@@ -217,13 +217,14 @@ async function initSupabaseConnection() {
       // Update Status Badge
       statusBadge.className = "status-badge online";
       statusBadge.querySelector(".status-text").textContent = "線上模式";
-      if (authSection) authSection.classList.remove("hidden");
+      if (authSection) {
+        authSection.classList.remove("hidden");
+        authSection.className = "card-col span-4";
+      }
       if (placeholder) placeholder.classList.add("hidden");
       
-      // Show cloud sync panel and set split layout
-      if (cloudSyncCardCol) cloudSyncCardCol.classList.remove("hidden");
       if (profileCardCol) {
-        profileCardCol.className = "card-col span-6";
+        profileCardCol.className = "card-col span-8";
       }
       
       // Check Auth Session
@@ -234,11 +235,12 @@ async function initSupabaseConnection() {
       state.isSupabaseMode = false;
       statusBadge.className = "status-badge offline";
       statusBadge.querySelector(".status-text").textContent = "Demo 模式 (連線錯誤)";
-      if (authSection) authSection.classList.add("hidden");
+      if (authSection) {
+        authSection.classList.add("hidden");
+        authSection.className = "card-col span-12 hidden";
+      }
       if (placeholder) placeholder.classList.remove("hidden");
       
-      // Hide cloud sync panel and set full width layout
-      if (cloudSyncCardCol) cloudSyncCardCol.classList.add("hidden");
       if (profileCardCol) {
         profileCardCol.className = "card-col span-12";
       }
@@ -247,11 +249,12 @@ async function initSupabaseConnection() {
     state.isSupabaseMode = false;
     statusBadge.className = "status-badge offline";
     statusBadge.querySelector(".status-text").textContent = "Demo 模式";
-    if (authSection) authSection.classList.add("hidden");
+    if (authSection) {
+      authSection.classList.add("hidden");
+      authSection.className = "card-col span-12 hidden";
+    }
     if (placeholder) placeholder.classList.remove("hidden");
     
-    // Hide cloud sync panel and set full width layout
-    if (cloudSyncCardCol) cloudSyncCardCol.classList.add("hidden");
     if (profileCardCol) {
       profileCardCol.className = "card-col span-12";
     }

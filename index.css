@@ -1202,3 +1202,14 @@ body {
   font-weight: 700;
 }
 
+/* PWA and Auth UI animations */
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+.auth-card {
+  transition: all 0.3s ease;
+}
+
