@@ -35,14 +35,19 @@ const state = {
   supabase: null,
   currentUser: {
     name: "系統管理員",
-    great_region: "第一大區",
-    pastoral_zone: "約書亞牧區",
-    small_group: "迦勒小組",
+    great_region: "東區",
+    pastoral_zone: "大安1",
+    small_group: "馬鈴",
     role: "admin",
     chapters_read: 0,
     plan_progress: 0,
     streak: 0,
     last_read: null
+  },
+  orgStructure: {
+    regions: [],
+    zones: {},  // regionName -> array of zoneNames
+    groups: {}  // zoneName -> array of groupNames
   },
   activePlan: null,
   activePlans: [], // Array of multiple joined plans
@@ -144,6 +149,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 6. Initialize Plan Creation Form & Checkboxes
   initPlanControls();
+
+  // 6.5 Load Church Organization Structure
+  await loadOrgStructure();
 
   // 7. Load Data & Render initial Dashboard
   await loadUserData();
@@ -281,9 +289,9 @@ async function loadUserData() {
       } else {
         // First-time login: create profile automatically in Supabase
         state.currentUser.name = (user.user_metadata && user.user_metadata.full_name) || "新使用者";
-        state.currentUser.great_region = "第一大區";
-        state.currentUser.pastoral_zone = "約書亞牧區";
-        state.currentUser.small_group = "迦勒小組";
+        state.currentUser.great_region = "東區";
+        state.currentUser.pastoral_zone = "大安1";
+        state.currentUser.small_group = "馬鈴";
         state.currentUser.role = "member";
         
         try {
@@ -387,9 +395,9 @@ async function loadUserData() {
     // First run in Demo mode: default to admin with mock logs/plan
     state.currentUser = {
       name: "系統管理員",
-      great_region: "第一大區",
-      pastoral_zone: "約書亞牧區",
-      small_group: "迦勒小組",
+      great_region: "東區",
+      pastoral_zone: "大安1",
+      small_group: "馬鈴",
       role: "admin",
       chapters_read: 80,
       plan_progress: 72,
@@ -432,6 +440,101 @@ async function loadUserData() {
   }
 
   calculateStreak();
+}
+
+// Load Church Organization Structure (from Supabase or Local Mock)
+async function loadOrgStructure() {
+  if (state.isSupabaseMode && state.supabase) {
+    try {
+      // 1. Fetch great regions
+      const { data: regions, error: rErr } = await state.supabase
+        .from("great_regions")
+        .select("id, name");
+      
+      if (rErr) throw rErr;
+      
+      // 2. Fetch pastoral zones
+      const { data: zones, error: zErr } = await state.supabase
+        .from("pastoral_zones")
+        .select("id, name, great_region_id");
+      
+      if (zErr) throw zErr;
+      
+      // 3. Fetch small groups
+      const { data: groups, error: gErr } = await state.supabase
+        .from("small_groups")
+        .select("id, name, pastoral_zone_id");
+      
+      if (gErr) throw gErr;
+      
+      // Map to state.orgStructure
+      state.orgStructure.regions = (regions || []).map(r => r.name).sort();
+      state.orgStructure.zones = {};
+      state.orgStructure.groups = {};
+      
+      // Create map of region id -> name for lookup
+      const regionMap = {};
+      (regions || []).forEach(r => {
+        regionMap[r.id] = r.name;
+        state.orgStructure.zones[r.name] = [];
+      });
+      
+      // Create map of zone id -> name for lookup
+      const zoneMap = {};
+      (zones || []).forEach(z => {
+        const rName = regionMap[z.great_region_id];
+        if (rName) {
+          state.orgStructure.zones[rName].push(z.name);
+        }
+        zoneMap[z.id] = z.name;
+        state.orgStructure.groups[z.name] = [];
+      });
+      
+      // Sort zones
+      for (const rName in state.orgStructure.zones) {
+        state.orgStructure.zones[rName].sort();
+      }
+      
+      // Populate groups
+      (groups || []).forEach(g => {
+        const zName = zoneMap[g.pastoral_zone_id];
+        if (zName) {
+          state.orgStructure.groups[zName].push(g.name);
+        }
+      });
+      
+      // Sort groups
+      for (const zName in state.orgStructure.groups) {
+        state.orgStructure.groups[zName].sort();
+      }
+      
+      // Store ID lookups for saving
+      state.orgStructure.rawRegions = regions || [];
+      state.orgStructure.rawZones = zones || [];
+      state.orgStructure.rawGroups = groups || [];
+      
+    } catch (err) {
+      console.error("Failed to load organization structure from database:", err);
+      loadMockOrgStructure();
+    }
+  } else {
+    loadMockOrgStructure();
+  }
+}
+
+function loadMockOrgStructure() {
+  state.orgStructure.regions = [...MOCK_GREAT_REGIONS];
+  state.orgStructure.zones = { ...MOCK_PASTORAL_ZONES_BY_REGION };
+  state.orgStructure.groups = { ...MOCK_SMALL_GROUPS };
+  
+  // Sort everything for UI consistency
+  state.orgStructure.regions.sort();
+  for (const r in state.orgStructure.zones) {
+    state.orgStructure.zones[r].sort();
+  }
+  for (const z in state.orgStructure.groups) {
+    state.orgStructure.groups[z].sort();
+  }
 }
 
 // Calculate streak based on reading logs
@@ -570,12 +673,19 @@ async function logChapterRead(book, chapter, isChecked) {
 async function syncProfileStatsToSupabase() {
   const { data: { user } } = await state.supabase.auth.getUser();
   if (user) {
+    const regionObj = state.orgStructure && state.orgStructure.rawRegions ? state.orgStructure.rawRegions.find(r => r.name === state.currentUser.great_region) : null;
+    const zoneObj = state.orgStructure && state.orgStructure.rawZones ? state.orgStructure.rawZones.find(z => z.name === state.currentUser.pastoral_zone) : null;
+    const groupObj = state.orgStructure && state.orgStructure.rawGroups ? state.orgStructure.rawGroups.find(g => g.name === state.currentUser.small_group) : null;
+
     await state.supabase.from("profiles").upsert({
       id: user.id,
       name: state.currentUser.name,
       great_region: state.currentUser.great_region,
       pastoral_zone: state.currentUser.pastoral_zone,
       small_group: state.currentUser.small_group,
+      great_region_id: regionObj ? regionObj.id : null,
+      pastoral_zone_id: zoneObj ? zoneObj.id : null,
+      small_group_id: groupObj ? groupObj.id : null,
       role: state.currentUser.role,
       updated_at: new Date().toISOString()
     });
@@ -654,9 +764,9 @@ async function renderPastoralZoneRankingList() {
     // Demo Mode
     const mockUser = {
       name: state.currentUser.name,
-      great_region: state.currentUser.great_region || "第一大區",
-      pastoral_zone: state.currentUser.pastoral_zone || "約書亞牧區",
-      small_group: state.currentUser.small_group || "迦勒小組",
+      great_region: state.currentUser.great_region || "東區",
+      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+      small_group: state.currentUser.small_group || "馬鈴",
       role: state.currentUser.role || "member",
       chapters_read: state.currentUser.chapters_read,
       plan_progress: state.currentUser.plan_progress,
@@ -1565,9 +1675,9 @@ async function updateStatsView() {
 
   const mockUser = {
     name: state.currentUser.name,
-    great_region: state.currentUser.great_region || "第一大區",
-    pastoral_zone: state.currentUser.pastoral_zone || "約書亞牧區",
-    small_group: state.currentUser.small_group || "迦勒小組",
+    great_region: state.currentUser.great_region || "東區",
+    pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+    small_group: state.currentUser.small_group || "馬鈴",
     role: state.currentUser.role || "member",
     chapters_read: state.currentUser.chapters_read,
     plan_progress: state.currentUser.plan_progress,
@@ -1890,8 +2000,8 @@ async function updateGroupChart(zoneName) {
   let groupStats = [];
   const mockUser = {
     name: state.currentUser.name,
-    pastoral_zone: state.currentUser.pastoral_zone || "約書亞牧區",
-    small_group: state.currentUser.small_group || "迦勒小組",
+    pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+    small_group: state.currentUser.small_group || "馬鈴",
     chapters_read: state.currentUser.chapters_read,
     plan_progress: state.currentUser.plan_progress,
     last_read: state.currentUser.last_read
@@ -1976,7 +2086,24 @@ function renderProfileView() {
   roleDisplay.value = roleNames[state.currentUser.role] || "一般組員";
 
   // 1. Determine Great Region value
-  const greatRegionsList = ["第一大區", "第二大區"];
+  const greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
+    ? state.orgStructure.regions 
+    : ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
+  
+  // Rebuild select options dynamically
+  greatRegionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
+  greatRegionsList.forEach(rName => {
+    const option = document.createElement("option");
+    option.value = rName;
+    option.textContent = rName;
+    greatRegionSelect.appendChild(option);
+  });
+  
+  const customOpt = document.createElement("option");
+  customOpt.value = "custom";
+  customOpt.textContent = "自訂大區...";
+  greatRegionSelect.appendChild(customOpt);
+
   const userGreatRegion = state.currentUser.great_region;
 
   if (userGreatRegion) {
@@ -2196,7 +2323,9 @@ function populateProfileZones(greatRegion) {
     return;
   }
 
-  const predefinedZones = MOCK_PASTORAL_ZONES_BY_REGION[greatRegion] || [];
+  const predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion]) 
+    ? state.orgStructure.zones[greatRegion] 
+    : (MOCK_PASTORAL_ZONES_BY_REGION[greatRegion] || []);
   predefinedZones.forEach(zName => {
     const option = document.createElement("option");
     option.value = zName;
@@ -2230,7 +2359,9 @@ function populateProfileGroupSelector() {
   const zone = zoneSelect.value;
   if (!zone) return;
 
-  const predefinedGroups = MOCK_SMALL_GROUPS[zone] || [];
+  const predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone]) 
+    ? state.orgStructure.groups[zone] 
+    : (MOCK_SMALL_GROUPS[zone] || []);
 
   predefinedGroups.forEach(groupName => {
     const option = document.createElement("option");
@@ -2267,9 +2398,9 @@ async function switchDemoRole(role) {
   if (!mockUser) {
     mockUser = {
       name: "模擬組員",
-      great_region: "第一大區",
-      pastoral_zone: "約書亞牧區",
-      small_group: "迦勒小組",
+      great_region: "東區",
+      pastoral_zone: "大安1",
+      small_group: "馬鈴",
       role: "member",
       chapters_read: 50,
       plan_progress: 10,
