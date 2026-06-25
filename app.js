@@ -2084,7 +2084,10 @@ function renderProfileView() {
         const { error } = await state.supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.origin + window.location.pathname
+            redirectTo: window.location.origin + window.location.pathname,
+            queryParams: {
+              prompt: 'select_account' // 強制顯示 Google 帳號選擇視窗，方便切換不同帳號
+            }
           }
         });
         if (error) throw error;
