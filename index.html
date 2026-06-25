@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教會速讀挑戰與統計系統</title>
+  <!-- Google Fonts: Inter & Outfit & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Vanilla CSS Stylesheet -->
+  <link rel="stylesheet" href="index.css">
+  <!-- Supabase JS Client library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js for premium stats dashboard -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="light-theme">
+  <!-- App Container -->
+  <div class="app-layout">
+    
+    <!-- Top Header -->
+    <header class="main-header">
+      <div class="header-container">
+        <a href="#" class="brand" id="brand-logo">
+          <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span class="brand-text">教會速讀挑戰</span>
+        </a>
+        
+        <!-- Desktop Navigation Tabs -->
+        <nav class="nav-tabs">
+          <button class="tab-btn active" data-target="dashboard-view">
+            <span>儀表板</span>
+          </button>
+          <button class="tab-btn" data-target="reader-view">
+            <span>聖經閱讀</span>
+          </button>
+          <button class="tab-btn" data-target="plan-view">
+            <span>讀經計畫</span>
+          </button>
+          <button class="tab-btn" data-target="stats-view">
+            <span>牧區統計</span>
+          </button>
+          <button class="tab-btn" data-target="profile-view">
+            <span>帳號與設定</span>
+          </button>
+        </nav>
+
+        <div class="header-actions">
+          <!-- Connection Status Badge -->
+          <div class="status-badge offline" id="connection-status">
+            <span class="indicator"></span>
+            <span class="status-text">Demo 模式</span>
+          </div>
+          <!-- Theme Toggle Button -->
+          <button class="icon-btn" id="theme-toggle" title="切換主題">
+            <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- VIEW 1: DASHBOARD -->
+      <section id="dashboard-view" class="view-pane active">
+        <div class="dashboard-hero">
+          <div class="hero-info">
+            <h1 class="welcome-title">哈囉，<span id="user-greeting">弟兄姊妹</span>！</h1>
+            <p class="welcome-subtitle">「神的話是我腳前的燈，是我路上的光。」今天也要一起速讀神的話語！</p>
+          </div>
+          <div class="streak-card">
+            <div class="streak-flame">🔥</div>
+            <div class="streak-count">
+              <span id="streak-days">0</span>
+              <span class="unit">天</span>
+            </div>
+            <div class="streak-label">連續讀經天數</div>
+          </div>
+        </div>
+
+        <div class="grid-layout">
+          <!-- Left Column: Personal Progress -->
+          <div class="card-col span-8">
+            <div class="glass-card">
+              <h3 class="card-title">進行中的計畫</h3>
+              <div id="active-plan-summary">
+                <!-- Dynamic active plan summary -->
+                <div class="empty-state">
+                  <p>目前沒有進行中的讀經計畫。</p>
+                  <button class="primary-btn" onclick="appRouter.switchTab('plan-view')">建立我的計畫</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Pastoral Top Ranking -->
+          <div class="card-col span-4">
+            <div class="glass-card">
+              <h3 class="card-title">牧區速讀排名 (總章數)</h3>
+              <div class="ranking-list" id="dashboard-pastoral-ranking">
+                <!-- Dynamically generated list -->
+              </div>
+              <button class="text-link-btn" onclick="appRouter.switchTab('stats-view')">查看詳細統計 →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: BIBLE READER -->
+      <section id="reader-view" class="view-pane">
+        <div class="reader-layout">
+          <!-- Left/Top Control Sidebar -->
+          <aside class="reader-sidebar">
+            <div class="glass-card">
+              <h3 class="card-title">選擇經卷</h3>
+              <div class="form-group">
+                <label for="reader-testament-select">新舊約</label>
+                <select id="reader-testament-select" class="form-control">
+                  <option value="all">全部書卷</option>
+                  <option value="old">舊約 (39)</option>
+                  <option value="new">新約 (27)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reader-book-select">書卷</label>
+                <select id="reader-book-select" class="form-control">
+                  <!-- Generated dynamically -->
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reader-chapter-select">章</label>
+                <select id="reader-chapter-select" class="form-control">
+                  <!-- Generated dynamically -->
+                </select>
+              </div>
+              <div class="reader-nav-buttons">
+                <button class="secondary-btn flex-btn" id="prev-chapter-btn">
+                  ◀ 上一章
+                </button>
+                <button class="secondary-btn flex-btn" id="next-chapter-btn">
+                  下一章 ▶
+                </button>
+              </div>
+              
+              <hr class="card-divider">
+
+              <!-- Typography controls -->
+              <h4 class="settings-subtitle">閱讀設定</h4>
+              <div class="typography-settings">
+                <button class="circle-btn font-change-btn" id="decrease-font" title="縮小字體">A-</button>
+                <span class="font-size-indicator" id="font-size-label">18px</span>
+                <button class="circle-btn font-change-btn" id="increase-font" title="放大字體">A+</button>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Main Bible Text Area -->
+          <article class="reader-body">
+            <div class="glass-card reader-card">
+              <div class="reader-header">
+                <h2 id="bible-title" class="bible-heading">創世記 1章</h2>
+                <div class="reader-actions-top">
+                  <button class="checkbox-btn" id="mark-read-btn">
+                    <span class="checkbox-box"></span>
+                    <span class="checkbox-label">標記此章已讀</span>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Bible Content container -->
+              <div id="bible-content" class="bible-text-container" style="font-size: 18px;">
+                <!-- Generated dynamically -->
+              </div>
+
+              <!-- Inline floating actions (appears on verse highlight) -->
+              <div id="context-toolbar" class="context-toolbar hidden">
+                <button class="toolbar-action" data-action="highlight" style="background-color: #ffeb3b; color: #000;" title="黃色螢光筆"></button>
+                <button class="toolbar-action" data-action="highlight" style="background-color: #ffc107; color: #000;" title="橘色螢光筆"></button>
+                <button class="toolbar-action" data-action="highlight" style="background-color: #a7ffeb; color: #000;" title="綠色螢光筆"></button>
+                <button class="toolbar-action" data-action="clear" title="清除標記">❌</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- VIEW 3: READING PLANS -->
+      <section id="plan-view" class="view-pane">
+        <div class="grid-layout">
+          <!-- Left Column: Current Active Plan Detail -->
+          <div class="card-col span-7">
+            <div class="glass-card" style="display: flex; flex-direction: column; height: 100%;">
+              <div class="card-header-flex" style="margin-bottom: 1rem;">
+                <h3 class="card-title">我的讀經計畫進度</h3>
+              </div>
+              <div id="plan-tracker-container" style="flex: 1; display: flex; flex-direction: column;">
+                <!-- Dynamically generated list of days & checkboxes -->
+                <div class="empty-state">
+                  <p>您尚未加入讀經計畫。請在右側清單選擇欲加入的季計畫！</p>
+                </div>
+              </div>
+              <!-- Abandon Action Footer (De-emphasized) -->
+              <div class="card-footer-action" style="margin-top: auto; padding-top: 0.8rem; border-top: 1px dashed var(--border-card); text-align: center;">
+                <button class="text-link-btn hidden" id="delete-plan-btn" style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500; background: none; border: none; cursor: pointer; padding: 0.5rem 1rem;">
+                  放棄目前進行中的計畫...
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Pre-designed Plans List -->
+          <div class="card-col span-5">
+            <div class="glass-card flex-col-container" style="height: 100%; display: flex; flex-direction: column;">
+              <h3 class="card-title">教會速讀挑戰計畫</h3>
+              <p class="card-subtitle" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.4;">
+                點擊下方預先設計好的季度速讀計畫，即可直覺地加入挑戰！
+              </p>
+              <div class="preset-plans-list" id="preset-plans-list" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.8rem; padding-right: 0.4rem; max-height: 520px;">
+                <!-- Generated dynamically by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: PASTORAL STATS -->
+      <section id="stats-view" class="view-pane">
+        <!-- Top Stats Row -->
+        <div class="stats-overview-row">
+          <div class="stats-mini-card">
+            <div class="label">各牧區總閱讀章數</div>
+            <div class="value" id="stats-total-read">0 章</div>
+          </div>
+          <div class="stats-mini-card">
+            <div class="label">全教會目前參與人數</div>
+            <div class="value" id="stats-total-members">0 人</div>
+          </div>
+          <div class="stats-mini-card">
+            <div class="label">本週活躍速讀者</div>
+            <div class="value" id="stats-active-members">0 人</div>
+          </div>
+        </div>
+
+        <div class="grid-layout">
+          <!-- Pastoral Zone Ranking Chart -->
+          <div class="card-col span-7">
+            <div class="glass-card">
+              <h3 class="card-title">各牧區速讀排行榜 (總累計章數)</h3>
+              <div class="chart-container">
+                <canvas id="pastoral-rank-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Average Completion Rate -->
+          <div class="card-col span-5">
+            <div class="glass-card">
+              <h3 class="card-title">牧區平均讀經進度對比 (%)</h3>
+              <div class="chart-container">
+                <canvas id="pastoral-progress-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-layout" style="margin-top: 2rem;">
+          <!-- Small Group breakdown within selected zone -->
+          <div class="card-col span-6">
+            <div class="glass-card">
+              <div class="card-header-flex">
+                <h3 class="card-title">牧區下屬小組進度統計</h3>
+                <select id="stats-zone-selector" class="form-control inline-select">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+              <div class="chart-container">
+                <canvas id="group-stats-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Member Details List -->
+          <div class="card-col span-6">
+            <div class="glass-card">
+              <h3 class="card-title">速讀進度明細 (牧區/小組)</h3>
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>牧區</th>
+                      <th>小組</th>
+                      <th>總讀章數</th>
+                      <th>進度</th>
+                      <th>連續天數</th>
+                    </tr>
+                  </thead>
+                  <tbody id="stats-members-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: PROFILE & SETTINGS -->
+      <section id="profile-view" class="view-pane">
+        <div class="grid-layout">
+          
+          <!-- Basic Profile Form -->
+          <div class="card-col span-12" id="profile-card-col">
+            <div class="glass-card">
+              <h3 class="card-title">基本速讀基本資料</h3>
+              <form id="profile-form">
+                <div class="form-group">
+                  <label for="profile-name">姓名</label>
+                  <input type="text" id="profile-name" class="form-control" placeholder="請輸入真實姓名" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="profile-great-region">所屬大區</label>
+                  <select id="profile-great-region" class="form-control">
+                    <option value="">-- 請選擇大區 --</option>
+                    <option value="第一大區">第一大區</option>
+                    <option value="第二大區">第二大區</option>
+                    <option value="custom">自訂大區...</option>
+                  </select>
+                  <input type="text" id="profile-great-region-custom" class="form-control hidden" placeholder="請輸入自訂大區名稱" style="margin-top: 0.5rem;">
+                </div>
+                
+                <div class="form-group">
+                  <label for="profile-zone">所屬牧區</label>
+                  <select id="profile-zone" class="form-control">
+                    <option value="">-- 請選擇牧區 --</option>
+                    <option value="約書亞牧區">約書亞牧區</option>
+                    <option value="大衛牧區">大衛牧區</option>
+                    <option value="提摩太牧區">提摩太牧區</option>
+                    <option value="撒母耳牧區">撒母耳牧區</option>
+                    <option value="custom">自訂牧區...</option>
+                  </select>
+                  <input type="text" id="profile-zone-custom" class="form-control hidden" placeholder="請輸入自訂牧區名稱" style="margin-top: 0.5rem;">
+                </div>
+
+                <div class="form-group">
+                  <label for="profile-group">所屬小組</label>
+                  <select id="profile-group" class="form-control">
+                    <option value="">-- 請選擇小組 --</option>
+                    <!-- Populated dynamically based on Zone -->
+                  </select>
+                  <input type="text" id="profile-group-custom" class="form-control hidden" placeholder="請輸入自訂小組名稱" style="margin-top: 0.5rem;">
+                </div>
+
+                <div class="form-group">
+                  <label>您的帳號角色</label>
+                  <input type="text" id="profile-role-display" class="form-control" value="組員 (預設)" readonly style="background-color: var(--border-card); cursor: not-allowed;">
+                </div>
+
+                <button type="submit" class="primary-btn w-full">儲存基本資料</button>
+
+                <!-- Demo Simulated Role Switcher -->
+                <div class="demo-role-card" style="margin-top: 1.5rem; padding: 1.2rem; background-color: rgba(99, 102, 241, 0.06); border: 1px dashed var(--primary-color); border-radius: var(--radius-sm);">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label for="demo-role-select" style="color: var(--primary-color); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                      <span>🌟 Demo 模擬角色切換 (測試權限視角)</span>
+                    </label>
+                    <select id="demo-role-select" class="form-control" style="margin-top: 0.5rem; border-color: var(--primary-color);">
+                      <option value="admin" selected>系統管理員 (Admin) - 看全教會統計 (最高權限)</option>
+                      <option value="member">組員 (林秀琴) - 僅看個人統計</option>
+                      <option value="group_leader">小組長 (陳建國) - 僅看「迦勒小組」統計</option>
+                      <option value="zone_leader">區長 (王區長) - 僅看「約書亞牧區」統計</option>
+                      <option value="great_zone_leader">大區長 (林大區長) - 僅看「第一大區」統計</option>
+                      <option value="senior_pastor">主任牧師 (張主任牧師) - 看全教會統計 (最高權限)</option>
+                    </select>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; line-height: 1.4;">提示：本切換器供您離線測試。切換後，首頁儀表板、成員清單、圖表等均會立即套用對應的角色視角進行過濾。</p>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Footer (Responsive Mobile Tabs + Info) -->
+    <footer class="main-footer">
+      <p>© 2026 教會速讀挑戰與統計系統 - 使用雲端備份與 Chart.js 技術建構</p>
+    </footer>
+
+    <!-- Mobile Navigation Bar -->
+    <nav class="mobile-nav-bar">
+      <button class="mobile-nav-btn active" data-target="dashboard-view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>儀表</span>
+      </button>
+      <button class="mobile-nav-btn" data-target="reader-view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+        <span>閱讀</span>
+      </button>
+      <button class="mobile-nav-btn" data-target="plan-view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span>計畫</span>
+      </button>
+      <button class="mobile-nav-btn" data-target="stats-view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        <span>統計</span>
+      </button>
+      <button class="mobile-nav-btn" data-target="profile-view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>帳號</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loader-overlay hidden" id="loader-overlay">
+    <div class="spinner"></div>
+    <p class="loader-text">載入經文中...</p>
+  </div>
+
+  <!-- Import application modules -->
+  <script src="config.js"></script>
+  <script src="bible_data.js"></script>
+  <script src="mock_stats.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "church-bible-reading-app",
+  "version": "1.0.0",
+  "description": "Church Bible Speed Reading & Statistics Application",
+  "main": "app.js",
+  "scripts": {
+    "build": "node build-config.js"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
