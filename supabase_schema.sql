@@ -42,25 +42,80 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- 建立自動同步文字欄位的觸發器函數與觸發器
 CREATE OR REPLACE FUNCTION public.sync_profile_text_fields()
 RETURNS TRIGGER AS $$
+DECLARE
+  r_id UUID;
+  z_id UUID;
+  g_id UUID;
+  user_role TEXT;
 BEGIN
+  -- 取得使用者角色
+  SELECT role INTO user_role FROM public.profiles WHERE id = NEW.id;
+  IF user_role IS NULL THEN
+    user_role := NEW.role;
+  END IF;
+
+  -- 1. 大區同步與防自訂
   IF NEW.great_region_id IS NOT NULL THEN
     SELECT name INTO NEW.great_region FROM public.great_regions WHERE id = NEW.great_region_id;
+  ELSIF NEW.great_region IS NOT NULL AND NEW.great_region <> '' THEN
+    SELECT id INTO r_id FROM public.great_regions WHERE name = NEW.great_region;
+    IF r_id IS NOT NULL THEN
+      NEW.great_region_id := r_id;
+    ELSIF user_role IN ('admin', 'senior_pastor') THEN
+      INSERT INTO public.great_regions (id, name)
+      VALUES (gen_random_uuid(), NEW.great_region)
+      RETURNING id INTO r_id;
+      NEW.great_region_id := r_id;
+    ELSE
+      -- 非管理員不能新增大區，將其清空或設為預設
+      RAISE EXCEPTION '只有系統管理員可以新增或自訂大區！';
+    END IF;
   END IF;
-  
+
+  -- 2. 牧區同步與防自訂
   IF NEW.pastoral_zone_id IS NOT NULL THEN
     SELECT name INTO NEW.pastoral_zone FROM public.pastoral_zones WHERE id = NEW.pastoral_zone_id;
+  ELSIF NEW.pastoral_zone IS NOT NULL AND NEW.pastoral_zone <> '' THEN
+    SELECT id INTO z_id FROM public.pastoral_zones 
+    WHERE name = NEW.pastoral_zone AND great_region_id = NEW.great_region_id;
+    
+    IF z_id IS NOT NULL THEN
+      NEW.pastoral_zone_id := z_id;
+    ELSIF user_role IN ('admin', 'senior_pastor') AND NEW.great_region_id IS NOT NULL THEN
+      INSERT INTO public.pastoral_zones (id, name, great_region_id)
+      VALUES (gen_random_uuid(), NEW.pastoral_zone, NEW.great_region_id)
+      RETURNING id INTO z_id;
+      NEW.pastoral_zone_id := z_id;
+    ELSE
+      RAISE EXCEPTION '只有系統管理員可以新增或自訂牧區！';
+    END IF;
   END IF;
-  
+
+  -- 3. 小組同步與防自訂
   IF NEW.small_group_id IS NOT NULL THEN
     SELECT name INTO NEW.small_group FROM public.small_groups WHERE id = NEW.small_group_id;
+  ELSIF NEW.small_group IS NOT NULL AND NEW.small_group <> '' THEN
+    SELECT id INTO g_id FROM public.small_groups 
+    WHERE name = NEW.small_group AND pastoral_zone_id = NEW.pastoral_zone_id;
+    
+    IF g_id IS NOT NULL THEN
+      NEW.small_group_id := g_id;
+    ELSIF user_role IN ('admin', 'senior_pastor') AND NEW.pastoral_zone_id IS NOT NULL THEN
+      INSERT INTO public.small_groups (id, name, pastoral_zone_id)
+      VALUES (gen_random_uuid(), NEW.small_group, NEW.pastoral_zone_id)
+      RETURNING id INTO g_id;
+      NEW.small_group_id := g_id;
+    ELSE
+      RAISE EXCEPTION '只有系統管理員可以新增或自訂小組！';
+    END IF;
   END IF;
-  
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE TRIGGER trigger_sync_profile_text_fields
-BEFORE INSERT OR UPDATE OF great_region_id, pastoral_zone_id, small_group_id
+BEFORE INSERT OR UPDATE
 ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.sync_profile_text_fields();

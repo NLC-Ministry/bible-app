@@ -2099,21 +2099,36 @@ function renderProfileView() {
     greatRegionSelect.appendChild(option);
   });
   
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "自訂大區...";
-  greatRegionSelect.appendChild(customOpt);
-
   const userGreatRegion = state.currentUser.great_region;
+  const isAdmin = state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor";
+
+  if (isAdmin) {
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    customOpt.textContent = "自訂大區...";
+    greatRegionSelect.appendChild(customOpt);
+  } else {
+    if (userGreatRegion && !greatRegionsList.includes(userGreatRegion)) {
+      const tempOpt = document.createElement("option");
+      tempOpt.value = userGreatRegion;
+      tempOpt.textContent = userGreatRegion + " (唯讀)";
+      greatRegionSelect.appendChild(tempOpt);
+    }
+  }
 
   if (userGreatRegion) {
     if (greatRegionsList.includes(userGreatRegion)) {
       greatRegionSelect.value = userGreatRegion;
       customGreatRegionInput.classList.add("hidden");
     } else {
-      greatRegionSelect.value = "custom";
-      customGreatRegionInput.classList.remove("hidden");
-      customGreatRegionInput.value = userGreatRegion;
+      if (isAdmin) {
+        greatRegionSelect.value = "custom";
+        customGreatRegionInput.classList.remove("hidden");
+        customGreatRegionInput.value = userGreatRegion;
+      } else {
+        greatRegionSelect.value = userGreatRegion;
+        customGreatRegionInput.classList.add("hidden");
+      }
     }
   } else {
     greatRegionSelect.value = "";
@@ -2182,20 +2197,28 @@ function renderProfileView() {
 
     loader.show("儲存個人資料中...");
     
+    const oldProfile = { ...state.currentUser };
+    
     state.currentUser.name = name;
     state.currentUser.great_region = greatRegion;
     state.currentUser.pastoral_zone = zone;
     state.currentUser.small_group = group;
 
-    saveLocalUserStats();
-
-    if (state.isSupabaseMode && state.supabase) {
-      await syncProfileStatsToSupabase();
+    try {
+      if (state.isSupabaseMode && state.supabase) {
+        await syncProfileStatsToSupabase();
+      }
+      saveLocalUserStats();
+      alert("個人資料儲存成功！");
+      updateDashboardView();
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      // Revert state
+      state.currentUser = oldProfile;
+      alert(`儲存個人資料失敗: ${err.message || err}`);
+    } finally {
+      loader.hide();
     }
-
-    loader.hide();
-    alert("個人資料儲存成功！");
-    updateDashboardView();
   };
 
   // Supabase connection settings are configured by admin in backend config.js
@@ -2307,6 +2330,7 @@ function populateProfileZones(greatRegion) {
   const zoneSelect = document.getElementById("profile-zone");
   const customZoneInput = document.getElementById("profile-zone-custom");
   const userZone = state.currentUser.pastoral_zone;
+  const isAdmin = state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor";
 
   zoneSelect.innerHTML = `<option value="">-- 請選擇牧區 --</option>`;
   customZoneInput.classList.add("hidden");
@@ -2314,11 +2338,21 @@ function populateProfileZones(greatRegion) {
   if (!greatRegion) return;
 
   if (greatRegion === "custom") {
-    zoneSelect.innerHTML += `<option value="custom">自訂裝區...</option>`;
-    if (userZone) {
-      zoneSelect.value = "custom";
-      customZoneInput.classList.remove("hidden");
-      customZoneInput.value = userZone;
+    if (isAdmin) {
+      zoneSelect.innerHTML += `<option value="custom">自訂牧區...</option>`;
+      if (userZone) {
+        zoneSelect.value = "custom";
+        customZoneInput.classList.remove("hidden");
+        customZoneInput.value = userZone;
+      }
+    } else {
+      if (userZone) {
+        const tempOpt = document.createElement("option");
+        tempOpt.value = userZone;
+        tempOpt.textContent = userZone + " (唯讀)";
+        tempOpt.selected = true;
+        zoneSelect.appendChild(tempOpt);
+      }
     }
     return;
   }
@@ -2336,15 +2370,25 @@ function populateProfileZones(greatRegion) {
     zoneSelect.appendChild(option);
   });
 
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "自訂牧區...";
-  if (userZone && !predefinedZones.includes(userZone)) {
-    customOpt.selected = true;
-    customZoneInput.classList.remove("hidden");
-    customZoneInput.value = userZone;
+  if (isAdmin) {
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    customOpt.textContent = "自訂牧區...";
+    if (userZone && !predefinedZones.includes(userZone)) {
+      customOpt.selected = true;
+      customZoneInput.classList.remove("hidden");
+      customZoneInput.value = userZone;
+    }
+    zoneSelect.appendChild(customOpt);
+  } else {
+    if (userZone && !predefinedZones.includes(userZone)) {
+      const tempOpt = document.createElement("option");
+      tempOpt.value = userZone;
+      tempOpt.textContent = userZone + " (唯讀)";
+      tempOpt.selected = true;
+      zoneSelect.appendChild(tempOpt);
+    }
   }
-  zoneSelect.appendChild(customOpt);
 }
 
 function populateProfileGroupSelector() {
@@ -2352,6 +2396,7 @@ function populateProfileGroupSelector() {
   const groupSelect = document.getElementById("profile-group");
   const customGroupInput = document.getElementById("profile-group-custom");
   const userGroup = state.currentUser.small_group;
+  const isAdmin = state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor";
 
   groupSelect.innerHTML = `<option value="">-- 請選擇小組 --</option>`;
   customGroupInput.classList.add("hidden");
@@ -2373,20 +2418,39 @@ function populateProfileGroupSelector() {
     groupSelect.appendChild(option);
   });
 
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "自訂小組...";
-  if (userGroup && !predefinedGroups.includes(userGroup) && zone !== "custom") {
-    customOpt.selected = true;
-    customGroupInput.classList.remove("hidden");
-    customGroupInput.value = userGroup;
-  }
-  groupSelect.appendChild(customOpt);
+  if (isAdmin) {
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    customOpt.textContent = "自訂小組...";
+    if (userGroup && !predefinedGroups.includes(userGroup) && zone !== "custom") {
+      customOpt.selected = true;
+      customGroupInput.classList.remove("hidden");
+      customGroupInput.value = userGroup;
+    }
+    groupSelect.appendChild(customOpt);
 
-  if (zone === "custom") {
-    groupSelect.value = "custom";
-    customGroupInput.classList.remove("hidden");
-    customGroupInput.value = userGroup || "";
+    if (zone === "custom") {
+      groupSelect.value = "custom";
+      customGroupInput.classList.remove("hidden");
+      customGroupInput.value = userGroup || "";
+    }
+  } else {
+    if (userGroup && !predefinedGroups.includes(userGroup) && zone !== "custom") {
+      const tempOpt = document.createElement("option");
+      tempOpt.value = userGroup;
+      tempOpt.textContent = userGroup + " (唯讀)";
+      tempOpt.selected = true;
+      groupSelect.appendChild(tempOpt);
+    }
+    if (zone === "custom") {
+      if (userGroup) {
+        const tempOpt = document.createElement("option");
+        tempOpt.value = userGroup;
+        tempOpt.textContent = userGroup + " (唯讀)";
+        tempOpt.selected = true;
+        groupSelect.appendChild(tempOpt);
+      }
+    }
   }
 }
 
