@@ -1,18 +1,25 @@
-const CACHE_NAME = 'church-bible-reading-v2';
-const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v2';
+const CACHE_NAME = 'church-bible-reading-v3';
+const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v3';
 
 // Static resources to precache
 const PRECACHE_ASSETS = [
   './',
   './index.html',
   './index.css',
-  './app.js',
   './bible_data.js',
   './config.js',
   './mock_stats.js',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './js/state.js',
+  './js/db.js',
+  './js/main.js',
+  './js/views/dashboard.js',
+  './js/views/reader.js',
+  './js/views/plan.js',
+  './js/views/stats.js',
+  './js/views/profile.js'
 ];
 
 // Install Event: cache static shell assets
