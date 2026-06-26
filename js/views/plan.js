@@ -130,6 +130,98 @@ function renderPresetPlansList() {
 }
 
 function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey = null) {
+  const preset = presetKey ? CHURCH_PLAN_PRESETS[presetKey] : null;
+
+  if (preset && preset.months) {
+    const days = [];
+    let dayNumCounter = 1;
+    let totalChaptersCount = 0;
+
+    preset.months.forEach(mSpec => {
+      // 1. Get all chapters of the books in this month
+      const allChapters = [];
+      mSpec.books.forEach(bookName => {
+        if (bookName === "詩篇 1-110") {
+          for (let i = 1; i <= 110; i++) {
+            allChapters.push({ book: "詩篇", chapter: i });
+          }
+        } else if (bookName === "詩篇 111-150") {
+          for (let i = 111; i <= 150; i++) {
+            allChapters.push({ book: "詩篇", chapter: i });
+          }
+        } else {
+          const book = BIBLE_BOOKS.find(b => b.name === bookName);
+          if (book) {
+            for (let i = 1; i <= book.chapters; i++) {
+              allChapters.push({ book: book.name, chapter: i });
+            }
+          }
+        }
+      });
+
+      const totalChapters = allChapters.length;
+      totalChaptersCount += totalChapters;
+
+      const readingDays = mSpec.readingDays;
+      const dailyChapters = Array.from({ length: readingDays }, () => []);
+      const chsPerDay = Math.floor(totalChapters / readingDays);
+      let remainder = totalChapters % readingDays;
+      let chIdx = 0;
+
+      for (let d = 0; d < readingDays; d++) {
+        const todayCount = chsPerDay + (remainder > 0 ? 1 : 0);
+        remainder--;
+        for (let c = 0; c < todayCount; c++) {
+          if (chIdx < totalChapters) {
+            dailyChapters[d].push(allChapters[chIdx]);
+            chIdx++;
+          }
+        }
+      }
+
+      // 2. Generate calendar days for this month
+      const daysInMonth = new Date(mSpec.year, mSpec.month, 0).getDate();
+
+      for (let dayOffset = 0; dayOffset < daysInMonth; dayOffset++) {
+        const dayDate = new Date(mSpec.year, mSpec.month - 1, dayOffset + 1);
+        const dateStr = dayDate.toISOString().substring(5, 10).replace("-", "/"); // MM/DD
+        
+        let chapters = [];
+        if (dayOffset < readingDays) {
+          chapters = dailyChapters[dayOffset].map(ch => ({
+            book: ch.book,
+            chapter: ch.chapter,
+            key: `${ch.book}_${ch.chapter}`
+          }));
+        }
+
+        days.push({
+          dayNum: dayNumCounter++,
+          date: dateStr,
+          year: mSpec.year,
+          month: mSpec.month,
+          chapters: chapters
+        });
+      }
+    });
+
+    return {
+      name: preset.name,
+      startDate: preset.startDate,
+      endDate: preset.endDate,
+      totalDays: days.length,
+      totalChapters: totalChaptersCount,
+      completedChapters: 0,
+      progress: 0,
+      days,
+      presetKey,
+      level: 'normal',
+      currentRound: 1,
+      wasDowngraded: false
+    };
+  }
+
+  // FALLBACK: Standard linear generation
   const start = new Date(startDate);
   const end = new Date(endDate);
   const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
@@ -181,6 +273,8 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     return {
       dayNum: index + 1,
       date: dateStr,
+      year: dayDate.getFullYear(),
+      month: dayDate.getMonth() + 1,
       chapters: chapters.map(ch => ({
         book: ch.book,
         chapter: ch.chapter,
@@ -371,32 +465,76 @@ async function renderPlanView() {
     <div class="days-scroll-list" style="max-height: 480px; overflow-y: auto; margin-top: 1.5rem; padding-right: 0.5rem;">
   `;
 
+  // Group days by year and month dynamically
+  const groups = {};
   state.activePlan.days.forEach(day => {
-    const allDone = day.chapters.every(ch => ch.isRead);
-    const badgeClass = allDone ? "day-badge complete" : "day-badge";
-    const badgeText = allDone ? "已完成" : "未完";
+    const yr = day.year || new Date().getFullYear();
+    const mo = day.month || (new Date().getMonth() + 1);
+    const key = `${yr}年${mo}月`;
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(day);
+  });
+
+  Object.entries(groups).forEach(([monthName, monthDays]) => {
+    // Clean identifier for HTML ID
+    const monthId = `month-${monthName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')}`;
 
     html += `
-      <div class="day-section">
-        <div class="day-title-flex" onclick="toggleDaySection(this)">
-          <div class="day-title">Day ${day.dayNum} <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">(${day.date})</span></div>
-          <span class="${badgeClass}">${badgeText}</span>
+      <div class="month-section" style="margin-bottom: 1.2rem;">
+        <div class="month-header" onclick="window.toggleMonthSection('${monthId}')" style="font-size: 0.98rem; font-weight: 800; color: var(--primary-color); padding: 0.65rem 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--border-card); background: rgba(99,102,241,0.07); border-radius: 8px; transition: background 0.2s ease; user-select: none;">
+          <span style="display: flex; align-items: center; gap: 0.4rem;">📅 ${monthName}</span>
+          <svg class="month-toggle-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" style="transition: transform 0.2s ease; transform: rotate(0deg);"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </div>
-        <div class="day-chapters-list">
+        <div class="month-days-list" id="${monthId}" style="margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; transition: all 0.3s ease;">
     `;
 
-    day.chapters.forEach(ch => {
-      const isChecked = ch.isRead ? "checked" : "";
-      const labelClass = ch.isRead ? "chapter-checkbox-item checked" : "chapter-checkbox-item";
-      const isDisabled = started ? "" : "disabled style='cursor: not-allowed; opacity: 0.6;'";
-      
-      html += `
-        <label class="${labelClass}" data-key="${ch.key}" ${!started ? 'style="opacity: 0.6; cursor: not-allowed;"' : ''}>
-          <input type="checkbox" value="${ch.key}" ${isChecked} ${isDisabled} onchange="togglePlanChapterCheckbox(this, '${ch.book}', ${ch.chapter})">
-          <span>${ch.book} ${ch.chapter}章</span>
-          <button class="text-link-btn" style="margin-left: auto; font-size: 0.75rem; font-weight: 600;" onclick="readChapterDirect('${ch.book}', ${ch.chapter})">閱讀</button>
-        </label>
-      `;
+    monthDays.forEach(day => {
+      if (!day.chapters || day.chapters.length === 0) {
+        // Rest Day card (catch-up / rest day)
+        html += `
+          <div class="rest-day-item" style="padding: 0.65rem 0.9rem; border: 1px dashed var(--border-card, rgba(0,0,0,0.12)); border-radius: 8px; background: rgba(255, 255, 255, 0.22); display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: var(--text-muted);">
+            <span style="font-weight: 600;">Day ${day.dayNum} (${day.date})</span>
+            <span style="font-weight: 700; color: var(--primary-color); display: inline-flex; align-items: center; gap: 0.3rem;">
+               🧘 補讀/休息日
+            </span>
+          </div>
+        `;
+      } else {
+        // Regular Day row
+        const allDone = day.chapters.every(ch => ch.isRead);
+        const badgeClass = allDone ? "day-badge complete" : "day-badge";
+        const badgeText = allDone ? "已完成" : "未完";
+
+        html += `
+          <div class="day-section" style="border: 1px solid var(--border-card); border-radius: 8px; background: var(--bg-card); overflow: hidden; margin: 0;">
+            <div class="day-title-flex" onclick="toggleDaySection(this)" style="padding: 0.6rem 0.8rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: rgba(255,255,255,0.03);">
+              <div class="day-title" style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary);">Day ${day.dayNum} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">(${day.date})</span></div>
+              <span class="${badgeClass}">${badgeText}</span>
+            </div>
+            <div class="day-chapters-list" style="padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.45rem;">
+        `;
+
+        day.chapters.forEach(ch => {
+          const isChecked = ch.isRead ? "checked" : "";
+          const labelClass = ch.isRead ? "chapter-checkbox-item checked" : "chapter-checkbox-item";
+          const isDisabled = started ? "" : "disabled style='cursor: not-allowed; opacity: 0.6;'";
+          
+          html += `
+            <label class="${labelClass}" data-key="${ch.key}" ${!started ? 'style="opacity: 0.6; cursor: not-allowed;"' : ''}>
+              <input type="checkbox" value="${ch.key}" ${isChecked} ${isDisabled} onchange="togglePlanChapterCheckbox(this, '${ch.book}', ${ch.chapter})">
+              <span>${ch.book} ${ch.chapter}章</span>
+              <button class="text-link-btn" style="margin-left: auto; font-size: 0.75rem; font-weight: 600;" onclick="readChapterDirect('${ch.book}', ${ch.chapter})">閱讀</button>
+            </label>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      }
     });
 
     html += `
@@ -418,8 +556,25 @@ async function renderPlanView() {
 
 function toggleDaySection(headerEl) {
   const list = headerEl.nextElementSibling;
-  list.classList.toggle("hidden");
+  if (list) {
+    list.classList.toggle("hidden");
+  }
 }
+
+window.toggleMonthSection = function(monthId) {
+  const container = document.getElementById(monthId);
+  if (container) {
+    container.classList.toggle("hidden");
+    const header = container.previousElementSibling;
+    if (header) {
+      const icon = header.querySelector(".month-toggle-icon");
+      if (icon) {
+        const isHidden = container.classList.contains("hidden");
+        icon.style.transform = isHidden ? "rotate(-90deg)" : "rotate(0deg)";
+      }
+    }
+  }
+};
 
 async function togglePlanChapterCheckbox(cb, book, chapter) {
   const isChecked = cb.checked;

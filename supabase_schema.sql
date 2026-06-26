@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS public.reading_plans (
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   target_books TEXT[] NOT NULL,
+  preset_key TEXT,
   level TEXT DEFAULT 'normal' NOT NULL,
   current_round INTEGER DEFAULT 1 NOT NULL,
   was_downgraded BOOLEAN DEFAULT FALSE NOT NULL,

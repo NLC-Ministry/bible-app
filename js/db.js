@@ -195,15 +195,41 @@ const db = {
 
         state.activePlans = [];
         if (plans && plans.length > 0) {
+          // Collect rows that need preset_key backfill (legacy data)
+          const legacyUpdates = [];
+
           plans.forEach(dbPlan => {
-            const key = getPresetKeyByName(dbPlan.name);
+            // Prefer stored preset_key, fall back to name-based lookup
+            const key = dbPlan.preset_key || getPresetKeyByName(dbPlan.name);
+
             const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key);
             planObj.id = dbPlan.id;
             planObj.level = dbPlan.level || 'normal';
             planObj.currentRound = dbPlan.current_round || 1;
             planObj.wasDowngraded = dbPlan.was_downgraded || false;
             state.activePlans.push(planObj);
+
+            // Queue a silent Supabase update if preset_key was missing
+            if (!dbPlan.preset_key && key) {
+              legacyUpdates.push({ id: dbPlan.id, preset_key: key });
+            }
           });
+
+          // Silently backfill preset_key for legacy records
+          if (legacyUpdates.length > 0) {
+            Promise.all(
+              legacyUpdates.map(({ id, preset_key }) =>
+                state.supabase
+                  .from("reading_plans")
+                  .update({ preset_key })
+                  .eq("id", id)
+                  .then(({ error }) => {
+                    if (error) console.warn(`Failed to backfill preset_key for plan ${id}:`, error);
+                    else console.log(`✅ Backfilled preset_key="${preset_key}" for plan ${id}`);
+                  })
+              )
+            );
+          }
           
           const selectedKey = localStorage.getItem("selected_plan_key");
           if (selectedKey) {
@@ -216,6 +242,7 @@ const db = {
           state.activePlan = null;
           state.activePlans = [];
         }
+
         
         this.calculateStreak();
         if (typeof checkAchievements !== 'undefined') {
@@ -847,6 +874,7 @@ const db = {
             start_date: startDate,
             end_date: endDate,
             target_books: selectedBooks,
+            preset_key: key,
             level: 'normal',
             current_round: 1,
             was_downgraded: false
