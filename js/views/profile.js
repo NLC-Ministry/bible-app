@@ -50,15 +50,15 @@ function renderProfileView() {
 
   greatRegionSelect.value = userGreatRegion || "";
 
-  populateProfileZones(greatRegionSelect.value);
+  populateProfileZones(greatRegionSelect.value, true);
 
   greatRegionSelect.onchange = () => {
-    populateProfileZones(greatRegionSelect.value);
-    populateProfileGroupSelector();
+    populateProfileZones(greatRegionSelect.value, false);
+    populateProfileGroupSelector(false);
   };
 
   zoneSelect.onchange = () => {
-    populateProfileGroupSelector();
+    populateProfileGroupSelector(false);
   };
 
   groupSelect.onchange = () => {};
@@ -369,7 +369,7 @@ async function renderAdminUserManagement() {
   }
 }
 
-function populateProfileZones(greatRegion) {
+function populateProfileZones(greatRegion, autoSelect = true) {
   const zoneSelect = document.getElementById("profile-zone");
   const userZone = state.currentUser.pastoral_zone;
 
@@ -385,25 +385,29 @@ function populateProfileZones(greatRegion) {
     const option = document.createElement("option");
     option.value = zName;
     option.textContent = zName;
-    if (userZone === zName) {
+    // Only auto-select on initial load, not when user changes region
+    if (autoSelect && userZone === zName) {
       option.selected = true;
     }
     zoneSelect.appendChild(option);
   });
 
-  // Append user's value if it's not in the predefined list, without "(唯讀)"
+  // Append user's custom value at the bottom if not in predefined list
   if (userZone && !predefinedZones.includes(userZone)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userZone;
     tempOpt.textContent = userZone;
-    tempOpt.selected = true;
+    // Only auto-select on initial load
+    if (autoSelect) tempOpt.selected = true;
     zoneSelect.appendChild(tempOpt);
   }
 
-  zoneSelect.value = userZone || "";
+  if (autoSelect) {
+    zoneSelect.value = userZone || "";
+  }
 }
 
-function populateProfileGroupSelector() {
+function populateProfileGroupSelector(autoSelect = true) {
   const zoneSelect = document.getElementById("profile-zone");
   const groupSelect = document.getElementById("profile-group");
   const userGroup = state.currentUser.small_group;
@@ -421,22 +425,26 @@ function populateProfileGroupSelector() {
     const option = document.createElement("option");
     option.value = groupName;
     option.textContent = groupName;
-    if (userGroup === groupName) {
+    // Only auto-select on initial load
+    if (autoSelect && userGroup === groupName) {
       option.selected = true;
     }
     groupSelect.appendChild(option);
   });
 
-  // Append user's value if it's not in the predefined list, without "(唯讀)"
+  // Append user's custom value at the bottom if not in predefined list
   if (userGroup && !predefinedGroups.includes(userGroup)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userGroup;
     tempOpt.textContent = userGroup;
-    tempOpt.selected = true;
+    // Only auto-select on initial load
+    if (autoSelect) tempOpt.selected = true;
     groupSelect.appendChild(tempOpt);
   }
 
-  groupSelect.value = userGroup || "";
+  if (autoSelect) {
+    groupSelect.value = userGroup || "";
+  }
 }
 
 function updateAdminNavVisibility() {
