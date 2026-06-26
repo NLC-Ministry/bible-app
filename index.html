@@ -489,6 +489,37 @@
                 </div>
               </form>
             </div>
+          <!-- Admin User Management Card -->
+          <div class="card-col span-12 hidden" id="admin-user-management-section" style="margin-top: 1.5rem;">
+            <div class="glass-card">
+              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="var(--primary-color)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                成員權限管理 (管理員專屬)
+              </h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.5;">
+                您可以檢視所有成員，並手動升任/降職其角色權限（例如：小組長、區長、大區長、主任牧師或管理員）。
+              </p>
+              
+              <div class="form-group" style="display: flex; gap: 0.5rem; max-width: 400px; margin-bottom: 1.2rem;">
+                <input type="text" id="admin-search-user" class="form-control" placeholder="搜尋成員姓名...">
+              </div>
+
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>所屬大區/牧區/小組</th>
+                      <th style="width: 250px;">權限角色</th>
+                      <th style="text-align: center; width: 100px;">狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-users-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
         </div>

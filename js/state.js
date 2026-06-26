@@ -160,3 +160,18 @@ function loadLocalSettings() {
     state.highlights = JSON.parse(savedHighlights);
   }
 }
+
+// HTML Sanitization / Escaping to prevent XSS (Script Injection) attacks
+function escapeHTML(str) {
+  if (str === null || str === undefined) return "";
+  if (typeof str !== 'string') str = String(str);
+  return str.replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}

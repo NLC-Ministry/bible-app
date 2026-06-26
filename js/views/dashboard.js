@@ -101,7 +101,7 @@ async function renderPastoralZoneRankingList() {
     rankItem.innerHTML = `
       <div class="rank-number ${rankClass}">${index + 1}</div>
       <div class="rank-details">
-        <div class="rank-name">${item.name || item.pastoral_zone}</div>
+        <div class="rank-name">${escapeHTML(item.name || item.pastoral_zone)}</div>
       </div>
       <div class="rank-value">${item.total_chapters || 0} 章</div>
     `;

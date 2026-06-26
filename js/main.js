@@ -22,6 +22,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 6.2 Initialize Devotional Notes Controls
   initDevotionalControls();
 
+  // 6.3 Initialize Profile & Auth Controls
+  initProfileControls();
+
   // 6.5 Load Church Organization Structure
   await db.loadOrgStructure();
 

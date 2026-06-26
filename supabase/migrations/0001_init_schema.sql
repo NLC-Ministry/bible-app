@@ -55,6 +55,22 @@ BEGIN
     user_role := NEW.role;
   END IF;
 
+  -- 0. 防範角色篡改 (Privilege Escalation Protection)
+  IF TG_OP = 'UPDATE' THEN
+    IF OLD.role IS DISTINCT FROM NEW.role THEN
+      IF auth.uid() IS NOT NULL AND (SELECT role FROM public.profiles WHERE id = auth.uid()) NOT IN ('admin', 'senior_pastor') THEN
+        RAISE EXCEPTION '權限不足，您不能修改角色權限！';
+      END IF;
+    END IF;
+  ELSIF TG_OP = 'INSERT' THEN
+    -- 如果是新註冊用戶，且資料庫中已有管理員，強制將角色設為 'member'，防止自封 admin
+    IF NEW.role NOT IN ('member') THEN
+      IF (SELECT COUNT(*) FROM public.profiles WHERE role IN ('admin', 'senior_pastor')) > 0 THEN
+        NEW.role := 'member';
+      END IF;
+    END IF;
+  END IF;
+
   -- 1. 大區同步與防自訂
   IF NEW.great_region_id IS NOT NULL THEN
     SELECT name INTO NEW.great_region FROM public.great_regions WHERE id = NEW.great_region_id;

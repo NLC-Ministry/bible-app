@@ -152,6 +152,29 @@ function renderProfileView() {
     }
   };
 
+  // Demo Switcher Listener
+  const demoRoleSelect = document.getElementById("demo-role-select");
+  if (demoRoleSelect) {
+    demoRoleSelect.value = state.currentUser.role || "member";
+    demoRoleSelect.onchange = async (e) => {
+      await db.switchDemoRole(e.target.value);
+    };
+  }
+
+  // Admin User Management Section Visibility and Rendering
+  const adminSection = document.getElementById("admin-user-management-section");
+  if (adminSection) {
+    if (isAdmin) {
+      adminSection.classList.remove("hidden");
+      renderAdminUserManagement();
+    } else {
+      adminSection.classList.add("hidden");
+    }
+  }
+}
+
+// Initialize profile & auth page controls on page load
+function initProfileControls() {
   // Google OAuth Login
   const btnGoogle = document.getElementById("btn-google-login");
   if (btnGoogle) {
@@ -196,15 +219,6 @@ function renderProfileView() {
         alert(`Google 登入失敗: ${err.message}`);
         loader.hide();
       }
-    };
-  }
-
-  // Demo Switcher Listener
-  const demoRoleSelect = document.getElementById("demo-role-select");
-  if (demoRoleSelect) {
-    demoRoleSelect.value = state.currentUser.role || "member";
-    demoRoleSelect.onchange = async (e) => {
-      await db.switchDemoRole(e.target.value);
     };
   }
 
@@ -275,6 +289,117 @@ function renderProfileView() {
         loader.hide();
       }
     };
+  }
+
+  const searchInput = document.getElementById("admin-search-user");
+  if (searchInput) {
+    let debounceTimer;
+    searchInput.oninput = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        renderAdminUserManagement();
+      }, 300);
+    };
+  }
+}
+
+// Render administrative User Permission Management table
+async function renderAdminUserManagement() {
+  const tableBody = document.getElementById("admin-users-table-body");
+  if (!tableBody) return;
+
+  const searchInput = document.getElementById("admin-search-user");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  // Show inline loading indicator
+  tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">載入成員名單中...</td></tr>`;
+
+  try {
+    const users = await db.fetchMergedUsersList();
+    
+    // Sort users: current user first, then leaders, then members
+    const roleOrder = { senior_pastor: 1, admin: 2, great_zone_leader: 3, zone_leader: 4, group_leader: 5, member: 6 };
+    const sortedUsers = [...users].sort((a, b) => {
+      if (a.name === state.currentUser.name) return -1;
+      if (b.name === state.currentUser.name) return 1;
+      return (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99);
+    });
+
+    const filteredUsers = sortedUsers.filter(u => u.name.toLowerCase().includes(query));
+
+    tableBody.innerHTML = "";
+
+    if (filteredUsers.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">無相符成員</td></tr>`;
+      return;
+    }
+
+    filteredUsers.forEach(user => {
+      const tr = document.createElement("tr");
+      
+      const roleOptions = [
+        { value: "member", label: "一般組員" },
+        { value: "group_leader", label: "小組長" },
+        { value: "zone_leader", label: "區長" },
+        { value: "great_zone_leader", label: "大區長" },
+        { value: "senior_pastor", label: "主任牧師" },
+        { value: "admin", label: "系統管理員" }
+      ];
+
+      let selectHtml = `<select class="form-control" style="font-size: 0.82rem; padding: 0.25rem 0.5rem; height: auto; width: 100%;">`;
+      roleOptions.forEach(opt => {
+        const selected = user.role === opt.value ? "selected" : "";
+        selectHtml += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+      });
+      selectHtml += `</select>`;
+
+      tr.innerHTML = `
+        <td><strong>${escapeHTML(user.name)}</strong></td>
+        <td>${escapeHTML(user.great_region)} / ${escapeHTML(user.pastoral_zone)} / ${escapeHTML(user.small_group)}</td>
+        <td>${selectHtml}</td>
+        <td style="text-align: center; vertical-align: middle;" class="status-cell">
+          <span style="font-size: 0.8rem; color: var(--text-muted);">--</span>
+        </td>
+      `;
+
+      // Event listener for role selector
+      const select = tr.querySelector("select");
+      const statusCell = tr.querySelector(".status-cell");
+
+      select.onchange = async (e) => {
+        const newRole = e.target.value;
+        statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--primary-color); font-weight: bold;">更新中...</span>`;
+        select.disabled = true;
+
+        const success = await db.updateUserRole(user.id, newRole, user.name);
+
+        select.disabled = false;
+        if (success) {
+          statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #10b981; font-weight: bold;">✓ 已儲存</span>`;
+          // If we edited our own role (using simulation switcher or directly), update local state and view.
+          if (user.name === state.currentUser.name) {
+            state.currentUser.role = newRole;
+            renderProfileView();
+          }
+          // Debounce clean status message
+          setTimeout(() => {
+            if (statusCell.textContent.includes("已儲存")) {
+              statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">--</span>`;
+            }
+          }, 2000);
+        } else {
+          statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #ef4444; font-weight: bold;">✕ 失敗</span>`;
+          // Revert select option
+          select.value = user.role;
+        }
+      };
+
+      tableBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("Failed to render admin user management:", err);
+    tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444;">載入失敗: ${err.message || err}</td></tr>`;
   }
 }
 

@@ -201,9 +201,9 @@ function renderRosterTable(users) {
   sorted.forEach(user => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${user.name}</strong></td>
-      <td>${user.pastoral_zone || "無"}</td>
-      <td>${user.small_group || "無"}</td>
+      <td><strong>${escapeHTML(user.name)}</strong></td>
+      <td>${escapeHTML(user.pastoral_zone || "無")}</td>
+      <td>${escapeHTML(user.small_group || "無")}</td>
       <td><span style="font-weight:700; color: var(--primary-color);">${user.chapters_read}</span> 章</td>
       <td>
         <div style="display:flex; align-items:center; gap:0.5rem;">

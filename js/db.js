@@ -515,6 +515,7 @@ const db = {
             }
 
             return {
+              id: profile.id,
               name: profile.name,
               great_region: profile.great_region,
               pastoral_zone: profile.pastoral_zone,
@@ -757,5 +758,30 @@ const db = {
     renderPlanView();
     updateDashboardView();
     alert("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
+  },
+
+  async updateUserRole(userId, newRole, userName) {
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const { error } = await state.supabase
+          .from("profiles")
+          .update({ role: newRole })
+          .eq("id", userId);
+        if (error) throw error;
+        return true;
+      } catch (err) {
+        console.error("Failed to update user role in Supabase:", err);
+        alert(`更新權限失敗: ${err.message || err}`);
+        return false;
+      }
+    } else {
+      // Demo mode: update local MOCK_USERS_DATA
+      const userIndex = MOCK_USERS_DATA.findIndex(u => u.name === userName);
+      if (userIndex !== -1) {
+        MOCK_USERS_DATA[userIndex].role = newRole;
+        return true;
+      }
+      return false;
+    }
   }
 };
