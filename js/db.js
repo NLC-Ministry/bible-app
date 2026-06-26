@@ -115,6 +115,9 @@ const db = {
 
   // Load User Data (either Supabase or LocalStorage fallbacks)
   async loadUserData() {
+    // 0. Load global preset plans first
+    await this.loadGlobalPlans();
+
     if (state.isSupabaseMode && state.supabase) {
       const { data: { user } } = await state.supabase.auth.getUser();
       if (user) {
@@ -688,8 +691,11 @@ const db = {
   },
 
   async joinPresetPlan(key) {
-    if (!CHURCH_PLAN_PRESETS[key]) return;
-    const preset = CHURCH_PLAN_PRESETS[key];
+    let preset = (state.globalPlans || []).find(p => p.presetKey === key || p.id === key);
+    if (!preset) {
+      preset = CHURCH_PLAN_PRESETS[key];
+    }
+    if (!preset) return;
 
     loader.show("加入挑戰計畫中...");
 
@@ -813,5 +819,133 @@ const db = {
       }
       return false;
     }
+  },
+
+  async loadGlobalPlans() {
+    state.globalPlans = [];
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const { data, error } = await state.supabase
+          .from("global_plans")
+          .select("*")
+          .order("start_date", { ascending: true });
+        
+        if (error) {
+          console.error("Failed to load global plans from Supabase:", error);
+        } else if (data && data.length > 0) {
+          state.globalPlans = data.map(dbPlan => ({
+            id: dbPlan.id,
+            name: dbPlan.name,
+            startDate: dbPlan.start_date,
+            endDate: dbPlan.end_date,
+            books: dbPlan.target_books,
+            presetKey: dbPlan.id
+          }));
+          return;
+        }
+      } catch (e) {
+        console.error("Error loading global plans from Supabase:", e);
+      }
+    }
+    
+    // Fallback: load from local storage or default presets
+    const localGlobal = localStorage.getItem("global_plans_presets");
+    if (localGlobal) {
+      state.globalPlans = JSON.parse(localGlobal);
+    } else {
+      state.globalPlans = Object.entries(CHURCH_PLAN_PRESETS).map(([key, p]) => ({
+        id: key,
+        name: p.name,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        books: p.books,
+        presetKey: key
+      }));
+      localStorage.setItem("global_plans_presets", JSON.stringify(state.globalPlans));
+    }
+  },
+
+  async saveGlobalPlan(plan) {
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const payload = {
+          name: plan.name,
+          start_date: plan.startDate,
+          end_date: plan.endDate,
+          target_books: plan.books
+        };
+        
+        let error;
+        if (plan.id && plan.id.length > 5 && plan.id.includes('-')) {
+          const res = await state.supabase
+            .from("global_plans")
+            .update(payload)
+            .eq("id", plan.id);
+          error = res.error;
+        } else {
+          const res = await state.supabase
+            .from("global_plans")
+            .insert(payload);
+          error = res.error;
+        }
+        
+        if (error) {
+          console.error("Failed to save global plan in Supabase:", error);
+          alert(`儲存計畫失敗: ${error.message || error}`);
+          return false;
+        }
+      } catch (e) {
+        console.error("Error saving global plan in Supabase:", e);
+        alert(`儲存計畫出錯: ${e.message || e}`);
+        return false;
+      }
+    } else {
+      // LocalStorage mode
+      const localGlobal = localStorage.getItem("global_plans_presets");
+      let list = localGlobal ? JSON.parse(localGlobal) : [];
+      if (plan.id) {
+        list = list.map(p => p.id === plan.id ? plan : p);
+      } else {
+        plan.id = "local_" + Date.now();
+        plan.presetKey = plan.id;
+        list.push(plan);
+      }
+      localStorage.setItem("global_plans_presets", JSON.stringify(list));
+    }
+    
+    await this.loadGlobalPlans();
+    return true;
+  },
+
+  async deleteGlobalPlan(planId) {
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const { error } = await state.supabase
+          .from("global_plans")
+          .delete()
+          .eq("id", planId);
+        
+        if (error) {
+          console.error("Failed to delete global plan in Supabase:", error);
+          alert(`刪除計畫失敗: ${error.message || error}`);
+          return false;
+        }
+      } catch (e) {
+        console.error("Error deleting global plan in Supabase:", e);
+        alert(`刪除計畫出錯: ${e.message || e}`);
+        return false;
+      }
+    } else {
+      // LocalStorage mode
+      const localGlobal = localStorage.getItem("global_plans_presets");
+      if (localGlobal) {
+        let list = JSON.parse(localGlobal);
+        list = list.filter(p => p.id !== planId);
+        localStorage.setItem("global_plans_presets", JSON.stringify(list));
+      }
+    }
+    
+    await this.loadGlobalPlans();
+    return true;
   }
 };

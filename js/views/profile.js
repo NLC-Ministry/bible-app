@@ -307,6 +307,11 @@ function initProfileControls() {
       }, 300);
     };
   }
+
+  // Initialize Global Plans Admin Controls
+  if (typeof initAdminPlanManagement === 'function') {
+    initAdminPlanManagement();
+  }
 }
 
 // Render administrative User Permission Management table
@@ -550,4 +555,208 @@ function updateAdminNavVisibility() {
       btn.classList.add("hidden");
     }
   });
+}
+
+function initAdminPlanManagement() {
+  const addBtn = document.getElementById("admin-add-plan-btn");
+  const cancelBtn = document.getElementById("admin-cancel-plan-btn");
+  const saveBtn = document.getElementById("admin-save-plan-btn");
+  const formContainer = document.getElementById("admin-plan-form-container");
+
+  if (!addBtn || !cancelBtn || !saveBtn || !formContainer) return;
+
+  // Render Bible books selection grids
+  const oldGrid = document.getElementById("admin-old-books-grid");
+  const newGrid = document.getElementById("admin-new-books-grid");
+
+  if (oldGrid && newGrid) {
+    oldGrid.innerHTML = "";
+    newGrid.innerHTML = "";
+    BIBLE_BOOKS.forEach(book => {
+      const label = document.createElement("label");
+      label.style = `
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.72rem;
+        cursor: pointer;
+        padding: 0.2rem 0.3rem;
+        border-radius: 4px;
+        background: white;
+        border: 1px solid var(--border-card);
+        user-select: none;
+      `;
+      label.innerHTML = `
+        <input type="checkbox" class="admin-book-checkbox" value="${book.name}" style="margin: 0; cursor: pointer;">
+        ${book.name}
+      `;
+      if (book.section === "old") {
+        oldGrid.appendChild(label);
+      } else {
+        newGrid.appendChild(label);
+      }
+    });
+  }
+
+  // Bind quick select buttons
+  document.getElementById("admin-select-all-books").onclick = () => {
+    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = true);
+  };
+  document.getElementById("admin-clear-books").onclick = () => {
+    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
+  };
+  document.getElementById("admin-select-old-books").onclick = () => {
+    BIBLE_BOOKS.forEach(book => {
+      const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
+      if (cb) cb.checked = book.section === "old";
+    });
+  };
+  document.getElementById("admin-select-new-books").onclick = () => {
+    BIBLE_BOOKS.forEach(book => {
+      const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
+      if (cb) cb.checked = book.section === "new";
+    });
+  };
+
+  // Toggle Form
+  addBtn.onclick = () => {
+    document.getElementById("admin-plan-form-title").textContent = "新增讀經計畫";
+    document.getElementById("admin-edit-plan-id").value = "";
+    document.getElementById("admin-plan-name").value = "";
+    document.getElementById("admin-plan-start-date").value = "";
+    document.getElementById("admin-plan-end-date").value = "";
+    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
+    formContainer.classList.remove("hidden");
+  };
+
+  cancelBtn.onclick = () => {
+    formContainer.classList.add("hidden");
+  };
+
+  // Save Plan
+  saveBtn.onclick = async () => {
+    const id = document.getElementById("admin-edit-plan-id").value;
+    const name = document.getElementById("admin-plan-name").value.trim();
+    const startDate = document.getElementById("admin-plan-start-date").value;
+    const endDate = document.getElementById("admin-plan-end-date").value;
+
+    const checkedBooks = [];
+    document.querySelectorAll(".admin-book-checkbox:checked").forEach(cb => {
+      checkedBooks.push(cb.value);
+    });
+
+    if (!name) {
+      alert("請輸入計畫名稱！");
+      return;
+    }
+    if (!startDate || !endDate) {
+      alert("請選擇計畫開始與結束日期！");
+      return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      alert("開始日期不可晚於結束日期！");
+      return;
+    }
+    if (checkedBooks.length === 0) {
+      alert("請至少選取一個聖經書卷！");
+      return;
+    }
+
+    loader.show("正在儲存計畫...");
+    const success = await db.saveGlobalPlan({
+      id: id || null,
+      name,
+      startDate,
+      endDate,
+      books: checkedBooks
+    });
+    loader.hide();
+
+    if (success) {
+      alert("計畫儲存成功！");
+      formContainer.classList.add("hidden");
+      renderAdminPlanManagement();
+      if (typeof renderPresetPlansList === 'function') {
+        renderPresetPlansList();
+      }
+    }
+  };
+}
+
+async function renderAdminPlanManagement() {
+  const tableBody = document.getElementById("admin-plans-table-body");
+  if (!tableBody) return;
+
+  tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">載入計畫列表中...</td></tr>`;
+
+  try {
+    const plans = state.globalPlans || [];
+    tableBody.innerHTML = "";
+
+    if (plans.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">目前無任何計畫，請點擊上方「新增計畫」建立</td></tr>`;
+      return;
+    }
+
+    plans.forEach(plan => {
+      const tr = document.createElement("tr");
+
+      const bookListText = plan.books.join(", ");
+      const bookCount = plan.books.length;
+      const booksDisplay = bookCount > 6 
+        ? `<span title="${bookListText}" style="cursor: help; text-decoration: underline dashed; text-underline-offset: 3px;">${plan.books.slice(0, 6).join(", ")}... 等 ${bookCount} 卷</span>`
+        : bookListText;
+
+      tr.innerHTML = `
+        <td><strong>${escapeHTML(plan.name)}</strong></td>
+        <td><span style="font-size: 0.8rem; font-weight: 600;">📅 ${plan.startDate} ~ ${plan.endDate}</span></td>
+        <td><span style="font-size: 0.78rem;">${booksDisplay}</span></td>
+        <td style="text-align: center; vertical-align: middle;">
+          <div style="display: flex; gap: 0.3rem; justify-content: center;">
+            <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">編輯</button>
+            <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">刪除</button>
+          </div>
+        </td>
+      `;
+
+      // Bind edit event
+      tr.querySelector(".admin-edit-plan-btn").onclick = () => {
+        document.getElementById("admin-plan-form-title").textContent = "編輯讀經計畫";
+        document.getElementById("admin-edit-plan-id").value = plan.id;
+        document.getElementById("admin-plan-name").value = plan.name;
+        document.getElementById("admin-plan-start-date").value = plan.startDate;
+        document.getElementById("admin-plan-end-date").value = plan.endDate;
+        
+        // Check corresponding books
+        document.querySelectorAll(".admin-book-checkbox").forEach(cb => {
+          cb.checked = plan.books.includes(cb.value);
+        });
+
+        document.getElementById("admin-plan-form-container").classList.remove("hidden");
+        document.getElementById("admin-plan-form-container").scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      };
+
+      // Bind delete event
+      tr.querySelector(".admin-delete-plan-btn").onclick = async () => {
+        if (confirm(`您確定要刪除「${plan.name}」嗎？這將使其他會友無法再從列表「加入」此計畫，但已加入該計畫之會友仍可照常閱讀及打卡。`)) {
+          loader.show("刪除計畫中...");
+          const success = await db.deleteGlobalPlan(plan.id);
+          loader.hide();
+          if (success) {
+            alert("計畫已成功刪除！");
+            renderAdminPlanManagement();
+            if (typeof renderPresetPlansList === 'function') {
+              renderPresetPlansList();
+            }
+          }
+        }
+      };
+
+      tableBody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("Failed to render admin plans:", err);
+    tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444;">載入計畫失敗: ${err.message || err}</td></tr>`;
+  }
 }

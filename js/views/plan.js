@@ -18,6 +18,8 @@ function initPlanControls() {
 
 function getPresetKeyByName(name) {
   if (!name) return null;
+  const foundDb = (state.globalPlans || []).find(p => p.name === name);
+  if (foundDb) return foundDb.presetKey || foundDb.id;
   const found = Object.entries(CHURCH_PLAN_PRESETS).find(([key, preset]) => preset.name === name);
   return found ? found[0] : null;
 }
@@ -47,7 +49,12 @@ function renderPresetPlansList() {
 
   container.innerHTML = "";
 
-  Object.entries(CHURCH_PLAN_PRESETS).forEach(([key, preset]) => {
+  const availablePlans = state.globalPlans && state.globalPlans.length > 0
+    ? state.globalPlans
+    : Object.entries(CHURCH_PLAN_PRESETS).map(([key, p]) => ({ id: key, presetKey: key, ...p }));
+
+  availablePlans.forEach(preset => {
+    const key = preset.presetKey || preset.id;
     const isJoined = state.activePlans && state.activePlans.some(p => p.presetKey === key || getPresetKeyByName(p.name) === key);
 
     const card = document.createElement("div");
