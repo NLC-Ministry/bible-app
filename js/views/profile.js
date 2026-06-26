@@ -838,36 +838,54 @@ function updateHeaderAvatar() {
     admin:             "系統管理員"
   };
 
-  const initial   = document.getElementById("user-avatar-initial");
+  const btn       = document.getElementById("user-avatar-btn");
   const nameEl    = document.getElementById("dropdown-user-name");
   const emailEl   = document.getElementById("dropdown-user-email");
   const roleEl    = document.getElementById("dropdown-user-role");
-
-  if (!initial) return;
 
   const userName  = state.currentUser.name || "用戶";
   const userRole  = state.currentUser.role || "member";
   const roleLabel = roleNames[userRole] || userRole;
 
-  // Avatar initial character
-  initial.textContent = userName.charAt(0) || "用";
-
   // Name
   if (nameEl) nameEl.textContent = userName;
 
-  // Email: show real email in Supabase mode, otherwise show offline label
-  if (emailEl) {
-    if (state.isSupabaseMode && state.supabase) {
-      state.supabase.auth.getUser().then(({ data }) => {
-        emailEl.textContent = (data && data.user && data.user.email) ? data.user.email : "Demo 離線模式";
-      });
-    } else {
-      emailEl.textContent = "Demo 離線模式";
-    }
-  }
-
   // Role badge
   if (roleEl) roleEl.textContent = roleLabel;
+
+  // Update email and avatar image (async when using Supabase Auth)
+  if (state.isSupabaseMode && state.supabase) {
+    state.supabase.auth.getUser().then(({ data }) => {
+      const user = data && data.user;
+      if (user) {
+        if (emailEl && user.email) {
+          emailEl.textContent = user.email;
+        }
+        const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+        if (avatarUrl && btn) {
+          btn.innerHTML = `<img src="${avatarUrl}" alt="頭像" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;">`;
+        } else if (btn) {
+          btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
+        }
+      } else {
+        if (emailEl) emailEl.textContent = "Demo 離線模式";
+        if (btn) {
+          btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
+        }
+      }
+    }).catch(err => {
+      console.error("Error in updateHeaderAvatar:", err);
+      if (emailEl) emailEl.textContent = "Demo 離線模式";
+      if (btn) {
+        btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
+      }
+    });
+  } else {
+    if (emailEl) emailEl.textContent = "Demo 離線模式";
+    if (btn) {
+      btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
+    }
+  }
 }
 
 /**
@@ -879,6 +897,7 @@ function initAvatarDropdown() {
   const btn         = document.getElementById("user-avatar-btn");
   const dropdown    = document.getElementById("avatar-dropdown-menu");
   const btnLogout   = document.getElementById("btn-avatar-logout");
+  const btnProfile  = document.getElementById("btn-avatar-profile");
 
   if (!btn || !dropdown) return;
 
@@ -897,6 +916,17 @@ function initAvatarDropdown() {
       btn.setAttribute("aria-expanded", "false");
     }
   });
+
+  // Settings button
+  if (btnProfile) {
+    btnProfile.addEventListener("click", (e) => {
+      e.preventDefault();
+      dropdown.classList.add("hidden");
+      if (typeof appRouter !== 'undefined' && appRouter.switchTab) {
+        appRouter.switchTab("profile-view");
+      }
+    });
+  }
 
   // Logout button
   if (btnLogout) {

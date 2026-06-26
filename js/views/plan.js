@@ -403,6 +403,7 @@ async function renderPlanView() {
         </div>
       </div>
     `;
+  });
   html += `</div>`;
   container.innerHTML = html;
   renderPresetPlansList();

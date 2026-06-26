@@ -3,8 +3,11 @@
 const db = {
   // Initialize Supabase Connection
   async init() {
-    const sbUrl = typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url ? SUPABASE_CONFIG.url.trim() : "";
-    const sbKey = typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.anonKey ? SUPABASE_CONFIG.anonKey.trim() : "";
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceOfflineDemo = urlParams.get("demo") === "true" || urlParams.get("offline") === "true";
+
+    const sbUrl = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url ? SUPABASE_CONFIG.url.trim() : "");
+    const sbKey = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.anonKey ? SUPABASE_CONFIG.anonKey.trim() : "");
     const statusBadge = document.getElementById("connection-status");
     const authSection = document.getElementById("sb-auth-section");
     const placeholder = document.getElementById("sb-disconnected-placeholder");
