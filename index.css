@@ -1289,3 +1289,158 @@ body {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
+/* Devotional Notes Card styles */
+.devotional-card textarea:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background-color: var(--bg-card);
+}
+
+/* Today Progress Member list styles */
+.member-progress-list::-webkit-scrollbar {
+  width: 4px;
+}
+.member-progress-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.member-progress-list::-webkit-scrollbar-thumb {
+  background: var(--border-card);
+  border-radius: 4px;
+}
+.member-progress-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.member-progress-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+.member-progress-item:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-card);
+  transform: translateX(2px);
+}
+
+.member-progress-item .member-name-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.member-progress-item .member-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.member-progress-item .member-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.progress-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.progress-badge.completed {
+  background: rgba(16, 185, 129, 0.08);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+.progress-badge.pending {
+  background: var(--border-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-card);
+}
+
+/* Monthly Hall of Fame card styles */
+.monthly-fame-card {
+  padding: 2rem;
+}
+
+.monthly-fame-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.monthly-fame-item:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+}
+
+.monthly-fame-month {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.fame-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  font-size: 0.88rem;
+}
+.fame-row:not(:last-child) {
+  border-bottom: 1px dashed var(--border-card);
+}
+
+.fame-rank {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+.fame-rank.gold {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+}
+.fame-rank.silver {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(107, 114, 128, 0.3);
+}
+.fame-rank.bronze {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.3);
+}
+
+.fame-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.fame-value {
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+

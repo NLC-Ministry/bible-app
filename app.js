@@ -150,6 +150,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 6. Initialize Plan Creation Form & Checkboxes
   initPlanControls();
 
+  // 6.2 Initialize Devotional Notes Controls
+  initDevotionalControls();
+
   // 6.5 Load Church Organization Structure
   await loadOrgStructure();
 
@@ -775,6 +778,10 @@ function updateDashboardView() {
 
   // Render Pastoral ranking top 5 list
   renderPastoralZoneRankingList();
+
+  // Load Devotional Notes & Group Progress
+  loadTodayDevotional();
+  renderTodayGroupProgress();
 }
 
 async function renderPastoralZoneRankingList() {
@@ -1889,6 +1896,9 @@ async function updateStatsView() {
     renderCharts(pastoralStats);
   }
 
+  // Render Monthly Hall of Fame
+  renderMonthlyHallOfFame();
+
   loader.hide();
 }
 
@@ -2586,4 +2596,378 @@ async function switchDemoRole(role) {
   }
   
   loader.hide();
+}
+
+// ==========================================
+// PWA/UIUX ENHANCEMENTS: DEVOTIONAL NOTES, GROUP PROGRESS & HALL OF FAME
+// ==========================================
+
+async function fetchMergedUsersList() {
+  const mockUser = {
+    name: state.currentUser.name,
+    great_region: state.currentUser.great_region || "東區",
+    pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+    small_group: state.currentUser.small_group || "馬鈴",
+    role: state.currentUser.role || "member",
+    chapters_read: state.currentUser.chapters_read,
+    plan_progress: state.currentUser.plan_progress,
+    last_read: state.currentUser.last_read
+  };
+
+  if (state.isSupabaseMode && state.supabase) {
+    try {
+      const { data: usersProfiles } = await state.supabase.from("profiles").select("*");
+      const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at");
+      const { data: allPlans } = await state.supabase.from("reading_plans").select("user_id, target_books");
+
+      if (usersProfiles) {
+        return usersProfiles.map(profile => {
+          const uLogs = allLogs ? allLogs.filter(l => l.user_id === profile.id) : [];
+          const uPlan = allPlans ? allPlans.find(p => p.user_id === profile.id) : null;
+          
+          let planProgress = 0;
+          if (uPlan && uPlan.target_books && uPlan.target_books.length > 0) {
+            let totalChapters = 0;
+            uPlan.target_books.forEach(bName => {
+              const b = BIBLE_BOOKS.find(book => book.name === bName);
+              if (b) totalChapters += b.chapters;
+            });
+            if (totalChapters > 0) {
+              planProgress = Math.round((uLogs.length / totalChapters) * 100) || 0;
+            }
+          }
+
+          let lastRead = null;
+          if (uLogs.length > 0) {
+            const sortedLogs = [...uLogs].sort((a, b) => new Date(b.read_at) - new Date(a.read_at));
+            if (sortedLogs[0] && sortedLogs[0].read_at) {
+              lastRead = sortedLogs[0].read_at.substring(0, 10);
+            }
+          }
+
+          return {
+            name: profile.name,
+            great_region: profile.great_region,
+            pastoral_zone: profile.pastoral_zone,
+            small_group: profile.small_group,
+            role: profile.role,
+            chapters_read: uLogs.length,
+            plan_progress: planProgress,
+            streak: profile.streak || 0,
+            last_read: lastRead
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch merged users, falling back to mock:", err);
+    }
+  }
+
+  return MockStatsService.getAllUsers(mockUser);
+}
+
+async function loadTodayDevotional() {
+  const textarea = document.getElementById("devotional-content");
+  const countEl = document.getElementById("devotional-word-count");
+  if (!textarea) return;
+  
+  textarea.value = "";
+  if (countEl) countEl.textContent = "字數: 0 字";
+  
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  
+  if (state.isSupabaseMode && state.supabase) {
+    try {
+      const { data: { user } } = await state.supabase.auth.getUser();
+      if (user) {
+        const { data } = await state.supabase
+          .from("devotional_notes")
+          .select("content")
+          .eq("user_id", user.id)
+          .eq("note_date", todayStr)
+          .maybeSingle();
+          
+        if (data && data.content) {
+          textarea.value = data.content;
+          if (countEl) countEl.textContent = `字數: ${data.content.length} 字`;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load devotional note from Supabase:", err);
+    }
+  } else {
+    const notesStr = localStorage.getItem("devotional_notes");
+    if (notesStr) {
+      const notes = JSON.parse(notesStr);
+      if (notes[todayStr]) {
+        textarea.value = notes[todayStr];
+        if (countEl) countEl.textContent = `字數: ${notes[todayStr].length} 字`;
+      }
+    }
+  }
+}
+
+let devotionalDebounceTimer = null;
+
+function initDevotionalControls() {
+  const textarea = document.getElementById("devotional-content");
+  const saveBtn = document.getElementById("btn-save-devotional");
+  const countEl = document.getElementById("devotional-word-count");
+  
+  if (!textarea) return;
+  
+  textarea.addEventListener("input", () => {
+    const text = textarea.value;
+    if (countEl) countEl.textContent = `字數: ${text.length} 字`;
+    
+    clearTimeout(devotionalDebounceTimer);
+    devotionalDebounceTimer = setTimeout(() => {
+      saveDevotionalNote(true);
+    }, 1000);
+  });
+  
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      clearTimeout(devotionalDebounceTimer);
+      saveDevotionalNote(false);
+    });
+  }
+
+  const searchInput = document.getElementById("member-today-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      renderProgressListFiltered(e.target.value);
+    });
+  }
+}
+
+async function saveDevotionalNote(isAuto) {
+  const textarea = document.getElementById("devotional-content");
+  const statusEl = document.getElementById("devotional-save-status");
+  if (!textarea) return;
+  
+  const content = textarea.value.trim();
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  
+  if (statusEl && isAuto) {
+    statusEl.textContent = "自動儲存中...";
+    statusEl.style.opacity = "1";
+  }
+  
+  if (state.isSupabaseMode && state.supabase) {
+    try {
+      const { data: { user } } = await state.supabase.auth.getUser();
+      if (!user) return;
+      
+      const { error } = await state.supabase
+        .from("devotional_notes")
+        .upsert({
+          user_id: user.id,
+          note_date: todayStr,
+          content: content
+        }, { onConflict: 'user_id,note_date' });
+        
+      if (error) throw error;
+      
+      showSaveSuccess(isAuto);
+    } catch (err) {
+      console.error("Failed to save devotional note:", err);
+      if (statusEl) {
+        statusEl.textContent = "儲存失敗";
+        statusEl.style.color = "#ef4444";
+        statusEl.style.opacity = "1";
+      }
+    }
+  } else {
+    try {
+      const notesStr = localStorage.getItem("devotional_notes") || "{}";
+      const notes = JSON.parse(notesStr);
+      notes[todayStr] = content;
+      localStorage.setItem("devotional_notes", JSON.stringify(notes));
+      showSaveSuccess(isAuto);
+    } catch (err) {
+      console.error("Failed to save devotional note:", err);
+    }
+  }
+}
+
+function showSaveSuccess(isAuto) {
+  const statusEl = document.getElementById("devotional-save-status");
+  if (!statusEl) return;
+  
+  statusEl.innerHTML = `
+    <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+    已自動儲存
+  `;
+  statusEl.style.color = "#10b981";
+  statusEl.style.opacity = "1";
+  
+  if (!isAuto) {
+    statusEl.innerHTML = `
+      <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+      儲存成功
+    `;
+  }
+  
+  setTimeout(() => {
+    statusEl.style.opacity = "0";
+  }, 2000);
+}
+
+async function renderTodayGroupProgress() {
+  const listEl = document.getElementById("member-today-list");
+  if (!listEl) return;
+  
+  listEl.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1rem;">載入中...</div>';
+  
+  let allUsers = await fetchMergedUsersList();
+  
+  const mockUser = {
+    name: state.currentUser.name,
+    great_region: state.currentUser.great_region || "東區",
+    pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+    small_group: state.currentUser.small_group || "馬鈴",
+    role: state.currentUser.role || "member"
+  };
+  
+  let groupMembers = allUsers.filter(u => 
+    u.pastoral_zone === mockUser.pastoral_zone && 
+    u.small_group === mockUser.small_group
+  );
+  
+  if (groupMembers.length === 0) {
+    groupMembers = allUsers.slice(0, 10);
+  }
+  
+  state.todayGroupMembers = groupMembers;
+  
+  renderProgressListFiltered("");
+}
+
+function renderProgressListFiltered(searchText) {
+  const listEl = document.getElementById("member-today-list");
+  if (!listEl || !state.todayGroupMembers) return;
+  
+  listEl.innerHTML = "";
+  
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  
+  const query = searchText.trim().toLowerCase();
+  const filtered = state.todayGroupMembers.filter(m => 
+    m.name.toLowerCase().includes(query)
+  );
+  
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1rem;">無相符成員</div>';
+    return;
+  }
+  
+  filtered.forEach(m => {
+    const isRecentRead = m.last_read && (
+      m.last_read === todayStr ||
+      m.last_read === "2026-06-26" ||
+      m.last_read === "2026-06-25"
+    );
+
+    const item = document.createElement("div");
+    item.className = "member-progress-item";
+    
+    const nameInfo = document.createElement("div");
+    nameInfo.className = "member-name-info";
+    
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "member-name";
+    nameSpan.textContent = m.name;
+    nameInfo.appendChild(nameSpan);
+    
+    const metaSpan = document.createElement("span");
+    metaSpan.className = "member-meta";
+    metaSpan.textContent = `連續讀經: ${m.streak || 0}天 | 總章數: ${m.chapters_read || 0}章`;
+    nameInfo.appendChild(metaSpan);
+    
+    item.appendChild(nameInfo);
+    
+    const badge = document.createElement("span");
+    if (isRecentRead) {
+      badge.className = "progress-badge completed";
+      badge.innerHTML = `
+        <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none" style="display:inline-block; vertical-align:middle; margin-right:2px;"><polyline points="20 6 9 17 4 12"/></svg>
+        今日已讀
+      `;
+    } else {
+      badge.className = "progress-badge pending";
+      badge.textContent = "未打卡";
+    }
+    item.appendChild(badge);
+    
+    listEl.appendChild(item);
+  });
+}
+
+function renderMonthlyHallOfFame() {
+  const fameList = document.getElementById("monthly-fame-list");
+  if (!fameList) return;
+  
+  fameList.innerHTML = "";
+  
+  const winners = [
+    {
+      month: "2026年6月 (本月累計)",
+      top3: [
+        { rank: "gold", name: "楊俊傑", zone: "大安6", chapters: 980 },
+        { rank: "silver", name: "蕭志平", zone: "中永和", chapters: 800 },
+        { rank: "bronze", name: "東區大區長", zone: "大安1", chapters: 750 }
+      ]
+    },
+    {
+      month: "2026年5月 (結算前三)",
+      top3: [
+        { rank: "gold", name: "張明哲", zone: "大安2", chapters: 650 },
+        { rank: "silver", name: "郭家豪", zone: "文山", chapters: 620 },
+        { rank: "bronze", name: "東區區長", zone: "大安1", chapters: 600 }
+      ]
+    },
+    {
+      month: "2026年4月 (結算前三)",
+      top3: [
+        { rank: "gold", name: "許美惠", zone: "大安6", chapters: 540 },
+        { rank: "silver", name: "吳志明", zone: "大安1", chapters: 520 },
+        { rank: "bronze", name: "陳建國", zone: "大安1", chapters: 480 }
+      ]
+    }
+  ];
+  
+  winners.forEach(w => {
+    const item = document.createElement("div");
+    item.className = "monthly-fame-item";
+    
+    const title = document.createElement("div");
+    title.className = "monthly-fame-month";
+    title.textContent = w.month;
+    item.appendChild(title);
+    
+    w.top3.forEach((t, i) => {
+      const row = document.createElement("div");
+      row.className = "fame-row";
+      
+      const rankSpan = document.createElement("span");
+      rankSpan.className = `fame-rank ${t.rank}`;
+      rankSpan.textContent = i + 1;
+      row.appendChild(rankSpan);
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "fame-name";
+      nameSpan.textContent = `${t.name} (${t.zone})`;
+      row.appendChild(nameSpan);
+      
+      const valSpan = document.createElement("span");
+      valSpan.className = "fame-value";
+      valSpan.textContent = `${t.chapters} 章`;
+      row.appendChild(valSpan);
+      
+      item.appendChild(row);
+    });
+    
+    fameList.appendChild(item);
+  });
 }

@@ -1085,3 +1085,22 @@ BEGIN
   ON CONFLICT (name, pastoral_zone_id) DO NOTHING;
 
 END $$;
+
+-- ==========================================
+-- 建立每日靈修心得資料表 (Devotional Notes)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.devotional_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    note_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, note_date)
+);
+
+-- 啟用 RLS
+ALTER TABLE public.devotional_notes ENABLE ROW LEVEL SECURITY;
+
+-- 建立安全存取原則
+CREATE POLICY "Users can manage their own devotional notes" ON public.devotional_notes
+    FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
