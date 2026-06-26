@@ -24,7 +24,7 @@ function renderProfileView() {
     senior_pastor: "主任牧師 (最高權限)",
     admin: "系統管理員"
   };
-  roleDisplay.value = roleNames[state.currentUser.role] || "一般組員";
+  roleDisplay.textContent = roleNames[state.currentUser.role] || "一般組員";
 
   const greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
     ? state.orgStructure.regions 
@@ -51,6 +51,7 @@ function renderProfileView() {
   greatRegionSelect.value = userGreatRegion || "";
 
   populateProfileZones(greatRegionSelect.value, true);
+  populateProfileGroupSelector(true);
 
   greatRegionSelect.onchange = () => {
     populateProfileZones(greatRegionSelect.value, false);
