@@ -447,12 +447,11 @@ function populateProfileZones(greatRegion, autoSelect = true) {
   });
 
   // Append user's custom value at the bottom if not in predefined list
-  if (userZone && userZone !== "custom" && !predefinedZones.includes(userZone)) {
+  if (autoSelect && userZone && userZone !== "custom" && !predefinedZones.includes(userZone)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userZone;
     tempOpt.textContent = userZone;
-    // Only auto-select on initial load
-    if (autoSelect) tempOpt.selected = true;
+    tempOpt.selected = true;
     zoneSelect.appendChild(tempOpt);
   }
 
@@ -512,12 +511,11 @@ function populateProfileGroupSelector(autoSelect = true) {
   });
 
   // Append user's custom value at the bottom if not in predefined list
-  if (userGroup && userGroup !== "custom" && !predefinedGroups.includes(userGroup)) {
+  if (autoSelect && userGroup && userGroup !== "custom" && !predefinedGroups.includes(userGroup)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userGroup;
     tempOpt.textContent = userGroup;
-    // Only auto-select on initial load
-    if (autoSelect) tempOpt.selected = true;
+    tempOpt.selected = true;
     groupSelect.appendChild(tempOpt);
   }
 

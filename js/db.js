@@ -479,7 +479,7 @@ const db = {
         great_region_id: regionObj ? regionObj.id : null,
         pastoral_zone_id: zoneObj ? zoneObj.id : null,
         small_group_id: groupObj ? groupObj.id : null,
-        role: state.currentUser.role,
+        role: state.realRole || "member",
         updated_at: new Date().toISOString()
       });
     }
@@ -556,7 +556,7 @@ const db = {
       try {
         const { data: usersProfiles } = await state.supabase.from("profiles").select("*").eq("is_demo", false);
         const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at");
-        const { data: allPlans } = await state.supabase.from("reading_plans").select("user_id, target_books");
+        const { data: allPlans } = await state.supabase.from("reading_plans").select("user_id, target_books, current_round, level");
 
         if (usersProfiles) {
           return usersProfiles.map(profile => {
@@ -593,7 +593,9 @@ const db = {
               chapters_read: uLogs.length,
               plan_progress: planProgress,
               streak: profile.streak || 0,
-              last_read: lastRead
+              last_read: lastRead,
+              current_round: uPlan ? (uPlan.current_round || 1) : 1,
+              level: uPlan ? (uPlan.level || 'normal') : 'normal'
             };
           });
         }

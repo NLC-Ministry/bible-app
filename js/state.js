@@ -62,7 +62,8 @@ const state = {
   statsCharts: {
     rank: null,
     progress: null,
-    group: null
+    group: null,
+    growth: null
   }
 };
 

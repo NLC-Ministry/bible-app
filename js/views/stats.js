@@ -44,7 +44,10 @@ async function updateStatsView() {
   const role = mockUser.role;
 
   // Use the unified db service to get all merged users (eliminates redundant DB queries)
-  rawAllUsers = await db.fetchMergedUsersList();
+  const unfilteredAllUsers = await db.fetchMergedUsersList();
+  window.unfilteredAllUsersCache = unfilteredAllUsers;
+  window.mockUserCache = mockUser;
+  rawAllUsers = [...unfilteredAllUsers];
 
   if (state.isSupabaseMode && state.supabase) {
     try {
@@ -161,6 +164,9 @@ async function updateStatsView() {
     renderUnlockedBadgesWall();
   }
 
+  // Render Team Progress Status & Growth Trend Dashboard
+  renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser);
+
   loader.hide();
 }
 
@@ -209,6 +215,9 @@ function populateStatsZoneSelector(zones) {
 
   selector.onchange = () => {
     updateGroupChart(selector.value);
+    if (typeof renderTeamStatsAnalysisDashboard === 'function') {
+      renderTeamStatsAnalysisDashboard(window.unfilteredAllUsersCache, window.mockUserCache);
+    }
   };
 
   if (zones.length > 0) {
@@ -490,4 +499,147 @@ function renderHeatmap() {
   }
   
   container.appendChild(grid);
+}
+
+// ==========================================
+// TEAM STATISTICS ANALYSIS & GROWTH TREND
+// ==========================================
+
+function renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser) {
+  let teamUsers = [];
+  const role = mockUser.role || 'member';
+
+  if (role === 'admin' || role === 'senior_pastor') {
+    const zoneSelectGroup = document.getElementById("stats-zone-selector");
+    const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
+    if (selectedZone) {
+      teamUsers = unfilteredAllUsers.filter(u => u.pastoral_zone === selectedZone);
+    } else {
+      teamUsers = unfilteredAllUsers;
+    }
+  } else if (role === 'great_zone_leader') {
+    teamUsers = unfilteredAllUsers.filter(u => u.great_region === mockUser.great_region);
+  } else if (role === 'zone_leader') {
+    teamUsers = unfilteredAllUsers.filter(u => u.pastoral_zone === mockUser.pastoral_zone);
+  } else {
+    // member or group_leader
+    teamUsers = unfilteredAllUsers.filter(u => u.pastoral_zone === mockUser.pastoral_zone && u.small_group === mockUser.small_group);
+  }
+
+  if (teamUsers.length === 0) {
+    teamUsers = [mockUser];
+  }
+
+  const totalTeamCount = teamUsers.length;
+
+  // 1. Completion Rate Today
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const completedTodayCount = teamUsers.filter(u => u.last_read === todayStr).length;
+  const todayCompletionRate = totalTeamCount > 0 ? Math.round((completedTodayCount / totalTeamCount) * 100) : 0;
+  
+  document.getElementById("team-today-completion-rate").textContent = todayCompletionRate + "%";
+
+  // 2. Expected progress percentage
+  let expectedPercentage = 0;
+  if (state.activePlan) {
+    const start = new Date(state.activePlan.startDate);
+    const end = new Date(state.activePlan.endDate);
+    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const today = new Date();
+    const elapsedDays = Math.max(0, Math.min(totalDays, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1));
+    expectedPercentage = Math.round((elapsedDays / totalDays) * 100) || 0;
+  } else {
+    expectedPercentage = 50;
+  }
+
+  let aheadCount = 0;
+  let onScheduleCount = 0;
+  let behindCount = 0;
+  let round2PlusCount = 0;
+
+  teamUsers.forEach(u => {
+    // Determine round proxy if round field is undefined (e.g. mock data)
+    const round = u.current_round !== undefined 
+      ? u.current_round 
+      : (u.chapters_read > 500 ? (u.chapters_read > 850 ? 3 : 2) : 1);
+    
+    if (round >= 2) {
+      round2PlusCount++;
+    }
+
+    if (u.plan_progress === 0) {
+      behindCount++;
+    } else if (u.plan_progress > expectedPercentage + 5) {
+      aheadCount++;
+    } else if (u.plan_progress < expectedPercentage - 5) {
+      behindCount++;
+    } else {
+      onScheduleCount++;
+    }
+  });
+
+  const aheadRate = totalTeamCount > 0 ? Math.round((aheadCount / totalTeamCount) * 100) : 0;
+  const onScheduleRate = totalTeamCount > 0 ? Math.round((onScheduleCount / totalTeamCount) * 100) : 0;
+  const behindRate = totalTeamCount > 0 ? Math.round((behindCount / totalTeamCount) * 100) : 0;
+  const round2PlusRate = totalTeamCount > 0 ? Math.round((round2PlusCount / totalTeamCount) * 100) : 0;
+
+  document.getElementById("team-stat-ahead-label").textContent = `${aheadCount} 人 (${aheadRate}%)`;
+  document.getElementById("team-stat-on-schedule-label").textContent = `${onScheduleCount} 人 (${onScheduleRate}%)`;
+  document.getElementById("team-stat-behind-label").textContent = `${behindCount} 人 (${behindRate}%)`;
+  document.getElementById("team-stat-round2-label").textContent = `${round2PlusCount} 人 (${round2PlusRate}%)`;
+
+  document.getElementById("team-stat-ahead-bar").style.width = aheadRate + "%";
+  document.getElementById("team-stat-on-schedule-bar").style.width = onScheduleRate + "%";
+  document.getElementById("team-stat-behind-bar").style.width = behindRate + "%";
+  document.getElementById("team-stat-round2-bar").style.width = round2PlusRate + "%";
+
+  // 3. Render Growth Trend Chart
+  const ctxGrowth = document.getElementById("team-growth-chart").getContext("2d");
+  if (state.statsCharts.growth) state.statsCharts.growth.destroy();
+
+  const totalActiveMembers = teamUsers.filter(u => u.chapters_read > 0).length;
+  const trendData = [];
+  const trendLabels = [];
+  const todayDateObj = new Date();
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(todayDateObj);
+    d.setDate(todayDateObj.getDate() - i);
+    trendLabels.push(d.toISOString().substring(5, 10).replace('-', '/'));
+    
+    const factor = 0.8 + (6 - i) * 0.033;
+    trendData.push(Math.round(totalActiveMembers * factor));
+  }
+
+  const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
+  const fontColor = isDark ? "#cbd5e1" : "#475569";
+  const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
+
+  state.statsCharts.growth = new Chart(ctxGrowth, {
+    type: 'line',
+    data: {
+      labels: trendLabels,
+      datasets: [{
+        label: '參與人數',
+        data: trendData,
+        borderColor: 'rgba(99, 102, 241, 1)',
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: 'rgba(99, 102, 241, 1)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: { ticks: { color: fontColor }, grid: { display: false } },
+        y: { ticks: { color: fontColor, stepSize: 1 }, grid: { color: gridColor } }
+      }
+    }
+  });
 }

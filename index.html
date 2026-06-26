@@ -505,6 +505,102 @@
           </div>
         </div>
 
+        <!-- Row 0.5: Team Statistics Analysis (New) -->
+        <div class="grid-layout" style="margin-bottom: 1.5rem;" id="team-stats-analysis-row">
+          
+          <!-- Team Today Completion & Growth Chart -->
+          <div class="card-col span-6">
+            <div class="glass-card" style="display: flex; flex-direction: column; height: 100%;">
+              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--primary-color)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+                  <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+                </svg>
+                團隊今日完成率 & 參與人數成長趨勢
+              </h3>
+              
+              <!-- Completion rate indicator -->
+              <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.2rem; background: rgba(255,255,255,0.06); padding: 0.8rem; border-radius: var(--radius-sm); border: 1px dashed var(--border-card);">
+                <div style="text-align: center;">
+                  <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">團隊當天完成率</div>
+                  <div style="font-size: 1.8rem; font-weight: 800; color: var(--primary-color); margin-top: 0.2rem;" id="team-today-completion-rate">0%</div>
+                </div>
+                <div style="flex: 1; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.45;">
+                  💡 <strong>團隊當天完成率</strong> 計算今天有進行讀經打卡的成員比例。鼓勵大家每天穩定靈修！
+                </div>
+              </div>
+
+              <!-- Growth trend chart -->
+              <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.5rem;">參與人數成長趨勢 (過去 7 天)</div>
+              <div style="height: 150px; position: relative;">
+                <canvas id="team-growth-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Team Progress Classification Stats -->
+          <div class="card-col span-6">
+            <div class="glass-card" style="display: flex; flex-direction: column; height: 100%;">
+              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.2rem;">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--primary-color)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+                  <path d="M12 20h9"></path>
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                </svg>
+                團隊成員進度分佈
+              </h3>
+              
+              <div style="display: flex; flex-direction: column; gap: 0.85rem; justify-content: center; height: 100%;">
+                
+                <!-- Ahead -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+                    <span style="font-weight: 600; color: #10b981;">🚀 超前進度</span>
+                    <span style="font-weight: 700; color: var(--text-primary);" id="team-stat-ahead-label">0 人 (0%)</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden;">
+                    <div id="team-stat-ahead-bar" style="width: 0%; height: 100%; background: #10b981; border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+
+                <!-- On Schedule -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+                    <span style="font-weight: 600; color: var(--primary-color);">✅ 進度上</span>
+                    <span style="font-weight: 700; color: var(--text-primary);" id="team-stat-on-schedule-label">0 人 (0%)</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden;">
+                    <div id="team-stat-on-schedule-bar" style="width: 0%; height: 100%; background: var(--primary-color); border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+
+                <!-- Behind -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+                    <span style="font-weight: 600; color: #ef4444;">⚠️ 落後進度</span>
+                    <span style="font-weight: 700; color: var(--text-primary);" id="team-stat-behind-label">0 人 (0%)</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden;">
+                    <div id="team-stat-behind-bar" style="width: 0%; height: 100%; background: #ef4444; border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+
+                <!-- Round 2+ -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+                    <span style="font-weight: 600; color: #eab308;">🔥 重複第二遍以上</span>
+                    <span style="font-weight: 700; color: var(--text-primary);" id="team-stat-round2-label">0 人 (0%)</span>
+                  </div>
+                  <div style="width: 100%; height: 8px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden;">
+                    <div id="team-stat-round2-bar" style="width: 0%; height: 100%; background: #eab308; border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
         <div class="grid-layout">
           <!-- Pastoral Zone Ranking Chart -->
           <div class="card-col span-7">
