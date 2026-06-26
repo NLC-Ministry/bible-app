@@ -131,6 +131,7 @@ const db = {
           state.currentUser.pastoral_zone = profile.pastoral_zone;
           state.currentUser.small_group = profile.small_group;
           state.currentUser.role = profile.role;
+          localStorage.setItem("real_user_role", profile.role);
         } else {
           // First-time login: create profile automatically in Supabase
           state.currentUser.name = (user.user_metadata && user.user_metadata.full_name) || "新使用者";
@@ -138,6 +139,7 @@ const db = {
           state.currentUser.pastoral_zone = "大安1";
           state.currentUser.small_group = "馬鈴";
           state.currentUser.role = "member";
+          localStorage.setItem("real_user_role", "member");
           
           try {
             await state.supabase.from("profiles").insert({
@@ -199,6 +201,9 @@ const db = {
     const localProfile = localStorage.getItem("user_profile");
     if (localProfile) {
       state.currentUser = JSON.parse(localProfile);
+      if (!localStorage.getItem("real_user_role")) {
+        localStorage.setItem("real_user_role", state.currentUser.role);
+      }
       const localLogs = localStorage.getItem("reading_logs");
       state.readingLogs = localLogs ? JSON.parse(localLogs) : [];
       state.currentUser.chapters_read = state.readingLogs.length;
@@ -237,6 +242,7 @@ const db = {
         last_read: new Date().toISOString().split('T')[0]
       };
       localStorage.setItem("user_profile", JSON.stringify(state.currentUser));
+      localStorage.setItem("real_user_role", "admin");
 
       state.activePlan = generatePlanObject(CHURCH_PLAN_PRESETS.q1.name, CHURCH_PLAN_PRESETS.q1.startDate, CHURCH_PLAN_PRESETS.q1.endDate, CHURCH_PLAN_PRESETS.q1.books, "q1");
       state.activePlan.progress = 72;

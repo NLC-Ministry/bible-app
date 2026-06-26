@@ -153,6 +153,18 @@ function renderProfileView() {
   };
 
   // Demo Switcher Listener
+  const realUserRole = localStorage.getItem("real_user_role");
+  const isRealAdmin = realUserRole === "admin" || realUserRole === "senior_pastor";
+  
+  const demoRoleCard = document.querySelector(".demo-role-card");
+  if (demoRoleCard) {
+    if (isRealAdmin) {
+      demoRoleCard.classList.remove("hidden");
+    } else {
+      demoRoleCard.classList.add("hidden");
+    }
+  }
+
   const demoRoleSelect = document.getElementById("demo-role-select");
   if (demoRoleSelect) {
     demoRoleSelect.value = state.currentUser.role || "member";
@@ -279,6 +291,7 @@ function initProfileControls() {
       loader.show("登出中...");
       try {
         await state.supabase.auth.signOut();
+        localStorage.removeItem("real_user_role");
         db.updateAuthUI(null);
         await db.loadUserData();
         alert("已成功登出。");
