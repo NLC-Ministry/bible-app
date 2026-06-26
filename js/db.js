@@ -144,6 +144,7 @@ const db = {
           state.currentUser.pastoral_zone = profile.pastoral_zone;
           state.currentUser.small_group = profile.small_group;
           state.currentUser.role = profile.role;
+          state.currentUser.is_demo = !!profile.is_demo;
           state.realRole = profile.role;
         } else {
           // First-time login: create profile automatically in Supabase
@@ -152,6 +153,7 @@ const db = {
           state.currentUser.pastoral_zone = "大安1";
           state.currentUser.small_group = "馬鈴";
           state.currentUser.role = "member";
+          state.currentUser.is_demo = false;
           state.realRole = "member";
           
           try {
@@ -537,7 +539,7 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles } = await state.supabase.from("profiles").select("*");
+        const { data: usersProfiles } = await state.supabase.from("profiles").select("*").eq("is_demo", false);
         const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at");
         const { data: allPlans } = await state.supabase.from("reading_plans").select("user_id, target_books");
 
@@ -588,6 +590,79 @@ const db = {
     return MockStatsService.getAllUsers(mockUser);
   },
 
+  async getUserRankings() {
+    if (state.isSupabaseMode && state.supabase && state.currentUser && state.currentUser.id) {
+      try {
+        const { data, error } = await state.supabase.rpc('get_user_rankings', { user_uuid: state.currentUser.id });
+        if (error) throw error;
+        if (data && data.length > 0) {
+          return {
+            groupRank: parseInt(data[0].group_rank, 10),
+            groupTotal: parseInt(data[0].group_total, 10),
+            zoneRank: parseInt(data[0].zone_rank, 10),
+            zoneTotal: parseInt(data[0].zone_total, 10),
+            regionRank: parseInt(data[0].region_rank, 10),
+            regionTotal: parseInt(data[0].region_total, 10),
+            churchRank: parseInt(data[0].church_rank, 10),
+            churchTotal: parseInt(data[0].church_total, 10)
+          };
+        }
+      } catch (err) {
+        console.error("Failed to call get_user_rankings RPC:", err);
+      }
+    }
+
+    // Offline / Demo fallback calculation
+    const allMockUsers = [...MOCK_USERS_DATA];
+    const currentMockIdx = allMockUsers.findIndex(u => u.name === state.currentUser.name);
+    const updatedCurrentUser = {
+      name: state.currentUser.name,
+      great_region: state.currentUser.great_region || "東區",
+      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
+      small_group: state.currentUser.small_group || "馬鈴",
+      role: state.currentUser.role || "member",
+      chapters_read: state.currentUser.chapters_read || 0,
+      plan_progress: state.currentUser.plan_progress || 0,
+      streak: state.currentUser.streak || 0,
+      last_read: state.currentUser.last_read
+    };
+    if (currentMockIdx !== -1) {
+      allMockUsers[currentMockIdx] = updatedCurrentUser;
+    } else {
+      allMockUsers.push(updatedCurrentUser);
+    }
+
+    const getRankAndTotal = (filteredList) => {
+      const sorted = [...filteredList].sort((a, b) => {
+        if (b.chapters_read !== a.chapters_read) {
+          return b.chapters_read - a.chapters_read;
+        }
+        return a.name.localeCompare(b.name);
+      });
+      const myIdx = sorted.findIndex(u => u.name === state.currentUser.name);
+      return {
+        rank: myIdx !== -1 ? myIdx + 1 : 0,
+        total: sorted.length
+      };
+    };
+
+    const churchStats = getRankAndTotal(allMockUsers);
+    const regionStats = getRankAndTotal(allMockUsers.filter(u => u.great_region === updatedCurrentUser.great_region));
+    const zoneStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone));
+    const groupStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone && u.small_group === updatedCurrentUser.small_group));
+
+    return {
+      groupRank: groupStats.rank,
+      groupTotal: groupStats.total,
+      zoneRank: zoneStats.rank,
+      zoneTotal: zoneStats.total,
+      regionRank: regionStats.rank,
+      regionTotal: regionStats.total,
+      churchRank: churchStats.rank,
+      churchTotal: churchStats.total
+    };
+  },
+
   async switchDemoRole(role) {
     loader.show("切換模擬角色中...");
     
@@ -613,6 +688,7 @@ const db = {
       pastoral_zone: mockUser.pastoral_zone,
       small_group: mockUser.small_group,
       role: mockUser.role,
+      is_demo: true,
       chapters_read: mockUser.chapters_read,
       plan_progress: mockUser.plan_progress,
       streak: mockUser.streak,

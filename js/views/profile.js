@@ -26,9 +26,15 @@ function renderProfileView() {
   };
   roleDisplay.textContent = roleNames[state.currentUser.role] || "一般組員";
 
-  const greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
+  const showDemoData = !state.isSupabaseMode || !!state.currentUser.is_demo;
+
+  let greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
     ? state.orgStructure.regions 
     : ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
+  
+  if (!showDemoData) {
+    greatRegionsList = greatRegionsList.filter(r => !r.startsWith("示範"));
+  }
   
   greatRegionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
   greatRegionsList.forEach(rName => {
@@ -41,12 +47,18 @@ function renderProfileView() {
   const userGreatRegion = state.currentUser.great_region;
 
   // Append user's value if it's not in the database, without "(唯讀)"
-  if (userGreatRegion && !greatRegionsList.includes(userGreatRegion)) {
+  if (userGreatRegion && userGreatRegion !== "custom" && !greatRegionsList.includes(userGreatRegion)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userGreatRegion;
     tempOpt.textContent = userGreatRegion;
     greatRegionSelect.appendChild(tempOpt);
   }
+
+  // Append custom option at the bottom
+  const customRegionOpt = document.createElement("option");
+  customRegionOpt.value = "custom";
+  customRegionOpt.textContent = "自訂大區...";
+  greatRegionSelect.appendChild(customRegionOpt);
 
   greatRegionSelect.value = userGreatRegion || "";
 
@@ -54,23 +66,42 @@ function renderProfileView() {
   populateProfileGroupSelector(true);
 
   greatRegionSelect.onchange = () => {
+    if (greatRegionSelect.value === "custom") {
+      customGreatRegionInput.classList.remove("hidden");
+    } else {
+      customGreatRegionInput.classList.add("hidden");
+      customGreatRegionInput.value = "";
+    }
     populateProfileZones(greatRegionSelect.value, false);
     populateProfileGroupSelector(false);
   };
 
   zoneSelect.onchange = () => {
+    if (zoneSelect.value === "custom") {
+      customZoneInput.classList.remove("hidden");
+    } else {
+      customZoneInput.classList.add("hidden");
+      customZoneInput.value = "";
+    }
     populateProfileGroupSelector(false);
   };
 
-  groupSelect.onchange = () => {};
+  groupSelect.onchange = () => {
+    if (groupSelect.value === "custom") {
+      customGroupInput.classList.remove("hidden");
+    } else {
+      customGroupInput.classList.add("hidden");
+      customGroupInput.value = "";
+    }
+  };
 
   // Submit profile details
   document.getElementById("profile-form").onsubmit = async (e) => {
     e.preventDefault();
     const name = document.getElementById("profile-name").value.trim();
-    const greatRegion = greatRegionSelect.value;
-    const zone = zoneSelect.value;
-    const group = groupSelect.value;
+    const greatRegion = greatRegionSelect.value === "custom" ? customGreatRegionInput.value.trim() : greatRegionSelect.value;
+    const zone = zoneSelect.value === "custom" ? customZoneInput.value.trim() : zoneSelect.value;
+    const group = groupSelect.value === "custom" ? customGroupInput.value.trim() : groupSelect.value;
 
     if (!greatRegion || !zone || !group) {
       alert("請完整填寫大區、牧區與小組資料！");
@@ -303,7 +334,8 @@ async function renderAdminUserManagement() {
 
     filteredUsers.forEach(user => {
       const tr = document.createElement("tr");
-      
+      const isDemo = !!user.is_demo;
+
       const roleOptions = [
         { value: "member", label: "一般組員" },
         { value: "group_leader", label: "小組長" },
@@ -313,53 +345,56 @@ async function renderAdminUserManagement() {
         { value: "admin", label: "系統管理員" }
       ];
 
-      let selectHtml = `<select class="form-control" style="font-size: 0.82rem; padding: 0.25rem 0.5rem; height: auto; width: 100%;">`;
+      let selectHtml = `<select class="form-control" style="font-size: 0.82rem; padding: 0.25rem 0.5rem; height: auto; width: 100%;" ${isDemo ? "disabled title=\"示範帳號不可更改角色\"" : ""}>`;
       roleOptions.forEach(opt => {
         const selected = user.role === opt.value ? "selected" : "";
         selectHtml += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
       });
       selectHtml += `</select>`;
 
+      const demoBadge = isDemo
+        ? `<span style="display:inline-block;margin-left:0.4rem;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.65rem;font-weight:700;background:rgba(251,191,36,0.18);color:#d97706;border:1px solid rgba(251,191,36,0.4);">示範</span>`
+        : "";
+
       tr.innerHTML = `
-        <td><strong>${escapeHTML(user.name)}</strong></td>
+        <td><strong>${escapeHTML(user.name)}</strong>${demoBadge}</td>
         <td>${escapeHTML(user.great_region)} / ${escapeHTML(user.pastoral_zone)} / ${escapeHTML(user.small_group)}</td>
         <td>${selectHtml}</td>
         <td style="text-align: center; vertical-align: middle;" class="status-cell">
-          <span style="font-size: 0.8rem; color: var(--text-muted);">--</span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">${isDemo ? "示範帳號" : "--"}</span>
         </td>
       `;
 
-      // Event listener for role selector
-      const select = tr.querySelector("select");
-      const statusCell = tr.querySelector(".status-cell");
+      if (!isDemo) {
+        // Event listener for role selector (only for real accounts)
+        const select = tr.querySelector("select");
+        const statusCell = tr.querySelector(".status-cell");
 
-      select.onchange = async (e) => {
-        const newRole = e.target.value;
-        statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--primary-color); font-weight: bold;">更新中...</span>`;
-        select.disabled = true;
+        select.onchange = async (e) => {
+          const newRole = e.target.value;
+          statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--primary-color); font-weight: bold;">更新中...</span>`;
+          select.disabled = true;
 
-        const success = await db.updateUserRole(user.id, newRole, user.name);
+          const success = await db.updateUserRole(user.id, newRole, user.name);
 
-        select.disabled = false;
-        if (success) {
-          statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #10b981; font-weight: bold;">✓ 已儲存</span>`;
-          // If we edited our own role (using simulation switcher or directly), update local state and view.
-          if (user.name === state.currentUser.name) {
-            state.currentUser.role = newRole;
-            renderProfileView();
-          }
-          // Debounce clean status message
-          setTimeout(() => {
-            if (statusCell.textContent.includes("已儲存")) {
-              statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">--</span>`;
+          select.disabled = false;
+          if (success) {
+            statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #10b981; font-weight: bold;">✓ 已儲存</span>`;
+            if (user.name === state.currentUser.name) {
+              state.currentUser.role = newRole;
+              renderProfileView();
             }
-          }, 2000);
-        } else {
-          statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #ef4444; font-weight: bold;">✕ 失敗</span>`;
-          // Revert select option
-          select.value = user.role;
-        }
-      };
+            setTimeout(() => {
+              if (statusCell.textContent.includes("已儲存")) {
+                statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">--</span>`;
+              }
+            }, 2000);
+          } else {
+            statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #ef4444; font-weight: bold;">✕ 失敗</span>`;
+            select.value = user.role;
+          }
+        };
+      }
 
       tableBody.appendChild(tr);
     });
@@ -372,15 +407,34 @@ async function renderAdminUserManagement() {
 
 function populateProfileZones(greatRegion, autoSelect = true) {
   const zoneSelect = document.getElementById("profile-zone");
+  const customZoneInput = document.getElementById("profile-zone-custom");
   const userZone = state.currentUser.pastoral_zone;
 
   zoneSelect.innerHTML = `<option value="">-- 請選擇牧區 --</option>`;
 
-  if (!greatRegion) return;
+  // Reset custom input box visibility when region selection changes
+  if (!autoSelect) {
+    customZoneInput.classList.add("hidden");
+    customZoneInput.value = "";
+  }
 
-  const predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion]) 
+  if (!greatRegion || greatRegion === "custom") {
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    customOpt.textContent = "自訂牧區...";
+    zoneSelect.appendChild(customOpt);
+    return;
+  }
+
+  const showDemoData = !state.isSupabaseMode || !!state.currentUser.is_demo;
+
+  let predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion] && state.orgStructure.zones[greatRegion].length > 0) 
     ? state.orgStructure.zones[greatRegion] 
     : (MOCK_PASTORAL_ZONES_BY_REGION[greatRegion] || []);
+  
+  if (!showDemoData) {
+    predefinedZones = predefinedZones.filter(z => !z.startsWith("示範"));
+  }
   
   predefinedZones.forEach(zName => {
     const option = document.createElement("option");
@@ -394,7 +448,7 @@ function populateProfileZones(greatRegion, autoSelect = true) {
   });
 
   // Append user's custom value at the bottom if not in predefined list
-  if (userZone && !predefinedZones.includes(userZone)) {
+  if (userZone && userZone !== "custom" && !predefinedZones.includes(userZone)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userZone;
     tempOpt.textContent = userZone;
@@ -402,6 +456,12 @@ function populateProfileZones(greatRegion, autoSelect = true) {
     if (autoSelect) tempOpt.selected = true;
     zoneSelect.appendChild(tempOpt);
   }
+
+  // Append custom option at the bottom
+  const customOpt = document.createElement("option");
+  customOpt.value = "custom";
+  customOpt.textContent = "自訂牧區...";
+  zoneSelect.appendChild(customOpt);
 
   if (autoSelect) {
     zoneSelect.value = userZone || "";
@@ -411,16 +471,35 @@ function populateProfileZones(greatRegion, autoSelect = true) {
 function populateProfileGroupSelector(autoSelect = true) {
   const zoneSelect = document.getElementById("profile-zone");
   const groupSelect = document.getElementById("profile-group");
+  const customGroupInput = document.getElementById("profile-group-custom");
   const userGroup = state.currentUser.small_group;
 
   groupSelect.innerHTML = `<option value="">-- 請選擇小組 --</option>`;
 
-  const zone = zoneSelect.value;
-  if (!zone) return;
+  // Reset custom input box visibility when zone selection changes
+  if (!autoSelect) {
+    customGroupInput.classList.add("hidden");
+    customGroupInput.value = "";
+  }
 
-  const predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone]) 
+  const zone = zoneSelect.value;
+  if (!zone || zone === "custom") {
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    customOpt.textContent = "自訂小組...";
+    groupSelect.appendChild(customOpt);
+    return;
+  }
+
+  const showDemoData = !state.isSupabaseMode || !!state.currentUser.is_demo;
+
+  let predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone] && state.orgStructure.groups[zone].length > 0) 
     ? state.orgStructure.groups[zone] 
     : (MOCK_SMALL_GROUPS[zone] || []);
+
+  if (!showDemoData) {
+    predefinedGroups = predefinedGroups.filter(g => !g.startsWith("示範"));
+  }
 
   predefinedGroups.forEach(groupName => {
     const option = document.createElement("option");
@@ -434,7 +513,7 @@ function populateProfileGroupSelector(autoSelect = true) {
   });
 
   // Append user's custom value at the bottom if not in predefined list
-  if (userGroup && !predefinedGroups.includes(userGroup)) {
+  if (userGroup && userGroup !== "custom" && !predefinedGroups.includes(userGroup)) {
     const tempOpt = document.createElement("option");
     tempOpt.value = userGroup;
     tempOpt.textContent = userGroup;
@@ -442,6 +521,12 @@ function populateProfileGroupSelector(autoSelect = true) {
     if (autoSelect) tempOpt.selected = true;
     groupSelect.appendChild(tempOpt);
   }
+
+  // Append custom option at the bottom
+  const customOpt = document.createElement("option");
+  customOpt.value = "custom";
+  customOpt.textContent = "自訂小組...";
+  groupSelect.appendChild(customOpt);
 
   if (autoSelect) {
     groupSelect.value = userGroup || "";

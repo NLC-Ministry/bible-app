@@ -142,8 +142,35 @@
             </div>
           </div>
 
-          <!-- Right Column: Pastoral Top Ranking -->
-          <div class="card-col span-4">
+          <!-- Right Column: Rankings -->
+          <div class="card-col span-4" style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- 我的讀經排名 Card -->
+            <div class="glass-card">
+              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--primary-color)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+                我的讀經排名 (總章數)
+              </h3>
+              <div style="display: flex; flex-direction: column; gap: 0.8rem; font-size: 0.88rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card);">
+                  <span style="color: var(--text-secondary); font-weight: 500;">小組內排名：</span>
+                  <span id="rank-group" style="font-weight: 700; color: var(--primary-color); font-size: 0.95rem;">載入中...</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card);">
+                  <span style="color: var(--text-secondary); font-weight: 500;">牧區內排名：</span>
+                  <span id="rank-zone" style="font-weight: 700; color: var(--primary-color); font-size: 0.95rem;">載入中...</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card);">
+                  <span style="color: var(--text-secondary); font-weight: 500;">大區內排名：</span>
+                  <span id="rank-region" style="font-weight: 700; color: var(--primary-color); font-size: 0.95rem;">載入中...</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="color: var(--text-secondary); font-weight: 500;">全教會排名：</span>
+                  <span id="rank-church" style="font-weight: 700; color: var(--primary-color); font-size: 0.95rem;">載入中...</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 牧區速讀排名 Card -->
             <div class="glass-card">
               <h3 class="card-title">牧區速讀排名 (總章數)</h3>
               <div class="ranking-list" id="dashboard-pastoral-ranking">

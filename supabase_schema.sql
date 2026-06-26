@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   pastoral_zone TEXT NOT NULL,
   small_group TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member', -- 權限角色 (member, group_leader, zone_leader, great_zone_leader, admin, senior_pastor)
+  is_demo BOOLEAN NOT NULL DEFAULT FALSE, -- 是否為示範/測試帳號，正式上線後統計一律排除 demo 成員
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   
   CONSTRAINT check_valid_role CHECK (role IN ('member', 'group_leader', 'zone_leader', 'great_zone_leader', 'admin', 'senior_pastor'))
@@ -266,7 +267,127 @@ CREATE POLICY "根據角色限制 Reading Logs 讀取權限"
   );
 
 -- ==========================================
--- 建立即時統計視圖 (Views) 方便前端查詢
+-- 建立計算計畫總章數的輔助函數與個人排名計算函數
+-- ==========================================
+
+-- 建立計算計畫總章數的輔助函數
+CREATE OR REPLACE FUNCTION public.get_plan_total_chapters(target_books TEXT[])
+RETURNS INTEGER AS $$
+DECLARE
+  b TEXT;
+  total INTEGER := 0;
+BEGIN
+  IF target_books IS NULL THEN
+    RETURN 0;
+  END IF;
+  FOREACH b IN ARRAY target_books LOOP
+    total := total + CASE b
+      WHEN '創世記' THEN 50 WHEN '出埃及記' THEN 40 WHEN '利未記' THEN 27 WHEN '民數記' THEN 36 WHEN '申命記' THEN 34
+      WHEN '約書亞記' THEN 24 WHEN '士師記' THEN 21 WHEN '路得記' THEN 4 WHEN '撒母耳記上' THEN 31 WHEN '撒母耳記下' THEN 24
+      WHEN '列王紀上' THEN 22 WHEN '列王紀下' THEN 25 WHEN '歷代志上' THEN 29 WHEN '歷代志下' THEN 36 WHEN '以斯拉記' THEN 10
+      WHEN '尼希米記' THEN 13 WHEN '以斯帖記' THEN 10 WHEN '約伯記' THEN 42 WHEN '詩篇' THEN 150 WHEN '箴言' THEN 31
+      WHEN '傳道書' THEN 12 WHEN '雅歌' THEN 8 WHEN '以賽亞書' THEN 66 WHEN '耶利米書' THEN 52 WHEN '耶利米哀歌' THEN 5
+      WHEN '以西結書' THEN 48 WHEN '但以理書' THEN 12 WHEN '何西阿書' THEN 14 WHEN '約珥書' THEN 3 WHEN '阿摩司書' THEN 9
+      WHEN '俄巴底亞書' THEN 1 WHEN '約拿書' THEN 4 WHEN '彌迦書' THEN 7 WHEN '那鴻書' THEN 3 WHEN '哈巴谷書' THEN 3
+      WHEN '西番雅書' THEN 3 WHEN '哈該書' THEN 2 WHEN '撒迦利亞書' THEN 14 WHEN '瑪拉基書' THEN 4
+      WHEN '馬太福音' THEN 28 WHEN '馬可福音' THEN 16 WHEN '路加福音' THEN 24 WHEN '約翰福音' THEN 21 WHEN '使徒行傳' THEN 28
+      WHEN '羅馬書' THEN 16 WHEN '哥林多前書' THEN 16 WHEN '哥林多後書' THEN 13 WHEN '加拉太書' THEN 6 WHEN '以弗所書' THEN 6
+      WHEN '腓立比書' THEN 4 WHEN '歌羅西書' THEN 4 WHEN '帖撒羅尼迦前書' THEN 5 WHEN '帖撒羅尼迦後書' THEN 3 WHEN '提摩太前書' THEN 6
+      WHEN '提摩太後書' THEN 4 WHEN '提多書' THEN 3 WHEN '腓利門書' THEN 1 WHEN '希伯來書' THEN 13 WHEN '雅各書' THEN 5
+      WHEN '彼得前書' THEN 5 WHEN '彼得後書' THEN 3 WHEN '約翰一書' THEN 5 WHEN '約翰二書' THEN 1 WHEN '約翰三書' THEN 1
+      WHEN '猶大書' THEN 1 WHEN '啟示錄' THEN 22
+      ELSE 0
+    END;
+  END LOOP;
+  RETURN total;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- 建立個人排名計算函數 (SECURITY DEFINER 以便一般會友越過 RLS 安全計算排名)
+CREATE OR REPLACE FUNCTION public.get_user_rankings(user_uuid UUID)
+RETURNS TABLE (
+  group_rank BIGINT, group_total BIGINT,
+  zone_rank BIGINT, zone_total BIGINT,
+  region_rank BIGINT, region_total BIGINT,
+  church_rank BIGINT, church_total BIGINT
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  u_chapters INT;
+  u_group TEXT;
+  u_zone TEXT;
+  u_region TEXT;
+BEGIN
+  -- 取得使用者的主要大區、牧區、小組
+  SELECT 
+    great_region, pastoral_zone, small_group,
+    (SELECT COUNT(*)::INT FROM public.reading_logs WHERE user_id = user_uuid)
+  INTO 
+    u_region, u_zone, u_group, u_chapters
+  FROM 
+    public.profiles 
+  WHERE 
+    id = user_uuid;
+
+  IF u_region IS NULL THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  WITH 
+    user_totals AS (
+      SELECT 
+        p.id,
+        p.great_region,
+        p.pastoral_zone,
+        p.small_group,
+        COUNT(l.id)::INT as total_chapters
+      FROM 
+        public.profiles p
+      LEFT JOIN 
+        public.reading_logs l ON p.id = l.user_id
+      WHERE
+        p.is_demo = false
+      GROUP BY 
+        p.id, p.great_region, p.pastoral_zone, p.small_group
+    ),
+    ranked_church AS (
+      SELECT id, ROW_NUMBER() OVER (ORDER BY total_chapters DESC, id) as rank
+      FROM user_totals
+    ),
+    ranked_region AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY great_region ORDER BY total_chapters DESC, id) as rank
+      FROM user_totals
+      WHERE great_region = u_region
+    ),
+    ranked_zone AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY pastoral_zone ORDER BY total_chapters DESC, id) as rank
+      FROM user_totals
+      WHERE pastoral_zone = u_zone
+    ),
+    ranked_group AS (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY pastoral_zone, small_group ORDER BY total_chapters DESC, id) as rank
+      FROM user_totals
+      WHERE pastoral_zone = u_zone AND small_group = u_group
+    )
+  SELECT
+    COALESCE((SELECT rank FROM ranked_group WHERE id = user_uuid), 0::BIGINT),
+    COALESCE((SELECT COUNT(*) FROM user_totals WHERE pastoral_zone = u_zone AND small_group = u_group), 0::BIGINT),
+    COALESCE((SELECT rank FROM ranked_zone WHERE id = user_uuid), 0::BIGINT),
+    COALESCE((SELECT COUNT(*) FROM user_totals WHERE pastoral_zone = u_zone), 0::BIGINT),
+    COALESCE((SELECT rank FROM ranked_region WHERE id = user_uuid), 0::BIGINT),
+    COALESCE((SELECT COUNT(*) FROM user_totals WHERE great_region = u_region), 0::BIGINT),
+    COALESCE((SELECT rank FROM ranked_church WHERE id = user_uuid), 0::BIGINT),
+    COALESCE((SELECT COUNT(*) FROM user_totals), 0::BIGINT)
+  ;
+END;
+$$;
+
+-- ==========================================
+-- 建立即時統計視圖 (Views) 方便前端查詢 (過濾 Demo 帳號並由資料庫端安全彙整)
 -- ==========================================
 
 -- 各大區統計數據視圖
@@ -280,23 +401,42 @@ FROM
   public.profiles p
 LEFT JOIN 
   public.reading_logs l ON p.id = l.user_id
+WHERE
+  p.is_demo = false
 GROUP BY 
   p.great_region;
 
 -- 各牧區統計數據視圖
 CREATE OR REPLACE VIEW public.view_pastoral_zone_stats AS
+WITH user_progress AS (
+  SELECT 
+    p.id,
+    p.great_region,
+    p.pastoral_zone,
+    COUNT(l.id) as chapters_read,
+    COALESCE(get_plan_total_chapters(pl.target_books), 0) as total_chapters
+  FROM 
+    public.profiles p
+  LEFT JOIN 
+    public.reading_plans pl ON p.id = pl.user_id
+  LEFT JOIN 
+    public.reading_logs l ON p.id = l.user_id AND l.plan_id = pl.id
+  WHERE
+    p.is_demo = false
+  GROUP BY 
+    p.id, p.great_region, p.pastoral_zone, pl.target_books
+)
 SELECT 
-  p.great_region,
-  p.pastoral_zone,
-  COUNT(DISTINCT p.id) as member_count,
-  COUNT(l.id) as total_chapters_read,
-  COUNT(DISTINCT CASE WHEN l.read_at > NOW() - INTERVAL '2 days' THEN p.id END) as active_member_count
+  great_region,
+  pastoral_zone,
+  COUNT(DISTINCT id) as member_count,
+  SUM(chapters_read)::BIGINT as total_chapters_read,
+  COALESCE(ROUND(AVG(CASE WHEN total_chapters > 0 THEN (chapters_read::FLOAT / total_chapters::FLOAT * 100.0) ELSE 0.0 END)), 0)::INTEGER as avg_progress,
+  COUNT(DISTINCT CASE WHEN id IN (SELECT DISTINCT user_id FROM public.reading_logs WHERE read_at > NOW() - INTERVAL '2 days') THEN id END) as active_member_count
 FROM 
-  public.profiles p
-LEFT JOIN 
-  public.reading_logs l ON p.id = l.user_id
+  user_progress
 GROUP BY 
-  p.great_region, p.pastoral_zone;
+  great_region, pastoral_zone;
 
 -- 各小組統計數據視圖
 CREATE OR REPLACE VIEW public.view_small_group_stats AS
@@ -310,6 +450,8 @@ FROM
   public.profiles p
 LEFT JOIN 
   public.reading_logs l ON p.id = l.user_id
+WHERE
+  p.is_demo = false
 GROUP BY 
   p.great_region, p.pastoral_zone, p.small_group;
 

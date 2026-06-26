@@ -70,73 +70,64 @@ const MOCK_SMALL_GROUPS = {
 };
 
 // Generate mock users with roles and great regions mapping
+// ⚠️  所有牧區/小組名稱均為虛擬示範資料，與真實教會組織無關
 const MOCK_USERS_DATA = [
-  // 東區 - 大安1
-  { name: "陳建國", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "group_leader", chapters_read: 480, plan_progress: 85, streak: 12, last_read: "2026-06-25" },
-  { name: "林秀琴", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "member", chapters_read: 210, plan_progress: 35, streak: 3, last_read: "2026-06-25" },
-  { name: "吳志明", great_region: "東區", pastoral_zone: "大安1", small_group: "安利", role: "member", chapters_read: 520, plan_progress: 88, streak: 14, last_read: "2026-06-25" },
-  
-  // 東區 - 大安2
-  { name: "張明哲", great_region: "東區", pastoral_zone: "大安2", small_group: "名雅", role: "group_leader", chapters_read: 650, plan_progress: 92, streak: 25, last_read: "2026-06-24" },
-  { name: "黃雅婷", great_region: "東區", pastoral_zone: "大安2", small_group: "名雅", role: "member", chapters_read: 120, plan_progress: 20, streak: 1, last_read: "2026-06-23" },
-  
-  // 東區 - 信義2
-  { name: "李冠宇", great_region: "東區", pastoral_zone: "信義2", small_group: "Gary", role: "group_leader", chapters_read: 310, plan_progress: 55, streak: 6, last_read: "2026-06-25" },
-  { name: "王淑芬", great_region: "東區", pastoral_zone: "信義2", small_group: "Gary", role: "member", chapters_read: 90, plan_progress: 15, streak: 0, last_read: "2026-06-22" },
-  
-  // 東區 - 區長
-  { name: "東區區長", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "zone_leader", chapters_read: 600, plan_progress: 75, streak: 18, last_read: "2026-06-25" },
-  { name: "東區大區長", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "great_zone_leader", chapters_read: 750, plan_progress: 88, streak: 20, last_read: "2026-06-25" },
+  // 示範大區A - 示範牧區甲
+  { name: "陳建國", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "group_leader", chapters_read: 480, plan_progress: 85, streak: 12, last_read: "2026-06-25" },
+  { name: "林秀琴", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "member", chapters_read: 210, plan_progress: 35, streak: 3, last_read: "2026-06-25" },
+  { name: "吳志明", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組2", role: "member", chapters_read: 520, plan_progress: 88, streak: 14, last_read: "2026-06-25" },
 
-  // 南區 - 大安6
-  { name: "楊俊傑", great_region: "南區", pastoral_zone: "大安6", small_group: "郁君", role: "group_leader", chapters_read: 980, plan_progress: 99, streak: 45, last_read: "2026-06-25" },
-  { name: "許美惠", great_region: "南區", pastoral_zone: "大安6", small_group: "郁君", role: "member", chapters_read: 540, plan_progress: 80, streak: 15, last_read: "2026-06-25" },
-  
-  // 南區 - 信義3
-  { name: "鄭裕民", great_region: "南區", pastoral_zone: "信義3", small_group: "保羅", role: "member", chapters_read: 300, plan_progress: 48, streak: 5, last_read: "2026-06-24" },
-  { name: "謝佩珊", great_region: "南區", pastoral_zone: "信義3", small_group: "保羅", role: "member", chapters_read: 150, plan_progress: 22, streak: 2, last_read: "2026-06-25" },
-  
-  // 南區 - 文山
-  { name: "郭家豪", great_region: "南區", pastoral_zone: "文山", small_group: "千惠", role: "member", chapters_read: 620, plan_progress: 90, streak: 21, last_read: "2026-06-25" },
-  
-  // 南區 - 區長
-  { name: "南區區長", great_region: "南區", pastoral_zone: "大安6", small_group: "郁君", role: "zone_leader", chapters_read: 610, plan_progress: 78, streak: 16, last_read: "2026-06-25" },
+  // 示範大區A - 示範牧區乙
+  { name: "張明哲", great_region: "示範大區A", pastoral_zone: "示範牧區乙", small_group: "示範小組3", role: "group_leader", chapters_read: 650, plan_progress: 92, streak: 25, last_read: "2026-06-24" },
+  { name: "黃雅婷", great_region: "示範大區A", pastoral_zone: "示範牧區乙", small_group: "示範小組3", role: "member", chapters_read: 120, plan_progress: 20, streak: 1, last_read: "2026-06-23" },
 
-  // 西區 - 中正1
-  { name: "葉子毅", great_region: "西區", pastoral_zone: "中正1", small_group: "詠溱", role: "member", chapters_read: 110, plan_progress: 18, streak: 1, last_read: "2026-06-24" },
-  { name: "周宛儒", great_region: "西區", pastoral_zone: "中正1", small_group: "詠溱", role: "member", chapters_read: 340, plan_progress: 50, streak: 7, last_read: "2026-06-25" },
-  
-  // 西區 - 中永和
-  { name: "蕭志平", great_region: "西區", pastoral_zone: "中永和", small_group: "季樺", role: "group_leader", chapters_read: 800, plan_progress: 95, streak: 30, last_read: "2026-06-25" },
-  { name: "莊雅雯", great_region: "西區", pastoral_zone: "中永和", small_group: "季樺", role: "member", chapters_read: 250, plan_progress: 42, streak: 5, last_read: "2026-06-25" },
-  
-  // 西區 - 區長
-  { name: "西區區長", great_region: "西區", pastoral_zone: "中正1", small_group: "詠溱", role: "zone_leader", chapters_read: 640, plan_progress: 80, streak: 15, last_read: "2026-06-25" },
+  // 示範大區A - 示範牧區丙
+  { name: "李冠宇", great_region: "示範大區A", pastoral_zone: "示範牧區丙", small_group: "示範小組4", role: "group_leader", chapters_read: 310, plan_progress: 55, streak: 6, last_read: "2026-06-25" },
+  { name: "王淑芬", great_region: "示範大區A", pastoral_zone: "示範牧區丙", small_group: "示範小組4", role: "member", chapters_read: 90, plan_progress: 15, streak: 0, last_read: "2026-06-22" },
 
-  // 北區 - 中山1
-  { name: "梁哲瑋", great_region: "北區", pastoral_zone: "中山1", small_group: "建安", role: "group_leader", chapters_read: 670, plan_progress: 91, streak: 18, last_read: "2026-06-25" },
-  { name: "徐淑貞", great_region: "北區", pastoral_zone: "中山1", small_group: "建安", role: "member", chapters_read: 290, plan_progress: 45, streak: 6, last_read: "2026-06-25" },
-  
-  // 北區 - 士林
-  { name: "孫啟宏", great_region: "北區", pastoral_zone: "士林", small_group: "哲蓉", role: "member", chapters_read: 430, plan_progress: 70, streak: 11, last_read: "2026-06-25" },
-  { name: "傅小敏", great_region: "北區", pastoral_zone: "士林", small_group: "哲蓉", role: "member", chapters_read: 150, plan_progress: 25, streak: 2, last_read: "2026-06-23" },
-  
-  // 北區 - 區長
-  { name: "北區區長", great_region: "北區", pastoral_zone: "中山1", small_group: "建安", role: "zone_leader", chapters_read: 630, plan_progress: 82, streak: 12, last_read: "2026-06-25" },
+  // 示範大區A - 區長
+  { name: "示範區長甲", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "zone_leader", chapters_read: 600, plan_progress: 75, streak: 18, last_read: "2026-06-25" },
+  { name: "示範大區長甲", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "great_zone_leader", chapters_read: 750, plan_progress: 88, streak: 20, last_read: "2026-06-25" },
 
-  // 青少年 - 青少年教會
-  { name: "林青年", great_region: "青少年", pastoral_zone: "青少年教會", small_group: "第一組", role: "group_leader", chapters_read: 420, plan_progress: 78, streak: 19, last_read: "2026-06-25" },
-  { name: "王同學", great_region: "青少年", pastoral_zone: "青少年教會", small_group: "第一組", role: "member", chapters_read: 180, plan_progress: 30, streak: 4, last_read: "2026-06-24" },
-  
-  // 慶典 - 慶典1
-  { name: "慶典同工", great_region: "慶典", pastoral_zone: "慶典1", small_group: "威宇", role: "group_leader", chapters_read: 590, plan_progress: 88, streak: 16, last_read: "2026-06-24" },
-  
-  // 創藝 - 創藝
-  { name: "創藝同工", great_region: "創藝", pastoral_zone: "創藝", small_group: "嘎嘎", role: "group_leader", chapters_read: 490, plan_progress: 75, streak: 10, last_read: "2026-06-25" },
-  
-  // 主任牧師 & Admin
-  { name: "張主任牧師", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "senior_pastor", chapters_read: 1050, plan_progress: 95, streak: 60, last_read: "2026-06-25" },
-  { name: "系統管理員", great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴", role: "admin", chapters_read: 80, plan_progress: 72, streak: 15, last_read: "2026-06-25" }
+  // 示範大區B - 示範牧區丁
+  { name: "楊俊傑", great_region: "示範大區B", pastoral_zone: "示範牧區丁", small_group: "示範小組5", role: "group_leader", chapters_read: 980, plan_progress: 99, streak: 45, last_read: "2026-06-25" },
+  { name: "許美惠", great_region: "示範大區B", pastoral_zone: "示範牧區丁", small_group: "示範小組5", role: "member", chapters_read: 540, plan_progress: 80, streak: 15, last_read: "2026-06-25" },
+
+  // 示範大區B - 示範牧區戊
+  { name: "鄭裕民", great_region: "示範大區B", pastoral_zone: "示範牧區戊", small_group: "示範小組6", role: "member", chapters_read: 300, plan_progress: 48, streak: 5, last_read: "2026-06-24" },
+  { name: "謝佩珊", great_region: "示範大區B", pastoral_zone: "示範牧區戊", small_group: "示範小組6", role: "member", chapters_read: 150, plan_progress: 22, streak: 2, last_read: "2026-06-25" },
+
+  // 示範大區B - 示範牧區己
+  { name: "郭家豪", great_region: "示範大區B", pastoral_zone: "示範牧區己", small_group: "示範小組7", role: "member", chapters_read: 620, plan_progress: 90, streak: 21, last_read: "2026-06-25" },
+
+  // 示範大區B - 區長
+  { name: "示範區長乙", great_region: "示範大區B", pastoral_zone: "示範牧區丁", small_group: "示範小組5", role: "zone_leader", chapters_read: 610, plan_progress: 78, streak: 16, last_read: "2026-06-25" },
+
+  // 示範大區C - 示範牧區庚
+  { name: "葉子毅", great_region: "示範大區C", pastoral_zone: "示範牧區庚", small_group: "示範小組8", role: "member", chapters_read: 110, plan_progress: 18, streak: 1, last_read: "2026-06-24" },
+  { name: "周宛儒", great_region: "示範大區C", pastoral_zone: "示範牧區庚", small_group: "示範小組8", role: "member", chapters_read: 340, plan_progress: 50, streak: 7, last_read: "2026-06-25" },
+
+  // 示範大區C - 示範牧區辛
+  { name: "蕭志平", great_region: "示範大區C", pastoral_zone: "示範牧區辛", small_group: "示範小組9", role: "group_leader", chapters_read: 800, plan_progress: 95, streak: 30, last_read: "2026-06-25" },
+  { name: "莊雅雯", great_region: "示範大區C", pastoral_zone: "示範牧區辛", small_group: "示範小組9", role: "member", chapters_read: 250, plan_progress: 42, streak: 5, last_read: "2026-06-25" },
+
+  // 示範大區C - 區長
+  { name: "示範區長丙", great_region: "示範大區C", pastoral_zone: "示範牧區庚", small_group: "示範小組8", role: "zone_leader", chapters_read: 640, plan_progress: 80, streak: 15, last_read: "2026-06-25" },
+
+  // 示範大區D - 示範牧區壬
+  { name: "梁哲瑋", great_region: "示範大區D", pastoral_zone: "示範牧區壬", small_group: "示範小組10", role: "group_leader", chapters_read: 670, plan_progress: 91, streak: 18, last_read: "2026-06-25" },
+  { name: "徐淑貞", great_region: "示範大區D", pastoral_zone: "示範牧區壬", small_group: "示範小組10", role: "member", chapters_read: 290, plan_progress: 45, streak: 6, last_read: "2026-06-25" },
+
+  // 示範大區D - 示範牧區癸
+  { name: "孫啟宏", great_region: "示範大區D", pastoral_zone: "示範牧區癸", small_group: "示範小組11", role: "member", chapters_read: 430, plan_progress: 70, streak: 11, last_read: "2026-06-25" },
+  { name: "傅小敏", great_region: "示範大區D", pastoral_zone: "示範牧區癸", small_group: "示範小組11", role: "member", chapters_read: 150, plan_progress: 25, streak: 2, last_read: "2026-06-23" },
+
+  // 示範大區D - 區長
+  { name: "示範區長丁", great_region: "示範大區D", pastoral_zone: "示範牧區壬", small_group: "示範小組10", role: "zone_leader", chapters_read: 630, plan_progress: 82, streak: 12, last_read: "2026-06-25" },
+
+  // 主任牧師 & Admin (使用虛擬示範大區)
+  { name: "張主任牧師", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "senior_pastor", chapters_read: 1050, plan_progress: 95, streak: 60, last_read: "2026-06-25" },
+  { name: "系統管理員", great_region: "示範大區A", pastoral_zone: "示範牧區甲", small_group: "示範小組1", role: "admin", chapters_read: 80, plan_progress: 72, streak: 15, last_read: "2026-06-25" }
 ];
 
 // Helper functions for mock data calculations with RBAC role filter
@@ -184,10 +175,18 @@ const MockStatsService = {
   },
 
   getPastoralZoneStats: (currentUser = null) => {
-    const users = MockStatsService.getAllUsers(currentUser);
+    let users = [...MOCK_USERS_DATA];
+    if (currentUser && currentUser.name) {
+      const idx = users.findIndex(u => u.name === currentUser.name);
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], ...currentUser };
+      } else {
+        users.push(currentUser);
+      }
+    }
     const zoneStats = {};
 
-    // Get zones relevant to the filtered users
+    // Get zones relevant to the users
     users.forEach(user => {
       const zone = user.pastoral_zone;
       if (!zone) return;
@@ -232,10 +231,19 @@ const MockStatsService = {
   },
 
   getSmallGroupStats: (pastoralZone, currentUser = null) => {
-    const users = MockStatsService.getAllUsers(currentUser).filter(u => u.pastoral_zone === pastoralZone);
+    let users = [...MOCK_USERS_DATA];
+    if (currentUser && currentUser.name) {
+      const idx = users.findIndex(u => u.name === currentUser.name);
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], ...currentUser };
+      } else {
+        users.push(currentUser);
+      }
+    }
+    const zoneUsers = users.filter(u => u.pastoral_zone === pastoralZone);
     const groupStats = {};
 
-    users.forEach(user => {
+    zoneUsers.forEach(user => {
       const group = user.small_group;
       if (!group) return;
 

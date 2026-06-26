@@ -48,6 +48,9 @@ function updateDashboardView() {
     `;
   }
 
+  // Render personal rankings
+  calculateAndRenderPersonalRankings();
+
   // Render Pastoral ranking top 5 list
   renderPastoralZoneRankingList();
 
@@ -60,6 +63,36 @@ function updateDashboardView() {
   if (!state.pilgrimageControlsInit) {
     initPilgrimageControls();
     state.pilgrimageControlsInit = true;
+  }
+}
+
+async function calculateAndRenderPersonalRankings() {
+  const rankGroupEl = document.getElementById("rank-group");
+  const rankZoneEl = document.getElementById("rank-zone");
+  const rankRegionEl = document.getElementById("rank-region");
+  const rankChurchEl = document.getElementById("rank-church");
+
+  if (!rankGroupEl || !rankZoneEl || !rankRegionEl || !rankChurchEl) return;
+
+  try {
+    const rankings = await db.getUserRankings();
+    if (rankings) {
+      rankGroupEl.textContent = rankings.groupRank > 0 ? `第 ${rankings.groupRank} 名 / 共 ${rankings.groupTotal} 人` : "尚無資料";
+      rankZoneEl.textContent = rankings.zoneRank > 0 ? `第 ${rankings.zoneRank} 名 / 共 ${rankings.zoneTotal} 人` : "尚無資料";
+      rankRegionEl.textContent = rankings.regionRank > 0 ? `第 ${rankings.regionRank} 名 / 共 ${rankings.regionTotal} 人` : "尚無資料";
+      rankChurchEl.textContent = rankings.churchRank > 0 ? `第 ${rankings.churchRank} 名 / 共 ${rankings.churchTotal} 人` : "尚無資料";
+    } else {
+      rankGroupEl.textContent = "無資料";
+      rankZoneEl.textContent = "無資料";
+      rankRegionEl.textContent = "無資料";
+      rankChurchEl.textContent = "無資料";
+    }
+  } catch (err) {
+    console.error("Error rendering personal rankings:", err);
+    rankGroupEl.textContent = "載入失敗";
+    rankZoneEl.textContent = "載入失敗";
+    rankRegionEl.textContent = "載入失敗";
+    rankChurchEl.textContent = "載入失敗";
   }
 }
 
@@ -228,6 +261,35 @@ async function renderTodayGroupProgress() {
   
   listEl.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1rem;">載入中...</div>';
   
+  // Adapt header and search box visibility based on role
+  const cardEl = listEl.closest('.glass-card');
+  if (cardEl) {
+    const cardTitleEl = cardEl.querySelector('.card-title');
+    const searchBoxEl = cardEl.querySelector('.search-box-wrapper');
+    
+    if (state.currentUser && state.currentUser.role === 'member') {
+      if (cardTitleEl) {
+        cardTitleEl.innerHTML = `
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--primary-color)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          我的今日讀經進度
+        `;
+      }
+      if (searchBoxEl) {
+        searchBoxEl.style.display = 'none';
+      }
+    } else {
+      if (cardTitleEl) {
+        cardTitleEl.innerHTML = `
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="var(--primary-color)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          小組今日讀經進度
+        `;
+      }
+      if (searchBoxEl) {
+        searchBoxEl.style.display = 'block';
+      }
+    }
+  }
+
   let allUsers = await db.fetchMergedUsersList();
   
   const mockUser = {

@@ -47,43 +47,32 @@ async function updateStatsView() {
   rawAllUsers = await db.fetchMergedUsersList();
 
   if (state.isSupabaseMode && state.supabase) {
-    // Apply RBAC filtering on the fetched dataset
-    rawAllUsers = filterUsersByRole(rawAllUsers, mockUser);
-
-    // Compute pastoral stats aggregation from raw filtered profiles
-    const zoneMap = {};
-    rawAllUsers.forEach(u => {
-      const z = u.pastoral_zone;
-      if (!z) return;
-      if (!zoneMap[z]) {
-        zoneMap[z] = {
-          name: z,
-          great_region: u.great_region,
-          member_count: 0,
-          total_chapters: 0,
-          avg_progress: 0,
-          active_count: 0,
-          progress_sum: 0
-        };
+    try {
+      const { data } = await state.supabase.from("view_pastoral_zone_stats").select("*");
+      if (data) {
+        pastoralStats = data.map(item => ({
+          name: item.pastoral_zone,
+          great_region: item.great_region,
+          member_count: item.member_count,
+          total_chapters: item.total_chapters_read,
+          avg_progress: item.avg_progress || 0,
+          active_count: item.active_member_count
+        })).sort((a, b) => b.total_chapters - a.total_chapters);
       }
-      const stats = zoneMap[z];
-      stats.member_count += 1;
-      stats.total_chapters += u.chapters_read;
-      stats.progress_sum += u.plan_progress;
-      stats.active_count += 1;
-    });
-
-    Object.keys(zoneMap).forEach(k => {
-      const stats = zoneMap[k];
-      stats.avg_progress = Math.round(stats.progress_sum / stats.member_count) || 0;
-    });
-
-    pastoralStats = Object.values(zoneMap).sort((a, b) => b.total_chapters - a.total_chapters);
-
+    } catch (e) {
+      console.error("Failed to load pastoral zone stats from views:", e);
+    }
+    // Apply RBAC filtering on the fetched roster dataset
+    rawAllUsers = filterUsersByRole(rawAllUsers, mockUser);
   } else {
     // Demo Mode
-    rawAllUsers = filterUsersByRole(rawAllUsers, mockUser);
     pastoralStats = MockStatsService.getPastoralZoneStats(mockUser);
+    rawAllUsers = filterUsersByRole(rawAllUsers, mockUser);
+  }
+
+  // Filter pastoralStats based on Great Region for non-admin roles
+  if (role !== "admin" && role !== "senior_pastor") {
+    pastoralStats = pastoralStats.filter(z => z.great_region === mockUser.great_region);
   }
 
   // 1. Update Mini Card Labels based on User Role
@@ -107,20 +96,18 @@ async function updateStatsView() {
       miniCardLabels[2].textContent = "本小組本週活躍人數";
     } else {
       miniCardLabels[0].textContent = "個人總閱讀章數";
-      miniCardLabels[1].textContent = "個人速讀排名";
+      miniCardLabels[1].textContent = "個人全教會排名";
       miniCardLabels[2].textContent = "個人連續讀經天數";
     }
   }
 
   // 2. Render Mini Card values
   if (role === "member") {
-    const allGlobalUsers = await db.fetchMergedUsersList();
-    allGlobalUsers.sort((a, b) => b.chapters_read - a.chapters_read);
-    const myIndex = allGlobalUsers.findIndex(u => u.name === mockUser.name);
-    const myRank = myIndex !== -1 ? (myIndex + 1) : "無";
+    const rankings = await db.getUserRankings();
+    const myRankStr = (rankings && rankings.churchRank > 0) ? `第 ${rankings.churchRank} / ${rankings.churchTotal} 名` : "尚無資料";
 
-    document.getElementById("stats-total-read").textContent = mockUser.chapters_read + " 章";
-    document.getElementById("stats-total-members").textContent = myRank + " / " + allGlobalUsers.length + " 名";
+    document.getElementById("stats-total-read").textContent = (state.currentUser.chapters_read || 0) + " 章";
+    document.getElementById("stats-total-members").textContent = myRankStr;
     document.getElementById("stats-active-members").textContent = (state.currentUser.streak || 0) + " 天";
   } else {
     const totalChaptersAll = pastoralStats.reduce((sum, item) => sum + (item.total_chapters || 0), 0);
@@ -147,34 +134,18 @@ async function updateStatsView() {
   const groupChartContainer = document.getElementById("group-stats-chart").closest('.grid-layout');
   const zoneSelectGroup = document.getElementById("stats-zone-selector");
 
-  if (role === "member") {
-    chartsContainer.classList.add("hidden");
-    groupChartContainer.classList.add("hidden");
-  } else if (role === "group_leader") {
-    chartsContainer.classList.add("hidden");
-    groupChartContainer.classList.remove("hidden");
+  // Show both charts to everyone, but apply filters/locks by role
+  chartsContainer.classList.remove("hidden");
+  groupChartContainer.classList.remove("hidden");
+
+  if (role === "member" || role === "group_leader" || role === "zone_leader") {
     zoneSelectGroup.innerHTML = `<option value="${mockUser.pastoral_zone}">${mockUser.pastoral_zone}</option>`;
     zoneSelectGroup.value = mockUser.pastoral_zone;
     zoneSelectGroup.disabled = true;
-    updateGroupChart(mockUser.pastoral_zone);
-  } else if (role === "zone_leader") {
-    chartsContainer.classList.add("hidden");
-    groupChartContainer.classList.remove("hidden");
-    zoneSelectGroup.innerHTML = `<option value="${mockUser.pastoral_zone}">${mockUser.pastoral_zone}</option>`;
-    zoneSelectGroup.value = mockUser.pastoral_zone;
-    zoneSelectGroup.disabled = true;
-    updateGroupChart(mockUser.pastoral_zone);
-  } else if (role === "great_zone_leader") {
-    chartsContainer.classList.remove("hidden");
-    groupChartContainer.classList.remove("hidden");
-    zoneSelectGroup.disabled = false;
     
-    populateStatsZoneSelector(pastoralStats);
     renderCharts(pastoralStats);
+    updateGroupChart(mockUser.pastoral_zone);
   } else {
-    // admin / senior pastor
-    chartsContainer.classList.remove("hidden");
-    groupChartContainer.classList.remove("hidden");
     zoneSelectGroup.disabled = false;
     
     populateStatsZoneSelector(pastoralStats);
