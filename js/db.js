@@ -40,11 +40,37 @@ const db = {
         });
       } catch (e) {
         console.error("Supabase connection failed:", e);
-        this.setDemoMode();
+        this.showConnectionError();
       }
     } else {
       this.setDemoMode();
     }
+  },
+
+  showConnectionError() {
+    state.isSupabaseMode = true;
+    
+    // Disable Google login gate button
+    const btnGoogleGate = document.getElementById("btn-gate-google-login");
+    if (btnGoogleGate) {
+      btnGoogleGate.disabled = true;
+      btnGoogleGate.style.opacity = "0.5";
+      btnGoogleGate.style.cursor = "not-allowed";
+    }
+
+    // Show red error status on login gate
+    const gateDot = document.getElementById("gate-status-dot");
+    const gateText = document.getElementById("gate-status-text");
+    if (gateDot && gateText) {
+      gateDot.style.backgroundColor = "#ef4444";
+      gateText.textContent = "連線失敗，請檢查網路連線！";
+    }
+
+    // Keep app layout hidden and show login gate
+    const loginGate = document.getElementById("login-gate");
+    const appLayout = document.querySelector(".app-layout");
+    if (loginGate) loginGate.classList.remove("hidden");
+    if (appLayout) appLayout.classList.add("hidden");
   },
 
   setDemoMode() {
@@ -183,6 +209,26 @@ const db = {
         if (typeof checkAchievements !== 'undefined') {
           await checkAchievements();
         }
+        if (typeof updateAdminNavVisibility === 'function') {
+          updateAdminNavVisibility();
+        }
+        return;
+      } else {
+        // Online mode but not logged in: clear state and return early
+        state.currentUser = {
+          name: "",
+          great_region: "",
+          pastoral_zone: "",
+          small_group: "",
+          role: "member",
+          chapters_read: 0,
+          plan_progress: 0,
+          streak: 0,
+          last_read: null
+        };
+        state.readingLogs = [];
+        state.activePlans = [];
+        state.activePlan = null;
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
         }
