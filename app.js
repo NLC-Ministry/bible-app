@@ -266,15 +266,35 @@ function updateAuthUI(session) {
   const loggedOutDiv = document.getElementById("auth-logged-out");
   const loggedInDiv = document.getElementById("auth-logged-in");
   const userEmailSpan = document.getElementById("auth-user-email");
+  const loginGate = document.getElementById("login-gate");
+  const appLayout = document.querySelector(".app-layout");
 
-  if (session && session.user) {
+  const isLoggedIn = !!(session && session.user);
+
+  if (isLoggedIn) {
     if (loggedOutDiv) loggedOutDiv.classList.add("hidden");
     if (loggedInDiv) loggedInDiv.classList.remove("hidden");
     if (userEmailSpan) userEmailSpan.textContent = session.user.email;
+    
+    // Online mode: Hide login gate, show app container
+    if (state.isSupabaseMode) {
+      if (loginGate) loginGate.classList.add("hidden");
+      if (appLayout) appLayout.classList.remove("hidden");
+    }
   } else {
     if (loggedOutDiv) loggedOutDiv.classList.remove("hidden");
     if (loggedInDiv) loggedInDiv.classList.add("hidden");
     if (userEmailSpan) userEmailSpan.textContent = "";
+
+    // Online mode: Show login gate, hide app container
+    if (state.isSupabaseMode) {
+      if (loginGate) loginGate.classList.remove("hidden");
+      if (appLayout) appLayout.classList.add("hidden");
+    } else {
+      // Demo mode: Ensure login gate is hidden and app is visible
+      if (loginGate) loginGate.classList.add("hidden");
+      if (appLayout) appLayout.classList.remove("hidden");
+    }
   }
 }
 
@@ -2259,6 +2279,29 @@ function renderProfileView() {
     };
   }
 
+  const btnGoogleGate = document.getElementById("btn-gate-google-login");
+  if (btnGoogleGate) {
+    btnGoogleGate.onclick = async (e) => {
+      e.preventDefault();
+      loader.show("開啟 Google 登入中...");
+      try {
+        const { error } = await state.supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin + window.location.pathname,
+            queryParams: {
+              prompt: 'select_account' // 強制顯示 Google 帳號選擇視窗，方便切換不同帳號
+            }
+          }
+        });
+        if (error) throw error;
+      } catch (err) {
+        alert(`Google 登入失敗: ${err.message}`);
+        loader.hide();
+      }
+    };
+  }
+
   // Demo Switcher Listener
   const demoRoleSelect = document.getElementById("demo-role-select");
   if (demoRoleSelect) {
@@ -2325,6 +2368,7 @@ function renderProfileView() {
       loader.show("登出中...");
       try {
         await state.supabase.auth.signOut();
+        updateAuthUI(null);
         await loadUserData();
         alert("已成功登出。");
         renderProfileView();
