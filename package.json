@@ -4,7 +4,9 @@
   "description": "Church Bible Speed Reading & Statistics Application",
   "main": "app.js",
   "scripts": {
-    "build": "node build-config.js"
+    "build": "node build-config.js",
+    "start": "npx serve .",
+    "dev": "npx serve ."
   },
   "dependencies": {},
   "devDependencies": {}
