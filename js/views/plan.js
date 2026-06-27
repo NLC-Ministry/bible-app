@@ -43,28 +43,46 @@ function initPlanControls() {
     });
   }
 
-  // Sub-tabs Toggle (Daily Reading vs Stats)
+  // Sub-tabs Toggle (Daily Reading vs Stats vs Ranking)
   const tabSchedule = document.getElementById("tab-plan-schedule");
   const tabStats = document.getElementById("tab-plan-stats");
+  const tabRanking = document.getElementById("tab-plan-ranking");
   const subviewSchedule = document.getElementById("subview-plan-schedule");
   const subviewPlanStats = document.getElementById("subview-plan-stats");
+  const subviewPlanRanking = document.getElementById("subview-plan-ranking");
 
-  if (tabSchedule && tabStats) {
+  if (tabSchedule && tabStats && tabRanking) {
     tabSchedule.addEventListener("click", () => {
       tabSchedule.classList.add("active");
       tabStats.classList.remove("active");
+      tabRanking.classList.remove("active");
       if (subviewSchedule) subviewSchedule.classList.remove("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+      if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
       renderPlanScheduleTracker();
     });
 
     tabStats.addEventListener("click", async () => {
       tabStats.classList.add("active");
       tabSchedule.classList.remove("active");
+      tabRanking.classList.remove("active");
       if (subviewSchedule) subviewSchedule.classList.add("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
+      if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
       if (state.activePlan) {
         await renderPlanStatsView();
+      }
+    });
+
+    tabRanking.addEventListener("click", async () => {
+      tabRanking.classList.add("active");
+      tabSchedule.classList.remove("active");
+      tabStats.classList.remove("active");
+      if (subviewSchedule) subviewSchedule.classList.add("hidden");
+      if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+      if (subviewPlanRanking) subviewPlanRanking.classList.remove("hidden");
+      if (state.activePlan) {
+        await renderPlanRankingView();
       }
     });
   }
@@ -335,11 +353,9 @@ function calculateAllPlansProgress() {
     plan.days.forEach(day => {
       day.chapters.forEach(ch => {
         const isRead = state.readingLogs.some(l => {
-          const logDate = l.read_at.substring(0, 10);
           const isPlanMatch = !l.presetKey || (l.presetKey === plan.presetKey) || (plan.id && l.plan_id === plan.id);
-          const isAdmin = state.currentUser && state.currentUser.role === 'admin';
           const isRoundMatch = (l.round || 1) === currentRound;
-          return l.book === ch.book && l.chapter === ch.chapter && isPlanMatch && isRoundMatch && (logDate >= plan.startDate || isAdmin);
+          return l.book === ch.book && l.chapter === ch.chapter && isPlanMatch && isRoundMatch;
         });
         ch.isRead = isRead;
         if (isRead) completed++;
@@ -553,19 +569,29 @@ async function renderPlanDetailView() {
   // Render current selected tab content
   const tabSchedule = document.getElementById("tab-plan-schedule");
   const tabStats = document.getElementById("tab-plan-stats");
+  const tabRanking = document.getElementById("tab-plan-ranking");
   const subviewSchedule = document.getElementById("subview-plan-schedule");
   const subviewPlanStats = document.getElementById("subview-plan-stats");
+  const subviewPlanRanking = document.getElementById("subview-plan-ranking");
 
   if (tabStats && tabStats.classList.contains("active")) {
     if (subviewSchedule) subviewSchedule.classList.add("hidden");
     if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
+    if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
     await renderPlanStatsView();
+  } else if (tabRanking && tabRanking.classList.contains("active")) {
+    if (subviewSchedule) subviewSchedule.classList.add("hidden");
+    if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+    if (subviewPlanRanking) subviewPlanRanking.classList.remove("hidden");
+    await renderPlanRankingView();
   } else {
     // Default to Schedule Tab
     if (tabSchedule) tabSchedule.classList.add("active");
     if (tabStats) tabStats.classList.remove("active");
+    if (tabRanking) tabRanking.classList.remove("active");
     if (subviewSchedule) subviewSchedule.classList.remove("hidden");
     if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+    if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
     renderPlanScheduleTracker();
   }
 }
@@ -1298,69 +1324,46 @@ window.addEventListener("scroll", async () => {
     const isAlreadyRead = state.readingLogs.some(l => l.book === currentCh.book && l.chapter === currentCh.chapter);
     if (!isAlreadyRead) {
       loader.show("記錄已讀中...");
-      const success = await db.logChapterRead(currentCh.book, currentCh.chapter, true);
+      await db.logChapterRead(currentCh.book, currentCh.chapter, true);
       loader.hide();
       
-      if (success) {
-        currentCh.isRead = true;
-        calculatePlanProgress();
-        db.saveLocalUserStats();
+      currentCh.isRead = true;
+      calculatePlanProgress();
+      db.saveLocalUserStats();
 
-        if (state.activePlan && state.activePlan.progress === 100) {
-          await handleRoundCompletion(state.activePlan);
-        }
+      if (state.activePlan && state.activePlan.progress === 100) {
+        await handleRoundCompletion(state.activePlan);
+      }
 
-        // Show toast
-        if (typeof showToast === 'function') {
-          showToast(`📖 已自動將 ${currentCh.book} 第 ${currentCh.chapter} 章標記為已讀！`);
-        }
+      // Show toast
+      if (typeof showToast === 'function') {
+        showToast(`📖 已自動將 ${currentCh.book} 第 ${currentCh.chapter} 章標記為已讀！`);
       }
     }
   }
 });
 
-// Toggle views for personal reading report inside plan stats tab
-window.showPersonalReportView = function() {
-  const overview = document.getElementById("plan-stats-overview-view");
-  const report = document.getElementById("plan-personal-report-view");
-  if (overview) overview.classList.add("hidden");
-  if (report) report.classList.remove("hidden");
-};
 
-window.hidePersonalReportView = function() {
-  const overview = document.getElementById("plan-stats-overview-view");
-  const report = document.getElementById("plan-personal-report-view");
-  if (overview) overview.classList.remove("hidden");
-  if (report) report.classList.add("hidden");
-};
-
+// ==================== PERSONAL STATS & HEATMAP & ACHIEVEMENTS ====================
 async function renderPlanStatsView() {
   if (!state.activePlan) return;
   
-  // Reset report view to show overview first
-  window.hidePersonalReportView();
-  
   // Set User Profile names
   const statsUserName = document.getElementById("stats-user-name");
-  const reportUserName = document.getElementById("report-user-name");
   const reportPlanTitle = document.getElementById("report-plan-title");
   
   const userName = state.currentUser.name || "弟兄姊妹";
   if (statsUserName) statsUserName.textContent = userName;
-  if (reportUserName) reportUserName.textContent = userName;
   if (reportPlanTitle) reportPlanTitle.textContent = state.activePlan.name;
 
   // Personal Streak val
   const personalStreak = state.currentUser.streak || 0;
-  const statsPersonalStreakVal = document.getElementById("stats-personal-streak-val");
-  if (statsPersonalStreakVal) statsPersonalStreakVal.textContent = personalStreak;
 
-  // Let's compute statistics for the user
   // 1. Highest streak (最高連續)
   const reportStatStreak = document.getElementById("report-stat-streak");
   if (reportStatStreak) reportStatStreak.textContent = personalStreak;
 
-  // 2. Total completed (累計完成) - number of days where all chapters are completed
+  // 2. Total completed (累計完成)
   const completedDaysCount = state.activePlan.days.filter(d => {
     if (!d.chapters || d.chapters.length === 0) return false;
     return d.chapters.every(ch => ch.isRead);
@@ -1378,7 +1381,7 @@ async function renderPlanStatsView() {
     }
   }
 
-  // 3. Completed this week (本週已完成) - count completed days in current week (Sun-Sat)
+  // 3. Completed this week (本週已完成)
   const today = new Date();
   const currentDayOfWeek = today.getDay(); // 0 is Sunday
   const startOfWeek = new Date(today);
@@ -1391,7 +1394,6 @@ async function renderPlanStatsView() {
   const reportStatWeekRange = document.getElementById("report-stat-week-range");
   if (reportStatWeekRange) reportStatWeekRange.textContent = `${weekStartStr} - ${weekEndStr}`;
 
-  // Count completed plan days that fall within startOfWeek and endOfWeek
   let weekCompletedCount = 0;
   state.activePlan.days.forEach(day => {
     if (!day.chapters || day.chapters.length === 0) return;
@@ -1402,7 +1404,6 @@ async function renderPlanStatsView() {
     if (parts.length === 2) {
       const dayDate = new Date(today.getFullYear(), parseInt(parts[0]) - 1, parseInt(parts[1]));
       const dayTime = dayDate.getTime();
-      // Set hours to compare purely by date
       const sOfWeek = new Date(startOfWeek);
       sOfWeek.setHours(0,0,0,0);
       const eOfWeek = new Date(endOfWeek);
@@ -1432,8 +1433,152 @@ async function renderPlanStatsView() {
   const reportStatMakeup = document.getElementById("report-stat-makeup");
   if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
 
-  // 5. Render participants list (Screenshot 2 style)
-  const listContainer = document.getElementById("stats-participants-list");
+  // Render heatmap and badges
+  renderPersonalHeatmap();
+  renderPersonalUnlockedBadges();
+}
+
+function renderPersonalHeatmap() {
+  const container = document.getElementById("bible-heatmap-container");
+  if (!container) return;
+  
+  container.innerHTML = "";
+  
+  const grid = document.createElement("div");
+  grid.className = "heatmap-grid";
+  grid.style.cssText = "display: grid; grid-template-rows: repeat(7, 10px); grid-auto-flow: column; gap: 3px; max-height: 90px; overflow-x: auto; padding: 0.2rem 0;";
+  
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 365);
+  const dayOfWeek = startDate.getDay();
+  startDate.setDate(startDate.getDate() - dayOfWeek);
+  
+  const today = new Date();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const daysDiff = Math.ceil((today.getTime() - startDate.getTime()) / oneDayMs);
+  
+  const logsByDate = {};
+  state.readingLogs.forEach(log => {
+    if (log.read_at) {
+      const dStr = log.read_at.substring(0, 10);
+      logsByDate[dStr] = (logsByDate[dStr] || 0) + 1;
+    }
+  });
+
+  for (let i = 0; i <= daysDiff; i++) {
+    const currentDate = new Date(startDate.getTime() + i * oneDayMs);
+    const dateStr = currentDate.toISOString().substring(0, 10);
+    const count = logsByDate[dateStr] || 0;
+    
+    const cell = document.createElement("div");
+    cell.className = "heatmap-cell";
+    cell.setAttribute("data-date", dateStr);
+    cell.setAttribute("data-count", count);
+    
+    cell.style.width = "10px";
+    cell.style.height = "10px";
+    cell.style.borderRadius = "2px";
+    
+    let background = "var(--border-card)";
+    let opacity = "0.2";
+    if (count > 0) {
+      opacity = "1";
+      if (count === 1) background = "rgba(99, 102, 241, 0.4)";
+      else if (count === 2) background = "rgba(99, 102, 241, 0.6)";
+      else if (count === 3) background = "rgba(99, 102, 241, 0.8)";
+      else background = "rgba(99, 102, 241, 1)";
+    }
+    
+    cell.style.background = background;
+    cell.style.opacity = opacity;
+    cell.title = `${dateStr}: 讀經 ${count} 章`;
+    
+    grid.appendChild(cell);
+  }
+  
+  container.appendChild(grid);
+}
+
+function renderPersonalUnlockedBadges() {
+  const container = document.getElementById("stats-badge-wall-container");
+  if (!container) return;
+
+  const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
+  container.innerHTML = "";
+
+  if (typeof ACHIEVEMENTS === 'undefined') {
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1rem;">暫無解鎖勳章</div>`;
+    return;
+  }
+
+  ACHIEVEMENTS.forEach(badge => {
+    const isUnlocked = unlocked.includes(badge.id);
+    const badgeItem = document.createElement("div");
+    
+    const descParsed = badge.description.replace("{streak}", state.currentUser.streak);
+
+    badgeItem.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.8rem 1rem;
+      background: ${isUnlocked ? 'var(--bg-input)' : 'rgba(255,255,255,0.02)'};
+      border: 1px solid ${isUnlocked ? 'var(--border-card)' : 'rgba(255,255,255,0.05)'};
+      border-radius: 12px;
+      opacity: ${isUnlocked ? '1' : '0.4'};
+      filter: ${isUnlocked ? 'none' : 'grayscale(100%)'};
+      transition: all 0.3s ease;
+    `;
+
+    badgeItem.innerHTML = `
+      <div style="font-size: 1.8rem; display: flex; width: 44px; height: 44px; background: ${isUnlocked ? badge.color : '#cbd5e1'}; border-radius: 50%; justify-content: center; align-items: center; box-shadow: ${isUnlocked ? '0 4px 10px ' + badge.shadow : 'none'}; flex-shrink: 0;">
+        ${badge.icon}
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; text-align: left;">
+        <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+          ${badge.title}
+          ${isUnlocked ? '<span style="font-size: 0.6rem; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 10px; font-weight: 800;">已解鎖</span>' : ''}
+        </span>
+        <span style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descParsed}</span>
+      </div>
+    `;
+
+    container.appendChild(badgeItem);
+  });
+}
+
+// ==================== RANKING WITH PERMISSIONS & BEHIND/AHEAD STATUS ====================
+async function renderPlanRankingView() {
+  if (!state.activePlan) return;
+
+  const rankingTitle = document.getElementById("ranking-title");
+  const personalStreak = state.currentUser.streak || 0;
+  
+  const completedDaysCount = state.activePlan.days.filter(d => {
+    if (!d.chapters || d.chapters.length === 0) return false;
+    return d.chapters.every(ch => ch.isRead);
+  }).length;
+
+  const userName = state.currentUser.name || "弟兄姊妹";
+
+  // Calculate expected days up to today
+  const planStart = new Date(state.activePlan.startDate);
+  const today = new Date();
+  const diffTime = today.getTime() - planStart.getTime();
+  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
+  const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
+
+  const userZone = state.currentUser.pastoral_zone || "大安1";
+  const userRole = state.currentUser.role || "member";
+  const isAdmin = userRole === "admin" || userRole === "senior_pastor";
+  
+  if (rankingTitle) {
+    rankingTitle.textContent = isAdmin 
+      ? `參與者總覽 (全教會排行)` 
+      : `參與者總覽 (${userZone}牧區排行)`;
+  }
+
+  const listContainer = document.getElementById("ranking-participants-list");
   if (listContainer) {
     listContainer.innerHTML = `<div style="text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.82rem;">載入成員數據中...</div>`;
     
@@ -1445,50 +1590,71 @@ async function renderPlanStatsView() {
       console.warn("Failed to fetch merged users, fallback to empty array", e);
     }
     
-    const userGroup = state.currentUser.small_group || "馬鈴";
-    const userZone = state.currentUser.pastoral_zone || "大安1";
-    let groupMembers = allUsers.filter(u => u.pastoral_zone === userZone && u.small_group === userGroup);
-    
-    // If no group members, populate with Screenshot 2 mock data
-    if (groupMembers.length <= 1) {
-      groupMembers = [
-        { name: "育慈", streak: 48, completed: 365, makeup: 48, avatarSeed: "yuci" },
-        { name: "Anne Shi", streak: 29, completed: 364, makeup: 191, avatarSeed: "anne" },
-        { name: "Anya", streak: 12, completed: 363, makeup: 311, avatarSeed: "anya" },
-        { name: "巫鎧廷", streak: 27, completed: 343, makeup: 163, avatarSeed: "kaiting" },
-        { name: "熊 Chu", streak: 19, completed: 212, makeup: 162, avatarSeed: "xiong" },
-        { name: userName, streak: personalStreak, completed: completedDaysCount, makeup: makeupDays, isMe: true },
-        { name: "Zhi Ting", streak: 15, completed: 142, makeup: 103, avatarSeed: "zhiting" },
-        { name: "劉育瑋 (Leo)", streak: 3, completed: 22, makeup: 18, avatarSeed: "leo" }
-      ];
-    } else {
-      // In online mode, map raw database users to table values dynamically
-      groupMembers = groupMembers.map(u => {
-        const isMe = u.name === state.currentUser.name;
-        const streak = isMe ? personalStreak : (u.streak || 0);
-        let completed = isMe ? completedDaysCount : Math.round((u.chapters_read || 0) / 4);
-        completed = Math.min(completed, state.activePlan.days.length);
-        const makeup = isMe ? makeupDays : Math.max(0, expectedDaysCount - completed);
-        return {
-          name: u.name,
-          streak: streak,
-          completed: completed,
-          makeup: makeup,
-          isMe: isMe
-        };
-      });
+    // Permission: Only show users of their own pastoral zone if not admin/senior_pastor
+    let groupMembers = allUsers;
+    if (!isAdmin) {
+      groupMembers = allUsers.filter(u => u.pastoral_zone === userZone);
     }
+
+    // Map list to values and calculate progress status (ahead/behind days)
+    groupMembers = groupMembers.map(u => {
+      const isMe = u.name === state.currentUser.name;
+      const streak = isMe ? personalStreak : (u.streak || 0);
+      
+      let completed = 0;
+      let diff = 0;
+      
+      if (isMe) {
+        completed = completedDaysCount;
+        diff = completed - expectedDaysCount;
+      } else {
+        completed = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
+        completed = Math.min(completed, state.activePlan.days.length);
+        diff = completed - expectedDaysCount;
+      }
+      
+      let statusStr = "進度一致";
+      let statusColor = "var(--text-muted)";
+      if (diff > 0) {
+        statusStr = `超前 ${diff}天`;
+        statusColor = "#10b981"; // Green
+      } else if (diff < 0) {
+        statusStr = `落後 ${Math.abs(diff)}天`;
+        statusColor = "#ef4444"; // Red
+      }
+      
+      return {
+        name: u.name,
+        streak: streak,
+        completed: completed,
+        statusStr: statusStr,
+        statusColor: statusColor,
+        isMe: isMe
+      };
+    });
 
     // Sort group members by Completed Days descending
     groupMembers.sort((a, b) => b.completed - a.completed);
 
     listContainer.innerHTML = "";
+    
+    if (groupMembers.length === 0) {
+      groupMembers = [{
+        name: userName,
+        streak: personalStreak,
+        completed: completedDaysCount,
+        statusStr: completedDaysCount - expectedDaysCount >= 0 ? "超前 " + (completedDaysCount - expectedDaysCount) + "天" : "落後 " + Math.abs(completedDaysCount - expectedDaysCount) + "天",
+        statusColor: completedDaysCount - expectedDaysCount >= 0 ? "#10b981" : "#ef4444",
+        isMe: true
+      }];
+    }
+
     groupMembers.forEach(m => {
       const itemRow = document.createElement("div");
       itemRow.style.cssText = `
         display: grid;
-        grid-template-columns: 1fr 65px 65px 60px;
-        gap: 0.5rem;
+        grid-template-columns: 1fr 55px 55px 75px;
+        gap: 0.4rem;
         align-items: center;
         padding: 0.6rem 0.2rem;
         border-bottom: 1px solid var(--border-card);
@@ -1510,7 +1676,7 @@ async function renderPlanStatsView() {
         </div>
         <div style="color: #ef4444;">${m.streak}</div>
         <div style="color: #10b981;">${m.completed}</div>
-        <div style="color: #f59e0b;">${m.makeup}</div>
+        <div style="color: ${m.statusColor}; font-size: 0.8rem;">${m.statusStr}</div>
       `;
       listContainer.appendChild(itemRow);
     });

@@ -347,10 +347,6 @@
               <div class="reader-header">
                 <h2 id="bible-title" class="bible-heading">創世記 1章</h2>
                 <div class="reader-actions-top">
-                  <button class="checkbox-btn" id="mark-read-btn">
-                    <span class="checkbox-box"></span>
-                    <span class="checkbox-label">標記此章已讀</span>
-                  </button>
                 </div>
               </div>
               
@@ -508,7 +504,8 @@
           <!-- Toggle View Pills -->
           <div class="status-pills-row" style="margin-bottom: 0.6rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem;">
             <button class="pill-btn active" id="tab-plan-schedule">📅 每日讀經</button>
-            <button class="pill-btn" id="tab-plan-stats">📊 計畫統計</button>
+            <button class="pill-btn" id="tab-plan-stats">📊 個人統計</button>
+            <button class="pill-btn" id="tab-plan-ranking">🏆 排名</button>
           </div>
 
           <!-- 子分頁 1：每日讀經進度表 -->
@@ -572,104 +569,98 @@
           <!-- 子分頁 2：計畫專屬統計與排行 -->
           <div id="subview-plan-stats" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
             
-            <!-- 統計主檢視 (Overview) -->
-            <div id="plan-stats-overview-view" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
-              <!-- User Profile Header -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 0; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; margin-bottom: 0.5rem;">
-                <div style="width: 76px; height: 76px; border-radius: 50%; background: #94a3b8; display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 0.8rem; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                  <svg viewBox="0 0 24 24" width="42" height="42" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <!-- User Profile Header -->
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 0; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px;">
+              <div style="width: 76px; height: 76px; border-radius: 50%; background: #94a3b8; display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 0.8rem; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                <svg viewBox="0 0 24 24" width="42" height="42" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              </div>
+              <h4 id="stats-user-name" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">使用者</h4>
+              <div style="width: 60%; height: 1px; background: var(--border-card); margin: 0.8rem 0;"></div>
+              <h5 id="report-plan-title" style="margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--text-primary); text-align: center;">365天逐章讀經計劃</h5>
+            </div>
+
+            <!-- 2x2 Grid Stats Cards -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <!-- 最高連續 -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">最高連續</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">連續讀經沒有中斷</span>
+                <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
+                  <span id="report-stat-streak">26</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
                 </div>
-                <h4 id="stats-user-name" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">使用者</h4>
               </div>
 
-              <!-- 個人讀經報告 Button Card -->
-              <div class="glass-card" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.2rem; border-radius: 14px; cursor: pointer; background: var(--bg-card); border: 1px solid var(--border-card);" onclick="window.showPersonalReportView()">
-                <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">個人讀經報告</span>
-                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.85rem; font-weight: 700;">
-                  <span>最高連續 <span id="stats-personal-streak-val">26</span> 天</span>
-                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="9 18 15 12 9 6"/></svg>
+              <!-- 累計完成 -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">累計完成</span>
+                <span id="report-stat-start-date" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">從 2026年7月1日起</span>
+                <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
+                  <span id="report-stat-completed">173</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
                 </div>
               </div>
 
-              <!-- 參與者總覽 -->
-              <div class="glass-card" style="padding: 1.2rem; background: var(--bg-card); border: 1px solid var(--border-card);">
-                <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">參與者總覽</h3>
-                
-                <!-- Table Headers -->
-                <div style="display: grid; grid-template-columns: 1fr 65px 65px 60px; gap: 0.5rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.76rem; font-weight: 800; text-align: center;">
-                  <div style="text-align: left; color: var(--text-muted);">成員</div>
-                  <div style="color: #ef4444;">最高連續</div>
-                  <div style="color: #10b981;">累計完成</div>
-                  <div style="color: #f59e0b;">補讀</div>
+              <!-- 本週已完成 -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">本週已完成</span>
+                <span id="report-stat-week-range" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">6月28日 - 7月4日</span>
+                <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
+                  <span id="report-stat-week-completed">0</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
                 </div>
+              </div>
 
-                <!-- Members List Container -->
-                <div id="stats-participants-list" style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 400px; overflow-y: auto; padding-right: 0.2rem;">
-                  <!-- Populated dynamically by JS -->
+              <!-- 補讀 -->
+              <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">補讀</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">進度落後天數</span>
+                <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
+                  <span id="report-stat-makeup">115</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
                 </div>
               </div>
             </div>
 
-            <!-- 個人讀經報告詳細檢視 (Report Details) -->
-            <div id="plan-personal-report-view" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
-              <!-- Sub-header -->
-              <div class="youversion-detail-header" style="border-bottom: 1px solid var(--border-card); padding-bottom: 0.8rem; margin-bottom: 0.5rem;">
-                <button class="circular-action-btn" onclick="window.hidePersonalReportView()" title="返回統計">
-                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                </button>
-                <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin: 0; text-align: center; flex: 1;">個人讀經報告</h3>
-                <div style="width: 36px;"></div>
+            <!-- Heatmap -->
+            <div class="glass-card" style="padding: 1.2rem; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px;">
+              <h3 class="card-title" style="margin-bottom: 1rem; font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">個人讀經熱點地圖 (365天打卡活躍度)</h3>
+              <div id="bible-heatmap-container" style="overflow-x: auto; background: var(--bg-input); border-radius: 10px; padding: 1.2rem; border: 1px solid var(--border-card); display: flex; align-items: center; justify-content: center;">
+                <!-- Generated dynamically -->
+              </div>
+              <div class="heatmap-legend" style="display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.6rem;">
+                <span>少</span>
+                <span style="width: 10px; height: 10px; border-radius: 2px; background: var(--border-card); opacity: 0.2;"></span>
+                <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(99, 102, 241, 0.4);"></span>
+                <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(99, 102, 241, 0.6);"></span>
+                <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(99, 102, 241, 0.8);"></span>
+                <span style="width: 10px; height: 10px; border-radius: 2px; background: rgba(99, 102, 241, 1);"></span>
+                <span>多</span>
+              </div>
+            </div>
+
+            <!-- Honors Badge Wall -->
+            <div class="glass-card" style="padding: 1.2rem; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; margin-bottom: 0.5rem;">
+              <h3 class="card-title" style="margin-bottom: 1rem; font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">我的榮譽勳章牆</h3>
+              <div id="stats-badge-wall-container" style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; max-height: 250px; overflow-y: auto; padding-right: 0.2rem;">
+                <!-- Generated dynamically -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 子分頁 3：小組排行 (Ranking) -->
+          <div id="subview-plan-ranking" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
+            <div class="glass-card" style="padding: 1.2rem; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px;">
+              <h3 class="card-title" id="ranking-title" style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">參與者總覽</h3>
+              
+              <!-- Table Headers -->
+              <div style="display: grid; grid-template-columns: 1fr 55px 55px 75px; gap: 0.4rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.74rem; font-weight: 800; text-align: center;">
+                <div style="text-align: left; color: var(--text-muted);">成員</div>
+                <div style="color: #ef4444;">最高連續</div>
+                <div style="color: #10b981;">累計完成</div>
+                <div style="color: #6366f1;">進度狀態</div>
               </div>
 
-              <!-- Profile Avatar Section -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 0; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px;">
-                <div style="width: 76px; height: 76px; border-radius: 50%; background: #94a3b8; display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 0.8rem; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                  <svg viewBox="0 0 24 24" width="42" height="42" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                </div>
-                <h4 id="report-user-name" style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">使用者</h4>
-                <div style="width: 60%; height: 1px; background: var(--border-card); margin: 1rem 0;"></div>
-                <h5 id="report-plan-title" style="margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--text-primary); text-align: center;">365天逐章讀經計劃</h5>
-              </div>
-
-              <!-- 2x2 Grid Stats Cards -->
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                
-                <!-- 最高連續 -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                  <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">最高連續</span>
-                  <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">連續讀經沒有中斷</span>
-                  <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
-                    <span id="report-stat-streak">26</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
-                  </div>
-                </div>
-
-                <!-- 累計完成 -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                  <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">累計完成</span>
-                  <span id="report-stat-start-date" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">從 2026年7月1日起</span>
-                  <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
-                    <span id="report-stat-completed">173</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
-                  </div>
-                </div>
-
-                <!-- 本週已完成 -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                  <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">本週已完成</span>
-                  <span id="report-stat-week-range" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">6月28日 - 7月4日</span>
-                  <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
-                    <span id="report-stat-week-completed">0</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
-                  </div>
-                </div>
-
-                <!-- 補讀 -->
-                <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                  <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">補讀</span>
-                  <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">進度落後天數</span>
-                  <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
-                    <span id="report-stat-makeup">115</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">天</span>
-                  </div>
-                </div>
-
+              <!-- Members List Container -->
+              <div id="ranking-participants-list" style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 500px; overflow-y: auto; padding-right: 0.2rem;">
+                <!-- Populated dynamically by JS -->
               </div>
             </div>
           </div>
