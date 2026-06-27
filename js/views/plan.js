@@ -43,22 +43,26 @@ function initPlanControls() {
     });
   }
 
-  // Sub-tabs Toggle (Daily Reading vs Stats vs Ranking)
+  // Sub-tabs Toggle (Daily Reading vs Stats vs Ranking vs History)
   const tabSchedule = document.getElementById("tab-plan-schedule");
   const tabStats = document.getElementById("tab-plan-stats");
   const tabRanking = document.getElementById("tab-plan-ranking");
+  const tabHistory = document.getElementById("tab-plan-history");
   const subviewSchedule = document.getElementById("subview-plan-schedule");
   const subviewPlanStats = document.getElementById("subview-plan-stats");
   const subviewPlanRanking = document.getElementById("subview-plan-ranking");
+  const subviewPlanHistory = document.getElementById("subview-plan-history");
 
-  if (tabSchedule && tabStats && tabRanking) {
+  if (tabSchedule && tabStats && tabRanking && tabHistory) {
     tabSchedule.addEventListener("click", () => {
       tabSchedule.classList.add("active");
       tabStats.classList.remove("active");
       tabRanking.classList.remove("active");
+      tabHistory.classList.remove("active");
       if (subviewSchedule) subviewSchedule.classList.remove("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
       if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+      if (subviewPlanHistory) subviewPlanHistory.classList.add("hidden");
       renderPlanScheduleTracker();
     });
 
@@ -66,9 +70,11 @@ function initPlanControls() {
       tabStats.classList.add("active");
       tabSchedule.classList.remove("active");
       tabRanking.classList.remove("active");
+      tabHistory.classList.remove("active");
       if (subviewSchedule) subviewSchedule.classList.add("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
       if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+      if (subviewPlanHistory) subviewPlanHistory.classList.add("hidden");
       if (state.activePlan) {
         await renderPlanStatsView();
       }
@@ -78,11 +84,27 @@ function initPlanControls() {
       tabRanking.classList.add("active");
       tabSchedule.classList.remove("active");
       tabStats.classList.remove("active");
+      tabHistory.classList.remove("active");
       if (subviewSchedule) subviewSchedule.classList.add("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
       if (subviewPlanRanking) subviewPlanRanking.classList.remove("hidden");
+      if (subviewPlanHistory) subviewPlanHistory.classList.add("hidden");
       if (state.activePlan) {
         await renderPlanRankingView();
+      }
+    });
+
+    tabHistory.addEventListener("click", async () => {
+      tabHistory.classList.add("active");
+      tabSchedule.classList.remove("active");
+      tabStats.classList.remove("active");
+      tabRanking.classList.remove("active");
+      if (subviewSchedule) subviewSchedule.classList.add("hidden");
+      if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+      if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+      if (subviewPlanHistory) subviewPlanHistory.classList.remove("hidden");
+      if (state.activePlan) {
+        await renderPlanHistoryView();
       }
     });
   }
@@ -570,28 +592,40 @@ async function renderPlanDetailView() {
   const tabSchedule = document.getElementById("tab-plan-schedule");
   const tabStats = document.getElementById("tab-plan-stats");
   const tabRanking = document.getElementById("tab-plan-ranking");
+  const tabHistory = document.getElementById("tab-plan-history");
   const subviewSchedule = document.getElementById("subview-plan-schedule");
   const subviewPlanStats = document.getElementById("subview-plan-stats");
   const subviewPlanRanking = document.getElementById("subview-plan-ranking");
+  const subviewPlanHistory = document.getElementById("subview-plan-history");
 
   if (tabStats && tabStats.classList.contains("active")) {
     if (subviewSchedule) subviewSchedule.classList.add("hidden");
     if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
     if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+    if (subviewPlanHistory) subviewPlanHistory.classList.add("hidden");
     await renderPlanStatsView();
   } else if (tabRanking && tabRanking.classList.contains("active")) {
     if (subviewSchedule) subviewSchedule.classList.add("hidden");
     if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
     if (subviewPlanRanking) subviewPlanRanking.classList.remove("hidden");
+    if (subviewPlanHistory) subviewPlanHistory.classList.add("hidden");
     await renderPlanRankingView();
+  } else if (tabHistory && tabHistory.classList.contains("active")) {
+    if (subviewSchedule) subviewSchedule.classList.add("hidden");
+    if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
+    if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+    if (subviewPlanHistory) subviewPlanHistory.classList.remove("hidden");
+    await renderPlanHistoryView();
   } else {
     // Default to Schedule Tab
     if (tabSchedule) tabSchedule.classList.add("active");
     if (tabStats) tabStats.classList.remove("active");
     if (tabRanking) tabRanking.classList.remove("active");
+    if (tabHistory) tabHistory.classList.remove("active");
     if (subviewSchedule) subviewSchedule.classList.remove("hidden");
-    if (subviewPlanStats) subviewPlanStats.classList.add("hidden");
-    if (subviewPlanRanking) subviewPlanRanking.classList.add("hidden");
+    if (subviewPlanStats) subviewPlanStats.add("hidden");
+    if (subviewPlanRanking) subviewPlanRanking.add("hidden");
+    if (subviewPlanHistory) subviewPlanHistory.add("hidden");
     renderPlanScheduleTracker();
   }
 }
@@ -608,8 +642,9 @@ function renderHorizontalDateStrip() {
     const day = state.activePlan.days.find(d => d.dayNum === dNum);
     if (!day) continue;
 
+    const isDayCompleted = day.chapters && day.chapters.length > 0 && day.chapters.every(ch => ch.isRead);
     const dateCard = document.createElement("div");
-    dateCard.className = `date-card ${dNum === state.selectedPlanDay ? "active" : ""}`;
+    dateCard.className = `date-card ${dNum === state.selectedPlanDay ? "active" : ""} ${isDayCompleted ? "completed" : ""}`;
     dateCard.setAttribute("data-day", dNum);
     
     let formattedDate = "";
@@ -706,6 +741,17 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
         statusPill.style.background = "rgba(245, 158, 11, 0.1)";
         statusPill.style.color = "#f59e0b";
       }
+    }
+  }
+
+  // Update completion check on the active date card in the carousel dynamically
+  const activeCard = document.querySelector(`.date-card[data-day="${state.selectedPlanDay}"]`);
+  if (activeCard && state.activePlan) {
+    const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => ch.isRead);
+    if (isDayCompleted) {
+      activeCard.classList.add("completed");
+    } else {
+      activeCard.classList.remove("completed");
     }
   }
 
@@ -1381,59 +1427,38 @@ async function renderPlanStatsView() {
     }
   }
 
-  // 3. Completed this week (本週已完成)
-  const today = new Date();
-  const currentDayOfWeek = today.getDay(); // 0 is Sunday
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - currentDayOfWeek); // Sunday
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
-
-  const weekStartStr = `${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日`;
-  const weekEndStr = `${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日`;
-  const reportStatWeekRange = document.getElementById("report-stat-week-range");
-  if (reportStatWeekRange) reportStatWeekRange.textContent = `${weekStartStr} - ${weekEndStr}`;
-
-  let weekCompletedCount = 0;
-  state.activePlan.days.forEach(day => {
-    if (!day.chapters || day.chapters.length === 0) return;
-    const allRead = day.chapters.every(ch => ch.isRead);
-    if (!allRead) return;
-
-    const parts = day.date.split('/');
-    if (parts.length === 2) {
-      const dayDate = new Date(today.getFullYear(), parseInt(parts[0]) - 1, parseInt(parts[1]));
-      const dayTime = dayDate.getTime();
-      const sOfWeek = new Date(startOfWeek);
-      sOfWeek.setHours(0,0,0,0);
-      const eOfWeek = new Date(endOfWeek);
-      eOfWeek.setHours(23,59,59,999);
-      if (dayTime >= sOfWeek.getTime() && dayTime <= eOfWeek.getTime()) {
-        weekCompletedCount++;
-      }
-    }
-  });
-  const reportStatWeekCompleted = document.getElementById("report-stat-week-completed");
-  if (reportStatWeekCompleted) reportStatWeekCompleted.textContent = weekCompletedCount;
-
-  // 4. Makeup/Catch up days (補讀)
+  // Calculate expected days up to today
   const planStart = new Date(state.activePlan.startDate);
+  const today = new Date();
   const diffTime = today.getTime() - planStart.getTime();
   const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
   const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
-  
-  let completedExpectedCount = 0;
-  for (let i = 0; i < expectedDaysCount; i++) {
-    const day = state.activePlan.days[i];
-    if (day && day.chapters && day.chapters.length > 0 && day.chapters.every(ch => ch.isRead)) {
-      completedExpectedCount++;
+
+  // 3. Progress Status (進度狀態)
+  const reportStatProgressStatus = document.getElementById("report-stat-progress-status");
+  if (reportStatProgressStatus) {
+    const diff = completedDaysCount - expectedDaysCount;
+    if (diff > 0) {
+      reportStatProgressStatus.textContent = `超前 ${diff}天`;
+      reportStatProgressStatus.style.color = "#10b981"; // Green
+    } else if (diff < 0) {
+      reportStatProgressStatus.textContent = `落後 ${Math.abs(diff)}天`;
+      reportStatProgressStatus.style.color = "#ef4444"; // Red
+    } else {
+      reportStatProgressStatus.textContent = "進度一致";
+      reportStatProgressStatus.style.color = "var(--text-primary)";
     }
   }
-  const makeupDays = Math.max(0, expectedDaysCount - completedExpectedCount);
+
+  // 4. Makeup/Catch up days (補讀)
+  const makeupDays = Math.max(0, expectedDaysCount - completedDaysCount);
   const reportStatMakeup = document.getElementById("report-stat-makeup");
   if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
+}
 
-  // Render heatmap and badges
+async function renderPlanHistoryView() {
+  if (!state.activePlan) return;
+  // Render heatmap and badges wall
   renderPersonalHeatmap();
   renderPersonalUnlockedBadges();
 }
@@ -1547,7 +1572,6 @@ function renderPersonalUnlockedBadges() {
   });
 }
 
-// ==================== RANKING WITH PERMISSIONS & BEHIND/AHEAD STATUS ====================
 async function renderPlanRankingView() {
   if (!state.activePlan) return;
 
@@ -1602,14 +1626,17 @@ async function renderPlanRankingView() {
       const streak = isMe ? personalStreak : (u.streak || 0);
       
       let completed = 0;
+      let makeup = 0;
       let diff = 0;
       
       if (isMe) {
         completed = completedDaysCount;
+        makeup = Math.max(0, expectedDaysCount - completedDaysCount);
         diff = completed - expectedDaysCount;
       } else {
         completed = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
         completed = Math.min(completed, state.activePlan.days.length);
+        makeup = Math.max(0, expectedDaysCount - completed);
         diff = completed - expectedDaysCount;
       }
       
@@ -1627,6 +1654,7 @@ async function renderPlanRankingView() {
         name: u.name,
         streak: streak,
         completed: completed,
+        makeup: makeup,
         statusStr: statusStr,
         statusColor: statusColor,
         isMe: isMe
@@ -1643,6 +1671,7 @@ async function renderPlanRankingView() {
         name: userName,
         streak: personalStreak,
         completed: completedDaysCount,
+        makeup: Math.max(0, expectedDaysCount - completedDaysCount),
         statusStr: completedDaysCount - expectedDaysCount >= 0 ? "超前 " + (completedDaysCount - expectedDaysCount) + "天" : "落後 " + Math.abs(completedDaysCount - expectedDaysCount) + "天",
         statusColor: completedDaysCount - expectedDaysCount >= 0 ? "#10b981" : "#ef4444",
         isMe: true
@@ -1653,7 +1682,7 @@ async function renderPlanRankingView() {
       const itemRow = document.createElement("div");
       itemRow.style.cssText = `
         display: grid;
-        grid-template-columns: 1fr 55px 55px 75px;
+        grid-template-columns: 1fr 65px 65px 55px 75px;
         gap: 0.4rem;
         align-items: center;
         padding: 0.6rem 0.2rem;
@@ -1667,15 +1696,13 @@ async function renderPlanRankingView() {
         itemRow.style.borderRadius = "8px";
       }
 
-      const avatarHtml = `<div style="width: 28px; height: 28px; border-radius: 50%; background: #94a3b8; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem; flex-shrink: 0;"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></div>`;
-
       itemRow.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 0.5rem; text-align: left; min-width: 0;">
-          ${avatarHtml}
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">${escapeHTML(m.name)}</span>
+        <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">
+          ${escapeHTML(m.name)}
         </div>
         <div style="color: #ef4444;">${m.streak}</div>
         <div style="color: #10b981;">${m.completed}</div>
+        <div style="color: #f59e0b;">${m.makeup}</div>
         <div style="color: ${m.statusColor}; font-size: 0.8rem;">${m.statusStr}</div>
       `;
       listContainer.appendChild(itemRow);
