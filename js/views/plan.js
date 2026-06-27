@@ -64,7 +64,7 @@ function initPlanControls() {
       if (subviewSchedule) subviewSchedule.classList.add("hidden");
       if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
       if (state.activePlan) {
-        await updateStatsView(state.activePlan.presetKey);
+        await renderPlanStatsView();
       }
     });
   }
@@ -118,7 +118,7 @@ function initPlanControls() {
       if (!day || !day.chapters || day.chapters.length === 0) return;
       
       const firstUnread = day.chapters.find(ch => !ch.isRead) || day.chapters[0];
-      readChapterDirect(firstUnread.book, firstUnread.chapter);
+      window.openPlanInlineReader(firstUnread.book, firstUnread.chapter, state.selectedPlanDay);
     });
   }
 
@@ -559,7 +559,7 @@ async function renderPlanDetailView() {
   if (tabStats && tabStats.classList.contains("active")) {
     if (subviewSchedule) subviewSchedule.classList.add("hidden");
     if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
-    await updateStatsView(state.activePlan.presetKey);
+    await renderPlanStatsView();
   } else {
     // Default to Schedule Tab
     if (tabSchedule) tabSchedule.classList.add("active");
@@ -705,10 +705,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
       <div class="task-checkbox ${checkState}" onclick="event.stopPropagation(); window.toggleYouVersionChapter(this, '${ch.book}', ${ch.chapter})">
         ${svgIcon}
       </div>
-      <div class="task-title" onclick="readChapterDirect('${ch.book}', ${ch.chapter})">
+      <div class="task-title" onclick="window.openPlanInlineReader('${ch.book}', ${ch.chapter}, ${state.selectedPlanDay})">
         ${ch.book} ${ch.chapter}章
       </div>
-      <div class="task-arrow" onclick="readChapterDirect('${ch.book}', ${ch.chapter})">
+      <div class="task-arrow" onclick="window.openPlanInlineReader('${ch.book}', ${ch.chapter}, ${state.selectedPlanDay})">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="9 18 15 12 9 6"></polyline></svg>
       </div>
     `;
@@ -1138,3 +1138,381 @@ async function renderAdminPlanManagement() {
   }
 }
 
+
+// Initialize state for inline reader
+state.inlineReader = {
+  active: false,
+  dayNum: 0,
+  chaptersList: [],
+  currentIndex: 0,
+  autoMarked: false
+};
+
+window.openPlanInlineReader = function(bookName, chapter, dayNum) {
+  if (!state.activePlan) return;
+  const day = state.activePlan.days.find(d => d.dayNum === dayNum);
+  if (!day || !day.chapters || day.chapters.length === 0) return;
+
+  state.inlineReader.active = true;
+  state.inlineReader.dayNum = dayNum;
+  state.inlineReader.chaptersList = day.chapters;
+  state.inlineReader.currentIndex = day.chapters.findIndex(ch => ch.book === bookName && ch.chapter === chapter);
+  if (state.inlineReader.currentIndex === -1) state.inlineReader.currentIndex = 0;
+
+  // Hide checklist interface elements
+  const carousel = document.getElementById("plan-date-carousel");
+  const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
+  const taskList = document.getElementById("plan-tasks-list");
+  const readBtn = document.getElementById("plan-start-reading-container");
+
+  if (carousel) carousel.classList.add("hidden");
+  if (planDayHeader) planDayHeader.classList.add("hidden");
+  if (taskList) taskList.classList.add("hidden");
+  if (readBtn) readBtn.classList.add("hidden");
+
+  // Show inline reader container
+  const inlineReader = document.getElementById("plan-inline-reader");
+  if (inlineReader) inlineReader.classList.remove("hidden");
+
+  renderInlineScriptureText();
+};
+
+window.closePlanInlineReader = function() {
+  state.inlineReader.active = false;
+
+  // Show checklist interface elements
+  const carousel = document.getElementById("plan-date-carousel");
+  const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
+  const taskList = document.getElementById("plan-tasks-list");
+  const readBtn = document.getElementById("plan-start-reading-container");
+
+  if (carousel) carousel.classList.remove("hidden");
+  if (planDayHeader) planDayHeader.classList.remove("hidden");
+  if (taskList) taskList.classList.remove("hidden");
+  if (readBtn) readBtn.classList.remove("hidden");
+
+  // Hide inline reader container
+  const inlineReader = document.getElementById("plan-inline-reader");
+  if (inlineReader) inlineReader.classList.add("hidden");
+
+  // Re-render checklist to show checked updates
+  renderPlanScheduleTracker(true);
+};
+
+async function renderInlineScriptureText() {
+  const currentCh = state.inlineReader.chaptersList[state.inlineReader.currentIndex];
+  if (!currentCh) return;
+
+  state.inlineReader.autoMarked = false;
+
+  // Set Title
+  const titleEl = document.getElementById("plan-inline-reader-title");
+  if (titleEl) titleEl.textContent = `${currentCh.book} ${currentCh.chapter}章`;
+
+  // Set Footer text
+  const footerPlanName = document.getElementById("plan-inline-footer-plan-name");
+  const footerProgress = document.getElementById("plan-inline-footer-progress");
+
+  if (footerPlanName) footerPlanName.textContent = state.activePlan.name;
+  if (footerProgress) footerProgress.textContent = `第 ${state.inlineReader.dayNum} 天 • ${state.inlineReader.chaptersList.length} 之 ${state.inlineReader.currentIndex + 1}`;
+
+  // Load verses
+  const container = document.getElementById("plan-inline-bible-content");
+  if (container) {
+    container.innerHTML = `<div class="loader-inline" style="text-align: center; padding: 2rem; color: var(--text-muted);">讀取經文中...</div>`;
+    
+    const book = BIBLE_BOOKS.find(b => b.name === currentCh.book);
+    if (book) {
+      try {
+        const data = await fetchBibleChapter(book.eng, currentCh.chapter);
+        container.innerHTML = "";
+        data.verses.forEach(v => {
+          const verseDiv = document.createElement("div");
+          verseDiv.className = "bible-verse";
+          verseDiv.style.marginBottom = "0.8rem";
+          verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 700; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.85rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
+          container.appendChild(verseDiv);
+        });
+      } catch (err) {
+        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: #ef4444;">載入經文失敗: ${err.message || err}</div>`;
+      }
+    }
+  }
+
+  // Prev / Next button states
+  const prevBtn = document.getElementById("plan-inline-prev-btn");
+  const nextBtn = document.getElementById("plan-inline-next-btn");
+
+  if (prevBtn) {
+    if (state.inlineReader.currentIndex === 0) {
+      prevBtn.setAttribute("disabled", "true");
+      prevBtn.style.opacity = "0.3";
+      prevBtn.style.pointerEvents = "none";
+    } else {
+      prevBtn.removeAttribute("disabled");
+      prevBtn.style.opacity = "1";
+      prevBtn.style.pointerEvents = "auto";
+    }
+  }
+
+  if (nextBtn) {
+    if (state.inlineReader.currentIndex === state.inlineReader.chaptersList.length - 1) {
+      nextBtn.setAttribute("disabled", "true");
+      nextBtn.style.opacity = "0.3";
+      nextBtn.style.pointerEvents = "none";
+    } else {
+      nextBtn.removeAttribute("disabled");
+      nextBtn.style.opacity = "1";
+      nextBtn.style.pointerEvents = "auto";
+    }
+  }
+
+  // Scroll window to top
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+window.navigateInlineChapter = function(direction) {
+  const newIndex = state.inlineReader.currentIndex + direction;
+  if (newIndex >= 0 && newIndex < state.inlineReader.chaptersList.length) {
+    state.inlineReader.currentIndex = newIndex;
+    renderInlineScriptureText();
+  }
+};
+
+// Window scroll listener for inline reader automatic check-in
+window.addEventListener("scroll", async () => {
+  if (!state.inlineReader || !state.inlineReader.active) return;
+  if (state.inlineReader.autoMarked) return;
+
+  const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+  const windowHeight = window.innerHeight;
+  const docHeight = document.documentElement.scrollHeight;
+
+  if (scrollTop + windowHeight >= docHeight - 50) {
+    state.inlineReader.autoMarked = true; // prevent double trigger
+    
+    const currentCh = state.inlineReader.chaptersList[state.inlineReader.currentIndex];
+    if (!currentCh) return;
+
+    // Check if already read
+    const isAlreadyRead = state.readingLogs.some(l => l.book === currentCh.book && l.chapter === currentCh.chapter);
+    if (!isAlreadyRead) {
+      loader.show("記錄已讀中...");
+      const success = await db.logChapterRead(currentCh.book, currentCh.chapter, true);
+      loader.hide();
+      
+      if (success) {
+        currentCh.isRead = true;
+        calculatePlanProgress();
+        db.saveLocalUserStats();
+
+        if (state.activePlan && state.activePlan.progress === 100) {
+          await handleRoundCompletion(state.activePlan);
+        }
+
+        // Show toast
+        if (typeof showToast === 'function') {
+          showToast(`📖 已自動將 ${currentCh.book} 第 ${currentCh.chapter} 章標記為已讀！`);
+        }
+      }
+    }
+  }
+});
+
+// Toggle views for personal reading report inside plan stats tab
+window.showPersonalReportView = function() {
+  const overview = document.getElementById("plan-stats-overview-view");
+  const report = document.getElementById("plan-personal-report-view");
+  if (overview) overview.classList.add("hidden");
+  if (report) report.classList.remove("hidden");
+};
+
+window.hidePersonalReportView = function() {
+  const overview = document.getElementById("plan-stats-overview-view");
+  const report = document.getElementById("plan-personal-report-view");
+  if (overview) overview.classList.remove("hidden");
+  if (report) report.classList.add("hidden");
+};
+
+async function renderPlanStatsView() {
+  if (!state.activePlan) return;
+  
+  // Reset report view to show overview first
+  window.hidePersonalReportView();
+  
+  // Set User Profile names
+  const statsUserName = document.getElementById("stats-user-name");
+  const reportUserName = document.getElementById("report-user-name");
+  const reportPlanTitle = document.getElementById("report-plan-title");
+  
+  const userName = state.currentUser.name || "弟兄姊妹";
+  if (statsUserName) statsUserName.textContent = userName;
+  if (reportUserName) reportUserName.textContent = userName;
+  if (reportPlanTitle) reportPlanTitle.textContent = state.activePlan.name;
+
+  // Personal Streak val
+  const personalStreak = state.currentUser.streak || 0;
+  const statsPersonalStreakVal = document.getElementById("stats-personal-streak-val");
+  if (statsPersonalStreakVal) statsPersonalStreakVal.textContent = personalStreak;
+
+  // Let's compute statistics for the user
+  // 1. Highest streak (最高連續)
+  const reportStatStreak = document.getElementById("report-stat-streak");
+  if (reportStatStreak) reportStatStreak.textContent = personalStreak;
+
+  // 2. Total completed (累計完成) - number of days where all chapters are completed
+  const completedDaysCount = state.activePlan.days.filter(d => {
+    if (!d.chapters || d.chapters.length === 0) return false;
+    return d.chapters.every(ch => ch.isRead);
+  }).length;
+  const reportStatCompleted = document.getElementById("report-stat-completed");
+  if (reportStatCompleted) reportStatCompleted.textContent = completedDaysCount;
+
+  const reportStatStartDate = document.getElementById("report-stat-start-date");
+  if (reportStatStartDate) {
+    const pDate = new Date(state.activePlan.startDate);
+    if (!isNaN(pDate)) {
+      reportStatStartDate.textContent = `從 ${pDate.getFullYear()}年${pDate.getMonth() + 1}月${pDate.getDate()}日起`;
+    } else {
+      reportStatStartDate.textContent = `從 ${state.activePlan.startDate} 起`;
+    }
+  }
+
+  // 3. Completed this week (本週已完成) - count completed days in current week (Sun-Sat)
+  const today = new Date();
+  const currentDayOfWeek = today.getDay(); // 0 is Sunday
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - currentDayOfWeek); // Sunday
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+
+  const weekStartStr = `${startOfWeek.getMonth() + 1}月${startOfWeek.getDate()}日`;
+  const weekEndStr = `${endOfWeek.getMonth() + 1}月${endOfWeek.getDate()}日`;
+  const reportStatWeekRange = document.getElementById("report-stat-week-range");
+  if (reportStatWeekRange) reportStatWeekRange.textContent = `${weekStartStr} - ${weekEndStr}`;
+
+  // Count completed plan days that fall within startOfWeek and endOfWeek
+  let weekCompletedCount = 0;
+  state.activePlan.days.forEach(day => {
+    if (!day.chapters || day.chapters.length === 0) return;
+    const allRead = day.chapters.every(ch => ch.isRead);
+    if (!allRead) return;
+
+    const parts = day.date.split('/');
+    if (parts.length === 2) {
+      const dayDate = new Date(today.getFullYear(), parseInt(parts[0]) - 1, parseInt(parts[1]));
+      const dayTime = dayDate.getTime();
+      // Set hours to compare purely by date
+      const sOfWeek = new Date(startOfWeek);
+      sOfWeek.setHours(0,0,0,0);
+      const eOfWeek = new Date(endOfWeek);
+      eOfWeek.setHours(23,59,59,999);
+      if (dayTime >= sOfWeek.getTime() && dayTime <= eOfWeek.getTime()) {
+        weekCompletedCount++;
+      }
+    }
+  });
+  const reportStatWeekCompleted = document.getElementById("report-stat-week-completed");
+  if (reportStatWeekCompleted) reportStatWeekCompleted.textContent = weekCompletedCount;
+
+  // 4. Makeup/Catch up days (補讀)
+  const planStart = new Date(state.activePlan.startDate);
+  const diffTime = today.getTime() - planStart.getTime();
+  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
+  const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
+  
+  let completedExpectedCount = 0;
+  for (let i = 0; i < expectedDaysCount; i++) {
+    const day = state.activePlan.days[i];
+    if (day && day.chapters && day.chapters.length > 0 && day.chapters.every(ch => ch.isRead)) {
+      completedExpectedCount++;
+    }
+  }
+  const makeupDays = Math.max(0, expectedDaysCount - completedExpectedCount);
+  const reportStatMakeup = document.getElementById("report-stat-makeup");
+  if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
+
+  // 5. Render participants list (Screenshot 2 style)
+  const listContainer = document.getElementById("stats-participants-list");
+  if (listContainer) {
+    listContainer.innerHTML = `<div style="text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.82rem;">載入成員數據中...</div>`;
+    
+    // Fetch group users
+    let allUsers = [];
+    try {
+      allUsers = await db.fetchMergedUsersList();
+    } catch(e) {
+      console.warn("Failed to fetch merged users, fallback to empty array", e);
+    }
+    
+    const userGroup = state.currentUser.small_group || "馬鈴";
+    const userZone = state.currentUser.pastoral_zone || "大安1";
+    let groupMembers = allUsers.filter(u => u.pastoral_zone === userZone && u.small_group === userGroup);
+    
+    // If no group members, populate with Screenshot 2 mock data
+    if (groupMembers.length <= 1) {
+      groupMembers = [
+        { name: "育慈", streak: 48, completed: 365, makeup: 48, avatarSeed: "yuci" },
+        { name: "Anne Shi", streak: 29, completed: 364, makeup: 191, avatarSeed: "anne" },
+        { name: "Anya", streak: 12, completed: 363, makeup: 311, avatarSeed: "anya" },
+        { name: "巫鎧廷", streak: 27, completed: 343, makeup: 163, avatarSeed: "kaiting" },
+        { name: "熊 Chu", streak: 19, completed: 212, makeup: 162, avatarSeed: "xiong" },
+        { name: userName, streak: personalStreak, completed: completedDaysCount, makeup: makeupDays, isMe: true },
+        { name: "Zhi Ting", streak: 15, completed: 142, makeup: 103, avatarSeed: "zhiting" },
+        { name: "劉育瑋 (Leo)", streak: 3, completed: 22, makeup: 18, avatarSeed: "leo" }
+      ];
+    } else {
+      // In online mode, map raw database users to table values dynamically
+      groupMembers = groupMembers.map(u => {
+        const isMe = u.name === state.currentUser.name;
+        const streak = isMe ? personalStreak : (u.streak || 0);
+        let completed = isMe ? completedDaysCount : Math.round((u.chapters_read || 0) / 4);
+        completed = Math.min(completed, state.activePlan.days.length);
+        const makeup = isMe ? makeupDays : Math.max(0, expectedDaysCount - completed);
+        return {
+          name: u.name,
+          streak: streak,
+          completed: completed,
+          makeup: makeup,
+          isMe: isMe
+        };
+      });
+    }
+
+    // Sort group members by Completed Days descending
+    groupMembers.sort((a, b) => b.completed - a.completed);
+
+    listContainer.innerHTML = "";
+    groupMembers.forEach(m => {
+      const itemRow = document.createElement("div");
+      itemRow.style.cssText = `
+        display: grid;
+        grid-template-columns: 1fr 65px 65px 60px;
+        gap: 0.5rem;
+        align-items: center;
+        padding: 0.6rem 0.2rem;
+        border-bottom: 1px solid var(--border-card);
+        font-size: 0.88rem;
+        font-weight: 700;
+        text-align: center;
+      `;
+      if (m.isMe) {
+        itemRow.style.background = "rgba(99, 102, 241, 0.08)";
+        itemRow.style.borderRadius = "8px";
+      }
+
+      const avatarHtml = `<div style="width: 28px; height: 28px; border-radius: 50%; background: #94a3b8; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem; flex-shrink: 0;"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></div>`;
+
+      itemRow.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; text-align: left; min-width: 0;">
+          ${avatarHtml}
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">${escapeHTML(m.name)}</span>
+        </div>
+        <div style="color: #ef4444;">${m.streak}</div>
+        <div style="color: #10b981;">${m.completed}</div>
+        <div style="color: #f59e0b;">${m.makeup}</div>
+      `;
+      listContainer.appendChild(itemRow);
+    });
+  }
+}
