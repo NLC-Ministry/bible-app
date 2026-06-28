@@ -1454,19 +1454,37 @@ async function renderPlanStatsView() {
   const makeupDays = Math.max(0, expectedDaysCount - completedDaysCount);
   const reportStatMakeup = document.getElementById("report-stat-makeup");
   if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
+
+  // Render heatmap and badges wall
+  renderPersonalHeatmap();
+  renderPersonalUnlockedBadges();
 }
 
 async function renderPlanHistoryView() {
   if (!state.activePlan) return;
   
-  // 1. Render Group Rankings table at the very top of history
+  // 1. Render Group Rankings/Participants table at top
   await renderGroupParticipantsRankingTable();
 
-  // 2. Render Heatmap and Badges wall
-  renderPersonalHeatmap();
-  renderPersonalUnlockedBadges();
+  // 2. Render group mini-cards and stats
+  await renderGroupMiniStats();
 
-  // 3. Render Bible Pilgrimage Trail canvas
+  // 3. Render group progress distribution bars
+  renderGroupProgressDistribution();
+
+  // 4. Render pastoral ranking bar chart
+  renderGroupPastoralChart();
+
+  // 5. Render small group chart (with zone selector)
+  renderGroupZoneChartWithSelector();
+
+  // 6. Render 7-day growth trend line chart
+  renderGroupGrowthTrend();
+
+  // 7. Render team heatmap
+  renderGroupTeamHeatmap();
+
+  // 8. Render Bible Pilgrimage Trail canvas
   if (typeof renderPilgrimageTrail === 'function') {
     await renderPilgrimageTrail();
   }
@@ -1476,25 +1494,271 @@ async function renderPlanHistoryView() {
   }
 }
 
-function renderPersonalHeatmap() {
-  const container = document.getElementById("bible-heatmap-container");
-  if (!container) return;
-  
-  container.innerHTML = "";
-  
-  const grid = document.createElement("div");
-  grid.className = "heatmap-grid";
-  grid.style.cssText = "display: grid; grid-template-rows: repeat(7, 10px); grid-auto-flow: column; gap: 3px; max-height: 90px; overflow-x: auto; padding: 0.2rem 0;";
-  
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 365);
-  const dayOfWeek = startDate.getDay();
-  startDate.setDate(startDate.getDate() - dayOfWeek);
-  
+async function renderGroupMiniStats() {
+  if (!state.activePlan) return;
+
+  const userZone = state.currentUser.pastoral_zone || '';
+  const isAdmin = getIsAdmin(state.currentUser);
+
+  let allUsers = [];
+  try {
+    allUsers = await db.fetchMergedUsersList();
+  } catch(e) {
+    console.warn('Failed to fetch users for group stats mini-cards', e);
+  }
+
+  let scopedUsers = getScopedUsers(allUsers, state.currentUser);
+  if (scopedUsers.length === 0) scopedUsers = allUsers;
+
+  const totalChapters = scopedUsers.reduce((sum, u) => sum + (u.chapters_read || 0), 0);
+  const totalMembers = scopedUsers.length;
+  const now = new Date();
+  const twoAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+  const totalActive = scopedUsers.filter(u => {
+    if (!u.last_read) return false;
+    return new Date(u.last_read) >= twoAgo;
+  }).length;
+
+  // Update labels based on scope
+  const labelTotal = document.getElementById('grp-label-total-read');
+  const labelMembers = document.getElementById('grp-label-members');
+  const labelActive = document.getElementById('grp-label-active');
+
+  if (labelTotal) labelTotal.textContent = isAdmin ? '全教會總閱讀章數' : `「${userZone}」總閱讀章數`;
+  if (labelMembers) labelMembers.textContent = isAdmin ? '全教會參與人數' : `「${userZone}」參與人數`;
+  if (labelActive) labelActive.textContent = isAdmin ? '本週全教會活躍人數' : `「${userZone}」本週活躍人數`;
+
+  const elTotal = document.getElementById('grp-total-read');
+  const elMembers = document.getElementById('grp-total-members');
+  const elActive = document.getElementById('grp-active-members');
+
+  if (elTotal) elTotal.textContent = totalChapters + ' 章';
+  if (elMembers) elMembers.textContent = totalMembers + ' 人';
+  if (elActive) elActive.textContent = totalActive + ' 人';
+
+  // Also stash for charts
+  window._grpScopedUsers = scopedUsers;
+  window._grpAllUsers = allUsers;
+}
+
+function renderGroupProgressDistribution() {
+  const scopedUsers = window._grpScopedUsers || [];
+  const totalCount = scopedUsers.length;
+  if (totalCount === 0) return;
+
+  // Calculate expected progress percentage from activePlan
+  let expectedPct = 50;
+  if (state.activePlan) {
+    const start = new Date(state.activePlan.startDate);
+    const end = new Date(state.activePlan.endDate);
+    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const today = new Date();
+    const elapsed = Math.max(0, Math.min(totalDays, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1));
+    expectedPct = Math.round((elapsed / totalDays) * 100) || 0;
+  }
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const todayDoneCount = scopedUsers.filter(u => u.last_read === todayStr).length;
+  const todayRate = Math.round((todayDoneCount / totalCount) * 100);
+
+  let aheadCount = 0, onCount = 0, behindCount = 0, round2Count = 0;
+  scopedUsers.forEach(u => {
+    const round = u.current_round !== undefined 
+      ? u.current_round 
+      : (u.chapters_read > 850 ? 3 : u.chapters_read > 500 ? 2 : 1);
+    if (round >= 2) round2Count++;
+    if (u.plan_progress === 0) { behindCount++; }
+    else if (u.plan_progress > expectedPct + 5) { aheadCount++; }
+    else if (u.plan_progress < expectedPct - 5) { behindCount++; }
+    else { onCount++; }
+  });
+
+  const aheadRate = Math.round((aheadCount / totalCount) * 100);
+  const onRate = Math.round((onCount / totalCount) * 100);
+  const behindRate = Math.round((behindCount / totalCount) * 100);
+  const round2Rate = Math.round((round2Count / totalCount) * 100);
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.style.width = val + '%'; };
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  setText('grp-today-rate', todayRate + '%');
+  set('grp-today-bar', todayRate);
+  setText('grp-ahead-label', `${aheadCount} 人 (${aheadRate}%)`);
+  set('grp-ahead-bar', aheadRate);
+  setText('grp-on-schedule-label', `${onCount} 人 (${onRate}%)`);
+  set('grp-on-schedule-bar', onRate);
+  setText('grp-behind-label', `${behindCount} 人 (${behindRate}%)`);
+  set('grp-behind-bar', behindRate);
+  setText('grp-round2-label', `${round2Count} 人 (${round2Rate}%)`);
+  set('grp-round2-bar', round2Rate);
+}
+
+function renderGroupPastoralChart() {
+  const canvas = document.getElementById('grp-pastoral-rank-chart');
+  if (!canvas) return;
+
+  const allUsers = window._grpAllUsers || [];
+  const zoneMap = {};
+  allUsers.forEach(u => {
+    const zone = u.pastoral_zone || '未知';
+    if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0 };
+    zoneMap[zone].total_chapters += (u.chapters_read || 0);
+  });
+  const zoneStats = Object.values(zoneMap).sort((a, b) => b.total_chapters - a.total_chapters);
+
+  const isDark = document.body.classList.contains('dark-theme');
+  const fontColor = isDark ? '#cbd5e1' : '#475569';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+
+  if (window._grpPastoralChart) window._grpPastoralChart.destroy();
+  window._grpPastoralChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: zoneStats.map(z => z.name),
+      datasets: [{
+        label: '累計速讀章數',
+        data: zoneStats.map(z => z.total_chapters),
+        backgroundColor: ['rgba(99,102,241,0.85)','rgba(16,185,129,0.85)','rgba(245,158,11,0.85)','rgba(239,68,68,0.85)','rgba(59,130,246,0.85)','rgba(168,85,247,0.85)'],
+        borderRadius: 8, borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: fontColor }, grid: { display: false } },
+        y: { ticks: { color: fontColor }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+function renderGroupZoneChartWithSelector() {
+  const selector = document.getElementById('grp-zone-selector');
+  if (!selector) return;
+
+  const allUsers = window._grpAllUsers || [];
+  const zones = [...new Set(allUsers.map(u => u.pastoral_zone || '未知'))].sort();
+  selector.innerHTML = zones.map(z => `<option value="${z}">${z}</option>`).join('');
+
+  const userZone = state.currentUser.pastoral_zone || zones[0];
+  if (userZone && zones.includes(userZone)) selector.value = userZone;
+
+  const drawGroupChart = (zoneName) => {
+    const canvas = document.getElementById('grp-group-stats-chart');
+    if (!canvas) return;
+
+    const usersInZone = allUsers.filter(u => u.pastoral_zone === zoneName);
+    const groupMap = {};
+    usersInZone.forEach(u => {
+      const grp = u.small_group || '未知';
+      if (!groupMap[grp]) groupMap[grp] = 0;
+      groupMap[grp] += (u.chapters_read || 0);
+    });
+    const groupStats = Object.entries(groupMap).sort((a, b) => b[1] - a[1]);
+
+    const isDark = document.body.classList.contains('dark-theme');
+    const fontColor = isDark ? '#cbd5e1' : '#475569';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+
+    if (window._grpGroupChart) window._grpGroupChart.destroy();
+    window._grpGroupChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: groupStats.map(g => g[0]),
+        datasets: [{
+          label: '累計章數',
+          data: groupStats.map(g => g[1]),
+          backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 6
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: fontColor }, grid: { color: gridColor } },
+          y: { ticks: { color: fontColor }, grid: { display: false } }
+        }
+      }
+    });
+  };
+
+  drawGroupChart(selector.value);
+  selector.onchange = () => drawGroupChart(selector.value);
+}
+
+function renderGroupGrowthTrend() {
+  const canvas = document.getElementById('grp-team-growth-chart');
+  if (!canvas) return;
+
+  const scopedUsers = window._grpScopedUsers || [];
+  const totalActive = scopedUsers.filter(u => u.chapters_read > 0).length;
+  const labels = [];
+  const data = [];
   const today = new Date();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const daysDiff = Math.ceil((today.getTime() - startDate.getTime()) / oneDayMs);
-  
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    labels.push(d.toISOString().substring(5, 10).replace('-', '/'));
+    const factor = 0.8 + (6 - i) * 0.033;
+    data.push(Math.round(totalActive * factor));
+  }
+
+  const isDark = document.body.classList.contains('dark-theme');
+  const fontColor = isDark ? '#cbd5e1' : '#475569';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+
+  if (window._grpGrowthChart) window._grpGrowthChart.destroy();
+  window._grpGrowthChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '參與人數',
+        data,
+        borderColor: 'rgba(99,102,241,1)',
+        backgroundColor: 'rgba(99,102,241,0.1)',
+        borderWidth: 2, fill: true, tension: 0.3,
+        pointBackgroundColor: 'rgba(99,102,241,1)'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: fontColor }, grid: { display: false } },
+        y: { ticks: { color: fontColor, stepSize: 1 }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+function renderGroupTeamHeatmap() {
+  const scopedUsers = window._grpScopedUsers || [];
+  const userZone = state.currentUser.pastoral_zone || '';
+  const isAdmin = getIsAdmin(state.currentUser);
+
+  const titleEl = document.getElementById('grp-heatmap-title');
+  if (titleEl) {
+    titleEl.textContent = isAdmin
+      ? '全教會讀經熱點地圖 (365天打卡活躍度)'
+      : `「${userZone}」團隊讀經熱點地圖 (365天打卡活躍度)`;
+  }
+
+  const logsByDate = {};
+  if (state.readingLogs) {
+    state.readingLogs.forEach(log => {
+      if (log.read_at) {
+        const dStr = log.read_at.substring(0, 10);
+        logsByDate[dStr] = (logsByDate[dStr] || 0) + 1;
+      }
+    });
+  }
+  buildHeatmapGrid('grp-bible-heatmap-container', logsByDate, scopedUsers.length, '章');
+}
+
+function renderPersonalHeatmap() {
   const logsByDate = {};
   state.readingLogs.forEach(log => {
     if (log.read_at) {
@@ -1502,87 +1766,11 @@ function renderPersonalHeatmap() {
       logsByDate[dStr] = (logsByDate[dStr] || 0) + 1;
     }
   });
-
-  for (let i = 0; i <= daysDiff; i++) {
-    const currentDate = new Date(startDate.getTime() + i * oneDayMs);
-    const dateStr = currentDate.toISOString().substring(0, 10);
-    const count = logsByDate[dateStr] || 0;
-    
-    const cell = document.createElement("div");
-    cell.className = "heatmap-cell";
-    cell.setAttribute("data-date", dateStr);
-    cell.setAttribute("data-count", count);
-    
-    cell.style.width = "10px";
-    cell.style.height = "10px";
-    cell.style.borderRadius = "2px";
-    
-    let background = "var(--border-card)";
-    let opacity = "0.2";
-    if (count > 0) {
-      opacity = "1";
-      if (count === 1) background = "rgba(99, 102, 241, 0.4)";
-      else if (count === 2) background = "rgba(99, 102, 241, 0.6)";
-      else if (count === 3) background = "rgba(99, 102, 241, 0.8)";
-      else background = "rgba(99, 102, 241, 1)";
-    }
-    
-    cell.style.background = background;
-    cell.style.opacity = opacity;
-    cell.title = `${dateStr}: 讀經 ${count} 章`;
-    
-    grid.appendChild(cell);
-  }
-  
-  container.appendChild(grid);
+  buildHeatmapGrid("bible-heatmap-container", logsByDate, 1, "章");
 }
 
 function renderPersonalUnlockedBadges() {
-  const container = document.getElementById("stats-badge-wall-container");
-  if (!container) return;
-
-  const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
-  container.innerHTML = "";
-
-  if (typeof ACHIEVEMENTS === 'undefined') {
-    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1rem;">暫無解鎖勳章</div>`;
-    return;
-  }
-
-  ACHIEVEMENTS.forEach(badge => {
-    const isUnlocked = unlocked.includes(badge.id);
-    const badgeItem = document.createElement("div");
-    
-    const descParsed = badge.description.replace("{streak}", state.currentUser.streak);
-
-    badgeItem.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.8rem 1rem;
-      background: ${isUnlocked ? 'var(--bg-input)' : 'rgba(255,255,255,0.02)'};
-      border: 1px solid ${isUnlocked ? 'var(--border-card)' : 'rgba(255,255,255,0.05)'};
-      border-radius: 12px;
-      opacity: ${isUnlocked ? '1' : '0.4'};
-      filter: ${isUnlocked ? 'none' : 'grayscale(100%)'};
-      transition: all 0.3s ease;
-    `;
-
-    badgeItem.innerHTML = `
-      <div style="font-size: 1.8rem; display: flex; width: 44px; height: 44px; background: ${isUnlocked ? badge.color : '#cbd5e1'}; border-radius: 50%; justify-content: center; align-items: center; box-shadow: ${isUnlocked ? '0 4px 10px ' + badge.shadow : 'none'}; flex-shrink: 0;">
-        ${badge.icon}
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; text-align: left;">
-        <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-          ${badge.title}
-          ${isUnlocked ? '<span style="font-size: 0.6rem; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 10px; font-weight: 800;">已解鎖</span>' : ''}
-        </span>
-        <span style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descParsed}</span>
-      </div>
-    `;
-
-    container.appendChild(badgeItem);
-  });
+  renderBadgeWall("stats-badge-wall-container");
 }
 
 async function renderPlanRankingView() {

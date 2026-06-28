@@ -1,5 +1,5 @@
-const CACHE_NAME = 'church-bible-reading-v35';
-const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v35';
+const CACHE_NAME = 'church-bible-reading-v38';
+const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v38';
 
 // Static resources to precache
 const PRECACHE_ASSETS = [
@@ -68,7 +68,7 @@ self.addEventListener('fetch', (e) => {
             console.log('[Service Worker] Serving Bible text from cache:', requestUrl.pathname);
             return cachedResponse;
           }
-          
+
           return fetch(e.request).then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
               cache.put(e.request, networkResponse.clone());
@@ -125,7 +125,7 @@ self.addEventListener('fetch', (e) => {
       }).catch((err) => {
         console.warn('[Service Worker] Fetch failed, returning cache if available:', err);
       });
-      
+
       return cachedResponse || fetchPromise;
     })
   );

@@ -1,28 +1,5 @@
 // Statistics & charts tab view controller
 
-function filterUsersByRole(users, currentUser) {
-  if (!currentUser) return users;
-  const role = currentUser.role || "member";
-  
-  if (role === "senior_pastor" || role === "admin") {
-    return users; // Full access
-  }
-  
-  if (role === "great_zone_leader") {
-    return users.filter(u => u.great_region === currentUser.great_region);
-  }
-  
-  if (role === "zone_leader") {
-    return users.filter(u => u.pastoral_zone === currentUser.pastoral_zone);
-  }
-  
-  if (role === "group_leader") {
-    return users.filter(u => u.pastoral_zone === currentUser.pastoral_zone && u.small_group === currentUser.small_group);
-  }
-  
-  // member
-  return users.filter(u => u.name === currentUser.name);
-}
 
 async function updateStatsView(filterPresetKey = null) {
   // If no filterPresetKey is provided, fallback to current activePlan's key
@@ -87,7 +64,7 @@ async function updateStatsView(filterPresetKey = null) {
     active_count: item.active_count
   })).sort((a, b) => b.total_chapters - a.total_chapters);
 
-  rawAllUsers = filterUsersByRole(rawAllUsers, mockUser);
+  rawAllUsers = getScopedUsers(rawAllUsers, mockUser);
 
   // Filter pastoralStats based on Great Region for non-admin roles
   if (role !== "admin" && role !== "senior_pastor") {
@@ -576,20 +553,7 @@ function renderHeatmap(teamUsers = []) {
     }
   }
 
-  const grid = document.createElement("div");
-  grid.className = "heatmap-grid";
-  
-  // Use UTC to prevent timezone offsets when converting to ISOString
-  const startDate = new Date();
-  startDate.setUTCHours(12, 0, 0, 0);
-  startDate.setUTCDate(startDate.getUTCDate() - 365);
-  const dayOfWeek = startDate.getUTCDay();
-  startDate.setUTCDate(startDate.getUTCDate() - dayOfWeek);
-  
-  const today = new Date();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const daysDiff = Math.ceil((today.getTime() - startDate.getTime()) / oneDayMs);
-  
+  // Build logs-by-date map from team logs
   const teamLogs = getTeamLogs(teamUsers);
   const logsByDate = {};
   teamLogs.forEach(log => {
@@ -599,37 +563,7 @@ function renderHeatmap(teamUsers = []) {
     }
   });
 
-  for (let i = 0; i <= daysDiff; i++) {
-    const currentDate = new Date(startDate.getTime() + i * oneDayMs);
-    const dateStr = currentDate.toISOString().substring(0, 10);
-    const count = logsByDate[dateStr] || 0;
-    
-    const cell = document.createElement("div");
-    cell.className = "heatmap-cell";
-    cell.setAttribute("data-date", dateStr);
-    cell.setAttribute("data-count", count);
-    
-    let background = "var(--border-card)";
-    let opacity = "0.4";
-    if (count > 0) {
-      opacity = "1";
-      // Scale count range dynamically based on team size
-      const maxCount = Math.max(2, Math.round(teamUsers.length * 1.5));
-      const ratio = count / maxCount;
-      if (ratio <= 0.1) background = "rgba(99, 102, 241, 0.25)";
-      else if (ratio <= 0.3) background = "rgba(99, 102, 241, 0.5)";
-      else if (ratio <= 0.6) background = "rgba(99, 102, 241, 0.75)";
-      else background = "rgba(99, 102, 241, 1)";
-    }
-    
-    cell.style.backgroundColor = background;
-    cell.style.opacity = opacity;
-    
-    cell.title = `${dateStr}: 團隊打卡 ${count} 章`;
-    grid.appendChild(cell);
-  }
-  
-  container.appendChild(grid);
+  buildHeatmapGrid("bible-heatmap-container", logsByDate, teamUsers.length, "章");
 }
 
 // ==========================================

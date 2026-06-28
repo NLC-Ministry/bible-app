@@ -1015,11 +1015,11 @@ const db = {
     const started = isPlanStarted(newPlanObj);
     const isAdmin = state.currentUser && state.currentUser.role === 'admin';
     if (started) {
-      alert(`成功加入「${planName}」！計畫已開始。`);
+      showToast(`成功加入「${planName}」！計畫已開始。`);
     } else if (isAdmin) {
-      alert(`成功預約加入「${planName}」！計畫將於 ${startDate} 開始。您目前為系統管理員，可提早進行測試。`);
+      showToast(`成功預約加入「${planName}」！計畫將於 ${startDate} 開始。您目前為系統管理員，可提早進行測試。`);
     } else {
-      alert(`成功預約加入「${planName}」！計畫將於 ${startDate} 開始。`);
+      showToast(`成功預約加入「${planName}」！計畫將於 ${startDate} 開始。`);
     }
   },
 
@@ -1057,7 +1057,7 @@ const db = {
     loader.hide();
     renderPlanView();
     updateDashboardView();
-    alert("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
+    showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
   },
 
   async updateUserRole(userId, newRole, userName) {
@@ -1071,7 +1071,7 @@ const db = {
         return true;
       } catch (err) {
         console.error("Failed to update user role in Supabase:", err);
-        alert(`更新權限失敗: ${err.message || err}`);
+        showToast(`更新權限失敗: ${err.message || err}`);
         return false;
       }
     } else {
@@ -1155,12 +1155,12 @@ const db = {
 
         if (error) {
           console.error("Failed to save global plan in Supabase:", error);
-          alert(`儲存計畫失敗: ${error.message || error}`);
+          showToast(`儲存計畫失敗: ${error.message || error}`);
           return false;
         }
       } catch (e) {
         console.error("Error saving global plan in Supabase:", e);
-        alert(`儲存計畫出錯: ${e.message || e}`);
+        showToast(`儲存計畫出錯: ${e.message || e}`);
         return false;
       }
     } else {
@@ -1191,12 +1191,12 @@ const db = {
 
         if (error) {
           console.error("Failed to delete global plan in Supabase:", error);
-          alert(`刪除計畫失敗: ${error.message || error}`);
+          showToast(`刪除計畫失敗: ${error.message || error}`);
           return false;
         }
       } catch (e) {
         console.error("Error deleting global plan in Supabase:", e);
-        alert(`刪除計畫出錯: ${e.message || e}`);
+        showToast(`刪除計畫出錯: ${e.message || e}`);
         return false;
       }
     } else {
@@ -1252,7 +1252,7 @@ const db = {
           .insert([{ title, content, created_by: userId }]);
         if (error) {
           console.error("Error saving announcement in Supabase:", error);
-          alert(`發布公告失敗: ${error.message || error}`);
+          showToast(`發布公告失敗: ${error.message || error}`);
           return false;
         }
         return true;
@@ -1283,7 +1283,7 @@ const db = {
           .eq('id', id);
         if (error) {
           console.error("Error deleting announcement in Supabase:", error);
-          alert(`刪除公告失敗: ${error.message || error}`);
+          showToast(`刪除公告失敗: ${error.message || error}`);
           return false;
         }
         return true;

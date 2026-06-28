@@ -327,38 +327,3 @@ function showContextToolbar(verseElement, highlightKey) {
   }, 10);
 }
 
-function showToast(message) {
-  let toast = document.getElementById("reader-auto-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "reader-auto-toast";
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 85px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: rgba(16, 185, 129, 0.95);
-      color: white;
-      padding: 0.8rem 1.6rem;
-      border-radius: 25px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.25);
-      z-index: 99999;
-      pointer-events: none;
-      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      opacity: 0;
-      white-space: nowrap;
-    `;
-    document.body.appendChild(toast);
-  }
-  
-  toast.textContent = message;
-  toast.style.opacity = "1";
-  toast.style.transform = "translateX(-50%) translateY(0)";
-  
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateX(-50%) translateY(20px)";
-  }, 2500);
-}

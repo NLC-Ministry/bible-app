@@ -268,61 +268,7 @@ function triggerBadgeUnlockEffect(badgeId) {
   };
 }
 
-// Render achievement wall card (permanent honors display card)
+// Render achievement badge wall — delegates to shared renderBadgeWall in utils.js
 function renderUnlockedBadgesWall() {
-  const container = document.getElementById("stats-badge-wall-container");
-  if (!container) return;
-
-  const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
-
-  container.innerHTML = "";
-
-  ACHIEVEMENTS.forEach(badge => {
-    const isUnlocked = unlocked.includes(badge.id);
-    const badgeItem = document.createElement("div");
-    badgeItem.className = isUnlocked ? "honor-badge-item unlocked" : "honor-badge-item locked";
-    
-    // Parse streak placeholder if needed
-    const descParsed = badge.description.replace("{streak}", state.currentUser.streak);
-
-    badgeItem.style = `
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.8rem 1rem;
-      background: ${isUnlocked ? 'var(--bg-input)' : 'rgba(255,255,255,0.05)'};
-      border: 1px solid ${isUnlocked ? 'var(--border-card)' : 'transparent'};
-      border-radius: var(--radius-sm);
-      opacity: ${isUnlocked ? '1' : '0.45'};
-      filter: ${isUnlocked ? 'none' : 'grayscale(100%)'};
-      transition: all 0.3s ease;
-      cursor: default;
-    `;
-
-    badgeItem.innerHTML = `
-      <div style="font-size: 2rem; display: flex; width: 50px; height: 50px; background: ${isUnlocked ? badge.color : '#e2e8f0'}; border-radius: 50%; justify-content: center; align-items: center; box-shadow: ${isUnlocked ? '0 4px 10px ' + badge.shadow : 'none'}; flex-shrink: 0;">
-        ${badge.icon}
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 0.15rem;">
-        <span style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-          ${badge.title}
-          ${isUnlocked ? '<span style="font-size: 0.65rem; background: #e0f2fe; color: #0284c7; padding: 0.05rem 0.35rem; border-radius: 10px; font-weight: 800;">已解鎖</span>' : ''}
-        </span>
-        <span style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4;">${descParsed}</span>
-      </div>
-    `;
-
-    if (isUnlocked) {
-      badgeItem.onmouseenter = () => {
-        badgeItem.style.borderColor = "var(--primary-color)";
-        badgeItem.style.transform = "translateY(-1px)";
-      };
-      badgeItem.onmouseleave = () => {
-        badgeItem.style.borderColor = "var(--border-card)";
-        badgeItem.style.transform = "none";
-      };
-    }
-
-    container.appendChild(badgeItem);
-  });
+  renderBadgeWall("stats-badge-wall-container");
 }
