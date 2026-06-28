@@ -404,30 +404,22 @@ async function renderPlanView() {
   if (state.activePlan) {
     if (listSubview) listSubview.classList.add("hidden");
     if (detailSubview) detailSubview.classList.remove("hidden");
+
+    // Always close/reset inline reader when entering plan view tab to show the checklist directly
+    state.inlineReader.active = false;
+    const inlineReader = document.getElementById("plan-inline-reader");
+    if (inlineReader) inlineReader.classList.add("hidden");
+    
+    const carousel = document.getElementById("plan-date-carousel");
+    const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
+    const taskList = document.getElementById("plan-tasks-list");
+    const readBtn = document.getElementById("plan-start-reading-container");
+    if (carousel) carousel.classList.remove("hidden");
+    if (planDayHeader) planDayHeader.classList.remove("hidden");
+    if (taskList) taskList.classList.remove("hidden");
+    if (readBtn) readBtn.classList.remove("hidden");
+
     await renderPlanDetailView();
-
-    // Auto-open first unread chapter if Schedule tab is active and reader is not active
-    const tabStats = document.getElementById("tab-plan-stats");
-    const tabRanking = document.getElementById("tab-plan-ranking");
-    const tabHistory = document.getElementById("tab-plan-history");
-    const isScheduleActive = !(tabStats && tabStats.classList.contains("active")) &&
-                             !(tabRanking && tabRanking.classList.contains("active")) &&
-                             !(tabHistory && tabHistory.classList.contains("active"));
-
-    if (isScheduleActive && !state.inlineReader.active) {
-      if (!state.selectedPlanDay) {
-        const firstUncompleted = state.activePlan.days.find(day => {
-          if (!day.chapters || day.chapters.length === 0) return false;
-          return !day.chapters.every(ch => ch.isRead);
-        });
-        state.selectedPlanDay = firstUncompleted ? firstUncompleted.dayNum : 1;
-      }
-      const day = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
-      if (day && day.chapters && day.chapters.length > 0) {
-        const firstUnread = day.chapters.find(ch => !ch.isRead) || day.chapters[0];
-        window.openPlanInlineReader(firstUnread.book, firstUnread.chapter, state.selectedPlanDay);
-      }
-    }
   } else {
     if (listSubview) listSubview.classList.remove("hidden");
     if (detailSubview) detailSubview.classList.add("hidden");
