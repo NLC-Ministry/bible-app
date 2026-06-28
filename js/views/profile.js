@@ -378,19 +378,41 @@ async function renderAdminUserManagement() {
 
         select.onchange = async (e) => {
           const newRole = e.target.value;
+          let additionalFields = {};
+
+          if (["great_zone_leader", "zone_leader", "group_leader"].includes(newRole)) {
+            const resp = await showResponsibilityModal(newRole);
+            if (!resp) {
+              select.value = user.role;
+              return;
+            }
+            additionalFields = resp;
+          }
+
           statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--primary-color); font-weight: bold;">更新中...</span>`;
           select.disabled = true;
 
-          const success = await db.updateUserRole(user.id, newRole, user.name);
+          const success = await db.updateUserRole(user.id, newRole, user.name, additionalFields);
 
           select.disabled = false;
           if (success) {
             statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #10b981; font-weight: bold;">✓ 已儲存</span>`;
+            user.role = newRole;
+            if (additionalFields.great_region) user.great_region = additionalFields.great_region;
+            if (additionalFields.pastoral_zone) user.pastoral_zone = additionalFields.pastoral_zone;
+            if (additionalFields.small_group) user.small_group = additionalFields.small_group;
+
             if (user.name === state.currentUser.name) {
               state.currentUser.role = newRole;
               state.realRole = newRole;
+              if (additionalFields.great_region) state.currentUser.great_region = additionalFields.great_region;
+              if (additionalFields.pastoral_zone) state.currentUser.pastoral_zone = additionalFields.pastoral_zone;
+              if (additionalFields.small_group) state.currentUser.small_group = additionalFields.small_group;
               renderProfileView();
             }
+
+            renderAdminUserManagement();
+
             setTimeout(() => {
               if (statusCell.textContent.includes("已儲存")) {
                 statusCell.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">--</span>`;
@@ -961,6 +983,267 @@ function initAvatarDropdown() {
       }
     });
   }
+}
+
+// Responsibility selection modal helper (supporting multi-select checkboxes)
+function showResponsibilityModal(role) {
+  return new Promise((resolve) => {
+    // Create the modal overlay
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.style = `
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 99999;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    `;
+    
+    // Create the modal container
+    const container = document.createElement("div");
+    container.className = "glass-card";
+    container.style = `
+      width: 90%;
+      max-width: 460px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 16px;
+      padding: 1.8rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      transform: translateY(20px);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    `;
+    
+    let roleText = "";
+    if (role === "great_zone_leader") roleText = "大區長";
+    else if (role === "zone_leader") roleText = "區長";
+    else if (role === "group_leader") roleText = "小組長";
+    
+    let htmlContent = `
+      <div style="margin-bottom: 0.2rem;">
+        <h3 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 800; color: var(--text-primary);">
+          設定 ${roleText} 的負責範圍
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0; line-height: 1.4;">
+          請勾選該成員所負責的區域或小組（支援複選）。系統將依此授權管理範圍。
+        </p>
+      </div>
+      
+      <div style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 380px; overflow-y: auto; padding-right: 0.2rem;">
+        <!-- Region selection -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責大區 (可複選)</label>
+          <div id="modal-regions-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
+            <!-- Loaded dynamically -->
+          </div>
+        </div>
+    `;
+    
+    // Pastoral Zone selection
+    if (role === "zone_leader" || role === "group_leader") {
+      htmlContent += `
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責牧區 (可複選)</label>
+          <div id="modal-zones-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選大區</span>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Small Group selection
+    if (role === "group_leader") {
+      htmlContent += `
+        <div class="form-group" style="margin-bottom: 0;">
+          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責小組 (可複選)</label>
+          <div id="modal-groups-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選牧區</span>
+          </div>
+        </div>
+      `;
+    }
+    
+    htmlContent += `
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.6rem; border-top: 1px solid var(--border-card); padding-top: 0.8rem; margin-top: 0.2rem;">
+        <button id="modal-btn-cancel" class="pill-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem;">取消</button>
+        <button id="modal-btn-confirm" class="primary-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 700;">確認變更</button>
+      </div>
+    `;
+    
+    container.innerHTML = htmlContent;
+    overlay.appendChild(container);
+    document.body.appendChild(overlay);
+    
+    // Animate in
+    setTimeout(() => {
+      overlay.style.opacity = "1";
+      container.style.transform = "translateY(0)";
+    }, 10);
+    
+    // Dynamic updates
+    const regionContainer = overlay.querySelector("#modal-regions-container");
+    const zoneContainer = overlay.querySelector("#modal-zones-container");
+    const groupContainer = overlay.querySelector("#modal-groups-container");
+    
+    // Load Regions
+    let regions = [];
+    if (state.isSupabaseMode && state.orgStructure.rawRegions) {
+      regions = state.orgStructure.rawRegions;
+    } else if (state.orgStructure.regions) {
+      regions = state.orgStructure.regions.map(rName => ({ id: rName, name: rName }));
+    }
+    
+    let regionsHtml = "";
+    regions.forEach(r => {
+      regionsHtml += `
+        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
+          <input type="checkbox" name="region-checkbox" value="${r.id}" data-name="${r.name}" style="cursor: pointer;">
+          <span>${r.name}</span>
+        </label>
+      `;
+    });
+    regionContainer.innerHTML = regionsHtml || `<span style="font-size: 0.8rem; color: var(--text-muted);">無大區資料</span>`;
+    
+    // Update Zones list based on checked regions
+    const updateZones = () => {
+      if (!zoneContainer) return;
+      const checkedRegions = Array.from(regionContainer.querySelectorAll("input[name='region-checkbox']:checked")).map(cb => cb.value);
+      
+      if (checkedRegions.length === 0) {
+        zoneContainer.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選大區</span>`;
+        if (groupContainer) groupContainer.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選牧區</span>`;
+        return;
+      }
+      
+      let zones = [];
+      if (state.isSupabaseMode && state.orgStructure.rawZones) {
+        zones = state.orgStructure.rawZones.filter(z => checkedRegions.includes(z.great_region_id));
+      } else if (state.orgStructure.zones) {
+        // Local mode regions are the values
+        checkedRegions.forEach(rName => {
+          const regionZones = state.orgStructure.zones[rName] || [];
+          regionZones.forEach(zName => {
+            zones.push({ id: zName, name: zName });
+          });
+        });
+      }
+      
+      let zonesHtml = "";
+      zones.forEach(z => {
+        zonesHtml += `
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
+            <input type="checkbox" name="zone-checkbox" value="${z.id}" data-name="${z.name}" style="cursor: pointer;">
+            <span>${z.name}</span>
+          </label>
+        `;
+      });
+      zoneContainer.innerHTML = zonesHtml || `<span style="font-size: 0.8rem; color: var(--text-muted);">無牧區資料</span>`;
+      
+      // Bind zone changes to update groups
+      zoneContainer.querySelectorAll("input[name='zone-checkbox']").forEach(cb => {
+        cb.onchange = updateGroups;
+      });
+      updateGroups();
+    };
+    
+    // Update Groups list based on checked zones
+    const updateGroups = () => {
+      if (!groupContainer) return;
+      const checkedZones = Array.from(zoneContainer.querySelectorAll("input[name='zone-checkbox']:checked")).map(cb => cb.value);
+      
+      if (checkedZones.length === 0) {
+        groupContainer.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選牧區</span>`;
+        return;
+      }
+      
+      let groups = [];
+      if (state.isSupabaseMode && state.orgStructure.rawGroups) {
+        groups = state.orgStructure.rawGroups.filter(g => checkedZones.includes(g.pastoral_zone_id));
+      } else if (state.orgStructure.groups) {
+        checkedZones.forEach(zName => {
+          const zoneGroups = state.orgStructure.groups[zName] || [];
+          zoneGroups.forEach(gName => {
+            groups.push({ id: gName, name: gName });
+          });
+        });
+      }
+      
+      let groupsHtml = "";
+      groups.forEach(g => {
+        groupsHtml += `
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
+            <input type="checkbox" name="group-checkbox" value="${g.id}" data-name="${g.name}" style="cursor: pointer;">
+            <span>${g.name}</span>
+          </label>
+        `;
+      });
+      groupContainer.innerHTML = groupsHtml || `<span style="font-size: 0.8rem; color: var(--text-muted);">無小組資料</span>`;
+    };
+    
+    // Bind region check actions
+    regionContainer.querySelectorAll("input[name='region-checkbox']").forEach(cb => {
+      cb.onchange = updateZones;
+    });
+    
+    // Close modal helper
+    const closeModal = (result) => {
+      overlay.style.opacity = "0";
+      container.style.transform = "translateY(20px)";
+      setTimeout(() => {
+        overlay.remove();
+        resolve(result);
+      }, 300);
+    };
+    
+    overlay.querySelector("#modal-btn-cancel").onclick = () => closeModal(null);
+    
+    overlay.querySelector("#modal-btn-confirm").onclick = () => {
+      const checkedRegionCbs = Array.from(regionContainer.querySelectorAll("input[name='region-checkbox']:checked"));
+      const checkedZoneCbs = zoneContainer ? Array.from(zoneContainer.querySelectorAll("input[name='zone-checkbox']:checked")) : [];
+      const checkedGroupCbs = groupContainer ? Array.from(groupContainer.querySelectorAll("input[name='group-checkbox']:checked")) : [];
+      
+      if (checkedRegionCbs.length === 0) {
+        alert("請至少選擇一個大區！");
+        return;
+      }
+      if ((role === "zone_leader" || role === "group_leader") && checkedZoneCbs.length === 0) {
+        alert("請至少選擇一個牧區！");
+        return;
+      }
+      if (role === "group_leader" && checkedGroupCbs.length === 0) {
+        alert("請至少選擇一個小組！");
+        return;
+      }
+      
+      const regionNames = checkedRegionCbs.map(cb => cb.dataset.name).join(",");
+      const regionId = checkedRegionCbs.length === 1 && state.isSupabaseMode ? checkedRegionCbs[0].value : null;
+      
+      const zoneNames = checkedZoneCbs.map(cb => cb.dataset.name).join(",");
+      const zoneId = checkedZoneCbs.length === 1 && state.isSupabaseMode ? checkedZoneCbs[0].value : null;
+      
+      const groupNames = checkedGroupCbs.map(cb => cb.dataset.name).join(",");
+      const groupId = checkedGroupCbs.length === 1 && state.isSupabaseMode ? checkedGroupCbs[0].value : null;
+      
+      closeModal({
+        great_region: regionNames,
+        great_region_id: regionId,
+        pastoral_zone: zoneNames,
+        pastoral_zone_id: zoneId,
+        small_group: groupNames,
+        small_group_id: groupId
+      });
+    };
+  });
 }
 
 

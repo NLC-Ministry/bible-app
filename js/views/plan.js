@@ -1063,24 +1063,36 @@ function initAdminPlanManagement() {
   }
 
   // Bind quick select buttons
-  document.getElementById("admin-select-all-books").onclick = () => {
-    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = true);
-  };
-  document.getElementById("admin-clear-books").onclick = () => {
-    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
-  };
-  document.getElementById("admin-select-old-books").onclick = () => {
-    BIBLE_BOOKS.forEach(book => {
-      const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
-      if (cb) cb.checked = book.section === "old";
-    });
-  };
-  document.getElementById("admin-select-new-books").onclick = () => {
-    BIBLE_BOOKS.forEach(book => {
-      const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
-      if (cb) cb.checked = book.section === "new";
-    });
-  };
+  const btnSelectAll = document.getElementById("admin-select-all-books");
+  if (btnSelectAll) {
+    btnSelectAll.onclick = () => {
+      document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = true);
+    };
+  }
+  const btnClear = document.getElementById("admin-clear-books");
+  if (btnClear) {
+    btnClear.onclick = () => {
+      document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
+    };
+  }
+  const btnSelectOld = document.getElementById("admin-select-old-books");
+  if (btnSelectOld) {
+    btnSelectOld.onclick = () => {
+      BIBLE_BOOKS.forEach(book => {
+        const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
+        if (cb) cb.checked = book.section === "old";
+      });
+    };
+  }
+  const btnSelectNew = document.getElementById("admin-select-new-books");
+  if (btnSelectNew) {
+    btnSelectNew.onclick = () => {
+      BIBLE_BOOKS.forEach(book => {
+        const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
+        if (cb) cb.checked = book.section === "new";
+      });
+    };
+  }
 
   // Toggle Form
   addBtn.onclick = () => {
@@ -1898,7 +1910,8 @@ async function renderGroupParticipantsRankingTable() {
           rankingZoneSelector.appendChild(defaultOpt);
         } else if (isGreatZoneLeader) {
           const userGreatRegion = state.currentUser.great_region;
-          zones = [...new Set(allUsers.filter(u => u.great_region === userGreatRegion).map(u => u.pastoral_zone).filter(Boolean))].sort();
+          const userRegions = (userGreatRegion || "").split(",");
+          zones = [...new Set(allUsers.filter(u => userRegions.includes(u.great_region)).map(u => u.pastoral_zone).filter(Boolean))].sort();
           
           const defaultOpt = document.createElement("option");
           defaultOpt.value = "all_great_region";
@@ -1942,7 +1955,8 @@ async function renderGroupParticipantsRankingTable() {
         if (rankingTitle) rankingTitle.textContent = "參與者總覽 (全教會排行)";
       } else if (selectedFilter === "all_great_region") {
         const userGreatRegion = state.currentUser.great_region;
-        groupMembers = allUsers.filter(u => u.great_region === userGreatRegion);
+        const userRegions = (userGreatRegion || "").split(",");
+        groupMembers = allUsers.filter(u => userRegions.includes(u.great_region));
         if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userGreatRegion || '大區'}排行)`;
       } else {
         groupMembers = allUsers.filter(u => u.pastoral_zone === selectedFilter);
@@ -1950,7 +1964,8 @@ async function renderGroupParticipantsRankingTable() {
       }
     } else {
       // Regular user or pastoral zone leader with no filter permission: only show their own zone members
-      groupMembers = allUsers.filter(u => u.pastoral_zone === userZone);
+      const userZones = (userZone || "").split(",");
+      groupMembers = allUsers.filter(u => userZones.includes(u.pastoral_zone));
       if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userZone}牧區排行)`;
     }
 

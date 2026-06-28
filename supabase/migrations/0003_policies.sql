@@ -39,9 +39,9 @@ CREATE POLICY "根據角色限制 Profiles 讀取權限"
   USING (
     id = auth.uid() OR
     (SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor') OR
-    ((SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = great_region) OR
-    ((SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = pastoral_zone) OR
-    ((SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = small_group)
+    ((SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ','))) OR
+    ((SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ','))) OR
+    ((SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ',')))
   );
 
 -- 4. Reading Plans 讀經計畫權限策略
@@ -60,9 +60,9 @@ CREATE POLICY "根據角色限制 Reading Plans 讀取權限"
     EXISTS (
       SELECT 1 FROM public.profiles p 
       WHERE p.id = user_id AND (
-        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = p.great_region OR
-        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone OR
-        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = p.small_group
+        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND p.great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND p.small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ','))
       )
     )
   );
@@ -83,9 +83,9 @@ CREATE POLICY "根據角色限制 Reading Logs 讀取權限"
     EXISTS (
       SELECT 1 FROM public.profiles p 
       WHERE p.id = user_id AND (
-        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = p.great_region OR
-        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone OR
-        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = p.small_group
+        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND p.great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND p.small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ','))
       )
     )
   );

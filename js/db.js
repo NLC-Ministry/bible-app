@@ -1059,12 +1059,13 @@ const db = {
     showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
   },
 
-  async updateUserRole(userId, newRole, userName) {
+  async updateUserRole(userId, newRole, userName, additionalFields = {}) {
     if (state.isSupabaseMode && state.supabase) {
       try {
+        const updateData = { role: newRole, ...additionalFields };
         const { error } = await state.supabase
           .from("profiles")
-          .update({ role: newRole })
+          .update(updateData)
           .eq("id", userId);
         if (error) throw error;
         return true;
@@ -1078,6 +1079,7 @@ const db = {
       const userIndex = MOCK_USERS_DATA.findIndex(u => u.name === userName);
       if (userIndex !== -1) {
         MOCK_USERS_DATA[userIndex].role = newRole;
+        Object.assign(MOCK_USERS_DATA[userIndex], additionalFields);
         return true;
       }
       return false;

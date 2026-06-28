@@ -78,15 +78,19 @@ function getScopedUsers(allUsers, currentUser) {
     return allUsers;
   }
   if (role === "great_zone_leader") {
-    return allUsers.filter(u => u.great_region === currentUser.great_region);
+    const assignedRegions = (currentUser.great_region || "").split(",");
+    return allUsers.filter(u => assignedRegions.includes(u.great_region));
   }
   if (role === "zone_leader") {
-    return allUsers.filter(u => u.pastoral_zone === currentUser.pastoral_zone);
+    const assignedZones = (currentUser.pastoral_zone || "").split(",");
+    return allUsers.filter(u => assignedZones.includes(u.pastoral_zone));
   }
   if (role === "group_leader") {
+    const assignedZones = (currentUser.pastoral_zone || "").split(",");
+    const assignedGroups = (currentUser.small_group || "").split(",");
     return allUsers.filter(u =>
-      u.pastoral_zone === currentUser.pastoral_zone &&
-      u.small_group === currentUser.small_group
+      assignedZones.includes(u.pastoral_zone) &&
+      assignedGroups.includes(u.small_group)
     );
   }
   // member — only themselves

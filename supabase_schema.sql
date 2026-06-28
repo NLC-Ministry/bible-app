@@ -74,9 +74,9 @@ BEGIN
   END IF;
 
   -- 1. 大區同步與防自訂
-  IF NEW.great_region_id IS NOT NULL THEN
+  IF NEW.great_region_id IS NOT NULL AND (NEW.great_region IS NULL OR position(',' in NEW.great_region) = 0) THEN
     SELECT name INTO NEW.great_region FROM public.great_regions WHERE id = NEW.great_region_id;
-  ELSIF NEW.great_region IS NOT NULL AND NEW.great_region <> '' THEN
+  ELSIF NEW.great_region IS NOT NULL AND NEW.great_region <> '' AND position(',' in NEW.great_region) = 0 THEN
     SELECT id INTO r_id FROM public.great_regions WHERE name = NEW.great_region;
     IF r_id IS NOT NULL THEN
       NEW.great_region_id := r_id;
@@ -89,12 +89,14 @@ BEGIN
       -- 非管理員不能新增大區，將其清空或設為預設
       RAISE EXCEPTION '只有系統管理員可以新增或自訂大區！';
     END IF;
+  ELSIF NEW.great_region IS NOT NULL AND position(',' in NEW.great_region) > 0 THEN
+    NEW.great_region_id := NULL;
   END IF;
 
   -- 2. 牧區同步與防自訂
-  IF NEW.pastoral_zone_id IS NOT NULL THEN
+  IF NEW.pastoral_zone_id IS NOT NULL AND (NEW.pastoral_zone IS NULL OR position(',' in NEW.pastoral_zone) = 0) THEN
     SELECT name INTO NEW.pastoral_zone FROM public.pastoral_zones WHERE id = NEW.pastoral_zone_id;
-  ELSIF NEW.pastoral_zone IS NOT NULL AND NEW.pastoral_zone <> '' THEN
+  ELSIF NEW.pastoral_zone IS NOT NULL AND NEW.pastoral_zone <> '' AND position(',' in NEW.pastoral_zone) = 0 THEN
     SELECT id INTO z_id FROM public.pastoral_zones 
     WHERE name = NEW.pastoral_zone AND great_region_id = NEW.great_region_id;
     
@@ -108,12 +110,14 @@ BEGIN
     ELSE
       RAISE EXCEPTION '只有系統管理員可以新增或自訂牧區！';
     END IF;
+  ELSIF NEW.pastoral_zone IS NOT NULL AND position(',' in NEW.pastoral_zone) > 0 THEN
+    NEW.pastoral_zone_id := NULL;
   END IF;
 
   -- 3. 小組同步與防自訂
-  IF NEW.small_group_id IS NOT NULL THEN
+  IF NEW.small_group_id IS NOT NULL AND (NEW.small_group IS NULL OR position(',' in NEW.small_group) = 0) THEN
     SELECT name INTO NEW.small_group FROM public.small_groups WHERE id = NEW.small_group_id;
-  ELSIF NEW.small_group IS NOT NULL AND NEW.small_group <> '' THEN
+  ELSIF NEW.small_group IS NOT NULL AND NEW.small_group <> '' AND position(',' in NEW.small_group) = 0 THEN
     SELECT id INTO g_id FROM public.small_groups 
     WHERE name = NEW.small_group AND pastoral_zone_id = NEW.pastoral_zone_id;
     
@@ -127,6 +131,8 @@ BEGIN
     ELSE
       RAISE EXCEPTION '只有系統管理員可以新增或自訂小組！';
     END IF;
+  ELSIF NEW.small_group IS NOT NULL AND position(',' in NEW.small_group) > 0 THEN
+    NEW.small_group_id := NULL;
   END IF;
 
   RETURN NEW;
@@ -222,9 +228,9 @@ CREATE POLICY "根據角色限制 Profiles 讀取權限"
   USING (
     id = auth.uid() OR -- 自己可以讀自己
     (SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor') OR -- admin & 主任牧師可讀全部
-    ((SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = great_region) OR -- 大區長可讀自己大區
-    ((SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = pastoral_zone) OR -- 區長可讀自己牧區
-    ((SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = small_group) -- 小組長/會友可讀自己小組
+    ((SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ','))) OR
+    ((SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ','))) OR
+    ((SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ',')))
   );
 
 -- --- Reading Plans 權限策略 ---
@@ -243,9 +249,9 @@ CREATE POLICY "根據角色限制 Reading Plans 讀取權限"
     EXISTS (
       SELECT 1 FROM public.profiles p 
       WHERE p.id = user_id AND (
-        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = p.great_region OR
-        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone OR
-        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = p.small_group
+        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND p.great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND p.small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ','))
       )
     )
   );
@@ -266,9 +272,9 @@ CREATE POLICY "根據角色限制 Reading Logs 讀取權限"
     EXISTS (
       SELECT 1 FROM public.profiles p 
       WHERE p.id = user_id AND (
-        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND (SELECT my_great_region FROM public.get_my_profile()) = p.great_region OR
-        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone OR
-        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND (SELECT my_pastoral_zone FROM public.get_my_profile()) = p.pastoral_zone AND (SELECT my_small_group FROM public.get_my_profile()) = p.small_group
+        (SELECT my_role FROM public.get_my_profile()) = 'great_zone_leader' AND p.great_region = ANY(string_to_array((SELECT my_great_region FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) = 'zone_leader' AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) OR
+        (SELECT my_role FROM public.get_my_profile()) IN ('group_leader', 'member') AND p.pastoral_zone = ANY(string_to_array((SELECT my_pastoral_zone FROM public.get_my_profile()), ',')) AND p.small_group = ANY(string_to_array((SELECT my_small_group FROM public.get_my_profile()), ','))
       )
     )
   );
