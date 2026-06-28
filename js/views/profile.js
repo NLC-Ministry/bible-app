@@ -388,6 +388,7 @@ async function renderAdminUserManagement() {
             statusCell.innerHTML = `<span style="font-size: 0.8rem; color: #10b981; font-weight: bold;">✓ 已儲存</span>`;
             if (user.name === state.currentUser.name) {
               state.currentUser.role = newRole;
+              state.realRole = newRole;
               renderProfileView();
             }
             setTimeout(() => {

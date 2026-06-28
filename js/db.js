@@ -558,7 +558,6 @@ const db = {
         great_region_id: regionObj ? regionObj.id : null,
         pastoral_zone_id: zoneObj ? zoneObj.id : null,
         small_group_id: groupObj ? groupObj.id : null,
-        role: state.realRole || "member",
         updated_at: new Date().toISOString()
       });
     }
