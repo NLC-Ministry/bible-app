@@ -467,36 +467,58 @@ const db = {
   },
 
   loadMockOrgStructure() {
-    state.orgStructure.regions = [
-      "東區", "南區", "西區", "北區", "青少年", "慶典", "創藝",
-      "示範大區A", "示範大區B", "示範大區C", "示範大區D"
-    ];
+    // 優先從 mock_stats.js 動態讀取以避免重複定義
+    if (typeof MOCK_GREAT_REGIONS !== 'undefined' && MOCK_GREAT_REGIONS.length > 0) {
+      state.orgStructure.regions = [...MOCK_GREAT_REGIONS];
+      const demoRegions = ["示範大區A", "示範大區B", "示範大區C", "示範大區D"];
+      demoRegions.forEach(dr => {
+        if (!state.orgStructure.regions.includes(dr)) {
+          state.orgStructure.regions.push(dr);
+        }
+      });
+
+      state.orgStructure.zones = {};
+      if (typeof MOCK_PASTORAL_ZONES_BY_REGION !== 'undefined') {
+        Object.assign(state.orgStructure.zones, MOCK_PASTORAL_ZONES_BY_REGION);
+      }
+      state.orgStructure.zones["示範大區A"] = ["示範牧區甲", "示範牧區乙", "示範牧區丙"];
+      state.orgStructure.zones["示範大區B"] = ["示範牧區丁", "示範牧區戊", "示範牧區己"];
+      state.orgStructure.zones["示範大區C"] = ["示範牧區庚", "示範牧區辛"];
+      state.orgStructure.zones["示範大區D"] = ["示範牧區壬", "示範牧區癸"];
+
+      state.orgStructure.groups = {};
+      if (typeof MOCK_SMALL_GROUPS !== 'undefined') {
+        Object.assign(state.orgStructure.groups, MOCK_SMALL_GROUPS);
+      }
+      Object.assign(state.orgStructure.groups, {
+        "示範牧區甲": ["示範小組1", "示範小組2"],
+        "示範牧區乙": ["示範小組3"],
+        "示範牧區丙": ["示範小組4"],
+        "示範牧區丁": ["示範小組5"],
+        "示範牧區戊": ["示範小組6"],
+        "示範牧區己": ["示範小組7"],
+        "示範牧區庚": ["示範小組8"],
+        "示範牧區辛": ["示範小組9"],
+        "示範牧區壬": ["示範小組10"],
+        "示範牧區癸": ["示範小組11"]
+      });
+      return;
+    }
+
+    // 當 mock_stats.js 載入失敗或不存在時的後備資料
+    state.orgStructure.regions = ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
     state.orgStructure.zones = {
       "東區": ["大安1", "大安2", "大安6", "信義", "內湖"],
       "南區": ["文山", "中永和", "新店"],
       "西區": ["萬華", "板橋", "新莊"],
-      "北區": ["士林", "北投", "天母"],
-      "示範大區A": ["示範牧區甲", "示範牧區乙", "示範牧區丙"],
-      "示範大區B": ["示範牧區丁", "示範牧區戊", "示範牧區己"],
-      "示範大區C": ["示範牧區庚", "示範牧區辛"],
-      "示範大區D": ["示範牧區壬", "示範牧區癸"]
+      "北區": ["士林", "北投", "天母"]
     };
     state.orgStructure.groups = {
       "大安1": ["馬鈴", "大衛", "約書亞"],
       "大安2": ["雅各", "彼得"],
       "中永和": ["保羅", "提摩太"],
       "文山": ["西面", "路得"],
-      "大安6": ["以利亞"],
-      "示範牧區甲": ["示範小組1", "示範小組2"],
-      "示範牧區乙": ["示範小組3"],
-      "示範牧區丙": ["示範小組4"],
-      "示範牧區丁": ["示範小組5"],
-      "示範牧區戊": ["示範小組6"],
-      "示範牧區己": ["示範小組7"],
-      "示範牧區庚": ["示範小組8"],
-      "示範牧區辛": ["示範小組9"],
-      "示範牧區壬": ["示範小組10"],
-      "示範牧區癸": ["示範小組11"]
+      "大安6": ["以利亞"]
     };
   },
 
