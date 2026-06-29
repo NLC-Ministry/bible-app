@@ -155,6 +155,9 @@ const db = {
     await this.loadGlobalPlans();
 
     if (state.isSupabaseMode && state.supabase) {
+      if (state.currentUser) {
+        state.currentUser.is_demo = false;
+      }
       const { data: { user } } = await state.supabase.auth.getUser();
       if (user) {
         // 1. Load Profile
@@ -455,26 +458,45 @@ const db = {
 
         return;
       } catch (err) {
-        console.error("Failed to load schema from Supabase, loading mock structure:", err);
+        console.error("Failed to load schema from Supabase:", err);
+        alert("無法從資料庫載入教會組織架構，請檢查網路連線或重新整理頁面。");
+        return;
       }
     }
     this.loadMockOrgStructure();
   },
 
   loadMockOrgStructure() {
-    state.orgStructure.regions = ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
+    state.orgStructure.regions = [
+      "東區", "南區", "西區", "北區", "青少年", "慶典", "創藝",
+      "示範大區A", "示範大區B", "示範大區C", "示範大區D"
+    ];
     state.orgStructure.zones = {
       "東區": ["大安1", "大安2", "大安6", "信義", "內湖"],
       "南區": ["文山", "中永和", "新店"],
       "西區": ["萬華", "板橋", "新莊"],
-      "北區": ["士林", "北投", "天母"]
+      "北區": ["士林", "北投", "天母"],
+      "示範大區A": ["示範牧區甲", "示範牧區乙", "示範牧區丙"],
+      "示範大區B": ["示範牧區丁", "示範牧區戊", "示範牧區己"],
+      "示範大區C": ["示範牧區庚", "示範牧區辛"],
+      "示範大區D": ["示範牧區壬", "示範牧區癸"]
     };
     state.orgStructure.groups = {
       "大安1": ["馬鈴", "大衛", "約書亞"],
       "大安2": ["雅各", "彼得"],
       "中永和": ["保羅", "提摩太"],
       "文山": ["西面", "路得"],
-      "大安6": ["以利亞"]
+      "大安6": ["以利亞"],
+      "示範牧區甲": ["示範小組1", "示範小組2"],
+      "示範牧區乙": ["示範小組3"],
+      "示範牧區丙": ["示範小組4"],
+      "示範牧區丁": ["示範小組5"],
+      "示範牧區戊": ["示範小組6"],
+      "示範牧區己": ["示範小組7"],
+      "示範牧區庚": ["示範小組8"],
+      "示範牧區辛": ["示範小組9"],
+      "示範牧區壬": ["示範小組10"],
+      "示範牧區癸": ["示範小組11"]
     };
   },
 
@@ -495,7 +517,7 @@ const db = {
       if (!existingLog) {
         state.readingLogs.push({ book, chapter, read_at: todayISO, plan_id: planId, presetKey: presetKey, round: round });
 
-        if (state.isSupabaseMode && state.supabase) {
+        if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
           const { data: { user } } = await state.supabase.auth.getUser();
           if (user) {
             await state.supabase.from("reading_logs").insert({
@@ -510,7 +532,7 @@ const db = {
         }
       } else {
         existingLog.read_at = todayISO;
-        if (state.isSupabaseMode && state.supabase) {
+        if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
           const { data: { user } } = await state.supabase.auth.getUser();
           if (user) {
             let query = state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
@@ -531,7 +553,7 @@ const db = {
         (l.round || 1) === round
       ));
 
-      if (state.isSupabaseMode && state.supabase) {
+      if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
         const { data: { user } } = await state.supabase.auth.getUser();
         if (user) {
           let query = state.supabase.from("reading_logs").delete().eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
@@ -562,6 +584,10 @@ const db = {
   },
 
   async syncProfileStatsToSupabase() {
+    if (state.currentUser && state.currentUser.is_demo) {
+      console.warn("syncProfileStatsToSupabase aborted: current user is demo user.");
+      return;
+    }
     const { data: { user } } = await state.supabase.auth.getUser();
     if (user) {
       const regionObj = state.orgStructure && state.orgStructure.rawRegions ? state.orgStructure.rawRegions.find(r => r.name === state.currentUser.great_region) : null;
@@ -872,6 +898,35 @@ const db = {
   async switchDemoRole(role) {
     loader.show("切換模擬角色中...");
 
+    if (role === "real_user") {
+      // 恢復線上連線狀態
+      state.isSupabaseMode = true;
+      const statusBadge = document.getElementById("connection-status");
+      if (statusBadge) {
+        statusBadge.className = "status-badge online";
+        statusBadge.querySelector(".status-text").textContent = "線上模式";
+      }
+      const placeholder = document.getElementById("sb-disconnected-placeholder");
+      if (placeholder) placeholder.classList.add("hidden");
+      
+      const authSection = document.getElementById("sb-auth-section");
+      if (authSection) {
+        authSection.classList.remove("hidden");
+        authSection.className = "card-col span-12";
+      }
+
+      window._cachedAllUsersList = null;
+      await this.loadUserData();
+      await this.loadOrgStructure(); // Re-fetch org structure from Supabase
+      
+      loader.hide();
+      return;
+    }
+
+    // 只要切換非 real_user 的模擬角色，就強制進入本機 Demo 模式沙盒
+    state.isSupabaseMode = false;
+    this.setDemoMode();
+
     let mockUser = MOCK_USERS_DATA.find(u => u.role === role);
     if (!mockUser) {
       mockUser = {
@@ -934,6 +989,7 @@ const db = {
       state.readingLogs = completedList;
     }
 
+    window._cachedAllUsersList = null;
     this.saveLocalUserStats();
 
     if (typeof updateAdminNavVisibility === 'function') {
@@ -981,7 +1037,7 @@ const db = {
   },
 
   async saveDevotionalNote(date, content) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const { data: { user } } = await state.supabase.auth.getUser();
       if (!user) return;
 
@@ -1018,7 +1074,7 @@ const db = {
 
     let newPlanObj = null;
 
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const { data: { user } } = await state.supabase.auth.getUser();
         if (user) {
@@ -1097,7 +1153,7 @@ const db = {
   async leavePlan(planId, presetKey) {
     loader.show("退出計畫中...");
 
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const { error } = await state.supabase.from("reading_plans").delete().eq("id", planId);
         if (error) throw error;
@@ -1132,7 +1188,7 @@ const db = {
   },
 
   async updateUserRole(userId, newRole, userName, additionalFields = {}) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const updateData = { role: newRole, ...additionalFields };
         const { error } = await state.supabase
@@ -1214,7 +1270,7 @@ const db = {
   },
 
   async saveGlobalPlan(plan) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const payload = {
           name: plan.name,
@@ -1269,7 +1325,7 @@ const db = {
   },
 
   async deleteGlobalPlan(planId) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const { error } = await state.supabase
           .from("global_plans")
@@ -1330,7 +1386,7 @@ const db = {
   },
 
   async saveAnnouncement(title, content) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const { data: { user } } = await state.supabase.auth.getUser();
         const userId = user ? user.id : (state.currentUser ? state.currentUser.id : null);
@@ -1362,7 +1418,7 @@ const db = {
   },
 
   async deleteAnnouncement(id) {
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const { error } = await state.supabase
           .from('church_announcements')

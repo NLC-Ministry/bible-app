@@ -137,11 +137,9 @@ function renderProfileView() {
   };
 
   // Demo Switcher Listener
-  const isRealAdmin = !state.isSupabaseMode || (state.realRole === "admin" || state.realRole === "senior_pastor");
-  
   const demoRoleCard = document.querySelector(".demo-role-card");
   if (demoRoleCard) {
-    if (isRealAdmin) {
+    if (!state.isSupabaseMode || isLocalhost) {
       demoRoleCard.classList.remove("hidden");
     } else {
       demoRoleCard.classList.add("hidden");
@@ -150,7 +148,11 @@ function renderProfileView() {
 
   const demoRoleSelect = document.getElementById("demo-role-select");
   if (demoRoleSelect) {
-    demoRoleSelect.value = state.currentUser.role || "member";
+    if (state.isSupabaseMode) {
+      demoRoleSelect.value = "real_user";
+    } else {
+      demoRoleSelect.value = state.currentUser.role || "member";
+    }
     demoRoleSelect.onchange = async (e) => {
       await db.switchDemoRole(e.target.value);
     };

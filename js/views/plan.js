@@ -1603,14 +1603,42 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   const masterSelect = document.getElementById(masterId);
   
   if (!regionSelect || !zoneSelect || !groupSelect || !masterSelect) return;
-  if (regionSelect.dataset.populated) return; // avoid double populating
+  
+  const userKey = state.currentUser ? `${state.currentUser.name}_${state.currentUser.role}` : "anonymous";
+  if (regionSelect.dataset.populatedFor === userKey) return;
+  
   regionSelect.dataset.populated = "true";
+  regionSelect.dataset.populatedFor = userKey;
+
+  // Reset disabled states for fresh population
+  regionSelect.disabled = false;
+  zoneSelect.disabled = false;
+  groupSelect.disabled = false;
 
   const userRole = (state.currentUser && state.currentUser.role) || "member";
   const isAdmin = userRole === "admin" || userRole === "senior_pastor";
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
   const isGroupLeader = userRole === "group_leader";
+
+  // Hide selectors that exceed user's permission level
+  if (isAdmin || isGreatZoneLeader) {
+    regionSelect.style.display = "";
+    zoneSelect.style.display = "";
+    groupSelect.style.display = "";
+  } else if (isZoneLeader) {
+    regionSelect.style.display = "none";
+    zoneSelect.style.display = "";
+    groupSelect.style.display = "";
+  } else if (isGroupLeader) {
+    regionSelect.style.display = "none";
+    zoneSelect.style.display = "none";
+    groupSelect.style.display = "";
+  } else {
+    regionSelect.style.display = "none";
+    zoneSelect.style.display = "none";
+    groupSelect.style.display = "none";
+  }
 
   // Get regions list
   let regions = state.orgStructure.regions || [];
@@ -2655,7 +2683,8 @@ async function renderGroupParticipantsRankingTable() {
       if (window._cachedAllUsersList && window._cachedAllUsersList.length > 0) {
         allUsers = window._cachedAllUsersList;
       } else {
-        allUsers = await db.fetchMergedUsersList();
+        const activeKey = state.activePlan ? state.activePlan.presetKey : null;
+        allUsers = await db.fetchMergedUsersList(activeKey);
         window._cachedAllUsersList = allUsers;
       }
     } catch(e) {
