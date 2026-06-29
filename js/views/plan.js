@@ -1588,12 +1588,6 @@ function populateStatsSelector() {
   if (!rankingZoneSelector.dataset.listenerInitialized) {
     rankingZoneSelector.dataset.listenerInitialized = "true";
     rankingZoneSelector.addEventListener("change", async () => {
-      // Sync members selector if visible and option exists
-      const membersSelector = document.getElementById("members-zone-selector");
-      if (membersSelector && [...membersSelector.options].some(o => o.value === rankingZoneSelector.value)) {
-        membersSelector.value = rankingZoneSelector.value;
-      }
-      
       // Re-render based on active subview
       const tabStats = document.getElementById("tab-plan-stats");
       const tabRanking = document.getElementById("tab-plan-ranking");
@@ -1609,46 +1603,138 @@ function populateStatsSelector() {
     });
   }
 
-  // Populate members-zone-selector separately without 'me' (Myself) and aggregate/region scopes
-  const membersZoneSelector = document.getElementById("members-zone-selector");
-  if (membersZoneSelector) {
-    if (!membersZoneSelector.dataset.populated) {
-      membersZoneSelector.innerHTML = "";
-      
-      const memberOptions = optionsList.filter(opt => {
-        const val = opt.value;
-        return val !== "me" && 
-               val !== "all" && 
-               val !== "all_great_region" && 
-               val !== "all_zones" && 
-               val !== "all_groups" && 
-               !val.startsWith("region:");
-      });
-      memberOptions.forEach(opt => {
-        const el = document.createElement("option");
-        el.value = opt.value;
-        el.textContent = opt.label.replace("我的牧區：", "牧區：");
-        membersZoneSelector.appendChild(el);
-      });
-      
-      let defaultMemberVal = memberOptions[0] ? memberOptions[0].value : "";
-      membersZoneSelector.value = defaultMemberVal;
-      membersZoneSelector.dataset.populated = "true";
-    }
+}
 
-    membersZoneSelector.disabled = membersZoneSelector.options.length <= 1;
-    membersZoneSelector.classList.remove("hidden");
+// ==================== MEMBERS SELECTOR POPULATOR ====================
+function populateMembersSelector() {
+  const membersZoneSelector = document.getElementById("members-zone-selector");
+  if (!membersZoneSelector) return;
+  if (membersZoneSelector.dataset.populated) return; // avoid double populating
+  
+  membersZoneSelector.innerHTML = "";
+  const optionsList = [];
+  
+  const userRole = (state.currentUser && state.currentUser.role) || "member";
+  const isAdmin = userRole === "admin" || userRole === "senior_pastor";
+  const isGreatZoneLeader = userRole === "great_zone_leader";
+  const isZoneLeader = userRole === "zone_leader";
+  const isGroupLeader = userRole === "group_leader";
+  const userZone = state.currentUser.pastoral_zone || "";
+  
+  if (isAdmin) {
+    // Zones
+    let zones = [];
+    if (state.orgStructure.rawZones) {
+      zones = state.orgStructure.rawZones.map(z => z.name);
+    } else if (state.orgStructure.zones) {
+      zones = Object.keys(state.orgStructure.zones);
+    }
+    zones.sort().forEach(z => {
+      optionsList.push({ value: `zone:${z}`, label: `牧區：${z}` });
+    });
     
-    if (!membersZoneSelector.dataset.listenerInitialized) {
-      membersZoneSelector.dataset.listenerInitialized = "true";
-      membersZoneSelector.addEventListener("change", async () => {
-        const rankingSel = document.getElementById("ranking-zone-selector");
-        if (rankingSel && rankingSel.value !== membersZoneSelector.value) {
-          rankingSel.value = membersZoneSelector.value;
-        }
-        await renderPlanMembersView();
+    // Groups
+    let groups = [];
+    if (state.orgStructure.rawGroups) {
+      groups = state.orgStructure.rawGroups.map(g => g.name);
+    } else if (state.orgStructure.groups) {
+      groups = Object.keys(state.orgStructure.groups);
+    }
+    groups.sort().forEach(g => {
+      optionsList.push({ value: `group:${g}`, label: `小組：${g}` });
+    });
+    
+  } else if (isGreatZoneLeader) {
+    const userGreatRegion = state.currentUser.great_region || "";
+    const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
+    
+    let zones = [];
+    if (state.isSupabaseMode && state.orgStructure.rawZones && state.orgStructure.rawRegions) {
+      const regionIds = state.orgStructure.rawRegions.filter(r => myRegions.includes(r.name)).map(r => r.id);
+      zones = state.orgStructure.rawZones.filter(z => regionIds.includes(z.great_region_id)).map(z => z.name);
+    } else if (state.orgStructure.zones) {
+      myRegions.forEach(r => {
+        const regionZones = state.orgStructure.zones[r] || [];
+        zones = zones.concat(regionZones);
       });
     }
+    zones = [...new Set(zones)].sort();
+    zones.forEach(z => {
+      optionsList.push({ value: `zone:${z}`, label: `牧區：${z}` });
+    });
+    
+    let groups = [];
+    if (state.isSupabaseMode && state.orgStructure.rawGroups && state.orgStructure.rawZones && state.orgStructure.rawRegions) {
+      const regionIds = state.orgStructure.rawRegions.filter(r => myRegions.includes(r.name)).map(r => r.id);
+      const zoneIds = state.orgStructure.rawZones.filter(z => regionIds.includes(z.great_region_id)).map(z => z.id);
+      groups = state.orgStructure.rawGroups.filter(g => zoneIds.includes(g.pastoral_zone_id)).map(g => g.name);
+    } else if (state.orgStructure.groups) {
+      zones.forEach(z => {
+        const zoneGroups = state.orgStructure.groups[z] || [];
+        groups = groups.concat(zoneGroups);
+      });
+    }
+    groups = [...new Set(groups)].sort();
+    groups.forEach(g => {
+      optionsList.push({ value: `group:${g}`, label: `小組：${g}` });
+    });
+    
+  } else if (isZoneLeader) {
+    const userZoneStr = state.currentUser.pastoral_zone || "";
+    const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
+    
+    myZones.forEach(z => {
+      optionsList.push({ value: `zone:${z}`, label: `牧區：${z}` });
+    });
+    
+    let groups = [];
+    if (state.isSupabaseMode && state.orgStructure.rawGroups && state.orgStructure.rawZones) {
+      const zoneIds = state.orgStructure.rawZones.filter(z => myZones.includes(z.name)).map(z => z.id);
+      groups = state.orgStructure.rawGroups.filter(g => zoneIds.includes(g.pastoral_zone_id)).map(g => g.name);
+    } else if (state.orgStructure.groups) {
+      myZones.forEach(z => {
+        const zoneGroups = state.orgStructure.groups[z] || [];
+        groups = groups.concat(zoneGroups);
+      });
+    }
+    groups = [...new Set(groups)].sort();
+    groups.forEach(g => {
+      optionsList.push({ value: `group:${g}`, label: `小組：${g}` });
+    });
+    
+  } else if (isGroupLeader) {
+    const userGroupStr = state.currentUser.small_group || "";
+    const myGroups = userGroupStr.split(",").map(s => s.trim()).filter(Boolean);
+    
+    myGroups.forEach(g => {
+      optionsList.push({ value: `group:${g}`, label: `小組：${g}` });
+    });
+    
+  } else {
+    if (userZone) {
+      optionsList.push({ value: `zone:${userZone}`, label: `牧區：${userZone}` });
+    }
+  }
+  
+  optionsList.forEach(opt => {
+    const el = document.createElement("option");
+    el.value = opt.value;
+    el.textContent = opt.label;
+    membersZoneSelector.appendChild(el);
+  });
+  
+  let defaultMemberVal = optionsList[0] ? optionsList[0].value : "";
+  membersZoneSelector.value = defaultMemberVal;
+  membersZoneSelector.dataset.populated = "true";
+  
+  membersZoneSelector.disabled = optionsList.length <= 1;
+  membersZoneSelector.classList.remove("hidden");
+  
+  if (!membersZoneSelector.dataset.listenerInitialized) {
+    membersZoneSelector.dataset.listenerInitialized = "true";
+    membersZoneSelector.addEventListener("change", async () => {
+      await renderPlanMembersView();
+    });
   }
 }
 
@@ -2354,11 +2440,16 @@ async function renderGroupParticipantsRankingTable() {
       scopedUsersList = allUsers.filter(u => userZones.includes(u.pastoral_zone));
     }
 
-    populateStatsSelector();
-    const rankingZoneSelector = document.getElementById("ranking-zone-selector");
-    const membersZoneSelector = document.getElementById("members-zone-selector");
     const tabMembers = document.getElementById("tab-plan-members");
     const isMembersActive = tabMembers && tabMembers.classList.contains("active");
+
+    if (isMembersActive) {
+      populateMembersSelector();
+    } else {
+      populateStatsSelector();
+    }
+    const rankingZoneSelector = document.getElementById("ranking-zone-selector");
+    const membersZoneSelector = document.getElementById("members-zone-selector");
     const searchInput = document.getElementById("member-search-input");
     const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
@@ -2577,17 +2668,9 @@ async function renderPlanMembersView() {
   if (!state.activePlan) return;
 
   // Make sure selectors are populated correctly
-  populateStatsSelector();
+  populateMembersSelector();
 
-  // Sync members-zone-selector value to ranking-zone-selector so the
-  // shared renderGroupParticipantsRankingTable() reads the correct scope.
-  const membersZoneSel = document.getElementById("members-zone-selector");
-  const rankingZoneSel = document.getElementById("ranking-zone-selector");
 
-  // If the members selector already has a value that differs, push it to ranking.
-  if (membersZoneSel && rankingZoneSel && membersZoneSel.value) {
-    rankingZoneSel.value = membersZoneSel.value;
-  }
 
   // Use members-ranking-title element instead of ranking-title so the title
   // updates show up in the members subview card.
