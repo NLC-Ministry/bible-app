@@ -184,12 +184,22 @@ const db = {
         }
 
         // 2. Load Reading Logs
+        // 2. Load Reading Logs (fetch round to enable multi-round tracking)
         const { data: logs } = await state.supabase
           .from("reading_logs")
-          .select("book, chapter, read_at, plan_id")
+          .select("book, chapter, read_at, plan_id, round")
           .eq("user_id", user.id);
 
-        state.readingLogs = logs || [];
+        const rawLogs = logs || [];
+        const uniqueMap = {};
+        rawLogs.forEach(l => {
+          const r = l.round || 1;
+          const key = `${l.book}_${l.chapter}_${r}`;
+          if (!uniqueMap[key] || new Date(l.read_at) > new Date(uniqueMap[key].read_at)) {
+            uniqueMap[key] = l;
+          }
+        });
+        state.readingLogs = Object.values(uniqueMap);
         state.currentUser.chapters_read = state.readingLogs.length;
 
         // 3. Load Active Reading Plans
@@ -286,8 +296,17 @@ const db = {
     if (localProfile) {
       state.currentUser = JSON.parse(localProfile);
       state.realRole = state.currentUser.role;
-      const localLogs = localStorage.getItem("reading_logs");
-      state.readingLogs = localLogs ? JSON.parse(localLogs) : [];
+      const localLogsStr = localStorage.getItem("reading_logs");
+      const rawLocalLogs = localLogsStr ? JSON.parse(localLogsStr) : [];
+      const uniqueLocalMap = {};
+      rawLocalLogs.forEach(l => {
+        const r = l.round || 1;
+        const key = `${l.book}_${l.chapter}_${r}`;
+        if (!uniqueLocalMap[key] || new Date(l.read_at) > new Date(uniqueLocalMap[key].read_at)) {
+          uniqueLocalMap[key] = l;
+        }
+      });
+      state.readingLogs = Object.values(uniqueLocalMap);
       state.currentUser.chapters_read = state.readingLogs.length;
 
       const localPlans = localStorage.getItem("active_reading_plans");
@@ -634,7 +653,7 @@ const db = {
     if (state.isSupabaseMode && state.supabase) {
       try {
         const { data: usersProfiles } = await state.supabase.from("profiles").select("*").eq("is_demo", false);
-        const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id");
+        const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
         state.allLogsCache = allLogs || [];
         const { data: allPlans } = await state.supabase.from("reading_plans").select("id, user_id, name, preset_key, target_books, current_round, level");
 
@@ -684,6 +703,17 @@ const db = {
               ? uLogs.filter(l => uPlan ? l.plan_id === uPlan.id : false)
               : uLogs;
 
+            // Group filteredLogs to ensure each (book, chapter, round) is counted at most once
+            const uniqueLogsMap = {};
+            filteredLogs.forEach(l => {
+              const r = l.round || 1;
+              const key = `${l.book}_${l.chapter}_${r}`;
+              if (!uniqueLogsMap[key]) {
+                uniqueLogsMap[key] = l;
+              }
+            });
+            const uniqueLogs = Object.values(uniqueLogsMap);
+
             let planProgress = 0;
             if (uPlan && uPlan.target_books && uPlan.target_books.length > 0) {
               let totalChapters = 0;
@@ -692,13 +722,13 @@ const db = {
                 if (b) totalChapters += b.chapters;
               });
               if (totalChapters > 0) {
-                planProgress = Math.round((filteredLogs.length / totalChapters) * 100) || 0;
+                planProgress = Math.round((uniqueLogs.length / totalChapters) * 100) || 0;
               }
             }
 
             let lastRead = null;
-            if (filteredLogs.length > 0) {
-              const sortedLogs = [...filteredLogs].sort((a, b) => new Date(b.read_at) - new Date(a.read_at));
+            if (uniqueLogs.length > 0) {
+              const sortedLogs = [...uniqueLogs].sort((a, b) => new Date(b.read_at) - new Date(a.read_at));
               if (sortedLogs[0] && sortedLogs[0].read_at) {
                 lastRead = sortedLogs[0].read_at.substring(0, 10);
               }
@@ -711,7 +741,7 @@ const db = {
               pastoral_zone: profile.pastoral_zone,
               small_group: profile.small_group,
               role: profile.role,
-              chapters_read: filteredLogs.length,
+              chapters_read: uniqueLogs.length,
               plan_progress: planProgress,
               streak: profile.streak || 0,
               last_read: lastRead,

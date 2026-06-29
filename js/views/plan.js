@@ -1816,6 +1816,19 @@ async function renderPlanStatsView() {
     const reportStatMakeup = document.getElementById("report-stat-makeup");
     if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
 
+    // 5. Cumulative chapters read (累積閱讀章數)
+    const reportStatTotalChapters = document.getElementById("report-stat-total-chapters");
+    if (reportStatTotalChapters) {
+      const uniqueKeys = new Set();
+      if (state.readingLogs) {
+        state.readingLogs.forEach(l => {
+          const r = l.round || 1;
+          uniqueKeys.add(`${l.book}_${l.chapter}_${r}`);
+        });
+      }
+      reportStatTotalChapters.textContent = uniqueKeys.size;
+    }
+
     // Render heatmap, trend chart, and badges wall
     renderPersonalHeatmap();
     renderPersonalTrendChart();

@@ -513,8 +513,17 @@
             
             <!-- 個人統計部分 -->
             <div id="stats-personal-section" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
-              <!-- 2x2 Grid Stats Cards -->
+              <!-- Grid Stats Cards -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <!-- 累積閱讀章數 -->
+                <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; grid-column: span 2;">
+                  <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">累積閱讀章數</span>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; margin-bottom: 0.6rem;">包含所有計畫與補讀之累積章數</span>
+                  <div style="font-size: 2.2rem; font-weight: 800; color: var(--primary-color);">
+                    <span id="report-stat-total-chapters">0</span><span style="font-size: 1rem; font-weight: 700; margin-left: 0.2rem; color: var(--text-secondary);">章</span>
+                  </div>
+                </div>
+
                 <!-- 最高連續 -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
                   <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">最高連續</span>
