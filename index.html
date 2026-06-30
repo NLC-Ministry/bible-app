@@ -1104,7 +1104,15 @@
     window.MOCK_PASTORAL_ZONES = [];
     window.MOCK_SMALL_GROUPS = {};
   </script>
-  <script src="demo/mock_stats.js" onerror="console.warn('測試/虛擬資料檔案 mock_stats.js 未載入，本機 Demo 模式已停用。')"></script>
+  <script>
+    // Load local demo data only during local development.
+    if (["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)) {
+      const mockScript = document.createElement("script");
+      mockScript.src = "demo/mock_stats.js";
+      mockScript.onerror = () => console.warn("Local demo data was not loaded.");
+      document.head.appendChild(mockScript);
+    }
+  </script>
   <script src="js/state.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/views/plan.js"></script>

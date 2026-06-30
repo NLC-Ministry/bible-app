@@ -129,7 +129,18 @@ const auth = {
     localStorage.removeItem(this.keys.memberContext);
   },
 
+  _getFlowItem(key) {
+    return sessionStorage.getItem(key) || localStorage.getItem(key);
+  },
+
+  _setFlowItem(key, value) {
+    sessionStorage.setItem(key, value);
+    localStorage.setItem(key, value);
+  },
+
   _clearFlowState() {
+    sessionStorage.removeItem(this.keys.state);
+    sessionStorage.removeItem(this.keys.verifier);
     localStorage.removeItem(this.keys.state);
     localStorage.removeItem(this.keys.verifier);
   },
@@ -187,8 +198,9 @@ const auth = {
       const verifierVal = this._generateCodeVerifier();
       const challenge = await this._generateCodeChallenge(verifierVal);
 
-      localStorage.setItem(this.keys.state, stateVal);
-      localStorage.setItem(this.keys.verifier, verifierVal);
+      this._clearFlowState();
+      this._setFlowItem(this.keys.state, stateVal);
+      this._setFlowItem(this.keys.verifier, verifierVal);
 
       const redirectUri = window.location.origin + window.location.pathname;
       const endpoints = await this._getEndpoints();
@@ -223,12 +235,12 @@ const auth = {
     if (!code && !stateVal) return false;
     if (!code || !stateVal) return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u8cc7\u6599\u4e0d\u5b8c\u6574\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { code: !!code, state: !!stateVal });
 
-    const savedState = localStorage.getItem(this.keys.state);
+    const savedState = this._getFlowItem(this.keys.state);
     if (!savedState || savedState !== stateVal) {
       return this._failCallback("\u767b\u5165\u9a57\u8b49\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { savedState: !!savedState, callbackState: !!stateVal });
     }
 
-    const verifier = localStorage.getItem(this.keys.verifier);
+    const verifier = this._getFlowItem(this.keys.verifier);
     if (!verifier) return this._failCallback("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
 
     loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");

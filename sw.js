@@ -1,5 +1,5 @@
-const CACHE_NAME = 'church-bible-reading-v61';
-const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v61';
+const CACHE_NAME = 'church-bible-reading-v62';
+const DYNAMIC_CACHE_NAME = 'church-bible-dynamic-v62';
 
 // Static resources to precache
 const PRECACHE_ASSETS = [
@@ -14,7 +14,6 @@ const PRECACHE_ASSETS = [
   './js/state.js',
   './js/db.js',
   './js/utils.js',
-  './demo/mock_stats.js',
   './js/gamification.js',
   './js/main.js',
   './js/views/dashboard.js',
@@ -68,7 +67,7 @@ function cleanResponse(response) {
 self.addEventListener('fetch', (e) => {
   const requestUrl = new URL(e.request.url);
 
-  if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
+  if (e.request.method !== 'GET' || (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:')) {
     return;
   }
 
@@ -133,22 +132,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 4. Stale-While-Revalidate for Local App Shell assets
-  e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      const fetchPromise = fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && e.request.method === 'GET') {
-          const cacheCopy = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, cleanResponse(cacheCopy));
-          });
-        }
-        return cleanResponse(networkResponse);
-      }).catch((err) => {
-        console.warn('[Service Worker] Fetch failed, returning cache if available:', err);
-      });
+  // 4. Network-first for local app shell assets so auth fixes ship immediately.
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
 
-      return cleanResponse(cachedResponse) || fetchPromise;
+  e.respondWith(
+    fetch(e.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200) {
+        const cacheCopy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(e.request, cleanResponse(cacheCopy)).catch(() => {});
+        });
+      }
+      return cleanResponse(networkResponse);
+    }).catch((err) => {
+      console.warn('[Service Worker] Fetch failed, returning cache if available:', err);
+      return caches.match(e.request).then((cachedResponse) => cleanResponse(cachedResponse));
     })
   );
 });

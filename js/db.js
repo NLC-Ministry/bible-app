@@ -76,7 +76,11 @@ const db = {
     if (sbUrl && sbKey) {
       try {
         // Initialize Supabase SDK
-        state.supabase = supabase.createClient(sbUrl, sbKey);
+        state.supabase = supabase.createClient(sbUrl, sbKey, {
+          auth: {
+            detectSessionInUrl: allowGoogleLogin
+          }
+        });
         state.isSupabaseMode = true;
 
         // Update Status Badge
