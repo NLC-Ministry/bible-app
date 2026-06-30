@@ -2,7 +2,7 @@
   "name": "教會速讀挑戰與統計系統",
   "short_name": "教會速讀",
   "description": "專為教會弟兄姊妹設計的聖經速讀計畫與分級統計系統。",
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f8fafc",

@@ -112,6 +112,10 @@ const auth = {
     }
   },
 
+  _getRedirectUri() {
+    return window.location.origin + "/";
+  },
+
   _cleanCallbackUrl() {
     const urlParams = new URLSearchParams(window.location.search);
     ["code", "state", "error", "error_description", "scope", "iss"].forEach(key => urlParams.delete(key));
@@ -202,7 +206,7 @@ const auth = {
       this._setFlowItem(this.keys.state, stateVal);
       this._setFlowItem(this.keys.verifier, verifierVal);
 
-      const redirectUri = window.location.origin + window.location.pathname;
+      const redirectUri = this._getRedirectUri();
       const endpoints = await this._getEndpoints();
       const authParams = new URLSearchParams({
         client_id: this.config.clientId,
@@ -245,7 +249,7 @@ const auth = {
 
     loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");
     try {
-      const redirectUri = window.location.origin + window.location.pathname;
+      const redirectUri = this._getRedirectUri();
       const endpoints = await this._getEndpoints();
       const response = await fetch(endpoints.tokenEndpoint, {
         method: "POST",
@@ -380,7 +384,7 @@ const auth = {
     if (idToken) {
       try {
         const endpoints = await this._getEndpoints();
-        const postLogoutRedirectUri = window.location.origin + window.location.pathname;
+        const postLogoutRedirectUri = this._getRedirectUri();
         const logoutParams = new URLSearchParams({
           id_token_hint: idToken,
           post_logout_redirect_uri: postLogoutRedirectUri
