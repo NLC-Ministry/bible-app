@@ -5,8 +5,8 @@
 const auth = {
   // Configuration settings (can be overridden by config.js / env)
   config: {
-    issuer: "https://sso.newlife.org.tw/oidc",
-    clientId: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.clientId) || "nlc-speed-reading-app",
+    issuer: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.issuer) || "https://sso.newlife.org.tw/oidc",
+    clientId: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.clientId) || "",
     memberHubUrl: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.memberHubUrl) || "https://member.newlife.org.tw",
     scopes: "openid profile email phone"
   },
@@ -82,6 +82,11 @@ const auth = {
    */
   async login() {
     try {
+      if (!this.config.clientId) {
+        console.error("NLC OIDC clientId is missing. Set NLC_CLIENT_ID and rebuild config.js.");
+        alert("教會系統登入設定缺少 Client ID，請確認 NLC_CLIENT_ID 是否已設定並重新部署。");
+        return;
+      }
       const stateVal = this._generateCodeVerifier();
       const verifierVal = this._generateCodeVerifier();
       const challenge = await this._generateCodeChallenge(verifierVal);
@@ -155,7 +160,9 @@ const auth = {
       });
 
       if (!response.ok) {
-        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text().catch(() => "");
+        console.error("OIDC token exchange failed response:", response.status, response.statusText, errorText);
+        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}${errorText ? " - " + errorText : ""}`);
       }
 
       const data = await response.json();
@@ -273,7 +280,9 @@ const auth = {
       });
 
       if (!response.ok) {
-        throw new Error(`OIDC Refresh failed: ${response.status}`);
+        const errorText = await response.text().catch(() => "");
+        console.error("OIDC refresh failed response:", response.status, errorText);
+        throw new Error(`OIDC Refresh failed: ${response.status}${errorText ? " - " + errorText : ""}`);
       }
 
       const data = await response.json();
