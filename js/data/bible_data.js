@@ -132,8 +132,8 @@ async function fetchFromBibleApi(bookEngName, chapter, translation) {
   }, `bible-api ${translation}`);
 }
 
-async function fetchFromBolls(bookEngName, chapter, translation) {
-  const bookCode = BOLLS_BOOK_CODES[bookEngName];
+async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier = null) {
+  const bookCode = bookIdentifier || BOLLS_BOOK_CODES[bookEngName] || bookEngName;
   if (!bookCode) throw new Error(`Bolls 缺少書卷代碼：${bookEngName}`);
 
   const url = `https://bolls.life/get-chapter/${encodeURIComponent(translation)}/${encodeURIComponent(bookCode)}/${encodeURIComponent(chapter)}/`;
@@ -183,12 +183,20 @@ const BIBLE_FALLBACK = {
  * @returns {Promise<{reference: string, verses: Array<{verse: number, text: string}>}>}
  */
 async function fetchBibleChapter(bookEngName, chapter) {
-  const sources = [
-    () => fetchFromBolls(bookEngName, chapter, "CUV"),
-    () => fetchFromBolls(bookEngName, chapter, "CUNP"),
-    () => fetchFromBolls(bookEngName, chapter, "CUNPS"),
-    () => fetchFromBibleApi(bookEngName, chapter, "cuv")
-  ];
+  const bollsBookCodes = Array.from(new Set([
+    BOLLS_BOOK_CODES[bookEngName],
+    bookEngName,
+    bookEngName.replace(/\s+/g, "")
+  ].filter(Boolean)));
+  const bollsTranslations = ["CUV", "CUVS", "CUVT", "CUNP", "CUNPS", "RCUVSS", "RCUVTS"];
+  const sources = [];
+
+  bollsTranslations.forEach(translation => {
+    bollsBookCodes.forEach(bookCode => {
+      sources.push(() => fetchFromBolls(bookEngName, chapter, translation, bookCode));
+    });
+  });
+  sources.push(() => fetchFromBibleApi(bookEngName, chapter, "cuv"));
 
   const errors = [];
   for (const source of sources) {
@@ -201,9 +209,9 @@ async function fetchBibleChapter(bookEngName, chapter) {
 
   const fallbackKey = `${bookEngName}_${chapter}`;
   const fallback = BIBLE_FALLBACK[fallbackKey];
-  if (fallback && fallback.verses && fallback.verses.length > 10) {
+  if (fallback && fallback.verses && fallback.verses.length > 0) {
     return fallback;
   }
 
-  throw new Error(`目前無法載入中文完整章節，請稍後再試。${errors.length ? "來源錯誤：" + errors.join("；") : ""}`);
+  throw new Error(`目前無法載入中文完整章節，請稍後再試。${errors.length ? "來源錯誤：" + errors.slice(0, 4).join("?") : ""}`);
 }

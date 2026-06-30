@@ -132,7 +132,7 @@ function initReaderControls() {
           const planDayChKey = `${bookObj.name}_${state.readerState.chapter}`;
           updatePlanCheckboxState(planDayChKey, isChecked);
           calculatePlanProgress();
-          if (state.activePlan.progress === 100) {
+          if (state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
             await handleRoundCompletion(state.activePlan);
           }
         }
@@ -179,7 +179,7 @@ function initReaderControls() {
         updatePlanCheckboxState(`${bookObj.name}_${chapter}`, true);
 
         // Check if active plan finishes
-        if (state.activePlan && state.activePlan.progress === 100) {
+        if (state.activePlan && state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
           await handleRoundCompletion(state.activePlan);
         }
 

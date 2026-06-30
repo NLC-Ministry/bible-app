@@ -71,6 +71,7 @@ const state = {
     groups: {}  // zoneName -> array of groupNames
   },
   activePlan: null,
+  planDetailOpen: false,
   activePlans: [], // Array of multiple joined plans
   readingLogs: [], // Array of { book: string, chapter: number, read_at: string, plan_id?: string, presetKey?: string }
   readerState: {
@@ -131,6 +132,7 @@ const appRouter = {
     } else if (tabId === "reader-view") {
       renderReaderText();
     } else if (tabId === "plan-view") {
+      state.planDetailOpen = false;
       renderPlanView();
     } else if (tabId === "stats-view") {
       updateStatsView();

@@ -13,6 +13,34 @@ function getPresetKeyByName(name) {
   return null;
 }
 
+
+function getPlanStorageKey(plan) {
+  return String((plan && (plan.id || plan.presetKey || plan.globalPlanId || plan.name)) || "");
+}
+
+function getLocalPlanDowngradeLock(plan) {
+  try {
+    const key = getPlanStorageKey(plan);
+    const locks = JSON.parse(localStorage.getItem("plan_downgrade_locks") || "{}");
+    return key ? (locks[key] || null) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setLocalPlanDowngradeLock(plan, lockedUntil) {
+  try {
+    const key = getPlanStorageKey(plan);
+    if (!key) return;
+    const locks = JSON.parse(localStorage.getItem("plan_downgrade_locks") || "{}");
+    if (lockedUntil) locks[key] = lockedUntil;
+    else delete locks[key];
+    localStorage.setItem("plan_downgrade_locks", JSON.stringify(locks));
+  } catch (e) {
+    console.warn("Failed to persist downgrade lock locally", e);
+  }
+}
+
 const db = {
   // Initialize Supabase Connection
   async init() {
@@ -341,6 +369,8 @@ const db = {
             planObj.level = dbPlan.level || 'normal';
             planObj.currentRound = dbPlan.current_round || 1;
             planObj.wasDowngraded = dbPlan.was_downgraded || false;
+            planObj.downgradeLockedUntil = dbPlan.downgrade_locked_until || getLocalPlanDowngradeLock(planObj);
+            planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
             state.activePlans.push(planObj);
           });
 
@@ -451,7 +481,8 @@ const db = {
                 freshPlan.currentRound = plan.currentRound;
                 freshPlan.level = plan.level;
                 freshPlan.wasDowngraded = plan.wasDowngraded;
-                
+                freshPlan.downgradeLockedUntil = plan.downgradeLockedUntil || getLocalPlanDowngradeLock(plan);
+                freshPlan.upgradePromptHandled = !!plan.upgradePromptHandled;
                 Object.assign(plan, freshPlan);
               }
             }
@@ -1224,7 +1255,9 @@ const db = {
             preset_key: key,
             level: 'normal',
             current_round: 1,
-            was_downgraded: false
+            was_downgraded: false,
+            downgrade_locked_until: null,
+            upgrade_prompt_handled: false
           };
 
           // 若是來自 global_plans 的計畫，儲存 global_plan_id（UUID FK）

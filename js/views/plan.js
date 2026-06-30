@@ -263,6 +263,66 @@ function getPlanLevelRounds(level) {
   return 1;
 }
 
+function getPlanLevelLabel(level) {
+  if (level === "breakthrough") return "突破";
+  if (level === "super") return "興盛";
+  return "一般";
+}
+
+function getPlanLevelOrder(level) {
+  if (level === "super") return 3;
+  if (level === "breakthrough") return 2;
+  return 1;
+}
+
+function addDaysIso(days) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function getDowngradeLockedUntil(plan) {
+  return (plan && plan.downgradeLockedUntil) || (typeof getLocalPlanDowngradeLock === "function" ? getLocalPlanDowngradeLock(plan) : null);
+}
+
+function isPlanUpgradeLocked(plan) {
+  const lockedUntil = getDowngradeLockedUntil(plan);
+  if (!lockedUntil) return false;
+  return new Date(lockedUntil).getTime() > Date.now();
+}
+
+function formatLockDate(lockedUntil) {
+  const date = new Date(lockedUntil);
+  if (isNaN(date)) return "兩週後";
+  return date.getFullYear() + "/" + String(date.getMonth() + 1).padStart(2, "0") + "/" + String(date.getDate()).padStart(2, "0");
+}
+
+async function persistPlanLevelState(plan) {
+  if (!plan) return;
+  if (typeof setLocalPlanDowngradeLock === "function") {
+    setLocalPlanDowngradeLock(plan, plan.downgradeLockedUntil || null);
+  }
+
+  if (state.isSupabaseMode && state.supabase && plan.id) {
+    const payload = {
+      level: plan.level,
+      was_downgraded: !!plan.wasDowngraded,
+      downgrade_locked_until: plan.downgradeLockedUntil || null,
+      upgrade_prompt_handled: !!plan.upgradePromptHandled
+    };
+    const { error } = await state.supabase.from("reading_plans").update(payload).eq("id", plan.id);
+    if (error) {
+      console.warn("Failed to persist downgrade lock column, retrying without it", error);
+      await state.supabase.from("reading_plans")
+        .update({ level: plan.level, was_downgraded: !!plan.wasDowngraded, upgrade_prompt_handled: !!plan.upgradePromptHandled })
+        .eq("id", plan.id);
+    }
+  } else if (!state.isSupabaseMode) {
+    localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+  }
+}
+
 function expandChaptersForLevel(chapters, level) {
   const rounds = getPlanLevelRounds(level);
   const expanded = [];
@@ -524,7 +584,19 @@ function calculateAllPlansProgress() {
       });
     });
     plan.completedChapters = completed;
-    plan.progress = Math.round((completed / plan.totalChapters) * 100) || 0;
+    const firstRoundTotalChapters = plan.days.reduce((sum, day) => {
+      return sum + ((day.chapters || []).filter(ch => (ch.round || 1) === 1).length);
+    }, 0) || plan.totalChapters;
+    const firstRoundCompletedChapters = plan.days.reduce((sum, day) => {
+      return sum + ((day.chapters || []).filter(ch => (ch.round || 1) === 1 && ch.isReadR1).length);
+    }, 0);
+    plan.firstRoundCompletedChapters = firstRoundCompletedChapters;
+    plan.firstRoundTotalChapters = firstRoundTotalChapters;
+    plan.isPlanCompleted = firstRoundTotalChapters > 0 && firstRoundCompletedChapters >= firstRoundTotalChapters;
+    plan.progress = plan.isPlanCompleted
+      ? 100
+      : (Math.round((firstRoundCompletedChapters / firstRoundTotalChapters) * 100) || 0);
+    if (!plan.isPlanCompleted) plan.upgradePromptHandled = false;
   });
 
   if (!state.isSupabaseMode) {
@@ -580,7 +652,7 @@ async function renderPlanView() {
   const listSubview = document.getElementById("plan-list-subview");
   const detailSubview = document.getElementById("plan-detail-subview");
 
-  if (state.activePlan) {
+  if (state.activePlan && state.planDetailOpen) {
     if (listSubview) listSubview.classList.add("hidden");
     if (detailSubview) detailSubview.classList.remove("hidden");
 
@@ -621,7 +693,7 @@ async function renderPlanView() {
   }
 
   if (state.activePlan && isPlanHidden(state.activePlan) && canManageHiddenPlans()) {
-    showToast("????????????????????");
+    showToast("這個計畫目前已隱藏，一般使用者不會看到。");
   }
 }
 
@@ -678,6 +750,7 @@ function renderJoinedPlansList() {
     `;
     card.onclick = () => {
       state.activePlan = plan;
+      state.planDetailOpen = true;
       state.selectedPlanDay = null; // reset to first uncompleted day
       localStorage.setItem("selected_plan_key", plan.presetKey || "");
       renderPlanView();
@@ -746,6 +819,7 @@ function renderPresetPlansList() {
     card.onclick = async () => {
       if (isJoined) {
         state.activePlan = state.activePlans.find(p => p.presetKey === key || p.id === plan.id);
+        state.planDetailOpen = true;
         state.selectedPlanDay = null;
         renderPlanView();
       } else {
@@ -1100,7 +1174,7 @@ window.toggleYouVersionChapter = async function(checkboxEl, book, chapter, taskR
     calculatePlanProgress();
     db.saveLocalUserStats();
 
-    if (state.activePlan && state.activePlan.progress === 100) {
+    if (state.activePlan && state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
       await handleRoundCompletion(state.activePlan);
     }
   } catch (error) {
@@ -1157,161 +1231,143 @@ function updatePlanCheckboxState(key, isChecked) {
 
 async function checkPlanSchedule(plan) {
   if (!plan) return;
+  if (!isPlanStarted(plan)) return;
 
-  const started = isPlanStarted(plan);
-  if (!started) return;
+  const level = plan.level || "normal";
+  if (getPlanLevelOrder(level) <= 1) return;
 
-  const currentRound = plan.currentRound || 1;
-  if (currentRound >= 4) return; // 3遍以上不安排進度，自主掌控
-
-  // Calculate expected progress
   const start = new Date(plan.startDate);
-  const end = new Date(plan.endDate);
-  const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
   const today = new Date();
-  const elapsedDays = Math.max(0, Math.min(totalDays, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1));
+  start.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
 
-  const progressFactor = elapsedDays / totalDays;
+  const elapsedDays = Math.max(0, Math.min(
+    plan.days.length,
+    Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1
+  ));
+  const requiredDaysWithGrace = Math.max(0, elapsedDays - 2);
+  if (requiredDaysWithGrace <= 0) return;
 
-  const level = plan.level || 'normal';
-  let targetRounds = 1;
-  if (level === 'breakthrough') targetRounds = 2;
-  else if (level === 'super') targetRounds = 3;
-
-  const expectedTotalChapters = progressFactor * plan.totalChapters;
-
-  // Calculate actual total completed chapters across all rounds
-  let actualCompletedChapters = 0;
-  for (let r = 1; r <= currentRound; r++) {
-    const roundLogs = state.readingLogs.filter(l => 
-      (l.plan_id === plan.id || l.presetKey === plan.presetKey) &&
-      (l.round || 1) === r
-    );
-    const uniqueChapters = new Set(roundLogs.map(l => `${l.book}_${l.chapter}`));
-    actualCompletedChapters += uniqueChapters.size;
-  }
-
-  if (Math.floor(expectedTotalChapters) > 0 && actualCompletedChapters < Math.floor(expectedTotalChapters)) {
-    let newLevel = level;
-    let message = "";
-
-    if (level === 'super') {
-      newLevel = 'breakthrough';
-      plan.wasDowngraded = true;
-      message = `⚠️ 進度落後警告：您的累計讀經進度已落後於「超強進度」的預期範圍（預計需完成 ${Math.floor(expectedTotalChapters)} 章，實際完成 ${actualCompletedChapters} 章）。\n\n系統已自動將您降級為「突破進度」，讓進度回歸合理區間。`;
-    } else if (level === 'breakthrough') {
-      newLevel = 'normal';
-      plan.wasDowngraded = true;
-      message = `⚠️ 進度落後警告：您的累計讀經進度已落後於「突破進度」的預期範圍（預計需完成 ${Math.floor(expectedTotalChapters)} 章，實際完成 ${actualCompletedChapters} 章）。\n\n系統已自動將您降級為「一般進度」。您此後將不得手動申請升級，直到您讀完第一遍為止。`;
-    }
-
-    if (newLevel !== level) {
-      plan.level = newLevel;
-
-      if (state.isSupabaseMode && state.supabase) {
-        await state.supabase.from("reading_plans")
-          .update({ 
-            level: newLevel,
-            was_downgraded: plan.wasDowngraded
-          })
-          .eq("id", plan.id);
-      } else {
-        localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
-      }
-
-      showToast(message);
-      calculatePlanProgress();
-    }
-  }
-}
-
-async function handleRoundCompletion(plan) {
-  const currentRound = plan.currentRound || 1;
-  const level = plan.level || 'normal';
-
-  let newRound = currentRound + 1;
-  let newLevel = level;
-  let wasDowngraded = plan.wasDowngraded;
-  let message = "";
-
-  if (currentRound === 1) {
-    if (level === 'normal') {
-      newLevel = 'breakthrough';
-      wasDowngraded = false; // Reset downgrade restriction on round completion
-      message = `🎉 恭喜您圓滿讀完第一遍！\n系統已自動將您升級為「突破進度 (第 2 遍)」，請繼續加油重複閱讀！`;
-    } else {
-      message = `🎉 恭喜您完成了第一遍的讀經進度！開始進入第二遍閱讀，加油！`;
-    }
-  } else if (currentRound === 2) {
-    if (level === 'breakthrough') {
-      newLevel = 'super';
-      wasDowngraded = false;
-      message = `🏆 太棒了！您已讀完第二遍！\n系統已自動將您升級為「超強進度 (第 3 遍)」，挑戰最高讀經榮譽！`;
-    } else {
-      message = `🎉 恭喜您完成了第二遍的讀經進度！開始進入第三遍閱讀！`;
-    }
-  } else if (currentRound === 3) {
-    message = `🔥 震撼！您已成功完成三遍讀經！\n此後系統不再為您強制安排預計進度，您可以自行掌控後續的閱讀自主權。`;
-  } else {
-    message = `✨ 恭喜您完成了第 ${currentRound} 遍讀經！繼續挑戰第 ${newRound} 遍！`;
-  }
-
-  plan.currentRound = newRound;
-  plan.level = newLevel;
-  plan.wasDowngraded = wasDowngraded;
-
-  if (state.isSupabaseMode && state.supabase) {
-    const { error } = await state.supabase.from("reading_plans")
-      .update({ 
-        current_round: newRound,
-        level: newLevel,
-        was_downgraded: wasDowngraded
-      })
-      .eq("id", plan.id);
-    if (error) console.error("Failed to update round completion in Supabase:", error);
-  } else {
-    localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
-  }
+  const expectedChaptersWithGrace = plan.days
+    .slice(0, requiredDaysWithGrace)
+    .reduce((sum, day) => sum + ((day.chapters && day.chapters.length) || 0), 0);
 
   calculatePlanProgress();
-  showToast(message);
+  const actualCompletedChapters = plan.completedChapters || 0;
+  if (expectedChaptersWithGrace <= 0 || actualCompletedChapters >= expectedChaptersWithGrace) return;
+
+  const newLevel = level === "super" ? "breakthrough" : "normal";
+  const oldLabel = getPlanLevelLabel(level);
+  const newLabel = getPlanLevelLabel(newLevel);
+  plan.wasDowngraded = true;
+  plan.downgradeLockedUntil = addDaysIso(14);
+
+  rebuildPlanScheduleForLevel(plan, newLevel);
+  calculatePlanProgress();
+  await persistPlanLevelState(plan);
+
+  showToast("進度已落後超過 2 天，已自動降級。兩週內暫停升級申請。");
+}
+async function handleRoundCompletion(plan) {
+  if (!plan) return;
+  calculatePlanProgress();
+
+  if (plan.pendingUpgradePrompt || plan.upgradePromptHandled) return;
+  if (plan.currentRound && plan.currentRound > 1) {
+    showToast("已完成本輪讀經。");
+    return;
+  }
+
+  const currentLevel = plan.level || "normal";
+  const nextLevel = currentLevel === "normal" ? "breakthrough" : (currentLevel === "breakthrough" ? "super" : null);
+  if (!nextLevel) {
+    showToast("恭喜完成讀經計畫！");
+    return;
+  }
+
+  plan.pendingUpgradePrompt = true;
+  const wantsUpgrade = confirm("恭喜完成第一遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始下一遍？");
+  plan.pendingUpgradePrompt = false;
+
+  if (!wantsUpgrade) {
+    plan.upgradePromptHandled = true;
+    showToast("已完成計畫。你可以之後到調整進度設定再升級。");
+    await persistPlanLevelState(plan);
+    if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+    return;
+  }
+
+  if (isPlanUpgradeLocked(plan)) {
+    showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(getDowngradeLockedUntil(plan)) + " 後再升級。");
+    return;
+  }
+
+  plan.upgradePromptHandled = true;
+  plan.currentRound = 2;
+  plan.wasDowngraded = false;
+  plan.downgradeLockedUntil = null;
+  rebuildPlanScheduleForLevel(plan, nextLevel);
+
+  await persistPlanLevelState(plan);
+  if (state.isSupabaseMode && state.supabase && plan.id) {
+    await state.supabase.from("reading_plans")
+      .update({ current_round: plan.currentRound, upgrade_prompt_handled: !!plan.upgradePromptHandled })
+      .eq("id", plan.id);
+  } else if (!state.isSupabaseMode) {
+    localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+  }
+
+  if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+
+  calculatePlanProgress();
+  state.planDetailOpen = true;
+  showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始下一遍讀經。");
 }
 
 window.changePlanLevel = async function(newLevel) {
   if (!state.activePlan) return;
 
-  if (state.activePlan.wasDowngraded && state.activePlan.level === 'normal' && newLevel !== 'normal') {
-    showToast("需要先讀完第一遍，才可以重新升級進度。");
+  const currentLevel = state.activePlan.level || "normal";
+  const isUpgrade = getPlanLevelOrder(newLevel) > getPlanLevelOrder(currentLevel);
+  const lockedUntil = getDowngradeLockedUntil(state.activePlan);
+  if (isUpgrade && isPlanUpgradeLocked(state.activePlan)) {
+    showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(lockedUntil) + " 後再升級。");
     return;
   }
 
   loader.show("正在變更進度等級...");
 
+  if (isUpgrade && lockedUntil && !isPlanUpgradeLocked(state.activePlan)) {
+    state.activePlan.wasDowngraded = false;
+    state.activePlan.downgradeLockedUntil = null;
+  }
+
+  state.activePlan.upgradePromptHandled = false;
   rebuildPlanScheduleForLevel(state.activePlan, newLevel);
   if (state.activePlans) {
-    const planInList = state.activePlans.find(p => p === state.activePlan || (p.id && p.id === state.activePlan.id) || (p.presetKey && p.presetKey === state.activePlan.presetKey));
-    if (planInList && planInList !== state.activePlan) rebuildPlanScheduleForLevel(planInList, newLevel);
+    const planInList = state.activePlans.find(p =>
+      p === state.activePlan ||
+      (p.id && p.id === state.activePlan.id) ||
+      (p.presetKey && p.presetKey === state.activePlan.presetKey)
+    );
+    if (planInList && planInList !== state.activePlan) {
+      rebuildPlanScheduleForLevel(planInList, newLevel);
+      planInList.wasDowngraded = state.activePlan.wasDowngraded;
+      planInList.downgradeLockedUntil = state.activePlan.downgradeLockedUntil || null;
+      planInList.upgradePromptHandled = false;
+    }
   }
 
-  if (state.isSupabaseMode && state.supabase) {
-    const { error } = await state.supabase.from("reading_plans")
-      .update({ level: newLevel })
-      .eq("id", state.activePlan.id);
-    if (error) console.error("Failed to update plan level in Supabase:", error);
-  } else {
-    localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
-  }
-
+  await persistPlanLevelState(state.activePlan);
+  if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
   calculatePlanProgress();
 
-  // Run schedule check immediately after upgrading level
   await checkPlanSchedule(state.activePlan);
 
   loader.hide();
   renderPlanView();
   updateDashboardView();
 };
-
 
 function initAdminPlanManagement() {
   const addBtn = document.getElementById("admin-add-plan-btn");
@@ -1475,7 +1531,7 @@ async function renderAdminPlanManagement() {
 
       tr.innerHTML = `
         <td>
-          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.82rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span style="color:#f59e0b; font-size:0.68rem; font-weight:800;">???</span>' : ''}</strong>
+          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.82rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span style="color:#f59e0b; font-size:0.68rem; font-weight:800;">已隱藏</span>' : ''}</strong>
           <span title="${escapeHTML(bookListText)}" style="font-size: 0.7rem; color: var(--text-muted); cursor: help; text-decoration: underline dashed; text-underline-offset: 2px;">
             共 ${bookCount} 卷書卷
           </span>
@@ -1725,7 +1781,7 @@ window.addEventListener("scroll", async () => {
       calculatePlanProgress();
       db.saveLocalUserStats();
 
-      if (state.activePlan && state.activePlan.progress === 100) {
+      if (state.activePlan && state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
         await handleRoundCompletion(state.activePlan);
       }
 
