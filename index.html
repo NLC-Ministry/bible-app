@@ -231,77 +231,82 @@
 
       <!-- VIEW 2: BIBLE READER -->
       <section id="reader-view" class="view-pane">
-        <div class="reader-layout">
-          <!-- Left/Top Control Sidebar -->
-          <aside class="reader-sidebar">
-            <div class="glass-card">
-              <h3 class="card-title">選擇經卷</h3>
-              <div class="form-group">
-                <label for="reader-testament-select">新舊約</label>
-                <select id="reader-testament-select" class="form-control">
-                  <option value="all">全部書卷</option>
-                  <option value="old">舊約 (39)</option>
-                  <option value="new">新約 (27)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="reader-book-select">書卷</label>
-                <select id="reader-book-select" class="form-control">
-                  <!-- Generated dynamically -->
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="reader-chapter-select">章</label>
-                <select id="reader-chapter-select" class="form-control">
-                  <!-- Generated dynamically -->
-                </select>
-              </div>
-              <div class="reader-nav-buttons">
-                <button class="secondary-btn flex-btn" id="prev-chapter-btn">
-                  ◀ 上一章
-                </button>
-                <button class="secondary-btn flex-btn" id="next-chapter-btn">
-                  下一章 ▶
-                </button>
-              </div>
-              
-              <hr class="card-divider">
 
-              <!-- Typography controls -->
-              <h4 class="settings-subtitle">閱讀設定</h4>
-              <div class="typography-settings">
-                <button class="circle-btn font-change-btn" id="decrease-font" title="縮小字體">A-</button>
-                <span class="font-size-indicator" id="font-size-label">18px</span>
-                <button class="circle-btn font-change-btn" id="increase-font" title="放大字體">A+</button>
-              </div>
-            </div>
-          </aside>
-
-          <!-- Main Bible Text Area -->
-          <article class="reader-body">
-            <div class="glass-card reader-card">
-              <div class="reader-header">
-                <h2 id="bible-title" class="bible-heading">創世記 1章</h2>
-                <div class="reader-actions-top">
-                </div>
-              </div>
-              
-              <!-- Bible Content container -->
-              <div id="bible-content" class="bible-text-container" style="font-size: 18px;">
-                <!-- Generated dynamically -->
-              </div>
-
-              <!-- Inline floating actions (appears on verse highlight) -->
-              <div id="context-toolbar" class="context-toolbar hidden">
-                <button class="toolbar-action" data-action="highlight" style="background-color: #ffeb3b; color: #000;" title="黃色螢光筆"></button>
-                <button class="toolbar-action" data-action="highlight" style="background-color: #ffc107; color: #000;" title="橘色螢光筆"></button>
-                <button class="toolbar-action" data-action="highlight" style="background-color: #a7ffeb; color: #000;" title="綠色螢光筆"></button>
-                <button class="toolbar-action" data-action="clear" title="清除標記">❌</button>
-              </div>
-            </div>
-          </article>
+        <!-- ── Compact Pill Bar (always visible) ── -->
+        <div class="reader-pill-bar" id="reader-pill-bar">
+          <div class="reader-pill-left">
+            <button class="reader-pill-badge" id="reader-book-badge" title="選擇書卷">
+              <span id="reader-pill-book-label">創世記</span>
+            </button>
+            <span class="reader-pill-sep">·</span>
+            <button class="reader-pill-badge" id="reader-chapter-badge" title="選擇章節">
+              <span id="reader-pill-chapter-label">第 1 章</span>
+            </button>
+          </div>
+          <div class="reader-pill-right">
+            <button class="reader-pill-icon-btn" id="reader-font-decrease" title="縮小字體">A-</button>
+            <span class="reader-pill-fontsize" id="font-size-label">18px</span>
+            <button class="reader-pill-icon-btn" id="reader-font-increase" title="放大字體">A+</button>
+          </div>
         </div>
+
+        <!-- ── Collapsible Navigation Drawer ── -->
+        <div class="reader-nav-drawer" id="reader-nav-drawer">
+          <div class="reader-nav-drawer-inner">
+            <div class="reader-nav-selects">
+              <select id="reader-testament-select" class="form-control reader-select-compact">
+                <option value="all">全部書卷</option>
+                <option value="old">舊約 (39)</option>
+                <option value="new">新約 (27)</option>
+              </select>
+              <select id="reader-book-select" class="form-control reader-select-compact">
+                <!-- Generated dynamically -->
+              </select>
+              <select id="reader-chapter-select" class="form-control reader-select-compact">
+                <!-- Generated dynamically -->
+              </select>
+            </div>
+            <div class="reader-nav-arrows">
+              <button class="secondary-btn" id="prev-chapter-btn">◀ 上一章</button>
+              <button class="secondary-btn" id="next-chapter-btn">下一章 ▶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Floating Navigation Buttons ── -->
+        <div class="reader-floating-nav">
+          <button class="floating-nav-btn prev" id="floating-prev-btn" title="上一章">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button class="floating-nav-btn next" id="floating-next-btn" title="下一章">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+
+        <!-- ── Main Bible Text Area ── -->
+        <article class="reader-body reader-body-full">
+          <div class="glass-card reader-card">
+            <div class="reader-header">
+              <h2 id="bible-title" class="bible-heading">創世記 1章</h2>
+              <div class="reader-actions-top"></div>
+            </div>
+
+            <!-- Bible Content container -->
+            <div id="bible-content" class="bible-text-container" style="font-size: 18px;">
+              <!-- Generated dynamically -->
+            </div>
+
+            <!-- Inline floating actions (appears on verse highlight) -->
+            <div id="context-toolbar" class="context-toolbar hidden">
+              <button class="toolbar-action" data-action="highlight" style="background-color: #ffeb3b; color: #000;" title="黃色螢光筆"></button>
+              <button class="toolbar-action" data-action="highlight" style="background-color: #ffc107; color: #000;" title="橘色螢光筆"></button>
+              <button class="toolbar-action" data-action="highlight" style="background-color: #a7ffeb; color: #000;" title="綠色螢光筆"></button>
+              <button class="toolbar-action" data-action="clear" title="清除標記">❌</button>
+            </div>
+          </div>
+        </article>
       </section>
+
 
       <!-- VIEW 3: READING PLANS -->
       <section id="plan-view" class="view-pane">
