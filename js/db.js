@@ -334,7 +334,7 @@ const db = {
     if (!response.ok || !payload.edge_session) {
       throw new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
     }
-    console.log("NLC Session Sync Payload:", payload);
+    console.log("%c[DIAGNOSTIC] NLC Session Sync Payload:", "color: #06b6d4; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", payload);
 
     localStorage.removeItem("nlc_supabase_access_token");
     localStorage.removeItem("nlc_supabase_expires_at");
@@ -982,7 +982,7 @@ const db = {
         updated_at: new Date().toISOString()
       };
 
-      console.log("Saving Profile Payload:", profilePayload);
+      console.log("%c[DIAGNOSTIC] Saving Profile Payload:", "color: #f59e0b; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", profilePayload);
 
       const saveResult = state.supabase.saveProfile
         ? await state.supabase.saveProfile(profilePayload)
