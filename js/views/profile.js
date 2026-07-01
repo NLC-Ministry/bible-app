@@ -185,7 +185,12 @@ function renderProfileView() {
     } catch (err) {
       console.error("Failed to save profile:", err);
       state.currentUser = oldProfile;
-      showToast(`儲存個人資料失敗: ${err.message || err}`);
+      const isAdmin = state.currentUser && (state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor");
+      if (isAdmin) {
+        showToast(`儲存個人資料失敗 (開發者除錯): ${err.message || err}`);
+      } else {
+        showToast("儲存個人資料失敗，請稍後再試。");
+      }
     } finally {
       loader.hide();
     }
