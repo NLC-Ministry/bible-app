@@ -24,6 +24,11 @@ function trimSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function normalizeSecret(value: string | undefined | null) {
+  const trimmed = (value || "").trim();
+  return trimmed.replace(/^['"]|['"]$/g, "");
+}
+
 function base64Url(input: ArrayBuffer | Uint8Array) {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   let binary = "";
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const jwtSecret = Deno.env.get("NLC_SUPABASE_JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET");
+    const jwtSecret = normalizeSecret(Deno.env.get("NLC_SUPABASE_JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET"));
     const issuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
     const memberHubUrl = trimSlash(Deno.env.get("NLC_MEMBER_HUB_URL") || "https://member.newlife.org.tw");
 
