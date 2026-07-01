@@ -980,7 +980,7 @@ const db = {
       const { data, error } = saveResult;
       if (error) throw new Error(error.message || error.error || error);
       if (state.supabase.saveProfile && !saveResult.project_url) {
-        throw new Error("nlc-data Edge Function ????? save_profile ???????? nlc-data?");
+        throw new Error("nlc-data Edge Function \u5c1a\u672a\u90e8\u7f72\u65b0\u7248 save_profile\uff0c\u8acb\u5230 Supabase \u91cd\u65b0\u90e8\u7f72 nlc-data\u3002");
       }
 
       let verifiedProfile = data || null;
