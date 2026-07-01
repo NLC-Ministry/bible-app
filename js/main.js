@@ -90,31 +90,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  // 8. Register Service Worker for PWA offline support
-  const isLocalhost = window.location.hostname === 'localhost' || 
-                      window.location.hostname === '127.0.0.1' || 
-                      window.location.hostname.startsWith('10.') || 
-                      window.location.hostname.startsWith('192.168.');
-
+  // 8. 💡 徹底解決 PWA 快取陷阱：移除 Service Worker 並清空所有瀏覽器快取儲存區
+  // 由於本系統（讀經打卡、排行榜、個人統計）高度依賴 Supabase 線上資料庫，離線模式並不具備實用價值，反而會因為 Service Worker 快取造成舊檔案/損壞檔案鎖死。
   if ("serviceWorker" in navigator) {
-    if (isLocalhost) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      if (registrations.length > 0) {
+        console.log("[Cache Buster] 偵測到舊版 Service Worker，正在移除並清空快取...");
         for (let registration of registrations) {
-          registration.unregister().then(success => {
-            if (success) {
-              console.log("Localhost detected: Unregistered existing Service Worker.");
-            }
-          });
+          registration.unregister();
         }
-      });
-    } else {
-      try {
-        navigator.serviceWorker.register("./sw.js")
-          .then(reg => console.log("Service Worker 註冊成功，範圍:", reg.scope))
-          .catch(err => console.error("Service Worker 註冊失敗:", err));
-      } catch (err) {
-        console.error("Service Worker registration failed:", err);
+        if (window.caches) {
+          caches.keys().then(keys => {
+            Promise.all(keys.map(key => caches.delete(key))).then(() => {
+              console.log("[Cache Buster] 快取已清空，正在執行強制重新整理...");
+              window.location.reload(true); // 強制從伺服器拉取最新檔案
+            });
+          });
+        } else {
+          window.location.reload(true);
+        }
       }
-    }
+    });
   }
 });
