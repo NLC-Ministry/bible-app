@@ -193,8 +193,32 @@ const auth = {
     state.realRole = state.currentUser.role;
   },
 
+  async resetLocalLogin() {
+    this._clearFlowState();
+    this._clearStoredTokens();
+    this._resetAppAuthState();
+    localStorage.removeItem("nlc_supabase_access_token");
+    localStorage.removeItem("nlc_supabase_expires_at");
+    localStorage.removeItem("nlc_supabase_profile");
+    if (typeof state !== "undefined") {
+      state.currentProfileId = null;
+      if (state.supabaseConfig && typeof db !== "undefined" && db.createSupabaseClient) {
+        state.supabase = db.createSupabaseClient();
+      }
+    }
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(key => key.startsWith("church-bible-")).map(key => caches.delete(key)));
+      }
+    } catch (err) {
+      console.warn("Could not clear app caches", err);
+    }
+  },
+
   async login() {
     try {
+      await this.resetLocalLogin();
       if (!this.config.clientId) {
         console.error("NLC OIDC clientId is missing. Set NLC_CLIENT_ID and rebuild config.js.");
         alert("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5c1a\u672a\u5b8c\u6210\u8a2d\u5b9a\uff0c\u8acb\u806f\u7d61\u7ba1\u7406\u54e1\u3002");

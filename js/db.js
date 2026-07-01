@@ -124,6 +124,9 @@ const db = {
         });
       } catch (e) {
         console.error("Supabase connection failed:", e);
+        if (typeof auth !== "undefined" && auth.resetLocalLogin) {
+          await auth.resetLocalLogin();
+        }
         this.showConnectionError();
       }
     } else {
@@ -229,15 +232,14 @@ const db = {
   showConnectionError() {
     state.isSupabaseMode = true;
 
-    // Disable NLC SSO login gate button
     const btnNlcGate = document.getElementById("btn-gate-nlc-login");
     if (btnNlcGate) {
-      btnNlcGate.disabled = true;
-      btnNlcGate.style.opacity = "0.5";
-      btnNlcGate.style.cursor = "not-allowed";
+      btnNlcGate.disabled = false;
+      btnNlcGate.style.opacity = "1";
+      btnNlcGate.style.cursor = "pointer";
+      btnNlcGate.textContent = "\u91cd\u65b0\u767b\u5165\u6559\u6703\u7cfb\u7d71";
     }
 
-    // Disable Google login gate button
     const btnGoogleGate = document.getElementById("btn-gate-google-login");
     if (btnGoogleGate) {
       btnGoogleGate.disabled = true;
@@ -245,15 +247,13 @@ const db = {
       btnGoogleGate.style.cursor = "not-allowed";
     }
 
-    // Show red error status on login gate
     const gateDot = document.getElementById("gate-status-dot");
     const gateText = document.getElementById("gate-status-text");
     if (gateDot && gateText) {
       gateDot.style.backgroundColor = "#ef4444";
-      gateText.textContent = "連線失敗，請檢查網路連線！";
+      gateText.textContent = "\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002";
     }
 
-    // Keep app layout hidden and show login gate
     const loginGate = document.getElementById("login-gate");
     const appLayout = document.querySelector(".app-layout");
     if (loginGate) loginGate.classList.remove("hidden");
