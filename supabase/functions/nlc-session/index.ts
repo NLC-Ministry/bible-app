@@ -119,16 +119,17 @@ Deno.serve(async (req) => {
     const memberProfile = memberContext?.profile || {};
     const memberIdentity = memberContext?.identity || {};
     const organization = memberContext?.organization || {};
-    const email = userinfo.email || memberIdentity.email || null;
-    const displayName =
-      memberProfile.displayName ||
-      userinfo.name ||
-      userinfo.preferred_username ||
-      memberIdentity.username ||
-      email ||
-      "NLC User";
-    const requestedRole = memberContext?.primaryRole || "member";
-    const role = allowedRoles.has(requestedRole) ? requestedRole : "member";
+    const sourceValues = {
+      email: userinfo.email || memberIdentity.email || null,
+      name: memberProfile.displayName || userinfo.name || userinfo.preferred_username || memberIdentity.username || null,
+      great_region: organization.homeRegionName || null,
+      pastoral_zone: organization.homeZoneName || organization.homeNodeName || null,
+      small_group: organization.homeGroupName || null,
+      role: allowedRoles.has(memberContext?.primaryRole) ? memberContext.primaryRole : null
+    };
+    const lockedFields = Object.entries(sourceValues)
+      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+      .map(([field]) => field);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
@@ -145,29 +146,49 @@ Deno.serve(async (req) => {
 
     let profileId = existingIdentity?.profile_id || null;
 
-    if (!profileId && email) {
-      const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
+    let existingProfile: any = null;
+
+    if (!profileId && sourceValues.email) {
+      const { data: profileByEmail, error: profileLookupError } = await supabaseAdmin
         .from("profiles")
-        .select("id")
-        .ilike("email", email)
+        .select("*")
+        .ilike("email", sourceValues.email)
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
       if (profileLookupError) throw profileLookupError;
+      existingProfile = profileByEmail || null;
       profileId = existingProfile?.id || null;
+    }
+
+    if (profileId && !existingProfile) {
+      const { data: profileById, error: profileByIdError } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", profileId)
+        .maybeSingle();
+      if (profileByIdError) throw profileByIdError;
+      existingProfile = profileById || null;
     }
 
     if (!profileId) profileId = crypto.randomUUID();
 
+    const firstValue = (...values: any[]) => {
+      for (const value of values) {
+        if (value !== null && value !== undefined && String(value).trim() !== "") return value;
+      }
+      return "";
+    };
+
     const nowIso = new Date().toISOString();
     const profilePayload = {
       id: profileId,
-      name: displayName,
-      email,
-      great_region: organization.homeRegionName || "",
-      pastoral_zone: organization.homeZoneName || organization.homeNodeName || "",
-      small_group: organization.homeGroupName || organization.homeNodeName || "",
-      role,
+      name: firstValue(sourceValues.name, existingProfile?.name, "NLC User"),
+      email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
+      great_region: firstValue(sourceValues.great_region, existingProfile?.great_region),
+      pastoral_zone: firstValue(sourceValues.pastoral_zone, existingProfile?.pastoral_zone),
+      small_group: firstValue(sourceValues.small_group, existingProfile?.small_group),
+      role: firstValue(sourceValues.role, existingProfile?.role, "member"),
       is_demo: false,
       is_active: true,
       last_seen_at: nowIso,
@@ -195,8 +216,8 @@ Deno.serve(async (req) => {
         profile_id: profileId,
         provider: "logto",
         provider_user_id: userinfo.sub,
-        email,
-        display_name: displayName,
+        email: profilePayload.email,
+        display_name: profilePayload.name,
         is_primary: true,
         metadata: {
           issuer,
@@ -211,7 +232,8 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       edge_session: true,
-      profile
+      profile,
+      locked_fields: lockedFields
     });
   } catch (err) {
     console.error("nlc-session failed:", err);

@@ -938,7 +938,11 @@ const db = {
       return;
     }
     const user = await this.getCurrentDbUser();
-    if (user) {
+    if (!user) {
+      throw new Error("Current login session is unavailable. Please sign in again.");
+    }
+
+    {
       const regionObj = state.orgStructure && state.orgStructure.rawRegions ? state.orgStructure.rawRegions.find(r => r.name === state.currentUser.great_region) : null;
       const zoneObj = state.orgStructure && state.orgStructure.rawZones ? state.orgStructure.rawZones.find(z => z.name === state.currentUser.pastoral_zone) : null;
       const groupObj = state.orgStructure && state.orgStructure.rawGroups ? state.orgStructure.rawGroups.find(g => g.name === state.currentUser.small_group) : null;

@@ -291,16 +291,22 @@ function initProfileControls() {
   if (btnSignout) {
     btnSignout.onclick = async (e) => {
       e.preventDefault();
-      loader.show("登出中...");
+      loader.show("\u767b\u51fa\u4e2d...");
       try {
-        await state.supabase.auth.signOut();
+        if (typeof auth !== "undefined" && auth.logout) {
+          await auth.logout();
+          return;
+        }
+        if (state.isSupabaseMode && state.supabase?.auth?.signOut) {
+          await state.supabase.auth.signOut();
+        }
         state.realRole = null;
         db.updateAuthUI(null);
         await db.loadUserData();
-        alert("已成功登出。");
+        alert("\u5df2\u767b\u51fa\u3002");
         renderProfileView();
       } catch (err) {
-        alert(`登出失敗: ${err.message}`);
+        alert(`\u767b\u51fa\u5931\u6557: ${err.message}`);
       } finally {
         loader.hide();
       }
@@ -923,64 +929,68 @@ function populateAdminGroups() {
  */
 function updateHeaderAvatar() {
   const roleNames = {
-    member:            "一般組員",
-    group_leader:      "小組長",
-    zone_leader:       "區長",
-    great_zone_leader: "大區長",
-    senior_pastor:     "主任牧師",
-    admin:             "系統管理員"
+    member: "\u6703\u53cb",
+    small_group_leader: "\u5c0f\u7d44\u9577",
+    group_leader: "\u5c0f\u7d44\u9577",
+    zone_leader: "\u7267\u5340\u9577",
+    great_zone_leader: "\u5927\u5340\u9577",
+    admin: "\u7cfb\u7d71\u7ba1\u7406\u54e1",
+    senior_pastor: "\u4e3b\u4efb\u7267\u5e2b"
   };
 
-  const btn       = document.getElementById("user-avatar-btn");
-  const nameEl    = document.getElementById("dropdown-user-name");
-  const emailEl   = document.getElementById("dropdown-user-email");
-  const roleEl    = document.getElementById("dropdown-user-role");
+  const btn = document.getElementById("user-avatar-btn");
+  const nameEl = document.getElementById("dropdown-user-name");
+  const emailEl = document.getElementById("dropdown-user-email");
+  const roleEl = document.getElementById("dropdown-user-role");
 
-  const userName  = state.currentUser.name || "用戶";
-  const userRole  = state.currentUser.role || "member";
+  const userName = state.currentUser.name || "NLC User";
+  const userRole = state.currentUser.role || "member";
   const roleLabel = roleNames[userRole] || userRole;
+  const initial = (userName || "N").trim().charAt(0) || "N";
+  const setInitialAvatar = () => {
+    if (btn) btn.innerHTML = `<span id="user-avatar-initial">${initial}</span>`;
+  };
 
-  // Name
   if (nameEl) nameEl.textContent = userName;
-
-  // Role badge
   if (roleEl) roleEl.textContent = roleLabel;
 
-  // Update email and avatar image (async when using Supabase Auth)
-  if (state.isSupabaseMode && state.supabase) {
+  if (typeof auth !== "undefined" && auth.isLoggedIn()) {
+    const payload = auth._parseJwt ? auth._parseJwt(localStorage.getItem(auth.keys.idToken) || "") : null;
+    const email = payload?.email || payload?.preferred_username || payload?.sub || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u4e2d";
+    if (emailEl) emailEl.textContent = email;
+    if (payload?.picture && btn) {
+      btn.innerHTML = `<img src="${payload.picture}" alt="avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;">`;
+    } else {
+      setInitialAvatar();
+    }
+    return;
+  }
+
+  if (state.isSupabaseMode && state.supabase && state.supabase.auth && state.supabase.auth.getUser) {
     state.supabase.auth.getUser().then(({ data }) => {
       const user = data && data.user;
       if (user) {
-        if (emailEl && user.email) {
-          emailEl.textContent = user.email;
-        }
+        if (emailEl) emailEl.textContent = user.email || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u4e2d";
         const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture;
         if (avatarUrl && btn) {
-          btn.innerHTML = `<img src="${avatarUrl}" alt="頭像" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;">`;
-        } else if (btn) {
-          btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
+          btn.innerHTML = `<img src="${avatarUrl}" alt="avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;">`;
+        } else {
+          setInitialAvatar();
         }
       } else {
-        if (emailEl) emailEl.textContent = "Demo 離線模式";
-        if (btn) {
-          btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
-        }
+        if (emailEl) emailEl.textContent = "Demo \u96e2\u7dda\u6a21\u5f0f";
+        setInitialAvatar();
       }
     }).catch(err => {
       console.error("Error in updateHeaderAvatar:", err);
-      if (emailEl) emailEl.textContent = "Demo 離線模式";
-      if (btn) {
-        btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
-      }
+      if (emailEl) emailEl.textContent = "Demo \u96e2\u7dda\u6a21\u5f0f";
+      setInitialAvatar();
     });
   } else {
-    if (emailEl) emailEl.textContent = "Demo 離線模式";
-    if (btn) {
-      btn.innerHTML = `<span id="user-avatar-initial">${userName.charAt(0) || "用"}</span>`;
-    }
+    if (emailEl) emailEl.textContent = "Demo \u96e2\u7dda\u6a21\u5f0f";
+    setInitialAvatar();
   }
 }
-
 /**
  * Wire up avatar dropdown toggle, click-outside-to-close, and logout.
  * Called once during initProfileControls().
@@ -1026,19 +1036,23 @@ function initAvatarDropdown() {
     btnLogout.addEventListener("click", async (e) => {
       e.preventDefault();
       dropdown.classList.add("hidden");
-      loader.show("登出中...");
+      loader.show("\u767b\u51fa\u4e2d...");
       try {
-        if (state.isSupabaseMode && state.supabase) {
+        if (typeof auth !== "undefined" && auth.logout) {
+          await auth.logout();
+          return;
+        }
+        if (state.isSupabaseMode && state.supabase?.auth?.signOut) {
           await state.supabase.auth.signOut();
         }
         state.realRole = null;
         db.updateAuthUI(null);
         await db.loadUserData();
         updateHeaderAvatar();
-        alert("已成功登出。");
+        alert("\u5df2\u767b\u51fa\u3002");
         appRouter.switchTab("dashboard-view");
       } catch (err) {
-        alert(`登出失敗: ${err.message}`);
+        alert(`\u767b\u51fa\u5931\u6557: ${err.message}`);
       } finally {
         loader.hide();
       }

@@ -133,6 +133,7 @@ const auth = {
     localStorage.removeItem(this.keys.supabaseAccessToken);
     localStorage.removeItem(this.keys.supabaseExpiresAt);
     localStorage.removeItem(this.keys.supabaseProfile);
+    localStorage.removeItem("nlc_edge_session_expires_at");
   },
 
   _getFlowItem(key) {
@@ -365,6 +366,15 @@ const auth = {
     this._clearStoredTokens();
     this._clearFlowState();
     this._resetAppAuthState();
+
+    try {
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(key => key.startsWith("church-bible-")).map(key => caches.delete(key)));
+      }
+    } catch (err) {
+      console.warn("Could not clear app caches during logout", err);
+    }
 
     if (idToken) {
       try {
