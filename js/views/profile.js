@@ -165,11 +165,14 @@ function renderProfileView() {
     state.currentUser.small_group = group;
 
     try {
+      let saveInfo = null;
       if (state.isSupabaseMode && state.supabase) {
-        await db.syncProfileStatsToSupabase();
+        saveInfo = await db.syncProfileStatsToSupabase();
       }
       db.saveLocalUserStats();
-      alert("個人資料儲存成功！");
+      const savedId = saveInfo?.profile?.id ? "\nProfile ID: " + saveInfo.profile.id : "";
+      const savedProject = saveInfo?.projectUrl ? "\nProject: " + saveInfo.projectUrl : "";
+      alert("\u500b\u4eba\u8cc7\u6599\u5df2\u78ba\u8a8d\u5beb\u5165 Supabase\u3002" + savedId + savedProject);
       updateDashboardView();
     } catch (err) {
       console.error("Failed to save profile:", err);

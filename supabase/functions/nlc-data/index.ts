@@ -163,7 +163,20 @@ Deno.serve(async (req) => {
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
       if (!savedProfile) return jsonResponse({ error: "profile_write_not_verified" }, 500);
 
-      return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl });
+      const expectedFields = ["name", "great_region", "pastoral_zone", "small_group"];
+      const mismatches = expectedFields.filter(field => String(savedProfile[field] || "") !== String(updatePayload[field] || ""));
+      if (mismatches.length > 0) {
+        return jsonResponse({
+          error: "profile_write_mismatch",
+          mismatches,
+          expected: updatePayload,
+          actual: savedProfile,
+          project_url: supabaseUrl,
+          profile_id: profile.id
+        }, 500);
+      }
+
+      return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl, profile_id: profile.id });
     }
 
     const canRead = action === "select" && READ_TABLES.has(table);

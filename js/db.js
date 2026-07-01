@@ -979,6 +979,9 @@ const db = {
         : await state.supabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("*").single();
       const { data, error } = saveResult;
       if (error) throw new Error(error.message || error.error || error);
+      if (state.supabase.saveProfile && !saveResult.project_url) {
+        throw new Error("nlc-data Edge Function ????? save_profile ???????? nlc-data?");
+      }
 
       let verifiedProfile = data || null;
       if (!verifiedProfile || verifiedProfile.id !== user.id) {
