@@ -957,7 +957,7 @@ const db = {
   async syncProfileStatsToSupabase() {
     if (state.currentUser && state.currentUser.is_demo) {
       console.warn("syncProfileStatsToSupabase aborted: current user is demo user.");
-      return;
+      return { aborted: true, reason: "demo" };
     }
     const user = await this.getCurrentDbUser();
     if (!user) {
@@ -987,7 +987,12 @@ const db = {
       const { data, error } = saveResult;
       if (error) throw new Error(error.message || error.error || error);
       if (state.supabase.saveProfile && !saveResult.project_url) {
-        throw new Error("nlc-data Edge Function \u5c1a\u672a\u90e8\u7f72\u65b0\u7248 save_profile\uff0c\u8acb\u5230 Supabase \u91cd\u65b0\u90e8\u7f72 nlc-data\u3002");
+        throw new Error("nlc-data Edge Function 尚未部署新版 save_profile，請到 Supabase 重新部署 nlc-data。");
+      }
+
+      if (!state.supabase.saveProfile) {
+        saveResult.project_url = state.supabaseConfig && state.supabaseConfig.url ? state.supabaseConfig.url : null;
+        saveResult.profile = data || null;
       }
 
       let verifiedProfile = data || null;
@@ -1003,10 +1008,11 @@ const db = {
 
       if (!verifiedProfile || verifiedProfile.id !== user.id) {
         const projectUrl = state.supabaseConfig && state.supabaseConfig.url ? state.supabaseConfig.url : "unknown Supabase project";
-        throw new Error("???????? Supabase profiles???? nlc-data Edge Function ????????????? Supabase project ? " + projectUrl);
+        throw new Error("儲存的 Supabase 檔案驗證失敗。nlc-data Edge Function 無法驗證寫入。Supabase 專案：" + projectUrl);
       }
 
       this.applyNlcProfile(verifiedProfile);
+      return saveResult;
     }
   },
 

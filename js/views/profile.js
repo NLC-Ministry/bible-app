@@ -166,13 +166,23 @@ function renderProfileView() {
 
     try {
       let saveInfo = null;
-      if (state.isSupabaseMode && state.supabase) {
+      const isSupabase = !!(state.isSupabaseMode && state.supabase);
+      if (isSupabase) {
         saveInfo = await db.syncProfileStatsToSupabase();
       }
       db.saveLocalUserStats();
-      const savedId = saveInfo?.profile?.id ? "\nProfile ID: " + saveInfo.profile.id : "";
-      const savedProject = saveInfo?.projectUrl ? "\nProject: " + saveInfo.projectUrl : "";
-      alert("\u500b\u4eba\u8cc7\u6599\u5df2\u78ba\u8a8d\u5beb\u5165 Supabase\u3002" + savedId + savedProject);
+
+      if (isSupabase) {
+        if (saveInfo && saveInfo.aborted && saveInfo.reason === "demo") {
+          alert("個人資料已儲存 (Demo 模擬模式)。");
+        } else {
+          const savedId = (saveInfo?.profile?.id || saveInfo?.profile_id) ? "\nProfile ID: " + (saveInfo.profile?.id || saveInfo.profile_id) : "";
+          const savedProject = saveInfo?.project_url ? "\nProject: " + saveInfo.project_url : "";
+          alert("個人資料已確認寫入 Supabase。" + savedId + savedProject);
+        }
+      } else {
+        alert("個人資料已儲存至本機 (離線模式)。");
+      }
       updateDashboardView();
     } catch (err) {
       console.error("Failed to save profile:", err);

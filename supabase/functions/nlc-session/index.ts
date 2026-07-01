@@ -1,4 +1,4 @@
-﻿import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     };
 
     const nowIso = new Date().toISOString();
-    const profilePayload = {
+    const profilePayload: Record<string, any> = {
       id: profileId,
       name: firstValue(sourceValues.name, existingProfile?.name, "NLC User"),
       email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
@@ -194,6 +194,36 @@ Deno.serve(async (req) => {
       last_seen_at: nowIso,
       updated_at: nowIso
     };
+
+    // Resolve organization IDs
+    let great_region_id: string | null = null;
+    let pastoral_zone_id: string | null = null;
+    let small_group_id: string | null = null;
+
+    if (profilePayload.great_region) {
+      const { data: regionData } = await supabaseAdmin
+        .from("great_regions")
+        .select("id")
+        .eq("name", profilePayload.great_region)
+        .maybeSingle();
+      if (regionData) great_region_id = regionData.id;
+    }
+    if (profilePayload.pastoral_zone) {
+      let query = supabaseAdmin.from("pastoral_zones").select("id").eq("name", profilePayload.pastoral_zone);
+      if (great_region_id) query = query.eq("great_region_id", great_region_id);
+      const { data: zoneData } = await query.maybeSingle();
+      if (zoneData) pastoral_zone_id = zoneData.id;
+    }
+    if (profilePayload.small_group) {
+      let query = supabaseAdmin.from("small_groups").select("id").eq("name", profilePayload.small_group);
+      if (pastoral_zone_id) query = query.eq("pastoral_zone_id", pastoral_zone_id);
+      const { data: groupData } = await query.maybeSingle();
+      if (groupData) small_group_id = groupData.id;
+    }
+
+    profilePayload.great_region_id = (great_region_id || (profilePayload.great_region === existingProfile?.great_region ? existingProfile?.great_region_id : null)) || null;
+    profilePayload.pastoral_zone_id = (pastoral_zone_id || (profilePayload.pastoral_zone === existingProfile?.pastoral_zone ? existingProfile?.pastoral_zone_id : null)) || null;
+    profilePayload.small_group_id = (small_group_id || (profilePayload.small_group === existingProfile?.small_group ? existingProfile?.small_group_id : null)) || null;
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
