@@ -948,7 +948,10 @@ const db = {
     this.saveLocalUserStats();
 
     if (state.isSupabaseMode && state.supabase) {
-      await this.syncProfileStatsToSupabase();
+      // 💡 效能與體驗優化：將個人資料統計同步改為非同步背景執行，不要阻塞使用者的勾選動作
+      this.syncProfileStatsToSupabase().catch(err => {
+        console.warn("Failed to sync profile stats in background:", err);
+      });
     }
     if (typeof checkAchievements !== 'undefined') {
       await checkAchievements();
