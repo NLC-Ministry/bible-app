@@ -133,12 +133,38 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (!table || typeof table !== "string") return jsonResponse({ error: "missing_table" }, 400);
+    if (action !== "save_profile" && (!table || typeof table !== "string")) return jsonResponse({ error: "missing_table" }, 400);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
     const profile = await resolveProfile(supabaseAdmin, accessToken);
+
+    if (action === "save_profile") {
+      const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
+      const updatePayload = {
+        name: payload.name ?? profile.name ?? "",
+        great_region: payload.great_region ?? profile.great_region ?? "",
+        pastoral_zone: payload.pastoral_zone ?? profile.pastoral_zone ?? "",
+        small_group: payload.small_group ?? profile.small_group ?? "",
+        great_region_id: payload.great_region_id ?? null,
+        pastoral_zone_id: payload.pastoral_zone_id ?? null,
+        small_group_id: payload.small_group_id ?? null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: savedProfile, error: saveError } = await supabaseAdmin
+        .from("profiles")
+        .update(updatePayload)
+        .eq("id", profile.id)
+        .select("*")
+        .single();
+
+      if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
+      if (!savedProfile) return jsonResponse({ error: "profile_write_not_verified" }, 500);
+
+      return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl });
+    }
 
     const canRead = action === "select" && READ_TABLES.has(table);
     const canOwnWrite = ["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table);

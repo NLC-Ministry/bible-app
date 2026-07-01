@@ -264,6 +264,9 @@ const db = {
     }
 
     return {
+      async saveProfile(payload) {
+        return callEdge({ action: "save_profile", payload });
+      },
       from(table) {
         return new NlcQueryBuilder(table);
       },
@@ -971,11 +974,10 @@ const db = {
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await state.supabase
-        .from("profiles")
-        .upsert(profilePayload, { onConflict: "id" })
-        .select("*")
-        .single();
+      const saveResult = state.supabase.saveProfile
+        ? await state.supabase.saveProfile(profilePayload)
+        : await state.supabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("*").single();
+      const { data, error } = saveResult;
       if (error) throw new Error(error.message || error.error || error);
 
       let verifiedProfile = data || null;
