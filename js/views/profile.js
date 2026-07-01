@@ -174,20 +174,18 @@ function renderProfileView() {
 
       if (isSupabase) {
         if (saveInfo && saveInfo.aborted && saveInfo.reason === "demo") {
-          alert("個人資料已儲存 (Demo 模擬模式)。");
+          showToast("個人資料已儲存 (Demo 模擬模式)");
         } else {
-          const savedId = (saveInfo?.profile?.id || saveInfo?.profile_id) ? "\nProfile ID: " + (saveInfo.profile?.id || saveInfo.profile_id) : "";
-          const savedProject = saveInfo?.project_url ? "\nProject: " + saveInfo.project_url : "";
-          alert("個人資料已確認寫入 Supabase。" + savedId + savedProject);
+          showToast("個人基本資料已儲存成功！");
         }
       } else {
-        alert("個人資料已儲存至本機 (離線模式)。");
+        showToast("個人資料已儲存至本機 (離線模式)");
       }
       updateDashboardView();
     } catch (err) {
       console.error("Failed to save profile:", err);
       state.currentUser = oldProfile;
-      alert(`儲存個人資料失敗: ${err.message || err}`);
+      showToast(`儲存個人資料失敗: ${err.message || err}`);
     } finally {
       loader.hide();
     }
