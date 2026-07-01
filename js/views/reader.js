@@ -22,16 +22,115 @@ function initReaderControls() {
     if (shouldOpen) renderReaderPicker();
     if (bookBadge) bookBadge.classList.toggle("active", shouldOpen);
     if (chapterBadge) chapterBadge.classList.toggle("active", shouldOpen);
+    
+    const dirBtn = document.getElementById("reader-nav-directory-btn");
+    if (dirBtn) dirBtn.classList.toggle("active", shouldOpen);
   }
 
   if (bookBadge) bookBadge.addEventListener("click", () => toggleDrawer());
   if (chapterBadge) chapterBadge.addEventListener("click", () => toggleDrawer());
 
   document.addEventListener("click", (e) => {
-    if (!e.target.closest("#reader-nav-drawer") && !e.target.closest("#reader-pill-bar")) {
+    if (!e.target.closest("#reader-nav-drawer") && !e.target.closest("#reader-pill-bar") && !e.target.closest("#reader-top-navbar")) {
       toggleDrawer(false);
     }
   }, true);
+
+  // ── New navigation and settings controls (Mockup Screenshot Design) ──
+  const navDirectoryBtn = document.getElementById("reader-nav-directory-btn");
+  if (navDirectoryBtn) {
+    navDirectoryBtn.addEventListener("click", () => toggleDrawer());
+  }
+
+  const navVersionBtn = document.getElementById("reader-nav-version-btn");
+  if (navVersionBtn) {
+    navVersionBtn.addEventListener("click", () => {
+      if (typeof window.toggleBibleVersion === "function") {
+        window.toggleBibleVersion();
+      }
+    });
+  }
+
+  const audioBtn = document.getElementById("reader-audio-btn");
+  if (audioBtn) {
+    audioBtn.addEventListener("click", () => {
+      if (typeof window.toggleReaderAudio === "function") {
+        window.toggleReaderAudio();
+      }
+    });
+  }
+
+  const searchBtn = document.getElementById("reader-search-btn");
+  const searchPanel = document.getElementById("reader-search-panel");
+  const searchInput = document.getElementById("reader-search-input");
+  const searchCloseBtn = document.getElementById("reader-search-close-btn");
+
+  if (searchBtn && searchPanel) {
+    searchBtn.addEventListener("click", () => {
+      const isHidden = searchPanel.classList.contains("hidden");
+      searchPanel.classList.toggle("hidden", !isHidden);
+      searchBtn.classList.toggle("active", isHidden);
+      if (isHidden && searchInput) {
+        searchInput.focus();
+      } else if (!isHidden && searchInput) {
+        searchInput.value = "";
+        if (typeof window.searchChapterVerses === "function") window.searchChapterVerses("");
+      }
+    });
+  }
+
+  if (searchCloseBtn && searchPanel && searchBtn) {
+    searchCloseBtn.addEventListener("click", () => {
+      searchPanel.classList.add("hidden");
+      searchBtn.classList.remove("active");
+      if (searchInput) {
+        searchInput.value = "";
+        if (typeof window.searchChapterVerses === "function") window.searchChapterVerses("");
+      }
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      if (typeof window.searchChapterVerses === "function") {
+        window.searchChapterVerses(e.target.value);
+      }
+    });
+  }
+
+  const settingsTrigger = document.getElementById("reader-settings-trigger-btn");
+  const settingsDropdown = document.getElementById("reader-settings-dropdown");
+
+  if (settingsTrigger && settingsDropdown) {
+    settingsTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      settingsDropdown.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".reader-settings-container")) {
+        settingsDropdown.classList.add("hidden");
+      }
+    });
+  }
+
+  // Bind font size buttons in settings dropdown
+  document.querySelectorAll("#reader-settings-dropdown .font-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const size = parseInt(btn.dataset.size);
+      state.readerState.fontSize = size;
+      updateReaderFontSize();
+    });
+  });
+
+  // Bind theme buttons in settings dropdown
+  document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const theme = btn.dataset.theme;
+      if (typeof window.applyAppTheme === "function") {
+        window.applyAppTheme(theme);
+      }
+    });
+  });
 
   // Reader picker controls
   const testamentButtons = document.querySelectorAll("#reader-testament-buttons .reader-picker-tab");
@@ -295,17 +394,36 @@ function saveReaderPreferences() {
 // Update the compact pill bar labels to reflect current book/chapter
 function updatePillLabels() {
   const book = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
-  const bookLabel = document.getElementById("reader-pill-book-label");
-  const chapterLabel = document.getElementById("reader-pill-chapter-label");
-  if (bookLabel && book) bookLabel.textContent = book.name;
-  if (chapterLabel) chapterLabel.textContent = `第 ${state.readerState.chapter} 章`;
+  const refLabel = document.getElementById("reader-nav-ref-label");
+  if (refLabel && book) {
+    refLabel.textContent = `${book.name} ${state.readerState.chapter}`;
+  }
+
+  const versionBtn = document.getElementById("reader-nav-version-btn");
+  if (versionBtn) {
+    const version = state.readerState.version || "CUNP";
+    const label = version === "CUNP" ? "CUNP-神" : (version === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const span = versionBtn.querySelector("span");
+    if (span) span.textContent = label;
+  }
 }
 
 // Keep a version in memory and store locally
 function updateReaderFontSize() {
-  document.getElementById("bible-content").style.fontSize = state.readerState.fontSize + "px";
-  document.getElementById("font-size-label").textContent = state.readerState.fontSize + "px";
+  const bibleContent = document.getElementById("bible-content");
+  if (bibleContent) bibleContent.style.fontSize = state.readerState.fontSize + "px";
+  
   localStorage.setItem("reader_font_size", state.readerState.fontSize);
+
+  // Update active button state in settings dropdown
+  document.querySelectorAll("#reader-settings-dropdown .font-btn").forEach(b => {
+    b.classList.toggle("active", parseInt(b.dataset.size) === state.readerState.fontSize);
+  });
+
+  // Update active theme button state in settings dropdown
+  document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.theme === state.theme);
+  });
 }
 
 function navigateToChapter(direction) {
@@ -456,3 +574,110 @@ function showContextToolbar(verseElement, highlightKey) {
     document.addEventListener("click", documentClickHandler);
   }, 10);
 }
+
+// ==========================================================================
+// Bible Reader Version, Audio, Search, and Theme Helpers
+// ==========================================================================
+window.toggleBibleVersion = function() {
+  const current = state.readerState.version || "CUNP";
+  let next = "CUNP";
+  if (current === "CUNP") next = "RCUVTS";
+  else if (current === "RCUVTS") next = "CUV";
+  else next = "CUNP";
+  
+  state.readerState.version = next;
+  localStorage.setItem("reader_bible_version", next);
+  
+  // Update version button text
+  const versionBtn = document.getElementById("reader-nav-version-btn");
+  if (versionBtn) {
+    const label = next === "CUNP" ? "CUNP-神" : (next === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const span = versionBtn.querySelector("span");
+    if (span) span.textContent = label;
+  }
+  
+  showToast(`已切換譯本至 ${next === "CUNP" ? "新譯標點和合本" : (next === "RCUVTS" ? "和合本修訂版" : "官話和合本")}`);
+  renderReaderText();
+};
+
+let isSpeaking = false;
+let speechUtterance = null;
+
+window.toggleReaderAudio = function() {
+  if (isSpeaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+    const btn = document.getElementById("reader-audio-btn");
+    if (btn) btn.classList.remove("active");
+    showToast("已停止朗讀");
+  } else {
+    const container = document.getElementById("bible-content");
+    if (!container) return;
+    const verses = Array.from(container.querySelectorAll(".verse-text")).map(el => el.textContent).join(" ");
+    if (!verses) return;
+    
+    window.speechSynthesis.cancel();
+    speechUtterance = new SpeechSynthesisUtterance(verses);
+    speechUtterance.lang = "zh-TW";
+    speechUtterance.rate = 1.0;
+    
+    speechUtterance.onend = () => {
+      isSpeaking = false;
+      const btn = document.getElementById("reader-audio-btn");
+      if (btn) btn.classList.remove("active");
+    };
+    
+    speechUtterance.onerror = () => {
+      isSpeaking = false;
+      const btn = document.getElementById("reader-audio-btn");
+      if (btn) btn.classList.remove("active");
+    };
+    
+    window.speechSynthesis.speak(speechUtterance);
+    isSpeaking = true;
+    const btn = document.getElementById("reader-audio-btn");
+    if (btn) btn.classList.add("active");
+    showToast("開始朗讀經文...");
+  }
+};
+
+window.searchChapterVerses = function(keyword) {
+  const container = document.getElementById("bible-content");
+  if (!container) return;
+  
+  container.querySelectorAll(".bible-verse").forEach(verseDiv => {
+    const verseTextEl = verseDiv.querySelector(".verse-text");
+    if (verseTextEl) {
+      verseTextEl.innerHTML = verseTextEl.textContent;
+    }
+  });
+  
+  const cleanKeyword = keyword.trim();
+  if (!cleanKeyword) return;
+  
+  container.querySelectorAll(".bible-verse").forEach(verseDiv => {
+    const verseTextEl = verseDiv.querySelector(".verse-text");
+    if (verseTextEl) {
+      const text = verseTextEl.textContent;
+      const regex = new RegExp(`(${escapeRegExp(cleanKeyword)})`, "gi");
+      if (text.toLowerCase().includes(cleanKeyword.toLowerCase())) {
+        verseTextEl.innerHTML = text.replace(regex, "<mark>$1</mark>");
+      }
+    }
+  });
+};
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+window.applyAppTheme = function(themeName) {
+  state.theme = themeName;
+  document.body.className = themeName + "-theme";
+  localStorage.setItem("app_theme", themeName);
+  
+  // Update setting dropdown button active state
+  document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.theme === themeName);
+  });
+};

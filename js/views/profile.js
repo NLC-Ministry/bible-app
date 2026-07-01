@@ -16,6 +16,9 @@ function updateGoogleLoginVisibility() {
 // Profile & settings tab view controller
 
 function renderProfileView() {
+  if (typeof renderBadgeWall === "function") {
+    renderBadgeWall("profile-badge-wall-container");
+  }
   const lockedFields = new Set(state.profileLockedFields || []);
   const profileNameInput = document.getElementById("profile-name");
   profileNameInput.value = state.currentUser.name || "";

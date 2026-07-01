@@ -188,7 +188,8 @@ async function fetchBibleChapter(bookEngName, chapter) {
     bookEngName,
     bookEngName.replace(/\s+/g, "")
   ].filter(Boolean)));
-  const bollsTranslations = ["CUV", "CUVS", "CUVT", "CUNP", "CUNPS", "RCUVSS", "RCUVTS"];
+  const preferredVersion = (typeof state !== "undefined" && state.readerState && state.readerState.version) || "CUNP";
+  const bollsTranslations = Array.from(new Set([preferredVersion, "CUNP", "CUV", "CUVS", "CUVT", "CUNPS", "RCUVSS", "RCUVTS"]));
   const sources = [];
 
   bollsTranslations.forEach(translation => {

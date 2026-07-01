@@ -103,10 +103,95 @@ const appRouter = {
         }
       });
     });
+
+    const backBtn = document.getElementById("global-back-btn");
+    if (backBtn) {
+      backBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.goBack();
+      });
+    }
+
+    const brandLogo = document.getElementById("brand-logo");
+    if (brandLogo) {
+      brandLogo.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.switchTab("dashboard-view");
+      });
+    }
+    this.updateNavigationChrome();
+  },
+
+  getTabLabel(tabId) {
+    const labels = {
+      "dashboard-view": "首頁",
+      "reader-view": "讀經",
+      "plan-view": "計畫",
+      "stats-view": "統計",
+      "profile-view": "個人",
+      "admin-view": "管理"
+    };
+    return labels[tabId] || "首頁";
+  },
+
+  updateNavigationChrome() {
+    const backBtn = document.getElementById("global-back-btn");
+    const backLabel = document.getElementById("global-back-label");
+    if (!backBtn || !backLabel) return;
+
+    const isHome = this.currentTab === "dashboard-view" && !(state.activePlan && state.planDetailOpen);
+    backBtn.classList.toggle("is-home", isHome);
+    backLabel.textContent = isHome ? "首頁" : "返回";
+    backBtn.title = isHome ? "回到首頁" : "返回上一層";
+  },
+
+  goBack() {
+    if (this.currentTab === "plan-view") {
+      if (state.inlineReader && state.inlineReader.active && typeof window.closePlanInlineReader === "function") {
+        window.closePlanInlineReader();
+        this.updateNavigationChrome();
+        return;
+      }
+
+      const levelSubview = document.getElementById("subview-plan-level");
+      if (levelSubview && !levelSubview.classList.contains("hidden")) {
+        const scheduleSubview = document.getElementById("subview-plan-schedule");
+        if (levelSubview) levelSubview.classList.add("hidden");
+        if (scheduleSubview) scheduleSubview.classList.remove("hidden");
+        if (typeof renderPlanScheduleTracker === "function") renderPlanScheduleTracker();
+        this.updateNavigationChrome();
+        return;
+      }
+
+      if (state.activePlan && state.planDetailOpen) {
+        state.activePlan = null;
+        state.planDetailOpen = false;
+        localStorage.removeItem("selected_plan_key");
+        if (typeof renderPlanView === "function") renderPlanView();
+        this.updateNavigationChrome();
+        return;
+      }
+    }
+
+    if (this.currentTab !== "dashboard-view") {
+      this.switchTab("dashboard-view");
+      return;
+    }
+
+    if (typeof updateDashboardView === "function") updateDashboardView();
+    this.updateNavigationChrome();
   },
 
   switchTab(tabId) {
+    // Stop reading audio if switching away from reader-view
+    if (tabId !== "reader-view" && typeof window.speechSynthesis !== "undefined") {
+      window.speechSynthesis.cancel();
+      const audioBtn = document.getElementById("reader-audio-btn");
+      if (audioBtn) audioBtn.classList.remove("active");
+    }
+
     this.currentTab = tabId;
+    this.updateNavigationChrome();
     
     // Update Active Nav Buttons (both desktop and mobile)
     document.querySelectorAll(".tab-btn, .mobile-nav-btn").forEach(btn => {
@@ -146,6 +231,7 @@ const appRouter = {
         renderAdminOrgManagement();
       }
     }
+    this.updateNavigationChrome();
   }
 };
 
@@ -178,7 +264,17 @@ function initTheme() {
 function loadLocalSettings() {
   // Load local reader preferences
   state.readerState.fontSize = parseInt(localStorage.getItem("reader_font_size")) || 18;
-  document.getElementById("font-size-label").textContent = state.readerState.fontSize + "px";
+  const sizeLabel = document.getElementById("font-size-label");
+  if (sizeLabel) sizeLabel.textContent = state.readerState.fontSize + "px";
+  
+  // Load local Bible translation version preference
+  state.readerState.version = localStorage.getItem("reader_bible_version") || "CUNP";
+  const versionBtn = document.getElementById("reader-nav-version-btn");
+  if (versionBtn) {
+    const label = state.readerState.version === "CUNP" ? "CUNP-神" : (state.readerState.version === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const span = versionBtn.querySelector("span");
+    if (span) span.textContent = label;
+  }
   
   const savedReader = localStorage.getItem("reader_state");
   if (savedReader) {
