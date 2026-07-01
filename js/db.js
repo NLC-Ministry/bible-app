@@ -124,9 +124,7 @@ const db = {
         });
       } catch (e) {
         console.error("Supabase connection failed:", e);
-        const message = e && e.message && e.message.includes("generated_jwt_rejected_by_supabase")
-          ? "\u7cfb\u7d71\u767b\u5165\u8a2d\u5b9a\u5c1a\u672a\u5b8c\u6210\uff0c\u8acb\u806f\u7d61\u7ba1\u7406\u54e1\u3002"
-          : "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002";
+        const message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002";
         this.showConnectionError(message);
       }
     } else {
@@ -165,6 +163,114 @@ const db = {
     return supabase.createClient(cfg.url, cfg.anonKey, options);
   },
 
+  createNlcDataClient() {
+    const cfg = state.supabaseConfig || {};
+    const callEdge = async (request) => {
+      const accessToken = typeof auth !== "undefined" ? localStorage.getItem(auth.keys.accessToken) : "";
+      if (!accessToken) throw new Error("NLC access token is missing.");
+      const response = await fetch(cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data", {
+        method: "POST",
+        headers: {
+          apikey: cfg.anonKey,
+          Authorization: "Bearer " + accessToken,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(request)
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return { data: null, error: payload };
+      if (payload.profile) this.applyNlcProfile(payload.profile);
+      return { data: payload.data, error: null };
+    };
+
+    class NlcQueryBuilder {
+      constructor(table) {
+        this.request = { table, action: null, filters: [] };
+      }
+      select(columns = "*") {
+        if (!this.request.action) this.request.action = "select";
+        this.request.select = columns;
+        return this;
+      }
+      insert(payload) {
+        this.request.action = "insert";
+        this.request.payload = payload;
+        return this;
+      }
+      update(payload) {
+        this.request.action = "update";
+        this.request.payload = payload;
+        return this;
+      }
+      delete() {
+        this.request.action = "delete";
+        return this;
+      }
+      upsert(payload, options) {
+        this.request.action = "upsert";
+        this.request.payload = payload;
+        this.request.options = options || null;
+        return this;
+      }
+      eq(column, value) {
+        this.request.filters.push({ type: "eq", column, value });
+        return this;
+      }
+      is(column, value) {
+        this.request.filters.push({ type: "is", column, value });
+        return this;
+      }
+      in(column, value) {
+        this.request.filters.push({ type: "in", column, value });
+        return this;
+      }
+      or(expression) {
+        this.request.or = expression;
+        return this;
+      }
+      order(column, options = {}) {
+        this.request.order = { column, ascending: options.ascending !== false };
+        return this;
+      }
+      limit(count) {
+        this.request.limit = count;
+        return this;
+      }
+      single() {
+        this.request.returning = "single";
+        return this;
+      }
+      maybeSingle() {
+        this.request.returning = "maybeSingle";
+        return this;
+      }
+      async execute() {
+        if (!this.request.action) this.request.action = "select";
+        return callEdge(this.request);
+      }
+      then(resolve, reject) {
+        return this.execute().then(resolve, reject);
+      }
+    }
+
+    return {
+      from(table) {
+        return new NlcQueryBuilder(table);
+      },
+      auth: {
+        async getUser() {
+          return { data: { user: state.currentProfileId ? { id: state.currentProfileId, oidc: true } : null }, error: null };
+        },
+        async getSession() {
+          return { data: { session: auth && auth.isLoggedIn() ? { user: { id: state.currentProfileId } } : null }, error: null };
+        },
+        onAuthStateChange() {
+          return { data: { subscription: { unsubscribe() {} } } };
+        }
+      }
+    };
+  },
+
   applyNlcProfile(profile) {
     if (!profile) return;
     state.currentProfileId = profile.id;
@@ -181,13 +287,12 @@ const db = {
   async syncNlcSessionWithSupabase(force = false) {
     if (typeof auth === "undefined" || !auth.isLoggedIn()) return null;
 
-    const cachedToken = localStorage.getItem("nlc_supabase_access_token");
-    const cachedExpiresAt = Number(localStorage.getItem("nlc_supabase_expires_at") || "0");
+    const cachedExpiresAt = Number(localStorage.getItem("nlc_edge_session_expires_at") || "0");
     const cachedProfile = localStorage.getItem("nlc_supabase_profile");
-    if (!force && cachedToken && cachedExpiresAt > Date.now() + 60000) {
-      state.supabase = this.createSupabaseClient(cachedToken);
+    if (!force && cachedExpiresAt > Date.now() + 60000) {
+      state.supabase = this.createNlcDataClient();
       if (cachedProfile) this.applyNlcProfile(JSON.parse(cachedProfile));
-      return { access_token: cachedToken, profile: cachedProfile ? JSON.parse(cachedProfile) : null };
+      return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null };
     }
 
     const accessToken = localStorage.getItem(auth.keys.accessToken);
@@ -205,16 +310,16 @@ const db = {
     });
 
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.access_token) {
+    if (!response.ok || !payload.edge_session) {
       throw new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
     }
 
-    const expiresAt = Date.now() + ((payload.expires_in || 3600) * 1000);
-    localStorage.setItem("nlc_supabase_access_token", payload.access_token);
-    localStorage.setItem("nlc_supabase_expires_at", String(expiresAt));
+    localStorage.removeItem("nlc_supabase_access_token");
+    localStorage.removeItem("nlc_supabase_expires_at");
+    localStorage.setItem("nlc_edge_session_expires_at", String(Date.now() + 10 * 60 * 1000));
     if (payload.profile) localStorage.setItem("nlc_supabase_profile", JSON.stringify(payload.profile));
 
-    state.supabase = this.createSupabaseClient(payload.access_token);
+    state.supabase = this.createNlcDataClient();
     this.applyNlcProfile(payload.profile);
     return payload;
   },

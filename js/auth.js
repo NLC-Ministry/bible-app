@@ -200,6 +200,7 @@ const auth = {
     localStorage.removeItem("nlc_supabase_access_token");
     localStorage.removeItem("nlc_supabase_expires_at");
     localStorage.removeItem("nlc_supabase_profile");
+    localStorage.removeItem("nlc_edge_session_expires_at");
     if (typeof state !== "undefined") {
       state.currentProfileId = null;
       if (state.supabaseConfig && typeof db !== "undefined" && db.createSupabaseClient) {
