@@ -128,21 +128,21 @@ const appRouter = {
 
     // Trigger tab-specific activation logic
     if (tabId === "dashboard-view") {
-      updateDashboardView();
+      if (typeof updateDashboardView === "function") updateDashboardView();
     } else if (tabId === "reader-view") {
-      renderReaderText();
+      if (typeof renderReaderText === "function") renderReaderText();
     } else if (tabId === "plan-view") {
       state.planDetailOpen = false;
-      renderPlanView();
+      if (typeof renderPlanView === "function") renderPlanView();
     } else if (tabId === "stats-view") {
-      updateStatsView();
+      if (typeof updateStatsView === "function") updateStatsView();
     } else if (tabId === "profile-view") {
-      renderProfileView();
+      if (typeof renderProfileView === "function") renderProfileView();
     } else if (tabId === "admin-view") {
-      if (typeof renderAdminUserManagement !== 'undefined') {
+      if (typeof renderAdminUserManagement === 'function') {
         renderAdminUserManagement();
       }
-      if (typeof renderAdminOrgManagement !== 'undefined') {
+      if (typeof renderAdminOrgManagement === 'function') {
         renderAdminOrgManagement();
       }
     }
