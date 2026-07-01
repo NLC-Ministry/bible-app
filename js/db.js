@@ -1334,6 +1334,9 @@ const db = {
 
           if (error) {
             console.error("Failed to insert plan in Supabase:", error);
+            loader.hide();
+            showToast("加入讀經計畫失敗：" + (error.message || error));
+            return null;
           } else {
             newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
             newPlanObj.id = dbPlan.id;
@@ -1346,6 +1349,9 @@ const db = {
         }
       } catch (e) {
         console.error("Error inserting plan in Supabase:", e);
+        loader.hide();
+        showToast("加入讀經計畫失敗：" + (e.message || e));
+        return null;
       }
     } else {
       newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
