@@ -69,14 +69,10 @@ const auth = {
     };
   },
 
-  _dec2hex(dec) {
-    return dec.toString(16).padStart(2, "0");
-  },
-
   _generateCodeVerifier() {
-    const array = new Uint32Array(28);
-    window.crypto.getRandomValues(array);
-    return Array.from(array, this._dec2hex).join("");
+    const bytes = new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    return this._base64urlencode(bytes);
   },
 
   _sha256(plain) {
