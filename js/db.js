@@ -1,5 +1,65 @@
 // Unified Data Service (Supabase & LocalStorage integration)
 
+window.showDebugOverlay = function(title, data) {
+  let overlay = document.getElementById("debug-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "debug-overlay";
+    overlay.style.position = "fixed";
+    overlay.style.bottom = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100%";
+    overlay.style.maxHeight = "60vh";
+    overlay.style.overflowY = "auto";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.95)";
+    overlay.style.color = "#10b981";
+    overlay.style.fontFamily = "monospace";
+    overlay.style.fontSize = "12px";
+    overlay.style.padding = "15px";
+    overlay.style.zIndex = "999999";
+    overlay.style.borderTop = "3px solid #10b981";
+    overlay.style.boxSizing = "border-box";
+    
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+    header.style.marginBottom = "10px";
+    
+    const titleEl = document.createElement("h4");
+    titleEl.id = "debug-overlay-title";
+    titleEl.style.margin = "0";
+    titleEl.style.color = "#ffffff";
+    titleEl.style.fontSize = "14px";
+    header.appendChild(titleEl);
+    
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "關閉 (Close)";
+    closeBtn.style.backgroundColor = "#ef4444";
+    closeBtn.style.color = "white";
+    closeBtn.style.border = "none";
+    closeBtn.style.padding = "6px 12px";
+    closeBtn.style.borderRadius = "4px";
+    closeBtn.style.fontWeight = "bold";
+    closeBtn.style.cursor = "pointer";
+    closeBtn.onclick = () => overlay.remove();
+    header.appendChild(closeBtn);
+    
+    overlay.appendChild(header);
+    
+    const preEl = document.createElement("pre");
+    preEl.id = "debug-overlay-content";
+    preEl.style.whiteSpace = "pre-wrap";
+    preEl.style.wordBreak = "break-all";
+    preEl.style.margin = "0";
+    overlay.appendChild(preEl);
+    
+    document.body.appendChild(overlay);
+  }
+  document.getElementById("debug-overlay-title").textContent = title;
+  document.getElementById("debug-overlay-content").textContent = JSON.stringify(data, null, 2);
+};
+
 /**
  * 依計畫名稱查找 CHURCH_PLAN_PRESETS 的 key（僅作舊資料 fallback 使用）
  * @param {string} name
@@ -337,7 +397,9 @@ const db = {
     console.log("%c[DIAGNOSTIC] NLC Session Sync Payload:", "color: #06b6d4; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", payload);
 
     if (payload.diagnostics) {
-      alert("【同步偵錯資訊】:\n" + JSON.stringify(payload.diagnostics, null, 2));
+      if (typeof window.showDebugOverlay === "function") {
+        window.showDebugOverlay("【同步偵錯資訊】", payload.diagnostics);
+      }
     }
 
     localStorage.removeItem("nlc_supabase_access_token");
@@ -987,7 +1049,9 @@ const db = {
       };
 
       console.log("%c[DIAGNOSTIC] Saving Profile Payload:", "color: #f59e0b; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", profilePayload);
-      alert("【儲存偵錯資訊】:\n" + JSON.stringify(profilePayload, null, 2));
+      if (typeof window.showDebugOverlay === "function") {
+        window.showDebugOverlay("【儲存偵錯資訊】", profilePayload);
+      }
 
       const saveResult = state.supabase.saveProfile
         ? await state.supabase.saveProfile(profilePayload)
