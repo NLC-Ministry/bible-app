@@ -588,6 +588,8 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     currentRound: getPlanLevelRounds(level),
     wasDowngraded: false
   };
+}
+
 function calculatePlanProgress() {
   calculateAllPlansProgress();
   if (state.activePlan && state.activePlans) {
