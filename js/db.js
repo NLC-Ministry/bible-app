@@ -943,7 +943,7 @@ const db = {
       const zoneObj = state.orgStructure && state.orgStructure.rawZones ? state.orgStructure.rawZones.find(z => z.name === state.currentUser.pastoral_zone) : null;
       const groupObj = state.orgStructure && state.orgStructure.rawGroups ? state.orgStructure.rawGroups.find(g => g.name === state.currentUser.small_group) : null;
 
-      await state.supabase.from("profiles").upsert({
+      const { data, error } = await state.supabase.from("profiles").upsert({
         id: user.id,
         name: state.currentUser.name,
         great_region: state.currentUser.great_region,
@@ -953,7 +953,9 @@ const db = {
         pastoral_zone_id: zoneObj ? zoneObj.id : null,
         small_group_id: groupObj ? groupObj.id : null,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: "id" }).select().single();
+      if (error) throw new Error(error.message || error.error || error);
+      if (data) this.applyNlcProfile(data);
     }
   },
 
@@ -1459,17 +1461,42 @@ const db = {
             insertPayload.global_plan_id = key;
           }
 
-          const { data: dbPlan, error } = await state.supabase
+          let existingQuery = state.supabase
             .from("reading_plans")
-            .insert(insertPayload)
-            .select().single();
+            .select("*")
+            .eq("user_id", user.id);
+          if (isGlobalPlanUUID) existingQuery = existingQuery.eq("global_plan_id", key);
+          else existingQuery = existingQuery.eq("preset_key", key).eq("name", planName);
 
-          if (error) {
-            console.error("Failed to insert plan in Supabase:", error);
-            loader.hide();
-            showToast("加入讀經計畫失敗：" + (error.message || error));
-            return null;
+          const { data: existingPlan, error: existingError } = await existingQuery.maybeSingle();
+          if (existingError) throw existingError;
+
+          if (existingPlan) {
+            newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
+            newPlanObj.id = existingPlan.id;
+            newPlanObj.globalPlanId = existingPlan.global_plan_id || null;
+            newPlanObj.level = existingPlan.level || newPlanObj.level || "normal";
+            newPlanObj.currentRound = existingPlan.current_round || 1;
+            if (!state.activePlans) state.activePlans = [];
+            if (!state.activePlans.some(p => p.id === newPlanObj.id)) state.activePlans.push(newPlanObj);
+            state.activePlan = newPlanObj;
+            localStorage.setItem("selected_plan_key", key);
           } else {
+            const { data: dbPlan, error } = await state.supabase
+              .from("reading_plans")
+              .insert(insertPayload)
+              .select()
+              .single();
+
+            if (error) {
+              console.error("Failed to insert plan in Supabase:", error);
+              loader.hide();
+              showToast("\u52a0\u5165\u8b80\u7d93\u8a08\u756b\u5931\u6557\uff1a" + (error.message || error.error || error));
+              return null;
+            }
+
+            if (!dbPlan) throw new Error("No plan returned after insert.");
+
             newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
             newPlanObj.id = dbPlan.id;
             newPlanObj.globalPlanId = dbPlan.global_plan_id || null;
@@ -1482,7 +1509,7 @@ const db = {
       } catch (e) {
         console.error("Error inserting plan in Supabase:", e);
         loader.hide();
-        showToast("加入讀經計畫失敗：" + (e.message || e));
+        showToast("\u52a0\u5165\u8b80\u7d93\u8a08\u756b\u5931\u6557\uff1a" + (e.message || e));
         return null;
       }
     } else {

@@ -108,6 +108,7 @@ function applyFilters(query: any, filters: any[] = []) {
 }
 
 function applyForcedScope(query: any, table: string, action: string, profile: any) {
+  if (action === "insert" || action === "upsert") return query;
   if (USER_TABLES.has(table)) return query.eq("user_id", profile.id);
   if (table === "profiles" && !isAdmin(profile)) return query.eq("id", profile.id);
   if (table === "user_identities") return query.eq("profile_id", profile.id);
@@ -162,11 +163,11 @@ Deno.serve(async (req) => {
     query = applyFilters(query, body.filters || []);
     if (body.or) query = query.or(body.or);
     query = applyForcedScope(query, table, action, profile);
+    if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
     if (body.order?.column) query = query.order(body.order.column, { ascending: body.order.ascending !== false });
     if (body.limit) query = query.limit(body.limit);
     if (body.returning === "single") query = query.single();
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
-    else if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
 
     const { data, error } = await query;
     if (error) return jsonResponse({ error: error.message, details: error }, 400);
