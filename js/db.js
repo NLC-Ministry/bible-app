@@ -336,6 +336,10 @@ const db = {
     }
     console.log("%c[DIAGNOSTIC] NLC Session Sync Payload:", "color: #06b6d4; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", payload);
 
+    if (payload.diagnostics) {
+      alert("【同步偵錯資訊】:\n" + JSON.stringify(payload.diagnostics, null, 2));
+    }
+
     localStorage.removeItem("nlc_supabase_access_token");
     localStorage.removeItem("nlc_supabase_expires_at");
     localStorage.setItem("nlc_edge_session_expires_at", String(Date.now() + 10 * 60 * 1000));
@@ -983,6 +987,7 @@ const db = {
       };
 
       console.log("%c[DIAGNOSTIC] Saving Profile Payload:", "color: #f59e0b; background: #1e1e2f; font-size: 14px; padding: 4px; font-weight: bold;", profilePayload);
+      alert("【儲存偵錯資訊】:\n" + JSON.stringify(profilePayload, null, 2));
 
       const saveResult = state.supabase.saveProfile
         ? await state.supabase.saveProfile(profilePayload)
