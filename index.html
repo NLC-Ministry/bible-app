@@ -16,8 +16,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <!-- Vanilla CSS Stylesheet -->
-  <link rel="stylesheet" href="index.css?v=app-shell-20260701-1">
+  <link rel="stylesheet" href="index.css?v=reader-module-20260702-1">
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Chart.js for premium stats dashboard -->
@@ -237,74 +238,35 @@
       <!-- VIEW 2: BIBLE READER -->
       <section id="reader-view" class="view-pane">
 
-        <!-- ── New Reader Navigation Bar (Matches Screenshot) ── -->
-        <div class="reader-top-navbar" id="reader-top-navbar">
-          <div class="reader-nav-left">
-            <button type="button" class="reader-pill-btn" id="reader-nav-directory-btn" title="開啟目錄">
-              <span id="reader-nav-ref-label">馬太福音 26</span>
-            </button>
-            <button type="button" class="reader-pill-btn" id="reader-nav-version-btn" title="切換譯本">
-              <span>CUNP-神</span>
-            </button>
-          </div>
-          <div class="reader-nav-right">
-            <!-- Audio Speaker Button -->
-            <button type="button" class="reader-icon-btn" id="reader-audio-btn" title="語音朗讀">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" style="display:block;">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-              </svg>
-            </button>
-            <!-- Search Button -->
-            <button type="button" class="reader-icon-btn" id="reader-search-btn" title="搜尋經文">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" style="display:block;">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </button>
-            <!-- Settings Menu Trigger (Three dots inside circle) -->
-            <div class="reader-settings-container">
-              <button type="button" class="reader-icon-btn" id="reader-settings-trigger-btn" title="主題設定">
-                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" style="display:block;">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <circle cx="8" cy="12" r="1" fill="currentColor"></circle>
-                  <circle cx="12" cy="12" r="1" fill="currentColor"></circle>
-                  <circle cx="16" cy="12" r="1" fill="currentColor"></circle>
-                </svg>
-              </button>
-              
-              <!-- Settings Dropdown Menu (Floating Card) -->
-              <div class="reader-settings-dropdown hidden" id="reader-settings-dropdown">
-                <div class="setting-section">
-                  <div class="setting-title">文字大小</div>
-                  <div class="setting-options-row font-size-row">
-                    <button type="button" class="setting-btn font-btn" data-size="16">小 16</button>
-                    <button type="button" class="setting-btn font-btn active" data-size="18">標準 18</button>
-                    <button type="button" class="setting-btn font-btn" data-size="20">大 20</button>
-                  </div>
-                </div>
-                <div class="setting-divider"></div>
-                <div class="setting-section">
-                  <div class="setting-title">閱讀背景</div>
-                  <div class="setting-options-row bg-theme-row">
-                    <button type="button" class="setting-btn theme-btn bg-white active" data-theme="light" title="亮白">A</button>
-                    <button type="button" class="setting-btn theme-btn bg-warm" data-theme="warm" title="暖黃">A</button>
-                    <button type="button" class="setting-btn theme-btn bg-dark" data-theme="dark" title="深黑">A</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- Native Reader Toolbar -->
+        <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar">
+          <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-nav-directory-btn" title="&#x76EE;&#x9304;" aria-label="&#x76EE;&#x9304;">
+            <i class="bi bi-list"></i>
+          </button>
+          <button type="button" class="reader-ref-chip" id="reader-book-badge" title="&#x9078;&#x64C7;&#x5377;&#x7AE0;&#x7BC0;">
+            <span id="reader-nav-ref-label">&#x99AC;&#x592A;&#x798F;&#x97F3; 1</span>
+            <span class="reader-version-inline" id="reader-version-inline">CUNP</span>
+          </button>
+          <button type="button" class="reader-pill-btn reader-version-btn" id="reader-nav-version-btn" title="&#x8056;&#x7D93;&#x7248;&#x672C;">
+            <span>CUNP</span>
+          </button>
+          <div class="reader-nav-spacer"></div>
+          <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-audio-btn" title="&#x8A9E;&#x97F3;" aria-label="&#x8A9E;&#x97F3;">
+            <i class="bi bi-volume-up"></i>
+          </button>
+          <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-search-btn" title="&#x641C;&#x5C0B;" aria-label="&#x641C;&#x5C0B;">
+            <i class="bi bi-search"></i>
+          </button>
+          <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-settings-trigger-btn" title="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;" aria-label="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;">
+            <i class="bi bi-three-dots"></i>
+          </button>
         </div>
 
-        <!-- ── Sliding Search Bar inside Reader ── -->
+        <!-- Legacy in-reader search panel kept hidden for compatibility -->
         <div class="reader-search-panel hidden" id="reader-search-panel">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="var(--text-muted)" stroke-width="2.5" fill="none" style="margin-left: 0.2rem;">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" class="reader-search-input" id="reader-search-input" placeholder="在目前章節中搜尋關鍵字...">
-          <button type="button" class="reader-icon-btn" id="reader-search-close-btn" style="width:28px; height:28px; font-size:11px;" title="關閉搜尋">✕</button>
+          <i class="bi bi-search"></i>
+          <input type="text" class="reader-search-input" id="reader-search-input" placeholder="&#x641C;&#x5C0B;&#x672C;&#x7AE0;&#x7D93;&#x6587;...">
+          <button type="button" class="reader-icon-btn" id="reader-search-close-btn" title="&#x95DC;&#x9589;"><i class="bi bi-x-lg"></i></button>
         </div>
 
         <!-- ── Collapsible Navigation Drawer ── -->
@@ -1144,101 +1106,82 @@
   </div>
 
   <!-- Bible Navigation Shell (Full-Page Overlay) -->
-  <div class="full-page-overlay hidden" id="bible-nav-overlay">
-    <header class="overlay-header">
-      <button type="button" class="overlay-back-btn" id="bible-nav-back-btn">
-        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
-        <span>返回</span>
+  <div class="full-page-overlay hidden" id="bible-nav-overlay" aria-hidden="true">
+    <header class="overlay-header bible-native-overlay-header">
+      <button type="button" class="overlay-back-btn" id="bible-nav-back-btn" aria-label="&#x8FD4;&#x56DE;">
+        <i class="bi bi-chevron-left"></i>
+        <span>&#x8FD4;&#x56DE;</span>
       </button>
-      <div class="overlay-title" id="bible-nav-title">選擇書卷</div>
-      <div class="overlay-version" id="bible-nav-version-badge">和合本 ▾</div>
+      <div class="overlay-title" id="bible-nav-title">&#x76EE;&#x9304;</div>
+      <button type="button" class="overlay-version" id="bible-nav-version-badge">CUNP</button>
     </header>
 
-    <!-- Segmented Tab Control -->
-    <div class="segmented-control">
-      <button type="button" class="segmented-tab active" data-tab="book">卷</button>
-      <button type="button" class="segmented-tab" data-tab="chapter">章</button>
-      <button type="button" class="segmented-tab" data-tab="verse">節</button>
+    <div class="segmented-control bible-native-tabs" role="tablist" aria-label="&#x8056;&#x7D93;&#x5C0E;&#x89BD;">
+      <button type="button" class="segmented-tab active" data-tab="book" role="tab">&#x5377;</button>
+      <button type="button" class="segmented-tab" data-tab="chapter" role="tab">&#x7AE0;</button>
+      <button type="button" class="segmented-tab" data-tab="verse" role="tab">&#x7BC0;</button>
     </div>
 
-    <!-- Mode Selector Row -->
     <div class="mode-selector-bar">
       <div class="toggle-container">
-        <span>目錄到節</span>
-        <label class="switch">
+        <span>&#x76EE;&#x9304;&#x5230;&#x7BC0;</span>
+        <label class="switch" aria-label="&#x81EA;&#x52D5;&#x5207;&#x63DB;&#x5230;&#x4E0B;&#x4E00;&#x6B65;">
           <input type="checkbox" id="bible-nav-auto-advance" checked>
           <span class="slider round"></span>
         </label>
       </div>
       <div class="view-mode-container">
-        <span>檢視</span>
-        <button type="button" class="view-mode-btn active" id="view-mode-grid" title="網格模式">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg>
+        <span>&#x6AA2;&#x8996;</span>
+        <button type="button" class="view-mode-btn active" id="view-mode-grid" title="&#x7DB2;&#x683C;" aria-label="&#x7DB2;&#x683C;">
+          <i class="bi bi-grid-3x3-gap-fill"></i>
         </button>
-        <button type="button" class="view-mode-btn" id="view-mode-list" title="列表模式">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        <button type="button" class="view-mode-btn" id="view-mode-list" title="&#x6E05;&#x55AE;" aria-label="&#x6E05;&#x55AE;">
+          <i class="bi bi-list-ul"></i>
         </button>
       </div>
     </div>
 
-    <!-- Navigation Scroll Container -->
-    <div class="overlay-scroll-content" id="bible-nav-content">
-      <!-- Generated dynamically (Books, Chapters, or Verses view) -->
-    </div>
+    <div class="overlay-scroll-content" id="bible-nav-content"></div>
   </div>
 
   <!-- Global Search Layer (Full-Page Overlay) -->
-  <div class="full-page-overlay hidden" id="global-search-overlay">
+  <div class="full-page-overlay hidden" id="global-search-overlay" aria-hidden="true">
     <header class="overlay-header search-header">
       <div class="search-input-wrapper">
-        <svg class="search-icon-inside" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-        <input type="text" class="search-input-field" id="global-search-input" placeholder="搜尋整本聖經或關鍵字...">
-        <button type="button" class="search-clear-btn hidden" id="global-search-clear-btn">✕</button>
+        <i class="bi bi-search search-icon-inside"></i>
+        <input type="search" class="search-input-field" id="global-search-input" placeholder="&#x641C;&#x5C0B;&#x6574;&#x672C;&#x8056;&#x7D93;..." autocomplete="off" inputmode="search">
+        <button type="button" class="search-clear-btn hidden" id="global-search-clear-btn" aria-label="&#x6E05;&#x9664;"><i class="bi bi-x-circle-fill"></i></button>
       </div>
-      <button class="search-cancel-btn" id="global-search-cancel-btn" type="button">取消</button>
+      <button class="search-cancel-btn" id="global-search-cancel-btn" type="button">&#x53D6;&#x6D88;</button>
     </header>
-
-    <div class="search-results-info" id="search-results-count">請輸入關鍵字進行搜尋</div>
-    
-    <!-- Results Scroll Container -->
-    <div class="overlay-scroll-content" id="global-search-results">
-      <!-- Results list dynamically generated -->
-    </div>
+    <div class="search-results-info" id="search-results-count">&#x8F38;&#x5165;&#x95DC;&#x9375;&#x5B57;&#x958B;&#x59CB;&#x641C;&#x5C0B;</div>
+    <div class="overlay-scroll-content" id="global-search-results"></div>
   </div>
 
   <!-- Typography Settings Sheet (Bottom Sheet) -->
-  <div class="bottom-sheet-backdrop hidden" id="typography-settings-backdrop">
-    <div class="bottom-sheet-container" id="typography-settings-sheet">
+  <div class="bottom-sheet-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container" id="typography-settings-sheet" role="dialog" aria-modal="true" aria-label="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;">
       <div class="bottom-sheet-drag-handle"></div>
       <div class="bottom-sheet-header">
-        <h3>顯示設定</h3>
-        <button type="button" class="bottom-sheet-close-x" id="typography-sheet-close-btn">✕</button>
+        <h3>&#x6587;&#x5B57;&#x8A2D;&#x5B9A;</h3>
+        <button type="button" class="bottom-sheet-close-x" id="typography-sheet-close-btn" aria-label="&#x95DC;&#x9589;"><i class="bi bi-x-lg"></i></button>
       </div>
       <div class="bottom-sheet-body">
         <div class="sheet-section">
-          <div class="sheet-section-title">文字大小</div>
-          <div class="sheet-options-row">
+          <div class="sheet-section-title">&#x6587;&#x5B57;&#x5927;&#x5C0F;</div>
+          <div class="sheet-options-row typography-size-row">
             <button type="button" class="sheet-option-btn font-size-option" data-size="16">
-              <span style="font-size: 14px;">小</span>
-              <span class="size-num">16</span>
+              <span class="size-label">&#x5C0F;</span>
+              <span class="size-num">16px</span>
             </button>
             <button type="button" class="sheet-option-btn font-size-option" data-size="18">
-              <span style="font-size: 16px;">一般</span>
-              <span class="size-num">18</span>
+              <span class="size-label">&#x4E00;&#x822C;</span>
+              <span class="size-num">18px</span>
             </button>
             <button type="button" class="sheet-option-btn font-size-option" data-size="20">
-              <span style="font-size: 18px;">大</span>
-              <span class="size-num">20</span>
+              <span class="size-label">&#x5927;</span>
+              <span class="size-num">20px</span>
             </button>
-          </div>
-        </div>
-        <div class="sheet-divider"></div>
-        <div class="sheet-section">
-          <div class="sheet-section-title">閱讀背景</div>
-          <div class="sheet-options-row">
-            <button type="button" class="sheet-option-btn theme-option bg-white" data-theme="light">亮白</button>
-            <button type="button" class="sheet-option-btn theme-option bg-warm" data-theme="warm">暖黃</button>
-            <button type="button" class="sheet-option-btn theme-option bg-dark" data-theme="dark">深黑</button>
           </div>
         </div>
       </div>
@@ -1291,7 +1234,7 @@
   <script src="js/utils.js?v=nlc-edge-20260701-99"></script>
   <script src="js/gamification.js?v=nlc-edge-20260701-99"></script>
   <script src="js/views/dashboard.js?v=nlc-edge-20260701-99"></script>
-  <script src="js/views/reader.js?v=nlc-edge-20260701-99"></script>
+  <script src="js/views/reader.js?v=reader-module-20260702-1"></script>
   <script src="js/views/stats.js?v=nlc-edge-20260701-99"></script>
   <script src="js/views/profile.js?v=nlc-edge-20260701-99"></script>
   <script src="js/main.js?v=nlc-edge-20260701-99"></script>

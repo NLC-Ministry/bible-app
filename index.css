@@ -354,6 +354,7 @@ body {
 .welcome-title span {
   background: var(--primary-gradient);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -4515,4 +4516,363 @@ input:checked + .slider:before {
   height: 1px;
   background-color: var(--border-card);
   margin: 0.15rem 0;
+}
+
+/* Native Bible Reader Module */
+:root {
+  --reader-font-size: 18px;
+  --reader-accent: #ef5b55;
+  --reader-layer-bg: #fbfbfc;
+  --reader-layer-card: #ffffff;
+  --reader-layer-line: rgba(31, 41, 55, 0.1);
+}
+
+body.reader-modal-open .main-content {
+  overflow: hidden !important;
+}
+
+.native-reader-toolbar {
+  min-height: 56px;
+  border-radius: 0;
+  border-width: 0 0 1px;
+  margin: -0.2rem -0.2rem 0.75rem;
+  padding: 0.35rem 0.55rem;
+  top: 0;
+  background: var(--bg-app);
+}
+
+.native-toolbar-btn,
+.reader-icon-btn.native-toolbar-btn {
+  min-width: 44px;
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  font-size: 1.25rem;
+}
+
+.reader-ref-chip {
+  min-height: 44px;
+  max-width: min(44vw, 260px);
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0 0.35rem;
+  cursor: pointer;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
+
+.reader-ref-chip:active {
+  transform: scale(0.95);
+  opacity: 0.82;
+}
+
+#reader-nav-ref-label {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.98rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.reader-version-inline {
+  margin-top: 0.15rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.reader-version-btn {
+  min-height: 44px;
+  padding: 0 0.7rem;
+  font-size: 0.75rem;
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.reader-nav-spacer {
+  flex: 1 1 auto;
+}
+
+.reader-body-full,
+.reader-card {
+  min-height: 0;
+}
+
+.bible-text-container {
+  font-size: var(--reader-font-size, 18px) !important;
+  line-height: 1.82;
+  transition: font-size 0.16s ease;
+}
+
+.bible-verse {
+  scroll-margin-top: 76px;
+}
+
+.full-page-overlay {
+  z-index: 650;
+  background: var(--reader-layer-bg);
+  color: #1f2937;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.bible-native-overlay-header,
+.search-header {
+  height: calc(56px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--reader-layer-card);
+  border-bottom-color: var(--reader-layer-line);
+}
+
+.overlay-back-btn,
+.overlay-version,
+.segmented-tab,
+.view-mode-btn,
+.grid-item-book,
+.grid-item-number,
+.list-item-book,
+.search-cancel-btn,
+.search-clear-btn,
+.sheet-option-btn,
+.bottom-sheet-close-x {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.overlay-back-btn,
+.overlay-version,
+.view-mode-btn,
+.search-cancel-btn,
+.search-clear-btn,
+.bottom-sheet-close-x {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.overlay-back-btn {
+  color: #1f2937;
+  font-size: 1rem;
+}
+
+.overlay-title {
+  color: #1f2937;
+  font-size: 1.12rem;
+  font-weight: 900;
+}
+
+.overlay-version {
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+}
+
+.segmented-control {
+  background: var(--reader-layer-card);
+  border-bottom-color: var(--reader-layer-line);
+}
+
+.segmented-tab {
+  color: #374151;
+  font-size: 1rem;
+}
+
+.segmented-tab.active {
+  color: var(--reader-accent);
+  border-bottom-color: var(--reader-accent);
+}
+
+.mode-selector-bar {
+  min-height: 56px;
+  background: var(--reader-layer-card);
+  color: #1f2937;
+  border-bottom-color: var(--reader-layer-line);
+}
+
+.toggle-container,
+.view-mode-container {
+  color: #1f2937;
+  font-size: 0.98rem;
+}
+
+.view-mode-btn {
+  color: #1f2937;
+  font-size: 1.35rem;
+}
+
+.view-mode-btn.active {
+  color: var(--reader-accent);
+  background: transparent;
+}
+
+.overlay-scroll-content {
+  background: var(--reader-layer-bg);
+  overscroll-behavior: contain;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.bible-nav-section-title {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  background: #f0f1f3;
+  color: #4b5563;
+  font-size: 0.9rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bible-nav-grid,
+.chapter-nav-grid,
+.verse-nav-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-color: var(--reader-layer-line);
+}
+
+.grid-item-book,
+.grid-item-number {
+  min-height: 72px;
+  background: var(--reader-layer-card);
+  border-color: var(--reader-layer-line);
+  color: #1f2937;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.grid-item-book .abbrev-title {
+  color: #1f2937;
+  font-size: 1.35rem;
+}
+
+.grid-item-book .full-title {
+  color: #374151;
+  font-size: 0.72rem;
+}
+
+.grid-item-book.active,
+.grid-item-number.active {
+  color: var(--reader-accent);
+  background: rgba(239, 91, 85, 0.08);
+  border-color: rgba(239, 91, 85, 0.35);
+}
+
+.grid-item-book.active .abbrev-title {
+  color: var(--reader-accent);
+}
+
+.bible-nav-list {
+  background: var(--reader-layer-card);
+}
+
+.list-item-book {
+  min-height: 58px;
+  color: #1f2937;
+  font-size: 1.08rem;
+  border-color: var(--reader-layer-line);
+}
+
+.list-item-book.active {
+  color: var(--reader-accent);
+  background: rgba(239, 91, 85, 0.05);
+}
+
+.search-input-field {
+  height: 42px;
+  background: #f2f3f5;
+  border: 0;
+  color: #111827;
+  font-size: 1rem;
+}
+
+.search-input-field:focus {
+  background: #eef0f3;
+  border: 0;
+}
+
+.search-icon-inside {
+  color: #6b7280;
+}
+
+.search-clear-btn {
+  right: 4px;
+  width: 44px;
+  height: 44px;
+  color: #9ca3af;
+}
+
+.search-cancel-btn {
+  color: var(--reader-accent);
+  font-size: 1rem;
+}
+
+.search-results-info {
+  background: var(--reader-layer-bg);
+  color: #6b7280;
+}
+
+.search-result-item {
+  min-height: 64px;
+  background: var(--reader-layer-card);
+  border-color: var(--reader-layer-line);
+}
+
+.search-result-ref {
+  color: var(--reader-accent);
+}
+
+.search-result-text {
+  color: #1f2937;
+}
+
+.bottom-sheet-backdrop {
+  z-index: 700;
+  overscroll-behavior: contain;
+}
+
+.bottom-sheet-container {
+  height: min(34vh, 330px);
+  min-height: 236px;
+  max-height: 36vh;
+  background: var(--bg-card);
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-options-row.typography-size-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sheet-option-btn {
+  min-height: 72px;
+  border-radius: 14px;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.sheet-option-btn:active {
+  transform: scale(0.95);
+}
+
+.font-size-option.active {
+  border-color: var(--reader-accent);
+  background: rgba(239, 91, 85, 0.1);
+  color: var(--reader-accent);
+}
+
+@media (max-width: 420px) {
+  .reader-version-btn {
+    display: none;
+  }
+
+  .reader-ref-chip {
+    max-width: 48vw;
+  }
+
+  .grid-item-book,
+  .grid-item-number {
+    min-height: 68px;
+  }
 }

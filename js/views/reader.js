@@ -1,5 +1,20 @@
 // Bible Reader tab view controller
 
+function openReaderLayer(element) {
+  if (!element) return;
+  element.classList.remove("hidden");
+  element.setAttribute("aria-hidden", "false");
+  document.body.classList.add("reader-modal-open");
+}
+
+function closeReaderLayer(element) {
+  if (!element) return;
+  element.classList.add("hidden");
+  element.setAttribute("aria-hidden", "true");
+  const stillOpen = document.querySelector(".full-page-overlay:not(.hidden), .bottom-sheet-backdrop:not(.hidden), .loader-overlay:not(.hidden)");
+  document.body.classList.toggle("reader-modal-open", Boolean(stillOpen));
+}
+
 function initReaderControls() {
   const bookSelect = document.getElementById("reader-book-select");
   const chapterSelect = document.getElementById("reader-chapter-select");
@@ -75,7 +90,7 @@ function initReaderControls() {
 
   if (searchBtn && searchOverlay) {
     searchBtn.addEventListener("click", () => {
-      searchOverlay.classList.remove("hidden");
+      openReaderLayer(searchOverlay);
       if (searchInput) {
         searchInput.value = "";
         searchInput.focus();
@@ -88,7 +103,7 @@ function initReaderControls() {
 
   if (searchCancelBtn && searchOverlay) {
     searchCancelBtn.addEventListener("click", () => {
-      searchOverlay.classList.add("hidden");
+      closeReaderLayer(searchOverlay);
     });
   }
 
@@ -157,7 +172,7 @@ function initReaderControls() {
       `;
       
       div.addEventListener("click", () => {
-        if (searchOverlay) searchOverlay.classList.add("hidden");
+        if (searchOverlay) closeReaderLayer(searchOverlay);
         
         const book = BIBLE_BOOKS.find(b => b.name === item.bookName || b.eng.toLowerCase() === item.bookEng.toLowerCase());
         if (book) {
@@ -179,21 +194,21 @@ function initReaderControls() {
   if (settingsTrigger && settingsBackdrop) {
     settingsTrigger.addEventListener("click", (e) => {
       e.stopPropagation();
-      settingsBackdrop.classList.remove("hidden");
+      openReaderLayer(settingsBackdrop);
       updateSheetActiveStates();
     });
   }
 
   if (settingsCloseBtn && settingsBackdrop) {
     settingsCloseBtn.addEventListener("click", () => {
-      settingsBackdrop.classList.add("hidden");
+      closeReaderLayer(settingsBackdrop);
     });
   }
 
   if (settingsBackdrop) {
     settingsBackdrop.addEventListener("click", (e) => {
       if (e.target === settingsBackdrop) {
-        settingsBackdrop.classList.add("hidden");
+        closeReaderLayer(settingsBackdrop);
       }
     });
   }
@@ -498,25 +513,28 @@ function updatePillLabels() {
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
     const version = state.readerState.version || "CUNP";
-    const label = version === "CUNP" ? "CUNP-神" : (version === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const label = version === "CUNP" ? "CUNP" : (version === "RCUVTS" ? "RCUV" : "CUV");
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
+    const inlineVersion = document.getElementById("reader-version-inline");
+    if (inlineVersion) inlineVersion.textContent = label;
   }
 }
 
 // Keep a version in memory and store locally
 function updateReaderFontSize() {
+  const size = Number(state.readerState.fontSize || 18);
+  state.readerState.fontSize = size;
+  document.documentElement.style.setProperty("--reader-font-size", size + "px");
   const bibleContent = document.getElementById("bible-content");
-  if (bibleContent) bibleContent.style.fontSize = state.readerState.fontSize + "px";
-  
-  localStorage.setItem("reader_font_size", state.readerState.fontSize);
+  if (bibleContent) bibleContent.style.fontSize = size + "px";
 
-  // Update active button state in settings dropdown
-  document.querySelectorAll("#reader-settings-dropdown .font-btn").forEach(b => {
+  localStorage.setItem("reader_font_size", size);
+
+  document.querySelectorAll("#reader-settings-dropdown .font-btn, .font-size-option").forEach(b => {
     b.classList.toggle("active", parseInt(b.dataset.size) === state.readerState.fontSize);
   });
 
-  // Update active theme button state in settings dropdown
   document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.theme === state.theme);
   });
@@ -595,6 +613,8 @@ async function renderReaderText() {
     data.verses.forEach(v => {
       const verseDiv = document.createElement("div");
       verseDiv.className = "bible-verse";
+      verseDiv.dataset.verse = String(v.verse);
+      verseDiv.id = `reader-verse-${v.verse}`;
 
       // Highlight if marked
       const highlightKey = `${book.name}_${chapter}_${v.verse}`;
@@ -687,9 +707,11 @@ window.toggleBibleVersion = function() {
   // Update version button text
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
-    const label = next === "CUNP" ? "CUNP-神" : (next === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const label = next === "CUNP" ? "CUNP" : (next === "RCUVTS" ? "RCUV" : "CUV");
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
+    const inlineVersion = document.getElementById("reader-version-inline");
+    if (inlineVersion) inlineVersion.textContent = label;
   }
   
   showToast(`已切換譯本至 ${next === "CUNP" ? "新譯標點和合本" : (next === "RCUVTS" ? "和合本修訂版" : "官話和合本")}`);
@@ -804,7 +826,7 @@ window.openBibleNavOverlay = function() {
   navOverlayState.selectedChapter = state.readerState.chapter;
   navOverlayState.selectedVerse = 1;
   
-  overlay.classList.remove("hidden");
+  openReaderLayer(overlay);
   
   // Initialize grid mode buttons in DOM
   const gridBtn = document.getElementById("view-mode-grid");
@@ -855,7 +877,7 @@ window.openBibleNavOverlay = function() {
       } else if (navOverlayState.activeTab === 'chapter') {
         window.switchNavTab('book');
       } else {
-        overlay.classList.add("hidden");
+        closeReaderLayer(overlay);
       }
     });
   }
@@ -897,7 +919,7 @@ function renderBibleNavContent() {
   const book = BIBLE_BOOKS.find(b => b.id === navOverlayState.selectedBookId);
   
   if (navOverlayState.activeTab === 'book') {
-    document.querySelector(".mode-selector-bar").style.display = "flex";
+    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "flex";
     
     if (navOverlayState.viewMode === 'grid') {
       // 5-Column Grid Mode
@@ -975,7 +997,7 @@ function renderBibleNavContent() {
       container.appendChild(newList);
     }
   } else if (navOverlayState.activeTab === 'chapter') {
-    document.querySelector(".mode-selector-bar").style.display = "none";
+    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "none";
     
     const grid = document.createElement("div");
     grid.className = "chapter-nav-grid";
@@ -991,7 +1013,7 @@ function renderBibleNavContent() {
     }
     container.appendChild(grid);
   } else if (navOverlayState.activeTab === 'verse') {
-    document.querySelector(".mode-selector-bar").style.display = "none";
+    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "none";
     
     const loader = document.createElement("div");
     loader.className = "loader-inline";
@@ -1027,7 +1049,7 @@ function selectNavBook(bookId) {
   navOverlayState.selectedBookId = bookId;
   navOverlayState.selectedChapter = 1;
   
-  const autoAdvance = document.getElementById("bible-nav-auto-advance").checked;
+  const autoAdvance = document.getElementById("bible-nav-auto-advance")?.checked !== false;
   if (autoAdvance) {
     window.switchNavTab('chapter');
   } else {
@@ -1038,7 +1060,7 @@ function selectNavBook(bookId) {
 function selectNavChapter(chNum) {
   navOverlayState.selectedChapter = chNum;
   
-  const autoAdvance = document.getElementById("bible-nav-auto-advance").checked;
+  const autoAdvance = document.getElementById("bible-nav-auto-advance")?.checked !== false;
   if (autoAdvance) {
     window.switchNavTab('verse');
   } else {
@@ -1050,7 +1072,7 @@ async function selectNavVerse(vNum) {
   navOverlayState.selectedVerse = vNum;
   
   // Close overlay
-  document.getElementById("bible-nav-overlay").classList.add("hidden");
+  closeReaderLayer(document.getElementById("bible-nav-overlay"));
   
   // Apply update to state and trigger re-render
   state.readerState.bookId = navOverlayState.selectedBookId;
@@ -1083,7 +1105,7 @@ async function selectNavVerse(vNum) {
         const verses = container.querySelectorAll(".bible-verse");
         for (let v of verses) {
           const numEl = v.querySelector(".verse-num");
-          if (numEl && parseInt(numEl.textContent) === vNum) {
+          if ((v.dataset.verse && parseInt(v.dataset.verse) === vNum) || (numEl && parseInt(numEl.textContent) === vNum)) {
             v.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
             // Visual physical flash feedback
@@ -1110,19 +1132,44 @@ function showLoader(text) {
   if (overlay) {
     const textEl = overlay.querySelector(".loader-text");
     if (textEl) textEl.textContent = text;
-    overlay.classList.remove("hidden");
+    openReaderLayer(overlay);
   }
 }
 
 function hideLoader() {
   const overlay = document.getElementById("loader-overlay");
-  if (overlay) overlay.classList.add("hidden");
+  if (overlay) closeReaderLayer(overlay);
 }
 
 // ==========================================================================
-// Full-Text Bible Search client (Bolls API)
+// Full-Text Bible Search client (local corpus first, Bolls API fallback)
 // ==========================================================================
+window.__BIBLE_SEARCH_CORPUS = window.__BIBLE_SEARCH_CORPUS || null;
+
+window.setBibleSearchCorpus = function(corpus) {
+  window.__BIBLE_SEARCH_CORPUS = Array.isArray(corpus) ? corpus : null;
+};
+
+function searchLocalBibleCorpus(query) {
+  const corpus = window.__BIBLE_SEARCH_CORPUS;
+  if (!Array.isArray(corpus) || !query) return null;
+  const needle = query.toLowerCase();
+  return corpus
+    .filter(item => String(item.text || "").toLowerCase().includes(needle))
+    .slice(0, 120)
+    .map(item => ({
+      bookName: item.bookName || item.book || "",
+      bookEng: item.bookEng || "",
+      chapter: Number(item.chapter || 1),
+      verse: Number(item.verse || 1),
+      text: String(item.text || "")
+    }));
+}
+
 window.searchBibleText = async function(query, translation = "CUNP") {
+  const localResults = searchLocalBibleCorpus(query);
+  if (localResults) return localResults;
+
   const url = `https://bolls.life/search/${encodeURIComponent(translation)}/?search=${encodeURIComponent(query)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("Search request failed");
