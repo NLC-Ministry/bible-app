@@ -4876,3 +4876,55 @@ body.reader-modal-open .main-content {
     min-height: 68px;
   }
 }
+
+
+/* Reader page uses its own top app bar */
+body.reader-page .main-header {
+  display: none !important;
+}
+
+body.reader-page .main-content {
+  top: 0 !important;
+  padding-top: 0 !important;
+}
+
+body.reader-page #reader-view.active {
+  min-height: 100%;
+}
+
+body.reader-page .native-reader-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 310;
+  margin: 0 calc(-1 * clamp(0.85rem, 3vw, 1.4rem)) 0.75rem;
+  min-height: calc(56px + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) 0.65rem 0.35rem;
+  border-bottom: 1px solid var(--border-card);
+  background: var(--bg-header);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.reader-back-btn {
+  display: inline-flex !important;
+}
+
+body:not(.reader-page) .reader-back-btn {
+  display: none !important;
+}
+
+body.reader-page .reader-ref-chip {
+  max-width: min(34vw, 220px);
+}
+
+@media (max-width: 420px) {
+  body.reader-page .native-toolbar-btn,
+  body.reader-page .reader-icon-btn.native-toolbar-btn {
+    width: 42px;
+    min-width: 42px;
+  }
+
+  body.reader-page .reader-ref-chip {
+    max-width: 32vw;
+  }
+}

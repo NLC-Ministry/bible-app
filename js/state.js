@@ -139,6 +139,7 @@ const appRouter = {
     const backLabel = document.getElementById("global-back-label");
     const titleEl = document.querySelector(".brand-text");
     if (titleEl) titleEl.textContent = this.getTabLabel(this.currentTab);
+    document.body.classList.toggle("reader-page", this.currentTab === "reader-view");
     if (!backBtn || !backLabel) return;
 
     const isHome = this.currentTab === "dashboard-view" && !(state.activePlan && state.planDetailOpen);

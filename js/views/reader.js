@@ -22,6 +22,14 @@ function initReaderControls() {
   const drawer = document.getElementById("reader-nav-drawer");
   const bookBadge = document.getElementById("reader-book-badge");
   const chapterBadge = document.getElementById("reader-chapter-badge");
+  const readerBackBtn = document.getElementById("reader-back-btn");
+
+  if (readerBackBtn) {
+    readerBackBtn.addEventListener("click", () => {
+      const globalBackBtn = document.getElementById("global-back-btn");
+      if (globalBackBtn) globalBackBtn.click();
+    });
+  }
 
   // Load books list
   populateBookSelector("all");
