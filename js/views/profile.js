@@ -21,10 +21,12 @@ function renderProfileView() {
   }
   const lockedFields = new Set(state.profileLockedFields || []);
   const profileNameInput = document.getElementById("profile-name");
-  profileNameInput.value = state.currentUser.name || "";
-  profileNameInput.readOnly = lockedFields.has("name");
-  profileNameInput.classList.toggle("readonly-field", lockedFields.has("name"));
-  profileNameInput.title = lockedFields.has("name") ? "\u6b64\u6b04\u4f4d\u7531\u6559\u6703\u7cfb\u7d71\u63d0\u4f9b\uff0c\u4e0d\u53ef\u7de8\u8f2f" : "";
+  if (profileNameInput) {
+    profileNameInput.value = state.currentUser.name || "";
+    profileNameInput.readOnly = lockedFields.has("name");
+    profileNameInput.classList.toggle("readonly-field", lockedFields.has("name"));
+    profileNameInput.title = lockedFields.has("name") ? "此欄位由教會系統提供，不可編輯" : "";
+  }
   
   const greatRegionSelect = document.getElementById("profile-great-region");
   const customGreatRegionInput = document.getElementById("profile-great-region-custom");
@@ -47,7 +49,32 @@ function renderProfileView() {
     senior_pastor: "主任牧師 (最高權限)",
     admin: "系統管理員"
   };
-  roleDisplay.textContent = roleNames[state.currentUser.role] || "一般組員";
+
+  if (roleDisplay) {
+    roleDisplay.textContent = roleNames[state.currentUser.role] || "一般組員";
+  }
+
+  // Render User Summary Header elements
+  const summaryName = document.getElementById("profile-summary-name");
+  if (summaryName) summaryName.textContent = state.currentUser.name || "新使用者";
+
+  const summaryOrg = document.getElementById("profile-summary-org");
+  if (summaryOrg) {
+    const region = state.currentUser.great_region || "";
+    const zone = state.currentUser.pastoral_zone || "";
+    const group = state.currentUser.small_group || "";
+    summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || "未設定所屬小組";
+  }
+
+  const summaryRole = document.getElementById("profile-summary-role");
+  if (summaryRole) {
+    summaryRole.textContent = roleNames[state.currentUser.role] || "一般組員";
+  }
+
+  const summaryInitial = document.getElementById("profile-summary-initial");
+  if (summaryInitial) {
+    summaryInitial.textContent = (state.currentUser.name || "新").substring(0, 1);
+  }
 
   const urlParams = new URLSearchParams(window.location.search);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
@@ -374,6 +401,23 @@ function initProfileControls() {
 
   if (typeof initAdminOrgManagement === 'function') {
     initAdminOrgManagement();
+  }
+
+  // Toggle collapsible profile form
+  const btnToggleForm = document.getElementById("btn-toggle-profile-form");
+  const formWrapper = document.getElementById("profile-form-wrapper");
+  if (btnToggleForm && formWrapper) {
+    btnToggleForm.onclick = (e) => {
+      e.preventDefault();
+      const isHidden = formWrapper.classList.contains("hidden");
+      if (isHidden) {
+        formWrapper.classList.remove("hidden");
+        btnToggleForm.innerHTML = "收起個人檔案編輯";
+      } else {
+        formWrapper.classList.add("hidden");
+        btnToggleForm.innerHTML = "✏️ 編輯個人檔案";
+      }
+    };
   }
 
   // Initialize header avatar dropdown

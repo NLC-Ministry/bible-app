@@ -841,69 +841,103 @@
       <section id="profile-view" class="view-pane">
         <div class="grid-layout">
           
-          <!-- Basic Profile Form -->
+          <!-- User Summary & Collapsible Profile Form Card -->
           <div class="card-col span-12" id="profile-card-col">
             <div class="glass-card">
-              <h3 class="card-title">個人基本資料</h3>
-              <form id="profile-form">
-                <div class="form-group">
-                  <label for="profile-name">姓名</label>
-                  <input type="text" id="profile-name" class="form-control" placeholder="請輸入真實姓名" required>
+              <!-- Profile Summary Header -->
+              <div style="display: flex; align-items: center; gap: 1.2rem; border-bottom: 1px solid var(--border-card); padding-bottom: 1.5rem; margin-bottom: 1rem;">
+                <div id="profile-summary-avatar" style="width: 64px; height: 64px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem; font-weight: 800; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);">
+                  <span id="profile-summary-initial">管</span>
                 </div>
-
-                <div class="form-group">
-                  <label for="profile-great-region">所屬大區</label>
-                  <select id="profile-great-region" class="form-control">
-                    <option value="">-- 請選擇大區 --</option>
-                  </select>
-                  <input type="text" id="profile-great-region-custom" class="form-control hidden" placeholder="請輸入自訂大區名稱" style="margin-top: 0.5rem;">
-                </div>
-                
-                <div class="form-group">
-                  <label for="profile-zone">所屬牧區</label>
-                  <select id="profile-zone" class="form-control">
-                    <option value="">-- 請選擇牧區 --</option>
-                  </select>
-                  <input type="text" id="profile-zone-custom" class="form-control hidden" placeholder="請輸入自訂牧區名稱" style="margin-top: 0.5rem;">
-                </div>
-
-                <div class="form-group">
-                  <label for="profile-group">所屬小組</label>
-                  <select id="profile-group" class="form-control">
-                    <option value="">-- 請選擇小組 --</option>
-                    <!-- Populated dynamically based on Zone -->
-                  </select>
-                  <input type="text" id="profile-group-custom" class="form-control hidden" placeholder="請輸入自訂小組名稱" style="margin-top: 0.5rem;">
-                </div>
-
-                <div class="form-group">
-                  <label>您的帳號角色</label>
-                  <p id="profile-role-display" style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">組員</p>
-                </div>
-
-                <button type="submit" class="primary-btn w-full">儲存基本資料</button>
-
-                <!-- Demo Simulated Role Switcher -->
-                <div class="demo-role-card hidden" style="margin-top: 1.5rem; padding: 1.2rem; background-color: rgba(99, 102, 241, 0.06); border: 1px dashed var(--primary-color); border-radius: var(--radius-sm);">
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label for="demo-role-select" style="color: var(--primary-color); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
-                      <span>🌟 Demo 模擬角色切換 (測試權限視角)</span>
-                    </label>
-                    <select id="demo-role-select" class="form-control" style="margin-top: 0.5rem; border-color: var(--primary-color);">
-                      <option value="real_user">⚡ 回到線上登入帳號 (真實資料)</option>
-                      <option value="admin">系統管理員 (Admin) - 看全教會統計 (最高權限)</option>
-                      <option value="member">組員 (示範組員一) - 僅看個人統計</option>
-                      <option value="group_leader">小組長 (示範組長甲) - 僅看 大安1第一組 統計</option>
-                      <option value="zone_leader">區長 (東區區長) - 僅看 大安1 統計</option>
-                      <option value="great_zone_leader">大區長 (東區大區長) - 僅看 東區 統計</option>
-                      <option value="senior_pastor">主任牧師 (示範主任牧師) - 看全教會統計 (最高權限)</option>
-                    </select>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; line-height: 1.4;">提示：本切換器供您離線測試。切換後，首頁儀表板、成員清單、圖表等均會立即套用對應的角色視角進行過濾。</p>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
+                  <h2 id="profile-summary-name" style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); margin: 0;">新使用者</h2>
+                  <p id="profile-summary-org" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">載入所屬組織中...</p>
+                  <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.25rem;">
+                    <span id="profile-summary-role" class="role-badge">一般組員</span>
                   </div>
                 </div>
-              </form>
+              </div>
+
+              <!-- Button to toggle the form -->
+              <button class="secondary-btn w-full" id="btn-toggle-profile-form" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid var(--border-card); background: transparent; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-weight: 700; color: var(--text-primary); cursor: pointer; transition: var(--transition-smooth);">
+                ✏️ 編輯個人檔案
+              </button>
+
+              <!-- Collapsible Profile Form Wrapper -->
+              <div id="profile-form-wrapper" class="hidden" style="margin-top: 1rem; border-top: 1px solid var(--border-card); padding-top: 1.5rem;">
+                <form id="profile-form">
+                  <div class="form-group">
+                    <label for="profile-name">姓名</label>
+                    <input type="text" id="profile-name" class="form-control" placeholder="請輸入真實姓名" required>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="profile-great-region">所屬大區</label>
+                    <select id="profile-great-region" class="form-control">
+                      <option value="">-- 請選擇大區 --</option>
+                    </select>
+                    <input type="text" id="profile-great-region-custom" class="form-control hidden" placeholder="請輸入自訂大區名稱" style="margin-top: 0.5rem;">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="profile-zone">所屬牧區</label>
+                    <select id="profile-zone" class="form-control">
+                      <option value="">-- 請選擇牧區 --</option>
+                    </select>
+                    <input type="text" id="profile-zone-custom" class="form-control hidden" placeholder="請輸入自訂牧區名稱" style="margin-top: 0.5rem;">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="profile-group">所屬小組</label>
+                    <select id="profile-group" class="form-control">
+                      <option value="">-- 請選擇小組 --</option>
+                      <!-- Populated dynamically based on Zone -->
+                    </select>
+                    <input type="text" id="profile-group-custom" class="form-control hidden" placeholder="請輸入自訂小組名稱" style="margin-top: 0.5rem;">
+                  </div>
+
+                  <div class="form-group">
+                    <label>您的帳號角色</label>
+                    <p id="profile-role-display" style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">組員</p>
+                  </div>
+
+                  <button type="submit" class="primary-btn w-full">儲存基本資料</button>
+
+                  <!-- Demo Simulated Role Switcher -->
+                  <div class="demo-role-card hidden" style="margin-top: 1.5rem; padding: 1.2rem; background-color: rgba(99, 102, 241, 0.06); border: 1px dashed var(--primary-color); border-radius: var(--radius-sm);">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label for="demo-role-select" style="color: var(--primary-color); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>🌟 Demo 模擬角色切換 (測試權限視角)</span>
+                      </label>
+                      <select id="demo-role-select" class="form-control" style="margin-top: 0.5rem; border-color: var(--primary-color);">
+                        <option value="real_user">⚡ 回到線上登入帳號 (真實資料)</option>
+                        <option value="admin">系統管理員 (Admin) - 看全教會統計 (最高權限)</option>
+                        <option value="member">組員 (示範組員一) - 僅看個人統計</option>
+                        <option value="group_leader">小組長 (示範組長甲) - 僅看 大安1第一組 統計</option>
+                        <option value="zone_leader">區長 (東區區長) - 僅看 大安1 統計</option>
+                        <option value="great_zone_leader">大區長 (東區大區長) - 僅看 東區 統計</option>
+                        <option value="senior_pastor">主任牧師 (示範主任牧師) - 看全教會統計 (最高權限)</option>
+                      </select>
+                      <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; line-height: 1.4;">提示：本切換器供您離線測試。切換後，首頁儀表板、成員清單、圖表等均會立即套用對應的角色視角進行過濾。</p>
+                    </div>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
+
+          <!-- Honor Badges Wall Card -->
+          <div class="card-col span-12" id="profile-badges-card-col" style="margin-top: 1rem;">
+            <div class="glass-card">
+              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                🏆 我的榮譽徽章
+              </h3>
+              <div id="profile-badge-wall-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; max-height: 350px; overflow-y: auto; padding-right: 0.2rem;">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+          
         </div>
       </section>
 
@@ -1191,7 +1225,7 @@
   <script src="js/views/dashboard.js?v=nlc-edge-20260702-2"></script>
   <script src="js/views/reader.js?v=reader-module-20260702-3"></script>
   <script src="js/views/stats.js?v=nlc-edge-20260701-99"></script>
-  <script src="js/views/profile.js?v=nlc-edge-20260701-99"></script>
+  <script src="js/views/profile.js?v=nlc-edge-20260702-2"></script>
   <script src="js/main.js?v=nlc-edge-20260702-2"></script>
 </body>
 </html>
