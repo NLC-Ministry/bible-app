@@ -5268,3 +5268,114 @@ body.reader-page .reader-ref-chip {
   box-shadow: none !important;
   background: transparent !important;
 }
+
+
+/* Smart reader interaction fixes: closed layers must never block taps. */
+.full-page-overlay.hidden,
+.bottom-sheet-backdrop.hidden,
+.loader-overlay.hidden,
+.reader-search-panel.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.full-page-overlay:not(.hidden),
+.bottom-sheet-backdrop:not(.hidden),
+.loader-overlay:not(.hidden) {
+  pointer-events: auto;
+  visibility: visible;
+}
+
+body.reader-modal-open #reader-view .reader-floating-nav,
+body.reader-modal-open #reader-view .floating-nav-btn {
+  pointer-events: none !important;
+}
+
+#reader-view .native-reader-toolbar {
+  position: relative;
+  z-index: 120;
+  pointer-events: auto;
+}
+
+#reader-view .reader-reading-surface {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* Smart floating chapter navigation: quiet while reading, available on wake. */
+#reader-view .reader-floating-nav {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 320 !important;
+  display: block !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+}
+
+#reader-view .floating-nav-btn {
+  position: fixed !important;
+  top: 50% !important;
+  width: 46px !important;
+  min-width: 44px !important;
+  height: 64px !important;
+  min-height: 44px !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--text-primary) !important;
+  background: rgba(15, 23, 42, 0.42) !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.26) !important;
+  backdrop-filter: blur(12px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.15) !important;
+  opacity: 0.2 !important;
+  transform: translateY(-50%) !important;
+  transition: opacity 0.22s ease, transform 0.16s ease, background 0.22s ease, border-color 0.22s ease !important;
+  pointer-events: auto !important;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+#reader-view .floating-nav-btn.prev {
+  left: max(0px, env(safe-area-inset-left, 0px)) !important;
+}
+
+#reader-view .floating-nav-btn.next {
+  right: max(0px, env(safe-area-inset-right, 0px)) !important;
+}
+
+#reader-view .floating-nav-btn svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.8px;
+}
+
+#reader-view .floating-nav-btn:hover {
+  background: rgba(30, 41, 59, 0.58) !important;
+  border-color: rgba(129, 140, 248, 0.42) !important;
+  transform: translateY(-50%) !important;
+}
+
+#reader-view .floating-nav-btn:active {
+  transform: translateY(-50%) scale(0.95) !important;
+}
+
+body.reader-nav-awake #reader-view .floating-nav-btn {
+  opacity: 0.62 !important;
+}
+
+body.reader-nav-hidden #reader-view .floating-nav-btn {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 640px) {
+  #reader-view .floating-nav-btn {
+    width: 44px !important;
+    height: 58px !important;
+  }
+}

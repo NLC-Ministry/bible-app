@@ -3,6 +3,7 @@
 function openReaderLayer(element) {
   if (!element) return;
   element.classList.remove("hidden");
+  element.style.pointerEvents = "auto";
   element.setAttribute("aria-hidden", "false");
   document.body.classList.add("reader-modal-open");
 }
@@ -10,9 +11,62 @@ function openReaderLayer(element) {
 function closeReaderLayer(element) {
   if (!element) return;
   element.classList.add("hidden");
+  element.style.pointerEvents = "none";
   element.setAttribute("aria-hidden", "true");
   const stillOpen = document.querySelector(".full-page-overlay:not(.hidden), .bottom-sheet-backdrop:not(.hidden), .loader-overlay:not(.hidden)");
   document.body.classList.toggle("reader-modal-open", Boolean(stillOpen));
+}
+
+function initSmartFloatingReaderNav() {
+  const readerView = document.getElementById("reader-view");
+  const floatPrev = document.getElementById("floating-prev-btn");
+  const floatNext = document.getElementById("floating-next-btn");
+  if (!readerView || (!floatPrev && !floatNext) || readerView.dataset.smartFloatingNavBound === "true") return;
+
+  readerView.dataset.smartFloatingNavBound = "true";
+  let idleTimer = null;
+
+  const setNavVisible = (visible, awake = false) => {
+    document.body.classList.toggle("reader-nav-hidden", !visible);
+    document.body.classList.toggle("reader-nav-awake", visible && awake);
+  };
+
+  const wakeFloatingNav = (duration = 1600) => {
+    clearTimeout(idleTimer);
+    setNavVisible(true, true);
+    idleTimer = setTimeout(() => setNavVisible(true, false), duration);
+  };
+
+  const hideFloatingNavDuringScroll = () => {
+    clearTimeout(idleTimer);
+    setNavVisible(false, false);
+    idleTimer = setTimeout(() => wakeFloatingNav(1400), 500);
+  };
+
+  const bindFloatingButton = (button, direction) => {
+    if (!button) return;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      navigateToChapter(direction);
+      wakeFloatingNav(900);
+    });
+  };
+
+  bindFloatingButton(floatPrev, -1);
+  bindFloatingButton(floatNext, 1);
+
+  const scrollSurface = readerView.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
+  if (scrollSurface) {
+    scrollSurface.addEventListener("scroll", hideFloatingNavDuringScroll, { passive: true });
+  }
+
+  readerView.addEventListener("pointerdown", (event) => {
+    const interactiveTarget = event.target.closest("button, a, input, select, textarea, [role='button'], .full-page-overlay, .bottom-sheet-backdrop");
+    if (!interactiveTarget) wakeFloatingNav();
+  }, { passive: true });
+
+  setNavVisible(true, false);
 }
 
 function initReaderControls() {
@@ -263,7 +317,7 @@ function initReaderControls() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
+      updatePillLabels();
     });
   }
 
@@ -273,7 +327,7 @@ function initReaderControls() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
+      updatePillLabels();
     });
   }
 
@@ -302,11 +356,8 @@ function initReaderControls() {
   if (prevChapterBtn) prevChapterBtn.addEventListener("click", () => navigateToChapter(-1));
   if (nextChapterBtn) nextChapterBtn.addEventListener("click", () => navigateToChapter(1));
 
-  // ── Floating Prev / Next Chapter Buttons ──
-  const floatPrev = document.getElementById("floating-prev-btn");
-  const floatNext = document.getElementById("floating-next-btn");
-  if (floatPrev) floatPrev.addEventListener("click", () => navigateToChapter(-1));
-  if (floatNext) floatNext.addEventListener("click", () => navigateToChapter(1));
+  // Smart floating prev / next chapter buttons
+  initSmartFloatingReaderNav();
 
 
 
@@ -422,7 +473,7 @@ function renderReaderChapterGrid() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
+      updatePillLabels();
     });
     grid.appendChild(btn);
   }
