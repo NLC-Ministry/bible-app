@@ -1192,19 +1192,15 @@ function getChapterCheckboxState(ch, currentRound) {
   const ICON_R3 = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width:15px;height:15px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
 
   if (currentRound === 1) {
-    return ch.isRead ? { cssClass: 'checked', content: ICON_R1 } : { cssClass: '', content: '' };
+    return ch.isReadR1 ? { cssClass: 'checked', content: ICON_R1 } : { cssClass: '', content: '' };
   }
 
   if (currentRound === 2) {
-    if (ch.isReadR2) return { cssClass: 'checked round-2', content: ICON_R2 };
-    if (ch.isReadR1) return { cssClass: 'checked round-1 dimmed', content: ICON_R1 };
-    return { cssClass: '', content: '' };
+    return ch.isReadR2 ? { cssClass: 'checked round-2', content: ICON_R2 } : { cssClass: '', content: '' };
   }
 
   if (currentRound >= 3) {
-    if (ch.isReadR3) return { cssClass: 'checked round-3', content: ICON_R3 };
-    if (ch.isReadR2) return { cssClass: 'checked round-2', content: ICON_R2 };
-    if (ch.isReadR1) return { cssClass: 'checked round-1 dimmed', content: ICON_R1 };
+    return ch.isReadR3 ? { cssClass: 'checked round-3', content: ICON_R3 } : { cssClass: '', content: '' };
   }
 
   return { cssClass: '', content: '' };

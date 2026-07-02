@@ -1129,17 +1129,36 @@ const db = {
       filterPresetKey = state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id;
     }
 
+    const currentPlanId = state.activePlan ? state.activePlan.id : null;
+    const currentPresetKey = state.activePlan ? state.activePlan.presetKey : null;
+    const currentPlanLogMap = new Map();
+    (state.readingLogs || []).forEach(log => {
+      const logPlanId = log.plan_id || null;
+      const logPresetKey = log.presetKey || log.preset_key || null;
+      const matchesPlan =
+        (currentPlanId && logPlanId && logPlanId === currentPlanId) ||
+        (currentPresetKey && logPresetKey && logPresetKey === currentPresetKey) ||
+        ((currentPlanId || currentPresetKey) && !logPlanId && !logPresetKey) ||
+        (!currentPlanId && !currentPresetKey && !logPlanId && !logPresetKey);
+      if (!matchesPlan) return;
+      const round = log.round || 1;
+      currentPlanLogMap.set(`${log.book}_${log.chapter}_${round}`, log);
+    });
+    const currentPlanLogs = Array.from(currentPlanLogMap.values());
+    const currentPlanLastRead = currentPlanLogs.length > 0
+      ? currentPlanLogs.map(log => log.read_at).filter(Boolean).sort().reverse()[0]?.substring(0, 10)
+      : null;
+
     const mockUser = {
       name: state.currentUser.name,
-      great_region: state.currentUser.great_region || "東區",
-      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
-      small_group: state.currentUser.small_group || "馬鈴",
+      great_region: state.currentUser.great_region || "",
+      pastoral_zone: state.currentUser.pastoral_zone || "",
+      small_group: state.currentUser.small_group || "",
       role: state.currentUser.role || "member",
-      chapters_read: state.currentUser.chapters_read,
-      plan_progress: state.currentUser.plan_progress,
-      last_read: state.currentUser.last_read
+      chapters_read: currentPlanLogs.length,
+      plan_progress: state.activePlan ? (state.activePlan.progress || 0) : 0,
+      last_read: currentPlanLastRead
     };
-
     if (state.isSupabaseMode && state.supabase) {
       try {
         const { data: usersProfiles } = await state.supabase.from("profiles").select("*").eq("is_demo", false);
@@ -1275,14 +1294,11 @@ const db = {
             plan_progress: mockUser.plan_progress
           };
         }
-        const seed = u.name.charCodeAt(0) || 10;
-        const totalCh = plan ? plan.totalChapters : 100;
-        const mockChapters = Math.round(((seed * 7) % 50) / 50 * totalCh);
-        const mockProgress = Math.round((mockChapters / totalCh) * 100);
         return {
           ...u,
-          chapters_read: mockChapters,
-          plan_progress: mockProgress
+          chapters_read: 0,
+          plan_progress: 0,
+          last_read: null
         };
       });
     }
