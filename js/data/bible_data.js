@@ -125,6 +125,8 @@ function assertCompleteEnough(result, sourceName) {
 
 async function fetchFromBibleApi(bookEngName, chapter, translation) {
   const url = `https://bible-api.com/${encodeURIComponent(`${bookEngName} ${chapter}`)}?translation=${encodeURIComponent(translation)}`;
+  const targetUrl = url;
+  console.log('🌐 [API 發送檢查] 正在線上獲取內文，完整 URL 內容為：', targetUrl);
   const data = await fetchJson(url);
   return assertCompleteEnough({
     reference: data.reference || `${bookEngName} ${chapter}`,
@@ -137,6 +139,8 @@ async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier 
   if (!bookCode) throw new Error(`Bolls 缺少書卷代碼：${bookEngName}`);
 
   const url = `https://bolls.life/get-chapter/${encodeURIComponent(translation)}/${encodeURIComponent(bookCode)}/${encodeURIComponent(chapter)}/`;
+  const targetUrl = url;
+  console.log('🌐 [API 發送檢查] 正在線上獲取內文，完整 URL 內容為：', targetUrl);
   const data = await fetchJson(url);
   return assertCompleteEnough({
     reference: `${bookEngName} ${chapter}`,
@@ -183,6 +187,21 @@ const BIBLE_FALLBACK = {
  * @returns {Promise<{reference: string, verses: Array<{verse: number, text: string}>}>}
  */
 async function fetchBibleChapter(bookEngName, chapter) {
+  // Anti-Bug Guard: validate parameters before sending network requests
+  if (!bookEngName || !chapter || isNaN(chapter) || Number(chapter) <= 0) {
+    console.warn('⚠️ [API 防護攔截] 偵測到無效參數，拒絕發送錯誤網址');
+    throw new Error('⚠️ [API 防護攔截] 偵測到無效參數，拒絕發送錯誤網址');
+  }
+
+  // Local Predictive cache lookup
+  if (!window._bibleChapterCache) {
+    window._bibleChapterCache = {};
+  }
+  const cacheKey = `${bookEngName}_${chapter}`;
+  if (window._bibleChapterCache[cacheKey]) {
+    console.log(`📦 [Cache Hits] 讀取預載快取成功: ${cacheKey}`);
+    return window._bibleChapterCache[cacheKey];
+  }
   const bollsBookCodes = Array.from(new Set([
     BOLLS_BOOK_CODES[bookEngName],
     bookEngName,

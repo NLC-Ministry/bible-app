@@ -649,7 +649,15 @@ async function renderReaderText() {
   heading.textContent = `${book.name} ${chapter}章`;
   updatePillLabels();
   renderReaderPicker();
-  ComponentSkeletonLoader.show('reader', container);
+  
+  // Synced cache pre-check: if cached, clear instantly for 0ms render; otherwise show skeleton
+  const cacheKey = `${book.eng}_${chapter}`;
+  const isCached = !!(window._bibleChapterCache && window._bibleChapterCache[cacheKey]);
+  if (!isCached) {
+    ComponentSkeletonLoader.show('reader', container);
+  } else {
+    container.innerHTML = "";
+  }
   
   // Set checked button status
   if (markReadBtn) {
@@ -688,13 +696,20 @@ async function renderReaderText() {
 
       container.appendChild(verseDiv);
     });
+    // Trigger predictive pre-fetch for the next chapter in background
+    triggerPredictivePrefetch();
   } catch (error) {
     console.error("Failed to load complete Bible chapter:", error);
-    container.innerHTML = "";
-    const errorDiv = document.createElement("div");
-    errorDiv.className = "reader-error-state";
-    errorDiv.textContent = error.message || "目前無法載入完整章節，請稍後再試。";
-    container.appendChild(errorDiv);
+    container.innerHTML = `
+      <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+        <div style="font-size: 2.5rem;">📖</div>
+        <p style="color: var(--text-secondary); font-weight: 700; margin: 0;">載入經文失敗</p>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; max-width: 280px; line-height: 1.5;">${error.message || '請確認網路連線是否正常'}</p>
+        <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 700; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
+          重新點亮畫面 (重試)
+        </button>
+      </div>
+    `;
   }
 
   // Make sure we apply font size preference
@@ -1285,7 +1300,7 @@ function updateReaderBottomActionBar() {
 
   // Force debugging trace output on first line of capsule action triggers
   const logClick = () => {
-    console.log('🧠 [智慧按鈕觸發] 情境：' + (isCatchingUp ? '補讀' : '正常') + '，fromPlan：' + fromPlan);
+    console.log('🧠 [智慧按鈕觸發] 情境：' + (isCatchingUp ? '補讀' : '正常'));
   };
 
   if (!fromPlan) {
@@ -1455,5 +1470,43 @@ function getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters) {
     }
   }
   return null;
+}
+
+function triggerPredictivePrefetch() {
+  const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
+  if (!currentBook) return;
+
+  let nextBookEng = currentBook.eng;
+  let nextChapter = state.readerState.chapter + 1;
+
+  if (nextChapter > currentBook.chapters) {
+    // Go to next book
+    const nextBook = BIBLE_BOOKS.find(b => b.id === currentBook.id + 1);
+    if (nextBook) {
+      nextBookEng = nextBook.eng;
+      nextChapter = 1;
+    } else {
+      // Last chapter of Revelation, nothing to prefetch
+      return;
+    }
+  }
+
+  const cacheKey = `${nextBookEng}_${nextChapter}`;
+  if (window._bibleChapterCache && window._bibleChapterCache[cacheKey]) {
+    return;
+  }
+
+  // Pre-fetch silently in background
+  console.log(`📡 [背景預載啟動] 正在預載下一章: ${nextBookEng} ${nextChapter}章`);
+  fetchBibleChapter(nextBookEng, nextChapter)
+    .then(data => {
+      if (window._bibleChapterCache) {
+        window._bibleChapterCache[cacheKey] = data;
+        console.log(`💾 [背景預載完成] 已快取下一章: ${cacheKey}`);
+      }
+    })
+    .catch(err => {
+      console.warn(`⚠️ [背景預載失敗] 無法預載下一章: ${cacheKey}`, err);
+    });
 }
 
