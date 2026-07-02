@@ -66,6 +66,7 @@ function initSmartFloatingReaderNav() {
   const scrollSurface = readerView.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
   if (scrollSurface) {
     scrollSurface.addEventListener("scroll", hideFloatingNavDuringScroll, { passive: true });
+    scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
   }
 
   readerView.addEventListener("pointerdown", (event) => {
@@ -650,13 +651,28 @@ async function renderReaderText() {
   const heading = document.getElementById("bible-title");
   const markReadBtn = document.getElementById("mark-read-btn");
   
-  const book = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
-  const chapter = state.readerState.chapter;
+  // Defensively parse inputs to prevent undefined/type-mismatch crashes on mobile
+  const bookId = Number(state.readerState && state.readerState.bookId) || 1;
+  const book = BIBLE_BOOKS.find(b => b.id === bookId) || BIBLE_BOOKS[0];
+  const chapter = Number(state.readerState && state.readerState.chapter) || 1;
 
   heading.textContent = `${book.name} ${chapter}章`;
   updatePillLabels();
   renderReaderPicker();
   
+  // Reset scroll container position to top for immersive reading
+  const scrollSurface = document.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
+  if (scrollSurface) {
+    scrollSurface.scrollTop = 0;
+  }
+
+  // Pre-hide sticky bottom action bar initially to prevent early popping
+  const bar = document.getElementById("reader-bottom-action-bar");
+  if (bar) {
+    bar.style.display = "none";
+    bar.classList.add("hidden");
+  }
+
   // Synced cache pre-check: if cached, clear instantly for 0ms render; otherwise show skeleton
   const cacheKey = `${book.eng}_${chapter}`;
   const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
@@ -1304,17 +1320,25 @@ function updateReaderBottomActionBar() {
   const btn = document.getElementById("reader-capsule-btn");
   if (!bar || !btn) return;
 
-  const bookObj = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
+  // Enforce initial hiding to prevent early display
+  bar.style.display = "none";
+  bar.classList.add("hidden");
+
+  const bookObj = BIBLE_BOOKS.find(b => b.id === Number(state.readerState.bookId));
   if (!bookObj) {
-    bar.classList.add("hidden");
     return;
   }
 
   const fromPlan = !!(state.readerState && state.readerState.fromPlan && state.activePlan);
+  if (!fromPlan) {
+    // If not from plan route, immediately exit and keep hidden
+    return;
+  }
+
   let isCatchingUp = false;
   let elapsedDay = 1;
 
-  if (fromPlan && state.activePlan) {
+  if (state.activePlan) {
     const start = new Date(state.activePlan.startDate);
     start.setHours(0, 0, 0, 0);
     const today = new Date();
@@ -1326,64 +1350,27 @@ function updateReaderBottomActionBar() {
   }
 
   // Remove previous scenario classes
-  bar.classList.remove("hidden", "scenario-a", "scenario-b", "scenario-c");
+  bar.classList.remove("scenario-a", "scenario-b", "scenario-c");
 
   // Force debugging trace output on first line of capsule action triggers
   const logClick = () => {
     console.log('🧠 [智慧按鈕觸發] 情境：' + (isCatchingUp ? '補讀' : '正常'));
   };
 
-  if (!fromPlan) {
-    // 情境 A：【自由讀經模式】
-    bar.classList.add("scenario-a");
-    if (indicator) indicator.classList.add("hidden");
-    btn.innerHTML = `<span>📌 紀錄進度</span>`;
-
-    btn.onclick = () => {
-      logClick();
-      const activePlans = state.activePlans || [];
-      if (activePlans.length === 0) {
-        showToast("您尚未加入任何讀經計畫，請前往計畫頁加入");
-        return;
-      }
-      if (activePlans.length === 1) {
-        const plan = activePlans[0];
-        // 100% 本地寫入，不准發起外部網絡請求
-        db.logChapterRead(bookObj.name, state.readerState.chapter, true, plan.currentRound || 1)
-          .then(() => db.saveLocalUserStats());
-        applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, plan.currentRound || 1);
-        calculatePlanProgress();
-        showToast(`已成功記錄至計畫「${plan.name}」`);
-      } else {
-        const planNames = activePlans.map((p, idx) => `${idx + 1}. ${p.name}`).join("\n");
-        const choice = prompt(`請選擇要記錄進度的計畫（輸入數字）：\n${planNames}`);
-        if (!choice) return;
-        const selectedIdx = parseInt(choice) - 1;
-        if (selectedIdx >= 0 && selectedIdx < activePlans.length) {
-          const plan = activePlans[selectedIdx];
-          db.logChapterRead(bookObj.name, state.readerState.chapter, true, plan.currentRound || 1)
-            .then(() => db.saveLocalUserStats());
-          applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, plan.currentRound || 1);
-          calculatePlanProgress();
-          showToast(`已成功記錄至計畫「${plan.name}」`);
-        }
-      }
-    };
-  } else {
-    const plan = state.activePlan;
-    const planDay = state.readerState.planDayNum || 1;
-    const selectedDay = plan.days.find(d => d.dayNum === planDay);
-    const dayChapters = (selectedDay && selectedDay.chapters) || [];
-    
-    // Find current index
-    const currentChIndex = dayChapters.findIndex(ch => 
-      ch.book === bookObj.name && Number(ch.chapter) === Number(state.readerState.chapter)
-    );
-    const isLastChapterOfDay = currentChIndex === dayChapters.length - 1 || currentChIndex === -1;
-    const totalChapters = dayChapters.length;
-    
-    // Count how many are read (treating current as read once they click the button)
-    const readCount = dayChapters.filter(ch => ch.isRead).length;
+  const plan = state.activePlan;
+  const planDay = state.readerState.planDayNum || 1;
+  const selectedDay = plan.days.find(d => d.dayNum === planDay);
+  const dayChapters = (selectedDay && selectedDay.chapters) || [];
+  
+  // Find current index
+  const currentChIndex = dayChapters.findIndex(ch => 
+    ch.book === bookObj.name && Number(ch.chapter) === Number(state.readerState.chapter)
+  );
+  const isLastChapterOfDay = currentChIndex === dayChapters.length - 1 || currentChIndex === -1;
+  const totalChapters = dayChapters.length;
+  
+  // Count how many are read (treating current as read once they click the button)
+  const readCount = dayChapters.filter(ch => ch.isRead).length;
 
     if (!isCatchingUp) {
       // 情境 B：【本日計畫正常模式】
@@ -1462,7 +1449,6 @@ function updateReaderBottomActionBar() {
       };
     }
   }
-}
 
 function applyMemoryChapterReadState(bookName, chapterNum, checked, roundNum) {
   if (!state.activePlan || !state.activePlan.days) return;
@@ -1538,5 +1524,46 @@ function triggerPredictivePrefetch() {
     .catch(err => {
       console.warn(`⚠️ [背景預載失敗] 無法預載下一章: ${cacheKey}`, err);
     });
+}
+
+function handleReaderScroll(event) {
+  const fromPlan = !!(state.readerState && state.readerState.fromPlan && state.activePlan);
+  console.log('📜 [滑動防護] fromPlan:', fromPlan, '是否啟動監聽顯示：', fromPlan ? '是' : '否');
+  
+  const bar = document.getElementById("reader-bottom-action-bar");
+  if (!fromPlan) {
+    if (bar) {
+      bar.style.display = "none";
+      bar.classList.add("hidden");
+    }
+    return;
+  }
+
+  const container = event.currentTarget || event.target;
+  const scrollTop = container.scrollTop;
+  const clientHeight = container.clientHeight;
+  const scrollHeight = container.scrollHeight;
+
+  const isBottom = (scrollTop + clientHeight) >= (scrollHeight - 50);
+  console.log('📜 [滑動監聽] 當前滾動高度：', scrollTop, '是否已滑到底：', isBottom);
+
+  if (bar) {
+    if (isBottom) {
+      if (bar.style.display === "none" || bar.classList.contains("hidden")) {
+        bar.style.display = "flex";
+        bar.classList.remove("hidden");
+        bar.style.opacity = "0";
+        bar.style.transform = "translateY(20px)";
+        // Force reflow
+        bar.offsetHeight;
+        bar.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+        bar.style.opacity = "1";
+        bar.style.transform = "translateY(0)";
+      }
+    } else {
+      bar.style.display = "none";
+      bar.classList.add("hidden");
+    }
+  }
 }
 
