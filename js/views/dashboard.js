@@ -933,10 +933,6 @@ function renderDailyVerse() {
 
 window.openActivePlanFromDashboard = function(event) {
   console.log('📅 [Debug] 已點選讀經計畫，正在跳轉至計畫頁');
-  if (event) {
-    const interactive = event.target && event.target.closest && event.target.closest("button, a, input, select, textarea");
-    if (interactive && !interactive.classList.contains("route-plan-card")) return;
-  }
   if (!state.activePlan) return;
   state.planDetailOpen = true;
   state.selectedPlanDay = null;

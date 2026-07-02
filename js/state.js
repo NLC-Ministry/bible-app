@@ -164,6 +164,12 @@ const appRouter = {
     document.body.classList.toggle("reader-page", isReaderPage);
     const appLayout = document.querySelector(".app-layout");
     if (appLayout) appLayout.classList.toggle("reader-mode", isReaderPage);
+    
+    // Explicitly hide the mobile bottom navigation bar in immersive reading mode
+    const mobileNavBar = document.querySelector(".mobile-nav-bar");
+    if (mobileNavBar) {
+      mobileNavBar.classList.toggle("hidden", isReaderPage);
+    }
     if (!backBtn || !backLabel) return;
 
     const isHome = this.currentTab === "dashboard-view" && !(state.activePlan && state.planDetailOpen);
