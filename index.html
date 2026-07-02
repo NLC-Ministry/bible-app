@@ -70,7 +70,8 @@
           </div>
           <!-- Theme Toggle Button -->
           <button class="icon-btn" id="theme-toggle" title="切換主題">
-            <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- Sun Icon (shows in dark theme) -->
+            <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none; width: 20px; height: 20px;">
               <circle cx="12" cy="12" r="5"></circle>
               <line x1="12" y1="1" x2="12" y2="3"></line>
               <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -80,6 +81,10 @@
               <line x1="21" y1="12" x2="23" y2="12"></line>
               <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
               <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <!-- Moon Icon (shows in light theme) -->
+            <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: none; width: 20px; height: 20px;">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
             </svg>
           </button>
 
@@ -120,32 +125,10 @@
       
       <!-- VIEW 1: DASHBOARD -->
       <section id="dashboard-view" class="view-pane active">
-        <div class="dashboard-hero">
-          <div class="hero-info">
-            <h1 class="welcome-title">哈囉，<span id="user-greeting">弟兄姊妹</span>！</h1>
-            <p class="welcome-subtitle">「神的話是我腳前的燈，是我路上的光。」今天也要一起速讀神的話語！</p>
-          </div>
-          <div class="streak-card">
-            <div class="streak-flame">🔥</div>
-            <div class="streak-count">
-              <span id="streak-days">0</span>
-              <span class="unit">天</span>
-            </div>
-            <div class="streak-label">連續讀經天數</div>
-          </div>
-        </div>
-
         <div class="grid-layout">
           <!-- Main Column: Personal Progress & Announcements -->
           <div class="card-col span-12">
-            <!-- 每日金句 (Verse of the Day) -->
-            <div class="glass-card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(124, 58, 237, 0.12) 100%); border: 1px solid rgba(99, 102, 241, 0.25); margin-bottom: 1.5rem; position: relative; overflow: hidden; padding: 1.5rem; border-radius: 16px; min-height: 120px; height: auto; display: flex; flex-direction: column; justify-content: center;">
-              <div style="font-size: 0.75rem; font-weight: 700; color: var(--primary-color); margin-bottom: 0.5rem; letter-spacing: 0.05em; text-transform: uppercase;">✨ 每日金句</div>
-              <blockquote id="daily-verse-text" style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.6; margin: 0 0 0.5rem 0; font-family: 'Outfit', sans-serif;">
-                「神的話是我腳前的燈，是我路上的光。」
-              </blockquote>
-              <cite id="daily-verse-source" style="font-size: 0.8rem; color: var(--text-muted); font-style: normal; font-weight: 600; text-align: right; display: block;">— 詩篇 119:105</cite>
-            </div>
+            <!-- 進行中的計畫 (Active Plan Summary) -->
             <div class="glass-card" style="height: auto; margin-bottom: 1.5rem;">
               <h3 class="card-title">進行中的計畫</h3>
               <div id="active-plan-summary">
@@ -155,6 +138,15 @@
                   <button class="primary-btn" onclick="appRouter.switchTab('plan-view')">建立我的計畫</button>
                 </div>
               </div>
+            </div>
+
+            <!-- 每日金句 (Verse of the Day) -->
+            <div class="glass-card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(124, 58, 237, 0.12) 100%); border: 1px solid rgba(99, 102, 241, 0.25); margin-bottom: 1.5rem; position: relative; overflow: hidden; padding: 1.5rem; border-radius: 16px; min-height: 120px; height: auto; display: flex; flex-direction: column; justify-content: center;">
+              <div style="font-size: 0.75rem; font-weight: 700; color: var(--primary-color); margin-bottom: 0.5rem; letter-spacing: 0.05em; text-transform: uppercase;">✨ 每日金句</div>
+              <blockquote id="daily-verse-text" style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.6; margin: 0 0 0.5rem 0; font-family: 'Outfit', sans-serif;">
+                「神的話是我腳前的燈，是我路上的光。」
+              </blockquote>
+              <cite id="daily-verse-source" style="font-size: 0.8rem; color: var(--text-muted); font-style: normal; font-weight: 600; text-align: right; display: block;">— 詩篇 119:105</cite>
             </div>
 
             <!-- 教會公告 (Church Announcements) -->

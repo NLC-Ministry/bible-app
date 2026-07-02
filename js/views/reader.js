@@ -799,7 +799,16 @@ function escapeRegExp(string) {
 
 window.applyAppTheme = function(themeName) {
   state.theme = themeName;
-  document.body.className = themeName + "-theme";
+  if (typeof setBodyThemeClass === "function") {
+    setBodyThemeClass(themeName);
+  } else {
+    document.body.classList.remove("light-theme", "warm-theme", "dark-theme");
+    document.body.classList.add(themeName + "-theme");
+  }
+  const isReaderPage = window.appRouter && window.appRouter.currentTab === "reader-view";
+  document.body.classList.toggle("reader-page", Boolean(isReaderPage));
+  const appLayout = document.querySelector(".app-layout");
+  if (appLayout) appLayout.classList.toggle("reader-mode", Boolean(isReaderPage));
   localStorage.setItem("app_theme", themeName);
   
   // Update settings dropdown active state if it exists

@@ -1,4 +1,5 @@
 {
+  "vercelToolbar": false,
   "cleanUrls": true,
   "buildCommand": "node build-config.js",
   "outputDirectory": ".",

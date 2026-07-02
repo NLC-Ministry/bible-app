@@ -246,6 +246,40 @@ body {
   box-shadow: var(--shadow-hover);
 }
 
+/* Theme Switching Sun/Moon Icons */
+.theme-icon-sun {
+  display: none;
+}
+.theme-icon-moon {
+  display: block;
+}
+
+body.light-theme .theme-icon-sun {
+  display: none !important;
+}
+body.light-theme .theme-icon-moon {
+  display: block !important;
+}
+
+body.dark-theme .theme-icon-sun {
+  display: block !important;
+}
+body.dark-theme .theme-icon-moon {
+  display: none !important;
+}
+
+/* Hide Vercel Toolbar */
+vercel-live-feedback,
+#vercel-live-feedback,
+.vercel-toolbar,
+[data-vercel-feedback],
+[id^="vercel-"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* Main Container Layout */
 .main-content {
   flex: 1;
@@ -3745,8 +3779,29 @@ select,
 
 .brand-icon,
 .nav-tabs,
-.header-actions,
 .main-footer {
+  display: none !important;
+}
+
+.header-actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex !important;
+  justify-self: end;
+  align-self: center;
+  gap: 0.5rem;
+}
+
+.header-actions #connection-status,
+.header-actions .user-avatar-container {
+  display: none !important;
+}
+
+.header-actions #theme-toggle {
+  display: flex !important;
+}
+
+.app-back-btn.is-home {
   display: none !important;
 }
 

@@ -35,8 +35,14 @@ const DAILY_VERSES = [
 ];
 
 function updateDashboardView() {
-  document.getElementById("user-greeting").textContent = state.currentUser.name || "弟兄姊妹";
-  document.getElementById("streak-days").textContent = state.currentUser.streak || "0";
+  const greetingEl = document.getElementById("user-greeting");
+  if (greetingEl) {
+    greetingEl.textContent = state.currentUser.name || "弟兄姊妹";
+  }
+  const streakEl = document.getElementById("streak-days");
+  if (streakEl) {
+    streakEl.textContent = state.currentUser.streak || "0";
+  }
   
   // Render Daily Verse and Church Announcements
   renderDailyVerse();
@@ -73,8 +79,8 @@ function updateDashboardView() {
         </p>
       </div>
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <button class="primary-btn flex-btn" onclick="appRouter.switchTab('plan-view')">查看每日讀經表</button>
-        <button class="secondary-btn flex-btn" onclick="appRouter.switchTab('reader-view')" ${isPlanAvailable ? '' : 'disabled style="opacity: 0.6; cursor: not-allowed;"'}>開始讀經</button>
+        <button class="secondary-btn flex-btn" onclick="appRouter.switchTab('plan-view')">讀經表</button>
+        <button class="primary-btn flex-btn" onclick="window.startReadingCurrentChapter()" ${isPlanAvailable ? '' : 'disabled style="opacity: 0.6; cursor: not-allowed;"'}>開始閱讀</button>
       </div>
     `;
   } else {
@@ -908,3 +914,57 @@ function renderDailyVerse() {
     verseSourceEl.textContent = `— ${verse.source}`;
   }
 }
+
+/**
+ * Switch directly to the Bible Reader and navigate to the user's first unread chapter.
+ */
+window.startReadingCurrentChapter = function() {
+  if (!state.activePlan) {
+    appRouter.switchTab('reader-view');
+    return;
+  }
+
+  let targetBook = null;
+  let targetChapter = 1;
+  let found = false;
+
+  // Search through all days of the active plan for the first unread chapter
+  if (state.activePlan.days) {
+    for (const day of state.activePlan.days) {
+      const unread = day.chapters.find(ch => !ch.isRead);
+      if (unread) {
+        targetBook = unread.book;
+        targetChapter = Number(unread.chapter);
+        found = true;
+        break;
+      }
+    }
+  }
+
+  // Fallback to the first chapter of the first day if everything is read
+  if (!found && state.activePlan.days && state.activePlan.days[0] && state.activePlan.days[0].chapters && state.activePlan.days[0].chapters[0]) {
+    targetBook = state.activePlan.days[0].chapters[0].book;
+    targetChapter = Number(state.activePlan.days[0].chapters[0].chapter);
+  }
+
+  if (targetBook && typeof BIBLE_BOOKS !== 'undefined') {
+    const bookObj = BIBLE_BOOKS.find(b => b.name === targetBook);
+    if (bookObj) {
+      state.readerState.bookId = bookObj.id;
+      state.readerState.chapter = targetChapter;
+
+      // Save preferences to local storage
+      if (typeof saveReaderPreferences === 'function') {
+        saveReaderPreferences();
+      } else {
+        localStorage.setItem("reader_state", JSON.stringify({
+          bookId: state.readerState.bookId,
+          chapter: state.readerState.chapter
+        }));
+      }
+    }
+  }
+
+  // Navigate to reader
+  appRouter.switchTab('reader-view');
+};

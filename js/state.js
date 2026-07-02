@@ -139,7 +139,10 @@ const appRouter = {
     const backLabel = document.getElementById("global-back-label");
     const titleEl = document.querySelector(".brand-text");
     if (titleEl) titleEl.textContent = this.getTabLabel(this.currentTab);
-    document.body.classList.toggle("reader-page", this.currentTab === "reader-view");
+    const isReaderPage = this.currentTab === "reader-view";
+    document.body.classList.toggle("reader-page", isReaderPage);
+    const appLayout = document.querySelector(".app-layout");
+    if (appLayout) appLayout.classList.toggle("reader-mode", isReaderPage);
     if (!backBtn || !backLabel) return;
 
     const isHome = this.currentTab === "dashboard-view" && !(state.activePlan && state.planDetailOpen);
@@ -251,14 +254,19 @@ const loader = {
 };
 
 // Theme Management
+function setBodyThemeClass(themeName) {
+  document.body.classList.remove("light-theme", "warm-theme", "dark-theme");
+  document.body.classList.add(themeName + "-theme");
+}
+
 function initTheme() {
   const savedTheme = localStorage.getItem("app_theme") || "light";
   state.theme = savedTheme;
-  document.body.className = savedTheme + "-theme";
+  setBodyThemeClass(savedTheme);
 
   document.getElementById("theme-toggle").addEventListener("click", () => {
     state.theme = state.theme === "light" ? "dark" : "light";
-    document.body.className = state.theme + "-theme";
+    setBodyThemeClass(state.theme);
     localStorage.setItem("app_theme", state.theme);
   });
 }
