@@ -186,7 +186,7 @@
               </div>
 
               <!-- 公告編輯表單 (管理員專屬，預設隱藏) -->
-              <div id="admin-announcement-form-container" class="hidden" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem;">
+              <div id="admin-announcement-form-container" class="hidden" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem;">
                 <h4 style="margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">發布教會公告</h4>
                 <input type="text" id="announcement-title-input" class="form-control" placeholder="公告標題" style="font-size: 0.85rem; padding: 0.4rem;">
                 <textarea id="announcement-content-input" class="form-control" placeholder="公告內容..." style="font-size: 0.85rem; padding: 0.4rem; min-height: 80px; resize: none;"></textarea>
@@ -383,7 +383,7 @@
               </h3>
               
               <!-- 表單與列表 -->
-              <div id="admin-plan-form-container" class="hidden" style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
+              <div id="admin-plan-form-container" class="hidden" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                 <h4 id="admin-plan-form-title" style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">新增讀經計畫</h4>
                 <input type="hidden" id="admin-edit-plan-id">
                 <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱" style="font-size: 0.85rem; padding: 0.4rem;">
@@ -998,7 +998,7 @@
 
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
                 <!-- 1. 大區管理 -->
-                <div style="background: rgba(255, 255, 255, 0.4); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第一步：選擇大區
                     <button class="primary-btn" id="admin-add-region-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增大區</button>
@@ -1011,7 +1011,7 @@
                 </div>
 
                 <!-- 2. 牧區管理 -->
-                <div style="background: rgba(255, 255, 255, 0.4); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第二步：選擇牧區
                     <button class="primary-btn" id="admin-add-zone-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增牧區</button>
@@ -1024,7 +1024,7 @@
                 </div>
 
                 <!-- 3. 小組管理 -->
-                <div style="background: rgba(255, 255, 255, 0.4); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第三步：選擇小組
                     <button class="primary-btn" id="admin-add-group-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增小組</button>

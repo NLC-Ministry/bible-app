@@ -872,7 +872,7 @@ function renderProfileReadingStats() {
           請至「讀經計畫」頁面選擇並加入任一計畫，即可在此查看詳細的進度統計。
         </p>
         
-        <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.2); border: 1px solid var(--border-card); padding: 0.8rem 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; text-align: left;">
+        <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 0.8rem 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; text-align: left;">
           <div style="display: flex; align-items: center; gap: 0.8rem;">
             <div class="stat-icon-wrapper" style="background: rgba(239, 68, 68, 0.1); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ef4444;">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
@@ -923,7 +923,7 @@ function renderProfileReadingStats() {
     <div class="profile-stats-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
       
       <!-- Today's Day -->
-      <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.18); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+      <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper" style="background: rgba(99, 102, 241, 0.1); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary-color);">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -939,7 +939,7 @@ function renderProfileReadingStats() {
       </div>
 
       <!-- Consecutive Streak -->
-      <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.18); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+      <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper" style="background: rgba(239, 68, 68, 0.1); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ef4444;">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
@@ -955,7 +955,7 @@ function renderProfileReadingStats() {
       </div>
 
       <!-- Behind Days -->
-      <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.18); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+      <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper" style="background: ${stats.lagDays > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.lagDays > 0 ? '#ef4444' : 'var(--text-muted)'};">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
@@ -971,7 +971,7 @@ function renderProfileReadingStats() {
       </div>
 
       <!-- Ahead Days -->
-      <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.18); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+      <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper" style="background: ${stats.leadDays > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.leadDays > 0 ? '#10b981' : 'var(--text-muted)'};">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
@@ -987,7 +987,7 @@ function renderProfileReadingStats() {
       </div>
 
       <!-- Makeup Days -->
-      <div class="stat-item-card" style="background: rgba(255, 255, 255, 0.18); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
+      <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper" style="background: ${stats.makeupDays > 0 ? 'rgba(59, 130, 246, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.makeupDays > 0 ? '#3b82f6' : 'var(--text-muted)'};">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
