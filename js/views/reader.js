@@ -638,6 +638,13 @@ function navigateToChapter(direction) {
 async function renderReaderText() {
   const container = document.getElementById("bible-content");
   
+  // Initialize state trackers for loading guard
+  let verses = null;
+  let isLoading = true;
+
+  // Print debug log trace at the very beginning of the rendering function
+  console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
+
   // Reset autoMarked for the newly loaded chapter
   state.readerState.autoMarked = false;
   const heading = document.getElementById("bible-title");
@@ -652,11 +659,16 @@ async function renderReaderText() {
   
   // Synced cache pre-check: if cached, clear instantly for 0ms render; otherwise show skeleton
   const cacheKey = `${book.eng}_${chapter}`;
-  const isCached = !!(window._bibleChapterCache && window._bibleChapterCache[cacheKey]);
-  if (!isCached) {
+  const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
+  if (cachedData && cachedData.verses && cachedData.verses.length > 0) {
+    verses = cachedData.verses;
+    isLoading = false;
+  }
+
+  if (isLoading || !verses) {
     ComponentSkeletonLoader.show('reader', container);
   } else {
-    container.innerHTML = "";
+    renderVersesList(container, verses, book.name, chapter);
   }
   
   // Set checked button status
@@ -670,43 +682,34 @@ async function renderReaderText() {
   }
 
   try {
+    isLoading = true;
     const data = await fetchBibleChapter(book.eng, chapter);
+    verses = data ? data.verses : null;
+    isLoading = false;
 
-    container.innerHTML = "";
-    data.verses.forEach(v => {
-      const verseDiv = document.createElement("div");
-      verseDiv.className = "bible-verse";
-      verseDiv.dataset.verse = String(v.verse);
-      verseDiv.id = `reader-verse-${v.verse}`;
+    // Print updated debug log trace
+    console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
-      // Highlight if marked
-      const highlightKey = `${book.name}_${chapter}_${v.verse}`;
-      if (state.highlights[highlightKey]) {
-        verseDiv.style.backgroundColor = state.highlights[highlightKey];
-        verseDiv.classList.add("selected");
-      }
+    // Data boundary validation checks
+    if (!verses || verses.length === 0) {
+      throw new Error("經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！");
+    }
 
-      verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
-
-      // Add Click listeners for highlighting verses
-      verseDiv.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showContextToolbar(verseDiv, highlightKey);
-      });
-
-      container.appendChild(verseDiv);
-    });
+    renderVersesList(container, verses, book.name, chapter);
+    
     // Trigger predictive pre-fetch for the next chapter in background
     triggerPredictivePrefetch();
   } catch (error) {
     console.error("Failed to load complete Bible chapter:", error);
+    isLoading = false;
+    
+    // Render custom Warm Retry Fallback UI
     container.innerHTML = `
       <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
         <div style="font-size: 2.5rem;">📖</div>
-        <p style="color: var(--text-secondary); font-weight: 700; margin: 0;">載入經文失敗</p>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; max-width: 280px; line-height: 1.5;">${error.message || '請確認網路連線是否正常'}</p>
+        <p style="color: var(--text-secondary); font-weight: 700; margin: 0; font-size: 0.95rem; line-height: 1.5; max-width: 280px;">經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！</p>
         <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 700; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
-          重新點亮畫面 (重試)
+          重新點亮畫面（重試）
         </button>
       </div>
     `;
@@ -717,6 +720,33 @@ async function renderReaderText() {
   
   // Update sticky bottom action bar context
   updateReaderBottomActionBar();
+}
+
+function renderVersesList(container, verses, bookName, chapter) {
+  container.innerHTML = "";
+  verses.forEach(v => {
+    const verseDiv = document.createElement("div");
+    verseDiv.className = "bible-verse";
+    verseDiv.dataset.verse = String(v.verse);
+    verseDiv.id = `reader-verse-${v.verse}`;
+
+    // Highlight if marked
+    const highlightKey = `${bookName}_${chapter}_${v.verse}`;
+    if (state.highlights[highlightKey]) {
+      verseDiv.style.backgroundColor = state.highlights[highlightKey];
+      verseDiv.classList.add("selected");
+    }
+
+    verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
+
+    // Add Click listeners for highlighting verses
+    verseDiv.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showContextToolbar(verseDiv, highlightKey);
+    });
+
+    container.appendChild(verseDiv);
+  });
 }
 
 // Floating context menu toolbar for highlights
