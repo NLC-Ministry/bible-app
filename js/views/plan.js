@@ -3162,7 +3162,18 @@ async function renderGroupParticipantsRankingTable() {
   if (!state.activePlan) return;
 
   const rankingTitle = document.getElementById("ranking-title");
-  const personalStreak = state.currentUser.streak || 0;
+  const currentPlanIdForStats = state.activePlan.id;
+  const currentPresetKeyForStats = state.activePlan.presetKey;
+  const uniquePlanLogs = (logs) => {
+    const unique = new Set();
+    (logs || []).forEach(log => {
+      if (!logMatchesPlan(log, currentPlanIdForStats, currentPresetKeyForStats)) return;
+      unique.add(`${log.book}_${log.chapter}_${log.round || 1}`);
+    });
+    return unique.size;
+  };
+  const myPlanReadCount = uniquePlanLogs(state.readingLogs || []);
+  const personalStreak = myPlanReadCount > 0 ? (state.currentUser.streak || 0) : 0;
 
   // Calculate completedDaysCount (讀完一遍後直接顯示總天數，避免進入二三遍計算落後/超前不準確)
   const isCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
@@ -3334,35 +3345,39 @@ async function renderGroupParticipantsRankingTable() {
 
     groupMembers = groupMembers.map(u => {
       const isMe = u.name === state.currentUser.name;
-      const streak = isMe ? personalStreak : (u.streak || 0);
+      const hasAnyPlanRead = isMe
+        ? myPlanReadCount > 0
+        : ((u.chapters_read || 0) > 0 || ((u.plan_progress || 0) > 0 && Boolean(u.last_read)));
+      const streak = hasAnyPlanRead ? (isMe ? personalStreak : (u.streak || 0)) : 0;
 
       let completed = 0;
       let makeup = 0;
       let diff = 0;
 
-      if (isMe) {
-        completed = completedDaysCount;
-        makeup = Math.max(0, expectedDaysCount - completedDaysCount);
-        diff = completed - expectedDaysCount;
-      } else {
-        completed = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
-        completed = Math.min(completed, state.activePlan.days.length);
-        makeup = Math.max(0, expectedDaysCount - completed);
-        diff = completed - expectedDaysCount;
+      if (hasAnyPlanRead) {
+        if (isMe) {
+          completed = completedDaysCount;
+          makeup = Math.max(0, expectedDaysCount - completedDaysCount);
+          diff = completed - expectedDaysCount;
+        } else {
+          completed = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
+          completed = Math.min(completed, state.activePlan.days.length);
+          makeup = Math.max(0, expectedDaysCount - completed);
+          diff = completed - expectedDaysCount;
+        }
       }
 
-      let statusStr = "進度一致";
+      let statusStr = hasAnyPlanRead ? "進度上一致" : "未開始";
       let statusColor = "var(--text-muted)";
-      if (diff > 0) {
+      if (hasAnyPlanRead && diff > 0) {
         statusStr = `超前 ${diff}天`;
         statusColor = "#10b981";
-      } else if (diff < 0) {
+      } else if (hasAnyPlanRead && diff < 0) {
         statusStr = `落後 ${Math.abs(diff)}天`;
         statusColor = "#ef4444";
       }
 
-      return {
-        name: u.name,
+      return {        name: u.name,
         streak: streak,
         completed: completed,
         makeup: makeup,
