@@ -5402,7 +5402,7 @@ body.reader-nav-hidden #reader-view .floating-nav-btn {
   opacity: 1;
   pointer-events: auto;
 }
-.bottom-sheet-container {
+.bottom-sheet-overlay .bottom-sheet-container {
   width: 100%;
   max-width: 500px;
   background: rgba(24, 24, 37, 0.95);
