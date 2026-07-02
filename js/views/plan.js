@@ -1000,105 +1000,378 @@ async function renderPlanDetailView() {
 function renderHorizontalDateStrip() {
   console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：渲染日曆格子', '資料版本:', state.dataVersion);
 
-  const carousel = document.getElementById("plan-date-carousel");
-  if (!carousel || !state.activePlan) return;
+  const container = document.getElementById("plan-date-carousel");
+  if (!container || !state.activePlan) return;
 
-  carousel.innerHTML = "";
+  container.innerHTML = "";
 
-  const daysCount = state.activePlan.days.length;
+  // 1. Initialize view year and month if not set
+  if (!state.calendarViewYear || !state.calendarViewMonth) {
+    let refDay = null;
+    if (state.selectedPlanDay) {
+      refDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
+    }
+    if (!refDay && state.activePlan.days && state.activePlan.days.length > 0) {
+      refDay = state.activePlan.days[0];
+    }
+    if (refDay) {
+      state.calendarViewYear = Number(refDay.year);
+      state.calendarViewMonth = Number(refDay.month);
+    } else {
+      const now = new Date();
+      state.calendarViewYear = now.getFullYear();
+      state.calendarViewMonth = now.getMonth() + 1;
+    }
+  }
 
-  // 取今天的年/月/日，用於比對計畫日期
+  const viewYear = state.calendarViewYear;
+  const viewMonth = state.calendarViewMonth;
+  const isExpanded = !!state.calendarExpanded;
+
+  // 2. Create the Calendar Wrapper
+  const calendarWrapper = document.createElement("div");
+  calendarWrapper.className = "calendar-component";
+
+  // 3. Create the Header (Month Selector & Toggle Button)
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "calendar-header";
+
+  const titleDiv = document.createElement("div");
+  titleDiv.className = "calendar-month-title";
+  titleDiv.textContent = `${viewYear} 年 ${viewMonth} 月`;
+
+  const actionsDiv = document.createElement("div");
+  actionsDiv.className = "calendar-header-actions";
+
+  // Prev Month Button
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "calendar-nav-btn";
+  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>`;
+  prevBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    state.calendarViewMonth--;
+    if (state.calendarViewMonth < 1) {
+      state.calendarViewMonth = 12;
+      state.calendarViewYear--;
+    }
+    renderHorizontalDateStrip();
+  });
+
+  // Next Month Button
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "calendar-nav-btn";
+  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+  nextBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    state.calendarViewMonth++;
+    if (state.calendarViewMonth > 12) {
+      state.calendarViewMonth = 1;
+      state.calendarViewYear++;
+    }
+    renderHorizontalDateStrip();
+  });
+
+  // Toggle View Button (Week/Month)
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "calendar-toggle-view-btn";
+  toggleBtn.innerHTML = isExpanded 
+    ? `收合 <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="18 15 12 9 6 15"></polyline></svg>`
+    : `展開 <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    state.calendarExpanded = !state.calendarExpanded;
+    renderHorizontalDateStrip();
+  });
+
+  actionsDiv.appendChild(prevBtn);
+  actionsDiv.appendChild(nextBtn);
+  actionsDiv.appendChild(toggleBtn);
+
+  headerDiv.appendChild(titleDiv);
+  headerDiv.appendChild(actionsDiv);
+  calendarWrapper.appendChild(headerDiv);
+
+  // 4. Create Weekday Header
+  const weekdaysDiv = document.createElement("div");
+  weekdaysDiv.className = "calendar-weekdays";
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  weekdays.forEach(w => {
+    const wDiv = document.createElement("div");
+    wDiv.textContent = w;
+    weekdaysDiv.appendChild(wDiv);
+  });
+  calendarWrapper.appendChild(weekdaysDiv);
+
+  // 5. Create Grid Wrapper
+  const gridDiv = document.createElement("div");
+  gridDiv.className = "calendar-grid";
+
+  // Helper function to map calendar cells
   const now = new Date();
   const todayYear = now.getFullYear();
   const todayMonth = now.getMonth() + 1;
   const todayDay = now.getDate();
 
-  for (let dNum = 1; dNum <= daysCount; dNum++) {
-    const day = state.activePlan.days.find(d => d.dayNum === dNum);
-    if (!day) continue;
-
-    const isDayCompleted = day.chapters && day.chapters.length > 0 && day.chapters.every(ch => ch.isRead);
-
-    // 比對日期：day.year / day.month 已有；day.date 格式為 "MM/DD"
-    let isToday = false;
-    let isPast = false;
-    if (day.year && day.month && day.date) {
-      const parts = day.date.split('/');
-      const dayOfMonth = parts.length === 2 ? parseInt(parts[1]) : null;
-      if (dayOfMonth !== null) {
-        const cardYear = day.year;
-        const cardMonth = day.month;
-        const cardDay = dayOfMonth;
-        if (cardYear === todayYear && cardMonth === todayMonth && cardDay === todayDay) {
-          isToday = true;
-        } else if (
-          cardYear < todayYear ||
-          (cardYear === todayYear && cardMonth < todayMonth) ||
-          (cardYear === todayYear && cardMonth === todayMonth && cardDay < todayDay)
-        ) {
-          isPast = true;
-        }
-      }
-    }
-
-    const dateCard = document.createElement("div");
-    dateCard.className = [
-      "date-card",
-      dNum === state.selectedPlanDay ? "active" : "",
-      isDayCompleted ? "completed" : "",
-      isToday ? "today" : "",
-      isPast ? "past" : ""
-    ].filter(Boolean).join(" ");
-    dateCard.setAttribute("data-day", dNum);
-
-    let formattedDate = "";
-    if (day.date) {
-      const parts = day.date.split('/');
-      if (parts.length === 2) {
-        formattedDate = `${parseInt(parts[0])}月${parseInt(parts[1])}日`;
-      } else {
-        formattedDate = day.date;
-      }
-    }
-
-    dateCard.innerHTML = `
-      <span class="day-num">${dNum}</span>
-      <span class="date-lbl">${formattedDate}</span>
-    `;
-
-    dateCard.addEventListener("click", () => {
-      state.selectedPlanDay = dNum;
-
-      // Update active highlight class
-      const cards = carousel.querySelectorAll('.date-card');
-      cards.forEach(c => c.classList.remove('active'));
-      dateCard.classList.add('active');
-
-      // Smoothly scroll the selected day card into the center of viewport
-      dateCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-
-      // Debounce rendering to protect against continuous clicking
-      if (dateClickDebounceTimer) {
-        clearTimeout(dateClickDebounceTimer);
-      }
-      dateClickDebounceTimer = setTimeout(() => {
-        setDataVersion(prev => prev + 1);
-      }, 200);
+  // Find a plan day by exact date
+  const findPlanDay = (year, month, dayOfMonth) => {
+    return state.activePlan.days.find(d => {
+      if (Number(d.year) !== Number(year) || Number(d.month) !== Number(month)) return false;
+      const parts = d.date.split('/');
+      return parts.length === 2 && Number(parts[1]) === Number(dayOfMonth);
     });
+  };
 
-    carousel.appendChild(dateCard);
+  let cells = [];
+
+  if (isExpanded) {
+    // Standard Monthly Grid
+    const firstDayIndex = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0-6
+    const totalDaysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+    // Previous Month padding
+    const prevMonthYear = viewMonth === 1 ? viewYear - 1 : viewYear;
+    const prevMonthVal = viewMonth === 1 ? 12 : viewMonth - 1;
+    const totalDaysInPrevMonth = new Date(prevMonthYear, prevMonthVal, 0).getDate();
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      cells.push({
+        year: prevMonthYear,
+        month: prevMonthVal,
+        dayOfMonth: totalDaysInPrevMonth - i,
+        isOtherMonth: true
+      });
+    }
+
+    // Current Month days
+    for (let i = 1; i <= totalDaysInMonth; i++) {
+      cells.push({
+        year: viewYear,
+        month: viewMonth,
+        dayOfMonth: i,
+        isOtherMonth: false
+      });
+    }
+
+    // Next Month padding
+    const nextMonthYear = viewMonth === 12 ? viewYear + 1 : viewYear;
+    const nextMonthVal = viewMonth === 12 ? 1 : viewMonth + 1;
+    const paddingSize = (7 - (cells.length % 7)) % 7;
+    for (let i = 1; i <= paddingSize; i++) {
+      cells.push({
+        year: nextMonthYear,
+        month: nextMonthVal,
+        dayOfMonth: i,
+        isOtherMonth: true
+      });
+    }
+  } else {
+    // Collapsed Week Grid (around selected date)
+    let refDate = new Date();
+    if (state.selectedPlanDay) {
+      const dayObj = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
+      if (dayObj) {
+        const parts = dayObj.date.split('/');
+        refDate = new Date(dayObj.year, dayObj.month - 1, parseInt(parts[1]));
+      }
+    }
+    const currentWeekday = refDate.getDay();
+    const sundayDate = new Date(refDate);
+    sundayDate.setDate(refDate.getDate() - currentWeekday);
+
+    for (let i = 0; i < 7; i++) {
+      const cellDate = new Date(sundayDate);
+      cellDate.setDate(sundayDate.getDate() + i);
+      cells.push({
+        year: cellDate.getFullYear(),
+        month: cellDate.getMonth() + 1,
+        dayOfMonth: cellDate.getDate(),
+        isOtherMonth: cellDate.getMonth() + 1 !== viewMonth
+      });
+    }
   }
 
-  // Auto center active card on load
-  setTimeout(() => {
-    const activeCard = carousel.querySelector(`.date-card[data-day="${state.selectedPlanDay}"]`);
-    if (activeCard) {
-      activeCard.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+  // Render Grid Cells
+  cells.forEach(cell => {
+    const dayCell = document.createElement("div");
+    dayCell.className = "calendar-day";
+    dayCell.textContent = cell.dayOfMonth;
+
+    if (cell.isOtherMonth) {
+      dayCell.classList.add("other-month");
     }
-  }, 100);
+
+    // Check if this date has a plan day mapped
+    const day = findPlanDay(cell.year, cell.month, cell.dayOfMonth);
+
+    if (day) {
+      dayCell.setAttribute("data-day-num", day.dayNum);
+
+      // Determine day status & styling
+      const totalChapters = day.chapters ? day.chapters.length : 0;
+      let completedChapters = 0;
+
+      if (totalChapters > 0) {
+        day.chapters.forEach(ch => {
+          const currentRound = state.activePlan.currentRound || 1;
+          const taskRound = ch.round || currentRound;
+          let isRead = false;
+          if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+          else if (taskRound === 2) isRead = ch.isReadR2;
+          else if (taskRound >= 3) isRead = ch.isReadR3;
+          else isRead = ch.isRead;
+
+          if (isRead) completedChapters++;
+        });
+      }
+
+      const isDayCompleted = totalChapters > 0 && completedChapters === totalChapters;
+      const isPartiallyCompleted = totalChapters > 0 && completedChapters > 0 && completedChapters < totalChapters;
+
+      // Determine today & past states
+      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
+      const isPast = cell.year < todayYear || 
+                     (cell.year === todayYear && cell.month < todayMonth) || 
+                     (cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth < todayDay);
+
+      // Selected date highlight
+      if (day.dayNum === state.selectedPlanDay) {
+        dayCell.classList.add("active");
+      }
+
+      if (isToday) {
+        dayCell.classList.add("today");
+      }
+
+      // Fully Read
+      if (isDayCompleted) {
+        dayCell.classList.add("completed");
+      }
+
+      // Partially Completed (Progress Bar)
+      if (isPartiallyCompleted) {
+        const progressContainer = document.createElement("div");
+        progressContainer.className = "micro-progress-container";
+        const progressBar = document.createElement("div");
+        progressBar.className = "micro-progress-bar";
+        progressBar.style.width = `${(completedChapters / totalChapters) * 100}%`;
+        progressContainer.appendChild(progressBar);
+        dayCell.appendChild(progressContainer);
+      }
+
+      // Past Unread / Behind (Catch-up Hot Zone)
+      if (isPast && !isDayCompleted && totalChapters > 0) {
+        dayCell.classList.add("past-unread");
+      }
+
+      // Show Day Number indicator (e.g. "D18" or "D18") for plan days
+      const planInd = document.createElement("div");
+      planInd.className = "day-plan-indicator";
+      planInd.textContent = `D${day.dayNum}`;
+      dayCell.appendChild(planInd);
+
+      // Click Event - Date Switching & AbortController Race-Condition Defense
+      dayCell.addEventListener("click", (e) => {
+        e.stopPropagation();
+
+        const clickedDate = `${cell.year}/${String(cell.month).padStart(2, '0')}/${String(cell.dayOfMonth).padStart(2, '0')}`;
+        console.log('📅 [日曆切換防護] 已成功鎖定日期：', clickedDate, '準備渲染對應章節');
+
+        // Cancel previous request
+        if (window._dateSwitchAbortController) {
+          window._dateSwitchAbortController.abort();
+        }
+        window._dateSwitchAbortController = new AbortController();
+        const signal = window._dateSwitchAbortController.signal;
+
+        state.selectedPlanDay = day.dayNum;
+
+        // Update view month/year if we clicked a padding day from another month
+        if (cell.month !== viewMonth || cell.year !== viewYear) {
+          state.calendarViewYear = cell.year;
+          state.calendarViewMonth = cell.month;
+        }
+
+        // Optimistically redraw calendar grid (highlight changes instantly)
+        renderHorizontalDateStrip();
+
+        // Render schedule list tasks
+        renderPlanScheduleTracker(true, signal);
+      });
+
+    } else {
+      // Cell is not part of the reading plan
+      dayCell.style.cursor = "default";
+      dayCell.style.opacity = "0.2";
+    }
+
+    gridDiv.appendChild(dayCell);
+  });
+
+  calendarWrapper.appendChild(gridDiv);
+
+  // 6. Floating Today Button (📅 今日)
+  // Check if selected date is today
+  let isTodaySelected = false;
+  if (state.selectedPlanDay) {
+    const activeDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
+    if (activeDay) {
+      const parts = activeDay.date.split('/');
+      isTodaySelected = Number(activeDay.year) === todayYear && 
+                        Number(activeDay.month) === todayMonth && 
+                        parts.length === 2 && Number(parts[1]) === todayDay;
+    }
+  }
+
+  const todayBtn = document.createElement("button");
+  todayBtn.className = "calendar-today-btn";
+  todayBtn.innerHTML = `📅 今日`;
+  if (isTodaySelected) {
+    todayBtn.classList.add("hidden");
+  }
+
+  // Snap back to today when clicked
+  todayBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    // Find today's day number in the plan
+    const todayPlanDay = state.activePlan.days.find(d => {
+      if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+      const parts = d.date.split('/');
+      return parts.length === 2 && Number(parts[1]) === todayDay;
+    });
+
+    if (todayPlanDay) {
+      state.selectedPlanDay = todayPlanDay.dayNum;
+      state.calendarViewYear = todayYear;
+      state.calendarViewMonth = todayMonth;
+
+      console.log('📅 [日曆切換防護] 今日快速返回鈕觸發，歸位日期：', `${todayYear}/${String(todayMonth).padStart(2, '0')}/${String(todayDay).padStart(2, '0')}`);
+      
+      if (window._dateSwitchAbortController) {
+        window._dateSwitchAbortController.abort();
+      }
+      window._dateSwitchAbortController = new AbortController();
+      const signal = window._dateSwitchAbortController.signal;
+
+      renderHorizontalDateStrip();
+      renderPlanScheduleTracker(true, signal);
+    } else {
+      // If today is not in plan (e.g. plan ended or hasn't started yet), snap to first day
+      state.selectedPlanDay = 1;
+      const firstDay = state.activePlan.days[0];
+      if (firstDay) {
+        state.calendarViewYear = Number(firstDay.year);
+        state.calendarViewMonth = Number(firstDay.month);
+      }
+      renderHorizontalDateStrip();
+      renderPlanScheduleTracker();
+    }
+  });
+
+  calendarWrapper.appendChild(todayBtn);
+  container.appendChild(calendarWrapper);
 }
 
-async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
+async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
   console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：渲染任務章節', '資料版本:', state.dataVersion);
 
   const container = document.getElementById("plan-tasks-list");
@@ -1134,6 +1407,11 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
   // Check checkPlanSchedule
   await checkPlanSchedule(state.activePlan);
 
+  // Validate abort signal
+  if (signal && signal.aborted) {
+    console.log('⏳ [日期切換防護] 偵測到 AbortController 取消，已自動忽略/取消舊日期的非同步請求');
+    return;
+  }
   // Validate request pointer after asynchronous block to prevent race condition overrides
   if (currentRequestId !== lastTrackerRequestId) {
     console.log('⏳ [日期切換防護] 偵測到快速切換，已自動忽略/取消舊日期的非同步請求，當前鎖定日期：', state.selectedPlanDay);
@@ -1151,7 +1429,14 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
       statusPill.style.background = "rgba(99, 102, 241, 0.1)";
       statusPill.style.color = "var(--primary-color)";
     } else {
-      const allDone = selectedDay.chapters.every(ch => ch.isRead);
+      const allDone = selectedDay.chapters.every(ch => {
+        const currentRound = state.activePlan.currentRound || 1;
+        const taskRound = ch.round || currentRound;
+        if (taskRound === 1) return ch.isReadR1 || ch.isRead;
+        if (taskRound === 2) return ch.isReadR2;
+        if (taskRound >= 3) return ch.isReadR3;
+        return ch.isRead;
+      });
       if (allDone) {
         statusPill.textContent = "已完成";
         statusPill.style.background = "rgba(16, 185, 129, 0.1)";
@@ -1164,14 +1449,51 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false) {
     }
   }
 
-  // Update completion check on the active date card in the carousel dynamically
-  const activeCard = document.querySelector(`.date-card[data-day="${state.selectedPlanDay}"]`);
+  // Update completion check on the active date card in the calendar dynamically
+  const activeCard = document.querySelector(`.calendar-day[data-day-num="${state.selectedPlanDay}"]`);
   if (activeCard && state.activePlan) {
-    const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => ch.isRead);
+    const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => {
+      const currentRound = state.activePlan.currentRound || 1;
+      const taskRound = ch.round || currentRound;
+      if (taskRound === 1) return ch.isReadR1 || ch.isRead;
+      if (taskRound === 2) return ch.isReadR2;
+      if (taskRound >= 3) return ch.isReadR3;
+      return ch.isRead;
+    });
+
     if (isDayCompleted) {
       activeCard.classList.add("completed");
+      const progressContainer = activeCard.querySelector('.micro-progress-container');
+      if (progressContainer) progressContainer.remove();
     } else {
       activeCard.classList.remove("completed");
+      const totalCh = selectedDay.chapters.length;
+      let completedCh = 0;
+      selectedDay.chapters.forEach(ch => {
+        const currentRound = state.activePlan.currentRound || 1;
+        const taskRound = ch.round || currentRound;
+        let isRead = false;
+        if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+        else if (taskRound === 2) isRead = ch.isReadR2;
+        else if (taskRound >= 3) isRead = ch.isReadR3;
+        else isRead = ch.isRead;
+        if (isRead) completedCh++;
+      });
+
+      let progressContainer = activeCard.querySelector('.micro-progress-container');
+      if (completedCh > 0 && completedCh < totalCh) {
+        if (!progressContainer) {
+          progressContainer = document.createElement("div");
+          progressContainer.className = "micro-progress-container";
+          const progressBar = document.createElement("div");
+          progressBar.className = "micro-progress-bar";
+          progressContainer.appendChild(progressBar);
+          activeCard.appendChild(progressContainer);
+        }
+        progressContainer.querySelector('.micro-progress-bar').style.width = `${(completedCh / totalCh) * 100}%`;
+      } else {
+        if (progressContainer) progressContainer.remove();
+      }
     }
   }
 
@@ -1273,7 +1595,42 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     ch.isRead = checked;
   };
 
+  const updateLocalReadingLogs = (book, chapter, round, checked) => {
+    if (!state.readingLogs) state.readingLogs = [];
+    if (checked) {
+      const exists = state.readingLogs.some(l => 
+        l.book === book && 
+        Number(l.chapter) === Number(chapter) && 
+        Number(l.round || 1) === Number(round) &&
+        (l.plan_id === (state.activePlan ? state.activePlan.id : null) || 
+         l.presetKey === (state.activePlan ? state.activePlan.presetKey : null))
+      );
+      if (!exists) {
+        state.readingLogs.push({
+          book: book,
+          chapter: Number(chapter),
+          round: Number(round),
+          plan_id: state.activePlan ? state.activePlan.id : null,
+          presetKey: state.activePlan ? state.activePlan.presetKey : null,
+          preset_key: state.activePlan ? state.activePlan.presetKey : null,
+          read_at: new Date().toISOString()
+        });
+      }
+    } else {
+      state.readingLogs = state.readingLogs.filter(l => !(
+        l.book === book && 
+        Number(l.chapter) === Number(chapter) && 
+        Number(l.round || 1) === Number(round) &&
+        ((state.activePlan && l.plan_id && l.plan_id === state.activePlan.id) || 
+         (state.activePlan && l.presetKey && l.presetKey === state.activePlan.presetKey) || 
+         (!state.activePlan && !l.plan_id && !l.presetKey) ||
+         ((l.plan_id === null || l.plan_id === undefined) && (l.presetKey === null || l.presetKey === undefined)))
+      ));
+    }
+  };
+
   // 1. 💡 立即在本機更新記憶體狀態與 UI 渲染（完全零延遲）
+  updateLocalReadingLogs(book, chapter, currentRound, willBeChecked);
   applyLocalReadState(chapterObj, willBeChecked);
   calculatePlanProgress();
   
@@ -1297,6 +1654,7 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     .catch(error => {
       console.error("Failed to update reading progress in background", error);
       // 💡 同步失敗時，自動還原打勾狀態並提示使用者
+      updateLocalReadingLogs(book, chapter, currentRound, isCurrentlyRead);
       applyLocalReadState(chapterObj, isCurrentlyRead);
       calculatePlanProgress();
       renderPlanScheduleTracker(true);

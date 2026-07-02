@@ -5916,3 +5916,260 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
   box-shadow: 0 8px 24px rgba(234, 88, 12, 0.25) !important;
 }
 
+/* ==========================================================================
+   Modern Collapsible Monthly Calendar Grid Component
+   ========================================================================== */
+
+/* Calendar container styling */
+.calendar-component {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  transition: max-height 0.3s ease;
+  overflow: visible;
+}
+
+/* Header bar inside calendar */
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calendar-month-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.calendar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-nav-btn {
+  background: transparent;
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.calendar-nav-btn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--primary-color);
+}
+
+.calendar-toggle-view-btn {
+  background: rgba(99, 102, 241, 0.08);
+  border: none;
+  color: var(--primary-color);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: var(--transition-smooth);
+}
+
+.calendar-toggle-view-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* Weekday header row */
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-card);
+  padding-bottom: 6px;
+}
+
+.calendar-weekdays div {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Grid layout */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px 4px;
+  transition: all 0.3s ease;
+}
+
+/* Calendar day cell */
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.calendar-day:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+/* Day states */
+
+/* Selected day */
+.calendar-day.active {
+  color: var(--text-primary) !important;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1.5px solid var(--primary-color) !important;
+  font-weight: 800;
+}
+
+/* Today */
+.calendar-day.today {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+  font-weight: 700;
+}
+
+/* Past Unread / Behind (Catch-up Hot Zone) */
+.calendar-day.past-unread {
+  border: 1.5px solid rgba(249, 115, 22, 0.4);
+  background-color: rgba(249, 115, 22, 0.05);
+  color: #ea580c;
+}
+
+/* Fully read (completed) - Light mode */
+.calendar-day.completed {
+  background: var(--accent-gradient) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.25);
+  animation: pulseCompleted 0.4s ease-out;
+}
+
+/* Fully read (completed) - Dark mode override (blue) */
+body.dark-theme .calendar-day.completed {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.25);
+}
+
+/* Micro progress bar for partially completed days */
+.calendar-day .micro-progress-container {
+  position: absolute;
+  bottom: 4px;
+  width: 50%;
+  height: 2px;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.calendar-day .micro-progress-bar {
+  height: 100%;
+  background: var(--accent-color);
+  border-radius: 1px;
+}
+body.dark-theme .calendar-day .micro-progress-bar {
+  background: #3b82f6;
+}
+
+/* Greyed out days from other months */
+.calendar-day.other-month {
+  opacity: 0.35;
+}
+
+/* Small indicator showing Day Number (e.g. D18) inside cell or as tooltip */
+.calendar-day .day-plan-indicator {
+  position: absolute;
+  top: 2px;
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  scale: 0.85;
+}
+.calendar-day.completed .day-plan-indicator,
+.calendar-day.active .day-plan-indicator {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* Micro pulse animation for completed cells */
+@keyframes pulseCompleted {
+  0% {
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Today Floating Button */
+.calendar-today-btn {
+  position: absolute;
+  bottom: -44px;
+  right: 12px;
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.calendar-today-btn.hidden {
+  opacity: 0 !important;
+  transform: translateY(10px) !important;
+  pointer-events: none !important;
+}
+
+.calendar-today-btn:hover {
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+  transform: translateY(-2px);
+}
+
+.calendar-today-btn:active {
+  transform: scale(0.95);
+}
+
+
