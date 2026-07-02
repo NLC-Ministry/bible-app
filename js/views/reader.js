@@ -1088,14 +1088,21 @@ function renderBibleNavContent() {
     grid.className = "verse-nav-grid";
     
     let totalVerses = 30; // sensible default fallback
+    let localData = null;
     if (book && typeof BIBLE_VERSE_COUNTS !== "undefined") {
       const bookCounts = BIBLE_VERSE_COUNTS[book.eng];
       if (bookCounts && bookCounts[navOverlayState.selectedChapter - 1]) {
         totalVerses = bookCounts[navOverlayState.selectedChapter - 1];
+        localData = {
+          book: book.name,
+          chapter: navOverlayState.selectedChapter,
+          totalVerses: totalVerses
+        };
       }
     }
     
-    console.log(`➡️ [Debug] 聖經目錄載入節數，自本地取得總節數: ${totalVerses}`);
+    // 強制本地撈取除錯軌跡
+    console.log('📦 [本地讀取成功] 已從 Local 讀取出卷章節數據：', localData);
     
     for (let v = 1; v <= totalVerses; v++) {
       const item = document.createElement("div");
