@@ -19,7 +19,6 @@ function initReaderControls() {
   const bookSelect = document.getElementById("reader-book-select");
   const chapterSelect = document.getElementById("reader-chapter-select");
   const testamentSelect = document.getElementById("reader-testament-select");
-  const drawer = document.getElementById("reader-nav-drawer");
   const bookBadge = document.getElementById("reader-book-badge");
   const chapterBadge = document.getElementById("reader-chapter-badge");
   const readerBackBtn = document.getElementById("reader-back-btn");
@@ -37,27 +36,12 @@ function initReaderControls() {
   updatePillLabels();
   renderReaderPicker();
 
-  function toggleDrawer(forceOpen) {
-    if (!drawer) return;
-    const isOpen = drawer.classList.contains("open");
-    const shouldOpen = forceOpen !== undefined ? forceOpen : !isOpen;
-    drawer.classList.toggle("open", shouldOpen);
-    if (shouldOpen) renderReaderPicker();
-    if (bookBadge) bookBadge.classList.toggle("active", shouldOpen);
-    if (chapterBadge) chapterBadge.classList.toggle("active", shouldOpen);
-    
-    const dirBtn = document.getElementById("reader-nav-directory-btn");
-    if (dirBtn) dirBtn.classList.toggle("active", shouldOpen);
+  function openReaderCatalog() {
+    if (typeof window.openBibleNavOverlay === "function") window.openBibleNavOverlay();
   }
 
-  if (bookBadge) bookBadge.addEventListener("click", () => toggleDrawer());
-  if (chapterBadge) chapterBadge.addEventListener("click", () => toggleDrawer());
-
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest("#reader-nav-drawer") && !e.target.closest("#reader-pill-bar") && !e.target.closest("#reader-top-navbar")) {
-      toggleDrawer(false);
-    }
-  }, true);
+  if (bookBadge) bookBadge.addEventListener("click", openReaderCatalog);
+  if (chapterBadge) chapterBadge.addEventListener("click", openReaderCatalog);
 
   // ── New navigation and settings controls (Mockup Screenshot Design) ──
   const navDirectoryBtn = document.getElementById("reader-nav-directory-btn");
@@ -279,8 +263,7 @@ function initReaderControls() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
-      toggleDrawer(false);
+      updatePillLabels();
     });
   }
 
@@ -290,8 +273,7 @@ function initReaderControls() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
-      toggleDrawer(false);
+      updatePillLabels();
     });
   }
 
@@ -440,13 +422,7 @@ function renderReaderChapterGrid() {
       saveReaderPreferences();
       renderReaderText();
       renderReaderPicker();
-      updatePillLabels();
-      const drawer = document.getElementById("reader-nav-drawer");
-      const bookBadge = document.getElementById("reader-book-badge");
-      const chapterBadge = document.getElementById("reader-chapter-badge");
-      if (drawer) drawer.classList.remove("open");
-      if (bookBadge) bookBadge.classList.remove("active");
-      if (chapterBadge) chapterBadge.classList.remove("active");
+      updatePillLabels();
     });
     grid.appendChild(btn);
   }

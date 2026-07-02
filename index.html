@@ -264,38 +264,15 @@
           <button type="button" class="reader-icon-btn" id="reader-search-close-btn" title="&#x95DC;&#x9589;"><i class="bi bi-x-lg"></i></button>
         </div>
 
-        <!-- ── Collapsible Navigation Drawer ── -->
-        <div class="reader-nav-drawer" id="reader-nav-drawer">
-          <div class="reader-nav-drawer-inner">
-            <div class="reader-nav-selects reader-native-selects-hidden">
-              <select id="reader-testament-select" class="form-control reader-select-compact">
-                <option value="all">全部</option>
-                <option value="old">舊約</option>
-                <option value="new">新約</option>
-              </select>
-              <select id="reader-book-select" class="form-control reader-select-compact">
-                <!-- Generated dynamically -->
-              </select>
-              <select id="reader-chapter-select" class="form-control reader-select-compact">
-                <!-- Generated dynamically -->
-              </select>
-            </div>
-            <div class="reader-picker-panel">
-              <div class="reader-picker-tabs" id="reader-testament-buttons">
-                <button type="button" class="reader-picker-tab active" data-testament="all">全部</button>
-                <button type="button" class="reader-picker-tab" data-testament="old">舊約</button>
-                <button type="button" class="reader-picker-tab" data-testament="new">新約</button>
-              </div>
-              <div class="reader-picker-section">
-                <div class="reader-picker-title">選擇書卷</div>
-                <div class="reader-book-grid" id="reader-book-grid"></div>
-              </div>
-              <div class="reader-picker-section">
-                <div class="reader-picker-title">選擇章節</div>
-                <div class="reader-chapter-grid" id="reader-chapter-grid"></div>
-              </div>
-            </div>
-          </div>
+        <!-- Hidden reader selectors kept for existing state logic; visual catalog is the full-page overlay. -->
+        <div class="reader-hidden-state-controls" aria-hidden="true">
+          <select id="reader-testament-select" tabindex="-1">
+            <option value="all">&#x5168;&#x90E8;</option>
+            <option value="old">&#x820A;&#x7D04;</option>
+            <option value="new">&#x65B0;&#x7D04;</option>
+          </select>
+          <select id="reader-book-select" tabindex="-1"></select>
+          <select id="reader-chapter-select" tabindex="-1"></select>
         </div>
 
         <!-- ── Floating Navigation Buttons ── -->

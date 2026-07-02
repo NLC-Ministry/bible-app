@@ -4983,3 +4983,126 @@ body.reader-page .reader-ref-chip {
     max-width: 32vw;
   }
 }
+
+
+/* Reader catalog/search visual refresh: project-native, no legacy drawer */
+.reader-hidden-state-controls,
+.reader-nav-drawer,
+.reader-picker-panel {
+  display: none !important;
+}
+
+:root {
+  --reader-accent: var(--primary-color, #6366f1);
+  --reader-layer-bg: var(--bg-app);
+  --reader-layer-card: var(--bg-card);
+  --reader-layer-line: var(--border-card);
+}
+
+.full-page-overlay {
+  background: radial-gradient(circle at 50% -10%, rgba(99, 102, 241, 0.16), transparent 30%), var(--bg-app) !important;
+  color: var(--text-primary) !important;
+}
+
+.bible-native-overlay-header,
+.search-header,
+.segmented-control,
+.mode-selector-bar {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: var(--border-card) !important;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.overlay-back-btn,
+.overlay-title,
+.segmented-tab,
+.toggle-container,
+.view-mode-container,
+.view-mode-btn,
+.search-cancel-btn {
+  color: var(--text-primary) !important;
+}
+
+.overlay-version {
+  color: var(--text-secondary) !important;
+  background: rgba(99, 102, 241, 0.12) !important;
+  border: 1px solid rgba(99, 102, 241, 0.24) !important;
+  border-radius: 999px;
+}
+
+.segmented-tab.active,
+.view-mode-btn.active,
+.grid-item-book.active .abbrev-title,
+.grid-item-number.active,
+.list-item-book.active,
+.search-cancel-btn {
+  color: var(--reader-accent) !important;
+}
+
+.segmented-tab.active {
+  border-bottom-color: var(--reader-accent) !important;
+}
+
+.overlay-scroll-content {
+  background: transparent !important;
+}
+
+.bible-nav-section-title {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--text-muted) !important;
+  border-top: 1px solid var(--border-card);
+  border-bottom: 1px solid var(--border-card);
+}
+
+.grid-item-book,
+.grid-item-number,
+.list-item-book,
+.search-result-item {
+  background: rgba(255, 255, 255, 0.045) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-primary) !important;
+}
+
+.grid-item-book .abbrev-title,
+.grid-item-book .full-title,
+.search-result-text {
+  color: var(--text-primary) !important;
+}
+
+.grid-item-book .full-title,
+.search-results-info {
+  color: var(--text-muted) !important;
+}
+
+.grid-item-book.active,
+.grid-item-number.active,
+.list-item-book.active {
+  background: rgba(99, 102, 241, 0.16) !important;
+  border-color: rgba(99, 102, 241, 0.38) !important;
+}
+
+.search-input-field {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-card) !important;
+}
+
+.search-input-field:focus {
+  background: rgba(255, 255, 255, 0.11) !important;
+  border-color: rgba(99, 102, 241, 0.42) !important;
+}
+
+.search-icon-inside,
+.search-clear-btn {
+  color: var(--text-muted) !important;
+}
+
+.search-results-info {
+  background: rgba(255, 255, 255, 0.025) !important;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.search-result-ref {
+  color: var(--reader-accent) !important;
+}
