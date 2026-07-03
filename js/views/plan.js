@@ -996,6 +996,10 @@ async function renderPlanDetailView() {
   allSubviewsInit.forEach(s => s.classList.add("hidden"));
   if (subviewSchedule) subviewSchedule.classList.remove("hidden");
   renderPlanScheduleTracker();
+
+  // Initialize plan view mode (default is 'card')
+  if (!state.planViewMode) state.planViewMode = 'card';
+  window.setPlanViewMode(state.planViewMode);
 }
 function renderHorizontalDateStrip() {
   console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：渲染日曆格子', '資料版本:', state.dataVersion);
@@ -1083,9 +1087,20 @@ function renderHorizontalDateStrip() {
     renderHorizontalDateStrip();
   });
 
+  // Back to Card Mode Button
+  const backBtn = document.createElement("button");
+  backBtn.className = "calendar-toggle-view-btn";
+  backBtn.style.cssText = "background: rgba(99, 102, 241, 0.08); color: var(--primary-color); font-weight: 700;";
+  backBtn.innerHTML = `🔙 返回卡片`;
+  backBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    window.setPlanViewMode('card');
+  });
+
   actionsDiv.appendChild(prevBtn);
   actionsDiv.appendChild(nextBtn);
   actionsDiv.appendChild(toggleBtn);
+  actionsDiv.appendChild(backBtn);
 
   headerDiv.appendChild(titleDiv);
   headerDiv.appendChild(actionsDiv);
@@ -4351,4 +4366,58 @@ window.showPlanStatsModal = function() {
     modalOverlay.style.opacity = "1";
     modalContainer.style.transform = "scale(1)";
   });
+};
+
+window.setPlanViewMode = function(currentView) {
+  state.planViewMode = currentView;
+  console.log('🔄 [視圖切換] 當前模式變更為：', currentView);
+
+  const coverCard = document.getElementById("plan-detail-cover");
+  const actionsBar = document.getElementById("plan-view-actions-bar");
+  const calendarCarousel = document.getElementById("plan-date-carousel");
+
+  if (currentView === 'calendar') {
+    if (coverCard) coverCard.style.display = "none";
+    if (actionsBar) actionsBar.style.display = "none";
+    if (calendarCarousel) {
+      calendarCarousel.style.display = "";
+      // Ensure calendar grid container is full width
+      const calendarComp = calendarCarousel.querySelector(".calendar-component");
+      if (calendarComp) {
+        calendarComp.style.width = "100%";
+        calendarComp.style.maxWidth = "none";
+        calendarComp.style.padding = "16px";
+        calendarComp.style.boxSizing = "border-box";
+      }
+    }
+  } else {
+    // default 'card' mode
+    if (coverCard) coverCard.style.display = "";
+    if (actionsBar) actionsBar.style.display = "flex";
+    if (calendarCarousel) {
+      calendarCarousel.style.display = "none";
+    }
+  }
+};
+
+window.snapCalendarToToday = function() {
+  const now = new Date();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const todayPlanDay = state.activePlan.days.find(d => {
+    if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+    const parts = d.date.split('/');
+    return parts.length === 2 && Number(parts[1]) === todayDay;
+  });
+  if (todayPlanDay) {
+    state.selectedPlanDay = todayPlanDay.dayNum;
+    state.calendarViewYear = todayYear;
+    state.calendarViewMonth = todayMonth;
+    renderHorizontalDateStrip();
+    renderPlanScheduleTracker();
+    showToast("已跳轉至今日進度");
+  } else {
+    showToast("今日不在計畫期間內");
+  }
 };
