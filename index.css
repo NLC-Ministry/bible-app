@@ -6213,4 +6213,32 @@ body.dark-theme .calendar-day.completed .day-plan-indicator {
   transform: scale(0.95);
 }
 
+/* Bottom sheet contrast fixes */
+.bottom-sheet-overlay #bottom-sheet-title {
+  color: #f8fafc;
+}
 
+.bottom-sheet-overlay .bottom-sheet-close-btn {
+  color: #cbd5e1;
+}
+
+.bottom-sheet-overlay .bottom-sheet-close-btn:hover {
+  color: #ffffff;
+}
+
+.bottom-sheet-overlay .bottom-sheet-content > div {
+  color: #cbd5e1 !important;
+}
+
+.bottom-sheet-overlay .bottom-sheet-item {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f8fafc !important;
+}
+
+.bottom-sheet-overlay .bottom-sheet-item:hover,
+.bottom-sheet-overlay .bottom-sheet-item.selected {
+  background: rgba(129, 140, 248, 0.18);
+  border-color: rgba(165, 180, 252, 0.5);
+  color: #c7d2fe !important;
+}
