@@ -3263,15 +3263,15 @@ button.logout-btn:hover {
   font-size: 0.62rem;
 }
 .plan-day-heading {
-  margin-bottom: 0.35rem !important;
+  margin-bottom: 0.8rem !important;
 }
 .plan-day-heading #plan-day-subtitle {
-  font-size: clamp(1rem, 4vw, 1.18rem) !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
 }
 .plan-day-heading #plan-day-status-pill {
-  padding: 0.22rem 0.7rem !important;
-  border-radius: 999px;
-  font-size: 0.72rem !important;
+  display: none !important;
 }
 .plan-tasks-list {
   gap: 0.38rem !important;
@@ -6046,69 +6046,71 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
 }
 
 .calendar-day:active {
-  transform: scale(0.92);
-  background: rgba(99, 102, 241, 0.08);
+  transform: scale(0.95) !important;
 }
 
 /* Day states */
 
 /* Selected day */
-.calendar-day.active {
-  color: var(--text-primary) !important;
-  background: rgba(99, 102, 241, 0.08) !important;
-  border: 2px solid var(--primary-color) !important;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-  font-weight: 800;
+.calendar-day.active:not(.today) .day-number {
+  border: 1px solid var(--border-card) !important;
+  background: rgba(99, 102, 241, 0.05) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* Today (Real Today) */
 .calendar-day.today {
-  border: 2px solid var(--primary-color) !important;
-  font-weight: 800 !important;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 .calendar-day.today .day-number {
-  color: var(--primary-color) !important;
+  width: 36px !important;
+  height: 36px !important;
+  background-color: #ef4444 !important; /* bg-red-500 */
+  color: #ffffff !important; /* text-white */
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   font-weight: 800 !important;
+  font-size: 0.95rem !important;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3) !important;
 }
 
 /* Past Unread / Behind (Catch-up Hot Zone) */
 .calendar-day.past-unread {
-  border: 1.5px solid rgba(249, 115, 22, 0.4) !important;
-  background-color: rgba(249, 115, 22, 0.04) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 .calendar-day.past-unread .day-number {
   color: #ea580c !important;
 }
 
-/* Fully read (completed) - Light mode (Low saturation emerald-50 background) */
+/* Fully read (completed) - Light & Dark mode transparent bg, normal text color */
 .calendar-day.completed {
-  background: #ecfdf5 !important;
-  border-color: transparent !important;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.08) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
   animation: pulseCompleted 0.4s ease-out;
 }
 .calendar-day.completed .day-number {
-  color: #047857 !important; /* emerald-700 */
-}
-
-/* Fully read (completed) - Dark mode override (translucent emerald-950/40) */
-body.dark-theme .calendar-day.completed {
-  background: rgba(6, 78, 59, 0.4) !important;
-  box-shadow: none !important;
-}
-body.dark-theme .calendar-day.completed .day-number {
-  color: #34d399 !important; /* emerald-400 */
+  font-weight: 700 !important;
 }
 
 /* Combine Today + Completed visually */
-.calendar-day.today.completed {
-  border: 2px solid var(--primary-color) !important;
-  background: #ecfdf5 !important;
-}
-body.dark-theme .calendar-day.today.completed {
-  border: 2px solid var(--primary-color) !important;
-  background: rgba(6, 78, 59, 0.4) !important;
+.calendar-day.today.completed .day-number {
+  width: 36px !important;
+  height: 36px !important;
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
 }
 
 /* Micro progress bar for partially completed days */
@@ -6139,25 +6141,22 @@ body.dark-theme .calendar-day .micro-progress-bar {
   color: var(--text-muted);
 }
 
-/* Small indicator showing Day Number (e.g. D18) inside cell */
-.calendar-day .day-plan-indicator {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-top: 1px;
-  line-height: 1;
+/* Bottom status dot indicators */
+.calendar-day .day-status-dot {
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50% !important;
+  margin-top: 4px;
+  display: block;
 }
-.calendar-day.completed .day-plan-indicator {
-  color: #059669 !important;
-  opacity: 0.8;
+.calendar-day .day-status-dot.dot-completed {
+  background-color: #10b981 !important; /* Emerald green */
 }
-body.dark-theme .calendar-day.completed .day-plan-indicator {
-  color: #10b981 !important;
-  opacity: 0.8;
+.calendar-day .day-status-dot.dot-behind {
+  background-color: #ef4444 !important; /* Red */
 }
-.calendar-day.active .day-plan-indicator {
-  color: var(--primary-color) !important;
-  opacity: 0.9;
+.calendar-day .day-status-dot.dot-grey {
+  background-color: #94a3b8 !important; /* Gray */
 }
 
 /* Micro pulse animation for completed cells */

@@ -1094,7 +1094,7 @@ function renderHorizontalDateStrip() {
   // 4. Create Weekday Header
   const weekdaysDiv = document.createElement("div");
   weekdaysDiv.className = "calendar-weekdays";
-  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
   weekdays.forEach(w => {
     const wDiv = document.createElement("div");
     wDiv.textContent = w;
@@ -1246,6 +1246,11 @@ function renderHorizontalDateStrip() {
         dayCell.classList.add("completed");
       }
 
+      // Past Unread / Behind (Catch-up Hot Zone)
+      if (isPast && !isDayCompleted && totalChapters > 0) {
+        dayCell.classList.add("past-unread");
+      }
+
       // Partially Completed (Progress Bar)
       if (isPartiallyCompleted) {
         const progressContainer = document.createElement("div");
@@ -1257,16 +1262,19 @@ function renderHorizontalDateStrip() {
         dayCell.appendChild(progressContainer);
       }
 
-      // Past Unread / Behind (Catch-up Hot Zone)
-      if (isPast && !isDayCompleted && totalChapters > 0) {
-        dayCell.classList.add("past-unread");
+      // Render the bottom status dot (if not today)
+      if (!isToday) {
+        const dot = document.createElement("div");
+        dot.className = "day-status-dot";
+        if (isDayCompleted) {
+          dot.classList.add("dot-completed");
+        } else if (isPast && totalChapters > 0) {
+          dot.classList.add("dot-behind");
+        } else {
+          dot.classList.add("dot-grey");
+        }
+        dayCell.appendChild(dot);
       }
-
-      // Show Day Number indicator (e.g. "D18" or "D18") for plan days
-      const planInd = document.createElement("div");
-      planInd.className = "day-plan-indicator";
-      planInd.textContent = `D${day.dayNum}`;
-      dayCell.appendChild(planInd);
 
       // Click Event - Date Switching & AbortController Race-Condition Defense
       dayCell.addEventListener("click", (e) => {
@@ -1300,7 +1308,16 @@ function renderHorizontalDateStrip() {
     } else {
       // Cell is not part of the reading plan
       dayCell.style.cursor = "default";
-      dayCell.style.opacity = "0.2";
+      dayCell.classList.add("other-month"); // Make it grayed out
+      
+      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
+      if (isToday) {
+        dayCell.classList.add("today");
+      } else {
+        const dot = document.createElement("div");
+        dot.className = "day-status-dot dot-grey";
+        dayCell.appendChild(dot);
+      }
     }
 
     gridDiv.appendChild(dayCell);
@@ -1401,7 +1418,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // Render day subtitle
   const daySubtitle = document.getElementById("plan-day-subtitle");
   if (daySubtitle) {
-    daySubtitle.textContent = `${state.activePlan.totalDays} 天中的第 ${state.selectedPlanDay} 天`;
+    const year = selectedDay.year || new Date().getFullYear();
+    const month = selectedDay.month || (new Date().getMonth() + 1);
+    const dayOfMonth = selectedDay.date ? selectedDay.date.split('/')[1] : new Date().getDate();
+    daySubtitle.textContent = `第 ${state.selectedPlanDay} 天 (${year}年${month}月${dayOfMonth}日)`;
   }
 
   // Check checkPlanSchedule
