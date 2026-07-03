@@ -1011,80 +1011,15 @@ function renderHorizontalDateStrip() {
 
   container.innerHTML = "";
 
-  // 1. Initialize view year and month if not set
-  if (!state.calendarViewYear || !state.calendarViewMonth) {
-    let refDay = null;
-    if (state.selectedPlanDay) {
-      refDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
-    }
-    if (!refDay && state.activePlan.days && state.activePlan.days.length > 0) {
-      refDay = state.activePlan.days[0];
-    }
-    if (refDay) {
-      state.calendarViewYear = Number(refDay.year);
-      state.calendarViewMonth = Number(refDay.month);
-    } else {
-      const now = new Date();
-      state.calendarViewYear = now.getFullYear();
-      state.calendarViewMonth = now.getMonth() + 1;
-    }
-  }
-
-  const viewYear = state.calendarViewYear;
-  const viewMonth = state.calendarViewMonth;
-  const isExpanded = !!state.calendarExpanded;
-
   // 2. Create the Calendar Wrapper (Clean flat look, completely borderless)
   const calendarWrapper = document.createElement("div");
   calendarWrapper.className = "calendar-component";
-  calendarWrapper.style.cssText = "background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; margin: 0 !important;";
+  calendarWrapper.style.cssText = "background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; margin: 0 !important; display: flex; flex-direction: column;";
 
-  // 3. Create the Header (Centred Year-Month & Chevrons around it)
-  const headerDiv = document.createElement("div");
-  headerDiv.className = "calendar-header";
-  headerDiv.style.cssText = "display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; padding: 0 0.5rem; width: 100%;";
-
-  // Prev Month Button
-  const prevBtn = document.createElement("button");
-  prevBtn.className = "calendar-nav-btn";
-  prevBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>`;
-  prevBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    state.calendarViewMonth--;
-    if (state.calendarViewMonth < 1) {
-      state.calendarViewMonth = 12;
-      state.calendarViewYear--;
-    }
-    renderHorizontalDateStrip();
-  });
-
-  const titleDiv = document.createElement("div");
-  titleDiv.className = "calendar-month-title";
-  titleDiv.style.cssText = "font-size: 0.88rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; text-align: center; flex-grow: 1;";
-  titleDiv.textContent = `${viewYear}-${String(viewMonth).padStart(2, '0')}`;
-
-  // Next Month Button
-  const nextBtn = document.createElement("button");
-  nextBtn.className = "calendar-nav-btn";
-  nextBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
-  nextBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    state.calendarViewMonth++;
-    if (state.calendarViewMonth > 12) {
-      state.calendarViewMonth = 1;
-      state.calendarViewYear++;
-    }
-    renderHorizontalDateStrip();
-  });
-
-  headerDiv.appendChild(prevBtn);
-  headerDiv.appendChild(titleDiv);
-  headerDiv.appendChild(nextBtn);
-  calendarWrapper.appendChild(headerDiv);
-
-  // 4. Create Weekday Header
+  // 3. Create Global Static Weekday Header (outside the scroll container)
   const weekdaysDiv = document.createElement("div");
   weekdaysDiv.className = "calendar-weekdays";
+  weekdaysDiv.style.cssText = "display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 0.4rem; padding-bottom: 0.4rem; border-bottom: none !important; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;";
   const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
   weekdays.forEach(w => {
     const wDiv = document.createElement("div");
@@ -1093,11 +1028,11 @@ function renderHorizontalDateStrip() {
   });
   calendarWrapper.appendChild(weekdaysDiv);
 
-  // 5. Create Grid Wrapper
-  const gridDiv = document.createElement("div");
-  gridDiv.className = "calendar-grid";
+  // 4. Create the Scroll Container (max-h-[380px] overflow-y-auto scrollbar-none)
+  const scrollContainer = document.createElement("div");
+  scrollContainer.className = "calendar-scroll-container scrollbar-none";
+  scrollContainer.style.cssText = "max-height: 380px; overflow-y: auto; width: 100%; display: flex; flex-direction: column; gap: 1.5rem; scrollbar-width: none; -ms-overflow-style: none;";
 
-  // Helper function to map calendar cells
   const now = new Date();
   const todayYear = now.getFullYear();
   const todayMonth = now.getMonth() + 1;
@@ -1112,184 +1047,210 @@ function renderHorizontalDateStrip() {
     });
   };
 
-  let cells = [];
-
-  // Standard Monthly Grid (Always render 5 rows / full month flat)
-  const firstDayIndex = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0-6
-  const totalDaysInMonth = new Date(viewYear, viewMonth, 0).getDate();
-
-  // Previous Month padding
-  const prevMonthYear = viewMonth === 1 ? viewYear - 1 : viewYear;
-  const prevMonthVal = viewMonth === 1 ? 12 : viewMonth - 1;
-  const totalDaysInPrevMonth = new Date(prevMonthYear, prevMonthVal, 0).getDate();
-  for (let i = firstDayIndex - 1; i >= 0; i--) {
-    cells.push({
-      year: prevMonthYear,
-      month: prevMonthVal,
-      dayOfMonth: totalDaysInPrevMonth - i,
-      isOtherMonth: true
-    });
-  }
-
-  // Current Month days
-  for (let i = 1; i <= totalDaysInMonth; i++) {
-    cells.push({
-      year: viewYear,
-      month: viewMonth,
-      dayOfMonth: i,
-      isOtherMonth: false
-    });
-  }
-
-  // Next Month padding
-  const nextMonthYear = viewMonth === 12 ? viewYear + 1 : viewYear;
-  const nextMonthVal = viewMonth === 12 ? 1 : viewMonth + 1;
-  const paddingSize = (7 - (cells.length % 7)) % 7;
-  for (let i = 1; i <= paddingSize; i++) {
-    cells.push({
-      year: nextMonthYear,
-      month: nextMonthVal,
-      dayOfMonth: i,
-      isOtherMonth: true
-    });
-  }
-
-  // Render Grid Cells
-  cells.forEach(cell => {
-    const dayCell = document.createElement("div");
-    dayCell.className = "calendar-day";
-    dayCell.innerHTML = `<span class="day-number">${cell.dayOfMonth}</span>`;
-
-    if (cell.isOtherMonth) {
-      dayCell.classList.add("other-month");
+  // Group plan days into unique year-month segments dynamically (continuous months)
+  const planMonths = [];
+  state.activePlan.days.forEach(d => {
+    const y = Number(d.year);
+    const m = Number(d.month);
+    if (!planMonths.some(pm => pm.year === y && pm.month === m)) {
+      planMonths.push({ year: y, month: m });
     }
+  });
+  planMonths.sort((a, b) => (a.year * 12 + a.month) - (b.year * 12 + b.month));
 
-    // Check if this date has a plan day mapped
-    const day = findPlanDay(cell.year, cell.month, cell.dayOfMonth);
+  // Render each month block
+  planMonths.forEach(pm => {
+    const monthBlock = document.createElement("div");
+    monthBlock.style.cssText = "display: flex; flex-direction: column; position: relative;";
 
-    if (day) {
-      dayCell.setAttribute("data-day-num", day.dayNum);
+    // Sticky Month Header (top-0 bg-slate-950 backdrop-blur)
+    const monthHeader = document.createElement("div");
+    monthHeader.className = "calendar-month-header";
+    monthHeader.style.cssText = "position: sticky; top: 0; background: #020617 !important; z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 0.6rem 0; font-size: 0.88rem; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; text-align: center; margin-bottom: 0.5rem;";
+    monthHeader.textContent = `${pm.year}-${String(pm.month).padStart(2, '0')}`;
+    monthBlock.appendChild(monthHeader);
 
-      // Determine day status & styling
-      const totalChapters = day.chapters ? day.chapters.length : 0;
-      let completedChapters = 0;
+    // Month Grid
+    const gridDiv = document.createElement("div");
+    gridDiv.className = "calendar-grid";
+    gridDiv.style.cssText = "display: grid; grid-template-columns: repeat(7, 1fr); gap: 24px 4px !important; padding: 8px 0 !important;";
 
-      if (totalChapters > 0) {
-        day.chapters.forEach(ch => {
-          const currentRound = state.activePlan.currentRound || 1;
-          const taskRound = ch.round || currentRound;
-          let isRead = false;
-          if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
-          else if (taskRound === 2) isRead = ch.isReadR2;
-          else if (taskRound >= 3) isRead = ch.isReadR3;
-          else isRead = ch.isRead;
+    // Cells calculation
+    const firstDayIndex = new Date(pm.year, pm.month - 1, 1).getDay(); // 0-6
+    const totalDaysInMonth = new Date(pm.year, pm.month, 0).getDate();
 
-          if (isRead) completedChapters++;
-        });
-      }
+    let cells = [];
 
-      const isDayCompleted = totalChapters > 0 && completedChapters === totalChapters;
-      const isPartiallyCompleted = totalChapters > 0 && completedChapters > 0 && completedChapters < totalChapters;
-
-      // Determine today & past states
-      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
-      const isPast = cell.year < todayYear || 
-                     (cell.year === todayYear && cell.month < todayMonth) || 
-                     (cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth < todayDay);
-
-      // Selected date highlight
-      if (day.dayNum === state.selectedPlanDay) {
-        dayCell.classList.add("active");
-      }
-
-      if (isToday) {
-        dayCell.classList.add("today");
-      }
-
-      // Fully Read
-      if (isDayCompleted) {
-        dayCell.classList.add("completed");
-      }
-
-      // Past Unread / Behind (Catch-up Hot Zone)
-      if (isPast && !isDayCompleted && totalChapters > 0) {
-        dayCell.classList.add("past-unread");
-      }
-
-      // Partially Completed (Progress Bar)
-      if (isPartiallyCompleted) {
-        const progressContainer = document.createElement("div");
-        progressContainer.className = "micro-progress-container";
-        const progressBar = document.createElement("div");
-        progressBar.className = "micro-progress-bar";
-        progressBar.style.width = `${(completedChapters / totalChapters) * 100}%`;
-        progressContainer.appendChild(progressBar);
-        dayCell.appendChild(progressContainer);
-      }
-
-      // Render the bottom status dot (if not today)
-      if (!isToday) {
-        const dot = document.createElement("div");
-        dot.className = "day-status-dot";
-        if (isDayCompleted) {
-          dot.classList.add("dot-completed");
-        } else if (isPast && totalChapters > 0) {
-          dot.classList.add("dot-behind");
-        } else {
-          dot.classList.add("dot-grey");
-        }
-        dayCell.appendChild(dot);
-      }
-
-      // Click Event - Date Switching & AbortController Race-Condition Defense
-      dayCell.addEventListener("click", (e) => {
-        e.stopPropagation();
-
-        const clickedDate = `${cell.year}/${String(cell.month).padStart(2, '0')}/${String(cell.dayOfMonth).padStart(2, '0')}`;
-        console.log('📅 [日曆切換防護] 已成功鎖定日期：', clickedDate, '準備渲染對應章節');
-
-        // Cancel previous request
-        if (window._dateSwitchAbortController) {
-          window._dateSwitchAbortController.abort();
-        }
-        window._dateSwitchAbortController = new AbortController();
-        const signal = window._dateSwitchAbortController.signal;
-
-        state.selectedPlanDay = day.dayNum;
-
-        // Update view month/year if we clicked a padding day from another month
-        if (cell.month !== viewMonth || cell.year !== viewYear) {
-          state.calendarViewYear = cell.year;
-          state.calendarViewMonth = cell.month;
-        }
-
-        // Optimistically redraw calendar grid (highlight changes instantly)
-        renderHorizontalDateStrip();
-
-        // Render schedule list tasks
-        renderPlanScheduleTracker(true, signal);
+    // Previous Month padding
+    const prevMonthYear = pm.month === 1 ? pm.year - 1 : pm.year;
+    const prevMonthVal = pm.month === 1 ? 12 : pm.month - 1;
+    const totalDaysInPrevMonth = new Date(prevMonthYear, prevMonthVal, 0).getDate();
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      cells.push({
+        year: prevMonthYear,
+        month: prevMonthVal,
+        dayOfMonth: totalDaysInPrevMonth - i,
+        isOtherMonth: true
       });
-
-    } else {
-      // Cell is not part of the reading plan
-      dayCell.style.cursor = "default";
-      dayCell.classList.add("other-month"); // Make it grayed out
-      
-      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
-      if (isToday) {
-        dayCell.classList.add("today");
-      } else {
-        const dot = document.createElement("div");
-        dot.className = "day-status-dot dot-grey";
-        dayCell.appendChild(dot);
-      }
     }
+
+    // Current Month days
+    for (let i = 1; i <= totalDaysInMonth; i++) {
+      cells.push({
+        year: pm.year,
+        month: pm.month,
+        dayOfMonth: i,
+        isOtherMonth: false
+      });
+    }
+
+    // Next Month padding
+    const nextMonthYear = pm.month === 12 ? pm.year + 1 : pm.year;
+    const nextMonthVal = pm.month === 12 ? 1 : pm.month + 1;
+    const paddingSize = (7 - (cells.length % 7)) % 7;
+    for (let i = 1; i <= paddingSize; i++) {
+      cells.push({
+        year: nextMonthYear,
+        month: nextMonthVal,
+        dayOfMonth: i,
+        isOtherMonth: true
+      });
+    }
+
+    // Render cells
+    cells.forEach(cell => {
+      const dayCell = document.createElement("div");
+      dayCell.className = "calendar-day";
+      dayCell.innerHTML = `<span class="day-number">${cell.dayOfMonth}</span>`;
+
+      if (cell.isOtherMonth) {
+        dayCell.classList.add("other-month");
+      }
+
+      const day = findPlanDay(cell.year, cell.month, cell.dayOfMonth);
+      if (day) {
+        dayCell.setAttribute("data-day-num", day.dayNum);
+
+        const totalChapters = day.chapters ? day.chapters.length : 0;
+        let completedChapters = 0;
+
+        if (totalChapters > 0) {
+          day.chapters.forEach(ch => {
+            const currentRound = state.activePlan.currentRound || 1;
+            const taskRound = ch.round || currentRound;
+            let isRead = false;
+            if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+            else if (taskRound === 2) isRead = ch.isReadR2;
+            else if (taskRound >= 3) isRead = ch.isReadR3;
+            else isRead = ch.isRead;
+
+            if (isRead) completedChapters++;
+          });
+        }
+
+        const isDayCompleted = totalChapters > 0 && completedChapters === totalChapters;
+        const isPartiallyCompleted = totalChapters > 0 && completedChapters > 0 && completedChapters < totalChapters;
+
+        const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
+        const isPast = cell.year < todayYear || 
+                       (cell.year === todayYear && cell.month < todayMonth) || 
+                       (cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth < todayDay);
+
+        // Highlight selected day
+        if (day.dayNum === state.selectedPlanDay) {
+          dayCell.classList.add("active");
+        }
+
+        if (isToday) {
+          dayCell.classList.add("today");
+        }
+
+        if (isDayCompleted) {
+          dayCell.classList.add("completed");
+        }
+
+        if (isPast && !isDayCompleted && totalChapters > 0) {
+          dayCell.classList.add("past-unread");
+        }
+
+        if (isPartiallyCompleted) {
+          const progressContainer = document.createElement("div");
+          progressContainer.className = "micro-progress-container";
+          const progressBar = document.createElement("div");
+          progressBar.className = "micro-progress-bar";
+          progressBar.style.width = `${(completedChapters / totalChapters) * 100}%`;
+          progressContainer.appendChild(progressBar);
+          dayCell.appendChild(progressContainer);
+        }
+
+        // Status dot indicator
+        if (!isToday) {
+          const dot = document.createElement("div");
+          dot.className = "day-status-dot";
+          if (isDayCompleted) {
+            dot.classList.add("dot-completed");
+          } else if (isPast && totalChapters > 0) {
+            dot.classList.add("dot-behind");
+          } else {
+            dot.classList.add("dot-grey");
+          }
+          dayCell.appendChild(dot);
+        }
+
+        // Click handler with race condition cancellation
+        dayCell.addEventListener("click", (e) => {
+          e.stopPropagation();
+
+          const clickedDate = `${cell.year}/${String(cell.month).padStart(2, '0')}/${String(cell.dayOfMonth).padStart(2, '0')}`;
+          console.log('📅 [日曆切換防護] 已成功鎖定日期：', clickedDate, '準備渲染對應章節');
+
+          if (window._dateSwitchAbortController) {
+            window._dateSwitchAbortController.abort();
+          }
+          window._dateSwitchAbortController = new AbortController();
+          const signal = window._dateSwitchAbortController.signal;
+
+          state.selectedPlanDay = day.dayNum;
+
+          // Redraw to refresh highlights (active state)
+          renderHorizontalDateStrip();
+          renderPlanScheduleTracker(true, signal);
+        });
+
+      } else {
+        // Not part of the reading plan
+        dayCell.style.cursor = "default";
+        dayCell.classList.add("other-month");
+
+        const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
+        if (isToday) {
+          dayCell.classList.add("today");
+        } else {
+          const dot = document.createElement("div");
+          dot.className = "day-status-dot dot-grey";
+          dayCell.appendChild(dot);
+        }
+      }
 
     gridDiv.appendChild(dayCell);
   });
 
-  calendarWrapper.appendChild(gridDiv);
+    monthBlock.appendChild(gridDiv);
+    scrollContainer.appendChild(monthBlock);
+  });
+
+  calendarWrapper.appendChild(scrollContainer);
   container.appendChild(calendarWrapper);
+
+  // Auto-scroll selected day into view (centered)
+  setTimeout(() => {
+    const activeDayCell = scrollContainer.querySelector(".calendar-day.active");
+    const todayDayCell = scrollContainer.querySelector(".calendar-day.today");
+    const targetCell = activeDayCell || todayDayCell;
+    if (targetCell) {
+      targetCell.scrollIntoView({ block: "center", behavior: "auto" });
+    }
+  }, 60);
 }
 
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {

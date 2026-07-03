@@ -6246,3 +6246,8 @@ body.dark-theme .calendar-day .micro-progress-bar {
   border-color: rgba(165, 180, 252, 0.5);
   color: #c7d2fe !important;
 }
+
+/* Hide scrollbars for the calendar scroll container in Webkit browsers */
+.calendar-scroll-container::-webkit-scrollbar {
+  display: none !important;
+}
