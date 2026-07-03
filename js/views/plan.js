@@ -2810,13 +2810,47 @@ async function renderPlanStatsView() {
       }
     }
 
-    // 4. Makeup/Catch up days (補讀)
-    // Round 2+: freeze at round-1 value (should be 0 if round 1 is done)
-    const makeupDays = currentRound > 1
-      ? Math.max(0, totalPlanDays - completedR1)  // frozen from round 1
-      : Math.max(0, expectedDaysCount - completedR1);
+    // 4. Makeup/Catch up days (🛡️ 進度救援)
+    const planStart = new Date(state.activePlan.startDate);
+    planStart.setHours(0,0,0,0);
+    const targetRoundsVal = getPlanLevelRounds(state.activePlan.level || "normal");
+    let catchUpDaysVal = 0;
+    for (let r = 1; r <= targetRoundsVal; r++) {
+      state.activePlan.days.forEach((day, index) => {
+        const d = index + 1;
+        const scheduledDate = new Date(planStart);
+        scheduledDate.setDate(planStart.getDate() + (d - 1));
+        const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+        
+        const roundLogs = (state.readingLogs || []).filter(l => 
+          (l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey) &&
+          (l.round || 1) === r
+        );
+        
+        let allChaptersCompleted = true;
+        let maxReadDateStr = "";
+        
+        for (const ch of day.chapters) {
+          const log = roundLogs.find(l => l.book === ch.book && l.chapter === ch.chapter);
+          if (!log) {
+            allChaptersCompleted = false;
+            break;
+          }
+          const logDateStr = log.read_at.substring(0, 10);
+          if (!maxReadDateStr || logDateStr > maxReadDateStr) {
+            maxReadDateStr = logDateStr;
+          }
+        }
+        
+        if (allChaptersCompleted && maxReadDateStr) {
+          if (maxReadDateStr > scheduledDateStr) {
+            catchUpDaysVal++;
+          }
+        }
+      });
+    }
     const reportStatMakeup = document.getElementById("report-stat-makeup");
-    if (reportStatMakeup) reportStatMakeup.textContent = makeupDays;
+    if (reportStatMakeup) reportStatMakeup.textContent = catchUpDaysVal;
 
     // 5. Cumulative chapters read (累積閱讀章數) — 所有遍次累計，不重置
     const reportStatTotalChapters = document.getElementById("report-stat-total-chapters");
@@ -3939,3 +3973,362 @@ async function renderPlanMembersView() {
     await renderGroupParticipantsRankingTable();
   }
 }
+
+window.showPlanStatsModal = function() {
+  if (!state.activePlan) {
+    showToast("尚未加入任何計畫");
+    return;
+  }
+
+  const plan = state.activePlan;
+  const streakDays = state.currentUser.streak || 0;
+
+  // 1. Calculate today's chapters progress
+  const now = new Date();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const todayDayObj = plan.days.find(d => {
+    if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+    const parts = d.date.split('/');
+    return parts.length === 2 && Number(parts[1]) === todayDay;
+  });
+
+  let todayTotalCount = 0;
+  let todayReadCount = 0;
+  if (todayDayObj && todayDayObj.chapters) {
+    todayTotalCount = todayDayObj.chapters.length;
+    todayDayObj.chapters.forEach(ch => {
+      const currentRound = plan.currentRound || 1;
+      const taskRound = ch.round || currentRound;
+      let isRead = false;
+      if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+      else if (taskRound === 2) isRead = ch.isReadR2;
+      else if (taskRound >= 3) isRead = ch.isReadR3;
+      else isRead = ch.isRead;
+      if (isRead) todayReadCount++;
+    });
+  }
+
+  // 2. Calculate overall plan progress
+  const totalCompletionRate = plan.progress || 0;
+
+  // 3. Calculate catch-up days (進度救援)
+  const start = new Date(plan.startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(plan.endDate);
+  end.setHours(0, 0, 0, 0);
+  const totalDays = plan.totalDays || (Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
+  const todayZero = new Date();
+  todayZero.setHours(0, 0, 0, 0);
+  const elapsedDays = Math.max(0, Math.min(totalDays, Math.round((todayZero - start) / (1000 * 60 * 60 * 24)) + 1));
+  const targetRounds = getPlanLevelRounds(plan.level || "normal");
+
+  let catchUpDays = 0;
+  for (let r = 1; r <= targetRounds; r++) {
+    plan.days.forEach((day, index) => {
+      const d = index + 1;
+      const scheduledDate = new Date(start);
+      scheduledDate.setDate(start.getDate() + (d - 1));
+      const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+      
+      const roundLogs = (state.readingLogs || []).filter(l => 
+        (l.plan_id === plan.id || l.presetKey === plan.presetKey) &&
+        (l.round || 1) === r
+      );
+      
+      let allChaptersCompleted = true;
+      let maxReadDateStr = "";
+      
+      for (const ch of day.chapters) {
+        const log = roundLogs.find(l => l.book === ch.book && l.chapter === ch.chapter);
+        if (!log) {
+          allChaptersCompleted = false;
+          break;
+        }
+        const logDateStr = log.read_at.substring(0, 10);
+        if (!maxReadDateStr || logDateStr > maxReadDateStr) {
+          maxReadDateStr = logDateStr;
+        }
+      }
+      
+      if (allChaptersCompleted && maxReadDateStr) {
+        if (maxReadDateStr > scheduledDateStr) {
+          catchUpDays++;
+        }
+      }
+    });
+  }
+
+  // 4. Calculate cumulative chapters read (累計閱讀)
+  const currentPlanId = plan.id;
+  const currentPresetKey = plan.presetKey;
+  const uniqueKeys = new Set();
+  if (state.readingLogs) {
+    state.readingLogs.forEach(l => {
+      const logMatchesPlan =
+        (currentPlanId && l.plan_id && l.plan_id === currentPlanId) ||
+        (currentPresetKey && l.presetKey && l.presetKey === currentPresetKey) ||
+        (!l.plan_id && !l.presetKey);
+      if (logMatchesPlan) {
+        const r = l.round || 1;
+        uniqueKeys.add(`${l.book}_${l.chapter}_${r}`);
+      }
+    });
+  }
+  const totalReadChapters = uniqueKeys.size;
+
+  // 5. Calculate completed days (達標天數)
+  const totalCompletedDays = plan.days.filter(day => {
+    if (!day.chapters || day.chapters.length === 0) return false;
+    return day.chapters.every(ch => {
+      const currentRound = plan.currentRound || 1;
+      const taskRound = ch.round || currentRound;
+      if (taskRound === 1) return ch.isReadR1 || ch.isRead;
+      if (taskRound === 2) return ch.isReadR2;
+      if (taskRound >= 3) return ch.isReadR3;
+      return ch.isRead;
+    });
+  }).length;
+
+  // 6. Calculate progress status (計畫狀態)
+  let equivalentDay = 0;
+  const cumulativeScheduled = [];
+  let sumChapters = 0;
+  for (let i = 0; i < plan.days.length; i++) {
+    sumChapters += plan.days[i].chapters.length;
+    cumulativeScheduled.push(sumChapters * targetRounds);
+  }
+  
+  // Calculate actual completed chapters across rounds
+  let actualCompletedChaptersTotal = 0;
+  for (let r = 1; r <= targetRounds; r++) {
+    const roundLogs = (state.readingLogs || []).filter(l => 
+      (l.plan_id === plan.id || l.presetKey === plan.presetKey) &&
+      (l.round || 1) === r
+    );
+    const uniqueChapters = new Set(roundLogs.map(l => `${l.book}_${l.chapter}`));
+    
+    let planChaptersCount = 0;
+    plan.days.forEach(day => {
+      day.chapters.forEach(ch => {
+        if (uniqueChapters.has(`${ch.book}_${ch.chapter}`)) {
+          planChaptersCount++;
+        }
+      });
+    });
+    actualCompletedChaptersTotal += planChaptersCount;
+  }
+
+  for (let d = 1; d <= plan.days.length; d++) {
+    if (actualCompletedChaptersTotal >= cumulativeScheduled[d - 1]) {
+      equivalentDay = d;
+    } else {
+      break;
+    }
+  }
+
+  let statusLabel = "";
+  let statusColor = "";
+  let statusBg = "";
+  
+  const currentRoundVal = plan.currentRound || 1;
+  if (currentRoundVal >= 4) {
+    statusLabel = "自主精修";
+    statusColor = "#818cf8"; // light purple/blue
+    statusBg = "rgba(129, 140, 248, 0.15)";
+  } else if (elapsedDays > 0) {
+    const diff = equivalentDay - elapsedDays;
+    if (diff > 0) {
+      statusLabel = `超前 ${diff} 天`;
+      statusColor = "#10b981"; // green
+      statusBg = "rgba(16, 185, 129, 0.15)";
+    } else if (diff < 0) {
+      statusLabel = `落後 ${Math.abs(diff)} 天`;
+      statusColor = "#f59e0b"; // orange
+      statusBg = "rgba(245, 158, 11, 0.15)";
+    } else {
+      statusLabel = "精準緊跟";
+      statusColor = "#3b82f6"; // blue
+      statusBg = "rgba(59, 130, 246, 0.15)";
+    }
+  } else {
+    statusLabel = "精準緊跟";
+    statusColor = "#3b82f6";
+    statusBg = "rgba(59, 130, 246, 0.15)";
+  }
+
+  // Mandatory debug log injection representing modal useEffect mount hook
+  console.log('📊 [統計面板載入] 真實讀取 -> 累計章數:', totalReadChapters, '成功追回天數:', catchUpDays);
+
+  // 7. Create Stats Modal Elements
+  const modalOverlay = document.createElement("div");
+  modalOverlay.className = "modal-overlay";
+  modalOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 1.2rem;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  `;
+
+  const modalContainer = document.createElement("div");
+  modalContainer.className = "modal-container";
+  modalContainer.style.cssText = `
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    width: 100%;
+    max-width: 420px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    transform: scale(0.92);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  `;
+
+  // Prevent background clicks closing modal unless clicked outside
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) {
+      closeStatsModal();
+    }
+  });
+
+  const closeStatsModal = () => {
+    modalOverlay.style.opacity = "0";
+    modalContainer.style.transform = "scale(0.92)";
+    setTimeout(() => {
+      modalOverlay.remove();
+    }, 250);
+  };
+
+  // Header content
+  const headerDiv = document.createElement("div");
+  headerDiv.style.cssText = `
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 0.8rem;
+  `;
+  headerDiv.innerHTML = `
+    <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+      <span>📊</span> 詳細數據統計
+    </h3>
+    <button class="circular-action-btn" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-card); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-secondary);" onclick="this.closest('.modal-overlay').remove()">✕</button>
+  `;
+  
+  headerDiv.querySelector("button").onclick = (e) => {
+    e.stopPropagation();
+    closeStatsModal();
+  };
+
+  // 2x2 Grid Layout Content
+  const gridDiv = document.createElement("div");
+  gridDiv.style.cssText = `
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+  `;
+
+  // Helper to generate a styled card
+  const makeCardHtml = (title, dataText, desc, iconColor, bgGlow = '') => {
+    return `
+      <div class="stat-grid-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 0.9rem; display: flex; flex-direction: column; justify-content: space-between; height: 120px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); transition: all 0.2s; ${bgGlow}">
+        <div style="font-size: 0.82rem; font-weight: 800; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+          ${title}
+        </div>
+        <div style="font-size: 1.45rem; font-weight: 800; color: ${iconColor}; margin: 0.3rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+          ${dataText}
+        </div>
+        <div style="font-size: 0.65rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">
+          ${desc}
+        </div>
+      </div>
+    `;
+  };
+
+  // Card A: 進度救援
+  const cardA = makeCardHtml(
+    `🛡️ 進度救援`,
+    `${catchUpDays} 天`,
+    `過去落後但已成功補讀完畢的天數。`,
+    `#ea580c`,
+    `background: linear-gradient(135deg, rgba(249, 115, 22, 0.04) 0%, rgba(249, 115, 22, 0.01) 100%);`
+  );
+
+  // Card B: 累計閱讀
+  const cardB = makeCardHtml(
+    `🏆 累計閱讀`,
+    `${totalReadChapters} 章`,
+    `在此計畫中讀完的經文章節總數。`,
+    `var(--primary-color)`
+  );
+
+  // Card C: 達標天數
+  const cardC = makeCardHtml(
+    `📅 達標天數`,
+    `${totalCompletedDays} 天`,
+    `計畫中所有章節皆 100% 讀完的累積總天數。`,
+    `#10b981`
+  );
+
+  // Card D: 計畫狀態 (Badge text with specific colors)
+  const badgeHtml = `
+    <span style="font-size: 0.75rem; font-weight: 800; background: ${statusBg}; color: ${statusColor}; padding: 0.25rem 0.6rem; border-radius: 20px; display: inline-block; border: 1px solid rgba(${statusColor === '#10b981' ? '16,185,129' : (statusColor === '#f59e0b' ? '245,158,11' : '59,130,246')}, 0.25);">
+      ${statusLabel}
+    </span>
+  `;
+  const cardD = makeCardHtml(
+    `🚦 計畫狀態`,
+    badgeHtml,
+    `目前讀經進度與計畫預期進度的比對結果。`,
+    `var(--text-primary)`
+  );
+
+  gridDiv.innerHTML = cardA + cardB + cardC + cardD;
+
+  // Bottom action close button
+  const footerDiv = document.createElement("div");
+  footerDiv.style.cssText = `
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.2rem;
+  `;
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "primary-btn";
+  closeBtn.style.cssText = `
+    padding: 0.5rem 1.5rem;
+    font-size: 0.85rem;
+    font-weight: 800;
+    border-radius: 20px;
+    width: 100%;
+  `;
+  closeBtn.textContent = "關閉";
+  closeBtn.onclick = closeStatsModal;
+  footerDiv.appendChild(closeBtn);
+
+  modalContainer.appendChild(headerDiv);
+  modalContainer.appendChild(gridDiv);
+  modalContainer.appendChild(footerDiv);
+  modalOverlay.appendChild(modalContainer);
+
+  document.body.appendChild(modalOverlay);
+
+  // Trigger smooth enter transitions
+  requestAnimationFrame(() => {
+    modalOverlay.style.opacity = "1";
+    modalContainer.style.transform = "scale(1)";
+  });
+};

@@ -59,6 +59,36 @@ function updateDashboardView() {
       ? `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.totalChapters} 章)`
       : `<span style="color: #3b82f6; font-weight: 700;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
       
+    // Calculate core statistics for dashboard summary card
+    const streakDays = state.currentUser.streak || 0;
+    const totalCompletionRate = progress;
+
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDay = now.getDate();
+    const todayDayObj = state.activePlan.days.find(d => {
+      if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+      const parts = d.date.split('/');
+      return parts.length === 2 && Number(parts[1]) === todayDay;
+    });
+
+    let todayTotalCount = 0;
+    let todayReadCount = 0;
+    if (todayDayObj && todayDayObj.chapters) {
+      todayTotalCount = todayDayObj.chapters.length;
+      todayDayObj.chapters.forEach(ch => {
+        const currentRound = state.activePlan.currentRound || 1;
+        const taskRound = ch.round || currentRound;
+        let isRead = false;
+        if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+        else if (taskRound === 2) isRead = ch.isReadR2;
+        else if (taskRound >= 3) isRead = ch.isReadR3;
+        else isRead = ch.isRead;
+        if (isRead) todayReadCount++;
+      });
+    }
+
     planSummaryDiv.innerHTML = `
       <div class="plan-progress-header">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
@@ -74,11 +104,34 @@ function updateDashboardView() {
         <div class="plan-progress-wrapper" style="margin-top: 1rem;">
           <div class="plan-progress-bar" style="width: ${progress}%;"></div>
         </div>
-        <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-secondary); margin-top: 0.5rem; text-align: right;">
+        <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-secondary); margin-top: 0.5rem; text-align: right; margin-bottom: 1rem;">
           ${statusText}
         </p>
+
+        <!-- 第一線首頁常駐卡片 (簡短核心，橫向 Flex 佈局) -->
+        <div class="dashboard-stats-strip" 
+             onclick="event.stopPropagation(); window.showPlanStatsModal ? window.showPlanStatsModal() : null;"
+             style="display: flex; justify-content: space-around; background: rgba(99, 102, 241, 0.06); border: 1px solid var(--border-card); border-radius: 12px; padding: 0.8rem 0.5rem; cursor: pointer; transition: transform 0.2s, background-color 0.2s;"
+             onmouseover="this.style.background='rgba(99, 102, 241, 0.1)'; this.style.transform='scale(1.01)';"
+             onmouseout="this.style.background='rgba(99, 102, 241, 0.06)'; this.style.transform='scale(1)';"
+             title="點擊展開詳細統計">
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
+            <span style="font-size: 1.15rem; font-weight: 800; color: #ef4444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">🔥 ${streakDays} 天</span>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">連續讀經</span>
+          </div>
+          <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
+            <span style="font-size: 1.15rem; font-weight: 800; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📖 ${todayReadCount}/${todayTotalCount} 章</span>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">今日進度</span>
+          </div>
+          <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
+            <span style="font-size: 1.15rem; font-weight: 800; color: #10b981; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📈 ${totalCompletionRate}%</span>
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">計畫進度</span>
+          </div>
+        </div>
       </div>
-      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+      <div style="display: flex; gap: 1rem; margin-top: 1.2rem;">
         <button class="secondary-btn flex-btn" onclick="event.stopPropagation(); window.openActivePlanFromDashboard()">讀經表</button>
         <button class="primary-btn flex-btn" onclick="event.stopPropagation(); window.startReadingCurrentChapter()" ${isPlanAvailable ? '' : 'disabled style="opacity: 0.6; cursor: not-allowed;"'}>開始閱讀</button>
       </div>
