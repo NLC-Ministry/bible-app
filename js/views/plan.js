@@ -1034,11 +1034,12 @@ function renderHorizontalDateStrip() {
   const viewMonth = state.calendarViewMonth;
   const isExpanded = !!state.calendarExpanded;
 
-  // 2. Create the Calendar Wrapper
+  // 2. Create the Calendar Wrapper (Clean flat look, completely borderless)
   const calendarWrapper = document.createElement("div");
   calendarWrapper.className = "calendar-component";
+  calendarWrapper.style.cssText = "background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; margin: 0 !important;";
 
-  // 3. Create the Header (Month Selector & Toggle Button)
+  // 3. Create the Header (Month Selector & Close Button)
   const headerDiv = document.createElement("div");
   headerDiv.className = "calendar-header";
 
@@ -1077,23 +1078,11 @@ function renderHorizontalDateStrip() {
     renderHorizontalDateStrip();
   });
 
-  // Toggle View Button (Week/Month)
-  const toggleBtn = document.createElement("button");
-  toggleBtn.className = "calendar-toggle-view-btn";
-  toggleBtn.innerHTML = isExpanded 
-    ? `收合 <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="18 15 12 9 6 15"></polyline></svg>`
-    : `展開 <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-  toggleBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    state.calendarExpanded = !state.calendarExpanded;
-    renderHorizontalDateStrip();
-  });
-
-  // Back to Card Mode Button
+  // Back to Card Mode Button (Sleek modern minimal "✕ 關閉" button)
   const backBtn = document.createElement("button");
   backBtn.className = "calendar-toggle-view-btn";
-  backBtn.style.cssText = "background: rgba(99, 102, 241, 0.08); color: var(--primary-color); font-weight: 700;";
-  backBtn.innerHTML = `🔙 返回卡片`;
+  backBtn.style.cssText = "background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); font-weight: 700; border: none; padding: 0.35rem 0.75rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s ease;";
+  backBtn.innerHTML = `✕ 關閉`;
   backBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     setViewMode('card');
@@ -1101,7 +1090,6 @@ function renderHorizontalDateStrip() {
 
   actionsDiv.appendChild(prevBtn);
   actionsDiv.appendChild(nextBtn);
-  actionsDiv.appendChild(toggleBtn);
   actionsDiv.appendChild(backBtn);
 
   headerDiv.appendChild(titleDiv);
@@ -1140,70 +1128,44 @@ function renderHorizontalDateStrip() {
 
   let cells = [];
 
-  if (isExpanded) {
-    // Standard Monthly Grid
-    const firstDayIndex = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0-6
-    const totalDaysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+  // Standard Monthly Grid (Always render 5 rows / full month flat)
+  const firstDayIndex = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0-6
+  const totalDaysInMonth = new Date(viewYear, viewMonth, 0).getDate();
 
-    // Previous Month padding
-    const prevMonthYear = viewMonth === 1 ? viewYear - 1 : viewYear;
-    const prevMonthVal = viewMonth === 1 ? 12 : viewMonth - 1;
-    const totalDaysInPrevMonth = new Date(prevMonthYear, prevMonthVal, 0).getDate();
-    for (let i = firstDayIndex - 1; i >= 0; i--) {
-      cells.push({
-        year: prevMonthYear,
-        month: prevMonthVal,
-        dayOfMonth: totalDaysInPrevMonth - i,
-        isOtherMonth: true
-      });
-    }
+  // Previous Month padding
+  const prevMonthYear = viewMonth === 1 ? viewYear - 1 : viewYear;
+  const prevMonthVal = viewMonth === 1 ? 12 : viewMonth - 1;
+  const totalDaysInPrevMonth = new Date(prevMonthYear, prevMonthVal, 0).getDate();
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    cells.push({
+      year: prevMonthYear,
+      month: prevMonthVal,
+      dayOfMonth: totalDaysInPrevMonth - i,
+      isOtherMonth: true
+    });
+  }
 
-    // Current Month days
-    for (let i = 1; i <= totalDaysInMonth; i++) {
-      cells.push({
-        year: viewYear,
-        month: viewMonth,
-        dayOfMonth: i,
-        isOtherMonth: false
-      });
-    }
+  // Current Month days
+  for (let i = 1; i <= totalDaysInMonth; i++) {
+    cells.push({
+      year: viewYear,
+      month: viewMonth,
+      dayOfMonth: i,
+      isOtherMonth: false
+    });
+  }
 
-    // Next Month padding
-    const nextMonthYear = viewMonth === 12 ? viewYear + 1 : viewYear;
-    const nextMonthVal = viewMonth === 12 ? 1 : viewMonth + 1;
-    const paddingSize = (7 - (cells.length % 7)) % 7;
-    for (let i = 1; i <= paddingSize; i++) {
-      cells.push({
-        year: nextMonthYear,
-        month: nextMonthVal,
-        dayOfMonth: i,
-        isOtherMonth: true
-      });
-    }
-  } else {
-    // Collapsed Week Grid (around selected date)
-    let refDate = new Date();
-    if (state.selectedPlanDay) {
-      const dayObj = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
-      if (dayObj) {
-        const parts = dayObj.date.split('/');
-        refDate = new Date(dayObj.year, dayObj.month - 1, parseInt(parts[1]));
-      }
-    }
-    const currentWeekday = refDate.getDay();
-    const sundayDate = new Date(refDate);
-    sundayDate.setDate(refDate.getDate() - currentWeekday);
-
-    for (let i = 0; i < 7; i++) {
-      const cellDate = new Date(sundayDate);
-      cellDate.setDate(sundayDate.getDate() + i);
-      cells.push({
-        year: cellDate.getFullYear(),
-        month: cellDate.getMonth() + 1,
-        dayOfMonth: cellDate.getDate(),
-        isOtherMonth: cellDate.getMonth() + 1 !== viewMonth
-      });
-    }
+  // Next Month padding
+  const nextMonthYear = viewMonth === 12 ? viewYear + 1 : viewYear;
+  const nextMonthVal = viewMonth === 12 ? 1 : viewMonth + 1;
+  const paddingSize = (7 - (cells.length % 7)) % 7;
+  for (let i = 1; i <= paddingSize; i++) {
+    cells.push({
+      year: nextMonthYear,
+      month: nextMonthVal,
+      dayOfMonth: i,
+      isOtherMonth: true
+    });
   }
 
   // Render Grid Cells
@@ -4393,7 +4355,7 @@ function renderPlanScheduleView() {
     // ─────────────────────────────────────────────
     const calContainer = document.createElement("div");
     calContainer.id = "calendar-view-container";
-    calContainer.className = "w-full px-4 text-center";
+    calContainer.className = "w-full px-4 text-center mx-0";
 
     // 1. Calendar Grid Component Container
     const calendarCarousel = document.createElement("div");
