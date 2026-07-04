@@ -95,15 +95,6 @@
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none"><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle></svg>
             </button>
             <div class="options-dropdown hidden" id="plan-options-dropdown" style="right: 0; left: auto; top: 48px;">
-              <button class="options-dropdown-item" id="menu-plan-stats" type="button">
-                <span class="menu-icon">📊</span><span>讀經統計</span>
-              </button>
-              <button class="options-dropdown-item" id="menu-plan-ranking" type="button">
-                <span class="menu-icon">🏆</span><span>排名</span>
-              </button>
-              <button class="options-dropdown-item" id="menu-plan-members" type="button">
-                <span class="menu-icon">👥</span><span>組員狀況</span>
-              </button>
               <button class="options-dropdown-item" id="menu-plan-level" type="button">
                 <span class="menu-icon">⚙️</span><span>調整進度設定</span>
               </button>
@@ -470,9 +461,24 @@
         <div id="plan-detail-subview" class="hidden plan-detail-compact" style="display: flex; flex-direction: column; gap: 1rem;">
           <!-- YouVersion Style Header Bar Removed (Integrated into Top App Bar) -->
 
+          <!-- Segmented Control for tabs -->
+          <div class="px-4 py-2" style="padding: 0.5rem 1rem;">
+            <div class="flex p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl" style="display: flex; padding: 0.25rem; background: var(--bg-input); border-radius: 12px;">
+              <!-- 按鈕 1：今日任務 -->
+              <button id="tab-today-task" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-slate-800 shadow-sm dark:bg-zinc-800 dark:text-white transition-all" style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;">
+                <i class="bi bi-check2-circle mr-1.5" style="margin-right: 0.375rem;"></i>今日讀經
+              </button>
+              
+              <!-- 按鈕 2：小組戰報 -->
+              <button id="tab-group-report" class="flex-1 py-2 text-xs font-medium rounded-lg text-center text-slate-500 dark:text-zinc-400 hover:text-slate-800 transition-all" style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;">
+                <i class="bi bi-trophy mr-1.5" style="margin-right: 0.375rem;"></i>小組戰報
+              </button>
+            </div>
+          </div>
+
           <!-- Toggle View Pills -->
-          <div class="status-pills-row plan-detail-tabs" style="margin-bottom: 0.6rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem;">
-            <button class="pill-btn active" id="tab-plan-schedule">📅 每日讀經</button>
+          <div class="status-pills-row plan-detail-tabs" style="margin-bottom: 0.6rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; display: none;">
+            <button class="pill-btn active" id="tab-plan-schedule" style="display: none;">📅 每日讀經</button>
             <button class="pill-btn" id="tab-plan-stats">📊 讀經統計</button>
             <button class="pill-btn" id="tab-plan-ranking">🏆 排名</button>
             <button class="pill-btn" id="tab-plan-members">👥 組員狀況</button>

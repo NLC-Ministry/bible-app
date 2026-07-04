@@ -3424,9 +3424,9 @@ button.logout-btn:hover {
     min-height: 170px;
   }
 }
-/* Plan detail navigation now lives in the top-right options menu */
+/* Plan detail navigation is managed dynamically in plan.js */
 #plan-detail-subview .plan-detail-tabs {
-  display: none !important;
+  display: none;
 }
 #plan-options-dropdown {
   min-width: 220px;

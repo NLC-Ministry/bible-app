@@ -128,6 +128,70 @@ function initPlanControls() {
     if (activeSubview) activeSubview.classList.remove("hidden");
   }
 
+  // Segmented Control (今日讀經 / 小組戰報) switcher
+  const tabTodayTask = document.getElementById("tab-today-task");
+  const tabGroupReport = document.getElementById("tab-group-report");
+  const planDetailTabs = document.querySelector("#plan-detail-subview .plan-detail-tabs");
+
+  let lastActiveReportTab = tabStats;
+  let lastActiveReportSubview = subviewPlanStats;
+
+  if (tabTodayTask && tabGroupReport) {
+    tabTodayTask.addEventListener("click", () => {
+      // Style tabTodayTask as active, tabGroupReport as inactive
+      tabTodayTask.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;";
+      tabGroupReport.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;";
+      
+      // Hide sub tabs
+      if (planDetailTabs) planDetailTabs.style.display = "none";
+
+      // Switch to daily reading schedule
+      switchToTab(tabSchedule, subviewSchedule);
+      renderPlanScheduleTracker();
+    });
+
+    tabGroupReport.addEventListener("click", async () => {
+      // Style tabGroupReport as active, tabTodayTask as inactive
+      tabGroupReport.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;";
+      tabTodayTask.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;";
+
+      // Show sub tabs
+      if (planDetailTabs) planDetailTabs.style.display = "flex";
+
+      // Switch to last active subview inside Group Report
+      switchToTab(lastActiveReportTab, lastActiveReportSubview);
+
+      // Render the active tab's view
+      if (lastActiveReportTab === tabStats) {
+        await window.switchStatTab('personal');
+      } else if (lastActiveReportTab === tabRanking) {
+        if (state.activePlan) await renderPlanRankingView();
+      } else if (lastActiveReportTab === tabMembers && _canSeeMembers) {
+        if (state.activePlan) await renderPlanMembersView();
+      }
+    });
+
+    // Make sure we track which tab inside Group Report is active
+    if (tabStats) {
+      tabStats.addEventListener("click", () => {
+        lastActiveReportTab = tabStats;
+        lastActiveReportSubview = subviewPlanStats;
+      });
+    }
+    if (tabRanking) {
+      tabRanking.addEventListener("click", () => {
+        lastActiveReportTab = tabRanking;
+        lastActiveReportSubview = subviewPlanRanking;
+      });
+    }
+    if (tabMembers) {
+      tabMembers.addEventListener("click", () => {
+        lastActiveReportTab = tabMembers;
+        lastActiveReportSubview = subviewPlanMembers;
+      });
+    }
+  }
+
   function closePlanOptionsMenu() {
     const menu = document.getElementById("plan-options-dropdown");
     if (menu) menu.classList.add("hidden");
@@ -984,6 +1048,18 @@ async function renderPlanDetailView() {
   if (tabMembers) tabMembers.classList.remove("active");
   allSubviewsInit.forEach(s => s.classList.add("hidden"));
   if (subviewSchedule) subviewSchedule.classList.remove("hidden");
+
+  // Reset Segmented Control to "今日讀經" active
+  const tabTodayTask = document.getElementById("tab-today-task");
+  const tabGroupReport = document.getElementById("tab-group-report");
+  const planDetailTabs = document.querySelector("#plan-detail-subview .plan-detail-tabs");
+  if (tabTodayTask && tabGroupReport) {
+    tabTodayTask.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;";
+    tabGroupReport.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;";
+  }
+  if (planDetailTabs) {
+    planDetailTabs.style.display = "none";
+  }
 
   // Initialize plan view mode (default is 'card')
   const initialViewMode = state.planViewMode === 'calendar' ? 'calendar' : 'card';
