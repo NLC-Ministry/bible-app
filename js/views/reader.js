@@ -723,8 +723,8 @@ async function renderReaderText() {
     container.innerHTML = `
       <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
         <div style="font-size: 2.5rem;">📖</div>
-        <p style="color: var(--text-secondary); font-weight: 700; margin: 0; font-size: 0.95rem; line-height: 1.5; max-width: 280px;">經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！</p>
-        <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 700; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
+        <p style="color: var(--text-secondary); font-weight: 500; margin: 0; font-size: 0.95rem; line-height: 1.5; max-width: 280px;">經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！</p>
+        <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 500; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
           重新點亮畫面（重試）
         </button>
       </div>

@@ -38,7 +38,7 @@ function updateDashboardView() {
     const isPlanAvailable = started || isAdmin;
     const statusText = started 
       ? `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.totalChapters} 章)`
-      : `<span style="color: #3b82f6; font-weight: 700;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
+      : `<span style="color: #3b82f6; font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
       
     // Calculate core statistics for dashboard summary card
     const streakDays = state.currentUser.streak || 0;
@@ -73,10 +73,10 @@ function updateDashboardView() {
     planSummaryDiv.innerHTML = `
       <div class="plan-progress-header">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-          <h4 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin: 0;">${state.activePlan.name}</h4>
+          <h4 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0;">${state.activePlan.name}</h4>
           ${started 
-            ? '<span style="font-size: 0.7rem; background: #10b981; color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 700; white-space: nowrap;">進行中</span>'
-            : '<span style="font-size: 0.7rem; background: #3b82f6; color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 700; white-space: nowrap;">等待開始</span>'
+            ? '<span style="font-size: 0.7rem; background: #10b981; color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 500; white-space: nowrap;">進行中</span>'
+            : '<span style="font-size: 0.7rem; background: #3b82f6; color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 500; white-space: nowrap;">等待開始</span>'
           }
         </div>
         <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.2rem;">
@@ -85,7 +85,7 @@ function updateDashboardView() {
         <div class="plan-progress-wrapper" style="margin-top: 1rem;">
           <div class="plan-progress-bar" style="width: ${progress}%;"></div>
         </div>
-        <p style="font-size: 0.88rem; font-weight: 600; color: var(--text-secondary); margin-top: 0.5rem; text-align: right; margin-bottom: 1rem;">
+        <p style="font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.5rem; text-align: right; margin-bottom: 1rem;">
           ${statusText}
         </p>
 
@@ -97,17 +97,17 @@ function updateDashboardView() {
              onmouseout="this.style.background='var(--color-brand-muted, rgba(4,169,210,0.08))'; this.style.transform='scale(1)';"
              title="點擊展開詳細統計">
           <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
-            <span style="font-size: 1.15rem; font-weight: 800; color: #ef4444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">🔥 ${streakDays} 天</span>
+            <span style="font-size: 1.15rem; font-weight: 500; color: #ef4444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">🔥 ${streakDays} 天</span>
             <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">連續讀經</span>
           </div>
           <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
           <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
-            <span style="font-size: 1.15rem; font-weight: 800; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📖 ${todayReadCount}/${todayTotalCount} 章</span>
+            <span style="font-size: 1.15rem; font-weight: 500; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📖 ${todayReadCount}/${todayTotalCount} 章</span>
             <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">今日進度</span>
           </div>
           <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
           <div style="display: flex; flex-direction: column; align-items: center; text-align: center; flex: 1; min-width: 0;">
-            <span style="font-size: 1.15rem; font-weight: 800; color: #10b981; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📈 ${totalCompletionRate}%</span>
+            <span style="font-size: 1.15rem; font-weight: 500; color: #10b981; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">📈 ${totalCompletionRate}%</span>
             <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">計畫進度</span>
           </div>
         </div>
@@ -935,7 +935,7 @@ async function updateAnnouncementsList() {
     
     item.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.3rem;">
-        <h4 style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary); margin: 0; line-height: 1.4;">${escapeHTML(ann.title)}</h4>
+        <h4 style="font-size: 0.95rem; font-weight: 500; color: var(--text-primary); margin: 0; line-height: 1.4;">${escapeHTML(ann.title)}</h4>
         <div style="display: flex; align-items: center; gap: 0.4rem;">
           <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${formattedTime}</span>
           ${isAdmin ? `<button class="circular-action-btn" style="width: 22px; height: 22px; padding: 0; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); display: flex; align-items: center; justify-content: center; font-size: 0.65rem;" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告">🗑️</button>` : ''}

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>&#x6559;&#x6703;&#x901F;&#x8B80;&#x6311;&#x6230;</title>
+  <title>新生命聖經速讀計畫</title>
   <!-- PWA Manifest & Mobile Meta -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#04A9D2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="教會速讀">
+  <meta name="apple-mobile-web-app-title" content="新生命聖經速讀計畫">
   <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
   <link rel="icon" href="assets/bible-reading-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -37,7 +37,7 @@
       <div class="header-container">
         <a href="#" class="brand" id="brand-logo">
           <img class="brand-icon-img" src="assets/bible-reading-icon.svg" alt="" width="32" height="32">
-          <span class="brand-text">&#x6559;&#x6703;&#x901F;&#x8B80;&#x6311;&#x6230;</span>
+          <span class="brand-text">新生命聖經速讀計畫</span>
         </a>
         <button class="app-back-btn is-home" id="global-back-btn" type="button" title="&#x8FD4;&#x56DE;">
           <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
@@ -184,7 +184,7 @@
                   </div>
                   
                   <!-- Center Scripture Text -->
-                  <blockquote id="daily-verse-text" class="text-lg font-bold text-white tracking-wide leading-relaxed my-auto pt-6" style="font-size: 1.125rem; font-weight: 700; color: #ffffff; line-height: 1.625; margin-top: auto; margin-bottom: auto; padding-top: 1.5rem; text-align: left; border: none; padding-left: 0; padding-right: 0; width: 100%;">
+                  <blockquote id="daily-verse-text" class="text-lg font-medium text-white tracking-wide leading-relaxed my-auto pt-6" style="font-size: 1.125rem; font-weight: 500; color: #ffffff; line-height: 1.625; margin-top: auto; margin-bottom: auto; padding-top: 1.5rem; text-align: left; border: none; padding-left: 0; padding-right: 0; width: 100%;">
                     「神的話是我腳前的燈，是我路上的光。」
                   </blockquote>
 
@@ -228,7 +228,7 @@
 
               <!-- 公告編輯表單 (管理員專屬，預設隱藏) -->
               <div id="admin-announcement-form-container" class="hidden" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                <h4 style="margin: 0; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">發布教會公告</h4>
+                <h4 style="margin: 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">發布教會公告</h4>
                 <input type="text" id="announcement-title-input" class="form-control" placeholder="公告標題" style="font-size: 0.85rem; padding: 0.4rem;">
                 <textarea id="announcement-content-input" class="form-control" placeholder="公告內容..." style="font-size: 0.85rem; padding: 0.4rem; min-height: 80px; resize: none;"></textarea>
                 <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
@@ -270,7 +270,7 @@
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
                 <span style="font-size: 0.75rem; color: var(--text-muted);" id="devotional-word-count">字數: 0 字</span>
-                <button class="primary-btn" id="btn-save-devotional" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                <button class="primary-btn" id="btn-save-devotional" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem;">
                   <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                   儲存心得
                 </button>
@@ -367,7 +367,7 @@
         <div id="plan-list-subview" class="grid-layout">
           <!-- Top YouVersion Style Header -->
           <div class="card-col span-12" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; padding: 0 0.5rem;">
-            <h2 style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary); margin: 0; font-family: 'Outfit', sans-serif;">計畫</h2>
+            <h2 style="font-size: 2.2rem; font-weight: 500; color: var(--text-primary); margin: 0; font-family: 'Outfit', sans-serif;">計畫</h2>
             <button class="circular-action-btn" title="搜尋計畫">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             </button>
@@ -425,7 +425,7 @@
               
               <!-- 表單與列表 -->
               <div id="admin-plan-form-container" class="hidden" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                <h4 id="admin-plan-form-title" style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 700; color: var(--text-primary);">新增讀經計畫</h4>
+                <h4 id="admin-plan-form-title" style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">新增讀經計畫</h4>
                 <input type="hidden" id="admin-edit-plan-id">
                 <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱" style="font-size: 0.85rem; padding: 0.4rem;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
@@ -490,7 +490,7 @@
             <div class="plan-chapters-card" style="background: transparent; border-radius: 0; padding: 0; margin-top: 1rem; overflow: visible; display: flex; flex-direction: column; border: none; width: 100%;">
               
               <div class="plan-day-heading" style="background: rgba(148, 163, 184, 0.12); border: none; padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between; border-radius: 0; margin-bottom: 0.5rem; width: 100%;">
-                <span id="plan-day-subtitle" style="font-size: 0.92rem; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px;">第 18 天 (2026年7月3日)</span>
+                <span id="plan-day-subtitle" style="font-size: 0.92rem; font-weight: 500; color: var(--text-primary); letter-spacing: 0.5px;">第 18 天 (2026年7月3日)</span>
                 <span id="plan-day-status-pill" class="role-badge hidden" style="display: none;">進行中</span>
               </div>
 
@@ -510,7 +510,7 @@
                 <button class="circular-action-btn" onclick="window.closePlanInlineReader()" title="返回經文清單">
                   <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </button>
-                <h3 id="plan-inline-reader-title" style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin: 0; text-align: center; flex: 1;">創世記 1章</h3>
+                <h3 id="plan-inline-reader-title" style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0; text-align: center; flex: 1;">創世記 1章</h3>
                 <div style="width: 36px;"></div> <!-- placeholder to center title -->
               </div>
 
@@ -520,14 +520,14 @@
               </div>
 
               <!-- Bottom Floating Nav Bar -->
-              <div class="plan-inline-footer" style="display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-card); padding: 0.75rem 1.2rem; border-radius: 30px; margin-top: 1.5rem; position: sticky; bottom: 15px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); z-index: 100;">
+              <div class="plan-inline-footer" style="display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-card); padding: 0.75rem 1.2rem; border-radius: 30px; margin-top: 1.5rem; position: sticky; bottom: 15px; box-shadow: var(--shadow-md); z-index: 100;">
                 <button class="circular-action-btn" id="plan-inline-prev-btn" style="background: rgba(255,255,255,0.06); border: none;" onclick="window.navigateInlineChapter(-1)">
                   <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </button>
                 
                 <div style="text-align: center; min-width: 0; flex: 1;">
-                  <div id="plan-inline-footer-plan-name" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PLAN NAME</div>
-                  <div id="plan-inline-footer-progress" style="font-size: 0.8rem; color: var(--text-primary); font-weight: 800; margin-top: 0.15rem;">第 18 天 • 2 之 1</div>
+                  <div id="plan-inline-footer-plan-name" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PLAN NAME</div>
+                  <div id="plan-inline-footer-progress" style="font-size: 0.8rem; color: var(--text-primary); font-weight: 500; margin-top: 0.15rem;">第 18 天 • 2 之 1</div>
                 </div>
                 
                 <button class="circular-action-btn" id="plan-inline-next-btn" style="background: rgba(255,255,255,0.06); border: none;" onclick="window.navigateInlineChapter(1)">
@@ -574,9 +574,9 @@
 
             <!-- 管理權限統計篩選器 (只在 管理 tab 顯示) -->
             <div class="stats-admin-scope-bar hidden" id="stats-admin-scope-bar" style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
-              <span style="font-size: 0.82rem; font-weight: 700; color: #d97706; white-space: nowrap;">&#x7D71;&#x8A08;&#x7BC4;&#x570D;</span><select id="stats-basic-scope-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select><select id="stats-admin-region-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
-              <select id="stats-admin-zone-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
-              <select id="stats-admin-group-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <span style="font-size: 0.82rem; font-weight: 500; color: #d97706; white-space: nowrap;">&#x7D71;&#x8A08;&#x7BC4;&#x570D;</span><select id="stats-basic-scope-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select><select id="stats-admin-region-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <select id="stats-admin-zone-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <select id="stats-admin-group-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
               
               <!-- Hidden master select for backward-compatibility -->
               <select id="ranking-zone-selector" class="form-control hidden" style="display: none;"></select>
@@ -628,7 +628,7 @@
                 <!-- 卡片 4 - 進度狀態 -->
                 <div class="bento-card">
                   <div class="flex items-center justify-between w-full">
-                    <div class="font-bold text-slate-800 dark:text-neutral-100" style="font-size: 0.85rem; line-height: 1;">
+                    <div class="font-medium text-slate-800 dark:text-neutral-100" style="font-size: 0.85rem; line-height: 1;">
                       <span id="report-stat-progress-status" class="px-2 py-0.5 rounded-full bg-slate-200/50 dark:bg-zinc-800/60 font-semibold" style="font-size: 0.75rem; display: inline-block;">第 2 遍</span>
                     </div>
                     <i class="bi bi-arrow-repeat" style="font-size: 1.15rem; color: var(--color-brand);"></i>
@@ -652,7 +652,7 @@
 
               <!-- 第二層：微縮 GitHub 風「讀經熱點地圖」卡片 -->
               <div class="glass-card-upgrade mx-4 my-2">
-                <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 800; text-align: left;">個人讀經熱點地圖</h3>
+                <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">個人讀經熱點地圖</h3>
                 
                 <div id="bible-heatmap-container" style="overflow-x: auto; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0.25rem 0;">
                   <!-- Generated dynamically -->
@@ -670,13 +670,13 @@
               <!-- 第三層：一線大廠感「每日讀經章數趨勢圖」卡片 -->
               <div class="glass-card-upgrade mx-4 my-3">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;">
-                  <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 800; text-align: left;">每日讀經章數趨勢</h3>
+                  <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日讀經章數趨勢</h3>
                   
                   <!-- 右上角微縮切換鈕 Segmented Control -->
                   <div class="capsule-segmented-control">
-                    <button id="trend-range-week" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 800; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('week')">週</button>
-                    <button id="trend-range-month" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 800; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('month')">月</button>
-                    <button id="trend-range-year" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 800; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('year')">年</button>
+                    <button id="trend-range-week" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('week')">週</button>
+                    <button id="trend-range-month" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('month')">月</button>
+                    <button id="trend-range-year" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('year')">年</button>
                   </div>
                 </div>
                 <div style="position: relative; height: 180px; width: 100%;">
@@ -770,7 +770,7 @@
               <!-- 第二層：C位重塑「屬靈旅程 — 牧區競賽」地圖卡片 -->
               <div class="glass-card-upgrade mx-4 my-3 pilgrimage-card" id="grp-pilgrimage-card" style="display: flex; flex-direction: column;">
                 <div class="card-header-flex" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                  <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 800; display: flex; align-items: center; gap: 0.25rem; text-align: left;">
+                  <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; text-align: left;">
                     🏃 屬靈旅程 — 牧區競賽
                   </h3>
                   <!-- 頂部選單極簡化 -->
@@ -787,7 +787,7 @@
 
               <!-- 第三層：收斂版「團隊讀經熱點地圖」卡片 -->
               <div class="glass-card-upgrade mx-4 my-2" id="grp-heatmap-card">
-                <h3 class="card-title text-slate-800 dark:text-neutral-100" id="grp-heatmap-title" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 800; text-align: left;">團隊讀經熱點地圖</h3>
+                <h3 class="card-title text-slate-800 dark:text-neutral-100" id="grp-heatmap-title" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">團隊讀經熱點地圖</h3>
                 
                 <div id="grp-bible-heatmap-container" style="overflow-x: auto; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0.25rem 0;">
                   <!-- Generated dynamically -->
@@ -810,30 +810,30 @@
           <div id="subview-plan-ranking" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
             <!-- 個人排名資訊 -->
             <div class="glass-card" style="margin-bottom: 1.2rem;">
-              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">🏆 我的讀經排名</h3>
+              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">🏆 我的讀經排名</h3>
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <!-- 全教會排行 card -->
                 <div style="background: var(--color-brand-muted); border: 1px solid var(--color-brand-border); border-radius: 12px; padding: 1rem; text-align: center;">
-                  <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.4rem;">全教會個人排行</div>
-                  <div style="font-size: 1.8rem; font-weight: 900; color: var(--primary-color);" id="my-rank-all">第 -- 名</div>
+                  <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.4rem;">全教會個人排行</div>
+                  <div style="font-size: 1.8rem; font-weight: 500; color: var(--primary-color);" id="my-rank-all">第 -- 名</div>
                   <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;" id="my-rank-all-total">共 -- 人</div>
                 </div>
                 
                 <!-- 牧區排行 card -->
                 <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.12); border-radius: 12px; padding: 1rem; text-align: center;">
-                  <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700; margin-bottom: 0.4rem;" id="my-rank-zone-title">牧區個人排行</div>
-                  <div style="font-size: 1.8rem; font-weight: 900; color: #10b981;" id="my-rank-zone">第 -- 名</div>
+                  <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.4rem;" id="my-rank-zone-title">牧區個人排行</div>
+                  <div style="font-size: 1.8rem; font-weight: 500; color: #10b981;" id="my-rank-zone">第 -- 名</div>
                   <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;" id="my-rank-zone-total">共 -- 人</div>
                 </div>
               </div>
             </div>
 
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 800; color: var(--text-primary);">各牧區速讀排行榜 (總累計章數)</h3>
+              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 500; color: var(--text-primary);">各牧區速讀排行榜 (總累計章數)</h3>
               
               <!-- Table Headers -->
-              <div style="display: grid; grid-template-columns: 40px 1fr 100px; gap: 0.5rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.76rem; font-weight: 800; text-align: center;">
+              <div style="display: grid; grid-template-columns: 40px 1fr 100px; gap: 0.5rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.76rem; font-weight: 500; text-align: center;">
                 <div style="color: var(--text-muted);">名次</div>
                 <div style="text-align: left; color: var(--text-muted); padding-left: 0.5rem;">牧區名稱</div>
                 <div style="color: var(--primary-color);">累計章數</div>
@@ -853,12 +853,12 @@
             <!-- 全域權限統計篩選器 (組員狀況) -->
             <div class="glass-card" style="padding: 1rem 1.2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
               <div style="display: flex; align-items: center; gap: 0.6rem; margin-right: auto;">
-                <span style="font-size: 1.1rem; font-weight: 800; color: var(--primary-color);">👥</span>
-                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--text-primary);">切換統計管理範圍</h3>
+                <span style="font-size: 1.1rem; font-weight: 500; color: var(--primary-color);">👥</span>
+                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">切換統計管理範圍</h3>
               </div>
-              <select id="members-admin-region-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
-              <select id="members-admin-zone-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
-              <select id="members-admin-group-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 700; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <select id="members-admin-region-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <select id="members-admin-zone-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+              <select id="members-admin-group-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
               
               <!-- Hidden master select for backward-compatibility -->
               <select id="members-zone-selector" class="form-control hidden" style="display: none;"></select>
@@ -867,12 +867,12 @@
             <!-- 參與者總覽 -->
             <div class="glass-card" style="margin-bottom: 1.2rem;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; gap: 1rem; flex-wrap: wrap;">
-                <h3 class="card-title" id="members-ranking-title" style="margin-bottom: 0; font-size: 1.15rem; font-weight: 800; color: var(--text-primary); flex: 1;">參與者總覽</h3>
-                <input type="text" id="member-search-input" placeholder="🔍 搜尋組員姓名..." style="width: 100%; max-width: 200px; padding: 0.4rem 0.8rem; font-size: 0.82rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-weight: 700;">
+                <h3 class="card-title" id="members-ranking-title" style="margin-bottom: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary); flex: 1;">參與者總覽</h3>
+                <input type="text" id="member-search-input" placeholder="🔍 搜尋組員姓名..." style="width: 100%; max-width: 200px; padding: 0.4rem 0.8rem; font-size: 0.82rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-weight: 500;">
               </div>
               <div style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
                 <div style="min-width: 480px; padding-bottom: 0.4rem;">
-                  <div style="display: grid; grid-template-columns: 1fr 80px 80px 70px 90px; gap: 0.4rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.74rem; font-weight: 800; text-align: center;">
+                  <div style="display: grid; grid-template-columns: 1fr 80px 80px 70px 90px; gap: 0.4rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.74rem; font-weight: 500; text-align: center;">
                     <div style="text-align: left; color: var(--text-muted);">成員</div>
                     <div style="color: #ef4444;">最高連續</div>
                     <div style="color: #10b981;">累計完成</div>
@@ -902,11 +902,11 @@
             <div class="glass-card">
               <!-- Profile Summary Header -->
               <div style="display: flex; align-items: center; gap: 1.2rem; border-bottom: 1px solid var(--border-card); padding-bottom: 1.5rem; margin-bottom: 1rem;">
-                <div id="profile-summary-avatar" style="width: 64px; height: 64px; border-radius: 50%; background: var(--color-brand); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem; font-weight: 800; box-shadow: 0 4px 12px var(--color-brand-border);">
+                <div id="profile-summary-avatar" style="width: 64px; height: 64px; border-radius: 50%; background: var(--color-brand); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.8rem; font-weight: 500; box-shadow: var(--shadow-sm);">
                   <span id="profile-summary-initial">管</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-                  <h2 id="profile-summary-name" style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); margin: 0;">新使用者</h2>
+                  <h2 id="profile-summary-name" style="font-size: 1.4rem; font-weight: 500; color: var(--text-primary); margin: 0;">新使用者</h2>
                   <p id="profile-summary-org" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">載入所屬組織中...</p>
                   <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.25rem;">
                     <span id="profile-summary-role" class="role-badge">一般組員</span>
@@ -915,7 +915,7 @@
               </div>
 
               <!-- Button to toggle the form -->
-              <button class="secondary-btn w-full" id="btn-toggle-profile-form" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid var(--border-card); background: transparent; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-weight: 700; color: var(--text-primary); cursor: pointer; transition: var(--transition-smooth);">
+              <button class="secondary-btn w-full" id="btn-toggle-profile-form" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid var(--border-card); background: transparent; padding: 0.6rem 1rem; border-radius: var(--radius-sm); font-weight: 500; color: var(--text-primary); cursor: pointer; transition: var(--transition-smooth);">
                 ✏️ 編輯個人檔案
               </button>
 
@@ -954,7 +954,7 @@
 
                   <div class="form-group">
                     <label>您的帳號角色</label>
-                    <p id="profile-role-display" style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">組員</p>
+                    <p id="profile-role-display" style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 500; color: var(--text-primary);">組員</p>
                   </div>
 
                   <button type="submit" class="primary-btn w-full">儲存基本資料</button>
@@ -962,7 +962,7 @@
                   <!-- Demo Simulated Role Switcher -->
                   <div class="demo-role-card hidden" style="margin-top: 1.5rem; padding: 1.2rem; background-color: var(--color-brand-muted); border: 1px dashed var(--primary-color); border-radius: var(--radius-sm);">
                     <div class="form-group" style="margin-bottom: 0;">
-                      <label for="demo-role-select" style="color: var(--primary-color); font-weight: 700; display: flex; align-items: center; gap: 0.4rem;">
+                      <label for="demo-role-select" style="color: var(--primary-color); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
                         <span>🌟 Demo 模擬角色切換 (測試權限視角)</span>
                       </label>
                       <select id="demo-role-select" class="form-control" style="margin-top: 0.5rem; border-color: var(--primary-color);">
@@ -1055,7 +1055,7 @@
               <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
                 <!-- 1. 大區管理 -->
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第一步：選擇大區
                     <button class="primary-btn" id="admin-add-region-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增大區</button>
                   </h4>
@@ -1068,7 +1068,7 @@
 
                 <!-- 2. 牧區管理 -->
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第二步：選擇牧區
                     <button class="primary-btn" id="admin-add-zone-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增牧區</button>
                   </h4>
@@ -1081,7 +1081,7 @@
 
                 <!-- 3. 小組管理 -->
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
+                  <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第三步：選擇小組
                     <button class="primary-btn" id="admin-add-group-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;">➕ 新增小組</button>
                   </h4>
@@ -1101,7 +1101,7 @@
 
     <!-- Bottom Footer (Responsive Mobile Tabs + Info) -->
     <footer class="main-footer">
-      <p>© 2026 教會速讀挑戰與統計系統 - 使用雲端備份與 Chart.js 技術建構</p>
+      <p>© 2026 新生命聖經速讀計畫 - 使用雲端備份與 Chart.js 技術建構</p>
     </footer>
 
     <!-- Mobile Navigation Bar -->
@@ -1135,17 +1135,17 @@
       <div class="login-logo-wrapper">
         <img src="assets/bible-reading-icon.svg" alt="" width="72" height="72">
       </div>
-      <h2 class="login-title">教會速讀挑戰</h2>
+      <h2 class="login-title">新生命聖經速讀計畫</h2>
       <p class="login-subtitle">專為教會弟兄姊妹設計的速讀計畫與分級統計系統。<br>請登入您的帳號以開始閱讀並同步進度。</p>
       
       <!-- Primary: NLC SSO login -->
-      <button class="primary-btn" id="btn-gate-nlc-login" style="display: inline-flex; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.82rem 1.8rem; width: 100%; font-size: 0.98rem; font-weight: 700; margin-bottom: 0.8rem;">
+      <button class="primary-btn" id="btn-gate-nlc-login" style="display: inline-flex; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.82rem 1.8rem; width: 100%; font-size: 0.98rem; font-weight: 500; margin-bottom: 0.8rem;">
         <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         使用 NLC 身份登入 (SSO)
       </button>
 
       <!-- Secondary: Google Signin as fallback -->
-      <button class="primary-btn" id="btn-gate-google-login" style="display: none; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.75rem 1.8rem; width: 100%; font-size: 0.92rem; font-weight: 600; background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid var(--border-card); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s;">
+      <button class="primary-btn" id="btn-gate-google-login" style="display: none; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.75rem 1.8rem; width: 100%; font-size: 0.92rem; font-weight: 500; background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid var(--border-card); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s;">
         <svg viewBox="0 0 24 24" width="16" height="16" style="display: block;"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"></path><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"></path><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"></path><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"></path></svg>
         使用 Google 帳號登入
       </button>
@@ -1264,7 +1264,7 @@
       console.error(errText, error);
 
       const errDiv = document.createElement("div");
-      errDiv.style.cssText = "position:fixed;top:15px;left:15px;right:15px;background:rgba(239,68,68,0.95);color:white;padding:12px;border-radius:8px;font-size:11px;font-family:monospace;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.3);pointer-events:none;white-space:pre-wrap;line-height:1.5;font-weight:bold;border:2px solid #fecaca;";
+      errDiv.style.cssText = "position:fixed;top:15px;left:15px;right:15px;background:rgba(239,68,68,0.95);color:white;padding:12px;border-radius:8px;font-size:11px;font-family:monospace;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.3);pointer-events:none;white-space:pre-wrap;line-height:1.5;font-weight: 500;border:2px solid #fecaca;";
       errDiv.textContent = errText;
       document.body.appendChild(errDiv);
       setTimeout(() => { errDiv.remove(); }, 15000);
@@ -1312,7 +1312,7 @@
       <button id="badge-page-back-btn" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: inherit;">
         <i class="bi bi-chevron-left"></i>
       </button>
-      <span id="detail-header-title" style="font-weight: 700; font-size: 1rem;">勳章詳情</span>
+      <span id="detail-header-title" style="font-weight: 500; font-size: 1rem;">勳章詳情</span>
       <button id="badge-page-share-btn" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: inherit;" title="分享">
         <i class="bi bi-share"></i>
       </button>
@@ -1330,15 +1330,15 @@
           <i id="detail-icon" style="font-size: 3rem; position: relative; z-index: 10;"></i>
           
           <!-- Small level count pill at the bottom center of the shield -->
-          <div id="detail-level-pill" style="background: rgba(0,0,0,0.6); color: #fff; border-radius: 9999px; padding: 0.15rem 0.5rem; font-size: 0.65rem; font-weight: 700; margin-top: 0.5rem; position: relative; z-index: 10;">1</div>
+          <div id="detail-level-pill" style="background: rgba(0,0,0,0.6); color: #fff; border-radius: 9999px; padding: 0.15rem 0.5rem; font-size: 0.65rem; font-weight: 500; margin-top: 0.5rem; position: relative; z-index: 10;">1</div>
         </div>
-        <h2 id="detail-title" style="margin-top: 1.25rem; font-size: 1.5rem; font-weight: 700; text-align: center;"></h2>
+        <h2 id="detail-title" style="margin-top: 1.25rem; font-size: 1.5rem; font-weight: 500; text-align: center;"></h2>
         <p id="detail-desc" style="margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5; text-align: center; opacity: 0.8; padding: 0 1rem;"></p>
       </div>
 
       <!-- 3. Lower Part: Milestones Timeline -->
       <div style="margin: 1rem 1rem 0 1rem; padding: 0.5rem;">
-        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;">里程碑</h3>
+        <h3 style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1rem;">里程碑</h3>
         <div id="detail-timeline-container" style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
           <!-- Dynamically populated timeline or progress bar -->
         </div>

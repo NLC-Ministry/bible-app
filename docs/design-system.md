@@ -17,9 +17,24 @@ Satellite app under [NewLife Member Hub](https://member.newlife.org.tw/). Shares
 | `--color-brand-active` | `#0284A3` | Button pressed |
 | `--color-brand-subtle` | 12% brand mix | Selected pills, focus rings |
 | `--color-brand-muted` | 8% brand mix | Hover backgrounds |
-| `--color-brand-border` | 24% brand mix | Borders, shadows |
+| `--color-brand-border` | 24% brand mix | Borders, selected states |
 
 Legacy alias: `--primary-color` → `--color-brand`.
+
+## Shadow scale (Member Hub / Tailwind aligned)
+
+Neutral shadows only — no brand-tinted glows on buttons, tabs, or cards.
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--shadow-sm` | `0 1px 2px 0 rgb(0 0 0 / 0.05)` | Cards, header, bento tiles |
+| `--shadow-md` | Tailwind `shadow-md` | Floating controls, plan covers |
+| `--shadow-lg` | Tailwind `shadow-lg` | Modals, dropdowns, login card |
+| `--shadow-up-md` / `--shadow-up-lg` | Flipped md/lg | Bottom sheets |
+| `--shadow-none` | none | Solid buttons, active tabs |
+| `--shadow-focus-ring` | 3px brand ring | Input focus (not elevation) |
+| `--shadow-card` | alias → `--shadow-sm` | Legacy |
+| `--shadow-hover` | alias → `--shadow-sm` | Legacy (hover uses border, not lift) |
 
 ## Semantic tokens
 
@@ -38,19 +53,31 @@ Legacy alias: `--primary-color` → `--color-brand`.
 | `--bg-app` | `#FAFAFA` |
 | `--bg-card` | `#FFFFFF` |
 | `--border-default` | `rgba(0,0,0,0.1)` |
-| `--shadow-card` | subtle neutral shadow |
+| `--shadow-sm` | Card / header elevation (see Shadow scale) |
 
 ## Typography
+
+Member Hub uses **medium (500)** for emphasis (titles, labels, buttons, nav) and **normal (400)** for body text. Avoid 600–900 weights on UI chrome.
+
+| Token | Value |
+|-------|-------|
+| `--type-weight-strong` | `500` |
+| `--type-weight-regular` | `400` |
 
 | Class | Size / weight |
 |-------|----------------|
 | `.type-page-title` | 1.75rem / 500 |
 | `.type-section-title` | 1.25rem / 500 |
 | `.type-card-title` | 1.125rem / 500 |
+| `.type-subsection-title` | 1rem / 500 |
+| `.type-label` | 0.875rem / 500 |
+| `.type-nav` | 0.875rem / 500 |
+| `.type-brand-title` | 0.875rem / 500 (header brand) |
+| `.type-lead` | 1rem / 400, muted |
 | `.type-body` | 1rem / 400, line-height 1.625 |
-| `.type-caption` | 0.875rem / muted |
+| `.type-caption` | 0.875rem / 400, muted |
 
-Body font: Inter + Noto Sans TC. Display titles: Outfit.
+Body font: Inter + Noto Sans TC.
 
 ## Components
 

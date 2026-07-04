@@ -191,10 +191,10 @@ function renderRosterTable(users) {
       <td><strong>${escapeHTML(user.name)}</strong></td>
       <td>${escapeHTML(user.pastoral_zone || "無")}</td>
       <td>${escapeHTML(user.small_group || "無")}</td>
-      <td><span style="font-weight:700; color: var(--primary-color);">${user.chapters_read}</span> 章</td>
+      <td><span style="font-weight: 500; color: var(--primary-color);">${user.chapters_read}</span> 章</td>
       <td>
         <div style="display:flex; align-items:center; gap:0.5rem;">
-          <span style="font-size:0.8rem; font-weight:700;">${user.plan_progress}%</span>
+          <span style="font-size:0.8rem; font-weight: 500;">${user.plan_progress}%</span>
           <div style="flex:1; width:50px; height:6px; background:#e2e8f0; border-radius:5px; overflow:hidden;">
             <div style="width:${user.plan_progress}%; height:100%; background: var(--color-success);"></div>
           </div>
@@ -867,7 +867,7 @@ function renderProfileReadingStats() {
           <line x1="9" y1="19" x2="15" y2="19"></line>
           <line x1="9" y1="11" x2="10" y2="11"></line>
         </svg>
-        <p style="font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">尚未加入讀經計畫</p>
+        <p style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">尚未加入讀經計畫</p>
         <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
           請至「讀經計畫」頁面選擇並加入任一計畫，即可在此查看詳細的進度統計。
         </p>
@@ -881,8 +881,8 @@ function renderProfileReadingStats() {
               <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
             </div>
           </div>
-          <div style="font-size: 1.25rem; font-weight: 800; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
-            ${streakDays} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">天</span>
+          <div style="font-size: 1.25rem; font-weight: 500; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
+            ${streakDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>
           </div>
         </div>
       </div>
@@ -900,24 +900,24 @@ function renderProfileReadingStats() {
   end.setHours(0,0,0,0);
 
   if (today < start) {
-    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">尚未開始 (開始於 ${stats.startDateStr})</span>`;
+    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">尚未開始 (開始於 ${stats.startDateStr})</span>`;
   } else if (today > end) {
-    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">已結束 (共 ${stats.totalDays} 天)</span>`;
+    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">已結束 (共 ${stats.totalDays} 天)</span>`;
   } else {
-    todayProgressText = `<span style="font-size: 1.25rem; font-weight: 800; color: var(--primary-color);">${stats.elapsedDays}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">/ ${stats.totalDays} 天</span>`;
+    todayProgressText = `<span style="font-size: 1.25rem; font-weight: 500; color: var(--primary-color);">${stats.elapsedDays}</span> <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">/ ${stats.totalDays} 天</span>`;
   }
 
   const lagDisplay = stats.lagDays > 0 
-    ? `${stats.lagDays} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">天</span>`
-    : `<span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">0 天</span>`;
+    ? `${stats.lagDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   const leadDisplay = stats.leadDays > 0
-    ? `${stats.leadDays} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">天</span>`
-    : `<span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">0 天</span>`;
+    ? `${stats.leadDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   const makeupDisplay = stats.makeupDays > 0
-    ? `${stats.makeupDays} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">天</span>`
-    : `<span style="font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">0 天</span>`;
+    ? `${stats.makeupDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   container.innerHTML = `
     <div class="profile-stats-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
@@ -929,11 +929,11 @@ function renderProfileReadingStats() {
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">今天計畫進度</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">今天計畫進度</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">目前已進行的計畫天數</div>
           </div>
         </div>
-        <div style="font-weight: 800; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div style="font-weight: 500; display: flex; align-items: baseline; gap: 0.1rem;">
           ${todayProgressText}
         </div>
       </div>
@@ -945,12 +945,12 @@ function renderProfileReadingStats() {
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">連續讀經</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">每日穩定靈修天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 800; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
-          ${streakDays} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">天</span>
+        <div style="font-size: 1.5rem; font-weight: 500; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
+          ${streakDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>
         </div>
       </div>
 
@@ -961,11 +961,11 @@ function renderProfileReadingStats() {
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">落後進度</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">落後進度</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">落後預計進度天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 800; color: ${stats.lagDays > 0 ? '#ef4444' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.lagDays > 0 ? '#ef4444' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
           ${lagDisplay}
         </div>
       </div>
@@ -977,11 +977,11 @@ function renderProfileReadingStats() {
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">超前進度</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">超前進度</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 800; color: ${stats.leadDays > 0 ? '#10b981' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.leadDays > 0 ? '#10b981' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
           ${leadDisplay}
         </div>
       </div>
@@ -993,11 +993,11 @@ function renderProfileReadingStats() {
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">補讀天數</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">補讀天數</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">事後補讀完畢天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 800; color: ${stats.makeupDays > 0 ? '#3b82f6' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.makeupDays > 0 ? '#3b82f6' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
           ${makeupDisplay}
         </div>
       </div>

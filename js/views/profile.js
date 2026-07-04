@@ -691,7 +691,7 @@ async function renderAdminUserManagement() {
       item.className = "member-list-item";
       
       const demoBadge = isDemo
-        ? `<span style="display:inline-block;margin-left:0.4rem;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.65rem;font-weight:700;background:rgba(251,191,36,0.18);color:#d97706;border:1px solid rgba(251,191,36,0.4);">示範</span>`
+        ? `<span style="display:inline-block;margin-left:0.4rem;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.65rem;font-weight: 500;background:rgba(251,191,36,0.18);color:#d97706;border:1px solid rgba(251,191,36,0.4);">示範</span>`
         : "";
 
       item.innerHTML = `
@@ -1435,7 +1435,7 @@ function showResponsibilityModal(role, user) {
       border: 1px solid var(--border-card);
       border-radius: 16px;
       padding: 1.8rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      box-shadow: var(--shadow-lg);
       transform: translateY(20px);
       transition: transform 0.3s ease;
       display: flex;
@@ -1450,7 +1450,7 @@ function showResponsibilityModal(role, user) {
     
     let htmlContent = `
       <div style="margin-bottom: 0.2rem;">
-        <h3 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 800; color: var(--text-primary);">
+        <h3 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 500; color: var(--text-primary);">
           設定 ${roleText} 的負責範圍
         </h3>
         <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0; line-height: 1.4;">
@@ -1461,7 +1461,7 @@ function showResponsibilityModal(role, user) {
       <div style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 380px; overflow-y: auto; padding-right: 0.2rem;">
         <!-- Region selection (Always rendered to avoid null and enable cascading) -->
         <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責大區 (可複選)</label>
+          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">負責大區 (可複選)</label>
           <div id="modal-regions-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
             <!-- Loaded dynamically -->
           </div>
@@ -1472,7 +1472,7 @@ function showResponsibilityModal(role, user) {
     if (role === "zone_leader" || role === "group_leader") {
       htmlContent += `
         <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責牧區 (可複選)</label>
+          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">負責牧區 (可複選)</label>
           <div id="modal-zones-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
             <span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選大區</span>
           </div>
@@ -1484,7 +1484,7 @@ function showResponsibilityModal(role, user) {
     if (role === "group_leader") {
       htmlContent += `
         <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.3rem;">負責小組 (可複選)</label>
+          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">負責小組 (可複選)</label>
           <div id="modal-groups-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
             <span style="font-size: 0.8rem; color: var(--text-muted);">請先勾選牧區</span>
           </div>
@@ -1496,7 +1496,7 @@ function showResponsibilityModal(role, user) {
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 0.6rem; border-top: 1px solid var(--border-card); padding-top: 0.8rem; margin-top: 0.2rem;">
         <button id="modal-btn-cancel" class="pill-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem;">取消</button>
-        <button id="modal-btn-confirm" class="primary-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 700;">確認變更</button>
+        <button id="modal-btn-confirm" class="primary-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 500;">確認變更</button>
       </div>
     `;
     
