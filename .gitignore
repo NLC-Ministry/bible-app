@@ -10,7 +10,6 @@ Thumbs.db
 .vscode/
 *.log
 node_modules/
-package-lock.json
 
 # 測試/虛擬資料檔案 (本地隔離)
 mock_stats.js
