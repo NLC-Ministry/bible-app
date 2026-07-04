@@ -984,6 +984,9 @@ const CURATED_IMAGE_POOL = [
 
 async function fetchRandomVerse(event) {
   if (event) {
+    if (event.target.closest(".social-toolbar") || event.target.closest("#share-card-btn")) {
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
   }
