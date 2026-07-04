@@ -1108,31 +1108,32 @@ async function shareAsImage(e) {
   
   const shareBtn = document.getElementById("share-card-btn");
   const card = document.getElementById("verse-card");
-  if (!shareBtn || !card) return;
+  if (!card) return;
   
-  shareBtn.disabled = true;
-  shareBtn.innerHTML = `<i class="bi bi-arrow-repeat animate-spin text-white text-lg"></i>`;
+  if (shareBtn) {
+    shareBtn.disabled = true;
+    shareBtn.innerHTML = `<i class="bi bi-arrow-repeat animate-spin text-white text-lg"></i>`;
+  }
   
   try {
+    // 1. 使用 html2canvas 將卡片轉為 Blob 圖片物件
     const canvas = await html2canvas(card, {
       useCORS: true,
-      scale: 2,
-      backgroundColor: null,
-      logging: false
+      scale: 2 // 提升圖片清晰度
     });
     
     canvas.toBlob(async (blob) => {
-      if (!blob) {
-        throw new Error("Blob conversion failed");
-      }
+      if (!blob) return alert('圖片產生失敗');
       
       const file = new File([blob], 'daily-verse.png', { type: 'image/png' });
+      
+      // 2. 【核心防禦】：檢查瀏覽器是否支援 Web Share API 且支援分享檔案
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
             title: '每日金句分享',
-            text: '分享一句帶給我力量的話語。'
+            text: '與你分享這句充滿力量的話語。'
           });
           
           localStorage.setItem("has_shared_verse", "true");
@@ -1142,35 +1143,47 @@ async function shareAsImage(e) {
           } else if (typeof checkAchievements === "function") {
             checkAchievements();
           }
-        } catch (shareErr) {
-          console.warn("Share cancelled or failed:", shareErr);
+        } catch (shareError) {
+          // 如果使用者在中途取消分享，不報錯，安靜結束
+          if (shareError.name !== 'AbortError') {
+            fallbackDownload(canvas);
+          }
         }
       } else {
-        const link = document.createElement('a');
-        link.download = 'daily-verse.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        
-        localStorage.setItem("has_shared_verse", "true");
-        localStorage.setItem("badge_share_verse_unlocked", "true");
-        if (typeof window.triggerBadgeUnlockNotification === "function") {
-          window.triggerBadgeUnlockNotification("share_verse", "傳遞愛光芒");
-        } else if (typeof checkAchievements === "function") {
-          checkAchievements();
-        }
+        // 3. 【退路機制】：若在 localhost、非 HTTPS 環境或不支援的手機上，直接觸發下載圖片到相簿/設備
+        fallbackDownload(canvas);
       }
     }, 'image/png');
-  } catch (err) {
-    console.error("Failed to generate image:", err);
-    if (typeof showToast === "function") {
-      showToast("產生圖卡失敗，請稍後再試。");
-    }
+
+  } catch (error) {
+    console.error('產生分享圖片時發生錯誤:', error);
+    alert('分享失敗，請稍後再試');
   } finally {
-    setTimeout(() => {
-      shareBtn.disabled = false;
-      shareBtn.innerHTML = `<i class="bi bi-share text-white text-lg"></i>`;
-    }, 1000);
+    if (shareBtn) {
+      setTimeout(() => {
+        shareBtn.disabled = false;
+        shareBtn.innerHTML = `<i class="bi bi-share text-white text-lg"></i>`;
+      }, 1000);
+    }
   }
+}
+
+// 輔助下載函式：確保在電腦版或非安全環境下也能拿到圖片
+function fallbackDownload(canvas) {
+  const link = document.createElement('a');
+  link.download = 'daily-verse.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  
+  localStorage.setItem("has_shared_verse", "true");
+  localStorage.setItem("badge_share_verse_unlocked", "true");
+  if (typeof window.triggerBadgeUnlockNotification === "function") {
+    window.triggerBadgeUnlockNotification("share_verse", "傳遞愛光芒");
+  } else if (typeof checkAchievements === "function") {
+    checkAchievements();
+  }
+  
+  alert('當前環境不支援原生分享（可能因未部署 HTTPS），已自動將精美金句圖片下載至您的裝置相簿！');
 }
 
 async function syncVerseLikes(verseSource) {
@@ -1180,7 +1193,7 @@ async function syncVerseLikes(verseSource) {
   if (!likeBtn || !label) return;
 
   // 1. Initial optimistic local UI state
-  let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "716420");
+  let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0");
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
   
   const updateUI = () => {
@@ -1211,8 +1224,8 @@ async function syncVerseLikes(verseSource) {
           localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
           updateUI();
         } else {
-          // Row does not exist yet: insert default random count
-          const initialCount = 716420 + Math.floor(Math.random() * 10000);
+          // Row does not exist yet: insert default count 0
+          const initialCount = 0;
           await state.supabase.from("verse_likes").insert({ source: verseSource, like_count: initialCount }).execute();
           count = initialCount;
           localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
@@ -1239,7 +1252,7 @@ async function toggleVerseLike(e) {
   if (!likeBtn || !label) return;
 
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
-  let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "716420");
+  let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0");
 
   // Optimistic UI updates
   liked = !liked;
