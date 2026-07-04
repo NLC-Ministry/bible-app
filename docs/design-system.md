@@ -17,9 +17,24 @@ Satellite app under [NewLife Member Hub](https://member.newlife.org.tw/). Shares
 | `--color-brand-active` | `#0284A3` | Button pressed |
 | `--color-brand-subtle` | 12% brand mix | Selected pills, focus rings |
 | `--color-brand-muted` | 8% brand mix | Hover backgrounds |
-| `--color-brand-border` | 24% brand mix | Borders, shadows |
+| `--color-brand-border` | 24% brand mix | Borders, selected states |
 
 Legacy alias: `--primary-color` → `--color-brand`.
+
+## Shadow scale (Member Hub / Tailwind aligned)
+
+Neutral shadows only — no brand-tinted glows on buttons, tabs, or cards.
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--shadow-sm` | `0 1px 2px 0 rgb(0 0 0 / 0.05)` | Cards, header, bento tiles |
+| `--shadow-md` | Tailwind `shadow-md` | Floating controls, plan covers |
+| `--shadow-lg` | Tailwind `shadow-lg` | Modals, dropdowns, login card |
+| `--shadow-up-md` / `--shadow-up-lg` | Flipped md/lg | Bottom sheets |
+| `--shadow-none` | none | Solid buttons, active tabs |
+| `--shadow-focus-ring` | 3px brand ring | Input focus (not elevation) |
+| `--shadow-card` | alias → `--shadow-sm` | Legacy |
+| `--shadow-hover` | alias → `--shadow-sm` | Legacy (hover uses border, not lift) |
 
 ## Semantic tokens
 
@@ -38,7 +53,7 @@ Legacy alias: `--primary-color` → `--color-brand`.
 | `--bg-app` | `#FAFAFA` |
 | `--bg-card` | `#FFFFFF` |
 | `--border-default` | `rgba(0,0,0,0.1)` |
-| `--shadow-card` | subtle neutral shadow |
+| `--shadow-sm` | Card / header elevation (see Shadow scale) |
 
 ## Typography
 

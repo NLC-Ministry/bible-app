@@ -17,6 +17,16 @@ const NLC_DESIGN = {
   black: "#0F0F0F",
 };
 
+/** Neutral shadow scale — matches Member Hub Tailwind shadow-sm/md/lg */
+const NLC_SHADOW = {
+  sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+  md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+  lg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+  upMd: "0 -4px 6px -1px rgb(0 0 0 / 0.1), 0 -2px 4px -2px rgb(0 0 0 / 0.1)",
+  upLg: "0 -10px 15px -3px rgb(0 0 0 / 0.1), 0 -4px 6px -4px rgb(0 0 0 / 0.1)",
+  none: "none",
+};
+
 const NLC_CHART = {
   brand: NLC_DESIGN.brand,
   brandFill: "rgba(4, 169, 210, 0.15)",
@@ -49,6 +59,7 @@ const NLC_MEMBER_COLORS = [
 ];
 
 window.NLC_DESIGN = NLC_DESIGN;
+window.NLC_SHADOW = NLC_SHADOW;
 window.NLC_CHART = NLC_CHART;
 window.NLC_PLAN_COVERS = NLC_PLAN_COVERS;
 window.NLC_MEMBER_COLORS = NLC_MEMBER_COLORS;

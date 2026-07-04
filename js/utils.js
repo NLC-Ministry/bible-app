@@ -24,7 +24,7 @@ function showToast(message, duration = 2500) {
       border-radius: 24px;
       font-size: 0.88rem;
       font-weight: 600;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      box-shadow: ${(window.NLC_SHADOW && window.NLC_SHADOW.lg) || "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)"};
       z-index: 9999;
       opacity: 0;
       transition: opacity 0.3s ease, transform 0.3s ease;
@@ -256,7 +256,7 @@ function renderBadgeWall(containerId) {
       cursor: pointer;
       position: relative;
       user-select: none;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      box-shadow: ${(window.NLC_SHADOW && window.NLC_SHADOW.md) || "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)"};
     `;
     
     let stateStyle = "";

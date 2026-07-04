@@ -1435,7 +1435,7 @@ function showResponsibilityModal(role, user) {
       border: 1px solid var(--border-card);
       border-radius: 16px;
       padding: 1.8rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      box-shadow: var(--shadow-lg);
       transform: translateY(20px);
       transition: transform 0.3s ease;
       display: flex;

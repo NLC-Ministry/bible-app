@@ -794,7 +794,7 @@ function getPlanCoverHtml(plan) {
   else if (plan.presetKey === "q2") text = "第二季";
   else if (plan.presetKey === "q3") text = "第三季";
   else if (plan.presetKey === "q4") text = "第四季";
-  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: #0F0F0F; font-weight: 800; font-size: 0.95rem; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">${text}</div>`;
+  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: #0F0F0F; font-weight: 800; font-size: 0.95rem; flex-shrink: 0; box-shadow: var(--shadow-sm);">${text}</div>`;
 }
 
 function renderJoinedPlansList() {
@@ -4123,7 +4123,7 @@ window.showPlanStatsModal = function () {
   // Helper to generate a styled card
   const makeCardHtml = (title, dataText, desc, iconColor, bgGlow = '') => {
     return `
-      <div class="stat-grid-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 0.9rem; display: flex; flex-direction: column; justify-content: space-between; height: 120px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); transition: all 0.2s; ${bgGlow}">
+      <div class="stat-grid-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 0.9rem; display: flex; flex-direction: column; justify-content: space-between; height: 120px; box-shadow: var(--shadow-sm); transition: all 0.2s; ${bgGlow}">
         <div style="font-size: 0.82rem; font-weight: 800; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
           ${title}
         </div>
@@ -4280,11 +4280,11 @@ function renderPlanScheduleView() {
     console.log('🎨 [按鈕視覺更新] 當前高亮亮起的按鈕為：', viewMode === 'calendar' ? '查看日曆' : (isTodayActive ? '今天進度' : '我的進度'));
 
     // Tailwind CSS dynamic flat theme style rules (No borders, rounded-xl 12px, transition & active scale)
-    const activeStyleStr = "flex: 1; font-weight: 700; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid #9061f9 !important; background: #7c3aed !important; color: white !important; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);";
-    const inactiveStyleStr = "flex: 1; font-weight: 500; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.12) !important; background: rgba(15, 23, 42, 0.6) !important; color: #94a3b8 !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
+    const activeStyleStr = "flex: 1; font-weight: 700; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid var(--color-brand) !important; background: var(--color-brand) !important; color: white !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
+    const inactiveStyleStr = "flex: 1; font-weight: 500; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid var(--border-card) !important; background: var(--bg-input) !important; color: var(--text-secondary) !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
 
-    const calActiveStyleStr = "flex: 1.2; font-weight: 700; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid #9061f9 !important; background: #7c3aed !important; color: white !important; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25);";
-    const calInactiveStyleStr = "flex: 1.2; font-weight: 500; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid rgba(148, 163, 184, 0.12) !important; background: rgba(15, 23, 42, 0.6) !important; color: #94a3b8 !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
+    const calActiveStyleStr = "flex: 1.2; font-weight: 700; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid var(--color-brand) !important; background: var(--color-brand) !important; color: white !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
+    const calInactiveStyleStr = "flex: 1.2; font-weight: 500; font-size: 0.82rem; padding: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; border-radius: 12px; border: 1px solid var(--border-card) !important; background: var(--bg-input) !important; color: var(--text-secondary) !important; cursor: pointer; transition: all 0.2s ease; box-shadow: none;";
 
     // 2. Action Buttons Row (我的進度, 今天進度, 查看日曆)
     const actionsBar = document.createElement("div");
