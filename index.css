@@ -150,7 +150,8 @@ body {
   justify-content: space-between;
 }
 
-.brand {
+.brand,
+.brand-mark {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -160,9 +161,11 @@ body {
   font-size: 0.875rem;
   font-family: 'Inter', 'Noto Sans TC', sans-serif;
   transition: var(--transition-smooth);
+  flex-shrink: 0;
 }
 
-.brand:hover {
+.brand:hover,
+.brand-mark:hover {
   transform: translateY(-1px);
   opacity: 0.9;
 }
@@ -288,16 +291,37 @@ body {
 .icon-btn {
   background: var(--bg-input);
   border: 1px solid var(--border-card);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 44px;
+  max-height: 44px;
+  padding: 0;
   border-radius: 50%;
-  display: flex;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   color: var(--text-primary);
   box-shadow: var(--shadow-card);
   transition: var(--transition-smooth);
+  overflow: hidden;
+}
+
+#theme-toggle {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 44px;
+  max-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  aspect-ratio: 1 / 1;
 }
 
 .icon-btn:hover {
@@ -3833,14 +3857,22 @@ select,
   max-width: 100%;
   padding: 0 0.85rem;
   display: grid;
-  grid-template-columns: 48px 1fr 48px;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "leading title actions";
   gap: 0.4rem;
-  justify-items: center;
+  align-items: center;
 }
 
-.brand {
-  grid-column: 2;
+.header-leading {
+  grid-area: leading;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
   min-width: 0;
+}
+
+.brand-mark {
   justify-content: center;
   pointer-events: auto;
 }
@@ -3852,8 +3884,7 @@ select,
 }
 
 .header-actions {
-  grid-column: 3;
-  grid-row: 1;
+  grid-area: actions;
   display: flex !important;
   justify-self: end;
   align-self: center;
@@ -3866,7 +3897,9 @@ select,
 }
 
 .header-actions #theme-toggle {
-  display: flex !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-back-btn.is-home {
@@ -3874,7 +3907,9 @@ select,
 }
 
 .brand-text {
+  grid-area: title;
   display: block;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3882,11 +3917,11 @@ select,
   font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   letter-spacing: normal;
+  text-align: center;
+  justify-self: center;
 }
 
 .app-back-btn {
-  grid-column: 1;
-  grid-row: 1;
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -3894,7 +3929,7 @@ select,
   padding: 0;
   border-radius: 999px;
   box-shadow: none;
-  justify-self: start;
+  flex-shrink: 0;
 }
 
 .app-back-btn span {
