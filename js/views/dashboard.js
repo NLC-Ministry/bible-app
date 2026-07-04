@@ -1002,6 +1002,12 @@ async function fetchRandomVerse(event) {
   isVerseLoading = true;
   isImgLoading = true;
   
+  // Set flag for sharing badge check
+  localStorage.setItem("has_shared_verse", "true");
+  if (typeof checkAchievements === "function") {
+    checkAchievements();
+  }
+  
   // Enter loading state
   card.classList.add("animate-pulse", "opacity-70");
   if (content) {
