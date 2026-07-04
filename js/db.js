@@ -134,6 +134,7 @@ const db = {
     } else {
       if (forceOfflineDemo) {
         this.setDemoMode();
+        this.updateAuthUI(null);
       } else {
         console.error("Supabase config is missing or invalid!");
         this.showConnectionError();
