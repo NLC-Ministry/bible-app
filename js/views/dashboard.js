@@ -994,93 +994,107 @@ const CHINESE_TO_ENGLISH_BOOKS = {
   "馬可福音": "mark"
 };
 
-window.fetchRandomVerse = async function(event) {
+window.flipAndFetchVerse = async function(event) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
   }
   
   if (isVerseLoading) return;
-  isVerseLoading = true;
   
   const card = document.getElementById("daily-verse-card");
   const content = document.getElementById("daily-verse-content");
   const skeleton = document.getElementById("daily-verse-skeleton");
-  const btn = document.getElementById("btn-refresh-verse");
   
-  if (content) content.classList.add("hidden");
-  if (skeleton) {
-    skeleton.classList.remove("hidden");
-    skeleton.style.display = "flex";
-  }
-  if (card) {
-    card.classList.add("animate-pulse");
-  }
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = "0.5";
-  }
+  if (!card) return;
   
+  // Kick off the 3D flip animation!
+  card.classList.toggle("flipped");
+  
+  isVerseLoading = true;
+  
+  // 1. Start fetching the new random verse in parallel
   const randomLocal = DAILY_VERSES[Math.floor(Math.random() * DAILY_VERSES.length)];
   let verseText = randomLocal.text;
   let verseSource = randomLocal.source;
   
-  try {
-    const match = randomLocal.source.match(/^([\u4e00-\u9fa5]+)\s*(\d+):(\d+)(?:-(\d+))?$/);
-    if (match) {
-      const chineseBook = match[1];
-      const chapter = match[2];
-      const verseStart = match[3];
-      const verseEnd = match[4];
-      const englishBook = CHINESE_TO_ENGLISH_BOOKS[chineseBook] || "john";
-      const passage = `${englishBook} ${chapter}:${verseStart}` + (verseEnd ? `-${verseEnd}` : "");
-      
-      const url = `https://bible-api.com/${encodeURIComponent(passage)}?translation=cuv`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 seconds timeout fallback
-      
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.text) {
-          // Wrap with quotes and sanitize whitespace
-          verseText = `「${data.text.trim().replace(/\s+/g, " ").replace(/\n/g, "")}」`;
+  const fetchPromise = (async () => {
+    try {
+      const match = randomLocal.source.match(/^([\u4e00-\u9fa5]+)\s*(\d+):(\d+)(?:-(\d+))?$/);
+      if (match) {
+        const chineseBook = match[1];
+        const chapter = match[2];
+        const verseStart = match[3];
+        const verseEnd = match[4];
+        const englishBook = CHINESE_TO_ENGLISH_BOOKS[chineseBook] || "john";
+        const passage = `${englishBook} ${chapter}:${verseStart}` + (verseEnd ? `-${verseEnd}` : "");
+        
+        const url = `https://bible-api.com/${encodeURIComponent(passage)}?translation=cuv`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout fallback
+        
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.text) {
+            return {
+              text: `「${data.text.trim().replace(/\s+/g, " ").replace(/\n/g, "")}」`,
+              source: randomLocal.source
+            };
+          }
         }
       }
+    } catch (err) {
+      console.warn("Fetch random verse from API failed, falling back to local dataset:", err);
     }
-  } catch (err) {
-    console.warn("Fetch random verse from API failed, falling back to local dataset:", err);
-  }
+    return { text: verseText, source: verseSource };
+  })();
   
-  isVerseLoading = false;
-  currentVerse = { text: verseText, source: verseSource };
-  
-  if (card) card.classList.remove("animate-pulse");
-  if (btn) {
-    btn.disabled = false;
-    btn.style.opacity = "1";
-  }
-  if (skeleton) {
-    skeleton.classList.add("hidden");
-    skeleton.style.display = "none";
-  }
-  
-  if (content) {
-    content.classList.remove("hidden");
-    content.style.opacity = "0";
+  // 2. Wait exactly 300ms (the golden mid-point when card is rotated 90 degrees)
+  setTimeout(async () => {
+    card.classList.add("animate-pulse");
+    
+    let result = null;
+    const checkResult = await Promise.race([
+      fetchPromise,
+      new Promise(resolve => setTimeout(() => resolve("pending"), 50))
+    ]);
+    
+    if (checkResult !== "pending") {
+      result = checkResult;
+    } else {
+      if (content) content.classList.add("hidden");
+      if (skeleton) {
+        skeleton.classList.remove("hidden");
+        skeleton.style.display = "flex";
+      }
+      result = await fetchPromise;
+    }
     
     const textEl = document.getElementById("daily-verse-text");
     const sourceEl = document.getElementById("daily-verse-source");
-    if (textEl) textEl.textContent = verseText;
-    if (sourceEl) sourceEl.textContent = `— ${verseSource}`;
+    if (textEl) textEl.textContent = result.text;
+    if (sourceEl) sourceEl.textContent = `— ${result.source}`;
     
-    content.classList.remove("animate-fadeIn");
-    void content.offsetWidth; // Force CSS reflow
-    content.classList.add("animate-fadeIn");
-  }
+    currentVerse = result;
+    isVerseLoading = false;
+    
+    card.classList.remove("animate-pulse");
+    if (skeleton) {
+      skeleton.classList.add("hidden");
+      skeleton.style.display = "none";
+    }
+    if (content) {
+      content.classList.remove("hidden");
+      content.style.opacity = "0";
+      
+      content.classList.remove("animate-fadeIn");
+      void content.offsetWidth; // Force CSS reflow
+      content.classList.add("animate-fadeIn");
+    }
+  }, 300);
 };
 
 function renderDailyVerse() {
@@ -1093,9 +1107,8 @@ function renderDailyVerse() {
     if (textEl) textEl.textContent = currentVerse.text;
     if (sourceEl) sourceEl.textContent = `— ${currentVerse.source}`;
     
-    window.fetchRandomVerse();
+    window.flipAndFetchVerse();
   } else {
-    // Re-render cached currentVerse if switching back to dashboard tab
     const textEl = document.getElementById("daily-verse-text");
     const sourceEl = document.getElementById("daily-verse-source");
     if (textEl) textEl.textContent = currentVerse.text;

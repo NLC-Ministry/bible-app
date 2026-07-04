@@ -165,27 +165,37 @@
             </div>
 
             <!-- 每日金句 (Verse of the Day) -->
-            <div id="daily-verse-card" class="glass-card" style="background: rgba(15, 23, 42, 0.4) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: none !important; margin-bottom: 1.5rem; position: relative; overflow: hidden; padding: 1.5rem; border-radius: 16px; min-height: 130px; height: auto; display: flex; flex-direction: column; justify-content: center; transition: all 0.3s ease;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                <div style="font-size: 0.75rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.05em; text-transform: uppercase;">✨ 每日金句</div>
-                <button id="btn-refresh-verse" style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08); padding: 0.3rem 0.7rem; border-radius: 20px; color: #cbd5e1; font-size: 0.7rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; transition: all 0.2s ease; outline: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" onclick="window.fetchRandomVerse(event)">
-                  🔄 抽卡換一句
-                </button>
-              </div>
-              
-              <!-- Loaded Content -->
-              <div id="daily-verse-content" style="transition: opacity 0.3s ease;">
-                <blockquote id="daily-verse-text" style="font-size: 1.05rem; font-weight: 500; color: #f1f5f9; line-height: 1.6; margin: 0 0 0.5rem 0; font-family: 'Outfit', sans-serif;">
-                  「神的話是我腳前的燈，是我路上的光。」
-                </blockquote>
-                <cite id="daily-verse-source" style="font-size: 0.78rem; color: #94a3b8; font-style: normal; font-weight: 600; text-align: right; display: block;">— 詩篇 119:105</cite>
-              </div>
+            <div id="daily-verse-card" class="daily-verse-card" style="perspective: 1000px; margin-bottom: 1.5rem; cursor: pointer;" onclick="window.flipAndFetchVerse(event)">
+              <div id="daily-verse-card-inner" style="background: rgba(15, 23, 42, 0.4) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: none !important; padding: 1.5rem; border-radius: 16px; min-height: 140px; height: auto; display: flex; flex-direction: column; justify-content: center; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);">
+                
+                <div id="daily-verse-face-content" style="transform-style: preserve-3d; transition: transform 0.6s ease; display: flex; flex-direction: column; height: 100%;">
+                  
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <div style="font-size: 0.75rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.35rem; text-transform: uppercase;">
+                      <i class="bi bi-stars"></i> 每日金句
+                    </div>
+                    <div style="font-size: 0.68rem; color: rgba(226, 232, 240, 0.4); display: flex; align-items: center; gap: 0.2rem; font-weight: 500;">
+                      <i class="bi bi-arrow-repeat"></i> 點擊卡片翻牌
+                    </div>
+                  </div>
+                  
+                  <!-- Loaded Content -->
+                  <div id="daily-verse-content" style="transition: opacity 0.3s ease;">
+                    <blockquote id="daily-verse-text" style="font-size: 1.05rem; font-weight: 500; color: #f1f5f9; line-height: 1.6; margin: 0 0 0.5rem 0; font-family: 'Outfit', sans-serif;">
+                      「神的話是我腳前的燈，是我路上的光。」
+                    </blockquote>
+                    <cite id="daily-verse-source" style="font-size: 0.78rem; color: #94a3b8; font-style: normal; font-weight: 600; text-align: right; display: block;">— 詩篇 119:105</cite>
+                  </div>
 
-              <!-- Skeleton Loader (hidden by default) -->
-              <div id="daily-verse-skeleton" class="hidden" style="flex-direction: column; gap: 0.6rem; width: 100%;">
-                <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.95rem; width: 90%; border-radius: 4px;"></div>
-                <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.95rem; width: 70%; border-radius: 4px; margin-bottom: 0.5rem;"></div>
-                <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.75rem; width: 30%; border-radius: 4px; align-self: flex-end;"></div>
+                  <!-- Skeleton Loader (hidden by default) -->
+                  <div id="daily-verse-skeleton" class="hidden" style="flex-direction: column; gap: 0.6rem; width: 100%;">
+                    <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.95rem; width: 90%; border-radius: 4px;"></div>
+                    <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.95rem; width: 70%; border-radius: 4px; margin-bottom: 0.5rem;"></div>
+                    <div class="skeleton-bar" style="background: rgba(30, 41, 59, 0.6); height: 0.75rem; width: 30%; border-radius: 4px; align-self: flex-end;"></div>
+                  </div>
+
+                </div>
+
               </div>
             </div>
 

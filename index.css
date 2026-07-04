@@ -6276,3 +6276,12 @@ body.dark-theme .calendar-day .micro-progress-bar {
     transform: translateY(0) scale(1);
   }
 }
+
+/* Card Flip Animation Styles */
+.daily-verse-card.flipped #daily-verse-card-inner {
+  transform: rotateY(180deg);
+}
+
+.daily-verse-card.flipped #daily-verse-face-content {
+  transform: rotateY(180deg);
+}
