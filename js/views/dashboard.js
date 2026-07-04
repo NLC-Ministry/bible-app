@@ -994,7 +994,7 @@ const CHINESE_TO_ENGLISH_BOOKS = {
   "馬可福音": "mark"
 };
 
-window.flipAndFetchVerse = async function(event) {
+async function flipAndFetchVerse(event) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
@@ -1098,6 +1098,12 @@ window.flipAndFetchVerse = async function(event) {
 };
 
 function renderDailyVerse() {
+  const card = document.getElementById("daily-verse-card");
+  if (card && !card._hasFlipListener) {
+    card.addEventListener("click", flipAndFetchVerse);
+    card._hasFlipListener = true;
+  }
+
   if (!currentVerse) {
     const dayOfMonth = new Date().getDate();
     currentVerse = DAILY_VERSES[(dayOfMonth - 1) % DAILY_VERSES.length];
@@ -1107,7 +1113,7 @@ function renderDailyVerse() {
     if (textEl) textEl.textContent = currentVerse.text;
     if (sourceEl) sourceEl.textContent = `— ${currentVerse.source}`;
     
-    window.flipAndFetchVerse();
+    flipAndFetchVerse();
   } else {
     const textEl = document.getElementById("daily-verse-text");
     const sourceEl = document.getElementById("daily-verse-source");
