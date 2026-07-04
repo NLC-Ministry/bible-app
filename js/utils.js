@@ -214,53 +214,89 @@ function renderBadgeWall(containerId) {
 
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
 
+  // Force grid layout styling on container
+  container.style.cssText = "display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; width: 100%;";
+
   ACHIEVEMENTS.forEach(badge => {
     const isUnlocked = unlocked.includes(badge.id);
-    const descParsed = badge.description.replace("{streak}", (state.currentUser && state.currentUser.streak) || 0);
 
     const badgeItem = document.createElement("div");
     badgeItem.className = isUnlocked ? "honor-badge-item unlocked" : "honor-badge-item locked";
-    badgeItem.style.cssText = `
+    
+    // Grid card styling
+    const baseCardStyle = `
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 1rem;
-      padding: 0.8rem 1rem;
-      background: ${isUnlocked ? "var(--bg-input)" : "rgba(255,255,255,0.05)"};
-      border: 1px solid ${isUnlocked ? "var(--border-card)" : "transparent"};
-      border-radius: var(--radius-sm);
-      opacity: ${isUnlocked ? "1" : "0.45"};
-      filter: ${isUnlocked ? "none" : "grayscale(100%)"};
+      text-align: center;
+      padding: 0.75rem 0.5rem;
+      border-radius: 0.75rem;
       transition: all 0.3s ease;
-      cursor: default;
+      cursor: pointer;
+      position: relative;
+      user-select: none;
     `;
-
+    
+    const stateStyle = isUnlocked 
+      ? `background: linear-gradient(to tr, rgba(245, 158, 11, 0.1), rgba(249, 115, 22, 0.1)); border: 1px solid rgba(245, 158, 11, 0.25);`
+      : `border: 1px dashed rgba(71, 85, 105, 0.6); background: rgba(15, 23, 42, 0.15);`;
+      
+    badgeItem.style.cssText = baseCardStyle + stateStyle;
+    
+    const iconColor = isUnlocked ? "color: #fbbf24;" : "color: #94a3b8; opacity: 0.35;";
+    const textColor = isUnlocked ? "color: #ffffff;" : "color: #94a3b8; opacity: 0.55;";
+    
     badgeItem.innerHTML = `
-      <div style="font-size: 2rem; display: flex; width: 50px; height: 50px; background: ${isUnlocked ? badge.color : "#e2e8f0"}; border-radius: 50%; justify-content: center; align-items: center; box-shadow: ${isUnlocked ? "0 4px 10px " + badge.shadow : "none"}; flex-shrink: 0;">
-        ${badge.icon}
+      <!-- Lock Badge for Locked State -->
+      ${!isUnlocked ? `
+        <div style="position: absolute; top: 6px; right: 8px; opacity: 0.55;">
+          <i class="bi bi-lock-fill" style="font-size: 0.7rem; color: #64748b;"></i>
+        </div>
+      ` : ""}
+      
+      <!-- Badge Icon -->
+      <div style="font-size: 1.6rem; display: flex; width: 44px; height: 44px; justify-content: center; align-items: center; flex-shrink: 0; ${iconColor}">
+        <i class="${badge.iconClass}"></i>
       </div>
-      <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 0;">
-        <span style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-          ${badge.title}
-          ${isUnlocked ? '<span style="font-size:0.65rem;background:#e0f2fe;color:#0284c7;padding:0.05rem 0.35rem;border-radius:10px;font-weight:800;">已解鎖</span>' : ""}
-        </span>
-        <span style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descParsed}</span>
-      </div>
+      
+      <!-- Short Title Only -->
+      <span style="font-size: 0.72rem; font-weight: 500; margin-top: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; ${textColor}">
+        ${badge.title}
+      </span>
     `;
 
-    if (isUnlocked) {
-      badgeItem.onmouseenter = () => {
-        badgeItem.style.borderColor = "var(--primary-color)";
-        badgeItem.style.transform = "translateY(-1px)";
-      };
-      badgeItem.onmouseleave = () => {
-        badgeItem.style.borderColor = "var(--border-card)";
-        badgeItem.style.transform = "none";
-      };
-    }
+    // Click handler to open the Toast showing requirements
+    badgeItem.onclick = () => {
+      if (typeof window.showBadgeDetail === "function") {
+        window.showBadgeDetail(badge.title, badge.description, isUnlocked);
+      }
+    };
+
+    // Hover effects
+    badgeItem.onmouseenter = () => {
+      badgeItem.style.transform = "scale(1.05)";
+      if (isUnlocked) {
+        badgeItem.style.boxShadow = "0 4px 12px rgba(245, 158, 11, 0.15)";
+      }
+    };
+    badgeItem.onmouseleave = () => {
+      badgeItem.style.transform = "scale(1)";
+      badgeItem.style.boxShadow = "none";
+    };
 
     container.appendChild(badgeItem);
   });
 }
+
+// Global click drawer/toast
+window.showBadgeDetail = function(title, description, isUnlocked) {
+  const statusText = isUnlocked ? "【已解鎖】" : "【未解鎖】";
+  if (typeof showToast === "function") {
+    showToast(`${statusText} ${title}：\n${description.split('：').pop()}`, 4000);
+  } else {
+    alert(`${statusText} ${title}：\n${description.split('：').pop()}`);
+  }
+};
 
 // ── Global Premium Skeleton UI Loader ──────────────────────
 const ComponentSkeletonLoader = {

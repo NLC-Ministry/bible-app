@@ -2,28 +2,44 @@
 
 const ACHIEVEMENTS = [
   {
-    id: "streak_7",
-    title: "初嚐甘甜",
-    description: "連續讀經打卡達到 7 天 (目前: {streak}天)",
-    icon: "🔥",
-    color: "linear-gradient(135deg, #f35f5f 0%, #fca468 100%)",
-    shadow: "rgba(243, 95, 95, 0.4)"
+    id: "subscribe_plan",
+    title: "開啟新旅程",
+    description: "開啟新旅程：解鎖條件為成功訂閱一個讀經計畫",
+    iconClass: "bi bi-calendar-plus",
+    color: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
+    shadow: "rgba(245, 158, 11, 0.4)"
   },
   {
-    id: "pentateuch",
-    title: "摩西五經大師",
-    description: "讀完創世記、出埃及記、利未記、民數記、申命記的全部章節",
-    icon: "📜",
-    color: "linear-gradient(135deg, #0ba395 0%, #35e478 100%)",
-    shadow: "rgba(11, 163, 149, 0.4)"
+    id: "streak_30",
+    title: "持之以恆",
+    description: "持之以恆：解鎖條件為連續打卡 30 天",
+    iconClass: "bi bi-calendar-check",
+    color: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
+    shadow: "rgba(245, 158, 11, 0.4)"
   },
   {
-    id: "record_breaker",
-    title: "讀經精兵",
-    description: "單日讀經打卡數量達到 5 章或以上 (今日自我突破！)",
-    icon: "⚡",
-    color: "linear-gradient(135deg, #8815b3 0%, #e02874 50%, #f36417 100%)",
-    shadow: "rgba(224, 40, 116, 0.4)"
+    id: "complete_plan",
+    title: "榮譽桂冠",
+    description: "榮譽桂冠：解鎖條件為 100% 完成任意一個讀經計畫",
+    iconClass: "bi bi-award",
+    color: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
+    shadow: "rgba(245, 158, 11, 0.4)"
+  },
+  {
+    id: "share_verse",
+    title: "傳遞愛光芒",
+    description: "傳遞愛光芒：解鎖條件為成功分享每日金句或讀經內容",
+    iconClass: "bi bi-share",
+    color: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
+    shadow: "rgba(245, 158, 11, 0.4)"
+  },
+  {
+    id: "read_all_bible",
+    title: "展開厚聖經",
+    description: "展開厚聖經：解鎖條件為讀完全本聖經所有卷書與章節",
+    iconClass: "bi bi-book-half",
+    color: "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)",
+    shadow: "rgba(245, 158, 11, 0.4)"
   }
 ];
 
@@ -32,35 +48,39 @@ async function checkAchievements() {
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
   const newlyUnlocked = [];
 
-  // 1. Check Streak 7
-  const currentStreak = state.currentUser.streak || 0;
-  if (currentStreak >= 7 && !unlocked.includes("streak_7")) {
-    newlyUnlocked.push("streak_7");
+  // 1. Check Subscribe Plan
+  if (state.activePlan && !unlocked.includes("subscribe_plan")) {
+    newlyUnlocked.push("subscribe_plan");
   }
 
-  // 2. Check Pentateuch Master
-  const pentateuchBooks = ["創世記", "出埃及記", "利未記", "民數記", "申命記"];
-  const isPentateuchDone = pentateuchBooks.every(bookName => {
-    const book = BIBLE_BOOKS.find(b => b.name === bookName);
-    if (!book) return false;
-    const readChapters = state.readingLogs.filter(l => l.book === bookName);
-    return readChapters.length >= book.chapters;
-  });
-  if (isPentateuchDone && !unlocked.includes("pentateuch")) {
-    newlyUnlocked.push("pentateuch");
+  // 2. Check Streak 30
+  const currentStreak = (state.currentUser && state.currentUser.streak) || 0;
+  if (currentStreak >= 30 && !unlocked.includes("streak_30")) {
+    newlyUnlocked.push("streak_30");
   }
 
-  // 3. Check Record Breaker (Single day chapters read >= 5)
-  const dateCounts = {};
-  state.readingLogs.forEach(l => {
-    if (l.read_at) {
-      const dateStr = l.read_at.substring(0, 10);
-      dateCounts[dateStr] = (dateCounts[dateStr] || 0) + 1;
+  // 3. Check Complete Plan
+  if (state.activePlan && state.activePlan.days) {
+    const allDone = state.activePlan.days.every(d => d.chapters.every(ch => ch.isRead));
+    if (allDone && !unlocked.includes("complete_plan")) {
+      newlyUnlocked.push("complete_plan");
     }
-  });
-  const maxChaptersInDay = Math.max(0, ...Object.values(dateCounts));
-  if (maxChaptersInDay >= 5 && !unlocked.includes("record_breaker")) {
-    newlyUnlocked.push("record_breaker");
+  }
+
+  // 4. Check Share Verse
+  if (localStorage.getItem("has_shared_verse") === "true" && !unlocked.includes("share_verse")) {
+    newlyUnlocked.push("share_verse");
+  }
+
+  // 5. Check Read All Bible (1189 total chapters)
+  if (state.readingLogs) {
+    const uniqueChapters = new Set();
+    state.readingLogs.forEach(l => {
+      uniqueChapters.add(`${l.book}_${l.chapter}`);
+    });
+    if (uniqueChapters.size >= 1189 && !unlocked.includes("read_all_bible")) {
+      newlyUnlocked.push("read_all_bible");
+    }
   }
 
   if (newlyUnlocked.length > 0) {
@@ -235,8 +255,8 @@ function triggerBadgeUnlockEffect(badgeId) {
   `;
 
   card.innerHTML = `
-    <div class="badge-popup-avatar" style="--glow: ${badge.shadow}; font-size: 4.8rem; margin: 0 auto 1.5rem auto; display: flex; width: 110px; height: 110px; background: ${badge.color}; border-radius: 50%; justify-content: center; align-items: center;">
-      ${badge.icon}
+    <div class="badge-popup-avatar" style="--glow: ${badge.shadow}; margin: 0 auto 1.5rem auto; display: flex; width: 110px; height: 110px; background: ${badge.color}; border-radius: 50%; justify-content: center; align-items: center;">
+      <i class="${badge.iconClass}" style="color: white; font-size: 3.5rem;"></i>
     </div>
     <h3 style="font-size: 1.6rem; font-weight: 800; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 2px;">🏆 榮譽成就解鎖 🏆</h3>
     <h4 style="font-size: 1.35rem; font-weight: 800; background: ${badge.color}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1.2rem;">${badge.title}</h4>
