@@ -3872,6 +3872,11 @@ select,
   min-width: 0;
 }
 
+/* Back navigation replaces the home logo in the leading slot */
+.header-leading:has(.app-back-btn:not(.is-home)) .brand-mark {
+  display: none;
+}
+
 .brand-mark {
   justify-content: center;
   pointer-events: auto;
