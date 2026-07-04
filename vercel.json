@@ -1,6 +1,6 @@
 {
   "cleanUrls": true,
-  "buildCommand": "node build-config.js",
+  "buildCommand": "npm run build",
   "outputDirectory": ".",
   "headers": [
     {
