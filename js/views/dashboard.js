@@ -10,28 +10,9 @@ const DAILY_VERSES = [
   { text: "「我們曉得萬事都互相效力，叫愛神的人得益處，就是按他旨意被召的人。」", source: "羅馬書 8:28" },
   { text: "「所以，不要為明天憂慮，因為明天自有明天的憂慮；一天的難處一天當就夠了。」", source: "馬太福音 6:34" },
   { text: "「我靠著那加給我力量的，凡事都能做。」", source: "腓立比書 4:13" },
-  { text: "「大山可以挪開，小山可以遷移，但我的慈愛必不離開你，我平安的盟約也不遷移。這是憐恤你的耶和華說的。」", source: "以賽亞書 54:10" },
   { text: "「神愛世人，甚至將他的獨生子賜給他們，叫一切信他的不致滅亡，反得永生。」", source: "約翰福音 3:16" },
-  { text: "「你們要先求他的國和他的義，這些東西都要加給你們了。」", source: "馬太福音 6:33" },
   { text: "「你不要害怕，因為我與你同在；不要驚惶，因為我是你的神。我必堅固你，我必幫助你，我必用我公義的右手扶持你。」", source: "以賽亞書 41:10" },
-  { text: "「人活著，不是單靠食物，乃是靠神口裡所出的一切話。」", source: "馬太福音 4:4" },
-  { text: "「因他受的鞭傷，我們得醫治；因他受的刑罰，我們得平安。」", source: "以賽亞書 53:5" },
-  { text: "「你們要靠主常常喜樂！我再說，你們要喜樂！」", source: "腓立比書 4:4" },
-  { text: "「堅心倚賴你的，你必保守他十分平安，因為他倚靠你。」", source: "以賽亞書 26:3" },
-  { text: "「所以，我們只管坦然無懼地來到施恩的寶座前，為要得憐恤，蒙恩惠，作隨時的幫助。」", source: "希伯來書 4:16" },
-  { text: "「不可叫人小看你年輕，總要在言語、行為、愛心、信心、清潔上，都作信徒的榜樣。」", source: "提摩太前書 4:12" },
-  { text: "「你們若有彼此相愛的心，眾人因此就認出你們是我的門徒了。」", source: "約翰福音 13:35" },
-  { text: "「凡勞苦擔重擔的人，可以到我這裡來，我就使你們得安息。」", source: "馬太福音 11:28" },
-  { text: "「至於我和我家，我們必定事奉耶和華。」", source: "約書亞記 24:15" },
-  { text: "「耶和華必在你前面行，他必與你同在，必不撇下你，也不丟棄你。不要懼怕，也不要驚惶。」", source: "申命記 31:8" },
-  { text: "「聖靈所結的果子，就是仁愛、喜樂、和平、忍耐、恩慈、良善、信實、溫柔、節制。這樣的事，沒有律法禁止。」", source: "加拉太書 5:22-23" },
-  { text: "「我留下一條新命令給你們，乃是叫你們彼此相愛；我怎樣愛你們，你們也要怎樣彼此相愛。」", source: "約翰福音 13:34" },
-  { text: "「耶和華是我的亮光，是我的拯救，我還怕誰呢？耶和華是我性命的保障，我還懼誰呢？」", source: "詩篇 27:1" },
-  { text: "「那光是真光，照亮一切生在世上的人。」", source: "約翰福音 1:9" },
-  { text: "「耶和華要保護你，免受一切的災害。他要保護你的性命。你出你入，耶和華要保護你，從今時直到永遠。」", source: "詩篇 121:7-8" },
-  { text: "「神的道是活潑的，是有功效的，比一切兩刃的劍更快。」", source: "希伯來書 4:12" },
-  { text: "「我們愛，因為神先愛我們。」", source: "約翰一書 4:19" },
-  { text: "「你若能信，在信的人，凡事都能。」", source: "馬可福音 9:23" }
+  { text: "「凡勞苦擔重擔的人，可以到我這裡來，我就使你們得安息。」", source: "馬太福音 11:28" }
 ];
 
 function updateDashboardView() {
@@ -995,42 +976,15 @@ const CHINESE_TO_ENGLISH_BOOKS = {
   "馬可福音": "mark"
 };
 
-function getKeywordsForVerse(source) {
-  const src = source || "";
-  if (src.includes("詩篇 119:105")) return "lantern,forest,night";
-  if (src.includes("以賽亞書 40:31")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("箴言 3:5-6")) return "forest,path,sunrise";
-  if (src.includes("約翰福音 16:33") || src.includes("約約翰福音 16:33")) return "calm-ocean,sunset,sky";
-  if (src.includes("詩篇 23:1")) return "peaceful-meadow,river,nature";
-  if (src.includes("腓立比書 4:6-7")) return "calm-ocean,sunset,sky";
-  if (src.includes("羅馬書 8:28")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("馬太福音 6:34")) return "calm-ocean,sunset,sky";
-  if (src.includes("腓立比書 4:13")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("以賽亞書 54:10")) return "peaceful-meadow,river,nature";
-  if (src.includes("約翰福音 3:16")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("馬太福音 6:33")) return "peaceful-meadow,river,nature";
-  if (src.includes("以賽亞書 41:10")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("馬太福音 4:4")) return "peaceful-meadow,river,nature";
-  if (src.includes("以賽亞書 53:5")) return "calm-ocean,sunset,sky";
-  if (src.includes("腓立比書 4:4")) return "peaceful-meadow,river,nature";
-  if (src.includes("以賽亞書 26:3")) return "calm-ocean,sunset,sky";
-  if (src.includes("希伯來書 4:16")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("提摩太前書 4:12")) return "peaceful-meadow,river,nature";
-  if (src.includes("約翰福音 13:35")) return "peaceful-meadow,river,nature";
-  if (src.includes("馬太福音 11:28")) return "calm-ocean,sunset,sky";
-  if (src.includes("約書亞記 24:15")) return "peaceful-meadow,river,nature";
-  if (src.includes("申命記 31:8")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("加拉太書 5:22-23")) return "peaceful-meadow,river,nature";
-  if (src.includes("約翰福音 13:34")) return "peaceful-meadow,river,nature";
-  if (src.includes("詩篇 27:1")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("約翰福音 1:9")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("詩篇 121:7-8")) return "mountain-sunrise,sunrise,light";
-  if (src.includes("希伯來書 4:12")) return "peaceful-meadow,river,nature";
-  if (src.includes("約翰一書 4:19")) return "peaceful-meadow,river,nature";
-  if (src.includes("馬可福音 9:23")) return "mountain-sunrise,sunrise,light";
-  
-  return "nature,minimalist,scenic";
-}
+const CURATED_IMAGE_POOL = [
+  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80", // Evening sky reflection
+  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80", // Misty green forest path
+  "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80", // Sunny field woodland
+  "https://images.unsplash.com/photo-1470252649358-96f5e5047118?auto=format&fit=crop&w=800&q=80", // Soft morning sunrise
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80", // Calm sunset beach
+  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&w=800&q=80", // Silent starry night
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80"  // Majestic clean mountain peaks
+];
 
 async function fetchRandomVerse(event) {
   if (event) {
@@ -1095,19 +1049,19 @@ async function fetchRandomVerse(event) {
   
   const result = await fetchPromise;
   
-  // Picsum Photos random URL with cache-buster parameter
-  const imgUrl = 'https://picsum.photos/800/600?random=' + Math.random();
+  // Pick a random image from the static curated pool
+  const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
   
   // Preload image
   const img = new Image();
   img.onload = () => {
-    applyVerseContent(result, imgUrl);
+    applyVerseContent(result, randomImgUrl);
   };
   img.onerror = () => {
-    console.warn("Failed to load image from Picsum, using fallback empty state");
-    applyVerseContent(result, "");
+    console.warn("Failed to load curated image path");
+    applyVerseContent(result, "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80"); // fallback
   };
-  img.src = imgUrl;
+  img.src = randomImgUrl;
   
   function applyVerseContent(verseData, imageUrl) {
     const textEl = document.getElementById("daily-verse-text");
