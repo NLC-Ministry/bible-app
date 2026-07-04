@@ -1132,13 +1132,24 @@ async function shareAsImage(e) {
     shareBtn.innerHTML = `<i class="bi bi-arrow-repeat animate-spin text-lg mb-1"></i><span>分享中</span>`;
   }
   
+  // 🛡️ 截圖前：將 toolbar 提升到 try 外層，保證 finally 能恢復
+  const toolbar = document.getElementById("verse-card-toolbar");
+
   try {
+    // 暫時隱藏工具列（避免按鈕截入圖片、Bootstrap icon 字型破圖）
+    if (toolbar) toolbar.style.visibility = "hidden";
+
     // 1. 使用 html2canvas 將卡片轉為 Blob 圖片物件
     const canvas = await html2canvas(card, {
       useCORS: true,
-      scale: 2 // 提升圖片清晰度
+      scale: 2,
+      logging: false,
+      ignoreElements: (el) => {
+        // 物理過濾：工具列容器、所有按鈕
+        return el.id === "verse-card-toolbar" || el.tagName === "BUTTON";
+      }
     });
-    
+
     canvas.toBlob(async (blob) => {
       if (!blob) return alert('圖片產生失敗');
       
@@ -1167,7 +1178,7 @@ async function shareAsImage(e) {
           }
         }
       } else {
-        // 3. 【退路機制】：若在 localhost、非 HTTPS 環境或不支援的手機上，直接觸發下載圖片到相簿/設備
+        // 3. 【退路機制】：若在 localhost、非 HTTPS 環境或不支援的手機上，直接觸發下載
         fallbackDownload(canvas);
       }
     }, 'image/png');
@@ -1176,6 +1187,8 @@ async function shareAsImage(e) {
     console.error('產生分享圖片時發生錯誤:', error);
     alert((window.APP_COPY && window.APP_COPY.verse.shareFail) || '分享失敗，等一下再試試');
   } finally {
+    // 🛡️ 無論成功或失敗，一律恢復工具列可見度
+    if (toolbar) toolbar.style.visibility = "";
     if (shareBtn) {
       setTimeout(() => {
         shareBtn.disabled = false;
