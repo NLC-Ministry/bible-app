@@ -165,14 +165,16 @@
             </div>
 
             <!-- 每日金句 (Verse of the Day) -->
-            <div id="daily-verse-card" class="relative overflow-hidden rounded-2xl cursor-pointer select-none transition-all duration-700 ease-in-out" style="min-height: 160px; box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); margin-bottom: 1.5rem;">
+            <div id="verse-card" class="relative overflow-hidden min-h-[200px] rounded-2xl cursor-pointer select-none transition-all duration-700 ease-in-out" style="box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); margin-bottom: 1.5rem;">
               
-              <!-- Dynamic Image Background & Overlay (for maximum readability) -->
-              <div id="daily-verse-bg" class="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-in-out" style="opacity: 0; z-index: 0; pointer-events: none;"></div>
-              <div id="daily-verse-overlay" class="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] transition-all duration-700 ease-in-out" style="z-index: 1; pointer-events: none;"></div>
+              <!-- Bottom Layer: Image -->
+              <img id="card-bg" class="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-500" src="" />
               
-              <!-- Card Face Content -->
-              <div id="daily-verse-face-content" class="relative z-10 flex flex-col justify-between h-full p-6 w-full text-white transition-all duration-700 ease-in-out">
+              <!-- Middle Layer: Dark Mask -->
+              <div class="absolute inset-0 bg-black/50 backdrop-blur-[1px] z-10"></div>
+              
+              <!-- Top Layer: Text Content -->
+              <div class="relative z-20 text-white p-6 h-full flex flex-col justify-between">
                 
                 <!-- Title Header -->
                 <div class="flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-wider text-purple-300">
@@ -187,13 +189,6 @@
                   <cite id="daily-verse-source" class="block text-right text-xs font-semibold text-slate-200/80 not-italic">— 詩篇 119:105</cite>
                 </div>
 
-                <!-- Skeleton Loader (hidden by default) -->
-                <div id="daily-verse-skeleton" class="hidden flex-col gap-3 w-full animate-pulse my-2">
-                  <div class="h-4 bg-white/20 rounded-md w-11/12"></div>
-                  <div class="h-4 bg-white/20 rounded-md w-3/4"></div>
-                  <div class="h-3 bg-white/20 rounded-md w-1/4 self-end"></div>
-                </div>
-                
                 <!-- Bottom Info Badge -->
                 <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-300/60 tracking-wider">
                   <i class="bi bi-arrow-repeat animate-spin-slow"></i> 點擊卡片隨機領取今日話語

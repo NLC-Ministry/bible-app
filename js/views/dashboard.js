@@ -1032,7 +1032,7 @@ function getKeywordsForVerse(source) {
   return "nature,minimalist,scenic";
 }
 
-async function flipAndFetchVerse(event) {
+async function fetchRandomVerse(event) {
   if (event) {
     event.preventDefault();
     event.stopPropagation();
@@ -1040,22 +1040,21 @@ async function flipAndFetchVerse(event) {
   
   if (isVerseLoading || isImgLoading) return;
   
-  const card = document.getElementById("daily-verse-card");
+  const card = document.getElementById("verse-card");
   const content = document.getElementById("daily-verse-content");
   
   if (!card) return;
   
-  // Set both text and image loading state to true
   isVerseLoading = true;
   isImgLoading = true;
   
-  // Apply visual style state: animate-pulse, dim card content
-  card.classList.add("animate-pulse", "opacity-60");
+  // Enter loading state
+  card.classList.add("animate-pulse", "opacity-70");
   if (content) {
     content.classList.add("opacity-40");
   }
   
-  // 1. Pick a new random verse in parallel
+  // Pick a random local verse
   const randomLocal = DAILY_VERSES[Math.floor(Math.random() * DAILY_VERSES.length)];
   let verseText = randomLocal.text;
   let verseSource = randomLocal.source;
@@ -1096,45 +1095,31 @@ async function flipAndFetchVerse(event) {
   
   const result = await fetchPromise;
   
-  // Unsplash natural backdrop logic
-  const keywords = getKeywordsForVerse(result.source);
-  let targetImageUrl = `https://source.unsplash.com/featured/800x600/?nature,minimalist,${encodeURIComponent(keywords)}&t=${Date.now()}`;
+  // Picsum Photos random URL with cache-buster parameter
+  const imgUrl = 'https://picsum.photos/800/600?random=' + Math.random();
   
   // Preload image
   const img = new Image();
   img.onload = () => {
-    applyVerseContent(result, targetImageUrl);
+    applyVerseContent(result, imgUrl);
   };
   img.onerror = () => {
-    console.warn("Failed to load Unsplash image, using fallback");
-    const fallbackUrl = `https://loremflickr.com/800/600/nature,minimalist,${encodeURIComponent(keywords)}?t=${Date.now()}`;
-    const fallbackImg = new Image();
-    fallbackImg.onload = () => {
-      applyVerseContent(result, fallbackUrl);
-    };
-    fallbackImg.onerror = () => {
-      applyVerseContent(result, "");
-    };
-    fallbackImg.src = fallbackUrl;
+    console.warn("Failed to load image from Picsum, using fallback empty state");
+    applyVerseContent(result, "");
   };
-  img.src = targetImageUrl;
+  img.src = imgUrl;
   
   function applyVerseContent(verseData, imageUrl) {
     const textEl = document.getElementById("daily-verse-text");
     const sourceEl = document.getElementById("daily-verse-source");
-    const bgEl = document.getElementById("daily-verse-bg");
+    const bgImgEl = document.getElementById("card-bg");
     
     if (textEl) textEl.textContent = verseData.text;
     if (sourceEl) sourceEl.textContent = `— ${verseData.source}`;
     
-    if (bgEl) {
-      if (imageUrl) {
-        bgEl.style.backgroundImage = `url('${imageUrl}')`;
-        bgEl.style.opacity = "1";
-      } else {
-        bgEl.style.backgroundImage = "none";
-        bgEl.style.opacity = "0";
-      }
+    if (bgImgEl) {
+      bgImgEl.src = imageUrl;
+      bgImgEl.style.opacity = "1";
     }
     
     currentVerse = { ...verseData, imageUrl };
@@ -1143,7 +1128,7 @@ async function flipAndFetchVerse(event) {
     isVerseLoading = false;
     isImgLoading = false;
     
-    card.classList.remove("animate-pulse", "opacity-60");
+    card.classList.remove("animate-pulse", "opacity-70");
     if (content) {
       content.classList.remove("opacity-40");
       content.style.opacity = "0";
@@ -1154,9 +1139,9 @@ async function flipAndFetchVerse(event) {
 }
 
 function renderDailyVerse() {
-  const card = document.getElementById("daily-verse-card");
+  const card = document.getElementById("verse-card");
   if (card && !card._hasFlipListener) {
-    card.addEventListener("click", flipAndFetchVerse);
+    card.addEventListener("click", fetchRandomVerse);
     card._hasFlipListener = true;
   }
 
@@ -1169,17 +1154,17 @@ function renderDailyVerse() {
     if (textEl) textEl.textContent = currentVerse.text;
     if (sourceEl) sourceEl.textContent = `— ${currentVerse.source}`;
     
-    flipAndFetchVerse();
+    fetchRandomVerse();
   } else {
     const textEl = document.getElementById("daily-verse-text");
     const sourceEl = document.getElementById("daily-verse-source");
     if (textEl) textEl.textContent = currentVerse.text;
     if (sourceEl) sourceEl.textContent = `— ${currentVerse.source}`;
     
-    const bgEl = document.getElementById("daily-verse-bg");
-    if (bgEl && currentVerse.imageUrl) {
-      bgEl.style.backgroundImage = `url('${currentVerse.imageUrl}')`;
-      bgEl.style.opacity = "1";
+    const bgImgEl = document.getElementById("card-bg");
+    if (bgImgEl && currentVerse.imageUrl) {
+      bgImgEl.src = currentVerse.imageUrl;
+      bgImgEl.style.opacity = "1";
     }
   }
 }
