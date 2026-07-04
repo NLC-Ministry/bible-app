@@ -16,3 +16,6 @@ mock_stats.js
 demo_data_seed.sql
 demo_data_seed_compact.sql
 supabase/delete_demo_data.sql
+
+# Superpowers SDD scratch (ledger, briefs, reports)
+.superpowers/
