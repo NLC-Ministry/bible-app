@@ -1449,7 +1449,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // 日曆重繪由外層呼叫方統一管理，禁止在任務渲染函式內循環觸發日曆重繪。
 
   const selectedDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
-  if (!selectedDay) return;
+  if (!selectedDay) {
+    container.innerHTML = "";
+    return;
+  }
 
   // Render day subtitle
   const daySubtitle = document.getElementById("plan-day-subtitle");
