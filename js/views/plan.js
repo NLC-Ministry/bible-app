@@ -1420,15 +1420,10 @@ function renderHorizontalDateStrip() {
   resizeObserver.observe(gridDiv);
   container._calendarResizeCleanup = () => resizeObserver.disconnect();
 
-  // Auto-scroll selected day into view (centered)
-  setTimeout(() => {
-    const activeDayCell = scrollContainer.querySelector(".calendar-day.active");
-    const todayDayCell = scrollContainer.querySelector(".calendar-day.today");
-    const targetCell = activeDayCell || todayDayCell;
-    if (targetCell) {
-      targetCell.scrollIntoView({ block: "center", behavior: "auto" });
-    }
-  }, 60);
+  // 🛡️ scrollIntoView 已物理刪除：
+  // 禁止在此處用 scrollIntoView/scrollTo 做自動捲動，
+  // 這是點擊日期格造成整頁大跳的根本元凶。
+  // 日曆的垂直捲動位置由使用者手勢完全自主控制。
 }
 
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
@@ -1449,13 +1444,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     state.selectedPlanDay = nextReadingDay ? nextReadingDay.dayNum : 1;
   }
 
-  // Ensure top view mode container is loaded (Card / Calendar mutual exclusion)
-  renderPlanScheduleView();
-
-  // Update date carousel
-  if (!skipCarouselUpdate) {
-    renderHorizontalDateStrip();
-  }
+  // 🛡️ 嚴禁在此處呼叫 renderPlanScheduleView() 或 renderHorizontalDateStrip()：
+  // 此函式職責單一：只負責刷新底部章節任務清單（plan-tasks-list）。
+  // 日曆重繪由外層呼叫方統一管理，禁止在任務渲染函式內循環觸發日曆重繪。
 
   const selectedDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
   if (!selectedDay) return;
@@ -4403,6 +4394,7 @@ function renderPlanScheduleView() {
 }
 
 function snapCalendarToToday() {
+  if (!state.activePlan) return;
   const now = new Date();
   const todayYear = now.getFullYear();
   const todayMonth = now.getMonth() + 1;
@@ -4417,11 +4409,13 @@ function snapCalendarToToday() {
     state.calendarViewYear = todayYear;
     state.calendarViewMonth = todayMonth;
 
-    // Redraw if calendar is loaded in the DOM
-    if (viewMode === 'calendar') {
-      renderHorizontalDateStrip();
-    }
-    renderPlanScheduleTracker();
+    // 🛡️ 只做 CSS active class 切換，嚴禁呼叫 renderHorizontalDateStrip 重繪整個日曆
+    const prev = document.querySelector('.calendar-day.active');
+    if (prev) prev.classList.remove('active');
+    const target = document.querySelector(`.calendar-day[data-day-num="${todayPlanDay.dayNum}"]`);
+    if (target) target.classList.add('active');
+
+    renderPlanScheduleTracker(true);
     showToast("已跳轉至今日進度");
   } else {
     showToast("今日不在計畫期間內");
@@ -4436,10 +4430,13 @@ function snapCalendarToMyProgress() {
     state.calendarViewYear = nextReadingDay.year || new Date().getFullYear();
     state.calendarViewMonth = nextReadingDay.month || (new Date().getMonth() + 1);
 
-    if (viewMode === 'calendar') {
-      renderHorizontalDateStrip();
-    }
-    renderPlanScheduleTracker();
+    // 🛡️ 只做 CSS active class 切換，嚴禁呼叫 renderHorizontalDateStrip 重繪整個日曆
+    const prev = document.querySelector('.calendar-day.active');
+    if (prev) prev.classList.remove('active');
+    const target = document.querySelector(`.calendar-day[data-day-num="${nextReadingDay.dayNum}"]`);
+    if (target) target.classList.add('active');
+
+    renderPlanScheduleTracker(true);
     showToast("已回到您的實際讀經進度");
   } else {
     showToast("計畫已全部完成！");
