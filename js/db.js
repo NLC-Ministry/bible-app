@@ -42,6 +42,9 @@ function setLocalPlanDowngradeLock(plan, lockedUntil) {
 }
 
 const db = {
+  _mergedUsersCache: {},
+  _mergedUsersPromise: {},
+
   // Initialize Supabase Connection
   async init() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -1124,12 +1127,42 @@ const db = {
   },
 
   async fetchMergedUsersList(filterPresetKey = null) {
-    // If no filter is provided, default to the active global plan first.
-    // Each participant has their own reading_plans.id, so group stats must match by global_plan_id/preset_key, not the current user's plan id.
     if (!filterPresetKey && state.activePlan) {
       filterPresetKey = state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id;
     }
+    const cacheKey = filterPresetKey || 'all';
 
+    // 1. Concurrent request deduplication
+    if (this._mergedUsersPromise[cacheKey]) {
+      return this._mergedUsersPromise[cacheKey];
+    }
+
+    // 2. Cache expiration validation (5-second TTL)
+    const cachedEntry = this._mergedUsersCache[cacheKey];
+    const now = Date.now();
+    if (cachedEntry && (now - cachedEntry.timestamp < 5000)) {
+      return cachedEntry.data;
+    }
+
+    // 3. Create the actual load promise
+    const loadPromise = (async () => {
+      try {
+        const result = await this._executeFetchMergedUsersList(filterPresetKey);
+        this._mergedUsersCache[cacheKey] = {
+          data: result,
+          timestamp: Date.now()
+        };
+        return result;
+      } finally {
+        delete this._mergedUsersPromise[cacheKey];
+      }
+    })();
+
+    this._mergedUsersPromise[cacheKey] = loadPromise;
+    return loadPromise;
+  },
+
+  async _executeFetchMergedUsersList(filterPresetKey) {
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
     const currentPresetKey = state.activePlan ? state.activePlan.presetKey : null;
     const currentPlanLogMap = new Map();
@@ -1160,12 +1193,24 @@ const db = {
       plan_progress: state.activePlan ? (state.activePlan.progress || 0) : 0,
       last_read: currentPlanLastRead
     };
+
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles } = await state.supabase.from("profiles").select("*").eq("is_demo", false);
-        const { data: allLogs } = await state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
+        const { data: usersProfiles } = await state.supabase.from("profiles").select("id, name, great_region, pastoral_zone, small_group, role").eq("is_demo", false);
+        
+        let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level");
+        if (filterPresetKey) {
+          plansQuery = plansQuery.or(`preset_key.eq."${filterPresetKey}",global_plan_id.eq."${filterPresetKey}",name.eq."${filterPresetKey}"`);
+        }
+        const { data: allPlans } = await plansQuery;
+
+        let logsQuery = state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
+        if (allPlans && allPlans.length > 0) {
+          const planIds = allPlans.map(p => p.id);
+          logsQuery = logsQuery.in("plan_id", planIds);
+        }
+        const { data: allLogs } = await logsQuery;
         state.allLogsCache = allLogs || [];
-        const { data: allPlans } = await state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level");
 
         window.userPlanIdCache = {};
         if (allPlans) {
