@@ -3975,26 +3975,26 @@ button.logout-btn:hover {
   background: transparent !important;
 }
 .plan-task-item .task-checkbox.checked {
-  border: none !important;
-  background: transparent !important;
+  border: 1px solid var(--color-success-border) !important;
+  background: var(--color-success-subtle) !important;
   color: var(--color-success-foreground) !important;
 }
 /* 第一遍完成，但當前處於第二或第三遍中 (還沒讀第二遍) */
 .plan-task-item .task-checkbox.checked.round-1.dimmed {
-  border: none !important;
-  background: transparent !important;
+  border: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent) !important;
+  background: color-mix(in srgb, var(--color-success) 6%, transparent) !important;
   color: color-mix(in srgb, var(--color-success) 45%, transparent) !important;
 }
 /* 第二遍完成：靛藍色雙勾 */
 .plan-task-item .task-checkbox.checked.round-2 {
-  border: none !important;
-  background: transparent !important;
+  border: 1px solid var(--color-brand-border) !important;
+  background: var(--color-brand-subtle) !important;
   color: var(--color-brand) !important;
 }
 /* 第三遍完成：金色星星 */
 .plan-task-item .task-checkbox.checked.round-3 {
-  border: none !important;
-  background: transparent !important;
+  border: 1px solid color-mix(in srgb, #f59e0b 24%, transparent) !important;
+  background: color-mix(in srgb, #f59e0b 12%, transparent) !important;
   color: #f59e0b !important;
 }
 .plan-task-item .task-checkbox svg {
