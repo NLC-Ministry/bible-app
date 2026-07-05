@@ -71,22 +71,12 @@ const BIBLE_BOOKS = [
   { id: 66, name: "啟示錄", abbrev: "啟", eng: "Revelation", chapters: 22, section: "new" }
 ];
 
-// Partial offline samples. They are used only if they contain a complete chapter.
-const BOLLS_BOOK_CODES = {
-  Genesis: "Gen", Exodus: "Exod", Leviticus: "Lev", Numbers: "Num", Deuteronomy: "Deut",
-  Joshua: "Josh", Judges: "Judg", Ruth: "Ruth", "1 Samuel": "1Sam", "2 Samuel": "2Sam",
-  "1 Kings": "1Kgs", "2 Kings": "2Kgs", "1 Chronicles": "1Chr", "2 Chronicles": "2Chr",
-  Ezra: "Ezra", Nehemiah: "Neh", Esther: "Esth", Job: "Job", Psalms: "Ps", Proverbs: "Prov",
-  Ecclesiastes: "Eccl", "Song of Solomon": "Song", Isaiah: "Isa", Jeremiah: "Jer", Lamentations: "Lam",
-  Ezekiel: "Ezek", Daniel: "Dan", Hosea: "Hos", Joel: "Joel", Amos: "Amos", Obadiah: "Obad",
-  Jonah: "Jonah", Micah: "Mic", Nahum: "Nah", Habakkuk: "Hab", Zephaniah: "Zeph", Haggai: "Hag",
-  Zechariah: "Zech", Malachi: "Mal", Matthew: "Matt", Mark: "Mark", Luke: "Luke", John: "John",
-  Acts: "Acts", Romans: "Rom", "1 Corinthians": "1Cor", "2 Corinthians": "2Cor", Galatians: "Gal",
-  Ephesians: "Eph", Philippians: "Phil", Colossians: "Col", "1 Thessalonians": "1Thess",
-  "2 Thessalonians": "2Thess", "1 Timothy": "1Tim", "2 Timothy": "2Tim", Titus: "Titus",
-  Philemon: "Phlm", Hebrews: "Heb", James: "Jas", "1 Peter": "1Pet", "2 Peter": "2Pet",
-  "1 John": "1John", "2 John": "2John", "3 John": "3John", Jude: "Jude", Revelation: "Rev"
-};
+// Bolls.life API uses numeric book IDs (1-66), not English abbreviations.
+// Build lookup map from the canonical BIBLE_BOOKS array.
+function getBollsBookId(bookEngName) {
+  const book = BIBLE_BOOKS.find(b => b.eng === bookEngName);
+  return book ? book.id : null;
+}
 
 async function fetchJson(url) {
   const response = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -135,7 +125,7 @@ async function fetchFromBibleApi(bookEngName, chapter, translation) {
 }
 
 async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier = null) {
-  const bookCode = bookIdentifier || BOLLS_BOOK_CODES[bookEngName] || bookEngName;
+  const bookCode = bookIdentifier;
   if (!bookCode) throw new Error(`Bolls 缺少書卷代碼：${bookEngName}`);
 
   const url = `https://bolls.life/get-chapter/${encodeURIComponent(translation)}/${encodeURIComponent(bookCode)}/${encodeURIComponent(chapter)}/`;
@@ -202,20 +192,17 @@ async function fetchBibleChapter(bookEngName, chapter) {
     console.log(`📦 [Cache Hits] 讀取預載快取成功: ${cacheKey}`);
     return window._bibleChapterCache[cacheKey];
   }
-  const bollsBookCodes = Array.from(new Set([
-    BOLLS_BOOK_CODES[bookEngName],
-    bookEngName,
-    bookEngName.replace(/\s+/g, "")
-  ].filter(Boolean)));
+  // Bolls.life requires the numeric book ID (1-66)
+  const bollsBookId = getBollsBookId(bookEngName);
   const preferredVersion = (typeof state !== "undefined" && state.readerState && state.readerState.version) || "CUNP";
   const bollsTranslations = Array.from(new Set([preferredVersion, "CUNP", "CUV", "CUVS", "CUVT", "CUNPS", "RCUVSS", "RCUVTS"]));
   const sources = [];
 
-  bollsTranslations.forEach(translation => {
-    bollsBookCodes.forEach(bookCode => {
-      sources.push(() => fetchFromBolls(bookEngName, chapter, translation, bookCode));
+  if (bollsBookId) {
+    bollsTranslations.forEach(translation => {
+      sources.push(() => fetchFromBolls(bookEngName, chapter, translation, bollsBookId));
     });
-  });
+  }
   sources.push(() => fetchFromBibleApi(bookEngName, chapter, "cuv"));
 
   const errors = [];
