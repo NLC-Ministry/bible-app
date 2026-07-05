@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
-    "@icon-park/svg": "^1.4.2",
+    "lucide": "^1.23.0",
     "vitest": "^4.1.9"
   }
 }

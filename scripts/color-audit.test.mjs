@@ -93,20 +93,16 @@ describe("color audit", () => {
     expect(hits, hits.join(", ")).toEqual([]);
   });
 
-  it("honor badge icon rules do not reference semi-transparent text tokens", () => {
+  it("honor badge icon rules use opaque icon tokens and transparent glyph backgrounds", () => {
     const css = readFileSync(join(root, "index.css"), "utf8");
     const iconBlock = css.match(/\.honor-badge-item__icon[\s\S]*?\.honor-badge-item__title/);
     expect(iconBlock).toBeTruthy();
     expect(iconBlock[0]).not.toMatch(/--text-muted|--text-secondary/);
-    for (const sel of [
-      ".honor-badge-item__rings--outer",
-      ".honor-badge-item__rings--inner",
-      ".honor-badge-item__lock",
-    ]) {
-      const rule = css.match(new RegExp(`\\${sel}\\s*\\{[^}]+\\}`));
-      expect(rule, sel).toBeTruthy();
-      expect(rule[0]).not.toMatch(/opacity\s*:/);
-    }
+    expect(iconBlock[0]).toMatch(/background:\s*transparent/);
+    expect(iconBlock[0]).not.toMatch(/background:\s*var\(--bg-card\)/);
+    const lockRule = css.match(/\.honor-badge-item__lock\s*\{[^}]+\}/);
+    expect(lockRule, ".honor-badge-item__lock").toBeTruthy();
+    expect(lockRule[0]).not.toMatch(/opacity\s*:/);
   });
 
   it("mobile nav icons use opaque icon tokens", () => {

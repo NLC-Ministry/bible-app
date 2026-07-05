@@ -706,7 +706,7 @@ async function renderAdminUserManagement() {
           </div>
         </div>
         <div class="member-arrow-right">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "18px", className: "nlc-icon" }) : ""}
         </div>
       `;
 

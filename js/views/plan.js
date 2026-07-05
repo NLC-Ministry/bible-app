@@ -1589,7 +1589,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       </div>
       ${roundLabelHtml}
       <div class="task-arrow">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "16px", className: "nlc-icon" }) : ""}
       </div>
     `;
     const openChapter = () => window.openPlanChapterInReader(ch.book, ch.chapter, state.selectedPlanDay, ch.round || currentRound);
@@ -1605,9 +1605,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 }
 
 function getChapterCheckboxState(ch, currentRound) {
-  const ICON_R1 = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-  const ICON_R2 = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width:14px;height:14px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
-  const ICON_R3 = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="width:15px;height:15px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+  const ICON_R1 = typeof renderIcon === "function" ? renderIcon("check", { size: "14px", className: "nlc-icon" }) : "";
+  const ICON_R2 = typeof renderIcon === "function" ? renderIcon("zapFill", { size: "14px", className: "nlc-icon" }) : "";
+  const ICON_R3 = typeof renderIcon === "function" ? renderIcon("starFill", { size: "15px", className: "nlc-icon" }) : "";
 
   if (currentRound === 1) {
     return ch.isReadR1 ? { cssClass: 'checked', content: ICON_R1 } : { cssClass: '', content: '' };
