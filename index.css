@@ -6098,173 +6098,213 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
   background: var(--color-brand-subtle);
 }
 
-/* Weekday header row */
-.calendar-weekdays {
+/* Weekday header row (plan calendar only) */
+.plan-calendar .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 0.4rem;
   border-bottom: none !important;
-  padding-bottom: 6px;
+  padding-bottom: 0.4rem;
 }
 
-.calendar-weekdays div {
+.plan-calendar .calendar-weekdays div {
   font-size: 0.72rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
-/* Grid layout */
-.calendar-grid {
+/* Plan calendar container overrides */
+.plan-calendar.calendar-component {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-calendar .calendar-scroll-container {
+  overflow-y: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.plan-calendar .calendar-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Plan calendar grid */
+.plan-calendar .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 24px 4px !important; /* Increased vertical spacing for thumb-friendly hot zone */
-  padding: 16px 0 !important; /* py-4 equivalent */
+  gap: 6px 4px;
+  padding: 8px 0;
   transition: all 0.3s ease;
 }
 
-/* Calendar day cell */
-.calendar-day {
+/* Plan day cell — square, shadcn-inspired */
+.plan-calendar .plan-day-cell {
+  width: 100%;
+  min-width: 0;
   aspect-ratio: 1;
+  max-width: 44px;
+  max-height: 44px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
   cursor: pointer;
   position: relative;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  border: 2px solid transparent;
-  padding: 2px 0;
+  box-shadow: 0 0 0 2px transparent;
 }
 
-.calendar-day .day-number {
+.plan-calendar button.plan-day-cell:focus {
+  outline: none;
+}
+
+.plan-calendar button.plan-day-cell:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-brand), var(--shadow-focus-ring);
+  z-index: 1;
+}
+
+.plan-calendar .plan-day-cell .day-number {
   font-size: 0.92rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.1;
   color: var(--text-primary);
 }
 
-.calendar-day:hover {
+.plan-calendar button.plan-day-cell:hover:not(.plan-day-cell--muted) {
   background: var(--color-brand-muted);
 }
 
-.calendar-day:active {
-  transform: scale(0.95) !important;
+.plan-calendar button.plan-day-cell:active:not(.plan-day-cell--muted) {
+  transform: scale(0.96);
 }
-
-/* Day states */
 
 /* Selected day */
-.calendar-day.active:not(.today) .day-number {
-  border: none !important;
-  background-color: #1e293b !important; /* bg-slate-800 */
-  color: #ffffff !important;
-  box-shadow: none !important;
-  border-radius: 50% !important;
-  width: 36px !important;
-  height: 36px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+.plan-calendar .plan-day-cell.active {
+  background: var(--color-brand-muted);
+  color: var(--primary-color);
 }
 
-/* Today (Real Today) */
-.calendar-day.today {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-.calendar-day.today .day-number {
-  width: 36px !important;
-  height: 36px !important;
-  background-color: #ef4444 !important; /* bg-red-500 */
-  color: #ffffff !important; /* text-white */
-  border-radius: 50% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  font-weight: var(--type-weight-strong) !important;
-  font-size: 0.95rem !important;
-  box-shadow: var(--shadow-none) !important;
+.plan-calendar .plan-day-cell.active .day-number {
+  color: var(--primary-color);
 }
 
-/* Past Unread / Behind (Catch-up Hot Zone) */
-.calendar-day.past-unread {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-.calendar-day.past-unread .day-number {
-  color: #ea580c !important;
+/* Today — NLC brand ring */
+.plan-calendar .plan-day-cell.today {
+  box-shadow: 0 0 0 2px var(--color-brand);
 }
 
-/* Fully read (completed) - Light & Dark mode transparent bg, normal text color */
-.calendar-day.completed {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+.plan-calendar .plan-day-cell.today .day-number {
+  color: var(--text-primary);
+  font-weight: var(--type-weight-strong);
+}
+
+/* Today + selected */
+.plan-calendar .plan-day-cell.today.active {
+  background: var(--color-brand-muted);
+  box-shadow: 0 0 0 2px var(--color-brand);
+}
+
+/* Past unread / behind */
+.plan-calendar .plan-day-cell.past-unread .day-number {
+  color: #ea580c;
+}
+
+body.dark-theme .plan-calendar .plan-day-cell.past-unread .day-number {
+  color: #fb923c;
+}
+
+/* Completed */
+.plan-calendar .plan-day-cell.completed {
+  background: color-mix(in srgb, #22c55e 12%, transparent);
   animation: pulseCompleted 0.4s ease-out;
 }
-.calendar-day.completed .day-number {
-  font-weight: var(--type-weight-strong) !important;
+
+.plan-calendar .plan-day-cell.completed .day-number {
+  font-weight: var(--type-weight-strong);
 }
 
-/* Combine Today + Completed visually */
-.calendar-day.today.completed .day-number {
-  width: 36px !important;
-  height: 36px !important;
-  background-color: #ef4444 !important;
-  color: #ffffff !important;
+.plan-calendar .plan-day-cell.today.completed {
+  background: color-mix(in srgb, #22c55e 12%, var(--color-brand-muted));
 }
 
-/* Micro progress bar for partially completed days */
-.calendar-day .micro-progress-container {
+/* Non-plan / muted days */
+.plan-calendar .plan-day-cell--muted {
+  cursor: default;
+  pointer-events: none;
+}
+
+.plan-calendar .plan-day-cell.other-month {
+  opacity: 0.35;
+}
+
+.plan-calendar .plan-day-cell.other-month .day-number {
+  color: var(--text-muted);
+}
+
+/* Micro progress bar */
+.plan-calendar .plan-day-cell .micro-progress-container {
   position: absolute;
   bottom: 4px;
-  width: 50%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 55%;
   height: 2px;
-  background: rgba(148, 163, 184, 0.3);
+  background: color-mix(in srgb, var(--text-muted) 30%, transparent);
   border-radius: 1px;
   overflow: hidden;
 }
 
-.calendar-day .micro-progress-bar {
+.plan-calendar .plan-day-cell .micro-progress-bar {
   height: 100%;
-  background: var(--accent-color);
+  background: var(--primary-color);
   border-radius: 1px;
 }
-body.dark-theme .calendar-day .micro-progress-bar {
-  background: #3b82f6;
+
+/* Status dots */
+.plan-calendar .plan-day-cell .day-status-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  margin-top: 3px;
+  flex-shrink: 0;
 }
 
-/* Greyed out days from other months */
-.calendar-day.other-month {
-  opacity: 0.3;
-}
-.calendar-day.other-month .day-number {
-  color: var(--text-muted);
+.plan-calendar .plan-day-cell .day-status-dot.dot-completed {
+  background-color: #22c55e;
 }
 
-/* Bottom status dot indicators */
-.calendar-day .day-status-dot {
-  width: 4px !important;
-  height: 4px !important;
-  border-radius: 50% !important;
-  margin-top: 4px !important;
-  display: block;
+.plan-calendar .plan-day-cell .day-status-dot.dot-behind {
+  background-color: #ef4444;
 }
-.calendar-day .day-status-dot.dot-completed {
-  background-color: #22c55e !important; /* bg-green-500 */
+
+.plan-calendar .plan-day-cell .day-status-dot.dot-grey {
+  background-color: var(--text-muted);
 }
-.calendar-day .day-status-dot.dot-behind {
-  background-color: #ef4444 !important; /* bg-red-500 */
-}
-.calendar-day .day-status-dot.dot-grey {
-  background-color: #374151 !important; /* bg-gray-700 */
+
+body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
+  background-color: color-mix(in srgb, var(--text-muted) 70%, #fff);
 }
 
 /* Micro pulse animation for completed cells */
