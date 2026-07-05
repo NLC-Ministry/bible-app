@@ -279,9 +279,13 @@ function initPlanControls() {
   document.querySelectorAll("#plan-level-options .plan-level-option").forEach(btn => {
     btn.addEventListener("click", async () => {
       const level = btn.dataset.level || "normal";
-      await window.changePlanLevel(level);
-      switchToTab(tabSchedule, subviewSchedule);
-      renderPlanScheduleTracker();
+      const currentLevel = state.activePlan ? (state.activePlan.level || "normal") : "normal";
+      if (level === currentLevel) return; // already selected, no action needed
+      window.openPlanLevelConfirmModal(level, async () => {
+        await window.changePlanLevel(level);
+        switchToTab(tabSchedule, subviewSchedule);
+        renderPlanScheduleTracker();
+      });
     });
   });
   const membersMenuItem = document.getElementById("menu-plan-members");
@@ -755,6 +759,16 @@ function calculateAllPlansProgress() {
       ? 100
       : (Math.round((firstRoundCompletedChapters / firstRoundTotalChapters) * 100) || 0);
     if (!plan.isPlanCompleted) plan.upgradePromptHandled = false;
+
+    // Track second-round completion for the round-2 → round-3 upgrade prompt
+    const secondRoundChapters = plan.days.reduce((sum, day) => {
+      return sum + ((day.chapters || []).filter(ch => (ch.round || 1) === 2).length);
+    }, 0);
+    const secondRoundCompleted = plan.days.reduce((sum, day) => {
+      return sum + ((day.chapters || []).filter(ch => (ch.round || 1) === 2 && ch.isReadR2).length);
+    }, 0);
+    plan.isRound2Completed = secondRoundChapters > 0 && secondRoundCompleted >= secondRoundChapters;
+    if (!plan.isRound2Completed) plan.round2UpgradePromptHandled = false;
   });
 
   if (!state.isSupabaseMode) {
@@ -1690,8 +1704,13 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
   db.logChapterRead(book, chapter, willBeChecked, currentRound)
     .then(async () => {
       db.saveLocalUserStats();
-      if (state.activePlan && state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
-        await handleRoundCompletion(state.activePlan);
+      if (state.activePlan) {
+        const plan = state.activePlan;
+        const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
+        const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
+        if (shouldHandleR1 || shouldHandleR2) {
+          await handleRoundCompletion(plan);
+        }
       }
     })
     .catch(error => {
@@ -1836,8 +1855,60 @@ async function handleRoundCompletion(plan) {
   if (!plan) return;
   calculatePlanProgress();
 
+  const currentRound = plan.currentRound || 1;
+
+  // ── Round 2 → Round 3 upgrade ──────────────────────────────────────────────
+  if (currentRound === 2) {
+    if (plan.pendingUpgradePrompt || plan.round2UpgradePromptHandled) return;
+    if (!plan.isRound2Completed) return;
+
+    const currentLevel = plan.level || "normal";
+    const nextLevel = currentLevel === "breakthrough" ? "super" : null;
+    if (!nextLevel) {
+      showToast("恭喜完成第二遍讀經！");
+      plan.round2UpgradePromptHandled = true;
+      return;
+    }
+
+    plan.pendingUpgradePrompt = true;
+    const wantsUpgrade = confirm("恭喜完成第二遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第三遍？");
+    plan.pendingUpgradePrompt = false;
+    plan.round2UpgradePromptHandled = true;
+
+    if (!wantsUpgrade) {
+      showToast("已完成第二遍。你可以之後到調整進度設定再升級。");
+      if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+      return;
+    }
+
+    if (isPlanUpgradeLocked(plan)) {
+      showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(getDowngradeLockedUntil(plan)) + " 後再升級。");
+      return;
+    }
+
+    plan.currentRound = 3;
+    plan.wasDowngraded = false;
+    plan.downgradeLockedUntil = null;
+    rebuildPlanScheduleForLevel(plan, nextLevel);
+
+    await persistPlanLevelState(plan);
+    if (state.isSupabaseMode && state.supabase && plan.id) {
+      await state.supabase.from("reading_plans")
+        .update({ current_round: plan.currentRound, upgrade_prompt_handled: !!plan.upgradePromptHandled })
+        .eq("id", plan.id);
+    } else if (!state.isSupabaseMode) {
+      localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+    }
+
+    calculatePlanProgress();
+    state.planDetailOpen = true;
+    showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始第三遍讀經。");
+    return;
+  }
+
+  // ── Round 1 → Round 2 upgrade ──────────────────────────────────────────────
   if (plan.pendingUpgradePrompt || plan.upgradePromptHandled) return;
-  if (plan.currentRound && plan.currentRound > 1) {
+  if (currentRound > 1) {
     showToast("已完成本輪讀經。");
     return;
   }
@@ -1850,7 +1921,7 @@ async function handleRoundCompletion(plan) {
   }
 
   plan.pendingUpgradePrompt = true;
-  const wantsUpgrade = confirm("恭喜完成第一遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始下一遍？");
+  const wantsUpgrade = confirm("恭喜完成第一遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第二遍？");
   plan.pendingUpgradePrompt = false;
 
   if (!wantsUpgrade) {
@@ -1885,8 +1956,61 @@ async function handleRoundCompletion(plan) {
 
   calculatePlanProgress();
   state.planDetailOpen = true;
-  showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始下一遍讀經。");
+  showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始第二遍讀經。");
 }
+
+// ── Plan Level Confirm Modal (防誤觸) ──────────────────────────────────────
+(function injectPlanLevelModalStyle() {
+  if (document.getElementById('plcm-style')) return;
+  const s = document.createElement('style');
+  s.id = 'plcm-style';
+  s.textContent = `@keyframes plcm-slide-up {
+    from { opacity: 0; transform: translateY(24px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0)  scale(1); }
+  }`;
+  document.head.appendChild(s);
+})();
+
+let _plcmPendingCallback = null;
+
+window.openPlanLevelConfirmModal = function(newLevel, onConfirm) {
+  const modal = document.getElementById('plan-level-confirm-modal');
+  const desc  = document.getElementById('plcm-desc');
+  const confirmBtn = document.getElementById('plcm-confirm-btn');
+  if (!modal || !desc || !confirmBtn) { onConfirm && onConfirm(); return; }
+
+  const currentLevel = state.activePlan ? (state.activePlan.level || 'normal') : 'normal';
+  const levelLabels = { normal: '一般', breakthrough: '突破', super: '興盛' };
+  const isUpgrade = getPlanLevelOrder(newLevel) > getPlanLevelOrder(currentLevel);
+  const arrow = isUpgrade ? '⬆️' : '⬇️';
+
+  desc.textContent = `${arrow} 將從「${levelLabels[currentLevel] || currentLevel}」切換為「${levelLabels[newLevel] || newLevel}」。此操作會重新計算每日讀經份量，確定要切換嗎？`;
+
+  // Remove old listener and attach fresh one
+  _plcmPendingCallback = onConfirm;
+  const newBtn = confirmBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+  newBtn.addEventListener('click', () => {
+    window.closePlanLevelConfirmModal();
+    if (_plcmPendingCallback) _plcmPendingCallback();
+    _plcmPendingCallback = null;
+  });
+
+  modal.style.display = 'flex';
+  document.addEventListener('keydown', _plcmEscListener);
+};
+
+window.closePlanLevelConfirmModal = function() {
+  const modal = document.getElementById('plan-level-confirm-modal');
+  if (modal) modal.style.display = 'none';
+  _plcmPendingCallback = null;
+  document.removeEventListener('keydown', _plcmEscListener);
+};
+
+function _plcmEscListener(e) {
+  if (e.key === 'Escape') window.closePlanLevelConfirmModal();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 window.changePlanLevel = async function (newLevel) {
   if (!state.activePlan) return;
@@ -2431,8 +2555,13 @@ window.addEventListener("scroll", async () => {
       db.logChapterRead(currentCh.book, currentCh.chapter, true, readRound)
         .then(async () => {
           db.saveLocalUserStats();
-          if (state.activePlan && state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
-            await handleRoundCompletion(state.activePlan);
+          if (state.activePlan) {
+            const plan = state.activePlan;
+            const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
+            const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
+            if (shouldHandleR1 || shouldHandleR2) {
+              await handleRoundCompletion(plan);
+            }
           }
         })
         .catch(error => {

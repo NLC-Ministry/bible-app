@@ -407,8 +407,11 @@ function initReaderControls() {
       db.logChapterRead(bookObj.name, state.readerState.chapter, isChecked)
         .then(async () => {
           if (state.activePlan) {
-            if (state.activePlan.isPlanCompleted && !state.activePlan.upgradePromptHandled) {
-              await handleRoundCompletion(state.activePlan);
+            const plan = state.activePlan;
+            const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
+            const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
+            if (shouldHandleR1 || shouldHandleR2) {
+              await handleRoundCompletion(plan);
             }
           }
         })
