@@ -1006,6 +1006,75 @@ const CURATED_IMAGE_POOL = [
   "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80"  // Majestic clean mountain peaks
 ];
 
+const VERSE_CARD_FALLBACK_IMAGE = CURATED_IMAGE_POOL[0];
+
+function setVerseCardLoading(loading) {
+  const card = document.getElementById("verse-card");
+  const skeleton = document.getElementById("verse-card-skeleton");
+  const body = document.getElementById("verse-card-body");
+  const bgImgEl = document.getElementById("card-bg");
+  if (!card) return;
+
+  card.classList.toggle("is-loading", loading);
+
+  if (loading) {
+    if (skeleton && typeof ComponentSkeletonLoader !== "undefined") {
+      ComponentSkeletonLoader.fill("verse-card", skeleton);
+    }
+    if (body) body.setAttribute("aria-hidden", "true");
+    if (bgImgEl) bgImgEl.style.opacity = "0";
+  } else if (body) {
+    body.removeAttribute("aria-hidden");
+  }
+}
+
+function preloadVerseCardImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => resolve(VERSE_CARD_FALLBACK_IMAGE);
+    img.src = url;
+  });
+}
+
+function applyVerseCardContent(verseData, imageUrl) {
+  const card = document.getElementById("verse-card");
+  const textEl = document.getElementById("daily-verse-text");
+  const sourceEl = document.getElementById("daily-verse-source");
+  const bgImgEl = document.getElementById("card-bg");
+  const content = document.getElementById("daily-verse-content");
+
+  if (textEl) textEl.textContent = verseData.text;
+  if (sourceEl) sourceEl.textContent = verseData.source;
+
+  if (bgImgEl) {
+    bgImgEl.src = imageUrl;
+    bgImgEl.style.opacity = "1";
+  }
+
+  currentVerse = { ...verseData, imageUrl };
+  if (typeof syncVerseLikes === "function") {
+    syncVerseLikes(verseData.source);
+  }
+
+  setVerseCardLoading(false);
+  isVerseLoading = false;
+  isImgLoading = false;
+
+  const toolbar = document.getElementById("verse-card-toolbar");
+  if (toolbar && typeof hydrateIcons === "function") {
+    hydrateIcons(toolbar);
+  }
+
+  card?.classList.remove("opacity-90");
+  if (content) {
+    content.classList.remove("opacity-40");
+    content.style.opacity = "0";
+    void content.offsetWidth;
+    content.style.opacity = "1";
+  }
+}
+
 async function fetchRandomVerse(event) {
   if (event) {
     if (event.target.closest(".social-toolbar") || event.target.closest("#share-card-btn")) {
@@ -1018,8 +1087,6 @@ async function fetchRandomVerse(event) {
   if (isVerseLoading || isImgLoading) return;
   
   const card = document.getElementById("verse-card");
-  const content = document.getElementById("daily-verse-content");
-  
   if (!card) return;
   
   isVerseLoading = true;
@@ -1031,19 +1098,13 @@ async function fetchRandomVerse(event) {
     checkAchievements();
   }
   
-  // Enter loading state
-  if (content && typeof ComponentSkeletonLoader !== "undefined") {
-    content.dataset.verseOriginalHtml = content.innerHTML;
-    content.innerHTML = ComponentSkeletonLoader.getHtml("verse-card");
-  } else if (content) {
-    content.classList.add("opacity-40");
-  }
-  card.classList.add("opacity-90");
+  setVerseCardLoading(true);
   
-  // Pick a random local verse
   const randomLocal = DAILY_VERSES[Math.floor(Math.random() * DAILY_VERSES.length)];
-  let verseText = randomLocal.text;
-  let verseSource = randomLocal.source;
+  const verseText = randomLocal.text;
+  const verseSource = randomLocal.source;
+  const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  const imgPromise = preloadVerseCardImage(randomImgUrl);
   
   const fetchPromise = (async () => {
     try {
@@ -1079,56 +1140,8 @@ async function fetchRandomVerse(event) {
     return { text: verseText, source: verseSource };
   })();
   
-  const result = await fetchPromise;
-  
-  // Pick a random image from the static curated pool
-  const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
-  
-  // Preload image
-  const img = new Image();
-  img.onload = () => {
-    applyVerseContent(result, randomImgUrl);
-  };
-  img.onerror = () => {
-    console.warn("Failed to load curated image path");
-    applyVerseContent(result, "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80"); // fallback
-  };
-  img.src = randomImgUrl;
-  
-  function applyVerseContent(verseData, imageUrl) {
-    if (content && content.dataset.verseOriginalHtml !== undefined) {
-      content.innerHTML = content.dataset.verseOriginalHtml;
-      delete content.dataset.verseOriginalHtml;
-    }
-
-    const textEl = document.getElementById("daily-verse-text");
-    const sourceEl = document.getElementById("daily-verse-source");
-    const bgImgEl = document.getElementById("card-bg");
-    
-    if (textEl) textEl.textContent = verseData.text;
-    if (sourceEl) sourceEl.textContent = verseData.source;
-    
-    if (bgImgEl) {
-      bgImgEl.src = imageUrl;
-      bgImgEl.style.opacity = "1";
-    }
-    
-    currentVerse = { ...verseData, imageUrl };
-    if (typeof syncVerseLikes === "function") {
-      syncVerseLikes(verseData.source);
-    }
-    
-    isVerseLoading = false;
-    isImgLoading = false;
-    
-    card.classList.remove("opacity-90");
-    if (content) {
-      content.classList.remove("opacity-40");
-      content.style.opacity = "0";
-      void content.offsetWidth;
-      content.style.opacity = "1";
-    }
-  }
+  const [result, loadedUrl] = await Promise.all([fetchPromise, imgPromise]);
+  applyVerseCardContent(result, loadedUrl);
 }
 
 async function shareAsImage(e) {
@@ -1143,7 +1156,7 @@ async function shareAsImage(e) {
   
   if (shareBtn) {
     shareBtn.disabled = true;
-    shareBtn.innerHTML = `<span class="nlc-icon animate-spin text-lg mb-1" data-icon="refresh"></span><span>分享中</span>`;
+    shareBtn.innerHTML = `<span class="nlc-icon" data-icon="refresh" data-icon-size="22px" aria-hidden="true"></span><span>分享中</span>`;
     if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
   }
   
@@ -1207,7 +1220,7 @@ async function shareAsImage(e) {
     if (shareBtn) {
       setTimeout(() => {
         shareBtn.disabled = false;
-        shareBtn.innerHTML = `<span class="nlc-icon text-lg mb-1" data-icon="share"></span><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
+        shareBtn.innerHTML = `<span class="nlc-icon" data-icon="share" data-icon-size="22px" aria-hidden="true"></span><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
         if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
       }, 1000);
     }
@@ -1372,28 +1385,17 @@ function renderDailyVerse() {
   }
 
   if (!currentVerse) {
-    const dayOfMonth = new Date().getDate();
-    currentVerse = DAILY_VERSES[(dayOfMonth - 1) % DAILY_VERSES.length];
-    
-    const textEl = document.getElementById("daily-verse-text");
-    const sourceEl = document.getElementById("daily-verse-source");
-    if (textEl) textEl.textContent = currentVerse.text;
-    if (sourceEl) sourceEl.textContent = currentVerse.source;
-    
+    setVerseCardLoading(true);
     fetchRandomVerse();
   } else {
-    const textEl = document.getElementById("daily-verse-text");
-    const sourceEl = document.getElementById("daily-verse-source");
-    if (textEl) textEl.textContent = currentVerse.text;
-    if (sourceEl) sourceEl.textContent = currentVerse.source;
-    
-    const bgImgEl = document.getElementById("card-bg");
-    if (bgImgEl && currentVerse.imageUrl) {
-      bgImgEl.src = currentVerse.imageUrl;
-      bgImgEl.style.opacity = "1";
-    }
-    
-    syncVerseLikes(currentVerse.source);
+    setVerseCardLoading(true);
+    const imageUrl = currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
+    preloadVerseCardImage(imageUrl).then((loadedUrl) => {
+      applyVerseCardContent(
+        { text: currentVerse.text, source: currentVerse.source },
+        loadedUrl
+      );
+    });
   }
 }
 

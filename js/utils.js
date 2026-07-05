@@ -652,11 +652,21 @@ const ComponentSkeletonLoader = {
 
     if (type === "verse-card") {
       return `
-        <div class="skeleton-wrapper skeleton-on-dark verse-card-skeleton" style="display:flex;flex-direction:column;gap:1rem;padding:0.5rem 0;min-height:180px;justify-content:center;">
-          ${this._bar("28%", "12px", "4px")}
-          ${this._bar("92%", "22px", "6px")}
-          ${this._bar("84%", "22px", "6px")}
-          ${this._bar("62%", "22px", "6px")}
+        <div class="skeleton-wrapper skeleton-on-dark verse-card-skeleton" style="display:flex;flex-direction:column;gap:1rem;height:100%;min-height:268px;justify-content:space-between;">
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            ${this._bar("32%", "10px", "4px")}
+            ${this._bar("24%", "12px", "4px")}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.65rem;flex:1;justify-content:center;padding:1rem 0;">
+            ${this._bar("96%", "20px", "6px")}
+            ${this._bar("88%", "20px", "6px")}
+            ${this._bar("64%", "20px", "6px")}
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:0.5rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:0.75rem;">
+            ${this._bar("28%", "36px", "8px")}
+            ${this._bar("28%", "36px", "8px")}
+            ${this._bar("28%", "36px", "8px")}
+          </div>
         </div>
       `;
     }

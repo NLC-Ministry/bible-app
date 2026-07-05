@@ -44,6 +44,13 @@ function findMatches(pattern) {
   return hits;
 }
 
+function stripAllowedInlineSvgs(html) {
+  return html
+    .replace(/<svg[\s\S]*?<\/svg>/g, (block) =>
+      GOOGLE_BRAND_SVG.test(block) || /class="theme-icon-(?:sun|moon)"/.test(block) ? "" : block
+    );
+}
+
 function findInlineSvgHits() {
   const hits = [];
   for (const abs of walk(root)) {
@@ -51,11 +58,9 @@ function findInlineSvgHits() {
     if (EXCLUDE.has(rel)) continue;
     const content = readFileSync(abs, "utf8");
     if (!INLINE_SVG.test(content)) continue;
-    if (rel === "index.html" && GOOGLE_BRAND_SVG.test(content)) {
-      const withoutGoogle = content.replace(/<svg[\s\S]*?<\/svg>/g, (block) =>
-        GOOGLE_BRAND_SVG.test(block) ? "" : block
-      );
-      if (!INLINE_SVG.test(withoutGoogle)) continue;
+    if (rel === "index.html") {
+      const withoutAllowed = stripAllowedInlineSvgs(content);
+      if (!INLINE_SVG.test(withoutAllowed)) continue;
     }
     hits.push(rel);
     INLINE_SVG.lastIndex = 0;
@@ -84,7 +89,7 @@ describe("icon audit", () => {
     expect(hits, hits.join(", ")).toEqual([]);
   });
 
-  it("has no inline SVG icons outside the Lucide registry (except Google brand mark)", () => {
+  it("has no inline SVG icons outside the Lucide registry (except Google brand mark and theme toggle)", () => {
     const hits = findInlineSvgHits();
     expect(hits, hits.join(", ")).toEqual([]);
   });

@@ -335,6 +335,9 @@ body.dark-theme {
 .dashboard-stat-strip__value--warning { color: var(--color-warning); }
 .dashboard-stat-strip__value--brand { color: var(--color-brand); }
 .dashboard-stat-strip__value--success { color: var(--color-success-foreground); }
+.dashboard-stat-strip__value .nlc-icon {
+  color: inherit;
+}
 .dashboard-stat-strip__icon { font-size: 1rem; flex-shrink: 0; }
 .dashboard-stat-strip__label {
   font-size: 0.7rem;
@@ -620,7 +623,8 @@ body {
   border-color: var(--color-brand-border);
 }
 
-.app-back-btn.is-home svg {
+.app-back-btn.is-home svg,
+.app-back-btn.is-home .nlc-icon {
   display: none;
 }
 
@@ -740,7 +744,88 @@ body {
   box-shadow: var(--shadow-hover);
 }
 
-/* Theme Switching Sun/Moon Icons */
+/* Theme Switching Sun/Moon Icons (inline Feather SVGs — not Lucide) */
+#theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Verse card loading skeleton — full overlay until background image is ready */
+#verse-card.is-loading {
+  background: var(--skeleton-base);
+}
+
+#verse-card.is-loading #verse-card-overlay {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#verse-card-skeleton,
+#verse-card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 100%;
+  flex: 1;
+}
+
+#verse-card-skeleton {
+  display: none;
+}
+
+#verse-card.is-loading #verse-card-skeleton {
+  display: flex;
+}
+
+#verse-card.is-loading #verse-card-body {
+  display: none;
+}
+
+#card-bg {
+  opacity: 0;
+}
+
+#verse-card:not(.is-loading) #card-bg {
+  opacity: 1;
+}
+
+/* Verse card toolbar — icons on dark photo overlay inherit light button color */
+#verse-card-toolbar button {
+  gap: 0.25rem;
+  min-height: 2.75rem;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+#verse-card-toolbar button:hover {
+  color: #fff;
+}
+
+#verse-card-toolbar button:active {
+  opacity: 0.72;
+}
+
+#verse-card-toolbar .nlc-icon {
+  color: inherit;
+  margin-bottom: 0.25rem;
+}
+
+#verse-card-toolbar .nlc-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.25;
+}
+
+#share-card-btn:disabled .nlc-icon svg {
+  animation: verse-toolbar-spin 0.85s linear infinite;
+}
+
+@keyframes verse-toolbar-spin {
+  to { transform: rotate(360deg); }
+}
+
 .theme-icon-sun {
   display: none;
 }
@@ -4437,13 +4522,17 @@ select,
   flex-shrink: 0;
 }
 
-.app-back-btn span {
+.app-back-btn .nlc-icon {
+  display: inline-flex;
+  color: inherit;
+}
+
+.app-back-btn #global-back-label {
   display: none;
 }
 
-.app-back-btn.is-home svg {
-  display: block;
-  opacity: 0;
+.app-back-btn.is-home .nlc-icon {
+  display: none;
 }
 
 .main-content {
