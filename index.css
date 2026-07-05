@@ -72,6 +72,16 @@
   --color-achievement-subtle: color-mix(in srgb, #F59E0B 15%, transparent);
   --color-achievement: #F59E0B;
 
+  --color-progress-track: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  --color-progress-fill: var(--color-brand);
+  --color-progress-fill-success: var(--color-success);
+
+  --color-icon-default: #0F0F0F;
+  --color-icon-muted: #8A8A8A;
+  --color-icon-inverse: #FAFAFA;
+  --color-icon-brand: #04A9D2;
+  --color-icon-achievement: #D97706;
+
   --heatmap-level-0: rgba(148, 163, 184, 0.12);
   --heatmap-level-1: var(--color-brand-muted);
   --heatmap-level-2: color-mix(in srgb, var(--color-brand) 35%, transparent);
@@ -115,6 +125,12 @@ body.dark-theme {
 
   --color-success-foreground: #7AEAA0;
   --color-success-border: color-mix(in srgb, var(--color-success-foreground) 30%, transparent);
+
+  --color-progress-track: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  --color-icon-default: #FAFAFA;
+  --color-icon-muted: #8A8A8A;
+  --color-icon-brand: #04A9D2;
+  --color-icon-achievement: #FBBF24;
 }
 
 
@@ -182,7 +198,48 @@ body.dark-theme {
 .stat-bento__icon-wrap--success { background: var(--color-success-subtle); color: var(--color-success-foreground); }
 .stat-bento__icon-wrap--warning { background: var(--color-warning-subtle); color: var(--color-warning); }
 .stat-bento__icon-wrap--danger { background: var(--color-danger-subtle); color: var(--color-danger); }
-.stat-bento__icon-wrap--neutral { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
+.stat-bento__icon-wrap--neutral { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--color-icon-muted); }
+.stat-bento__icon-wrap .nlc-icon { color: inherit; }
+
+/* Stats modal / profile stat cards */
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: var(--type-weight-strong);
+  display: flex;
+  align-items: baseline;
+  gap: 0.1rem;
+  color: var(--text-primary);
+}
+.stat-value--hero { font-size: 1.25rem; }
+.stat-value--danger { color: var(--color-danger); }
+.stat-value--brand { color: var(--color-brand); }
+.stat-value--success { color: var(--color-success-foreground); }
+.stat-value--muted { color: var(--text-secondary); }
+.stat-value__unit {
+  font-size: 0.8rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-secondary);
+}
+.stat-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.stat-icon-wrapper--sm { width: 36px; height: 36px; }
+.stat-icon-wrapper--danger { background: var(--color-danger-subtle); color: var(--color-danger); }
+.stat-icon-wrapper--brand { background: var(--color-brand-subtle); color: var(--color-brand); }
+.stat-icon-wrapper--success { background: var(--color-success-subtle); color: var(--color-success-foreground); }
+.stat-icon-wrapper--neutral { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--color-icon-muted); }
+.stat-icon-wrapper .nlc-icon { color: inherit; }
+
+.text-danger { color: var(--color-danger); }
+.text-warning { color: var(--color-warning); }
+.text-brand { color: var(--color-brand); }
+.text-success-fg { color: var(--color-success-foreground); }
 .stat-bento__icon-wrap--hero { width: 36px; height: 36px; font-size: 1.25rem; }
 .bento-card:not(.stat-bento--danger-active) .stat-bento__value--danger,
 .bento-card:not(.stat-bento--danger-active) .stat-bento__icon-wrap--danger-only {
@@ -202,6 +259,8 @@ body.dark-theme {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .stat-badge--brand {
   color: var(--color-brand);
@@ -367,9 +426,8 @@ body.dark-theme {
   position: absolute;
   top: 6px;
   right: 8px;
-  opacity: 0.75;
   font-size: 0.7rem;
-  color: var(--text-muted);
+  color: var(--color-icon-muted);
 }
 .honor-badge-item__rings {
   position: absolute;
@@ -380,15 +438,13 @@ body.dark-theme {
   pointer-events: none;
 }
 .honor-badge-item__rings--outer {
-  border: 1px solid currentColor;
-  opacity: 0.08;
+  border: 1px solid color-mix(in srgb, var(--color-icon-muted) 25%, var(--bg-card));
 }
 .honor-badge-item__rings--inner {
   width: 38px;
   height: 38px;
   top: 1.1rem;
-  border: 1px dashed currentColor;
-  opacity: 0.15;
+  border: 1px dashed color-mix(in srgb, var(--color-icon-muted) 35%, var(--bg-card));
 }
 .honor-badge-item__icon {
   font-size: 1.4rem;
@@ -400,9 +456,12 @@ body.dark-theme {
   flex-shrink: 0;
   position: relative;
   z-index: 1;
+  isolation: isolate;
+  background: var(--bg-card);
 }
-.honor-badge-item.unlocked .honor-badge-item__icon { color: var(--color-achievement); }
-.honor-badge-item.locked .honor-badge-item__icon { color: var(--text-muted); }
+.honor-badge-item.unlocked .honor-badge-item__icon { color: var(--color-icon-achievement); }
+.honor-badge-item.locked .honor-badge-item__icon { color: var(--color-icon-muted); }
+.honor-badge-item__icon .nlc-icon { color: inherit; }
 .honor-badge-item__title {
   font-size: 0.72rem;
   margin-top: 0.5rem;
@@ -426,7 +485,7 @@ body.dark-theme {
   justify-content: center;
   vertical-align: middle;
   flex-shrink: 0;
-  color: currentColor;
+  color: var(--color-icon-default);
   line-height: 0;
 }
 .nlc-icon svg {
@@ -453,6 +512,9 @@ body.dark-theme {
 .stat-bento__icon-wrap--hero .nlc-icon svg {
   width: 1.25rem;
   height: 1.25rem;
+}
+.stat-bento__icon-wrap .nlc-icon {
+  color: inherit;
 }
 .honor-badge-item__icon .nlc-icon svg {
   width: 1.4rem;
@@ -851,7 +913,7 @@ vercel-live-feedback,
 
 @keyframes pulse {
   0% { transform: scale(1); }
-  100% { transform: scale(1.15); filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.4)); }
+  100% { transform: scale(1.15); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-danger) 40%, transparent)); }
 }
 
 .streak-count {
@@ -1567,17 +1629,31 @@ vercel-live-feedback,
   margin-bottom: 1.5rem;
 }
 
+.plan-progress-header > div:first-child > h4 {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .plan-progress-wrapper {
   height: 10px;
-  background-color: var(--border-card);
+  background-color: var(--color-progress-track);
   border-radius: 10px;
   overflow: hidden;
   margin-top: 0.5rem;
 }
 
+.plan-progress-wrapper--compact {
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 0.4rem;
+}
+
 .plan-progress-bar {
   height: 100%;
-  background: var(--color-success);
+  background: var(--color-progress-fill);
   width: 0%;
   transition: width 0.4s ease;
 }
@@ -1610,7 +1686,7 @@ vercel-live-feedback,
 
 .day-badge.complete {
   background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
-  color: var(--accent-color);
+  color: var(--color-success-foreground);
 }
 
 .day-chapters-list {
@@ -2427,15 +2503,15 @@ vercel-live-feedback,
 
 button.logout-btn {
   cursor: pointer;
-  color: #f87171;
+  color: var(--color-danger);
   font-weight: var(--type-weight-strong);
   transition: background 0.15s ease, color 0.15s ease;
   border-top: 1px solid var(--border-card, rgba(255,255,255,0.08));
 }
 
 button.logout-btn:hover {
-  background: rgba(239,68,68,0.12);
-  color: #ef4444;
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
 }
 
 .light-theme .avatar-dropdown {
@@ -2465,7 +2541,7 @@ button.logout-btn:hover {
 
 /* Progress Bar Animations for different rounds */
 .plan-progress-bar.round-1 {
-  background: var(--color-success);
+  background: var(--color-progress-fill);
 }
 
 .plan-progress-bar.round-2 {
@@ -2524,13 +2600,13 @@ button.logout-btn:hover {
 /* Red thin progress bars matching YouVersion */
 .joined-plan-item-card .plan-progress-wrapper {
   height: 4px !important;
-  background: var(--border-card) !important;
+  background: var(--color-progress-track) !important;
   border-radius: 2px !important;
   overflow: hidden;
 }
 .joined-plan-item-card .plan-progress-bar {
   height: 100% !important;
-  background: #ff4757 !important; /* YouVersion Style Red Progress */
+  background: var(--color-progress-fill) !important;
   border-radius: 2px !important;
 }
 
@@ -2943,10 +3019,10 @@ button.logout-btn:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 .options-dropdown-item.danger-item {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 .options-dropdown-item.danger-item:hover {
-  background: rgba(239, 68, 68, 0.08);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
 }
 
 /* Centering plan details view on web/desktop viewports */
@@ -3021,7 +3097,7 @@ button.logout-btn:hover {
 .calendar-day[data-level="1"] { background: rgba(20, 184, 166, 0.22); color: #0f766e; border-color: rgba(20, 184, 166, 0.22); }
 .calendar-day[data-level="2"] { background: rgba(34, 197, 94, 0.32); color: #166534; border-color: rgba(34, 197, 94, 0.28); }
 .calendar-day[data-level="3"] { background: rgba(245, 158, 11, 0.42); color: #92400e; border-color: rgba(245, 158, 11, 0.32); }
-.calendar-day[data-level="4"] { background: rgba(239, 68, 68, 0.72); color: #fff; border-color: rgba(239, 68, 68, 0.42); }
+.calendar-day[data-level="4"] { background: color-mix(in srgb, var(--color-danger) 72%, transparent); color: #fff; border-color: color-mix(in srgb, var(--color-danger) 42%, transparent); }
 .calendar-day:hover {
   transform: translateY(-1px) scale(1.05);
   filter: brightness(1.05);
@@ -3277,11 +3353,11 @@ button.logout-btn:hover {
   margin-bottom: -0.35rem;
 }
 .distribution-redesign .stacked-progress-summary span:nth-child(1) {
-  color: #ef4444;
+  color: var(--color-danger);
   text-align: left;
 }
 .distribution-redesign .stacked-progress-summary span:nth-child(2) {
-  color: #64748b;
+  color: var(--text-muted);
   text-align: center;
 }
 .distribution-redesign .stacked-progress-summary span:nth-child(3) {
@@ -3293,10 +3369,10 @@ button.logout-btn:hover {
   border-radius: 8px;
 }
 .distribution-redesign .stacked-segment.behind {
-  background: #ef4444;
+  background: var(--color-danger);
 }
 .distribution-redesign .stacked-segment.on {
-  background: #64748b;
+  background: var(--text-muted);
 }
 .distribution-redesign .stacked-segment.ahead {
   background: var(--color-success);
@@ -3309,8 +3385,8 @@ button.logout-btn:hover {
   border-radius: 8px;
 }
 .distribution-redesign .stacked-legend-item.behind {
-  border-color: rgba(239, 68, 68, 0.22);
-  background: rgba(239, 68, 68, 0.06);
+  border-color: color-mix(in srgb, var(--color-danger) 22%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
 .distribution-redesign .stacked-legend-item.on {
   border-color: rgba(100, 116, 139, 0.22);
@@ -3420,9 +3496,9 @@ button.logout-btn:hover {
 }
 
 .reader-error-state {
-  color: var(--danger-color, #ef4444);
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 28%, transparent);
   border-radius: 10px;
   padding: 1rem;
   line-height: 1.7;
@@ -3759,7 +3835,7 @@ button.logout-btn:hover {
   color: #ff6b6b;
 }
 #plan-options-dropdown .options-dropdown-item.danger-item:hover {
-  background: rgba(239, 68, 68, 0.14);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
 }
 
 
@@ -3988,7 +4064,7 @@ button.logout-btn:hover {
 .theme-btn.bg-white {
   background: #ffffff !important;
   color: #1e293b !important;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-card);
 }
 .theme-btn.bg-warm {
   background: #f4ecd8 !important;
@@ -3999,6 +4075,147 @@ button.logout-btn:hover {
   background: #1e293b !important;
   color: #f8fafc !important;
   border: 1px solid #475569;
+}
+
+/* ==========================================================================
+   Badge Detail Page (theme via CSS, not JS hex)
+   ========================================================================== */
+#badge-detail-page {
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+#badge-detail-hero {
+  border-radius: 1.5rem;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0.5rem 1rem 1.5rem 1rem;
+  background: #171717;
+  border: 1px solid #262626;
+  color: #FAFAFA;
+}
+
+#detail-shield {
+  width: 144px;
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2rem 2rem 35% 35%;
+  position: relative;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding-top: 0.5rem;
+}
+
+#detail-shield.badge-shield--unlocked {
+  background: rgba(254, 243, 199, 0.95);
+  border: 1px solid color-mix(in srgb, var(--color-icon-achievement) 60%, transparent);
+  color: var(--color-icon-achievement);
+}
+
+#detail-shield.badge-shield--locked {
+  background: color-mix(in srgb, var(--color-icon-muted) 35%, var(--bg-card));
+  border: 1px dashed color-mix(in srgb, var(--color-icon-muted) 60%, transparent);
+  color: var(--color-icon-muted);
+}
+
+body.dark-theme #detail-shield.badge-shield--unlocked {
+  background: color-mix(in srgb, var(--color-icon-achievement) 35%, #171717);
+  border-color: color-mix(in srgb, var(--color-icon-achievement) 25%, transparent);
+  color: #FBBF24;
+}
+
+body.dark-theme #detail-shield.badge-shield--locked {
+  background: color-mix(in srgb, var(--color-icon-muted) 25%, #171717);
+  border-color: color-mix(in srgb, var(--color-icon-muted) 40%, transparent);
+  color: var(--color-icon-muted);
+}
+
+#detail-shield .nlc-icon,
+#detail-icon.nlc-icon {
+  color: inherit;
+}
+
+.badge-milestone-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-card);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.badge-milestone-circle {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: var(--type-weight-strong);
+  flex-shrink: 0;
+}
+
+.badge-milestone-circle--unlocked {
+  background: color-mix(in srgb, var(--color-icon-achievement) 20%, transparent);
+  color: var(--color-icon-achievement);
+}
+
+.badge-milestone-circle--locked {
+  background: var(--color-progress-track);
+  color: var(--color-icon-muted);
+}
+
+.badge-milestone-done {
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
+}
+
+.badge-milestone-remaining {
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-muted);
+}
+
+.badge-milestone-track {
+  width: 100px;
+  height: 5px;
+  background: var(--color-progress-track);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.badge-milestone-fill {
+  height: 100%;
+  background: var(--color-icon-achievement);
+  border-radius: 9999px;
+}
+
+.btn-danger-soft {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+}
+
+.plan-progress-wrapper--spaced {
+  margin-top: 1rem;
 }
 
 /* ==========================================================================
@@ -4029,6 +4246,12 @@ body.warm-theme {
 
   --color-success-foreground: #2A7A48;
   --color-success-border: color-mix(in srgb, var(--color-success-foreground) 28%, transparent);
+
+  --color-progress-track: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  --color-icon-default: #5C4731;
+  --color-icon-muted: #9C8A77;
+  --color-icon-brand: #04A9D2;
+  --color-icon-achievement: #D97706;
 
   --skeleton-base: color-mix(in srgb, var(--text-primary) 8%, var(--bg-card));
   --skeleton-highlight: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card));
@@ -4282,15 +4505,17 @@ select,
   transition: transform 0.12s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.mobile-nav-btn .icon {
-  width: 23px;
-  height: 23px;
-  flex: 0 0 auto;
+.mobile-nav-btn .nlc-icon {
+  color: var(--color-icon-muted);
 }
 
 .mobile-nav-btn.active {
   color: var(--primary-color);
   background: var(--color-brand-subtle);
+}
+
+.mobile-nav-btn.active .nlc-icon {
+  color: var(--color-icon-brand);
 }
 
 button,
@@ -4391,6 +4616,10 @@ button:focus-visible,
     width: 21px;
     height: 21px;
   }
+}
+
+#like-btn.is-liked .nlc-icon {
+  color: var(--color-danger);
 }
 
 
@@ -4507,8 +4736,8 @@ button:focus-visible,
   background: rgba(128, 128, 128, 0.04);
 }
 .segmented-tab.active {
-  color: #ef4444; /* Coral red active line */
-  border-bottom-color: #ef4444;
+  color: var(--color-danger); /* Coral red active line */
+  border-bottom-color: var(--color-danger);
 }
 
 /* Mode Selector Bar */
@@ -4556,8 +4785,8 @@ button:focus-visible,
   transform: scale(0.95) !important;
 }
 .view-mode-btn.active {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.06);
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
 
 /* Scroll Container */
@@ -4602,7 +4831,7 @@ button:focus-visible,
   transition: .15s ease;
 }
 input:checked + .slider {
-  background-color: #ef4444;
+  background-color: var(--color-danger);
 }
 input:checked + .slider:before {
   transform: translateX(20px);
@@ -4652,11 +4881,11 @@ input:checked + .slider:before {
   transform: scale(0.95) !important;
 }
 .grid-item-book.active {
-  background: rgba(239, 68, 68, 0.04);
-  border-color: rgba(239, 68, 68, 0.28);
+  background: color-mix(in srgb, var(--color-danger) 4%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 28%, transparent);
 }
 .grid-item-book.active .abbrev-title {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 .grid-item-book .abbrev-title {
   font-size: 1.15rem;
@@ -4700,8 +4929,8 @@ input:checked + .slider:before {
   transform: scale(0.98) !important;
 }
 .list-item-book.active {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.03);
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 3%, transparent);
 }
 .list-item-book .abbrev-badge {
   font-size: 0.68rem;
@@ -4740,9 +4969,9 @@ input:checked + .slider:before {
   transform: scale(0.95) !important;
 }
 .grid-item-number.active {
-  background: rgba(239, 68, 68, 0.06);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.28);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 28%, transparent);
 }
 
 /* Search Header styling */
@@ -4758,8 +4987,12 @@ input:checked + .slider:before {
 .search-icon-inside {
   position: absolute;
   left: 10px;
-  color: var(--text-muted);
+  color: var(--color-icon-muted);
   pointer-events: none;
+}
+.search-icon-inside.nlc-icon,
+.search-icon-inside .nlc-icon {
+  color: var(--color-icon-muted);
 }
 .search-input-field {
   width: 100%;
@@ -4775,7 +5008,7 @@ input:checked + .slider:before {
   outline: none;
 }
 .search-input-field:focus {
-  border-color: #ef4444;
+  border-color: var(--color-brand);
   background: var(--bg-input);
 }
 .search-clear-btn {
@@ -4795,7 +5028,7 @@ input:checked + .slider:before {
 .search-cancel-btn {
   background: transparent;
   border: none;
-  color: #ef4444;
+  color: var(--color-danger);
   font-size: 0.92rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
@@ -4829,7 +5062,7 @@ input:checked + .slider:before {
 .search-result-ref {
   font-size: 0.78rem;
   font-weight: var(--type-weight-strong);
-  color: #ef4444;
+  color: var(--color-danger);
   margin-bottom: 0.2rem;
 }
 .search-result-text {
@@ -4975,9 +5208,9 @@ input:checked + .slider:before {
   transform: scale(0.95) !important;
 }
 .sheet-option-btn.active {
-  border-color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
-  color: #ef4444;
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 5%, transparent);
+  color: var(--color-danger);
 }
 .sheet-option-btn .size-num {
   font-size: 0.62rem;
@@ -4986,7 +5219,7 @@ input:checked + .slider:before {
   font-weight: var(--type-weight-strong);
 }
 .sheet-option-btn.active .size-num {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .sheet-divider {
@@ -5233,8 +5466,8 @@ body.reader-modal-open .main-content {
 .grid-item-book.active,
 .grid-item-number.active {
   color: var(--reader-accent);
-  background: rgba(239, 91, 85, 0.08);
-  border-color: rgba(239, 91, 85, 0.35);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
 }
 
 .grid-item-book.active .abbrev-title {
@@ -5254,7 +5487,7 @@ body.reader-modal-open .main-content {
 
 .list-item-book.active {
   color: var(--reader-accent);
-  background: rgba(239, 91, 85, 0.05);
+  background: color-mix(in srgb, var(--color-danger) 5%, transparent);
 }
 
 .search-input-field {
@@ -5338,7 +5571,7 @@ body.reader-modal-open .main-content {
 
 .font-size-option.active {
   border-color: var(--reader-accent);
-  background: rgba(239, 91, 85, 0.1);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
   color: var(--reader-accent);
 }
 
@@ -5942,7 +6175,7 @@ body.reader-nav-hidden #reader-view .floating-nav-btn {
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
-  color: #cbd5e1;
+  color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
@@ -6654,7 +6887,7 @@ body.dark-theme .plan-calendar .plan-day-cell.past-unread .day-number {
 }
 
 .plan-calendar .plan-day-cell .day-status-dot.dot-behind {
-  background-color: #ef4444;
+  background-color: var(--color-danger);
 }
 
 .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
@@ -6723,7 +6956,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 .bottom-sheet-overlay .bottom-sheet-close-btn {
-  color: #cbd5e1;
+  color: var(--text-muted);
 }
 
 .bottom-sheet-overlay .bottom-sheet-close-btn:hover {
@@ -6731,7 +6964,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 .bottom-sheet-overlay .bottom-sheet-content > div {
-  color: #cbd5e1 !important;
+  color: var(--text-muted) !important;
 }
 
 .bottom-sheet-overlay .bottom-sheet-item {

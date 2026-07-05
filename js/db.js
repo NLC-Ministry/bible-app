@@ -393,7 +393,7 @@ const db = {
     const gateDot = document.getElementById("gate-status-dot");
     const gateText = document.getElementById("gate-status-text");
     if (gateDot && gateText) {
-      gateDot.style.backgroundColor = "#ef4444";
+      gateDot.style.backgroundColor = "var(--color-danger)";
       gateText.textContent = message;
     }
 

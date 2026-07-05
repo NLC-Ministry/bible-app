@@ -40,12 +40,19 @@ Neutral shadows only — no brand-tinted glows on buttons, tabs, or cards.
 
 | Token | Value |
 |-------|-------|
-| `--color-success` | `#66F78F` | Progress fills, chart areas, decorative backgrounds |
+| `--color-success` | `#66F78F` | Ahead/completed fills, chart areas — not primary progress |
 | `--color-success-foreground` | `#1F8F52` (light) | Text, icons, borders on light surfaces |
 | `--color-success-subtle` | 12% success mix | Badge/chip backgrounds |
 | `--color-success-border` | 24% foreground mix | Success badge borders |
 | `--color-warning` | `#FE7615` |
 | `--color-danger` | `#FC365A` |
+| `--color-progress-fill` | `var(--color-brand)` | Primary % complete bars |
+| `--color-progress-track` | muted mix | Progress bar track |
+| `--color-progress-fill-success` | `var(--color-success)` | Ahead/completed segment fills |
+| `--color-icon-default` | `#0F0F0F` (light) | Opaque icon strokes on light surfaces |
+| `--color-icon-muted` | `#8A8A8A` | Locked / inactive icons |
+| `--color-icon-brand` | `#04A9D2` | Active brand icons (e.g. mobile nav tab) |
+| `--color-icon-achievement` | `#D97706` | Unlocked honor badges |
 | `--color-white` | `#FAFAFA` |
 | `--color-black` | `#0F0F0F` |
 
@@ -136,12 +143,14 @@ NLC_MEMBER_COLORS    // avatar / trail palette
 - Registry: `js/icon-manifest.json` → build generates `js/icon-registry.js` (`window.NLC_ICON_SVGS`).
 - Runtime: `js/icons.js` — `renderIcon(key)`, `iconLabel(key, text)`, `hydrateIcons(root)`.
 - Markup: `<span class="nlc-icon" data-icon="fire" aria-hidden="true"></span>`; no Bootstrap Icons CDN.
+- **Icon stroke colors must be 100% opaque** — use `--color-icon-*` tokens on `.nlc-icon` or wrappers, not `--text-muted` / `--text-secondary` (which are rgba and cause path bleed on complex Outline SVGs).
+- Parent text may stay muted; set explicit icon color on `.nlc-icon` (mobile nav, honor badges, search icons, stat icon wraps).
 - Filled exceptions: `heartFill`, `likeFill` use IconPark filled theme for active states.
 
 ## PWA bottom navigation
 
 - Fixed bar: `.mobile-nav-bar` with `env(safe-area-inset-bottom)` padding and `viewport-fit=cover`.
-- Active tab: brand color + `--color-brand-subtle` pill (`.mobile-nav-btn.active`).
+- Active tab: brand color + `--color-brand-subtle` pill (`.mobile-nav-btn.active`); icons use `--color-icon-brand` / `--color-icon-muted`.
 - Accessibility: `role="tablist"`, `role="tab"`, `aria-selected`, `aria-current="page"` synced in `switchTab()`.
 - Reader mode: bar hidden with `aria-hidden="true"`; main content bottom inset removed.
 

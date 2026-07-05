@@ -876,7 +876,7 @@ function getPlanCoverHtml(plan) {
   else if (plan.presetKey === "q2") text = "第二季";
   else if (plan.presetKey === "q3") text = "第三季";
   else if (plan.presetKey === "q4") text = "第四季";
-  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: #0F0F0F; font-weight: 500; font-size: 0.95rem; flex-shrink: 0; box-shadow: var(--shadow-sm);">${text}</div>`;
+  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: 0.95rem; flex-shrink: 0; box-shadow: var(--shadow-sm);">${text}</div>`;
 }
 
 function renderJoinedPlansList() {
@@ -930,8 +930,8 @@ function renderJoinedPlansList() {
         <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
           <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
         </div>
-        <div class="plan-progress-wrapper" style="margin-top: 0.4rem; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; position: relative;">
-          <div class="plan-progress-bar" style="width: ${progress}%; height: 100%; background: #ff4757 !important; border-radius: 2px;"></div>
+        <div class="plan-progress-wrapper plan-progress-wrapper--compact">
+          <div class="plan-progress-bar" style="width: ${progress}%;"></div>
         </div>
         <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem;">
           已讀 ${progress}% (${plan.completedChapters} / ${plan.totalChapters} 章)
@@ -1472,8 +1472,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   if (statusPill) {
     if (!selectedDay.chapters || selectedDay.chapters.length === 0) {
       statusPill.textContent = (window.APP_COPY && window.APP_COPY.plan.restDayPill) || "休息日";
-      statusPill.style.background = "var(--color-brand-subtle, rgba(4,169,210,0.12))";
-      statusPill.style.color = "var(--primary-color)";
+      statusPill.className = "stat-badge stat-badge--brand";
     } else {
       const allDone = selectedDay.chapters.every(ch => {
         const currentRound = state.activePlan.currentRound || 1;
@@ -1485,12 +1484,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       });
       if (allDone) {
         statusPill.textContent = "已完成";
-        statusPill.style.background = "var(--color-success-subtle)";
-        statusPill.style.color = "var(--color-success-foreground)";
+        statusPill.className = "stat-badge stat-badge--success";
       } else {
         statusPill.textContent = "進行中";
-        statusPill.style.background = "rgba(245, 158, 11, 0.1)";
-        statusPill.style.color = "#f59e0b";
+        statusPill.className = "stat-badge stat-badge--warning";
       }
     }
   }
@@ -1742,7 +1739,7 @@ function renderPlanLevelEditor() {
       option.style.pointerEvents = "none";
       let span = option.querySelector("span");
       if (span && !span.innerHTML.includes("downgrade-warning")) {
-        span.innerHTML += ` <span class="downgrade-warning" style="color: #ef4444; font-weight: 500;">(已讀至第 ${maxReadRound} 遍，不可調回此難度)</span>`;
+        span.innerHTML += ` <span class="downgrade-warning text-danger" style="font-weight: 500;">(已讀至第 ${maxReadRound} 遍，不可調回此難度)</span>`;
       }
     } else {
       option.disabled = false;
@@ -1755,7 +1752,7 @@ function renderPlanLevelEditor() {
         const warningSpan = span.querySelector(".downgrade-warning");
         if (warningSpan) warningSpan.remove();
         span.innerHTML = span.innerHTML.replace(/\s*<span class="downgrade-warning".*?<\/span>/g, "");
-        span.innerHTML = span.innerHTML.replace(/\s*<span style="color: #ef4444; font-weight: 500;">\(已晉升，不可調回低階難度\)<\/span>/g, "");
+        span.innerHTML = span.innerHTML.replace(/\s*<span class="downgrade-warning text-danger" style="font-weight: 500;">\(已晉升，不可調回低階難度\)<\/span>/g, "");
       }
     }
   });
@@ -2141,7 +2138,7 @@ async function renderAdminPlanManagement() {
 
       tr.innerHTML = `
         <td>
-          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.82rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span style="color:#f59e0b; font-size:0.68rem; font-weight: 500;">已隱藏</span>' : ''}</strong>
+          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.82rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span class="text-warning" style="font-size:0.68rem; font-weight: 500;">已隱藏</span>' : ''}</strong>
           <span title="${escapeHTML(bookListText)}" style="font-size: 0.7rem; color: var(--text-muted); cursor: help; text-decoration: underline dashed; text-underline-offset: 2px;">
             共 ${bookCount} 卷書卷
           </span>
@@ -2211,7 +2208,7 @@ async function renderAdminPlanManagement() {
 
   } catch (err) {
     console.error("Failed to render admin plans:", err);
-    tableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444;">載入計畫失敗: ${err.message || err}</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="4" class="text-danger" style="text-align: center;">載入計畫失敗: ${err.message || err}</td></tr>`;
   }
 }
 
@@ -2345,7 +2342,7 @@ async function renderInlineScriptureText() {
           container.appendChild(verseDiv);
         });
       } catch (err) {
-        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: #ef4444;">載入經文失敗: ${err.message || err}</div>`;
+        container.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2rem;">載入經文失敗: ${err.message || err}</div>`;
       }
     }
   }
@@ -3846,7 +3843,7 @@ async function renderGroupParticipantsRankingTable() {
         statusColor = "var(--color-success-foreground)";
       } else if (hasAnyPlanRead && diff < 0) {
         statusStr = `落後 ${Math.abs(diff)}天`;
-        statusColor = "#ef4444";
+        statusColor = "var(--color-danger)";
       }
 
       return {
@@ -3919,9 +3916,9 @@ window.displayParticipantsList = function (limit = 100) {
       <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">
         ${escapeHTML(m.name)}
       </div>
-      <div style="color: #ef4444;">${m.streak}</div>
-      <div style="color: var(--color-success-foreground);">${m.completed}</div>
-      <div style="color: #f59e0b;">${m.makeup}</div>
+      <div class="text-danger">${m.streak}</div>
+      <div class="text-success-fg">${m.completed}</div>
+      <div class="text-warning">${m.makeup}</div>
       <div style="color: ${m.statusColor}; font-size: 0.8rem;">${m.statusStr}</div>
     `;
     listContainer.appendChild(itemRow);
