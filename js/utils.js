@@ -1,17 +1,7 @@
 // ============================================================
 // utils.js — Shared utilities used across all view controllers
 // ============================================================
-
-/**
- * Inline icon + label markup for buttons (Bootstrap Icons).
- * @param {string} biClass - e.g. "bi-pencil" (without "bi " prefix)
- * @param {string} text
- * @returns {string}
- */
-function iconLabel(biClass, text) {
-  const cls = biClass.startsWith("bi-") ? biClass : `bi-${biClass}`;
-  return `<span class="btn-with-icon"><i class="bi ${cls}" aria-hidden="true"></i><span>${text}</span></span>`;
-}
+// iconLabel / renderIcon / hydrateIcons live in js/icons.js
 
 // ── Toast Notification ──────────────────────────────────────
 /**
@@ -237,13 +227,13 @@ function renderBadgeWall(containerId) {
     badgeItem.innerHTML = `
       ${!isUnlocked ? `
         <div class="honor-badge-item__lock">
-          <i class="bi bi-lock-fill" aria-hidden="true"></i>
+          <span class="nlc-icon" data-icon="lockFill" aria-hidden="true"></span>
         </div>
       ` : ""}
       <div class="honor-badge-item__rings honor-badge-item__rings--outer"></div>
       <div class="honor-badge-item__rings honor-badge-item__rings--inner"></div>
       <div class="honor-badge-item__icon">
-        <i class="bi ${badge.iconClass}" aria-hidden="true"></i>
+        <span class="nlc-icon" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
       </div>
       <span class="honor-badge-item__title">${badge.title}</span>
     `;
@@ -258,6 +248,10 @@ function renderBadgeWall(containerId) {
 
     container.appendChild(badgeItem);
   });
+
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(container);
+  }
 
   // Attach back button close event listener once
   const backBtn = document.getElementById("badge-page-back-btn");
@@ -305,7 +299,14 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
   // Render text contents
   title.textContent = badge.title;
   desc.textContent = badge.description.split("：").pop();
-  icon.className = `bi ${badge.iconClass}`;
+  if (icon) {
+    icon.className = "nlc-icon";
+    icon.style.fontSize = "3rem";
+    icon.setAttribute("data-icon", badge.iconKey || "award");
+    icon.innerHTML = typeof renderIcon === "function"
+      ? renderIcon(badge.iconKey || "award", { size: "3rem", className: "nlc-icon" })
+      : "";
+  }
 
   // Apply Shield styles based on unlock state & theme
   if (isUnlocked) {

@@ -18,8 +18,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" crossorigin="anonymous">
-  <!-- Vanilla CSS Stylesheet -->
   <link rel="stylesheet" href="index.css">
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
@@ -98,10 +96,10 @@
             </button>
             <div class="options-dropdown hidden" id="plan-options-dropdown" style="right: 0; left: auto; top: 48px;">
               <button class="options-dropdown-item" id="menu-plan-level" type="button">
-                <span class="menu-icon"><i class="bi bi-gear" aria-hidden="true"></i></span><span>調整進度設定</span>
+                <span class="menu-icon"><span class="nlc-icon" data-icon="setting" aria-hidden="true"></span></span><span>調整進度設定</span>
               </button>
               <button class="options-dropdown-item danger-item" id="delete-plan-btn">
-                <span class="menu-icon"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></span><span>退出此計畫</span>
+                <span class="menu-icon"><span class="nlc-icon" data-icon="logout" aria-hidden="true"></span></span><span>退出此計畫</span>
               </button>
             </div>
           </div>
@@ -196,19 +194,19 @@
                 <div id="verse-card-toolbar" class="flex items-center justify-between w-full pt-3 border-t border-white/10 mt-auto text-slate-300" style="display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem; margin-top: auto; color: rgba(203, 213, 225, 0.9); font-size: 0.75rem;">
                   <!-- 1. 純按讚按鈕 -->
                   <button id="like-btn" class="flex flex-col items-center justify-center flex-1 py-1 text-xs" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: inherit;">
-                    <i class="bi bi-heart text-lg mb-1" style="font-size: 1.125rem; margin-bottom: 0.25rem;"></i>
+                    <span class="nlc-icon text-lg mb-1" data-icon="heart" style="font-size: 1.125rem; margin-bottom: 0.25rem;"></span>
                     <span id="like-count-text">0</span>
                   </button>
                   
                   <!-- 2. 換一句按鈕（唯一允許觸發抽卡的入口） -->
                   <button id="draw-card-btn" class="flex flex-col items-center justify-center flex-1 py-1 text-xs text-slate-200" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: #e2e8f0;">
-                    <i class="bi bi-arrow-repeat text-xl mb-1" style="font-size: 1.25rem; margin-bottom: 0.25rem;"></i>
+                    <span class="nlc-icon text-xl mb-1" data-icon="refresh" style="font-size: 1.25rem; margin-bottom: 0.25rem;"></span>
                     <span>換一句</span>
                   </button>
                   
                   <!-- 3. 分享按鈕 -->
                   <button id="share-card-btn" class="flex flex-col items-center justify-center flex-1 py-1 text-xs" style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: inherit;">
-                    <i class="bi bi-share text-lg mb-1" style="font-size: 1.125rem; margin-bottom: 0.25rem;"></i>
+                    <span class="nlc-icon text-lg mb-1" data-icon="share" style="font-size: 1.125rem; margin-bottom: 0.25rem;"></span>
                     <span>分享</span>
                   </button>
                 </div>
@@ -224,7 +222,7 @@
                   教會公告
                 </h3>
                 <button class="primary-btn admin-only-nav hidden" id="btn-show-announcement-form" style="font-size: 0.75rem; padding: 0.3rem 0.65rem;" onclick="window.openAnnouncementForm()">
-                  <span class="btn-with-icon"><i class="bi bi-megaphone" aria-hidden="true"></i><span>發布公告</span></span>
+                  <span class="btn-with-icon"><span class="nlc-icon" data-icon="megaphone" aria-hidden="true"></span><span>發布公告</span></span>
                 </button>
               </div>
 
@@ -267,14 +265,14 @@
                   今日靈修心得
                 </h3>
                 <span class="privacy-badge label-with-icon" style="font-size: 0.75rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.3rem; background: var(--bg-input); padding: 0.2rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
-                  <i class="bi bi-lock-fill" aria-hidden="true"></i>
+                  <span class="nlc-icon" data-icon="lockFill" aria-hidden="true"></span>
                   只有你看得到
                 </span>
               </div>
               <div class="form-group" style="margin-bottom: 1rem; position: relative; flex: 1; display: flex; flex-direction: column;">
                 <textarea id="devotional-content" class="form-control" placeholder="今天讀經有什麼感動？寫下來吧 — 只有你看得到" style="flex: 1; min-height: 140px; resize: none; padding: 0.9rem; border-radius: var(--radius-sm); font-size: 0.9rem; line-height: 1.6;"></textarea>
-                <div id="devotional-save-status" style="position: absolute; right: 15px; bottom: 15px; font-size: 0.72rem; color: #10b981; display: flex; align-items: center; gap: 0.25rem; transition: opacity 0.3s; opacity: 0; pointer-events: none; background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.2);">
-                  <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+                <div id="devotional-save-status" style="position: absolute; right: 15px; bottom: 15px; font-size: 0.72rem; color: var(--color-success-foreground); display: flex; align-items: center; gap: 0.25rem; transition: opacity 0.3s; opacity: 0; pointer-events: none; background: var(--bg-card); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid var(--color-success-border);">
+                  <span style="width: 5px; height: 5px; background: var(--color-success-foreground); border-radius: 50%; display: inline-block;"></span>
                   已自動儲存
                 </div>
               </div>
@@ -300,10 +298,10 @@
         <!-- Native Reader Toolbar -->
         <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar">
           <button type="button" class="reader-icon-btn native-toolbar-btn reader-back-btn" id="reader-back-btn" title="&#x8FD4;&#x56DE;" aria-label="&#x8FD4;&#x56DE;">
-            <i class="bi bi-chevron-left"></i>
+            <span class="nlc-icon" data-icon="chevronLeft"></span>
           </button>
           <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-nav-directory-btn" title="&#x76EE;&#x9304;" aria-label="&#x76EE;&#x9304;">
-            <i class="bi bi-list"></i>
+            <span class="nlc-icon" data-icon="list"></span>
           </button>
           <button type="button" class="reader-ref-chip" id="reader-book-badge" title="&#x9078;&#x64C7;&#x5377;&#x7AE0;&#x7BC0;">
             <span id="reader-nav-ref-label">&#x99AC;&#x592A;&#x798F;&#x97F3; 1</span>
@@ -314,21 +312,21 @@
           </button>
           <div class="reader-nav-spacer"></div>
           <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-audio-btn" title="&#x8A9E;&#x97F3;" aria-label="&#x8A9E;&#x97F3;">
-            <i class="bi bi-volume-up"></i>
+            <span class="nlc-icon" data-icon="volumeNotice"></span>
           </button>
           <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-search-btn" title="&#x641C;&#x5C0B;" aria-label="&#x641C;&#x5C0B;">
-            <i class="bi bi-search"></i>
+            <span class="nlc-icon" data-icon="search"></span>
           </button>
           <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-settings-trigger-btn" title="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;" aria-label="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;">
-            <i class="bi bi-three-dots"></i>
+            <span class="nlc-icon" data-icon="more"></span>
           </button>
         </div>
 
         <!-- Legacy in-reader search panel kept hidden for compatibility -->
         <div class="reader-search-panel hidden" id="reader-search-panel">
-          <i class="bi bi-search"></i>
+          <span class="nlc-icon" data-icon="search"></span>
           <input type="text" class="reader-search-input" id="reader-search-input" placeholder="&#x641C;&#x5C0B;&#x672C;&#x7AE0;&#x7D93;&#x6587;...">
-          <button type="button" class="reader-icon-btn" id="reader-search-close-btn" title="&#x95DC;&#x9589;"><i class="bi bi-x-lg"></i></button>
+          <button type="button" class="reader-icon-btn" id="reader-search-close-btn" title="&#x95DC;&#x9589;"><span class="nlc-icon" data-icon="closeLg"></span></button>
         </div>
 <!-- ── Floating Navigation Buttons ── -->
         <div class="reader-floating-nav">
@@ -356,7 +354,7 @@
             <div class="reader-bottom-action-bar hidden" id="reader-bottom-action-bar">
               <div class="progress-indicator" id="reader-progress-indicator">本日進度 2/3</div>
               <button type="button" class="capsule-action-btn" id="reader-capsule-btn">
-                <span class="btn-with-icon"><i class="bi bi-chevron-right" aria-hidden="true"></i><span>下一章</span></span>
+                <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span><span>下一章</span></span>
               </button>
             </div>
 
@@ -365,7 +363,7 @@
               <button class="toolbar-action" data-action="highlight" style="background-color: #ffeb3b; color: #000;" title="黃色螢光筆"></button>
               <button class="toolbar-action" data-action="highlight" style="background-color: #ffc107; color: #000;" title="橘色螢光筆"></button>
               <button class="toolbar-action" data-action="highlight" style="background-color: #a7ffeb; color: #000;" title="綠色螢光筆"></button>
-              <button class="toolbar-action" data-action="clear" title="清除標記"><i class="bi bi-eraser" aria-hidden="true"></i></button>
+              <button class="toolbar-action" data-action="clear" title="清除標記"><span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span></button>
             </div>
         </article>
       </section>
@@ -445,7 +443,7 @@
                   <svg viewBox="0 0 24 24" width="22" height="22" stroke="var(--primary-color)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                   全域計畫管理
                 </span>
-                <button class="primary-btn" id="admin-add-plan-btn" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;"><span class="btn-with-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>新增</span></span></button>
+                <button class="primary-btn" id="admin-add-plan-btn" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;"><span class="btn-with-icon"><span class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增</span></span></button>
               </h3>
               
               <!-- 表單與列表 -->
@@ -500,22 +498,22 @@
             <div class="flex p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl" style="display: flex; padding: 0.25rem; background: var(--bg-input); border-radius: 12px;">
               <!-- 按鈕 1：今日任務 -->
               <button id="tab-today-task" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-slate-800 shadow-sm dark:bg-zinc-800 dark:text-white transition-all" style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;">
-                <i class="bi bi-check2-circle mr-1.5" style="margin-right: 0.375rem;"></i>今日讀經
+                <span class="nlc-icon mr-1.5" data-icon="checkOne" style="margin-right: 0.375rem;"></span>今日讀經
               </button>
               
               <!-- 按鈕 2：小組戰報 -->
               <button id="tab-group-report" class="flex-1 py-2 text-xs font-medium rounded-lg text-center text-slate-500 dark:text-zinc-400 hover:text-slate-800 transition-all" style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;">
-                <i class="bi bi-people mr-1.5" style="margin-right: 0.375rem;"></i>小組進度
+                <span class="nlc-icon mr-1.5" data-icon="people" style="margin-right: 0.375rem;"></span>小組進度
               </button>
             </div>
           </div>
 
           <!-- Toggle View Pills -->
           <div class="status-pills-row plan-detail-tabs" style="margin-bottom: 0.6rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; display: none;">
-            <button class="pill-btn active" id="tab-plan-schedule" style="display: none;"><span class="btn-with-icon"><i class="bi bi-calendar3" aria-hidden="true"></i><span>每日讀經</span></span></button>
-            <button class="pill-btn" id="tab-plan-stats"><span class="btn-with-icon"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>讀經統計</span></span></button>
-            <button class="pill-btn" id="tab-plan-ranking"><span class="btn-with-icon"><i class="bi bi-trophy" aria-hidden="true"></i><span>排名</span></span></button>
-            <button class="pill-btn" id="tab-plan-members"><span class="btn-with-icon"><i class="bi bi-people" aria-hidden="true"></i><span>組員狀況</span></span></button>
+            <button class="pill-btn active" id="tab-plan-schedule" style="display: none;"><span class="btn-with-icon"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span><span>每日讀經</span></span></button>
+            <button class="pill-btn" id="tab-plan-stats"><span class="btn-with-icon"><span class="nlc-icon" data-icon="barChart" aria-hidden="true"></span><span>讀經統計</span></span></button>
+            <button class="pill-btn" id="tab-plan-ranking"><span class="btn-with-icon"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>排名</span></span></button>
+            <button class="pill-btn" id="tab-plan-members"><span class="btn-with-icon"><span class="nlc-icon" data-icon="people" aria-hidden="true"></span><span>組員狀況</span></span></button>
           </div>
 
           
@@ -533,7 +531,7 @@
               <div class="px-4 py-2 flex items-center justify-between text-xs border-b border-slate-100/50 dark:border-zinc-800/30" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-card); font-size: 0.75rem; width: 100%; margin-bottom: 0.8rem; background: rgba(148, 163, 184, 0.05); border-radius: 8px;">
                 <!-- 左側：一鍵回到【我的進度】雷達 -->
                 <button id="go-my-progress-btn" class="flex items-center space-x-1 text-slate-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 transition-colors font-medium" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; cursor: pointer; font-weight: 500; transition: color 0.2s; padding: 0;" onmouseover="this.style.color='var(--color-brand)'" onmouseout="this.style.color='var(--text-muted)'">
-                  <i class="bi bi-person-bounding-box" style="font-size: 0.85rem;"></i>
+                  <span class="nlc-icon" data-icon="personBox" style="font-size: 0.85rem;"></span>
                   <span>↺ 我的進度</span>
                 </button>
 
@@ -547,9 +545,9 @@
                 </div>
 
                 <!-- 右側：一鍵看【今天進度】雷達 -->
-                <button id="go-today-plan-btn" class="flex items-center space-x-1 text-slate-400 hover:text-emerald-500 dark:text-zinc-500 dark:hover:text-emerald-400 transition-colors font-medium" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; cursor: pointer; font-weight: 500; transition: color 0.2s; padding: 0;" onmouseover="this.style.color='#10b981'" onmouseout="this.style.color='var(--text-muted)'">
+                <button id="go-today-plan-btn" class="flex items-center space-x-1 text-slate-400 hover:text-emerald-500 dark:text-zinc-500 dark:hover:text-emerald-400 transition-colors font-medium" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; cursor: pointer; font-weight: 500; transition: color 0.2s; padding: 0;" onmouseover="this.style.color='var(--color-success-foreground)'" onmouseout="this.style.color='var(--text-muted)'">
                   <span>今天計畫 ↻</span>
-                  <i class="bi bi-calendar-event" style="font-size: 0.85rem;"></i>
+                  <span class="nlc-icon" data-icon="calendarEvent" style="font-size: 0.85rem;"></span>
                 </button>
               </div>
 
@@ -654,7 +652,7 @@
                       <span id="report-stat-total-chapters">0</span>
                       <span class="stat-bento__unit">章</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand stat-bento__icon-wrap--hero"><i class="bi bi-book-half" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand stat-bento__icon-wrap--hero"><span class="nlc-icon" data-icon="bookOpen" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">累積閱讀章數</span>
                 </div>
@@ -666,7 +664,7 @@
                       <span id="report-stat-streak">0</span>
                       <span class="stat-bento__unit">天</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><i class="bi bi-fire" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><span class="nlc-icon" data-icon="fire" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">最高連續</span>
                 </div>
@@ -678,7 +676,7 @@
                       <span id="report-stat-completed">0</span>
                       <span class="stat-bento__unit">天</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><i class="bi bi-calendar-check" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><span class="nlc-icon" data-icon="calendarCheck" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">累計完成</span>
                   <span id="report-stat-start-date" class="hidden" style="display: none;"></span>
@@ -690,7 +688,7 @@
                     <div class="stat-bento__value stat-bento__value--status">
                       <span id="report-stat-progress-status" class="stat-badge stat-badge--brand">進度一致</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span class="nlc-icon" data-icon="refresh" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">進度狀態</span>
                 </div>
@@ -702,7 +700,7 @@
                       <span id="report-stat-makeup">0</span>
                       <span class="stat-bento__unit">天</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--danger stat-bento__icon-wrap--danger-only"><i class="bi bi-hourglass-split" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--danger stat-bento__icon-wrap--danger-only"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">補讀天數</span>
                 </div>
@@ -760,7 +758,7 @@
                       <span id="grp-total-read">0</span>
                       <span class="stat-bento__unit">章</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand stat-bento__icon-wrap--hero"><i class="bi bi-people-fill" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand stat-bento__icon-wrap--hero"><span class="nlc-icon" data-icon="peoples" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label" id="grp-label-total-read">總閱讀章數</span>
                 </div>
@@ -772,7 +770,7 @@
                       <span id="grp-total-members">0</span>
                       <span class="stat-bento__unit">人</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><i class="bi bi-people" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><span class="nlc-icon" data-icon="people" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label" id="grp-label-members">參與人數</span>
                 </div>
@@ -784,7 +782,7 @@
                       <span id="grp-active-members">0</span>
                       <span class="stat-bento__unit">人</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><i class="bi bi-lightning-charge" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><span class="nlc-icon" data-icon="lightning" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label" id="grp-label-active">每日活躍</span>
                 </div>
@@ -796,7 +794,7 @@
                       <span id="grp-today-rate">0</span>
                       <span class="stat-bento__unit">%</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><i class="bi bi-check-circle" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span class="nlc-icon" data-icon="checkOne" aria-hidden="true"></span></span>
                   </div>
                   
                   <!-- 三色進度條 -->
@@ -816,7 +814,7 @@
                       <span id="grp-reread-count">0</span>
                       <span class="stat-bento__unit">人</span>
                     </div>
-                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
+                    <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span class="nlc-icon" data-icon="refresh" aria-hidden="true"></span></span>
                   </div>
                   <span class="stat-bento__label">複讀人數</span>
                 </div>
@@ -872,7 +870,7 @@
           <div id="subview-plan-ranking" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
             <!-- 個人排名資訊 -->
             <div class="glass-card" style="margin-bottom: 1.2rem;">
-              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);"><span class="label-with-icon"><i class="bi bi-trophy" aria-hidden="true"></i><span>我的讀經排名</span></span></h3>
+              <h3 class="card-title" style="margin-bottom: 1.2rem; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);"><span class="label-with-icon"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>我的讀經排名</span></span></h3>
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <!-- 全教會排行 card -->
@@ -883,9 +881,9 @@
                 </div>
                 
                 <!-- 牧區排行 card -->
-                <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.12); border-radius: 12px; padding: 1rem; text-align: center;">
+                <div style="background: var(--color-success-subtle); border: 1px solid var(--color-success-border); border-radius: 12px; padding: 1rem; text-align: center;">
                   <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.4rem;" id="my-rank-zone-title">牧區個人排行</div>
-                  <div style="font-size: 1.8rem; font-weight: 500; color: #10b981;" id="my-rank-zone">第 -- 名</div>
+                  <div style="font-size: 1.8rem; font-weight: 500; color: var(--color-success-foreground);" id="my-rank-zone">第 -- 名</div>
                   <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;" id="my-rank-zone-total">共 -- 人</div>
                 </div>
               </div>
@@ -933,7 +931,7 @@
               <!-- 全域權限統計篩選器 (組員狀況) -->
               <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 0.6rem; margin-right: auto;">
-                  <span class="label-with-icon" style="font-size: 1.1rem; font-weight: 500; color: var(--primary-color);"><i class="bi bi-people" aria-hidden="true"></i></span>
+                  <span class="label-with-icon" style="font-size: 1.1rem; font-weight: 500; color: var(--primary-color);"><span class="nlc-icon" data-icon="people" aria-hidden="true"></span></span>
                   <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">切換統計管理範圍</h3>
                 </div>
                 <select id="members-admin-region-select" class="form-control" style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
@@ -952,7 +950,7 @@
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; gap: 1rem; flex-wrap: wrap;">
                   <h3 class="card-title" id="members-ranking-title" style="margin-bottom: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary); flex: 1;">參與者總覽</h3>
                   <div class="member-search-wrapper">
-                    <i class="bi bi-search search-icon-inside" aria-hidden="true"></i>
+                    <span class="nlc-icon search-icon-inside" data-icon="search" aria-hidden="true"></span>
                     <input type="text" id="member-search-input" placeholder="搜尋組員姓名…">
                   </div>
                 </div>
@@ -961,7 +959,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 80px 80px 70px 90px; gap: 0.4rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.74rem; font-weight: 500; text-align: center;">
                       <div style="text-align: left; color: var(--text-muted);">成員</div>
                       <div style="color: #ef4444;">最高連續</div>
-                      <div style="color: #10b981;">累計完成</div>
+                      <div style="color: var(--color-success-foreground);">累計完成</div>
                       <div style="color: #f59e0b;">補讀</div>
                       <div style="color: var(--color-brand);">進度狀態</div>
                     </div>
@@ -1008,7 +1006,7 @@
 
               <!-- Button to toggle the form -->
               <button class="secondary-btn w-full" id="btn-toggle-profile-form">
-                <span class="btn-with-icon"><i class="bi bi-pencil" aria-hidden="true"></i><span>編輯個人檔案</span></span>
+                <span class="btn-with-icon"><span class="nlc-icon" data-icon="edit" aria-hidden="true"></span><span>編輯個人檔案</span></span>
               </button>
 
               <!-- Collapsible Profile Form Wrapper -->
@@ -1055,7 +1053,7 @@
                   <div class="demo-role-card hidden" style="margin-top: 1.5rem; padding: 1.2rem; background-color: var(--color-brand-muted); border: 1px dashed var(--primary-color); border-radius: var(--radius-sm);">
                     <div class="form-group" style="margin-bottom: 0;">
                       <label for="demo-role-select" style="color: var(--primary-color); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
-                        <span class="label-with-icon"><i class="bi bi-stars" aria-hidden="true"></i><span>Demo 模擬角色切換 (測試權限視角)</span></span>
+                        <span class="label-with-icon"><span class="nlc-icon" data-icon="star" aria-hidden="true"></span><span>Demo 模擬角色切換 (測試權限視角)</span></span>
                       </label>
                       <select id="demo-role-select" class="form-control" style="margin-top: 0.5rem; border-color: var(--primary-color);">
                         <option value="real_user">回到線上登入帳號 (真實資料)</option>
@@ -1078,7 +1076,7 @@
           <div class="card-col span-12" id="profile-badges-card-col" style="margin-top: 1rem;">
             <div class="profile-badges-card" id="profile-badges-inner-card">
               <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-                <span class="label-with-icon"><i class="bi bi-trophy" aria-hidden="true"></i><span>我的榮譽徽章</span></span>
+                <span class="label-with-icon"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>我的榮譽徽章</span></span>
               </h3>
               <div id="badges-grid">
                 <!-- Dynamically populated -->
@@ -1149,7 +1147,7 @@
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第一步：選擇大區
-                    <button class="primary-btn" id="admin-add-region-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>新增大區</span></span></button>
+                    <button class="primary-btn" id="admin-add-region-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><span class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增大區</span></span></button>
                   </h4>
                   <div style="display: flex; gap: 0.3rem;">
                     <select id="admin-org-region" class="form-control" style="font-size: 0.8rem;"></select>
@@ -1162,7 +1160,7 @@
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第二步：選擇牧區
-                    <button class="primary-btn" id="admin-add-zone-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>新增牧區</span></span></button>
+                    <button class="primary-btn" id="admin-add-zone-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><span class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增牧區</span></span></button>
                   </h4>
                   <div style="display: flex; gap: 0.3rem;">
                     <select id="admin-org-zone" class="form-control" style="font-size: 0.8rem;"></select>
@@ -1175,7 +1173,7 @@
                 <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                   <h4 style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
                     第三步：選擇小組
-                    <button class="primary-btn" id="admin-add-group-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>新增小組</span></span></button>
+                    <button class="primary-btn" id="admin-add-group-btn" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span class="btn-with-icon"><span class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增小組</span></span></button>
                   </h4>
                   <div style="display: flex; gap: 0.3rem;">
                     <select id="admin-org-group" class="form-control" style="font-size: 0.8rem;"></select>
@@ -1199,23 +1197,23 @@
     <!-- Mobile Navigation Bar -->
     <nav class="mobile-nav-bar" role="tablist" aria-label="主要導覽">
       <button class="mobile-nav-btn active" role="tab" aria-selected="true" aria-current="page" data-target="dashboard-view">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 10v10h14V10"></path><path d="M9 20v-6h6v6"></path></svg>
+        <span class="nlc-icon icon" data-icon="home" aria-hidden="true"></span>
         <span>&#x9996;&#x9801;</span>
       </button>
       <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="reader-view">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+        <span class="nlc-icon icon" data-icon="bookOpen" aria-hidden="true"></span>
         <span>&#x8B80;&#x7D93;</span>
       </button>
       <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="plan-view">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="3"></rect><path d="M3 10h18"></path><path d="m8 15 2 2 4-4"></path></svg>
+        <span class="nlc-icon icon" data-icon="calendarThirty" aria-hidden="true"></span>
         <span>&#x8A08;&#x756B;</span>
       </button>
       <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="profile-view">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+        <span class="nlc-icon icon" data-icon="user" aria-hidden="true"></span>
         <span>&#x500B;&#x4EBA;</span>
       </button>
       <button class="mobile-nav-btn admin-only-nav hidden" role="tab" aria-selected="false" data-target="admin-view">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="icon"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path><path d="m9 12 2 2 4-4"></path></svg>
+        <span class="nlc-icon icon" data-icon="shield" aria-hidden="true"></span>
         <span>&#x7BA1;&#x7406;</span>
       </button>
     </nav>
@@ -1244,7 +1242,7 @@
       
       <div style="margin-top: 2rem; font-size: 0.75rem; color: var(--text-muted);" id="gate-status-container">
         <span style="display: inline-flex; align-items: center; gap: 0.3rem;">
-          <span style="width: 6px; height: 6px; background: #10b981; border-radius: 50%;" id="gate-status-dot"></span>
+          <span style="width: 6px; height: 6px; background: var(--color-success-foreground); border-radius: 50%;" id="gate-status-dot"></span>
           <span id="gate-status-text">線上模式已啟用</span>
         </span>
       </div>
@@ -1255,7 +1253,7 @@
   <div class="full-page-overlay hidden" id="bible-nav-overlay" aria-hidden="true">
     <header class="overlay-header bible-native-overlay-header">
       <button type="button" class="overlay-back-btn" id="bible-nav-back-btn" aria-label="&#x8FD4;&#x56DE;">
-        <i class="bi bi-chevron-left"></i>
+        <span class="nlc-icon" data-icon="chevronLeft"></span>
         <span>&#x8FD4;&#x56DE;</span>
       </button>
       <div class="overlay-title" id="bible-nav-title">&#x76EE;&#x9304;</div>
@@ -1272,10 +1270,10 @@
       <div class="view-mode-container">
         <span>&#x6AA2;&#x8996;</span>
         <button type="button" class="view-mode-btn active" id="view-mode-grid" title="&#x7DB2;&#x683C;" aria-label="&#x7DB2;&#x683C;">
-          <i class="bi bi-grid-3x3-gap-fill"></i>
+          <span class="nlc-icon" data-icon="gridFour"></span>
         </button>
         <button type="button" class="view-mode-btn" id="view-mode-list" title="&#x6E05;&#x55AE;" aria-label="&#x6E05;&#x55AE;">
-          <i class="bi bi-list-ul"></i>
+          <span class="nlc-icon" data-icon="unorderedList"></span>
         </button>
       </div>
     </div>
@@ -1287,9 +1285,9 @@
   <div class="full-page-overlay hidden" id="global-search-overlay" aria-hidden="true">
     <header class="overlay-header search-header">
       <div class="search-input-wrapper">
-        <i class="bi bi-search search-icon-inside"></i>
+        <span class="nlc-icon search-icon-inside" data-icon="search"></span>
         <input type="search" class="search-input-field" id="global-search-input" placeholder="&#x641C;&#x5C0B;&#x6574;&#x672C;&#x8056;&#x7D93;..." autocomplete="off" inputmode="search">
-        <button type="button" class="search-clear-btn hidden" id="global-search-clear-btn" aria-label="&#x6E05;&#x9664;"><i class="bi bi-x-circle-fill"></i></button>
+        <button type="button" class="search-clear-btn hidden" id="global-search-clear-btn" aria-label="&#x6E05;&#x9664;"><span class="nlc-icon" data-icon="closeOne"></span></button>
       </div>
       <button class="search-cancel-btn" id="global-search-cancel-btn" type="button">&#x53D6;&#x6D88;</button>
     </header>
@@ -1303,7 +1301,7 @@
       <div class="bottom-sheet-drag-handle"></div>
       <div class="bottom-sheet-header">
         <h3>&#x6587;&#x5B57;&#x8A2D;&#x5B9A;</h3>
-        <button type="button" class="bottom-sheet-close-x" id="typography-sheet-close-btn" aria-label="&#x95DC;&#x9589;"><i class="bi bi-x-lg"></i></button>
+        <button type="button" class="bottom-sheet-close-x" id="typography-sheet-close-btn" aria-label="&#x95DC;&#x9589;"><span class="nlc-icon" data-icon="closeLg"></span></button>
       </div>
       <div class="bottom-sheet-body">
         <div class="sheet-section">
@@ -1396,11 +1394,11 @@
     <!-- 1. Header Navigation Bar -->
     <header style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid rgba(128,128,128,0.1); width: 100%; box-sizing: border-box;">
       <button id="badge-page-back-btn" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: inherit;">
-        <i class="bi bi-chevron-left"></i>
+        <span class="nlc-icon" data-icon="chevronLeft"></span>
       </button>
       <span id="detail-header-title" style="font-weight: 500; font-size: 1rem;">勳章詳情</span>
       <button id="badge-page-share-btn" style="background: none; border: none; font-size: 1.25rem; cursor: pointer; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: inherit;" title="分享">
-        <i class="bi bi-share"></i>
+        <span class="nlc-icon" data-icon="share"></span>
       </button>
     </header>
 
@@ -1413,7 +1411,7 @@
           <!-- Double Ring Circles Inside -->
           <div style="position: absolute; inset: 12px; border: 2px solid currentColor; border-radius: 50%; opacity: 0.15; pointer-events: none; height: 80px; width: 80px; margin: auto;"></div>
           <div style="position: absolute; inset: 18px; border: 1.5px dashed currentColor; border-radius: 50%; opacity: 0.25; pointer-events: none; height: 68px; width: 68px; margin: auto;"></div>
-          <i id="detail-icon" style="font-size: 3rem; position: relative; z-index: 10;"></i>
+          <span id="detail-icon" class="nlc-icon" data-icon="award" style="font-size: 3rem; position: relative; z-index: 10;" aria-hidden="true"></span>
           
           <!-- Small level count pill at the bottom center of the shield -->
           <div id="detail-level-pill" style="background: rgba(0,0,0,0.6); color: #fff; border-radius: 9999px; padding: 0.15rem 0.5rem; font-size: 0.65rem; font-weight: 500; margin-top: 0.5rem; position: relative; z-index: 10;">1</div>
@@ -1436,6 +1434,8 @@
   <script src="js/copy/zh-Hant.js"></script>
   <script src="js/design-tokens.js"></script>
   <script src="js/design-system-helpers.js"></script>
+  <script src="js/icon-registry.js"></script>
+  <script src="js/icons.js"></script>
   <script src="js/state.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/views/plan.js"></script>

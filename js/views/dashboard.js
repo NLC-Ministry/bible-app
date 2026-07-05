@@ -94,21 +94,21 @@ function updateDashboardView() {
              title="點擊展開詳細統計">
           <div class="dashboard-stat-strip__item">
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--warning">
-              <i class="bi bi-fire dashboard-stat-strip__icon" aria-hidden="true"></i>${streakDays} 天
+              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="fire" aria-hidden="true"></span>${streakDays} 天
             </span>
             <span class="dashboard-stat-strip__label">連續讀經</span>
           </div>
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--brand">
-              <i class="bi bi-book-half dashboard-stat-strip__icon" aria-hidden="true"></i>${todayReadCount}/${todayTotalCount} 章
+              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="bookOpen" aria-hidden="true"></span>${todayReadCount}/${todayTotalCount} 章
             </span>
             <span class="dashboard-stat-strip__label">今日進度</span>
           </div>
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--success">
-              <i class="bi bi-graph-up-arrow dashboard-stat-strip__icon" aria-hidden="true"></i>${totalCompletionRate}%
+              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="trendTwo" aria-hidden="true"></span>${totalCompletionRate}%
             </span>
             <span class="dashboard-stat-strip__label">計畫進度</span>
           </div>
@@ -159,6 +159,9 @@ function updateDashboardView() {
     state.pilgrimageControlsInit = true;
   }
 
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(document.getElementById("dashboard-view"));
+  }
 }
 
 async function calculateAndRenderPersonalRankings() {
@@ -358,15 +361,15 @@ function showSaveSuccess(isAuto) {
   if (!statusEl) return;
   
   statusEl.innerHTML = `
-    <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+    <span style="width: 5px; height: 5px; background: var(--color-success-foreground); border-radius: 50%; display: inline-block;"></span>
     已自動儲存
   `;
-  statusEl.style.color = "#10b981";
+  statusEl.style.color = "var(--color-success-foreground)";
   statusEl.style.opacity = "1";
   
   if (!isAuto) {
     statusEl.innerHTML = `
-      <span style="width: 5px; height: 5px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+      <span style="width: 5px; height: 5px; background: var(--color-success-foreground); border-radius: 50%; display: inline-block;"></span>
       儲存成功
     `;
   }
@@ -535,7 +538,9 @@ function getMemberColor(name) {
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const colors = window.NLC_MEMBER_COLORS || ["#04A9D2", "#0396BA", "#66F78F", "#FE7615", "#5BB8D4", "#0284A3", "#8ED4EA", "#FC365A"];
+  const colors = window.NLC_MEMBER_COLORS || (window.NLC_DESIGN
+    ? [window.NLC_DESIGN.brand, window.NLC_DESIGN.brandHover, window.NLC_DESIGN.success, window.NLC_DESIGN.warning, "#5BB8D4", window.NLC_DESIGN.brandActive, "#8ED4EA", window.NLC_DESIGN.danger]
+    : ["#04A9D2", "#0396BA", "#FE7615", "#FC365A"]);
   const index = Math.abs(hash) % colors.length;
   return colors[index];
 }
@@ -601,9 +606,14 @@ async function renderPilgrimageTrail() {
   const maxDrawIndex = Math.min(Math.max(0, maxChaptersRead - 1) + 16, TOTAL_PLAN_CHAPTERS - 1);
 
   // ── 4. Round-based color palette ──────────────────────────────────────
+  const brand = window.NLC_DESIGN.brand;
+  const brandActive = window.NLC_DESIGN.brandActive;
+  const brandHover = window.NLC_DESIGN.brandHover;
+  const success = window.NLC_DESIGN.success;
+  const successFg = window.NLC_DESIGN.successForeground;
   const palette = {
-    1: { myPath: "#04A9D2", grpPath: "#8ED4EA", myFill: "rgba(4,169,210,0.15)", grpFill: "rgba(4,169,210,0.08)", myStroke: "#04A9D2", grpStroke: "#0396BA", myText: "#0284A3", grpText: "#0396BA" },
-    2: { myPath: "#66F78F", grpPath: "#A8F5C0", myFill: "rgba(102,247,143,0.15)", grpFill: "rgba(102,247,143,0.08)", myStroke: "#66F78F", grpStroke: "#4ADE80", myText: "#16A34A", grpText: "#15803D" },
+    1: { myPath: brand, grpPath: "#8ED4EA", myFill: "rgba(4,169,210,0.15)", grpFill: "rgba(4,169,210,0.08)", myStroke: brand, grpStroke: brandHover, myText: brandActive, grpText: brandHover },
+    2: { myPath: success, grpPath: "#A8F5C0", myFill: "rgba(102,247,143,0.15)", grpFill: "rgba(102,247,143,0.08)", myStroke: success, grpStroke: success, myText: successFg, grpText: successFg },
     3: { myPath: "#f59e0b", grpPath: "#fcd34d", myFill: "#fef3c7", grpFill: "#fffbeb", myStroke: "#d97706", grpStroke: "#ca8a04", myText: "#92400e", grpText: "#b45309" },
   };
   const pal = palette[Math.min(currentRound, 3)];
@@ -952,7 +962,7 @@ async function updateAnnouncementsList() {
         <h4 style="font-size: 0.95rem; font-weight: 500; color: var(--text-primary); margin: 0; line-height: 1.4;">${escapeHTML(ann.title)}</h4>
         <div style="display: flex; align-items: center; gap: 0.4rem;">
           <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${formattedTime}</span>
-          ${isAdmin ? `<button class="circular-action-btn" style="width: 22px; height: 22px; padding: 0; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); display: flex; align-items: center; justify-content: center; font-size: 0.75rem;" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告" aria-label="刪除公告"><i class="bi bi-trash" aria-hidden="true"></i></button>` : ''}
+          ${isAdmin ? `<button class="circular-action-btn" style="width: 22px; height: 22px; padding: 0; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); display: flex; align-items: center; justify-content: center; font-size: 0.75rem;" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告" aria-label="刪除公告"><span class="nlc-icon" data-icon="trash" aria-hidden="true"></span></button>` : ''}
         </div>
       </div>
       <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; line-height: 1.5; white-space: pre-wrap;">${escapeHTML(ann.content)}</p>
@@ -1131,7 +1141,8 @@ async function shareAsImage(e) {
   
   if (shareBtn) {
     shareBtn.disabled = true;
-    shareBtn.innerHTML = `<i class="bi bi-arrow-repeat animate-spin text-lg mb-1"></i><span>分享中</span>`;
+    shareBtn.innerHTML = `<span class="nlc-icon animate-spin text-lg mb-1" data-icon="refresh"></span><span>分享中</span>`;
+    if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
   }
   
   // 🛡️ 截圖前：將 toolbar 提升到 try 外層，保證 finally 能恢復
@@ -1194,7 +1205,8 @@ async function shareAsImage(e) {
     if (shareBtn) {
       setTimeout(() => {
         shareBtn.disabled = false;
-        shareBtn.innerHTML = `<i class="bi bi-share text-lg mb-1"></i><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
+        shareBtn.innerHTML = `<span class="nlc-icon text-lg mb-1" data-icon="share"></span><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
+        if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
       }, 1000);
     }
   }
@@ -1227,15 +1239,11 @@ async function syncVerseLikes(verseSource) {
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
   
   const updateUI = () => {
-    const icon = likeBtn.querySelector("i");
-    if (icon) {
-      if (liked) {
-        icon.className = "bi bi-heart-fill";
-        icon.style.color = "#f43f5e";
-      } else {
-        icon.className = "bi bi-heart";
-        icon.style.color = "";
-      }
+    const iconEl = likeBtn.querySelector(".nlc-icon");
+    if (iconEl) {
+      iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
+      iconEl.style.color = liked ? "#f43f5e" : "";
+      if (typeof hydrateIcons === "function") hydrateIcons(likeBtn);
     }
     if (label) {
       label.textContent = count >= 10000 ? `${(count / 10000).toFixed(1)}萬` : count;
@@ -1292,15 +1300,11 @@ async function toggleVerseLike(e) {
   localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
 
   // Renders optimistic state instantly
-  const icon = likeBtn.querySelector("i");
-  if (icon) {
-    if (liked) {
-      icon.className = "bi bi-heart-fill";
-      icon.style.color = "#f43f5e";
-    } else {
-      icon.className = "bi bi-heart";
-      icon.style.color = "";
-    }
+  const iconEl = likeBtn.querySelector(".nlc-icon");
+  if (iconEl) {
+    iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
+    iconEl.style.color = liked ? "#f43f5e" : "";
+    if (typeof hydrateIcons === "function") hydrateIcons(likeBtn);
   }
   if (label) {
     label.textContent = count >= 10000 ? `${(count / 10000).toFixed(1)}萬` : count;

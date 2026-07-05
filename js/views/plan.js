@@ -928,7 +928,7 @@ function renderJoinedPlansList() {
       <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
         <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
         <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-          <i class="bi bi-calendar3" aria-hidden="true"></i> <span>${plan.startDate} ~ ${plan.endDate}</span>
+          <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
         </div>
         <div class="plan-progress-wrapper" style="margin-top: 0.4rem; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; position: relative;">
           <div class="plan-progress-bar" style="width: ${progress}%; height: 100%; background: #ff4757 !important; border-radius: 2px;"></div>
@@ -1000,9 +1000,9 @@ function renderPresetPlansList() {
       <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
         <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
         <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-          <i class="bi bi-calendar3" aria-hidden="true"></i> <span>${plan.startDate} ~ ${plan.endDate}</span>
+          <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
         </div>
-        <div style="font-size: 0.76rem; font-weight: 500; color: ${isJoined ? '#10b981' : 'var(--primary-color)'}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
+        <div style="font-size: 0.76rem; font-weight: 500; color: ${isJoined ? 'var(--color-success-foreground)' : 'var(--primary-color)'}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
           ${isJoined ? '✓ 已加入挑戰' : '+ 點擊加入計畫挑戰'}
         </div>
       </div>
@@ -1485,8 +1485,8 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       });
       if (allDone) {
         statusPill.textContent = "已完成";
-        statusPill.style.background = "rgba(16, 185, 129, 0.1)";
-        statusPill.style.color = "#10b981";
+        statusPill.style.background = "var(--color-success-subtle)";
+        statusPill.style.color = "var(--color-success-foreground)";
       } else {
         statusPill.textContent = "進行中";
         statusPill.style.background = "rgba(245, 158, 11, 0.1)";
@@ -2147,7 +2147,7 @@ async function renderAdminPlanManagement() {
           </span>
         </td>
         <td>
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><i class="bi bi-calendar3" aria-hidden="true"></i> ${plan.startDate}</span>
+          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
           <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
         </td>
         <td style="text-align: center; vertical-align: middle;">
@@ -3843,7 +3843,7 @@ async function renderGroupParticipantsRankingTable() {
       let statusColor = "var(--text-muted)";
       if (hasAnyPlanRead && diff > 0) {
         statusStr = `超前 ${diff}天`;
-        statusColor = "#10b981";
+        statusColor = "var(--color-success-foreground)";
       } else if (hasAnyPlanRead && diff < 0) {
         statusStr = `落後 ${Math.abs(diff)}天`;
         statusColor = "#ef4444";
@@ -3920,7 +3920,7 @@ window.displayParticipantsList = function (limit = 100) {
         ${escapeHTML(m.name)}
       </div>
       <div style="color: #ef4444;">${m.streak}</div>
-      <div style="color: #10b981;">${m.completed}</div>
+      <div style="color: var(--color-success-foreground);">${m.completed}</div>
       <div style="color: #f59e0b;">${m.makeup}</div>
       <div style="color: ${m.statusColor}; font-size: 0.8rem;">${m.statusStr}</div>
     `;
@@ -4208,9 +4208,9 @@ window.showPlanStatsModal = function () {
   `;
   headerDiv.innerHTML = `
     <h3 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-      <i class="bi bi-bar-chart" aria-hidden="true"></i> 詳細數據統計
+      <span class="nlc-icon" data-icon="barChart" aria-hidden="true"></span> 詳細數據統計
     </h3>
-    <button class="circular-action-btn" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-card); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-secondary);" onclick="this.closest('.modal-overlay').remove()" aria-label="關閉"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+    <button class="circular-action-btn" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-card); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-secondary);" onclick="this.closest('.modal-overlay').remove()" aria-label="關閉"><span class="nlc-icon" data-icon="closeLg" aria-hidden="true"></span></button>
   `;
 
   headerDiv.querySelector("button").onclick = (e) => {
@@ -4245,7 +4245,7 @@ window.showPlanStatsModal = function () {
 
   // Card A: 進度救援
   const cardA = makeCardHtml(
-    iconLabel("bi-shield-check", "進度救援"),
+    iconLabel("shieldCheck", "進度救援"),
     `${catchUpDays} 天`,
     `過去落後但已成功補讀完畢的天數。`,
     `#ea580c`,
@@ -4254,7 +4254,7 @@ window.showPlanStatsModal = function () {
 
   // Card B: 累計閱讀
   const cardB = makeCardHtml(
-    iconLabel("bi-trophy", "累計閱讀"),
+    iconLabel("trophy", "累計閱讀"),
     `${totalReadChapters} 章`,
     `在此計畫中讀完的經文章節總數。`,
     `var(--primary-color)`
@@ -4262,10 +4262,10 @@ window.showPlanStatsModal = function () {
 
   // Card C: 達標天數
   const cardC = makeCardHtml(
-    iconLabel("bi-calendar3", "達標天數"),
+    iconLabel("calendarThirty", "達標天數"),
     `${totalCompletedDays} 天`,
     `計畫中所有章節皆 100% 讀完的累積總天數。`,
-    `#10b981`
+    `var(--color-success-foreground)`
   );
 
   // Card D: 計畫狀態 (Badge text with specific colors)
@@ -4273,7 +4273,7 @@ window.showPlanStatsModal = function () {
     <span class="stat-badge ${statusBadgeClass}">${statusLabel}</span>
   `;
   const cardD = makeCardHtml(
-    iconLabel("bi-signpost-split", "計畫狀態"),
+    iconLabel("signpost", "計畫狀態"),
     badgeHtml,
     `目前讀經進度與計畫預期進度的比對結果。`,
     `var(--text-primary)`

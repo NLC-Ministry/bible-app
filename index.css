@@ -21,6 +21,8 @@
   --color-white: #FAFAFA;
   --color-black: #0F0F0F;
   --color-success: #66F78F;
+  --color-success-foreground: #1F8F52;
+  --color-success-border: color-mix(in srgb, var(--color-success-foreground) 24%, transparent);
   --color-warning: #FE7615;
   --color-danger: #FC365A;
   --color-info: #4A4A4A;
@@ -110,6 +112,9 @@ body.dark-theme {
   --skeleton-highlight: rgba(255, 255, 255, 0.14);
   --skeleton-on-dark-base: rgba(255, 255, 255, 0.12);
   --skeleton-on-dark-highlight: rgba(255, 255, 255, 0.28);
+
+  --color-success-foreground: #7AEAA0;
+  --color-success-border: color-mix(in srgb, var(--color-success-foreground) 30%, transparent);
 }
 
 
@@ -174,7 +179,7 @@ body.dark-theme {
   font-size: 1.125rem;
 }
 .stat-bento__icon-wrap--brand { background: var(--color-brand-subtle); color: var(--color-brand); }
-.stat-bento__icon-wrap--success { background: var(--color-success-subtle); color: var(--color-success); }
+.stat-bento__icon-wrap--success { background: var(--color-success-subtle); color: var(--color-success-foreground); }
 .stat-bento__icon-wrap--warning { background: var(--color-warning-subtle); color: var(--color-warning); }
 .stat-bento__icon-wrap--danger { background: var(--color-danger-subtle); color: var(--color-danger); }
 .stat-bento__icon-wrap--neutral { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-muted); }
@@ -204,9 +209,9 @@ body.dark-theme {
   border-color: var(--color-brand-border);
 }
 .stat-badge--success {
-  color: color-mix(in srgb, var(--color-success) 85%, var(--text-primary));
+  color: var(--color-success-foreground);
   background: var(--color-success-subtle);
-  border-color: color-mix(in srgb, var(--color-success) 24%, transparent);
+  border-color: var(--color-success-border);
 }
 .stat-badge--warning {
   color: var(--color-warning);
@@ -270,7 +275,7 @@ body.dark-theme {
 }
 .dashboard-stat-strip__value--warning { color: var(--color-warning); }
 .dashboard-stat-strip__value--brand { color: var(--color-brand); }
-.dashboard-stat-strip__value--success { color: var(--color-success); }
+.dashboard-stat-strip__value--success { color: var(--color-success-foreground); }
 .dashboard-stat-strip__icon { font-size: 1rem; flex-shrink: 0; }
 .dashboard-stat-strip__label {
   font-size: 0.7rem;
@@ -413,6 +418,51 @@ body.dark-theme {
 .honor-badge-item.locked .honor-badge-item__title { color: var(--text-muted); }
 
 .secondary-btn.w-full { width: 100%; }
+
+/* IconPark icons */
+.nlc-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  flex-shrink: 0;
+  color: currentColor;
+  line-height: 0;
+}
+.nlc-icon svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+.nlc-icon--inline svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+.dashboard-stat-strip__icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+.mobile-nav-btn .nlc-icon svg {
+  width: 23px;
+  height: 23px;
+}
+.stat-bento__icon-wrap .nlc-icon svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.stat-bento__icon-wrap--hero .nlc-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.honor-badge-item__icon .nlc-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+.search-icon-inside.nlc-icon svg,
+.search-icon-inside .nlc-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
 
 /* Global Styles */
 body {
@@ -576,7 +626,7 @@ body {
 }
 
 .status-badge.online {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
   color: #059669;
 }
 
@@ -1371,7 +1421,7 @@ vercel-live-feedback,
 .checkbox-btn:hover {
   border-color: var(--accent-color);
   color: var(--accent-color);
-  background-color: rgba(16, 185, 129, 0.05);
+  background-color: color-mix(in srgb, var(--color-success) 5%, transparent);
 }
 
 .checkbox-box {
@@ -1388,7 +1438,7 @@ vercel-live-feedback,
 .checkbox-btn.checked {
   color: var(--accent-color);
   border-color: var(--accent-color);
-  background-color: rgba(16, 185, 129, 0.05);
+  background-color: color-mix(in srgb, var(--color-success) 5%, transparent);
 }
 
 .checkbox-btn.checked .checkbox-box {
@@ -1559,7 +1609,7 @@ vercel-live-feedback,
 }
 
 .day-badge.complete {
-  background-color: rgba(16, 185, 129, 0.1);
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
   color: var(--accent-color);
 }
 
@@ -1687,8 +1737,8 @@ vercel-live-feedback,
 }
 
 .auth-user-info {
-  background-color: rgba(16, 185, 129, 0.05);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background-color: color-mix(in srgb, var(--color-success) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent);
   border-radius: var(--radius-sm);
   padding: 1rem;
   margin-bottom: 1.25rem;
@@ -1989,9 +2039,9 @@ vercel-live-feedback,
   gap: 0.25rem;
 }
 .progress-badge.completed {
-  background: rgba(16, 185, 129, 0.08);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.15);
+  background: color-mix(in srgb, var(--color-success) 8%, transparent);
+  color: var(--color-success-foreground);
+  border: 1px solid color-mix(in srgb, var(--color-success) 15%, transparent);
 }
 .progress-badge.pending {
   background: var(--border-card);
@@ -2682,12 +2732,12 @@ button.logout-btn:hover {
   position: relative;
 }
 .date-card.completed {
-  background: rgba(16, 185, 129, 0.05);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: color-mix(in srgb, var(--color-success) 5%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
 }
 .date-card.completed.active {
-  border: 2px solid #10b981;
-  background: rgba(16, 185, 129, 0.12);
+  border: 2px solid var(--color-success-foreground);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
   box-shadow: var(--shadow-none);
 }
 .date-card.completed::after {
@@ -2697,7 +2747,7 @@ button.logout-btn:hover {
   right: 6px;
   font-size: 0.7rem;
   font-weight: var(--type-weight-strong);
-  color: #10b981;
+  color: var(--color-success-foreground);
 }
 .date-card.active {
   border: 2px solid var(--primary-color);
@@ -2739,13 +2789,13 @@ button.logout-btn:hover {
 }
 /* 今天 + 已完成 優先顯示綠色 */
 .date-card.today.completed {
-  border: 2px solid #10b981;
-  background: rgba(16, 185, 129, 0.12);
+  border: 2px solid var(--color-success-foreground);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
   box-shadow: var(--shadow-none);
 }
 .date-card.today.completed .day-num,
 .date-card.today.completed .date-lbl {
-  color: #10b981;
+  color: var(--color-success-foreground);
 }
 .date-card .day-num {
   font-size: 1.2rem;
@@ -2794,13 +2844,13 @@ button.logout-btn:hover {
 .plan-task-item .task-checkbox.checked {
   border: none !important;
   background: transparent !important;
-  color: #10b981 !important;
+  color: var(--color-success-foreground) !important;
 }
 /* 第一遍完成，但當前處於第二或第三遍中 (還沒讀第二遍) */
 .plan-task-item .task-checkbox.checked.round-1.dimmed {
   border: none !important;
   background: transparent !important;
-  color: rgba(16, 185, 129, 0.45) !important;
+  color: color-mix(in srgb, var(--color-success) 45%, transparent) !important;
 }
 /* 第二遍完成：靛藍色雙勾 */
 .plan-task-item .task-checkbox.checked.round-2 {
@@ -3235,7 +3285,7 @@ button.logout-btn:hover {
   text-align: center;
 }
 .distribution-redesign .stacked-progress-summary span:nth-child(3) {
-  color: #10b981;
+  color: var(--color-success-foreground);
   text-align: right;
 }
 .distribution-redesign .stacked-percent-bar {
@@ -3249,7 +3299,7 @@ button.logout-btn:hover {
   background: #64748b;
 }
 .distribution-redesign .stacked-segment.ahead {
-  background: #10b981;
+  background: var(--color-success);
 }
 .distribution-redesign .stacked-progress-legend {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3267,8 +3317,8 @@ button.logout-btn:hover {
   background: rgba(100, 116, 139, 0.08);
 }
 .distribution-redesign .stacked-legend-item.ahead {
-  border-color: rgba(16, 185, 129, 0.22);
-  background: rgba(16, 185, 129, 0.06);
+  border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+  background: color-mix(in srgb, var(--color-success) 6%, transparent);
 }
 
 @media (max-width: 900px) {
@@ -3289,7 +3339,7 @@ button.logout-btn:hover {
   }
 }
 .distribution-metric-card.success strong {
-  color: #10b981;
+  color: var(--color-success-foreground);
 }
 .distribution-metric-card.warning strong {
   color: #f59e0b;
@@ -3977,6 +4027,9 @@ body.warm-theme {
   --color-brand-muted: color-mix(in srgb, #04A9D2 10%, transparent);
   --primary-color: var(--color-brand);
 
+  --color-success-foreground: #2A7A48;
+  --color-success-border: color-mix(in srgb, var(--color-success-foreground) 28%, transparent);
+
   --skeleton-base: color-mix(in srgb, var(--text-primary) 8%, var(--bg-card));
   --skeleton-highlight: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card));
   --skeleton-on-dark-base: rgba(255, 255, 255, 0.14);
@@ -4112,7 +4165,6 @@ select,
 }
 
 .brand-icon,
-.nav-tabs,
 .main-footer {
   display: none !important;
 }
@@ -4296,7 +4348,28 @@ button:focus-visible,
     display: none;
   }
 
+  .header-container {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "leading title nav actions";
+  }
+
+  .nav-tabs {
+    grid-area: nav;
+    display: flex !important;
+    gap: 0.35rem;
+    justify-self: end;
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  .header-container .tab-btn:not(#admin-edit-region-btn):not(#admin-edit-zone-btn):not(#admin-edit-group-btn) {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
   .main-content {
+    bottom: 0;
+    padding-bottom: 1.4rem;
     padding-left: max(1.4rem, calc((100vw - 1180px) / 2));
     padding-right: max(1.4rem, calc((100vw - 1180px) / 2));
   }

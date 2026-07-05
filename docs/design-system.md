@@ -40,7 +40,10 @@ Neutral shadows only — no brand-tinted glows on buttons, tabs, or cards.
 
 | Token | Value |
 |-------|-------|
-| `--color-success` | `#66F78F` |
+| `--color-success` | `#66F78F` | Progress fills, chart areas, decorative backgrounds |
+| `--color-success-foreground` | `#1F8F52` (light) | Text, icons, borders on light surfaces |
+| `--color-success-subtle` | 12% success mix | Badge/chip backgrounds |
+| `--color-success-border` | 24% foreground mix | Success badge borders |
 | `--color-warning` | `#FE7615` |
 | `--color-danger` | `#FC365A` |
 | `--color-white` | `#FAFAFA` |
@@ -125,7 +128,15 @@ NLC_MEMBER_COLORS    // avatar / trail palette
 | Heatmap intensity | `--heatmap-level-0` … `--heatmap-level-4` (brand monochrome ramp) |
 | Group progress | `.progress-segment-track`, `.progress-segment--{behind,on-schedule,ahead}` |
 
-**Rules:** no emoji in data UI (Bootstrap Icons only); JS toggles modifier classes, not inline hex colors; theme via `body.dark-theme` / `body.warm-theme` CSS selectors.
+**Rules:** no emoji in data UI (IconPark Outline via `data-icon` / `renderIcon`); JS toggles modifier classes, not inline hex colors; theme via `body.dark-theme` / `body.warm-theme` CSS selectors.
+
+## IconPark Outline
+
+- Source: [`@icon-park/svg`](https://www.npmjs.com/package/@icon-park/svg) (Outline theme, `strokeWidth: 3`, `currentColor`).
+- Registry: `js/icon-manifest.json` → build generates `js/icon-registry.js` (`window.NLC_ICON_SVGS`).
+- Runtime: `js/icons.js` — `renderIcon(key)`, `iconLabel(key, text)`, `hydrateIcons(root)`.
+- Markup: `<span class="nlc-icon" data-icon="fire" aria-hidden="true"></span>`; no Bootstrap Icons CDN.
+- Filled exceptions: `heartFill`, `likeFill` use IconPark filled theme for active states.
 
 ## PWA bottom navigation
 

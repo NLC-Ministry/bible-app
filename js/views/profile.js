@@ -412,10 +412,10 @@ function initProfileControls() {
       const isHidden = formWrapper.classList.contains("hidden");
       if (isHidden) {
         formWrapper.classList.remove("hidden");
-        btnToggleForm.innerHTML = iconLabel("bi-chevron-up", "收起個人檔案編輯");
+        btnToggleForm.innerHTML = iconLabel("chevronUp", "收起個人檔案編輯");
       } else {
         formWrapper.classList.add("hidden");
-        btnToggleForm.innerHTML = iconLabel("bi-pencil", "編輯個人檔案");
+        btnToggleForm.innerHTML = iconLabel("edit", "編輯個人檔案");
       }
     };
   }
@@ -757,7 +757,7 @@ function openMemberEditBottomSheet(user) {
     scopeBtn.style.color = "#a5b4fc";
     scopeBtn.style.marginBottom = "0.8rem";
     scopeBtn.type = "button";
-    scopeBtn.innerHTML = `<span class="btn-with-icon"><i class="bi bi-pencil" aria-hidden="true"></i><span>修改管轄範圍 (${user.great_region}/${user.pastoral_zone}/${user.small_group})</span></span>`;
+    scopeBtn.innerHTML = iconLabel("edit", `修改管轄範圍 (${user.great_region}/${user.pastoral_zone}/${user.small_group})`);
     scopeBtn.onclick = async () => {
       console.log(`✏️ [Debug] 修改管轄範圍按鈕被點擊，成員：${user.name}`);
       closeAdminFilterBottomSheet();

@@ -62,14 +62,14 @@ describe("getPlanProgressBadgeClass", () => {
 describe("getStatMetricConfig", () => {
   it("maps streak to fire icon and warning modifier", () => {
     expect(getStatMetricConfig("streak")).toEqual({
-      icon: "bi-fire",
+      icon: "fire",
       modifier: "warning",
     });
   });
 
   it("maps today to book icon and brand modifier", () => {
     expect(getStatMetricConfig("today")).toEqual({
-      icon: "bi-book-half",
+      icon: "bookOpen",
       modifier: "brand",
     });
   });
