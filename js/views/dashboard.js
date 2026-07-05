@@ -1665,11 +1665,9 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
 
   notes.forEach(note => {
     const profile = profileMap[note.user_id] || { name: "未知成員", small_group: "小組" };
-    
-    // Get initials avatar character
     const initial = profile.name ? profile.name.charAt(0) : "神";
     
-    // Hash name to gradient background color class
+    // Hash name to gradient background color class for avatar only
     const colors = [
       "from-pink-500/20 to-rose-500/20 text-rose-500 dark:text-rose-300",
       "from-purple-500/20 to-indigo-500/20 text-indigo-500 dark:text-indigo-300",
@@ -1705,12 +1703,12 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     noteComments.forEach(comm => {
       const commProfile = profileMap[comm.user_id] || { name: "未知組員" };
       commentsHtml += `
-        <div class="text-[11px] bg-slate-100/50 dark:bg-zinc-950/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-zinc-800/40 shadow-sm">
+        <div class="p-2.5 rounded-sm border" style="background: color-mix(in srgb, var(--text-primary) 1%, var(--bg-card)); border-color: var(--border-card); margin-bottom: 0.5rem;">
           <div class="flex items-center justify-between mb-1">
-            <span class="font-bold text-slate-900 dark:text-zinc-100">${commProfile.name}</span>
-            <span class="text-[9px] text-slate-500 dark:text-zinc-400">${new Date(comm.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.8rem;">${commProfile.name}</span>
+            <span style="color: var(--text-muted); font-size: 0.7rem;">${new Date(comm.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <p class="m-0 text-slate-800 dark:text-zinc-200 leading-normal font-sans">${comm.content}</p>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap;">${comm.content}</p>
         </div>
       `;
     });
@@ -1718,60 +1716,67 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     const isExpanded = window.expandedNoteIds.has(note.id);
 
     const card = document.createElement("div");
-    card.className = "p-5 rounded-3xl bg-white dark:bg-zinc-900/40 backdrop-blur-xl border border-slate-200/80 dark:border-zinc-800/30 shadow-[0_8px_30px_rgb(15,23,42,0.03)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:shadow-[0_8px_30px_rgb(15,23,42,0.06)] hover:-translate-y-1 transition-all duration-500 ease-out";
+    card.className = "devotional-post-card transition-all duration-200";
+    card.style.background = "var(--bg-card)";
+    card.style.border = "1px solid var(--border-card)";
+    card.style.borderRadius = "var(--radius-sm)";
+    card.style.padding = "1rem";
+    card.style.marginBottom = "1rem";
+    card.style.boxShadow = "var(--shadow-sm)";
     
     card.innerHTML = `
       <!-- User profile header -->
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-3">
         <div class="flex items-center space-x-3">
           <!-- Initials Avatar -->
-          <div class="w-9 h-9 rounded-full bg-gradient-to-br ${avatarColorClass} flex items-center justify-center font-bold text-sm shadow-inner">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br ${avatarColorClass} flex items-center justify-center font-bold text-xs shadow-inner">
             ${initial}
           </div>
           <div class="flex flex-col">
-            <span class="text-xs font-bold text-slate-900 dark:text-zinc-100">${profile.name}</span>
-            <span class="text-[9px] text-slate-500 dark:text-zinc-400 mt-0.5">${profile.small_group || "小組"}</span>
+            <span class="text-xs font-medium" style="color: var(--text-primary);">${profile.name}</span>
+            <span class="text-[10px]" style="color: var(--text-muted);">${profile.small_group || "小組"}</span>
           </div>
         </div>
         <!-- Time badge -->
-        <span class="text-[9px] text-slate-500 dark:text-zinc-400 bg-slate-100 dark:bg-zinc-800/40 px-2.5 py-1 rounded-full font-medium">${timeStr}</span>
+        <span class="text-[10px]" style="color: var(--text-muted);">${timeStr}</span>
       </div>
 
-      <!-- Golden verse content quotes (highly readable contrast) -->
-      <div class="relative pl-3 border-l-2 border-violet-500/50 my-3">
-        <p class="text-[14px] text-slate-900 dark:text-zinc-50 leading-relaxed font-sans font-medium m-0">
+      <!-- Golden verse content (No brackets, left border brand accented) -->
+      <div class="my-3 pl-3" style="border-left: 2px solid var(--color-brand); margin: 0.75rem 0;">
+        <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary); margin: 0; font-weight: var(--type-weight-regular);">
           ${note.content}
         </p>
       </div>
 
       <!-- Footer social actions -->
-      <div class="flex items-center justify-start space-x-6 mt-4 pt-3 border-t border-slate-200/40 dark:border-zinc-850/10 text-slate-400 dark:text-zinc-500">
-        <button type="button" class="flex items-center space-x-1.5 hover:text-rose-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px] ${hasLiked ? 'text-rose-500' : ''}" onclick="window.toggleDevotionalLike('${note.id}')">
-          <span class="nlc-icon nlc-icon--sm" data-icon="${hasLiked ? 'heartFill' : 'heart'}" style="width: 14px; height: 14px;"></span>
-          <span class="font-bold text-[10px]">${noteLikes.length > 0 ? noteLikes.length + ' ' : ''}讚</span>
+      <div class="flex items-center justify-start space-x-6 mt-3 pt-2" style="border-top: 1px solid var(--border-card); color: var(--text-secondary);">
+        <!-- Like Action -->
+        <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: ${hasLiked ? 'var(--color-danger)' : 'var(--text-secondary)'}; font-weight: var(--type-weight-strong);" onclick="window.toggleDevotionalLike('${note.id}')">
+          <span class="nlc-icon nlc-icon--sm" data-icon="${hasLiked ? 'heartFill' : 'heart'}" style="width: 15px; height: 15px; color: ${hasLiked ? 'var(--color-danger)' : 'var(--color-icon-default)'};"></span>
+          <span>${noteLikes.length > 0 ? noteLikes.length + ' ' : ''}讚</span>
         </button>
-        <button type="button" class="flex items-center space-x-1.5 hover:text-blue-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px]" onclick="window.toggleCommentsSection('${note.id}')">
-          <span class="nlc-icon nlc-icon--sm" data-icon="inbox" style="width: 14px; height: 14px;"></span>
-          <span class="font-bold text-[10px]">${noteComments.length > 0 ? noteComments.length + ' ' : ''}回覆</span>
+        <!-- Comments list toggle -->
+        <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: var(--text-secondary); font-weight: var(--type-weight-strong);" onclick="window.toggleCommentsSection('${note.id}')">
+          <span class="nlc-icon nlc-icon--sm" data-icon="inbox" style="width: 15px; height: 15px; color: var(--color-icon-default);"></span>
+          <span>${noteComments.length > 0 ? noteComments.length + ' ' : ''}回覆</span>
+        </button>
+        <!-- Direct toggle comment input -->
+        <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: var(--text-secondary); font-weight: var(--type-weight-strong);" onclick="window.toggleCommentInput('${note.id}')">
+          <span class="nlc-icon nlc-icon--sm" data-icon="plus" style="width: 15px; height: 15px; color: var(--color-icon-default);"></span>
+          <span>+留言</span>
         </button>
       </div>
 
       <!-- Comments Thread Panel -->
-      <div id="comments-section-${note.id}" class="${isExpanded ? '' : 'hidden'} mt-3 pt-3 border-t border-slate-200/40 dark:border-zinc-850/10">
-        <div id="comments-list-${note.id}" class="space-y-2.5 mb-3">
-          ${commentsHtml || '<div class="text-[10px] text-slate-400 dark:text-zinc-500 text-center py-2">目前尚無留言</div>'}
+      <div id="comments-section-${note.id}" class="${isExpanded ? '' : 'hidden'} mt-3 pt-3" style="border-top: 1px solid var(--border-card);">
+        <div id="comments-list-${note.id}" class="space-y-2 mb-2">
+          ${commentsHtml || '<div class="text-[10px] text-center py-2" style="color: var(--text-muted);">沒有留言</div>'}
         </div>
-        
-        <!-- Toggle Add Comment button -->
-        <button type="button" class="w-full py-1.5 border border-dashed border-slate-350 dark:border-zinc-750 hover:border-violet-500 rounded-xl text-[10px] font-bold text-slate-500 dark:text-zinc-400 hover:text-violet-500 bg-transparent cursor-pointer transition-colors duration-200 flex items-center justify-center space-x-1 mb-2" onclick="window.toggleCommentInput('${note.id}')">
-          <span class="nlc-icon nlc-icon--sm" data-icon="plus" style="width: 10px; height: 10px;"></span>
-          <span>+ 新增留言</span>
-        </button>
 
-        <!-- Comment Input Box (Hidden by default, shown when clicking "+ 新增留言") -->
-        <div id="comment-input-container-${note.id}" class="hidden flex items-center space-x-2">
-          <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="flex-1 text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 shadow-inner">
-          <button type="button" class="px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-full text-[10px] font-bold border-0 cursor-pointer" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
+        <!-- Comment Input Box (Hidden by default, toggled via "+留言") -->
+        <div id="comment-input-container-${note.id}" class="hidden flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
+          <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm);">
+          <button type="button" class="primary-btn" style="padding: 0.4rem 0.85rem; font-size: 0.75rem; border-radius: var(--radius-sm); white-space: nowrap;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
         </div>
       </div>
     `;
@@ -1807,9 +1812,19 @@ window.toggleCommentsSection = function(noteId) {
 };
 
 window.toggleCommentInput = function(noteId) {
+  const sec = document.getElementById(`comments-section-${noteId}`);
+  if (sec && sec.classList.contains("hidden")) {
+    sec.classList.remove("hidden");
+    window.expandedNoteIds = window.expandedNoteIds || new Set();
+    window.expandedNoteIds.add(noteId);
+  }
   const el = document.getElementById(`comment-input-container-${noteId}`);
   if (el) {
     el.classList.toggle("hidden");
+    if (!el.classList.contains("hidden")) {
+      const inp = document.getElementById(`comment-input-${noteId}`);
+      if (inp) inp.focus();
+    }
   }
 };
 
@@ -1822,6 +1837,12 @@ window.submitDevotionalComment = async function(noteId) {
   try {
     await db.addDevotionalComment(noteId, content);
     input.value = "";
+    
+    // Auto-hide comment input container after successful send
+    const inputCont = document.getElementById(`comment-input-container-${noteId}`);
+    if (inputCont) {
+      inputCont.classList.add("hidden");
+    }
     
     // Ensure it stays expanded
     window.expandedNoteIds = window.expandedNoteIds || new Set();

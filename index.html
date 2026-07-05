@@ -301,7 +301,7 @@
             <div class="dashboard-panel-card__header card-header-flex">
               <h3 class="dashboard-panel-card__title card-title">
                 <span class="dashboard-panel-card__title-icon" aria-hidden="true">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="heart" style="color: #8b5cf6;"></span>
+                  <span class="nlc-icon nlc-icon--sm" data-icon="heart" style="color: var(--color-brand);"></span>
                 </span>
                 <span class="dashboard-panel-card__title-text">牧區靈修分享牆</span>
               </h3>
@@ -312,22 +312,22 @@
               <!-- 發布金句/心得的區塊 -->
               <div class="mb-6 devotional-card">
                 <div class="flex items-center space-x-3 mb-3">
-                  <div class="w-8 h-8 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center font-bold text-xs">
+                  <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs" style="background-color: var(--color-brand-subtle); color: var(--color-brand);">
                     我
                   </div>
-                  <span class="text-xs font-bold text-slate-900 dark:text-zinc-100">記錄並分享今日金句與靈修心得</span>
+                  <span class="text-xs font-bold" style="color: var(--text-primary);">記錄並分享今日金句與靈修心得</span>
                 </div>
                 <div class="form-group devotional-field relative mb-3">
-                  <textarea id="devotional-content" class="w-full text-sm p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/40 text-slate-900 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 leading-relaxed shadow-inner" placeholder="今天速讀完之後，哪一節經文讓你最印象深刻？在這裡分享給同小組的家人們吧！" rows="3" style="resize: none;"></textarea>
-                  <div id="devotional-save-status" class="devotional-save-status absolute bottom-2 right-3 text-[10px] text-slate-400 dark:text-zinc-500 flex items-center space-x-1" aria-live="polite">
-                    <span class="devotional-save-status__dot w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-                    <span>已自動儲存</span>
+                  <textarea id="devotional-content" class="form-control" placeholder="今天速讀完之後，哪一節經文讓你最印象深刻？在這裡分享給同小組的家人們吧！" rows="3" style="resize: none;"></textarea>
+                  <div id="devotional-save-status" class="devotional-save-status absolute bottom-2 right-3 text-[10px] flex items-center space-x-1" style="color: var(--text-muted); opacity: 0;" aria-live="polite">
+                    <span class="devotional-save-status__dot w-1.5 h-1.5 rounded-full inline-block" style="background-color: var(--color-success-foreground);"></span>
+                    <span>已儲存</span>
                   </div>
                 </div>
                 <div class="flex items-center justify-between">
-                  <span class="text-[10px] text-slate-500 dark:text-zinc-400 font-medium" id="devotional-word-count">字數: 0 字</span>
-                  <button type="button" class="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-full text-xs font-bold border-0 cursor-pointer shadow-md transition-all duration-300 flex items-center space-x-1.5" id="btn-save-devotional">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true" style="width: 12px; height: 12px;"></span>
+                  <span class="text-[10px] font-medium" style="color: var(--text-muted);" id="devotional-word-count">字數: 0 字</span>
+                  <button type="button" class="primary-btn" id="btn-save-devotional" style="padding: 0.5rem 1rem; font-size: 0.8rem; border-radius: var(--radius-sm);">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true" style="color: inherit;"></span>
                     <span>分享金句</span>
                   </button>
                 </div>
