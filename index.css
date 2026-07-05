@@ -560,23 +560,32 @@ body.dark-theme {
   }
 }
 
-/* Honor badge hex medallions — regular hex geometry + neutral glossy finish */
+/* Honor badge hex medallions — achievement-toned fill + neutral gloss beam (Open Loyalty pattern) */
 :root {
   --badge-hex-aspect: 100 / 115.47;
-  --badge-hex-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 115.47'%3E%3Cpath d='M50 0 L100 28.87 L100 86.6 L50 115.47 L0 86.6 L0 28.87 Z'/%3E%3C/svg%3E");
+  /* Regular hex with softly filleted vertices (all six corners) */
+  --badge-hex-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 115.47'%3E%3Cpath d='M55 2.89 Q50 0 45 2.89 L100 34.64 Q100 28.87 95 25.98 L95 89.49 Q100 86.6 100 80.83 L45 112.58 Q50 115.47 55 112.58 L0 80.83 Q0 86.6 5 89.49 L5 25.98 Q0 28.87 0 34.64 Z'/%3E%3C/svg%3E");
+  /* Neutral gloss accents only — rim, beam, dot highlights */
   --badge-gloss-edge: #FFFFFF;
-  --badge-gloss-surface-top: #F8F8FA;
-  --badge-gloss-surface-mid: #ECECF0;
-  --badge-gloss-surface-deep: #D8D8DE;
-  --badge-gloss-dot: rgb(255 255 255 / 0.55);
-  --badge-gloss-shadow: rgb(15 15 15 / 0.12);
-  --badge-gloss-icon: #9A6700;
-  --badge-gloss-check-bg: #FAFAFA;
-  --badge-gloss-check-border: rgb(154 103 0 / 0.35);
+  --badge-gloss-rim: rgb(255 255 255 / 0.82);
+  --badge-gloss-beam-strong: rgb(255 255 255 / 0.68);
+  --badge-gloss-beam-soft: rgb(255 255 255 / 0.16);
+  --badge-gloss-dot: rgb(255 255 255 / 0.38);
+  --badge-gloss-shadow: rgb(120 53 15 / 0.22);
+  --badge-gloss-check-bg: #FFFBEB;
+  --badge-gloss-check-border: rgb(255 255 255 / 0.85);
+  /* Primary badge tone — warm gold achievement (body color, not brand cyan) */
+  --badge-tone-top: #FDE68A;
+  --badge-tone-mid: var(--color-achievement);
+  --badge-tone-deep: #B45309;
+  --badge-tone-icon: #78350F;
+  --badge-tone-inner-shadow: rgb(120 53 15 / 0.28);
+  /* Locked medals stay neutral gray with the same white gloss beam */
   --badge-gloss-locked-top: #F0F0F2;
   --badge-gloss-locked-mid: #E2E2E6;
   --badge-gloss-locked-deep: #D2D2D8;
-  --badge-gloss-locked-dot: rgb(15 15 15 / 0.08);
+  --badge-gloss-locked-dot: rgb(255 255 255 / 0.45);
+  --badge-gloss-locked-shadow: rgb(15 15 15 / 0.1);
 }
 
 .honor-badge-hex-shell {
@@ -595,7 +604,15 @@ body.dark-theme {
 
 .honor-badge-hex-shell--hero {
   width: 5.5rem;
-  filter: drop-shadow(0 6px 16px rgb(15 15 15 / 0.18));
+  filter: drop-shadow(0 6px 16px rgb(120 53 15 / 0.32));
+}
+
+.honor-badge-hex-shell:has(.honor-badge-hex--locked) {
+  filter: drop-shadow(0 2px 6px var(--badge-gloss-locked-shadow));
+}
+
+.honor-badge-hex-shell--sm:has(.honor-badge-hex--locked) {
+  filter: drop-shadow(0 2px 5px var(--badge-gloss-locked-shadow));
 }
 
 .honor-badge-hex-shell::before {
@@ -613,21 +630,24 @@ body.dark-theme {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--badge-gloss-icon);
+  color: var(--badge-tone-icon);
   overflow: hidden;
   -webkit-mask: var(--badge-hex-mask) center / 100% 100% no-repeat;
   mask: var(--badge-hex-mask) center / 100% 100% no-repeat;
-  background-color: var(--badge-gloss-surface-mid);
+  background-color: var(--badge-tone-mid);
   background-image:
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.22) 0%, transparent 58%),
     radial-gradient(circle, var(--badge-gloss-dot) 0.75px, transparent 0.75px),
     linear-gradient(
-      148deg,
-      var(--badge-gloss-surface-top) 0%,
-      var(--badge-gloss-surface-mid) 46%,
-      var(--badge-gloss-surface-deep) 100%
+      155deg,
+      var(--badge-tone-top) 0%,
+      var(--badge-tone-mid) 44%,
+      var(--badge-tone-deep) 100%
     );
-  background-size: 6px 6px, 100% 100%;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72), inset 0 -2px 6px rgb(15 15 15 / 0.06);
+  background-size: 100% 100%, 6px 6px, 100% 100%;
+  box-shadow:
+    inset 0 1px 0 var(--badge-gloss-rim),
+    inset 0 -3px 8px var(--badge-tone-inner-shadow);
 }
 
 .honor-badge-hex::after {
@@ -637,34 +657,43 @@ body.dark-theme {
   pointer-events: none;
   background: linear-gradient(
     145deg,
-    rgb(255 255 255 / 0.62) 0%,
-    rgb(255 255 255 / 0.18) 28%,
-    transparent 52%
+    var(--badge-gloss-beam-strong) 0%,
+    var(--badge-gloss-beam-soft) 32%,
+    transparent 54%
   );
   -webkit-mask: var(--badge-hex-mask) center / 100% 100% no-repeat;
   mask: var(--badge-hex-mask) center / 100% 100% no-repeat;
+}
+
+.honor-badge-hex--unlocked {
+  color: var(--badge-tone-icon);
 }
 
 .honor-badge-hex--locked {
   color: var(--color-icon-muted);
   background-color: var(--badge-gloss-locked-mid);
   background-image:
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.18) 0%, transparent 58%),
     radial-gradient(circle, var(--badge-gloss-locked-dot) 0.75px, transparent 0.75px),
     linear-gradient(
-      148deg,
+      155deg,
       var(--badge-gloss-locked-top) 0%,
       var(--badge-gloss-locked-mid) 55%,
       var(--badge-gloss-locked-deep) 100%
     );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), inset 0 -1px 4px rgb(15 15 15 / 0.04);
-  filter: saturate(0.72);
+  background-size: 100% 100%, 6px 6px, 100% 100%;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -2px 6px var(--badge-gloss-locked-shadow);
+  filter: saturate(0.7);
 }
 
 .honor-badge-hex--locked::after {
   background: linear-gradient(
     145deg,
-    rgb(255 255 255 / 0.35) 0%,
-    transparent 42%
+    rgb(255 255 255 / 0.5) 0%,
+    rgb(255 255 255 / 0.12) 30%,
+    transparent 50%
   );
 }
 
@@ -673,7 +702,7 @@ body.dark-theme {
   z-index: 1;
   color: inherit;
   background: transparent;
-  filter: drop-shadow(0 1px 1px rgb(15 15 15 / 0.12));
+  filter: drop-shadow(0 1px 1px rgb(67 20 7 / 0.18));
 }
 
 .honor-badge-hex__check {
@@ -689,8 +718,8 @@ body.dark-theme {
   border-radius: 50%;
   background: var(--badge-gloss-check-bg);
   border: 1px solid var(--badge-gloss-check-border);
-  color: var(--badge-gloss-icon);
-  box-shadow: 0 1px 3px rgb(15 15 15 / 0.1);
+  color: var(--badge-tone-deep);
+  box-shadow: 0 1px 4px rgb(120 53 15 / 0.18);
 }
 
 .honor-badge-hex__lock {
@@ -718,58 +747,72 @@ body.dark-theme {
 }
 
 #badge-detail-hero .honor-badge-hex-shell::before {
-  background: rgb(255 255 255 / 0.96);
+  background: rgb(255 255 255 / 0.98);
 }
 
 #badge-detail-hero .honor-badge-hex--unlocked {
   background-image:
-    radial-gradient(circle, rgb(255 255 255 / 0.28) 0.85px, transparent 0.85px),
+    radial-gradient(circle at 50% 34%, rgb(255 255 255 / 0.28) 0%, transparent 58%),
+    radial-gradient(circle, rgb(255 255 255 / 0.32) 0.85px, transparent 0.85px),
     linear-gradient(
-      148deg,
-      #52525B 0%,
-      #3F3F46 48%,
-      #27272A 100%
+      155deg,
+      #FDE68A 0%,
+      var(--color-achievement) 42%,
+      #92400E 100%
     );
-  color: #FCD34D;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -3px 10px rgb(0 0 0 / 0.35);
+  color: #78350F;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.75),
+    inset 0 -4px 12px rgb(67 20 7 / 0.35);
 }
 
 #badge-detail-hero .honor-badge-hex--locked {
   background-image:
-    radial-gradient(circle, rgb(255 255 255 / 0.1) 0.85px, transparent 0.85px),
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.14) 0%, transparent 58%),
+    radial-gradient(circle, rgb(255 255 255 / 0.12) 0.85px, transparent 0.85px),
     linear-gradient(
-      148deg,
-      #52525B 0%,
-      #404040 100%
+      155deg,
+      var(--badge-gloss-locked-top) 0%,
+      var(--badge-gloss-locked-mid) 55%,
+      var(--badge-gloss-locked-deep) 100%
     );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 -2px 8px rgb(0 0 0 / 0.25);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 8px var(--badge-gloss-locked-shadow);
 }
 
 body.dark-theme {
-  --badge-gloss-edge: #52525B;
-  --badge-gloss-surface-top: #52525B;
-  --badge-gloss-surface-mid: #3F3F46;
-  --badge-gloss-surface-deep: #27272A;
-  --badge-gloss-dot: rgb(255 255 255 / 0.12);
-  --badge-gloss-shadow: rgb(0 0 0 / 0.35);
-  --badge-gloss-icon: #FCD34D;
-  --badge-gloss-check-bg: #3F3F46;
-  --badge-gloss-check-border: rgb(252 211 77 / 0.35);
+  --badge-gloss-edge: #FFFBEB;
+  --badge-gloss-rim: rgb(255 251 235 / 0.55);
+  --badge-gloss-beam-strong: rgb(255 255 255 / 0.42);
+  --badge-gloss-beam-soft: rgb(255 255 255 / 0.1);
+  --badge-gloss-dot: rgb(255 255 255 / 0.22);
+  --badge-gloss-shadow: rgb(0 0 0 / 0.38);
+  --badge-gloss-check-bg: #422006;
+  --badge-gloss-check-border: rgb(255 255 255 / 0.35);
+  --badge-tone-top: #FBBF24;
+  --badge-tone-mid: #D97706;
+  --badge-tone-deep: #92400E;
+  --badge-tone-icon: #FEF3C7;
+  --badge-tone-inner-shadow: rgb(0 0 0 / 0.35);
   --badge-gloss-locked-top: #404040;
   --badge-gloss-locked-mid: #333333;
   --badge-gloss-locked-deep: #262626;
-  --badge-gloss-locked-dot: rgb(255 255 255 / 0.06);
+  --badge-gloss-locked-dot: rgb(255 255 255 / 0.08);
+  --badge-gloss-locked-shadow: rgb(0 0 0 / 0.28);
 }
 
 body.dark-theme .honor-badge-hex--unlocked {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -3px 8px rgb(0 0 0 / 0.3);
+  box-shadow:
+    inset 0 1px 0 var(--badge-gloss-rim),
+    inset 0 -3px 10px var(--badge-tone-inner-shadow);
 }
 
 body.dark-theme .honor-badge-hex--unlocked::after {
   background: linear-gradient(
     145deg,
-    rgb(255 255 255 / 0.22) 0%,
-    rgb(255 255 255 / 0.06) 30%,
+    var(--badge-gloss-beam-strong) 0%,
+    var(--badge-gloss-beam-soft) 30%,
     transparent 52%
   );
 }
@@ -808,7 +851,7 @@ body.dark-theme .honor-badge-hex--unlocked::after {
 }
 
 .honor-badge-item.unlocked:hover .honor-badge-hex-shell {
-  filter: drop-shadow(0 4px 12px rgb(15 15 15 / 0.16));
+  filter: drop-shadow(0 4px 14px rgb(180 83 9 / 0.32));
 }
 
 .honor-badge-item__lock {
@@ -899,7 +942,7 @@ body.dark-theme .honor-badge-hex--unlocked::after {
 }
 
 .badge-strip__item.unlocked:hover .honor-badge-hex-shell {
-  filter: drop-shadow(0 3px 10px rgb(15 15 15 / 0.14));
+  filter: drop-shadow(0 3px 10px rgb(180 83 9 / 0.28));
 }
 
 .badge-strip__item .nlc-icon {

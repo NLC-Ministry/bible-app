@@ -31,11 +31,28 @@ function userNeedsOrgSetup() {
 }
 
 function openMemberHubStructure() {
+  scheduleProfileSyncOnReturn();
   if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
     auth.openMemberHub("pastoral/structure");
     return;
   }
   window.open(getMemberHubUrls().structure, "_blank", "noopener,noreferrer");
+}
+
+function scheduleProfileSyncOnReturn() {
+  if (typeof document === "undefined" || document._nlcHubVisibilityBound) return;
+  document._nlcHubVisibilityBound = true;
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    if (typeof auth === "undefined" || !auth.isLoggedIn()) return;
+    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+    db.syncNlcSessionWithSupabase(true).then(function () {
+      if (typeof renderProfileView === "function") renderProfileView();
+      if (typeof renderMemberHubProfileLinks === "function") renderMemberHubProfileLinks();
+    }).catch(function (err) {
+      console.warn("Profile sync after Member Hub return failed:", err);
+    });
+  });
 }
 
 function renderMemberHubProfileLinks() {
@@ -53,6 +70,14 @@ function renderMemberHubProfileLinks() {
   if (structureEl) structureEl.href = urls.structure;
   if (homeEl) homeEl.href = urls.home;
   if (avatarHubEl) avatarHubEl.href = urls.structure;
+
+  [structureEl, homeEl, avatarHubEl].forEach(function (linkEl) {
+    if (!linkEl || linkEl._hubSyncBound) return;
+    linkEl._hubSyncBound = true;
+    linkEl.addEventListener("click", function () {
+      scheduleProfileSyncOnReturn();
+    });
+  });
 
   const card = document.getElementById("profile-member-hub-card");
   const descEl = document.getElementById("profile-member-hub-desc");

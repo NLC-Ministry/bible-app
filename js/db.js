@@ -305,6 +305,7 @@ const db = {
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
     state.currentUser.role = profile.role || "member";
+    if (profile.membership_status) state.membershipStatus = profile.membership_status;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = !!profile.is_demo;
     state.realRole = state.currentUser.role;
@@ -354,7 +355,12 @@ const db = {
     localStorage.removeItem("nlc_supabase_access_token");
     localStorage.removeItem("nlc_supabase_expires_at");
     localStorage.setItem("nlc_edge_session_expires_at", String(Date.now() + 10 * 60 * 1000));
-    if (payload.profile) localStorage.setItem("nlc_supabase_profile", JSON.stringify(payload.profile));
+    if (payload.profile) {
+      if (payload.membership_status) {
+        payload.profile.membership_status = payload.membership_status;
+      }
+      localStorage.setItem("nlc_supabase_profile", JSON.stringify(payload.profile));
+    }
     localStorage.setItem("nlc_profile_locked_fields", JSON.stringify(payload.locked_fields || []));
 
     state.supabase = this.createNlcDataClient();

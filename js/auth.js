@@ -7,7 +7,8 @@ const auth = {
     issuer: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.issuer) || "https://sso.newlife.org.tw/oidc",
     clientId: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.clientId) || "",
     memberHubUrl: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.memberHubUrl) || "https://member.newlife.org.tw",
-    scopes: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.scopes) || "openid"
+    scopes: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.scopes) || "openid profile email member:read.basic",
+    platformResource: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.platformResource) || "https://platform.newlife.org.tw"
   },
 
   keys: {
@@ -263,6 +264,9 @@ const auth = {
         code_challenge: challenge,
         code_challenge_method: "S256"
       });
+      if (this.config.platformResource) {
+        authParams.set("resource", this.config.platformResource);
+      }
 
       window.location.href = `${endpoints.authorizationEndpoint}?${authParams.toString()}`;
     } catch (err) {
@@ -343,14 +347,22 @@ const auth = {
 
     try {
       const endpoints = await this._getEndpoints();
+      const refreshParams = new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: this.config.clientId
+      });
+      if (this.config.platformResource) {
+        refreshParams.set("resource", this.config.platformResource);
+      }
+      if (this.config.scopes) {
+        refreshParams.set("scope", this.config.scopes);
+      }
+
       const response = await fetch(endpoints.tokenEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: refreshToken,
-          client_id: this.config.clientId
-        })
+        body: refreshParams
       });
 
       if (!response.ok) {
@@ -390,6 +402,13 @@ const auth = {
 
     const nextToken = localStorage.getItem(this.keys.accessToken);
     if (!nextToken) throw new Error("\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+    if (this.config.platformResource && nextToken.split(".").length !== 3) {
+      console.warn(
+        "Logto access token is not a JWT. Platform API requires resource=",
+        this.config.platformResource,
+        "at login/refresh."
+      );
+    }
     return nextToken;
   },
 

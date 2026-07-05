@@ -15,6 +15,7 @@ Required Supabase Edge Function secrets:
 ```bash
 NLC_LOGTO_ISSUER=https://sso.newlife.org.tw/oidc
 NLC_MEMBER_HUB_URL=https://member.newlife.org.tw
+NLC_PLATFORM_API_URL=https://platform.newlife.org.tw/platform/v1
 APP_ORIGIN=https://bible.newlife.org.tw
 ```
 

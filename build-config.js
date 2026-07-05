@@ -8,7 +8,9 @@ let anonKey = process.env.SUPABASE_ANON_KEY || "";
 let nlcClientId = process.env.NLC_CLIENT_ID || "";
 let nlcLogtoIssuer = process.env.NLC_LOGTO_ISSUER || "https://sso.newlife.org.tw/oidc";
 let nlcMemberHubUrl = process.env.NLC_MEMBER_HUB_URL || "https://member.newlife.org.tw";
-let nlcScopes = process.env.NLC_SCOPES || "openid";
+let nlcScopes = process.env.NLC_SCOPES || "openid profile email member:read.basic";
+let nlcPlatformResource = process.env.NLC_PLATFORM_RESOURCE || "https://platform.newlife.org.tw";
+let nlcPlatformApiUrl = process.env.NLC_PLATFORM_API_URL || "https://platform.newlife.org.tw/platform/v1";
 
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
@@ -26,6 +28,8 @@ if (fs.existsSync(envPath)) {
       else if (key === 'NLC_LOGTO_ISSUER') nlcLogtoIssuer = val;
       else if (key === 'NLC_MEMBER_HUB_URL') nlcMemberHubUrl = val;
       else if (key === 'NLC_SCOPES') nlcScopes = val;
+      else if (key === 'NLC_PLATFORM_RESOURCE') nlcPlatformResource = val;
+      else if (key === 'NLC_PLATFORM_API_URL') nlcPlatformApiUrl = val;
     }
   }
 }
@@ -42,7 +46,9 @@ const NLC_CONFIG = {
   clientId: "${nlcClientId}",
   issuer: "${nlcLogtoIssuer}",
   memberHubUrl: "${nlcMemberHubUrl}",
-  scopes: "${nlcScopes}"
+  scopes: "${nlcScopes}",
+  platformResource: "${nlcPlatformResource}",
+  platformApiUrl: "${nlcPlatformApiUrl}"
 };
 `;
 
@@ -55,4 +61,6 @@ console.log(`NLC Client ID: ${nlcClientId ? nlcClientId : '(尚未填寫 — 向
 console.log(`NLC Logto Issuer: ${nlcLogtoIssuer}`);
 console.log(`NLC Member Hub URL: ${nlcMemberHubUrl}`);
 console.log(`NLC Scopes: ${nlcScopes}`);
+console.log(`NLC Platform Resource: ${nlcPlatformResource}`);
+console.log(`NLC Platform API URL: ${nlcPlatformApiUrl}`);
 console.log('---');

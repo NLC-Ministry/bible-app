@@ -286,7 +286,16 @@ const appRouter = {
     } else if (tabId === "stats-view") {
       if (typeof updateStatsView === "function") updateStatsView();
     } else if (tabId === "profile-view") {
-      if (typeof renderProfileView === "function") renderProfileView();
+      if (typeof auth !== "undefined" && auth.isLoggedIn() && typeof db !== "undefined" && typeof db.syncNlcSessionWithSupabase === "function") {
+        db.syncNlcSessionWithSupabase(true).then(function () {
+          if (typeof renderProfileView === "function") renderProfileView();
+        }).catch(function (err) {
+          console.warn("Profile tab sync failed:", err);
+          if (typeof renderProfileView === "function") renderProfileView();
+        });
+      } else if (typeof renderProfileView === "function") {
+        renderProfileView();
+      }
     } else if (tabId === "admin-view") {
       if (typeof renderAdminUserManagement === 'function') {
         renderAdminUserManagement();

@@ -68,6 +68,7 @@ CREATE TABLE public.profiles (
   pastoral_zone TEXT NOT NULL DEFAULT '',
   small_group TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'member',
+  nlc_member_id UUID UNIQUE,
   is_demo BOOLEAN NOT NULL DEFAULT FALSE,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   last_seen_at TIMESTAMP WITH TIME ZONE,
@@ -98,6 +99,7 @@ CREATE UNIQUE INDEX idx_user_identities_one_primary_per_profile
 CREATE INDEX idx_user_identities_profile_id ON public.user_identities(profile_id);
 CREATE INDEX idx_user_identities_email ON public.user_identities(LOWER(email)) WHERE email IS NOT NULL;
 CREATE INDEX idx_profiles_role ON public.profiles(role);
+CREATE INDEX idx_profiles_nlc_member_id ON public.profiles(nlc_member_id) WHERE nlc_member_id IS NOT NULL;
 CREATE INDEX idx_profiles_zone_group ON public.profiles(pastoral_zone, small_group);
 
 -- Create a stable profile automatically for Supabase Auth users.
