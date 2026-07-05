@@ -412,6 +412,15 @@ CREATE POLICY reading_logs_select_by_scope ON public.reading_logs FOR SELECT TO 
 );
 
 CREATE POLICY devotional_notes_manage_own ON public.devotional_notes FOR ALL TO authenticated USING (user_id = public.current_profile_id()) WITH CHECK (user_id = public.current_profile_id());
+CREATE POLICY devotional_notes_select_group ON public.devotional_notes FOR SELECT TO authenticated USING (
+  user_id = public.current_profile_id() OR
+  (SELECT role FROM public.profiles WHERE id = public.current_profile_id()) IN ('admin', 'senior_pastor') OR
+  EXISTS (
+    SELECT 1 FROM public.profiles p1
+    JOIN public.profiles p2 ON p1.pastoral_zone = p2.pastoral_zone AND p1.small_group = p2.small_group
+    WHERE p1.id = user_id AND p2.id = public.current_profile_id()
+  )
+);
 
 CREATE POLICY announcements_read_published ON public.church_announcements FOR SELECT TO authenticated USING (is_published = TRUE OR (SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor'));
 CREATE POLICY announcements_manage_admin ON public.church_announcements FOR ALL TO authenticated USING ((SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor')) WITH CHECK ((SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor'));

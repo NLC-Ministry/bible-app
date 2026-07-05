@@ -12,9 +12,9 @@ window.APP_COPY = {
     shareFail: "分享失敗，等一下再試試",
   },
   devotional: {
-    title: "今日靈修心得",
-    placeholder: "今天讀經有什麼感動？寫下來吧 — 只有你看得到",
-    privacy: "只有你看得到",
+    title: "分享今日金句",
+    placeholder: "今天速讀完之後，哪一節經文讓你最印象深刻？在此記錄並分享給小組吧！",
+    privacy: "分享給小組成員",
     saved: "已自動儲存",
   },
   plan: {
@@ -24,7 +24,7 @@ window.APP_COPY = {
     findPlansHint: "點擊頂部「找計畫」即可瀏覽並選擇欲加入的挑戰計畫，與弟兄姊妹一起在神的話語中得勝！",
     groupProgress: "小組進度",
     restDayPill: "休息日",
-    restDayBanner: "今天是補讀或靈修休息日，好好親近神吧",
+    restDayBanner: "今天是補讀與休息日，好好親近神吧",
     syncFail: "進度沒同步成功，等一下再試試",
     noPlanJoined: "還沒加入任何計畫",
     goFindPlans: "前往「找計畫」加入新挑戰吧！",

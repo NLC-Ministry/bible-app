@@ -1219,6 +1219,16 @@ const db = {
         console.log(`🔍 [AdminDebug] reading_logs 查詢結果: ${allLogs ? allLogs.length : 0} 筆`, logsError ? `錯誤: ${logsError.message}` : '');
         state.allLogsCache = allLogs || [];
 
+        // Fetch today's devotional notes (golden verses)
+        const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        const { data: todayNotes } = await state.supabase.from("devotional_notes").select("user_id, content").eq("note_date", todayStr);
+        const notesByUser = {};
+        if (todayNotes) {
+          todayNotes.forEach(n => {
+            notesByUser[n.user_id] = n.content;
+          });
+        }
+
         window.userPlanIdCache = {};
         if (allPlans) {
           allPlans.forEach(p => {
@@ -1315,7 +1325,8 @@ const db = {
               presetKey: uPlan ? uPlan.preset_key : null,
               globalPlanId: uPlan ? uPlan.global_plan_id : null,
               current_round: uPlan ? (uPlan.current_round || 1) : 1,
-              level: uPlan ? (uPlan.level || 'normal') : 'normal'
+              level: uPlan ? (uPlan.level || 'normal') : 'normal',
+              today_devotional: notesByUser[profile.id] || null
             };
           }).filter(Boolean);
         }
@@ -1333,6 +1344,11 @@ const db = {
       localUsers = [mockUser];
     }
 
+    const localNotesStr = localStorage.getItem("devotional_notes") || "{}";
+    const localNotes = JSON.parse(localNotesStr);
+    const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+    const myTodayNote = localNotes[todayStr] || null;
+
     if (filterPresetKey) {
       const plan = state.activePlans ? state.activePlans.find(p => p.presetKey === filterPresetKey) : null;
       if (plan) {
@@ -1344,14 +1360,43 @@ const db = {
           return {
             ...u,
             chapters_read: mockUser.chapters_read,
-            plan_progress: mockUser.plan_progress
+            plan_progress: mockUser.plan_progress,
+            today_devotional: myTodayNote
           };
         }
         return {
           ...u,
           chapters_read: 0,
           plan_progress: 0,
-          last_read: null
+          last_read: null,
+          today_devotional: null
+        };
+      });
+    } else {
+      localUsers = localUsers.map(u => {
+        let uNote = null;
+        if (u.name === mockUser.name) {
+          uNote = myTodayNote;
+        } else {
+          const mockVerses = [
+            "起初，神創造天地。 (創 1:1)",
+            "神愛世人，甚至將他的獨生子賜給他們... (約 3:16)",
+            "耶和華是我的牧者，我必不致缺乏。 (詩 23:1)",
+            "你要專心仰賴耶和華，不可倚靠自己的聰明 (箴 3:5)"
+          ];
+          const isRecentRead = u.last_read && (
+            u.last_read === todayStr ||
+            u.last_read === "2026-06-26" ||
+            u.last_read === "2026-06-25"
+          );
+          if (isRecentRead) {
+            const idx = Math.abs(u.name.charCodeAt(0)) % mockVerses.length;
+            uNote = mockVerses[idx];
+          }
+        }
+        return {
+          ...u,
+          today_devotional: uNote
         };
       });
     }

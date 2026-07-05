@@ -350,6 +350,9 @@ async function saveDevotionalNote(isAuto) {
   try {
     await db.saveDevotionalNote(todayStr, content);
     showSaveSuccess(isAuto);
+    if (typeof renderTodayGroupProgress === "function") {
+      renderTodayGroupProgress();
+    }
   } catch (err) {
     console.error("Failed to save devotional note:", err);
     if (statusEl) {
@@ -360,6 +363,77 @@ async function saveDevotionalNote(isAuto) {
     }
   }
 }
+
+window.checkAndPromptTodayCompletion = async function() {
+  if (!state.activePlan) return;
+  
+  const now = new Date();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const todayDayObj = state.activePlan.days.find(d => {
+    if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+    const parts = d.date.split('/');
+    return parts.length === 2 && Number(parts[1]) === todayDay;
+  });
+  
+  if (!todayDayObj || !todayDayObj.chapters || todayDayObj.chapters.length === 0) return;
+  
+  const currentRound = state.activePlan.currentRound || 1;
+  const isTodayComplete = todayDayObj.chapters.every(ch => {
+    const r = ch.round || currentRound;
+    if (r === 1) return Boolean(ch.isReadR1 || ch.isRead);
+    if (r === 2) return Boolean(ch.isReadR2);
+    if (r >= 3) return Boolean(ch.isReadR3);
+    return Boolean(ch.isRead);
+  });
+  
+  if (!isTodayComplete) return;
+  
+  const todayStr = todayYear + '-' + String(todayMonth).padStart(2, '0') + '-' + String(todayDay).padStart(2, '0');
+  const existingNote = await db.getDevotionalNote(todayStr);
+  if (existingNote && existingNote.trim().length > 0) return;
+  
+  setTimeout(() => {
+    if (typeof showToast === "function") {
+      showToast("🎉 恭喜完成今日速讀！寫下今天最深刻的金句，分享給小組吧！", 5000);
+    }
+    const devContent = document.getElementById("devotional-content");
+    if (devContent) {
+      devContent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      devContent.focus();
+      const devCard = devContent.closest(".devotional-card");
+      if (devCard) {
+        devCard.style.outline = "2.5px solid var(--color-brand)";
+        devCard.style.boxShadow = "var(--shadow-focus-ring)";
+        setTimeout(() => {
+          devCard.style.outline = "";
+          devCard.style.boxShadow = "";
+        }, 4000);
+      }
+    } else {
+      if (confirm("🎉 恭喜完成今日速讀！是否前往「首頁」記錄你最印象深刻的今日金句並分享給小組？")) {
+        appRouter.switchTab("dashboard-view");
+        setTimeout(() => {
+          const dc = document.getElementById("devotional-content");
+          if (dc) {
+            dc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            dc.focus();
+            const dcCard = dc.closest(".devotional-card");
+            if (dcCard) {
+              dcCard.style.outline = "2.5px solid var(--color-brand)";
+              dcCard.style.boxShadow = "var(--shadow-focus-ring)";
+              setTimeout(() => {
+                dcCard.style.outline = "";
+                dcCard.style.boxShadow = "";
+              }, 4000);
+            }
+          }
+        }, 300);
+      }
+    }
+  }, 1000);
+};
 
 function showSaveSuccess(isAuto) {
   const statusEl = document.getElementById("devotional-save-status");
@@ -486,6 +560,14 @@ function renderProgressListFiltered(searchText) {
     metaSpan.className = "member-meta";
     metaSpan.textContent = `連續讀經: ${m.streak || 0}天 | 總章數: ${m.chapters_read || 0}章`;
     nameInfo.appendChild(metaSpan);
+    
+    if (m.today_devotional) {
+      const quoteDiv = document.createElement("div");
+      quoteDiv.className = "member-quote";
+      quoteDiv.style.cssText = "margin-top: 0.4rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-brand); background: var(--color-brand-muted); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; font-style: italic;";
+      quoteDiv.textContent = `「${m.today_devotional}」`;
+      nameInfo.appendChild(quoteDiv);
+    }
     
     item.appendChild(nameInfo);
     

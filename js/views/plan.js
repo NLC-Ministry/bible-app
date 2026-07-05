@@ -1711,6 +1711,9 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
         if (shouldHandleR1 || shouldHandleR2) {
           await handleRoundCompletion(plan);
         }
+        if (willBeChecked && typeof window.checkAndPromptTodayCompletion === "function") {
+          await window.checkAndPromptTodayCompletion();
+        }
       }
     })
     .catch(error => {
@@ -2561,6 +2564,9 @@ window.addEventListener("scroll", async () => {
             const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
             if (shouldHandleR1 || shouldHandleR2) {
               await handleRoundCompletion(plan);
+            }
+            if (typeof window.checkAndPromptTodayCompletion === "function") {
+              await window.checkAndPromptTodayCompletion();
             }
           }
         })

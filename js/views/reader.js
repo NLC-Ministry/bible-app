@@ -416,6 +416,9 @@ function initReaderControls() {
             if (shouldHandleR1 || shouldHandleR2) {
               await handleRoundCompletion(plan);
             }
+            if (isChecked && typeof window.checkAndPromptTodayCompletion === "function") {
+              await window.checkAndPromptTodayCompletion();
+            }
           }
         })
         .catch(error => {
