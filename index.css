@@ -428,40 +428,33 @@ body.dark-theme {
   right: 8px;
   font-size: 0.7rem;
   color: var(--color-icon-muted);
-}
-.honor-badge-item__rings {
-  position: absolute;
-  width: 44px;
-  height: 44px;
-  top: 0.9rem;
-  border-radius: 50%;
-  pointer-events: none;
-}
-.honor-badge-item__rings--outer {
-  border: 1px solid color-mix(in srgb, var(--color-icon-muted) 25%, var(--bg-card));
-}
-.honor-badge-item__rings--inner {
-  width: 38px;
-  height: 38px;
-  top: 1.1rem;
-  border: 1px dashed color-mix(in srgb, var(--color-icon-muted) 35%, var(--bg-card));
+  background: transparent;
 }
 .honor-badge-item__icon {
   font-size: 1.4rem;
   display: flex;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
   position: relative;
   z-index: 1;
-  isolation: isolate;
-  background: var(--bg-card);
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent);
+  box-shadow: none;
 }
-.honor-badge-item.unlocked .honor-badge-item__icon { color: var(--color-icon-achievement); }
-.honor-badge-item.locked .honor-badge-item__icon { color: var(--color-icon-muted); }
-.honor-badge-item__icon .nlc-icon { color: inherit; }
+.honor-badge-item.unlocked .honor-badge-item__icon {
+  color: var(--color-icon-achievement);
+  border-color: color-mix(in srgb, var(--color-icon-achievement) 42%, transparent);
+}
+.honor-badge-item.locked .honor-badge-item__icon {
+  color: var(--color-icon-muted);
+  border-color: color-mix(in srgb, var(--color-icon-muted) 32%, transparent);
+  border-style: dashed;
+}
+.honor-badge-item__icon .nlc-icon { color: inherit; background: transparent; }
 .honor-badge-item__title {
   font-size: 0.72rem;
   margin-top: 0.5rem;
@@ -478,7 +471,7 @@ body.dark-theme {
 
 .secondary-btn.w-full { width: 100%; }
 
-/* IconPark icons */
+/* Lucide icons (via data-icon / renderIcon) */
 .nlc-icon {
   display: inline-flex;
   align-items: center;
@@ -487,11 +480,13 @@ body.dark-theme {
   flex-shrink: 0;
   color: var(--color-icon-default);
   line-height: 0;
+  background: transparent;
 }
 .nlc-icon svg {
   display: block;
   width: 1em;
   height: 1em;
+  background: transparent;
 }
 .nlc-icon--inline svg {
   width: 1.05em;
@@ -3830,6 +3825,7 @@ button.logout-btn:hover {
   justify-content: center;
   flex-shrink: 0;
   font-size: 1rem;
+  background: transparent;
 }
 #plan-options-dropdown .options-dropdown-item.danger-item {
   color: #ff6b6b;
@@ -7207,13 +7203,12 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   align-items: center;
   gap: 0.35rem;
   vertical-align: middle;
+  background: transparent;
 }
 
-.btn-with-icon .bi,
-.label-with-icon .bi {
-  font-size: 0.9em;
-  line-height: 1;
-  flex-shrink: 0;
+.btn-with-icon .nlc-icon,
+.label-with-icon .nlc-icon {
+  background: transparent;
 }
 
 .member-search-wrapper {

@@ -1,5 +1,5 @@
 /**
- * IconPark Outline runtime — uses pre-built registry from icon-registry.js
+ * Lucide icon runtime — uses pre-built registry from icon-registry.js
  */
 
 (function () {

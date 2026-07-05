@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 新生命聖經速讀計畫 (NewLife Bible Speed Reading) — a Traditional-Chinese PWA for a church's quarterly Bible-reading challenges: reading tracker, plans, personal/group statistics, leaderboards, gamification badges, and devotional notes. It is a **satellite app** of the NewLife Member Hub and integrates with the NLC (紟道) ecosystem SSO.
 
-Stack: **vanilla JS, HTML, and CSS — no framework, no bundler, no build step for app code**. Third-party libs (Supabase JS, Chart.js, html2canvas, Bootstrap Icons) load from CDN in `index.html`. Backend is Supabase (Postgres + Edge Functions). Hosted on Vercel.
+Stack: **vanilla JS, HTML, and CSS — no framework, no bundler for app code** (production uses `scripts/bundle.mjs` to hash JS/CSS). Third-party libs (Supabase JS, Chart.js, html2canvas) load from CDN in `index.html`. Icons are **Lucide**, built at compile time into `js/icon-registry.js`. Backend is Supabase (Postgres + Edge Functions). Hosted on Vercel.
 
 ## Commands
 
@@ -73,4 +73,4 @@ Each view file renders one tab and wires its controls: `dashboard.js` (verse of 
 
 ## Design system
 
-See `docs/design-system.md`. Satellite brand color is **`#04A9D2`** (`--color-brand`; legacy alias `--primary-color`). Rules: no gradient fills on UI chrome (flat colors only), content-first calm reader, three themes (light/dark/warm-sepia). Typography uses **medium (500)** for emphasis and **normal (400)** for body — avoid 600–900 weights on chrome. Neutral shadows only, no brand-tinted glows. Icons are Bootstrap Icons (`<i class="bi bi-...">`); prefer these over emoji. UI copy is Traditional Chinese (see `js/copy/zh-Hant.js`).
+See `docs/design-system.md`. Satellite brand color is **`#04A9D2`** (`--color-brand`; legacy alias `--primary-color`). Rules: no gradient fills on UI chrome (flat colors only), content-first calm reader, three themes (light/dark/warm-sepia). Typography uses **medium (500)** for emphasis and **normal (400)** for body — avoid 600–900 weights on chrome. Neutral shadows only, no brand-tinted glows. Icons are **Lucide** via `data-icon` / `renderIcon()`; prefer these over emoji. UI copy is Traditional Chinese (see `js/copy/zh-Hant.js`).

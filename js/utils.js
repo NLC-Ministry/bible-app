@@ -227,11 +227,9 @@ function renderBadgeWall(containerId) {
     badgeItem.innerHTML = `
       ${!isUnlocked ? `
         <div class="honor-badge-item__lock">
-          <span class="nlc-icon" data-icon="lockFill" aria-hidden="true"></span>
+          <span class="nlc-icon" data-icon="lock" aria-hidden="true"></span>
         </div>
       ` : ""}
-      <div class="honor-badge-item__rings honor-badge-item__rings--outer"></div>
-      <div class="honor-badge-item__rings honor-badge-item__rings--inner"></div>
       <div class="honor-badge-item__icon">
         <span class="nlc-icon" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
       </div>
