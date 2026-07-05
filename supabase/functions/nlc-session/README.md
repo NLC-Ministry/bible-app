@@ -37,4 +37,4 @@ Supabase default secrets used automatically:
 
 The SPA must request Logto tokens with `resource=https://platform.newlife.org.tw` and scopes including `member:read.basic` (see `.env.example` / `NLC_CONFIG`). Without `resource`, Logto may issue opaque tokens that Platform API rejects.
 
-Apply migration `0006_nlc_member_id.sql` before deploy so `profiles.nlc_member_id` exists.
+Apply migration `0008_nlc_member_id.sql` before deploy so `profiles.nlc_member_id` exists.
