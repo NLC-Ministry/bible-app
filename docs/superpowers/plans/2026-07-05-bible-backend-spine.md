@@ -412,6 +412,19 @@ export async function verifyLogtoToken(token: string, opts: Opts = {}) {
 
 ## Task 4: Member Hub sync + `POST /auth/session`
 
+> **SUPERSEDED SHAPE (2026-07-06):** the `ctx.org` / `ctx.onboardingComplete` /
+> `classifyState` design below assumed a Member-Hub context shape that does not
+> exist. Task 4 is now implemented against the **home-based membership-state
+> contract** (`mms-core/docs/superpowers/specs/2026-07-06-membership-state-contract-design.md`):
+> the Hub's `GET /api/me/context` returns authoritative `membershipState` +
+> `hasHome` + resolved `organization.{greatRegion,pastoralZone,smallGroup}`.
+> bible-backend **consumes** `context.membershipState` (safe-default
+> `authenticated_no_membership` if absent — it carries NO classification rule),
+> **stores** it in a new `member_profiles.membership_state` column (Task 5's
+> middleware gates on it per-request), and keeps `resolveSyncedRole` verbatim for
+> privilege. The account-link port and the upsert wiring below still apply. See
+> the contract-aligned brief used for execution.
+
 **Files:** Create `src/member-hub/account-link.ts` (+ `test/account-link.test.ts`), `src/member-hub/client.ts`, `src/member-hub/sync.ts` (+ `test/sync.test.ts`), `src/routes/session.ts` (+ `test/session.test.ts`). Modify `src/index.ts` to mount the session route.
 
 **Interfaces:**
