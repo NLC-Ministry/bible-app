@@ -280,21 +280,14 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
   
   if (!page) return;
 
-  // Apply general theme colors dynamically to prevent contrast and visual bugs
-  if (isDark) {
-    page.style.background = "#0a0a0a"; // neutral-950
-    page.style.color = "#ffffff";
-    page.style.borderColor = "#262626"; // neutral-800
-  } else {
-    page.style.background = "#f8fafc"; // slate-50
-    page.style.color = "#1e293b"; // slate-800
-    page.style.borderColor = "#e2e8f0"; // slate-200
+  page.style.background = "";
+  page.style.color = "";
+  page.style.borderColor = "";
+  if (hero) {
+    hero.style.background = "";
+    hero.style.borderColor = "";
+    hero.style.color = "";
   }
-
-  // Always dark-themed hero container for premium YouVersion aesthetics
-  hero.style.background = "#171717"; // neutral-900
-  hero.style.borderColor = "#262626"; // neutral-800
-  hero.style.color = "#ffffff"; // Always white text inside hero
 
   // Render text contents
   title.textContent = badge.title;
@@ -308,35 +301,15 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
       : "";
   }
 
-  // Apply Shield styles based on unlock state & theme
-  if (isUnlocked) {
-    if (isDark) {
-      shield.style.background = "rgba(69, 26, 3, 0.35)";
-      shield.style.borderColor = "rgba(245, 158, 11, 0.25)";
-      shield.style.borderStyle = "solid";
-      shield.style.borderWidth = "1px";
-      shield.style.color = "#fbbf24"; // golden icon
-    } else {
-      shield.style.background = "rgba(254, 243, 199, 0.95)";
-      shield.style.borderColor = "rgba(251, 191, 36, 0.6)";
-      shield.style.borderStyle = "solid";
-      shield.style.borderWidth = "1px";
-      shield.style.color = "#d97706"; // warm amber icon
-    }
-  } else {
-    if (isDark) {
-      shield.style.background = "rgba(39, 39, 42, 0.6)";
-      shield.style.borderColor = "rgba(63, 63, 70, 0.6)";
-      shield.style.borderStyle = "dashed";
-      shield.style.borderWidth = "1px";
-      shield.style.color = "#52525b"; // lock color icon
-    } else {
-      shield.style.background = "rgba(226, 232, 240, 0.6)";
-      shield.style.borderColor = "rgba(148, 163, 184, 0.6)";
-      shield.style.borderStyle = "dashed";
-      shield.style.borderWidth = "1px";
-      shield.style.color = "#94a3b8"; // grey icon
-    }
+  // Apply Shield styles based on unlock state (theme via CSS)
+  if (shield) {
+    shield.classList.remove("badge-shield--unlocked", "badge-shield--locked");
+    shield.classList.add(isUnlocked ? "badge-shield--unlocked" : "badge-shield--locked");
+    shield.style.background = "";
+    shield.style.borderColor = "";
+    shield.style.borderStyle = "";
+    shield.style.borderWidth = "";
+    shield.style.color = "";
   }
 
   // Dynamic milestone configurations for YouVersion level circles
@@ -389,22 +362,10 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     const isLvlUnlocked = currentVal >= lvl;
     
     const item = document.createElement("div");
-    item.style.cssText = "display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(128,128,128,0.1); width: 100%; box-sizing: border-box;";
+    item.className = "badge-milestone-item";
     
     const circle = document.createElement("div");
-    circle.style.cssText = `
-      width: 2.2rem;
-      height: 2.2rem;
-      border-radius: 50%;
-      background: ${isLvlUnlocked ? (isDark ? "rgba(245, 158, 11, 0.2)" : "rgba(217, 119, 6, 0.15)") : (isDark ? "#27272a" : "#e2e8f0")};
-      color: ${isLvlUnlocked ? (isDark ? "#fbbf24" : "#d97706") : (isDark ? "#a1a1aa" : "#64748b")};
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.8rem;
-      font-weight: 500;
-      flex-shrink: 0;
-    `;
+    circle.className = `badge-milestone-circle ${isLvlUnlocked ? "badge-milestone-circle--unlocked" : "badge-milestone-circle--locked"}`;
     circle.textContent = lvl;
     
     const contentBox = document.createElement("div");
@@ -418,15 +379,15 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
         localStorage.setItem(`date_unlocked_${badge.id}_lvl_${lvl}`, dateStr);
       }
       contentBox.innerHTML = `
-        <div style="font-size: 0.875rem; font-weight: 500; color: ${isDark ? "#ffffff" : "#1e293b"};">完成於 ${dateStr}</div>
+        <div class="badge-milestone-done">完成於 ${dateStr}</div>
       `;
     } else {
       const diff = lvl - currentVal;
       const pct = Math.min(100, Math.floor((currentVal / lvl) * 100));
       contentBox.innerHTML = `
-        <div style="font-size: 0.875rem; font-weight: 500; color: ${isDark ? "#a1a1aa" : "#64748b"};">還差 ${diff} ${conf.unit}</div>
-        <div style="width: 100px; height: 5px; background: ${isDark ? "#27272a" : "#e2e8f0"}; border-radius: 9999px; overflow: hidden; margin-top: 0.35rem;">
-          <div style="width: ${pct}%; height: 100%; background: ${isDark ? "#fbbf24" : "#d97706"}; border-radius: 9999px;"></div>
+        <div class="badge-milestone-remaining">還差 ${diff} ${conf.unit}</div>
+        <div class="badge-milestone-track">
+          <div class="badge-milestone-fill" style="width: ${pct}%;"></div>
         </div>
       `;
     }

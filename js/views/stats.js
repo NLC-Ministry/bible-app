@@ -213,7 +213,7 @@ function renderRosterTable(users) {
       <td>
         <div style="display:flex; align-items:center; gap:0.5rem;">
           <span style="font-size:0.8rem; font-weight: 500;">${user.plan_progress}%</span>
-          <div style="flex:1; width:50px; height:6px; background:#e2e8f0; border-radius:5px; overflow:hidden;">
+          <div style="flex:1; width:50px; height:6px; background: var(--color-progress-track); border-radius:5px; overflow:hidden;">
             <div style="width:${user.plan_progress}%; height:100%; background: var(--color-success);"></div>
           </div>
         </div>
@@ -259,7 +259,7 @@ function renderCharts(zoneStats) {
   const progressData = zoneStats.map(z => z.avg_progress);
 
   const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
-  const fontColor = isDark ? "#cbd5e1" : "#475569";
+  const fontColor = isDark ? NLC_CHART.muted : NLC_DESIGN.black;
   const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
 
   // Chart 1: Ranking Chart
@@ -274,7 +274,7 @@ function renderCharts(zoneStats) {
           'rgba(4, 169, 210, 0.85)',
           'color-mix(in srgb, var(--color-success) 85%, transparent)',
           'rgba(245, 158, 11, 0.85)',
-          'rgba(239, 68, 68, 0.85)'
+          'rgba(252, 54, 90, 0.85)'
         ],
         borderRadius: 8,
         borderWidth: 0
@@ -364,7 +364,7 @@ async function updateGroupChart(zoneName) {
   const data = groupStats.map(g => g.total_chapters);
 
   const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
-  const fontColor = isDark ? "#cbd5e1" : "#475569";
+  const fontColor = isDark ? NLC_CHART.muted : NLC_DESIGN.black;
   const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
 
   state.statsCharts.group = new Chart(ctxGroup, {
@@ -697,7 +697,7 @@ function renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser) {
   }
 
   const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
-  const fontColor = isDark ? "#cbd5e1" : "#475569";
+  const fontColor = isDark ? NLC_CHART.muted : NLC_DESIGN.black;
   const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
 
   state.statsCharts.growth = new Chart(ctxGrowth, {
@@ -892,15 +892,15 @@ function renderProfileReadingStats() {
         
         <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 0.8rem 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; text-align: left;">
           <div style="display: flex; align-items: center; gap: 0.8rem;">
-            <div class="stat-icon-wrapper" style="background: rgba(239, 68, 68, 0.1); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+            <div class="stat-icon-wrapper stat-icon-wrapper--sm stat-icon-wrapper--danger">
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
             </div>
             <div>
               <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
             </div>
           </div>
-          <div style="font-size: 1.25rem; font-weight: 500; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
-            ${streakDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>
+          <div class="stat-value stat-value--hero stat-value--danger">
+            ${streakDays} <span class="stat-value__unit">天</span>
           </div>
         </div>
       </div>
@@ -937,13 +937,20 @@ function renderProfileReadingStats() {
     ? `${stats.makeupDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
     : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
+  const lagIconClass = stats.lagDays > 0 ? "stat-icon-wrapper--danger" : "stat-icon-wrapper--neutral";
+  const lagValueClass = stats.lagDays > 0 ? "stat-value--danger" : "stat-value--muted";
+  const leadIconClass = stats.leadDays > 0 ? "stat-icon-wrapper--success" : "stat-icon-wrapper--neutral";
+  const leadValueClass = stats.leadDays > 0 ? "stat-value--success" : "stat-value--muted";
+  const makeupIconClass = stats.makeupDays > 0 ? "stat-icon-wrapper--brand" : "stat-icon-wrapper--neutral";
+  const makeupValueClass = stats.makeupDays > 0 ? "stat-value--brand" : "stat-value--muted";
+
   container.innerHTML = `
     <div class="profile-stats-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
       
       <!-- Today's Day -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: var(--color-brand-subtle, rgba(4,169,210,0.12)); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--primary-color);">
+          <div class="stat-icon-wrapper stat-icon-wrapper--brand">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           </div>
           <div>
@@ -959,7 +966,7 @@ function renderProfileReadingStats() {
       <!-- Consecutive Streak -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: rgba(239, 68, 68, 0.1); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #ef4444;">
+          <div class="stat-icon-wrapper stat-icon-wrapper--danger">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
           </div>
           <div>
@@ -967,15 +974,15 @@ function renderProfileReadingStats() {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">每日穩定靈修天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 500; color: #ef4444; display: flex; align-items: baseline; gap: 0.1rem;">
-          ${streakDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>
+        <div class="stat-value stat-value--danger">
+          ${streakDays} <span class="stat-value__unit">天</span>
         </div>
       </div>
 
       <!-- Behind Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: ${stats.lagDays > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.lagDays > 0 ? '#ef4444' : 'var(--text-muted)'};">
+          <div class="stat-icon-wrapper ${lagIconClass}">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           </div>
           <div>
@@ -983,7 +990,7 @@ function renderProfileReadingStats() {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">落後預計進度天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.lagDays > 0 ? '#ef4444' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div class="stat-value ${lagValueClass}">
           ${lagDisplay}
         </div>
       </div>
@@ -991,7 +998,7 @@ function renderProfileReadingStats() {
       <!-- Ahead Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: ${stats.leadDays > 0 ? 'var(--color-success-subtle)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.leadDays > 0 ? 'var(--color-success-foreground)' : 'var(--text-muted)'};">
+          <div class="stat-icon-wrapper ${leadIconClass}">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
           </div>
           <div>
@@ -999,7 +1006,7 @@ function renderProfileReadingStats() {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.leadDays > 0 ? 'var(--color-success-foreground)' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div class="stat-value ${leadValueClass}">
           ${leadDisplay}
         </div>
       </div>
@@ -1007,7 +1014,7 @@ function renderProfileReadingStats() {
       <!-- Makeup Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: ${stats.makeupDays > 0 ? 'rgba(59, 130, 246, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.makeupDays > 0 ? '#3b82f6' : 'var(--text-muted)'};">
+          <div class="stat-icon-wrapper ${makeupIconClass}">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           </div>
           <div>
@@ -1015,7 +1022,7 @@ function renderProfileReadingStats() {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">事後補讀完畢天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.makeupDays > 0 ? '#3b82f6' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div class="stat-value ${makeupValueClass}">
           ${makeupDisplay}
         </div>
       </div>

@@ -14,9 +14,16 @@ const NLC_DESIGN = {
   successSubtle: "color-mix(in srgb, #66F78F 12%, transparent)",
   warning: "#FE7615",
   danger: "#FC365A",
-  muted: "#94A3B8",
+  dangerSubtle: "color-mix(in srgb, #FC365A 12%, transparent)",
+  muted: "#8A8A8A",
   white: "#FAFAFA",
   black: "#0F0F0F",
+  progressFill: "#04A9D2",
+  progressTrack: "color-mix(in srgb, #8A8A8A 18%, transparent)",
+  iconDefault: "#0F0F0F",
+  iconMuted: "#8A8A8A",
+  iconBrand: "#04A9D2",
+  iconAchievement: "#D97706",
 };
 
 /** Typography weights — matches Member Hub font-medium / font-normal */

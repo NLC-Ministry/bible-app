@@ -38,7 +38,7 @@ function updateDashboardView() {
     const isPlanAvailable = started || isAdmin;
     const statusText = started 
       ? `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.totalChapters} 章)`
-      : `<span style="color: #3b82f6; font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
+      : `<span class="text-brand" style="font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
       
     // Calculate core statistics for dashboard summary card
     const streakDays = state.currentUser.streak || 0;
@@ -82,7 +82,7 @@ function updateDashboardView() {
         <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.2rem;">
           計畫週期: ${state.activePlan.startDate} ~ ${state.activePlan.endDate} (${state.activePlan.totalDays} 天)
         </p>
-        <div class="plan-progress-wrapper" style="margin-top: 1rem;">
+        <div class="plan-progress-wrapper plan-progress-wrapper--spaced">
           <div class="plan-progress-bar" style="width: ${progress}%;"></div>
         </div>
         <p style="font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.5rem; text-align: right; margin-bottom: 1rem;">
@@ -350,7 +350,8 @@ async function saveDevotionalNote(isAuto) {
     console.error("Failed to save devotional note:", err);
     if (statusEl) {
       statusEl.textContent = "儲存失敗";
-      statusEl.style.color = "#ef4444";
+      statusEl.classList.add("text-danger");
+      statusEl.classList.remove("text-success-fg");
       statusEl.style.opacity = "1";
     }
   }
@@ -364,7 +365,8 @@ function showSaveSuccess(isAuto) {
     <span style="width: 5px; height: 5px; background: var(--color-success-foreground); border-radius: 50%; display: inline-block;"></span>
     已自動儲存
   `;
-  statusEl.style.color = "var(--color-success-foreground)";
+  statusEl.classList.add("text-success-fg");
+  statusEl.classList.remove("text-danger");
   statusEl.style.opacity = "1";
   
   if (!isAuto) {
@@ -670,9 +672,9 @@ async function renderPilgrimageTrail() {
     const isBookStart = ch.isBookStart;
     const r = isBookStart ? 22 : 13;
 
-    let fillStyle  = "#f8fafc";
-    let strokeStyle = "#cbd5e1";
-    let textColor  = "#94a3b8";
+    let fillStyle  = NLC_DESIGN.white;
+    let strokeStyle = NLC_DESIGN.muted;
+    let textColor  = NLC_DESIGN.muted;
     let isBold = false;
     let strokeW = isBookStart ? 2.5 : 1.5;
 
@@ -803,12 +805,12 @@ async function renderPilgrimageTrail() {
       legendEl.innerHTML = `
         <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:${pal.myStroke};border-radius:50%;"></span>我</span>
         <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:${pal.grpStroke};border-radius:50%;"></span>組員</span>
-        <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:#cbd5e1;border-radius:50%;"></span>後續</span>`;
+        <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:var(--color-progress-track);border-radius:50%;"></span>後續</span>`;
     } else {
       legendEl.innerHTML = `
         <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:${pal.myStroke};border-radius:50%;"></span>R${currentRound}</span>
         <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:rgba(4,169,210,0.6);border-radius:50%;"></span>R1足跡</span>
-        <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:#cbd5e1;border-radius:50%;"></span>後續</span>`;
+        <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:var(--color-progress-track);border-radius:50%;"></span>後續</span>`;
     }
   }
 
@@ -962,7 +964,7 @@ async function updateAnnouncementsList() {
         <h4 style="font-size: 0.95rem; font-weight: 500; color: var(--text-primary); margin: 0; line-height: 1.4;">${escapeHTML(ann.title)}</h4>
         <div style="display: flex; align-items: center; gap: 0.4rem;">
           <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${formattedTime}</span>
-          ${isAdmin ? `<button class="circular-action-btn" style="width: 22px; height: 22px; padding: 0; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); display: flex; align-items: center; justify-content: center; font-size: 0.75rem;" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告" aria-label="刪除公告"><span class="nlc-icon" data-icon="trash" aria-hidden="true"></span></button>` : ''}
+          ${isAdmin ? `<button class="circular-action-btn btn-danger-soft" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告" aria-label="刪除公告"><span class="nlc-icon" data-icon="trash" aria-hidden="true"></span></button>` : ''}
         </div>
       </div>
       <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; line-height: 1.5; white-space: pre-wrap;">${escapeHTML(ann.content)}</p>
@@ -1242,7 +1244,8 @@ async function syncVerseLikes(verseSource) {
     const iconEl = likeBtn.querySelector(".nlc-icon");
     if (iconEl) {
       iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
-      iconEl.style.color = liked ? "#f43f5e" : "";
+      likeBtn.classList.toggle("is-liked", liked);
+      iconEl.style.color = "";
       if (typeof hydrateIcons === "function") hydrateIcons(likeBtn);
     }
     if (label) {
@@ -1303,7 +1306,8 @@ async function toggleVerseLike(e) {
   const iconEl = likeBtn.querySelector(".nlc-icon");
   if (iconEl) {
     iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
-    iconEl.style.color = liked ? "#f43f5e" : "";
+    likeBtn.classList.toggle("is-liked", liked);
+    iconEl.style.color = "";
     if (typeof hydrateIcons === "function") hydrateIcons(likeBtn);
   }
   if (label) {

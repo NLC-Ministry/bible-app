@@ -691,7 +691,7 @@ async function renderAdminUserManagement() {
       item.className = "member-list-item";
       
       const demoBadge = isDemo
-        ? `<span style="display:inline-block;margin-left:0.4rem;padding:0.1rem 0.45rem;border-radius:99px;font-size:0.65rem;font-weight: 500;background:rgba(251,191,36,0.18);color:#d97706;border:1px solid rgba(251,191,36,0.4);">示範</span>`
+        ? `<span class="stat-badge stat-badge--warning" style="display:inline-block;margin-left:0.4rem;font-size:0.65rem;">示範</span>`
         : "";
 
       item.innerHTML = `
@@ -724,7 +724,7 @@ async function renderAdminUserManagement() {
 
   } catch (err) {
     console.error("Failed to render admin user management:", err);
-    listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: #ef4444;">載入失敗: ${err.message || err}</div>`;
+    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">載入失敗: ${err.message || err}</div>`;
   }
 }
 

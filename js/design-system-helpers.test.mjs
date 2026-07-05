@@ -115,4 +115,12 @@ describe("static markup audit", () => {
     expect(html).not.toMatch(/profile-badges-inner-card[^>]*slate-/);
     expect(html).not.toMatch(/profile-badges-inner-card[^>]*zinc-/);
   });
+
+  it("plan-progress-bar uses progress fill token not success mint", () => {
+    const css = readFileSync(join(root, "index.css"), "utf8");
+    const barRule = css.match(/\.plan-progress-bar\s*\{[^}]+\}/);
+    expect(barRule).toBeTruthy();
+    expect(barRule[0]).toMatch(/var\(--color-progress-fill\)/);
+    expect(barRule[0]).not.toMatch(/--color-success\)/);
+  });
 });
