@@ -1779,11 +1779,6 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
           <span class="nlc-icon nlc-icon--sm" data-icon="inbox" style="width: 15px; height: 15px;"></span>
           <span>${noteComments.length > 0 ? noteComments.length + ' ' : ''}回覆</span>
         </button>
-        <!-- Direct toggle comment input -->
-        <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: var(--text-secondary); font-weight: var(--type-weight-strong);" onclick="window.toggleCommentInput('${note.id}')">
-          <span class="nlc-icon nlc-icon--sm" data-icon="plus" style="width: 15px; height: 15px;"></span>
-          <span>留言</span>
-        </button>
       </div>
 
       <!-- Comments Thread Panel -->
@@ -1792,8 +1787,8 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
           ${commentsHtml || '<div class="text-[10px] text-center py-2" style="color: var(--text-muted);">沒有留言</div>'}
         </div>
 
-        <!-- Comment Input Box (Hidden by default, toggled via "+留言") -->
-        <div id="comment-input-container-${note.id}" class="hidden flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
+        <!-- Comment Input Box (Visible by default inside comments section) -->
+        <div id="comment-input-container-${note.id}" class="flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
           <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm);">
           <button type="button" class="primary-btn" style="padding: 0.4rem 0.85rem; font-size: 0.75rem; border-radius: var(--radius-sm); white-space: nowrap;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
         </div>
@@ -1856,12 +1851,6 @@ window.submitDevotionalComment = async function (noteId) {
   try {
     await db.addDevotionalComment(noteId, content);
     input.value = "";
-
-    // Auto-hide comment input container after successful send
-    const inputCont = document.getElementById(`comment-input-container-${noteId}`);
-    if (inputCont) {
-      inputCont.classList.add("hidden");
-    }
 
     // Ensure it stays expanded
     window.expandedNoteIds = window.expandedNoteIds || new Set();

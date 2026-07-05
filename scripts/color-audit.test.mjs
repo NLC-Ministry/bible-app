@@ -50,7 +50,7 @@ function walk(dir, acc = []) {
 function scanPattern(pattern, allowFiles = null) {
   const hits = [];
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (allowFiles && allowFiles.has(rel)) continue;
     const content = readFileSync(abs, "utf8");
@@ -85,7 +85,7 @@ describe("color audit", () => {
   it("blocks inline style color/background hex in js/views templates", () => {
     const hits = [];
     for (const abs of walk(join(root, "js/views"))) {
-      const rel = relative(root, abs);
+      const rel = relative(root, abs).replace(/\\/g, "/");
       const content = readFileSync(abs, "utf8");
       if (INLINE_STYLE_COLOR_HEX.test(content)) hits.push(rel);
       INLINE_STYLE_COLOR_HEX.lastIndex = 0;

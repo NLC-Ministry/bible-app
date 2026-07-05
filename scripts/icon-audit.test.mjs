@@ -58,7 +58,7 @@ function walk(dir, acc = []) {
 function findMatches(pattern) {
   const hits = [];
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     const content = readFileSync(abs, "utf8");
     if (pattern.test(content)) hits.push(rel);
@@ -77,7 +77,7 @@ function stripAllowedInlineSvgs(html) {
 function findInlineSvgHits() {
   const hits = [];
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     const content = readFileSync(abs, "utf8");
     if (!INLINE_SVG.test(content)) continue;
@@ -99,7 +99,7 @@ function findControlIconColorOverrides() {
     /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bcolor:\s*(?!inherit\b)/i;
 
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
     const content = readFileSync(abs, "utf8");
@@ -121,7 +121,7 @@ function findInvalidIconSizeUsage() {
   const renderSize = /renderIcon\([^)]*size:\s*["']([^"']+)["']/g;
 
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
     const content = readFileSync(abs, "utf8");
@@ -146,7 +146,7 @@ function findInlineIconFontSize() {
     /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bfont-size\s*:/i;
 
   for (const abs of walk(root)) {
-    const rel = relative(root, abs);
+    const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
     const content = readFileSync(abs, "utf8");
@@ -228,7 +228,7 @@ describe("icon audit", () => {
   it("does not use deprecated nlc-icon--xs in app markup", () => {
     const hits = [];
     for (const abs of walk(root)) {
-      const rel = relative(root, abs);
+      const rel = relative(root, abs).replace(/\\/g, "/");
       if (EXCLUDE.has(rel)) continue;
       if (!/\.(html|js)$/.test(abs)) continue;
       if (/nlc-icon--xs/.test(readFileSync(abs, "utf8"))) hits.push(rel);
@@ -240,7 +240,7 @@ describe("icon audit", () => {
     const hits = [];
     const renderSize = /renderIcon\([^)]*size:\s*["']xs["']/g;
     for (const abs of walk(root)) {
-      const rel = relative(root, abs);
+      const rel = relative(root, abs).replace(/\\/g, "/");
       if (EXCLUDE.has(rel)) continue;
       if (!/\.js$/.test(abs)) continue;
       const content = readFileSync(abs, "utf8");
