@@ -1650,6 +1650,72 @@ const db = {
     }
   },
 
+  async toggleDevotionalLike(noteId) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const user = await this.getCurrentDbUser();
+      if (!user) return false;
+      
+      const { data: existing } = await state.supabase
+        .from("devotional_likes")
+        .select("id")
+        .eq("note_id", noteId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+        
+      if (existing) {
+        await state.supabase
+          .from("devotional_likes")
+          .delete()
+          .eq("id", existing.id);
+        return false;
+      } else {
+        await state.supabase
+          .from("devotional_likes")
+          .insert([{ note_id: noteId, user_id: user.id }]);
+        return true;
+      }
+    } else {
+      const likedKey = `like_${noteId}`;
+      const isLiked = localStorage.getItem(likedKey) === "true";
+      if (isLiked) {
+        localStorage.removeItem(likedKey);
+        return false;
+      } else {
+        localStorage.setItem(likedKey, "true");
+        return true;
+      }
+    }
+  },
+
+  async addDevotionalComment(noteId, content) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const user = await this.getCurrentDbUser();
+      if (!user) return null;
+      
+      const { data, error } = await state.supabase
+        .from("devotional_comments")
+        .insert([{ note_id: noteId, user_id: user.id, content }])
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return data;
+    } else {
+      const commentsKey = `comments_${noteId}`;
+      const list = JSON.parse(localStorage.getItem(commentsKey) || "[]");
+      const newComment = {
+        id: `comment_${Date.now()}`,
+        note_id: noteId,
+        user_id: state.currentUser ? state.currentUser.id || "me" : "me",
+        content,
+        created_at: new Date().toISOString()
+      };
+      list.push(newComment);
+      localStorage.setItem(commentsKey, JSON.stringify(list));
+      return newComment;
+    }
+  },
+
   async joinPresetPlan(key) {
     let preset = (state.globalPlans || []).find(p => p.presetKey === key || p.id === key);
     if (!preset) {
