@@ -1866,20 +1866,23 @@ async function handleRoundCompletion(plan) {
     if (!plan.isRound2Completed) return;
 
     const currentLevel = plan.level || "normal";
-    const nextLevel = currentLevel === "breakthrough" ? "super" : null;
-    if (!nextLevel) {
-      showToast("恭喜完成第二遍讀經！");
-      plan.round2UpgradePromptHandled = true;
-      return;
-    }
+    const nextLevel = "super";
 
     plan.pendingUpgradePrompt = true;
-    const wantsUpgrade = confirm("恭喜完成第二遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第三遍？");
+    const wantsUpgrade = confirm(
+      currentLevel === "super"
+        ? "恭喜完成第二遍！是否要開始第三遍？"
+        : "恭喜完成第二遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第三遍？"
+    );
     plan.pendingUpgradePrompt = false;
     plan.round2UpgradePromptHandled = true;
 
     if (!wantsUpgrade) {
-      showToast("已完成第二遍。你可以之後到調整進度設定再升級。");
+      showToast(
+        currentLevel === "super"
+          ? "已完成第二遍。你可以之後到調整進度設定再開始第三遍。"
+          : "已完成第二遍。你可以之後到調整進度設定再升級。"
+      );
       if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
       return;
     }
