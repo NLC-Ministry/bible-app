@@ -405,6 +405,7 @@ async function persistPlanLevelState(plan) {
   if (state.isSupabaseMode && state.supabase && plan.id) {
     const payload = {
       level: plan.level,
+      current_round: plan.currentRound || getPlanLevelOrder(plan.level),
       was_downgraded: !!plan.wasDowngraded,
       downgrade_locked_until: plan.downgradeLockedUntil || null,
       upgrade_prompt_handled: !!plan.upgradePromptHandled
@@ -413,7 +414,12 @@ async function persistPlanLevelState(plan) {
     if (error) {
       console.warn("Failed to persist downgrade lock column, retrying without it", error);
       await state.supabase.from("reading_plans")
-        .update({ level: plan.level, was_downgraded: !!plan.wasDowngraded, upgrade_prompt_handled: !!plan.upgradePromptHandled })
+        .update({
+          level: plan.level,
+          current_round: plan.currentRound || getPlanLevelOrder(plan.level),
+          was_downgraded: !!plan.wasDowngraded,
+          upgrade_prompt_handled: !!plan.upgradePromptHandled
+        })
         .eq("id", plan.id);
     }
   } else if (!state.isSupabaseMode) {
@@ -465,6 +471,7 @@ function rebuildPlanScheduleForLevel(plan, level) {
     totalChapters: rebuilt.totalChapters,
     days: rebuilt.days,
     level,
+    currentRound: getPlanLevelOrder(level),
     target_books: plan.target_books || rebuilt.target_books,
     targetBooks: plan.targetBooks || rebuilt.targetBooks
   });
