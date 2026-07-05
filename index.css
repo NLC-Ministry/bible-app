@@ -478,7 +478,7 @@ body.dark-theme {
 
 .secondary-btn.w-full { width: 100%; }
 
-/* IconPark icons */
+/* Lucide icons (via data-icon / renderIcon) */
 .nlc-icon {
   display: inline-flex;
   align-items: center;

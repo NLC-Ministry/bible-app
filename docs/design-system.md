@@ -135,17 +135,17 @@ NLC_MEMBER_COLORS    // avatar / trail palette
 | Heatmap intensity | `--heatmap-level-0` … `--heatmap-level-4` (brand monochrome ramp) |
 | Group progress | `.progress-segment-track`, `.progress-segment--{behind,on-schedule,ahead}` |
 
-**Rules:** no emoji in data UI (IconPark Outline via `data-icon` / `renderIcon`); JS toggles modifier classes, not inline hex colors; theme via `body.dark-theme` / `body.warm-theme` CSS selectors.
+**Rules:** no emoji in data UI (Lucide via `data-icon` / `renderIcon`); JS toggles modifier classes, not inline hex colors; theme via `body.dark-theme` / `body.warm-theme` CSS selectors.
 
-## IconPark Outline
+## Lucide icons
 
-- Source: [`@icon-park/svg`](https://www.npmjs.com/package/@icon-park/svg) (Outline theme, `strokeWidth: 3`, `currentColor`).
+- Source: [`lucide`](https://www.npmjs.com/package/lucide) (outline, `strokeWidth: 2`, `currentColor`).
 - Registry: `js/icon-manifest.json` → build generates `js/icon-registry.js` (`window.NLC_ICON_SVGS`).
 - Runtime: `js/icons.js` — `renderIcon(key)`, `iconLabel(key, text)`, `hydrateIcons(root)`.
-- Markup: `<span class="nlc-icon" data-icon="fire" aria-hidden="true"></span>`; no Bootstrap Icons CDN.
-- **Icon stroke colors must be 100% opaque** — use `--color-icon-*` tokens on `.nlc-icon` or wrappers, not `--text-muted` / `--text-secondary` (which are rgba and cause path bleed on complex Outline SVGs).
+- Markup: `<span class="nlc-icon" data-icon="fire" aria-hidden="true"></span>`; no inline SVG in app UI (except third-party brand marks, e.g. Google sign-in).
+- **Icon stroke colors must be 100% opaque** — use `--color-icon-*` tokens on `.nlc-icon` or wrappers, not `--text-muted` / `--text-secondary` (which are rgba and cause path bleed on complex SVGs).
 - Parent text may stay muted; set explicit icon color on `.nlc-icon` (mobile nav, honor badges, search icons, stat icon wraps).
-- Filled exceptions: `heartFill`, `likeFill` use IconPark filled theme for active states.
+- Filled exceptions: `heartFill`, `likeFill`, `starFill`, `zapFill` are generated with `fill="currentColor"` for active states.
 
 ## PWA bottom navigation
 
