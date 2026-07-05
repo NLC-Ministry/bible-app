@@ -39,7 +39,8 @@ A **dev/prod split**, the same philosophy Vite uses, implemented minimally for c
 
 **1. Bundler script (`scripts/bundle.mjs`)** — pure, testable, no framework. Responsibilities:
 - Parse `index.html` for local `<script src>` tags (the ~15 app files, in order) and the local `<link rel="stylesheet">`.
-- Concatenate the JS files in document order into a single string, separated by newlines and `//# sourceURL=<original path>` markers (so runtime stack traces still name the original file — preserves the app's existing `window.onerror` debugging affordance).
+- Concatenate the JS files in document order into a single string, ASI-safe separated (`\n;\n`). **Per-file `//# sourceURL` markers are intentionally NOT emitted** (amended after review): a single `//# sourceURL` directive names the whole concatenated script, so it cannot provide per-file attribution — true per-file stack-trace / `window.onerror` filenames require source maps, which arrive with Vite in Stage 2. For Stage 1, on-screen error attribution is bundle-level (`app.<hash>.js`); this is an accepted, temporary observability tradeoff of a delivery-only change.
+- After concatenation, **syntax-validate the assembled bundle** (parse without executing, e.g. `new Function(bundleJs)`) and throw on any parse error, so a malformed concatenation blocks the deploy rather than shipping a blank screen.
 - Compute an 8-char content hash of the concatenated JS and of the CSS; write `dist/app.<hash>.js` and `dist/index.<hash>.css`.
 - Emit `dist/index.html`: the ~15 script tags replaced by one `<script src="/app.<hash>.js"></script>` **at the position of the last (bottom) script tag** so execution order relative to inline scripts is preserved; the stylesheet link repointed to the hashed CSS.
 - Copy remaining referenced files (`assets/`, `manifest.json`, and any other static references) into `dist/` unchanged.
@@ -81,8 +82,8 @@ The core risk is that concatenation changes execution semantics. Mitigations, ea
 
 ## Error handling
 
-- The bundler fails loudly (non-zero exit) if: `index.html` is missing, a referenced local script file is missing, the isolation grep (step 1) finds a collision, or `dist/` cannot be written. A failed build blocks the Vercel deploy — the running production app is unaffected.
-- Runtime error handling is unchanged; the `//# sourceURL` markers preserve the existing on-screen `window.onerror` debug banner's file attribution.
+- The bundler fails loudly (non-zero exit) if: `index.html` is missing, a referenced local script file is missing, a source uses `document.currentScript`, the byte-identity check fails, **the assembled bundle fails a syntax parse-check**, or `dist/` cannot be written. A failed build blocks the Vercel deploy — the running production app is unaffected.
+- Runtime error handling is unchanged. The on-screen `window.onerror` debug banner still functions; its filename field reports `app.<hash>.js` (bundle-level) in Stage 1 — per-file attribution returns with source maps in Stage 2 (Vite). See §Architecture › Components.
 
 ## Testing
 
