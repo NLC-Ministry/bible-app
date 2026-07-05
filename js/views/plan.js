@@ -1967,10 +1967,7 @@ async function handleRoundCompletion(plan) {
   s.textContent = `@keyframes plcm-slide-up {
     from { opacity: 0; transform: translateY(24px) scale(0.96); }
     to   { opacity: 1; transform: translateY(0)  scale(1); }
-  }
-  #plcm-cancel-btn:hover  { background: var(--bg-hover, rgba(255,255,255,0.06)) !important; }
-  #plcm-confirm-btn:hover { opacity: 0.88; }
-  `;
+  }`;
   document.head.appendChild(s);
 })();
 
