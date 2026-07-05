@@ -4,7 +4,7 @@
   "description": "Church Bible Speed Reading & Statistics Application",
   "main": "app.js",
   "scripts": {
-    "build": "node build-config.js && node scripts/hash-assets.mjs",
+    "build": "node build-config.js && node scripts/bundle.mjs",
     "start": "npx serve .",
     "dev": "npx serve .",
     "test": "vitest run",
