@@ -25,6 +25,15 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
   <!-- html2canvas for exporting high-quality cards -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+  <!-- Tailwind CSS CDN scoped (no preflight to prevent conflict with index.css) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      corePlugins: {
+        preflight: false,
+      }
+    }
+  </script>
 </head>
 <body class="light-theme">
   <!-- App Container -->
@@ -242,6 +251,24 @@
                 </div>
 
                 </div>
+              </div>
+            </div>
+            
+            <!-- 首頁最下方的金句牆區塊 -->
+            <div class="mt-8 px-4 w-full">
+              <!-- 區塊標題 -->
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-bold tracking-wide text-slate-800 dark:text-zinc-200 flex items-center">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="heart" style="color: #8b5cf6; margin-right: 0.35rem;"></span>
+                  <span>牧區靈修分享牆</span>
+                </h3>
+                <span class="text-[10px] bg-violet-500/10 text-violet-500 px-2 py-0.5 rounded-full font-medium">今日即時</span>
+              </div>
+
+              <!-- 金句卡片瀑布流動態渲染主容器 -->
+              <div id="home-verse-wall" class="space-y-4 pb-12">
+                <!-- 骨架屏加載狀態（預設） -->
+                <div class="animate-pulse p-4 rounded-2xl bg-zinc-900/20 h-24 w-full border border-zinc-800/30"></div>
               </div>
             </div>
 

@@ -156,6 +156,11 @@ function updateDashboardView() {
   // Load Devotional Notes
   loadTodayDevotional();
 
+  // Load sharing wall
+  if (typeof fetchPastoralVerseWall === "function") {
+    fetchPastoralVerseWall();
+  }
+
   // Render Pilgrimage Trail & controls
   renderPilgrimageTrail();
   if (!state.pilgrimageControlsInit) {
@@ -352,6 +357,9 @@ async function saveDevotionalNote(isAuto) {
     showSaveSuccess(isAuto);
     if (typeof renderTodayGroupProgress === "function") {
       renderTodayGroupProgress();
+    }
+    if (typeof fetchPastoralVerseWall === "function") {
+      fetchPastoralVerseWall();
     }
   } catch (err) {
     console.error("Failed to save devotional note:", err);
@@ -1547,3 +1555,101 @@ window.startReadingCurrentChapter = function() {
   // Navigate to reader
   appRouter.switchTab('reader-view', { fromPlan: true });
 };
+
+async function fetchPastoralVerseWall() {
+  const container = document.getElementById("home-verse-wall");
+  if (!container) return;
+
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+
+  if (state.isSupabaseMode && state.supabase) {
+    try {
+      const pastoralZone = state.currentUser.pastoral_zone || "";
+      let profilesQuery = state.supabase.from("profiles").select("id, name, small_group");
+      if (pastoralZone) {
+        profilesQuery = profilesQuery.eq("pastoral_zone", pastoralZone);
+      }
+      const { data: profiles, error: pError } = await profilesQuery;
+        
+      if (pError) throw pError;
+      if (!profiles || profiles.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 dark:text-zinc-500 text-center py-6">尚無同工在該牧區</div>`;
+        return;
+      }
+
+      const userIds = profiles.map(p => p.id);
+
+      const { data: notes, error: nError } = await state.supabase
+        .from("devotional_notes")
+        .select("user_id, content, created_at")
+        .eq("note_date", todayStr)
+        .in("user_id", userIds)
+        .order("created_at", { ascending: false });
+
+      if (nError) throw nError;
+      
+      const activeNotes = (notes || []).filter(n => n.content && n.content.trim().length > 0);
+
+      if (activeNotes.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 dark:text-zinc-500 text-center py-6">今天還沒有人分享金句喔，快來分享吧！</div>`;
+        return;
+      }
+
+      const profileMap = {};
+      profiles.forEach(p => {
+        profileMap[p.id] = p;
+      });
+
+      renderVerseWallCards(activeNotes, profileMap);
+    } catch (err) {
+      console.error("Failed to load pastoral sharing wall:", err);
+      container.innerHTML = `<div class="text-xs text-red-500 text-center py-6">載入分享牆失敗</div>`;
+    }
+  } else {
+    // Offline / local fallback demo data
+    const mockNotes = [
+      { user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date().toISOString() },
+      { user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date().toISOString() }
+    ];
+    const mockProfileMap = {
+      "demo1": { name: "張弟兄", small_group: "馬鈴薯組" },
+      "demo2": { name: "李姊妹", small_group: "喜樂組" }
+    };
+    renderVerseWallCards(mockNotes, mockProfileMap);
+  }
+}
+
+function renderVerseWallCards(notes, profileMap) {
+  const container = document.getElementById("home-verse-wall");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  notes.forEach(note => {
+    const profile = profileMap[note.user_id] || { name: "未知成員", small_group: "小組" };
+    const card = document.createElement("div");
+    
+    // Borderless frosted shimmer card using Tailwind CSS
+    card.className = "p-4 rounded-2xl bg-slate-500/5 dark:bg-zinc-800/10 backdrop-blur-md border border-slate-500/10 dark:border-zinc-800/20 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5";
+    
+    let timeStr = "今日";
+    if (note.created_at) {
+      try {
+        const d = new Date(note.created_at);
+        timeStr = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {}
+    }
+
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs font-semibold text-slate-700 dark:text-zinc-300">${profile.name}</span>
+          <span class="text-[10px] text-slate-400 dark:text-zinc-500 bg-slate-500/10 dark:bg-zinc-800/20 px-1.5 py-0.5 rounded-md">${profile.small_group || "小組"}</span>
+        </div>
+        <span class="text-[9px] text-slate-400 dark:text-zinc-500">${timeStr}</span>
+      </div>
+      <p class="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed font-serif italic m-0">「${note.content}」</p>
+    `;
+    container.appendChild(card);
+  });
+}
