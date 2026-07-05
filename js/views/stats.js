@@ -272,7 +272,7 @@ function renderCharts(zoneStats) {
         data: chaptersData,
         backgroundColor: [
           'rgba(4, 169, 210, 0.85)',
-          'rgba(16, 185, 129, 0.85)',
+          'color-mix(in srgb, var(--color-success) 85%, transparent)',
           'rgba(245, 158, 11, 0.85)',
           'rgba(239, 68, 68, 0.85)'
         ],
@@ -374,7 +374,7 @@ async function updateGroupChart(zoneName) {
       datasets: [{
         label: '累計章數',
         data: data,
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
+        backgroundColor: 'color-mix(in srgb, var(--color-success) 80%, transparent)',
         borderRadius: 6
       }]
     },
@@ -991,7 +991,7 @@ function renderProfileReadingStats() {
       <!-- Ahead Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper" style="background: ${stats.leadDays > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.leadDays > 0 ? '#10b981' : 'var(--text-muted)'};">
+          <div class="stat-icon-wrapper" style="background: ${stats.leadDays > 0 ? 'var(--color-success-subtle)' : 'rgba(229, 231, 235, 0.2)'}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: ${stats.leadDays > 0 ? 'var(--color-success-foreground)' : 'var(--text-muted)'};">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
           </div>
           <div>
@@ -999,7 +999,7 @@ function renderProfileReadingStats() {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
           </div>
         </div>
-        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.leadDays > 0 ? '#10b981' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
+        <div style="font-size: 1.5rem; font-weight: 500; color: ${stats.leadDays > 0 ? 'var(--color-success-foreground)' : 'var(--text-secondary)'}; display: flex; align-items: baseline; gap: 0.1rem;">
           ${leadDisplay}
         </div>
       </div>

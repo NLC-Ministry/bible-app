@@ -251,9 +251,10 @@ const appRouter = {
     // Update Active Nav Buttons (both desktop and mobile)
     document.querySelectorAll(".tab-btn, .mobile-nav-btn").forEach(btn => {
       const target = btn.getAttribute("data-target");
+      if (!target) return;
       const isActive = target === tabId;
       btn.classList.toggle("active", isActive);
-      if (btn.classList.contains("mobile-nav-btn")) {
+      if (btn.classList.contains("mobile-nav-btn") || btn.closest(".nav-tabs")) {
         btn.setAttribute("aria-selected", isActive ? "true" : "false");
         if (isActive) {
           btn.setAttribute("aria-current", "page");

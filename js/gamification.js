@@ -5,7 +5,7 @@ const ACHIEVEMENTS = [
     id: "subscribe_plan",
     title: "開啟新旅程",
     description: "成功加入一個讀經計畫",
-    iconClass: "bi bi-calendar-plus",
+    iconKey: "calendarPlus",
     color: "#F59E0B",
     shadow: "rgba(245, 158, 11, 0.4)"
   },
@@ -13,7 +13,7 @@ const ACHIEVEMENTS = [
     id: "streak_30",
     title: "持之以恆",
     description: "連續打卡 30 天",
-    iconClass: "bi bi-calendar-check",
+    iconKey: "calendarCheck",
     color: "#F59E0B",
     shadow: "rgba(245, 158, 11, 0.4)"
   },
@@ -21,7 +21,7 @@ const ACHIEVEMENTS = [
     id: "complete_plan",
     title: "榮譽桂冠",
     description: "100% 完成任意一個讀經計畫",
-    iconClass: "bi bi-award",
+    iconKey: "award",
     color: "#F59E0B",
     shadow: "rgba(245, 158, 11, 0.4)"
   },
@@ -29,7 +29,7 @@ const ACHIEVEMENTS = [
     id: "share_verse",
     title: "傳遞愛光芒",
     description: "分享一次今日經文",
-    iconClass: "bi bi-share",
+    iconKey: "share",
     color: "#F59E0B",
     shadow: "rgba(245, 158, 11, 0.4)"
   },
@@ -37,7 +37,7 @@ const ACHIEVEMENTS = [
     id: "read_all_bible",
     title: "展開厚聖經",
     description: "讀完全本聖經所有卷書與章節",
-    iconClass: "bi bi-book-half",
+    iconKey: "bookOpen",
     color: "#F59E0B",
     shadow: "rgba(245, 158, 11, 0.4)"
   }
@@ -250,9 +250,9 @@ function triggerBadgeUnlockEffect(badgeId) {
 
   card.innerHTML = `
     <div class="badge-popup-avatar" style="--glow: ${badge.shadow}; margin: 0 auto 1.5rem auto; display: flex; width: 110px; height: 110px; background: ${badge.color}; border-radius: 50%; justify-content: center; align-items: center;">
-      <i class="${badge.iconClass}" style="color: white; font-size: 3.5rem;"></i>
+      ${typeof renderIcon === "function" ? renderIcon(badge.iconKey || "award", { size: "3.5rem", className: "nlc-icon" }) : ""}
     </div>
-    <h3 style="font-size: 1.6rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 2px;"><span class="label-with-icon" style="justify-content: center;"><i class="bi bi-trophy" aria-hidden="true"></i><span>${(window.APP_COPY && window.APP_COPY.badge.unlockTitle) || "榮譽成就解鎖"}</span></span></h3>
+    <h3 style="font-size: 1.6rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 2px;"><span class="label-with-icon" style="justify-content: center;"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>${(window.APP_COPY && window.APP_COPY.badge.unlockTitle) || "榮譽成就解鎖"}</span></span></h3>
     <h4 style="font-size: 1.35rem; font-weight: 500; background: ${badge.color}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1.2rem;">${badge.title}</h4>
     <p style="font-size: 0.92rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 2.2rem; padding: 0 1rem;">${descParsed}</p>
     <button class="primary-btn" style="width: 100%; padding: 0.8rem; font-weight: 500; font-size: 1rem; border-radius: var(--radius-sm);" onclick="closeBadgeModal('${badgeId}')">${(window.APP_COPY && window.APP_COPY.badge.unlockCta) || "解鎖了，繼續保持"}</button>
@@ -306,7 +306,7 @@ window.triggerBadgeUnlockNotification = function(badgeId, badgeName) {
     id: badgeId,
     title: badgeName,
     description: `恭喜解鎖：${badgeName}`,
-    iconClass: "bi-share"
+    iconKey: "share"
   };
 
   // Open the detail page subpanel to congratulate the user

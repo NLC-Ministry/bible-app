@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 2. Initialize Routing
   try {
     appRouter.init();
+    if (typeof hydrateIcons === "function") hydrateIcons();
   } catch (err) {
     console.error("Failed to initialize routing:", err);
   }

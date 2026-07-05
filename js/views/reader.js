@@ -1382,7 +1382,7 @@ function updateReaderBottomActionBar() {
       if (isLastChapterOfDay) {
         btn.innerHTML = `<span>🎉 大功告成</span>`;
       } else {
-        btn.innerHTML = iconLabel("bi-chevron-right", (window.APP_COPY && window.APP_COPY.reader.nextChapter) || "下一章");
+        btn.innerHTML = iconLabel("chevronRight", (window.APP_COPY && window.APP_COPY.reader.nextChapter) || "下一章");
       }
 
       btn.onclick = () => {
@@ -1416,7 +1416,7 @@ function updateReaderBottomActionBar() {
       // 情境 C：【落後補讀模式】
       bar.classList.add("scenario-c");
       if (indicator) indicator.classList.add("hidden"); // 強制隱藏提示字
-      btn.innerHTML = iconLabel("bi-skip-forward", (window.APP_COPY && window.APP_COPY.reader.catchUpNextDay) || "補讀下一天");
+      btn.innerHTML = iconLabel("skipForward", (window.APP_COPY && window.APP_COPY.reader.catchUpNextDay) || "補讀下一天");
 
       btn.onclick = () => {
         logClick();

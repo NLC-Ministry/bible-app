@@ -81,20 +81,20 @@ export function getPlanProgressStatus(plan, deps = {}) {
 }
 
 const STAT_METRIC_CONFIG = {
-  streak: { icon: "bi-fire", modifier: "warning" },
-  today: { icon: "bi-book-half", modifier: "brand" },
-  progress: { icon: "bi-graph-up-arrow", modifier: "success" },
-  chapters: { icon: "bi-journal-text", modifier: "brand" },
-  days: { icon: "bi-calendar-check", modifier: "neutral" },
-  round: { icon: "bi-arrow-repeat", modifier: "warning" },
-  makeup: { icon: "bi-exclamation-circle", modifier: "danger" },
-  group: { icon: "bi-people", modifier: "brand" },
+  streak: { icon: "fire", modifier: "warning" },
+  today: { icon: "bookOpen", modifier: "brand" },
+  progress: { icon: "trendTwo", modifier: "success" },
+  chapters: { icon: "journalText", modifier: "brand" },
+  days: { icon: "calendarCheck", modifier: "neutral" },
+  round: { icon: "refresh", modifier: "warning" },
+  makeup: { icon: "exclamationCircle", modifier: "danger" },
+  group: { icon: "people", modifier: "brand" },
 };
 
 export function getStatMetricConfig(metricKey) {
   return (
     STAT_METRIC_CONFIG[metricKey] || {
-      icon: "bi-bar-chart",
+      icon: "barChart",
       modifier: "neutral",
     }
   );

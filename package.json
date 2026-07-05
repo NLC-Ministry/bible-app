@@ -4,14 +4,14 @@
   "description": "Church Bible Speed Reading & Statistics Application",
   "main": "app.js",
   "scripts": {
-    "build": "node build-config.js && node scripts/bundle.mjs",
+    "build": "node scripts/generate-icon-registry.mjs && node build-config.js && node scripts/bundle.mjs",
     "start": "npx serve .",
     "dev": "npx serve .",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@icon-park/svg": "^1.4.2",
     "vitest": "^4.1.9"
   }
 }
