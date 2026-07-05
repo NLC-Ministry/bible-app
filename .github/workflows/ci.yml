@@ -22,10 +22,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Verify build succeeds
-        run: npm run build
+      - name: Build and verify bundled output
+        run: |
+          npm run build
+          test -n "$(ls dist/app.*.js 2>/dev/null)" || { echo "no hashed app bundle in dist/"; exit 1; }
+          test -n "$(ls dist/index.*.css 2>/dev/null)" || { echo "no hashed css in dist/"; exit 1; }
+          test -f dist/index.html || { echo "no dist/index.html"; exit 1; }
         env:
-          # Placeholders so build-config.js produces a valid config.js in CI.
-          # Real values are injected by Vercel at deploy time.
           SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_ANON_KEY: placeholder-anon-key
