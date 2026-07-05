@@ -1581,7 +1581,7 @@ async function fetchPastoralVerseWall() {
 
       const { data: notes, error: nError } = await state.supabase
         .from("devotional_notes")
-        .select("user_id, content, created_at")
+        .select("id, user_id, content, created_at")
         .eq("note_date", todayStr)
         .in("user_id", userIds)
         .order("created_at", { ascending: false });
@@ -1595,12 +1595,24 @@ async function fetchPastoralVerseWall() {
         return;
       }
 
+      const noteIds = activeNotes.map(n => n.id);
+      const { data: likes } = await state.supabase
+        .from("devotional_likes")
+        .select("note_id, user_id")
+        .in("note_id", noteIds);
+
+      const { data: comments } = await state.supabase
+        .from("devotional_comments")
+        .select("id, note_id, user_id, content, created_at")
+        .in("note_id", noteIds)
+        .order("created_at", { ascending: true });
+
       const profileMap = {};
       profiles.forEach(p => {
         profileMap[p.id] = p;
       });
 
-      renderVerseWallCards(activeNotes, profileMap);
+      renderVerseWallCards(activeNotes, profileMap, likes || [], comments || []);
     } catch (err) {
       console.error("Failed to load pastoral sharing wall:", err);
       container.innerHTML = `<div class="text-xs text-red-500 text-center py-6">載入分享牆失敗</div>`;
@@ -1608,22 +1620,36 @@ async function fetchPastoralVerseWall() {
   } else {
     // Offline / local fallback demo data
     const mockNotes = [
-      { user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date().toISOString() },
-      { user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date().toISOString() }
+      { id: "demo_note1", user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date().toISOString() },
+      { id: "demo_note2", user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date().toISOString() }
     ];
     const mockProfileMap = {
       "demo1": { name: "張弟兄", small_group: "馬鈴薯組" },
       "demo2": { name: "李姊妹", small_group: "喜樂組" }
     };
-    renderVerseWallCards(mockNotes, mockProfileMap);
+
+    const likesList = [];
+    const commentsList = [];
+    mockNotes.forEach(n => {
+      const likedKey = `like_${n.id}`;
+      if (localStorage.getItem(likedKey) === "true") {
+        likesList.push({ note_id: n.id, user_id: "me" });
+      }
+      const commentsKey = `comments_${n.id}`;
+      const localComms = JSON.parse(localStorage.getItem(commentsKey) || "[]");
+      commentsList.push(...localComms);
+    });
+
+    renderVerseWallCards(mockNotes, mockProfileMap, likesList, commentsList);
   }
 }
 
-function renderVerseWallCards(notes, profileMap) {
+function renderVerseWallCards(notes, profileMap, likes, comments) {
   const container = document.getElementById("home-verse-wall");
   if (!container) return;
 
   container.innerHTML = "";
+  const currentUserId = state.currentUser ? state.currentUser.id : null;
 
   notes.forEach(note => {
     const profile = profileMap[note.user_id] || { name: "未知成員", small_group: "小組" };
@@ -1659,8 +1685,25 @@ function renderVerseWallCards(notes, profileMap) {
       } catch (e) {}
     }
 
+    const noteLikes = likes.filter(l => l.note_id === note.id);
+    const noteComments = comments.filter(c => c.note_id === note.id);
+    const hasLiked = currentUserId && noteLikes.some(l => l.user_id === currentUserId);
+
+    let commentsHtml = "";
+    noteComments.forEach(comm => {
+      const commProfile = profileMap[comm.user_id] || { name: "未知組員" };
+      commentsHtml += `
+        <div class="text-[11px] bg-slate-500/5 dark:bg-zinc-950/20 p-2 rounded-xl border border-slate-500/[0.05] dark:border-zinc-800/[0.05]">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-bold text-slate-800 dark:text-zinc-200">${commProfile.name}</span>
+            <span class="text-[9px] text-slate-400 dark:text-zinc-500">${new Date(comm.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <p class="m-0 text-slate-700 dark:text-zinc-300 leading-normal font-sans">${comm.content}</p>
+        </div>
+      `;
+    });
+
     const card = document.createElement("div");
-    // Borderless frosted shimmer card using Tailwind CSS
     card.className = "p-5 rounded-3xl bg-gradient-to-br from-slate-500/5 to-slate-500/[0.02] dark:from-zinc-950/20 dark:to-zinc-950/5 backdrop-blur-xl border border-slate-500/10 dark:border-zinc-800/10 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-500 ease-out";
     
     card.innerHTML = `
@@ -1680,23 +1723,34 @@ function renderVerseWallCards(notes, profileMap) {
         <span class="text-[9px] text-slate-400 dark:text-zinc-500 bg-slate-500/5 dark:bg-zinc-800/20 px-2.5 py-1 rounded-full font-medium">${timeStr}</span>
       </div>
 
-      <!-- Golden verse content quotes -->
-      <div class="relative pl-3 border-l-2 border-violet-500/40 my-3">
-        <p class="text-[13px] text-slate-700 dark:text-zinc-300 leading-relaxed font-serif italic m-0">
+      <!-- Golden verse content quotes (highly readable contrast) -->
+      <div class="relative pl-3 border-l-2 border-violet-500/50 my-3">
+        <p class="text-[14px] text-slate-900 dark:text-zinc-50 leading-relaxed font-sans font-medium m-0">
           「${note.content}」
         </p>
       </div>
 
       <!-- Footer social actions -->
       <div class="flex items-center justify-start space-x-6 mt-4 pt-3 border-t border-slate-500/5 dark:border-zinc-800/5 text-slate-400 dark:text-zinc-500">
-        <button type="button" class="flex items-center space-x-1.5 hover:text-rose-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px]" onclick="event.stopPropagation(); this.classList.toggle('text-rose-500')">
-          <span class="nlc-icon nlc-icon--sm" data-icon="heart" style="width: 14px; height: 14px;"></span>
-          <span class="font-medium text-[10px]">讚</span>
+        <button type="button" class="flex items-center space-x-1.5 hover:text-rose-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px] ${hasLiked ? 'text-rose-500' : ''}" onclick="window.toggleDevotionalLike('${note.id}')">
+          <span class="nlc-icon nlc-icon--sm" data-icon="${hasLiked ? 'heartFill' : 'heart'}" style="width: 14px; height: 14px;"></span>
+          <span class="font-bold text-[10px]">${noteLikes.length > 0 ? noteLikes.length + ' ' : ''}讚</span>
         </button>
-        <button type="button" class="flex items-center space-x-1.5 hover:text-blue-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px]" onclick="event.stopPropagation();">
+        <button type="button" class="flex items-center space-x-1.5 hover:text-blue-500 transition-colors duration-250 bg-transparent border-0 cursor-pointer p-0 text-[11px]" onclick="window.toggleCommentsSection('${note.id}')">
           <span class="nlc-icon nlc-icon--sm" data-icon="inbox" style="width: 14px; height: 14px;"></span>
-          <span class="font-medium text-[10px]">回覆</span>
+          <span class="font-bold text-[10px]">${noteComments.length > 0 ? noteComments.length + ' ' : ''}回覆</span>
         </button>
+      </div>
+
+      <!-- Comments Thread Panel -->
+      <div id="comments-section-${note.id}" class="hidden mt-3 pt-3 border-t border-slate-500/5 dark:border-zinc-800/5">
+        <div id="comments-list-${note.id}" class="space-y-2.5 mb-3">
+          ${commentsHtml || '<div class="text-[10px] text-slate-400 dark:text-zinc-500 text-center py-2">尚無回覆，快來寫下第一個回覆吧！</div>'}
+        </div>
+        <div class="flex items-center space-x-2">
+          <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="flex-1 text-xs px-3 py-1.5 rounded-full border border-slate-500/10 dark:border-zinc-800/10 bg-slate-500/5 dark:bg-zinc-950/20 text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+          <button type="button" class="px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-full text-[10px] font-bold border-0 cursor-pointer" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
+        </div>
       </div>
     `;
     container.appendChild(card);
@@ -1707,3 +1761,35 @@ function renderVerseWallCards(notes, profileMap) {
     hydrateIcons(container);
   }
 }
+
+window.toggleDevotionalLike = async function(noteId) {
+  try {
+    await db.toggleDevotionalLike(noteId);
+    await fetchPastoralVerseWall();
+  } catch (err) {
+    console.error("Failed to toggle like:", err);
+  }
+};
+
+window.toggleCommentsSection = function(noteId) {
+  const el = document.getElementById(`comments-section-${noteId}`);
+  if (el) {
+    el.classList.toggle("hidden");
+  }
+};
+
+window.submitDevotionalComment = async function(noteId) {
+  const input = document.getElementById(`comment-input-${noteId}`);
+  if (!input) return;
+  const content = input.value.trim();
+  if (!content) return;
+  
+  try {
+    await db.addDevotionalComment(noteId, content);
+    input.value = "";
+    await fetchPastoralVerseWall();
+  } catch (err) {
+    console.error("Failed to add comment:", err);
+    showToast("發送回覆失敗，請稍後再試");
+  }
+};

@@ -279,6 +279,24 @@ CREATE TABLE public.devotional_notes (
 
 CREATE INDEX idx_devotional_notes_user_date ON public.devotional_notes(user_id, note_date DESC);
 
+CREATE TABLE public.devotional_likes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  note_id UUID NOT NULL REFERENCES public.devotional_notes(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(note_id, user_id)
+);
+CREATE INDEX idx_devotional_likes_note ON public.devotional_likes(note_id);
+
+CREATE TABLE public.devotional_comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  note_id UUID NOT NULL REFERENCES public.devotional_notes(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+CREATE INDEX idx_devotional_comments_note ON public.devotional_comments(note_id);
+
 CREATE TABLE public.church_announcements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
@@ -358,6 +376,8 @@ ALTER TABLE public.global_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reading_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reading_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.devotional_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.devotional_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.devotional_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.church_announcements ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY org_read_authenticated ON public.great_regions FOR SELECT TO authenticated USING (TRUE);
@@ -424,6 +444,28 @@ CREATE POLICY devotional_notes_select_group ON public.devotional_notes FOR SELEC
   )
 );
 
+CREATE POLICY devotional_likes_select_group ON public.devotional_likes FOR SELECT TO authenticated USING (
+  user_id = public.current_profile_id() OR
+  (SELECT role FROM public.profiles WHERE id = public.current_profile_id()) IN ('admin', 'senior_pastor') OR
+  EXISTS (
+    SELECT 1 FROM public.profiles p1
+    JOIN public.profiles p2 ON p1.pastoral_zone = p2.pastoral_zone AND p1.small_group = p2.small_group
+    WHERE p1.id = user_id AND p2.id = public.current_profile_id()
+  )
+);
+CREATE POLICY devotional_likes_manage_own ON public.devotional_likes FOR ALL TO authenticated USING (user_id = public.current_profile_id()) WITH CHECK (user_id = public.current_profile_id());
+
+CREATE POLICY devotional_comments_select_group ON public.devotional_comments FOR SELECT TO authenticated USING (
+  user_id = public.current_profile_id() OR
+  (SELECT role FROM public.profiles WHERE id = public.current_profile_id()) IN ('admin', 'senior_pastor') OR
+  EXISTS (
+    SELECT 1 FROM public.profiles p1
+    JOIN public.profiles p2 ON p1.pastoral_zone = p2.pastoral_zone AND p1.small_group = p2.small_group
+    WHERE p1.id = user_id AND p2.id = public.current_profile_id()
+  )
+);
+CREATE POLICY devotional_comments_manage_own ON public.devotional_comments FOR ALL TO authenticated USING (user_id = public.current_profile_id()) WITH CHECK (user_id = public.current_profile_id());
+
 CREATE POLICY announcements_read_published ON public.church_announcements FOR SELECT TO authenticated USING (is_published = TRUE OR (SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor'));
 CREATE POLICY announcements_manage_admin ON public.church_announcements FOR ALL TO authenticated USING ((SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor')) WITH CHECK ((SELECT my_role FROM public.get_my_profile()) IN ('admin', 'senior_pastor'));
 
@@ -456,6 +498,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_identities TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.reading_plans TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.reading_logs TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.devotional_notes TO authenticated;
+GRANT SELECT, INSERT, DELETE ON public.devotional_likes TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.devotional_comments TO authenticated;
 
 -- Admin-managed shared data. RLS policies still restrict writes to admin roles.
 GRANT INSERT, UPDATE, DELETE ON public.great_regions TO authenticated;
