@@ -35,7 +35,7 @@
       <div class="header-container">
         <div class="header-leading">
           <a href="#" class="brand-mark" id="brand-logo" aria-label="回到首頁">
-            <img class="brand-icon-img" src="assets/bible-reading-icon.svg" alt="" width="36" height="36">
+            <img class="brand-icon-img" src="assets/bible-reading-icon.svg" alt="" width="44" height="44">
           </a>
           <button class="app-back-btn is-home" id="global-back-btn" type="button" title="&#x8FD4;&#x56DE;">
             <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
@@ -677,9 +677,9 @@
           <div id="subview-plan-stats" class="hidden" style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
             
             <!-- 讀經統計內層 4-tab 列 -->
-            <div class="stats-inner-tab-row">
-              <button class="stats-inner-tab active" data-tab="personal" onclick="window.switchStatTab('personal')">&#x500B;&#x4EBA;</button>
-              <button class="stats-inner-tab" id="stats-inner-tab-admin" data-tab="admin" onclick="window.switchStatTab('admin')">&#x5718;&#x9AD4;&#x7D71;&#x8A08;</button>
+            <div class="stats-inner-tab-row segment-track">
+              <button class="stats-inner-tab segment-toggle-btn active" data-tab="personal" onclick="window.switchStatTab('personal')">個人</button>
+              <button class="stats-inner-tab segment-toggle-btn" id="stats-inner-tab-admin" data-tab="admin" onclick="window.switchStatTab('admin')">團體統計</button>
             </div>
 
             <!-- 管理權限統計篩選器 (只在 管理 tab 顯示) -->
@@ -785,10 +785,10 @@
                   <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日讀經章數趨勢</h3>
                   
                   <!-- 右上角微縮切換鈕 Segmented Control -->
-                  <div class="capsule-segmented-control">
-                    <button id="trend-range-week" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('week')">週</button>
-                    <button id="trend-range-month" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('month')">月</button>
-                    <button id="trend-range-year" style="background: none; border: none; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; padding: 0.25rem 0.55rem; border-radius: 9999px; cursor: pointer; transition: all 0.2s;" onclick="window.changePersonalTrendRange('year')">年</button>
+                  <div class="capsule-segmented-control segment-track">
+                    <button type="button" class="segment-toggle-btn" id="trend-range-week" onclick="window.changePersonalTrendRange('week')">週</button>
+                    <button type="button" class="segment-toggle-btn active" id="trend-range-month" onclick="window.changePersonalTrendRange('month')">月</button>
+                    <button type="button" class="segment-toggle-btn" id="trend-range-year" onclick="window.changePersonalTrendRange('year')">年</button>
                   </div>
                 </div>
                 <div style="position: relative; height: 180px; width: 100%;">
@@ -1313,19 +1313,19 @@
       <button type="button" class="overlay-version bible-nav-sheet__badge" id="bible-nav-version-badge">CUNP</button>
     </header>
 
-    <div class="segmented-control bible-native-tabs bible-nav-sheet__tabs" role="tablist" aria-label="&#x8056;&#x7D93;&#x5C0E;&#x89BD;">
-      <button type="button" class="segmented-tab active" data-tab="book" role="tab">&#x5377;</button>
-      <button type="button" class="segmented-tab" data-tab="chapter" role="tab">&#x7AE0;</button>
-      <button type="button" class="segmented-tab" data-tab="verse" role="tab">&#x7BC0;</button>
+    <div class="segmented-control bible-nav-sheet__tabs segment-track" role="tablist" aria-label="聖經導覽">
+      <button type="button" class="segmented-tab segment-toggle-btn active" data-tab="book" role="tab">卷</button>
+      <button type="button" class="segmented-tab segment-toggle-btn" data-tab="chapter" role="tab">章</button>
+      <button type="button" class="segmented-tab segment-toggle-btn" data-tab="verse" role="tab">節</button>
     </div>
 
     <div class="mode-selector-bar bible-nav-sheet__toolbar">
-      <div class="view-mode-container bible-nav-sheet__toggle-group">
-        <span class="bible-nav-sheet__toggle-label">&#x6AA2;&#x8996;</span>
-        <button type="button" class="view-mode-btn active" id="view-mode-grid" title="&#x7DB2;&#x683C;" aria-label="&#x7DB2;&#x683C;">
+      <div class="view-mode-container bible-nav-sheet__toggle-group segment-track">
+        <span class="bible-nav-sheet__toggle-label">檢視</span>
+        <button type="button" class="view-mode-btn segment-toggle-btn active" id="view-mode-grid" title="網格" aria-label="網格">
           <span class="nlc-icon nlc-icon--sm" data-icon="gridFour"></span>
         </button>
-        <button type="button" class="view-mode-btn" id="view-mode-list" title="&#x6E05;&#x55AE;" aria-label="&#x6E05;&#x55AE;">
+        <button type="button" class="view-mode-btn segment-toggle-btn" id="view-mode-list" title="清單" aria-label="清單">
           <span class="nlc-icon nlc-icon--sm" data-icon="unorderedList"></span>
         </button>
       </div>

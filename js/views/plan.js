@@ -3439,15 +3439,12 @@ function renderPersonalTrendChart() {
   const btnMonth = document.getElementById("trend-range-month");
   const btnYear = document.getElementById("trend-range-year");
 
-  const activeStyle = { background: "var(--primary-color)", color: "white" };
-  const inactiveStyle = { background: "none", color: "var(--text-muted)" };
-
-  [btnWeek, btnMonth, btnYear].forEach(btn => {
-    if (btn) Object.assign(btn.style, inactiveStyle);
+  [btnWeek, btnMonth, btnYear].forEach((btn) => {
+    if (btn) btn.classList.remove("active");
   });
 
   const activeBtn = document.getElementById(`trend-range-${range}`);
-  if (activeBtn) Object.assign(activeBtn.style, activeStyle);
+  if (activeBtn) activeBtn.classList.add("active");
 
   let labels = [];
   let chartData = [];

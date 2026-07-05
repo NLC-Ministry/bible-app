@@ -26,6 +26,9 @@ describe("icon manifest registry", () => {
     for (const key of keys) {
       expect(registry[key], `missing SVG for ${key}`).toBeTruthy();
       expect(registry[key]).toContain("<svg");
+      if (key.endsWith("Fill")) {
+        expect(registry[key], `${key} should use solid fill`).toMatch(/fill="currentColor"/);
+      }
     }
   });
 });
