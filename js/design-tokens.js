@@ -80,3 +80,17 @@ window.NLC_SHADOW = NLC_SHADOW;
 window.NLC_CHART = NLC_CHART;
 window.NLC_PLAN_COVERS = NLC_PLAN_COVERS;
 window.NLC_MEMBER_COLORS = NLC_MEMBER_COLORS;
+
+/** Semantic Lucide icon sizes — mirror :root --icon-size-* in index.css */
+const NLC_ICON_SIZES = {
+  xs: "14px",
+  sm: "18px",
+  md: "22px",
+  lg: "24px",
+  nav: "23px",
+  touch: "26px",
+  hero: "48px",
+  badge: "56px",
+};
+
+window.NLC_ICON_SIZES = NLC_ICON_SIZES;

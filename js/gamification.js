@@ -250,7 +250,7 @@ function triggerBadgeUnlockEffect(badgeId) {
 
   card.innerHTML = `
     <div class="badge-popup-avatar" style="--glow: ${badge.shadow}; margin: 0 auto 1.5rem auto; display: flex; width: 110px; height: 110px; background: ${badge.color}; border-radius: 50%; justify-content: center; align-items: center;">
-      ${typeof renderIcon === "function" ? renderIcon(badge.iconKey || "award", { size: "3.5rem", className: "nlc-icon" }) : ""}
+      ${typeof renderIcon === "function" ? renderIcon(badge.iconKey || "award", { size: "badge", className: "nlc-icon" }) : ""}
     </div>
     <h3 style="font-size: 1.6rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 2px;"><span class="label-with-icon" style="justify-content: center;"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>${(window.APP_COPY && window.APP_COPY.badge.unlockTitle) || "榮譽成就解鎖"}</span></span></h3>
     <h4 style="font-size: 1.35rem; font-weight: 500; background: ${badge.color}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1.2rem;">${badge.title}</h4>

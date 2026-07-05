@@ -295,7 +295,7 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     icon.style.fontSize = "3rem";
     icon.setAttribute("data-icon", badge.iconKey || "award");
     icon.innerHTML = typeof renderIcon === "function"
-      ? renderIcon(badge.iconKey || "award", { size: "3rem", className: "nlc-icon" })
+      ? renderIcon(badge.iconKey || "award", { size: "hero", className: "nlc-icon" })
       : "";
   }
 
