@@ -1,7 +1,6 @@
 // scripts/bundle.test.mjs
 import { describe, it, expect, beforeAll } from "vitest";
-import { readFileSync, mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
-import { readFileSync as rf } from "node:fs";
+import { readFileSync, readFileSync as rf, writeFileSync, mkdtempSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -21,6 +20,19 @@ describe("resolveLocalAssets", () => {
     const out = resolveLocalAssets(html);
     expect(out.scripts).toEqual(["config.js", "js/state.js"]);
     expect(out.stylesheet).toBe("index.css");
+  });
+
+  it("extracts src regardless of attribute order, still excluding external and inline", () => {
+    const html = `
+      <script defer src="js/a.js"></script>
+      <script type="module" src="js/b.js"></script>
+      <script src="https://cdn/lib.js" crossorigin></script>
+      <script>window.x = "src=inline";</script>`;
+    expect(resolveLocalAssets(html).scripts).toEqual(["js/a.js", "js/b.js"]);
+  });
+
+  it("returns null stylesheet when there is no local stylesheet link", () => {
+    expect(resolveLocalAssets(`<script src="js/a.js"></script>`).stylesheet).toBeNull();
   });
 
   it("resolves the real index.html to the exact 16-file order", () => {
@@ -58,6 +70,18 @@ describe("assertParses", () => {
   });
   it("throws a descriptive error for a syntax error", () => {
     expect(() => assertParses("var a = ;")).toThrow(/failed syntax check/);
+  });
+});
+
+describe("emitBundle guards", () => {
+  it("throws a descriptive error when index.html has no local stylesheet", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bundle-nocss-"));
+    try {
+      writeFileSync(join(dir, "index.html"), `<script src="a.js"></script>`);
+      expect(() => emitBundle({ root: dir, outDir: join(dir, "out") })).toThrow(/no local stylesheet/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

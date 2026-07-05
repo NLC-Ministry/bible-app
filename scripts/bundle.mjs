@@ -4,7 +4,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, cpSync } fr
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const SCRIPT_RE = /<script\s+src="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>\s*<\/script>/g;
+// Matches a local <script src="..."></script> with `src` in ANY attribute position
+// (e.g. `<script type="module" src=...>` / `<script defer src=...>`). `[^>]*?` stays
+// inside the opening tag, so external (http/protocol-relative) and inline scripts are excluded.
+const SCRIPT_RE = /<script\b[^>]*?\ssrc="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>\s*<\/script>/g;
 const CSS_RE = /<link\s+rel="stylesheet"\s+href="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>/g;
 
 export function resolveLocalAssets(html) {
@@ -35,6 +38,7 @@ export function emitBundle({ root, outDir }) {
   if (!existsSync(indexPath)) throw new Error(`bundle: missing ${indexPath}`);
   const html = readFileSync(indexPath, "utf8");
   const { scripts, stylesheet } = resolveLocalAssets(html);
+  if (!stylesheet) throw new Error("bundle: no local stylesheet <link> found in index.html");
 
   const readSource = (rel) => {
     const abs = join(root, rel);
@@ -70,7 +74,7 @@ export function emitBundle({ root, outDir }) {
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
 
   // Rewrite HTML: last local script tag -> bundle tag; others -> "".
-  // Note: SCRIPT_RE assumes src is the first attribute on <script> tags (true for this repo's index.html).
+  // SCRIPT_RE matches local <script src> tags regardless of attribute order.
   const total = scripts.length;
   let seen = 0;
   let outHtml = html.replace(SCRIPT_RE, () => {
