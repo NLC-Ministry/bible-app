@@ -1208,15 +1208,13 @@ function renderHorizontalDateStrip() {
   const windowEnd = new Date(endBase);
   windowEnd.setDate(endBase.getDate() + (6 - endDayOfWeek));
 
-  // 3. Create the Calendar Wrapper (Clean flat look, completely borderless)
+  // 3. Create the Calendar Wrapper (scoped under .plan-calendar for square-cell styling)
   const calendarWrapper = document.createElement("div");
-  calendarWrapper.className = "calendar-component";
-  calendarWrapper.style.cssText = "background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; margin: 0 !important; display: flex; flex-direction: column;";
+  calendarWrapper.className = "calendar-component plan-calendar";
 
   // 4. Create Global Static Weekday Header (outside the scroll container)
   const weekdaysDiv = document.createElement("div");
   weekdaysDiv.className = "calendar-weekdays";
-  weekdaysDiv.style.cssText = "display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 0.4rem; padding-bottom: 0.4rem; border-bottom: none !important; font-size: 0.72rem; font-weight: 500; color: var(--text-muted); text-transform: uppercase;";
   const weekdays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
   weekdays.forEach(w => {
     const wDiv = document.createElement("div");
@@ -1228,7 +1226,6 @@ function renderHorizontalDateStrip() {
   // 5. Create the Scroll Container (visible area is capped to five calendar rows)
   const scrollContainer = document.createElement("div");
   scrollContainer.className = "calendar-scroll-container scrollbar-none";
-  scrollContainer.style.cssText = "overflow-y: auto; width: 100%; display: flex; flex-direction: column; scrollbar-width: none; -ms-overflow-style: none;";
 
   const now = new Date();
   const todayYear = now.getFullYear();
@@ -1259,22 +1256,23 @@ function renderHorizontalDateStrip() {
   // Month Grid Container (Seamless single grid, no month banners/dividers)
   const gridDiv = document.createElement("div");
   gridDiv.className = "calendar-grid";
-  gridDiv.style.cssText = "display: grid; grid-template-columns: repeat(7, 1fr); gap: 24px 4px !important; padding: 16px 0 !important; width: 100%;";
-
-
 
   // Render cells flatly
   cells.forEach(cell => {
-    const dayCell = document.createElement("div");
-    dayCell.className = "calendar-day";
-
-    // Minimal Month Identifier: 1st of month displays "M/D" (e.g. 7/1), others display "D"
+    const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
     const numberLabel = cell.dayOfMonth === 1 ? `${cell.month}/${cell.dayOfMonth}` : `${cell.dayOfMonth}`;
-    dayCell.innerHTML = `<span class="day-number">${numberLabel}</span>`;
-
     const day = findPlanDay(cell.year, cell.month, cell.dayOfMonth);
+
     if (day) {
+      const dayCell = document.createElement("button");
+      dayCell.type = "button";
+      dayCell.className = "plan-day-cell";
+      dayCell.innerHTML = `<span class="day-number">${numberLabel}</span>`;
       dayCell.setAttribute("data-day-num", day.dayNum);
+      dayCell.setAttribute("aria-selected", day.dayNum === state.selectedPlanDay ? "true" : "false");
+      if (isToday) {
+        dayCell.setAttribute("aria-current", "date");
+      }
 
       const totalChapters = day.chapters ? day.chapters.length : 0;
       let completedChapters = 0;
@@ -1296,12 +1294,11 @@ function renderHorizontalDateStrip() {
       const isDayCompleted = totalChapters > 0 && completedChapters === totalChapters;
       const isPartiallyCompleted = totalChapters > 0 && completedChapters > 0 && completedChapters < totalChapters;
 
-      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
       const isPast = cell.year < todayYear ||
         (cell.year === todayYear && cell.month < todayMonth) ||
         (cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth < todayDay);
 
-      // Selected active focus highlight (circular grey background)
+      // Selected active focus highlight
       if (day.dayNum === state.selectedPlanDay) {
         dayCell.classList.add("active");
       }
@@ -1359,22 +1356,25 @@ function renderHorizontalDateStrip() {
         state.selectedPlanDay = day.dayNum;
 
         // 1. Pure front-end high-speed active class switching
-        const prevSelected = container.querySelector('.calendar-day.active');
+        const prevSelected = container.querySelector('.plan-day-cell.active');
         if (prevSelected) {
           prevSelected.classList.remove('active');
+          prevSelected.setAttribute('aria-selected', 'false');
         }
         dayCell.classList.add('active');
+        dayCell.setAttribute('aria-selected', 'true');
 
         // 2. Refresh bottom task list without redrawing the calendar strip
         renderPlanScheduleTracker(true, signal);
       });
 
+      gridDiv.appendChild(dayCell);
     } else {
-      // Not part of the reading plan
-      dayCell.style.cursor = "default";
-      dayCell.classList.add("other-month");
+      const dayCell = document.createElement("span");
+      dayCell.className = "plan-day-cell plan-day-cell--muted other-month";
+      dayCell.setAttribute("aria-hidden", "true");
+      dayCell.innerHTML = `<span class="day-number">${numberLabel}</span>`;
 
-      const isToday = cell.year === todayYear && cell.month === todayMonth && cell.dayOfMonth === todayDay;
       if (isToday) {
         dayCell.classList.add("today");
       } else {
@@ -1382,9 +1382,9 @@ function renderHorizontalDateStrip() {
         dot.className = "day-status-dot dot-grey";
         dayCell.appendChild(dot);
       }
-    }
 
-    gridDiv.appendChild(dayCell);
+      gridDiv.appendChild(dayCell);
+    }
   });
 
 
@@ -1394,7 +1394,7 @@ function renderHorizontalDateStrip() {
   container.appendChild(calendarWrapper);
 
   const applyCalendarMaxRows = () => {
-    const firstCell = gridDiv.querySelector(".calendar-day");
+    const firstCell = gridDiv.querySelector(".plan-day-cell");
     if (!firstCell) return;
 
     const gridStyles = getComputedStyle(gridDiv);
@@ -1519,7 +1519,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   }
 
   // Update completion check on the active date card in the calendar dynamically
-  const activeCard = document.querySelector(`.calendar-day[data-day-num="${state.selectedPlanDay}"]`);
+  const activeCard = document.querySelector(`.plan-day-cell[data-day-num="${state.selectedPlanDay}"]`);
   if (activeCard && state.activePlan) {
     const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => {
       const currentRound = state.activePlan.currentRound || 1;
@@ -4411,10 +4411,16 @@ function snapCalendarToToday() {
     state.calendarViewMonth = todayMonth;
 
     // 🛡️ 只做 CSS active class 切換，嚴禁呼叫 renderHorizontalDateStrip 重繪整個日曆
-    const prev = document.querySelector('.calendar-day.active');
-    if (prev) prev.classList.remove('active');
-    const target = document.querySelector(`.calendar-day[data-day-num="${todayPlanDay.dayNum}"]`);
-    if (target) target.classList.add('active');
+    const prev = document.querySelector('.plan-day-cell.active');
+    if (prev) {
+      prev.classList.remove('active');
+      prev.setAttribute('aria-selected', 'false');
+    }
+    const target = document.querySelector(`.plan-day-cell[data-day-num="${todayPlanDay.dayNum}"]`);
+    if (target) {
+      target.classList.add('active');
+      target.setAttribute('aria-selected', 'true');
+    }
 
     renderPlanScheduleTracker(true);
     showToast("已跳轉至今日進度");
@@ -4432,10 +4438,16 @@ function snapCalendarToMyProgress() {
     state.calendarViewMonth = nextReadingDay.month || (new Date().getMonth() + 1);
 
     // 🛡️ 只做 CSS active class 切換，嚴禁呼叫 renderHorizontalDateStrip 重繪整個日曆
-    const prev = document.querySelector('.calendar-day.active');
-    if (prev) prev.classList.remove('active');
-    const target = document.querySelector(`.calendar-day[data-day-num="${nextReadingDay.dayNum}"]`);
-    if (target) target.classList.add('active');
+    const prev = document.querySelector('.plan-day-cell.active');
+    if (prev) {
+      prev.classList.remove('active');
+      prev.setAttribute('aria-selected', 'false');
+    }
+    const target = document.querySelector(`.plan-day-cell[data-day-num="${nextReadingDay.dayNum}"]`);
+    if (target) {
+      target.classList.add('active');
+      target.setAttribute('aria-selected', 'true');
+    }
 
     renderPlanScheduleTracker(true);
     showToast("已回到您的實際讀經進度");
