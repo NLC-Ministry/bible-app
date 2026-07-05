@@ -321,9 +321,13 @@ function initTheme() {
     setBodyThemeClass(state.theme);
     localStorage.setItem("app_theme", state.theme);
     
-    // Refresh theme configurations inside My Honor Badges wall dynamically
-    if (typeof renderBadgeWall === "function" && document.getElementById("profile-badge-wall-container")) {
-      renderBadgeWall("profile-badge-wall-container");
+    // Refresh badge UI for theme change
+    if (typeof renderBadgeWall === "function") {
+      renderBadgeWall("badges-grid");
+    }
+    if (typeof renderBadgeStrip === "function") {
+      renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
+      renderBadgeStrip("plan-badge-strip");
     }
   });
 }

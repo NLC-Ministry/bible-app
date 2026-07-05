@@ -271,121 +271,44 @@ function getBadgeProgressValue(badgeId) {
   return typeof conf.getValue === "function" ? conf.getValue() : 0;
 }
 
-function getBadgeProgressInfo(badgeId, isUnlocked) {
-  const conf = getBadgeMilestoneConfig(badgeId);
-  const target = BADGE_UNLOCK_TARGETS[badgeId] || conf.levels[conf.levels.length - 1] || 1;
-  const current = getBadgeProgressValue(badgeId);
-  const pct = target > 0 ? Math.min(100, Math.floor((current / target) * 100)) : 0;
-  const remaining = Math.max(0, target - current);
-  const inProgress = !isUnlocked && current > 0;
-  return { current, target, pct, remaining, unit: conf.unit, inProgress };
+function updateBadgeWallSummary(unlockedCount, total) {
+  const summaryEl = document.getElementById("badge-wall-summary");
+  if (summaryEl) {
+    summaryEl.textContent = `${unlockedCount} / ${total}`;
+  }
 }
 
-function getBadgeEarnedDateLabel(badgeId) {
-  const target = BADGE_UNLOCK_TARGETS[badgeId];
-  if (target) {
-    const dated = localStorage.getItem(`date_unlocked_${badgeId}_lvl_${target}`);
-    if (dated) return dated;
-  }
-  const conf = getBadgeMilestoneConfig(badgeId);
-  for (let i = 0; i < conf.levels.length; i++) {
-    const lvl = conf.levels[i];
-    const dated = localStorage.getItem(`date_unlocked_${badgeId}_lvl_${lvl}`);
-    if (dated) return dated;
-  }
-  return null;
-}
-
-function formatBadgeProgressMeta(badge, isUnlocked, progress) {
-  if (isUnlocked) {
-    const earned = getBadgeEarnedDateLabel(badge.id);
-    if (earned) return `已解鎖 · ${earned}`;
-    return "已解鎖";
-  }
-  if (progress.inProgress) {
-    if (badge.id === "read_all_bible") {
-      return `${progress.current} / ${progress.target} ${progress.unit}`;
+function bindBadgeStripProfileLink() {
+  const linkBtn = document.getElementById("dashboard-badge-strip-link");
+  if (!linkBtn || linkBtn._badgeStripLinkBound) return;
+  linkBtn._badgeStripLinkBound = true;
+  linkBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (typeof window.navigateToBadgeWall === "function") {
+      window.navigateToBadgeWall();
     }
-    if (progress.target === 1) {
-      return `還差 ${progress.remaining} ${progress.unit}`;
-    }
-    return `還差 ${progress.remaining} ${progress.unit}`;
-  }
-  return "尚未開始";
-}
-
-function getBadgeWallItemClasses(isUnlocked, inProgress, accent) {
-  let cls = "honor-badge-item honor-badge-item--tile";
-  if (isUnlocked) cls += " unlocked";
-  else if (inProgress) cls += " in-progress";
-  else cls += " locked";
-  if (accent) cls += ` honor-badge-item--accent-${accent}`;
-  return cls;
-}
-
-let badgeWallFilter = "all";
-
-function bindBadgeWallFilters() {
-  const track = document.querySelector(".badge-wall__filters");
-  if (!track || track._badgeFilterBound) return;
-  track._badgeFilterBound = true;
-  track.addEventListener("click", function (e) {
-    const btn = e.target.closest("[data-badge-filter]");
-    if (!btn) return;
-    badgeWallFilter = btn.getAttribute("data-badge-filter") || "all";
-    track.querySelectorAll(".segment-toggle-btn").forEach(function (b) {
-      const active = b === btn;
-      b.classList.toggle("active", active);
-      b.setAttribute("aria-selected", active ? "true" : "false");
-    });
-    renderBadgeWall("badges-grid");
   });
 }
 
-function updateBadgeWallChrome(unlockedIds, total) {
-  const summaryEl = document.getElementById("badge-wall-summary");
-  if (summaryEl) {
-    summaryEl.textContent = `已解鎖 ${unlockedIds.length} / ${total}`;
-  }
-
-  const nextUpEl = document.getElementById("badge-wall-next-up");
-  if (nextUpEl && typeof ACHIEVEMENTS !== "undefined") {
-    let closest = null;
-    let closestPct = -1;
-    ACHIEVEMENTS.forEach(function (badge) {
-      if (unlockedIds.includes(badge.id)) return;
-      const progress = getBadgeProgressInfo(badge.id, false);
-      if (progress.inProgress && progress.pct > closestPct) {
-        closestPct = progress.pct;
-        closest = { badge: badge, progress: progress };
-      }
-    });
-    if (closest) {
-      const meta = formatBadgeProgressMeta(closest.badge, false, closest.progress);
-      nextUpEl.innerHTML = `<span class="badge-wall__next-up-label">下一個目標</span><span class="badge-wall__next-up-text"><strong>${typeof escapeHTML === "function" ? escapeHTML(closest.badge.title) : closest.badge.title}</strong> — ${meta}</span>`;
-      nextUpEl.classList.remove("hidden");
-    } else {
-      nextUpEl.innerHTML = "";
-      nextUpEl.classList.add("hidden");
+function attachBadgeOpenHandlers(element, badge, isUnlocked) {
+  const openDetail = function () {
+    if (typeof window.openBadgeDetailPage === "function") {
+      const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
+      window.openBadgeDetailPage(badge, isUnlocked, isDark);
     }
-  }
-}
-
-function badgeMatchesWallFilter(isUnlocked, inProgress) {
-  if (badgeWallFilter === "unlocked") return isUnlocked;
-  if (badgeWallFilter === "in-progress") return inProgress;
-  return true;
+  };
+  element.onclick = openDetail;
+  element.onkeydown = function (e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openDetail();
+    }
+  };
 }
 
 function renderBadgeWall(containerId) {
-  const profileGrid = document.getElementById("badges-grid");
-  const container = profileGrid || document.getElementById(containerId);
+  const container = document.getElementById("badges-grid") || document.getElementById(containerId);
   if (!container) return;
-
-  const isProfileWall = container.id === "badges-grid";
-  if (isProfileWall) {
-    bindBadgeWallFilters();
-  }
 
   container.innerHTML = "";
 
@@ -395,66 +318,35 @@ function renderBadgeWall(containerId) {
   }
 
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
-  if (isProfileWall) {
-    updateBadgeWallChrome(unlocked, ACHIEVEMENTS.length);
+  if (container.id === "badges-grid") {
+    updateBadgeWallSummary(unlocked.length, ACHIEVEMENTS.length);
   }
 
-  let visibleCount = 0;
+  const getBadgeClasses = typeof getHonorBadgeItemClasses === "function"
+    ? getHonorBadgeItemClasses
+    : (isUnlocked) => (isUnlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
 
   ACHIEVEMENTS.forEach(function (badge) {
     const isUnlocked = unlocked.includes(badge.id);
-    const progress = getBadgeProgressInfo(badge.id, isUnlocked);
-    const inProgress = progress.inProgress;
-
-    if (isProfileWall && !badgeMatchesWallFilter(isUnlocked, inProgress)) {
-      return;
-    }
-
-    visibleCount += 1;
-    const accent = badge.accent || "achievement";
     const badgeItem = document.createElement("div");
-    badgeItem.className = getBadgeWallItemClasses(isUnlocked, inProgress, accent);
-    badgeItem.setAttribute("role", "listitem");
+    badgeItem.className = getBadgeClasses(isUnlocked) + " honor-badge-item--tile";
+    badgeItem.setAttribute("role", "button");
     badgeItem.setAttribute("tabindex", "0");
-    badgeItem.setAttribute("data-badge-id", badge.id);
+    badgeItem.setAttribute("aria-label", (isUnlocked ? "已解鎖：" : "尚未解鎖：") + badge.title);
 
-    const showLock = !isUnlocked && !inProgress;
-    const metaText = formatBadgeProgressMeta(badge, isUnlocked, progress);
-    const progressBar = !isUnlocked && inProgress
-      ? `<div class="honor-badge-item__track" aria-hidden="true"><div class="honor-badge-item__fill" style="width:${progress.pct}%;"></div></div>`
-      : "";
-
+    const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
     badgeItem.innerHTML = `
-      ${showLock ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
+      ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
       <div class="honor-badge-item__icon-wrap">
         <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
+        ${isUnlocked ? `<span class="honor-badge-item__check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
       </div>
-      <span class="honor-badge-item__title">${typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title}</span>
-      <span class="honor-badge-item__meta">${typeof escapeHTML === "function" ? escapeHTML(metaText) : metaText}</span>
-      ${progressBar}
+      <span class="honor-badge-item__title">${safeTitle}</span>
     `;
 
-    const openDetail = function () {
-      if (typeof window.openBadgeDetailPage === "function") {
-        const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
-        window.openBadgeDetailPage(badge, isUnlocked, isDark);
-      }
-    };
-
-    badgeItem.onclick = openDetail;
-    badgeItem.onkeydown = function (e) {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        openDetail();
-      }
-    };
-
+    attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
     container.appendChild(badgeItem);
   });
-
-  if (visibleCount === 0 && isProfileWall) {
-    container.innerHTML = `<div class="badge-wall__empty">此篩選條件下沒有徽章。</div>`;
-  }
 
   if (typeof hydrateIcons === "function") {
     hydrateIcons(container);
@@ -472,8 +364,57 @@ function renderBadgeWall(containerId) {
   }
 }
 
+function renderBadgeStrip(containerId, options) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const opts = options || {};
+  container.innerHTML = "";
+
+  if (typeof ACHIEVEMENTS === "undefined") return;
+
+  if (opts.linkToProfile) {
+    bindBadgeStripProfileLink();
+  }
+
+  const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
+
+  ACHIEVEMENTS.forEach(function (badge) {
+    const isUnlocked = unlocked.includes(badge.id);
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "badge-strip__item " + (isUnlocked ? "unlocked" : "locked");
+    item.setAttribute("aria-label", (isUnlocked ? "已解鎖：" : "尚未解鎖：") + badge.title);
+    item.innerHTML = `
+      <span class="nlc-icon nlc-icon--sm" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
+      ${!isUnlocked ? `<span class="badge-strip__item-lock" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="lock"></span></span>` : ""}
+      ${isUnlocked ? `<span class="badge-strip__item-check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
+    `;
+    attachBadgeOpenHandlers(item, badge, isUnlocked);
+    container.appendChild(item);
+  });
+
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(container);
+  }
+}
+
+window.navigateToBadgeWall = function () {
+  if (typeof appRouter !== "undefined" && typeof appRouter.switchTab === "function") {
+    appRouter.switchTab("profile-view");
+  }
+  requestAnimationFrame(function () {
+    const target = document.getElementById("profile-badges-card-col");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+};
+
+window.renderBadgeStrip = renderBadgeStrip;
+
 window.getBadgeMilestoneConfig = getBadgeMilestoneConfig;
-window.getBadgeProgressInfo = getBadgeProgressInfo;
+window.getBadgeProgressValue = getBadgeProgressValue;
 
 // YouVersion high-grade full-screen detail subpage controller
 window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
@@ -501,6 +442,17 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
   // Render text contents
   title.textContent = badge.title;
   desc.textContent = badge.description.split("：").pop();
+
+  const triggerEl = document.getElementById("detail-trigger-text");
+  const triggerCard = document.getElementById("detail-trigger-card");
+  const triggerCopy = badge.triggerText || badge.description;
+  if (triggerEl) {
+    triggerEl.textContent = triggerCopy;
+  }
+  if (triggerCard) {
+    triggerCard.classList.toggle("hidden", !triggerCopy);
+  }
+
   if (icon) {
     icon.className = "nlc-icon";
     icon.style.fontSize = "3rem";

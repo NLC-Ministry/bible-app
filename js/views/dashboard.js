@@ -29,6 +29,10 @@ function updateDashboardView() {
   renderDailyVerse();
   updateAnnouncementsList();
 
+  if (typeof renderBadgeStrip === "function") {
+    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
+  }
+
   // Render active plan card
   const planSummaryDiv = document.getElementById("active-plan-summary");
   if (state.activePlan) {

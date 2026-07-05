@@ -928,9 +928,13 @@ window.applyAppTheme = function(themeName) {
   if (appLayout) appLayout.classList.toggle("reader-mode", Boolean(isReaderPage));
   localStorage.setItem("app_theme", themeName);
   
-  // Refresh theme configurations inside My Honor Badges wall dynamically
-  if (typeof renderBadgeWall === "function" && document.getElementById("profile-badge-wall-container")) {
-    renderBadgeWall("profile-badge-wall-container");
+  // Refresh badge UI for theme change
+  if (typeof renderBadgeWall === "function") {
+    renderBadgeWall("badges-grid");
+  }
+  if (typeof renderBadgeStrip === "function") {
+    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
+    renderBadgeStrip("plan-badge-strip");
   }
   
   // Update settings dropdown active state if it exists

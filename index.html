@@ -165,6 +165,15 @@
               </div>
             </div>
 
+            <!-- 我的徽章 (compact preview) -->
+            <div class="glass-card badge-strip-card" style="height: auto; margin-bottom: 1.5rem;">
+              <div class="badge-strip__header">
+                <h3 class="badge-strip__title card-title">我的徽章</h3>
+                <button type="button" class="secondary-btn badge-strip__link" id="dashboard-badge-strip-link">查看全部</button>
+              </div>
+              <div id="dashboard-badge-strip" class="badge-strip"></div>
+            </div>
+
             <!-- 每日金句 (Verse of the Day) -->
             <div id="verse-card" class="relative w-full min-h-[320px] rounded-2xl overflow-hidden cursor-default shadow-lg is-loading" style="position: relative; width: 100%; min-height: 320px; overflow: hidden; border-radius: 1rem; cursor: default; margin-bottom: 1.5rem;">
               
@@ -764,6 +773,12 @@
 
               </div>
 
+              <!-- 榮譽徽章預覽 -->
+              <div class="glass-card-upgrade mx-4 my-2 badge-strip-card">
+                <h3 class="card-title badge-strip__title" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">我的徽章</h3>
+                <div id="plan-badge-strip" class="badge-strip"></div>
+              </div>
+
               <!-- 第二層：微縮 GitHub 風「讀經熱點地圖」卡片 -->
               <div class="glass-card-upgrade mx-4 my-2">
                 <h3 class="card-title text-slate-800 dark:text-neutral-100" style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">個人讀經活躍度</h3>
@@ -1133,26 +1148,15 @@
           <div class="card-col span-12" id="profile-badges-card-col">
             <div class="profile-badges-card badge-wall" id="profile-badges-inner-card">
               <div class="badge-wall__header dashboard-panel-card__header card-header-flex">
-                <div class="badge-wall__heading">
-                  <h3 class="dashboard-panel-card__title card-title">
-                    <span class="dashboard-panel-card__title-icon" aria-hidden="true">
-                      <span class="nlc-icon nlc-icon--sm" data-icon="trophy"></span>
-                    </span>
-                    <span class="dashboard-panel-card__title-text">我的榮譽徽章</span>
-                  </h3>
-                  <p class="badge-wall__summary" id="badge-wall-summary">已解鎖 0 / 0</p>
-                </div>
+                <h3 class="dashboard-panel-card__title card-title">
+                  <span class="dashboard-panel-card__title-icon" aria-hidden="true">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="trophy"></span>
+                  </span>
+                  <span class="dashboard-panel-card__title-text">我的榮譽徽章</span>
+                </h3>
+                <span class="stat-badge stat-badge--neutral badge-wall__count" id="badge-wall-summary">0 / 5</span>
               </div>
-
-              <div class="badge-wall__next-up hidden" id="badge-wall-next-up" aria-live="polite"></div>
-
-              <div class="badge-wall__filters segment-track" role="tablist" aria-label="徽章篩選">
-                <button type="button" class="segment-toggle-btn active" data-badge-filter="all" role="tab" aria-selected="true">全部</button>
-                <button type="button" class="segment-toggle-btn" data-badge-filter="unlocked" role="tab" aria-selected="false">已解鎖</button>
-                <button type="button" class="segment-toggle-btn" data-badge-filter="in-progress" role="tab" aria-selected="false">進行中</button>
-              </div>
-
-              <div id="badges-grid" class="badges-grid" role="list"></div>
+              <div id="badges-grid" class="badges-grid"></div>
             </div>
           </div>
           
@@ -1492,6 +1496,11 @@
         </div>
         <h2 id="detail-title" style="margin-top: 1.25rem; font-size: 1.5rem; font-weight: 500; text-align: center;"></h2>
         <p id="detail-desc" style="margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5; text-align: center; opacity: 0.8; padding: 0 1rem;"></p>
+      </div>
+
+      <div class="badge-detail-trigger" id="detail-trigger-card">
+        <span class="badge-detail-trigger__label">如何取得</span>
+        <p class="badge-detail-trigger__text" id="detail-trigger-text"></p>
       </div>
 
       <!-- 3. Lower Part: Milestones Timeline -->

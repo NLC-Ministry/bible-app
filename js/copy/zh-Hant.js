@@ -39,6 +39,9 @@ window.APP_COPY = {
   badge: {
     unlockTitle: "榮譽成就解鎖",
     unlockCta: "解鎖了，繼續保持",
+    stripTitle: "我的徽章",
+    viewAll: "查看全部",
+    triggerLabel: "如何取得",
     descriptions: {
       subscribe_plan: "成功加入一個讀經計畫",
       streak_30: "連續打卡 30 天",
