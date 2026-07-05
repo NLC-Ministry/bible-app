@@ -706,7 +706,7 @@ async function renderAdminUserManagement() {
           </div>
         </div>
         <div class="member-arrow-right">
-          ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "18px", className: "nlc-icon" }) : ""}
+          ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "sm", className: "nlc-icon" }) : ""}
         </div>
       `;
 

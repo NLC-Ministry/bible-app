@@ -405,7 +405,7 @@ async function renderTodayGroupProgress() {
     if (state.currentUser && state.currentUser.role === 'member') {
       if (cardTitleEl) {
         cardTitleEl.innerHTML = `
-          <span style="color: var(--primary-color);">${typeof renderIcon === "function" ? renderIcon("user", { size: "20px", className: "nlc-icon" }) : ""}</span>
+          <span style="color: var(--primary-color);">${typeof renderIcon === "function" ? renderIcon("user", { size: "sm", className: "nlc-icon" }) : ""}</span>
           我的今日讀經進度
         `;
       }
@@ -415,7 +415,7 @@ async function renderTodayGroupProgress() {
     } else {
       if (cardTitleEl) {
         cardTitleEl.innerHTML = `
-          <span style="color: var(--primary-color);">${typeof renderIcon === "function" ? renderIcon("people", { size: "20px", className: "nlc-icon" }) : ""}</span>
+          <span style="color: var(--primary-color);">${typeof renderIcon === "function" ? renderIcon("people", { size: "sm", className: "nlc-icon" }) : ""}</span>
           小組今日讀經進度
         `;
       }
@@ -496,7 +496,7 @@ function renderProgressListFiltered(searchText) {
     if (isRecentRead) {
       badge.className = "progress-badge completed";
       badge.innerHTML = `
-        ${typeof renderIcon === "function" ? renderIcon("check", { size: "10px", className: "nlc-icon nlc-icon--inline" }) : ""}
+        ${typeof renderIcon === "function" ? renderIcon("check", { size: "xs", className: "nlc-icon nlc-icon--inline" }) : ""}
         今日已讀
       `;
     } else {
@@ -1156,7 +1156,7 @@ async function shareAsImage(e) {
   
   if (shareBtn) {
     shareBtn.disabled = true;
-    shareBtn.innerHTML = `<span class="nlc-icon" data-icon="refresh" data-icon-size="22px" aria-hidden="true"></span><span>分享中</span>`;
+    shareBtn.innerHTML = `<span class="nlc-icon nlc-icon--md" data-icon="refresh" aria-hidden="true"></span><span>分享中</span>`;
     if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
   }
   
@@ -1220,7 +1220,7 @@ async function shareAsImage(e) {
     if (shareBtn) {
       setTimeout(() => {
         shareBtn.disabled = false;
-        shareBtn.innerHTML = `<span class="nlc-icon" data-icon="share" data-icon-size="22px" aria-hidden="true"></span><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
+        shareBtn.innerHTML = `<span class="nlc-icon nlc-icon--md" data-icon="share" aria-hidden="true"></span><span>${(window.APP_COPY && window.APP_COPY.verse.share) || "分享"}</span>`;
         if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
       }, 1000);
     }

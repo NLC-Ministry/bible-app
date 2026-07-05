@@ -879,7 +879,7 @@ function renderProfileReadingStats() {
     container.innerHTML = `
       <div class="empty-state" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
         <div style="margin: 0 auto 1rem; opacity: 0.6; display: block; width: 48px;">
-          ${typeof renderIcon === "function" ? renderIcon("inbox", { size: "48px", className: "nlc-icon" }) : ""}
+          ${typeof renderIcon === "function" ? renderIcon("inbox", { size: "hero", className: "nlc-icon" }) : ""}
         </div>
         <p style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">${(window.APP_COPY && window.APP_COPY.stats.noPlan) || "還沒加入讀經計畫"}</p>
         <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
@@ -889,7 +889,7 @@ function renderProfileReadingStats() {
         <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 0.8rem 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; text-align: left;">
           <div style="display: flex; align-items: center; gap: 0.8rem;">
             <div class="stat-icon-wrapper stat-icon-wrapper--sm stat-icon-wrapper--danger">
-              ${typeof renderIcon === "function" ? renderIcon("fire", { size: "18px", className: "nlc-icon" }) : ""}
+              ${typeof renderIcon === "function" ? renderIcon("fire", { size: "sm", className: "nlc-icon" }) : ""}
             </div>
             <div>
               <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
@@ -947,7 +947,7 @@ function renderProfileReadingStats() {
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper stat-icon-wrapper--brand">
-            ${typeof renderIcon === "function" ? renderIcon("calendar", { size: "20px", className: "nlc-icon" }) : ""}
+            ${typeof renderIcon === "function" ? renderIcon("calendar", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">今天計畫進度</div>
@@ -963,7 +963,7 @@ function renderProfileReadingStats() {
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper stat-icon-wrapper--danger">
-            ${typeof renderIcon === "function" ? renderIcon("fire", { size: "20px", className: "nlc-icon" }) : ""}
+            ${typeof renderIcon === "function" ? renderIcon("fire", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
@@ -979,7 +979,7 @@ function renderProfileReadingStats() {
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper ${lagIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("exclamationCircle", { size: "20px", className: "nlc-icon" }) : ""}
+            ${typeof renderIcon === "function" ? renderIcon("exclamationCircle", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">落後進度</div>
@@ -995,7 +995,7 @@ function renderProfileReadingStats() {
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper ${leadIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "20px", className: "nlc-icon" }) : ""}
+            ${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">超前進度</div>
@@ -1011,7 +1011,7 @@ function renderProfileReadingStats() {
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
           <div class="stat-icon-wrapper ${makeupIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("refresh", { size: "20px", className: "nlc-icon" }) : ""}
+            ${typeof renderIcon === "function" ? renderIcon("refresh", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">補讀天數</div>

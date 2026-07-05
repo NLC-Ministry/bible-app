@@ -21,6 +21,29 @@ const ICON_PARK = /@icon-park\/svg/i;
 const INLINE_SVG = /<svg\b/i;
 const GOOGLE_BRAND_SVG = /fill="#4285F4"/;
 
+const ALLOWED_ICON_SIZE_KEYS = new Set([
+  "xs",
+  "sm",
+  "md",
+  "lg",
+  "nav",
+  "touch",
+  "hero",
+  "badge",
+  "1em",
+]);
+
+const ICON_SIZE_CSS_VARS = [
+  "--icon-size-xs",
+  "--icon-size-sm",
+  "--icon-size-md",
+  "--icon-size-lg",
+  "--icon-size-nav",
+  "--icon-size-touch",
+  "--icon-size-hero",
+  "--icon-size-badge",
+];
+
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name === "dist" || name === ".git") continue;
@@ -68,6 +91,75 @@ function findInlineSvgHits() {
   return hits;
 }
 
+/** Icons on actionable controls must inherit label color — not --color-icon-default. */
+function findControlIconColorOverrides() {
+  const hits = [];
+  const buttonBlock = /<button\b[\s\S]*?<\/button>/gi;
+  const explicitIconColor =
+    /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bcolor:\s*(?!inherit\b)/i;
+
+  for (const abs of walk(root)) {
+    const rel = relative(root, abs);
+    if (EXCLUDE.has(rel)) continue;
+    if (!/\.(html|js)$/.test(abs)) continue;
+    const content = readFileSync(abs, "utf8");
+    let match;
+    while ((match = buttonBlock.exec(content))) {
+      if (explicitIconColor.test(match[0])) {
+        hits.push(rel);
+        break;
+      }
+    }
+    buttonBlock.lastIndex = 0;
+  }
+  return hits;
+}
+
+function findInvalidIconSizeUsage() {
+  const hits = [];
+  const dataSize = /data-icon-size="([^"]+)"/g;
+  const renderSize = /renderIcon\([^)]*size:\s*["']([^"']+)["']/g;
+
+  for (const abs of walk(root)) {
+    const rel = relative(root, abs);
+    if (EXCLUDE.has(rel)) continue;
+    if (!/\.(html|js)$/.test(abs)) continue;
+    const content = readFileSync(abs, "utf8");
+    let match;
+    while ((match = dataSize.exec(content))) {
+      if (!ALLOWED_ICON_SIZE_KEYS.has(match[1])) {
+        hits.push(`${rel}: data-icon-size="${match[1]}"`);
+      }
+    }
+    while ((match = renderSize.exec(content))) {
+      if (!ALLOWED_ICON_SIZE_KEYS.has(match[1])) {
+        hits.push(`${rel}: renderIcon size="${match[1]}"`);
+      }
+    }
+  }
+  return hits;
+}
+
+function findInlineIconFontSize() {
+  const hits = [];
+  const pattern =
+    /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bfont-size\s*:/i;
+
+  for (const abs of walk(root)) {
+    const rel = relative(root, abs);
+    if (EXCLUDE.has(rel)) continue;
+    if (!/\.(html|js)$/.test(abs)) continue;
+    const content = readFileSync(abs, "utf8");
+    if (pattern.test(content)) hits.push(rel);
+    pattern.lastIndex = 0;
+  }
+  return hits;
+}
+
+function findLegacyNavBackSizeSelectors(css) {
+  return /nav-back-chevron\[data-icon-size="[^"]*px/i.test(css) ? ["index.css"] : [];
+}
+
 describe("icon audit", () => {
   it("has no Bootstrap Icons class usage in source", () => {
     const hits = findMatches(BI_CLASS);
@@ -99,6 +191,43 @@ describe("icon audit", () => {
     const block = css.match(/\/\* Lucide icons[\s\S]*?\.search-icon-inside/);
     expect(block).toBeTruthy();
     expect(block[0]).toMatch(/\.nlc-icon\s*\{[\s\S]*?background:\s*transparent/);
-    expect(block[0]).toMatch(/\.nlc-icon svg\s*\{[\s\S]*?background:\s*transparent/);
+    expect(block[0]).toMatch(/\.nlc-icon svg,\s*\n\.nlc-icon__svg\s*\{[\s\S]*?background:\s*transparent/);
+  });
+
+  it("actionable controls inherit icon color from label text", () => {
+    const css = readFileSync(join(root, "index.css"), "utf8");
+    expect(css).toMatch(/button\s+\.nlc-icon[\s\S]*?color:\s*inherit/);
+    expect(css).toMatch(/\.btn-with-icon\s+\.nlc-icon[\s\S]*?color:\s*inherit/);
+    expect(css).toMatch(/\.label-with-icon\s+\.nlc-icon[\s\S]*?color:\s*inherit/);
+  });
+
+  it("has no explicit icon color overrides inside buttons", () => {
+    const hits = findControlIconColorOverrides();
+    expect(hits, hits.join(", ")).toEqual([]);
+  });
+
+  it("defines all icon size CSS tokens on :root", () => {
+    const css = readFileSync(join(root, "index.css"), "utf8");
+    const rootBlock = css.match(/:root\s*\{[\s\S]*?\n\}/);
+    expect(rootBlock).toBeTruthy();
+    for (const token of ICON_SIZE_CSS_VARS) {
+      expect(rootBlock[0], token).toMatch(new RegExp(`${token}:`));
+    }
+  });
+
+  it("uses only semantic icon size keys in markup and renderIcon", () => {
+    const hits = findInvalidIconSizeUsage();
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+
+  it("has no inline font-size on nlc-icon elements", () => {
+    const hits = findInlineIconFontSize();
+    expect(hits, hits.join(", ")).toEqual([]);
+  });
+
+  it("does not use legacy px selectors for nav-back chevrons", () => {
+    const css = readFileSync(join(root, "index.css"), "utf8");
+    const hits = findLegacyNavBackSizeSelectors(css);
+    expect(hits, hits.join(", ")).toEqual([]);
   });
 });

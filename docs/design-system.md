@@ -148,6 +148,55 @@ NLC_MEMBER_COLORS    // avatar / trail palette
 - Parent text may stay muted; set explicit icon color on `.nlc-icon` (mobile nav, honor badges, search icons, stat icon wraps).
 - Filled exceptions: `heartFill`, `likeFill`, `starFill`, `zapFill` are generated with `fill="currentColor"` for active states.
 
+### Icon size scale
+
+CSS tokens in `:root` (mirrored in `js/design-tokens.js` as `NLC_ICON_SIZES`):
+
+| Token | Value | Utility class | Role |
+|-------|-------|---------------|------|
+| `--icon-size-xs` | `14px` | `.nlc-icon--xs` | Dense UI (dropdown rows, inline badges, button icons) |
+| `--icon-size-sm` | `18px` | `.nlc-icon--sm` | Compact chrome (plan nav, overlay, login lock) |
+| `--icon-size-md` | `22px` | `.nlc-icon--md` | Default chrome (header back, verse toolbar) |
+| `--icon-size-lg` | `24px` | `.nlc-icon--lg` | Floating chapter nav |
+| `--icon-size-nav` | `23px` | `.nlc-icon--nav` | Mobile bottom tab bar only |
+| `--icon-size-touch` | `26px` | `.nlc-icon--touch` | Reader floating controls |
+| `--icon-size-hero` | `48px` | `.nlc-icon--hero` | Empty states, badge detail |
+| `--icon-size-badge` | `56px` | `.nlc-icon--badge` | Badge unlock modal |
+
+**Sizing rules**
+
+- Prefer utility classes: `<span class="nlc-icon nlc-icon--sm" data-icon="lock">`.
+- `renderIcon(key, { size: "sm" })` accepts the same semantic keys.
+- Do not use raw `px`/`rem` in markup or JS; component recipes in `index.css` map contexts to tokens.
+- `iconLabel` / `.nlc-icon--inline` may use `1em` (text-relative) — the only non-token exception.
+
+### Icon color roles
+
+| Role | When |
+|------|------|
+| `color: inherit` | Icons on buttons, `.btn-with-icon`, `.label-with-icon`, dropdown rows |
+| `--color-icon-default` | Standalone icons on light surfaces |
+| `--color-icon-muted` | Inactive nav, search placeholders, locked badges |
+| `--color-icon-brand` | Active mobile nav tab |
+| `--color-icon-achievement` | Unlocked honor badges |
+| `--color-brand` on wrapper | Decorative section header accents (bell, pencil) — not mixed with body text on controls |
+
+Nav-back chevrons (`.nav-back-chevron`) use stroke-width `2.5` and a 1px optical nudge in circular touch targets.
+
+### Component icon recipes
+
+| Context | Size token |
+|---------|------------|
+| `.mobile-nav-btn .nlc-icon` | `nav` |
+| `.nav-back-chevron` | `sm` / `md` / `lg` via utility class |
+| `#verse-card-toolbar .nlc-icon` | `md` |
+| `#reader-view .floating-nav-btn .nlc-icon` | `touch` |
+| `.stat-bento__icon-wrap .nlc-icon` | `sm` |
+| `.honor-badge-item__icon .nlc-icon` | `md` |
+| `.search-icon-inside .nlc-icon` | `xs` |
+| `.dashboard-stat-strip__icon` | `xs` |
+| `#detail-icon.nlc-icon` | `hero` |
+
 ## PWA bottom navigation
 
 - Fixed bar: `.mobile-nav-bar` with `env(safe-area-inset-bottom)` padding and `viewport-fit=cover`.

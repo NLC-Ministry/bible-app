@@ -82,6 +82,15 @@
   --color-icon-brand: #04A9D2;
   --color-icon-achievement: #D97706;
 
+  --icon-size-xs: 14px;
+  --icon-size-sm: 18px;
+  --icon-size-md: 22px;
+  --icon-size-lg: 24px;
+  --icon-size-nav: 23px;
+  --icon-size-touch: 26px;
+  --icon-size-hero: 48px;
+  --icon-size-badge: 56px;
+
   --heatmap-level-0: rgba(148, 163, 184, 0.12);
   --heatmap-level-1: var(--color-brand-muted);
   --heatmap-level-2: color-mix(in srgb, var(--color-brand) 35%, transparent);
@@ -338,7 +347,7 @@ body.dark-theme {
 .dashboard-stat-strip__value .nlc-icon {
   color: inherit;
 }
-.dashboard-stat-strip__icon { font-size: 1rem; flex-shrink: 0; }
+.dashboard-stat-strip__icon { flex-shrink: 0; }
 .dashboard-stat-strip__label {
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -485,43 +494,120 @@ body.dark-theme {
   line-height: 0;
   background: transparent;
 }
-.nlc-icon svg {
+.nlc-icon svg,
+.nlc-icon__svg {
   display: block;
-  width: 1em;
-  height: 1em;
+  width: var(--nlc-icon-size, 1em);
+  height: var(--nlc-icon-size, 1em);
   background: transparent;
 }
+
+/* Semantic icon size utilities */
+.nlc-icon--xs { --nlc-icon-size: var(--icon-size-xs); width: var(--icon-size-xs); height: var(--icon-size-xs); }
+.nlc-icon--sm { --nlc-icon-size: var(--icon-size-sm); width: var(--icon-size-sm); height: var(--icon-size-sm); }
+.nlc-icon--md { --nlc-icon-size: var(--icon-size-md); width: var(--icon-size-md); height: var(--icon-size-md); }
+.nlc-icon--lg { --nlc-icon-size: var(--icon-size-lg); width: var(--icon-size-lg); height: var(--icon-size-lg); }
+.nlc-icon--nav { --nlc-icon-size: var(--icon-size-nav); width: var(--icon-size-nav); height: var(--icon-size-nav); }
+.nlc-icon--touch { --nlc-icon-size: var(--icon-size-touch); width: var(--icon-size-touch); height: var(--icon-size-touch); }
+.nlc-icon--hero { --nlc-icon-size: var(--icon-size-hero); width: var(--icon-size-hero); height: var(--icon-size-hero); }
+.nlc-icon--badge { --nlc-icon-size: var(--icon-size-badge); width: var(--icon-size-badge); height: var(--icon-size-badge); }
+
+/*
+ * Icon + label color pairing: on controls and inline label rows, glyphs inherit
+ * the surrounding text color. Standalone/decorative icons keep --color-icon-* tokens.
+ */
+button .nlc-icon,
+[role="button"] .nlc-icon,
+.dropdown-item .nlc-icon,
+.options-dropdown-item .nlc-icon,
+.btn-with-icon .nlc-icon,
+.label-with-icon .nlc-icon {
+  color: inherit;
+}
+
+/* Nav-back chevrons — optical centering + heavier stroke in touch targets */
+.nav-back-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+  color: inherit;
+}
+
+.nav-back-chevron svg {
+  stroke-width: 2.5;
+}
+
+.app-back-btn .nav-back-chevron,
+.reader-back-btn .nav-back-chevron,
+#badge-page-back-btn .nav-back-chevron,
+.circular-action-btn .nav-back-chevron {
+  transform: translateX(-1px);
+}
+
+.overlay-back-btn .nav-back-chevron,
+.plan-level-back-btn .nav-back-chevron {
+  transform: translateX(-1px);
+  margin-inline-end: -0.05rem;
+}
+
 .nlc-icon--inline svg {
   width: 1.05em;
   height: 1.05em;
 }
-.dashboard-stat-strip__icon svg {
-  width: 1rem;
-  height: 1rem;
+
+/* Component icon size recipes */
+.mobile-nav-btn .nlc-icon {
+  --nlc-icon-size: var(--icon-size-nav);
+  width: var(--icon-size-nav);
+  height: var(--icon-size-nav);
 }
-.mobile-nav-btn .nlc-icon svg {
-  width: 23px;
-  height: 23px;
+
+.dashboard-stat-strip__icon {
+  --nlc-icon-size: var(--icon-size-xs);
+  width: var(--icon-size-xs);
+  height: var(--icon-size-xs);
 }
-.stat-bento__icon-wrap .nlc-icon svg {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-.stat-bento__icon-wrap--hero .nlc-icon svg {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-.stat-bento__icon-wrap .nlc-icon {
+
+.stat-bento__icon-wrap .nlc-icon,
+.stat-bento__icon-wrap--hero .nlc-icon {
+  --nlc-icon-size: var(--icon-size-sm);
+  width: var(--icon-size-sm);
+  height: var(--icon-size-sm);
   color: inherit;
 }
-.honor-badge-item__icon .nlc-icon svg {
-  width: 1.4rem;
-  height: 1.4rem;
+
+.honor-badge-item__icon .nlc-icon {
+  --nlc-icon-size: var(--icon-size-md);
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
 }
-.search-icon-inside.nlc-icon svg,
-.search-icon-inside .nlc-icon svg {
-  width: 1rem;
-  height: 1rem;
+
+.search-icon-inside.nlc-icon,
+.search-icon-inside .nlc-icon {
+  --nlc-icon-size: var(--icon-size-xs);
+  width: var(--icon-size-xs);
+  height: var(--icon-size-xs);
+  color: var(--color-icon-muted);
+}
+
+#verse-card-toolbar .nlc-icon {
+  --nlc-icon-size: var(--icon-size-md);
+  width: var(--icon-size-md);
+  height: var(--icon-size-md);
+}
+
+#reader-view .floating-nav-btn .nlc-icon {
+  --nlc-icon-size: var(--icon-size-touch);
+  width: var(--icon-size-touch);
+  height: var(--icon-size-touch);
+}
+
+#detail-icon.nlc-icon {
+  --nlc-icon-size: var(--icon-size-hero);
+  width: var(--icon-size-hero);
+  height: var(--icon-size-hero);
 }
 
 /* Global Styles */
@@ -591,8 +677,8 @@ body {
 }
 
 .brand-icon-img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -813,8 +899,6 @@ body {
 }
 
 #verse-card-toolbar .nlc-icon svg {
-  width: 22px;
-  height: 22px;
   stroke-width: 2.25;
 }
 
@@ -1468,7 +1552,7 @@ vercel-live-feedback,
   transform: scale(0.95);
 }
 
-.floating-nav-btn svg {
+.floating-nav-btn .nlc-icon svg {
   stroke-width: 2.8px;
 }
 
@@ -4517,9 +4601,16 @@ select,
   min-width: 44px;
   min-height: 44px;
   padding: 0;
+  gap: 0;
   border-radius: 999px;
   box-shadow: none;
   flex-shrink: 0;
+}
+
+.app-back-btn:not(.is-home) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-back-btn .nlc-icon {
@@ -6114,9 +6205,7 @@ body.reader-modal-open #reader-view .floating-nav-btn {
   right: max(0px, env(safe-area-inset-right, 0px)) !important;
 }
 
-#reader-view .floating-nav-btn svg {
-  width: 26px;
-  height: 26px;
+#reader-view .floating-nav-btn .nlc-icon svg {
   stroke-width: 2.8px;
 }
 
@@ -7298,6 +7387,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 .btn-with-icon .nlc-icon,
 .label-with-icon .nlc-icon {
   background: transparent;
+  color: inherit;
 }
 
 .member-search-wrapper {
