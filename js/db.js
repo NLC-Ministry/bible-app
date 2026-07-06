@@ -76,44 +76,7 @@ const db = {
       });
     }
 
-    // ── Developer Login Wiring ──
-    const devLoginBox = document.getElementById("developer-login-box");
-    if (devLoginBox) {
-      const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "::1" || window.location.hostname.startsWith("192.168.");
-      devLoginBox.style.display = isLocalhost ? "block" : "none";
-      
-      const btnDevLogin = document.getElementById("btn-gate-dev-login");
-      if (btnDevLogin) {
-        btnDevLogin.addEventListener("click", async (e) => {
-          e.preventDefault();
-          const email = document.getElementById("dev-login-email").value.trim();
-          const password = document.getElementById("dev-login-password").value;
-          
-          if (!email || !password) {
-            showToast("請輸入測試帳號與密碼");
-            return;
-          }
-          
-          loader.show("登入測試帳號中...");
-          try {
-            const nativeSupabase = db.createSupabaseClient();
-            const { data, error } = await nativeSupabase.auth.signInWithPassword({ email, password });
-            
-            if (error) throw error;
-            
-            state.supabase = nativeSupabase;
-            db.updateAuthUI(data.session);
-            await db.loadUserData(true);
-            showToast("測試帳號登入成功！");
-          } catch (err) {
-            console.error("Test account login failed:", err);
-            showToast("登入失敗：" + (err.message || err));
-          } finally {
-            loader.hide();
-          }
-        });
-      }
-    }
+
 
     if (sbUrl && sbKey) {
       try {
