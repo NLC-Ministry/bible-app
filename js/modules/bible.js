@@ -1,6 +1,6 @@
-// Bible Reader tab view controller
+// js/modules/bible.js
 
-function openReaderLayer(element) {
+export function openReaderLayer(element) {
   if (!element) return;
   element.classList.remove("hidden");
   element.style.pointerEvents = "auto";
@@ -8,7 +8,7 @@ function openReaderLayer(element) {
   document.body.classList.add("reader-modal-open");
 }
 
-function closeReaderLayer(element) {
+export function closeReaderLayer(element) {
   if (!element) return;
   element.classList.add("hidden");
   element.style.pointerEvents = "none";
@@ -17,7 +17,7 @@ function closeReaderLayer(element) {
   document.body.classList.toggle("reader-modal-open", Boolean(stillOpen));
 }
 
-function releaseClosedReaderLayers() {
+export function releaseClosedReaderLayers() {
   document.querySelectorAll(
     ".full-page-overlay.hidden, .bottom-sheet-backdrop.hidden, .reader-search-panel.hidden, " +
     ".full-page-overlay[aria-hidden='true'], .bottom-sheet-backdrop[aria-hidden='true'], .reader-search-panel[aria-hidden='true']"
@@ -80,7 +80,7 @@ function initSmartFloatingReaderNav() {
   setNavVisible(true, false);
 }
 
-function initReaderControls() {
+export function initReaderControls() {
   releaseClosedReaderLayers();
   const bookSelect = document.getElementById("reader-book-select");
   const chapterSelect = document.getElementById("reader-chapter-select");
@@ -96,7 +96,6 @@ function initReaderControls() {
     });
   }
 
-  // Load books list
   populateBookSelector("all");
   populateChapterSelector();
   updatePillLabels();
@@ -110,7 +109,6 @@ function initReaderControls() {
   if (bookBadge) bookBadge.addEventListener("click", openReaderCatalog);
   if (chapterBadge) chapterBadge.addEventListener("click", openReaderCatalog);
 
-  // ── New navigation and settings controls (Mockup Screenshot Design) ──
   const navDirectoryBtn = document.getElementById("reader-nav-directory-btn");
   if (navDirectoryBtn) {
     navDirectoryBtn.addEventListener("click", () => {
@@ -139,7 +137,6 @@ function initReaderControls() {
     });
   }
 
-  // Global Search overlay hooks
   const searchBtn = document.getElementById("reader-search-btn");
   const searchOverlay = document.getElementById("global-search-overlay");
   const searchInput = document.getElementById("global-search-input");
@@ -202,7 +199,7 @@ function initReaderControls() {
           console.error("Search error:", err);
           if (searchResultsCountEl) searchResultsCountEl.textContent = "搜尋失敗，請稍後再試";
         }
-      }, 400); // 400ms debounce
+      }, 400);
     });
   }
 
@@ -246,7 +243,6 @@ function initReaderControls() {
     });
   }
 
-  // Display Settings Bottom Sheet hooks
   const settingsTrigger = document.getElementById("reader-settings-trigger-btn");
   const settingsBackdrop = document.getElementById("typography-settings-backdrop");
   const settingsCloseBtn = document.getElementById("typography-sheet-close-btn");
@@ -276,7 +272,6 @@ function initReaderControls() {
     });
   }
 
-  // Bind font size buttons in bottom sheet
   document.querySelectorAll(".font-size-option").forEach(btn => {
     btn.addEventListener("click", () => {
       const size = parseInt(btn.dataset.size);
@@ -286,7 +281,6 @@ function initReaderControls() {
     });
   });
 
-  // Bind theme buttons in bottom sheet
   document.querySelectorAll(".theme-option").forEach(btn => {
     btn.addEventListener("click", () => {
       const theme = btn.dataset.theme;
@@ -306,7 +300,6 @@ function initReaderControls() {
     });
   }
 
-  // Reader picker controls
   const testamentButtons = document.querySelectorAll("#reader-testament-buttons .reader-picker-tab");
   testamentButtons.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -348,7 +341,6 @@ function initReaderControls() {
     });
   }
 
-  // ── Font size buttons (new pill bar IDs) ──
   const incFont = document.getElementById("reader-font-increase");
   const decFont = document.getElementById("reader-font-decrease");
   if (incFont) incFont.addEventListener("click", () => {
@@ -357,7 +349,7 @@ function initReaderControls() {
   if (decFont) decFont.addEventListener("click", () => {
     if (state.readerState.fontSize > 12) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
   });
-  // Legacy font buttons (kept for safety)
+
   const legacyInc = document.getElementById("increase-font");
   const legacyDec = document.getElementById("decrease-font");
   if (legacyInc) legacyInc.addEventListener("click", () => {
@@ -367,7 +359,6 @@ function initReaderControls() {
     if (state.readerState.fontSize > 12) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
   });
 
-  // ── Prev / Next Chapter Buttons ──
   const prevChapterBtn = document.getElementById("prev-chapter-btn");
   const nextChapterBtn = document.getElementById("next-chapter-btn");
   if (prevChapterBtn) prevChapterBtn.addEventListener("click", () => {
@@ -379,12 +370,8 @@ function initReaderControls() {
     navigateToChapter(1);
   });
 
-  // Smart floating prev / next chapter buttons
   initSmartFloatingReaderNav();
 
-
-
-  // Mark chapter read checkbox
   const markReadBtn = document.getElementById("mark-read-btn");
   if (markReadBtn) {
     markReadBtn.addEventListener("click", () => {
@@ -393,7 +380,6 @@ function initReaderControls() {
       const bookObj = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
       if (!bookObj) return;
 
-      // 1. 💡 立即在本機更新記憶體與按鈕打勾狀態（完全零延遲）
       markReadBtn.classList.toggle("checked", isChecked);
 
       let planDayChKey = null;
@@ -406,7 +392,6 @@ function initReaderControls() {
         }
       }
 
-      // 2. 💡 背景非同步向 Supabase 發送進度更新，不阻塞 UI 操作
       db.logChapterRead(bookObj.name, state.readerState.chapter, isChecked)
         .then(async () => {
           if (state.activePlan) {
@@ -423,7 +408,6 @@ function initReaderControls() {
         })
         .catch(error => {
           console.error("Failed to update reader progress in background", error);
-          // 💡 同步失敗時，自動還原按鈕打勾狀態與進度
           markReadBtn.classList.toggle("checked", wasChecked);
           if (state.activePlan && planDayChKey) {
             updatePlanCheckboxState(planDayChKey, wasChecked);
@@ -432,14 +416,13 @@ function initReaderControls() {
               updateDashboardView();
             }
           }
-      showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
+          showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
         });
     });
   }
-  // Reading progress is updated only by the user's explicit check action.
 }
 
-function renderReaderPicker() {
+export function renderReaderPicker() {
   renderReaderTestamentTabs();
   renderReaderBookGrid();
   renderReaderChapterGrid();
@@ -508,7 +491,7 @@ function renderReaderChapterGrid() {
   }
 }
 
-function populateBookSelector(filter) {
+export function populateBookSelector(filter) {
   const bookSelect = document.getElementById("reader-book-select");
   if (!bookSelect) return;
 
@@ -527,7 +510,7 @@ function populateBookSelector(filter) {
   });
 }
 
-function populateChapterSelector() {
+export function populateChapterSelector() {
   const bookSelect = document.getElementById("reader-book-select");
   const chapterSelect = document.getElementById("reader-chapter-select");
   const bookId = bookSelect ? parseInt(bookSelect.value || state.readerState.bookId, 10) : Number(state.readerState.bookId || 1);
@@ -557,15 +540,14 @@ function populateChapterSelector() {
   }
 }
 
-function saveReaderPreferences() {
+export function saveReaderPreferences() {
   localStorage.setItem("reader_state", JSON.stringify({
     bookId: state.readerState.bookId,
     chapter: state.readerState.chapter
   }));
 }
 
-// Update the compact pill bar labels to reflect current book/chapter
-function updatePillLabels() {
+export function updatePillLabels() {
   const book = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
   const refLabel = document.getElementById("reader-nav-ref-label");
   if (refLabel && book) {
@@ -583,8 +565,7 @@ function updatePillLabels() {
   }
 }
 
-// Keep a version in memory and store locally
-function updateReaderFontSize() {
+export function updateReaderFontSize() {
   const size = Number(state.readerState.fontSize || 18);
   state.readerState.fontSize = size;
   document.documentElement.style.setProperty("--reader-font-size", size + "px");
@@ -602,12 +583,11 @@ function updateReaderFontSize() {
   });
 }
 
-function navigateToChapter(direction) {
+export function navigateToChapter(direction) {
   const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
   let newChapter = state.readerState.chapter + direction;
   
   if (newChapter < 1) {
-    // Go to previous book
     const prevBookId = state.readerState.bookId - 1;
     if (prevBookId >= 1) {
       const prevBook = BIBLE_BOOKS.find(b => b.id === prevBookId);
@@ -622,7 +602,6 @@ function navigateToChapter(direction) {
       renderReaderText();
     }
   } else if (newChapter > currentBook.chapters) {
-    // Go to next book
     const nextBookId = state.readerState.bookId + 1;
     if (nextBookId <= 66) {
       state.readerState.bookId = nextBookId;
@@ -636,7 +615,6 @@ function navigateToChapter(direction) {
       renderReaderText();
     }
   } else {
-    // Stay in same book
     state.readerState.chapter = newChapter;
     const chapterSelect = document.getElementById("reader-chapter-select");
     if (chapterSelect) chapterSelect.value = newChapter;
@@ -645,44 +623,38 @@ function navigateToChapter(direction) {
   }
 }
 
-async function renderReaderText() {
+export async function renderReaderText() {
   const container = document.getElementById("bible-content");
-  
-  // Initialize state trackers for loading guard
+  if (!container) return;
+
   let verses = null;
   let isLoading = true;
 
-  // Print debug log trace at the very beginning of the rendering function
   console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
-  // Reset autoMarked for the newly loaded chapter
   state.readerState.autoMarked = false;
   const heading = document.getElementById("bible-title");
   const markReadBtn = document.getElementById("mark-read-btn");
   
-  // Defensively parse inputs to prevent undefined/type-mismatch crashes on mobile
   const bookId = Number(state.readerState && state.readerState.bookId) || 1;
   const book = BIBLE_BOOKS.find(b => b.id === bookId) || BIBLE_BOOKS[0];
   const chapter = Number(state.readerState && state.readerState.chapter) || 1;
 
-  heading.textContent = `${book.name} ${chapter}章`;
+  if (heading) heading.textContent = `${book.name} ${chapter}章`;
   updatePillLabels();
   renderReaderPicker();
   
-  // Reset scroll container position to top for immersive reading
   const scrollSurface = document.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
   if (scrollSurface) {
     scrollSurface.scrollTop = 0;
   }
 
-  // Pre-hide sticky bottom action bar initially to prevent early popping
   const bar = document.getElementById("reader-bottom-action-bar");
   if (bar) {
     bar.style.display = "none";
     bar.classList.add("hidden");
   }
 
-  // Synced cache pre-check: if cached, clear instantly for 0ms render; otherwise show skeleton
   const cacheKey = `${book.eng}_${chapter}`;
   const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
   if (cachedData && cachedData.verses && cachedData.verses.length > 0) {
@@ -696,14 +668,9 @@ async function renderReaderText() {
     renderVersesList(container, verses, book.name, chapter);
   }
   
-  // Set checked button status
   if (markReadBtn) {
     const isRead = state.readingLogs.some(l => l.book === book.name && l.chapter === chapter);
-    if (isRead) {
-      markReadBtn.classList.add("checked");
-    } else {
-      markReadBtn.classList.remove("checked");
-    }
+    markReadBtn.classList.toggle("checked", isRead);
   }
 
   try {
@@ -712,23 +679,18 @@ async function renderReaderText() {
     verses = data ? data.verses : null;
     isLoading = false;
 
-    // Print updated debug log trace
     console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
-    // Data boundary validation checks
     if (!verses || verses.length === 0) {
       throw new Error("經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！");
     }
 
     renderVersesList(container, verses, book.name, chapter);
-    
-    // Trigger predictive pre-fetch for the next chapter in background
     triggerPredictivePrefetch();
   } catch (error) {
     console.error("Failed to load complete Bible chapter:", error);
     isLoading = false;
     
-    // Render custom Warm Retry Fallback UI
     container.innerHTML = `
       <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
         <div style="font-size: 2.5rem;">📖</div>
@@ -740,10 +702,7 @@ async function renderReaderText() {
     `;
   }
 
-  // Make sure we apply font size preference
   updateReaderFontSize();
-  
-  // Update sticky bottom action bar context
   updateReaderBottomActionBar();
 }
 
@@ -755,7 +714,6 @@ function renderVersesList(container, verses, bookName, chapter) {
     verseDiv.dataset.verse = String(v.verse);
     verseDiv.id = `reader-verse-${v.verse}`;
 
-    // Highlight if marked
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
     if (state.highlights[highlightKey]) {
       verseDiv.style.backgroundColor = state.highlights[highlightKey];
@@ -764,7 +722,6 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
 
-    // Add Click listeners for highlighting verses
     verseDiv.addEventListener("click", (e) => {
       e.stopPropagation();
       showContextToolbar(verseDiv, highlightKey);
@@ -774,11 +731,10 @@ function renderVersesList(container, verses, bookName, chapter) {
   });
 }
 
-// Floating context menu toolbar for highlights
 function showContextToolbar(verseElement, highlightKey) {
   const toolbar = document.getElementById("context-toolbar");
+  if (!toolbar) return;
   
-  // Display floating menu near clicked element
   const rect = verseElement.getBoundingClientRect();
   toolbar.style.top = `${window.scrollY + rect.top}px`;
   toolbar.style.left = `${window.scrollX + rect.left + rect.width / 2}px`;
@@ -819,9 +775,6 @@ function showContextToolbar(verseElement, highlightKey) {
   }, 10);
 }
 
-// ==========================================================================
-// Bible Reader Version, Audio, Search, and Theme Helpers
-// ==========================================================================
 window.toggleBibleVersion = function() {
   const current = state.readerState.version || "CUNP";
   let next = "CUNP";
@@ -832,7 +785,6 @@ window.toggleBibleVersion = function() {
   state.readerState.version = next;
   localStorage.setItem("reader_bible_version", next);
   
-  // Update version button text
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
     const label = next === "CUNP" ? "CUNP" : (next === "RCUVTS" ? "RCUV" : "CUV");
@@ -931,7 +883,6 @@ window.applyAppTheme = function(themeName) {
   if (appLayout) appLayout.classList.toggle("reader-mode", Boolean(isReaderPage));
   localStorage.setItem("app_theme", themeName);
   
-  // Refresh badge UI for theme change
   if (typeof renderBadgeWall === "function") {
     renderBadgeWall("badges-grid");
   }
@@ -940,26 +891,21 @@ window.applyAppTheme = function(themeName) {
     renderBadgeStrip("plan-badge-strip");
   }
   
-  // Update settings dropdown active state if it exists
   document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.theme === themeName);
   });
 
-  // Update bottom sheet active state
   document.querySelectorAll(".theme-option").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.theme === themeName);
   });
 };
 
-// ==========================================================================
-// Bible Navigation Overlay (Catalog Shell) State and Handlers
-// ==========================================================================
 let navOverlayState = {
-  activeTab: 'book', // 'book', 'chapter', 'verse'
+  activeTab: 'book',
   selectedBookId: 1,
   selectedChapter: 1,
   selectedVerse: 1,
-  viewMode: 'grid', // 'grid', 'list'
+  viewMode: 'grid',
   autoAdvance: true
 };
 
@@ -968,14 +914,12 @@ window.openBibleNavOverlay = function() {
   const overlay = document.getElementById("bible-nav-overlay");
   if (!overlay) return;
   
-  // Sync selections with global reader state
   navOverlayState.selectedBookId = state.readerState.bookId;
   navOverlayState.selectedChapter = state.readerState.chapter;
   navOverlayState.selectedVerse = 1;
   
   openReaderLayer(overlay);
   
-  // Initialize grid mode buttons in DOM
   const gridBtn = document.getElementById("view-mode-grid");
   const listBtn = document.getElementById("view-mode-list");
   if (gridBtn && listBtn) {
@@ -983,7 +927,6 @@ window.openBibleNavOverlay = function() {
     listBtn.classList.toggle("active", navOverlayState.viewMode === 'list');
   }
 
-  // Bind Segmented Tab clicks once
   const tabs = document.querySelectorAll("#bible-nav-overlay .segmented-tab");
   tabs.forEach(tab => {
     if (!tab.dataset.bound) {
@@ -994,7 +937,6 @@ window.openBibleNavOverlay = function() {
     }
   });
 
-  // Bind view mode triggers once
   if (gridBtn && !gridBtn.dataset.bound) {
     gridBtn.dataset.bound = "true";
     gridBtn.addEventListener("click", () => {
@@ -1014,7 +956,6 @@ window.openBibleNavOverlay = function() {
     });
   }
 
-  // Bind back button once
   const backBtn = document.getElementById("bible-nav-back-btn");
   if (backBtn && !backBtn.dataset.bound) {
     backBtn.dataset.bound = "true";
@@ -1036,7 +977,6 @@ window.switchNavTab = function(tabName) {
   console.log(`➡️ [Debug] 切換聖經目錄分頁至: ${tabName}`);
   navOverlayState.activeTab = tabName;
   
-  // Update segmented control tabs
   document.querySelectorAll("#bible-nav-overlay .segmented-tab").forEach(tab => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
   });
@@ -1070,7 +1010,6 @@ function renderBibleNavContent() {
     document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "flex";
     
     if (navOverlayState.viewMode === 'grid') {
-      // 5-Column Grid Mode
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
       oldSection.textContent = "舊約聖經";
@@ -1107,7 +1046,6 @@ function renderBibleNavContent() {
       container.appendChild(newSection);
       container.appendChild(newGrid);
     } else {
-      // List Mode
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
       oldSection.textContent = "舊約聖經";
@@ -1169,7 +1107,7 @@ function renderBibleNavContent() {
     const grid = document.createElement("div");
     grid.className = "verse-nav-grid";
     
-    let totalVerses = 30; // sensible default fallback
+    let totalVerses = 30;
     let localData = null;
     if (book && typeof BIBLE_VERSE_COUNTS !== "undefined") {
       const bookCounts = BIBLE_VERSE_COUNTS[book.eng];
@@ -1183,7 +1121,6 @@ function renderBibleNavContent() {
       }
     }
     
-    // 強制本地撈取除錯軌跡
     console.log('📦 [本地讀取成功] 已從 Local 讀取出卷章節數據：', localData);
     
     for (let v = 1; v <= totalVerses; v++) {
@@ -1215,14 +1152,11 @@ async function selectNavVerse(vNum) {
   console.log(`➡️ [Debug] 聖經目錄選擇節數: ${vNum}`);
   navOverlayState.selectedVerse = vNum;
   
-  // Close overlay
   closeReaderLayer(document.getElementById("bible-nav-overlay"));
   
-  // Apply update to state and trigger re-render
   state.readerState.bookId = navOverlayState.selectedBookId;
   state.readerState.chapter = navOverlayState.selectedChapter;
   
-  // Sync selects
   const bookSelect = document.getElementById("reader-book-select");
   if (bookSelect) {
     bookSelect.value = String(navOverlayState.selectedBookId);
@@ -1239,7 +1173,6 @@ async function selectNavVerse(vNum) {
   try {
     await renderReaderText();
     
-    // Scroll to the verse
     const container = document.getElementById("bible-content");
     if (container) {
       setTimeout(() => {
@@ -1249,7 +1182,6 @@ async function selectNavVerse(vNum) {
           if ((v.dataset.verse && parseInt(v.dataset.verse) === vNum) || (numEl && parseInt(numEl.textContent) === vNum)) {
             v.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // Visual physical flash feedback
             const oldBg = v.style.backgroundColor;
             v.style.backgroundColor = 'var(--color-brand-subtle, rgba(4,169,210,0.22))';
             setTimeout(() => {
@@ -1265,9 +1197,6 @@ async function selectNavVerse(vNum) {
   }
 }
 
-// ==========================================================================
-// Full-Text Bible Search client (local corpus first, Bolls API fallback)
-// ==========================================================================
 window.__BIBLE_SEARCH_CORPUS = window.__BIBLE_SEARCH_CORPUS || null;
 
 window.setBibleSearchCorpus = function(corpus) {
@@ -1311,27 +1240,20 @@ window.searchBibleText = async function(query, translation = "CUNP") {
   });
 };
 
-// ── Context-Aware Read Tracking Bottom Action Bar ─────────
-function updateReaderBottomActionBar() {
+export function updateReaderBottomActionBar() {
   const bar = document.getElementById("reader-bottom-action-bar");
   const indicator = document.getElementById("reader-progress-indicator");
   const btn = document.getElementById("reader-capsule-btn");
   if (!bar || !btn) return;
 
-  // Enforce initial hiding to prevent early display
   bar.style.display = "none";
   bar.classList.add("hidden");
 
   const bookObj = BIBLE_BOOKS.find(b => b.id === Number(state.readerState.bookId));
-  if (!bookObj) {
-    return;
-  }
+  if (!bookObj) return;
 
   const fromPlan = !!(state.readerState && state.readerState.fromPlan && state.activePlan);
-  if (!fromPlan) {
-    // If not from plan route, immediately exit and keep hidden
-    return;
-  }
+  if (!fromPlan) return;
 
   let isCatchingUp = false;
   let elapsedDay = 1;
@@ -1347,10 +1269,8 @@ function updateReaderBottomActionBar() {
     isCatchingUp = planDay < elapsedDay;
   }
 
-  // Remove previous scenario classes
   bar.classList.remove("scenario-a", "scenario-b", "scenario-c");
 
-  // Force debugging trace output on first line of capsule action triggers
   const logClick = () => {
     console.log('🧠 [智慧按鈕觸發] 情境：' + (isCatchingUp ? '補讀' : '正常'));
   };
@@ -1369,98 +1289,86 @@ function updateReaderBottomActionBar() {
     return ch.isRead;
   });
 
-  if (isDayCompletedBefore) {
-    // If the day is already fully completed, do not show the bottom action bar
-    return;
-  }
+  if (isDayCompletedBefore) return;
   
-  // Find current index
   const currentChIndex = dayChapters.findIndex(ch => 
     ch.book === bookObj.name && Number(ch.chapter) === Number(state.readerState.chapter)
   );
   const isLastChapterOfDay = currentChIndex === dayChapters.length - 1 || currentChIndex === -1;
   const totalChapters = dayChapters.length;
-  
-  // Count how many are read (treating current as read once they click the button)
   const readCount = dayChapters.filter(ch => ch.isRead).length;
 
-    if (!isCatchingUp) {
-      // 情境 B：【本日計畫正常模式】
-      bar.classList.add("scenario-b");
-      if (indicator) {
-        indicator.classList.remove("hidden");
-        indicator.textContent = `本日進度 ${readCount}/${totalChapters}`;
+  if (!isCatchingUp) {
+    bar.classList.add("scenario-b");
+    if (indicator) {
+      indicator.classList.remove("hidden");
+      indicator.textContent = `本日進度 ${readCount}/${totalChapters}`;
+    }
+
+    if (isLastChapterOfDay) {
+      btn.innerHTML = `<span>🎉 大功告成</span>`;
+    } else {
+      btn.innerHTML = iconLabel("chevronRight", (window.APP_COPY && window.APP_COPY.reader.nextChapter) || "下一章");
+    }
+
+    btn.onclick = () => {
+      logClick();
+      
+      const currentRound = state.readerState.planRound || plan.currentRound || 1;
+      db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
+        .then(() => db.saveLocalUserStats());
+      applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
+      calculatePlanProgress();
+      if (typeof updateDashboardView === "function") {
+        updateDashboardView();
       }
 
       if (isLastChapterOfDay) {
-        btn.innerHTML = `<span>🎉 大功告成</span>`;
+        showToast("🎉 本日計畫已全部完成！");
+        appRouter.switchTab("plan-view", { keepPlanDetail: true });
       } else {
-        btn.innerHTML = iconLabel("chevronRight", (window.APP_COPY && window.APP_COPY.reader.nextChapter) || "下一章");
+        const nextCh = dayChapters[currentChIndex + 1];
+        const nextBook = BIBLE_BOOKS.find(b => b.name === nextCh.book || b.eng === nextCh.book);
+        if (nextBook) {
+          state.readerState.bookId = nextBook.id;
+          state.readerState.chapter = Number(nextCh.chapter);
+          renderReaderText();
+        }
+      }
+    };
+  } else {
+    bar.classList.add("scenario-c");
+    if (indicator) indicator.classList.add("hidden");
+    btn.innerHTML = iconLabel("skipForward", (window.APP_COPY && window.APP_COPY.reader.catchUpNextDay) || "補讀下一天");
+
+    btn.onclick = () => {
+      logClick();
+      
+      const currentRound = state.readerState.planRound || plan.currentRound || 1;
+      db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
+        .then(() => db.saveLocalUserStats());
+      applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
+      calculatePlanProgress();
+      if (typeof updateDashboardView === "function") {
+        updateDashboardView();
       }
 
-      btn.onclick = () => {
-        logClick();
-        
-        // 1. 標記已讀，100% 同步寫入本地端
-        const currentRound = state.readerState.planRound || plan.currentRound || 1;
-        db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
-          .then(() => db.saveLocalUserStats());
-        applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
-        calculatePlanProgress();
-        if (typeof updateDashboardView === "function") {
-          updateDashboardView();
+      const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
+      if (nextChInfo) {
+        const nextBook = BIBLE_BOOKS.find(b => b.name === nextChInfo.book || b.eng === nextChInfo.book);
+        if (nextBook) {
+          state.readerState.bookId = nextBook.id;
+          state.readerState.chapter = Number(nextChInfo.chapter);
+          state.readerState.planDayNum = nextChInfo.dayNum;
+          renderReaderText();
         }
-
-        if (isLastChapterOfDay) {
-          showToast("🎉 本日計畫已全部完成！");
-          appRouter.switchTab("plan-view", { keepPlanDetail: true });
-        } else {
-          // 載入本地下一章
-          const nextCh = dayChapters[currentChIndex + 1];
-          const nextBook = BIBLE_BOOKS.find(b => b.name === nextCh.book || b.eng === nextCh.book);
-          if (nextBook) {
-            state.readerState.bookId = nextBook.id;
-            state.readerState.chapter = Number(nextCh.chapter);
-            renderReaderText();
-          }
-        }
-      };
-    } else {
-      // 情境 C：【落後補讀模式】
-      bar.classList.add("scenario-c");
-      if (indicator) indicator.classList.add("hidden"); // 強制隱藏提示字
-      btn.innerHTML = iconLabel("skipForward", (window.APP_COPY && window.APP_COPY.reader.catchUpNextDay) || "補讀下一天");
-
-      btn.onclick = () => {
-        logClick();
-        
-        // 1. 標記已讀，100% 同步寫入本地端
-        const currentRound = state.readerState.planRound || plan.currentRound || 1;
-        db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
-          .then(() => db.saveLocalUserStats());
-        applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
-        calculatePlanProgress();
-        if (typeof updateDashboardView === "function") {
-          updateDashboardView();
-        }
-
-        // 尋找下一個補讀章節
-        const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
-        if (nextChInfo) {
-          const nextBook = BIBLE_BOOKS.find(b => b.name === nextChInfo.book || b.eng === nextChInfo.book);
-          if (nextBook) {
-            state.readerState.bookId = nextBook.id;
-            state.readerState.chapter = Number(nextChInfo.chapter);
-            state.readerState.planDayNum = nextChInfo.dayNum;
-            renderReaderText();
-          }
-        } else {
-          showToast("🎉 補讀進度已全部追上！");
-          appRouter.switchTab("plan-view", { keepPlanDetail: true });
-        }
-      };
-    }
+      } else {
+        showToast("🎉 補讀進度已全部追上！");
+        appRouter.switchTab("plan-view", { keepPlanDetail: true });
+      }
+    };
   }
+}
 
 function applyMemoryChapterReadState(bookName, chapterNum, checked, roundNum) {
   if (!state.activePlan || !state.activePlan.days) return;
@@ -1508,13 +1416,11 @@ function triggerPredictivePrefetch() {
   let nextChapter = state.readerState.chapter + 1;
 
   if (nextChapter > currentBook.chapters) {
-    // Go to next book
     const nextBook = BIBLE_BOOKS.find(b => b.id === currentBook.id + 1);
     if (nextBook) {
       nextBookEng = nextBook.eng;
       nextChapter = 1;
     } else {
-      // Last chapter of Revelation, nothing to prefetch
       return;
     }
   }
@@ -1524,7 +1430,6 @@ function triggerPredictivePrefetch() {
     return;
   }
 
-  // Pre-fetch silently in background
   console.log(`📡 [背景預載啟動] 正在預載下一章: ${nextBookEng} ${nextChapter}章`);
   fetchBibleChapter(nextBookEng, nextChapter)
     .then(data => {
@@ -1566,7 +1471,6 @@ function handleReaderScroll(event) {
         bar.classList.remove("hidden");
         bar.style.opacity = "0";
         bar.style.transform = "translateY(20px)";
-        // Force reflow
         bar.offsetHeight;
         bar.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
         bar.style.opacity = "1";
@@ -1579,3 +1483,15 @@ function handleReaderScroll(event) {
   }
 }
 
+export function init() {
+  initReaderControls();
+}
+
+window.renderReaderText = renderReaderText;
+window.saveReaderPreferences = saveReaderPreferences;
+window.populateBookSelector = populateBookSelector;
+window.populateChapterSelector = populateChapterSelector;
+window.updatePillLabels = updatePillLabels;
+window.updateReaderFontSize = updateReaderFontSize;
+window.navigateToChapter = navigateToChapter;
+window.initReaderControls = init;

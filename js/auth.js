@@ -446,3 +446,5 @@ const auth = {
     this._finishLocalLogout();
   }
 };
+
+window.auth = auth;

@@ -1662,6 +1662,28 @@ const db = {
     }
   },
 
+  async deleteDevotionalNote(noteId) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const { error } = await state.supabase
+        .from("devotional_notes")
+        .delete()
+        .eq("id", noteId);
+
+      if (error) throw error;
+    } else {
+      const notesStr = localStorage.getItem("devotional_notes") || "[]";
+      let notes = [];
+      try {
+        notes = JSON.parse(notesStr);
+        if (!Array.isArray(notes)) notes = [];
+      } catch (e) {
+        notes = [];
+      }
+      notes = notes.filter(n => n.id !== noteId);
+      localStorage.setItem("devotional_notes", JSON.stringify(notes));
+    }
+  },
+
   async toggleDevotionalLike(noteId) {
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const user = await this.getCurrentDbUser();
@@ -2221,3 +2243,5 @@ const db = {
     }
   }
 };
+
+window.db = db;

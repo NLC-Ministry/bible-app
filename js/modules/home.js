@@ -1,4 +1,4 @@
-// Dashboard tab view controller
+// js/modules/home.js
 
 const DAILY_VERSES = [
   { text: "「神的話是我腳前的燈，是我路上的光。」", source: "詩篇 119:105" },
@@ -15,7 +15,7 @@ const DAILY_VERSES = [
   { text: "「凡勞苦擔重擔的人，可以到我這裡來，我就使你們得安息。」", source: "馬太福音 11:28" }
 ];
 
-function updateDashboardView() {
+export function updateDashboardView() {
   const greetingEl = document.getElementById("user-greeting");
   if (greetingEl) {
     greetingEl.textContent = state.currentUser.name || "弟兄姊妹";
@@ -25,7 +25,6 @@ function updateDashboardView() {
     streakEl.textContent = state.currentUser.streak || "0";
   }
 
-  // Render Daily Verse and Church Announcements
   renderDailyVerse();
   updateAnnouncementsList();
 
@@ -33,7 +32,6 @@ function updateDashboardView() {
     renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
   }
 
-  // Render active plan card
   const planSummaryDiv = document.getElementById("active-plan-summary");
   if (state.activePlan) {
     const progress = state.activePlan.progress || 0;
@@ -44,7 +42,6 @@ function updateDashboardView() {
       ? `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`
       : `<span class="text-brand" style="font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
 
-    // Calculate core statistics for dashboard summary card
     const streakDays = state.currentUser.streak || 0;
     const totalCompletionRate = progress;
 
@@ -147,21 +144,14 @@ function updateDashboardView() {
     `;
   }
 
-  // Render personal rankings
   calculateAndRenderPersonalRankings();
-
-  // Render Pastoral ranking top 5 list
   renderPastoralZoneRankingList();
-
-  // Load Devotional Notes
   loadTodayDevotional();
 
-  // Load sharing wall
   if (typeof fetchPastoralVerseWall === "function") {
     fetchPastoralVerseWall();
   }
 
-  // Render Pilgrimage Trail & controls
   renderPilgrimageTrail();
   if (!state.pilgrimageControlsInit) {
     initPilgrimageControls();
@@ -248,7 +238,6 @@ async function renderPastoralZoneRankingList() {
       console.error("Failed to load pastoral zone stats:", e);
     }
   } else {
-    // Demo Mode
     const mockUser = {
       name: state.currentUser.name,
       great_region: state.currentUser.great_region || "東區",
@@ -283,7 +272,6 @@ async function renderPastoralZoneRankingList() {
   });
 }
 
-// Devotional Notes View Handlers
 async function loadTodayDevotional() {
   const textarea = document.getElementById("devotional-content");
   const countEl = document.getElementById("devotional-word-count");
@@ -306,6 +294,7 @@ async function loadTodayDevotional() {
 }
 
 let devotionalDebounceTimer = null;
+let isSavingDevotional = false;
 
 function initDevotionalControls() {
   const textarea = document.getElementById("devotional-content");
@@ -331,7 +320,6 @@ function initDevotionalControls() {
     });
   }
 
-  // Toggle Devotional input box visibility when '+留言' (sharing) button is clicked
   const toggleBtn = document.getElementById("btn-toggle-devotional-box");
   const devCard = document.querySelector(".devotional-card");
   if (toggleBtn && devCard) {
@@ -354,7 +342,10 @@ function initDevotionalControls() {
 async function saveDevotionalNote(isAuto) {
   const textarea = document.getElementById("devotional-content");
   const statusEl = document.getElementById("devotional-save-status");
+  const saveBtn = document.getElementById("btn-save-devotional");
   if (!textarea) return;
+
+  if (isSavingDevotional) return;
 
   const content = textarea.value.trim();
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
@@ -362,6 +353,16 @@ async function saveDevotionalNote(isAuto) {
   if (statusEl && isAuto) {
     statusEl.innerHTML = `<span class="devotional-save-status__dot" aria-hidden="true"></span>自動儲存中...`;
     statusEl.style.opacity = "1";
+  }
+
+  if (!isAuto) {
+    isSavingDevotional = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = "0.6";
+      const spanText = saveBtn.querySelector("span:not(.nlc-icon)");
+      if (spanText) spanText.textContent = "分享中...";
+    }
   }
 
   try {
@@ -373,7 +374,6 @@ async function saveDevotionalNote(isAuto) {
     if (typeof fetchPastoralVerseWall === "function") {
       fetchPastoralVerseWall();
     }
-    // Auto-hide the input block after manual post submission
     if (!isAuto) {
       const devCard = document.querySelector(".devotional-card");
       if (devCard) {
@@ -387,6 +387,16 @@ async function saveDevotionalNote(isAuto) {
       statusEl.classList.add("text-danger");
       statusEl.classList.remove("text-success-fg");
       statusEl.style.opacity = "1";
+    }
+  } finally {
+    if (!isAuto) {
+      isSavingDevotional = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.style.opacity = "";
+        const spanText = saveBtn.querySelector("span:not(.nlc-icon)");
+        if (spanText) spanText.textContent = "分享金句";
+      }
     }
   }
 }
@@ -494,7 +504,6 @@ async function renderTodayGroupProgress() {
     ? ComponentSkeletonLoader.getHtml("member-progress", { count: 4 })
     : "";
 
-  // Adapt header and search box visibility based on role
   const cardEl = listEl.closest('.glass-card');
   if (cardEl) {
     const cardTitleEl = cardEl.querySelector('.card-title');
@@ -543,7 +552,6 @@ async function renderTodayGroupProgress() {
   }
 
   state.todayGroupMembers = groupMembers;
-
   renderProgressListFiltered("");
 }
 
@@ -552,9 +560,7 @@ function renderProgressListFiltered(searchText) {
   if (!listEl || !state.todayGroupMembers) return;
 
   listEl.innerHTML = "";
-
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-
   const query = searchText.trim().toLowerCase();
   const filtered = state.todayGroupMembers.filter(m =>
     m.name.toLowerCase().includes(query)
@@ -615,10 +621,6 @@ function renderProgressListFiltered(searchText) {
   });
 }
 
-// ==========================================
-// PILGRIMAGE TRAIL BOARD RENDER LOGIC
-// ==========================================
-
 state.pilgrimageZoom = 1.0;
 state.pilgrimageControlsInit = false;
 
@@ -657,7 +659,6 @@ async function renderPilgrimageTrail() {
   const canvas = document.getElementById("pilgrimage-canvas");
   if (!canvas) return;
 
-  // Must have an active plan to draw the plan-specific trail
   if (!state.activePlan || !state.activePlan.days || state.activePlan.days.length === 0) {
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
     return;
@@ -666,7 +667,6 @@ async function renderPilgrimageTrail() {
   const ctx = canvas.getContext("2d");
   const currentRound = state.activePlan.currentRound || 1;
 
-  // ── 1. Build plan chapter list (in reading order) ──────────────────────
   const planChapters = [];
   let lastBook = null;
   state.activePlan.days.forEach(day => {
@@ -689,20 +689,18 @@ async function renderPilgrimageTrail() {
   const TOTAL_PLAN_CHAPTERS = planChapters.length;
   if (TOTAL_PLAN_CHAPTERS === 0) return;
 
-  // ── 2. Compute MY progress per round ──────────────────────────────────
   const myR1Count = planChapters.filter(c => c.isReadR1).length;
   const myR2Count = planChapters.filter(c => c.isReadR2).length;
   const myR3Count = planChapters.filter(c => c.isReadR3).length;
   const myChaptersRead = currentRound === 3 ? myR3Count : (currentRound === 2 ? myR2Count : myR1Count);
 
-  // ── 3. Fetch group members (plan-scoped via fetchMergedUsersList) ──────
   let allUsers = await db.fetchMergedUsersList();
   const myZone = state.currentUser.pastoral_zone || "";
   let groupMembers = myZone ? allUsers.filter(u => u.pastoral_zone === myZone) : [];
   if (!groupMembers || groupMembers.length === 0) {
     groupMembers = [{ name: state.currentUser.name, chapters_read: myChaptersRead }];
   }
-  // Override self with local round-specific count for accuracy
+
   groupMembers = groupMembers.map(m =>
     m.name === state.currentUser.name ? { ...m, chapters_read: myChaptersRead } : m
   );
@@ -713,7 +711,6 @@ async function renderPilgrimageTrail() {
   const maxChaptersRead = groupMembers.reduce((max, m) => Math.max(max, m.chapters_read || 0), 0);
   const maxDrawIndex = Math.min(Math.max(0, maxChaptersRead - 1) + 16, TOTAL_PLAN_CHAPTERS - 1);
 
-  // ── 4. Round-based color palette ──────────────────────────────────────
   const brand = window.NLC_DESIGN.brand;
   const brandActive = window.NLC_DESIGN.brandActive;
   const brandHover = window.NLC_DESIGN.brandHover;
@@ -726,7 +723,6 @@ async function renderPilgrimageTrail() {
   };
   const pal = palette[Math.min(currentRound, 3)];
 
-  // ── 5. Canvas sizing ──────────────────────────────────────────────────
   const cols = 8;
   const spacingX = 72;
   const spacingY = 72;
@@ -735,7 +731,6 @@ async function renderPilgrimageTrail() {
   canvas.height = rowsCount * spacingY + 15;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // ── 6. Path line helper ───────────────────────────────────────────────
   function drawPathLine(startIndex, endIndex, color, width = 7) {
     if (endIndex < startIndex) return;
     ctx.beginPath();
@@ -752,29 +747,22 @@ async function renderPilgrimageTrail() {
     ctx.stroke();
   }
 
-  // ── 7. Draw path lines ────────────────────────────────────────────────
-  // Background grey path
   drawPathLine(0, maxDrawIndex, "rgba(226, 232, 240, 0.8)", 7);
-  // Round 1 footprint underlay (visible only on round 2+)
   if (currentRound >= 2 && myR1Count > 1) {
     drawPathLine(0, Math.min(myR1Count - 1, maxDrawIndex), "rgba(4, 169, 210, 0.2)", 5);
   }
-  // Group path
   if (maxChaptersRead > 1) {
     drawPathLine(0, Math.min(maxChaptersRead - 1, maxDrawIndex), pal.grpPath, 6);
   }
-  // My path
   if (myChaptersRead > 1) {
     drawPathLine(0, Math.min(myChaptersRead - 1, maxDrawIndex), pal.myPath, 8);
   }
 
-  // ── 8. Draw tile nodes ────────────────────────────────────────────────
   for (let i = 0; i <= maxDrawIndex; i++) {
     const pos = getTileCoords(i);
     const ch = planChapters[i];
     if (!ch) continue;
 
-    // Large circle for book start, small for regular chapters
     const isBookStart = ch.isBookStart;
     const r = isBookStart ? 22 : 13;
 
@@ -793,7 +781,6 @@ async function renderPilgrimageTrail() {
       textColor = pal.myText;
       isBold = true;
       strokeW = isBookStart ? 3.5 : 2.5;
-      // Glow for round 2+
       if (currentRound >= 2) {
         ctx.save();
         ctx.shadowColor = pal.myStroke;
@@ -811,7 +798,6 @@ async function renderPilgrimageTrail() {
       strokeW = isBookStart ? 2.5 : 1.5;
     }
 
-    // Draw main circle
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
     ctx.fillStyle = fillStyle;
@@ -820,7 +806,6 @@ async function renderPilgrimageTrail() {
     ctx.strokeStyle = strokeStyle;
     ctx.stroke();
 
-    // Round 2+: draw dim R1 inner ring on tiles that were read in R1 but not yet in current round
     if (currentRound >= 2 && ch.isReadR1 && !isMineRead) {
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, r - 3, 0, Math.PI * 2);
@@ -829,7 +814,6 @@ async function renderPilgrimageTrail() {
       ctx.stroke();
     }
 
-    // Book-start: outer ring for emphasis
     if (isBookStart && isMineRead) {
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, r + 3, 0, Math.PI * 2);
@@ -838,7 +822,6 @@ async function renderPilgrimageTrail() {
       ctx.stroke();
     }
 
-    // Label text
     ctx.fillStyle = textColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -854,7 +837,6 @@ async function renderPilgrimageTrail() {
     }
   }
 
-  // ── 9. Member avatar badges ───────────────────────────────────────────
   const membersByPos = {};
   groupMembers.forEach(m => {
     const posIndex = Math.max(0, (m.chapters_read || 0) - 1);
@@ -874,7 +856,6 @@ async function renderPilgrimageTrail() {
       const y = tilePos.y + Math.sin(angle) * offset;
       const isMe = m.name === state.currentUser.name;
 
-      // Draw outer glowing ring (equivalent to ring-2 ring-violet-400/30)
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, 15.5, 0, Math.PI * 2);
@@ -904,7 +885,6 @@ async function renderPilgrimageTrail() {
     });
   });
 
-  // ── 10. Legend ────────────────────────────────────────────────────────
   const legendEl = document.getElementById("pilgrimage-legend");
   if (legendEl) {
     if (currentRound === 1) {
@@ -920,7 +900,6 @@ async function renderPilgrimageTrail() {
     }
   }
 
-  // ── 11. Auto-scroll to my position ───────────────────────────────────
   const wrapper = canvas.closest(".trail-scroll-wrapper");
   if (wrapper) {
     const myTilePos = getTileCoords(Math.max(0, myChaptersRead - 1));
@@ -972,8 +951,6 @@ function initPilgrimageControls() {
   }
 }
 
-
-
 window.openAnnouncementForm = function () {
   const form = document.getElementById("admin-announcement-form-container");
   if (form) form.classList.remove("hidden");
@@ -1004,9 +981,7 @@ window.saveAnnouncement = async function () {
   const success = await db.saveAnnouncement(title, content);
 
   if (success) {
-    if (typeof showToast === "function") {
-      showToast("公告已發布成功！");
-    }
+    showToast("公告已發布成功！");
     window.closeAnnouncementForm();
     await updateAnnouncementsList();
   }
@@ -1018,9 +993,7 @@ window.deleteAnnouncement = async function (id) {
   const success = await db.deleteAnnouncement(id);
 
   if (success) {
-    if (typeof showToast === "function") {
-      showToast("公告已成功刪除。");
-    }
+    showToast("公告已成功刪除。");
     await updateAnnouncementsList();
   }
 };
@@ -1036,8 +1009,7 @@ async function updateAnnouncementsList() {
   const isAdmin = state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'senior_pastor');
   const publishBtn = document.getElementById("btn-show-announcement-form");
   if (publishBtn) {
-    if (isAdmin) publishBtn.classList.remove("hidden");
-    else publishBtn.classList.add("hidden");
+    publishBtn.classList.toggle("hidden", !isAdmin);
   }
 
   const announcements = await db.fetchAnnouncements();
@@ -1083,7 +1055,6 @@ let currentVerse = null;
 let isVerseLoading = false;
 let isImgLoading = false;
 
-// Map Chinese book names to English ones for Bible-API.com
 const CHINESE_TO_ENGLISH_BOOKS = {
   "詩篇": "psalms",
   "以賽亞書": "isaiah",
@@ -1103,13 +1074,13 @@ const CHINESE_TO_ENGLISH_BOOKS = {
 };
 
 const CURATED_IMAGE_POOL = [
-  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80", // Evening sky reflection
-  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80", // Misty green forest path
-  "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80", // Sunny field woodland
-  "https://images.unsplash.com/photo-1470252649358-96f5e5047118?auto=format&fit=crop&w=800&q=80", // Soft morning sunrise
-  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80", // Calm sunset beach
-  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&w=800&q=80", // Silent starry night
-  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80"  // Majestic clean mountain peaks
+  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1470252649358-96f5e5047118?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&w=800&q=80",
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80"
 ];
 
 const VERSE_CARD_FALLBACK_IMAGE = CURATED_IMAGE_POOL[0];
@@ -1131,7 +1102,6 @@ function setVerseCardLoading(loading) {
     if (bgImgEl) bgImgEl.style.opacity = "0";
   } else if (body) {
     body.removeAttribute("aria-hidden");
-    // releaseClosedReaderLayers() may have set this while body was aria-hidden at boot
     body.style.pointerEvents = "";
   }
 }
@@ -1200,7 +1170,6 @@ async function fetchRandomVerse(event) {
   isVerseLoading = true;
   isImgLoading = true;
 
-  // Set flag for sharing badge check
   localStorage.setItem("has_shared_verse", "true");
   if (typeof checkAchievements === "function") {
     checkAchievements();
@@ -1212,6 +1181,7 @@ async function fetchRandomVerse(event) {
   const verseText = randomLocal.text;
   const verseSource = randomLocal.source;
   const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  localStorage.setItem("verse_card_bg", randomImgUrl);
   const imgPromise = preloadVerseCardImage(randomImgUrl);
 
   const fetchPromise = (async () => {
@@ -1227,7 +1197,7 @@ async function fetchRandomVerse(event) {
 
         const url = `https://bible-api.com/${encodeURIComponent(passage)}?translation=cuv`;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout fallback
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -1268,20 +1238,16 @@ async function shareAsImage(e) {
     if (typeof hydrateIcons === "function") hydrateIcons(shareBtn);
   }
 
-  // 🛡️ 截圖前：將 toolbar 提升到 try 外層，保證 finally 能恢復
   const toolbar = document.getElementById("verse-card-toolbar");
 
   try {
-    // 暫時隱藏工具列（避免按鈕截入圖片、Bootstrap icon 字型破圖）
     if (toolbar) toolbar.style.visibility = "hidden";
 
-    // 1. 使用 html2canvas 將卡片轉為 Blob 圖片物件
     const canvas = await html2canvas(card, {
       useCORS: true,
       scale: 2,
       logging: false,
       ignoreElements: (el) => {
-        // 物理過濾：工具列容器、所有按鈕
         return el.id === "verse-card-toolbar" || el.tagName === "BUTTON";
       }
     });
@@ -1291,7 +1257,6 @@ async function shareAsImage(e) {
 
       const file = new File([blob], 'daily-verse.png', { type: 'image/png' });
 
-      // 2. 【核心防禦】：檢查瀏覽器是否支援 Web Share API 且支援分享檔案
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
@@ -1308,13 +1273,11 @@ async function shareAsImage(e) {
             checkAchievements();
           }
         } catch (shareError) {
-          // 如果使用者在中途取消分享，不報錯，安靜結束
           if (shareError.name !== 'AbortError') {
             fallbackDownload(canvas);
           }
         }
       } else {
-        // 3. 【退路機制】：若在 localhost、非 HTTPS 環境或不支援的手機上，直接觸發下載
         fallbackDownload(canvas);
       }
     }, 'image/png');
@@ -1323,7 +1286,6 @@ async function shareAsImage(e) {
     console.error('產生分享圖片時發生錯誤:', error);
     alert((window.APP_COPY && window.APP_COPY.verse.shareFail) || '分享失敗，等一下再試試');
   } finally {
-    // 🛡️ 無論成功或失敗，一律恢復工具列可見度
     if (toolbar) toolbar.style.visibility = "";
     if (shareBtn) {
       setTimeout(() => {
@@ -1335,7 +1297,6 @@ async function shareAsImage(e) {
   }
 }
 
-// 輔助下載函式：確保在電腦版或非安全環境下也能拿到圖片
 function fallbackDownload(canvas) {
   const link = document.createElement('a');
   link.download = 'daily-verse.png';
@@ -1352,12 +1313,10 @@ function fallbackDownload(canvas) {
 }
 
 async function syncVerseLikes(verseSource) {
-  const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
   const likeBtn = document.getElementById("like-btn");
   const label = document.getElementById("like-count-text");
   if (!likeBtn || !label) return;
 
-  // 1. Initial optimistic local UI state
   let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0");
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
 
@@ -1376,7 +1335,6 @@ async function syncVerseLikes(verseSource) {
 
   updateUI();
 
-  // 2. Fetch fresh like_count from Supabase
   if (state.supabase && state.isSupabaseMode) {
     try {
       const { data, error } = await state.supabase.from("verse_likes").select("like_count").eq("source", verseSource).maybeSingle();
@@ -1386,7 +1344,6 @@ async function syncVerseLikes(verseSource) {
           localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
           updateUI();
         } else {
-          // Row does not exist yet: insert default count 0
           const initialCount = 0;
           await state.supabase.from("verse_likes").insert({ source: verseSource, like_count: initialCount }).execute();
           count = initialCount;
@@ -1416,14 +1373,12 @@ async function toggleVerseLike(e) {
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
   let count = parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0");
 
-  // Optimistic UI updates
   liked = !liked;
   count += liked ? 1 : -1;
 
   localStorage.setItem(`verse_liked_${verseSource}`, liked ? "true" : "false");
   localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
 
-  // Renders optimistic state instantly
   const iconEl = likeBtn.querySelector(".nlc-icon");
   if (iconEl) {
     iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
@@ -1435,7 +1390,6 @@ async function toggleVerseLike(e) {
     label.textContent = count >= 10000 ? `${(count / 10000).toFixed(1)}萬` : count;
   }
 
-  // Persists async Supabase request in background
   if (state.supabase && state.isSupabaseMode) {
     try {
       if (typeof state.supabase.rpc === "function") {
@@ -1467,9 +1421,6 @@ async function toggleVerseLike(e) {
 }
 
 function renderDailyVerse() {
-  const card = document.getElementById("verse-card");
-  // Clicking the card backdrop/overlay is disabled; drawing a new card is only allowed via draw-card-btn.
-
   const shareBtn = document.getElementById("share-card-btn");
   if (shareBtn && !shareBtn._hasShareListener) {
     shareBtn.addEventListener("click", shareAsImage);
@@ -1492,12 +1443,13 @@ function renderDailyVerse() {
     likeBtn._hasLikeListener = true;
   }
 
+  const savedBg = localStorage.getItem("verse_card_bg");
   if (!currentVerse) {
     setVerseCardLoading(true);
     fetchRandomVerse();
   } else {
     setVerseCardLoading(true);
-    const imageUrl = currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
+    const imageUrl = savedBg || currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
     preloadVerseCardImage(imageUrl).then((loadedUrl) => {
       applyVerseCardContent(
         { text: currentVerse.text, source: currentVerse.source },
@@ -1506,7 +1458,6 @@ function renderDailyVerse() {
     });
   }
 }
-
 
 window.openActivePlanFromDashboard = function (event) {
   console.log('📅 [Debug] 已點選讀經計畫，正在跳轉至計畫頁');
@@ -1517,9 +1468,6 @@ window.openActivePlanFromDashboard = function (event) {
   appRouter.switchTab('plan-view', { keepPlanDetail: true });
 };
 
-/**
- * Switch directly to the Bible Reader and navigate to the user's first unread chapter.
- */
 window.startReadingCurrentChapter = function () {
   console.log('📖 [Debug] 已點選章節，進入全滿版沉浸閱讀模式');
   if (!state.activePlan) {
@@ -1531,7 +1479,6 @@ window.startReadingCurrentChapter = function () {
   let targetChapter = 1;
   let found = false;
 
-  // Search through all days of the active plan for the first unread chapter
   if (state.activePlan.days) {
     for (const day of state.activePlan.days) {
       const unread = day.chapters.find(ch => !ch.isRead);
@@ -1544,7 +1491,6 @@ window.startReadingCurrentChapter = function () {
     }
   }
 
-  // Fallback to the first chapter of the first day if everything is read
   if (!found && state.activePlan.days && state.activePlan.days[0] && state.activePlan.days[0].chapters && state.activePlan.days[0].chapters[0]) {
     targetBook = state.activePlan.days[0].chapters[0].book;
     targetChapter = Number(state.activePlan.days[0].chapters[0].chapter);
@@ -1557,7 +1503,6 @@ window.startReadingCurrentChapter = function () {
       state.readerState.chapter = targetChapter;
       state.readerState.fromPlan = true;
 
-      // Save preferences to local storage
       if (typeof saveReaderPreferences === 'function') {
         saveReaderPreferences();
       } else {
@@ -1570,8 +1515,6 @@ window.startReadingCurrentChapter = function () {
   }
 
   state.readerState.returnTab = "dashboard-view";
-
-  // Navigate to reader
   appRouter.switchTab('reader-view', { fromPlan: true });
 };
 
@@ -1637,7 +1580,6 @@ async function fetchPastoralVerseWall() {
       container.innerHTML = `<div class="text-xs text-red-500 text-center py-6">載入分享牆失敗</div>`;
     }
   } else {
-    // Offline / local fallback demo data
     const defaultMock = [
       { id: "demo_note1", user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date(Date.now() - 3600000).toISOString() },
       { id: "demo_note2", user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date(Date.now() - 7200000).toISOString() }
@@ -1686,7 +1628,6 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     const profile = profileMap[note.user_id] || { name: "未知成員", small_group: "小組" };
     const initial = profile.name ? profile.name.charAt(0) : "神";
 
-    // Hash name to gradient background color class for avatar only
     const colors = [
       "from-pink-500/20 to-rose-500/20 text-rose-500 dark:text-rose-300",
       "from-purple-500/20 to-indigo-500/20 text-indigo-500 dark:text-indigo-300",
@@ -1697,7 +1638,6 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     const charCode = profile.name ? profile.name.charCodeAt(0) : 0;
     const avatarColorClass = colors[charCode % colors.length];
 
-    // Format relative time or standard time
     let timeStr = "剛剛";
     if (note.created_at) {
       try {
@@ -1744,10 +1684,8 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     card.style.boxShadow = "var(--shadow-sm)";
 
     card.innerHTML = `
-      <!-- User profile header -->
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center space-x-3">
-          <!-- Initials Avatar -->
           <div class="w-8 h-8 rounded-full bg-gradient-to-br ${avatarColorClass} flex items-center justify-center font-bold text-xs shadow-inner">
             ${initial}
           </div>
@@ -1756,38 +1694,46 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
             <span class="text-[10px]" style="color: var(--text-muted);">${profile.small_group || "小組"}</span>
           </div>
         </div>
-        <!-- Time badge -->
-        <span class="text-[10px]" style="color: var(--text-muted);">${timeStr}</span>
+        <div class="flex items-center space-x-2">
+          <span class="text-[10px]" style="color: var(--text-muted);">${timeStr}</span>
+          ${note.user_id === currentUserId ? `
+            <div class="relative inline-block" style="position: relative;">
+              <button type="button" class="flex items-center justify-center p-1 rounded-full hover:bg-white/10 dark:hover:bg-white/5 transition-colors border-0 bg-transparent cursor-pointer" onclick="event.stopPropagation(); window.toggleDevotionalOptions('${note.id}')" style="color: var(--text-muted); height: 24px; width: 24px;">
+                <span class="nlc-icon nlc-icon--sm" data-icon="threeDots" style="width: 16px; height: 16px;"></span>
+              </button>
+              <div id="devotional-options-${note.id}" class="hidden" style="position: absolute; right: 0; top: 28px; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); width: 100px; box-shadow: var(--shadow-lg); z-index: 99; display: flex; flex-direction: column; overflow: hidden; padding: 4px 0;">
+                <button type="button" class="options-dropdown-item danger-item" onclick="event.stopPropagation(); window.deleteDevotionalNote('${note.id}')" style="padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: var(--type-weight-strong); border: 0; background: transparent; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 0.35rem; color: var(--color-danger); width: 100%;">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="trash" style="width: 12px; height: 12px;"></span>
+                  <span>刪除</span>
+                </button>
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
-      <!-- Golden verse content (No brackets, left border brand accented) -->
       <div class="my-3 pl-3" style="border-left: 2px solid var(--color-brand); margin: 0.75rem 0;">
         <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary); margin: 0; font-weight: var(--type-weight-regular);">
           ${note.content}
         </p>
       </div>
 
-      <!-- Footer social actions -->
       <div class="flex items-center justify-start space-x-6 mt-3 pt-2" style="border-top: 1px solid var(--border-card); color: var(--text-secondary);">
-        <!-- Like Action -->
         <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: ${hasLiked ? 'var(--color-danger)' : 'var(--text-secondary)'}; font-weight: var(--type-weight-strong);" onclick="window.toggleDevotionalLike('${note.id}')">
           <span class="nlc-icon nlc-icon--sm" data-icon="${hasLiked ? 'heartFill' : 'heart'}" style="width: 15px; height: 15px;"></span>
           <span>${noteLikes.length > 0 ? noteLikes.length + ' ' : ''}讚</span>
         </button>
-        <!-- Comments list toggle -->
         <button type="button" class="flex items-center space-x-1.5 hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-0 text-xs" style="color: var(--text-secondary); font-weight: var(--type-weight-strong);" onclick="window.toggleCommentsSection('${note.id}')">
           <span class="nlc-icon nlc-icon--sm" data-icon="inbox" style="width: 15px; height: 15px;"></span>
           <span>${noteComments.length > 0 ? noteComments.length + ' ' : ''}回覆</span>
         </button>
       </div>
 
-      <!-- Comments Thread Panel -->
       <div id="comments-section-${note.id}" class="${isExpanded ? '' : 'hidden'} mt-3 pt-3" style="border-top: 1px solid var(--border-card);">
         <div id="comments-list-${note.id}" class="space-y-2 mb-2">
           ${commentsHtml || '<div class="text-[10px] text-center py-2" style="color: var(--text-muted);">沒有留言</div>'}
         </div>
 
-        <!-- Comment Input Box (Visible by default inside comments section) -->
         <div id="comment-input-container-${note.id}" class="flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
           <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="font-size: 0.8rem; padding: 0.4rem 0.75rem; border-radius: var(--radius-sm);">
           <button type="button" class="primary-btn" style="padding: 0.4rem 0.85rem; font-size: 0.75rem; border-radius: var(--radius-sm); white-space: nowrap;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
@@ -1797,7 +1743,6 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     container.appendChild(card);
   });
 
-  // Hydrate Lucide icons dynamically inside card feed
   if (typeof hydrateIcons === "function") {
     hydrateIcons(container);
   }
@@ -1852,7 +1797,6 @@ window.submitDevotionalComment = async function (noteId) {
     await db.addDevotionalComment(noteId, content);
     input.value = "";
 
-    // Ensure it stays expanded
     window.expandedNoteIds = window.expandedNoteIds || new Set();
     window.expandedNoteIds.add(noteId);
 
@@ -1862,3 +1806,63 @@ window.submitDevotionalComment = async function (noteId) {
     showToast("發送回覆失敗，請稍後再試");
   }
 };
+
+window.toggleDevotionalOptions = function (noteId) {
+  const dropdowns = document.querySelectorAll('[id^="devotional-options-"]');
+  dropdowns.forEach(d => {
+    if (d.id !== `devotional-options-${noteId}`) {
+      d.classList.add("hidden");
+    }
+  });
+
+  const dropdown = document.getElementById(`devotional-options-${noteId}`);
+  if (dropdown) {
+    dropdown.classList.toggle("hidden");
+  }
+};
+
+window.deleteDevotionalNote = async function (noteId) {
+  if (!confirm("確定要刪除此則靈修分享嗎？")) return;
+
+  try {
+    await db.deleteDevotionalNote(noteId);
+    if (typeof fetchPastoralVerseWall === "function") {
+      fetchPastoralVerseWall();
+    }
+    showToast("已成功刪除");
+  } catch (err) {
+    console.error("Failed to delete devotional note:", err);
+    showToast("刪除失敗");
+  }
+};
+
+document.addEventListener("click", () => {
+  const dropdowns = document.querySelectorAll('[id^="devotional-options-"]');
+  dropdowns.forEach(d => d.classList.add("hidden"));
+});
+
+window.changeVerseCardBackground = function () {
+  const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  localStorage.setItem("verse_card_bg", randomImgUrl);
+
+  if (currentVerse) {
+    currentVerse.imageUrl = randomImgUrl;
+  }
+
+  const bgImgEl = document.getElementById("card-bg");
+  if (bgImgEl) {
+    bgImgEl.src = randomImgUrl;
+    bgImgEl.style.opacity = "1";
+  }
+
+  showToast("已成功更換背景");
+};
+
+export function init() {
+  initDevotionalControls();
+}
+
+window.updateDashboardView = updateDashboardView;
+window.fetchPastoralVerseWall = fetchPastoralVerseWall;
+window.initDevotionalControls = init;
+window.changeVerseCardBackground = changeVerseCardBackground;

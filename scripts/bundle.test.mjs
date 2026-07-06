@@ -35,16 +35,11 @@ describe("resolveLocalAssets", () => {
     expect(resolveLocalAssets(`<script src="js/a.js"></script>`).stylesheet).toBeNull();
   });
 
-  it("resolves the real index.html to the exact 19-file order", () => {
+  it("resolves the real index.html to the exact 1-file order", () => {
     const html = readFileSync(join(root, "index.html"), "utf8");
     const { scripts } = resolveLocalAssets(html);
     expect(scripts).toEqual([
-      "config.js", "js/data/bible_data.js", "js/data/bible_verse_counts.js",
-      "js/copy/zh-Hant.js", "js/design-tokens.js", "js/design-system-helpers.js",
-      "js/icon-registry.js", "js/icons.js", "js/state.js", "js/auth.js",
-      "js/views/plan.js", "js/db.js", "js/utils.js", "js/gamification.js",
-      "js/views/dashboard.js", "js/views/reader.js", "js/views/stats.js",
-      "js/views/profile.js", "js/main.js",
+      "js/app.js"
     ]);
   });
 });
@@ -114,10 +109,12 @@ describe("emitBundle (integration, real repo)", () => {
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);
       expect(readdirSync(join(out, "assets")).length).toBeGreaterThan(0);
-      // byte-identity: main.js body present verbatim in the bundle
+      // modules folder copied
+      expect(existsSync(join(out, "modules"))).toBe(true);
+      expect(readdirSync(join(out, "modules")).length).toBeGreaterThan(0);
+      // contains app bundle code
       const bundle = rf(join(out, jsFile), "utf8");
-      const mainSrc = rf(join(root, "js/main.js"), "utf8");
-      expect(bundle.includes(mainSrc)).toBe(true);
+      expect(bundle.includes("Lazy-loading")).toBe(true);
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

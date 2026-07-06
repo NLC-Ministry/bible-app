@@ -50,6 +50,9 @@ const NLC_CONFIG = {
   platformResource: "${nlcPlatformResource}",
   platformApiUrl: "${nlcPlatformApiUrl}"
 };
+
+window.SUPABASE_CONFIG = SUPABASE_CONFIG;
+window.NLC_CONFIG = NLC_CONFIG;
 `;
 
 fs.writeFileSync(path.join(__dirname, 'config.js'), configContent, 'utf8');
