@@ -586,21 +586,12 @@ function renderPresetPlansList() {
 async function renderPlanDetailView() {
   if (!state.activePlan) return;
 
+  // Ensure initial active sub tab is 'today'
+  state.planActiveSubTab = state.planActiveSubTab || "today";
+
   // Set Title
   const titleEl = document.getElementById("plan-detail-title");
   if (titleEl) titleEl.textContent = state.activePlan.name;
-
-  // Set Cover title & dates
-  const coverTitle = document.getElementById("plan-cover-title");
-  const coverDates = document.getElementById("plan-cover-dates");
-  const coverCard = document.getElementById("plan-detail-cover");
-
-  if (coverTitle) coverTitle.textContent = state.activePlan.name;
-  if (coverDates) coverDates.textContent = `${state.activePlan.startDate} ~ ${state.activePlan.endDate}`;
-
-  if (coverCard) {
-    coverCard.style.background = getPlanCoverColor(state.activePlan);
-  }
 
   // Render current selected tab content
   const tabSchedule = document.getElementById("tab-plan-schedule");
@@ -612,6 +603,7 @@ async function renderPlanDetailView() {
   const subviewPlanRanking = document.getElementById("subview-plan-ranking");
   const subviewPlanMembers = document.getElementById("subview-plan-members");
   const subviewPlanLevel = document.getElementById("subview-plan-level");
+  
   // Hide the 組員狀況 tab for regular members
   const _restoreRole = (state.currentUser && state.currentUser.role) || "member";
   const _restoreCanSeeMembers = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(_restoreRole);
@@ -631,31 +623,43 @@ async function renderPlanDetailView() {
 
   const allSubviewsInit = [subviewSchedule, subviewPlanStats, subviewPlanRanking, subviewPlanLevel, _restoreCanSeeMembers ? subviewPlanMembers : null].filter(Boolean);
 
-  // Always enter the plan on the daily reading screen; other screens are opened from the top-right menu.
-  if (tabSchedule) tabSchedule.classList.add("active");
-  if (tabStats) tabStats.classList.remove("active");
-  if (tabRanking) tabRanking.classList.remove("active");
-  if (tabMembers) tabMembers.classList.remove("active");
-  allSubviewsInit.forEach(s => s.classList.add("hidden"));
-  if (subviewSchedule) subviewSchedule.classList.remove("hidden");
+  if (state.planActiveSubTab === "today") {
+    // Today reading checklist mode
+    if (tabSchedule) tabSchedule.classList.add("active");
+    if (tabStats) tabStats.classList.remove("active");
+    if (tabRanking) tabRanking.classList.remove("active");
+    if (tabMembers) tabMembers.classList.remove("active");
+    
+    allSubviewsInit.forEach(s => s.classList.add("hidden"));
+    if (subviewSchedule) subviewSchedule.classList.remove("hidden");
 
-  // Reset Segmented Control to "今日讀經" active
-  const tabTodayTask = document.getElementById("tab-today-task");
-  const tabGroupReport = document.getElementById("tab-group-report");
-  const planDetailTabs = document.querySelector("#plan-detail-subview .plan-detail-tabs");
-  if (tabTodayTask && tabGroupReport) {
-    tabTodayTask.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;";
-    tabGroupReport.style.cssText = "flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;";
+    const planDetailTabs = document.querySelector("#plan-detail-subview .plan-detail-tabs");
+    if (planDetailTabs) {
+      planDetailTabs.style.display = "none";
+    }
+
+    // Initialize plan view mode (default is 'card')
+    const initialViewMode = state.planViewMode === 'calendar' ? 'calendar' : 'card';
+    setViewMode(initialViewMode);
+    renderPlanScheduleTracker();
+  } else {
+    // Group Report statistics / ranking mode
+    const planDetailTabs = document.querySelector("#plan-detail-subview .plan-detail-tabs");
+    if (planDetailTabs) {
+      planDetailTabs.style.display = "flex";
+    }
+
+    // Default active sub-tab inside group report is stats
+    if (tabSchedule) tabSchedule.classList.remove("active");
+    if (tabStats) tabStats.classList.add("active");
+    if (tabRanking) tabRanking.classList.remove("active");
+    if (tabMembers) tabMembers.classList.remove("active");
+
+    allSubviewsInit.forEach(s => s.classList.add("hidden"));
+    if (subviewPlanStats) subviewPlanStats.classList.remove("hidden");
+
+    await window.switchStatTab('personal');
   }
-  if (planDetailTabs) {
-    planDetailTabs.style.display = "none";
-  }
-
-  // Initialize plan view mode (default is 'card')
-  const initialViewMode = state.planViewMode === 'calendar' ? 'calendar' : 'card';
-  setViewMode(initialViewMode);
-
-  renderPlanScheduleTracker();
 }
 
 
@@ -5219,3 +5223,16 @@ if (typeof snapCalendarToMyProgress === 'function') {
 if (typeof snapCalendarToToday === 'function') {
   window.snapCalendarToToday = snapCalendarToToday;
 }
+
+window.togglePlanDetailSubTab = async function() {
+  if (!state.activePlan) return;
+  state.planActiveSubTab = (state.planActiveSubTab === "today") ? "group" : "today";
+
+  // Synchronize Top Bar
+  if (typeof appRouter !== 'undefined' && typeof appRouter.updateNavigationChrome === 'function') {
+    appRouter.updateNavigationChrome();
+  }
+
+  // Rerender plan detail
+  await renderPlanDetailView();
+};

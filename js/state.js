@@ -124,6 +124,33 @@ const appRouter = {
         this.switchTab("dashboard-view");
       });
     }
+
+    const topBarBackBtn = document.getElementById("top-bar-back-btn");
+    if (topBarBackBtn) {
+      topBarBackBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.currentTab === "plan-view") {
+          state.planDetailOpen = false;
+          if (typeof window.renderPlanView === 'function') {
+            window.renderPlanView();
+          }
+          this.updateNavigationChrome();
+        }
+      });
+    }
+
+    const topBarGroupTrigger = document.getElementById("top-bar-group-trigger");
+    if (topBarGroupTrigger) {
+      topBarGroupTrigger.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.togglePlanDetailSubTab === "function") {
+          window.togglePlanDetailSubTab();
+        }
+      });
+    }
+
     this.updateNavigationChrome();
   },
 
@@ -142,22 +169,67 @@ const appRouter = {
   updateNavigationChrome() {
     const backBtn = document.getElementById("global-back-btn");
     const backLabel = document.getElementById("global-back-label");
+    const brandLogo = document.getElementById("brand-logo");
     const titleEl = document.querySelector(".brand-text");
     
-    // Dynamic page title: show active plan name if viewing a plan
-    if (titleEl) {
-      if (this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen) {
-        titleEl.textContent = state.activePlan.name;
-      } else {
+    const topBarBackBtn = document.getElementById("top-bar-back-btn");
+    const topBarGroupTrigger = document.getElementById("top-bar-group-trigger");
+    const topBarPlanName = document.getElementById("top-bar-plan-name");
+    const topBarSubMode = document.getElementById("top-bar-sub-mode");
+
+    const isPlanDetail = this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen;
+
+    if (isPlanDetail) {
+      // Hide brand mark and normal back button
+      if (brandLogo) brandLogo.style.display = "none";
+      if (backBtn) backBtn.style.display = "none";
+      if (titleEl) titleEl.style.display = "none";
+
+      // Show plan specific navigation elements
+      if (topBarBackBtn) {
+        topBarBackBtn.style.display = "flex";
+        topBarBackBtn.classList.remove("hidden");
+      }
+      if (topBarGroupTrigger) {
+        topBarGroupTrigger.style.display = "flex";
+        topBarGroupTrigger.classList.remove("hidden");
+      }
+      if (topBarPlanName && state.activePlan) {
+        topBarPlanName.textContent = state.activePlan.name;
+      }
+      if (topBarSubMode) {
+        const currentSubTab = state.planActiveSubTab || "today";
+        if (currentSubTab === "today") {
+          topBarSubMode.innerHTML = `<span>小組進度</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="font-size: 8px;"></span>`;
+        } else {
+          topBarSubMode.innerHTML = `<span>今日讀經</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="font-size: 8px;"></span>`;
+        }
+        if (typeof hydrateIcons === "function") hydrateIcons(topBarSubMode);
+      }
+    } else {
+      // Show brand mark and normal back button
+      if (brandLogo) brandLogo.style.display = "";
+      if (backBtn) backBtn.style.display = "";
+      if (titleEl) {
+        titleEl.style.display = "";
         titleEl.textContent = this.getTabLabel(this.currentTab);
+      }
+
+      // Hide plan specific navigation elements
+      if (topBarBackBtn) {
+        topBarBackBtn.style.display = "none";
+        topBarBackBtn.classList.add("hidden");
+      }
+      if (topBarGroupTrigger) {
+        topBarGroupTrigger.style.display = "none";
+        topBarGroupTrigger.classList.add("hidden");
       }
     }
 
     // Toggle global plan options menu visibility
     const optionsContainer = document.getElementById("global-plan-options-container");
     if (optionsContainer) {
-      const showOptions = this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen;
-      optionsContainer.classList.toggle("hidden", !showOptions);
+      optionsContainer.classList.toggle("hidden", !isPlanDetail);
     }
 
     const isReaderPage = this.currentTab === "reader-view";
@@ -173,7 +245,7 @@ const appRouter = {
     }
     if (!backBtn || !backLabel) return;
 
-    const isHome = this.currentTab === "dashboard-view" && !(state.activePlan && state.planDetailOpen);
+    const isHome = this.currentTab === "dashboard-view" && !isPlanDetail;
     backBtn.classList.toggle("is-home", isHome);
     backLabel.textContent = isHome ? "首頁" : "返回";
     backBtn.title = isHome ? "回到首頁" : "返回上一層";

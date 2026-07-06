@@ -46,8 +46,8 @@
 
     <!-- Top Header -->
     <header class="main-header">
-      <div class="header-container">
-        <div class="header-leading">
+      <div class="header-container" style="display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative;">
+        <div class="header-leading" style="display: flex; align-items: center; min-width: 70px;">
           <a href="#" class="brand-mark" id="brand-logo" aria-label="回到首頁">
             <img class="brand-icon-img" src="assets/bible-reading-icon.svg" alt="" width="44" height="44">
           </a>
@@ -55,8 +55,28 @@
             <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
             <span id="global-back-label">&#x9996;&#x9801;</span>
           </button>
+          
+          <!-- 新增：計畫詳情專用的極簡返回鈕 -->
+          <button id="top-bar-back-btn" class="hidden" style="display: none; align-items: center; gap: 4px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.88rem; font-weight: 500; padding: 0;">
+            <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+            <span>讀經</span>
+          </button>
         </div>
-        <span class="brand-text">新生命聖經速讀計畫</span>
+        
+        <!-- 中間：標題與核心切換按鈕 -->
+        <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
+          <span class="brand-text">新生命聖經速讀計畫</span>
+          
+          <!-- 新增：計畫詳情專用的動態切換按鈕 -->
+          <button id="top-bar-group-trigger" class="hidden" style="display: none; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-card); padding: 4px 12px; border-radius: 99px; cursor: pointer; transition: all 0.2s;">
+            <span id="top-bar-plan-name" style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">測試計畫</span>
+            <span style="width: 1px; height: 12px; background: var(--border-card);"></span>
+            <span id="top-bar-sub-mode" style="font-size: 0.72rem; color: var(--primary-color); font-weight: 500; display: flex; align-items: center; gap: 2px;">
+              <span>小組進度</span>
+              <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="font-size: 8px;"></span>
+            </span>
+          </button>
+        </div>
 
         <!-- Desktop Navigation Tabs -->
         <nav class="nav-tabs">
@@ -651,8 +671,8 @@
           style="display: flex; flex-direction: column; gap: 1rem;">
           <!-- YouVersion Style Header Bar Removed (Integrated into Top App Bar) -->
 
-          <!-- Segmented Control for tabs -->
-          <div class="px-4 py-2" style="padding: 0.5rem 1rem;">
+          <!-- Segmented Control for tabs (Hidden, handled by Top Bar) -->
+          <div class="px-4 py-2" style="padding: 0.5rem 1rem; display: none;">
             <div class="flex p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl"
               style="display: flex; padding: 0.25rem; background: var(--bg-input); border-radius: 12px;">
               <!-- 按鈕 1：今日任務 -->
@@ -698,38 +718,20 @@
               style="background: transparent; border-radius: 0; padding: 0; margin-top: 1rem; overflow: visible; display: flex; flex-direction: column; border: none; width: 100%;">
 
               <!-- 雙軌時間導航欄 (Dual-Track Time Navigation Bar) -->
+              <!-- 極簡時間導航欄 -->
               <div
-                class="px-4 py-2 flex items-center justify-between text-xs border-b border-slate-100/50 dark:border-zinc-800/30"
-                style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-card); font-size: 0.75rem; width: 100%; margin-bottom: 0.8rem; background: rgba(148, 163, 184, 0.05); border-radius: 8px;">
-                <!-- 左側：一鍵回到【我的進度】雷達 -->
-                <button id="go-my-progress-btn"
-                  class="flex items-center space-x-1 text-slate-400 hover:text-violet-500 dark:text-zinc-500 dark:hover:text-violet-400 transition-colors font-medium"
-                  style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; cursor: pointer; font-weight: 500; transition: color 0.2s; padding: 0;"
-                  onmouseover="this.style.color='var(--color-brand)'" onmouseout="this.style.color='var(--text-muted)'">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="personBox"></span>
-                  <span>↺ 我的進度</span>
-                </button>
-
-                <!-- 中間：當前日曆選中的天數標示 -->
-                <div class="text-center" style="text-align: center; display: flex; align-items: center; gap: 4px;">
-                  <span id="current-view-day" class="font-bold text-slate-700 dark:text-zinc-300"
-                    style="font-weight: 700; color: var(--text-primary);">第 -- 天</span>
-                  <span id="current-view-date" class="text-slate-400 dark:text-zinc-500 ml-1"
-                    style="color: var(--text-muted); margin-left: 0.25rem;">----/--/--</span>
-                  <!-- Keep original ID hidden to prevent JS issues -->
+                class="px-4 py-2 flex items-center justify-center text-xs"
+                style="display: flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-card); font-size: 0.75rem; width: 100%; margin-bottom: 0.8rem; border-radius: 8px;">
+                <div class="text-center" style="text-align: center; display: flex; align-items: center; gap: 6px;">
+                  <span id="current-view-day" class="font-bold" style="font-weight: 700; color: var(--text-primary);">第 -- 天</span>
+                  <span style="color: var(--text-muted);">|</span>
+                  <span id="current-view-date" style="color: var(--text-muted);">----/--/--</span>
+                  <!-- Keep original IDs hidden to prevent JS issues -->
+                  <button id="go-my-progress-btn" class="hidden" style="display: none;"></button>
+                  <button id="go-today-plan-btn" class="hidden" style="display: none;"></button>
                   <span id="plan-day-subtitle" class="hidden" style="display: none;"></span>
                   <span id="plan-day-status-pill" class="role-badge hidden" style="display: none;">進行中</span>
                 </div>
-
-                <!-- 右側：一鍵看【今天進度】雷達 -->
-                <button id="go-today-plan-btn"
-                  class="flex items-center space-x-1 text-slate-400 hover:text-emerald-500 dark:text-zinc-500 dark:hover:text-emerald-400 transition-colors font-medium"
-                  style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; cursor: pointer; font-weight: 500; transition: color 0.2s; padding: 0;"
-                  onmouseover="this.style.color='var(--color-success-foreground)'"
-                  onmouseout="this.style.color='var(--text-muted)'">
-                  <span>今天計畫 ↻</span>
-                  <span class="nlc-icon nlc-icon--sm" data-icon="calendarEvent"></span>
-                </button>
               </div>
 
               <!-- Tasks list (checklist) -->
