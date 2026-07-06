@@ -1,10 +1,4 @@
-// js/modules/profile.js
-
-function isLocalhostGoogleLoginAllowed() {
-  return window.location.hostname === "localhost" ||
-         window.location.hostname === "127.0.0.1" ||
-         window.location.hostname === "::1";
-}
+import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 
 function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
