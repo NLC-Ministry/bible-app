@@ -567,6 +567,17 @@ function initProfileControls() {
 
   // Initialize header avatar dropdown
   initAvatarDropdown();
+
+  // Change homepage background button inside settings list
+  const btnChangeBg = document.getElementById("profile-change-bg-btn");
+  if (btnChangeBg) {
+    btnChangeBg.onclick = (e) => {
+      e.preventDefault();
+      if (typeof window.changeVerseCardBackground === "function") {
+        window.changeVerseCardBackground();
+      }
+    };
+  }
 }
 
 // Initialize advanced search filters state and bottom sheet UI

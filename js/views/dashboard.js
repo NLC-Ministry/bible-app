@@ -1236,6 +1236,7 @@ async function fetchRandomVerse(event) {
   const verseText = randomLocal.text;
   const verseSource = randomLocal.source;
   const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  localStorage.setItem("verse_card_bg", randomImgUrl);
   const imgPromise = preloadVerseCardImage(randomImgUrl);
 
   const fetchPromise = (async () => {
@@ -1516,12 +1517,13 @@ function renderDailyVerse() {
     likeBtn._hasLikeListener = true;
   }
 
+  const savedBg = localStorage.getItem("verse_card_bg");
   if (!currentVerse) {
     setVerseCardLoading(true);
     fetchRandomVerse();
   } else {
     setVerseCardLoading(true);
-    const imageUrl = currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
+    const imageUrl = savedBg || currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
     preloadVerseCardImage(imageUrl).then((loadedUrl) => {
       applyVerseCardContent(
         { text: currentVerse.text, source: currentVerse.source },
@@ -1936,3 +1938,20 @@ document.addEventListener("click", () => {
   const dropdowns = document.querySelectorAll('[id^="devotional-options-"]');
   dropdowns.forEach(d => d.classList.add("hidden"));
 });
+
+window.changeVerseCardBackground = function () {
+  const randomImgUrl = CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  localStorage.setItem("verse_card_bg", randomImgUrl);
+
+  if (currentVerse) {
+    currentVerse.imageUrl = randomImgUrl;
+  }
+
+  const bgImgEl = document.getElementById("card-bg");
+  if (bgImgEl) {
+    bgImgEl.src = randomImgUrl;
+    bgImgEl.style.opacity = "1";
+  }
+
+  showToast("已成功更換背景");
+};
