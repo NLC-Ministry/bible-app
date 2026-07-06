@@ -19,6 +19,7 @@ const READ_TABLES = new Set([
   "devotional_notes",
   "devotional_likes",
   "devotional_comments",
+  "verse_likes",
   "profile_identity_overview",
   "member_reading_summary",
   "view_pastoral_zone_stats",
@@ -26,7 +27,7 @@ const READ_TABLES = new Set([
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements"]);
-const OWN_WRITE_TABLES = new Set(["profiles", "reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments"]);
+const OWN_WRITE_TABLES = new Set(["profiles", "reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "verse_likes"]);
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -92,7 +93,8 @@ function forceUserPayload(table: string, payload: any, profileId: string) {
     const rows = normalizeRows(payload).map(row => ({ ...row, id: profileId }));
     return Array.isArray(payload) ? rows : rows[0];
   }
-  if (USER_TABLES.has(table)) {
+  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments"];
+  if (writeProtected.includes(table)) {
     const rows = normalizeRows(payload).map(row => ({ ...row, user_id: profileId }));
     return Array.isArray(payload) ? rows : rows[0];
   }
