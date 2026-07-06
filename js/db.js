@@ -114,13 +114,16 @@ const db = {
             console.log("Auth state changed:", event, !!session);
             this.updateAuthUI(session);
             await this.loadUserData();
+            if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
 
             if (appRouter.currentTab === "dashboard-view") {
-              updateDashboardView();
+              if (typeof updateDashboardView === 'function') updateDashboardView();
+            } else if (appRouter.currentTab === "plan-view") {
+              if (typeof window.renderPlanView === 'function') window.renderPlanView();
             } else if (appRouter.currentTab === "profile-view") {
-              renderProfileView();
+              if (typeof renderProfileView === 'function') renderProfileView();
             } else if (appRouter.currentTab === "stats-view") {
-              updateStatsView();
+              if (typeof window.updateStatsView === 'function') window.updateStatsView();
             }
           } catch (err) {
             console.error("Error in onAuthStateChange callback:", err);

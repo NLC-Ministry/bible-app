@@ -168,8 +168,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize Database Connection & Auth (triggers loadUserData)
   try {
     await db.init();
+    // 確保管理員 nav 在 init 完成後立即更新（OIDC 模式 return early 後 profile.js 還未載入）
+    if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
   } catch (err) {
-    console.error("Failed to initialize database connection & auth:", err);
+    console.error('Failed to initialize database connection & auth:', err);
   }
 
   // Load Data in Parallel, Verify Session & Render initial Dashboard
@@ -179,20 +181,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       db.loadUserData()
     ]);
 
+    // 確保管理員 UI 和角色相關 UI 在資料載入後即時更新
+    if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
+
     if (state.isSupabaseMode && state.supabase && state.supabase.auth) {
       const { data: { session } } = await state.supabase.auth.getSession();
       if (session) {
         db.updateAuthUI(session);
         await db.loadUserData();
+        if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
       }
     }
 
     // Lazy load the homepage module and render the initial view
-    await appRouter.switchTab("dashboard-view");
+    await appRouter.switchTab('dashboard-view');
   } catch (err) {
-    console.error("Failed to load initial data & render dashboard:", err);
+    console.error('Failed to load initial data & render dashboard:', err);
   } finally {
-    if (typeof ComponentSkeletonLoader !== "undefined") {
+    if (typeof ComponentSkeletonLoader !== 'undefined') {
       ComponentSkeletonLoader.clearBootInlineSkeletons();
     }
   }

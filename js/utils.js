@@ -1242,7 +1242,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
 
   // 3. Otherwise (custom plans, or upgraded preset plans), use the new segmented round-distribution logic!
   const allChapters = [];
-  const booksToUse = preset && preset.months ? preset.months.flatMap(m => m.books) : selectedBooks;
+  const booksToUse = (preset && preset.months ? preset.months.flatMap(m => m.books) : selectedBooks) || [];
   booksToUse.forEach(bookName => {
     if (bookName === "詩篇 1-110") {
       for (let i = 1; i <= 110; i++) {
@@ -1516,6 +1516,23 @@ function getVisiblePlans(plans) {
   return list.filter(plan => !isPlanHidden(plan));
 }
 
+// ── Admin Nav Visibility ─────────────────────────────────────
+// Defined here (in utils.js, which loads early) so db.init() and other
+// early callers don't have to wait for profile.js to lazy-load.
+function updateAdminNavVisibility() {
+  const isRealAdmin = !state.isSupabaseMode || (state.realRole === 'admin' || state.realRole === 'senior_pastor');
+  const isSimulatedAdmin = state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'senior_pastor');
+  const shouldShowNav = isRealAdmin && isSimulatedAdmin;
+
+  document.querySelectorAll('.admin-only-nav').forEach(btn => {
+    btn.classList.toggle('hidden', !shouldShowNav);
+  });
+
+  document.querySelectorAll('.admin-only-plan-card').forEach(card => {
+    card.classList.toggle('hidden', !shouldShowNav);
+  });
+}
+
 window.getPlanLevelRounds = getPlanLevelRounds;
 window.getPlanLevelLabel = getPlanLevelLabel;
 window.getPlanLevelOrder = getPlanLevelOrder;
@@ -1535,3 +1552,4 @@ window.getHiddenPlanKeys = getHiddenPlanKeys;
 window.isPlanHidden = isPlanHidden;
 window.canManageHiddenPlans = canManageHiddenPlans;
 window.getVisiblePlans = getVisiblePlans;
+window.updateAdminNavVisibility = updateAdminNavVisibility;
