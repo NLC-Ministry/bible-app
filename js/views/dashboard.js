@@ -306,6 +306,7 @@ async function loadTodayDevotional() {
 }
 
 let devotionalDebounceTimer = null;
+let isSavingDevotional = false;
 
 function initDevotionalControls() {
   const textarea = document.getElementById("devotional-content");
@@ -354,7 +355,10 @@ function initDevotionalControls() {
 async function saveDevotionalNote(isAuto) {
   const textarea = document.getElementById("devotional-content");
   const statusEl = document.getElementById("devotional-save-status");
+  const saveBtn = document.getElementById("btn-save-devotional");
   if (!textarea) return;
+
+  if (isSavingDevotional) return;
 
   const content = textarea.value.trim();
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
@@ -362,6 +366,16 @@ async function saveDevotionalNote(isAuto) {
   if (statusEl && isAuto) {
     statusEl.innerHTML = `<span class="devotional-save-status__dot" aria-hidden="true"></span>自動儲存中...`;
     statusEl.style.opacity = "1";
+  }
+
+  if (!isAuto) {
+    isSavingDevotional = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = "0.6";
+      const spanText = saveBtn.querySelector("span:not(.nlc-icon)");
+      if (spanText) spanText.textContent = "分享中...";
+    }
   }
 
   try {
@@ -387,6 +401,16 @@ async function saveDevotionalNote(isAuto) {
       statusEl.classList.add("text-danger");
       statusEl.classList.remove("text-success-fg");
       statusEl.style.opacity = "1";
+    }
+  } finally {
+    if (!isAuto) {
+      isSavingDevotional = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.style.opacity = "";
+        const spanText = saveBtn.querySelector("span:not(.nlc-icon)");
+        if (spanText) spanText.textContent = "分享金句";
+      }
     }
   }
 }
