@@ -301,16 +301,21 @@ const auth = {
     try {
       const redirectUri = this._getRedirectUri();
       const endpoints = await this._getEndpoints();
+      const tokenParams = {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        client_id: this.config.clientId,
+        code_verifier: verifier
+      };
+      if (this.config.platformResource) {
+        tokenParams.resource = this.config.platformResource;
+      }
+
       const response = await fetch(endpoints.tokenEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: redirectUri,
-          client_id: this.config.clientId,
-          code_verifier: verifier
-        })
+        body: new URLSearchParams(tokenParams)
       });
 
       if (!response.ok) {
