@@ -385,11 +385,6 @@ function getDowngradeLockedUntil(plan) {
 }
 
 function isPlanUpgradeLocked(plan) {
-  if (!plan) return false;
-  // If the user has completed the current round, they are allowed to upgrade regardless of any downgrade lock!
-  if (plan.currentRound === 1 && plan.isPlanCompleted) return false;
-  if (plan.currentRound === 2 && plan.isRound2Completed) return false;
-
   const lockedUntil = getDowngradeLockedUntil(plan);
   if (!lockedUntil) return false;
   return new Date(lockedUntil).getTime() > Date.now();
@@ -801,6 +796,12 @@ function calculateAllPlansProgress() {
     }, 0);
     plan.isRound2Completed = secondRoundChapters > 0 && secondRoundCompleted >= secondRoundChapters;
     if (!plan.isRound2Completed) plan.round2UpgradePromptHandled = false;
+
+    // Clear downgrade lock in memory if the current round is completed
+    if ((plan.currentRound === 1 && plan.isPlanCompleted) || (plan.currentRound === 2 && plan.isRound2Completed)) {
+      plan.wasDowngraded = false;
+      plan.downgradeLockedUntil = null;
+    }
   });
 
   if (!state.isSupabaseMode) {
@@ -1889,6 +1890,15 @@ async function checkPlanSchedule(plan) {
 async function handleRoundCompletion(plan) {
   if (!plan) return;
   calculatePlanProgress();
+
+  // Clear downgrade lock in database if the current round is completed
+  if ((plan.currentRound === 1 && plan.isPlanCompleted) || (plan.currentRound === 2 && plan.isRound2Completed)) {
+    if (plan.wasDowngraded || plan.downgradeLockedUntil) {
+      plan.wasDowngraded = false;
+      plan.downgradeLockedUntil = null;
+      await persistPlanLevelState(plan);
+    }
+  }
 
   const currentRound = plan.currentRound || 1;
 
