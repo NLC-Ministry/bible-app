@@ -114,7 +114,15 @@ function assertCompleteEnough(result, sourceName) {
 }
 
 async function fetchFromBibleApi(bookEngName, chapter, translation) {
-  const url = `https://bible-api.com/${encodeURIComponent(`${bookEngName} ${chapter}`)}?translation=${encodeURIComponent(translation)}`;
+  let queryPassage = `${bookEngName} ${chapter}`;
+  if (translation === "cuv" && typeof BIBLE_BOOKS !== "undefined") {
+    const book = BIBLE_BOOKS.find(b => b.eng.toLowerCase() === bookEngName.toLowerCase());
+    if (book) {
+      queryPassage = `${book.name} ${chapter}`;
+    }
+  }
+
+  const url = `https://bible-api.com/${encodeURIComponent(queryPassage)}?translation=${encodeURIComponent(translation)}`;
   const targetUrl = url;
   console.log('🌐 [API 發送檢查] 正在線上獲取內文，完整 URL 內容為：', targetUrl);
   const data = await fetchJson(url);

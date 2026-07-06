@@ -361,66 +361,70 @@ function initPlanControls() {
 
 
 async function renderPlanView() {
-  if (state.activePlan && isPlanHidden(state.activePlan) && !canManageHiddenPlans()) {
-    const nextVisiblePlan = (state.activePlans || []).find(plan => !isPlanHidden(plan));
-    state.activePlan = nextVisiblePlan || null;
-    if (state.activePlan) localStorage.setItem("selected_plan_key", state.activePlan.presetKey || state.activePlan.id || "");
-    else localStorage.removeItem("selected_plan_key");
-  }
-
-  renderJoinedPlansList();
-  renderPresetPlansList();
-
-  const listSubview = document.getElementById("plan-list-subview");
-  const detailSubview = document.getElementById("plan-detail-subview");
-
-  if (state.activePlan && state.planDetailOpen) {
-    if (listSubview) listSubview.classList.add("hidden");
-    if (detailSubview) detailSubview.classList.remove("hidden");
-
-    // Always close/reset inline reader when entering plan view tab to show the checklist directly
-    state.inlineReader.active = false;
-    const inlineReader = document.getElementById("plan-inline-reader");
-    if (inlineReader) inlineReader.classList.add("hidden");
-
-    const carousel = document.getElementById("plan-date-carousel");
-    const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
-    const taskList = document.getElementById("plan-tasks-list");
-    const readBtn = document.getElementById("plan-start-reading-container");
-    if (carousel) carousel.classList.remove("hidden");
-    if (planDayHeader) planDayHeader.classList.remove("hidden");
-    if (taskList) taskList.classList.remove("hidden");
-    if (readBtn) readBtn.classList.remove("hidden");
-
-    await renderPlanDetailView();
-  } else {
-    if (listSubview) listSubview.classList.remove("hidden");
-    if (detailSubview) detailSubview.classList.add("hidden");
-  }
-
-  // Admin simulation check
-  const isRealAdmin = !state.isSupabaseMode || (state.realRole === "admin" || state.realRole === "senior_pastor");
-  const isSimulatedAdmin = state.currentUser && (state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor");
-  const adminCard = document.getElementById("admin-plan-card");
-  if (adminCard) {
-    if (isRealAdmin && isSimulatedAdmin) {
-      adminCard.classList.remove("hidden");
-    } else {
-      adminCard.classList.add("hidden");
+  try {
+    if (state.activePlan && isPlanHidden(state.activePlan) && !canManageHiddenPlans()) {
+      const nextVisiblePlan = (state.activePlans || []).find(plan => !isPlanHidden(plan));
+      state.activePlan = nextVisiblePlan || null;
+      if (state.activePlan) localStorage.setItem("selected_plan_key", state.activePlan.presetKey || state.activePlan.id || "");
+      else localStorage.removeItem("selected_plan_key");
     }
-  }
 
-  if (isRealAdmin && isSimulatedAdmin && typeof renderAdminPlanManagement === 'function') {
-    renderAdminPlanManagement();
-  }
+    renderJoinedPlansList();
+    renderPresetPlansList();
 
-  if (state.activePlan && isPlanHidden(state.activePlan) && canManageHiddenPlans()) {
-    showToast("這個計畫目前已隱藏，一般使用者不會看到。");
-  }
+    const listSubview = document.getElementById("plan-list-subview");
+    const detailSubview = document.getElementById("plan-detail-subview");
 
-  // Synchronize dynamic title and options menu in the Top App Bar
-  if (typeof appRouter !== 'undefined' && typeof appRouter.updateNavigationChrome === 'function') {
-    appRouter.updateNavigationChrome();
+    if (state.activePlan && state.planDetailOpen) {
+      if (listSubview) listSubview.classList.add("hidden");
+      if (detailSubview) detailSubview.classList.remove("hidden");
+
+      // Always close/reset inline reader when entering plan view tab to show the checklist directly
+      state.inlineReader.active = false;
+      const inlineReader = document.getElementById("plan-inline-reader");
+      if (inlineReader) inlineReader.classList.add("hidden");
+
+      const carousel = document.getElementById("plan-date-carousel");
+      const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
+      const taskList = document.getElementById("plan-tasks-list");
+      const readBtn = document.getElementById("plan-start-reading-container");
+      if (carousel) carousel.classList.remove("hidden");
+      if (planDayHeader) planDayHeader.classList.remove("hidden");
+      if (taskList) taskList.classList.remove("hidden");
+      if (readBtn) readBtn.classList.remove("hidden");
+
+      await renderPlanDetailView();
+    } else {
+      if (listSubview) listSubview.classList.remove("hidden");
+      if (detailSubview) detailSubview.classList.add("hidden");
+    }
+
+    // Admin simulation check
+    const isRealAdmin = !state.isSupabaseMode || (state.realRole === "admin" || state.realRole === "senior_pastor");
+    const isSimulatedAdmin = state.currentUser && (state.currentUser.role === "admin" || state.currentUser.role === "senior_pastor");
+    const adminCard = document.getElementById("admin-plan-card");
+    if (adminCard) {
+      if (isRealAdmin && isSimulatedAdmin) {
+        adminCard.classList.remove("hidden");
+      } else {
+        adminCard.classList.add("hidden");
+      }
+    }
+
+    if (isRealAdmin && isSimulatedAdmin && typeof renderAdminPlanManagement === 'function') {
+      renderAdminPlanManagement();
+    }
+
+    if (state.activePlan && isPlanHidden(state.activePlan) && canManageHiddenPlans()) {
+      showToast("這個計畫目前已隱藏，一般使用者不會看到。");
+    }
+
+    // Synchronize dynamic title and options menu in the Top App Bar
+    if (typeof appRouter !== 'undefined' && typeof appRouter.updateNavigationChrome === 'function') {
+      appRouter.updateNavigationChrome();
+    }
+  } catch (err) {
+    console.error("Critical error inside renderPlanView:", err);
   }
 }
 
@@ -444,66 +448,70 @@ function getPlanCoverHtml(plan) {
 }
 
 function renderJoinedPlansList() {
-  const container = document.getElementById("joined-plans-list");
-  if (!container) return;
+  try {
+    const container = document.getElementById("joined-plans-list");
+    if (!container) return;
 
-  if (!state.activePlans) {
-    ComponentSkeletonLoader.show('plan', container);
-    return;
+    if (!state.activePlans) {
+      ComponentSkeletonLoader.show('plan', container);
+      return;
+    }
+
+    container.innerHTML = "";
+
+    if (!state.activePlans || state.activePlans.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="text-align: center; padding: 3rem 0;">
+          <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-weight: 500;">您目前沒有加入任何讀經計畫。</p>
+          <p style="font-size: 0.88rem; color: var(--text-muted);">${(window.APP_COPY && window.APP_COPY.plan.clickFindPlans) || "請點擊頂部「找計畫」瀏覽並加入！"}</p>
+        </div>
+      `;
+      return;
+    }
+
+    state.activePlans.forEach(plan => {
+      const card = document.createElement("div");
+      card.className = "joined-plan-item-card";
+      card.style = `
+        background: var(--bg-card);
+        border: 1px solid var(--border-card);
+        border-radius: 16px;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      `;
+      card.onclick = () => {
+        state.activePlan = plan;
+        state.planDetailOpen = true;
+        state.selectedPlanDay = null; // reset to first uncompleted day
+        localStorage.setItem("selected_plan_key", plan.presetKey || "");
+        renderPlanView();
+      };
+
+      const progress = plan.progress || 0;
+      card.innerHTML = `
+        ${getPlanCoverHtml(plan)}
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
+          <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
+          <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
+            <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
+          </div>
+          <div class="plan-progress-wrapper plan-progress-wrapper--compact">
+            <div class="plan-progress-bar" style="width: ${progress}%;"></div>
+          </div>
+          <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem;">
+            已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error("Critical error inside renderJoinedPlansList:", err);
   }
-
-  container.innerHTML = "";
-
-  if (!state.activePlans || state.activePlans.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state" style="text-align: center; padding: 3rem 0;">
-        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-weight: 500;">您目前沒有加入任何讀經計畫。</p>
-        <p style="font-size: 0.88rem; color: var(--text-muted);">${(window.APP_COPY && window.APP_COPY.plan.clickFindPlans) || "請點擊頂部「找計畫」瀏覽並加入！"}</p>
-      </div>
-    `;
-    return;
-  }
-
-  state.activePlans.forEach(plan => {
-    const card = document.createElement("div");
-    card.className = "joined-plan-item-card";
-    card.style = `
-      background: var(--bg-card);
-      border: 1px solid var(--border-card);
-      border-radius: 16px;
-      padding: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    `;
-    card.onclick = () => {
-      state.activePlan = plan;
-      state.planDetailOpen = true;
-      state.selectedPlanDay = null; // reset to first uncompleted day
-      localStorage.setItem("selected_plan_key", plan.presetKey || "");
-      renderPlanView();
-    };
-
-    const progress = plan.progress || 0;
-    card.innerHTML = `
-      ${getPlanCoverHtml(plan)}
-      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-        <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
-        <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-          <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
-        </div>
-        <div class="plan-progress-wrapper plan-progress-wrapper--compact">
-          <div class="plan-progress-bar" style="width: ${progress}%;"></div>
-        </div>
-        <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem;">
-          已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)
-        </div>
-      </div>
-    `;
-    container.appendChild(card);
-  });
 }
 
 function renderPresetPlansList() {

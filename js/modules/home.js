@@ -1192,8 +1192,7 @@ async function fetchRandomVerse(event) {
         const chapter = match[2];
         const verseStart = match[3];
         const verseEnd = match[4];
-        const englishBook = CHINESE_TO_ENGLISH_BOOKS[chineseBook] || "john";
-        const passage = `${englishBook} ${chapter}:${verseStart}` + (verseEnd ? `-${verseEnd}` : "");
+        const passage = `${chineseBook} ${chapter}:${verseStart}` + (verseEnd ? `-${verseEnd}` : "");
 
         const url = `https://bible-api.com/${encodeURIComponent(passage)}?translation=cuv`;
         const controller = new AbortController();
