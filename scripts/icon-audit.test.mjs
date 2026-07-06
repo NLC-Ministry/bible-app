@@ -9,9 +9,9 @@ const EXCLUDE = new Set([
   "scripts/migrate-icons.mjs",
   "scripts/icon-audit.test.mjs",
   "scripts/generate-icon-registry.mjs",
-  "js/icon-manifest.test.mjs",
-  "js/icon-registry.js",
-  "js/icons.js",
+  "js/design/icon-manifest.test.mjs",
+  "js/design/icon-registry.js",
+  "js/design/icons.js",
 ]);
 
 const BI_CLASS = /\bbi bi-[a-z0-9-]+/i;

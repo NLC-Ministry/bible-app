@@ -10,7 +10,7 @@ import {
   getStatMetricConfig,
 } from "./design-system-helpers.mjs";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 function makePlan(overrides = {}) {
   const days = Array.from({ length: 10 }, (_, i) => ({

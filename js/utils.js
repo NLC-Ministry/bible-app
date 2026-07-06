@@ -1007,7 +1007,6 @@ const ComponentSkeletonLoader = {
   hide(container) {
     const parent = typeof container === "string" ? document.querySelector(container) : container;
     if (!parent) return;
-
     if (parent.dataset.originalHtml !== undefined) {
       parent.innerHTML = parent.dataset.originalHtml;
       delete parent.dataset.originalHtml;
@@ -1015,4 +1014,16 @@ const ComponentSkeletonLoader = {
   }
 };
 window.ComponentSkeletonLoader = ComponentSkeletonLoader;
+
+window.showToast = showToast;
+window.getUserAvatarInitial = getUserAvatarInitial;
+window.normalizeAvatarUrl = normalizeAvatarUrl;
+window.getUserAvatarContext = getUserAvatarContext;
+window.resolveUserAvatarContext = resolveUserAvatarContext;
+window.renderUserAvatar = renderUserAvatar;
+window.refreshUserAvatars = refreshUserAvatars;
+window.getIsAdmin = getIsAdmin;
+window.getScopedUsers = getScopedUsers;
+window.buildHeatmapGrid = buildHeatmapGrid;
+window.renderBadgeWall = renderBadgeWall;
 

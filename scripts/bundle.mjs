@@ -3,10 +3,9 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { execSync } from "node:child_process";
 
 // Matches a local <script src="..."></script> with `src` in ANY attribute position
-// (e.g. `<script type="module" src=...>` / `<script defer src=...>`). `[^>]*?` stays
-// inside the opening tag, so external (http/protocol-relative) and inline scripts are excluded.
 const SCRIPT_RE = /<script\b[^>]*?\ssrc="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>\s*<\/script>/g;
 const CSS_RE = /<link\s+rel="stylesheet"\s+href="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>/g;
 
@@ -26,7 +25,6 @@ export function contentHash(text) {
 
 export function assertParses(code) {
   try {
-    // Parse without executing. `new Function` throws SyntaxError on parse failure.
     new Function(code);
   } catch (err) {
     throw new Error(`bundle: assembled output failed syntax check: ${err.message}`);
@@ -46,19 +44,22 @@ export function emitBundle({ root, outDir }) {
     return readFileSync(abs, "utf8");
   };
 
-  // Guard 2: document.currentScript changes meaning after concatenation.
-  for (const rel of scripts) {
-    if (readSource(rel).includes("document.currentScript")) {
-      throw new Error(`bundle: ${rel} uses document.currentScript; unsafe to concatenate`);
-    }
-  }
+  // Compile using esbuild
+  const entryPoint = join(root, "js/app.js");
+  if (!existsSync(entryPoint)) throw new Error(`bundle: missing entrypoint ${entryPoint}`);
 
-  const bundleJs = concatScripts(scripts, readSource);
-  // Guard 3: byte-identity.
-  for (const rel of scripts) {
-    if (!bundleJs.includes(readSource(rel))) {
-      throw new Error(`bundle: concatenated output missing verbatim content of ${rel}`);
-    }
+  console.log(`⚡ [esbuild] Bundling ${entryPoint}...`);
+  const esbuildPath = join(root, "node_modules", ".bin", "esbuild");
+  const esbuildCmd = existsSync(esbuildPath) ? esbuildPath : "npx esbuild";
+  
+  let bundleJs;
+  try {
+    bundleJs = execSync(`"${esbuildCmd}" "${entryPoint}" --bundle --minify --target=es2020`, {
+      encoding: "utf8",
+      cwd: root
+    });
+  } catch (err) {
+    throw new Error(`esbuild compilation failed: ${err.message}`);
   }
 
   // Guard 4: syntax-check the assembled output before writing.
@@ -73,8 +74,7 @@ export function emitBundle({ root, outDir }) {
   writeFileSync(join(outDir, jsFile), bundleJs, "utf8");
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
 
-  // Rewrite HTML: last local script tag -> bundle tag; others -> "".
-  // SCRIPT_RE matches local <script src> tags regardless of attribute order.
+  // Rewrite HTML
   const total = scripts.length;
   let seen = 0;
   let outHtml = html.replace(SCRIPT_RE, () => {
@@ -87,6 +87,12 @@ export function emitBundle({ root, outDir }) {
   // Copy static assets unchanged.
   cpSync(join(root, "assets"), join(outDir, "assets"), { recursive: true });
   cpSync(join(root, "manifest.json"), join(outDir, "manifest.json"));
+
+  // Copy modules folder for lazy loading support
+  const modulesSrc = join(root, "js/modules");
+  if (existsSync(modulesSrc)) {
+    cpSync(modulesSrc, join(outDir, "modules"), { recursive: true });
+  }
 
   return { jsFile, cssFile };
 }

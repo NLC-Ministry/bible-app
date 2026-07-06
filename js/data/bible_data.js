@@ -241,3 +241,7 @@ async function fetchBibleChapter(bookEngName, chapter) {
     verses: placeholderVerses
   };
 }
+
+window.BIBLE_BOOKS = BIBLE_BOOKS;
+window.fetchBibleChapter = fetchBibleChapter;
+

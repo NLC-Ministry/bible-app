@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { execSync } from "node:child_process";
 
-const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const manifestPath = join(root, "js/icon-manifest.json");
-const registryPath = join(root, "js/icon-registry.js");
+const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+const manifestPath = join(root, "js/design/icon-manifest.json");
+const registryPath = join(root, "js/design/icon-registry.js");
 
 describe("icon manifest registry", () => {
   it("generates non-empty SVG for every manifest key with no duplicates", () => {

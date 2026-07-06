@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "lucide": "^1.23.0",
     "vitest": "^4.1.9"
   }

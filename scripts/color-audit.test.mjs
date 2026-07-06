@@ -7,7 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const TOKEN_FILES = new Set([
   "index.css",
-  "js/design-tokens.js",
+  "js/design/design-tokens.js",
   "docs/design-system.md",
 ]);
 

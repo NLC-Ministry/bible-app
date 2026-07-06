@@ -402,3 +402,12 @@ const [dataVersion, setDataVersion] = (function() {
 })();
 window.dataVersion = dataVersion;
 window.setDataVersion = setDataVersion;
+
+window.state = state;
+window.CHURCH_PLAN_PRESETS = CHURCH_PLAN_PRESETS;
+window.appRouter = appRouter;
+window.initTheme = initTheme;
+window.loadLocalSettings = loadLocalSettings;
+window.setBodyThemeClass = setBodyThemeClass;
+window.escapeHTML = escapeHTML;
+window.loader = loader;
