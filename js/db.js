@@ -357,6 +357,7 @@ const db = {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.edge_session) {
+      console.error("❌ NLC Session Sync Failed Payload:", payload);
       throw new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
     }
 
