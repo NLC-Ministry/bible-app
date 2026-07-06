@@ -178,7 +178,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     await Promise.all([
       db.loadOrgStructure(),
-      db.loadUserData()
+      db.loadUserData(true)
     ]);
 
     // 確保管理員 UI 和角色相關 UI 在資料載入後即時更新
@@ -188,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const { data: { session } } = await state.supabase.auth.getSession();
       if (session) {
         db.updateAuthUI(session);
-        await db.loadUserData();
+        await db.loadUserData(true);
         if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
       }
     }

@@ -276,3 +276,7 @@ window.triggerBadgeUnlockNotification = function(badgeId, badgeName) {
 window.refreshBadgeSurfaces = refreshBadgeSurfaces;
 window.launchFireworks = launchFireworks;
 window.renderUnlockedBadgesWall = renderUnlockedBadgesWall;
+window.ACHIEVEMENTS = ACHIEVEMENTS;
+window.BADGE_UNLOCK_LEVELS = BADGE_UNLOCK_LEVELS;
+window.checkAchievements = checkAchievements;
+window.recordBadgeUnlockDate = recordBadgeUnlockDate;

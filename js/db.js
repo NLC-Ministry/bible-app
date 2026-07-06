@@ -581,23 +581,27 @@ const db = {
         state.activePlans = [];
         if (plans && plans.length > 0) {
           plans.forEach(dbPlan => {
-            // 優先用 global_plan_id（UUID）連結 global_plans；其次用 preset_key；最後 fallback 到名稱查找（舊資料相容）
-            const globalPlanId = dbPlan.global_plan_id || null;
-            const key = dbPlan.preset_key
-              || (globalPlanId ? globalPlanId : null)
-              || getPresetKeyByName(dbPlan.name);
+            try {
+              // 優先用 global_plan_id（UUID）連結 global_plans；其次用 preset_key；最後 fallback 到名稱查找（舊資料相容）
+              const globalPlanId = dbPlan.global_plan_id || null;
+              const key = dbPlan.preset_key
+                || (globalPlanId ? globalPlanId : null)
+                || getPresetKeyByName(dbPlan.name);
 
-            const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, dbPlan.level || 'normal');
-            planObj.id = dbPlan.id;
-            planObj.globalPlanId = globalPlanId;  // ?? UUID ??
-            const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
-            planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
-            planObj.level = dbPlan.level || 'normal';
-            planObj.currentRound = dbPlan.current_round || 1;
-            planObj.wasDowngraded = dbPlan.was_downgraded || false;
-            planObj.downgradeLockedUntil = dbPlan.downgrade_locked_until || getLocalPlanDowngradeLock(planObj);
-            planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
-            state.activePlans.push(planObj);
+              const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, dbPlan.level || 'normal');
+              planObj.id = dbPlan.id;
+              planObj.globalPlanId = globalPlanId;  // ?? UUID ??
+              const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
+              planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
+              planObj.level = dbPlan.level || 'normal';
+              planObj.currentRound = dbPlan.current_round || 1;
+              planObj.wasDowngraded = dbPlan.was_downgraded || false;
+              planObj.downgradeLockedUntil = dbPlan.downgrade_locked_until || getLocalPlanDowngradeLock(planObj);
+              planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
+              state.activePlans.push(planObj);
+            } catch (err) {
+              console.error("Failed to parse dbPlan:", dbPlan, err);
+            }
           });
 
           const selectedKey = localStorage.getItem("selected_plan_key");

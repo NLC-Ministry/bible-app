@@ -433,21 +433,22 @@ function renderBadgeWall(containerId) {
 
   container.innerHTML = "";
 
-  if (typeof ACHIEVEMENTS === "undefined") {
+  const ACHIEVEMENTS_LIST = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
+  if (!ACHIEVEMENTS_LIST) {
     container.innerHTML = `<div class="badge-wall__empty">暫無解鎖勳章</div>`;
     return;
   }
 
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
   if (container.id === "badges-grid") {
-    updateBadgeWallSummary(unlocked.length, ACHIEVEMENTS.length);
+    updateBadgeWallSummary(unlocked.length, ACHIEVEMENTS_LIST.length);
   }
 
   const getBadgeClasses = typeof getHonorBadgeItemClasses === "function"
     ? getHonorBadgeItemClasses
     : (isUnlocked) => (isUnlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
 
-  ACHIEVEMENTS.forEach(function (badge) {
+  ACHIEVEMENTS_LIST.forEach(function (badge) {
     const isUnlocked = unlocked.includes(badge.id);
     const badgeItem = document.createElement("div");
     badgeItem.className = getBadgeClasses(isUnlocked) + " honor-badge-item--tile";
@@ -495,7 +496,8 @@ function renderBadgeStrip(containerId, options) {
   const opts = options || {};
   container.innerHTML = "";
 
-  if (typeof ACHIEVEMENTS === "undefined") return;
+  const ACHIEVEMENTS_LIST = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
+  if (!ACHIEVEMENTS_LIST) return;
 
   if (opts.linkToProfile) {
     bindBadgeStripProfileLink();
@@ -503,7 +505,7 @@ function renderBadgeStrip(containerId, options) {
 
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
 
-  ACHIEVEMENTS.forEach(function (badge) {
+  ACHIEVEMENTS_LIST.forEach(function (badge) {
     const isUnlocked = unlocked.includes(badge.id);
     const item = document.createElement("button");
     item.type = "button";
@@ -1156,11 +1158,18 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
 
   // 1. Calculate parseLocalDate
   const parseLocalDate = (dateStr) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!dateStr || typeof dateStr !== 'string') {
+      return new Date();
+    }
+    const parts = dateStr.split('-');
+    if (parts.length < 3) {
+      return new Date();
+    }
+    const [year, month, day] = parts.map(Number);
     return new Date(year, month - 1, day);
   };
-  const start = parseLocalDate(startDate);
-  const end = parseLocalDate(endDate);
+  const start = parseLocalDate(startDate || '');
+  const end = parseLocalDate(endDate || '');
   const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
   // 2. If level is normal AND it is a preset plan, use the original month-by-month calendar grid
