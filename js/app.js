@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       db.loadUserData()
     ]);
 
-    if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase && state.supabase.auth) {
       const { data: { session } } = await state.supabase.auth.getSession();
       if (session) {
         db.updateAuthUI(session);
