@@ -5172,11 +5172,29 @@ export function init() {
 
 // Global attachments for compatibility
 window.initPlanControls = init;
+if (typeof renderPlanView === 'function') {
+  window.renderPlanView = renderPlanView;
+}
+if (typeof updateStatsView === 'function') {
+  window.updateStatsView = updateStatsView;
+}
 if (typeof renderPlanScheduleTracker === 'function') {
   window.renderPlanScheduleTracker = renderPlanScheduleTracker;
 }
 if (typeof renderHorizontalDateStrip === 'function') {
   window.renderHorizontalDateStrip = renderHorizontalDateStrip;
+}
+if (typeof renderPlanDetailView === 'function') {
+  window.renderPlanDetailView = renderPlanDetailView;
+}
+if (typeof renderPlanRankingView === 'function') {
+  window.renderPlanRankingView = renderPlanRankingView;
+}
+if (typeof renderPlanMembersView === 'function') {
+  window.renderPlanMembersView = renderPlanMembersView;
+}
+if (typeof renderPlanStatsView === 'function') {
+  window.renderPlanStatsView = renderPlanStatsView;
 }
 if (typeof showPlanStatsModal === 'function') {
   window.showPlanStatsModal = showPlanStatsModal;
@@ -5186,4 +5204,10 @@ if (typeof switchStatTab === 'function') {
 }
 if (typeof updateStatsScopeSelect === 'function') {
   window.updateStatsScopeSelect = updateStatsScopeSelect;
+}
+if (typeof snapCalendarToMyProgress === 'function') {
+  window.snapCalendarToMyProgress = snapCalendarToMyProgress;
+}
+if (typeof snapCalendarToToday === 'function') {
+  window.snapCalendarToToday = snapCalendarToToday;
 }
