@@ -52,19 +52,51 @@ async function fetchJson(url: string, init?: RequestInit) {
   return body;
 }
 
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split(".")[1];
+    if (!base64Url) return null;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((char) => "%" + ("00" + char.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
-  const issuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
-  const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
-  const userinfo = await fetchJson(discovery.userinfo_endpoint, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
-  });
-  if (!userinfo?.sub) throw new Error("invalid_logto_token");
+  let sub: string | null = null;
+
+  // Try decoding as JWT first (since Logto issues JWT access tokens for API resources)
+  const payload = parseJwt(accessToken);
+  if (payload && payload.sub) {
+    sub = payload.sub;
+  } else {
+    // Fallback to UserInfo endpoint call (e.g. for opaque tokens)
+    try {
+      const issuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
+      const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+      const userinfo = await fetchJson(discovery.userinfo_endpoint, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
+      });
+      sub = userinfo?.sub || null;
+    } catch (err) {
+      console.error("Failed to resolve profile from OIDC UserInfo fallback:", err);
+    }
+  }
+
+  if (!sub) throw new Error("invalid_logto_token");
 
   const { data: identity, error: identityError } = await supabaseAdmin
     .from("user_identities")
     .select("profile_id")
     .eq("provider", "logto")
-    .eq("provider_user_id", userinfo.sub)
+    .eq("provider_user_id", sub)
     .maybeSingle();
   if (identityError) throw identityError;
   if (!identity?.profile_id) throw new Error("profile_identity_not_found");
