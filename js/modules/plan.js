@@ -258,9 +258,9 @@ function initPlanControls() {
 
   function switchToTab(activeTab, activeSubview) {
     allTabs.forEach(t => t && t.classList.remove("active"));
-    allSubviews.forEach(s => s && s.classList.add("hidden"));
+    allSubviews.forEach(s => forceHidden(s, s !== activeSubview));
     if (activeTab) activeTab.classList.add("active");
-    if (activeSubview) activeSubview.classList.remove("hidden");
+    if (activeSubview) forceHidden(activeSubview, false);
   }
 
   // Segmented Control (今日讀經 / 小組進度) switcher
@@ -381,6 +381,9 @@ function initPlanControls() {
   });
 
   bindPlanMenuItem("menu-plan-level", async () => {
+    if (getCurrentPlanRoute() !== PLAN_ROUTE.DETAIL) {
+      await setPlanState(PLAN_ROUTE.DETAIL);
+    }
     switchToTab(null, subviewPlanLevel);
     renderPlanLevelEditor();
   });
@@ -1457,8 +1460,11 @@ window.showPlanLevelModal = async function () {
     document.getElementById("subview-plan-members"),
     subviewPlanLevel
   ].filter(Boolean);
-  subviews.forEach(view => view.classList.add("hidden"));
-  if (subviewPlanLevel) subviewPlanLevel.classList.remove("hidden");
+  if (getCurrentPlanRoute() !== PLAN_ROUTE.DETAIL) {
+    await setPlanState(PLAN_ROUTE.DETAIL);
+  }
+  subviews.forEach(view => forceHidden(view, view !== subviewPlanLevel));
+  if (subviewPlanLevel) forceHidden(subviewPlanLevel, false);
   renderPlanLevelEditor();
 };
 function readChapterDirect(bookName, chapter) {
