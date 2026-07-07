@@ -57,7 +57,9 @@
           </button>
           
           <!-- 新增：計畫詳情專用的極簡返回鈕 -->
-          <button id="top-bar-back-btn" onclick="if (appRouter.currentTab === 'plan-view') { state.planDetailOpen = false; if (typeof window.renderPlanView === 'function') window.renderPlanView(); appRouter.updateNavigationChrome(); }" class="hidden" style="display: none; align-items: center; gap: 4px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.88rem; font-weight: 500; padding: 0;">
+          <button id="top-bar-back-btn"
+            onclick="if (typeof window.planGoBack === 'function') { window.planGoBack(); } else if (appRouter.currentTab === 'plan-view') { state.planDetailOpen = false; if (typeof window.renderPlanView === 'function') window.renderPlanView(); appRouter.updateNavigationChrome(); }"
+            class="hidden" style="display: none; align-items: center; gap: 4px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.88rem; font-weight: 500; padding: 0;">
             <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
             <span>計畫</span>
           </button>
@@ -67,7 +69,9 @@
         <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
           <span class="brand-text">新生命聖經速讀計畫</span>
           
-          <button id="top-bar-group-trigger" onclick="if (typeof window.togglePlanDetailSubTab === 'function') { window.togglePlanDetailSubTab(); } else { console.warn('togglePlanDetailSubTab not loaded yet'); }" class="hidden" style="display: none; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-card); padding: 4px 12px; border-radius: 99px; cursor: pointer; transition: all 0.2s;">
+          <button id="top-bar-group-trigger"
+            onclick="if (typeof window.planToggleGroupProgress === 'function') { window.planToggleGroupProgress(); } else if (typeof window.togglePlanDetailSubTab === 'function') { window.togglePlanDetailSubTab(); } else { console.warn('plan.js not loaded yet'); }"
+            class="hidden" style="display: none; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-card); padding: 4px 12px; border-radius: 99px; cursor: pointer; transition: all 0.2s;">
             <span id="top-bar-plan-name" style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">測試計畫</span>
             <span style="width: 1px; height: 12px; background: var(--border-card);"></span>
             <span id="top-bar-sub-mode" style="font-size: 0.72rem; color: var(--primary-color); font-weight: 500; display: flex; align-items: center; gap: 2px;">
