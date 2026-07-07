@@ -237,18 +237,25 @@ const appRouter = {
     const appLayout = document.querySelector(".app-layout");
     if (appLayout) appLayout.classList.toggle("reader-mode", isReaderPage);
     
-    // Explicitly hide the mobile bottom navigation bar in immersive reading mode
+    // In reader-view: do NOT hard-hide the nav bar here.
+    // bible.js scroll handler adds/removes body.reader-nav-hidden which controls
+    // visibility via CSS (see .reader-nav-hidden .mobile-nav-bar rule).
+    // On tap the nav bar reappears — that behaviour lives entirely in CSS+bible.js.
     const mobileNavBar = document.querySelector(".mobile-nav-bar");
     if (mobileNavBar) {
-      mobileNavBar.classList.toggle("hidden", isReaderPage);
       mobileNavBar.setAttribute("aria-hidden", isReaderPage ? "true" : "false");
     }
     if (!backBtn || !backLabel) return;
 
-    const isHome = this.currentTab === "dashboard-view" && !isPlanDetail;
-    backBtn.classList.toggle("is-home", isHome);
-    backLabel.textContent = isHome ? "首頁" : "返回";
-    backBtn.title = isHome ? "回到首頁" : "返回上一層";
+    // Back button rules:
+    // - reader-view: always show (returns to previous tab)
+    // - plan-detail: hidden here (handled by topBarBackBtn above)
+    // - all other tabs: HIDE — bottom nav handles all tab switching
+    const showBackBtn = isReaderPage;
+    backBtn.classList.toggle("is-home", !showBackBtn);
+    backBtn.style.display = showBackBtn ? "" : "none";
+    backLabel.textContent = "返回";
+    backBtn.title = "返回上一層";
   },
 
   goBack() {

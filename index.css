@@ -7126,6 +7126,24 @@ body.reader-nav-hidden #reader-view .floating-nav-btn {
   pointer-events: none !important;
 }
 
+/* Mobile nav bar follows the same scroll-hide logic as floating nav buttons.
+   Default in reader-view: hidden (translated down).
+   When body.reader-nav-awake: slides back into view on tap. */
+body.reader-page .mobile-nav-bar {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity   0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.reader-nav-hidden.reader-page .mobile-nav-bar,
+.app-layout.reader-mode body.reader-nav-hidden .mobile-nav-bar {
+  transform: translateY(110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (max-width: 640px) {
   #reader-view .floating-nav-btn {
     width: 44px !important;
@@ -7591,17 +7609,13 @@ body.light-theme .book-brand-box {
   transform: scale(0.98);
 }
 
-body.reader-page .mobile-nav-bar,
-.app-layout.reader-mode .mobile-nav-bar {
-  opacity: 0;
-  transform: translateY(110%);
-  pointer-events: none;
-}
+/* NOTE: mobile-nav-bar visibility in reader-view is now controlled by
+   body.reader-nav-hidden / body.reader-nav-awake classes (set by bible.js scroll events).
+   See the reader-nav-hidden section above for the actual rules. */
 
 body.reader-page .main-content,
 .app-layout.reader-mode .main-content {
-  bottom: 0 !important;
-  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  bottom: calc(var(--app-bottom-nav-height) + var(--app-safe-bottom)) !important;
 }
 
 @media (max-width: 640px) {
