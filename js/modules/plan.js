@@ -106,8 +106,8 @@ function setOnlyPlanRouteVisible(route) {
   if (!shell) return null;
 
   forceHidden(shell.listView, route !== PLAN_ROUTE.LIST);
-  forceHidden(shell.detailView, route !== PLAN_ROUTE.DETAIL);
-  forceHidden(shell.groupView, route !== PLAN_ROUTE.GROUP);
+  forceHidden(shell.detailView, route === PLAN_ROUTE.LIST);
+  forceHidden(shell.groupView, true);
 
   return shell;
 }
@@ -518,7 +518,7 @@ async function renderPlanView() {
     ensurePlanRouteShell();
 
     if (state.activePlan && state.planDetailOpen) {
-      if (state.planActiveSubTab === "group" || getCurrentPlanRoute() === PLAN_ROUTE.GROUP) {
+      if (state.planActiveSubTab === "group") {
         await setPlanState(PLAN_ROUTE.GROUP);
       } else {
         await setPlanState(PLAN_ROUTE.DETAIL);
@@ -610,15 +610,17 @@ function renderJoinedPlansList() {
         cursor: pointer;
         transition: all 0.2s ease;
       `;
-      card.onclick = () => {
+      card.onclick = async () => {
         state.activePlan = plan;
+        state.planDetailOpen = true;
+        state.planActiveSubTab = "today";
+        window.currentPlanViewState = PLAN_ROUTE.DETAIL;
         if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
         state.selectedPlanDay = null; // reset to first uncompleted day
         localStorage.setItem("selected_plan_key", plan.presetKey || "");
         if (typeof window.setPlanState === 'function') {
-          window.setPlanState('detail');
+          await window.setPlanState(PLAN_ROUTE.DETAIL);
         } else {
-          state.planDetailOpen = true;
           renderPlanView();
         }
       };
@@ -689,11 +691,13 @@ function renderPresetPlansList() {
     card.onclick = async () => {
       if (isJoined) {
         state.activePlan = state.activePlans.find(p => p.presetKey === key || p.id === plan.id);
+        state.planDetailOpen = true;
+        state.planActiveSubTab = "today";
+        window.currentPlanViewState = PLAN_ROUTE.DETAIL;
         state.selectedPlanDay = null;
         if (typeof window.setPlanState === 'function') {
-          window.setPlanState('detail');
+          await window.setPlanState(PLAN_ROUTE.DETAIL);
         } else {
-          state.planDetailOpen = true;
           renderPlanView();
         }
       } else {
@@ -5422,7 +5426,7 @@ async function fetchGroupRankings(planId) {
 
   if (!state.activePlan) return;
 
-  moveGroupNodesToGroup();
+  moveGroupNodesToDetail();
 
   window._currentStatsTab = "admin";
   window._statsTabScope = getDefaultGroupStatsScope();
@@ -5470,7 +5474,7 @@ async function enterGroupProgressState() {
   state.planDetailOpen = true;
   state.planActiveSubTab = "group";
   const shell = setOnlyPlanRouteVisible(PLAN_ROUTE.GROUP);
-  moveGroupNodesToGroup(shell);
+  moveGroupNodesToDetail(shell);
 
   forceHidden(document.getElementById("subview-plan-schedule"), true);
   forceHidden(document.getElementById("subview-plan-level"), true);
