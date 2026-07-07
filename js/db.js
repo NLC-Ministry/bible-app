@@ -133,7 +133,7 @@ const db = {
         });
       } catch (e) {
         console.error("Supabase connection failed:", e);
-        const message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002";
+        const message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uFF08" + (e.message || e) + "\uFF09\uFF0C\u8acb\u91cd\u65b0\u767b\u5165\u3002";
         this.showConnectionError(message);
       }
     } else {
