@@ -7889,12 +7889,17 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
 
 /* Selected day */
 .plan-calendar .plan-day-cell.active {
-  background: var(--color-brand-muted);
-  color: var(--primary-color);
+  background: color-mix(in srgb, #dc2626 14%, var(--surface-card));
+  color: #b91c1c;
+  box-shadow:
+    0 0 0 2px #dc2626,
+    0 0 0 5px color-mix(in srgb, #dc2626 18%, transparent),
+    var(--shadow-sm);
+  z-index: 2;
 }
 
 .plan-calendar .plan-day-cell.active .day-number {
-  color: var(--primary-color);
+  color: #b91c1c;
 }
 
 /* Today — NLC brand ring */
@@ -7909,8 +7914,24 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
 
 /* Today + selected */
 .plan-calendar .plan-day-cell.today.active {
-  background: var(--color-brand-muted);
-  box-shadow: 0 0 0 2px var(--color-brand);
+  background: color-mix(in srgb, #dc2626 16%, var(--surface-card));
+  box-shadow:
+    0 0 0 2px #dc2626,
+    0 0 0 5px color-mix(in srgb, #dc2626 20%, transparent),
+    var(--shadow-sm);
+}
+
+body.dark-theme .plan-calendar .plan-day-cell.active {
+  background: color-mix(in srgb, #ef4444 22%, var(--surface-card));
+  color: #fecaca;
+  box-shadow:
+    0 0 0 2px #f87171,
+    0 0 0 5px color-mix(in srgb, #ef4444 24%, transparent),
+    var(--shadow-sm);
+}
+
+body.dark-theme .plan-calendar .plan-day-cell.active .day-number {
+  color: #fecaca;
 }
 
 /* Past unread / behind */
