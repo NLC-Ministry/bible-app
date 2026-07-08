@@ -145,7 +145,7 @@ const appRouter = {
       });
     }
 
-    // top-bar-back-btn and top-bar-group-trigger handled via inline onclick in index.html.
+    // top-bar-back-btn is handled via inline onclick; plan detail tabs are controlled by PlanPageController.
 
     this.updateNavigationChrome();
   },
@@ -172,6 +172,7 @@ const appRouter = {
     const topBarGroupTrigger = document.getElementById("top-bar-group-trigger");
     const topBarPlanName = document.getElementById("top-bar-plan-name");
     const topBarSubMode = document.getElementById("top-bar-sub-mode");
+    const planSettingsIcon = document.getElementById("plan-settings-icon");
 
     const isPlanDetail = this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen;
 
@@ -187,20 +188,18 @@ const appRouter = {
         topBarBackBtn.classList.remove("hidden");
       }
       if (topBarGroupTrigger) {
-        topBarGroupTrigger.style.display = "flex";
-        topBarGroupTrigger.classList.remove("hidden");
+        topBarGroupTrigger.style.display = "none";
+        topBarGroupTrigger.classList.add("hidden");
       }
       if (topBarPlanName && state.activePlan) {
         topBarPlanName.textContent = state.activePlan.name;
+        topBarPlanName.style.display = "block";
+        topBarPlanName.classList.remove("hidden");
       }
-      if (topBarSubMode) {
-        const currentSubTab = state.planActiveSubTab || "today";
-        if (currentSubTab === "today") {
-          topBarSubMode.innerHTML = `<span>小組進度</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight"></span>`;
-        } else {
-          topBarSubMode.innerHTML = `<span>今日讀經</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight"></span>`;
-        }
-        if (typeof hydrateIcons === "function") hydrateIcons(topBarSubMode);
+      if (topBarSubMode) topBarSubMode.innerHTML = "";
+      if (planSettingsIcon) {
+        planSettingsIcon.style.display = "inline-flex";
+        planSettingsIcon.classList.remove("hidden");
       }
     } else {
       // Show brand mark and normal back button
@@ -220,12 +219,20 @@ const appRouter = {
         topBarGroupTrigger.style.display = "none";
         topBarGroupTrigger.classList.add("hidden");
       }
+      if (topBarPlanName) {
+        topBarPlanName.style.display = "none";
+        topBarPlanName.classList.add("hidden");
+      }
+      if (planSettingsIcon) {
+        planSettingsIcon.style.display = "none";
+        planSettingsIcon.classList.add("hidden");
+      }
     }
 
     // Toggle global plan options menu visibility
     const optionsContainer = document.getElementById("global-plan-options-container");
     if (optionsContainer) {
-      optionsContainer.classList.toggle("hidden", !isPlanDetail);
+      optionsContainer.classList.toggle("hidden", true);
     }
 
     const isReaderPage = this.currentTab === "reader-view";

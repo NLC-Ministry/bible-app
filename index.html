@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260707_detail_fix">
+  <link rel="stylesheet" href="index.css?v=20260707_tabstrip">
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
   <!-- Chart.js for premium stats dashboard -->
@@ -68,17 +68,10 @@
         <!-- 中間：標題與核心切換按鈕 -->
         <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
           <span class="brand-text">新生命聖經速讀計畫</span>
-          
-          <button id="top-bar-group-trigger"
-            onclick="if (typeof window.planToggleGroupProgress === 'function') { window.planToggleGroupProgress(); } else if (typeof window.togglePlanDetailSubTab === 'function') { window.togglePlanDetailSubTab(); } else { console.warn('plan.js not loaded yet'); }"
-            class="hidden" style="display: none; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-card); padding: 4px 12px; border-radius: 99px; cursor: pointer; transition: all 0.2s;">
-            <span id="top-bar-plan-name" style="font-size: 0.78rem; font-weight: 700; color: var(--text-primary);">測試計畫</span>
-            <span style="width: 1px; height: 12px; background: var(--border-card);"></span>
-            <span id="top-bar-sub-mode" style="font-size: 0.72rem; color: var(--primary-color); font-weight: 500; display: flex; align-items: center; gap: 2px;">
-              <span>小組進度</span>
-              <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight"></span>
-            </span>
-          </button>
+          <span id="top-bar-plan-name" class="hidden"
+            style="display: none; max-width: 58vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; font-weight: 500; color: var(--text-primary); text-align: center;">
+            計畫
+          </span>
         </div>
 
         <!-- Desktop Navigation Tabs -->
@@ -126,6 +119,10 @@
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
             </svg>
+          </button>
+
+          <button class="icon-btn hidden" id="plan-settings-icon" type="button" title="調整進度設定" aria-label="調整進度設定" style="display: none;">
+            <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
           </button>
 
           <!-- Plan Options Menu (visible only when viewing plan details) -->
@@ -673,6 +670,21 @@
         <div id="plan-detail-subview" class="hidden plan-detail-compact"
           style="display: flex; flex-direction: column; gap: 1rem;">
           <!-- YouVersion Style Header Bar Removed (Integrated into Top App Bar) -->
+
+          <nav id="plan-detail-tab-strip" class="plan-detail-tab-strip hidden" aria-label="計畫分頁" style="display: none;">
+            <div class="plan-detail-tab-strip__scroller" role="tablist">
+              <button id="tab-btn-0" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-page-index="0">今日讀經</button>
+              <button id="tab-btn-1" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-page-index="1">小組進度</button>
+              <div id="tab-indicator" aria-hidden="true"></div>
+            </div>
+          </nav>
+
+          <div id="plan-view-window" class="plan-view-window hidden" style="display: none;">
+            <div id="plan-view-wrapper" class="w-full flex will-change-transform transition-transform duration-300">
+              <section id="plan-page-0" class="plan-page-panel" data-plan-page="0"></section>
+              <section id="plan-page-1" class="plan-page-panel" data-plan-page="1"></section>
+            </div>
+          </div>
 
           <!-- Segmented Control for tabs (Hidden, handled by Top Bar) -->
           <div class="px-4 py-2" style="padding: 0.5rem 1rem; display: none;">
@@ -1898,7 +1910,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260707_plan_entry_fix"></script>
+  <script type="module" src="js/app.js?v=20260707_tabstrip"></script>
 </body>
 
 </html>

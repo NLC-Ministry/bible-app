@@ -8714,3 +8714,25 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   border-radius: 999px;
   padding: 0.4rem 0.75rem;
 }
+
+/* Plan detail tab-strip architecture */
+.plan-detail-tab-strip { position: sticky; top: 0; z-index: 12; margin: -0.35rem -0.25rem 0.25rem; padding: 0.15rem 0.25rem 0.35rem; background: color-mix(in srgb, var(--bg-main) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.plan-detail-tab-strip__scroller { position: relative; display: flex; align-items: center; gap: 1.35rem; overflow-x: auto; scrollbar-width: none; padding: 0.15rem 0.75rem 0.55rem; }
+.plan-detail-tab-strip__scroller::-webkit-scrollbar { display: none; }
+.plan-detail-tab-btn { position: relative; flex: 0 0 auto; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 0.94rem; font-weight: 500; letter-spacing: 0.01em; padding: 0.55rem 0.05rem; transition: color 0.2s ease; }
+.plan-detail-tab-btn.active { color: var(--text-primary); }
+#tab-indicator { position: absolute; left: 0; bottom: 0.25rem; width: 0; height: 3px; border-radius: 999px; background: var(--color-brand); transform: translateX(0); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.plan-view-window { width: 100%; overflow: hidden; }
+#plan-view-wrapper { display: flex; width: 100%; transform: translateX(0%); transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+.plan-page-panel { width: 100%; min-width: 100%; flex: 0 0 100%; padding: 0 0.05rem 1.25rem; }
+.plan-settings-modal { position: fixed; inset: 0; z-index: 10000; display: none; align-items: flex-end; justify-content: center; padding: 1rem; }
+.plan-settings-modal__backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.46); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.plan-settings-modal__panel { position: relative; z-index: 1; width: min(100%, 460px); max-height: min(78vh, 680px); overflow: auto; border: 1px solid var(--border-card); border-radius: 24px 24px 18px 18px; background: var(--bg-card); box-shadow: var(--shadow-lg); padding: 1rem; }
+.plan-settings-modal__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.85rem; }
+.plan-settings-modal__header h3 { margin: 0; color: var(--text-primary); font-size: 1rem; font-weight: 500; }
+.plan-settings-modal__body #subview-plan-level { display: flex !important; }
+.plan-settings-modal__body .plan-level-back-btn { display: none; }
+.plan-calendar .plan-day-cell.active, .plan-calendar .plan-day-cell.today.active { background: color-mix(in srgb, #ef4444 24%, var(--surface-card)); color: #991b1b; border-color: #ef4444; box-shadow: 0 0 0 2px #ef4444, 0 0 0 6px color-mix(in srgb, #ef4444 22%, transparent), var(--shadow-sm); }
+.plan-calendar .plan-day-cell.active .day-number, .plan-calendar .plan-day-cell.today.active .day-number { color: #991b1b; font-weight: var(--type-weight-strong); }
+body.dark-theme .plan-calendar .plan-day-cell.active, body.dark-theme .plan-calendar .plan-day-cell.today.active { background: color-mix(in srgb, #ef4444 34%, var(--surface-card)); color: #fee2e2; border-color: #f87171; }
+body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-theme .plan-calendar .plan-day-cell.today.active .day-number { color: #fee2e2; }
