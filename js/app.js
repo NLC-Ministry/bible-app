@@ -116,7 +116,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "plan-view") {
-      const mod = await loadModule('plan', './modules/plan.js?v=20260708_calendar_only');
+      const mod = await loadModule('plan', './modules/plan.js?v=20260710_level_disable');
       if (mod && typeof mod.renderPlanView === 'function') {
         await mod.renderPlanView();
       } else if (typeof window.renderPlanView === 'function') {
@@ -124,7 +124,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "stats-view") {
-      const mod = await loadModule('plan', './modules/plan.js?v=20260708_calendar_only');
+      const mod = await loadModule('plan', './modules/plan.js?v=20260710_level_disable');
       if (typeof window.updateStatsView === 'function') {
         await window.updateStatsView();
       }
@@ -236,7 +236,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // in the background. This guarantees the plan tab shows real data immediately
   // when tapped — eliminating the skeleton-stuck-forever bug.
   // We intentionally do NOT await this (fire-and-forget) to keep startup fast.
-  loadModule('plan', './modules/plan.js?v=20260708_calendar_only').then(mod => {
+  loadModule('plan', './modules/plan.js?v=20260710_level_disable').then(mod => {
     if (mod && typeof mod.renderPlanView === 'function') {
       mod.renderPlanView().catch(() => {});
     }

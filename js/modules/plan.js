@@ -1616,6 +1616,22 @@ function renderPlanLevelEditor() {
         span.innerHTML = span.innerHTML.replace(/\s*<span class="downgrade-warning text-danger" style="font-weight: 500;">\(已晉升，不可調回低階難度\)<\/span>/g, "");
       }
     }
+
+    // 💡 標示並禁用當前設定等級（不可重複選定）
+    const strong = option.querySelector("strong");
+    if (strong) {
+      // 清除舊有的目前設定標記
+      const currentBadge = strong.querySelector(".current-level-badge");
+      if (currentBadge) currentBadge.remove();
+      strong.innerHTML = strong.innerHTML.replace(/\s*<span class="current-level-badge".*?<\/span>/g, "");
+
+      if (optLevel === currentLevel) {
+        strong.innerHTML += ` <span class="current-level-badge text-brand" style="margin-left: 0.5rem; font-size: 0.84rem; font-weight: 500;">(目前設定)</span>`;
+        option.disabled = true;
+        option.style.cursor = "default";
+        option.style.pointerEvents = "none";
+      }
+    }
   });
 }
 window.showPlanLevelModal = async function () {
