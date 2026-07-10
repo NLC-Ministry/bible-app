@@ -1570,8 +1570,6 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
 };
 
 function renderPlanLevelEditor() {
-  const currentLevel = state.activePlan ? (state.activePlan.level || "normal") : "normal";
-
   // 💡 關鍵修復：直接從計畫各章節的打卡狀態（R2, R3）計算實際已讀的最大遍數，並加上當前遍數防護
   let maxReadRound = state.activePlan ? (state.activePlan.currentRound || 1) : 1;
   if (state.activePlan && state.activePlan.days) {
@@ -1583,6 +1581,22 @@ function renderPlanLevelEditor() {
         });
       }
     });
+  }
+
+  let currentLevel = state.activePlan ? (state.activePlan.level || "normal") : "normal";
+  const currentLevelOrder = getPlanLevelOrder(currentLevel);
+
+  // 💡 數據一致性修正：若已讀遍數大於當前等級所屬的遍數，代表實際上已經升級，自動將等級修正為對應的難度
+  if (maxReadRound > currentLevelOrder) {
+    if (maxReadRound === 2) currentLevel = "breakthrough";
+    else if (maxReadRound === 3) currentLevel = "super";
+
+    if (state.activePlan) {
+      state.activePlan.level = currentLevel;
+      state.activePlan.currentRound = maxReadRound;
+      // 異步儲存到資料庫/localStorage，避免資料不一致
+      persistPlanLevelState(state.activePlan).catch(console.error);
+    }
   }
 
   const options = document.querySelectorAll("#plan-level-options .plan-level-option");
