@@ -1619,17 +1619,19 @@ function renderPlanLevelEditor() {
 
     // 💡 標示並禁用當前設定等級（紅色外框且不可重複選定）
     if (optLevel === currentLevel) {
-      option.style.borderColor = "var(--color-danger)";
-      option.style.borderWidth = "2px";
-      option.style.boxShadow = "0 0 0 1px var(--color-danger)";
+      option.style.setProperty("border-color", "var(--color-danger)", "important");
+      option.style.setProperty("border-width", "2px", "important");
+      option.style.setProperty("box-shadow", "0 0 0 1px var(--color-danger)", "important");
+      option.style.setProperty("opacity", "1", "important"); // 強制目前設定等級維持 100% 不透明度以凸顯紅色外框
       option.disabled = true;
       option.style.cursor = "default";
       option.style.pointerEvents = "none";
     } else {
-      // 非當前等級，重設為預設邊框樣式
-      option.style.borderColor = "";
-      option.style.borderWidth = "";
-      option.style.boxShadow = "";
+      // 非當前等級，重設為預設邊框與外觀樣式
+      option.style.removeProperty("border-color");
+      option.style.removeProperty("border-width");
+      option.style.removeProperty("box-shadow");
+      option.style.removeProperty("opacity");
     }
 
     const strong = option.querySelector("strong");
@@ -1675,7 +1677,44 @@ async function checkPlanSchedule(plan) {
   if (!plan) return;
   if (!isPlanStarted(plan)) return;
 
+  // 💡 關鍵修復：手動調整進度等級後，提供 7 天的寬限期（Grace Period），避免因新難度的目標章節數較高而立即被系統自動降級。
+  const planKey = plan.id || plan.presetKey;
+  const levelChangedAtStr = localStorage.getItem(`level_changed_at_${planKey}`);
+  if (levelChangedAtStr) {
+    const levelChangedAt = new Date(levelChangedAtStr);
+    const msSinceChange = Date.now() - levelChangedAt.getTime();
+    const daysSinceChange = msSinceChange / (1000 * 60 * 60 * 24);
+    if (daysSinceChange < 7) {
+      console.log(`[進度保護] 距離上次手動調整等級未滿 7 天（已過 ${daysSinceChange.toFixed(1)} 天），暫停自動降級檢查。`);
+      return;
+    }
+  }
+
   const level = plan.level || "normal";
+
+  // 💡 關鍵修復：如果使用者已完成第一遍，則不再檢查落後（皆視為超前）
+  const targetRounds = getPlanLevelRounds(level);
+  const singleRoundChapters = Math.ceil((plan.totalChapters || 0) / targetRounds);
+  calculatePlanProgress();
+  const actualCompletedChapters = plan.completedChapters || 0;
+
+  let maxReadRound = plan.currentRound || 1;
+  if (plan.days) {
+    plan.days.forEach(day => {
+      if (day.chapters) {
+        day.chapters.forEach(ch => {
+          if (ch.isReadR3) maxReadRound = Math.max(maxReadRound, 3);
+          else if (ch.isReadR2) maxReadRound = Math.max(maxReadRound, 2);
+        });
+      }
+    });
+  }
+
+  if (actualCompletedChapters >= singleRoundChapters || maxReadRound >= 2) {
+    console.log(`[進度保護] 使用者已讀完第一遍（已讀 ${actualCompletedChapters} 章，最大已讀遍數 ${maxReadRound}），免除落後檢查。`);
+    return;
+  }
+
   if (getPlanLevelOrder(level) <= 1) return;
 
   const start = new Date(plan.startDate);
@@ -1924,6 +1963,10 @@ window.changePlanLevel = async function (newLevel) {
   }
 
   state.activePlan.upgradePromptHandled = false;
+  // 💡 關鍵修復：手動調整進度等級後，記錄時間戳記到 localStorage 以提供 7 天自動降級寬限期
+  const planKey = state.activePlan.id || state.activePlan.presetKey;
+  localStorage.setItem(`level_changed_at_${planKey}`, new Date().toISOString());
+
   rebuildPlanScheduleForLevel(state.activePlan, newLevel);
   if (state.activePlans) {
     const planInList = state.activePlans.find(p =>
