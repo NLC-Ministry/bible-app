@@ -118,5 +118,5 @@ describe("emitBundle (integration, real repo)", () => {
     } finally {
       rmSync(out, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 });

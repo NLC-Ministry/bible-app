@@ -100,7 +100,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
     }
 
     if (tabId === "dashboard-view") {
-      const mod = await loadModule('home', './modules/home.js');
+      const mod = await loadModule('home', './modules/home.js?v=20260710_cuv_fix');
       if (mod && typeof mod.updateDashboardView === 'function') {
         await mod.updateDashboardView();
       } else if (typeof window.updateDashboardView === 'function') {
