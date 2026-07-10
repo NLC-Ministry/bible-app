@@ -1696,7 +1696,7 @@ async function checkPlanSchedule(plan) {
   const targetRounds = getPlanLevelRounds(level);
   const singleRoundChapters = Math.ceil((plan.totalChapters || 0) / targetRounds);
   calculatePlanProgress();
-  const actualCompletedChapters = plan.completedChapters || 0;
+  let actualCompletedChapters = plan.completedChapters || 0;
 
   let maxReadRound = plan.currentRound || 1;
   if (plan.days) {
@@ -1734,7 +1734,7 @@ async function checkPlanSchedule(plan) {
     .reduce((sum, day) => sum + ((day.chapters && day.chapters.length) || 0), 0);
 
   calculatePlanProgress();
-  const actualCompletedChapters = plan.completedChapters || 0;
+  actualCompletedChapters = plan.completedChapters || 0;
   if (expectedChaptersWithGrace <= 0 || actualCompletedChapters >= expectedChaptersWithGrace) return;
 
   const newLevel = level === "super" ? "breakthrough" : "normal";
