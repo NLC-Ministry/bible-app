@@ -291,8 +291,10 @@ window.addEventListener("planDataChanged", (e) => {
 });
 
 function canUseAdvancedGroupStats() {
-  const role = (state.currentUser && state.currentUser.role) || "member";
-  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(role);
+  const allowedRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"];
+  const currentRole = (state.currentUser && state.currentUser.role) || "member";
+  const realRole = state.realRole || "member";
+  return allowedRoles.includes(currentRole) || allowedRoles.includes(realRole);
 }
 
 function getDefaultGroupStatsScope() {
@@ -412,13 +414,16 @@ function initPlanControls() {
   const subviewPlanLevel = document.getElementById("subview-plan-level");
   // Only leaders and above can see the 組員狀況 tab
   const _initUserRole = (state.currentUser && state.currentUser.role) || "member";
-  const _canSeeMembers = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(_initUserRole);
+  const _canSeeMembers = canUseAdvancedGroupStats();
   if (tabMembers) tabMembers.style.display = _canSeeMembers ? "" : "none";
   if (subviewPlanMembers) subviewPlanMembers.style.display = _canSeeMembers ? "" : "none";
 
-  // Control visibility of inner admin stats tab
+  // Control visibility of group status using both the active and authenticated role.
   const innerAdminTab = document.getElementById("stats-inner-tab-admin");
-  if (innerAdminTab) { innerAdminTab.style.display = ""; innerAdminTab.classList.remove("hidden"); }
+  if (innerAdminTab) {
+    innerAdminTab.style.display = _canSeeMembers ? "" : "none";
+    innerAdminTab.classList.toggle("hidden", !_canSeeMembers);
+  }
 
   const allTabs = [tabSchedule, tabStats, tabRanking, _canSeeMembers ? tabMembers : null].filter(Boolean);
   const allSubviews = [subviewSchedule, subviewPlanStats, subviewPlanRanking, subviewPlanLevel, _canSeeMembers ? subviewPlanMembers : null].filter(Boolean);
@@ -885,19 +890,14 @@ async function renderPlanDetailView() {
 
   // Hide the 組員狀況 tab for regular members
   const _restoreRole = (state.currentUser && state.currentUser.role) || "member";
-  const _restoreCanSeeMembers = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(_restoreRole);
+  const _restoreCanSeeMembers = canUseAdvancedGroupStats();
   if (tabMembers) tabMembers.style.display = _restoreCanSeeMembers ? "" : "none";
   if (subviewPlanMembers) subviewPlanMembers.style.display = _restoreCanSeeMembers ? "" : "none";
 
   const innerAdminTab = document.getElementById("stats-inner-tab-admin");
   if (innerAdminTab) {
-    if (_restoreCanSeeMembers) {
-      innerAdminTab.style.display = "";
-      innerAdminTab.classList.remove("hidden");
-    } else {
-      innerAdminTab.style.display = "none";
-      innerAdminTab.classList.add("hidden");
-    }
+    innerAdminTab.style.display = _restoreCanSeeMembers ? "" : "none";
+    innerAdminTab.classList.toggle("hidden", !_restoreCanSeeMembers);
   }
 
   const allSubviewsInit = [subviewSchedule, subviewPlanStats, subviewPlanRanking, subviewPlanLevel, _restoreCanSeeMembers ? subviewPlanMembers : null].filter(Boolean);
