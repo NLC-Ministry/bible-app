@@ -222,7 +222,7 @@
 
             <!-- Middle/Top Layer: Absolute Text Overlay with glass backdrop filter -->
             <div id="verse-card-overlay" class="absolute inset-0 p-6 flex flex-col justify-between text-white"
-              style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; padding: 1.5rem; display: flex; flex-direction: column; justify-content: space-between; background: rgba(0,0,0,0.4); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); color: white;">
+              style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; padding: 1.5rem 1.5rem 0.75rem 1.5rem; display: flex; flex-direction: column; justify-content: space-between; background: rgba(0,0,0,0.4); backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); color: white;">
 
               <div id="verse-card-skeleton" class="verse-card-skeleton-layer" aria-hidden="true">
                 <div class="skeleton-wrapper skeleton-on-dark verse-card-skeleton"
@@ -276,27 +276,27 @@
 
                 <!-- Bottom Social Toolbar -->
                 <div id="verse-card-toolbar"
-                  class="flex items-center justify-between w-full pt-3 border-t border-white/10 mt-auto text-slate-300"
-                  style="display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem; margin-top: auto; color: rgba(203, 213, 225, 0.9); font-size: 0.75rem;">
+                  class="flex items-center justify-between w-full pt-2.5 border-t border-white/10 mt-auto text-slate-300"
+                  style="display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.6rem; margin-top: auto; color: rgba(203, 213, 225, 0.9); font-size: 0.72rem;">
                   <!-- 1. 純按讚按鈕 -->
-                  <button id="like-btn" class="flex flex-col items-center justify-center flex-1 py-1 text-xs"
-                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: inherit;">
-                    <span class="nlc-icon nlc-icon--md" data-icon="heart" aria-hidden="true"></span>
+                  <button id="like-btn" class="flex items-center justify-center flex-1 py-1 text-xs"
+                    style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: inherit;">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="heart" aria-hidden="true"></span>
                     <span id="like-count-text">0</span>
                   </button>
 
                   <!-- 2. 換一句按鈕（唯一允許觸發抽卡的入口） -->
                   <button id="draw-card-btn"
-                    class="flex flex-col items-center justify-center flex-1 py-1 text-xs text-slate-200"
-                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: #e2e8f0;">
-                    <span class="nlc-icon nlc-icon--md" data-icon="refresh" aria-hidden="true"></span>
+                    class="flex items-center justify-center flex-1 py-1 text-xs text-slate-200"
+                    style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: #e2e8f0;">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
                     <span>換一句</span>
                   </button>
 
                   <!-- 3. 分享按鈕 -->
-                  <button id="share-card-btn" class="flex flex-col items-center justify-center flex-1 py-1 text-xs"
-                    style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 0.25rem 0; font-size: 0.75rem; background: none; border: none; cursor: pointer; color: inherit;">
-                    <span class="nlc-icon nlc-icon--md" data-icon="share" aria-hidden="true"></span>
+                  <button id="share-card-btn" class="flex items-center justify-center flex-1 py-1 text-xs"
+                    style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: inherit;">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true"></span>
                     <span>分享</span>
                   </button>
                 </div>

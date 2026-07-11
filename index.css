@@ -1420,7 +1420,7 @@ body {
 /* Verse card toolbar — icons on dark photo overlay inherit light button color */
 #verse-card-toolbar button {
   gap: 0.25rem;
-  min-height: 2.75rem;
+  min-height: auto;
   transition: color 0.15s ease, opacity 0.15s ease;
 }
 
@@ -1434,7 +1434,7 @@ body {
 
 #verse-card-toolbar .nlc-icon {
   color: inherit;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0;
 }
 
 #verse-card-toolbar .nlc-icon svg {
