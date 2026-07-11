@@ -279,18 +279,7 @@ async function loadTodayDevotional() {
 
   textarea.value = "";
   if (countEl) countEl.textContent = "字數: 0 字";
-
-  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-
-  try {
-    const content = await db.getDevotionalNote(todayStr);
-    if (content) {
-      textarea.value = content;
-      if (countEl) countEl.textContent = `字數: ${content.length} 字`;
-    }
-  } catch (err) {
-    console.error("Failed to load devotional note:", err);
-  }
+  state.currentEditingNoteId = null;
 }
 
 let devotionalDebounceTimer = null;
@@ -326,6 +315,10 @@ function initDevotionalControls() {
     toggleBtn.addEventListener("click", () => {
       devCard.classList.toggle("hidden");
       if (!devCard.classList.contains("hidden")) {
+        // 💡 關鍵修復 1：按分享心得時，清空輸入框防止出現上次寫過的字，並將當前編輯 ID 設為 null 以新增全新文章
+        textarea.value = "";
+        if (countEl) countEl.textContent = "字數: 0 字";
+        state.currentEditingNoteId = null;
         textarea.focus();
       }
     });
@@ -343,6 +336,7 @@ async function saveDevotionalNote(isAuto) {
   const textarea = document.getElementById("devotional-content");
   const statusEl = document.getElementById("devotional-save-status");
   const saveBtn = document.getElementById("btn-save-devotional");
+  const countEl = document.getElementById("devotional-word-count");
   if (!textarea) return;
 
   if (isSavingDevotional) return;
@@ -366,7 +360,12 @@ async function saveDevotionalNote(isAuto) {
   }
 
   try {
-    await db.saveDevotionalNote(todayStr, content);
+    // 💡 關鍵修復 2：將 state.currentEditingNoteId 帶入儲存方法中。若首次儲存會回傳新產生的 ID，續寫時則以該 ID 進行 update。
+    const newNoteId = await db.saveDevotionalNote(todayStr, content, state.currentEditingNoteId);
+    if (newNoteId) {
+      state.currentEditingNoteId = newNoteId;
+    }
+    
     showSaveSuccess(isAuto);
     if (typeof renderTodayGroupProgress === "function") {
       renderTodayGroupProgress();
@@ -374,7 +373,13 @@ async function saveDevotionalNote(isAuto) {
     if (typeof fetchPastoralVerseWall === "function") {
       fetchPastoralVerseWall();
     }
+    
     if (!isAuto) {
+      // 💡 關鍵修復 3：當按下手動發佈完成後，清空輸入框，且將 state.currentEditingNoteId 設回 null，以防下次再分享時蓋掉這次發佈的心得
+      textarea.value = "";
+      if (countEl) countEl.textContent = "字數: 0 字";
+      state.currentEditingNoteId = null;
+
       const devCard = document.querySelector(".devotional-card");
       if (devCard) {
         devCard.classList.add("hidden");

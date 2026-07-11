@@ -1688,44 +1688,34 @@ const db = {
     return "";
   },
 
-  async saveDevotionalNote(date, content) {
+  async saveDevotionalNote(date, content, noteId = null) {
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const user = await this.getCurrentDbUser();
-      if (!user) return;
+      if (!user) return null;
 
-      // 💡 關鍵修復：先檢查當天是否已經有這名使用者的靈修心得紀錄，避免重疊與產生兩則重複留言
-      const { data: existing, error: fetchError } = await state.supabase
-        .from("devotional_notes")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("note_date", date)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (fetchError) {
-        console.error("Failed to query existing devotional note:", fetchError);
-      }
-
-      if (existing) {
-        // 若已有舊紀錄，更新既有內容（解決自動存檔與點擊分享產生兩則紀錄的衝突）
+      if (noteId) {
+        // 如果有指定正在編輯的 noteId，則更新它（解決同一次輸入的自動存檔與點擊發佈衝突）
         const { error } = await state.supabase
           .from("devotional_notes")
           .update({ content: content })
-          .eq("id", existing.id);
+          .eq("id", noteId);
 
         if (error) throw error;
+        return noteId;
       } else {
-        // 若無紀錄，新增一筆
-        const { error } = await state.supabase
+        // 沒有指定 noteId，則新增一筆，並回傳新產生的 ID 以供後續自動存檔/發佈更新
+        const { data, error } = await state.supabase
           .from("devotional_notes")
           .insert({
             user_id: user.id,
             note_date: date,
             content: content
-          });
+          })
+          .select("id")
+          .single();
 
         if (error) throw error;
+        return data ? data.id : null;
       }
     } else {
       const notesStr = localStorage.getItem("devotional_notes") || "[]";
@@ -1737,20 +1727,26 @@ const db = {
         notes = [];
       }
 
-      // 本地端防重複：檢查當天是否已有心得
-      const existingIdx = notes.findIndex(n => n.user_id === "me" && n.note_date === date);
-      if (existingIdx !== -1) {
-        notes[existingIdx].content = content;
-      } else {
-        notes.unshift({
-          id: "mock_note_" + Date.now(),
-          user_id: "me",
-          note_date: date,
-          content: content,
-          created_at: new Date().toISOString()
-        });
+      if (noteId) {
+        const existingIdx = notes.findIndex(n => n.id === noteId);
+        if (existingIdx !== -1) {
+          notes[existingIdx].content = content;
+          localStorage.setItem("devotional_notes", JSON.stringify(notes));
+          return noteId;
+        }
       }
+
+      // 新增一筆
+      const newId = "mock_note_" + Date.now();
+      notes.unshift({
+        id: newId,
+        user_id: "me",
+        note_date: date,
+        content: content,
+        created_at: new Date().toISOString()
+      });
       localStorage.setItem("devotional_notes", JSON.stringify(notes));
+      return newId;
     }
   },
 
