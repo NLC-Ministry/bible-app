@@ -1233,6 +1233,7 @@ async function updateAnnouncementsList() {
 }
 
 let currentVerse = null;
+let currentBlessing = null;
 let isVerseLoading = false;
 let isImgLoading = false;
 
@@ -1334,7 +1335,13 @@ function applyVerseCardContent(verseData, imageUrl) {
     bgImgEl.style.opacity = "1";
   }
 
-  currentVerse = { ...verseData, imageUrl };
+  const isBlessing = state.verseCardMode === 'blessing';
+  if (isBlessing) {
+    currentBlessing = { ...verseData, imageUrl };
+  } else {
+    currentVerse = { ...verseData, imageUrl };
+  }
+
   if (typeof syncVerseLikes === "function") {
     syncVerseLikes(verseData.source);
   }
@@ -1715,7 +1722,7 @@ function renderDailyVerse() {
       if (state.verseCardMode === 'verse') return;
       state.verseCardMode = 'verse';
       updateModeUI();
-      fetchRandomVerse();
+      renderDailyVerse();
     });
     btnModeVerse._hasModeListener = true;
   }
@@ -1727,21 +1734,24 @@ function renderDailyVerse() {
       if (state.verseCardMode === 'blessing') return;
       state.verseCardMode = 'blessing';
       updateModeUI();
-      fetchRandomVerse();
+      renderDailyVerse();
     });
     btnModeBlessing._hasModeListener = true;
   }
 
   const savedBg = localStorage.getItem("verse_card_bg");
-  if (!currentVerse) {
+  const activeMode = state.verseCardMode || 'verse';
+  const currentData = activeMode === 'blessing' ? currentBlessing : currentVerse;
+
+  if (!currentData) {
     setVerseCardLoading(true);
     fetchRandomVerse();
   } else {
     setVerseCardLoading(true);
-    const imageUrl = savedBg || currentVerse.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
+    const imageUrl = savedBg || currentData.imageUrl || CURATED_IMAGE_POOL[(new Date().getDate() - 1) % CURATED_IMAGE_POOL.length];
     preloadVerseCardImage(imageUrl).then((loadedUrl) => {
       applyVerseCardContent(
-        { text: currentVerse.text, source: currentVerse.source },
+        { text: currentData.text, source: currentData.source },
         loadedUrl
       );
     });
