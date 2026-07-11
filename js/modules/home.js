@@ -1646,10 +1646,10 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
       commentsHtml += `
         <div class="p-2.5 rounded-sm border" style="background: color-mix(in srgb, var(--text-primary) 1%, var(--bg-card)); border-color: var(--border-card); margin-bottom: 0.5rem;">
           <div class="flex items-center justify-between mb-1">
-            <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.8rem;">${commProfile.name}</span>
+            <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.8rem;">${escapeHTML(commProfile.name)}</span>
             <span style="color: var(--text-muted); font-size: 0.7rem;">${new Date(comm.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap;">${comm.content}</p>
+          <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap;">${escapeHTML(comm.content)}</p>
         </div>
       `;
     });
@@ -1669,11 +1669,11 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center space-x-3">
           <div class="w-8 h-8 rounded-full bg-gradient-to-br ${avatarColorClass} flex items-center justify-center font-bold text-xs shadow-inner">
-            ${initial}
+            ${escapeHTML(initial)}
           </div>
           <div class="flex flex-col">
-            <span class="text-xs font-medium" style="color: var(--text-primary);">${profile.name}</span>
-            <span class="text-[10px]" style="color: var(--text-muted);">${profile.small_group || "小組"}</span>
+            <span class="text-xs font-medium" style="color: var(--text-primary);">${escapeHTML(profile.name)}</span>
+            <span class="text-[10px]" style="color: var(--text-muted);">${escapeHTML(profile.small_group || "小組")}</span>
           </div>
         </div>
         <div class="flex items-center space-x-2">
@@ -1696,7 +1696,7 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
 
       <div class="my-3 pl-3" style="border-left: 2px solid var(--color-brand); margin: 0.75rem 0;">
         <p style="font-size: 0.875rem; line-height: 1.5; color: var(--text-primary); margin: 0; font-weight: var(--type-weight-regular);">
-          ${note.content}
+          ${escapeHTML(note.content)}
         </p>
       </div>
 
