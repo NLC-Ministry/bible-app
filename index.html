@@ -366,7 +366,16 @@
                 <span class="dashboard-panel-card__title-text">牧區靈修分享牆</span>
               </h3>
               <div class="flex items-center space-x-2">
-                <span class="privacy-badge stat-badge stat-badge--success label-with-icon">今日即時</span>
+                <!-- Segmented Control for Today vs History -->
+                <div class="segment-control" style="display: inline-flex; background: var(--bg-input); padding: 2px; border-radius: 9999px; border: 1px solid var(--border-card);">
+                  <button type="button" id="btn-wall-tab-today" class="segment-btn active" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border-radius: 9999px; border: 0; background: var(--color-brand-subtle, rgba(4,169,210,0.1)); color: var(--color-brand); cursor: pointer; font-weight: 600; transition: all 0.2s;">今日即時</button>
+                  <button type="button" id="btn-wall-tab-history" class="segment-btn" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border-radius: 9999px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 600; transition: all 0.2s;">歷史回顧</button>
+                </div>
+                <!-- Dropdown for History Filter (Hidden by default) -->
+                <select id="wall-history-filter" class="form-control hidden" style="padding: 0.2rem 1.5rem 0.2rem 0.5rem; font-size: 0.72rem; border-radius: 9999px; height: 26px; line-height: 1; border-color: var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer;">
+                  <option value="all">全小組/牧區</option>
+                  <option value="mine">僅看自己</option>
+                </select>
                 <button type="button" id="btn-toggle-devotional-box" class="premium-action-btn"
                   style="padding: 0.28rem 0.72rem; font-size: 0.72rem; border-radius: 9999px; font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem;">
                   <span class="nlc-icon nlc-icon--sm" data-icon="edit" style="width:11px; height:11px;"></span>

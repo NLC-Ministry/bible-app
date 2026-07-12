@@ -523,6 +523,34 @@ function initDevotionalControls() {
       renderProgressListFiltered(e.target.value);
     });
   }
+
+  // 歷史靈修分享切換與篩選監聽器
+  const tabToday = document.getElementById("btn-wall-tab-today");
+  const tabHistory = document.getElementById("btn-wall-tab-history");
+  const historyFilter = document.getElementById("wall-history-filter");
+
+  if (tabToday && tabHistory) {
+    const switchTab = (activeTab, inactiveTab) => {
+      activeTab.classList.add("active");
+      activeTab.style.background = "var(--color-brand-subtle, rgba(4,169,210,0.1))";
+      activeTab.style.color = "var(--color-brand)";
+
+      inactiveTab.classList.remove("active");
+      inactiveTab.style.background = "transparent";
+      inactiveTab.style.color = "var(--text-secondary)";
+
+      fetchPastoralVerseWall();
+    };
+
+    tabToday.addEventListener("click", () => switchTab(tabToday, tabHistory));
+    tabHistory.addEventListener("click", () => switchTab(tabHistory, tabToday));
+  }
+
+  if (historyFilter) {
+    historyFilter.addEventListener("change", () => {
+      fetchPastoralVerseWall();
+    });
+  }
 }
 
 async function publishDevotionalNote() {
@@ -1841,8 +1869,19 @@ async function fetchPastoralVerseWall() {
 
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
 
+  const isHistory = document.getElementById("btn-wall-tab-history")?.classList.contains("active");
+  const historyFilter = document.getElementById("wall-history-filter")?.value || "all";
+  const historyFilterEl = document.getElementById("wall-history-filter");
+
+  if (isHistory) {
+    historyFilterEl?.classList.remove("hidden");
+  } else {
+    historyFilterEl?.classList.add("hidden");
+  }
+
   if (state.isSupabaseMode && state.supabase) {
     try {
+      const user = await db.getCurrentDbUser();
       const pastoralZone = (state.currentUser && state.currentUser.pastoral_zone) || "";
       let profilesQuery = state.supabase.from("profiles").select("id, name, small_group");
       if (pastoralZone) {
@@ -1858,19 +1897,31 @@ async function fetchPastoralVerseWall() {
 
       const userIds = profiles.map(p => p.id);
 
-      const { data: notes, error: nError } = await state.supabase
+      let notesQuery = state.supabase
         .from("devotional_notes")
-        .select("id, user_id, content, created_at")
-        .eq("note_date", todayStr)
-        .in("user_id", userIds)
-        .order("created_at", { ascending: false });
+        .select("id, user_id, content, created_at, note_date");
 
+      if (isHistory) {
+        if (historyFilter === "mine" && user) {
+          notesQuery = notesQuery.eq("user_id", user.id);
+        } else {
+          notesQuery = notesQuery.in("user_id", userIds);
+        }
+        notesQuery = notesQuery.order("created_at", { ascending: false }).limit(50);
+      } else {
+        notesQuery = notesQuery.eq("note_date", todayStr).in("user_id", userIds).order("created_at", { ascending: false });
+      }
+
+      const { data: notes, error: nError } = await notesQuery;
       if (nError) throw nError;
 
       const activeNotes = (notes || []).filter(n => n.content && n.content.trim().length > 0);
 
       if (activeNotes.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-400 dark:text-zinc-500 text-center py-6">今天還沒有人分享金句喔，快來分享吧！</div>`;
+        const noNotesMsg = isHistory
+          ? (historyFilter === "mine" ? "您目前尚無過去分享的心得喔！" : "此小組/牧區尚無歷史分享心得喔！")
+          : "今天還沒有人分享金句喔，快來分享吧！";
+        container.innerHTML = `<div class="text-xs text-slate-400 dark:text-zinc-500 text-center py-6">${noNotesMsg}</div>`;
         return;
       }
 
@@ -1891,7 +1942,7 @@ async function fetchPastoralVerseWall() {
         profileMap[p.id] = p;
       });
 
-      renderVerseWallCards(activeNotes, profileMap, likes || [], comments || []);
+      renderVerseWallCards(activeNotes, profileMap, likes || [], comments || [], isHistory);
     } catch (err) {
       console.error("Failed to load pastoral sharing wall:", err);
       container.innerHTML = `<div class="text-xs text-red-500 text-center py-6">載入分享牆失敗</div>`;
@@ -1899,7 +1950,9 @@ async function fetchPastoralVerseWall() {
   } else {
     const defaultMock = [
       { id: "demo_note1", user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date(Date.now() - 3600000).toISOString() },
-      { id: "demo_note2", user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date(Date.now() - 7200000).toISOString() }
+      { id: "demo_note2", user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date(Date.now() - 7200000).toISOString() },
+      { id: "demo_note3", user_id: "demo1", content: "敬畏耶和華是智慧的開端；認識至聖者便是聰明。 (箴 9:10)", created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
+      { id: "demo_note4", user_id: "me", content: "我將你的話藏在心裡，免得我得罪你。 (詩 119:11)", created_at: new Date(Date.now() - 86400000).toISOString() }
     ];
 
     const localNotesStr = localStorage.getItem("devotional_notes") || "[]";
@@ -1917,9 +1970,32 @@ async function fetchPastoralVerseWall() {
       "me": { name: (state.currentUser && state.currentUser.name) || "我", small_group: (state.currentUser && state.currentUser.small_group) || "小組" }
     };
 
+    let processedMock = mockNotes.map(n => {
+      const datePart = n.created_at ? n.created_at.slice(0, 10) : todayStr;
+      return { ...n, note_date: datePart };
+    });
+
+    let filteredNotes = processedMock;
+    if (isHistory) {
+      if (historyFilter === "mine") {
+        const myId = (state.currentUser && state.currentUser.id) || "me";
+        filteredNotes = processedMock.filter(n => n.user_id === "me" || n.user_id === myId);
+      }
+      filteredNotes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      filteredNotes = filteredNotes.slice(0, 50);
+    } else {
+      filteredNotes = processedMock.filter(n => n.note_date === todayStr);
+    }
+
+    if (filteredNotes.length === 0) {
+      const noNotesMsg = isHistory ? "無符合歷史心得" : "今天還沒有人分享金句喔，快來分享吧！";
+      container.innerHTML = `<div class="text-xs text-slate-400 dark:text-zinc-500 text-center py-6">${noNotesMsg}</div>`;
+      return;
+    }
+
     const likesList = [];
     const commentsList = [];
-    mockNotes.forEach(n => {
+    filteredNotes.forEach(n => {
       const likedKey = `like_${n.id}`;
       if (localStorage.getItem(likedKey) === "true") {
         likesList.push({ note_id: n.id, user_id: "me" });
@@ -1929,7 +2005,7 @@ async function fetchPastoralVerseWall() {
       commentsList.push(...localComms);
     });
 
-    renderVerseWallCards(mockNotes, mockProfileMap, likesList, commentsList);
+    renderVerseWallCards(filteredNotes, mockProfileMap, likesList, commentsList, isHistory);
   }
 }
 
@@ -1997,7 +2073,7 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
   return html;
 }
 
-function renderVerseWallCards(notes, profileMap, likes, comments) {
+function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = false) {
   const container = document.getElementById("home-verse-wall");
   if (!container) return;
 
@@ -2022,15 +2098,27 @@ function renderVerseWallCards(notes, profileMap, likes, comments) {
     let timeStr = "剛剛";
     if (note.created_at) {
       try {
-        const diffMs = new Date() - new Date(note.created_at);
-        const diffMins = Math.floor(diffMs / 60000);
-        if (diffMins < 1) {
-          timeStr = "剛剛";
-        } else if (diffMins < 60) {
-          timeStr = `${diffMins} 分鐘前`;
+        const noteDate = new Date(note.created_at);
+        const todayDateStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        const noteDateStr = noteDate.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+
+        if (isHistory || noteDateStr !== todayDateStr) {
+          const y = noteDate.getFullYear();
+          const m = String(noteDate.getMonth() + 1).padStart(2, '0');
+          const d = String(noteDate.getDate()).padStart(2, '0');
+          const hr = String(noteDate.getHours()).padStart(2, '0');
+          const min = String(noteDate.getMinutes()).padStart(2, '0');
+          timeStr = `${y}-${m}-${d} ${hr}:${min}`;
         } else {
-          const d = new Date(note.created_at);
-          timeStr = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+          const diffMs = new Date() - noteDate;
+          const diffMins = Math.floor(diffMs / 60000);
+          if (diffMins < 1) {
+            timeStr = "剛剛";
+          } else if (diffMins < 60) {
+            timeStr = `${diffMins} 分鐘前`;
+          } else {
+            timeStr = noteDate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+          }
         }
       } catch (e) { }
     }
