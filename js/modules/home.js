@@ -1,4 +1,5 @@
 // js/modules/home.js
+import { validateVerseSource } from "./verse-validator.mjs";
 
 const DAILY_VERSES = [
   { text: "「愛是恆久忍耐，又有恩慈；愛是不嫉妒；愛是不自誇，不張狂，不做害羞的事，不求自己的益處，不輕易發怒，不計算人的惡。」", source: "哥林多前書 13:4-5" },
@@ -1545,8 +1546,16 @@ async function syncVerseLikes(verseSource) {
   const label = document.getElementById("like-count-text");
   if (!likeBtn || !label) return;
 
-  let count = Math.max(0, parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0"));
-  let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
+  let validatedSource;
+  try {
+    validatedSource = validateVerseSource(verseSource);
+  } catch (err) {
+    console.error("Invalid verse source for sync:", err);
+    return;
+  }
+
+  let count = Math.max(0, parseInt(localStorage.getItem(`verse_like_count_${validatedSource}`) || "0"));
+  let liked = localStorage.getItem(`verse_liked_${validatedSource}`) === "true";
 
   const updateUI = () => {
     const iconEl = likeBtn.querySelector(".nlc-icon");
@@ -1565,15 +1574,15 @@ async function syncVerseLikes(verseSource) {
 
   if (state.supabase && state.isSupabaseMode) {
     try {
-      const { data, error } = await state.supabase.from("verse_likes").select("like_count").eq("source", verseSource).maybeSingle();
+      const { data, error } = await state.supabase.from("verse_likes").select("like_count").eq("source", validatedSource).maybeSingle();
       if (!error) {
         if (data) {
           count = Math.max(0, data.like_count || 0);
-          localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
+          localStorage.setItem(`verse_like_count_${validatedSource}`, count.toString());
           updateUI();
         } else {
           count = 0;
-          localStorage.setItem(`verse_like_count_${verseSource}`, "0");
+          localStorage.setItem(`verse_like_count_${validatedSource}`, "0");
           updateUI();
         }
       }
@@ -1592,20 +1601,28 @@ async function toggleVerseLike(e) {
   if (!currentVerse || !currentVerse.source) return;
   const verseSource = currentVerse.source;
 
+  let validatedSource;
+  try {
+    validatedSource = validateVerseSource(verseSource);
+  } catch (err) {
+    console.error("Invalid verse source for like toggle:", err);
+    return;
+  }
+
   const likeBtn = document.getElementById("like-btn");
   const label = document.getElementById("like-count-text");
   if (!likeBtn || !label) return;
 
-  let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
-  let count = Math.max(0, parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0"));
+  let liked = localStorage.getItem(`verse_liked_${validatedSource}`) === "true";
+  let count = Math.max(0, parseInt(localStorage.getItem(`verse_like_count_${validatedSource}`) || "0"));
   const previousLiked = liked;
   const previousCount = count;
 
   liked = !liked;
   count = Math.max(0, count + (liked ? 1 : -1));
 
-  localStorage.setItem(`verse_liked_${verseSource}`, liked ? "true" : "false");
-  localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
+  localStorage.setItem(`verse_liked_${validatedSource}`, liked ? "true" : "false");
+  localStorage.setItem(`verse_like_count_${validatedSource}`, count.toString());
 
   const iconEl = likeBtn.querySelector(".nlc-icon");
   if (iconEl) {
@@ -1622,12 +1639,12 @@ async function toggleVerseLike(e) {
     try {
       if (typeof state.supabase.rpc === "function") {
         const rpcName = liked ? "increment_likes" : "decrement_likes";
-        const { data, error } = await state.supabase.rpc(rpcName, { verse_source: verseSource });
+        const { data, error } = await state.supabase.rpc(rpcName, { verse_source: validatedSource });
         if (error) throw new Error(error.message || error.error || String(error));
         if (typeof data !== "number") throw new Error("Atomic verse-like RPC returned an invalid count.");
         const guardedData = Math.max(0, data);
         count = guardedData;
-        localStorage.setItem(`verse_like_count_${verseSource}`, guardedData.toString());
+        localStorage.setItem(`verse_like_count_${validatedSource}`, guardedData.toString());
         if (label) {
           label.textContent = guardedData >= 10000 ? `${(guardedData / 10000).toFixed(1)}萬` : guardedData;
         }
@@ -1637,8 +1654,8 @@ async function toggleVerseLike(e) {
     } catch (dbErr) {
       liked = previousLiked;
       count = previousCount;
-      localStorage.setItem(`verse_liked_${verseSource}`, liked ? "true" : "false");
-      localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
+      localStorage.setItem(`verse_liked_${validatedSource}`, liked ? "true" : "false");
+      localStorage.setItem(`verse_like_count_${validatedSource}`, count.toString());
       if (iconEl) {
         iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
         likeBtn.classList.toggle("is-liked", liked);
