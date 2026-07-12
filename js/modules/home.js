@@ -1,5 +1,8 @@
 // js/modules/home.js
 import { validateVerseSource } from "./verse-validator.mjs";
+import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
+
+const sharingController = new DevotionalSharingController();
 
 const DAILY_VERSES = [
   { text: "「愛是恆久忍耐，又有恩慈；愛是不嫉妒；愛是不自誇，不張狂，不做害羞的事，不求自己的益處，不輕易發怒，不計算人的惡。」", source: "哥林多前書 13:4-5" },
@@ -530,24 +533,41 @@ function initDevotionalControls() {
   const historyFilter = document.getElementById("wall-history-filter");
 
   if (tabToday && tabHistory) {
-    const switchTab = (activeTab, inactiveTab) => {
+    const switchTab = (activeTab, inactiveTab, targetState) => {
+      try {
+        sharingController.tab = targetState;
+      } catch (err) {
+        console.error(err);
+        return;
+      }
+
       activeTab.classList.add("active");
-      activeTab.style.background = "var(--color-brand-subtle, rgba(4,169,210,0.1))";
+      activeTab.style.background = "var(--bg-card)";
       activeTab.style.color = "var(--color-brand)";
+      activeTab.style.boxShadow = "var(--shadow-sm)";
+      activeTab.style.fontWeight = "600";
 
       inactiveTab.classList.remove("active");
       inactiveTab.style.background = "transparent";
       inactiveTab.style.color = "var(--text-secondary)";
+      inactiveTab.style.boxShadow = "none";
+      inactiveTab.style.fontWeight = "500";
 
       fetchPastoralVerseWall();
     };
 
-    tabToday.addEventListener("click", () => switchTab(tabToday, tabHistory));
-    tabHistory.addEventListener("click", () => switchTab(tabHistory, tabToday));
+    tabToday.addEventListener("click", () => switchTab(tabToday, tabHistory, "today"));
+    tabHistory.addEventListener("click", () => switchTab(tabHistory, tabToday, "history"));
   }
 
   if (historyFilter) {
     historyFilter.addEventListener("change", () => {
+      try {
+        sharingController.filter = historyFilter.value;
+      } catch (err) {
+        console.error(err);
+        return;
+      }
       fetchPastoralVerseWall();
     });
   }
@@ -559,11 +579,14 @@ async function publishDevotionalNote() {
   const countEl = document.getElementById("devotional-word-count");
   if (!textarea) return;
 
-  const content = textarea.value.trim();
-  if (!content) {
-    alert("請輸入內容後再發佈！");
+  let content;
+  try {
+    content = sharingController.validateContent(textarea.value);
+  } catch (err) {
+    alert(err.message);
     return;
   }
+
 
   if (isSavingDevotional) return;
 
@@ -1869,8 +1892,8 @@ async function fetchPastoralVerseWall() {
 
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
 
-  const isHistory = document.getElementById("btn-wall-tab-history")?.classList.contains("active");
-  const historyFilter = document.getElementById("wall-history-filter")?.value || "all";
+  const isHistory = (sharingController.tab === "history");
+  const historyFilter = sharingController.filter;
   const historyFilterWrapper = document.getElementById("wall-history-filter-wrapper");
 
   if (isHistory) {
@@ -2173,13 +2196,12 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
     const isExpanded = window.expandedNoteIds.has(note.id);
 
     const card = document.createElement("div");
-    card.className = "devotional-post-card transition-all duration-200";
+    card.className = "devotional-post-card transition-all duration-200 shadow-sm";
     card.style.background = "var(--bg-card)";
     card.style.border = "1px solid var(--border-card)";
-    card.style.borderRadius = "var(--radius-sm)";
+    card.style.borderRadius = "12px";
     card.style.padding = "1rem";
     card.style.marginBottom = "1rem";
-    card.style.boxShadow = "var(--shadow-sm)";
 
     card.innerHTML = `
       <div class="flex items-center justify-between mb-3">
