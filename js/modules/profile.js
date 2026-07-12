@@ -814,21 +814,30 @@ export function updateHeaderAvatar() {
     return;
   }
 
-  if (state.isSupabaseMode && state.supabase && state.supabase.auth && state.supabase.auth.getUser) {
-    state.supabase.auth.getUser().then(({ data }) => {
-      const user = data && data.user;
-      if (user) {
-        if (emailEl) emailEl.textContent = user.email || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u4e2d";
-      } else if (emailEl) {
-        emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
-      }
+  if (state.isSupabaseMode && state.supabase) {
+    // NLC/OIDC mode: email is already on state.currentUser (set by applyNlcProfile).
+    // Calling supabase.auth.getUser() on the nlc-data custom client returns 403.
+    if (state.currentUser && state.currentUser.email) {
+      if (emailEl) emailEl.textContent = state.currentUser.email;
       if (typeof refreshUserAvatars === "function") refreshUserAvatars();
-    }).catch(err => {
-      console.error("Error in updateHeaderAvatar:", err);
-      if (emailEl) emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
-      if (typeof refreshUserAvatars === "function") refreshUserAvatars();
-    });
-    return;
+      return;
+    }
+    // Standard Supabase auth (non-OIDC): safe to call getUser().
+    if (state.supabase.auth && state.supabase.auth.getUser && !localStorage.getItem("nlc_supabase_access_token")) {
+      state.supabase.auth.getUser().then(({ data }) => {
+        const user = data && data.user;
+        if (user) {
+          if (emailEl) emailEl.textContent = user.email || "教會系統登入中";
+        } else if (emailEl) {
+          emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
+        }
+        if (typeof refreshUserAvatars === "function") refreshUserAvatars();
+      }).catch(() => {
+        if (emailEl) emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
+        if (typeof refreshUserAvatars === "function") refreshUserAvatars();
+      });
+      return;
+    }
   }
 
   if (emailEl) emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";

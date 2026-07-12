@@ -366,6 +366,7 @@ const db = {
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
     state.currentUser.role = profile.role || "member";
+    if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
@@ -1323,7 +1324,7 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, great_region, pastoral_zone, small_group, role, managed_regions, managed_zones, managed_groups").eq("is_demo", false);
+        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role, managed_regions, managed_zones, managed_groups").eq("is_demo", false);
         console.log(`🔍 [AdminDebug] profiles 查詢結果: ${usersProfiles ? usersProfiles.length : 0} 筆`, profilesError ? `錯誤: ${profilesError.message}` : '');
         if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${u.role})`));
         
