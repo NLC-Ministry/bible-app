@@ -2403,8 +2403,8 @@ const db = {
     // Real Supabase mode
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: { user } } = await state.supabase.auth.getUser();
-        if (!user) return { data: [], error: null };
+        const profileId = state.currentProfileId;
+        if (!profileId) return { data: [], error: null };
         const { data, error } = await state.supabase
           .from("care_reminders")
           .select(`
@@ -2415,7 +2415,7 @@ const db = {
             sent_on,
             sender:profiles!sender_id (name, role)
           `)
-          .eq("recipient_id", user.id)
+          .eq("recipient_id", profileId)
           .eq("status", "unread")
           .order("created_at", { ascending: false });
         return { data: data || [], error };
@@ -2480,44 +2480,43 @@ const db = {
       return { error: null };
     }
 
-    // 生產模式：寫入 Supabase（RLS 會驗證發送者是否在授權範圍內）
+    // 生產模式：透過 nlc-data 的 send_care_reminder action 安全送出（server 端強制 sender_id）
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: { user } } = await state.supabase.auth.getUser();
-        if (!user) return { error: new Error("請先登入後再傳送關心提醒") };
-
-        // 取得發送者的 profile ID
-        const { data: senderProfile, error: profileErr } = await state.supabase
-          .from("profiles")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-        if (profileErr || !senderProfile) {
-          return { error: profileErr || new Error("找不到發送者的牧養資料") };
+        if (typeof auth === "undefined" || !auth.isLoggedIn()) {
+          return { error: new Error("請先登入後再傳送關心提醒") };
         }
-
-        const { error } = await state.supabase
-          .from("care_reminders")
-          .insert({
-            sender_id: senderProfile.id,
-            recipient_id: recipientId,
-            plan_key: String(planKey || ""),
-            reason: reason,
-            message: trimmedMsg,
-            status: "unread",
-            sent_on: new Date().toISOString().slice(0, 10)
-          });
-
-        if (error) {
-          // 409 Conflict = 今日已傳送過
-          if (error.code === "23505") {
+        const cfg = state.supabaseConfig || {};
+        const accessToken = await auth.getValidAccessToken();
+        const response = await fetch(
+          cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
+          {
+            method: "POST",
+            headers: {
+              apikey: cfg.anonKey,
+              Authorization: "Bearer " + accessToken,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              action: "send_care_reminder",
+              payload: {
+                recipient_id: recipientId,
+                reason: reason,
+                message: trimmedMsg,
+                plan_key: String(planKey || "")
+              }
+            })
+          }
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (payload.code === "23505" || response.status === 409) {
             return { error: new Error("今日已傳送過關心提醒給此成員，明日再試") };
           }
-          // RLS 拒絕 = 超出牧養範圍
-          if (error.code === "42501" || (error.message && error.message.includes("policy"))) {
+          if (payload.code === "42501" || (payload.error && payload.error.includes("policy"))) {
             return { error: new Error("此成員不在您的牧養範圍內") };
           }
-          return { error };
+          return { error: new Error(payload.error || "傳送失敗") };
         }
         return { error: null };
       } catch (e) {

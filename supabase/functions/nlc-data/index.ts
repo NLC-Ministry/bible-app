@@ -23,11 +23,12 @@ const READ_TABLES = new Set([
   "profile_identity_overview",
   "member_reading_summary",
   "view_pastoral_zone_stats",
-  "view_small_group_stats"
+  "view_small_group_stats",
+  "care_reminders"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles"]);
-const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments"]);
+const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders"]);
 const RPC_FUNCTIONS = new Set(["increment_likes", "decrement_likes"]);
 
 function jsonResponse(body: unknown, status = 200) {
@@ -167,6 +168,9 @@ function applyForcedScope(query: any, table: string, action: string, profile: an
   if (table === "user_identities") return query.eq("profile_id", profile.id);
   if (table === "global_plans" && action === "select" && !isAdmin(profile)) return query.eq("is_hidden", false);
   if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return query.eq("is_published", true);
+  // care_reminders: SELECT scoped to recipient, UPDATE scoped to recipient (mark as read)
+  if (table === "care_reminders" && action === "select") return query.eq("recipient_id", profile.id);
+  if (table === "care_reminders" && action === "update") return query.eq("recipient_id", profile.id);
   return query;
 }
 
@@ -209,6 +213,29 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabaseAdmin.rpc(functionName, body.args || {});
       if (error) return jsonResponse({ error: error.message, details: error }, 400);
       return jsonResponse({ data, profile });
+    }
+
+    // ── send_care_reminder: server-side forced sender_id ──
+    if (action === "send_care_reminder") {
+      const p = body.payload || {};
+      const validReasons = ["behind", "inactive", "care", "encouragement"];
+      if (!p.recipient_id) return jsonResponse({ error: "missing_recipient_id" }, 400);
+      if (!validReasons.includes(p.reason)) return jsonResponse({ error: "invalid_reason" }, 400);
+      const msg = String(p.message || "").trim();
+      if (!msg || msg.length > 300) return jsonResponse({ error: "invalid_message" }, 400);
+      const { error } = await supabaseAdmin
+        .from("care_reminders")
+        .insert({
+          sender_id: profile.id,           // always the authenticated caller
+          recipient_id: p.recipient_id,
+          plan_key: String(p.plan_key || ""),
+          reason: p.reason,
+          message: msg,
+          status: "unread",
+          sent_on: new Date().toISOString().slice(0, 10)
+        });
+      if (error) return jsonResponse({ error: error.message, details: error, code: error.code }, 400);
+      return jsonResponse({ data: null, profile });
     }
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
