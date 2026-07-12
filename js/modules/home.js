@@ -1572,10 +1572,8 @@ async function syncVerseLikes(verseSource) {
           localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
           updateUI();
         } else {
-          const initialCount = 0;
-          await state.supabase.from("verse_likes").insert({ source: verseSource, like_count: initialCount }).execute();
-          count = initialCount;
-          localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
+          count = 0;
+          localStorage.setItem(`verse_like_count_${verseSource}`, "0");
           updateUI();
         }
       }
@@ -1600,6 +1598,8 @@ async function toggleVerseLike(e) {
 
   let liked = localStorage.getItem(`verse_liked_${verseSource}`) === "true";
   let count = Math.max(0, parseInt(localStorage.getItem(`verse_like_count_${verseSource}`) || "0"));
+  const previousLiked = liked;
+  const previousCount = count;
 
   liked = !liked;
   count = Math.max(0, count + (liked ? 1 : -1));
@@ -1622,29 +1622,30 @@ async function toggleVerseLike(e) {
     try {
       if (typeof state.supabase.rpc === "function") {
         const rpcName = liked ? "increment_likes" : "decrement_likes";
-        const { data, error } = await state.supabase.rpc(rpcName, { verse_source: verseSource }).execute();
-        if (!error && typeof data === "number") {
-          const guardedData = Math.max(0, data);
-          localStorage.setItem(`verse_like_count_${verseSource}`, guardedData.toString());
-          if (label) {
-            label.textContent = guardedData >= 10000 ? `${(guardedData / 10000).toFixed(1)}萬` : guardedData;
-          }
+        const { data, error } = await state.supabase.rpc(rpcName, { verse_source: verseSource });
+        if (error) throw new Error(error.message || error.error || String(error));
+        if (typeof data !== "number") throw new Error("Atomic verse-like RPC returned an invalid count.");
+        const guardedData = Math.max(0, data);
+        count = guardedData;
+        localStorage.setItem(`verse_like_count_${verseSource}`, guardedData.toString());
+        if (label) {
+          label.textContent = guardedData >= 10000 ? `${(guardedData / 10000).toFixed(1)}萬` : guardedData;
         }
       } else {
-        const { data, error } = await state.supabase.from("verse_likes").select("like_count").eq("source", verseSource).maybeSingle();
-        if (!error && data) {
-          const latestDbCount = data.like_count || 0;
-          const newDbCount = Math.max(0, latestDbCount + (liked ? 1 : -1));
-          await state.supabase.from("verse_likes").update({ like_count: newDbCount }).eq("source", verseSource).execute();
-
-          localStorage.setItem(`verse_like_count_${verseSource}`, newDbCount.toString());
-          if (label) {
-            label.textContent = newDbCount >= 10000 ? `${(newDbCount / 10000).toFixed(1)}萬` : newDbCount;
-          }
-        }
+        throw new Error("Atomic verse-like RPC is unavailable; direct counter writes are forbidden.");
       }
     } catch (dbErr) {
-      console.warn("Failed to toggle like on Supabase:", dbErr);
+      liked = previousLiked;
+      count = previousCount;
+      localStorage.setItem(`verse_liked_${verseSource}`, liked ? "true" : "false");
+      localStorage.setItem(`verse_like_count_${verseSource}`, count.toString());
+      if (iconEl) {
+        iconEl.setAttribute("data-icon", liked ? "heartFill" : "heart");
+        likeBtn.classList.toggle("is-liked", liked);
+        if (typeof hydrateIcons === "function") hydrateIcons(likeBtn);
+      }
+      if (label) label.textContent = count >= 10000 ? `${(count / 10000).toFixed(1)}萬` : count;
+      console.warn("Failed to toggle like on Supabase; optimistic state rolled back.", dbErr);
     }
   }
 }

@@ -27,7 +27,8 @@ const READ_TABLES = new Set([
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements"]);
-const OWN_WRITE_TABLES = new Set(["profiles", "reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "verse_likes"]);
+const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments"]);
+const RPC_FUNCTIONS = new Set(["increment_likes", "decrement_likes"]);
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -179,13 +180,20 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (action !== "save_profile" && (!table || typeof table !== "string")) return jsonResponse({ error: "missing_table" }, 400);
+    if (!["save_profile", "rpc"].includes(action) && (!table || typeof table !== "string")) return jsonResponse({ error: "missing_table" }, 400);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
     const profile = await resolveProfile(supabaseAdmin, accessToken);
 
+    if (action === "rpc") {
+      const functionName = typeof body.function === "string" ? body.function : "";
+      if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
+      const { data, error } = await supabaseAdmin.rpc(functionName, body.args || {});
+      if (error) return jsonResponse({ error: error.message, details: error }, 400);
+      return jsonResponse({ data, profile });
+    }
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
       const updatePayload = {

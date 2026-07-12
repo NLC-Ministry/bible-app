@@ -328,6 +328,14 @@ const db = {
       from(table) {
         return new NlcQueryBuilder(table);
       },
+      rpc(functionName, args = {}) {
+        return {
+          execute: () => callEdge({ action: "rpc", function: functionName, args }),
+          then(resolve, reject) {
+            return this.execute().then(resolve, reject);
+          }
+        };
+      },
       auth: {
         async getUser() {
           return { data: { user: state.currentProfileId ? { id: state.currentProfileId, oidc: true } : null }, error: null };
