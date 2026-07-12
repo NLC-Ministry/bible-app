@@ -148,6 +148,9 @@ export function emitBundle({ root, outDir }) {
   cpDirRecursive(join(root, "assets"), join(outDir, "assets"));
   console.log("DEBUG: Copying manifest.json...");
   cpDirRecursive(join(root, "manifest.json"), join(outDir, "manifest.json"));
+  console.log("DEBUG: Copying Service Worker and PWA runtime modules...");
+  cpDirRecursive(join(root, "sw.js"), join(outDir, "sw.js"));
+  cpDirRecursive(join(root, "js", "pwa"), join(outDir, "js", "pwa"));
 
   // Copy modules folder for lazy loading support
   const modulesSrc = join(root, "js/modules");

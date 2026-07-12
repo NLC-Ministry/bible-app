@@ -25,10 +25,12 @@ There are **no tests, no linter, and no compile step**. "Building" only means re
 
 The app aggressively fights stale caches because church members run it on mobile PWAs:
 
-- Every `<script>`/`<link>` in `index.html` has a `?v=YYYYMMDD_...` query string. **When you change a JS or CSS file, bump its version string in `index.html`** or clients will load the old file. The current tag is `20260705_nlc`.
-- `sw.js` is a **cache-buster service worker** that unregisters itself and deletes all Caches. `main.js` also unregisters any existing service worker on load and force-reloads. Do not reintroduce a caching service worker — offline mode is intentionally unsupported (the app depends on live Supabase data).
-- `vercel.json` sets `no-store` on `/`, `/index.html`, `/config.js`, and `/sw.js`.
-
+- Every `<script>`/`<link>` in `index.html` has a `?v=YYYYMMDD_...` query string. **When you change a JS or CSS file, bump its version string in `index.html`** or clients may load an old file.
+- `sw.js` is a thin, module-based Service Worker. It delegates cache behavior to `js/pwa/CacheManager.js`; never put business logic directly in lifecycle handlers.
+- Cache only same-origin static assets and public Bible API responses. Authentication, Supabase/NLC, rankings, member data, and admin data must bypass Service Worker caching.
+- Authenticated reading-log writes may be queued in IndexedDB by `PwaCoordinator`; credentials are never persisted in the queue. Background Sync asks an open authenticated client to flush the queue.
+- `vercel.json` must keep `/`, `/index.html`, and `/sw.js` non-immutable. Hashed app bundles and versioned runtime modules may use immutable caching.
+- See `docs/pwa-architecture.md` before changing caching or offline synchronization.
 ## Architecture
 
 ### Script load order (globals, not modules)

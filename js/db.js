@@ -1009,7 +1009,7 @@ const db = {
         if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
           const user = await this.getCurrentDbUser();
           if (user) {
-            await state.supabase.from("reading_logs").insert({
+            const insertResult = await state.supabase.from("reading_logs").insert({
               user_id: user.id,
               plan_id: planId,
               book,
@@ -1017,6 +1017,9 @@ const db = {
               read_at: todayISO,
               round: round
             });
+            if (insertResult && insertResult.error) {
+              throw new Error(insertResult.error.message || insertResult.error.error || String(insertResult.error));
+            }
           }
         }
       } else {
@@ -1029,7 +1032,10 @@ const db = {
             let query = state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
             if (planId) query = query.eq("plan_id", planId);
             else query = query.is("plan_id", null);
-            await query;
+            const updateResult = await query;
+            if (updateResult && updateResult.error) {
+              throw new Error(updateResult.error.message || updateResult.error.error || String(updateResult.error));
+            }
           }
         }
       }
@@ -1045,7 +1051,10 @@ const db = {
           } else {
             query = query.is("plan_id", null);
           }
-          await query;
+          const deleteResult = await query;
+          if (deleteResult && deleteResult.error) {
+            throw new Error(deleteResult.error.message || deleteResult.error.error || String(deleteResult.error));
+          }
         }
       }
     }

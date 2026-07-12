@@ -108,6 +108,8 @@ describe("emitBundle (integration, real repo)", () => {
       expect(html).toContain(`href="/${cssFile}"`);
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);
+      expect(existsSync(join(out, "sw.js"))).toBe(true);
+      expect(existsSync(join(out, "js", "pwa", "CacheManager.js"))).toBe(true);
       expect(readdirSync(join(out, "assets")).length).toBeGreaterThan(0);
       // modules folder copied
       expect(existsSync(join(out, "modules"))).toBe(true);

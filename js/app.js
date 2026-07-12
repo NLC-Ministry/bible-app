@@ -14,6 +14,7 @@ import './auth.js';
 import './db.js';
 import './utils.js?v=20260709_badge_back';
 import './gamification.js';
+import { initializePwa } from './pwa/PwaCoordinator.js';
 
 const buildVersion = "__BUILD_VERSION__";
 const moduleCache = {};
@@ -238,6 +239,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // PWA registration and authenticated offline reading queue.
+  try {
+    await initializePwa();
+  } catch (error) {
+    console.warn("[PWA] Initialization failed; continuing in online-only mode.", error);
+  }
+
+  window.addEventListener("pwa:sync-status", event => {
+    const detail = event.detail || {};
+    document.documentElement.dataset.syncState = detail.status || "idle";
+    document.documentElement.dataset.pendingSyncCount = String(detail.pending || 0);
+    if (detail.status === "queued" && typeof showToast === "function") {
+      showToast("已離線儲存，恢復網路後會自動同步");
+    } else if (detail.status === "complete" && detail.pending === 0 && typeof showToast === "function") {
+      showToast("離線讀經進度已同步");
+    }
+  });
   // ── Background pre-warm: silently load plan module & render plan list ──
   // While the user sees the dashboard, we load plan.js and call renderPlanView()
   // in the background. This guarantees the plan tab shows real data immediately
@@ -249,25 +267,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }).catch(() => {});
 
-  // PWA Cache Buster
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations().then(registrations => {
-      if (registrations.length > 0) {
-        console.log("[Cache Buster] 偵測到舊版 Service Worker，正在移除並清空快取...");
-        for (let registration of registrations) {
-          registration.unregister();
-        }
-        if (window.caches) {
-          caches.keys().then(keys => {
-            Promise.all(keys.map(key => caches.delete(key))).then(() => {
-              console.log("[Cache Buster] 快取已清空，正在執行強制重新整理...");
-              window.location.reload(true);
-            });
-          });
-        } else {
-          window.location.reload(true);
-        }
-      }
-    });
-  }
+
 });
