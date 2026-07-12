@@ -307,6 +307,11 @@ export async function renderProfileView() {
     profileNameInput.classList.toggle("readonly-field", lockedFields.has("name"));
     profileNameInput.title = lockedFields.has("name") ? "此欄位由教會系統提供，不可編輯" : "";
   }
+
+  const profileEmailInput = document.getElementById("profile-email");
+  if (profileEmailInput) {
+    profileEmailInput.value = state.currentUser.email || "";
+  }
   
   const greatRegionSelect = document.getElementById("profile-great-region");
   const customGreatRegionInput = document.getElementById("profile-great-region-custom");

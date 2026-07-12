@@ -7408,6 +7408,15 @@ body.reader-nav-hidden.reader-page .mobile-nav-bar,
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.member-email-text {
+  font-size: 0.75rem;
+  color: #a5b4fc;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+}
 .member-arrow-right {
   color: var(--text-muted);
   font-weight: 500;

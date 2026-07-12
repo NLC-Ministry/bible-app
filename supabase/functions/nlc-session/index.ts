@@ -224,13 +224,20 @@ Deno.serve(async (req: Request) => {
       userinfo = parseJwt(idToken);
     }
 
-    if (!userinfo || !userinfo.sub) {
-      console.log("Decoding id_token failed or was not provided; falling back to OIDC UserInfo endpoint.");
-      const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
-      const userinfoEndpoint = discovery.userinfo_endpoint;
-      if (!userinfoEndpoint) return jsonResponse({ error: "userinfo_endpoint_missing" }, 500);
-
-      userinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
+    if (!userinfo || !userinfo.sub || !userinfo.email) {
+      console.log("UserInfo from token is incomplete or missing email; fetching full profile from OIDC UserInfo endpoint.");
+      try {
+        const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+        const userinfoEndpoint = discovery.userinfo_endpoint;
+        if (userinfoEndpoint) {
+          const fullUserinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
+          if (fullUserinfo && fullUserinfo.sub) {
+            userinfo = { ...userinfo, ...fullUserinfo };
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch full userinfo from OIDC endpoint:", err);
+      }
     }
 
     if (!userinfo || !userinfo.sub) {

@@ -212,10 +212,11 @@ export async function renderAdminUserManagement() {
     const filteredUsers = sortedUsers.filter(u => {
       if (state.isSupabaseMode && u.is_demo) return false;
       const matchName = u.name.toLowerCase().includes(query);
+      const matchEmail = u.email ? u.email.toLowerCase().includes(query) : false;
       const matchRegion = !state.adminFilters.region || u.great_region === state.adminFilters.region;
       const matchZone = !state.adminFilters.zone || u.pastoral_zone === state.adminFilters.zone;
       const matchGroup = !state.adminFilters.group || u.small_group === state.adminFilters.group;
-      return matchName && matchRegion && matchZone && matchGroup;
+      return (matchName || matchEmail) && matchRegion && matchZone && matchGroup;
     });
 
     listContainer.innerHTML = "";
@@ -255,6 +256,7 @@ export async function renderAdminUserManagement() {
           <div class="member-sub-text">
             ${escapeHTML(user.great_region)} / ${escapeHTML(user.pastoral_zone)} / ${escapeHTML(user.small_group)}
           </div>
+          ${user.email ? `<div class="member-email-text">${escapeHTML(user.email)}</div>` : ''}
         </div>
         <div class="member-arrow-right">
           ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "sm", className: "nlc-icon" }) : ""}
