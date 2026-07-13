@@ -1346,6 +1346,32 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 
   const currentRound = state.activePlan.currentRound || 1;
 
+  if (state.activePlan.progress >= 100) {
+    const upgradeBanner = document.createElement("div");
+    upgradeBanner.className = "glass-card congrats-inline-banner";
+    upgradeBanner.style = `
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12));
+      border: 1px solid var(--border-card);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.2rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+    `;
+    const nextRound = currentRound + 1;
+    upgradeBanner.innerHTML = `
+      <div style="font-size: 2.2rem; margin-bottom: 0.2rem; animation: pulseMedal 2s infinite ease-in-out;">🏆</div>
+      <div style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">您已完成了此遍的讀經進度！</div>
+      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">恭喜獲得紀念勳章。確認要開始下一遍讀經了嗎？</div>
+      <button onclick="window.triggerPlanUpgradeFlow()" class="primary-btn" style="margin-top: 0.5rem; padding: 0.5rem 1.5rem; font-size: 0.88rem; background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); border: none; border-radius: 8px; color: #fff; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);">🏆 確認升級下一 Level (第 ${nextRound} 遍)</button>
+    `;
+    container.appendChild(upgradeBanner);
+  }
+
   selectedDay.chapters.forEach(ch => {
     const taskItem = document.createElement("div");
     taskItem.className = "plan-task-item";
@@ -1565,6 +1591,142 @@ async function checkPlanSchedule(plan) {
   return;
 }
 
+function showCongratsModal(plan, round) {
+  const oldModal = document.getElementById("congrats-modal");
+  if (oldModal) oldModal.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "congrats-modal";
+  modal.style = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    animation: fadeIn 0.3s ease-out;
+  `;
+
+  const nextRound = round + 1;
+
+  modal.innerHTML = `
+    <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 24px; padding: 2.5rem; width: 90%; max-width: 440px; box-shadow: var(--shadow-lg); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; overflow: hidden;">
+      
+      <!-- Confetti Background Effects -->
+      <div style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; opacity: 0.6;">
+        <div style="position: absolute; width: 8px; height: 8px; background: #fbbf24; border-radius: 50%; top: 10%; left: 15%; animation: float 3s infinite ease-in-out;"></div>
+        <div style="position: absolute; width: 6px; height: 12px; background: #6366f1; transform: rotate(45deg); top: 20%; right: 20%; animation: float 4s infinite ease-in-out 1s;"></div>
+        <div style="position: absolute; width: 10px; height: 10px; background: #ec4899; transform: rotate(15deg); bottom: 15%; left: 25%; animation: float 3.5s infinite ease-in-out 0.5s;"></div>
+        <div style="position: absolute; width: 8px; height: 8px; background: #10b981; border-radius: 50%; bottom: 25%; right: 15%; animation: float 4.5s infinite ease-in-out 1.5s;"></div>
+      </div>
+
+      <!-- Medal Icon -->
+      <div class="medal-container" style="position: relative; width: 120px; height: 120px; margin-bottom: 1.5rem; filter: drop-shadow(0 8px 16px rgba(251, 191, 36, 0.35)); animation: pulseMedal 2s infinite ease-in-out;">
+        <svg viewBox="0 0 100 100" width="100%" height="100%">
+          <!-- Ribbons -->
+          <path d="M35 55 L25 85 L45 85 Z" fill="#ef4444" />
+          <path d="M65 55 L75 85 L55 85 Z" fill="#3b82f6" />
+          <!-- Outer Glow / Ring -->
+          <circle cx="50" cy="45" r="28" fill="none" stroke="#fbbf24" stroke-width="4" stroke-dasharray="6,3" />
+          <!-- Gold Circle -->
+          <circle cx="50" cy="45" r="24" fill="url(#goldGradient)" stroke="#f59e0b" stroke-width="1.5" />
+          <!-- Star in center -->
+          <polygon points="50,28 55,38 67,39 58,47 61,59 50,52 39,59 42,47 33,39 45,38" fill="#fff" />
+          <!-- Inner circle overlay -->
+          <circle cx="50" cy="45" r="16" fill="none" stroke="#d97706" stroke-width="1" opacity="0.3" />
+          
+          <defs>
+            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#fef08a" />
+              <stop offset="50%" stop-color="#f59e0b" />
+              <stop offset="100%" stop-color="#b45309" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <h3 style="margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 700; color: var(--text-primary);">🎉 恭喜完成！</h3>
+      <p style="margin: 0 0 0.25rem 0; font-size: 1rem; font-weight: 600; color: var(--primary-color);">您已讀完第 ${round} 遍挑戰</p>
+      <p style="margin: 0 0 1.5rem 0; font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">獲得「第 ${round} 遍讀經紀念勳章」</p>
+
+      <div style="width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
+        <button id="btn-modal-upgrade" onclick="window.triggerPlanUpgradeFlow()" style="width: 100%; background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); border: none; border-radius: 12px; padding: 0.85rem; font-size: 1rem; color: #fff; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);">🏆 確認升級第 ${nextRound} 遍</button>
+        <button id="btn-modal-later" style="width: 100%; background: var(--bg-card-active); border: 1px solid var(--border-card); border-radius: 12px; padding: 0.75rem; font-size: 0.9rem; color: var(--text-primary); font-weight: 500; cursor: pointer; transition: all 0.2s;">稍後再說</button>
+      </div>
+    </div>
+  `;
+
+  if (!document.getElementById("congrats-anim-style")) {
+    const style = document.createElement("style");
+    style.id = "congrats-anim-style";
+    style.textContent = `
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-10px) rotate(10deg); }
+      }
+      @keyframes pulseMedal {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(modal);
+
+  document.getElementById("btn-modal-later").onclick = () => modal.remove();
+}
+
+window.triggerPlanUpgradeFlow = async function() {
+  const plan = state.activePlan;
+  if (!plan) return;
+
+  const currentRound = plan.currentRound || 1;
+  const nextRound = currentRound + 1;
+  let nextLevel = "level" + nextRound;
+  if (nextRound === 2) nextLevel = "breakthrough";
+  else if (nextRound === 3) nextLevel = "super";
+
+  loader.show("升級計畫中...");
+  try {
+    plan.currentRound = nextRound;
+    plan.wasDowngraded = false;
+    plan.downgradeLockedUntil = null;
+    plan.lastUpgradedRound = currentRound;
+
+    rebuildPlanScheduleForLevel(plan, nextLevel);
+    await persistPlanLevelState(plan);
+
+    if (state.isSupabaseMode && state.supabase && plan.id) {
+      await state.supabase.from("reading_plans")
+        .update({ current_round: plan.currentRound, level: nextLevel, was_downgraded: false, downgrade_locked_until: null })
+        .eq("id", plan.id);
+    } else if (!state.isSupabaseMode) {
+      localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+    }
+
+    calculatePlanProgress();
+
+    const modal = document.getElementById("congrats-modal");
+    if (modal) modal.remove();
+
+    showToast(`恭喜！成功升級到第 ${nextRound} 遍並開始讀經。`);
+
+    renderPlanView();
+    window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
+  } catch (err) {
+    console.error("Failed to upgrade plan:", err);
+    showToast("升級失敗，請重試");
+  } finally {
+    loader.hide();
+  }
+};
+
 async function handleRoundCompletion(plan) {
   if (!plan) return;
   calculatePlanProgress();
@@ -1577,33 +1739,11 @@ async function handleRoundCompletion(plan) {
   if (!isCurrentRoundCompleted) return;
 
   // Prevent multiple triggers for the same round completion in the same session
-  if (plan.lastUpgradedRound === currentRound) return;
-  plan.lastUpgradedRound = currentRound;
+  if (plan.lastPromptedRound === currentRound) return;
+  plan.lastPromptedRound = currentRound;
 
-  const nextRound = currentRound + 1;
-  plan.currentRound = nextRound;
-  plan.wasDowngraded = false;
-  plan.downgradeLockedUntil = null;
-
-  let nextLevel = "level" + nextRound;
-  if (nextRound === 2) nextLevel = "breakthrough";
-  else if (nextRound === 3) nextLevel = "super";
-
-  rebuildPlanScheduleForLevel(plan, nextLevel);
-  await persistPlanLevelState(plan);
-
-  if (state.isSupabaseMode && state.supabase && plan.id) {
-    await state.supabase.from("reading_plans")
-      .update({ current_round: plan.currentRound, level: nextLevel, was_downgraded: false, downgrade_locked_until: null })
-      .eq("id", plan.id);
-  } else if (!state.isSupabaseMode) {
-    localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-  }
-
-  calculatePlanProgress();
-  state.planDetailOpen = true;
-
-  showToast(`恭喜完成第 ${currentRound} 遍！已自動升級到「${getPlanLevelLabel(nextLevel)}」並開始第 ${nextRound} 遍讀經。`);
+  // Show the congrats medal modal, do NOT auto upgrade
+  showCongratsModal(plan, currentRound);
 };
 
 function initAdminPlanManagement() {
