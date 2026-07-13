@@ -204,9 +204,8 @@ const appRouter = {
       }
       if (topBarSubMode) topBarSubMode.innerHTML = "";
       if (planSettingsIcon) {
-        const showSettingsIcon = state.planActiveSubTab !== "settings";
-        planSettingsIcon.style.display = showSettingsIcon ? "inline-flex" : "none";
-        planSettingsIcon.classList.toggle("hidden", !showSettingsIcon);
+        planSettingsIcon.style.display = "none";
+        planSettingsIcon.classList.add("hidden");
       }
     } else {
       // Show brand mark and normal back button

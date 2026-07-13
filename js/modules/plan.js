@@ -473,15 +473,7 @@ function initPlanControls() {
     });
   }
 
-  const planSettingsIcon = document.getElementById("plan-settings-icon");
-  if (planSettingsIcon && !planSettingsIcon.dataset.planSettingsBound) {
-    planSettingsIcon.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (window.PlanPageController) await window.PlanPageController.openSettingsModal();
-    });
-    planSettingsIcon.dataset.planSettingsBound = "true";
-  }
+
 
   // Abandon Plan Button inside options dropdown
   const deleteBtn = document.getElementById("delete-plan-btn");
@@ -527,30 +519,7 @@ function initPlanControls() {
     await showPlanGroupSubview(GROUP_SUBVIEW.RANKING);
   });
 
-  bindPlanMenuItem("menu-plan-level", async () => {
-    if (window.PlanPageController) await window.PlanPageController.openSettingsModal();
-  });
 
-  const planLevelBackBtn = document.getElementById("btn-plan-level-back");
-  if (planLevelBackBtn) {
-    planLevelBackBtn.addEventListener("click", () => {
-      if (window.PlanPageController) window.PlanPageController.closeSettingsModal();
-      renderPlanScheduleTracker();
-    });
-  }
-
-  document.querySelectorAll("#plan-level-options .plan-level-option").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const level = btn.dataset.level || "normal";
-      const currentLevel = state.activePlan ? (state.activePlan.level || "normal") : "normal";
-      if (level === currentLevel) return; // already selected, no action needed
-      window.openPlanLevelConfirmModal(level, async () => {
-        await window.changePlanLevel(level);
-        if (window.PlanPageController) window.PlanPageController.closeSettingsModal();
-        window.PlanPageController.switchPage(PLAN_PAGE.READING);
-      });
-    });
-  });
   const membersMenuItem = document.getElementById("menu-plan-members");
   if (membersMenuItem) membersMenuItem.style.display = _canSeeMembers ? "" : "none";
   bindPlanMenuItem("menu-plan-members", async () => {
@@ -850,10 +819,7 @@ function isChapterReadForRound(ch, round) {
   const chRound = ch.round || 1;
   if (chRound < round) return true;
   if (chRound > round) return false;
-  if (round === 1) return Boolean(ch.isReadR1 || ch.isRead);
-  if (round === 2) return Boolean(ch.isReadR2);
-  if (round >= 3) return Boolean(ch.isReadR3);
-  return Boolean(ch.isRead);
+  return Boolean(ch["isReadR" + round] || ch.isRead);
 }
 
 function isPlanDayCompletedForRound(day, round) {
@@ -1016,11 +982,7 @@ function renderHorizontalDateStrip() {
         day.chapters.forEach(ch => {
           const currentRound = state.activePlan.currentRound || 1;
           const taskRound = ch.round || currentRound;
-          let isRead = false;
-          if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
-          else if (taskRound === 2) isRead = ch.isReadR2;
-          else if (taskRound >= 3) isRead = ch.isReadR3;
-          else isRead = ch.isRead;
+          const isRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
 
           if (isRead) completedChapters++;
         });
@@ -1235,10 +1197,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       const allDone = selectedDay.chapters.every(ch => {
         const currentRound = state.activePlan.currentRound || 1;
         const taskRound = ch.round || currentRound;
-        if (taskRound === 1) return ch.isReadR1 || ch.isRead;
-        if (taskRound === 2) return ch.isReadR2;
-        if (taskRound >= 3) return ch.isReadR3;
-        return ch.isRead;
+        return Boolean(ch["isReadR" + taskRound] || ch.isRead);
       });
       if (allDone) {
         statusPill.textContent = "已完成";
@@ -1256,10 +1215,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => {
       const currentRound = state.activePlan.currentRound || 1;
       const taskRound = ch.round || currentRound;
-      if (taskRound === 1) return ch.isReadR1 || ch.isRead;
-      if (taskRound === 2) return ch.isReadR2;
-      if (taskRound >= 3) return ch.isReadR3;
-      return ch.isRead;
+      return Boolean(ch["isReadR" + taskRound] || ch.isRead);
     });
 
     if (isDayCompleted) {
@@ -1273,11 +1229,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       selectedDay.chapters.forEach(ch => {
         const currentRound = state.activePlan.currentRound || 1;
         const taskRound = ch.round || currentRound;
-        let isRead = false;
-        if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
-        else if (taskRound === 2) isRead = ch.isReadR2;
-        else if (taskRound >= 3) isRead = ch.isReadR3;
-        else isRead = ch.isRead;
+        const isRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
         if (isRead) completedCh++;
       });
 
@@ -1352,6 +1304,7 @@ function getChapterCheckboxState(ch, currentRound) {
   const ICON_R1 = typeof renderIcon === "function" ? renderIcon("check", { size: "sm", className: "nlc-icon" }) : "";
   const ICON_R2 = typeof renderIcon === "function" ? renderIcon("zap", { size: "sm", className: "nlc-icon" }) : "";
   const ICON_R3 = typeof renderIcon === "function" ? renderIcon("star", { size: "sm", className: "nlc-icon" }) : "";
+  const ICON_RX = typeof renderIcon === "function" ? renderIcon("trendingUp", { size: "sm", className: "nlc-icon" }) : "";
 
   if (currentRound === 1) {
     return ch.isReadR1 ? { cssClass: 'checked', content: ICON_R1 } : { cssClass: '', content: '' };
@@ -1361,16 +1314,29 @@ function getChapterCheckboxState(ch, currentRound) {
     return ch.isReadR2 ? { cssClass: 'checked round-2', content: ICON_R2 } : { cssClass: '', content: '' };
   }
 
-  if (currentRound >= 3) {
+  if (currentRound === 3) {
     return ch.isReadR3 ? { cssClass: 'checked round-3', content: ICON_R3 } : { cssClass: '', content: '' };
+  }
+
+  if (currentRound >= 4) {
+    const isRead = Boolean(ch["isReadR" + currentRound] || ch.isRead);
+    return isRead ? { cssClass: 'checked round-3', content: ICON_RX } : { cssClass: '', content: '' };
   }
 
   return { cssClass: '', content: '' };
 }
 
 function getRoundBadge(ch, currentRound) {
-  if (currentRound >= 3 && ch.isReadR2 && !ch.isReadR3) return '✓✓已讀';
-  if (currentRound >= 2 && ch.isReadR1 && !ch.isReadR2) return '✓第1遍';
+  if (currentRound >= 2) {
+    const prevRound = currentRound - 1;
+    const prevCompleted = Boolean(ch["isReadR" + prevRound]);
+    const currCompleted = Boolean(ch["isReadR" + currentRound]);
+    if (prevCompleted && !currCompleted) {
+      if (currentRound === 2) return '✓第1遍';
+      if (currentRound === 3) return '✓✓已讀';
+      return `✓第${prevRound}遍`;
+    }
+  }
   return '';
 }
 
@@ -1399,9 +1365,7 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
 
   const applyLocalReadState = (ch, checked) => {
     if (!ch) return;
-    if (currentRound === 1) ch.isReadR1 = checked;
-    else if (currentRound === 2) ch.isReadR2 = checked;
-    else if (currentRound === 3) ch.isReadR3 = checked;
+    ch["isReadR" + currentRound] = checked;
     ch.isRead = checked;
   };
 
@@ -1459,9 +1423,8 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
       db.saveLocalUserStats();
       if (state.activePlan) {
         const plan = state.activePlan;
-        const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
-        const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
-        if (shouldHandleR1 || shouldHandleR2) {
+        calculatePlanProgress();
+        if (plan.progress >= 100) {
           await handleRoundCompletion(plan);
         }
         if (willBeChecked && typeof window.checkAndPromptTodayCompletion === "function") {
@@ -1483,105 +1446,13 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
 };
 
 function renderPlanLevelEditor() {
-  // 💡 關鍵修復：直接從打卡日誌計算實際讀過的最大遍數，並加上當前遍數防護
-  let maxReadRound = state.activePlan ? (state.activePlan.currentRound || 1) : 1;
-  if (state.activePlan && state.readingLogs) {
-    state.readingLogs.forEach(l => {
-      const logPlanId = l.plan_id || null;
-      const logPresetKey = l.presetKey || l.preset_key || null;
-      const isPlanMatch =
-        (state.activePlan.id && logPlanId && logPlanId === state.activePlan.id) ||
-        (state.activePlan.presetKey && logPresetKey && logPresetKey === state.activePlan.presetKey) ||
-        ((state.activePlan.id || state.activePlan.presetKey) && !logPlanId && !logPresetKey) ||
-        (!state.activePlan.id && !state.activePlan.presetKey && !logPlanId && !logPresetKey);
-      
-      if (isPlanMatch) {
-        maxReadRound = Math.max(maxReadRound, l.round || 1);
-      }
-    });
-  }
-
-  let currentLevel = state.activePlan ? (state.activePlan.level || "normal") : "normal";
-  const currentLevelOrder = getPlanLevelOrder(currentLevel);
-
-  // 💡 數據一致性修正：若已讀遍數大於當前等級所屬的遍數，代表實際上已經升級，自動將等級修正為對應的難度
-  if (maxReadRound > currentLevelOrder) {
-    if (maxReadRound === 2) currentLevel = "breakthrough";
-    else if (maxReadRound === 3) currentLevel = "super";
-
-    if (state.activePlan) {
-      state.activePlan.level = currentLevel;
-      state.activePlan.currentRound = maxReadRound;
-      // 異步儲存到資料庫/localStorage，避免資料不一致
-      persistPlanLevelState(state.activePlan).catch(console.error);
-    }
-  }
-
-  const options = document.querySelectorAll("#plan-level-options .plan-level-option");
-  options.forEach(option => {
-    const optLevel = option.dataset.level || "normal";
-    const optRounds = getPlanLevelRounds(optLevel);
-
-    option.classList.toggle("active", optLevel === currentLevel);
-
-    // 只有當「目標選項的總遍數」低於「使用者實際已讀到的最大遍數」時，才進行防呆禁用
-    if (optRounds < maxReadRound) {
-      option.disabled = true;
-      option.style.opacity = "0.4";
-      option.style.cursor = "not-allowed";
-      option.style.pointerEvents = "none";
-      let span = option.querySelector("span");
-      if (span && !span.innerHTML.includes("downgrade-warning")) {
-        span.innerHTML += ` <span class="downgrade-warning text-danger" style="font-weight: 500;">(已讀至第 ${maxReadRound} 遍，不可調回此難度)</span>`;
-      }
-    } else {
-      option.disabled = false;
-      option.style.opacity = "";
-      option.style.cursor = "pointer";
-      option.style.pointerEvents = "auto";
-      let span = option.querySelector("span");
-      if (span) {
-        // 清除舊有的防呆標示與警告字元
-        const warningSpan = span.querySelector(".downgrade-warning");
-        if (warningSpan) warningSpan.remove();
-        span.innerHTML = span.innerHTML.replace(/\s*<span class="downgrade-warning".*?<\/span>/g, "");
-        span.innerHTML = span.innerHTML.replace(/\s*<span class="downgrade-warning text-danger" style="font-weight: 500;">\(已晉升，不可調回低階難度\)<\/span>/g, "");
-      }
-    }
-
-    // 💡 標示並禁用當前設定等級（紅色外框且不可重複選定）
-    if (optLevel === currentLevel) {
-      option.style.setProperty("border-color", "var(--color-danger)", "important");
-      option.style.setProperty("border-width", "2px", "important");
-      option.style.setProperty("box-shadow", "0 0 0 1px var(--color-danger)", "important");
-      option.style.setProperty("opacity", "1", "important"); // 強制目前設定等級維持 100% 不透明度以凸顯紅色外框
-      option.disabled = true;
-      option.style.cursor = "default";
-      option.style.pointerEvents = "none";
-    } else {
-      // 非當前等級，重設為預設邊框與外觀樣式
-      option.style.removeProperty("border-color");
-      option.style.removeProperty("border-width");
-      option.style.removeProperty("box-shadow");
-      option.style.removeProperty("opacity");
-    }
-
-    const strong = option.querySelector("strong");
-    if (strong) {
-      // 清除舊有的目前設定標記
-      const currentBadge = strong.querySelector(".current-level-badge");
-      if (currentBadge) currentBadge.remove();
-      strong.innerHTML = strong.innerHTML.replace(/\s*<span class="current-level-badge".*?<\/span>/g, "");
-
-      if (optLevel === currentLevel) {
-        strong.innerHTML += ` <span class="current-level-badge text-danger" style="margin-left: 0.5rem; font-size: 0.84rem; font-weight: 500;">(目前設定)</span>`;
-      }
-    }
-  });
+  // Manual progress adjustments have been disabled.
 }
+
 window.showPlanLevelModal = async function () {
-  if (window.PlanPageController) await window.PlanPageController.openSettingsModal();
+  // Disabled.
 };
+
 function readChapterDirect(bookName, chapter) {
   const book = BIBLE_BOOKS.find(b => b.name === bookName);
   if (book) {
@@ -1604,338 +1475,51 @@ function updatePlanCheckboxState(key, isChecked) {
   }
 }
 
-
 async function checkPlanSchedule(plan) {
-  if (!plan) return;
-  if (!isPlanStarted(plan)) return;
-
-  // 💡 關鍵修復：手動調整進度等級後，提供 7 天的寬限期（Grace Period），避免因新難度的目標章節數較高而立即被系統自動降級。
-  const planKey = plan.id || plan.presetKey;
-  const levelChangedAtStr = localStorage.getItem(`level_changed_at_${planKey}`);
-  if (levelChangedAtStr) {
-    const levelChangedAt = new Date(levelChangedAtStr);
-    const msSinceChange = Date.now() - levelChangedAt.getTime();
-    const daysSinceChange = msSinceChange / (1000 * 60 * 60 * 24);
-    if (daysSinceChange < 7) {
-      console.log(`[進度保護] 距離上次手動調整等級未滿 7 天（已過 ${daysSinceChange.toFixed(1)} 天），暫停自動降級檢查。`);
-      return;
-    }
-  }
-
-  const level = plan.level || "normal";
-
-  // 💡 關鍵修復：如果使用者已完成第一遍，則不再檢查落後（皆視為超前）
-  const targetRounds = getPlanLevelRounds(level);
-  const singleRoundChapters = Math.ceil((plan.totalChapters || 0) / targetRounds);
-  calculatePlanProgress();
-  let actualCompletedChapters = plan.completedChapters || 0;
-
-  let maxReadRound = plan.currentRound || 1;
-  if (state.readingLogs) {
-    state.readingLogs.forEach(l => {
-      const logPlanId = l.plan_id || null;
-      const logPresetKey = l.presetKey || l.preset_key || null;
-      const isPlanMatch =
-        (plan.id && logPlanId && logPlanId === plan.id) ||
-        (plan.presetKey && logPresetKey && logPresetKey === plan.presetKey) ||
-        ((plan.id || plan.presetKey) && !logPlanId && !logPresetKey) ||
-        (!plan.id && !plan.presetKey && !logPlanId && !logPresetKey);
-      
-      if (isPlanMatch) {
-        maxReadRound = Math.max(maxReadRound, l.round || 1);
-      }
-    });
-  }
-
-  if (actualCompletedChapters >= singleRoundChapters || maxReadRound >= 2) {
-    console.log(`[進度保護] 使用者已讀完第一遍（已讀 ${actualCompletedChapters} 章，最大已讀遍數 ${maxReadRound}），免除落後檢查。`);
-    return;
-  }
-
-  if (getPlanLevelOrder(level) <= 1) return;
-
-  const start = new Date(plan.startDate);
-  const today = new Date();
-  start.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-
-  const elapsedDays = Math.max(0, Math.min(
-    plan.days.length,
-    Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1
-  ));
-  const requiredDaysWithGrace = Math.max(0, elapsedDays - 2);
-  if (requiredDaysWithGrace <= 0) return;
-
-  const expectedChaptersWithGrace = plan.days
-    .slice(0, requiredDaysWithGrace)
-    .reduce((sum, day) => sum + ((day.chapters && day.chapters.length) || 0), 0);
-
-  calculatePlanProgress();
-  actualCompletedChapters = plan.completedChapters || 0;
-  if (expectedChaptersWithGrace <= 0 || actualCompletedChapters >= expectedChaptersWithGrace) return;
-
-  const newLevel = level === "super" ? "breakthrough" : "normal";
-  const oldLabel = getPlanLevelLabel(level);
-  const newLabel = getPlanLevelLabel(newLevel);
-  plan.wasDowngraded = true;
-  plan.downgradeLockedUntil = addDaysIso(14);
-
-  rebuildPlanScheduleForLevel(plan, newLevel);
-  calculatePlanProgress();
-  await persistPlanLevelState(plan);
-
-  showToast("進度已落後超過 2 天，已自動降級。兩週內暫停升級申請。");
+  // Since manual settings and downgrades are removed, and levels only go up automatically,
+  // we do not perform lag/lead checks or automatic downgrades.
+  return;
 }
+
 async function handleRoundCompletion(plan) {
   if (!plan) return;
   calculatePlanProgress();
 
-  // Clear downgrade lock in database if the current round is completed
-  if ((plan.currentRound === 1 && plan.isPlanCompleted) || (plan.currentRound === 2 && plan.isRound2Completed)) {
-    if (plan.wasDowngraded || plan.downgradeLockedUntil) {
-      plan.wasDowngraded = false;
-      plan.downgradeLockedUntil = null;
-      await persistPlanLevelState(plan);
-    }
-  }
-
   const currentRound = plan.currentRound || 1;
+  const currentRoundTotal = plan.currentRoundTotalChapters || 0;
+  const currentRoundCompleted = plan.completedChapters || 0;
+  const isCurrentRoundCompleted = currentRoundTotal > 0 && currentRoundCompleted >= currentRoundTotal;
 
-  // ── Round 2 → Round 3 upgrade ──────────────────────────────────────────────
-  if (currentRound === 2) {
-    if (plan.pendingUpgradePrompt || plan.round2UpgradePromptHandled) return;
-    if (!plan.isRound2Completed) return;
+  if (!isCurrentRoundCompleted) return;
 
-    const currentLevel = plan.level || "normal";
-    const nextLevel = "super";
+  // Prevent multiple triggers for the same round completion in the same session
+  if (plan.lastUpgradedRound === currentRound) return;
+  plan.lastUpgradedRound = currentRound;
 
-    plan.pendingUpgradePrompt = true;
-    const wantsUpgrade = confirm(
-      currentLevel === "super"
-        ? "恭喜完成第二遍！是否要開始第三遍？"
-        : "恭喜完成第二遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第三遍？"
-    );
-    plan.pendingUpgradePrompt = false;
-    plan.round2UpgradePromptHandled = true;
-
-    if (!wantsUpgrade) {
-      showToast(
-        currentLevel === "super"
-          ? "已完成第二遍。你可以之後到調整進度設定再開始第三遍。"
-          : "已完成第二遍。你可以之後到調整進度設定再升級。"
-      );
-      if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-      return;
-    }
-
-    if (isPlanUpgradeLocked(plan)) {
-      showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(getDowngradeLockedUntil(plan)) + " 後再升級。");
-      return;
-    }
-
-    plan.currentRound = 3;
-    plan.wasDowngraded = false;
-    plan.downgradeLockedUntil = null;
-    rebuildPlanScheduleForLevel(plan, nextLevel);
-
-    await persistPlanLevelState(plan);
-    if (state.isSupabaseMode && state.supabase && plan.id) {
-      await state.supabase.from("reading_plans")
-        .update({ current_round: plan.currentRound, upgrade_prompt_handled: !!plan.upgradePromptHandled })
-        .eq("id", plan.id);
-    } else if (!state.isSupabaseMode) {
-      localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-    }
-
-    calculatePlanProgress();
-    state.planDetailOpen = true;
-    showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始第三遍讀經。");
-    return;
-  }
-
-  // ── Round 1 → Round 2 upgrade ──────────────────────────────────────────────
-  if (plan.pendingUpgradePrompt || plan.upgradePromptHandled) return;
-  if (currentRound > 1) {
-    showToast("已完成本輪讀經。");
-    return;
-  }
-
-  const currentLevel = plan.level || "normal";
-  const nextLevel = currentLevel === "normal" ? "breakthrough" : (currentLevel === "breakthrough" ? "super" : null);
-  if (!nextLevel) {
-    showToast("恭喜完成讀經計畫！");
-    return;
-  }
-
-  plan.pendingUpgradePrompt = true;
-  const wantsUpgrade = confirm("恭喜完成第一遍！是否要升級到「" + getPlanLevelLabel(nextLevel) + "」並開始第二遍？");
-  plan.pendingUpgradePrompt = false;
-
-  if (!wantsUpgrade) {
-    plan.upgradePromptHandled = true;
-    showToast("已完成計畫。你可以之後到調整進度設定再升級。");
-    await persistPlanLevelState(plan);
-    if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-    return;
-  }
-
-  if (isPlanUpgradeLocked(plan)) {
-    showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(getDowngradeLockedUntil(plan)) + " 後再升級。");
-    return;
-  }
-
-  plan.upgradePromptHandled = true;
-  plan.currentRound = 2;
+  const nextRound = currentRound + 1;
+  plan.currentRound = nextRound;
   plan.wasDowngraded = false;
   plan.downgradeLockedUntil = null;
-  rebuildPlanScheduleForLevel(plan, nextLevel);
 
+  let nextLevel = "level" + nextRound;
+  if (nextRound === 2) nextLevel = "breakthrough";
+  else if (nextRound === 3) nextLevel = "super";
+
+  rebuildPlanScheduleForLevel(plan, nextLevel);
   await persistPlanLevelState(plan);
+
   if (state.isSupabaseMode && state.supabase && plan.id) {
     await state.supabase.from("reading_plans")
-      .update({ current_round: plan.currentRound, upgrade_prompt_handled: !!plan.upgradePromptHandled })
+      .update({ current_round: plan.currentRound, level: nextLevel, was_downgraded: false, downgrade_locked_until: null })
       .eq("id", plan.id);
   } else if (!state.isSupabaseMode) {
     localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
   }
 
-  if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-
   calculatePlanProgress();
   state.planDetailOpen = true;
-  showToast("已升級到「" + getPlanLevelLabel(nextLevel) + "」，開始第二遍讀經。");
-}
 
-// ── Plan Level Confirm Modal (防誤觸) ──────────────────────────────────────
-(function injectPlanLevelModalStyle() {
-  if (document.getElementById('plcm-style')) return;
-  const s = document.createElement('style');
-  s.id = 'plcm-style';
-  s.textContent = `@keyframes plcm-slide-up {
-    from { opacity: 0; transform: translateY(24px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0)  scale(1); }
-  }`;
-  document.head.appendChild(s);
-})();
-
-let _plcmPendingCallback = null;
-
-window.openPlanLevelConfirmModal = function (newLevel, onConfirm) {
-  const modal = document.getElementById('plan-level-confirm-modal');
-  const desc = document.getElementById('plcm-desc');
-  const confirmBtn = document.getElementById('plcm-confirm-btn');
-  if (!modal || !desc || !confirmBtn) { onConfirm && onConfirm(); return; }
-
-  const currentLevel = state.activePlan ? (state.activePlan.level || 'normal') : 'normal';
-  const levelLabels = { normal: '一般', breakthrough: '突破', super: '興盛' };
-  const isUpgrade = getPlanLevelOrder(newLevel) > getPlanLevelOrder(currentLevel);
-  const arrow = isUpgrade ? '⬆️' : '⬇️';
-
-  desc.textContent = `${arrow} 將從「${levelLabels[currentLevel] || currentLevel}」切換為「${levelLabels[newLevel] || newLevel}」。此操作會重新計算每日讀經份量，確定要切換嗎？`;
-
-  // Remove old listener and attach fresh one
-  _plcmPendingCallback = onConfirm;
-  const newBtn = confirmBtn.cloneNode(true);
-  confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-  newBtn.addEventListener('click', () => {
-    window.closePlanLevelConfirmModal();
-    if (_plcmPendingCallback) _plcmPendingCallback();
-    _plcmPendingCallback = null;
-  });
-
-  modal.style.display = 'flex';
-  document.addEventListener('keydown', _plcmEscListener);
-};
-
-window.closePlanLevelConfirmModal = function () {
-  const modal = document.getElementById('plan-level-confirm-modal');
-  if (modal) modal.style.display = 'none';
-  _plcmPendingCallback = null;
-  document.removeEventListener('keydown', _plcmEscListener);
-};
-
-function _plcmEscListener(e) {
-  if (e.key === 'Escape') window.closePlanLevelConfirmModal();
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
-window.changePlanLevel = async function (newLevel) {
-  if (!state.activePlan) return;
-
-  const currentLevel = state.activePlan.level || "normal";
-
-  // 💡 關鍵修復：直接從打卡日誌計算實際讀過的最大遍數，並加上當前遍數防護
-  let maxReadRound = state.activePlan ? (state.activePlan.currentRound || 1) : 1;
-  if (state.activePlan && state.readingLogs) {
-    state.readingLogs.forEach(l => {
-      const logPlanId = l.plan_id || null;
-      const logPresetKey = l.presetKey || l.preset_key || null;
-      const isPlanMatch =
-        (state.activePlan.id && logPlanId && logPlanId === state.activePlan.id) ||
-        (state.activePlan.presetKey && logPresetKey && logPresetKey === state.activePlan.presetKey) ||
-        ((state.activePlan.id || state.activePlan.presetKey) && !logPlanId && !logPresetKey) ||
-        (!state.activePlan.id && !state.activePlan.presetKey && !logPlanId && !logPresetKey);
-      
-      if (isPlanMatch) {
-        maxReadRound = Math.max(maxReadRound, l.round || 1);
-      }
-    });
-  }
-
-  const newRounds = getPlanLevelRounds(newLevel);
-  if (newRounds < maxReadRound) {
-    showToast(`您已打卡第 ${maxReadRound} 遍進度，無法調回低於此遍數的等級。`);
-    return;
-  }
-
-  const currentLevelOrder = getPlanLevelOrder(currentLevel);
-  const newLevelOrder = getPlanLevelOrder(newLevel);
-  const isUpgrade = newLevelOrder > currentLevelOrder;
-  const lockedUntil = getDowngradeLockedUntil(state.activePlan);
-  if (isUpgrade && isPlanUpgradeLocked(state.activePlan)) {
-    showToast("降級後兩週內暫停升級申請，可於 " + formatLockDate(lockedUntil) + " 後再升級。");
-    return;
-  }
-
-  loader.show("正在變更進度等級...");
-
-  if (isUpgrade && lockedUntil && !isPlanUpgradeLocked(state.activePlan)) {
-    state.activePlan.wasDowngraded = false;
-    state.activePlan.downgradeLockedUntil = null;
-  }
-
-  state.activePlan.upgradePromptHandled = false;
-  // 💡 關鍵修復：手動調整進度等級後，記錄時間戳記到 localStorage 以提供 7 天自動降級寬限期
-  const planKey = state.activePlan.id || state.activePlan.presetKey;
-  localStorage.setItem(`level_changed_at_${planKey}`, new Date().toISOString());
-
-  rebuildPlanScheduleForLevel(state.activePlan, newLevel);
-  if (state.activePlans) {
-    const planInList = state.activePlans.find(p =>
-      p === state.activePlan ||
-      (p.id && p.id === state.activePlan.id) ||
-      (p.presetKey && p.presetKey === state.activePlan.presetKey)
-    );
-    if (planInList && planInList !== state.activePlan) {
-      rebuildPlanScheduleForLevel(planInList, newLevel);
-      planInList.wasDowngraded = state.activePlan.wasDowngraded;
-      planInList.downgradeLockedUntil = state.activePlan.downgradeLockedUntil || null;
-      planInList.upgradePromptHandled = false;
-    }
-  }
-
-  await persistPlanLevelState(state.activePlan);
-  if (!state.isSupabaseMode) localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-  calculatePlanProgress();
-
-  await checkPlanSchedule(state.activePlan);
-
-  loader.hide();
-  renderPlanView();
-  updateDashboardView();
-  if (typeof showToast === "function") {
-    showToast(`已成功將計畫難度變更為「${getPlanLevelLabel(newLevel)}」！`);
-  }
+  showToast(`恭喜完成第 ${currentRound} 遍！已自動升級到「${getPlanLevelLabel(nextLevel)}」並開始第 ${nextRound} 遍讀經。`);
 };
 
 function initAdminPlanManagement() {

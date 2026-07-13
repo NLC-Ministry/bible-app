@@ -1050,19 +1050,26 @@ window.renderBadgeWall = renderBadgeWall;
 function getPlanLevelRounds(level) {
   if (level === "breakthrough") return 2;
   if (level === "super") return 3;
+  if (typeof level === "string" && level.startsWith("level")) {
+    const num = parseInt(level.substring(5), 10);
+    if (!isNaN(num)) return num;
+  }
+  const num = parseInt(level, 10);
+  if (!isNaN(num)) return num;
   return 1;
 }
 
 function getPlanLevelLabel(level) {
   if (level === "breakthrough") return "突破";
   if (level === "super") return "興盛";
+  if (level === "normal") return "一般";
+  const rounds = getPlanLevelRounds(level);
+  if (rounds > 3) return `Level ${rounds}`;
   return "一般";
 }
 
 function getPlanLevelOrder(level) {
-  if (level === "super") return 3;
-  if (level === "breakthrough") return 2;
-  return 1;
+  return getPlanLevelRounds(level);
 }
 
 function addDaysIso(days) {
@@ -1290,71 +1297,41 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     }
   });
 
-  // Calculate D1 and D2 (round completion days) dynamically from reading logs
-  let d1 = null;
-  let d2 = null;
+  // Calculate round completion days dynamically from reading logs
+  const maxRounds = getPlanLevelRounds(level);
+  const roundCompletionDays = []; // index 0 for round 1, index 1 for round 2, etc. (up to maxRounds-1)
 
-  if (level === "breakthrough" || level === "super") {
-    const round1Logs = (state.readingLogs || []).filter(l => (l.round || 1) === 1);
-    if (round1Logs.length > 0) {
-      const maxDateStr = round1Logs.reduce((max, log) => log.read_at > max ? log.read_at : max, round1Logs[0].read_at);
+  for (let r = 1; r < maxRounds; r++) {
+    const roundLogs = (state.readingLogs || []).filter(l => (l.round || 1) === r);
+    let d_r = null;
+    if (roundLogs.length > 0) {
+      const maxDateStr = roundLogs.reduce((max, log) => log.read_at > max ? log.read_at : max, roundLogs[0].read_at);
       const maxDate = new Date(maxDateStr.substring(0, 10));
       maxDate.setHours(0, 0, 0, 0);
       start.setHours(0, 0, 0, 0);
-      d1 = Math.max(1, Math.floor((maxDate - start) / (1000 * 60 * 60 * 24)) + 1);
-      d1 = Math.min(d1, totalDays - 1);
+      d_r = Math.max(1, Math.floor((maxDate - start) / (1000 * 60 * 60 * 24)) + 1);
+      const prevD = r > 1 ? roundCompletionDays[r - 2] : 0;
+      d_r = Math.max(d_r, prevD + 1);
+      d_r = Math.min(d_r, totalDays - (maxRounds - r));
     } else {
-      d1 = Math.floor(totalDays / (level === "super" ? 3 : 2));
+      const prevD = r > 1 ? roundCompletionDays[r - 2] : 0;
+      d_r = Math.floor(prevD + (totalDays - prevD) / (maxRounds - r + 1));
     }
-
-    if (level === "super") {
-      const round2Logs = (state.readingLogs || []).filter(l => l.round === 2);
-      if (round2Logs.length > 0) {
-        const maxDateStr = round2Logs.reduce((max, log) => log.read_at > max ? log.read_at : max, round2Logs[0].read_at);
-        const maxDate = new Date(maxDateStr.substring(0, 10));
-        maxDate.setHours(0, 0, 0, 0);
-        start.setHours(0, 0, 0, 0);
-        d2 = Math.max(d1 + 1, Math.floor((maxDate - start) / (1000 * 60 * 60 * 24)) + 1);
-        d2 = Math.min(d2, totalDays - 1);
-      } else {
-        d2 = Math.floor(totalDays * 2 / 3);
-      }
-    }
+    roundCompletionDays.push(d_r);
   }
 
   let dailyChapters = Array.from({ length: totalDays }, () => []);
 
-  // Distribute Round 1
-  const round1Chapters = allChapters.map(ch => ({ ...ch, round: 1 }));
-  if (d1 === null) {
-    dailyChapters = distributeChaptersAcrossDays(round1Chapters, totalDays);
-  } else {
-    const r1Daily = distributeChaptersAcrossDays(round1Chapters, d1);
-    for (let i = 0; i < d1; i++) {
-      dailyChapters[i] = dailyChapters[i].concat(r1Daily[i]);
-    }
+  for (let r = 1; r <= maxRounds; r++) {
+    const roundChapters = allChapters.map(ch => ({ ...ch, round: r }));
+    const roundStartDay = r > 1 ? roundCompletionDays[r - 2] : 0;
+    const roundEndDay = r < maxRounds ? roundCompletionDays[r - 1] : totalDays;
+    const roundDays = roundEndDay - roundStartDay;
 
-    // Distribute Round 2
-    const round2Chapters = allChapters.map(ch => ({ ...ch, round: 2 }));
-    if (level === "breakthrough") {
-      const r2Days = totalDays - d1;
-      const r2Daily = distributeChaptersAcrossDays(round2Chapters, r2Days);
-      for (let i = 0; i < r2Days; i++) {
-        dailyChapters[d1 + i] = dailyChapters[d1 + i].concat(r2Daily[i]);
-      }
-    } else if (level === "super") {
-      const r2Days = d2 - d1;
-      const r2Daily = distributeChaptersAcrossDays(round2Chapters, r2Days);
-      for (let i = 0; i < r2Days; i++) {
-        dailyChapters[d1 + i] = dailyChapters[d1 + i].concat(r2Daily[i]);
-      }
-
-      // Distribute Round 3
-      const round3Chapters = allChapters.map(ch => ({ ...ch, round: 3 }));
-      const r3Days = totalDays - d2;
-      const r3Daily = distributeChaptersAcrossDays(round3Chapters, r3Days);
-      for (let i = 0; i < r3Days; i++) {
-        dailyChapters[d2 + i] = dailyChapters[d2 + i].concat(r3Daily[i]);
+    if (roundDays > 0) {
+      const rDaily = distributeChaptersAcrossDays(roundChapters, roundDays);
+      for (let i = 0; i < roundDays; i++) {
+        dailyChapters[roundStartDay + i] = dailyChapters[roundStartDay + i].concat(rDaily[i]);
       }
     }
   }
@@ -1442,7 +1419,11 @@ function calculateAllPlansProgress() {
 
     const currentLevelOrder = getPlanLevelOrder(plan.level || "normal");
     if (maxReadRound > currentLevelOrder) {
-      const newLevel = maxReadRound === 2 ? "breakthrough" : (maxReadRound === 3 ? "super" : "normal");
+      let newLevel = "normal";
+      if (maxReadRound === 2) newLevel = "breakthrough";
+      else if (maxReadRound === 3) newLevel = "super";
+      else newLevel = "level" + maxReadRound;
+
       console.log(`[進度校正] 偵測到使用者已讀到第 ${maxReadRound} 遍，但計畫等級為 ${plan.level || "normal"}。自動修正等級為 ${newLevel}。`);
       plan.level = newLevel;
       plan.currentRound = maxReadRound;
@@ -1476,12 +1457,13 @@ function calculateAllPlansProgress() {
           });
         };
 
-        ch.isReadR1 = checkRoundLog(1);
-        ch.isReadR2 = checkRoundLog(2);
-        ch.isReadR3 = checkRoundLog(3);
+        const totalRounds = Math.max(plan.currentRound || 1, maxReadRound || 1, 3);
+        for (let r = 1; r <= totalRounds; r++) {
+          ch[`isReadR${r}`] = checkRoundLog(r);
+        }
 
         const targetRound = ch.round || plan.currentRound || 1;
-        const isRead = targetRound === 3 ? ch.isReadR3 : (targetRound === 2 ? ch.isReadR2 : ch.isReadR1);
+        const isRead = Boolean(ch["isReadR" + targetRound]);
         ch.isRead = isRead;
         if (isRead) completed++;
       });
@@ -1503,10 +1485,7 @@ function calculateAllPlansProgress() {
     }, 0) || plan.totalChapters;
     const currentRoundCompleted = plan.days.reduce((sum, day) => {
       const isCompleted = (ch) => {
-        if (plan.currentRound === 1) return ch.isReadR1 || ch.isRead;
-        if (plan.currentRound === 2) return ch.isReadR2;
-        if (plan.currentRound === 3) return ch.isReadR3;
-        return ch.isRead;
+        return Boolean(ch["isReadR" + plan.currentRound]);
       };
       return sum + ((day.chapters || []).filter(ch => (ch.round || 1) === plan.currentRound && isCompleted(ch)).length);
     }, 0);
@@ -1532,7 +1511,7 @@ function calculateAllPlansProgress() {
     if (!plan.isRound2Completed) plan.round2UpgradePromptHandled = false;
 
     // Clear downgrade lock in memory if the current round is completed
-    if ((plan.currentRound === 1 && plan.isPlanCompleted) || (plan.currentRound === 2 && plan.isRound2Completed)) {
+    if (isCurrentRoundCompleted) {
       plan.wasDowngraded = false;
       plan.downgradeLockedUntil = null;
     }
