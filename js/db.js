@@ -1908,6 +1908,22 @@ const db = {
           return;
         }
 
+        // 限制只能選擇當月，或每月 25 號（含）之後開放選擇的下個月份計畫
+        const today = new Date();
+        const todayYear = today.getFullYear();
+        const todayMonth = today.getMonth() + 1;
+        const todayDay = today.getDate();
+        const monthsDiff = (year - todayYear) * 12 + (month - todayMonth);
+
+        if (monthsDiff < 0) {
+          showToast("此讀經計畫已過期，無法加入。");
+          return;
+        }
+        if (monthsDiff > 1 || (monthsDiff === 1 && todayDay < 25)) {
+          showToast("下月份的讀經計畫將於每月 25 號開放選擇。");
+          return;
+        }
+
         const getMonthSeason = (y, m) => {
           if (y === 2026 && (m === 8 || m === 9 || m === 10)) return 1;
           if ((y === 2026 && m === 11) || (y === 2026 && m === 12) || (y === 2027 && m === 1)) return 2;
@@ -1983,8 +1999,17 @@ const db = {
             upgrade_prompt_handled: false
           };
 
-          // 若是來自 global_plans 的計畫，儲存 global_plan_id（UUID FK）
-          if (isGlobalPlanUUID) {
+          // 若是來自月度預設計畫，自動關聯到 global_plans 中的 9 大分類模板 UUID
+          if (key && key.startsWith("m_")) {
+            const keyParts = key.split("_");
+            if (keyParts.length >= 4) {
+              const catKey = keyParts[3]; // e.g. cat2
+              const catIdx = parseInt(catKey.replace("cat", ""));
+              if (catIdx >= 1 && catIdx <= 9) {
+                insertPayload.global_plan_id = `00000000-0000-0000-a000-00000000000${catIdx}`;
+              }
+            }
+          } else if (isGlobalPlanUUID) {
             insertPayload.global_plan_id = key;
           }
 

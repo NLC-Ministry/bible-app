@@ -787,7 +787,33 @@ function renderPresetPlansList() {
         }
       }
     });
-  }
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+
+  monthlyPlans = monthlyPlans.filter(p => {
+    if (!p.startDate) return false;
+    const parts = p.startDate.split("-");
+    const pYear = parseInt(parts[0]);
+    const pMonth = parseInt(parts[1]);
+
+    const monthsDiff = (pYear - currentYear) * 12 + (pMonth - currentMonth);
+
+    // 1. past months are hidden
+    if (monthsDiff < 0) return false;
+
+    // 2. if the user already joined a plan for this specific month, hide all presets for this month
+    const hasPlanForMonth = (state.activePlans || []).some(ap => {
+      if (!ap.startDate) return false;
+      const apParts = ap.startDate.split("-");
+      const apYear = parseInt(apParts[0]);
+      const apMonth = parseInt(apParts[1]);
+      return apYear === pYear && apMonth === pMonth;
+    });
+
+    return !hasPlanForMonth;
+  });
 
   // Sort monthlyPlans by startDate
   monthlyPlans.sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -841,6 +867,12 @@ function renderPresetPlansList() {
       const key = plan.presetKey || plan.id;
       const isJoined = state.activePlans && state.activePlans.some(p => p.presetKey === key || p.id === plan.id);
 
+      const parts = plan.startDate.split("-");
+      const pYear = parseInt(parts[0]);
+      const pMonth = parseInt(parts[1]);
+      const monthsDiff = (pYear - currentYear) * 12 + (pMonth - currentMonth);
+      const isOpen = (monthsDiff === 0) || (monthsDiff === 1 && currentDay >= 25);
+
       const card = document.createElement("div");
       card.className = "joined-plan-item-card";
       card.style = `
@@ -851,8 +883,9 @@ function renderPresetPlansList() {
         display: flex;
         align-items: center;
         gap: 1rem;
-        cursor: pointer;
+        cursor: ${isOpen ? 'pointer' : 'not-allowed'};
         transition: all 0.2s ease;
+        opacity: ${isOpen ? '1' : '0.65'};
       `;
       card.onclick = async () => {
         if (isJoined) {
@@ -867,6 +900,10 @@ function renderPresetPlansList() {
             renderPlanView();
           }
         } else {
+          if (!isOpen) {
+            showToast("下月份的讀經計畫將於每月 25 號開放選擇。");
+            return;
+          }
           if (confirm(`確定要加入 ${plan.name} 讀經計畫挑戰嗎？`)) {
             await db.joinPresetPlan(key);
           }
@@ -878,6 +915,13 @@ function renderPresetPlansList() {
         displayName = displayName.split("：")[1];
       }
 
+      let statusLabel = '+ 點擊加入計畫挑戰';
+      if (isJoined) {
+        statusLabel = '✓ 已加入挑戰';
+      } else if (!isOpen) {
+        statusLabel = '🔒 尚未開放選取 (每月 25 號開放)';
+      }
+
       card.innerHTML = `
         ${getPlanCoverHtml({ presetKey: key })}
         <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
@@ -885,8 +929,8 @@ function renderPresetPlansList() {
           <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
             <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
           </div>
-          <div style="font-size: 0.76rem; font-weight: 500; color: ${isJoined ? 'var(--color-success-foreground)' : 'var(--primary-color)'}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
-            ${isJoined ? '✓ 已加入挑戰' : '+ 點擊加入計畫挑戰'}
+          <div style="font-size: 0.76rem; font-weight: 500; color: ${isJoined ? 'var(--color-success-foreground)' : (!isOpen ? 'var(--text-muted)' : 'var(--primary-color)')}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
+            ${statusLabel}
           </div>
         </div>
       `;
@@ -1456,6 +1500,22 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
   const isCurrentlyRead = checkboxEl.dataset.isCurrentRead === 'true';
   const willBeChecked = !isCurrentlyRead;
   const currentRound = taskRound || (state.activePlan ? (state.activePlan.currentRound || 1) : 1);
+
+  // 限制：如果計畫的開始時間尚未到達，不允許勾選已讀，只能進去查看進度
+  if (state.activePlan && state.activePlan.startDate) {
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const parts = state.activePlan.startDate.split("-");
+    const planStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    
+    if (todayStart < planStart) {
+      showToast("此計畫尚未開始，目前僅供預覽，無法勾選已讀。");
+      if (checkboxEl) {
+        checkboxEl.checked = isCurrentlyRead;
+      }
+      return;
+    }
+  }
 
   // 💡 關鍵修復：唯讀歷史鎖定，防止誤觸修改已完成遍數的打卡紀錄
   if (state.activePlan && currentRound < (state.activePlan.currentRound || 1)) {
@@ -2234,6 +2294,17 @@ window.addEventListener("scroll", async () => {
     // 💡 關鍵修復：如果是在唯讀歷史遍數中，不允許自動打卡
     if (state.activePlan && readRound < (state.activePlan.currentRound || 1)) {
       return;
+    }
+
+    // 限制：如果計畫的開始時間尚未到達，不允許自動打卡
+    if (state.activePlan && state.activePlan.startDate) {
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const parts = state.activePlan.startDate.split("-");
+      const planStart = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      if (todayStart < planStart) {
+        return;
+      }
     }
 
     const isAlreadyRead = state.readingLogs.some(l =>
