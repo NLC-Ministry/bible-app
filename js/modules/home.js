@@ -238,12 +238,20 @@ export function updateDashboardView() {
   const planSummaryDiv = document.getElementById("active-plan-summary");
   if (state.activePlan) {
     const progress = state.activePlan.progress || 0;
+    const currentRound = state.activePlan.currentRound || 1;
     const started = isPlanStarted(state.activePlan);
     const isAdmin = state.currentUser && state.currentUser.role === 'admin';
     const isPlanAvailable = started || isAdmin;
-    const statusText = started
-      ? `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`
-      : `<span class="text-brand" style="font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
+    let statusText = "";
+    if (started) {
+      if (currentRound > 1) {
+        statusText = `已完成第 ${currentRound - 1} 遍 👑 | 第 ${currentRound} 遍：${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
+      } else {
+        statusText = `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
+      }
+    } else {
+      statusText = `<span class="text-brand" style="font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
+    }
 
     const streakDays = state.currentUser.streak || 0;
     const totalCompletionRate = progress;

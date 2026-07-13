@@ -1459,6 +1459,12 @@ function isPlanStarted(plan) {
   return todayStr >= plan.startDate;
 }
 
+function isPlanExpired(plan) {
+  if (!plan || !plan.endDate) return false;
+  const todayStr = new Date().toISOString().split('T')[0];
+  return todayStr > plan.endDate;
+}
+
 function calculateAllPlansProgress() {
   const visibleActivePlans = getVisiblePlans(state.activePlans || []);
 
@@ -1655,6 +1661,7 @@ window.rebuildPlanScheduleForLevel = rebuildPlanScheduleForLevel;
 window.generatePlanObject = generatePlanObject;
 window.calculatePlanProgress = calculatePlanProgress;
 window.isPlanStarted = isPlanStarted;
+window.isPlanExpired = isPlanExpired;
 window.calculateAllPlansProgress = calculateAllPlansProgress;
 window.getHiddenPlanKeys = getHiddenPlanKeys;
 window.isPlanHidden = isPlanHidden;

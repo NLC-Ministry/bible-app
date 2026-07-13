@@ -738,6 +738,11 @@ function renderJoinedPlansList() {
       };
 
       const progress = plan.progress || 0;
+      const currentRound = plan.currentRound || 1;
+      const progressText = currentRound > 1
+        ? `已完成第 ${currentRound - 1} 遍 👑<br>第 ${currentRound} 遍：已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`
+        : `已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`;
+
       card.innerHTML = `
         ${getPlanCoverHtml(plan)}
         <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
@@ -748,8 +753,8 @@ function renderJoinedPlansList() {
           <div class="plan-progress-wrapper plan-progress-wrapper--compact">
             <div class="plan-progress-bar" style="width: ${progress}%;"></div>
           </div>
-          <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem;">
-            已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)
+          <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35;">
+            ${progressText}
           </div>
         </div>
       `;
@@ -1383,7 +1388,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 
   const currentRound = state.activePlan.currentRound || 1;
 
-  if (state.activePlan.progress >= 100) {
+  if (state.activePlan.progress >= 100 && !isPlanExpired(state.activePlan)) {
     const upgradeBanner = document.createElement("div");
     upgradeBanner.className = "glass-card congrats-inline-banner";
     const nextRound = currentRound + 1;
@@ -1714,6 +1719,13 @@ window.triggerPlanUpgradeFlow = async function() {
   const plan = state.activePlan;
   if (!plan) return;
 
+  if (isPlanExpired(plan)) {
+    showToast("計畫時間已過，無法再進行升級。");
+    const modal = document.getElementById("congrats-modal");
+    if (modal) modal.remove();
+    return;
+  }
+
   const currentRound = plan.currentRound || 1;
   const nextRound = currentRound + 1;
 
@@ -1802,6 +1814,11 @@ async function handleRoundCompletion(plan) {
   // Prevent multiple triggers for the same round completion in the same session
   if (plan.lastPromptedRound === currentRound) return;
   plan.lastPromptedRound = currentRound;
+
+  if (isPlanExpired(plan)) {
+    showToast("恭喜完成此遍補讀打卡！由於計畫時間已過，無法再進行升級。");
+    return;
+  }
 
   // Show the congrats medal modal, do NOT auto upgrade
   showCongratsModal(plan, currentRound);
