@@ -648,8 +648,20 @@ async function renderPlanView() {
 
 
 
+function getResolvedPresetKey(plan) {
+  if (!plan) return null;
+  if (plan.presetKey) return plan.presetKey;
+  const name = plan.name || "";
+  if (name.includes("第一季")) return "q1";
+  if (name.includes("第二季")) return "q2";
+  if (name.includes("第三季")) return "q3";
+  if (name.includes("第四季")) return "q4";
+  return null;
+}
+
 function getPlanCoverColor(plan) {
   const covers = window.NLC_PLAN_COVERS || ["#B8E8F5", "#C8F5D8", "#FFE4CC", "#D4E4F7", "#E8E0F5", "#F7D4E4", "#F4F7D4", "#E4D4F7", "#D4F7F2"];
+  const resolvedKey = getResolvedPresetKey(plan);
   if (plan && plan.presetKey && plan.presetKey.startsWith("m_")) {
     const parts = plan.presetKey.split("_");
     if (parts.length >= 4) {
@@ -658,17 +670,18 @@ function getPlanCoverColor(plan) {
     }
   }
   const presetMap = { q1: 1, q2: 2, q3: 3, q4: 4 };
-  const idx = presetMap[plan.presetKey] ?? 0;
+  const idx = presetMap[resolvedKey] ?? 0;
   return covers[idx] || covers[0];
 }
 
 function getPlanCoverHtml(plan) {
   const bg = getPlanCoverColor(plan);
+  const resolvedKey = getResolvedPresetKey(plan);
   let text = "速讀";
-  if (plan.presetKey === "q1") text = "第一季";
-  else if (plan.presetKey === "q2") text = "第二季";
-  else if (plan.presetKey === "q3") text = "第三季";
-  else if (plan.presetKey === "q4") text = "第四季";
+  if (resolvedKey === "q1") text = "第一季";
+  else if (resolvedKey === "q2") text = "第二季";
+  else if (resolvedKey === "q3") text = "第三季";
+  else if (resolvedKey === "q4") text = "第四季";
   else if (plan.presetKey && plan.presetKey.startsWith("m_")) {
     const parts = plan.presetKey.split("_");
     if (parts.length >= 4) {
@@ -791,6 +804,32 @@ function renderPresetPlansList() {
     return null;
   };
 
+  // Helper to check if a plan is a monthly category plan
+  const isCategoryPlan = (p) => {
+    if (!p) return false;
+    if (p.presetKey && p.presetKey.startsWith("m_")) return true;
+    const name = p.name || "";
+    const categoryNames = [
+      "摩西五經", "歷史書", "詩歌智慧書", "大先知書", "小先知書", 
+      "福音書+使徒行傳", "福音書+徒", "保羅書信一", "保羅書信二", 
+      "普通書信+啟示錄", "普通書信+啟"
+    ];
+    if (categoryNames.includes(name)) return true;
+    if (categoryNames.some(cName => name.includes(cName) && !name.includes("季"))) return true;
+    return false;
+  };
+
+  // Helper to clean display name (strip dates after colon)
+  const getCleanDisplayName = (plan) => {
+    if (!plan || !plan.name) return "";
+    const isMonthly = isCategoryPlan(plan);
+    if (plan.name.includes("：")) {
+      const parts = plan.name.split("：");
+      return isMonthly ? parts[1].trim() : parts[0].trim();
+    }
+    return plan.name;
+  };
+
   // Helper to calculate duration text
   const getDurationLabel = (sStr, eStr) => {
     if (!sStr || !eStr) return "時間：未設定";
@@ -865,7 +904,7 @@ function renderPresetPlansList() {
       `;
       header.innerHTML = `
         <span class="nlc-icon" data-icon="calendar" aria-hidden="true" style="color: var(--primary-color);"></span>
-        <span>月度計畫挑戰 (${targetMonth.label})</span>
+        <span>教會特別計畫 (${targetMonth.label})</span>
       `;
       section.appendChild(header);
 
@@ -918,7 +957,7 @@ function renderPresetPlansList() {
         card.innerHTML = `
           ${getPlanCoverHtml({ presetKey })}
           <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${catSpec.name}</h4>
+            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${getCleanDisplayName({ name: catSpec.name, presetKey })}</h4>
             <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
               <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${durationText}</span>
             </div>
@@ -956,10 +995,14 @@ function renderPresetPlansList() {
 
   if (state.globalPlans && state.globalPlans.length > 0) {
     state.globalPlans.forEach(gp => {
-      const isMonthly = (gp.presetKey && gp.presetKey.startsWith("m_")) || /^\d{4}年\d{1,2}月：/.test(gp.name);
+      const isMonthly = isCategoryPlan(gp);
       if (!isMonthly) {
         const isJoined = (state.activePlans || []).some(ap => ap.presetKey === gp.presetKey || ap.id === gp.id);
-        const alreadyListed = otherPlans.some(op => op.id === gp.id || op.presetKey === gp.presetKey);
+        const alreadyListed = otherPlans.some(op => 
+          op.id === gp.id || 
+          op.presetKey === gp.presetKey ||
+          getCleanDisplayName(op) === getCleanDisplayName(gp)
+        );
         if (!isJoined && !alreadyListed && !gp.isHidden) {
           otherPlans.push(gp);
         }
@@ -985,7 +1028,7 @@ function renderPresetPlansList() {
     `;
     header.innerHTML = `
       <span class="nlc-icon" data-icon="star" aria-hidden="true" style="color: var(--primary-color);"></span>
-      <span>季度與經典計畫挑戰</span>
+      <span>其他計畫 (自由加入、不固定時間)</span>
     `;
     section.appendChild(header);
 
@@ -1016,15 +1059,15 @@ function renderPresetPlansList() {
       `;
 
       card.onclick = async () => {
-        if (confirm(`確定要加入 ${plan.name} 讀經計畫挑戰嗎？\n系統將自動設定為從今天開始的完整讀經區段。`)) {
+        if (confirm(`確定要加入 ${getCleanDisplayName(plan)} 讀經計畫挑戰嗎？\n系統將自動設定為從今天開始的完整讀經區段。`)) {
           await db.joinPresetPlan(key);
         }
       };
 
       card.innerHTML = `
-        ${getPlanCoverHtml({ presetKey: key })}
+        ${getPlanCoverHtml(plan)}
         <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-          <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
+          <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${getCleanDisplayName(plan)}</h4>
           <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
             <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${durationText}</span>
           </div>

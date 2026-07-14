@@ -1,21 +1,10 @@
 const fs = require('fs');
-const ts = require('typescript');
+const content = fs.readFileSync('js/modules/plan.js', 'utf8');
 
-const fileName = 'js/modules/plan.js';
-const sourceCode = fs.readFileSync(fileName, 'utf8');
-
-const sourceFile = ts.createSourceFile(
-  fileName,
-  sourceCode,
-  ts.ScriptTarget.ES2022,
-  true,
-  ts.ScriptKind.JS
-);
-
-// Get syntax diagnostics from the sourceFile directly
-const diagnostics = sourceFile.parseDiagnostics || [];
-console.log("TypeScript parser diagnostics count:", diagnostics.length);
-diagnostics.forEach(d => {
-  const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, d.start);
-  console.log(`Error at line ${line + 1}, col ${character + 1}: ${d.messageText}`);
+const queries = ['getPlanCoverHtml', 'getPlanCoverColor'];
+const lines = content.split('\n');
+lines.forEach((line, idx) => {
+  if (queries.some(q => line.includes(q))) {
+    console.log(`Line ${idx + 1}: ${line.trim()}`);
+  }
 });

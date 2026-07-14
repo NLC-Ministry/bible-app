@@ -1970,7 +1970,20 @@ const db = {
 
     loader.show("加入挑戰計畫中...");
 
-    const planName = preset.name;
+    const getCleanDisplayName = (name, presetKey) => {
+      if (!name) return "";
+      const isMonthly = (presetKey && presetKey.startsWith("m_")) ||
+        ["摩西五經", "歷史書", "詩歌智慧書", "大先知書", "小先知書", "福音書+使徒行傳", "福音書+徒", "保羅書信一", "保羅書信二", "普通書信+啟示錄", "普通書信+啟"].includes(name) ||
+        ["摩西五經", "歷史書", "詩歌", "大先知", "小先知", "福音", "保羅", "普通"].some(c => name.includes(c) && !name.includes("季"));
+      
+      if (name.includes("：")) {
+        const parts = name.split("：");
+        return isMonthly ? parts[1].trim() : parts[0].trim();
+      }
+      return name;
+    };
+
+    const planName = getCleanDisplayName(preset.name, key);
     let startDate = preset.startDate;
     let endDate = preset.endDate;
     const selectedBooks = preset.books;
