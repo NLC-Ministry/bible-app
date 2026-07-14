@@ -2110,6 +2110,10 @@ const db = {
     renderPlanView();
     updateDashboardView();
 
+    if (typeof appRouter !== "undefined" && typeof appRouter.switchTab === "function") {
+      appRouter.switchTab("dashboard-view");
+    }
+
     const started = isPlanStarted(newPlanObj);
     const isAdmin = state.currentUser && state.currentUser.role === 'admin';
     if (started) {

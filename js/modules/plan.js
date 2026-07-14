@@ -796,7 +796,7 @@ function renderPresetPlansList() {
       const parts = p.presetKey.split("_");
       if (parts.length >= 4) return parts[3];
     }
-    if (p.globalPlanId) {
+    if (p.globalPlanId && p.globalPlanId.startsWith("00000000-0000-0000-a000-")) {
       const suffix = p.globalPlanId.split("-").pop();
       const idx = parseInt(suffix);
       if (idx >= 1 && idx <= 9) return `cat${idx}`;
