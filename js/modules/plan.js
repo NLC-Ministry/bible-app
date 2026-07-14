@@ -939,6 +939,10 @@ function renderPresetPlansList() {
       availableCategories.forEach(([catKey, catSpec]) => {
         const presetKey = `m_${targetMonth.year}_${String(targetMonth.month).padStart(2, '0')}_${catKey}`;
 
+        // Check if this card is locked because of August 2026 constraint
+        const isAugustConstraint = (targetMonth.year === 2026 && targetMonth.month === 8 && catKey !== "cat1");
+        const cardIsOpen = isOpen && !isAugustConstraint;
+
         const card = document.createElement("div");
         card.className = "joined-plan-item-card";
         card.style = `
@@ -949,14 +953,18 @@ function renderPresetPlansList() {
           display: flex;
           align-items: center;
           gap: 1rem;
-          cursor: ${isOpen ? 'pointer' : 'not-allowed'};
+          cursor: ${cardIsOpen ? 'pointer' : 'not-allowed'};
           transition: all 0.2s ease;
-          opacity: ${isOpen ? '1' : '0.65'};
+          opacity: ${cardIsOpen ? '1' : '0.65'};
         `;
 
         card.onclick = async () => {
           if (alreadyHasPlan) {
             showToast(`您此月份已加入「${targetMonthPlanName}」特別計畫，無法選取其他類別。`);
+            return;
+          }
+          if (isAugustConstraint) {
+            showToast("2026年8月限定只能選擇「摩西五經」。");
             return;
           }
           if (!isDateOpen) {
@@ -971,6 +979,8 @@ function renderPresetPlansList() {
         let statusLabel = `+ 點擊加入 ${targetMonth.month} 月份挑戰`;
         if (alreadyHasPlan) {
           statusLabel = `🔒 此月已選擇「${targetMonthPlanName}」`;
+        } else if (isAugustConstraint) {
+          statusLabel = `🔒 8月份僅開放選取摩西五經`;
         } else if (!isDateOpen) {
           statusLabel = `🔒 尚未開放選取 (每月 25 號開放)`;
         }
@@ -982,7 +992,7 @@ function renderPresetPlansList() {
             <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
               <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${durationText}</span>
             </div>
-            <div style="font-size: 0.76rem; font-weight: 500; color: ${isOpen ? 'var(--primary-color)' : 'var(--text-muted)'}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
+            <div style="font-size: 0.76rem; font-weight: 500; color: ${cardIsOpen ? 'var(--primary-color)' : 'var(--text-muted)'}; margin-top: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
               ${statusLabel}
             </div>
           </div>

@@ -1901,8 +1901,11 @@ const db = {
         const year = parseInt(parts[1]);
         const month = parseInt(parts[2]);
         const catKey = parts[3];
-
-
+        // 2026年8月限定只能選擇「摩西五經」
+        if (year === 2026 && month === 8 && catKey !== "cat1") {
+          showToast("2026年8月限定只能選擇「摩西五經」。");
+          return;
+        }
 
         // 限制只能選擇當月，或每月 25 號（含）之後開放選擇的下個月份計畫
         const today = new Date();
