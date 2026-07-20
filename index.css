@@ -9042,43 +9042,246 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   box-shadow: 0 2px 6px -1px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-/* ──────────────── Honor Badge Tiers ──────────────── */
+/* ──────────────── Ranked reading medals ──────────────── */
 .honor-badge-hex.tier-bronze {
-  --badge-tone-top: #ffedd5;
-  --badge-tone-mid: #c2410c;
-  --badge-tone-deep: #7c2d12;
-  --badge-tone-icon: #ffedd5;
+  --badge-tone-top: #FFD7B5;
+  --badge-tone-mid: #B85C2B;
+  --badge-tone-deep: #61260F;
+  --badge-tone-icon: #FFF1E6;
+  inset: 7%;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -4px 8px rgb(74 28 12 / 0.45);
 }
 
 .honor-badge-hex.tier-silver {
-  --badge-tone-top: #f3f4f6;
-  --badge-tone-mid: #6b7280;
-  --badge-tone-deep: #374151;
-  --badge-tone-icon: #f9fafb;
+  --badge-tone-top: #FFFFFF;
+  --badge-tone-mid: #94A3B8;
+  --badge-tone-deep: #334155;
+  --badge-tone-icon: #FFFFFF;
+  inset: 6%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.38), inset 0 -4px 9px rgb(30 41 59 / 0.38);
 }
 
 .honor-badge-hex.tier-gold {
-  --badge-tone-top: #fef9c3;
-  --badge-tone-mid: #d97706;
-  --badge-tone-deep: #78350f;
-  --badge-tone-icon: #fef9c3;
+  --badge-tone-top: #FFF7AE;
+  --badge-tone-mid: #E5A50A;
+  --badge-tone-deep: #7A3E00;
+  --badge-tone-icon: #FFFBE8;
+  inset: 5%;
+  box-shadow: inset 0 0 0 2px rgb(255 247 174 / 0.65), inset 0 -5px 10px rgb(92 45 0 / 0.42), 0 0 8px rgb(229 165 10 / 0.42);
 }
 
 .honor-badge-hex.tier-platinum {
-  --badge-tone-top: #ecfeff;
-  --badge-tone-mid: #0891b2;
-  --badge-tone-deep: #164e63;
-  --badge-tone-icon: #ecfeff;
-  box-shadow: inset 0 1px 0 var(--badge-gloss-rim), inset 0 -3px 8px var(--badge-tone-inner-shadow), 0 0 12px rgba(8, 145, 178, 0.4);
+  --badge-tone-top: #E6FFFF;
+  --badge-tone-mid: #12AFC0;
+  --badge-tone-deep: #075A70;
+  --badge-tone-icon: #F0FFFF;
+  inset: 4%;
+  box-shadow: inset 0 0 0 2px rgb(224 255 255 / 0.68), inset 0 -5px 11px rgb(6 78 89 / 0.45), 0 0 12px rgb(18 175 192 / 0.55);
 }
 
 .honor-badge-hex.tier-legendary {
-  --badge-tone-top: #fae8ff;
-  --badge-tone-mid: #a21caf;
-  --badge-tone-deep: #4a044e;
-  --badge-tone-icon: #fae8ff;
+  --badge-tone-top: #FFE6FF;
+  --badge-tone-mid: #B72ACB;
+  --badge-tone-deep: #55106B;
+  --badge-tone-icon: #FFF2FF;
+  inset: 3%;
   animation: cosmicPulse 3s infinite ease-in-out;
-  box-shadow: inset 0 1px 0 var(--badge-gloss-rim), inset 0 -3px 8px var(--badge-tone-inner-shadow), 0 0 16px rgba(162, 28, 175, 0.6);
+  box-shadow: inset 0 0 0 2px rgb(255 230 255 / 0.72), inset 0 -6px 12px rgb(65 12 83 / 0.48), 0 0 16px rgb(183 42 203 / 0.62);
+}
+
+.honor-badge-hex.tier-bronze::before,
+.honor-badge-hex.tier-silver::before,
+.honor-badge-hex.tier-gold::before,
+.honor-badge-hex.tier-platinum::before,
+.honor-badge-hex.tier-legendary::before {
+  content: "";
+  position: absolute;
+  inset: 10%;
+  z-index: 0;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  pointer-events: none;
+}
+
+.honor-badge-hex.tier-silver::before { inset: 8%; border-width: 2px; }
+.honor-badge-hex.tier-gold::before { inset: 7%; border-width: 2px; border-color: rgb(255 249 195 / 0.58); }
+.honor-badge-hex.tier-platinum::before { inset: 6%; border-width: 2px; border-color: rgb(236 254 255 / 0.7); }
+.honor-badge-hex.tier-legendary::before { inset: 5%; border-width: 2px; border-color: rgb(255 230 255 / 0.78); }
+
+.honor-badge-hex-shell:has(.tier-bronze)::before { background: #F3B184; }
+.honor-badge-hex-shell:has(.tier-silver)::before { background: #E2E8F0; }
+.honor-badge-hex-shell:has(.tier-gold)::before { background: #FFE27A; }
+.honor-badge-hex-shell:has(.tier-platinum)::before { background: #A5F3FC; }
+.honor-badge-hex-shell:has(.tier-legendary)::before { background: #F0ABFC; }
+
+#badge-detail-hero .honor-badge-hex--unlocked.tier-bronze,
+#badge-detail-hero .honor-badge-hex--unlocked.tier-silver,
+#badge-detail-hero .honor-badge-hex--unlocked.tier-gold,
+#badge-detail-hero .honor-badge-hex--unlocked.tier-platinum,
+#badge-detail-hero .honor-badge-hex--unlocked.tier-legendary {
+  color: var(--badge-tone-icon);
+  background-image:
+    radial-gradient(circle at 50% 34%, rgb(255 255 255 / 0.3) 0%, transparent 58%),
+    radial-gradient(circle, rgb(255 255 255 / 0.28) 0.85px, transparent 0.85px),
+    linear-gradient(155deg, var(--badge-tone-top) 0%, var(--badge-tone-mid) 44%, var(--badge-tone-deep) 100%);
+  box-shadow: inherit;
+}
+
+#badge-detail-hero .honor-badge-hex-shell:has(.tier-bronze)::before { background: #F3B184; }
+#badge-detail-hero .honor-badge-hex-shell:has(.tier-silver)::before { background: #E2E8F0; }
+#badge-detail-hero .honor-badge-hex-shell:has(.tier-gold)::before { background: #FFE27A; }
+#badge-detail-hero .honor-badge-hex-shell:has(.tier-platinum)::before { background: #A5F3FC; }
+#badge-detail-hero .honor-badge-hex-shell:has(.tier-legendary)::before { background: #F0ABFC; }
+
+/* Campaign medal material is fixed by the award configured for each stage. */
+.honor-badge-hex.campaign-medal-stage-1 {
+  --badge-tone-top: #CBD5E1;
+  --badge-tone-mid: #64748B;
+  --badge-tone-deep: #1E293B;
+  --badge-tone-icon: #F8FAFC;
+  inset: 8%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.28), inset 0 -5px 9px rgb(15 23 42 / 0.52);
+}
+
+.honor-badge-hex.campaign-medal-stage-2 {
+  --badge-tone-top: #E5E7EB;
+  --badge-tone-mid: #4B5563;
+  --badge-tone-deep: #111827;
+  --badge-tone-icon: #F9FAFB;
+  inset: 7.5%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.24), inset 0 -5px 10px rgb(3 7 18 / 0.58);
+}
+
+.honor-badge-hex.campaign-medal-stage-3 {
+  --badge-tone-top: #FFD4B8;
+  --badge-tone-mid: #C66A32;
+  --badge-tone-deep: #6B2D16;
+  --badge-tone-icon: #FFF1E8;
+  inset: 7%;
+  box-shadow: inset 0 0 0 1px rgb(255 239 226 / 0.45), inset 0 -5px 10px rgb(92 38 17 / 0.48);
+}
+
+.honor-badge-hex.campaign-medal-stage-4 {
+  --badge-tone-top: #F4C39A;
+  --badge-tone-mid: #9A4B20;
+  --badge-tone-deep: #4E2411;
+  --badge-tone-icon: #FFE8D2;
+  inset: 6.5%;
+  box-shadow: inset 0 0 0 2px rgb(255 226 197 / 0.38), inset 0 -5px 10px rgb(70 30 12 / 0.5);
+}
+
+.honor-badge-hex.campaign-medal-stage-5 {
+  --badge-tone-top: #FFFFFF;
+  --badge-tone-mid: #A8B3C4;
+  --badge-tone-deep: #475569;
+  --badge-tone-icon: #FFFFFF;
+  inset: 6%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.62), inset 0 -5px 11px rgb(51 65 85 / 0.42), 0 0 7px rgb(203 213 225 / 0.44);
+}
+
+.honor-badge-hex.campaign-medal-stage-6 {
+  --badge-tone-top: #FFF4A8;
+  --badge-tone-mid: #D99A08;
+  --badge-tone-deep: #754000;
+  --badge-tone-icon: #FFFBE6;
+  inset: 5.5%;
+  box-shadow: inset 0 0 0 2px rgb(255 245 170 / 0.66), inset 0 -5px 11px rgb(105 55 0 / 0.44), 0 0 8px rgb(217 154 8 / 0.4);
+}
+
+.honor-badge-hex.campaign-medal-stage-7 {
+  --badge-tone-top: #FFFCE0;
+  --badge-tone-mid: #F0C93D;
+  --badge-tone-deep: #98630A;
+  --badge-tone-icon: #FFFFFF;
+  inset: 5%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 231 / 0.76), inset 0 -5px 12px rgb(128 82 7 / 0.42), 0 0 10px rgb(240 201 61 / 0.48);
+}
+
+.honor-badge-hex.campaign-medal-stage-8 {
+  --badge-tone-top: #FFF0A3;
+  --badge-tone-mid: #C88A09;
+  --badge-tone-deep: #5E3500;
+  --badge-tone-icon: #FFF8D6;
+  inset: 4.5%;
+  box-shadow: inset 0 0 0 2px rgb(255 240 163 / 0.72), inset 0 -6px 12px rgb(84 43 0 / 0.5), 0 0 11px rgb(200 138 9 / 0.5);
+}
+
+.honor-badge-hex.campaign-medal-stage-9 {
+  --badge-tone-top: #FFF1A8;
+  --badge-tone-mid: #E18113;
+  --badge-tone-deep: #8C2505;
+  --badge-tone-icon: #FFF8DC;
+  inset: 4%;
+  box-shadow: inset 0 0 0 2px rgb(255 241 168 / 0.74), inset 0 -6px 13px rgb(118 31 3 / 0.52), 0 0 13px rgb(225 94 19 / 0.58);
+}
+
+.honor-badge-hex.campaign-medal-stage-10 {
+  --badge-tone-top: #FFFFFF;
+  --badge-tone-mid: #DCCBFF;
+  --badge-tone-deep: #7C6BC7;
+  --badge-tone-icon: #FFFFFF;
+  inset: 3.5%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.82), inset 0 -6px 14px rgb(73 55 139 / 0.42), 0 0 16px rgb(124 107 199 / 0.58);
+}
+
+.honor-badge-hex[class*="campaign-medal-stage-"]::before {
+  content: "";
+  position: absolute;
+  inset: 7%;
+  z-index: 0;
+  border: 2px solid rgb(255 255 255 / 0.42);
+  clip-path: polygon(50% 0, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  pointer-events: none;
+}
+
+.honor-badge-hex-shell:has(.campaign-medal-stage-1)::before { background: #94A3B8; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-2)::before { background: #6B7280; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-3)::before { background: #E39A67; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-4)::before { background: #B86A3A; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-5)::before { background: #E2E8F0; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-6)::before { background: #FFE27A; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-7)::before { background: #FFF3A3; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-8)::before { background: #E8B43F; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-9)::before { background: #F3A132; }
+.honor-badge-hex-shell:has(.campaign-medal-stage-10)::before { background: #E9DDFF; }
+
+.honor-badge-hex--locked[class*="campaign-medal-stage-"] {
+  color: var(--color-icon-muted);
+  background-color: var(--badge-gloss-locked-mid);
+  background-image:
+    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 0.18) 0%, transparent 58%),
+    radial-gradient(circle, var(--badge-gloss-locked-dot) 0.75px, transparent 0.75px),
+    linear-gradient(155deg, var(--badge-gloss-locked-top) 0%, var(--badge-gloss-locked-mid) 55%, var(--badge-gloss-locked-deep) 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 -2px 6px var(--badge-gloss-locked-shadow);
+}
+
+.honor-badge-hex-shell:has(.honor-badge-hex--locked[class*="campaign-medal-stage-"])::before,
+#badge-detail-hero .honor-badge-hex-shell:has(.honor-badge-hex--locked[class*="campaign-medal-stage-"])::before {
+  background: var(--badge-gloss-locked-mid);
+}
+
+#badge-detail-hero .honor-badge-hex--unlocked[class*="campaign-medal-stage-"] {
+  color: var(--badge-tone-icon);
+  background-image:
+    radial-gradient(circle at 50% 34%, rgb(255 255 255 / 0.32) 0%, transparent 58%),
+    radial-gradient(circle, rgb(255 255 255 / 0.28) 0.85px, transparent 0.85px),
+    linear-gradient(155deg, var(--badge-tone-top) 0%, var(--badge-tone-mid) 44%, var(--badge-tone-deep) 100%);
+  box-shadow: inherit;
+}
+
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-1)::before { background: #94A3B8; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-2)::before { background: #6B7280; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-3)::before { background: #E39A67; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-4)::before { background: #B86A3A; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-5)::before { background: #E2E8F0; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-6)::before { background: #FFE27A; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-7)::before { background: #FFF3A3; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-8)::before { background: #E8B43F; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-9)::before { background: #F3A132; }
+#badge-detail-hero .honor-badge-hex-shell:has(.campaign-medal-stage-10)::before { background: #E9DDFF; }
+
+#badge-detail-hero .honor-badge-hex-shell:has(.honor-badge-hex--locked[class*="campaign-medal-stage-"])::before {
+  background: var(--badge-gloss-locked-mid);
 }
 
 @keyframes cosmicPulse {

@@ -386,9 +386,10 @@ function getBadgeStarState(badge) {
 
 function renderBadgeStars(badge, compact = false) {
   const starState = getBadgeStarState(badge);
-  const stars = Array.from({ length: starState.displayedStars }, (_, index) =>
-    `<span class="badge-star ${index < starState.level ? "badge-star--lit" : "badge-star--unlit"}"><span class="nlc-icon" data-icon="star" aria-hidden="true"></span></span>`
-  ).join("");
+  const stars = Array.from({ length: starState.displayedStars }, (_, index) => {
+    const isLit = index < starState.level;
+    return `<span class="badge-star ${isLit ? "badge-star--lit" : "badge-star--unlit"}"><span class="nlc-icon" data-icon="${isLit ? "starFill" : "star"}" aria-hidden="true"></span></span>`;
+  }).join("");
   return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="已點亮 ${starState.level} 顆，共顯示 ${starState.displayedStars} 顆">${stars}</span>`;
 }
 
@@ -434,6 +435,20 @@ function attachBadgeOpenHandlers(element, badge, isUnlocked) {
   return "";
 };
 
+const CAMPAIGN_MEDAL_FRAME_CLASSES = Array.from({ length: 10 }, (_, index) =>
+  `campaign-medal-stage-${index + 1}`
+);
+
+function getBadgeFrameClass(badge, starsCount) {
+  const stageNo = Number(badge && badge.campaignStageNo || 0);
+  if (stageNo >= 1 && stageNo <= CAMPAIGN_MEDAL_FRAME_CLASSES.length) {
+    return `campaign-medal-stage-${stageNo}`;
+  }
+  return typeof window.getBadgeTierClass === "function"
+    ? window.getBadgeTierClass(starsCount)
+    : "";
+}
+
 function renderBadgeWall(containerId) {
   const container = document.getElementById("badges-grid") || document.getElementById(containerId);
   if (!container) return;
@@ -461,7 +476,7 @@ function renderBadgeWall(containerId) {
     badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
     const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
     const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    const tierClass = typeof window.getBadgeTierClass === "function" ? window.getBadgeTierClass(starState.level) : "";
+    const tierClass = getBadgeFrameClass(badge, starState.level);
     badgeItem.innerHTML = `
       ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
       <div class="honor-badge-item__icon-wrap honor-badge-hex-shell">
@@ -496,7 +511,7 @@ function renderBadgeStrip(containerId, options) {
     item.type = "button";
     item.className = "badge-strip__item " + (isUnlocked ? "unlocked" : "locked");
     item.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const tierClass = typeof window.getBadgeTierClass === "function" ? window.getBadgeTierClass(starState.level) : "";
+    const tierClass = getBadgeFrameClass(badge, starState.level);
     const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
     item.innerHTML = `
       <span class="honor-badge-hex-shell honor-badge-hex-shell--sm">
@@ -619,12 +634,14 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     }
     const hexInner = shield.querySelector(".honor-badge-hex");
     if (hexInner) {
-      hexInner.classList.remove("honor-badge-hex--unlocked", "honor-badge-hex--locked", "tier-bronze", "tier-silver", "tier-gold", "tier-platinum", "tier-legendary");
+      hexInner.classList.remove(
+        "honor-badge-hex--unlocked", "honor-badge-hex--locked",
+        "tier-bronze", "tier-silver", "tier-gold", "tier-platinum", "tier-legendary",
+        ...CAMPAIGN_MEDAL_FRAME_CLASSES
+      );
       hexInner.classList.add(isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked");
-      if (isUnlocked && typeof window.getBadgeTierClass === "function") {
-        const tierClass = window.getBadgeTierClass(badgeStarState.level);
-        if (tierClass) hexInner.classList.add(tierClass);
-      }
+      const frameClass = getBadgeFrameClass(badge, badgeStarState.level);
+      if (frameClass) hexInner.classList.add(frameClass);
     }
     shield.style.background = "";
     shield.style.borderColor = "";
