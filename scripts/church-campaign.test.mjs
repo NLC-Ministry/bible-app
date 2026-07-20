@@ -52,6 +52,15 @@ describe("versioned church Bible campaign", () => {
     expect(new Set(scheduled)).toEqual(new Set(canonical));
   });
 
+  it("redistributes every campaign stage around personal weekly rest days", () => {
+    const days = context.window.buildChurchCampaignDays(campaign, books, [0, 6]);
+    const restDays = days.filter(day => [0, 6].includes(new Date(day.isoDate + "T00:00:00").getDay()));
+    expect(restDays.length).toBeGreaterThan(0);
+    expect(restDays.every(day => day.isRestDay && day.chapters.length === 0)).toBe(true);
+    expect(days.flatMap(day => day.chapters)).toHaveLength(1189);
+    expect(days.filter(day => day.chapters.length > 0).every(day => ![0, 6].includes(new Date(day.isoDate + "T00:00:00").getDay()))).toBe(true);
+  });
+
   it("uses profile small-group membership with a six-person minimum and no maximum", () => {
     const five = Array.from({ length: 5 }, () => ({ small_group: "恩典小組" }));
     const six = Array.from({ length: 6 }, () => ({ small_group: "恩典小組" }));
@@ -122,5 +131,32 @@ describe("editable flexible weekly schedules", () => {
     expect(db).toContain("rest_weekdays: weeklySchedule.restWeekdays");
     expect(db).toContain("const rebuilt = generatePlanObject");
     expect(migration).toContain("cardinality(rest_weekdays) = 7 - reading_days_per_week");
+  });
+});
+
+describe("joined plan options menu", () => {
+  const html = readFileSync(join(root, "index.html"), "utf8");
+  const stateSource = readFileSync(join(root, "js", "state.js"), "utf8");
+  const planSource = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
+
+  it("shows plan details and exit actions for every joined plan", () => {
+    const details = html.indexOf('id="view-plan-details-btn"');
+    const exit = html.indexOf('id="delete-plan-btn"');
+    expect(details).toBeGreaterThan(-1);
+    expect(exit).toBeGreaterThan(details);
+    expect(stateSource).toContain('optionsContainer.classList.toggle("hidden", !isPlanDetail)');
+    expect(stateSource).toContain('optionsContainer.style.display = isPlanDetail ? "flex" : "none"');
+    expect(planSource).toContain("openPlanDetailsDialog(state.activePlan)");
+  });
+
+  it("keeps the weekly schedule as a separate action for every plan", () => {
+    const details = html.indexOf('id="view-plan-details-btn"');
+    const schedule = html.indexOf('id="edit-flexible-plan-schedule-btn"');
+    const exit = html.indexOf('id="delete-plan-btn"');
+    expect(schedule).toBeGreaterThan(details);
+    expect(exit).toBeGreaterThan(schedule);
+    expect(html).not.toContain('id="edit-flexible-plan-schedule-btn" style="display:none;"');
+    expect(planSource).toContain('if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = ""');
+    expect(planSource).toContain('if (!plan) return;');
   });
 });

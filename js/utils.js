@@ -1229,7 +1229,6 @@ function distributeChaptersAcrossDays(chapters, readingDays) {
 }
 
 function normalizePlanScheduleSettings(isFixed, readingDaysPerWeek = 7, restWeekdays = []) {
-  if (isFixed) return { readingDaysPerWeek: 7, restWeekdays: [] };
 
   const normalizedRestDays = Array.from(new Set((Array.isArray(restWeekdays) ? restWeekdays : [])
     .map(Number)
@@ -1291,8 +1290,13 @@ function resolveChurchCampaignDefinition(presetKey, name) {
   return null;
 }
 
-function generateChurchCampaignPlanObject(definition, presetKey) {
-  const days = window.buildChurchCampaignDays(definition, BIBLE_BOOKS);
+function generateChurchCampaignPlanObject(definition, presetKey, scheduleSettings = null) {
+  const weeklySchedule = normalizePlanScheduleSettings(
+    false,
+    scheduleSettings && scheduleSettings.readingDaysPerWeek,
+    scheduleSettings && scheduleSettings.restWeekdays
+  );
+  const days = window.buildChurchCampaignDays(definition, BIBLE_BOOKS, weeklySchedule.restWeekdays);
   days.forEach(day => {
     day.chapters.forEach(chapter => {
       chapter.key = chapter.book + "_" + chapter.chapter + "_" + (chapter.round || 1);
@@ -1326,24 +1330,28 @@ function generateChurchCampaignPlanObject(definition, presetKey) {
     campaignStages: definition.stages,
     campaignRules: definition.rules,
     ruleVersion: Number(definition.version || 1),
-    readingDaysPerWeek: 7,
-    reading_days_per_week: 7,
-    restWeekdays: [],
-    rest_weekdays: []
+    readingDaysPerWeek: weeklySchedule.readingDaysPerWeek,
+    reading_days_per_week: weeklySchedule.readingDaysPerWeek,
+    restWeekdays: weeklySchedule.restWeekdays,
+    rest_weekdays: weeklySchedule.restWeekdays
   };
 }
 
 function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey = null, level = "normal", isFixed = true, scheduleSettings = null) {
   const preset = presetKey ? CHURCH_PLAN_PRESETS[presetKey] : null;
   const campaignDefinition = resolveChurchCampaignDefinition(presetKey, name);
-  if (isFixed && campaignDefinition) {
-    return generateChurchCampaignPlanObject(campaignDefinition, presetKey || window.CHURCH_CAMPAIGN_PRESET_KEY);
-  }
   const weeklySchedule = normalizePlanScheduleSettings(
     isFixed,
     scheduleSettings && scheduleSettings.readingDaysPerWeek,
     scheduleSettings && scheduleSettings.restWeekdays
   );
+  if (campaignDefinition) {
+    return generateChurchCampaignPlanObject(
+      campaignDefinition,
+      presetKey || window.CHURCH_CAMPAIGN_PRESET_KEY,
+      weeklySchedule
+    );
+  }
   const restWeekdaySet = new Set(weeklySchedule.restWeekdays);
 
   // 1. Calculate parseLocalDate

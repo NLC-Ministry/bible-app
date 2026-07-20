@@ -467,10 +467,7 @@ function initPlanControls() {
     optionsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
-      if (flexibleScheduleMenuButton) {
-        const plan = state.activePlan;
-        flexibleScheduleMenuButton.style.display = plan && (plan.isFixed === false || plan.is_fixed === false) ? "" : "none";
-      }
+      if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = "";
       dropdown.classList.toggle("hidden");
     });
     document.addEventListener("click", () => {
@@ -479,6 +476,16 @@ function initPlanControls() {
   }
 
 
+  const planDetailsButton = document.getElementById("view-plan-details-btn");
+  if (planDetailsButton) {
+    planDetailsButton.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const dropdown = document.getElementById("plan-options-dropdown");
+      if (dropdown) dropdown.classList.add("hidden");
+      openPlanDetailsDialog(state.activePlan);
+    });
+  }
 
   const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
   if (flexibleScheduleMenuButton) {
@@ -486,7 +493,9 @@ function initPlanControls() {
       event.preventDefault();
       event.stopPropagation();
       const plan = state.activePlan;
-      if (!plan || (plan.isFixed !== false && plan.is_fixed !== false)) return;
+      if (!plan) return;
+      const dropdown = document.getElementById("plan-options-dropdown");
+      if (dropdown) dropdown.classList.add("hidden");
       const scheduleSettings = await openFlexibleScheduleDialog(plan, { editing: true });
       if (!scheduleSettings) return;
       const result = await db.updateFlexiblePlanSchedule(plan, scheduleSettings);
@@ -849,6 +858,49 @@ function renderJoinedPlansList() {
   } catch (err) {
     console.error("Critical error inside renderJoinedPlansList:", err);
   }
+}
+
+
+function openPlanDetailsDialog(plan) {
+  if (!plan) return;
+  const existing = document.getElementById("plan-details-dialog");
+  if (existing) existing.remove();
+
+  const isFlexible = plan.isFixed === false || plan.is_fixed === false;
+  const books = plan.target_books || plan.targetBooks || [];
+  const scheduleText = isFlexible
+    ? formatFlexibleScheduleSummary(plan)
+    : (plan.startDate + " ～ " + plan.endDate);
+  const stageCount = Array.isArray(plan.campaignStages) ? plan.campaignStages.length : 0;
+  const overlay = document.createElement("div");
+  overlay.id = "plan-details-dialog";
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:1rem;";
+  overlay.innerHTML = `
+    <div class="glass-card" role="dialog" aria-modal="true" aria-labelledby="plan-details-title"
+      style="width:min(440px,100%);height:auto!important;max-height:80vh;overflow:auto;padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);">
+      <h3 id="plan-details-title" style="margin:0 0 1rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);">${escapeHTML(plan.name || "讀經計畫")}</h3>
+      ${plan.description ? `<p style="margin:0 0 1rem;font-size:.84rem;line-height:1.6;color:var(--text-secondary);">${escapeHTML(plan.description)}</p>` : ""}
+      <dl style="display:grid;grid-template-columns:auto 1fr;gap:.65rem .9rem;margin:0;font-size:.82rem;">
+        <dt style="color:var(--text-muted);">計畫類型</dt>
+        <dd style="margin:0;color:var(--text-primary);">${isFlexible ? "非固定日期" : "固定日期"}</dd>
+        <dt style="color:var(--text-muted);">日期／安排</dt>
+        <dd style="margin:0;color:var(--text-primary);">${escapeHTML(scheduleText)}</dd>
+        ${stageCount ? `<dt style="color:var(--text-muted);">獎勵階段</dt><dd style="margin:0;color:var(--text-primary);">${stageCount} 個階段</dd>` : ""}
+        <dt style="color:var(--text-muted);">閱讀經卷</dt>
+        <dd style="margin:0;color:var(--text-primary);line-height:1.55;">${books.length ? escapeHTML(books.join("、")) : "依計畫排程"}</dd>
+      </dl>
+      <div style="display:flex;justify-content:flex-end;margin-top:1.35rem;">
+        <button type="button" id="plan-details-close" class="btn-primary">關閉</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector("#plan-details-close").addEventListener("click", close);
+  overlay.addEventListener("click", event => {
+    if (event.target === overlay) close();
+  });
 }
 
 function formatFlexibleScheduleSummary(plan) {

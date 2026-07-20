@@ -216,10 +216,16 @@ const appRouter = {
       }
     }
 
-    // Toggle global plan options menu visibility
+    // Every joined plan detail exposes the same top-right options menu.
     const optionsContainer = document.getElementById("global-plan-options-container");
     if (optionsContainer) {
-      optionsContainer.classList.toggle("hidden", true);
+      optionsContainer.classList.toggle("hidden", !isPlanDetail);
+      optionsContainer.hidden = !isPlanDetail;
+      optionsContainer.style.display = isPlanDetail ? "flex" : "none";
+      if (!isPlanDetail) {
+        const dropdown = document.getElementById("plan-options-dropdown");
+        if (dropdown) dropdown.classList.add("hidden");
+      }
     }
 
     const isReaderPage = this.currentTab === "reader-view";

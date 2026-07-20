@@ -135,7 +135,8 @@ function validateChurchCampaign(definition, bibleBooks = window.BIBLE_BOOKS || [
   return { valid: errors.length === 0, errors, warnings, chapterCount };
 }
 
-function buildChurchCampaignDays(definition, bibleBooks = window.BIBLE_BOOKS || []) {
+function buildChurchCampaignDays(definition, bibleBooks = window.BIBLE_BOOKS || [], restWeekdays = []) {
+  const restWeekdaySet = new Set((Array.isArray(restWeekdays) ? restWeekdays : []).map(Number));
   const start = parseCampaignDate(definition.startDate);
   const end = parseCampaignDate(definition.endDate);
   if (!start || !end) return [];
@@ -174,14 +175,32 @@ function buildChurchCampaignDays(definition, bibleBooks = window.BIBLE_BOOKS || 
       const to = Number(reading.to || maxChapter);
       for (let chapter = from; chapter <= to; chapter++) chapters.push({ book: reading.book, chapter, round: 1 });
     });
-    const base = Math.floor(chapters.length / segmentDays);
-    const remainder = chapters.length % segmentDays;
+    const segmentDayIndexes = Array.from({ length: segmentDays }, (_, index) => index);
+    const readingDayIndexes = segmentDayIndexes.filter(index => {
+      const day = days[offset + index];
+      if (!day) return false;
+      const date = parseCampaignDate(day.isoDate);
+      return date && !restWeekdaySet.has(date.getDay());
+    });
+    const allocationDayIndexes = readingDayIndexes.length ? readingDayIndexes : segmentDayIndexes;
+    const base = Math.floor(chapters.length / allocationDayIndexes.length);
+    const remainder = chapters.length % allocationDayIndexes.length;
     let chapterIndex = 0;
     const stage = stageMap.get(Number(segment.stageNo));
+
     for (let index = 0; index < segmentDays; index++) {
       const day = days[offset + index];
       if (!day) continue;
-      const count = base + (index < remainder ? 1 : 0);
+      day.stageNo = Number(segment.stageNo);
+      day.campaignRound = Number(segment.roundNo);
+      day.awardName = stage ? stage.awardName : null;
+      day.segmentLabel = segment.label;
+      const readingIndex = allocationDayIndexes.indexOf(index);
+      if (readingIndex === -1) {
+        day.isRestDay = true;
+        continue;
+      }
+      const count = base + (readingIndex < remainder ? 1 : 0);
       day.chapters = chapters.slice(chapterIndex, chapterIndex + count).map(chapter => ({
         ...chapter,
         isRead: false,
@@ -189,10 +208,6 @@ function buildChurchCampaignDays(definition, bibleBooks = window.BIBLE_BOOKS || 
         isReadR2: false,
         isReadR3: false
       }));
-      day.stageNo = Number(segment.stageNo);
-      day.campaignRound = Number(segment.roundNo);
-      day.awardName = stage ? stage.awardName : null;
-      day.segmentLabel = segment.label;
       chapterIndex += count;
     }
   });

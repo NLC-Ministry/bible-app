@@ -2165,12 +2165,13 @@ const db = {
 
 
   async updateFlexiblePlanSchedule(plan, scheduleSettings) {
-    if (!plan || (plan.isFixed !== false && plan.is_fixed !== false)) {
-      return { success: false, error: new Error("Only flexible plans can change weekly schedules.") };
+    if (!plan) {
+      return { success: false, error: new Error("A plan is required.") };
     }
+    const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
 
     const weeklySchedule = normalizePlanScheduleSettings(
-      false,
+      isFixed,
       scheduleSettings && scheduleSettings.readingDaysPerWeek,
       scheduleSettings && scheduleSettings.restWeekdays
     );
@@ -2193,7 +2194,7 @@ const db = {
       plan.target_books || plan.targetBooks || [],
       plan.presetKey || plan.globalPlanId,
       plan.level || "normal",
-      false,
+      isFixed,
       weeklySchedule
     );
     const preserved = {
@@ -2202,7 +2203,9 @@ const db = {
       presetKey: plan.presetKey,
       currentRound: plan.currentRound || 1,
       level: plan.level || "normal",
-      wasDowngraded: Boolean(plan.wasDowngraded)
+      wasDowngraded: Boolean(plan.wasDowngraded),
+      isFixed,
+      is_fixed: isFixed
     };
     Object.assign(plan, rebuilt, preserved);
 
