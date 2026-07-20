@@ -1820,6 +1820,26 @@ vercel-live-feedback,
   border-color: var(--primary-color);
 }
 
+.primary-btn:focus-visible,
+.secondary-btn:focus-visible,
+.danger-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.primary-btn:active,
+.secondary-btn:active,
+.danger-btn:active {
+  transform: scale(0.98);
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled,
+.danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .danger-btn {
   background: var(--color-danger);
   color: #ffffff;
@@ -4980,6 +5000,21 @@ button.logout-btn:hover {
 }
 #plan-options-dropdown .options-dropdown-item.danger-item:hover {
   background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+
+.joined-plan-schedule-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.joined-plan-schedule-summary .nlc-icon {
+  color: var(--color-icon-muted);
+  flex-shrink: 0;
 }
 
 

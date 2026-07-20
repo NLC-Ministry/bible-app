@@ -842,32 +842,12 @@ function renderJoinedPlansList() {
             <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35;">
               ${progressText}
             </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:.65rem;margin-top:.35rem;">
-              <span style="font-size:.74rem;color:var(--text-muted);">${escapeHTML(weeklyScheduleSummary)}</span>
-              <button type="button" class="edit-flexible-schedule-btn btn-secondary"
-                style="padding:.38rem .58rem;font-size:.72rem;white-space:nowrap;">調整每週安排</button>
+            <div class="joined-plan-schedule-summary">
+              <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
+              <span>${escapeHTML(weeklyScheduleSummary)}</span>
             </div>
           </div>
         `;
-      }
-
-      const scheduleButton = card.querySelector(".edit-flexible-schedule-btn");
-      if (scheduleButton) {
-        scheduleButton.addEventListener("click", async event => {
-          event.preventDefault();
-          event.stopPropagation();
-          const scheduleSettings = await openFlexibleScheduleDialog(plan, { editing: true });
-          if (!scheduleSettings) return;
-          scheduleButton.disabled = true;
-          const result = await db.updateFlexiblePlanSchedule(plan, scheduleSettings);
-          scheduleButton.disabled = false;
-          if (!result || !result.success) {
-            showToast("儲存每週安排失敗：" + ((result && result.error && result.error.message) || "請稍後再試"));
-            return;
-          }
-          showToast("每週讀經安排已更新，章節已重新分配。");
-          renderJoinedPlansList();
-        });
       }
 
       container.appendChild(card);
@@ -925,7 +905,7 @@ function openPlanDetailsDialog(plan) {
         <dt style="color:var(--text-muted);">閱讀經卷</dt><dd style="margin:0;color:var(--text-primary);line-height:1.55;">${books.length ? escapeHTML(books.join("、")) : "依計畫排程"}</dd>
       </dl>
       ${segmentHtml ? `<h4 style="margin:1.25rem 0 .7rem;font-size:.92rem;font-weight:500;color:var(--text-primary);">每月／階段章節安排</h4><div style="display:grid;gap:.65rem;">${segmentHtml}</div>` : ""}
-      <div style="display:flex;justify-content:flex-end;margin-top:1.35rem;"><button type="button" id="plan-details-close" class="btn-primary">關閉</button></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1.35rem;"><button type="button" id="plan-details-close" class="primary-btn">關閉</button></div>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1002,8 +982,8 @@ function openFlexibleScheduleDialog(plan, options = {}) {
         <p id="flexible-schedule-summary" style="margin:.85rem 0 0;font-size:.78rem;color:var(--text-muted);"></p>
         <p id="flexible-schedule-error" role="alert" style="display:none;margin:.55rem 0 0;font-size:.78rem;color:var(--color-danger);"></p>
         <div style="display:flex;justify-content:flex-end;gap:.65rem;margin-top:1.25rem;">
-          <button type="button" id="flexible-schedule-cancel" class="btn-secondary">\u53d6\u6d88</button>
-          <button type="button" id="flexible-schedule-confirm" class="btn-primary">${isEditing ? "儲存安排" : (isUpcomingFixed ? "預先加入" : "加入計畫")}</button>
+          <button type="button" id="flexible-schedule-cancel" class="secondary-btn">\u53d6\u6d88</button>
+          <button type="button" id="flexible-schedule-confirm" class="primary-btn">${isEditing ? "儲存安排" : (isUpcomingFixed ? "預先加入" : "加入計畫")}</button>
         </div>
       </div>
     `;
@@ -4383,7 +4363,7 @@ window.displayParticipantsList = function (limit = 100) {
     `;
 
     const loadMoreBtn = document.createElement("button");
-    loadMoreBtn.className = "btn-secondary";
+    loadMoreBtn.className = "secondary-btn";
     loadMoreBtn.style.cssText = `
       padding: 0.4rem 1.2rem;
       font-size: 0.8rem;

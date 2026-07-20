@@ -153,9 +153,11 @@ describe("editable flexible weekly schedules", () => {
   const db = readFileSync(join(root, "js", "db.js"), "utf8");
   const migration = readFileSync(join(root, "supabase", "migrations", "0015_flexible_weekly_schedule.sql"), "utf8");
 
-  it("shows the saved rest weekdays and lets joined users edit them", () => {
+  it("shows saved rest weekdays in the list and edits only from the plan menu", () => {
     expect(plan).toContain("formatFlexibleScheduleSummary");
-    expect(plan).toContain("edit-flexible-schedule-btn");
+    expect(plan).toContain("joined-plan-schedule-summary");
+    expect(plan).not.toContain("edit-flexible-schedule-btn");
+    expect(plan).toContain('document.getElementById("edit-flexible-plan-schedule-btn")');
     expect(plan).toContain("openFlexibleScheduleDialog(plan, { editing: true })");
     expect(plan).toContain("db.updateFlexiblePlanSchedule");
     expect(plan).toContain("isFixedPlanUpcoming");
