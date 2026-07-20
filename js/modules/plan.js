@@ -1358,7 +1358,8 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   const year = selectedDay.year || new Date().getFullYear();
   const month = selectedDay.month || (new Date().getMonth() + 1);
   const dayOfMonth = selectedDay.date ? selectedDay.date.split('/')[1] : new Date().getDate();
-  const formattedDayText = `第 ${state.selectedPlanDay} 天`;
+  const displayDayNumber = isPlanStarted(state.activePlan) ? state.selectedPlanDay : 0;
+  const formattedDayText = "第 " + displayDayNumber + " 天";
   const formattedDateText = `${year}-${String(month).padStart(2, '0')}-${String(dayOfMonth).padStart(2, '0')}`;
 
   if (daySubtitle) {

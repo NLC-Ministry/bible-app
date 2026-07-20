@@ -145,6 +145,7 @@ function buildChurchCampaignDays(definition, bibleBooks = window.BIBLE_BOOKS || 
     date.setDate(start.getDate() + index);
     return {
       day: index + 1,
+      dayNum: index + 1,
       date: String(date.getMonth() + 1).padStart(2, "0") + "/" + String(date.getDate()).padStart(2, "0"),
       isoDate: date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0"),
       year: date.getFullYear(),

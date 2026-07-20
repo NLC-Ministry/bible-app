@@ -43,6 +43,10 @@ describe("versioned church Bible campaign", () => {
     const canonical = books.flatMap(book =>
       Array.from({ length: book.chapters }, (_, index) => book.name + ":" + (index + 1))
     );
+    const campaignDays = context.window.buildChurchCampaignDays(campaign, books);
+    expect(campaignDays[0].dayNum).toBe(1);
+    expect(campaignDays.at(-1).dayNum).toBe(campaignDays.length);
+    expect(new Set(campaignDays.map(day => day.dayNum)).size).toBe(campaignDays.length);
     expect(scheduled).toHaveLength(1189);
     expect(new Set(scheduled).size).toBe(1189);
     expect(new Set(scheduled)).toEqual(new Set(canonical));
