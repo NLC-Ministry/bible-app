@@ -1236,7 +1236,8 @@ function rebuildPlanScheduleForLevel(plan, level) {
     plan.endDate,
     plan.target_books || plan.targetBooks || [],
     plan.presetKey,
-    level
+    level,
+    plan.isFixed !== false
   );
   Object.assign(plan, {
     totalDays: rebuilt.totalDays,
@@ -1245,11 +1246,13 @@ function rebuildPlanScheduleForLevel(plan, level) {
     level,
     currentRound: getPlanLevelOrder(level),
     target_books: plan.target_books || rebuilt.target_books,
-    targetBooks: plan.targetBooks || rebuilt.targetBooks
+    targetBooks: plan.targetBooks || rebuilt.targetBooks,
+    isFixed: plan.isFixed !== false,
+    is_fixed: plan.isFixed !== false
   });
   return plan;
 }
-function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey = null, level = "normal") {
+function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey = null, level = "normal", isFixed = true) {
   const preset = presetKey ? CHURCH_PLAN_PRESETS[presetKey] : null;
 
   // 1. Calculate parseLocalDate
@@ -1353,7 +1356,9 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
       targetBooks: selectedBooks,
       level,
       currentRound: 1,
-      wasDowngraded: false
+      wasDowngraded: false,
+      isFixed,
+      is_fixed: isFixed
     };
   }
 
@@ -1452,7 +1457,9 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     target_books: selectedBooks,
     level,
     currentRound: getPlanLevelRounds(level),
-    wasDowngraded: false
+    wasDowngraded: false,
+    isFixed,
+    is_fixed: isFixed
   };
 }
 
@@ -1468,12 +1475,14 @@ function calculatePlanProgress() {
 
 function isPlanStarted(plan) {
   if (!plan) return false;
+  if (plan.isFixed === false || plan.is_fixed === false) return true;
   const todayStr = new Date().toISOString().split('T')[0];
   return todayStr >= plan.startDate;
 }
 
 function isPlanExpired(plan) {
   if (!plan || !plan.endDate) return false;
+  if (plan.isFixed === false || plan.is_fixed === false) return false;
   const todayStr = new Date().toISOString().split('T')[0];
   return todayStr > plan.endDate;
 }

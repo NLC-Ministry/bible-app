@@ -740,15 +740,17 @@ const db = {
         if (plans && plans.length > 0) {
           plans.forEach(dbPlan => {
             try {
-              // 優先用 global_plan_id（UUID）連結 global_plans；其次用 preset_key；最後 fallback 到名稱查找（舊資料相容）
               const globalPlanId = dbPlan.global_plan_id || null;
               const key = dbPlan.preset_key
                 || (globalPlanId ? globalPlanId : null)
                 || getPresetKeyByName(dbPlan.name);
 
-              const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, dbPlan.level || 'normal');
+              const isFixed = dbPlan.is_fixed !== false;
+              const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, dbPlan.level || 'normal', isFixed);
               planObj.id = dbPlan.id;
-              planObj.globalPlanId = globalPlanId;  // ?? UUID ??
+              planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯
+              planObj.isFixed = isFixed;
+              planObj.is_fixed = isFixed;
               const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
               planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
               planObj.level = dbPlan.level || 'normal';
@@ -2077,7 +2079,11 @@ const db = {
     let endDate = preset.endDate;
     const selectedBooks = preset.books;
 
-    if (key && !key.startsWith("m_")) {
+    // 優先用 globalPlan 查詢，並確定是否為固定時間計畫
+    const globalPlan = (state.globalPlans || []).find(gp => gp.id === key || gp.presetKey === key);
+    const isFixed = globalPlan ? globalPlan.isFixed !== false : true;
+
+    if (!isFixed) {
       const getLocalDateString = (d) => {
         const y = d.getFullYear();
         const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -2118,7 +2124,8 @@ const db = {
             current_round: 1,
             was_downgraded: false,
             downgrade_locked_until: null,
-            upgrade_prompt_handled: false
+            upgrade_prompt_handled: false,
+            is_fixed: isFixed
           };
 
           // 若是來自月度預設計畫，自動關聯到 global_plans 中的 9 大分類模板 UUID
@@ -2146,11 +2153,14 @@ const db = {
           if (existingError) throw existingError;
 
           if (existingPlan) {
-            newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
+            const existingIsFixed = existingPlan.is_fixed !== false;
+            newPlanObj = generatePlanObject(planName, existingPlan.start_date, existingPlan.end_date, selectedBooks, key, 'normal', existingIsFixed);
             newPlanObj.id = existingPlan.id;
             newPlanObj.globalPlanId = existingPlan.global_plan_id || null;
             newPlanObj.level = existingPlan.level || newPlanObj.level || "normal";
             newPlanObj.currentRound = existingPlan.current_round || 1;
+            newPlanObj.isFixed = existingIsFixed;
+            newPlanObj.is_fixed = existingIsFixed;
             if (!state.activePlans) state.activePlans = [];
             if (!state.activePlans.some(p => p.id === newPlanObj.id)) state.activePlans.push(newPlanObj);
             state.activePlan = newPlanObj;
@@ -2165,15 +2175,18 @@ const db = {
             if (error) {
               console.error("Failed to insert plan in Supabase:", error);
               loader.hide();
-              showToast("\u52a0\u5165\u8b80\u7d93\u8a08\u756b\u5931\u6557\uff1a" + (error.message || error.error || error));
+              showToast("加入讀經計畫失敗：" + (error.message || error.error || error));
               return null;
             }
 
             if (!dbPlan) throw new Error("No plan returned after insert.");
 
-            newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
+            const dbIsFixed = dbPlan.is_fixed !== false;
+            newPlanObj = generatePlanObject(planName, dbPlan.start_date, dbPlan.end_date, selectedBooks, key, 'normal', dbIsFixed);
             newPlanObj.id = dbPlan.id;
             newPlanObj.globalPlanId = dbPlan.global_plan_id || null;
+            newPlanObj.isFixed = dbIsFixed;
+            newPlanObj.is_fixed = dbIsFixed;
             if (!state.activePlans) state.activePlans = [];
             state.activePlans.push(newPlanObj);
             state.activePlan = newPlanObj;
@@ -2183,11 +2196,13 @@ const db = {
       } catch (e) {
         console.error("Error inserting plan in Supabase:", e);
         loader.hide();
-        showToast("\u52a0\u5165\u8b80\u7d93\u8a08\u756b\u5931\u6557\uff1a" + (e.message || e));
+        showToast("加入讀經計畫失敗：" + (e.message || e));
         return null;
       }
     } else {
-      newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key);
+      newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key, 'normal', isFixed);
+      newPlanObj.isFixed = isFixed;
+      newPlanObj.is_fixed = isFixed;
       if (!state.activePlans) state.activePlans = [];
       state.activePlans.push(newPlanObj);
       state.activePlan = newPlanObj;
@@ -2310,7 +2325,9 @@ const db = {
             endDate: dbPlan.end_date,
             books: dbPlan.target_books,
             presetKey: dbPlan.id,
-            isHidden: Boolean(dbPlan.is_hidden)
+            isHidden: Boolean(dbPlan.is_hidden),
+            isFixed: dbPlan.is_fixed !== false,
+            is_fixed: dbPlan.is_fixed !== false
           }));
           return;
         }
@@ -2329,13 +2346,17 @@ const db = {
         endDate: p.endDate,
         books: p.books,
         presetKey: key,
-        isHidden: Boolean(p.isHidden || p.is_hidden)
+        isHidden: Boolean(p.isHidden || p.is_hidden),
+        isFixed: p.isFixed !== false,
+        is_fixed: p.isFixed !== false
       }));
       // 自訂計畫：排除掉 presetKey 為 q1~q4 的項目避免重複
       const customPlans = loadedList.filter(p => !presetKeys.includes(p.presetKey) && !presetKeys.includes(p.id));
       return [...presetPlans, ...customPlans].map(plan => ({
         ...plan,
-        isHidden: Boolean(plan.isHidden || plan.is_hidden)
+        isHidden: Boolean(plan.isHidden || plan.is_hidden),
+        isFixed: plan.isFixed !== false,
+        is_fixed: plan.isFixed !== false
       }));
     };
 
@@ -2356,7 +2377,8 @@ const db = {
           name: plan.name,
           start_date: plan.startDate,
           end_date: plan.endDate,
-          target_books: plan.books
+          target_books: plan.books,
+          is_fixed: plan.isFixed !== false
         };
 
         let error;
@@ -2369,14 +2391,18 @@ const db = {
 
           if (!error) {
             // 💡 同步更新所有使用者對應的全域計畫 copy
+            const updatePayload = {
+              name: payload.name,
+              target_books: payload.target_books,
+              is_fixed: payload.is_fixed
+            };
+            if (payload.is_fixed) {
+              updatePayload.start_date = payload.start_date;
+              updatePayload.end_date = payload.end_date;
+            }
             const syncRes = await state.supabase
               .from("reading_plans")
-              .update({
-                name: payload.name,
-                start_date: payload.start_date,
-                end_date: payload.end_date,
-                target_books: payload.target_books
-              })
+              .update(updatePayload)
               .eq("global_plan_id", plan.id);
             if (syncRes.error) {
               console.error("Failed to sync updates to user reading_plans:", syncRes.error);

@@ -2146,6 +2146,25 @@ function initAdminPlanManagement() {
     };
   }
 
+  // Bind schedule time type radios change
+  const typeRadios = document.getElementsByName("admin-plan-time-type");
+  const dateInputs = document.getElementById("admin-plan-date-inputs");
+  const durationContainer = document.getElementById("admin-plan-duration-container");
+
+  const toggleTimeTypeFields = (type) => {
+    if (type === "flexible") {
+      if (dateInputs) dateInputs.style.display = "none";
+      if (durationContainer) durationContainer.style.display = "block";
+    } else {
+      if (dateInputs) dateInputs.style.display = "grid";
+      if (durationContainer) durationContainer.style.display = "none";
+    }
+  };
+
+  typeRadios.forEach(radio => {
+    radio.onchange = (e) => toggleTimeTypeFields(e.target.value);
+  });
+
   // Toggle Form
   addBtn.onclick = () => {
     document.getElementById("admin-plan-form-title").textContent = "新增讀經計畫";
@@ -2153,6 +2172,14 @@ function initAdminPlanManagement() {
     document.getElementById("admin-plan-name").value = "";
     document.getElementById("admin-plan-start-date").value = "";
     document.getElementById("admin-plan-end-date").value = "";
+    const durationInput = document.getElementById("admin-plan-duration-days");
+    if (durationInput) durationInput.value = "";
+
+    // Set fixed as default
+    const fixedRadio = document.querySelector('input[name="admin-plan-time-type"][value="fixed"]');
+    if (fixedRadio) fixedRadio.checked = true;
+    toggleTimeTypeFields("fixed");
+
     document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
     formContainer.classList.remove("hidden");
   };
@@ -2165,8 +2192,48 @@ function initAdminPlanManagement() {
   saveBtn.onclick = async () => {
     const id = document.getElementById("admin-edit-plan-id").value;
     const name = document.getElementById("admin-plan-name").value.trim();
-    const startDate = document.getElementById("admin-plan-start-date").value;
-    const endDate = document.getElementById("admin-plan-end-date").value;
+
+    // Determine time type selection
+    const checkedRadio = document.querySelector('input[name="admin-plan-time-type"]:checked');
+    const isFixed = checkedRadio ? checkedRadio.value === "fixed" : true;
+
+    let startDate = "";
+    let endDate = "";
+
+    if (isFixed) {
+      startDate = document.getElementById("admin-plan-start-date").value;
+      endDate = document.getElementById("admin-plan-end-date").value;
+
+      if (!startDate || !endDate) {
+        alert("請選擇計畫開始與結束日期！");
+        return;
+      }
+      if (new Date(startDate) > new Date(endDate)) {
+        alert("開始日期不可晚於結束日期！");
+        return;
+      }
+    } else {
+      const durationVal = document.getElementById("admin-plan-duration-days").value;
+      const durationDays = parseInt(durationVal);
+      if (!durationVal || isNaN(durationDays) || durationDays <= 0) {
+        alert("請輸入有效的計畫總天數！");
+        return;
+      }
+
+      // Generate start/end dates for the template starting today to satisfy database constraints
+      const getLocalDateString = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      const today = new Date();
+      startDate = getLocalDateString(today);
+      const end = new Date(today);
+      end.setDate(today.getDate() + durationDays - 1);
+      endDate = getLocalDateString(end);
+    }
 
     const checkedBooks = [];
     document.querySelectorAll(".admin-book-checkbox:checked").forEach(cb => {
@@ -2175,14 +2242,6 @@ function initAdminPlanManagement() {
 
     if (!name) {
       alert("請輸入計畫名稱！");
-      return;
-    }
-    if (!startDate || !endDate) {
-      alert("請選擇計畫開始與結束日期！");
-      return;
-    }
-    if (new Date(startDate) > new Date(endDate)) {
-      alert("開始日期不可晚於結束日期！");
       return;
     }
     if (checkedBooks.length === 0) {
@@ -2196,7 +2255,8 @@ function initAdminPlanManagement() {
       name,
       startDate,
       endDate,
-      books: checkedBooks
+      books: checkedBooks,
+      isFixed: isFixed
     });
     loader.hide();
 
@@ -2250,6 +2310,21 @@ async function renderAdminPlanManagement() {
       const bookListText = plan.books.join(", ");
       const bookCount = plan.books.length;
       const hidden = isPlanHidden(plan);
+      const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
+
+      let timeColHtml = "";
+      if (isFixed) {
+        timeColHtml = `
+          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
+          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
+        `;
+      } else {
+        const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+        timeColHtml = `
+          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> 彈性時間</span>
+          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">共 ${duration} 天</span>
+        `;
+      }
 
       tr.innerHTML = `
         <td>
@@ -2259,8 +2334,7 @@ async function renderAdminPlanManagement() {
           </span>
         </td>
         <td>
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
+          ${timeColHtml}
         </td>
         <td style="text-align: center; vertical-align: middle;">
           <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
@@ -2275,8 +2349,29 @@ async function renderAdminPlanManagement() {
         document.getElementById("admin-plan-form-title").textContent = "編輯讀經計畫";
         document.getElementById("admin-edit-plan-id").value = plan.id;
         document.getElementById("admin-plan-name").value = plan.name;
-        document.getElementById("admin-plan-start-date").value = plan.startDate;
-        document.getElementById("admin-plan-end-date").value = plan.endDate;
+
+        // Set radio button and fields visibility
+        const fixedRadio = document.querySelector('input[name="admin-plan-time-type"][value="fixed"]');
+        const flexRadio = document.querySelector('input[name="admin-plan-time-type"][value="flexible"]');
+        const dateInputs = document.getElementById("admin-plan-date-inputs");
+        const durationContainer = document.getElementById("admin-plan-duration-container");
+
+        if (isFixed) {
+          if (fixedRadio) fixedRadio.checked = true;
+          document.getElementById("admin-plan-start-date").value = plan.startDate;
+          document.getElementById("admin-plan-end-date").value = plan.endDate;
+          document.getElementById("admin-plan-duration-days").value = "";
+          if (dateInputs) dateInputs.style.display = "grid";
+          if (durationContainer) durationContainer.style.display = "none";
+        } else {
+          if (flexRadio) flexRadio.checked = true;
+          const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
+          document.getElementById("admin-plan-duration-days").value = duration;
+          document.getElementById("admin-plan-start-date").value = "";
+          document.getElementById("admin-plan-end-date").value = "";
+          if (dateInputs) dateInputs.style.display = "none";
+          if (durationContainer) durationContainer.style.display = "block";
+        }
 
         // Check corresponding books
         document.querySelectorAll(".admin-book-checkbox").forEach(cb => {

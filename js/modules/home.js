@@ -260,11 +260,34 @@ export function updateDashboardView() {
     const todayYear = now.getFullYear();
     const todayMonth = now.getMonth() + 1;
     const todayDay = now.getDate();
-    const todayDayObj = state.activePlan.days.find(d => {
-      if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
-      const parts = d.date.split('/');
-      return parts.length === 2 && Number(parts[1]) === todayDay;
-    });
+
+    const isFixed = state.activePlan.isFixed !== false && state.activePlan.is_fixed !== false;
+
+    let todayDayObj = null;
+    if (isFixed) {
+      todayDayObj = state.activePlan.days.find(d => {
+        if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+        const parts = d.date.split('/');
+        return parts.length === 2 && Number(parts[1]) === todayDay;
+      });
+    } else {
+      // 彈性時間計畫：指向第一個未完成的讀經天數
+      todayDayObj = state.activePlan.days.find(d => {
+        const currentRound = state.activePlan.currentRound || 1;
+        return d.chapters && d.chapters.some(ch => {
+          const taskRound = ch.round || currentRound;
+          let isRead = false;
+          if (taskRound === 1) isRead = ch.isReadR1 || ch.isRead;
+          else if (taskRound === 2) isRead = ch.isReadR2;
+          else if (taskRound >= 3) isRead = ch.isReadR3;
+          else isRead = ch.isRead;
+          return !isRead;
+        });
+      });
+      if (!todayDayObj) {
+        todayDayObj = state.activePlan.days[state.activePlan.days.length - 1];
+      }
+    }
 
     let todayTotalCount = 0;
     let todayReadCount = 0;
@@ -282,6 +305,12 @@ export function updateDashboardView() {
       });
     }
 
+    const periodHtml = isFixed
+      ? `計畫週期: ${state.activePlan.startDate} ~ ${state.activePlan.endDate} (${state.activePlan.totalDays} 天)`
+      : `計畫類型: 彈性時間 (共 ${state.activePlan.totalDays} 天)`;
+
+    const progressLabel = isFixed ? "今日進度" : `第 ${todayDayObj ? todayDayObj.dayNum : 1} 天`;
+
     planSummaryDiv.innerHTML = `
       <div class="plan-progress-header">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
@@ -292,7 +321,7 @@ export function updateDashboardView() {
       }
         </div>
         <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.2rem;">
-          計畫週期: ${state.activePlan.startDate} ~ ${state.activePlan.endDate} (${state.activePlan.totalDays} 天)
+          ${periodHtml}
         </p>
         <div class="plan-progress-wrapper plan-progress-wrapper--spaced">
           <div class="plan-progress-bar" style="width: ${progress}%;"></div>
@@ -315,7 +344,7 @@ export function updateDashboardView() {
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--brand">
               <span class="nlc-icon dashboard-stat-strip__icon" data-icon="bookOpen" aria-hidden="true"></span>${todayReadCount}/${todayTotalCount} 章
             </span>
-            <span class="dashboard-stat-strip__label">今日進度</span>
+            <span class="dashboard-stat-strip__label">${progressLabel}</span>
           </div>
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">

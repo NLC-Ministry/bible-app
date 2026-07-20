@@ -618,11 +618,26 @@
                 <input type="hidden" id="admin-edit-plan-id">
                 <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱"
                   style="font-size: 0.85rem; padding: 0.4rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div class="form-group" style="display: flex; gap: 1rem; align-items: center; font-size: 0.85rem; color: var(--text-primary);">
+                  <span style="font-weight: 500;">排程類型：</span>
+                  <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
+                    <input type="radio" name="admin-plan-time-type" value="fixed" checked style="cursor: pointer; margin: 0;">
+                    固定時間
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
+                    <input type="radio" name="admin-plan-time-type" value="flexible" style="cursor: pointer; margin: 0;">
+                    非固定時間
+                  </label>
+                </div>
+                <div id="admin-plan-date-inputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                   <input type="date" id="admin-plan-start-date" class="form-control"
                     style="font-size: 0.85rem; padding: 0.4rem;">
                   <input type="date" id="admin-plan-end-date" class="form-control"
                     style="font-size: 0.85rem; padding: 0.4rem;">
+                </div>
+                <div id="admin-plan-duration-container" style="display: none;">
+                  <input type="number" id="admin-plan-duration-days" class="form-control" placeholder="計畫總天數 (例如 90)"
+                    style="font-size: 0.85rem; padding: 0.4rem; width: 100%;" min="1">
                 </div>
                 <div class="form-group">
                   <div style="display: flex; gap: 0.2rem; margin-bottom: 0.4rem; justify-content: space-between;">
@@ -1901,7 +1916,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260719_plan_participant_stats"></script>
+  <script type="module" src="js/app.js?v=20260720_fixed_flexible_plans"></script>
 </body>
 
 </html>

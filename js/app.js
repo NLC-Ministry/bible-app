@@ -12,7 +12,7 @@ import './design/icons.js';
 import './state.js';
 import './auth.js';
 import './db.js';
-import './utils.js?v=20260709_badge_back';
+import './utils.js?v=20260720_fixed_flexible_plans';
 import './gamification.js';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
