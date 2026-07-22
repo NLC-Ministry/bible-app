@@ -847,7 +847,7 @@ const db = {
 
         this.calculateStreak();
         if (typeof checkAchievements !== 'undefined') {
-          await checkAchievements();
+          await checkAchievements(true);
         }
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
@@ -1016,7 +1016,7 @@ const db = {
 
         this.calculateStreak();
         if (typeof checkAchievements !== 'undefined') {
-          await checkAchievements();
+          await checkAchievements(true);
         }
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
