@@ -10,12 +10,20 @@
   };
   const isSupportedPlan = plan => !!plan && plan.planKind === "church_campaign_stage" && /^[0-9a-f-]{36}$/i.test(getPlanId(plan));
 
+  function removeOverlay(overlay) {
+    overlay?.remove();
+    if (!document.querySelector(".reading-team-overlay")) {
+      document.body.classList.remove("reading-team-modal-open");
+    }
+  }
+
   function createOverlay(id, labelledBy) {
-    document.getElementById(id)?.remove();
+    removeOverlay(document.getElementById(id));
     const overlay = document.createElement("div");
     overlay.id = id;
     overlay.className = "modal-overlay reading-team-overlay";
     overlay.innerHTML = `<section class="reading-team-dialog glass-card" role="dialog" aria-modal="true" aria-labelledby="${labelledBy}"></section>`;
+    document.body.classList.add("reading-team-modal-open");
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -35,27 +43,29 @@
     return new Promise(resolve => {
       const overlay = createOverlay("reading-team-choice-dialog", "reading-team-choice-title");
       const panel = overlay.firstElementChild;
+      panel.classList.add("reading-team-dialog--choice");
+      panel.setAttribute("aria-describedby", "reading-team-choice-description");
       panel.innerHTML = `
         <header class="reading-team-dialog__header">
           <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-choice-title">選擇參加方式</h3></div>
           <button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
-        <p class="reading-team-dialog__intro">每個人仍保有自己的讀經進度；選擇團隊後，可以和固定隊員查看共同完成狀況。</p>
+        <p class="reading-team-dialog__intro" id="reading-team-choice-description">每個人仍保有自己的讀經進度；選擇團隊後，可以和固定隊員查看共同完成狀況。</p>
         <div class="reading-team-choice-grid">
           <button type="button" class="reading-team-choice" data-team-mode="personal">
             <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="user" aria-hidden="true"></span></span>
-            <strong>個人參加</strong><span>只顯示自己的讀經進度</span>
+            <span class="reading-team-choice__body"><strong>個人參加</strong><span class="reading-team-choice__description">只顯示自己的讀經進度</span></span><span class="reading-team-choice__arrow"><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
           </button>
           <button type="button" class="reading-team-choice" data-team-mode="team" data-division="3">
             <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
-            <strong>3 人組</strong><span>固定三人，滿員後完成組隊</span>
+            <span class="reading-team-choice__body"><strong>3 人組</strong><span class="reading-team-choice__description">固定三人，滿員後完成組隊</span></span><span class="reading-team-choice__arrow"><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
           </button>
           <button type="button" class="reading-team-choice" data-team-mode="team" data-division="6">
             <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
-            <strong>6 人組</strong><span>固定六人，滿員後完成組隊</span>
+            <span class="reading-team-choice__body"><strong>6 人組</strong><span class="reading-team-choice__description">固定六人，滿員後完成組隊</span></span><span class="reading-team-choice__arrow"><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
           </button>
         </div>`;
-      const finish = value => { overlay.remove(); resolve(value); };
+      const finish = value => { removeOverlay(overlay); resolve(value); };
       panel.querySelector("[data-team-close]").onclick = () => finish(null);
       panel.querySelectorAll("[data-team-mode]").forEach(button => {
         button.onclick = () => finish({
@@ -100,7 +110,7 @@
     let preferredDivision = [3, 6].includes(Number(options.preferredDivision)) ? Number(options.preferredDivision) : 3;
     let closed = false;
 
-    const close = () => { closed = true; overlay.remove(); };
+    const close = () => { closed = true; removeOverlay(overlay); };
     closeOnBackdrop(overlay, close);
 
     const renderLoading = () => {
@@ -259,7 +269,7 @@
     if (!isSupportedPlan(plan)) return null;
     const overlay = createOverlay("reading-team-admin-dialog", "reading-team-admin-title");
     const panel = overlay.firstElementChild;
-    const close = () => overlay.remove();
+    const close = () => removeOverlay(overlay);
     closeOnBackdrop(overlay, close);
     panel.innerHTML = `<div class="reading-team-loading"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span><span>正在整理競賽團隊統計…</span></div>`;
     hydrate(panel);

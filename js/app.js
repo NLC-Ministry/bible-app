@@ -16,7 +16,7 @@ import './db.js?v=20260722_admin_role';
 import './utils.js?v=20260722_admin_role';
 import './gamification.js?v=20260720_complete_svg_badges';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
-import './modules/team-registration.js?v=20260722_admin_role';
+import './modules/team-registration.js?v=20260722_modal_layout';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';

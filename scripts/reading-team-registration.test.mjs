@@ -8,6 +8,7 @@ const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
 const teamUi = read("js/modules/team-registration.js");
+const teamCss = read("css/team-registration.css");
 const html = read("index.html");
 
 describe("reading competition team schema", () => {
@@ -77,6 +78,16 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("只有同隊成員可查看");
     expect(teamUi).toContain("系統不會只用姓名建立成員");
     expect(db).toContain("尚未找到你的會員資料");
+  });
+
+  it("renders the participation chooser above fixed app navigation", () => {
+    expect(teamCss).toMatch(/\.reading-team-overlay[\s\S]*position: fixed/);
+    expect(teamCss).toContain("inset: 0");
+    expect(teamCss).toContain("z-index: var(--z-modal, 700)");
+    expect(teamCss).toMatch(/@media \(max-width: 640px\)[\s\S]*align-items: flex-end/);
+    expect(teamUi).toContain("reading-team-modal-open");
+    expect(teamUi).toContain("reading-team-dialog--choice");
+    expect(teamUi).toContain('data-icon="chevronRight"');
   });
 
   it("connects joining and the plan options menu to My Team", () => {
