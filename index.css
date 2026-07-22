@@ -9584,3 +9584,130 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
 }
+
+
+/* Admin campaign round editor */
+.campaign-rule-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 0.6rem;
+}
+
+.campaign-rule-section-heading h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: var(--type-weight-strong);
+}
+
+.campaign-rule-section-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.campaign-rule-section-heading--schedule {
+  margin-top: 1.25rem;
+}
+
+.campaign-add-stage-btn {
+  min-height: 40px;
+  padding: 0.55rem 0.85rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.campaign-editor-table {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  scrollbar-color: var(--border-card) transparent;
+}
+
+.campaign-stage-columns,
+.campaign-stage-row {
+  display: grid;
+  grid-template-columns: 64px minmax(180px, 1.35fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.1fr) minmax(150px, 1fr) 48px;
+  gap: 0.45rem;
+  min-width: 1080px;
+  align-items: center;
+}
+
+.campaign-segment-columns,
+.campaign-segment-row {
+  display: grid;
+  grid-template-columns: 64px 130px minmax(155px, 1fr) minmax(155px, 1fr) minmax(330px, 2.2fr);
+  gap: 0.45rem;
+  min-width: 900px;
+  align-items: center;
+}
+
+.campaign-stage-columns,
+.campaign-segment-columns {
+  padding: 0 0.2rem 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: var(--type-weight-strong);
+}
+
+#campaign-stage-rows,
+#campaign-segment-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.campaign-stage-row,
+.campaign-segment-row {
+  padding: 0.45rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+}
+
+.campaign-stage-row .form-control,
+.campaign-segment-row .form-control {
+  min-width: 0;
+  background: var(--bg-card);
+}
+
+.campaign-stage-remove {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.campaign-stage-remove:hover {
+  background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+}
+
+.campaign-stage-remove:active {
+  transform: scale(0.96);
+}
+
+.campaign-stage-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+@media (max-width: 720px) {
+  .campaign-rule-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .campaign-add-stage-btn {
+    width: 100%;
+  }
+}

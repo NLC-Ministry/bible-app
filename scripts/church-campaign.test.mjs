@@ -277,3 +277,38 @@ describe("joined plan options menu", () => {
 
   });
 });
+
+
+describe("admin campaign round editor", () => {
+  const editor = readFileSync(join(root, "js", "modules", "campaign-rule-editor.js"), "utf8");
+  const css = readFileSync(join(root, "index.css"), "utf8");
+  const db = readFileSync(join(root, "js", "db.js"), "utf8");
+  const cleanupMigration = readFileSync(join(root, "supabase", "migrations", "0018_cleanup_removed_campaign_stages.sql"), "utf8");
+
+  it("labels every date purpose and supports adding and removing rounds", () => {
+    expect(editor).toContain("閱讀開始日期");
+    expect(editor).toContain("閱讀結束日期");
+    expect(editor).toContain("測驗／頒獎日期（選填）");
+    expect(editor).toContain('id="campaign-add-stage"');
+    expect(editor).toContain("data-remove-stage");
+    expect(editor).toContain("renderStageRow");
+    expect(editor).toContain("renderSegmentRow");
+    expect(editor).toContain("若已有參加者，該輪進度與打卡紀錄會在發布後一併刪除");
+    expect(css).toContain(".campaign-stage-columns");
+    expect(css).toContain(".campaign-stage-remove");
+  });
+
+  it("publishes atomically to Supabase and removes deleted materialized stages", () => {
+    expect(editor).toContain("db.publishCampaignRules(plan, next)");
+    expect(editor).toContain("完成 Supabase 儲存驗證");
+    expect(db).toContain('.rpc("publish_global_plan_rules"');
+    expect(db).toContain('.select("id, rules, rule_version")');
+    expect(db).toContain("materializedStageNumbers");
+    expect(db).toContain("persistenceVerified");
+    expect(cleanupMigration).toContain("cleanup_removed_church_campaign_stages");
+    expect(cleanupMigration).toContain("DELETE FROM public.reading_plans");
+    expect(cleanupMigration).toContain("DELETE FROM public.global_plans");
+    expect(cleanupMigration).toContain("AFTER UPDATE OF rules");
+    expect(cleanupMigration).toContain("parentCampaignId");
+  });
+});

@@ -12,15 +12,15 @@ import './design/icon-registry.js';
 import './design/icons.js';
 import './state.js?v=20260720_complete_svg_badges';
 import './auth.js';
-import './db.js?v=20260720_complete_svg_badges';
+import './db.js?v=20260720_round_editor';
 import './utils.js?v=20260720_complete_svg_badges';
 import './gamification.js?v=20260720_complete_svg_badges';
-import './modules/campaign-rule-editor.js';
+import './modules/campaign-rule-editor.js?v=20260720_round_editor';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 
-const buildVersion = "__BUILD_VERSION__" + "_weekly_action_ui";
+const buildVersion = "__BUILD_VERSION__" + "_round_editor";
 const moduleCache = {};
 
 async function loadModule(name, path) {

@@ -2463,10 +2463,15 @@ const db = {
     nextDefinition.id = plan.id || window.CHURCH_CAMPAIGN_ID;
     nextDefinition.presetKey = window.CHURCH_CAMPAIGN_PRESET_KEY;
     nextDefinition.planKind = "church_campaign";
+    const campaignId = plan.id || window.CHURCH_CAMPAIGN_ID;
+    let persistenceVerified = false;
+    let persistenceVerificationError = null;
+    let storage = "local";
 
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      storage = "supabase";
       const { data, error } = await state.supabase.rpc("publish_global_plan_rules", {
-        p_plan_id: plan.id,
+        p_plan_id: campaignId,
         p_expected_version: Number(plan.ruleVersion || 1),
         p_definition: nextDefinition
       });
@@ -2478,6 +2483,49 @@ const db = {
         return { success: false, validation, error };
       }
       nextDefinition.version = Number(data || plan.ruleVersion + 1);
+
+      const parseStoredRules = value => {
+        if (!value || typeof value !== "string") return value || {};
+        try { return JSON.parse(value); } catch (_) { return {}; }
+      };
+      const expectedStageNumbers = nextDefinition.stages.map(stage => Number(stage.stageNo)).sort((a, b) => a - b);
+      const masterResult = await state.supabase
+        .from("global_plans")
+        .select("id, rules, rule_version")
+        .eq("id", campaignId)
+        .single();
+      const stageResult = await state.supabase
+        .from("global_plans")
+        .select("id, rules, rule_version, plan_kind")
+        .eq("plan_kind", "church_campaign_stage");
+
+      const storedRules = parseStoredRules(masterResult.data && masterResult.data.rules);
+      const storedStageNumbers = Array.isArray(storedRules.stages)
+        ? storedRules.stages.map(stage => Number(stage.stageNo)).sort((a, b) => a - b)
+        : [];
+      const materializedStageNumbers = (stageResult.data || []).map(item => ({
+        item,
+        rules: parseStoredRules(item.rules)
+      })).filter(entry => String(entry.rules.parentCampaignId || "") === String(campaignId))
+        .map(entry => Number(entry.rules.stageNo))
+        .sort((a, b) => a - b);
+      const sameStageNumbers = list => list.length === expectedStageNumbers.length
+        && list.every((stageNo, index) => stageNo === expectedStageNumbers[index]);
+
+      persistenceVerified = !masterResult.error
+        && !stageResult.error
+        && Number(masterResult.data && masterResult.data.rule_version) === nextDefinition.version
+        && sameStageNumbers(storedStageNumbers)
+        && sameStageNumbers(materializedStageNumbers);
+      if (!persistenceVerified) {
+        persistenceVerificationError = masterResult.error || stageResult.error || new Error("campaign_persistence_verification_failed");
+        console.error("Campaign rules were published but Supabase verification did not match:", {
+          persistenceVerificationError,
+          expectedStageNumbers,
+          storedStageNumbers,
+          materializedStageNumbers
+        });
+      }
     } else {
       nextDefinition.version = Number(plan.ruleVersion || 1) + 1;
       localStorage.setItem("church_campaign_override", JSON.stringify(nextDefinition));
@@ -2486,11 +2534,12 @@ const db = {
         const preset = CHURCH_PLAN_PRESETS[stage.presetKey];
         if (preset) Object.assign(preset, stage, { campaignDefinition: window.cloneChurchCampaign(stage) });
       });
+      persistenceVerified = true;
     }
 
     this._userDataPromise = null;
     await this.loadGlobalPlans();
-    return { success: true, validation, version: nextDefinition.version };
+    return { success: true, validation, version: nextDefinition.version, storage, persistenceVerified, persistenceVerificationError };
   },
 
   async saveGlobalPlan(plan) {
