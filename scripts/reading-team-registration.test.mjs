@@ -6,6 +6,7 @@ const migration = read("supabase/migrations/0019_reading_team_registration.sql")
 const forwardMigration = read("supabase/migrations/0021_enforce_reading_team_uuid_links.sql");
 const dualDivisionMigration = read("supabase/migrations/0022_allow_both_team_divisions.sql");
 const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_reminders.sql");
+const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -85,6 +86,14 @@ describe("reading competition team schema", () => {
     expect(peerReminderMigration).toContain("auth.uid() IS NOT NULL");
     expect(peerReminderMigration).not.toMatch(/UPDATE\s+public\.(profiles|small_groups|pastoral_zones)/i);
   });
+
+  it("returns the same roster metrics needed by organisation member status", () => {
+    expect(rosterStatsMigration).toContain("'longestStreak'");
+    expect(rosterStatsMigration).toContain("'readingLogs'");
+    expect(rosterStatsMigration).toContain("ROW_NUMBER() OVER (ORDER BY read_day)");
+    expect(rosterStatsMigration).toContain("membership.team_id = selected_team.id");
+    expect(rosterStatsMigration).not.toMatch(/ALTER\s+TABLE\s+public\.(profiles|small_groups|pastoral_zones)/i);
+  });
 });
 
 describe("NLC and browser integration", () => {
@@ -120,6 +129,11 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("使用邀請碼加入團隊");
     expect(teamUi).toContain("team.inviteCode");
     expect(teamUi).toContain("renderTeamStatGrid");
+    expect(teamUi).toContain("renderTeamMemberRoster");
+    expect(teamUi).toContain("最高連續");
+    expect(teamUi).toContain("累計完成");
+    expect(teamUi).toContain("補讀");
+    expect(teamUi).toContain("進度狀態");
     expect(teamUi).toContain("data-team-remind-user");
     expect(db).toContain("sendReadingTeamReminder");
     expect(teamUi).toContain("加入後，你可以查看自己的團隊與夥伴進度");

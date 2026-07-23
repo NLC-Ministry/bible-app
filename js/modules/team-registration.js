@@ -148,6 +148,94 @@
       .reduce((sum, day) => sum + (Array.isArray(day.chapters) ? day.chapters.length : 0), 0));
   }
 
+  function toLocalDateKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function getTeamMemberRosterMetrics(member, plan) {
+    const days = Array.isArray(plan && plan.days) ? plan.days : [];
+    const logs = Array.isArray(member.readingLogs) ? member.readingLogs : [];
+    const roundOneLogs = logs.filter(log => Number(log.round || 1) === 1);
+    const currentRound = Number(member.currentRound || 1);
+    const start = new Date(`${plan && plan.startDate || ""}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expectedDays = Number.isNaN(start.getTime())
+      ? 0
+      : Math.max(0, Math.min(days.length, Math.floor((today - start) / 86400000) + 1));
+
+    const completedDetails = days.map((day, index) => {
+      const chapters = Array.isArray(day.chapters) ? day.chapters : [];
+      if (!chapters.length) return null;
+      const matchedLogs = chapters.map(chapter => roundOneLogs.find(log =>
+        String(log.book) === String(chapter.book) && Number(log.chapter) === Number(chapter.chapter)
+      ));
+      if (matchedLogs.some(log => !log)) return null;
+      const scheduled = new Date(start);
+      scheduled.setDate(start.getDate() + index);
+      const latestRead = matchedLogs.reduce((latest, log) => {
+        const key = toLocalDateKey(log.readAt);
+        return key > latest ? key : latest;
+      }, "");
+      return { scheduled: toLocalDateKey(scheduled), latestRead };
+    }).filter(Boolean);
+
+    const readingDayCount = days.filter(day => Array.isArray(day.chapters) && day.chapters.length > 0).length;
+    const completed = currentRound > 1 ? readingDayCount : completedDetails.length;
+    const makeup = completedDetails.filter(item => item.latestRead > item.scheduled).length;
+    const diff = completed - expectedDays;
+    const currentProgress = Number(member.chaptersRead || 0);
+    let statusStr = "未開始";
+    let statusClass = "reading-team-status--muted";
+
+    if (member.hasJoinedPlan && currentRound > 1) {
+      statusStr = `超前第${currentRound}遍`;
+      statusClass = "reading-team-status--ahead";
+    } else if (member.hasJoinedPlan && currentProgress > 0 && diff > 0) {
+      statusStr = `超前 ${diff} 天`;
+      statusClass = "reading-team-status--ahead";
+    } else if (member.hasJoinedPlan && currentProgress > 0 && diff < 0) {
+      statusStr = diff === -1 ? "今日未完成" : `落後 ${Math.abs(diff)} 天`;
+      statusClass = "reading-team-status--behind";
+    } else if (member.hasJoinedPlan && currentProgress > 0) {
+      statusStr = "在進度上";
+      statusClass = "reading-team-status--current";
+    }
+
+    return {
+      streak: Number(member.longestStreak || 0),
+      completed,
+      makeup,
+      statusStr,
+      statusClass
+    };
+  }
+
+  function renderTeamMemberRoster(members, plan) {
+    const rows = members.map(member => ({ member, metrics: getTeamMemberRosterMetrics(member, plan) }))
+      .sort((left, right) => right.metrics.completed - left.metrics.completed || right.metrics.streak - left.metrics.streak);
+    return `<div class="reading-team-roster-scroll">
+      <div class="reading-team-roster">
+        <div class="reading-team-roster__head" aria-hidden="true">
+          <span>成員</span><span>最高連續</span><span>累計完成</span><span>補讀</span><span>進度狀態</span><span>提醒</span>
+        </div>
+        ${rows.map(({ member, metrics }) => `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}">
+          <div class="reading-team-roster__person"><strong>${escapeHTML(member.name || "未命名隊員")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
+          <strong class="reading-team-roster__streak">${metrics.streak}</strong>
+          <strong class="reading-team-roster__completed">${metrics.completed}</strong>
+          <strong class="reading-team-roster__makeup">${metrics.makeup}</strong>
+          <span class="reading-team-roster__status ${metrics.statusClass}">${metrics.statusStr}</span>
+          ${member.isMe ? '<span class="reading-team-roster__self">—</span>' : `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="提醒 ${escapeHTML(member.name || "隊員")}讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span></button>`}
+        </article>`).join("")}
+      </div>
+    </div>`;
+  }
+
   function renderTeamStatGrid(members, totalChapters, plan) {
     const totalRead = members.reduce((sum, member) => sum + Number(member.chaptersRead || 0), 0);
     const activeToday = members.filter(member => Number(member.todayRead || 0) > 0).length;
@@ -384,7 +472,7 @@
       ${summary}
       ${mode === "stats" ? renderTeamStatGrid(members, totalChapters, plan) : ""}
       <section class="reading-team-members" aria-label="團隊成員">
-        <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>
+        ${mode === "members" ? renderTeamMemberRoster(members, plan) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>`}
       </section>`;
     if (mode === "members") bindTeamReminderButtons(container, team, members, totalChapters);
     hydrate(container);

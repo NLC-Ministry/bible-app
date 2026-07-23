@@ -636,6 +636,103 @@ body.reading-team-modal-open .main-content {
   min-height: 180px;
 }
 
+.reading-team-roster-scroll {
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.reading-team-roster {
+  min-width: 660px;
+}
+
+.reading-team-roster__head,
+.reading-team-roster__row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) 76px 76px 64px 104px 52px;
+  text-align: center;
+}
+
+.reading-team-roster__head {
+  border-bottom: 1px solid var(--reading-team-separator);
+  color: var(--text-secondary);
+  font-size: .74rem;
+  padding: 10px 8px;
+}
+
+.reading-team-roster__head span:first-child {
+  text-align: left;
+}
+
+.reading-team-roster__head span:nth-child(2),
+.reading-team-roster__streak {
+  color: var(--color-danger, #dc4c64);
+}
+
+.reading-team-roster__head span:nth-child(3),
+.reading-team-roster__completed {
+  color: var(--color-success-foreground, #168458);
+}
+
+.reading-team-roster__head span:nth-child(4),
+.reading-team-roster__makeup {
+  color: var(--color-warning-text, #d97706);
+}
+
+.reading-team-roster__head span:nth-child(5) {
+  color: var(--reading-team-accent);
+}
+
+.reading-team-roster__row {
+  border-bottom: 1px solid var(--reading-team-separator);
+  min-height: 58px;
+  padding: 8px;
+}
+
+.reading-team-roster__row--me {
+  background: var(--reading-team-accent-soft);
+  border-radius: 12px;
+}
+
+.reading-team-roster__person {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  text-align: left;
+}
+
+.reading-team-roster__person strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reading-team-roster__status {
+  font-size: .78rem;
+}
+
+.reading-team-status--ahead,
+.reading-team-status--current {
+  color: var(--color-success-foreground, #168458);
+}
+
+.reading-team-status--behind {
+  color: var(--color-danger, #dc4c64);
+}
+
+.reading-team-status--muted,
+.reading-team-roster__self {
+  color: var(--text-muted);
+}
+
+.reading-team-roster__row .reading-team-remind-btn {
+  margin: 0 auto;
+}
+
 @media (max-width: 640px) {
   .reading-team-overlay {
     align-items: flex-end;
