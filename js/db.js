@@ -1317,7 +1317,7 @@ const db = {
       const { data, error } = saveResult;
       if (error) throw new Error(error.message || error.error || error);
       if (state.supabase.saveProfile && !saveResult.project_url) {
-        throw new Error("nlc-data Edge Function 尚未部署新版 save_profile，請到 Supabase 重新部署 nlc-data。");
+        throw new Error("個人資料暫時無法儲存，請稍後再試。");
       }
 
       if (!state.supabase.saveProfile) {
@@ -1337,8 +1337,8 @@ const db = {
       }
 
       if (!verifiedProfile || verifiedProfile.id !== user.id) {
-        const projectUrl = state.supabaseConfig && state.supabaseConfig.url ? state.supabaseConfig.url : "unknown Supabase project";
-        throw new Error("儲存的 Supabase 檔案驗證失敗。nlc-data Edge Function 無法驗證寫入。Supabase 專案：" + projectUrl);
+
+        throw new Error("個人資料尚未成功儲存，請稍後再試。");
       }
 
       // 💡 關鍵修復：儲存成功後，立即更新 LocalStorage 快取檔案，防止重新整理或快取載入時再次被舊資料覆寫！
@@ -2064,20 +2064,21 @@ const db = {
   _readingTeamErrorMessage(error) {
     const raw = String(error && (error.message || error.error || error.details) || error || "");
     const messages = {
-      profile_required: "尚未找到你的會員資料。請先註冊或登入，完成會員資料同步後，再回來輸入邀請碼。",
-      profile_identity_not_found: "尚未找到你的會員資料。請先註冊或登入，完成會員資料同步後，再回來輸入邀請碼。",
+      profile_required: "目前找不到你的會員資料，請重新登入後再試。",
+      profile_identity_not_found: "目前找不到你的會員資料，請重新登入後再試。",
       team_plan_not_found: "這個計畫目前未開放團隊報名。",
-      team_statistics_admin_required: "只有系統管理員可以查看全部競賽團隊統計。",
+      team_statistics_admin_required: "目前無法查看這項團隊資料。",
       invalid_team_division: "團隊只能選擇 3 人組或 6 人組。",
       invalid_team_name: "請輸入 1 至 40 字的團隊名稱。",
       already_in_plan_team: "你在這個計畫已加入一個團隊。",
       team_invite_not_found: "找不到這組邀請碼，請向隊長確認。",
       reading_team_full: "這個團隊已額滿。",
-      ready_team_roster_locked: "團隊已額滿並鎖定名單，如需調整請聯絡管理員。",
+      ready_team_roster_locked: "團隊已額滿，名單目前不能調整。",
       captain_must_disband_team: "隊長需解散尚未成隊的團隊，不能直接退出。",
       team_captain_required: "只有隊長可以解散團隊。",
       reading_team_not_found: "找不到這個團隊。",
-      not_a_team_member: "你目前不在這個團隊中。"
+      not_a_team_member: "你目前不在這個團隊中。",
+      forbidden_rpc: "團隊功能暫時無法使用，請稍後再試。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : (raw || "團隊資料處理失敗，請稍後再試。");
@@ -2312,11 +2313,9 @@ const db = {
     }
 
     const started = isPlanStarted(newPlanObj);
-    const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+
     if (started) {
       showToast(`成功加入 ${planName}！計畫已開始。`);
-    } else if (isAdmin) {
-      showToast(`成功預約加入 ${planName}！計畫將於 ${startDate} 開始。您目前為系統管理員，可提早進行測試。`);
     } else {
       showToast(`成功預約加入 ${planName}！計畫將於 ${startDate} 開始。`);
     }
@@ -2816,7 +2815,7 @@ const db = {
         { 
           id: 'default-welcome', 
           title: '歡迎使用速讀挑戰系統！', 
-          content: '親愛的弟兄姊妹平安，歡迎加入教會季度速讀挑戰。讓我們一起藉著每日讀經，更加認識神、親近神！如有任何問題，請洽詢教會管理員。', 
+          content: '親愛的弟兄姊妹平安，歡迎加入教會季度速讀挑戰。讓我們一起藉著每日讀經，更加認識神、親近神！如有任何問題，請洽詢教會同工。',
           created_at: new Date().toISOString() 
         }
       ];

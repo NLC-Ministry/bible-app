@@ -82,10 +82,11 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("並產生邀請碼");
     expect(teamUi).toContain("使用邀請碼加入團隊");
     expect(teamUi).toContain("team.inviteCode");
-    expect(teamUi).toContain("一般會員只能查看自己加入的隊伍");
+    expect(teamUi).toContain("加入後，你可以查看自己的團隊與夥伴進度");
     expect(teamUi).toContain("只有同隊成員可查看");
-    expect(teamUi).toContain("不會只用姓名建立成員");
-    expect(db).toContain("尚未找到你的會員資料");
+    expect(teamUi).toContain("其他隊伍的資料不會顯示");
+    expect(teamUi).not.toContain("UUID");
+    expect(db).toContain("目前找不到你的會員資料");
   });
 
   it("uses adaptive semantic surfaces in light, dark, and warm themes", () => {
@@ -108,18 +109,25 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain('data-icon="chevronRight"');
   });
 
-  it("connects joining and the plan options menu to My Team", () => {
+  it("connects joining to My Team and integrates team data into existing group views", () => {
     expect(plan).not.toContain("chooseReadingPlanParticipation(plan)");
     expect(plan).toContain("offerReadingTeamParticipation(joinedPlan)");
     expect(plan).toContain("openReadingTeamDialog(joinedPlan");
     expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("offerReadingTeamParticipation(joinedPlan)"));
     expect(html).toContain('id="view-reading-team-btn"');
     expect(html).toContain("我的團隊");
-    expect(html).toContain("競賽團隊統計");
-    expect(plan).toContain("readingTeamStatsButton.hidden = true");
-    expect(plan).toContain("await db.getMyReadingTeam(planAtOpen)");
-    expect(plan).toContain("membership.context && membership.context.team");
-    expect(teamUi).toContain("請先加入 3 人或 6 人團隊");
+    expect(html).not.toContain('id="view-reading-team-stats-btn"');
+    expect(html).toContain('id="stats-team-view-select"');
+    expect(html).toContain('id="members-team-view-select"');
+    expect(plan).toContain("async function prepareReadingTeamSubview");
+    expect(plan).toContain('prepareReadingTeamSubview("stats")');
+    expect(plan).toContain('prepareReadingTeamSubview("members")');
+    expect(plan).toContain('select.value = "reading-team"');
+    expect(plan).toContain('readingTeamDefaultPlan');
+    expect(teamUi).toContain("renderMyReadingTeamInline");
+    expect(teamUi).not.toContain("openReadingTeamAdminStatsDialog");
+    expect(teamUi).not.toContain("競賽團隊統計");
+    expect(db).toContain("forbidden_rpc");
     expect(migration).toMatch(/get_reading_team_statistics[\s\S]*team_statistics_admin_required/);
     expect(db).toContain('_callReadingTeamRpc("get_my_reading_team"');
     expect(db).toContain("return newPlanObj;");

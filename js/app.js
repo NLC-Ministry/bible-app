@@ -12,16 +12,16 @@ import './design/icon-registry.js';
 import './design/icons.js';
 import './state.js?v=20260720_complete_svg_badges';
 import './auth.js';
-import './db.js?v=20260723_silent_achievements';
+import './db.js?v=20260723_team_default_views';
 import './utils.js?v=20260722_admin_role';
 import './gamification.js?v=20260723_silent_achievements';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
-import './modules/team-registration.js?v=20260723_team_invite_tabs';
+import './modules/team-registration.js?v=20260723_team_default_views';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 
-const buildVersion = "__BUILD_VERSION__" + "_team_invite_tabs";
+const buildVersion = "__BUILD_VERSION__" + "_team_default_views";
 const moduleCache = {};
 
 async function loadModule(name, path) {

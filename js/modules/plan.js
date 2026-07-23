@@ -429,6 +429,83 @@ window.switchStatTab = async function (tab) {
   }
 };
 
+function setReadingTeamSubviewElementHidden(element, hidden) {
+  if (!element) return;
+  if (element.dataset.readingTeamOriginalDisplay === undefined) {
+    element.dataset.readingTeamOriginalDisplay = element.style.display || "";
+  }
+  element.style.display = hidden ? "none" : element.dataset.readingTeamOriginalDisplay;
+}
+
+async function prepareReadingTeamSubview(mode) {
+  const isStats = mode === "stats";
+  const switcher = document.getElementById(isStats ? "stats-team-view-switch" : "members-team-view-switch");
+  const select = document.getElementById(isStats ? "stats-team-view-select" : "members-team-view-select");
+  const inline = document.getElementById(isStats ? "reading-team-stats-inline" : "reading-team-members-inline");
+  if (!switcher || !select || !inline) return true;
+
+  const organizationElements = isStats
+    ? [
+        document.getElementById("stats-admin-scope-bar"),
+        document.getElementById("stats-personal-section"),
+        document.getElementById("stats-group-section")
+      ]
+    : [
+        document.getElementById("members-organization-controls"),
+        document.getElementById("member-list-container")
+      ];
+
+  const supported = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+  const result = supported ? await db.getMyReadingTeam(state.activePlan) : null;
+  const context = result && result.success && result.context && result.context.team ? result.context : null;
+  let teamOption = select.querySelector('option[value="reading-team"]');
+
+  if (!context) {
+    teamOption?.remove();
+    select.value = "organization";
+    delete select.dataset.readingTeamDefaultPlan;
+    switcher.classList.add("hidden");
+    inline.classList.add("hidden");
+    organizationElements.forEach(element => setReadingTeamSubviewElementHidden(element, false));
+    return true;
+  }
+
+  if (!teamOption) {
+    teamOption = document.createElement("option");
+    teamOption.value = "reading-team";
+    select.appendChild(teamOption);
+  }
+  teamOption.textContent = `我的 ${Number(context.team.division)} 人團隊`;
+  const activePlanKey = String(
+    state.activePlan.globalPlanId
+      || state.activePlan.id
+      || state.activePlan.presetKey
+      || state.activePlan.name
+      || "current-plan"
+  );
+  if (select.dataset.readingTeamDefaultPlan !== activePlanKey) {
+    select.dataset.readingTeamDefaultPlan = activePlanKey;
+    select.value = "reading-team";
+  }
+  switcher.classList.remove("hidden");
+
+  if (!select.dataset.readingTeamBound) {
+    select.dataset.readingTeamBound = "true";
+    select.addEventListener("change", async () => {
+      if (isStats) await renderPlanStatsView();
+      else await renderPlanMembersView();
+    });
+  }
+
+  const showTeam = select.value === "reading-team";
+  organizationElements.forEach(element => setReadingTeamSubviewElementHidden(element, showTeam));
+  inline.classList.toggle("hidden", !showTeam);
+  if (showTeam && typeof window.renderMyReadingTeamInline === "function") {
+    window.renderMyReadingTeamInline(inline, state.activePlan, context, mode);
+  }
+  return !showTeam;
+}
+
 function initPlanControls() {
   ensurePlanRouteShell();
   renderPresetPlansList();
@@ -520,24 +597,14 @@ function initPlanControls() {
   const optionsBtn = document.getElementById("btn-plan-options");
   const dropdown = document.getElementById("plan-options-dropdown");
   if (optionsBtn && dropdown) {
-    optionsBtn.addEventListener("click", async (e) => {
+    optionsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const isOpening = dropdown.classList.contains("hidden");
       const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
       if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = "";
       const readingTeamMenuButton = document.getElementById("view-reading-team-btn");
       const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
       if (readingTeamMenuButton) readingTeamMenuButton.hidden = !isTeamPlan;
-      const readingTeamStatsButton = document.getElementById("view-reading-team-stats-btn");
-      const role = state.currentUser && state.currentUser.role;
-      if (readingTeamStatsButton) readingTeamStatsButton.hidden = true;
       dropdown.classList.toggle("hidden");
-
-      if (!isOpening || !isTeamPlan || role !== "admin" || !readingTeamStatsButton) return;
-      const planAtOpen = state.activePlan;
-      const membership = await db.getMyReadingTeam(planAtOpen);
-      if (dropdown.classList.contains("hidden") || state.activePlan !== planAtOpen) return;
-      readingTeamStatsButton.hidden = !(membership.success && membership.context && membership.context.team);
     });
     document.addEventListener("click", () => {
       dropdown.classList.add("hidden");
@@ -586,18 +653,6 @@ function initPlanControls() {
       dropdown?.classList.add("hidden");
       if (state.activePlan && typeof window.openReadingTeamDialog === "function") {
         await window.openReadingTeamDialog(state.activePlan);
-      }
-    });
-  }
-
-  const readingTeamStatsButton = document.getElementById("view-reading-team-stats-btn");
-  if (readingTeamStatsButton) {
-    readingTeamStatsButton.addEventListener("click", async event => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropdown?.classList.add("hidden");
-      if (state.activePlan && typeof window.openReadingTeamAdminStatsDialog === "function") {
-        await window.openReadingTeamAdminStatsDialog(state.activePlan);
       }
     });
   }
@@ -1254,7 +1309,7 @@ function renderPresetPlansList() {
   const getDurationLabel = (startDate, endDate) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "日期待管理員設定";
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "日期尚未公布";
     const days = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
     return days >= 365 ? `${startDate} ～ ${endDate}` : `共 ${days} 天`;
   };
@@ -3072,6 +3127,8 @@ async function renderPlanStatsView() {
   if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext();
   if (!state.activePlan) return;
 
+  if (!(await prepareReadingTeamSubview("stats"))) return;
+
   // Make sure stats selector is populated
   populateStatsSelector();
 
@@ -4534,6 +4591,8 @@ window.displayParticipantsList = function (limit = 100) {
 // ==================== 組員狀況 TAB ====================
 async function renderPlanMembersView() {
   if (!state.activePlan) return;
+
+  if (!(await prepareReadingTeamSubview("members"))) return;
 
   // Make sure selectors are populated correctly
   populateMembersSelector();

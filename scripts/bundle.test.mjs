@@ -111,7 +111,7 @@ describe("emitBundle (integration, real repo)", () => {
       expect((html.match(new RegExp(`href="/${cssFile}"`, "g")) || []).length).toBe(1);
       const bundledCss = rf(join(out, cssFile), "utf8");
       expect(bundledCss).toContain(".reading-team-overlay");
-      expect(bundledCss).toContain(".reading-team-admin-summary");
+
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);
       expect(existsSync(join(out, "sw.js"))).toBe(true);

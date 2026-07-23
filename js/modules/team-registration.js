@@ -147,14 +147,14 @@
         <form id="reading-team-join-form" class="reading-team-form-card reading-team-registration-panel" data-registration-panel="join" role="tabpanel" hidden>
           <div class="reading-team-registration-panel__heading">
             <span class="reading-team-form-card__icon"><span class="nlc-icon nlc-icon--md" data-icon="lock" aria-hidden="true"></span></span>
-            <div><h4>使用邀請碼加入</h4><p>輸入隊長提供的邀請碼，即可連結到指定團隊。</p></div>
+            <div><h4>使用邀請碼加入</h4><p>輸入隊長提供的邀請碼，即可加入指定團隊。</p></div>
           </div>
           <label for="reading-team-code">團隊邀請碼</label>
           <input id="reading-team-code" class="form-control reading-team-code-input" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="輸入邀請碼">
           <button type="submit" class="primary-btn reading-team-submit">使用邀請碼加入團隊</button>
           <span class="reading-team-form-hint">邀請碼不分大小寫；每個階段只能加入一支團隊。</span>
         </form>
-        <p class="reading-team-registration-privacy">競賽團隊與牧區、小組分開管理。一般會員只能查看自己加入的隊伍；系統會以會員 UUID 連結成員，不會只用姓名建立成員。</p>
+        <p class="reading-team-registration-privacy">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
       const error = panel.querySelector("[data-team-error]");
       const showError = message => { error.textContent = message; error.hidden = false; };
@@ -281,64 +281,33 @@
     return overlay;
   };
 
-  window.openReadingTeamAdminStatsDialog = async function openReadingTeamAdminStatsDialog(plan) {
-    if (!isSupportedPlan(plan)) return null;
-    const overlay = createOverlay("reading-team-admin-dialog", "reading-team-admin-title");
-    const panel = overlay.firstElementChild;
-    const close = () => removeOverlay(overlay);
-    closeOnBackdrop(overlay, close);
-    panel.innerHTML = `<div class="reading-team-loading"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span><span>正在整理競賽團隊統計…</span></div>`;
-    hydrate(panel);
-    const membership = await db.getMyReadingTeam(plan);
-    if (!document.body.contains(overlay)) return null;
-    if (!membership.success || !membership.context || !membership.context.team) {
-      removeOverlay(overlay);
-      showToast("請先加入 3 人或 6 人團隊，再查看競賽團隊統計。");
-      return null;
-    }
-    const result = await db.getReadingTeamStatistics(plan);
-    if (!document.body.contains(overlay)) return null;
-    if (!result.success) {
-      panel.innerHTML = `<header class="reading-team-dialog__header"><h3 id="reading-team-admin-title">競賽團隊統計</h3><button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button></header><div class="reading-team-empty-error"><p>${escapeHTML(result.message || "目前無法載入團隊統計。")}</p></div>`;
-      panel.querySelector("[data-team-close]").onclick = close;
-      hydrate(panel);
-      return overlay;
-    }
-    const context = result.context || {};
-    const summary = context.summary || {};
-    const teams = Array.isArray(context.teams) ? context.teams : [];
-    const totalChapters = Number(plan.currentRoundTotalChapters || plan.totalChapters || 0);
-    panel.innerHTML = `
-      <header class="reading-team-dialog__header">
-        <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-admin-title">競賽團隊統計</h3></div>
-        <button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
-      </header>
-      <p class="reading-team-dialog__intro">此頁只統計 3 人組與 6 人組競賽隊伍，不納入牧區或小組統計。</p>
-      <div class="reading-team-admin-summary">
-        <div><span>隊伍</span><strong>${Number(summary.teamCount || 0)}</strong></div>
-        <div><span>已成隊</span><strong>${Number(summary.readyTeamCount || 0)}</strong></div>
-        <div><span>參賽者</span><strong>${Number(summary.memberCount || 0)}</strong></div>
-        <div><span>3 人／6 人</span><strong>${Number(summary.division3Teams || 0)}／${Number(summary.division6Teams || 0)}</strong></div>
+  window.renderMyReadingTeamInline = function renderMyReadingTeamInline(container, plan, context, mode = "members") {
+    if (!container || !context || !context.team) return;
+    const team = context.team;
+    const members = Array.isArray(context.members) ? context.members : [];
+    const totalChapters = Number(plan && (plan.currentRoundTotalChapters || plan.totalChapters) || 0);
+    const totalRead = members.reduce((sum, member) => sum + Number(member.chaptersRead || 0), 0);
+    const averageProgress = members.length && totalChapters > 0
+      ? Math.min(100, Math.round(totalRead / (members.length * totalChapters) * 100))
+      : 0;
+    const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);
+    const summary = mode === "stats" ? `
+      <div class="reading-team-summary">
+        <div><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalChapters * members.length} 章</span></div>
+        <div class="reading-team-summary__progress"><span>組隊狀態</span><strong>${Number(team.memberCount)} / ${Number(team.capacity)}</strong><span>${isReady ? "已成隊" : "等待隊員"}</span></div>
+      </div>` : "";
+    container.innerHTML = `
+      <div class="reading-team-inline__header">
+        <div><h3>${escapeHTML(team.name || "我的團隊")}</h3><p>${Number(team.division)} 人團隊・一起查看彼此的讀經進度</p></div>
+        <span class="stat-badge stat-badge--brand">${mode === "stats" ? "團隊統計" : "組員狀況"}</span>
       </div>
-      <div class="reading-team-admin-list">${teams.length ? teams.map(team => {
-        const memberCount = Number(team.memberCount || 0);
-        const capacity = Number(team.division || 0);
-        const progress = totalChapters > 0 && memberCount > 0
-          ? Math.min(100, Math.round(Number(team.chaptersRead || 0) / (totalChapters * memberCount) * 100))
-          : 0;
-        const members = Array.isArray(team.members) ? team.members : [];
-        return `<article class="reading-team-admin-card">
-          <div class="reading-team-admin-card__title"><div><strong>${escapeHTML(team.name || "未命名隊伍")}</strong><span>${capacity} 人組・${memberCount}/${capacity} 人</span></div><b>${progress}%</b></div>
-          <div class="reading-team-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
-          <div class="reading-team-admin-members">${members.map(member => `<span>${escapeHTML(member.name || "隊員")}・${Number(member.chaptersRead || 0)} 章</span>`).join("")}</div>
-        </article>`;
-      }).join("") : '<div class="reading-team-admin-empty">目前尚無競賽團隊。</div>'}</div>
-      <footer class="reading-team-dialog__footer"><button type="button" class="primary-btn" data-team-close-footer>完成</button></footer>`;
-    panel.querySelector("[data-team-close]").onclick = close;
-    panel.querySelector("[data-team-close-footer]").onclick = close;
-    hydrate(panel);
-    return overlay;
+      ${summary}
+      <section class="reading-team-members" aria-label="競賽團隊成員">
+        <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>
+      </section>`;
+    hydrate(container);
   };
+
 
   window.isReadingTeamPlan = isSupportedPlan;
 })();

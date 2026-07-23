@@ -334,6 +334,73 @@ body.reading-team-modal-open .main-content {
   text-transform: uppercase;
 }
 
+.reading-team-subview-switch {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.reading-team-subview-switch.hidden {
+  display: none;
+}
+
+.reading-team-subview-switch label {
+  color: var(--text-secondary);
+  font-size: .8rem;
+  font-weight: 500;
+}
+
+.reading-team-subview-switch .form-control {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  min-height: 40px;
+  min-width: min(220px, 58vw);
+}
+
+.reading-team-inline {
+  --reading-team-accent: var(--color-brand, #04a9d2);
+  --reading-team-accent-soft: color-mix(in srgb, var(--reading-team-accent) 10%, transparent);
+  --reading-team-separator: var(--border-card);
+  --reading-team-surface: var(--bg-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  color: var(--text-primary);
+  padding: 16px;
+}
+
+.reading-team-inline.hidden {
+  display: none;
+}
+
+.reading-team-inline__header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.reading-team-inline__header h3,
+.reading-team-inline__header p {
+  margin: 0;
+}
+
+.reading-team-inline__header p {
+  color: var(--text-secondary);
+  font-size: .78rem;
+  margin-top: 4px;
+}
+
+.reading-team-inline .reading-team-summary {
+  margin-top: 0;
+}
+
 .reading-team-summary {
   background: var(--reading-team-surface);
   border: 1px solid var(--reading-team-separator);
@@ -554,6 +621,20 @@ body.reading-team-modal-open .main-content {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .reading-team-subview-switch {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reading-team-subview-switch .form-control {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .reading-team-inline {
+    padding: 12px;
   }
 }
 

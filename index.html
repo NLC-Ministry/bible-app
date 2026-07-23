@@ -22,8 +22,8 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="index.css?v=20260723_plan_search">
-  <link rel="stylesheet" href="css/team-registration.css?v=20260723_team_invite_tabs">
-  <link rel="stylesheet" href="css/team-admin-stats.css?v=20260722_reading_teams">
+  <link rel="stylesheet" href="css/team-registration.css?v=20260723_team_default_views">
+
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
   <!-- Chart.js for premium stats dashboard -->
@@ -141,10 +141,6 @@
               <button class="options-dropdown-item" id="view-reading-team-btn" hidden>
                 <span class="menu-icon"><span class="nlc-icon" data-icon="people"
                     aria-hidden="true"></span></span><span>我的團隊</span>
-              </button>
-              <button class="options-dropdown-item" id="view-reading-team-stats-btn" hidden>
-                <span class="menu-icon"><span class="nlc-icon" data-icon="barChart"
-                    aria-hidden="true"></span></span><span>競賽團隊統計</span>
               </button>
               <button class="options-dropdown-item" id="delete-plan-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="logout"
@@ -921,6 +917,15 @@
           <div id="subview-plan-stats" class="hidden"
             style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
 
+            <div class="reading-team-subview-switch hidden" id="stats-team-view-switch">
+              <label for="stats-team-view-select">查看內容</label>
+              <select id="stats-team-view-select" class="form-control">
+                <option value="organization">教會團體</option>
+              </select>
+            </div>
+
+            <div id="reading-team-stats-inline" class="reading-team-inline hidden" aria-live="polite"></div>
+
             <!-- 管理權限統計篩選器 (只在 管理 tab 顯示) -->
             <div class="stats-admin-scope-bar hidden" id="stats-admin-scope-bar"
               style="display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;">
@@ -1292,14 +1297,20 @@
             <div class="p-4 bg-white dark:bg-zinc-900/60 border-b border-slate-100 dark:border-zinc-800/50 flex-none"
               style="padding: 1rem; border-bottom: 1px solid var(--border-card); flex: none; display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-card); border-radius: 12px; margin-bottom: 0.8rem;">
               <h2 class="text-base font-bold text-slate-800 dark:text-white mb-2"
-                style="font-size: 1rem; font-weight: 500; color: var(--text-primary); margin: 0 0 0.5rem 0;">組員管理</h2>
+                style="font-size: 1rem; font-weight: 500; color: var(--text-primary); margin: 0 0 0.5rem 0;">組員狀況</h2>
+              <div class="reading-team-subview-switch hidden" id="members-team-view-switch">
+                <label for="members-team-view-select">查看內容</label>
+                <select id="members-team-view-select" class="form-control">
+                  <option value="organization">教會小組</option>
+                </select>
+              </div>
               <!-- 全域權限統計篩選器 (組員狀況) -->
-              <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+              <div id="members-organization-controls" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 0.6rem; margin-right: auto;">
                   <span class="label-with-icon"
                     style="font-size: 1.1rem; font-weight: 500; color: var(--primary-color);"><span class="nlc-icon"
                       data-icon="people" aria-hidden="true"></span></span>
-                  <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">切換統計管理範圍</h3>
+                  <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">查看範圍</h3>
                 </div>
                 <select id="members-admin-region-select" class="form-control"
                   style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
@@ -1314,6 +1325,8 @@
             </div>
 
             <!-- 下方組員列表容器：利用 flex-1 自動填滿剩餘上方空間，並允許內部獨立滾動 -->
+            <div id="reading-team-members-inline" class="reading-team-inline hidden" aria-live="polite"></div>
+
             <div id="member-list-container" class="flex-1 overflow-y-auto p-4 space-y-3"
               style="flex: 1; overflow-y: auto; padding: 0.5rem 0; display: flex; flex-direction: column; gap: 0.8rem; min-height: 0;">
               <!-- 參與者總覽 -->
@@ -1944,7 +1957,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260723_team_invite_tabs"></script>
+  <script type="module" src="js/app.js?v=20260723_team_integrated_views"></script>
 </body>
 
 </html>

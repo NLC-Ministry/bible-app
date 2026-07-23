@@ -196,22 +196,29 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
 }
 
 async function applyForcedScope(query: any, table: string, action: string, profile: any, supabaseAdmin: any) {
-  if (action === "insert" || action === "upsert") return query;
+  // Supabase query builders are PromiseLike. Returning one directly from this
+  // async function would execute the query before order/limit/returning are
+  // applied. Always wrap it in a plain object to prevent Promise assimilation.
+  if (action === "insert" || action === "upsert") return { query };
   if (USER_TABLES.has(table)) {
-    if (action !== "select") return query.eq("user_id", profile.id);
+    if (action !== "select") return { query: query.eq("user_id", profile.id) };
     const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-    return visibleIds === null ? query : query.in("user_id", visibleIds.length ? visibleIds : [profile.id]);
+    return {
+      query: visibleIds === null
+        ? query
+        : query.in("user_id", visibleIds.length ? visibleIds : [profile.id])
+    };
   }
   if (table === "profiles" && !isAdmin(profile)) {
     const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-    return query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]);
+    return { query: query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]) };
   }
-  if (table === "user_identities") return query.eq("profile_id", profile.id);
-  if (table === "global_plans" && action === "select" && !isAdmin(profile)) return query.eq("is_hidden", false);
-  if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return query.eq("is_published", true);
-  if (table === "care_reminders" && action === "select") return query.eq("recipient_id", profile.id);
-  if (table === "care_reminders" && action === "update") return query.eq("recipient_id", profile.id);
-  return query;
+  if (table === "user_identities") return { query: query.eq("profile_id", profile.id) };
+  if (table === "global_plans" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_hidden", false) };
+  if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
+  if (table === "care_reminders" && action === "select") return { query: query.eq("recipient_id", profile.id) };
+  if (table === "care_reminders" && action === "update") return { query: query.eq("recipient_id", profile.id) };
+  return { query };
 }
 
 Deno.serve(async (req: Request) => {
@@ -345,7 +352,7 @@ Deno.serve(async (req: Request) => {
 
     query = applyFilters(query, body.filters || []);
     if (body.or) query = query.or(body.or);
-    query = await applyForcedScope(query, table, action, profile, supabaseAdmin);
+    ({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));
     if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
     if (body.order?.column) query = query.order(body.order.column, { ascending: body.order.ascending !== false });
     if (body.limit) query = query.limit(body.limit);
