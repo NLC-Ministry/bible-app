@@ -2929,6 +2929,7 @@ const db = {
             message,
             status,
             sent_on,
+            plan_key,
             sender:profiles!sender_id (name, role)
           `)
           .eq("recipient_id", profileId)
@@ -3029,7 +3030,7 @@ const db = {
           if (payload.code === "23505" || response.status === 409) {
             return { error: new Error("今日已傳送過關心提醒給此成員，明日再試") };
           }
-          if (payload.code === "42501" || (payload.error && payload.error.includes("policy"))) {
+          if (response.status === 403 || payload.code === "42501" || (payload.error && payload.error.includes("policy"))) {
             return { error: new Error("此成員不在您的牧養範圍內") };
           }
           return { error: new Error(payload.error || "傳送失敗") };

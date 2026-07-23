@@ -248,7 +248,9 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (!["save_profile", "rpc"].includes(action) && (!table || typeof table !== "string")) return jsonResponse({ error: "missing_table" }, 400);
+    if (!["save_profile", "rpc", "send_care_reminder"].includes(action) && (!table || typeof table !== "string")) {
+      return jsonResponse({ error: "missing_table" }, 400);
+    }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
@@ -278,6 +280,25 @@ Deno.serve(async (req: Request) => {
       if (!validReasons.includes(p.reason)) return jsonResponse({ error: "invalid_reason" }, 400);
       const msg = String(p.message || "").trim();
       if (!msg || msg.length > 300) return jsonResponse({ error: "invalid_message" }, 400);
+      const pastoralRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"];
+      if (!pastoralRoles.includes(profile.role) || profile.id === p.recipient_id) {
+        return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
+      }
+      const { data: recipient, error: recipientError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, is_active, great_region, pastoral_zone, small_group")
+        .eq("id", p.recipient_id)
+        .maybeSingle();
+      if (recipientError) return jsonResponse({ error: recipientError.message }, 400);
+      if (!recipient || recipient.is_active === false) return jsonResponse({ error: "recipient_not_found" }, 404);
+
+      const withinScope = isAdmin(profile)
+        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.great_region))
+        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone))
+        || (profile.role === "group_leader"
+          && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone)
+          && valuesOverlap(recipient.small_group, profile.small_group));
+      if (!withinScope) return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
       const { error } = await supabaseAdmin
         .from("care_reminders")
         .insert({

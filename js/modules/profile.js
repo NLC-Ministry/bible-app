@@ -576,7 +576,7 @@ async function renderCareReminders() {
 
   const titleEl = document.createElement("div");
   titleEl.style.cssText = "margin-bottom: 0.75rem; font-weight: 500; font-size: 0.9rem; color: var(--color-warning-text, #D97706); display: flex; align-items: center; gap: 0.4rem;";
-  titleEl.innerHTML = `<span class="nlc-icon nlc-icon--md" data-icon="remind"></span><span>收到牧長同工的關心提醒</span>`;
+  titleEl.innerHTML = `<span class="nlc-icon nlc-icon--md" data-icon="remind"></span><span>收到的關心提醒</span>`;
   containerCol.appendChild(titleEl);
 
   const roleNames = {
@@ -596,14 +596,16 @@ async function renderCareReminders() {
     const sender = reminder.sender || {};
     const senderName = reminder.sender_name || sender.name || "牧長";
     const senderRoleRaw = reminder.sender_role || sender.role || "leader";
-    const senderRole = roleNames[senderRoleRaw] || "領袖";
+    const isTeamReminder = String(reminder.plan_key || "").startsWith("reading-team:");
+    const senderRole = isTeamReminder ? "隊友" : (roleNames[senderRoleRaw] || "領袖");
     const dateStr = reminder.sent_on || "";
 
     const header = document.createElement("div");
     header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);";
     header.innerHTML = `
       <span style="font-weight: 500; color: var(--text-primary);">
-        💌 來自 ${senderRole} <strong>${senderName}</strong>
+        <span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span>
+        來自${senderRole} <strong>${senderName}</strong>
       </span>
       <span>${dateStr}</span>
     `;

@@ -11,6 +11,9 @@ const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
 const teamUi = read("js/modules/team-registration.js");
+const profile = read("js/modules/profile.js");
+const reminderFixture = read("supabase/scripts/seed_reading_team_reminder_test.sql");
+const reminderFixtureCleanup = read("supabase/scripts/cleanup_reading_team_reminder_test.sql");
 const teamCss = read("css/team-registration.css");
 const html = read("index.html");
 const teamFixture = read("supabase/scripts/seed_reading_team_test_data.sql");
@@ -113,6 +116,21 @@ describe("NLC and browser integration", () => {
     const readAllowlist = edge.match(/const READ_TABLES = new Set\([\s\S]*?\);/)?.[0] || "";
     expect(readAllowlist).not.toContain("reading_teams");
     expect(readAllowlist).not.toContain("reading_team_members");
+  });
+
+  it("delivers team reminders without requiring a table parameter", () => {
+    expect(edge).toContain('["save_profile", "rpc", "send_care_reminder"]');
+    expect(edge).toContain('const pastoralRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"]');
+    expect(edge).toContain("pastoral_reminder_scope_required");
+    expect(edge).toContain("const withinScope = isAdmin(profile)");
+    expect(db).toContain("response.status === 403");
+    expect(profile).toContain("收到的關心提醒");
+    expect(profile).toContain('startsWith("reading-team:")');
+    expect(profile).toContain('isTeamReminder ? "隊友"');
+    expect(profile).not.toContain("收到牧長同工的關心提醒");
+    expect(reminderFixture).toContain("[團隊提醒測試]");
+    expect(reminderFixture).toContain("recipient.is_demo = FALSE");
+    expect(reminderFixtureCleanup).toContain("[團隊提醒測試]");
   });
 
   it("keeps personal progress primary and offers optional 3-person or 6-person teams", () => {
