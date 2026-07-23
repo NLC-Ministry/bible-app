@@ -11,6 +11,8 @@ const plan = read("js/modules/plan.js");
 const teamUi = read("js/modules/team-registration.js");
 const teamCss = read("css/team-registration.css");
 const html = read("index.html");
+const teamFixture = read("supabase/scripts/seed_reading_team_test_data.sql");
+const teamFixtureCleanup = read("supabase/scripts/cleanup_reading_team_test_data.sql");
 
 describe("reading competition team schema", () => {
   it("keeps 3-person and 6-person teams separate from organisation groups", () => {
@@ -30,6 +32,25 @@ describe("reading competition team schema", () => {
     expect(dualDivisionMigration).toContain("UNIQUE (global_plan_id, user_id, division)");
     expect(dualDivisionMigration).toContain("FOREIGN KEY (team_id, global_plan_id, division)");
     expect(dualDivisionMigration).toContain("already_in_plan_division");
+  });
+
+  it("provides repeatable UUID-linked test teams that need one final real join", () => {
+    expect(teamFixture).toContain("TEST3TEAM");
+    expect(teamFixture).toContain("TEST6TEAM");
+    expect(teamFixture).toContain("'2 / 3'");
+    expect(teamFixture).toContain("'5 / 6'");
+    expect(teamFixture).toContain("team.captain_id");
+    expect(teamFixture).toContain("團報功能測試計畫");
+    expect(teamFixture).toContain("00000000-0000-0000-c026-000000009999");
+    expect(teamFixture).toContain("團報測試隊長");
+    expect(teamFixture).toContain("is_demo, is_active");
+    expect(teamFixture).not.toContain("INSERT INTO auth.users");
+    expect(teamFixture).not.toContain("is_demo = FALSE");
+    expect(teamFixtureCleanup).toContain("TEST3TEAM");
+    expect(teamFixtureCleanup).toContain("TEST6TEAM");
+    expect(teamFixtureCleanup).toContain("00000000-0000-0000-c026-000000009999");
+    expect(teamFixtureCleanup.indexOf("DELETE FROM public.reading_plans"))
+      .toBeLessThan(teamFixtureCleanup.indexOf("DELETE FROM public.global_plans"));
   });
 
   it("locks concurrent joins and freezes a completed roster", () => {
