@@ -81,7 +81,7 @@ function refreshBadgeSurfaces() {
 }
 
 // Check achievements and trigger popup if newly unlocked
-async function checkAchievements() {
+async function checkAchievements(silent = false) {
   const unlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
   const newlyUnlocked = [];
 
@@ -104,11 +104,16 @@ async function checkAchievements() {
   const updatedUnlocked = [...new Set([...unlocked, ...newlyUnlocked])];
   localStorage.setItem("unlocked_badges", JSON.stringify(updatedUnlocked));
   newlyUnlocked.forEach(function (badgeId, index) {
-    if (index === 0 && typeof window.triggerBadgeUnlockNotification === "function") {
-      const badge = ACHIEVEMENTS.find(item => item.id === badgeId);
-      if (badge) window.triggerBadgeUnlockNotification(badgeId, badge.title);
-    } else {
+    if (silent) {
       localStorage.setItem(`notified_${badgeId}`, "true");
+      localStorage.setItem(`${badgeId}_unlocked`, "true");
+    } else {
+      if (index === 0 && typeof window.triggerBadgeUnlockNotification === "function") {
+        const badge = ACHIEVEMENTS.find(item => item.id === badgeId);
+        if (badge) window.triggerBadgeUnlockNotification(badgeId, badge.title);
+      } else {
+        localStorage.setItem(`notified_${badgeId}`, "true");
+      }
     }
   });
   refreshBadgeSurfaces();
