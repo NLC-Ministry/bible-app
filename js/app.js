@@ -21,7 +21,7 @@ import { initializePwa } from './pwa/PwaCoordinator.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 
-const buildVersion = "__BUILD_VERSION__" + "_team_dual_division";
+const buildVersion = "__BUILD_VERSION__" + "_stats_navigation";
 const moduleCache = {};
 let careReminderBadgeLastRefresh = 0;
 

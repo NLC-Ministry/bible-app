@@ -11,13 +11,20 @@ const plan = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
 describe("plan primary navigation", () => {
   it("places the four primary views in task-priority order above the content", () => {
     const progress = html.indexOf('data-plan-primary-view="progress"');
-    const members = html.indexOf('data-plan-primary-view="members"');
+    const personal = html.indexOf('data-plan-primary-view="personal"');
     const stats = html.indexOf('data-plan-primary-view="stats"');
     const ranking = html.indexOf('data-plan-primary-view="ranking"');
     expect(progress).toBeGreaterThan(-1);
-    expect(progress).toBeLessThan(members);
-    expect(members).toBeLessThan(stats);
+    expect(progress).toBeLessThan(personal);
+    expect(personal).toBeLessThan(stats);
     expect(stats).toBeLessThan(ranking);
+  });
+
+  it("keeps personal statistics in the plan and removes the duplicate profile card", () => {
+    expect(html).toContain('data-plan-primary-view="personal"');
+    expect(html).toContain('id="stats-personal-section"');
+    expect(html).not.toContain('id="profile-personal-stats-card"');
+    expect(html).not.toContain('id="profile-personal-stats-container"');
   });
 
   it("removes the old bottom pill row from the visual and accessibility trees", () => {
@@ -31,10 +38,10 @@ describe("plan primary navigation", () => {
     expect(css).toContain("min-height: 44px");
   });
 
-  it("routes every primary tab through one controller and keeps members visible", () => {
+  it("routes every primary tab through one controller and nests member status in group statistics", () => {
     expect(plan).toContain("async switchPrimaryView(view, options = {})");
     expect(plan).toContain("updatePlanPrimaryTabs(target)");
-    expect(plan).not.toContain("target === GROUP_SUBVIEW.MEMBERS && !canUseAdvancedGroupStats()");
+    expect(plan).toContain("stats.insertBefore(members, stats.firstChild)");
     expect(plan).not.toContain("data-plan-page-index");
   });
 });

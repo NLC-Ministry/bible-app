@@ -718,7 +718,7 @@
           <nav id="plan-detail-tab-strip" class="plan-detail-tab-strip hidden" aria-label="計畫分頁" style="display: none;">
             <div class="plan-detail-tab-strip__scroller" role="tablist">
               <button id="plan-primary-tab-progress" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-primary-view="progress">進度</button>
-              <button id="plan-primary-tab-members" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="members">組員狀況</button>
+              <button id="plan-primary-tab-personal" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="personal">個人統計</button>
               <button id="plan-primary-tab-stats" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="stats">團體統計</button>
               <button id="plan-primary-tab-ranking" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="ranking">排名</button>
               <div id="tab-indicator" aria-hidden="true"></div>
@@ -1517,23 +1517,6 @@
             <!-- Populated dynamically by profile.js -->
           </div>
 
-          <!-- Personal Reading Stats Card -->
-          <div class="card-col span-12" id="profile-personal-stats-card-col">
-            <div class="glass-card" id="profile-personal-stats-card">
-              <div class="dashboard-panel-card__header card-header-flex" style="margin-bottom: 0.85rem;">
-                <h3 class="dashboard-panel-card__title card-title" style="margin: 0;">
-                  <span class="dashboard-panel-card__title-icon" aria-hidden="true">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="barChart"></span>
-                  </span>
-                  <span class="dashboard-panel-card__title-text">個人統計</span>
-                </h3>
-                <span class="stat-badge stat-badge--neutral" id="profile-personal-stats-plan-name">目前計畫</span>
-              </div>
-              <div id="profile-personal-stats-container" class="profile-personal-stats-grid">
-                <div class="empty-state" style="text-align:center; padding: 1.5rem 1rem; color: var(--text-muted);">載入統計中...</div>
-              </div>
-            </div>
-          </div>
           <!-- Honor Badges Wall Card -->
           <div class="card-col span-12" id="profile-badges-card-col">
             <div class="profile-badges-card badge-wall" id="profile-badges-inner-card">
@@ -1959,7 +1942,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260723_unread_reminder_badge"></script>
+  <script type="module" src="js/app.js?v=20260723_stats_navigation"></script>
 </body>
 
 </html>

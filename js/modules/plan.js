@@ -27,8 +27,7 @@ function getPlanGroupNodes() {
   return [
     getPlanDetailTabs(),
     document.getElementById("subview-plan-stats"),
-    document.getElementById("subview-plan-ranking"),
-    document.getElementById("subview-plan-members")
+    document.getElementById("subview-plan-ranking")
   ].filter(Boolean);
 }
 
@@ -45,11 +44,13 @@ function moveGroupNodesToDetail(shell = ensurePlanRouteShell()) {
 
   [
     document.getElementById("subview-plan-stats"),
-    document.getElementById("subview-plan-ranking"),
-    document.getElementById("subview-plan-members")
+    document.getElementById("subview-plan-ranking")
   ].filter(Boolean).forEach(node => {
     if (node.parentElement !== shell.legacyDetail) shell.legacyDetail.appendChild(node);
   });
+  const stats = document.getElementById("subview-plan-stats");
+  const members = document.getElementById("subview-plan-members");
+  if (stats && members && members.parentElement !== stats) stats.insertBefore(members, stats.firstChild);
 }
 
 function moveGroupNodesToGroup(shell = ensurePlanRouteShell()) {
@@ -138,7 +139,7 @@ function ensurePlanPageShell() {
     strip.className = "plan-detail-tab-strip hidden";
     strip.setAttribute("aria-label", "計畫分頁");
     strip.style.display = "none";
-    strip.innerHTML = `<div class="plan-detail-tab-strip__scroller" role="tablist"><button id="plan-primary-tab-progress" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-primary-view="progress">進度</button><button id="plan-primary-tab-members" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="members">組員狀況</button><button id="plan-primary-tab-stats" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="stats">團體統計</button><button id="plan-primary-tab-ranking" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="ranking">排名</button><div id="tab-indicator" aria-hidden="true"></div></div>`;
+    strip.innerHTML = `<div class="plan-detail-tab-strip__scroller" role="tablist"><button id="plan-primary-tab-progress" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-primary-view="progress">進度</button><button id="plan-primary-tab-personal" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="personal">個人統計</button><button id="plan-primary-tab-stats" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="stats">團體統計</button><button id="plan-primary-tab-ranking" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="ranking">排名</button><div id="tab-indicator" aria-hidden="true"></div></div>`;
     detail.insertBefore(strip, detail.querySelector(".px-4.py-2, .plan-detail-tabs, #subview-plan-schedule") || detail.firstChild);
   }
   if (!windowEl) {
@@ -159,13 +160,14 @@ function ensurePlanPageShell() {
   const members = document.getElementById("subview-plan-members");
   if (page0 && schedule && schedule.parentElement !== page0) page0.appendChild(schedule);
   if (page0 && level && level.parentElement !== page0) page0.appendChild(level);
-  [stats, ranking, members].filter(Boolean).forEach(node => { if (page1 && node.parentElement !== page1) page1.appendChild(node); });
+  [stats, ranking].filter(Boolean).forEach(node => { if (page1 && node.parentElement !== page1) page1.appendChild(node); });
+  if (stats && members && members.parentElement !== stats) stats.insertBefore(members, stats.firstChild);
   return { shell, detail, strip, windowEl, wrapper, page0, page1, schedule, level, stats, ranking, members };
 }
 
 const PLAN_PRIMARY_VIEW = Object.freeze({
   PROGRESS: "progress",
-  MEMBERS: "members",
+  PERSONAL: "personal",
   STATS: "stats",
   RANKING: "ranking"
 });
@@ -189,23 +191,16 @@ function updatePlanPrimaryTabs(view = PLAN_PRIMARY_VIEW.PROGRESS) {
   });
 }
 
-const GROUP_SUBVIEW = Object.freeze({ STATS: "stats", RANKING: "ranking", MEMBERS: "members" });
+const GROUP_SUBVIEW = Object.freeze({ PERSONAL: "personal", STATS: "stats", RANKING: "ranking" });
 
 async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
   const allowedViews = Object.values(GROUP_SUBVIEW);
   let target = allowedViews.includes(view) ? view : GROUP_SUBVIEW.STATS;
 
   const tabs = getPlanDetailTabs();
-  const tabMap = {
-    [GROUP_SUBVIEW.STATS]: document.getElementById("tab-plan-stats"),
-    [GROUP_SUBVIEW.RANKING]: document.getElementById("tab-plan-ranking"),
-    [GROUP_SUBVIEW.MEMBERS]: document.getElementById("tab-plan-members")
-  };
-  const viewMap = {
-    [GROUP_SUBVIEW.STATS]: document.getElementById("subview-plan-stats"),
-    [GROUP_SUBVIEW.RANKING]: document.getElementById("subview-plan-ranking"),
-    [GROUP_SUBVIEW.MEMBERS]: document.getElementById("subview-plan-members")
-  };
+  const statsPanel = document.getElementById("subview-plan-stats");
+  const rankingPanel = document.getElementById("subview-plan-ranking");
+  const membersPanel = document.getElementById("subview-plan-members");
 
   if (tabs) forceHidden(tabs, true);
   const legacyScheduleTab = document.getElementById("tab-plan-schedule");
@@ -213,22 +208,36 @@ async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
     legacyScheduleTab.classList.remove("active");
     legacyScheduleTab.setAttribute("aria-selected", "false");
   }
-  Object.entries(tabMap).forEach(([key, button]) => {
+  ["tab-plan-stats", "tab-plan-ranking", "tab-plan-members"].forEach(id => {
+    const button = document.getElementById(id);
     if (!button) return;
     forceHidden(button, true);
-    button.classList.toggle("active", key === target);
-    button.setAttribute("aria-selected", key === target ? "true" : "false");
+    const isActive = id === "tab-plan-stats" && target === GROUP_SUBVIEW.STATS
+      || id === "tab-plan-ranking" && target === GROUP_SUBVIEW.RANKING;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
-  Object.entries(viewMap).forEach(([key, panel]) => forceHidden(panel, key !== target));
+  forceHidden(statsPanel, target === GROUP_SUBVIEW.RANKING);
+  forceHidden(rankingPanel, target !== GROUP_SUBVIEW.RANKING);
+  forceHidden(membersPanel, target !== GROUP_SUBVIEW.STATS);
 
   window.PlanPageController.groupSubview = target;
   updatePlanPrimaryTabs(target);
-  if (target === GROUP_SUBVIEW.STATS) {
-    await window.switchStatTab(canUseAdvancedGroupStats() ? "admin" : "personal");
+  if (target === GROUP_SUBVIEW.PERSONAL) {
+    await window.switchStatTab("personal");
+  } else if (target === GROUP_SUBVIEW.STATS) {
+    await renderPlanMembersView();
+    const membersSelect = document.getElementById("members-team-view-select");
+    const statsSelect = document.getElementById("stats-team-view-select");
+    if (membersSelect && statsSelect) statsSelect.value = membersSelect.value;
+    const hasSelectedTeam = !!membersSelect && membersSelect.value.startsWith("reading-team-");
+    const canViewOrganization = canUseAdvancedGroupStats();
+    if (!canViewOrganization && !hasSelectedTeam) forceHidden(membersPanel, true);
+    await window.switchStatTab(canViewOrganization ? "admin" : (hasSelectedTeam ? "group" : "personal"));
+    const duplicateSwitcher = document.getElementById("stats-team-view-switch");
+    if (duplicateSwitcher) duplicateSwitcher.classList.add("hidden");
   } else if (target === GROUP_SUBVIEW.RANKING) {
     await renderPlanRankingView();
-  } else if (target === GROUP_SUBVIEW.MEMBERS) {
-    await renderPlanMembersView();
   }
 }
 
@@ -268,7 +277,7 @@ window.PlanPageController = {
       const viewById = {
         "tab-plan-stats": GROUP_SUBVIEW.STATS,
         "tab-plan-ranking": GROUP_SUBVIEW.RANKING,
-        "tab-plan-members": GROUP_SUBVIEW.MEMBERS
+        "tab-plan-members": GROUP_SUBVIEW.STATS
       };
       groupTabs.addEventListener("click", async event => {
         const button = event.target.closest("button");
@@ -511,8 +520,21 @@ async function prepareReadingTeamSubview(mode) {
   if (!select.dataset.readingTeamBound) {
     select.dataset.readingTeamBound = "true";
     select.addEventListener("change", async () => {
-      if (isStats) await renderPlanStatsView();
-      else await renderPlanMembersView();
+      if (isStats) {
+        await renderPlanStatsView();
+      } else {
+        await renderPlanMembersView();
+        if (window.PlanPageController?.groupSubview === GROUP_SUBVIEW.STATS) {
+          const statsSelect = document.getElementById("stats-team-view-select");
+          if (statsSelect) statsSelect.value = select.value;
+          const hasSelectedTeam = select.value.startsWith("reading-team-");
+          const canViewOrganization = canUseAdvancedGroupStats();
+          const membersPanel = document.getElementById("subview-plan-members");
+          forceHidden(membersPanel, !canViewOrganization && !hasSelectedTeam);
+          await window.switchStatTab(canViewOrganization ? "admin" : (hasSelectedTeam ? "group" : "personal"));
+          document.getElementById("stats-team-view-switch")?.classList.add("hidden");
+        }
+      }
     });
   }
 
@@ -728,7 +750,7 @@ function initPlanControls() {
   bindPlanMenuItem("menu-plan-members", async () => {
     if (!_canSeeMembers) return;
     await window.PlanPageController.switchPage(PLAN_PAGE.GROUP);
-    await showPlanGroupSubview(GROUP_SUBVIEW.MEMBERS);
+    await showPlanGroupSubview(GROUP_SUBVIEW.STATS);
   });
   // Category Pills filters inside Plan List Page
   const listPills = document.querySelectorAll("#plan-list-status-pills .pill-btn");
@@ -799,7 +821,7 @@ async function renderPlanView() {
     ensurePlanRouteShell();
 
     if (state.activePlan && state.planDetailOpen) {
-      const groupViews = [GROUP_SUBVIEW.MEMBERS, GROUP_SUBVIEW.STATS, GROUP_SUBVIEW.RANKING, "group"];
+      const groupViews = [GROUP_SUBVIEW.PERSONAL, GROUP_SUBVIEW.STATS, GROUP_SUBVIEW.RANKING, "group"];
       if (groupViews.includes(state.planActiveSubTab)) {
         if (window.PlanPageController && state.planActiveSubTab !== "group") {
           window.PlanPageController.groupSubview = state.planActiveSubTab;
@@ -3148,16 +3170,19 @@ async function renderPlanStatsView() {
   if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext();
   if (!state.activePlan) return;
 
-  if (!(await prepareReadingTeamSubview("stats"))) return;
-
-  // Make sure stats selector is populated
-  populateStatsSelector();
-
   const personalSec = document.getElementById("stats-personal-section");
   const groupSec = document.getElementById("stats-group-section");
-
   const currentTab = window._currentStatsTab || 'personal';
+
+  if (currentTab !== 'personal' && !(await prepareReadingTeamSubview("stats"))) return;
+  populateStatsSelector();
   if (currentTab === 'personal') {
+    const teamSwitcher = document.getElementById("stats-team-view-switch");
+    const teamInline = document.getElementById("reading-team-stats-inline");
+    if (teamSwitcher) teamSwitcher.classList.add("hidden");
+    if (teamInline) teamInline.classList.add("hidden");
+    setReadingTeamSubviewElementHidden(personalSec, false);
+    setReadingTeamSubviewElementHidden(groupSec, true);
     // Show personal, hide group
     if (personalSec) personalSec.classList.remove("hidden");
     if (groupSec) groupSec.classList.add("hidden");
@@ -4312,7 +4337,8 @@ async function renderGroupParticipantsRankingTable() {
     }
 
     const tabMembers = document.getElementById("tab-plan-members");
-    const isMembersActive = tabMembers && tabMembers.classList.contains("active");
+    const isMembersActive = (tabMembers && tabMembers.classList.contains("active"))
+      || window.PlanPageController?.groupSubview === GROUP_SUBVIEW.STATS;
 
     if (isMembersActive) {
       populateMembersSelector();
