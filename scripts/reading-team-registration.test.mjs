@@ -80,6 +80,15 @@ describe("NLC and browser integration", () => {
     expect(db).toContain("尚未找到你的會員資料");
   });
 
+  it("uses adaptive semantic surfaces in light, dark, and warm themes", () => {
+    expect(teamCss).toContain("--reading-team-surface:");
+    expect(teamCss).toContain("--reading-team-surface-raised:");
+    expect(teamCss).toContain("body.dark-theme .reading-team-overlay");
+    expect(teamCss).toContain("body.warm-theme .reading-team-overlay");
+    expect(teamCss).toContain("@media (prefers-contrast: more)");
+    expect(teamCss).not.toMatch(/var\(--bg-secondary,\s*#2/i);
+  });
+
   it("renders the participation chooser above fixed app navigation", () => {
     expect(teamCss).toMatch(/\.reading-team-overlay[\s\S]*position: fixed/);
     expect(teamCss).toContain("inset: 0");
