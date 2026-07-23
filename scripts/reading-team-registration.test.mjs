@@ -16,10 +16,23 @@ const reminderFixture = read("supabase/scripts/seed_reading_team_reminder_test.s
 const reminderFixtureCleanup = read("supabase/scripts/cleanup_reading_team_reminder_test.sql");
 const teamCss = read("css/team-registration.css");
 const html = read("index.html");
+const app = read("js/app.js");
+const indexCss = read("index.css");
 const teamFixture = read("supabase/scripts/seed_reading_team_test_data.sql");
 const teamFixtureCleanup = read("supabase/scripts/cleanup_reading_team_test_data.sql");
 
 describe("reading competition team schema", () => {
+  it("shows unread care reminders without requiring the profile tab to be opened", () => {
+    expect(html.match(/data-care-reminder-badge/g)?.length).toBe(2);
+    expect(html).toContain("care-reminder-badge--mobile");
+    expect(html).toContain("care-reminder-badge--desktop");
+    expect(app).toContain("refreshCareReminderBadge({ force: true })");
+    expect(app).toContain('document.addEventListener("visibilitychange"');
+    expect(app).toContain('count > 9 ? "9+"');
+    expect(profile).toContain('window.updateCareReminderBadge(reminders || [])');
+    expect(indexCss).toContain(".care-reminder-badge[hidden]");
+  });
+
   it("keeps 3-person and 6-person teams separate from organisation groups", () => {
     expect(migration).toContain("division IN (3, 6)");
     expect(migration).toContain("UNIQUE (global_plan_id, user_id)"); // upgraded by 0022

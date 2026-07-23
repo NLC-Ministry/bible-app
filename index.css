@@ -1335,6 +1335,40 @@ body {
   box-shadow: var(--shadow-none);
 }
 
+.tab-btn--with-badge,
+.mobile-nav-btn--with-badge {
+  position: relative;
+}
+
+.care-reminder-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid var(--bg-header);
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #ffffff;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.care-reminder-badge[hidden] {
+  display: none;
+}
+
+.care-reminder-badge--desktop {
+  top: 1px;
+  right: 2px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -5743,6 +5777,11 @@ select,
   justify-content: space-around;
   align-items: stretch;
   gap: 0.2rem;
+}
+
+.care-reminder-badge--mobile {
+  top: 4px;
+  left: calc(50% + 7px);
 }
 
 .mobile-nav-btn {

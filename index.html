@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260723_plan_search">
+  <link rel="stylesheet" href="index.css?v=20260723_unread_reminder_badge">
   <link rel="stylesheet" href="css/team-registration.css?v=20260723_team_member_roster">
 
   <!-- Supabase JS Client library -->
@@ -87,8 +87,9 @@
           <button class="tab-btn" data-target="plan-view">
             <span>&#x8A08;&#x756B;</span>
           </button>
-          <button class="tab-btn" data-target="profile-view">
+          <button class="tab-btn tab-btn--with-badge" data-target="profile-view" aria-label="個人">
             <span>&#x500B;&#x4EBA;</span>
+            <span class="care-reminder-badge care-reminder-badge--desktop" data-care-reminder-badge hidden aria-hidden="true"></span>
           </button>
           <button class="tab-btn admin-only-nav hidden" data-target="admin-view">
             <span>&#x7BA1;&#x7406;</span>
@@ -1702,9 +1703,10 @@
         <span class="nlc-icon icon" data-icon="calendarThirty" aria-hidden="true"></span>
         <span>&#x8A08;&#x756B;</span>
       </button>
-      <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="profile-view">
+      <button class="mobile-nav-btn mobile-nav-btn--with-badge" role="tab" aria-selected="false" data-target="profile-view" aria-label="個人">
         <span class="nlc-icon icon" data-icon="user" aria-hidden="true"></span>
         <span>&#x500B;&#x4EBA;</span>
+        <span class="care-reminder-badge care-reminder-badge--mobile" data-care-reminder-badge hidden aria-hidden="true"></span>
       </button>
       <button class="mobile-nav-btn admin-only-nav hidden" role="tab" aria-selected="false" data-target="admin-view">
         <span class="nlc-icon icon" data-icon="shield" aria-hidden="true"></span>
@@ -1957,7 +1959,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260723_team_reminder_delivery"></script>
+  <script type="module" src="js/app.js?v=20260723_unread_reminder_badge"></script>
 </body>
 
 </html>

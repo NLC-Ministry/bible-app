@@ -23,6 +23,46 @@ import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 
 const buildVersion = "__BUILD_VERSION__" + "_team_dual_division";
 const moduleCache = {};
+let careReminderBadgeLastRefresh = 0;
+
+function updateCareReminderBadge(reminders = []) {
+  const count = Array.isArray(reminders) ? reminders.length : 0;
+  const badgeText = count > 9 ? "9+" : String(count);
+
+  document.querySelectorAll("[data-care-reminder-badge]").forEach(badge => {
+    badge.hidden = count === 0;
+    badge.textContent = count === 0 ? "" : badgeText;
+  });
+
+  document.querySelectorAll('[data-target="profile-view"]').forEach(button => {
+    button.setAttribute(
+      "aria-label",
+      count > 0 ? `個人，${count} 則未讀關心提醒` : "個人"
+    );
+  });
+}
+
+async function refreshCareReminderBadge(options = {}) {
+  if (typeof db === "undefined" || typeof db.fetchCareReminders !== "function") return;
+  if (!state.currentUser || !state.currentUser.id) {
+    updateCareReminderBadge([]);
+    return;
+  }
+
+  const now = Date.now();
+  if (!options.force && now - careReminderBadgeLastRefresh < 30000) return;
+  careReminderBadgeLastRefresh = now;
+
+  try {
+    const { data, error } = await db.fetchCareReminders();
+    if (!error) updateCareReminderBadge(data || []);
+  } catch (error) {
+    console.warn("Care reminder badge refresh failed:", error);
+  }
+}
+
+window.updateCareReminderBadge = updateCareReminderBadge;
+window.refreshCareReminderBadge = refreshCareReminderBadge;
 
 async function loadModule(name, path) {
   if (moduleCache[name]) {
@@ -176,6 +216,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
     // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──
     // All async rendering is complete. State is now fully settled.
     this.updateNavigationChrome();
+    refreshCareReminderBadge();
 
   } finally {
     // ── 7. Always release the lock, even on error ──
@@ -251,6 +292,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Update role-dependent UI now that profile data is loaded
     if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
 
+    await refreshCareReminderBadge({ force: true });
+
     // Render the initial view only after ALL data is ready
     await appRouter.switchTab('dashboard-view');
   } catch (err) {
@@ -288,6 +331,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       mod.renderPlanView().catch(() => {});
     }
   }).catch(() => {});
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshCareReminderBadge();
+    }
+  });
 
 
 });

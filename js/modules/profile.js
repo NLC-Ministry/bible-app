@@ -568,6 +568,9 @@ async function renderCareReminders() {
   }
 
   const { data: reminders, error } = await db.fetchCareReminders();
+  if (!error && typeof window.updateCareReminderBadge === "function") {
+    window.updateCareReminderBadge(reminders || []);
+  }
   if (error || !reminders || reminders.length === 0) {
     return;
   }
