@@ -79,6 +79,17 @@ describe("profile readiness source", () => {
     expect(edgeSource).not.toContain("orgFromHomePath");
     expect(edgeSource).not.toContain("orgFromLegacyOrganization");
   });
+
+  it("persists hasRequiredPlacement into the profiles row for degraded future syncs", () => {
+    const edgeSource = readFileSync(join(process.cwd(), "supabase/functions/nlc-session/index.ts"), "utf8");
+    expect(edgeSource).toContain("profilePayload.has_required_placement = hasRequiredPlacement");
+    expect(edgeSource).toContain("profile.hasRequiredPlacement = hasRequiredPlacement");
+  });
+
+  it("maps snake-case persisted required placement back into the browser profile state", () => {
+    const dbSource = readFileSync(join(process.cwd(), "js/db.js"), "utf8");
+    expect(dbSource).toContain("profile.hasRequiredPlacement === true || profile.has_required_placement === true");
+  });
 });
 
 describe("resolveSyncedRole", () => {

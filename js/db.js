@@ -510,7 +510,7 @@ const db = {
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
     state.currentUser.role = profile.role || "member";
-    state.currentUser.hasRequiredPlacement = profile.hasRequiredPlacement === true;
+    state.currentUser.hasRequiredPlacement = profile.hasRequiredPlacement === true || profile.has_required_placement === true;
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;

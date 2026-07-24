@@ -300,6 +300,7 @@ Deno.serve(async (req: Request) => {
       last_seen_at: nowIso,
       updated_at: nowIso
     };
+    profilePayload.has_required_placement = hasRequiredPlacement;
 
     if (memberId) {
       profilePayload.nlc_member_id = memberId;
