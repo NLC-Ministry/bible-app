@@ -510,6 +510,7 @@ const db = {
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
     state.currentUser.role = profile.role || "member";
+    state.currentUser.hasRequiredPlacement = profile.hasRequiredPlacement === true;
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
@@ -573,6 +574,9 @@ const db = {
     if (payload.profile) {
       if (payload.membership_status) {
         payload.profile.membership_status = payload.membership_status;
+      }
+      if (typeof payload.has_required_placement === "boolean") {
+        payload.profile.hasRequiredPlacement = payload.has_required_placement;
       }
       localStorage.setItem("nlc_supabase_profile", JSON.stringify(payload.profile));
     }

@@ -1,95 +1,83 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
-  orgFromCareChain,
-  orgFromHomePath,
-  orgFromLegacyOrganization,
+  orgFromProjectedOrganization,
   mergeOrgSources,
+  resolveRequiredPlacement,
   resolveSyncedRole,
   buildLockedFields
 } from "./lib/nlc-profile-sync.mjs";
 
-describe("orgFromCareChain", () => {
-  it("maps levelDepth 0/1/2 to great_region, pastoral_zone, small_group", () => {
-    const careChain = [
-      { nodeId: "1", name: "北大區", levelDepth: 0, levelName: "大區" },
-      { nodeId: "2", name: "青年牧區", levelDepth: 1, levelName: "牧區" },
-      { nodeId: "3", name: "大安小組", levelDepth: 2, levelName: "小組" },
-      { nodeId: "4", name: "恩典小家", levelDepth: 3, levelName: "小家" }
-    ];
-    expect(orgFromCareChain(careChain)).toEqual({
-      great_region: "北大區",
-      pastoral_zone: "青年牧區",
-      small_group: "大安小組"
-    });
-  });
-
-  it("returns nulls for empty chain", () => {
-    expect(orgFromCareChain([])).toEqual({
-      great_region: null,
-      pastoral_zone: null,
-      small_group: null
-    });
-  });
-});
-
-describe("orgFromHomePath", () => {
-  it("maps path segments by levelName", () => {
-    const path = [
-      { id: "1", name: "花蓮", levelName: "大區" },
-      { id: "2", name: "資訊事工", levelName: "牧區" },
-      { id: "3", name: "大安小組", levelName: "小組" },
-      { id: "4", name: "恩典小家", levelName: "小家" }
-    ];
-    expect(orgFromHomePath(path)).toEqual({
-      great_region: "花蓮",
-      pastoral_zone: "資訊事工",
-      small_group: "大安小組"
-    });
-  });
-});
-
 describe("mergeOrgSources", () => {
-  it("prefers Platform org over placement and legacy", () => {
-    const platform = { great_region: "A", pastoral_zone: "B", small_group: "C" };
-    const placement = { great_region: "X", pastoral_zone: "Y", small_group: "Z" };
-    const legacy = { homeRegionName: "L1", homeZoneName: "L2", homeGroupName: "L3" };
-    expect(mergeOrgSources(platform, placement, legacy)).toEqual(platform);
+  it("uses Member Hub projected organization fields before any fallback", () => {
+    const projected = orgFromProjectedOrganization({
+      greatRegion: "北一大區",
+      pastoralZone: "士林牧區",
+      smallGroup: "士林小組",
+      homeRegionName: "Legacy Region",
+      homeZoneName: "Legacy Zone",
+      homeGroupName: "Legacy Group"
+    });
+
+    expect(projected).toEqual({
+      great_region: "北一大區",
+      pastoral_zone: "士林牧區",
+      small_group: "士林小組"
+    });
   });
 
-  it("falls back to legacy fields then homeNodeName", () => {
+  it("prefers projected org over existing profile fallback", () => {
+    const projected = { great_region: "A", pastoral_zone: "B", small_group: "C" };
+    const existing = { great_region: "X", pastoral_zone: "Y", small_group: "Z" };
+    expect(mergeOrgSources(projected, existing)).toEqual(projected);
+  });
+
+  it("falls back to existing profile fields only when projected org is absent", () => {
     expect(mergeOrgSources(
       { great_region: null, pastoral_zone: null, small_group: null },
-      { great_region: null, pastoral_zone: null, small_group: null },
-      { homeRegionName: "東區", homeZoneName: "大安1", homeGroupName: "馬鈴" }
+      { great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴" }
     )).toEqual({
       great_region: "東區",
       pastoral_zone: "大安1",
       small_group: "馬鈴"
-    });
-
-    expect(mergeOrgSources(
-      { great_region: null, pastoral_zone: null, small_group: null },
-      { great_region: null, pastoral_zone: null, small_group: null },
-      { homeNodeName: "恩典小家" }
-    )).toEqual({
-      great_region: null,
-      pastoral_zone: "恩典小家",
-      small_group: null
     });
   });
 });
 
-describe("orgFromLegacyOrganization", () => {
-  it("reads deprecated homeRegionName fields", () => {
-    expect(orgFromLegacyOrganization({
-      homeRegionName: "東區",
-      homeZoneName: "大安1",
-      homeGroupName: "馬鈴"
-    })).toEqual({
-      great_region: "東區",
-      pastoral_zone: "大安1",
-      small_group: "馬鈴"
-    });
+describe("resolveRequiredPlacement", () => {
+  it("uses hasRequiredPlacement and does not derive readiness from hasHome", () => {
+    expect(resolveRequiredPlacement(
+      { hasRequiredPlacement: true, hasHome: false },
+      false
+    )).toBe(true);
+    expect(resolveRequiredPlacement(
+      { hasRequiredPlacement: false, hasHome: true },
+      true
+    )).toBe(false);
+  });
+
+  it("preserves the previous value when Hub omits hasRequiredPlacement", () => {
+    expect(resolveRequiredPlacement({ hasHome: false }, true)).toBe(true);
+  });
+});
+
+describe("profile readiness source", () => {
+  it("checks hasRequiredPlacement instead of hasHome for Member Hub org setup readiness", () => {
+    const profileSource = readFileSync(join(process.cwd(), "js/modules/profile.js"), "utf8");
+    const match = profileSource.match(/function userNeedsOrgSetup\(\) \{[\s\S]*?\n\}/);
+    expect(match && match[0]).toContain("hasRequiredPlacement");
+    expect(match && match[0]).not.toContain("hasHome");
+  });
+
+  it("does not call legacy org derivation helpers from the Edge Function", () => {
+    const edgeSource = readFileSync(join(process.cwd(), "supabase/functions/nlc-session/index.ts"), "utf8");
+    expect(edgeSource).toContain("orgFromProjectedOrganization(organization)");
+    expect(edgeSource).not.toContain("/api/me/org-placement");
+    expect(edgeSource).not.toContain("/members/${encodeURIComponent(memberId)}/organization");
+    expect(edgeSource).not.toContain("orgFromCareChain");
+    expect(edgeSource).not.toContain("orgFromHomePath");
+    expect(edgeSource).not.toContain("orgFromLegacyOrganization");
   });
 });
 
