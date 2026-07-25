@@ -39,8 +39,8 @@ export class ValidateReportBlock {
     }
 
     const trimmed = description.trim();
-    if (trimmed.length < 10) {
-      return { success: false, error: "回報內容太短（最少 10 個字）" };
+    if (trimmed.length < 1) {
+      return { success: false, error: "回報內容太短（最少 1 個字）" };
     }
     if (trimmed.length > 500) {
       return { success: false, error: "回報內容太長（最多 500 個字）" };

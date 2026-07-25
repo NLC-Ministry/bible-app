@@ -9,6 +9,71 @@ export const IssueReportFab: React.FC = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // 1. Route Protection & Location check
+  const [currentPath, setCurrentPath] = React.useState(
+    typeof window !== "undefined" ? window.location.pathname : ""
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleLocationChange = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", handleLocationChange);
+    // Periodically sync path to catch SPA custom tab routing shifts
+    const interval = setInterval(handleLocationChange, 500);
+
+    return () => {
+      window.removeEventListener("popstate", handleLocationChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // 2. Smart Scroll Hide with Throttle
+  const [isVisible, setIsVisible] = React.useState(true);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let lastScrollY = window.scrollY;
+    let throttleTimeout: any = null;
+    let scrollStopTimeout: any = null;
+
+    const handleScroll = (event: Event) => {
+      if (throttleTimeout) return;
+
+      throttleTimeout = setTimeout(() => {
+        const target = event.target as HTMLElement;
+        const currentScrollY = target.scrollTop !== undefined ? target.scrollTop : window.scrollY;
+
+        if (scrollStopTimeout) clearTimeout(scrollStopTimeout);
+
+        if (currentScrollY > lastScrollY && currentScrollY > 50) {
+          // Scrolling down - hide
+          setIsVisible(false);
+        } else {
+          // Scrolling up - show
+          setIsVisible(true);
+        }
+
+        lastScrollY = currentScrollY;
+        throttleTimeout = null;
+
+        // Auto-show when scrolling stops for a brief period
+        scrollStopTimeout = setTimeout(() => {
+          setIsVisible(true);
+        }, 150);
+      }, 50); // 50ms throttle
+    };
+
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      if (throttleTimeout) clearTimeout(throttleTimeout);
+      if (scrollStopTimeout) clearTimeout(scrollStopTimeout);
+    };
+  }, []);
+
   // Initialize offline sync on mount
   React.useEffect(() => {
     initOfflineReportSync();
@@ -56,13 +121,27 @@ export const IssueReportFab: React.FC = () => {
     }
   };
 
+  // Check if we are on a login or excluded auth page
+  const isExcluded =
+    (currentPath || "") === "/login" ||
+    (currentPath || "").startsWith("/auth") ||
+    (currentPath || "") === "/signup" ||
+    // Integration fallback checking if the login gate DOM is visible on screen
+    (typeof document !== "undefined" && document.getElementById("login-gate") && !document.getElementById("login-gate")?.classList.contains("hidden"));
+
+  if (isExcluded) {
+    return null;
+  }
+
   return (
     <>
       {/* Floating Action Button (FAB) */}
       <button
         onClick={handleOpen}
-        className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
-          isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
+        className={`fixed bottom-20 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
+          isOpen ? "scale-0 opacity-0 pointer-events-none" : ""
+        } ${
+          !isVisible && !isOpen ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
         }`}
         aria-label="打開問題回報與建議表單"
       >
@@ -150,7 +229,7 @@ export const IssueReportFab: React.FC = () => {
               </label>
               <span
                 className={`text-xs ${
-                  description.length < 10 || description.length > 500
+                  description.length < 1 || description.length > 500
                     ? "text-rose-500 font-medium"
                     : "text-slate-400 dark:text-zinc-500"
                 }`}
@@ -164,7 +243,7 @@ export const IssueReportFab: React.FC = () => {
               onChange={(e) => setDescription(e.target.value)}
               disabled={isLoading}
               rows={4}
-              placeholder="請詳細描述您遇到的問題或建議，最少 10 個字，最多 500 個字..."
+              placeholder="請詳細描述您遇到的問題或建議，最少 1 個字，最多 500 個字..."
               className="mt-1.5 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-neutral-100"
             />
             <p className="mt-1.5 text-xs text-slate-400 dark:text-zinc-500">
@@ -175,7 +254,7 @@ export const IssueReportFab: React.FC = () => {
           {/* Submit Action Button */}
           <button
             type="submit"
-            disabled={isLoading || description.length < 10 || description.length > 500}
+            disabled={isLoading || description.length < 1 || description.length > 500}
             className="flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600"
           >
             {isLoading ? (

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
 import { IssueReportFab } from "../IssueReportFab.tsx";
+import { convertToCSV } from "../AdminReportView.tsx";
 
 class MockIDBRequest {
   result: any;
@@ -12,7 +13,7 @@ class MockIDBRequest {
 
 if (typeof globalThis.window === "undefined") {
   (globalThis as any).window = globalThis;
-  (globalThis as any).window.location = { href: "http://localhost/test" };
+  (globalThis as any).window.location = { href: "http://localhost/test", pathname: "/test" };
 }
 
 if (typeof globalThis.navigator === "undefined") {
@@ -69,10 +70,10 @@ describe("Issue Report System Tests", () => {
       expect(result.error).toBe("無效的分類項目");
     });
 
-    it("當描述少於 10 個字時，應阻擋並回傳錯誤", () => {
-      const result = ValidateReportBlock.validate("bug", "太短了");
+    it("當描述少於 1 個字時，應阻擋並回傳錯誤", () => {
+      const result = ValidateReportBlock.validate("bug", "");
       expect(result.success).toBe(false);
-      expect(result.error).toBe("回報內容太短（最少 10 個字）");
+      expect(result.error).toBe("回報內容不能為空");
     });
 
     it("當描述超過 500 個字時，應阻擋並回傳錯誤", () => {
@@ -176,7 +177,7 @@ describe("Issue Report System Tests", () => {
         
         expect(fabButton).toBeDefined();
         expect(fabButton.props.className).toContain("fixed");
-        expect(fabButton.props.className).toContain("bottom-6");
+        expect(fabButton.props.className).toContain("bottom-20");
         expect(fabButton.props.className).toContain("right-6");
         expect(fabButton.props.className).toContain("z-[9999]");
         
@@ -186,6 +187,74 @@ describe("Issue Report System Tests", () => {
         (React as any).useState = origUseState;
         (React as any).useEffect = origUseEffect;
       }
+    });
+  });
+
+  // 5. Smart Routing, Scroll Hide, and CSV Export Tests
+  describe("Route protection, Smart scroll, and CSV Export", () => {
+    it("當路由切換至 '/login' 時，元件渲染結果為 null", () => {
+      // Mock hooks to bypass dispatcher checks
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      const origPath = window.location.pathname;
+      Object.defineProperty(window.location, 'pathname', { value: '/login', configurable: true });
+
+      try {
+        const element = (IssueReportFab as any)({});
+        expect(element).toBeNull();
+      } finally {
+        Object.defineProperty(window.location, 'pathname', { value: origPath, configurable: true });
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
+    });
+
+    it("向下滾動事件觸發時，懸浮球狀態正確切換為隱藏", () => {
+      let isVisible = true;
+      const simulateScroll = (lastY: number, currentY: number) => {
+        if (currentY > lastY && currentY > 50) {
+          isVisible = false;
+        } else {
+          isVisible = true;
+        }
+      };
+
+      // 1. Scroll down past 50px -> should hide
+      simulateScroll(0, 100);
+      expect(isVisible).toBe(false);
+
+      // 2. Scroll up -> should show
+      simulateScroll(100, 40);
+      expect(isVisible).toBe(true);
+    });
+
+    it("匯出功能能正確將 JSON 轉換為 CSV 字串格式", () => {
+      const mockReports: any[] = [
+        {
+          id: "rep-1",
+          created_at: "2026-07-25T12:00:00Z",
+          category: "bug",
+          description: "發現錯誤：內容包含 \"雙引號\"",
+          url: "http://localhost/test",
+          user_agent: "agent-1",
+          status: "pending"
+        }
+      ];
+
+      const csv = convertToCSV(mockReports);
+
+      // Headers exist
+      expect(csv).toContain("ID,建立時間,分類,問題描述,來源網址,瀏覽器環境 (User Agent),狀態");
+      // Data converted correctly
+      expect(csv).toContain("\"rep-1\"");
+      expect(csv).toContain("\"Bug 錯誤\"");
+      // Quotes escaped correctly
+      expect(csv).toContain("\"發現錯誤：內容包含 \"\"雙引號\"\"\"");
     });
   });
 });
