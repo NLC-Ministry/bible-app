@@ -1,17 +1,16 @@
-// components/issue-report/IssueReportFab.tsx
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { MessageSquare, X, Loader2 } from "lucide-react";
 import { ReportPipeline, initOfflineReportSync } from "./IssueReportBlocks.ts";
 
 export const IssueReportFab: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [category, setCategory] = useState("bug");
-  const [description, setDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [category, setCategory] = React.useState("bug");
+  const [description, setDescription] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Initialize offline sync on mount
-  useEffect(() => {
+  React.useEffect(() => {
     initOfflineReportSync();
   }, []);
 
@@ -62,7 +61,7 @@ export const IssueReportFab: React.FC = () => {
       {/* Floating Action Button (FAB) */}
       <button
         onClick={handleOpen}
-        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
+        className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
           isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
         }`}
         aria-label="打開問題回報與建議表單"
@@ -74,13 +73,13 @@ export const IssueReportFab: React.FC = () => {
       {isOpen && (
         <div
           onClick={handleClose}
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-300"
+          className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-sm transition-opacity duration-300"
         />
       )}
 
       {/* Bottom Drawer (Mobile-First Drawer UI) */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-lg flex-col rounded-t-2xl bg-white p-6 shadow-2xl transition-all duration-300 dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 ${
+        className={`fixed inset-x-0 bottom-0 z-[9999] mx-auto flex max-w-lg flex-col rounded-t-2xl bg-white p-6 shadow-2xl transition-all duration-300 dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 ${
           isOpen ? "translate-y-0" : "translate-y-full"
         }`}
         role="dialog"

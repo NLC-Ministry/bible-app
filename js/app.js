@@ -1,6 +1,9 @@
 // js/app.js
 
 // Import all support and core files to be bundled by esbuild in correct order
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { IssueReportFab } from '../components/issue-report/IssueReportFab.tsx';
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
@@ -347,5 +350,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-
+  // Mount the React IssueReportFab component to document.body
+  try {
+    const reportRoot = document.createElement("div");
+    reportRoot.id = "issue-report-root";
+    document.body.appendChild(reportRoot);
+    const root = createRoot(reportRoot);
+    root.render(React.createElement(IssueReportFab));
+    console.log("[IssueReport] Mounted IssueReportFab React component successfully.");
+  } catch (err) {
+    console.error("[IssueReport] Failed to mount React component:", err);
+  }
 });

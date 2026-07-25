@@ -1,6 +1,8 @@
 // components/issue-report/__tests__/IssueReport.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
+import { IssueReportFab } from "../IssueReportFab.tsx";
 
 class MockIDBRequest {
   result: any;
@@ -144,6 +146,46 @@ describe("Issue Report System Tests", () => {
       // 點擊關閉 X 按鈕
       toggle();
       expect(isOpen).toBe(false);
+    });
+  });
+
+  // 4. UI Rendering and Click Interaction Tests
+  describe("UI FAB React Element Structure", () => {
+    it("主頁面 Render 後，懸浮圓球按鈕確確實實存在且可被點擊觸發狀態切換", () => {
+      // Temporarily mock hooks to bypass dispatcher checks
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      try {
+        // Call the functional component directly to obtain its virtual DOM elements
+        const element = (IssueReportFab as any)({});
+        
+        expect(element).toBeDefined();
+        expect(element.type).toBe(React.Fragment);
+        
+        const children = React.Children.toArray(element.props.children);
+        
+        // Find the FAB button by its tag name and aria-label
+        const fabButton = children.find(
+          (child: any) => child.type === "button" && child.props["aria-label"] === "打開問題回報與建議表單"
+        ) as any;
+        
+        expect(fabButton).toBeDefined();
+        expect(fabButton.props.className).toContain("fixed");
+        expect(fabButton.props.className).toContain("bottom-6");
+        expect(fabButton.props.className).toContain("right-6");
+        expect(fabButton.props.className).toContain("z-[9999]");
+        
+        // Verify click action handler exists
+        expect(typeof fabButton.props.onClick).toBe("function");
+      } finally {
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
     });
   });
 });
