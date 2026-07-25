@@ -177,7 +177,7 @@ describe("Issue Report System Tests", () => {
         
         expect(fabButton).toBeDefined();
         expect(fabButton.props.className).toContain("fixed");
-        expect(fabButton.props.className).toContain("bottom-20");
+        expect(fabButton.props.className).toContain("bottom-28");
         expect(fabButton.props.className).toContain("right-6");
         expect(fabButton.props.className).toContain("z-[9999]");
         
