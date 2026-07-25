@@ -138,7 +138,7 @@ export const IssueReportFab: React.FC = () => {
       {/* Floating Action Button (FAB) */}
       <button
         onClick={handleOpen}
-        className={`fixed bottom-20 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
+        className={`fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-indigo-700 active:scale-95 ${
           isOpen ? "scale-0 opacity-0 pointer-events-none" : ""
         } ${
           !isVisible && !isOpen ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"

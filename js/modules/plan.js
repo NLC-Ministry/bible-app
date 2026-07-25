@@ -5359,6 +5359,18 @@ window.displayParticipantsList = function (limit = 100) {
 async function renderPlanMembersView() {
   if (!state.activePlan) return;
 
+  // Set up collapsible list logic
+  const toggleBtn = document.getElementById("btn-toggle-members-collapse");
+  const wrapper = document.getElementById("members-list-collapsible-wrapper");
+  if (toggleBtn && wrapper && !toggleBtn.dataset.listenerBound) {
+    toggleBtn.dataset.listenerBound = "true";
+    toggleBtn.addEventListener("click", () => {
+      const isCollapsed = wrapper.classList.toggle("hidden");
+      toggleBtn.querySelector("span:first-child").textContent = isCollapsed ? "展開" : "收合";
+      toggleBtn.querySelector("span:last-child").textContent = isCollapsed ? "▼" : "▲";
+    });
+  }
+
   if (!(await prepareReadingTeamSubview("members"))) return;
 
   // Switch the header filter bars: show members controls, hide stats controls

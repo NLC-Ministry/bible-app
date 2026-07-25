@@ -4,6 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { IssueReportFab } from '../components/issue-report/IssueReportFab.tsx';
+import { AdminReportView } from '../components/issue-report/AdminReportView.tsx';
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
@@ -360,5 +361,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("[IssueReport] Mounted IssueReportFab React component successfully.");
   } catch (err) {
     console.error("[IssueReport] Failed to mount React component:", err);
+  }
+
+  // Mount the React AdminReportView component to #admin-reports-root
+  try {
+    const adminReportsRoot = document.getElementById("admin-reports-root");
+    if (adminReportsRoot) {
+      const root = createRoot(adminReportsRoot);
+      root.render(React.createElement(AdminReportView));
+      console.log("[IssueReportAdmin] Mounted AdminReportView React component successfully.");
+    }
+  } catch (err) {
+    console.error("[IssueReportAdmin] Failed to mount AdminReportView component:", err);
   }
 });
