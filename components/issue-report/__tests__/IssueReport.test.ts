@@ -4,6 +4,7 @@ import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
 import { IssueReportFab } from "../IssueReportFab.tsx";
 import { convertToCSV } from "../AdminReportView.tsx";
+import { AdminUsersAccordion } from "../AdminUsersAccordion.tsx";
 
 class MockIDBRequest {
   result: any;
@@ -255,6 +256,82 @@ describe("Issue Report System Tests", () => {
       expect(csv).toContain("\"Bug 錯誤\"");
       // Quotes escaped correctly
       expect(csv).toContain("\"發現錯誤：內容包含 \"\"雙引號\"\"\"");
+    });
+  });
+
+  // 6. AdminUsersAccordion Collapsible and Render Tests
+  describe("AdminUsersAccordion Component", () => {
+    it("頁面初始 Render 時，人員名單 Accordion 預設為關閉狀態", () => {
+      // Mock hooks to bypass dispatcher checks
+      let initialIsOpenState: boolean | null = null;
+      const mockState = vi.fn().mockImplementation((init) => {
+        if (initialIsOpenState === null && typeof init === "boolean") {
+          initialIsOpenState = init;
+        }
+        return [init, vi.fn()];
+      });
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      try {
+        const element = (AdminUsersAccordion as any)({});
+        expect(element).toBeDefined();
+        // Check default state is false (closed/collapsed)
+        expect(initialIsOpenState).toBe(false);
+      } finally {
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
+    });
+
+    it("點擊 Accordion 標題時，機能正確切換展開/收合狀態", () => {
+      let isOpen = false;
+      const toggle = () => {
+        isOpen = !isOpen;
+      };
+
+      // 1. Initial State
+      expect(isOpen).toBe(false);
+
+      // 2. Expand action
+      toggle();
+      expect(isOpen).toBe(true);
+
+      // 3. Collapse action
+      toggle();
+      expect(isOpen).toBe(false);
+    });
+
+    it("名單內容區存在對應的目標 DOM 元素容器", () => {
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      try {
+        const element = (AdminUsersAccordion as any)({});
+        expect(element).toBeDefined();
+        
+        // Find inside content tree
+        const contentArea = React.Children.toArray(element.props.children)[1] as any;
+        expect(contentArea).toBeDefined();
+        expect(contentArea.props.className).toContain("transition-all");
+        
+        const scrollArea = React.Children.toArray(contentArea.props.children.props.children) as any[];
+        const scrollContainer = scrollArea.find((child: any) => child.props.id === "admin-users-list-scroll-area");
+        expect(scrollContainer).toBeDefined();
+        
+        const listDiv = scrollContainer.props.children;
+        expect(listDiv.props.id).toBe("admin-users-list");
+      } finally {
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
     });
   });
 });

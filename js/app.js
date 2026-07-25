@@ -5,6 +5,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { IssueReportFab } from '../components/issue-report/IssueReportFab.tsx';
 import { AdminReportView } from '../components/issue-report/AdminReportView.tsx';
+import { AdminUsersAccordion } from '../components/issue-report/AdminUsersAccordion.tsx';
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
@@ -373,5 +374,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (err) {
     console.error("[IssueReportAdmin] Failed to mount AdminReportView component:", err);
+  }
+
+  // Mount the React AdminUsersAccordion component to #admin-users-accordion-root
+  try {
+    const adminUsersAccordionRoot = document.getElementById("admin-users-accordion-root");
+    if (adminUsersAccordionRoot) {
+      const root = createRoot(adminUsersAccordionRoot);
+      root.render(React.createElement(AdminUsersAccordion));
+      console.log("[IssueReportAdmin] Mounted AdminUsersAccordion React component successfully.");
+    }
+  } catch (err) {
+    console.error("[IssueReportAdmin] Failed to mount AdminUsersAccordion component:", err);
   }
 });

@@ -58,13 +58,27 @@ export const AdminReportView: React.FC = () => {
         throw new Error("Supabase client is not initialized");
       }
 
-      const { data, error: fetchErr } = await supabase
-        .from("issue_reports")
-        .select("*")
-        .order("created_at", { ascending: false });
+      // Fetch session token
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !session) {
+        throw new Error("請先登入管理員帳號");
+      }
+
+      // Query via nlc-data Edge Function
+      const { data: resData, error: fetchErr } = await supabase.functions.invoke("nlc-data", {
+        body: {
+          table: "issue_reports",
+          action: "select",
+          select: "*",
+          order: { column: "created_at", ascending: false }
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       if (fetchErr) throw fetchErr;
-      setReports(data || []);
+      setReports(resData || []);
     } catch (err: any) {
       console.error("[IssueReportAdmin] Fetch error:", err);
       setError(err.message || "載入回報失敗，請確認管理員權限");
@@ -98,11 +112,25 @@ export const AdminReportView: React.FC = () => {
       const supabase = state?.supabase;
       if (!supabase) throw new Error("Supabase client is not initialized");
 
-      // Parametrized query built automatically by Supabase query builder
-      const { error: delErr } = await supabase
-        .from("issue_reports")
-        .delete()
-        .eq("id", deleteTargetId);
+      // Fetch session token
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !session) {
+        throw new Error("請先登入管理員帳號");
+      }
+
+      // Delete via nlc-data Edge Function
+      const { error: delErr } = await supabase.functions.invoke("nlc-data", {
+        body: {
+          table: "issue_reports",
+          action: "delete",
+          filters: [
+            { type: "eq", column: "id", value: deleteTargetId }
+          ]
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
       if (delErr) throw delErr;
 

@@ -88,6 +88,24 @@ function parseJwt(token: string) {
 }
 
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
+  // 1. Try verifying as Supabase JWT first (standard Supabase client auth)
+  try {
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(accessToken);
+    if (user && !authErr) {
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      if (!profileError && profile) {
+        return profile;
+      }
+    }
+  } catch (err) {
+    console.log("Supabase JWT verification bypassed, falling back to Logto OIDC:", err);
+  }
+
+  // 2. Fallback to Logto OIDC SSO verification
   let sub: string | null = null;
 
   // Try decoding as JWT first (since Logto issues JWT access tokens for API resources)
@@ -372,9 +390,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl, profile_id: profile.id });
     }
 
-    const canRead = action === "select" && READ_TABLES.has(table);
+    const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
     const canOwnWrite = ["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table);
-    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && ADMIN_WRITE_TABLES.has(table) && isAdmin(profile);
+    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && isAdmin(profile);
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
 
 
