@@ -71,3 +71,8 @@ CREATE POLICY "Only admins can delete reports"
             WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
         )
     );
+
+-- 4. Add foreign key relation to profiles table
+ALTER TABLE public.issue_reports DROP CONSTRAINT IF EXISTS fk_issue_reports_user_id;
+ALTER TABLE public.issue_reports ADD CONSTRAINT fk_issue_reports_user_id FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+

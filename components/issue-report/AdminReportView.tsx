@@ -10,6 +10,11 @@ interface IssueReport {
   url?: string;
   user_agent?: string;
   status: string;
+  profiles?: {
+    name?: string;
+    pastoral_zone?: string;
+    small_group?: string;
+  } | null;
 }
 
 const CATEGORY_MAP = {
@@ -21,15 +26,15 @@ const CATEGORY_MAP = {
 
 export function convertToCSV(data: IssueReport[]): string {
   if (!data || data.length === 0) return "";
-  const headers = ["ID", "建立時間", "分類", "問題描述", "來源網址", "瀏覽器環境 (User Agent)", "狀態"];
+  const headers = ["ID", "建立時間", "分類", "問題描述", "回報者姓名", "回報者牧區", "回報者小組"];
   const rows = data.map(item => [
     item.id,
     item.created_at,
     CATEGORY_MAP[item.category] || item.category,
     item.description.replace(/"/g, '""'),
-    item.url || "",
-    item.user_agent || "",
-    item.status
+    item.profiles?.name || "訪客/離線",
+    item.profiles?.pastoral_zone || "",
+    item.profiles?.small_group || ""
   ]);
   
   return [
@@ -83,7 +88,7 @@ export const AdminReportView: React.FC = () => {
         body: JSON.stringify({
           table: "issue_reports",
           action: "select",
-          select: "*",
+          select: "*, profiles(name, pastoral_zone, small_group)",
           order: { column: "created_at", ascending: false }
         })
       });

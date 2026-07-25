@@ -11,6 +11,11 @@ interface IssueReport {
   url?: string;
   user_agent?: string;
   status: string;
+  profiles?: {
+    name?: string;
+    pastoral_zone?: string;
+    small_group?: string;
+  } | null;
 }
 
 const CATEGORY_MAP = {
@@ -148,10 +153,8 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
               <tr>
                 <th className="px-4 py-3">建立時間</th>
                 <th className="px-4 py-3">分類</th>
-                <th className="px-6 py-3 w-1/3">回報內容</th>
-                <th className="px-4 py-3">來源網址</th>
-                <th className="px-4 py-3">瀏覽器 User Agent</th>
-                <th className="px-4 py-3">狀態</th>
+                <th className="px-6 py-3 w-1/2">回報內容</th>
+                <th className="px-4 py-3">回報人姓名 / 牧區 / 小組</th>
                 <th className="px-4 py-3 text-center">操作</th>
               </tr>
             </thead>
@@ -177,16 +180,15 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                   <td className="px-6 py-3.5 break-words leading-relaxed text-sm" style={{ color: "var(--text-primary)" }}>
                     {report.description}
                   </td>
-                  <td className="px-4 py-3.5 break-all max-w-[150px] hover:underline" style={{ color: "var(--primary-color)" }}>
-                    {report.url ? <a href={report.url} target="_blank" rel="noreferrer">{new URL(report.url).pathname + new URL(report.url).search}</a> : "-"}
-                  </td>
-                  <td className="px-4 py-3.5 max-w-[150px] truncate" style={{ color: "var(--text-muted)" }} title={report.user_agent}>
-                    {report.user_agent || "-"}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className="text-[11px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
-                      {report.status}
-                    </span>
+                  <td className="px-4 py-3.5 max-w-[200px]">
+                    {report.profiles ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm">{report.profiles.name || "未填姓名"}</span>
+                        <span className="text-[10px]" style={{ color: "var(--text-secondary)" }}>{report.profiles.pastoral_zone || "無牧區"} / {report.profiles.small_group || "無小組"}</span>
+                      </div>
+                    ) : (
+                      <span style={{ color: "var(--text-muted)" }}>訪客 / 離線回報</span>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-center">
                     <motion.button

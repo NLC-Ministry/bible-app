@@ -245,17 +245,25 @@ describe("Issue Report System Tests", () => {
           description: "發現錯誤：內容包含 \"雙引號\"",
           url: "http://localhost/test",
           user_agent: "agent-1",
-          status: "pending"
+          status: "pending",
+          profiles: {
+            name: "測試人",
+            pastoral_zone: "社青牧區",
+            small_group: "社青一組"
+          }
         }
       ];
 
       const csv = convertToCSV(mockReports);
 
       // Headers exist
-      expect(csv).toContain("ID,建立時間,分類,問題描述,來源網址,瀏覽器環境 (User Agent),狀態");
+      expect(csv).toContain("ID,建立時間,分類,問題描述,回報者姓名,回報者牧區,回報者小組");
       // Data converted correctly
       expect(csv).toContain("\"rep-1\"");
       expect(csv).toContain("\"Bug 錯誤\"");
+      expect(csv).toContain("\"測試人\"");
+      expect(csv).toContain("\"社青牧區\"");
+      expect(csv).toContain("\"社青一組\"");
       // Quotes escaped correctly
       expect(csv).toContain("\"發現錯誤：內容包含 \"\"雙引號\"\"\"");
     });
