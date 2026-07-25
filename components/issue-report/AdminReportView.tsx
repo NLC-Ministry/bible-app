@@ -1,6 +1,6 @@
 // components/issue-report/AdminReportView.tsx
 import React, { useState, useEffect } from "react";
-import { Download, Trash2, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { AdminReportTable } from "./AdminReportTable.tsx";
 
 interface IssueReport {
   id: string;
@@ -19,9 +19,6 @@ const CATEGORY_MAP = {
   other: "其他"
 };
 
-/**
- * Converts reports JSON array to CSV format
- */
 export function convertToCSV(data: IssueReport[]): string {
   if (!data || data.length === 0) return "";
   const headers = ["ID", "建立時間", "分類", "問題描述", "來源網址", "瀏覽器環境 (User Agent)", "狀態"];
@@ -29,7 +26,7 @@ export function convertToCSV(data: IssueReport[]): string {
     item.id,
     item.created_at,
     CATEGORY_MAP[item.category] || item.category,
-    item.description.replace(/"/g, '""'), // escape double quotes
+    item.description.replace(/"/g, '""'),
     item.url || "",
     item.user_agent || "",
     item.status
@@ -45,8 +42,6 @@ export const AdminReportView: React.FC = () => {
   const [reports, setReports] = useState<IssueReport[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -62,7 +57,6 @@ export const AdminReportView: React.FC = () => {
         throw new Error("Supabase client is not initialized");
       }
 
-      // 1. Get access token from either Supabase Auth session or Logto client
       let accessToken = "";
       if (supabase && typeof supabase.auth?.getSession === "function") {
         const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
@@ -78,7 +72,6 @@ export const AdminReportView: React.FC = () => {
         throw new Error("請先登入管理員帳號");
       }
 
-      // 2. Query via nlc-data Edge Function directly using fetch
       const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
       const response = await fetch(functionUrl, {
         method: "POST",
@@ -116,7 +109,7 @@ export const AdminReportView: React.FC = () => {
   const handleExportCSV = () => {
     if (reports.length === 0) return;
     const csvContent = convertToCSV(reports);
-    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" }); // BOM for Excel Chinese reading
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -126,9 +119,7 @@ export const AdminReportView: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const handleDelete = async () => {
-    if (!deleteTargetId) return;
-    setIsDeleting(true);
+  const handleDelete = async (id: string) => {
     try {
       const state = (window as any).state;
       const supabase = state?.supabase;
@@ -138,7 +129,6 @@ export const AdminReportView: React.FC = () => {
 
       if (!supabase) throw new Error("Supabase client is not initialized");
 
-      // 1. Get access token from either Supabase Auth session or Logto client
       let accessToken = "";
       if (supabase && typeof supabase.auth?.getSession === "function") {
         const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
@@ -154,7 +144,6 @@ export const AdminReportView: React.FC = () => {
         throw new Error("請先登入管理員帳號");
       }
 
-      // 2. Delete via nlc-data Edge Function directly using fetch
       const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
       const response = await fetch(functionUrl, {
         method: "POST",
@@ -167,7 +156,7 @@ export const AdminReportView: React.FC = () => {
           table: "issue_reports",
           action: "delete",
           filters: [
-            { type: "eq", column: "id", value: deleteTargetId }
+            { type: "eq", column: "id", value: id }
           ]
         })
       });
@@ -177,189 +166,21 @@ export const AdminReportView: React.FC = () => {
         throw new Error(payload.error || `HTTP 錯誤 ${response.status}`);
       }
 
-      setReports(prev => prev.filter(r => r.id !== deleteTargetId));
-      setDeleteTargetId(null);
+      setReports(prev => prev.filter(r => r.id !== id));
     } catch (err: any) {
       console.error("[IssueReportAdmin] Delete error:", err);
-      alert(err.message || "刪除失敗");
-    } finally {
-      setIsDeleting(false);
+      throw err;
     }
   };
 
   return (
-    <div 
-      className="flex w-full flex-col gap-6 p-6 rounded-xl border"
-      style={{ 
-        backgroundColor: "var(--bg-app)", 
-        borderColor: "var(--border-card)",
-        color: "var(--text-primary)"
-      }}
-    >
-      {/* Title & Actions */}
-      <div 
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-4"
-        style={{ borderColor: "var(--border-card)" }}
-      >
-        <div>
-          <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>問題與建議回報管理</h2>
-          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>檢視並管理使用者提交的 Bug 報告與介面建議</p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchReports}
-            disabled={isLoading}
-            className="flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-colors shadow-sm disabled:opacity-50"
-            style={{ 
-              backgroundColor: "var(--bg-card)", 
-              borderColor: "var(--border-card)", 
-              color: "var(--text-primary)" 
-            }}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            重新整理
-          </button>
-          
-          <button
-            onClick={handleExportCSV}
-            disabled={reports.length === 0 || isLoading}
-            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold text-white transition-colors shadow-sm disabled:opacity-50"
-            style={{ backgroundColor: "var(--primary-color)" }}
-          >
-            <Download className="h-3.5 w-3.5" />
-            匯出 Excel/CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Error Alert Box */}
-      {error && (
-        <div className="flex items-start gap-3 rounded-lg p-4 text-sm border" style={{ backgroundColor: "var(--color-danger-subtle)", borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-          <div>
-            <span className="font-semibold">載入錯誤：</span>
-            {error}
-          </div>
-        </div>
-      )}
-
-      {/* Reports Table Container */}
-      <div 
-        className="overflow-x-auto rounded-lg border shadow"
-        style={{ 
-          backgroundColor: "var(--bg-card)", 
-          borderColor: "var(--border-card)" 
-        }}
-      >
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center p-12" style={{ color: "var(--text-muted)" }}>
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: "var(--primary-color)" }} />
-            <span className="mt-3 text-sm">正在載入回報清單...</span>
-          </div>
-        ) : reports.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-sm" style={{ color: "var(--text-muted)" }}>
-            無任何回報資料
-          </div>
-        ) : (
-          <table className="min-w-full divide-y text-left text-xs" style={{ borderColor: "var(--border-card)" }}>
-            <thead className="uppercase tracking-wider font-semibold" style={{ backgroundColor: "var(--bg-app)", color: "var(--text-secondary)" }}>
-              <tr>
-                <th className="px-4 py-3">建立時間</th>
-                <th className="px-4 py-3">分類</th>
-                <th className="px-6 py-3 w-1/3">回報內容</th>
-                <th className="px-4 py-3">來源網址</th>
-                <th className="px-4 py-3">瀏覽器 User Agent</th>
-                <th className="px-4 py-3">狀態</th>
-                <th className="px-4 py-3 text-center">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: "var(--border-card)", color: "var(--text-primary)" }}>
-              {reports.map((report) => (
-                <tr key={report.id} className="hover:bg-black/5 dark:hover:bg-white/5">
-                  <td className="px-4 py-3.5 whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
-                    {new Date(report.created_at).toLocaleString("zh-TW")}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap font-medium">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 font-semibold text-[10px] ${
-                      report.category === "bug" 
-                        ? "bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400"
-                        : report.category === "ui"
-                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
-                        : report.category === "data"
-                        ? "bg-teal-50 text-teal-700 dark:bg-teal-950/20 dark:text-teal-400"
-                        : "bg-slate-50 text-slate-700 dark:bg-zinc-850 dark:text-zinc-400"
-                    }`}>
-                      {CATEGORY_MAP[report.category] || report.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3.5 break-words leading-relaxed text-sm" style={{ color: "var(--text-primary)" }}>
-                    {report.description}
-                  </td>
-                  <td className="px-4 py-3.5 break-all max-w-[150px] hover:underline" style={{ color: "var(--primary-color)" }}>
-                    {report.url ? <a href={report.url} target="_blank" rel="noreferrer">{new URL(report.url).pathname + new URL(report.url).search}</a> : "-"}
-                  </td>
-                  <td className="px-4 py-3.5 max-w-[150px] truncate" style={{ color: "var(--text-muted)" }} title={report.user_agent}>
-                    {report.user_agent || "-"}
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className="text-[11px] font-semibold uppercase" style={{ color: "var(--text-muted)" }}>
-                      {report.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-center">
-                    <button
-                      onClick={() => setDeleteTargetId(report.id)}
-                      className="inline-flex rounded-lg p-1.5 transition-colors"
-                      style={{ color: "var(--color-danger)" }}
-                      title="刪除此回報"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Delete Confirmation Modal / Dialog */}
-      {deleteTargetId && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div 
-            className="w-full max-w-sm rounded-xl p-6 shadow-2xl border"
-            style={{ 
-              backgroundColor: "var(--bg-card)", 
-              borderColor: "var(--border-card)", 
-              color: "var(--text-primary)" 
-            }}
-          >
-            <h3 className="text-md font-bold">確認刪除</h3>
-            <p className="text-sm text-slate-500 dark:text-zinc-400 mt-2">
-              您確定要刪除這筆使用者問題回報嗎？此動作將從 Supabase 中永久移除，無法復原。
-            </p>
-            
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTargetId(null)}
-                disabled={isDeleting}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-zinc-700 dark:bg-zinc-850 dark:text-neutral-200 dark:hover:bg-zinc-800"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 shadow-sm disabled:opacity-50"
-              >
-                {isDeleting && <Loader2 className="h-3 w-3 animate-spin" />}
-                確定刪除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    <AdminReportTable
+      reports={reports}
+      isLoading={isLoading}
+      error={error}
+      onRefresh={fetchReports}
+      onExport={handleExportCSV}
+      onDelete={handleDelete}
+    />
   );
 };

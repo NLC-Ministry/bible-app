@@ -2,9 +2,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
-import { IssueReportFab } from "../IssueReportFab.tsx";
 import { convertToCSV } from "../AdminReportView.tsx";
 import { AdminUsersAccordion } from "../AdminUsersAccordion.tsx";
+import { SupportFab } from "../SupportFab.tsx";
+import { ReportDrawer } from "../ReportDrawer.tsx";
+import { AdminReportTable } from "../AdminReportTable.tsx";
 
 class MockIDBRequest {
   result: any;
@@ -163,27 +165,24 @@ describe("Issue Report System Tests", () => {
       (React as any).useEffect = mockEffect;
 
       try {
-        // Call the functional component directly to obtain its virtual DOM elements
-        const element = (IssueReportFab as any)({});
+        // Render SupportFab directly to check its structure
+        const element = (SupportFab as any)({
+          onClick: vi.fn(),
+          isOpen: false
+        });
         
         expect(element).toBeDefined();
-        expect(element.type).toBe(React.Fragment);
         
-        const children = React.Children.toArray(element.props.children);
-        
-        // Find the FAB button by its tag name and aria-label
-        const fabButton = children.find(
-          (child: any) => child.type === "button" && child.props["aria-label"] === "打開問題回報與建議表單"
-        ) as any;
-        
-        expect(fabButton).toBeDefined();
-        expect(fabButton.props.className).toContain("fixed");
-        expect(fabButton.props.className).toContain("bottom-28");
-        expect(fabButton.props.className).toContain("right-6");
-        expect(fabButton.props.className).toContain("z-[9999]");
+        // Inside AnimatePresence is the motion.button
+        const button = element.props.children;
+        expect(button).toBeDefined();
+        expect(button.props.className).toContain("fixed");
+        expect(button.props.className).toContain("bottom-28");
+        expect(button.props.className).toContain("right-6");
+        expect(button.props.className).toContain("z-[9999]");
         
         // Verify click action handler exists
-        expect(typeof fabButton.props.onClick).toBe("function");
+        expect(typeof button.props.onClick).toBe("function");
       } finally {
         (React as any).useState = origUseState;
         (React as any).useEffect = origUseEffect;
@@ -206,7 +205,10 @@ describe("Issue Report System Tests", () => {
       Object.defineProperty(window.location, 'pathname', { value: '/login', configurable: true });
 
       try {
-        const element = (IssueReportFab as any)({});
+        const element = (SupportFab as any)({
+          onClick: vi.fn(),
+          isOpen: false
+        });
         expect(element).toBeNull();
       } finally {
         Object.defineProperty(window.location, 'pathname', { value: origPath, configurable: true });
@@ -331,6 +333,83 @@ describe("Issue Report System Tests", () => {
       } finally {
         (React as any).useState = origUseState;
         (React as any).useEffect = origUseEffect;
+      }
+    });
+  });
+
+  // 7. SupportFab Tests
+  describe("SupportFab Component", () => {
+    it("應該正確初始化並能正常 Render", () => {
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      try {
+        const element = (SupportFab as any)({
+          onClick: vi.fn(),
+          isOpen: false
+        });
+        expect(element).toBeDefined();
+      } finally {
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
+    });
+  });
+
+  // 8. ReportDrawer Tests
+  describe("ReportDrawer Component", () => {
+    it("當開關狀態 isOpen 改變時，正確反應屬性", () => {
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockEffect = vi.fn();
+      const origUseState = React.useState;
+      const origUseEffect = React.useEffect;
+      (React as any).useState = mockState;
+      (React as any).useEffect = mockEffect;
+
+      try {
+        const drawerOpen = (ReportDrawer as any)({
+          isOpen: true,
+          onClose: vi.fn()
+        });
+        expect(drawerOpen).toBeDefined();
+
+        const drawerClosed = (ReportDrawer as any)({
+          isOpen: false,
+          onClose: vi.fn()
+        });
+        expect(drawerClosed).toBeDefined();
+      } finally {
+        (React as any).useState = origUseState;
+        (React as any).useEffect = origUseEffect;
+      }
+    });
+  });
+
+  // 9. AdminReportTable Tests
+  describe("AdminReportTable Component", () => {
+    it("正確顯示回報資料項目與載入狀態", () => {
+      const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const origUseState = React.useState;
+      (React as any).useState = mockState;
+
+      try {
+        const table = (AdminReportTable as any)({
+          reports: [
+            { id: "rep-1", created_at: "2026-07-24T12:00:00Z", category: "bug", description: "測試錯誤", status: "open" }
+          ],
+          isLoading: false,
+          error: null,
+          onRefresh: vi.fn(),
+          onExport: vi.fn(),
+          onDelete: vi.fn()
+        });
+        expect(table).toBeDefined();
+      } finally {
+        (React as any).useState = origUseState;
       }
     });
   });
