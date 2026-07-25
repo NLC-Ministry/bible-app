@@ -54,31 +54,53 @@ export const AdminReportView: React.FC = () => {
     try {
       const state = (window as any).state;
       const supabase = state?.supabase;
+      const cfg = state?.supabaseConfig || {};
+      const supabaseUrl = cfg.url || "";
+      const supabaseAnonKey = cfg.anonKey || "";
+
       if (!supabase) {
         throw new Error("Supabase client is not initialized");
       }
 
-      // Fetch session token
-      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !session) {
+      // 1. Get access token from either Supabase Auth session or Logto client
+      let accessToken = "";
+      if (supabase && typeof supabase.auth?.getSession === "function") {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (!sessionErr && session) {
+          accessToken = session.access_token;
+        }
+      }
+      if (!accessToken && (window as any).auth && typeof (window as any).auth.getValidAccessToken === "function") {
+        accessToken = await (window as any).auth.getValidAccessToken();
+      }
+
+      if (!accessToken) {
         throw new Error("請先登入管理員帳號");
       }
 
-      // Query via nlc-data Edge Function
-      const { data: resData, error: fetchErr } = await supabase.functions.invoke("nlc-data", {
-        body: {
+      // 2. Query via nlc-data Edge Function directly using fetch
+      const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseAnonKey,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
           table: "issue_reports",
           action: "select",
           select: "*",
           order: { column: "created_at", ascending: false }
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
-        }
+        })
       });
 
-      if (fetchErr) throw fetchErr;
-      setReports(resData || []);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP 錯誤 ${response.status}`);
+      }
+
+      setReports(payload.data || []);
     } catch (err: any) {
       console.error("[IssueReportAdmin] Fetch error:", err);
       setError(err.message || "載入回報失敗，請確認管理員權限");
@@ -110,29 +132,50 @@ export const AdminReportView: React.FC = () => {
     try {
       const state = (window as any).state;
       const supabase = state?.supabase;
+      const cfg = state?.supabaseConfig || {};
+      const supabaseUrl = cfg.url || "";
+      const supabaseAnonKey = cfg.anonKey || "";
+
       if (!supabase) throw new Error("Supabase client is not initialized");
 
-      // Fetch session token
-      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !session) {
+      // 1. Get access token from either Supabase Auth session or Logto client
+      let accessToken = "";
+      if (supabase && typeof supabase.auth?.getSession === "function") {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (!sessionErr && session) {
+          accessToken = session.access_token;
+        }
+      }
+      if (!accessToken && (window as any).auth && typeof (window as any).auth.getValidAccessToken === "function") {
+        accessToken = await (window as any).auth.getValidAccessToken();
+      }
+
+      if (!accessToken) {
         throw new Error("請先登入管理員帳號");
       }
 
-      // Delete via nlc-data Edge Function
-      const { error: delErr } = await supabase.functions.invoke("nlc-data", {
-        body: {
+      // 2. Delete via nlc-data Edge Function directly using fetch
+      const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseAnonKey,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
           table: "issue_reports",
           action: "delete",
           filters: [
             { type: "eq", column: "id", value: deleteTargetId }
           ]
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
-        }
+        })
       });
 
-      if (delErr) throw delErr;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP 錯誤 ${response.status}`);
+      }
 
       setReports(prev => prev.filter(r => r.id !== deleteTargetId));
       setDeleteTargetId(null);
