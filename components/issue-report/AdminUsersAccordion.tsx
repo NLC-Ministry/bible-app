@@ -43,21 +43,33 @@ export const AdminUsersAccordion: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900 shadow-sm transition-all duration-300">
+    <div 
+      className="w-full border rounded-xl overflow-hidden shadow-sm transition-all duration-300"
+      style={{ 
+        backgroundColor: "var(--bg-card)", 
+        borderColor: "var(--border-card)",
+        color: "var(--text-primary)" 
+      }}
+    >
       {/* Accordion Trigger Header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-850/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors focus:outline-none"
+        className="w-full flex items-center justify-between p-4 transition-colors focus:outline-none"
+        style={{ 
+          backgroundColor: "var(--bg-app)", 
+          color: "var(--text-primary)",
+          borderBottom: isOpen ? "1px solid var(--border-card)" : "none"
+        }}
         aria-expanded={isOpen}
         type="button"
       >
-        <div className="flex items-center gap-2.5 text-slate-800 dark:text-zinc-200 text-sm font-semibold">
-          <Users className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+        <div className="flex items-center gap-2.5 text-sm font-semibold">
+          <Users className="h-4.5 w-4.5" style={{ color: "var(--primary-color)" }} />
           <span>人員名單 (已選取 {selectedCount}/{totalCount} 人) ── 點擊展開/修改</span>
         </div>
         <div className="flex items-center gap-1.5">
-          {selectedCount > 0 && <CheckCircle className="h-4 w-4 text-emerald-500" />}
-          <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+          {selectedCount > 0 && <CheckCircle className="h-4 w-4" style={{ color: "var(--accent-color)" }} />}
+          <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} style={{ color: "var(--text-secondary)" }} />
         </div>
       </button>
 
@@ -65,19 +77,19 @@ export const AdminUsersAccordion: React.FC = () => {
       <div 
         className={`transition-all duration-300 ease-in-out ${
           isOpen 
-            ? "max-h-[320px] opacity-100 border-t border-zinc-200 dark:border-zinc-800" 
+            ? "max-h-[320px] opacity-100" 
             : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
         }`}
       >
-        <div className="p-4 bg-white dark:bg-zinc-900">
+        <div className="p-4" style={{ backgroundColor: "var(--bg-card)" }}>
           <div 
             id="admin-users-list-scroll-area" 
-            className="max-h-56 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700"
+            className="max-h-56 overflow-y-auto space-y-2 pr-1 scrollbar-thin"
             style={{ WebkitOverflowScrolling: "touch" }}
           >
             {/* Target element populated by Vanilla JS modules/admin.js */}
             <div id="admin-users-list">
-              <div className="text-center py-6 text-xs text-zinc-400 dark:text-zinc-500">
+              <div className="text-center py-6 text-xs" style={{ color: "var(--text-muted)" }}>
                 載入中或名單為空...
               </div>
             </div>
