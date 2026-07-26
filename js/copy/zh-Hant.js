@@ -41,6 +41,7 @@ window.APP_COPY = {
     cardBody: "姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。",
     cardBodyNeedsOrg: "您尚未設定牧區歸屬。請至會員中心完成身份設定，以便參與小組統計與排行。",
     manageStructure: "管理身份與牧區歸屬",
+    completeOnboarding: "完成身份設定",
     openHub: "開啟會員中心",
     formNotice: "若欄位無法編輯，請至會員中心更新；儲存於此的變更僅適用於本 app 可編輯項目。",
     orgUnset: "未設定所屬小組",

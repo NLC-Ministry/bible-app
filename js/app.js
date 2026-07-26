@@ -9,7 +9,7 @@ import { AdminUsersAccordion } from '../components/issue-report/AdminUsersAccord
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260723_production_cleanup';
+import './copy/zh-Hant.js?v=20260726_org_setup_onboarding';
 import './data/church_campaign.js?v=20260720_complete_svg_badges';
 import './design/design-tokens.js';
 import './design/design-system-helpers.js';
