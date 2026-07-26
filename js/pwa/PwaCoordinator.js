@@ -2,6 +2,7 @@ import { IndexedDbClient } from "./IndexedDbClient.js";
 import { OfflineQueueRepository } from "./OfflineQueueRepository.js";
 import { OfflineSyncManager } from "./OfflineSyncManager.js";
 import { ServiceWorkerRegistrar } from "./ServiceWorkerRegistrar.js";
+import { cleanupRetiredOfflineOperations } from "../production-cleanup.mjs";
 
 const READING_OPERATION = "SET_CHAPTER_READ_STATE";
 
@@ -15,6 +16,12 @@ export class PwaCoordinator {
   }
 
   async initialize() {
+    try {
+      await cleanupRetiredOfflineOperations(this.dbClient);
+    } catch (error) {
+      console.warn("[PWA] Retired offline operations could not be cleaned.", error);
+    }
+
     let registration = null;
     try { registration = await this.registrar.register(); }
     catch (error) { console.warn("[PWA] Service Worker registration failed; app remains online-only.", error); }
@@ -81,7 +88,7 @@ export class PwaCoordinator {
   }
 
   shouldQueue() {
-    return Boolean(window.state?.isSupabaseMode && window.state?.supabase && !window.state?.currentUser?.is_demo);
+    return Boolean(window.state?.isSupabaseMode && window.state?.supabase);
   }
 
   async applyLocalReadingChange(book, chapter, isChecked, roundOverride) {

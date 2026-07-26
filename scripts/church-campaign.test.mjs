@@ -111,7 +111,7 @@ describe("versioned church Bible campaign", () => {
 describe("campaign data contract and statistics scope", () => {
   const migration = readFileSync(join(root, "supabase", "migrations", "0016_versioned_church_campaign.sql"), "utf8");
   const stageMigration = readFileSync(join(root, "supabase", "migrations", "0017_church_campaign_stage_plans.sql"), "utf8");
-  const cleanupSql = readFileSync(join(root, "supabase", "scripts", "cleanup_church_campaign_test_data.sql"), "utf8");
+  const cleanupSql = readFileSync(join(root, "supabase", "migrations", "0026_production_cleanup_obsolete_plans_badges.sql"), "utf8");
   const edge = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
   const db = readFileSync(join(root, "js", "db.js"), "utf8");
 
@@ -133,11 +133,11 @@ describe("campaign data contract and statistics scope", () => {
     expect(stageMigration).toContain("ON DELETE CASCADE");
     expect(db).toContain("migrateLocalChurchCampaignToStages");
     expect(db).toContain("item.books.includes(log.book)");
-    expect(cleanupSql).toContain("TEST ENVIRONMENT ONLY");
-    expect(cleanupSql).toContain("reading_logs are removed automatically");
-    expect(cleanupSql).toContain("participant_count");
-    expect(cleanupSql).toContain("2026-2029 新生生命聖經速讀計畫");
-    expect(cleanupSql).toContain("教會階段規則設定");
+    expect(cleanupSql).toContain("Production cleanup");
+    expect(cleanupSql).toContain("ON DELETE CASCADE");
+    expect(cleanupSql).toContain("orphan reading_logs remain");
+    expect(cleanupSql).toContain("retired enrollments remain");
+    expect(cleanupSql).toMatch(/BEGIN;[\s\S]*COMMIT;/);
   });
 
   it("lets admins read all church participants while keeping non-admin scope filters", () => {
@@ -211,7 +211,7 @@ describe("joined plan options menu", () => {
     expect(planSource).toContain("campaignAwardEarned");
     expect(planSource).toContain('campaignStageNo >= 10 ? "0.88rem"');
     expect(planSource).toContain("white-space: nowrap");
-    expect(gamification).toContain("CAMPAIGN_STAGE_ACHIEVEMENTS");
+    expect(gamification).toContain('const ACHIEVEMENTS = typeof window.createChurchCampaignStageDefinitions');
     expect(gamification).toContain("church_stage_award_");
     expect(gamification).toContain("badge.designVersion = 2");
     expect(gamification).toContain("badge.maxStars = 5");
@@ -231,14 +231,9 @@ describe("joined plan options menu", () => {
     expect(cssSource).toContain(".badge-star--lit");
     expect(cssSource).toContain(".badge-star--unlit");
     expect(cssSource).toContain(".badge-stars--compact");
-    expect(cssSource).toContain("Ranked reading medals");
-    expect(cssSource).toContain(".honor-badge-hex-shell:has(.tier-bronze)");
-    expect(cssSource).toContain(".honor-badge-hex-shell:has(.tier-silver)");
-    expect(cssSource).toContain(".honor-badge-hex-shell:has(.tier-gold)");
-    expect(cssSource).toContain(".honor-badge-hex-shell:has(.tier-platinum)");
-    expect(cssSource).toContain(".honor-badge-hex-shell:has(.tier-legendary)");
-    expect(cssSource).toContain("#badge-detail-hero .honor-badge-hex--unlocked.tier-bronze");
-    expect(cssSource).toContain("#badge-detail-hero .honor-badge-hex-shell:has(.tier-legendary)");
+    expect(cssSource).not.toContain("Ranked reading medals");
+    expect(cssSource).not.toContain("tier-bronze");
+    expect(cssSource).not.toContain("tier-legendary");
     expect(utilsSource).not.toContain('label: "青銅"');
     expect(utilsSource).not.toContain('label: "傳奇"');
     expect(utilsSource).toContain("function getBadgeFrameClass");
@@ -248,7 +243,7 @@ describe("joined plan options menu", () => {
     expect(cssSource).toContain(".honor-badge-hex.campaign-medal-stage-1");
     expect(cssSource).toContain(".honor-badge-hex.campaign-medal-stage-10");
     expect(cssSource).toContain('.honor-badge-hex--locked[class*="campaign-medal-stage-"]');
-    expect(utilsSource).toContain("const frameClass = getBadgeFrameClass(badge, badgeStarState.level)");
+    expect(utilsSource).toContain("const frameClass = getBadgeFrameClass(badge)");
     const badgeSpecs = [
       ["rock-badge.svg", "磐石"], ["iron-badge.svg", "鐵級"], ["copper-badge.svg", "銅級"],
       ["bronze-badge.svg", "青銅"], ["silver-badge.svg", "白銀"], ["gold-badge.svg", "黃金"],

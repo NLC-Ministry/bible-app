@@ -14,7 +14,8 @@ let planSearchQuery = '';
 const PLAN_ROUTE = Object.freeze({
   LIST: "LIST",
   DETAIL: "DETAIL",
-  GROUP: "GROUP"
+  GROUP: "GROUP",
+  ORG_STATS: "ORG_STATS"
 });
 
 window.currentPlanViewState = window.currentPlanViewState || PLAN_ROUTE.LIST;
@@ -64,7 +65,11 @@ function forceHidden(el, hidden) {
   if (!el) return;
   el.classList.toggle("hidden", hidden);
   el.hidden = hidden;
-  if (!hidden) el.style.display = "";
+  if (hidden) {
+    el.style.setProperty("display", "none", "important");
+  } else {
+    el.style.display = "";
+  }
 }
 
 function ensurePlanRouteShell() {
@@ -112,6 +117,9 @@ function setOnlyPlanRouteVisible(route) {
   forceHidden(shell.groupView, true);
   forceHidden(shell.legacyList, false);
   forceHidden(shell.legacyDetail, route === PLAN_ROUTE.LIST);
+
+  const orgSub = document.getElementById("plan-org-stats-subview");
+  if (orgSub) forceHidden(orgSub, route !== PLAN_ROUTE.ORG_STATS);
 
   return shell;
 }
@@ -197,12 +205,18 @@ async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
   const allowedViews = Object.values(GROUP_SUBVIEW);
   let target = allowedViews.includes(view) ? view : GROUP_SUBVIEW.STATS;
 
-  const tabs = getPlanDetailTabs();
+  const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+  if (isTeamPlan && target === GROUP_SUBVIEW.STATS) {
+    const hasTeam = await checkUserHasTeam();
+    if (!hasTeam) {
+      target = GROUP_SUBVIEW.PERSONAL;
+    }
+  }
+
   const statsPanel = document.getElementById("subview-plan-stats");
   const rankingPanel = document.getElementById("subview-plan-ranking");
   const membersPanel = document.getElementById("subview-plan-members");
 
-  if (tabs) forceHidden(tabs, true);
   const legacyScheduleTab = document.getElementById("tab-plan-schedule");
   if (legacyScheduleTab) {
     legacyScheduleTab.classList.remove("active");
@@ -217,28 +231,40 @@ async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
     button.classList.toggle("active", isActive);
     button.setAttribute("aria-selected", isActive ? "true" : "false");
   });
+
   forceHidden(statsPanel, target === GROUP_SUBVIEW.RANKING);
   forceHidden(rankingPanel, target !== GROUP_SUBVIEW.RANKING);
-  forceHidden(membersPanel, target !== GROUP_SUBVIEW.STATS);
+  forceHidden(membersPanel, true); // Keep members panel hidden under all main tabs
 
   window.PlanPageController.groupSubview = target;
   updatePlanPrimaryTabs(target);
+
   if (target === GROUP_SUBVIEW.PERSONAL) {
     await window.switchStatTab("personal");
   } else if (target === GROUP_SUBVIEW.STATS) {
-    await renderPlanMembersView();
-    const membersSelect = document.getElementById("members-team-view-select");
-    const statsSelect = document.getElementById("stats-team-view-select");
-    if (membersSelect && statsSelect) statsSelect.value = membersSelect.value;
-    const hasSelectedTeam = !!membersSelect && membersSelect.value.startsWith("reading-team-");
-    const canViewOrganization = canUseAdvancedGroupStats();
-    if (!canViewOrganization && !hasSelectedTeam) forceHidden(membersPanel, true);
-    await window.switchStatTab(canViewOrganization ? "admin" : (hasSelectedTeam ? "group" : "personal"));
-    const duplicateSwitcher = document.getElementById("stats-team-view-switch");
-    if (duplicateSwitcher) duplicateSwitcher.classList.add("hidden");
+    const regContainer = document.getElementById("reading-team-registration-inline");
+    if (regContainer) regContainer.classList.add("hidden");
+
+    // Hide personal section under the stats tab
+    const personalSec = document.getElementById("stats-personal-section");
+    if (personalSec) personalSec.classList.add("hidden");
+
+    await prepareReadingTeamSubview("stats");
   } else if (target === GROUP_SUBVIEW.RANKING) {
     await renderPlanRankingView();
   }
+}
+
+async function checkUserHasTeam() {
+  if (!state.activePlan) return false;
+  const supported = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+  if (!supported) return false;
+  const result = await db.getMyReadingTeam(state.activePlan);
+  if (result && result.success) {
+    const contexts = getJoinedReadingTeamContexts(result.context);
+    return contexts.length > 0;
+  }
+  return false;
 }
 
 window.PlanPageController = {
@@ -260,7 +286,7 @@ window.PlanPageController = {
       });
       shell.strip.addEventListener("keydown", async event => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-        const buttons = [...shell.strip.querySelectorAll("[data-plan-primary-view]")];
+        const buttons = [...shell.strip.querySelectorAll("[data-plan-primary-view]")].filter(b => !b.classList.contains("hidden") && b.style.display !== "none");
         const current = buttons.indexOf(document.activeElement);
         if (current < 0) return;
         event.preventDefault();
@@ -292,7 +318,14 @@ window.PlanPageController = {
     return shell;
   },
   async switchPrimaryView(view, options = {}) {
-    const targetView = Object.values(PLAN_PRIMARY_VIEW).includes(view) ? view : PLAN_PRIMARY_VIEW.PROGRESS;
+    let targetView = Object.values(PLAN_PRIMARY_VIEW).includes(view) ? view : PLAN_PRIMARY_VIEW.PROGRESS;
+    const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+    if (isTeamPlan && targetView === PLAN_PRIMARY_VIEW.STATS) {
+      const hasTeam = await checkUserHasTeam();
+      if (!hasTeam) {
+        targetView = PLAN_PRIMARY_VIEW.PERSONAL;
+      }
+    }
     if (targetView === PLAN_PRIMARY_VIEW.PROGRESS) {
       return this.switchPage(PLAN_PAGE.READING, options);
     }
@@ -301,9 +334,37 @@ window.PlanPageController = {
   },
   async switchPage(index, options = {}) {
     if (!state.activePlan) return;
+
     const target = Number(index) === PLAN_PAGE.GROUP ? PLAN_PAGE.GROUP : PLAN_PAGE.READING;
     const shell = this.ensureShell();
     if (!shell?.wrapper) return;
+
+    // Check if user has team and dynamically update third tab name
+    const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+    let hasTeam = false;
+    if (isTeamPlan) {
+      hasTeam = await checkUserHasTeam();
+    }
+    const statsTab = document.getElementById("plan-primary-tab-stats");
+    if (statsTab) {
+      if (isTeamPlan) {
+        statsTab.textContent = "團隊統計";
+        forceHidden(statsTab, !hasTeam);
+      } else {
+        statsTab.textContent = "團體統計";
+        forceHidden(statsTab, false);
+      }
+    }
+
+    if (isTeamPlan && !hasTeam) {
+      if (options.primaryView === GROUP_SUBVIEW.STATS) {
+        options.primaryView = GROUP_SUBVIEW.PERSONAL;
+      }
+      if (this.groupSubview === GROUP_SUBVIEW.STATS) {
+        this.groupSubview = GROUP_SUBVIEW.PERSONAL;
+      }
+    }
+
     this.currentIndex = target;
     state.planDetailOpen = true;
     state.planActiveSubTab = target === PLAN_PAGE.GROUP ? (options.primaryView || this.groupSubview || "stats") : "today";
@@ -423,8 +484,15 @@ window.switchStatTab = async function (tab) {
   tabs.forEach(t => t.classList.toggle("active", t.getAttribute("data-tab") === tab));
 
   const adminScopeBar = document.getElementById("stats-admin-scope-bar");
+  const membersOrgControls = document.getElementById("members-organization-controls");
+
   if (adminScopeBar) {
     adminScopeBar.classList.toggle("hidden", tab !== 'admin');
+    adminScopeBar.style.display = tab === 'admin' ? "" : "none";
+  }
+  if (membersOrgControls) {
+    // Members controls only show on members-related views, never alongside stats-admin-scope-bar
+    membersOrgControls.style.display = "none";
   }
 
   if (tab === 'personal') {
@@ -438,13 +506,6 @@ window.switchStatTab = async function (tab) {
   }
 };
 
-function setReadingTeamSubviewElementHidden(element, hidden) {
-  if (!element) return;
-  if (element.dataset.readingTeamOriginalDisplay === undefined) {
-    element.dataset.readingTeamOriginalDisplay = element.style.display || "";
-  }
-  element.style.display = hidden ? "none" : element.dataset.readingTeamOriginalDisplay;
-}
 
 function getJoinedReadingTeamContexts(context) {
   if (Array.isArray(context && context.teams)) {
@@ -456,27 +517,34 @@ function getJoinedReadingTeamContexts(context) {
 }
 
 async function prepareReadingTeamSubview(mode) {
+  // Bypass reading team subview when in ORG_STATS mode
+  if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
+    const switcher = document.getElementById(mode === "stats" ? "stats-team-view-switch" : "members-team-view-switch");
+    const inline = document.getElementById(mode === "stats" ? "reading-team-stats-inline" : "reading-team-members-inline");
+    if (switcher) switcher.classList.add("hidden");
+    if (inline) inline.classList.add("hidden");
+    return true;
+  }
+
   const isStats = mode === "stats";
   const switcher = document.getElementById(isStats ? "stats-team-view-switch" : "members-team-view-switch");
   const select = document.getElementById(isStats ? "stats-team-view-select" : "members-team-view-select");
   const inline = document.getElementById(isStats ? "reading-team-stats-inline" : "reading-team-members-inline");
   if (!switcher || !select || !inline) return true;
 
-  const organizationElements = isStats
-    ? [
-        document.getElementById("stats-admin-scope-bar"),
-        document.getElementById("stats-personal-section"),
-        document.getElementById("stats-group-section")
-      ]
-    : [
-        document.getElementById("members-organization-controls"),
-        document.getElementById("member-list-container")
-      ];
-
   const supported = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
-  const result = supported ? await db.getMyReadingTeam(state.activePlan) : null;
+  if (!supported) {
+    switcher.classList.add("hidden");
+    inline.classList.add("hidden");
+    return true;
+  }
+
+  const result = await db.getMyReadingTeam(state.activePlan);
   const contexts = result && result.success ? getJoinedReadingTeamContexts(result.context) : [];
   const activeDivisions = new Set(contexts.map(context => Number(context.team.division)));
+
+  const orgOption = select.querySelector('option[value="organization"]');
+  if (orgOption) orgOption.remove();
 
   select.querySelectorAll('option[data-reading-team-division]').forEach(option => {
     if (!activeDivisions.has(Number(option.dataset.readingTeamDivision))) option.remove();
@@ -487,21 +555,23 @@ async function prepareReadingTeamSubview(mode) {
     delete select.dataset.readingTeamDefaultPlan;
     switcher.classList.add("hidden");
     inline.classList.add("hidden");
-    organizationElements.forEach(element => setReadingTeamSubviewElementHidden(element, false));
     return true;
   }
 
+  const regContainer = document.getElementById("reading-team-registration-inline");
+  if (regContainer) regContainer.classList.add("hidden");
+
   contexts.forEach(context => {
     const division = Number(context.team.division);
-    const value = `reading-team-${division}`;
-    let option = select.querySelector(`option[value="${value}"]`);
+    const value = "reading-team-" + division;
+    let option = select.querySelector('option[value="' + value + '"]');
     if (!option) {
       option = document.createElement("option");
       option.value = value;
       option.dataset.readingTeamDivision = String(division);
       select.appendChild(option);
     }
-    option.textContent = `我的 ${division} 人團隊`;
+    option.textContent = "第 " + division + " 人組";
   });
 
   const activePlanKey = String(
@@ -513,41 +583,38 @@ async function prepareReadingTeamSubview(mode) {
   );
   if (select.dataset.readingTeamDefaultPlan !== activePlanKey) {
     select.dataset.readingTeamDefaultPlan = activePlanKey;
-    select.value = `reading-team-${Number(contexts[0].team.division)}`;
+    select.value = "reading-team-" + Number(contexts[0].team.division);
   }
-  switcher.classList.remove("hidden");
+
+  if (contexts.length > 1) {
+    switcher.classList.remove("hidden");
+  } else {
+    switcher.classList.add("hidden");
+  }
 
   if (!select.dataset.readingTeamBound) {
     select.dataset.readingTeamBound = "true";
     select.addEventListener("change", async () => {
       if (isStats) {
-        await renderPlanStatsView();
+        await prepareReadingTeamSubview("stats");
       } else {
-        await renderPlanMembersView();
-        if (window.PlanPageController?.groupSubview === GROUP_SUBVIEW.STATS) {
-          const statsSelect = document.getElementById("stats-team-view-select");
-          if (statsSelect) statsSelect.value = select.value;
-          const hasSelectedTeam = select.value.startsWith("reading-team-");
-          const canViewOrganization = canUseAdvancedGroupStats();
-          const membersPanel = document.getElementById("subview-plan-members");
-          forceHidden(membersPanel, !canViewOrganization && !hasSelectedTeam);
-          await window.switchStatTab(canViewOrganization ? "admin" : (hasSelectedTeam ? "group" : "personal"));
-          document.getElementById("stats-team-view-switch")?.classList.add("hidden");
-        }
+        await prepareReadingTeamSubview("members");
       }
     });
   }
 
+  // Direct C logic: render the team progress inline details
   const selectedDivision = Number(String(select.value).replace("reading-team-", ""));
-  const selectedContext = contexts.find(context => Number(context.team.division) === selectedDivision) || null;
+  const selectedContext = contexts.find(context => Number(context.team.division) === selectedDivision) || contexts[0];
   const showTeam = !!selectedContext;
-  organizationElements.forEach(element => setReadingTeamSubviewElementHidden(element, showTeam));
   inline.classList.toggle("hidden", !showTeam);
   if (showTeam && typeof window.renderMyReadingTeamInline === "function") {
     window.renderMyReadingTeamInline(inline, state.activePlan, selectedContext, mode);
   }
-  return !showTeam;
+
+  return true;
 }
+
 
 function initPlanControls() {
   ensurePlanRouteShell();
@@ -628,8 +695,13 @@ function initPlanControls() {
 
   // Back Button
   const backBtn = document.getElementById("btn-back-to-plans");
-  if (backBtn) {
+  if (backBtn && !backBtn.dataset.listenerBound) {
+    backBtn.dataset.listenerBound = "true";
     backBtn.addEventListener("click", () => {
+      if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
+        setPlanState(PLAN_ROUTE.DETAIL);
+        return;
+      }
       state.activePlan = null;
       if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(null);
       localStorage.removeItem("selected_plan_key");
@@ -640,18 +712,26 @@ function initPlanControls() {
   const optionsBtn = document.getElementById("btn-plan-options");
   const dropdown = document.getElementById("plan-options-dropdown");
   if (optionsBtn && dropdown) {
-    optionsBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
-      if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = "";
-      const readingTeamMenuButton = document.getElementById("view-reading-team-btn");
-      const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
-      if (readingTeamMenuButton) readingTeamMenuButton.hidden = !isTeamPlan;
-      dropdown.classList.toggle("hidden");
-    });
-    document.addEventListener("click", () => {
-      dropdown.classList.add("hidden");
-    });
+    if (!optionsBtn.dataset.dropdownBound) {
+      optionsBtn.dataset.dropdownBound = "true";
+      optionsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
+        if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = "";
+        const readingTeamMenuButton = document.getElementById("view-reading-team-btn");
+        const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+        const hasPermission = state.currentUser && ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'].includes(state.currentUser.role);
+        if (readingTeamMenuButton) readingTeamMenuButton.hidden = !isTeamPlan || !hasPermission;
+        dropdown.classList.toggle("hidden");
+      });
+    }
+    if (!window._planDropdownClickListenerBound) {
+      window._planDropdownClickListenerBound = true;
+      document.addEventListener("click", () => {
+        const dd = document.getElementById("plan-options-dropdown");
+        if (dd) dd.classList.add("hidden");
+      });
+    }
   }
 
 
@@ -694,8 +774,8 @@ function initPlanControls() {
       event.preventDefault();
       event.stopPropagation();
       dropdown?.classList.add("hidden");
-      if (state.activePlan && typeof window.openReadingTeamDialog === "function") {
-        await window.openReadingTeamDialog(state.activePlan);
+      if (state.activePlan) {
+        await setPlanState(PLAN_ROUTE.ORG_STATS);
       }
     });
   }
@@ -706,10 +786,107 @@ function initPlanControls() {
     deleteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (!state.activePlan) return;
-      if (!confirm("確定要放棄目前的讀經計畫嗎？已讀章節紀錄仍會保留。")) {
-        return;
-      }
+      const confirmed = await window.showConfirmDialog({
+        title: "確定要放棄目前的讀經計畫嗎？",
+        message: "您的已讀進度紀錄仍會保留，之後您可以隨時重新加入。",
+        confirmText: "確定放棄",
+        cancelText: "保留計畫",
+        isDestructive: true
+      });
+      if (!confirmed) return;
       await db.leavePlan(state.activePlan.id, state.activePlan.presetKey);
+    });
+  }
+
+  // Reset Plan Progress Button inside options dropdown
+  const resetProgressBtn = document.getElementById("reset-plan-progress-btn");
+  if (resetProgressBtn) {
+    resetProgressBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const menu = document.getElementById("plan-options-dropdown");
+      if (menu) menu.classList.add("hidden");
+      if (!state.activePlan) return;
+      const planName = state.activePlan.name;
+      const confirmed = await window.showConfirmDialog({
+        title: `確定要重置「${planName}」的進度嗎？`,
+        message: "重置後，此計畫的所有打卡紀錄都將會被清除，且無法復原。",
+        confirmText: "確定重置",
+        cancelText: "保留進度",
+        isDestructive: true
+      });
+      if (!confirmed) return;
+
+      loader.show("正在重置計畫進度...");
+      try {
+        const plan = state.activePlan;
+        const planId = plan.id;
+        const presetKey = plan.presetKey;
+
+        // 1. Clear local memory logs
+        if (state.readingLogs) {
+          state.readingLogs = state.readingLogs.filter(l => !(
+            (planId && l.plan_id === planId) ||
+            (presetKey && l.presetKey === presetKey)
+          ));
+        }
+
+        // 2. Clear progress in memory plan object
+        plan.progress = 0;
+        if (plan.days) {
+          plan.days.forEach(d => {
+            if (d.chapters) {
+              d.chapters.forEach(ch => {
+                ch.isRead = false;
+                for (let r = 1; r <= 10; r++) {
+                  ch[`isReadR${r}`] = false;
+                }
+              });
+            }
+          });
+        }
+
+        // 3. Clear database (if Supabase mode)
+        if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+          const user = await db.getCurrentDbUser();
+          if (user && user.id) {
+            let query = state.supabase.from("reading_logs").delete().eq("user_id", user.id);
+            if (planId && planId.length > 5 && planId.includes('-')) {
+              query = query.eq("plan_id", planId);
+            } else if (presetKey) {
+              query = query.eq("preset_key", presetKey);
+            }
+            const { error } = await query;
+            if (error) throw error;
+          }
+        }
+
+        // 4. Save to localStorage (if local/demo mode)
+        if (!state.isSupabaseMode) {
+          localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs || []));
+          localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
+        }
+
+        // 5. Update UI
+        if (typeof calculatePlanProgress === "function") {
+          calculatePlanProgress();
+        }
+        window.setDataVersion(prev => prev + 1);
+        window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
+
+        showToast("已成功重置計畫進度！");
+        
+        // Reload the plan detail view to reflect the 0% progress
+        if (typeof window.setPlanState === 'function') {
+          await window.setPlanState(PLAN_ROUTE.DETAIL);
+        } else {
+          renderPlanView();
+        }
+      } catch (err) {
+        console.error("Failed to reset plan progress:", err);
+        showToast("重置失敗：" + (err.message || err));
+      } finally {
+        loader.hide();
+      }
     });
   }
 
@@ -763,20 +940,30 @@ function initPlanControls() {
       const joinedContainer = document.getElementById("joined-plans-list-container");
       const presetContainer = document.getElementById("preset-plans-list-container");
       const sidebarCard = document.getElementById("plan-sidebar-info-card");
+      const joinTeamContainer = document.getElementById("join-team-container");
 
       if (filter === "mine") {
         if (joinedContainer) joinedContainer.classList.remove("hidden");
         if (presetContainer) presetContainer.classList.add("hidden");
+        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
         if (sidebarCard) sidebarCard.classList.remove("hidden");
         renderJoinedPlansList();
       } else if (filter === "saved") {
         if (joinedContainer) joinedContainer.classList.add("hidden");
         if (presetContainer) presetContainer.classList.remove("hidden");
+        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
         if (sidebarCard) sidebarCard.classList.remove("hidden");
         renderPresetPlansList();
+      } else if (filter === "join-team") {
+        if (joinedContainer) joinedContainer.classList.add("hidden");
+        if (presetContainer) presetContainer.classList.add("hidden");
+        if (joinTeamContainer) joinTeamContainer.classList.remove("hidden");
+        if (sidebarCard) sidebarCard.classList.add("hidden");
+        setupGlobalJoinTeamForm();
       } else {
         if (joinedContainer) joinedContainer.classList.remove("hidden");
         if (presetContainer) presetContainer.classList.add("hidden");
+        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
         if (sidebarCard) sidebarCard.classList.add("hidden");
         renderJoinedPlansList();
       }
@@ -821,14 +1008,18 @@ async function renderPlanView() {
     ensurePlanRouteShell();
 
     if (state.activePlan && state.planDetailOpen) {
-      const groupViews = [GROUP_SUBVIEW.PERSONAL, GROUP_SUBVIEW.STATS, GROUP_SUBVIEW.RANKING, "group"];
-      if (groupViews.includes(state.planActiveSubTab)) {
-        if (window.PlanPageController && state.planActiveSubTab !== "group") {
-          window.PlanPageController.groupSubview = state.planActiveSubTab;
-        }
-        await setPlanState(PLAN_ROUTE.GROUP);
+      if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
+        await setPlanState(PLAN_ROUTE.ORG_STATS);
       } else {
-        await setPlanState(PLAN_ROUTE.DETAIL);
+        const groupViews = [GROUP_SUBVIEW.PERSONAL, GROUP_SUBVIEW.STATS, GROUP_SUBVIEW.RANKING, "group"];
+        if (groupViews.includes(state.planActiveSubTab)) {
+          if (window.PlanPageController && state.planActiveSubTab !== "group") {
+            window.PlanPageController.groupSubview = state.planActiveSubTab;
+          }
+          await setPlanState(PLAN_ROUTE.GROUP);
+        } else {
+          await setPlanState(PLAN_ROUTE.DETAIL);
+        }
       }
     } else {
       await setPlanState(PLAN_ROUTE.LIST);
@@ -957,6 +1148,20 @@ function renderJoinedPlansList() {
       plansToRender = (state.activePlans || []).filter(p => isExpired(p));
     }
 
+    console.log("🔍 [Debug renderJoinedPlansList]", {
+      filter,
+      today: today.toISOString().split('T')[0],
+      activePlansLength: state.activePlans ? state.activePlans.length : null,
+      activePlans: state.activePlans
+    });
+    
+    (state.activePlans || []).forEach(plan => {
+      console.log(`  Active Plan: ${plan.name} (${plan.presetKey || plan.id})`, {
+        endDate: plan.endDate,
+        isExpired: isExpired(plan)
+      });
+    });
+
     plansToRender = plansToRender.filter(matchesPlanSearch);
 
     if (plansToRender.length === 0 && planSearchQuery) {
@@ -1003,10 +1208,6 @@ function renderJoinedPlansList() {
         transition: all 0.2s ease;
       `;
       card.onclick = async () => {
-        if (isPlanExpired(plan)) {
-          showToast("此計畫已過期，無法再進入進度閱讀。");
-          return;
-        }
         state.activePlan = plan;
         state.planDetailOpen = true;
         state.planActiveSubTab = "today";
@@ -1014,6 +1215,9 @@ function renderJoinedPlansList() {
         if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
         state.selectedPlanDay = null; // reset to first uncompleted day
         localStorage.setItem("selected_plan_key", plan.presetKey || "");
+        if (isPlanExpired(plan)) {
+          showToast("此計畫已過期，僅供查看紀錄與統計。");
+        }
         if (typeof window.setPlanState === 'function') {
           await window.setPlanState(PLAN_ROUTE.DETAIL);
         } else {
@@ -1029,9 +1233,6 @@ function renderJoinedPlansList() {
       const campaignAwardHtml = isCampaignStage ? `<div style="margin-top:.25rem;padding:.42rem .6rem;border-radius:10px;background:var(--bg-secondary);color:${campaignAwardEarned ? "var(--color-success-foreground)" : "var(--primary-color)"};font-size:.75rem;font-weight:500;display:flex;align-items:center;gap:.35rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span><span>${campaignAwardEarned ? "已獲得" : "完成可獲得"} ${escapeHTML(campaignAwardName)}</span></div>` : "";
       const weeklyScheduleSummary = formatFlexibleScheduleSummary(plan);
       const isUpcomingFixed = isFixedPlanUpcoming(plan);
-      const upcomingJoinedHtml = isUpcomingFixed
-        ? `<div style="margin-top:.25rem;padding:.42rem .6rem;border-radius:10px;background:var(--bg-secondary);color:var(--text-secondary);font-size:.75rem;line-height:1.45;"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> 已預先加入並開放預覽・${escapeHTML(plan.startDate)} 正式開始，敬請期待</div>`
-        : "";
 
       if (filter === "completed") {
         // Expired plan: show status label instead of progress bar
@@ -1046,7 +1247,6 @@ function renderJoinedPlansList() {
             <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
               <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
             </div>
-            ${upcomingJoinedHtml}
             ${campaignAwardHtml}
             <div style="font-size: 0.82rem; font-weight: 600; color: ${statusColor}; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;">
               狀態：${statusText}
@@ -1056,10 +1256,19 @@ function renderJoinedPlansList() {
       } else {
         // Normal active plan: show progress bar
         const progressText = isUpcomingFixed
-          ? "可先查看計畫內容與每週安排"
+          ? `預計 ${escapeHTML(plan.startDate)} 開始`
           : (currentRound > 1
             ? `已完成第 ${currentRound - 1} 遍 👑<br>第 ${currentRound} 遍：已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`
             : `已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`);
+
+        const isTeamPlan = (typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan)) || 
+          !!(plan && (plan.planKind === "church_campaign_stage" || (plan.presetKey && (plan.presetKey.startsWith("church_stage_") || plan.presetKey.startsWith("preset-stage-")))));
+        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;"></div>` : "";
+        const progressHtml = isUpcomingFixed
+          ? ""
+          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact">
+              <div class="plan-progress-bar" style="width: ${progress}%;"></div>
+            </div>`;
 
         card.innerHTML = `
           ${getPlanCoverHtml(plan)}
@@ -1068,11 +1277,8 @@ function renderJoinedPlansList() {
             <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
               <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
             </div>
-            ${upcomingJoinedHtml}
             ${campaignAwardHtml}
-            <div class="plan-progress-wrapper plan-progress-wrapper--compact">
-              <div class="plan-progress-bar" style="width: ${progress}%;"></div>
-            </div>
+            ${progressHtml}
             <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35;">
               ${progressText}
             </div>
@@ -1080,8 +1286,70 @@ function renderJoinedPlansList() {
               <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
               <span>${escapeHTML(weeklyScheduleSummary)}</span>
             </div>
+            ${teamHtml}
           </div>
         `;
+
+        if (isTeamPlan) {
+          const teamContainer = card.querySelector(".plan-card-team-controls");
+          if (teamContainer) {
+            const isDemo = state.currentUser && state.currentUser.is_demo;
+            const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
+
+            if (isDemo || !isLoggedIn) {
+              teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--text-muted);">👥 團隊功能需登入正式帳號</span>`;
+            } else {
+              teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--text-muted);">正在載入團隊狀態...</span>`;
+              db.getMyReadingTeam(plan).then(result => {
+                if (!teamContainer.parentElement) return;
+                teamContainer.innerHTML = "";
+
+                const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
+                const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
+
+                [3, 6].forEach(division => {
+                  const hasJoined = joinedDivisions.has(division);
+                  const btn = document.createElement("button");
+                  btn.type = "button";
+                  btn.style.cssText = `
+                    font-size: 0.75rem;
+                    padding: 0.3rem 0.6rem;
+                    border-radius: 8px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                    cursor: pointer;
+                    margin: 0;
+                    border: 1px solid var(--border-card);
+                    transition: all 0.2s;
+                  `;
+
+                  if (hasJoined) {
+                    const teamName = contexts.find(c => Number(c.team.division) === division)?.team?.name || "";
+                    btn.className = "secondary-btn";
+                    btn.innerHTML = `<span class="nlc-icon nlc-icon--xs" data-icon="people" style="color: var(--color-success-foreground);"></span><span>已入 ${division}人組 (${escapeHTML(teamName)})</span>`;
+                    btn.onclick = (e) => {
+                      e.stopPropagation();
+                      window.openReadingTeamDialog(plan, { preferredDivision: division });
+                    };
+                  } else {
+                    btn.className = "primary-btn";
+                    btn.innerHTML = `<span class="nlc-icon nlc-icon--xs" data-icon="plus"></span><span>報名 ${division}人組</span>`;
+                    btn.onclick = (e) => {
+                      e.stopPropagation();
+                      window.openReadingTeamDialog(plan, { preferredDivision: division });
+                    };
+                  }
+                  teamContainer.appendChild(btn);
+                });
+                if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
+              }).catch(err => {
+                console.error("Error loading team info for card:", err);
+                teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--color-danger);">無法載入團隊資料</span>`;
+              });
+            }
+          }
+        }
       }
 
       container.appendChild(card);
@@ -1099,8 +1367,238 @@ function formatCampaignReadingRange(reading) {
   return reading.book + " " + (from === to ? from : from + "–" + to) + "章";
 }
 
-function openPlanDetailsDialog(plan) {
+// ==================== 加入模式選擇對話框 ====================
+// 顯示「個人 or 團體」選擇，在加入計畫之前呼叫。
+// 回傳 3（3人團隊）、6（6人團隊）或 null（先自己開始）。
+function openJoinModeDialog(plan) {
+  return new Promise(resolve => {
+    const existing = document.getElementById("join-mode-dialog");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "join-mode-dialog";
+    overlay.className = "modal-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:10001;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:1rem;animation:fadeIn 0.18s ease;";
+
+    overlay.innerHTML = `
+      <div class="glass-card" role="dialog" aria-modal="true" aria-labelledby="join-mode-title"
+        style="width:min(400px,100%);padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);border-radius:20px;animation:slideUp 0.22s cubic-bezier(0.34,1.56,0.64,1);">
+
+        <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.35rem;">
+          <span class="nlc-icon nlc-icon--md" data-icon="people" style="color:var(--color-brand,#04A9D2);" aria-hidden="true"></span>
+          <h3 id="join-mode-title" style="margin:0;font-size:1.05rem;font-weight:600;color:var(--text-primary);">要與夥伴一起讀嗎？</h3>
+        </div>
+        <p style="margin:0 0 1.2rem;font-size:.83rem;color:var(--text-muted);line-height:1.5;">
+          計畫已加入！你可以額外選擇報名讀經小組團隊，與夥伴彼此鼓勵；若暫不組隊，請點擊下方的「先自己開始」。
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:.65rem;margin-bottom:1.4rem;">
+          <!-- 3人團隊 -->
+          <button type="button" id="join-mode-team-3"
+            style="display:flex;align-items:center;gap:.9rem;padding:.9rem 1rem;border-radius:14px;
+                   border:1.5px solid var(--border-card);background:var(--bg-input);
+                   cursor:pointer;transition:all .18s ease;text-align:left;width:100%;">
+            <span style="width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+                         background:rgba(4,169,210,.10);flex-shrink:0;">
+              <span class="nlc-icon nlc-icon--sm" data-icon="people" style="color:var(--color-brand,#04A9D2);" aria-hidden="true"></span>
+            </span>
+            <span style="display:flex;flex-direction:column;gap:.18rem;">
+              <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 3 人團隊</strong>
+              <span style="font-size:.77rem;color:var(--text-muted);">固定三人組隊，共同挑戰進度</span>
+            </span>
+            <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="color:var(--text-muted);margin-left:auto;flex-shrink:0;" aria-hidden="true"></span>
+          </button>
+
+          <!-- 6人團隊 -->
+          <button type="button" id="join-mode-team-6"
+            style="display:flex;align-items:center;gap:.9rem;padding:.9rem 1rem;border-radius:14px;
+                   border:1.5px solid var(--border-card);background:var(--bg-input);
+                   cursor:pointer;transition:all .18s ease;text-align:left;width:100%;">
+            <span style="width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+                         background:rgba(34,197,94,.10);flex-shrink:0;">
+              <span class="nlc-icon nlc-icon--sm" data-icon="people" style="color:var(--color-success-foreground,#16a34a);" aria-hidden="true"></span>
+            </span>
+            <span style="display:flex;flex-direction:column;gap:.18rem;">
+              <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 6 人團隊</strong>
+              <span style="font-size:.77rem;color:var(--text-muted);">固定六人組隊，挑戰更高榮譽</span>
+            </span>
+            <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="color:var(--text-muted);margin-left:auto;flex-shrink:0;" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:flex-start;">
+          <button type="button" id="join-mode-cancel" class="secondary-btn"
+            style="font-size:.83rem;padding:.45rem 1rem;cursor:pointer;">先自己開始</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    if (typeof hydrateIcons === "function") hydrateIcons(overlay);
+
+    const close = value => { overlay.remove(); resolve(value); };
+
+    // Hover effects
+    const addHover = (btn, borderColor, bgColor) => {
+      if (!btn) return;
+      btn.addEventListener("mouseenter", () => {
+        btn.style.borderColor = borderColor;
+        btn.style.background = bgColor;
+      });
+      btn.addEventListener("mouseleave", () => {
+        btn.style.borderColor = "var(--border-card)";
+        btn.style.background = "var(--bg-input)";
+      });
+    };
+
+    const team3Btn = overlay.querySelector("#join-mode-team-3");
+    const team6Btn = overlay.querySelector("#join-mode-team-6");
+    const cancelBtn = overlay.querySelector("#join-mode-cancel");
+
+    addHover(team3Btn, "var(--color-brand,#04A9D2)", "rgba(4,169,210,.06)");
+    addHover(team6Btn, "var(--color-success-foreground,#16a34a)", "rgba(34,197,94,.06)");
+
+    team3Btn?.addEventListener("click", () => close(3));
+    team6Btn?.addEventListener("click", () => close(6));
+    cancelBtn?.addEventListener("click", () => close(null));
+    overlay.addEventListener("click", e => { if (e.target === overlay) close(null); });
+  });
+}
+
+// ==================== 全域加入團隊支援 ====================
+async function joinTeamGlobally(inviteCode) {
+  const code = String(inviteCode || "").trim().toUpperCase();
+  if (!code) {
+    return { success: false, message: "請輸入邀請碼。" };
+  }
+
+  if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    return { success: false, message: "團隊功能需登入正式帳號使用。" };
+  }
+
+  loader.show("正在尋找並加入團隊...");
+  try {
+    const candidatePlans = [];
+    const seenIds = new Set();
+
+    const addPlan = (p) => {
+      if (!p) return;
+      const id = p.globalPlanId || p.id;
+      if (id && !seenIds.has(id)) {
+        seenIds.add(id);
+        candidatePlans.push(p);
+      }
+    };
+
+    (state.activePlans || []).forEach(addPlan);
+    (state.globalPlans || []).forEach(addPlan);
+
+    if (candidatePlans.length === 0 && typeof CHURCH_PLAN_PRESETS !== "undefined") {
+      Object.values(CHURCH_PLAN_PRESETS).forEach(addPlan);
+    }
+
+    let joinResult = null;
+    let matchingPlan = null;
+
+    // Try joining for each plan UUID
+    for (const plan of candidatePlans) {
+      const planId = typeof db._readingTeamPlanId === "function" ? db._readingTeamPlanId(plan) : (plan.globalPlanId || plan.id);
+      if (!planId) continue;
+
+      const res = await db.joinReadingTeam(plan, code);
+      if (res && res.success) {
+        joinResult = res;
+        matchingPlan = plan;
+        break;
+      } else if (res && res.message && !res.message.includes("找不到這組邀請碼")) {
+        joinResult = res;
+        matchingPlan = plan;
+        break;
+      }
+    }
+
+    if (!joinResult || !joinResult.success) {
+      return {
+        success: false,
+        message: (joinResult && joinResult.message) || "找不到這組邀請碼，請向隊長確認。"
+      };
+    }
+
+    // Auto join the plan itself if not joined yet
+    const hasJoinedPlan = (state.activePlans || []).some(p =>
+      p.id === matchingPlan.id || p.presetKey === matchingPlan.presetKey || p.globalPlanId === matchingPlan.globalPlanId
+    );
+
+    if (!hasJoinedPlan) {
+      const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
+      await db.joinPresetPlan(matchingPlan.presetKey || matchingPlan.id, defaultSchedule);
+    }
+
+    return { success: true, plan: matchingPlan, result: joinResult };
+  } catch (err) {
+    console.error("joinTeamGlobally error:", err);
+    return { success: false, message: "加入失敗：" + (err.message || err) };
+  } finally {
+    loader.hide();
+  }
+}
+window.joinTeamGlobally = joinTeamGlobally;
+
+function setupGlobalJoinTeamForm() {
+  const form = document.getElementById("global-join-team-form");
+  if (!form || form.dataset.listenerBound) return;
+  form.dataset.listenerBound = "true";
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("global-team-code-input");
+    const errorEl = document.getElementById("global-join-team-error");
+    const submitBtn = document.getElementById("global-join-team-submit-btn");
+
+    if (!input || !errorEl) return;
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    const code = input.value.trim().toUpperCase();
+    if (!code) {
+      errorEl.textContent = "請輸入邀請碼！";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = "0.7";
+    }
+
+    try {
+      const res = await window.joinTeamGlobally(code);
+      if (res && res.success) {
+        showToast(`已成功加入「${res.plan.name}」團隊！`);
+        input.value = "";
+
+        if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
+        const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn")).find(p => p.getAttribute("data-filter") === "mine");
+        if (minePill) minePill.click();
+      } else {
+        errorEl.textContent = (res && res.message) || "加入失敗，請確認邀請碼是否正確。";
+        errorEl.style.display = "block";
+      }
+    } catch (err) {
+      errorEl.textContent = "加入團隊時發生錯誤：" + (err.message || err);
+      errorEl.style.display = "block";
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = "1";
+      }
+    }
+  });
+}
+
+function openPlanDetailsDialog(plan, options = {}) {
   if (!plan) return;
+  const joinAction = typeof options.onJoin === "function" ? options.onJoin : null;
   const existing = document.getElementById("plan-details-dialog");
   if (existing) existing.remove();
 
@@ -1128,8 +1626,15 @@ function openPlanDetailsDialog(plan) {
   overlay.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:1rem;";
   overlay.innerHTML = `
     <div class="glass-card" role="dialog" aria-modal="true" aria-labelledby="plan-details-title"
-      style="width:min(520px,100%);height:auto!important;max-height:84vh;overflow:auto;padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);">
-      <h3 id="plan-details-title" style="margin:0 0 1rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);">${escapeHTML(plan.name || "讀經計畫")}</h3>
+      style="width:min(520px,100%);height:auto!important;max-height:84vh;overflow:auto;padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);position:relative;">
+      
+      <!-- X Close Button -->
+      <button type="button" id="plan-details-x-btn" aria-label="關閉"
+        style="position:absolute;top:1rem;right:1rem;width:30px;height:30px;border-radius:50%;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all 0.15s ease;">
+        <span class="nlc-icon" data-icon="close" aria-hidden="true" style="font-size:1.1rem;"></span>
+      </button>
+
+      <h3 id="plan-details-title" style="margin:0 0 1rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);padding-right:2rem;">${escapeHTML(plan.name || "讀經計畫")}</h3>
       ${isCampaignStage ? `<div style="display:flex;align-items:center;gap:.75rem;padding:.9rem;margin-bottom:1rem;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-card);"><div style="width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--primary-color);color:white;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span></div><div><div style="font-size:.72rem;color:var(--text-muted);">${awardEarned ? "已完成並獲得" : "完成本階段可獲得"}</div><strong style="font-size:1rem;color:var(--text-primary);">${escapeHTML(awardName)}</strong></div></div>` : ""}
       ${plan.description ? `<p style="margin:0 0 1rem;font-size:.84rem;line-height:1.6;color:var(--text-secondary);">${escapeHTML(plan.description)}</p>` : ""}
       <dl style="display:grid;grid-template-columns:auto 1fr;gap:.65rem .9rem;margin:0;font-size:.82rem;">
@@ -1145,7 +1650,36 @@ function openPlanDetailsDialog(plan) {
   document.body.appendChild(overlay);
   if (typeof hydrateIcons === "function") hydrateIcons(overlay);
   const close = () => overlay.remove();
-  overlay.querySelector("#plan-details-close").addEventListener("click", close);
+  
+  const xBtn = overlay.querySelector("#plan-details-x-btn");
+  xBtn.addEventListener("click", close);
+  xBtn.addEventListener("mouseenter", () => {
+    xBtn.style.color = "var(--text-primary)";
+    xBtn.style.background = "var(--bg-secondary)";
+  });
+  xBtn.addEventListener("mouseleave", () => {
+    xBtn.style.color = "var(--text-secondary)";
+    xBtn.style.background = "transparent";
+  });
+
+  const closeButton = overlay.querySelector("#plan-details-close");
+  closeButton.addEventListener("click", close);
+
+  if (joinAction) {
+    const parent = closeButton.parentElement;
+    closeButton.remove();
+    
+    const joinButton = document.createElement("button");
+    joinButton.type = "button";
+    joinButton.className = "primary-btn";
+    joinButton.textContent = isFixedPlanUpcoming(plan) ? "預先加入計畫" : "加入計畫";
+    joinButton.addEventListener("click", async () => {
+      joinButton.disabled = true;
+      close();
+      await joinAction();
+    });
+    parent.appendChild(joinButton);
+  }
   overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
 }
 
@@ -1300,10 +1834,9 @@ function renderPresetPlansList() {
   container.innerHTML = "";
 
   const legacyCategoryIdPrefix = "00000000-0000-0000-a000-";
-  const isLegacyChoicePlan = plan =>
+  const isObsoleteCategoryPlan = plan =>
     String(plan && (plan.id || plan.globalPlanId || "")).startsWith(legacyCategoryIdPrefix)
-    || String(plan && plan.presetKey || "").startsWith("m_")
-    || ["q1", "q2", "q3", "q4"].includes(String(plan && plan.presetKey || ""));
+    || String(plan && plan.presetKey || "").startsWith("m_");
 
   const sourcePlans = state.globalPlans && state.globalPlans.length > 0
     ? state.globalPlans
@@ -1329,14 +1862,39 @@ function renderPresetPlansList() {
       || normalizedName === "2026-2029 新生生命聖經速讀計畫");
   };
 
-  const visiblePlans = sourcePlans.filter(plan => {
-    if (!plan || isLegacyChoicePlan(plan) || isLegacyCampaignMaster(plan)) return false;
-    if (isPlanHidden(plan) && !canManageHiddenPlans()) return false;
-    if (!matchesPlanSearch(plan)) return false;
-    return ![plan.id, plan.globalPlanId, plan.presetKey, plan.name]
-      .filter(Boolean)
-      .some(value => joinedKeys.has(String(value)));
+  console.log("🔍 [Debug renderPresetPlansList]", {
+    isSupabaseMode: state.isSupabaseMode,
+    globalPlansLength: state.globalPlans ? state.globalPlans.length : null,
+    globalPlans: state.globalPlans,
+    activePlans: state.activePlans,
+    presets: CHURCH_PLAN_PRESETS
   });
+
+  const visiblePlans = sourcePlans.filter(plan => {
+    if (!plan) return false;
+    const isObsolete = isObsoleteCategoryPlan(plan);
+    const isLegacy = isLegacyCampaignMaster(plan);
+    const isHidden = isPlanHidden(plan);
+    const matchesSearch = matchesPlanSearch(plan);
+    
+    const joinedKeysValues = [plan.id, plan.globalPlanId, plan.presetKey, plan.name].filter(Boolean).map(String);
+    const isAlreadyJoined = joinedKeysValues.some(value => joinedKeys.has(value));
+    
+    console.log(`  Plan: ${plan.name} (${plan.presetKey || plan.id})`, {
+      isObsolete,
+      isLegacy,
+      isHidden,
+      matchesSearch,
+      isAlreadyJoined,
+      joinedKeysValues
+    });
+
+    if (isObsolete || isLegacy) return false;
+    if (isHidden && !canManageHiddenPlans()) return false;
+    if (!matchesSearch) return false;
+    return !isAlreadyJoined;
+  });
+  console.log("🔍 [Debug renderPresetPlansList] visiblePlans:", visiblePlans);
 
   if (visiblePlans.length === 0) {
     container.innerHTML = `
@@ -1385,22 +1943,27 @@ function renderPresetPlansList() {
         ${description ? `<p style="margin:.15rem 0 0;font-size:.76rem;line-height:1.45;color:var(--text-secondary);">${escapeHTML(description)}</p>` : ""}
         ${isCampaignStage ? `<div style="font-size:.76rem;font-weight:500;color:var(--primary-color);"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
         ${upcomingNotice ? `<div style="padding:.42rem .58rem;border-radius:9px;background:var(--bg-secondary);font-size:.74rem;line-height:1.45;color:var(--text-secondary);"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
-        <div style="font-size:.76rem;font-weight:500;color:var(--primary-color);margin-top:.15rem;">+ ${isUpcomingFixed ? "預先加入計畫" : "加入計畫"}</div>
+        <div style="font-size:.76rem;font-weight:500;color:var(--primary-color);margin-top:.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
       </div>
     `;
 
-    card.onclick = async () => {
-      const scheduleSettings = await openFlexibleScheduleDialog(plan);
-      if (!scheduleSettings) return;
-      const joinedPlan = await db.joinPresetPlan(key, scheduleSettings);
-      if (!joinedPlan) return;
 
-      const division = typeof window.offerReadingTeamParticipation === "function"
-        ? await window.offerReadingTeamParticipation(joinedPlan)
-        : null;
-      if (division && typeof window.openReadingTeamDialog === "function") {
-        await window.openReadingTeamDialog(joinedPlan, { preferredDivision: division });
-      }
+    card.onclick = () => {
+      openPlanDetailsDialog(plan, { onJoin: async () => {
+        // Step 1: Ask personal vs team BEFORE joining
+        const joinMode = await openJoinModeDialog(plan);
+        if (joinMode === null) return; // user dismissed
+
+        // Step 2: Join with default 7-day schedule (user can edit later from the plan menu)
+        const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
+        const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
+        if (!joinedPlan) return;
+
+        // Step 3: If team mode chosen, open team setup
+        if (joinMode === "team" && typeof window.openReadingTeamDialog === "function") {
+          await window.openReadingTeamDialog(joinedPlan, {});
+        }
+      }});
     };
 
     container.appendChild(card);
@@ -2643,16 +3206,23 @@ async function renderAdminPlanManagement() {
 
       // Bind delete event
       tr.querySelector(".admin-delete-plan-btn").onclick = async () => {
-        if (confirm(`您確定要刪除 ${plan.name} 嗎？這將使其他會友無法再從列表「加入」此計畫，但已加入該計畫之會友仍可照常閱讀及打卡。`)) {
-          loader.show("刪除計畫中...");
-          const success = await db.deleteGlobalPlan(plan.id);
-          loader.hide();
-          if (success) {
-            alert("計畫已成功刪除！");
-            renderAdminPlanManagement();
-            if (typeof renderPresetPlansList === 'function') {
-              renderPresetPlansList();
-            }
+        const confirmed = await window.showConfirmDialog({
+          title: "確定要刪除此計畫嗎？",
+          message: `您確定要刪除「${plan.name}」嗎？這將使其他會友無法再從列表「加入」此計畫，但已加入的會友仍可照常閱讀打卡。`,
+          confirmText: "確認刪除",
+          cancelText: "取消",
+          isDestructive: true
+        });
+        if (!confirmed) return;
+
+        loader.show("刪除計畫中...");
+        const success = await db.deleteGlobalPlan(plan.id);
+        loader.hide();
+        if (success) {
+          showToast("計畫已成功刪除！");
+          renderAdminPlanManagement();
+          if (typeof renderPresetPlansList === 'function') {
+            renderPresetPlansList();
           }
         }
       };
@@ -2864,7 +3434,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   if (!regionSelect || !zoneSelect || !groupSelect || !masterSelect) return;
 
   const userKey = state.currentUser ? `${state.currentUser.name}_${state.currentUser.role}` : "anonymous";
-  if (regionSelect.dataset.populatedFor === userKey) return;
+  if (regionSelect.options.length > 1 && regionSelect.dataset.populatedFor === userKey) return;
 
   regionSelect.dataset.populated = "true";
   regionSelect.dataset.populatedFor = userKey;
@@ -2879,6 +3449,8 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
   const isGroupLeader = userRole === "group_leader";
+
+  let isInitializing = true;
 
   // Hide selectors that exceed user's permission level
   if (isAdmin || isGreatZoneLeader) {
@@ -2935,9 +3507,21 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   if (isAdmin) {
     regionSelect.options.add(new Option("-- 請選擇大區 --", ""));
     regions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
+    if (isInitializing) {
+      const userGreatRegion = state.currentUser ? state.currentUser.great_region : "";
+      if (userGreatRegion) {
+        regionSelect.value = "region:" + userGreatRegion;
+      }
+    }
   } else if (isGreatZoneLeader) {
     regionSelect.options.add(new Option(`全部大區 (${myRegions.join(",")})`, ""));
     myRegions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
+    if (isInitializing) {
+      const userGreatRegion = state.currentUser ? state.currentUser.great_region : "";
+      if (userGreatRegion && myRegions.includes(userGreatRegion)) {
+        regionSelect.value = "region:" + userGreatRegion;
+      }
+    }
   } else {
     const userReg = state.currentUser.great_region || "";
     regionSelect.options.add(new Option(userReg ? `大區：${userReg}` : "大區", ""));
@@ -3003,6 +3587,12 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         zoneSelect.options.add(new Option("全部牧區", ""));
         const zones = getZonesForRegion(rName);
         zones.sort().forEach(z => zoneSelect.options.add(new Option(`牧區：${z}`, z)));
+        if (isInitializing) {
+          const userZone = state.currentUser ? state.currentUser.pastoral_zone : "";
+          if (userZone && zones.includes(userZone)) {
+            zoneSelect.value = userZone;
+          }
+        }
       }
     } else if (isGreatZoneLeader) {
       const regVal = regionSelect.value;
@@ -3014,6 +3604,12 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         zoneSelect.options.add(new Option("全部牧區", ""));
         const zones = getZonesForRegion(rName);
         zones.sort().forEach(z => zoneSelect.options.add(new Option(`牧區：${z}`, z)));
+        if (isInitializing) {
+          const userZone = state.currentUser ? state.currentUser.pastoral_zone : "";
+          if (userZone && zones.includes(userZone)) {
+            zoneSelect.value = userZone;
+          }
+        }
       }
     } else if (isZoneLeader) {
       const userZone = state.currentUser.pastoral_zone || "";
@@ -3052,6 +3648,12 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         groupSelect.options.add(new Option("全部小組", ""));
         const groups = getGroupsForZone(zoneVal);
         groups.sort().forEach(g => groupSelect.options.add(new Option(`小組：${g}`, g)));
+        if (isInitializing) {
+          const userGroup = state.currentUser ? state.currentUser.small_group : "";
+          if (userGroup && groups.includes(userGroup)) {
+            groupSelect.value = userGroup;
+          }
+        }
       }
     } else if (isZoneLeader) {
       const userZone = state.currentUser.pastoral_zone || "";
@@ -3064,6 +3666,12 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         groupSelect.options.add(new Option("全部小組", ""));
         const groups = getGroupsForZone(activeZone);
         groups.sort().forEach(g => groupSelect.options.add(new Option(`小組：${g}`, g)));
+        if (isInitializing) {
+          const userGroup = state.currentUser ? state.currentUser.small_group : "";
+          if (userGroup && groups.includes(userGroup)) {
+            groupSelect.value = userGroup;
+          }
+        }
       }
     } else if (isGroupLeader) {
       const userGroup = state.currentUser.small_group || "";
@@ -3091,6 +3699,8 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
 
   // Set initial master select value mapping without triggering render loop
   updateMasterValue(true);
+
+  isInitializing = false;
 }
 
 // ==================== STATS SELECTOR POPULATOR ====================
@@ -3153,9 +3763,64 @@ function populateStatsSelector() {
     });
   }
 }
+// ==================== ORG FILTER UTILITY ====================
+function getActiveOrgFilter() {
+  const regionSelect = document.getElementById("members-admin-region-select");
+  const zoneSelect = document.getElementById("members-admin-zone-select");
+  const groupSelect = document.getElementById("members-admin-group-select");
+
+  if (!regionSelect || !zoneSelect || !groupSelect) return "all";
+
+  const userRole = (state.currentUser && state.currentUser.role) || "member";
+  const isAdmin = userRole === "admin";
+  const isGreatZoneLeader = userRole === "great_zone_leader";
+  const isZoneLeader = userRole === "zone_leader";
+  const isGroupLeader = userRole === "group_leader";
+
+  if (isGroupLeader) {
+    const userGroup = state.currentUser.small_group || "";
+    return userGroup ? `group:${userGroup}` : "all_groups";
+  } else if (isZoneLeader) {
+    const userZone = state.currentUser.pastoral_zone || "";
+    const selectedGrp = groupSelect.value;
+    return selectedGrp ? `group:${selectedGrp}` : (userZone ? `zone:${userZone}` : "all_zones");
+  } else if (isGreatZoneLeader) {
+    const selectedGrp = groupSelect.value;
+    const selectedZone = zoneSelect.value;
+    const selectedReg = regionSelect.value;
+    if (selectedGrp) return `group:${selectedGrp}`;
+    else if (selectedZone) return `zone:${selectedZone}`;
+    else if (selectedReg) return selectedReg;
+    return "all_great_region";
+  } else if (isAdmin) {
+    const selectedGrp = groupSelect.value;
+    const selectedZone = zoneSelect.value;
+    const selectedReg = regionSelect.value;
+    if (selectedGrp) return `group:${selectedGrp}`;
+    else if (selectedZone) return `zone:${selectedZone}`;
+    else if (selectedReg) return selectedReg;
+    return "all";
+  }
+  return "all";
+}
+
 // ==================== MEMBERS SELECTOR POPULATOR ====================
 function populateMembersSelector() {
   setupCascadingSelectors("members-admin-region-select", "members-admin-zone-select", "members-admin-group-select", "members-zone-selector");
+
+  // Direct bindings to guarantee that any dropdown selection change immediately updates stats
+  const regionSelect = document.getElementById("members-admin-region-select");
+  const zoneSelect = document.getElementById("members-admin-zone-select");
+  const groupSelect = document.getElementById("members-admin-group-select");
+
+  [regionSelect, zoneSelect, groupSelect].forEach(el => {
+    if (el && !el.dataset.directListenerBound) {
+      el.dataset.directListenerBound = "true";
+      el.addEventListener("change", async () => {
+        await renderPlanMembersView();
+      });
+    }
+  });
 
   const membersZoneSelector = document.getElementById("members-zone-selector");
   if (membersZoneSelector && !membersZoneSelector.dataset.listenerInitialized) {
@@ -3179,10 +3844,10 @@ async function renderPlanStatsView() {
   if (currentTab === 'personal') {
     const teamSwitcher = document.getElementById("stats-team-view-switch");
     const teamInline = document.getElementById("reading-team-stats-inline");
+    const regContainer = document.getElementById("reading-team-registration-inline");
     if (teamSwitcher) teamSwitcher.classList.add("hidden");
     if (teamInline) teamInline.classList.add("hidden");
-    setReadingTeamSubviewElementHidden(personalSec, false);
-    setReadingTeamSubviewElementHidden(groupSec, true);
+    if (regContainer) regContainer.classList.add("hidden");
     // Show personal, hide group
     if (personalSec) personalSec.classList.remove("hidden");
     if (groupSec) groupSec.classList.add("hidden");
@@ -3392,7 +4057,7 @@ async function renderPlanHistoryView() {
   }
 }
 
-async function renderGroupMiniStats() {
+async function renderGroupMiniStats(overrideFilter) {
   if (!state.activePlan) return;
 
   let allUsers = [];
@@ -3402,28 +4067,41 @@ async function renderGroupMiniStats() {
     console.warn('Failed to fetch users for group stats mini-cards', e);
   }
 
-  // Use the selector's scoped users if available, otherwise fallback to user's scope
+  // Use the selector's scoped users if available, otherwise fallback to user's scope.
+  // Priority: explicit overrideFilter param → _statsTabScope → cached _grpScopedUsers → default scope
   let scopedUsers = window._grpScopedUsers;
-  // If tab scope is overridden, recalculate scopedUsers using it instead of using cached window._grpScopedUsers
-  if (window._statsTabScope !== null && allUsers.length > 0) {
-    const overrideFilter = window._statsTabScope;
-    if (overrideFilter === "all") {
+  const effectiveFilter = overrideFilter !== undefined ? overrideFilter : window._statsTabScope;
+  if (effectiveFilter !== null && effectiveFilter !== undefined && allUsers.length > 0) {
+
+    if (effectiveFilter === "all") {
       scopedUsers = allUsers;
-    } else if (overrideFilter === "me") {
+    } else if (effectiveFilter === "me") {
       scopedUsers = allUsers.filter(u => u.name === state.currentUser.name);
-    } else if (overrideFilter === "all_groups") {
+    } else if (effectiveFilter === "all_groups") {
       scopedUsers = allUsers.filter(u => u.small_group === state.currentUser.small_group);
-    } else if (overrideFilter.startsWith("group:")) {
-      const group = overrideFilter.replace("group:", "");
+    } else if (effectiveFilter === "all_great_region") {
+      const userGreatRegion = state.currentUser.great_region || "";
+      const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
+      scopedUsers = allUsers.filter(u => myRegions.includes(u.great_region));
+    } else if (effectiveFilter === "all_zones") {
+      const userZoneStr = state.currentUser.pastoral_zone || "";
+      const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
+      scopedUsers = allUsers.filter(u => myZones.includes(u.pastoral_zone));
+    } else if (effectiveFilter.startsWith("region:")) {
+      const region = effectiveFilter.replace("region:", "");
+      scopedUsers = allUsers.filter(u => u.great_region === region);
+    } else if (effectiveFilter.startsWith("group:")) {
+      const group = effectiveFilter.replace("group:", "");
       scopedUsers = allUsers.filter(u => u.small_group === group);
-    } else if (overrideFilter.startsWith("zone:")) {
-      const zone = overrideFilter.replace("zone:", "");
+    } else if (effectiveFilter.startsWith("zone:")) {
+      const zone = effectiveFilter.replace("zone:", "");
       scopedUsers = allUsers.filter(u => u.pastoral_zone === zone);
     }
   } else if (scopedUsers === undefined) {
     scopedUsers = getScopedUsers(allUsers, state.currentUser);
   }
   if (!scopedUsers) scopedUsers = [];
+
 
   const totalChapters = scopedUsers.reduce((sum, u) => sum + (u.chapters_read || 0), 0);
   const totalMembers = scopedUsers.length;
@@ -3432,9 +4110,11 @@ async function renderGroupMiniStats() {
   // Determine current scope label from selector
   let scopeLabel = "全教會";
   const rankingZoneSelector = document.getElementById("ranking-zone-selector");
-  const selectedFilter = window._statsTabScope !== null
-    ? window._statsTabScope
-    : (rankingZoneSelector ? rankingZoneSelector.value : null);
+  const selectedFilter = overrideFilter !== undefined
+    ? overrideFilter
+    : (window._statsTabScope !== null
+      ? window._statsTabScope
+      : (rankingZoneSelector ? rankingZoneSelector.value : null));
 
   if (selectedFilter) {
     if (selectedFilter === "all") {
@@ -3488,15 +4168,17 @@ async function renderGroupMiniStats() {
   window._grpAllUsers = allUsers;
 }
 
-function renderGroupProgressDistribution() {
+function renderGroupProgressDistribution(overrideFilter) {
   const scopedUsers = window._grpScopedUsers || [];
   const totalCount = scopedUsers.length;
 
   let titleSuffix = "團體進度狀態分佈";
   const rankingZoneSelector = document.getElementById("ranking-zone-selector");
-  const selectedFilter = window._statsTabScope !== null
-    ? window._statsTabScope
-    : (rankingZoneSelector ? rankingZoneSelector.value : null);
+  const selectedFilter = overrideFilter !== undefined
+    ? overrideFilter
+    : (window._statsTabScope !== null
+      ? window._statsTabScope
+      : (rankingZoneSelector ? rankingZoneSelector.value : null));
 
   if (selectedFilter) {
     if (selectedFilter === "all") titleSuffix = "全教會進度狀態分佈";
@@ -3590,7 +4272,7 @@ function renderGroupZoneChartWithSelector() {
   return;
 }
 
-function renderGroupGrowthTrend() {
+function renderGroupGrowthTrend(overrideFilter) {
   const scopedUsers = window._grpScopedUsers || [];
   const chartCard = document.getElementById('grp-daily-active-chart-card');
   const titleEl = document.getElementById('grp-daily-active-chart-title');
@@ -3608,9 +4290,11 @@ function renderGroupGrowthTrend() {
   // Update title based on scope
   if (titleEl) {
     const rankingZoneSelector = document.getElementById('ranking-zone-selector');
-    const selectedFilter = window._statsTabScope !== null
-      ? window._statsTabScope
-      : (rankingZoneSelector ? rankingZoneSelector.value : null);
+    const selectedFilter = overrideFilter !== undefined
+      ? overrideFilter
+      : (window._statsTabScope !== null
+        ? window._statsTabScope
+        : (rankingZoneSelector ? rankingZoneSelector.value : null));
     let scopeLabel = '全教會';
     if (selectedFilter) {
       if (selectedFilter === 'all') scopeLabel = '全教會';
@@ -3760,7 +4444,7 @@ function renderGroupGrowthTrend() {
   });
 }
 
-function renderGroupTeamHeatmap() {
+function renderGroupTeamHeatmap(overrideFilter) {
   const scopedUsers = window._grpScopedUsers || [];
   const heatmapCard = document.getElementById("grp-heatmap-card");
 
@@ -3774,9 +4458,11 @@ function renderGroupTeamHeatmap() {
   // Determine current scope label from selector
   let scopeLabel = "全教會";
   const rankingZoneSelector = document.getElementById("ranking-zone-selector");
-  const selectedFilter = window._statsTabScope !== null
-    ? window._statsTabScope
-    : (rankingZoneSelector ? rankingZoneSelector.value : null);
+  const selectedFilter = overrideFilter !== undefined
+    ? overrideFilter
+    : (window._statsTabScope !== null
+      ? window._statsTabScope
+      : (rankingZoneSelector ? rankingZoneSelector.value : null));
 
   if (selectedFilter) {
     if (selectedFilter === "all") {
@@ -4338,7 +5024,7 @@ async function renderGroupParticipantsRankingTable() {
 
     const tabMembers = document.getElementById("tab-plan-members");
     const isMembersActive = (tabMembers && tabMembers.classList.contains("active"))
-      || window.PlanPageController?.groupSubview === GROUP_SUBVIEW.STATS;
+      || window.currentPlanViewState === PLAN_ROUTE.ORG_STATS;
 
     if (isMembersActive) {
       populateMembersSelector();
@@ -4357,7 +5043,7 @@ async function renderGroupParticipantsRankingTable() {
         groupMembers = scopedUsersList.filter(u => u.name.toLowerCase().includes(query));
         if (rankingTitle) rankingTitle.textContent = `搜尋結果: ${query}`;
       } else {
-        const selectedFilter = membersZoneSelector ? membersZoneSelector.value : null;
+        const selectedFilter = getActiveOrgFilter();
         if (selectedFilter) {
           if (selectedFilter.startsWith("zone:")) {
             const zone = selectedFilter.replace("zone:", "");
@@ -4543,11 +5229,35 @@ window.displayParticipantsList = function (limit = 100) {
   const _careRole = (state.currentUser && state.currentUser.role) || "member";
   const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "admin"].includes(_careRole);
 
+  // Align header columns dynamically based on _canSendCare
+  const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;
+  if (headerEl) {
+    if (_canSendCare) {
+      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px 44px";
+      let reminderHeader = document.getElementById("members-ranking-reminder-col");
+      if (!reminderHeader) {
+        reminderHeader = Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
+      }
+      if (!reminderHeader) {
+        reminderHeader = document.createElement("div");
+        reminderHeader.id = "members-ranking-reminder-col";
+        reminderHeader.style.color = "var(--text-muted)";
+        reminderHeader.textContent = "提醒";
+        headerEl.appendChild(reminderHeader);
+      }
+    } else {
+      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px";
+      const reminderHeader = document.getElementById("members-ranking-reminder-col")
+        || Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
+      if (reminderHeader) reminderHeader.remove();
+    }
+  }
+
   visibleItems.forEach(m => {
     const itemRow = document.createElement("div");
     itemRow.style.cssText = `
       display: grid;
-      grid-template-columns: 1fr 80px 80px 70px 90px${_canSendCare && !m.isMe ? ' 44px' : ''};
+      grid-template-columns: 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
       gap: 0.4rem;
       align-items: center;
       padding: 0.6rem 0.2rem;
@@ -4572,32 +5282,42 @@ window.displayParticipantsList = function (limit = 100) {
     `;
 
     // 💌 關心戳一下按鈕（僅限領袖，自己的列不顯示）
-    if (_canSendCare && !m.isMe) {
-      const careBtn = document.createElement("button");
-      careBtn.title = "傳送關心提醒";
-      careBtn.setAttribute("aria-label", `關心 ${m.name}`);
-      careBtn.style.cssText = `
-        display: flex; align-items: center; justify-content: center;
-        width: 32px; height: 32px; border-radius: 50%;
-        border: 1px solid var(--border-card);
-        background: var(--bg-input);
-        cursor: pointer; transition: background 0.18s, border-color 0.18s;
-        margin: 0 auto;
-        color: var(--color-warning-text, #D97706);
-        flex-shrink: 0;
-      `;
-      careBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span>`;
-      careBtn.addEventListener("mouseenter", () => {
-        careBtn.style.background = "var(--color-warning-muted, rgba(251,191,36,0.15))";
-        careBtn.style.borderColor = "var(--color-warning-text, #D97706)";
-      });
-      careBtn.addEventListener("mouseleave", () => {
-        careBtn.style.background = "var(--bg-input)";
-        careBtn.style.borderColor = "var(--border-card)";
-      });
-      careBtn.onclick = () => window.openCareReminderDialog(m);
-      itemRow.appendChild(careBtn);
-      if (typeof hydrateIcons === "function") hydrateIcons(careBtn);
+    if (_canSendCare) {
+      if (!m.isMe) {
+        const careBtn = document.createElement("button");
+        careBtn.className = "secondary-btn";
+        careBtn.title = "傳送關心提醒";
+        careBtn.setAttribute("aria-label", `關心 ${m.name}`);
+        careBtn.style.cssText = `
+          display: flex; align-items: center; justify-content: center;
+          width: 32px; height: 32px; border-radius: 50%;
+          padding: 0;
+          margin: 0 auto;
+          color: var(--color-brand, #04A9D2);
+          background: transparent;
+          border: 1px solid var(--border-card, rgba(0,0,0,0.1));
+          cursor: pointer; transition: all 0.2s ease;
+          flex-shrink: 0;
+          box-shadow: none;
+        `;
+        careBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true" style="color: inherit; background: transparent;"></span>`;
+        careBtn.addEventListener("mouseenter", () => {
+          careBtn.style.background = "var(--color-brand-muted, rgba(4,169,210,0.08))";
+          careBtn.style.borderColor = "var(--color-brand-border, rgba(4,169,210,0.24))";
+        });
+        careBtn.addEventListener("mouseleave", () => {
+          careBtn.style.background = "transparent";
+          careBtn.style.borderColor = "var(--border-card, rgba(0,0,0,0.1))";
+        });
+        careBtn.onclick = () => window.openCareReminderDialog(m);
+        itemRow.appendChild(careBtn);
+        if (typeof hydrateIcons === "function") hydrateIcons(careBtn);
+      } else {
+        // 自己的列提供空白的佔位元素，確保表格寬度跟 header 完全對齊
+        const spacer = document.createElement("div");
+        spacer.style.width = "44px";
+        itemRow.appendChild(spacer);
+      }
     }
 
     listContainer.appendChild(itemRow);
@@ -4639,12 +5359,33 @@ window.displayParticipantsList = function (limit = 100) {
 async function renderPlanMembersView() {
   if (!state.activePlan) return;
 
+  // Set up collapsible list logic
+  const toggleBtn = document.getElementById("btn-toggle-members-collapse");
+  const wrapper = document.getElementById("members-list-collapsible-wrapper");
+  if (toggleBtn && wrapper && !toggleBtn.dataset.listenerBound) {
+    toggleBtn.dataset.listenerBound = "true";
+    toggleBtn.addEventListener("click", () => {
+      const isCollapsed = wrapper.classList.toggle("hidden");
+      toggleBtn.querySelector("span:first-child").textContent = isCollapsed ? "展開" : "收合";
+      toggleBtn.querySelector("span:last-child").textContent = isCollapsed ? "▼" : "▲";
+    });
+  }
+
   if (!(await prepareReadingTeamSubview("members"))) return;
+
+  // Switch the header filter bars: show members controls, hide stats controls
+  const adminScopeBar = document.getElementById("stats-admin-scope-bar");
+  const membersOrgControls = document.getElementById("members-organization-controls");
+  if (adminScopeBar) {
+    adminScopeBar.classList.add("hidden");
+    adminScopeBar.style.display = "none";
+  }
+  if (membersOrgControls) {
+    membersOrgControls.style.display = "";
+  }
 
   // Make sure selectors are populated correctly
   populateMembersSelector();
-
-
 
   // Use members-ranking-title element instead of ranking-title so the title
   // updates show up in the members subview card.
@@ -4660,7 +5401,38 @@ async function renderPlanMembersView() {
   } else {
     await renderGroupParticipantsRankingTable();
   }
+
+  // When in org-stats mode, the members filter should also control all the
+  // statistics cards and charts on this page. After renderGroupParticipantsRankingTable
+  // has set window._grpScopedUsers for the selected scope, re-render the stats.
+  if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
+    // Read the current filter value from the members selector directly.
+    // Do NOT sync to ranking-zone-selector because that would fire its own
+    // change listener and re-render with the wrong scope.
+    const currentOrgFilter = getActiveOrgFilter();
+
+    // Pass the filter explicitly so renderGroupMiniStats/charts use it for both
+    // scopedUsers calculation and scopeLabel, bypassing _statsTabScope.
+    await renderGroupMiniStats(currentOrgFilter);
+    renderGroupGrowthTrend(currentOrgFilter);
+    renderGroupTeamHeatmap(currentOrgFilter);
+
+    const distCard = document.getElementById("grp-distribution-card");
+    if (distCard && distCard.style.display !== "none") {
+      renderGroupProgressDistribution(currentOrgFilter);
+    }
+
+    // Also update the group stats section visibility
+    const groupSec = document.getElementById("stats-group-section");
+    if (groupSec) {
+      groupSec.classList.remove("hidden");
+      groupSec.style.display = "";
+    }
+  }
 }
+
+
+
 
 window.showPlanStatsModal = function () {
   if (!state.activePlan) {
@@ -5455,8 +6227,11 @@ async function updateGroupChart(zoneName) {
       console.error("Failed to load small group stats from Supabase:", e);
     }
   } else {
-    // Demo Mode
-    groupStats = MockStatsService.getSmallGroupStats(zoneName, mockUser);
+    if (typeof MockStatsService !== 'undefined' && MockStatsService) {
+      groupStats = MockStatsService.getSmallGroupStats(zoneName, mockUser);
+    } else {
+      groupStats = [];
+    }
   }
 
   const labels = groupStats.map(g => g.name);
@@ -5498,78 +6273,10 @@ function renderMonthlyHallOfFame() {
 
   fameList.innerHTML = "";
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
-  const forceOfflineDemo = isLocalhost && (urlParams.get("demo") === "true" || urlParams.get("offline") === "true");
-  const showDemoData = (forceOfflineDemo && typeof MockStatsService !== 'undefined' && MockStatsService !== null) || (state.currentUser && !!state.currentUser.is_demo);
-  if (!showDemoData) {
-    const placeholder = document.createElement("div");
-    placeholder.style.cssText = "grid-column: span 3; text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;";
-    placeholder.textContent = "正式計畫尚未結算，月度名人堂虛位以待！";
-    fameList.appendChild(placeholder);
-    return;
-  }
-
-  const winners = [
-    {
-      month: "2026年6月 (本月累計)",
-      top3: [
-        { rank: "gold", name: "示範組長丁", zone: "大安6", chapters: 980 },
-        { rank: "silver", name: "示範組長戊", zone: "中永和", chapters: 800 },
-        { rank: "bronze", name: "東區大區長", zone: "大安1", chapters: 750 }
-      ]
-    },
-    {
-      month: "2026年5月 (結算前三)",
-      top3: [
-        { rank: "gold", name: "示範組長乙", zone: "大安2", chapters: 650 },
-        { rank: "silver", name: "示範組員八", zone: "文山", chapters: 620 },
-        { rank: "bronze", name: "東區區長", zone: "大安1", chapters: 600 }
-      ]
-    },
-    {
-      month: "2026年4月 (結算前三)",
-      top3: [
-        { rank: "gold", name: "示範組員五", zone: "大安6", chapters: 540 },
-        { rank: "silver", name: "示範組員二", zone: "大安1", chapters: 520 },
-        { rank: "bronze", name: "示範組長甲", zone: "大安1", chapters: 480 }
-      ]
-    }
-  ];
-
-  winners.forEach(w => {
-    const item = document.createElement("div");
-    item.className = "monthly-fame-item";
-
-    const title = document.createElement("div");
-    title.className = "monthly-fame-month";
-    title.textContent = w.month;
-    item.appendChild(title);
-
-    w.top3.forEach((t, i) => {
-      const row = document.createElement("div");
-      row.className = "fame-row";
-
-      const rankSpan = document.createElement("span");
-      rankSpan.className = `fame-rank ${t.rank}`;
-      rankSpan.textContent = i + 1;
-      row.appendChild(rankSpan);
-
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "fame-name";
-      nameSpan.textContent = `${t.name} (${t.zone})`;
-      row.appendChild(nameSpan);
-
-      const valSpan = document.createElement("span");
-      valSpan.className = "fame-value";
-      valSpan.textContent = `${t.chapters} 章`;
-      row.appendChild(valSpan);
-
-      item.appendChild(row);
-    });
-
-    fameList.appendChild(item);
-  });
+  const placeholder = document.createElement("div");
+  placeholder.style.cssText = "grid-column: span 3; text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem;";
+  placeholder.textContent = "正式計畫尚未結算，月度名人堂虛位以待！";
+  fameList.appendChild(placeholder);
 }
 
 // ==========================================
@@ -5968,8 +6675,7 @@ function calculateProfileStats(plan) {
 /**
  * Render personal reading stats card.
  */
-function renderProfileReadingStats() {
-  const container = document.getElementById("profile-reading-stats-container");
+function renderProfileReadingStats(container) {
   if (!container) return;
 
   const streakDays = state.currentUser.streak || 0;
@@ -5983,9 +6689,9 @@ function renderProfileReadingStats() {
         <div style="margin: 0 auto 1rem; opacity: 0.6; display: block; width: 48px;">
           ${typeof renderIcon === "function" ? renderIcon("inbox", { size: "hero", className: "nlc-icon" }) : ""}
         </div>
-        <p style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">${(window.APP_COPY && window.APP_COPY.stats.noPlan) || "還沒加入讀經計畫"}</p>
+        <p style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">${(window.APP_COPY && window.APP_COPY.stats.noPlan) || "尚未加入讀經計畫"}</p>
         <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
-          請至「計畫」頁面選擇並加入，即可在此查看進度統計。
+          請至「計畫」分頁挑選計畫並加入，即可在此查看進度統計。
         </p>
         
         <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 0.8rem 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; text-align: left;">
@@ -6010,13 +6716,14 @@ function renderProfileReadingStats() {
   let todayProgressText = "";
   const start = new Date(stats.startDateStr);
   const end = new Date(stats.endDateStr);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   start.setHours(0, 0, 0, 0);
   end.setHours(0, 0, 0, 0);
 
   if (today < start) {
-    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">尚未開始 (開始於 ${stats.startDateStr})</span>`;
+    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">尚未開始 (預計 ${stats.startDateStr})</span>`;
   } else if (today > end) {
     todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">已結束 (共 ${stats.totalDays} 天)</span>`;
   } else {
@@ -6052,12 +6759,12 @@ function renderProfileReadingStats() {
             ${typeof renderIcon === "function" ? renderIcon("calendar", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">今天計畫進度</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">目前已進行的計畫天數</div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">今日進度</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">目前讀經進度天數</div>
           </div>
         </div>
-        <div style="font-weight: 500; display: flex; align-items: baseline; gap: 0.1rem;">
-          ${todayProgressText}
+        <div class="stat-value stat-value--brand">
+          \\\${todayProgressText}
         </div>
       </div>
 
@@ -6073,60 +6780,254 @@ function renderProfileReadingStats() {
           </div>
         </div>
         <div class="stat-value stat-value--danger">
-          ${streakDays} <span class="stat-value__unit">天</span>
+          \\\${streakDays} <span class="stat-value__unit">天</span>
         </div>
       </div>
 
       <!-- Behind Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper ${lagIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("exclamationCircle", { size: "sm", className: "nlc-icon" }) : ""}
+          <div class="stat-icon-wrapper \\\${lagIconClass}">
+            \\\${typeof renderIcon === "function" ? renderIcon("exclamationCircle", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">落後進度</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">落後預計進度天數</div>
           </div>
         </div>
-        <div class="stat-value ${lagValueClass}">
-          ${lagDisplay}
+        <div class="stat-value \\\${lagValueClass}">
+          \\\${lagDisplay}
         </div>
       </div>
 
       <!-- Ahead Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper ${leadIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "sm", className: "nlc-icon" }) : ""}
+          <div class="stat-icon-wrapper \\\${leadIconClass}">
+            \\\${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">超前進度</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
           </div>
         </div>
-        <div class="stat-value ${leadValueClass}">
-          ${leadDisplay}
+        <div class="stat-value \\\${leadValueClass}">
+          \\\${leadDisplay}
         </div>
       </div>
 
       <!-- Makeup Days -->
       <div class="stat-item-card" style="background: var(--bg-card); border: 1px solid var(--border-card); padding: 1rem; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 0.8rem;">
-          <div class="stat-icon-wrapper ${makeupIconClass}">
-            ${typeof renderIcon === "function" ? renderIcon("refresh", { size: "sm", className: "nlc-icon" }) : ""}
+          <div class="stat-icon-wrapper \\\${makeupIconClass}">
+            \\\${typeof renderIcon === "function" ? renderIcon("refresh", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
             <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">補讀天數</div>
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">事後補讀完畢天數</div>
           </div>
         </div>
-        <div class="stat-value ${makeupValueClass}">
-          ${makeupDisplay}
+        <div class="stat-value \\\${makeupValueClass}">
+          \\\${makeupDisplay}
         </div>
       </div>
 
     </div>
   `;
+}
+
+async function enterPlanListState() {
+  window.currentPlanViewState = PLAN_ROUTE.LIST;
+  state.planDetailOpen = false;
+  state.planActiveSubTab = "today";
+  if (window.PlanPageController) window.PlanPageController.groupLoadedForPlanKey = null;
+  const shell = setOnlyPlanRouteVisible(PLAN_ROUTE.LIST);
+  moveGroupNodesToDetail(shell);
+  renderJoinedPlansList();
+  renderPresetPlansList();
+}
+
+async function enterPlanDetailState() {
+  if (!state.activePlan) {
+    await enterPlanListState();
+    return;
+  }
+  window.currentPlanViewState = PLAN_ROUTE.DETAIL;
+  state.planDetailOpen = true;
+  state.planActiveSubTab = "today";
+  setOnlyPlanRouteVisible(PLAN_ROUTE.DETAIL);
+  if (window.PlanPageController) await window.PlanPageController.switchPage(PLAN_PAGE.READING, { skipChrome: true });
+}
+
+async function fetchGroupRankings(planId) {
+  if (!state.activePlan && planId) {
+    state.activePlan = (state.activePlans || []).find(plan =>
+      plan.id === planId ||
+      plan.globalPlanId === planId ||
+      plan.presetKey === planId
+    ) || null;
+    if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(state.activePlan);
+  }
+  if (!state.activePlan) return;
+
+  window._statsTabScope = getDefaultGroupStatsScope();
+  populateStatsSelector();
+  populateMembersSelector();
+}
+
+async function enterGroupProgressState() {
+  if (!state.activePlan) {
+    await enterPlanListState();
+    return;
+  }
+  window.currentPlanViewState = PLAN_ROUTE.GROUP;
+  state.planDetailOpen = true;
+
+  const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
+  let hasTeam = false;
+  if (isTeamPlan) {
+    hasTeam = await checkUserHasTeam();
+  }
+
+  let requestedSubview = Object.values(GROUP_SUBVIEW).includes(state.planActiveSubTab)
+    ? state.planActiveSubTab
+    : (window.PlanPageController?.groupSubview || GROUP_SUBVIEW.STATS);
+
+  if (isTeamPlan && !hasTeam && requestedSubview === GROUP_SUBVIEW.STATS) {
+    requestedSubview = GROUP_SUBVIEW.PERSONAL;
+  }
+
+  state.planActiveSubTab = requestedSubview;
+  setOnlyPlanRouteVisible(PLAN_ROUTE.GROUP);
+  if (window.PlanPageController) {
+    window.PlanPageController.groupSubview = requestedSubview;
+    await window.PlanPageController.switchPage(PLAN_PAGE.GROUP, { skipChrome: true, primaryView: requestedSubview });
+  }
+}
+
+async function enterOrgStatsState() {
+  if (!state.activePlan) {
+    await enterPlanListState();
+    return;
+  }
+  window.currentPlanViewState = PLAN_ROUTE.ORG_STATS;
+  state.planDetailOpen = true;
+  window._currentStatsTab = 'admin';
+
+  // Show the plan-detail wrapper shell, but hide lists
+  setOnlyPlanRouteVisible(PLAN_ROUTE.ORG_STATS);
+
+  // Hide detail sub-components (tab strip & main view window) to only leave org-stats visible
+  const tabStrip = document.getElementById("plan-detail-tab-strip");
+  const viewWindow = document.getElementById("plan-view-window");
+  if (tabStrip) {
+    tabStrip.classList.add("hidden");
+    tabStrip.style.display = "none";
+  }
+  if (viewWindow) {
+    viewWindow.classList.add("hidden");
+    viewWindow.style.display = "none";
+  }
+
+  // Ensure org stats subview is visible
+  const orgSub = document.getElementById("plan-org-stats-subview");
+  if (orgSub) {
+    orgSub.classList.remove("hidden");
+    orgSub.style.display = "flex";
+  }
+
+  const brandText = document.querySelector("#top-bar-title-area .brand-text");
+  const planNameEl = document.getElementById("top-bar-plan-name");
+  if (brandText) brandText.style.display = "none";
+  if (planNameEl) {
+    planNameEl.textContent = "牧區小組狀況";
+    planNameEl.style.display = "block";
+    planNameEl.classList.remove("hidden");
+  }
+
+  const backBtn = document.getElementById("btn-back-to-plans");
+  if (backBtn) {
+    backBtn.classList.remove("hidden");
+    const backBtnText = backBtn.querySelector("span:not(.nlc-icon)");
+    if (backBtnText) backBtnText.textContent = "返回";
+  }
+
+  // Switch the header filter bars immediately to prevent layout flashing/flicker
+  const adminScopeBar = document.getElementById("stats-admin-scope-bar");
+  const membersOrgControls = document.getElementById("members-organization-controls");
+  if (adminScopeBar) {
+    adminScopeBar.classList.add("hidden");
+    adminScopeBar.style.display = "none";
+  }
+  if (membersOrgControls) {
+    membersOrgControls.style.display = "";
+    membersOrgControls.classList.remove("hidden");
+  }
+
+  populateStatsSelector();
+  populateMembersSelector();
+
+  // Do NOT call switchStatTab("admin") here — that would invoke renderPlanHistoryView()
+  // which uses _statsTabScope (from the old stats filter, e.g. "group:青少年教會") and
+  // overwrites the stats cards. In org-stats mode the members filter is the single
+  // source of truth. We go straight to renderPlanMembersView() which shows the members
+  // filter bar and calls renderGroupMiniStats with the correct scope via our org-stats block.
+  await renderPlanMembersView();
+}
+
+
+
+async function setPlanState(newState) {
+  ensurePlanRouteShell();
+
+  const normalized = String(newState || "").toUpperCase();
+  if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL" || normalized === PLAN_ROUTE.GROUP || normalized === "GROUP" || normalized === "ORG_STATS" || newState === PLAN_ROUTE.ORG_STATS) {
+    if (state.activePlan && isPlanExpired(state.activePlan)) {
+      showToast("此計畫已過期，僅供查看紀錄與統計。");
+    }
+  }
+
+  if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS && normalized !== "ORG_STATS" && newState !== PLAN_ROUTE.ORG_STATS) {
+    const orgSub = document.getElementById("plan-org-stats-subview");
+    if (orgSub) orgSub.classList.add("hidden");
+    const brandText = document.querySelector("#top-bar-title-area .brand-text");
+    const planNameEl = document.getElementById("top-bar-plan-name");
+    if (brandText) brandText.style.display = "";
+    const backBtn = document.getElementById("btn-back-to-plans");
+    if (backBtn) {
+      const backBtnText = backBtn.querySelector("span:not(.nlc-icon)");
+      if (backBtnText) backBtnText.textContent = "計畫";
+    }
+  }
+
+  if (normalized === PLAN_ROUTE.LIST || normalized === "LIST") {
+    await enterPlanListState();
+  } else if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL") {
+    await enterPlanDetailState();
+  } else if (normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
+    await enterGroupProgressState();
+  } else if (normalized === "ORG_STATS" || newState === PLAN_ROUTE.ORG_STATS) {
+    await enterOrgStatsState();
+  } else {
+    console.error(`[PlanSM] Unknown state: ${newState}`);
+    return;
+  }
+
+  if (typeof appRouter !== "undefined" && typeof appRouter.updateNavigationChrome === "function") {
+    appRouter.updateNavigationChrome();
+  }
+}
+
+function planGoBack() {
+  if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
+    setPlanState(PLAN_ROUTE.DETAIL);
+    return;
+  }
+  if (state.planActiveSubTab === "settings" && window.PlanPageController) {
+    window.PlanPageController.closeSettingsPage();
+    return;
+  }
+  if (getCurrentPlanRoute() !== PLAN_ROUTE.LIST) setPlanState(PLAN_ROUTE.LIST);
 }
 
 
@@ -6178,99 +7079,6 @@ if (typeof snapCalendarToToday === 'function') {
   window.snapCalendarToToday = snapCalendarToToday;
 }
 
-// Plan route state machine: the plan tab has exactly three mutually exclusive screens.
-async function enterPlanListState() {
-  window.currentPlanViewState = PLAN_ROUTE.LIST;
-  state.planDetailOpen = false;
-  state.planActiveSubTab = "today";
-  if (window.PlanPageController) window.PlanPageController.groupLoadedForPlanKey = null;
-  const shell = setOnlyPlanRouteVisible(PLAN_ROUTE.LIST);
-  moveGroupNodesToDetail(shell);
-  renderJoinedPlansList();
-  renderPresetPlansList();
-}
-
-async function enterPlanDetailState() {
-  if (!state.activePlan) {
-    await enterPlanListState();
-    return;
-  }
-  window.currentPlanViewState = PLAN_ROUTE.DETAIL;
-  state.planDetailOpen = true;
-  state.planActiveSubTab = "today";
-  setOnlyPlanRouteVisible(PLAN_ROUTE.DETAIL);
-  if (window.PlanPageController) await window.PlanPageController.switchPage(PLAN_PAGE.READING, { skipChrome: true });
-}
-
-async function fetchGroupRankings(planId) {
-  if (!state.activePlan && planId) {
-    state.activePlan = (state.activePlans || []).find(plan =>
-      plan.id === planId ||
-      plan.globalPlanId === planId ||
-      plan.presetKey === planId
-    ) || null;
-    if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(state.activePlan);
-  }
-  if (!state.activePlan) return;
-
-  window._statsTabScope = getDefaultGroupStatsScope();
-  populateStatsSelector();
-  populateMembersSelector();
-}
-async function enterGroupProgressState() {
-  if (!state.activePlan) {
-    await enterPlanListState();
-    return;
-  }
-  window.currentPlanViewState = PLAN_ROUTE.GROUP;
-  state.planDetailOpen = true;
-  const requestedSubview = Object.values(GROUP_SUBVIEW).includes(state.planActiveSubTab)
-    ? state.planActiveSubTab
-    : (window.PlanPageController?.groupSubview || GROUP_SUBVIEW.STATS);
-  state.planActiveSubTab = requestedSubview;
-  setOnlyPlanRouteVisible(PLAN_ROUTE.GROUP);
-  if (window.PlanPageController) {
-    window.PlanPageController.groupSubview = requestedSubview;
-    await window.PlanPageController.switchPage(PLAN_PAGE.GROUP, { skipChrome: true, primaryView: requestedSubview });
-  }
-}
-
-async function setPlanState(newState) {
-  ensurePlanRouteShell();
-
-  const normalized = String(newState || "").toUpperCase();
-  if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL" || normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
-    if (state.activePlan && isPlanExpired(state.activePlan)) {
-      showToast("此計畫已過期，無法再進入進度閱讀。");
-      await enterPlanListState();
-      return;
-    }
-  }
-
-  if (normalized === PLAN_ROUTE.LIST || normalized === "LIST") {
-    await enterPlanListState();
-  } else if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL") {
-    await enterPlanDetailState();
-  } else if (normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
-    await enterGroupProgressState();
-  } else {
-    console.error(`[PlanSM] Unknown state: ${newState}`);
-    return;
-  }
-
-  if (typeof appRouter !== "undefined" && typeof appRouter.updateNavigationChrome === "function") {
-    appRouter.updateNavigationChrome();
-  }
-}
-
-function planGoBack() {
-  if (state.planActiveSubTab === "settings" && window.PlanPageController) {
-    window.PlanPageController.closeSettingsPage();
-    return;
-  }
-  if (getCurrentPlanRoute() !== PLAN_ROUTE.LIST) setPlanState(PLAN_ROUTE.LIST);
-}
-
 function planToggleGroupProgress() {
   if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext();
   if (!state.activePlan || !window.PlanPageController) return;
@@ -6283,6 +7091,8 @@ window.setPlanState = setPlanState;
 window.planGoBack = planGoBack;
 window.planToggleGroupProgress = planToggleGroupProgress;
 window.togglePlanDetailSubTab = planToggleGroupProgress;
+
+
 
 // ==================== 關心戳一下 Dialog ====================
 window.openCareReminderDialog = function(member) {
@@ -6487,14 +7297,8 @@ window.openCareReminderDialog = function(member) {
       sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="send" aria-hidden="true"></span> 傳送關心`;
       if (typeof hydrateIcons === "function") hydrateIcons(sendBtn);
 
-      const isDemoOrNoId = !member.id || (state.currentUser && state.currentUser.is_demo);
-      if (isDemoOrNoId) {
-        overlay.remove();
-        if (typeof showToast === "function") showToast(`(Demo) 已模擬傳送關心提醒給 ${member.name} 💛`);
-      } else {
-        errorEl.textContent = `傳送失敗：${err.message || "請稍後再試"}`;
-        errorEl.style.display = "block";
-      }
+      errorEl.textContent = `傳送失敗：${err.message || "請稍後再試"}`;
+      errorEl.style.display = "block";
     }
   });
 

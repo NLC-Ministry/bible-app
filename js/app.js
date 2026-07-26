@@ -1,10 +1,15 @@
 // js/app.js
 
 // Import all support and core files to be bundled by esbuild in correct order
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { IssueReportFab } from '../components/issue-report/IssueReportFab.tsx';
+import { AdminReportView } from '../components/issue-report/AdminReportView.tsx';
+import { AdminUsersAccordion } from '../components/issue-report/AdminUsersAccordion.tsx';
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js';
+import './copy/zh-Hant.js?v=20260723_production_cleanup';
 import './data/church_campaign.js?v=20260720_complete_svg_badges';
 import './design/design-tokens.js';
 import './design/design-system-helpers.js';
@@ -12,16 +17,22 @@ import './design/icon-registry.js';
 import './design/icons.js';
 import './state.js?v=20260720_complete_svg_badges';
 import './auth.js';
-import './db.js?v=20260723_team_dual_division';
-import './utils.js?v=20260722_admin_role';
-import './gamification.js?v=20260723_silent_achievements';
+import './db.js?v=20260724_clean_demo_mode';
+import './utils.js?v=20260723_production_cleanup';
+import './gamification.js?v=20260723_production_cleanup';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
 import './modules/team-registration.js?v=20260723_team_dual_division';
-import { initializePwa } from './pwa/PwaCoordinator.js';
+import { cleanupProductionStorage } from './production-cleanup.mjs';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260723_production_cleanup';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 
-const buildVersion = "__BUILD_VERSION__" + "_stats_navigation";
+cleanupProductionStorage(window.localStorage);
+
+let buildVersion = "__BUILD_VERSION__" + "_clean_demo_mode_v20";
+if (buildVersion.includes("__BUILD_VERSION__")) {
+  buildVersion = "dev_" + Date.now();
+}
 const moduleCache = {};
 let careReminderBadgeLastRefresh = 0;
 
@@ -211,6 +222,9 @@ appRouter.switchTab = async function (tabId, options = {}) {
       if (typeof window.renderAdminOrgManagement === 'function') {
         window.renderAdminOrgManagement(); // sync, no await needed
       }
+      if (mod && typeof mod.renderAdminFeatureSettings === 'function') {
+        await mod.renderAdminFeatureSettings();
+      }
     }
 
     // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──
@@ -338,5 +352,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Mount the React IssueReportFab component to document.body
+  try {
+    const reportRoot = document.createElement("div");
+    reportRoot.id = "issue-report-root";
+    document.body.appendChild(reportRoot);
+    const root = createRoot(reportRoot);
+    root.render(React.createElement(IssueReportFab));
+    console.log("[IssueReport] Mounted IssueReportFab React component successfully.");
+  } catch (err) {
+    console.error("[IssueReport] Failed to mount React component:", err);
+  }
 
+  // Mount the React AdminReportView component to #admin-reports-root
+  try {
+    const adminReportsRoot = document.getElementById("admin-reports-root");
+    if (adminReportsRoot) {
+      const root = createRoot(adminReportsRoot);
+      root.render(React.createElement(AdminReportView));
+      console.log("[IssueReportAdmin] Mounted AdminReportView React component successfully.");
+    }
+  } catch (err) {
+    console.error("[IssueReportAdmin] Failed to mount AdminReportView component:", err);
+  }
+
+  // Mount the React AdminUsersAccordion component to #admin-users-accordion-root
+  try {
+    const adminUsersAccordionRoot = document.getElementById("admin-users-accordion-root");
+    if (adminUsersAccordionRoot) {
+      const root = createRoot(adminUsersAccordionRoot);
+      root.render(React.createElement(AdminUsersAccordion));
+      console.log("[IssueReportAdmin] Mounted AdminUsersAccordion React component successfully.");
+    }
+  } catch (err) {
+    console.error("[IssueReportAdmin] Failed to mount AdminUsersAccordion component:", err);
+  }
 });

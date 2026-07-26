@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isRetiredPlanRequest } from "./retired-resources.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
@@ -24,10 +25,11 @@ const READ_TABLES = new Set([
   "member_reading_summary",
   "view_pastoral_zone_stats",
   "view_small_group_stats",
-  "care_reminders"
+  "care_reminders",
+  "app_feature_settings"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
-const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles"]);
+const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
 const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders"]);
 const TEAM_RPC_FUNCTIONS = new Set([
   "get_my_reading_team",
@@ -86,6 +88,24 @@ function parseJwt(token: string) {
 }
 
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
+  // 1. Try verifying as Supabase JWT first (standard Supabase client auth)
+  try {
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(accessToken);
+    if (user && !authErr) {
+      const { data: profile, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+      if (!profileError && profile) {
+        return profile;
+      }
+    }
+  } catch (err) {
+    console.log("Supabase JWT verification bypassed, falling back to Logto OIDC:", err);
+  }
+
+  // 2. Fallback to Logto OIDC SSO verification
   let sub: string | null = null;
 
   // Try decoding as JWT first (since Logto issues JWT access tokens for API resources)
@@ -126,6 +146,16 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
   return profile;
 }
 
+
+async function isFeatureEnabled(supabaseAdmin: any, key: string) {
+  const { data, error } = await supabaseAdmin
+    .from("app_feature_settings")
+    .select("enabled")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) return false;
+  return data?.enabled === true;
+}
 function isAdmin(profile: any) {
   return profile?.role === "admin";
 }
@@ -257,8 +287,16 @@ Deno.serve(async (req: Request) => {
     });
     const profile = await resolveProfile(supabaseAdmin, accessToken);
 
+    if (isRetiredPlanRequest(body)) {
+      return jsonResponse({ error: "resource_not_found", resource: "reading_plan" }, 404);
+    }
+
     if (action === "rpc") {
       const functionName = typeof body.function === "string" ? body.function : "";
+      if (["increment_likes", "decrement_likes"].includes(functionName)
+        && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
+        return jsonResponse({ error: "feature_archived" }, 403);
+      }
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
       if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
@@ -352,11 +390,18 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl, profile_id: profile.id });
     }
 
-    const canRead = action === "select" && READ_TABLES.has(table);
+    const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
     const canOwnWrite = ["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table);
-    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && ADMIN_WRITE_TABLES.has(table) && isAdmin(profile);
+    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && isAdmin(profile);
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
 
+
+    const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
+    if (devotionalTables.has(table)
+      && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
+      if (action === "select") return jsonResponse({ data: [], profile });
+      return jsonResponse({ error: "feature_archived" }, 403);
+    }
     let query: any;
     if (action === "select") {
       query = supabaseAdmin.from(table).select(body.select || "*");
