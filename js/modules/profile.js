@@ -710,6 +710,25 @@ async function handleLogoutAndClearCache() {
 
 export function init() {
   updateGoogleLoginVisibility();
+
+  // Segmented control tabs toggle (Settings vs Badges)
+  const tabTriggers = document.querySelectorAll(".profile-tab-trigger");
+  tabTriggers.forEach(trigger => {
+    trigger.onclick = (e) => {
+      e.preventDefault();
+      const targetTab = trigger.getAttribute("data-profile-tab");
+      
+      tabTriggers.forEach(t => t.classList.remove("active"));
+      trigger.classList.add("active");
+      
+      document.querySelectorAll(".profile-tab-content").forEach(content => {
+        content.classList.add("hidden");
+      });
+      
+      const activeContent = document.getElementById(`profile-tab-content-${targetTab}`);
+      if (activeContent) activeContent.classList.remove("hidden");
+    };
+  });
   
   const btnToggleForm = document.getElementById("btn-toggle-profile-form");
   const formWrapper = document.getElementById("profile-form-wrapper");
