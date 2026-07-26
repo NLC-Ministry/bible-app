@@ -105,15 +105,20 @@ describe("PlanActivityCard Component Tests", () => {
     const subheader = divisionSection.props.children[0]
     expect(getChildrenText(subheader)).toBe("組隊參賽狀態")
 
-    // 檢查組別按鈕列表 (只應包含已加入的 3人組徽章，不應有 6人組按鈕)
+    // 檢查組別按鈕列表
     const buttonsList = divisionSection.props.children[1].props.children
-    expect(buttonsList.length).toBe(1)
+    expect(buttonsList.length).toBe(2)
 
     // 已加入 3人組
     const firstBtn = buttonsList[0]
     expect(firstBtn.props.className).toContain("border-emerald-500")
     expect(getChildrenText(firstBtn)).toContain("已入 3人組")
     expect(getChildrenText(firstBtn)).toContain("(磐石小組)")
+
+    // 未加入 6人組
+    const secondBtn = buttonsList[1]
+    expect(secondBtn.props.className).toContain("bg-primary")
+    expect(getChildrenText(secondBtn)).toContain("報名 6人組")
   })
 
   it("載入中狀態 (Loading Lock) 應禁用所有報名按鈕", () => {

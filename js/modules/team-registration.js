@@ -375,7 +375,6 @@
           ${!isReady ? (isCaptain
             ? '<button type="button" class="reading-team-danger-link" data-disband-team>解散隊伍</button>'
             : '<button type="button" class="reading-team-danger-link" data-leave-team>退出隊伍</button>') : ""}
-          ${allContexts.length < 2 ? `<button type="button" class="secondary-btn" data-add-other-team>加入另一個 ${Number(team.division) === 3 ? 6 : 3} 人團隊</button>` : ""}
           <button type="button" class="primary-btn" data-team-close-footer>完成</button>
         </footer>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
