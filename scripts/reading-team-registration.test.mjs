@@ -140,11 +140,9 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("data-team-skip");
     expect(teamUi).toContain('data-team-division="3"');
     expect(teamUi).toContain('data-team-division="6"');
-    expect(teamUi).toContain('data-registration-mode="create"');
-    expect(teamUi).toContain('data-registration-mode="join"');
-    expect(teamUi).toContain('id="reading-team-code"');
+    expect(teamUi).toContain('id="reading-team-create-form"');
     expect(teamUi).toContain("並產生邀請碼");
-    expect(teamUi).toContain("使用邀請碼加入團隊");
+    expect(html).toContain("使用邀請碼加入團隊");
     expect(teamUi).toContain("team.inviteCode");
     expect(teamUi).toContain("renderTeamStatGrid");
     expect(teamUi).toContain("renderTeamMemberRoster");
@@ -183,9 +181,9 @@ describe("NLC and browser integration", () => {
 
   it("connects joining to My Team and integrates team data into existing group views", () => {
     expect(plan).not.toContain("chooseReadingPlanParticipation(plan)");
-    expect(plan).toContain("offerReadingTeamParticipation(joinedPlan)");
+    expect(plan).toContain("openJoinModeDialog(plan)");
     expect(plan).toContain("openReadingTeamDialog(joinedPlan");
-    expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("offerReadingTeamParticipation(joinedPlan)"));
+    expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("openReadingTeamDialog(joinedPlan"));
     expect(html).toContain('id="view-reading-team-btn"');
     expect(html).toContain("牧區小組狀況");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');

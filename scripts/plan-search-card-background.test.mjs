@@ -21,7 +21,7 @@ describe("plan search", () => {
     expect(plan).toContain("function normalizePlanSearchValue");
     expect(plan).toContain("function matchesPlanSearch");
     expect(plan).toContain("plansToRender = plansToRender.filter(matchesPlanSearch)");
-    expect(plan).toContain("if (!matchesPlanSearch(plan)) return false");
+    expect(plan).toContain("if (!matchesSearch) return false");
     expect(plan).toContain('planSearchInput.addEventListener("input"');
   });
 });

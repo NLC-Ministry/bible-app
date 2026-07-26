@@ -317,7 +317,7 @@
           </div>
           <div>
             <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數組別</span>
-            <div style="font-size: 0.95rem; font-weight: 600; color: var(--color-brand, #04A9D2); margin-bottom: 1.1rem; padding: 0.2rem 0; display: flex; align-items: center; gap: 0.35rem;">
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--color-brand); margin-bottom: 1.1rem; padding: 0.2rem 0; display: flex; align-items: center; gap: 0.35rem;">
               <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
               <span>${preferredDivision} 人組團隊</span>
             </div>

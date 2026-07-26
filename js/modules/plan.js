@@ -1327,14 +1327,14 @@ function renderJoinedPlansList() {
                   if (hasJoined) {
                     const teamName = contexts.find(c => Number(c.team.division) === division)?.team?.name || "";
                     btn.className = "secondary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--xs" data-icon="people" style="color: var(--color-success-foreground);"></span><span>已入 ${division}人組 (${escapeHTML(teamName)})</span>`;
+                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span><span>已入 ${division}人組 (${escapeHTML(teamName)})</span>`;
                     btn.onclick = (e) => {
                       e.stopPropagation();
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
                     };
                   } else {
                     btn.className = "primary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--xs" data-icon="plus"></span><span>報名 ${division}人組</span>`;
+                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span><span>報名 ${division}人組</span>`;
                     btn.onclick = (e) => {
                       e.stopPropagation();
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
@@ -1385,7 +1385,7 @@ function openJoinModeDialog(plan) {
         style="width:min(400px,100%);padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);border-radius:20px;animation:slideUp 0.22s cubic-bezier(0.34,1.56,0.64,1);">
 
         <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.35rem;">
-          <span class="nlc-icon nlc-icon--md" data-icon="people" style="color:var(--color-brand,#04A9D2);" aria-hidden="true"></span>
+          <span class="nlc-icon nlc-icon--md" data-icon="people" style="color:var(--color-brand);" aria-hidden="true"></span>
           <h3 id="join-mode-title" style="margin:0;font-size:1.05rem;font-weight:600;color:var(--text-primary);">要與夥伴一起讀嗎？</h3>
         </div>
         <p style="margin:0 0 1.2rem;font-size:.83rem;color:var(--text-muted);line-height:1.5;">
@@ -1400,13 +1400,15 @@ function openJoinModeDialog(plan) {
                    cursor:pointer;transition:all .18s ease;text-align:left;width:100%;">
             <span style="width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
                          background:rgba(4,169,210,.10);flex-shrink:0;">
-              <span class="nlc-icon nlc-icon--sm" data-icon="people" style="color:var(--color-brand,#04A9D2);" aria-hidden="true"></span>
+              <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
             </span>
             <span style="display:flex;flex-direction:column;gap:.18rem;">
               <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 3 人團隊</strong>
               <span style="font-size:.77rem;color:var(--text-muted);">固定三人組隊，共同挑戰進度</span>
             </span>
-            <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="color:var(--text-muted);margin-left:auto;flex-shrink:0;" aria-hidden="true"></span>
+            <span style="margin-left:auto;flex-shrink:0;display:inline-flex;color:var(--text-muted);">
+              <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+            </span>
           </button>
 
           <!-- 6人團隊 -->
@@ -1416,13 +1418,15 @@ function openJoinModeDialog(plan) {
                    cursor:pointer;transition:all .18s ease;text-align:left;width:100%;">
             <span style="width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
                          background:rgba(34,197,94,.10);flex-shrink:0;">
-              <span class="nlc-icon nlc-icon--sm" data-icon="people" style="color:var(--color-success-foreground,#16a34a);" aria-hidden="true"></span>
+              <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
             </span>
             <span style="display:flex;flex-direction:column;gap:.18rem;">
               <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 6 人團隊</strong>
               <span style="font-size:.77rem;color:var(--text-muted);">固定六人組隊，挑戰更高榮譽</span>
             </span>
-            <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" style="color:var(--text-muted);margin-left:auto;flex-shrink:0;" aria-hidden="true"></span>
+            <span style="margin-left:auto;flex-shrink:0;display:inline-flex;color:var(--text-muted);">
+              <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+            </span>
           </button>
         </div>
 
@@ -1455,12 +1459,12 @@ function openJoinModeDialog(plan) {
     const team6Btn = overlay.querySelector("#join-mode-team-6");
     const cancelBtn = overlay.querySelector("#join-mode-cancel");
 
-    addHover(team3Btn, "var(--color-brand,#04A9D2)", "rgba(4,169,210,.06)");
-    addHover(team6Btn, "var(--color-success-foreground,#16a34a)", "rgba(34,197,94,.06)");
+    addHover(team3Btn, "var(--color-brand)", "rgba(4,169,210,.06)");
+    addHover(team6Btn, "var(--color-success-foreground)", "rgba(34,197,94,.06)");
 
     team3Btn?.addEventListener("click", () => close(3));
     team6Btn?.addEventListener("click", () => close(6));
-    cancelBtn?.addEventListener("click", () => close(null));
+    cancelBtn?.addEventListener("click", () => close("solo"));
     overlay.addEventListener("click", e => { if (e.target === overlay) close(null); });
   });
 }
@@ -1631,7 +1635,7 @@ function openPlanDetailsDialog(plan, options = {}) {
       <!-- X Close Button -->
       <button type="button" id="plan-details-x-btn" aria-label="關閉"
         style="position:absolute;top:1rem;right:1rem;width:30px;height:30px;border-radius:50%;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all 0.15s ease;">
-        <span class="nlc-icon" data-icon="close" aria-hidden="true" style="font-size:1.1rem;"></span>
+        <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
       </button>
 
       <h3 id="plan-details-title" style="margin:0 0 1rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);padding-right:2rem;">${escapeHTML(plan.name || "讀經計畫")}</h3>
@@ -1952,16 +1956,16 @@ function renderPresetPlansList() {
       openPlanDetailsDialog(plan, { onJoin: async () => {
         // Step 1: Ask personal vs team BEFORE joining
         const joinMode = await openJoinModeDialog(plan);
-        if (joinMode === null) return; // user dismissed
+        if (joinMode === null) return; // dismissed via backdrop
 
         // Step 2: Join with default 7-day schedule (user can edit later from the plan menu)
         const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
         const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
         if (!joinedPlan) return;
 
-        // Step 3: If team mode chosen, open team setup
-        if (joinMode === "team" && typeof window.openReadingTeamDialog === "function") {
-          await window.openReadingTeamDialog(joinedPlan, {});
+        // Step 3: If a team size was chosen, open team setup for that division
+        if ((joinMode === 3 || joinMode === 6) && typeof window.openReadingTeamDialog === "function") {
+          await window.openReadingTeamDialog(joinedPlan, { preferredDivision: joinMode });
         }
       }});
     };
