@@ -375,7 +375,7 @@
           ${!isReady ? (isCaptain
             ? '<button type="button" class="reading-team-danger-link" data-disband-team>解散隊伍</button>'
             : '<button type="button" class="reading-team-danger-link" data-leave-team>退出隊伍</button>') : ""}
-          <button type="button" class="primary-btn" data-team-close-footer>完成</button>
+          <button type="button" class="primary-btn" data-team-close-footer>關閉</button>
         </footer>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
       panel.querySelector("[data-team-close]").onclick = close;
