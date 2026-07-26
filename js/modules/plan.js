@@ -1370,32 +1370,35 @@ function renderJoinedPlansList() {
                     teamContainer.appendChild(badge);
                   });
                 } else {
-                  const btn = document.createElement("button");
-                  btn.type = "button";
-                  btn.style.cssText = `
-                    font-size: 0.75rem;
-                    padding: 0.35rem 0.9rem;
-                    border-radius: 9999px;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.35rem;
-                    cursor: pointer;
-                    margin: 0;
-                    background: transparent;
-                    border: 1px solid var(--primary-color);
-                    color: var(--primary-color);
-                    transition: all 0.2s ease;
-                    font-weight: 600;
-                  `;
-                  btn.innerHTML = `
-                    <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
-                    <span>報名小組團隊</span>
-                  `;
-                  btn.onclick = (e) => {
-                    e.stopPropagation();
-                    window.openReadingTeamDialog(plan);
-                  };
-                  teamContainer.appendChild(btn);
+                  const divisions = [3, 6];
+                  divisions.forEach(division => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.style.cssText = `
+                      font-size: 0.75rem;
+                      padding: 0.35rem 0.9rem;
+                      border-radius: 9999px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 0.35rem;
+                      cursor: pointer;
+                      margin: 0;
+                      background: transparent;
+                      border: 1px solid var(--primary-color);
+                      color: var(--primary-color);
+                      transition: all 0.2s ease;
+                      font-weight: 600;
+                    `;
+                    btn.innerHTML = `
+                      <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
+                      <span>報名 ${division}人組</span>
+                    `;
+                    btn.onclick = (e) => {
+                      e.stopPropagation();
+                      window.openReadingTeamDialog(plan, { preferredDivision: division });
+                    };
+                    teamContainer.appendChild(btn);
+                  });
                 }
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
