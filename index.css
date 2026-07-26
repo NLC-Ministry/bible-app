@@ -10047,3 +10047,174 @@ body.dark-theme .custom-confirm-overlay {
   }
 }
 
+/* ─── App-Style Grouped Settings List (Shadcn & 21st.dev Inspired) ─── */
+.app-settings-group {
+  margin-bottom: 1.25rem;
+}
+
+.app-settings-group__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.app-settings-group__header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand);
+}
+
+.app-settings-group__header-text h3 {
+  color: var(--text-primary);
+  font-weight: var(--type-weight-strong);
+  font-size: 0.875rem;
+}
+
+.app-settings-group__header-text p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+/* 列表容器：合併成一個圓角卡片，並加上邊框與背景 */
+.app-settings-list {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 列表項目 */
+.app-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  background: transparent;
+  transition: var(--transition-smooth);
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  outline: none;
+}
+
+.app-settings-item:last-child {
+  border-bottom: none;
+}
+
+.app-settings-item:hover {
+  background: color-mix(in srgb, var(--color-brand) 5%, var(--bg-card));
+  text-decoration: none;
+}
+
+.app-settings-item:active {
+  transform: scale(0.995);
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--bg-card));
+}
+
+.app-settings-item__leading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 左側圖示裝飾背景 */
+.app-settings-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.app-settings-icon-wrap--brand {
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+}
+
+.app-settings-icon-wrap--neutral {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-secondary);
+}
+
+.app-settings-icon-wrap--danger {
+  background: rgba(252, 54, 90, 0.12);
+  color: var(--color-danger);
+}
+
+/* 設定文字區域 */
+.app-settings-item__meta {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  min-width: 0;
+}
+
+.app-settings-item__title {
+  font-size: 0.9rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.app-settings-item__subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.125rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-settings-item__chevron {
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  transition: transform 0.2s ease;
+}
+
+/* 登出特殊樣式 */
+.app-settings-item--danger:hover {
+  background: rgba(252, 54, 90, 0.05);
+}
+
+.app-settings-item--danger:active {
+  background: rgba(252, 54, 90, 0.08);
+}
+
+.text-danger {
+  color: var(--color-danger) !important;
+}
+
+.text-danger-muted {
+  color: color-mix(in srgb, var(--color-danger) 70%, var(--text-secondary)) !important;
+}
+
+/* Onboarding alert state for the Member Hub card when user needs to setup pastoral structure */
+.app-settings-group__header.member-hub-profile-card--needs-org {
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--border-card));
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.app-settings-group__header.member-hub-profile-card--needs-org .app-settings-group__header-icon {
+  color: var(--color-warning);
+}
+
+
+

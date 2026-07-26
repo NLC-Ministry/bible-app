@@ -148,11 +148,16 @@ function renderMemberHubProfileLinks() {
   if (btnToggle && hubManaged && formWrapper && formWrapper.classList.contains("hidden")) {
     const label = copy.profileSettings || "帳號設定（本 app）";
     btnToggle.innerHTML = `
-      <span class="settings-row-btn__icon-wrap">
-        <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-      </span>
-      <span class="settings-row-btn__label">${label}</span>
-      <span class="settings-row-btn__chevron">
+      <div class="app-settings-item__leading">
+        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+          <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+        </span>
+        <div class="app-settings-item__meta">
+          <span class="app-settings-item__title" id="btn-toggle-profile-form-title">${label}</span>
+          <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
+        </div>
+      </div>
+      <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
         <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
       </span>`;
   }
@@ -716,19 +721,32 @@ export function init() {
       if (isHidden) {
         formWrapper.classList.remove("hidden");
         btnToggleForm.innerHTML = `
-          <span class="settings-row-btn__icon-wrap">
+          <div class="app-settings-item__leading">
+            <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+              <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
+            </span>
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">收起個人檔案編輯</span>
+              <span class="app-settings-item__subtitle">隱藏下方的個人檔案編輯表單</span>
+            </div>
+          </div>
+          <span class="app-settings-item__chevron">
             <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
-          </span>
-          <span class="settings-row-btn__label">收起個人檔案編輯</span>`;
+          </span>`;
       } else {
         formWrapper.classList.add("hidden");
         const label = copy.profileSettings || "帳號設定（本 app）";
         btnToggleForm.innerHTML = `
-          <span class="settings-row-btn__icon-wrap">
-            <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-          </span>
-          <span class="settings-row-btn__label">${label}</span>
-          <span class="settings-row-btn__chevron">
+          <div class="app-settings-item__leading">
+            <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+              <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+            </span>
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title" id="btn-toggle-profile-form-title">${label}</span>
+              <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
+            </div>
+          </div>
+          <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
             <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
           </span>`;
       }
