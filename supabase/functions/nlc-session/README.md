@@ -26,6 +26,11 @@ Org mapping helpers are duplicated from [`scripts/lib/nlc-profile-sync.mjs`](../
 - `NLC_PLATFORM_API_URL=https://platform.newlife.org.tw/platform/v1`
 - `APP_ORIGIN=https://bible.newlife.org.tw`
 
+Frontend builds should also set
+`NLC_BIBLE_BACKEND_URL=https://bible-api.newlife.org.tw`. The current
+`nlc-session` bridge still reads Member Hub directly, but this URL is exposed as
+`window.NLC_CONFIG.bibleBackendUrl` for the backend-backed session cutover.
+
 Supabase default secrets used automatically:
 
 - `SUPABASE_URL`

@@ -19,6 +19,16 @@ NLC_PLATFORM_API_URL=https://platform.newlife.org.tw/platform/v1
 APP_ORIGIN=https://bible.newlife.org.tw
 ```
 
+Frontend builds should also set:
+
+```bash
+NLC_BIBLE_BACKEND_URL=https://bible-api.newlife.org.tw
+```
+
+This exposes `window.NLC_CONFIG.bibleBackendUrl` for the backend-backed session
+cutover. Keep `NLC_MEMBER_HUB_URL` configured for the current `nlc-session`
+bridge until the frontend no longer calls that Edge Function.
+
 Supabase provides these default secrets automatically:
 
 ```bash
