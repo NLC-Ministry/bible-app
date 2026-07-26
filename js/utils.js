@@ -48,6 +48,77 @@ function showToast(message, duration = 2500) {
   }, duration);
 }
 
+// ── App-style Confirmation Dialog ──────────────────────────
+/**
+ * Show a premium app-like custom confirmation dialog.
+ * @param {object} options - Options object
+ * @param {string} options.title - Dialog title
+ * @param {string} options.message - Dialog body message
+ * @param {string} [options.confirmText="確認"] - Confirm button text
+ * @param {string} [options.cancelText="取消"] - Cancel button text
+ * @param {boolean} [options.isDestructive=false] - Whether it is a destructive action
+ * @returns {Promise<boolean>} Resolves to true if confirmed, false if cancelled
+ */
+function showConfirmDialog({ title, message, confirmText = "確認", cancelText = "取消", isDestructive = false } = {}) {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById("app-custom-confirm-overlay");
+    if (overlay) overlay.remove();
+
+    overlay = document.createElement("div");
+    overlay.id = "app-custom-confirm-overlay";
+    overlay.className = "custom-confirm-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:var(--z-critical,900);padding:20px;opacity:0;transition:opacity 0.2s ease;";
+
+    const safeEscape = (str) => typeof escapeHTML === "function" ? escapeHTML(str) : String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
+    overlay.innerHTML = `
+      <div class="custom-confirm-card" role="dialog" aria-modal="true">
+        <div class="custom-confirm-content">
+          <h3 class="custom-confirm-title">${safeEscape(title)}</h3>
+          <p class="custom-confirm-desc">${safeEscape(message)}</p>
+        </div>
+        <div class="custom-confirm-actions">
+          <button type="button" class="custom-confirm-btn-cancel secondary-btn">${safeEscape(cancelText)}</button>
+          <button type="button" class="custom-confirm-btn-confirm ${isDestructive ? 'danger-btn' : 'primary-btn'}">${safeEscape(confirmText)}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Force style recalculation for animations
+    overlay.offsetWidth;
+
+    overlay.style.opacity = "1";
+    overlay.classList.add("active");
+
+    const cleanup = (value) => {
+      overlay.style.opacity = "0";
+      overlay.classList.remove("active");
+      setTimeout(() => {
+        overlay.remove();
+        resolve(value);
+      }, 200);
+    };
+
+    overlay.querySelector(".custom-confirm-btn-cancel").onclick = () => cleanup(false);
+    overlay.querySelector(".custom-confirm-btn-confirm").onclick = () => cleanup(true);
+
+    overlay.onclick = (e) => {
+      if (e.target === overlay) cleanup(false);
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        cleanup(false);
+        document.removeEventListener("keydown", handleKeyDown);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+  });
+}
+window.showConfirmDialog = showConfirmDialog;
+
 // ── User Avatar (shadcn-inspired: image + initials fallback) ──
 
 function getUserAvatarInitial(name) {
@@ -320,10 +391,6 @@ function buildHeatmapGrid(containerId, logsByDate, teamSize = 1, label = "章", 
   container.appendChild(wrapper);
 }
 
-const BADGE_UNLOCK_TARGETS = {
-  subscribe_plan: 1, streak_30: 1, complete_plan: 1, share_verse: 1, read_all_bible: 10
-};
-
 function getCampaignStageCompletedRounds(stageNo) {
   const target = Number(stageNo || 0);
   let completedRounds = Number(localStorage.getItem(`church_stage_completed_rounds_${target}`) || 0);
@@ -351,19 +418,7 @@ function getBadgeMilestoneConfig(badgeId) {
     const stageNo = Number(badgeId.replace("church_stage_award_", ""));
     return { levels: [5, 4, 3, 2, 1], unit: "遍", getValue: () => getCampaignStageCompletedRounds(stageNo) };
   }
-  const activePlanCount = () => (state.activePlans || []).length;
-  const completedPlanCount = () => (state.activePlans || []).filter(plan => Number(plan.progress || 0) >= 100 || Number(plan.currentRound || 1) > 1).length;
-  const config = {
-    subscribe_plan: { levels: [5, 4, 3, 2, 1], unit: "個計畫", getValue: activePlanCount },
-    streak_30: { levels: [30, 21, 14, 7, 1], unit: "天", getValue: () => Number((state.currentUser && state.currentUser.streak) || 0) },
-    complete_plan: { levels: [5, 4, 3, 2, 1], unit: "個計畫", getValue: completedPlanCount },
-    share_verse: { levels: [50, 25, 10, 5, 1], unit: "次分享", getValue: () => Number(localStorage.getItem("verse_share_count") || (localStorage.getItem("has_shared_verse") === "true" ? 1 : 0)) },
-    read_all_bible: { levels: [1189, 800, 500, 100, 10], unit: "章", getValue: () => {
-      const uniqueChapters = new Set((state.readingLogs || []).map(log => `${log.book}_${log.chapter}`));
-      return uniqueChapters.size;
-    }}
-  };
-  return config[badgeId] || { levels: [5, 4, 3, 2, 1], unit: "次", getValue: () => 0 };
+  return { levels: [5, 4, 3, 2, 1], unit: "遍", getValue: () => 0 };
 }
 
 function getBadgeProgressValue(badgeId) {
@@ -426,27 +481,18 @@ function attachBadgeOpenHandlers(element, badge, isUnlocked) {
       openDetail();
     }
   };
-}window.getBadgeTierClass = function(starsCount) {
-  if (starsCount === 1) return "tier-bronze";
-  if (starsCount === 2) return "tier-silver";
-  if (starsCount === 3) return "tier-gold";
-  if (starsCount === 4) return "tier-platinum";
-  if (starsCount >= 5) return "tier-legendary";
-  return "";
-};
+}
 
 const CAMPAIGN_MEDAL_FRAME_CLASSES = Array.from({ length: 10 }, (_, index) =>
   `campaign-medal-stage-${index + 1}`
 );
 
-function getBadgeFrameClass(badge, starsCount) {
+function getBadgeFrameClass(badge) {
   const stageNo = Number(badge && badge.campaignStageNo || 0);
   if (stageNo >= 1 && stageNo <= CAMPAIGN_MEDAL_FRAME_CLASSES.length) {
     return `campaign-medal-stage-${stageNo}`;
   }
-  return typeof window.getBadgeTierClass === "function"
-    ? window.getBadgeTierClass(starsCount)
-    : "";
+  return "";
 }
 
 function renderBadgeWall(containerId) {
@@ -476,7 +522,7 @@ function renderBadgeWall(containerId) {
     badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
     const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
     const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    const tierClass = getBadgeFrameClass(badge, starState.level);
+    const tierClass = getBadgeFrameClass(badge);
     badgeItem.innerHTML = `
       ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
       <div class="honor-badge-item__icon-wrap honor-badge-hex-shell">
@@ -511,7 +557,7 @@ function renderBadgeStrip(containerId, options) {
     item.type = "button";
     item.className = "badge-strip__item " + (isUnlocked ? "unlocked" : "locked");
     item.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const tierClass = getBadgeFrameClass(badge, starState.level);
+    const tierClass = getBadgeFrameClass(badge);
     const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
     item.innerHTML = `
       <span class="honor-badge-hex-shell honor-badge-hex-shell--sm">
@@ -636,11 +682,10 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     if (hexInner) {
       hexInner.classList.remove(
         "honor-badge-hex--unlocked", "honor-badge-hex--locked",
-        "tier-bronze", "tier-silver", "tier-gold", "tier-platinum", "tier-legendary",
         ...CAMPAIGN_MEDAL_FRAME_CLASSES
       );
       hexInner.classList.add(isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked");
-      const frameClass = getBadgeFrameClass(badge, badgeStarState.level);
+      const frameClass = getBadgeFrameClass(badge);
       if (frameClass) hexInner.classList.add(frameClass);
     }
     shield.style.background = "";

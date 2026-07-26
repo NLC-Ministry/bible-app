@@ -1,7 +1,7 @@
 
 
 /**
- * 依計畫名稱查找 CHURCH_PLAN_PRESETS 的 key（僅作舊資料 fallback 使用）
+ * 依計畫名稱查找目前階段定義的 key。
  * @param {string} name
  * @returns {string|null}
  */
@@ -23,9 +23,8 @@ function quotePostgrestValue(value) {
 }
 
 /**
- * A plan can be referenced by a global UUID, a legacy preset key (for example
- * q1), or its display name. Keep all aliases together so older enrollments are
- * included in the same church-wide statistics as newer enrollments.
+ * A plan can be referenced by a global UUID, its current stage key, or its
+ * display name. Keep those aliases together so statistics stay plan-specific.
  */
 function getPlanFilterAliases(filterValue) {
   if (!filterValue) return [];
@@ -200,7 +199,7 @@ const db = {
                         hostname.startsWith('10.') || 
                         hostname.startsWith('172.') || 
                         hostname.endsWith('.local');
-    const forceOfflineDemo = isLocalhost && (urlParams.get("demo") === "true" || urlParams.get("offline") === "true");
+    const forceOfflineDemo = false;
 
     const sbUrl = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url ? SUPABASE_CONFIG.url.trim() : "");
     const sbKey = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.anonKey ? SUPABASE_CONFIG.anonKey.trim() : "");
@@ -234,26 +233,7 @@ const db = {
       });
     }
 
-    const btnDemoGateEarly = document.getElementById("btn-gate-demo-login");
-    if (btnDemoGateEarly) {
-      btnDemoGateEarly.style.display = allowGoogleLogin ? "inline-flex" : "none";
-      btnDemoGateEarly.addEventListener("click", async (e) => {
-        e.preventDefault();
-        loader.show("進入 Demo 模式中...");
-        try {
-          db.setDemoMode();
-          db.updateAuthUI(null);
-          await db.loadUserData(true);
-          // Trigger view update
-          if (typeof updateDashboardView === 'function') updateDashboardView();
-          if (typeof updateHeaderAvatar === 'function') updateHeaderAvatar();
-        } catch (err) {
-          console.error("Demo login failed:", err);
-        } finally {
-          loader.hide();
-        }
-      });
-    }
+
 
     // ── NLC SSO button wiring (always, even before Supabase) ──
     const btnNlcGate = document.getElementById("btn-gate-nlc-login");
@@ -515,7 +495,7 @@ const db = {
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
-    state.currentUser.is_demo = !!profile.is_demo;
+    state.currentUser.is_demo = false;
     state.realRole = state.currentUser.role;
     this.refreshRoleDependentUI();
   },
@@ -524,8 +504,8 @@ const db = {
     if (typeof updateAdminNavVisibility === "function") {
       updateAdminNavVisibility();
     }
-    if (typeof updateProfileDropdown === "function") {
-      updateProfileDropdown();
+    if (typeof updateHeaderAvatar === "function") {
+      updateHeaderAvatar();
     }
     if (typeof refreshUserAvatars === "function") {
       refreshUserAvatars();
@@ -626,27 +606,6 @@ const db = {
     const appLayout = document.querySelector(".app-layout");
     if (loginGate) loginGate.classList.remove("hidden");
     if (appLayout) appLayout.classList.add("hidden");
-  },
-
-  setDemoMode() {
-    state.isSupabaseMode = false;
-    const statusBadge = document.getElementById("connection-status");
-    const authSection = document.getElementById("sb-auth-section");
-    const placeholder = document.getElementById("sb-disconnected-placeholder");
-
-    const profileCardCol = document.getElementById("profile-card-col");
-
-    statusBadge.className = "status-badge offline";
-    statusBadge.querySelector(".status-text").textContent = "Demo 模式";
-    if (authSection) {
-      authSection.classList.add("hidden");
-      authSection.className = "card-col span-12 hidden";
-    }
-    if (placeholder) placeholder.classList.remove("hidden");
-
-    if (profileCardCol) {
-      profileCardCol.className = "card-col span-12";
-    }
   },
 
   // Handle Supabase Auth UI Switches
@@ -881,6 +840,7 @@ const db = {
     }
 
     // FALLBACK: LocalStorage mode
+    await this.loadGlobalPlans();
     const localProfile = localStorage.getItem("user_profile");
     if (localProfile) {
       state.currentUser = JSON.parse(localProfile);
@@ -915,12 +875,7 @@ const db = {
           // Self-heal legacy timezone-offsetted dates and missing year/month properties
           if (plan.presetKey && plan.days && plan.days.length > 0) {
             const isMissingProperties = !plan.days[0].year || !plan.days[0].month;
-            const hasShiftBug = (plan.presetKey === 'q1' && plan.days[0].date === '06/30') || 
-                               (plan.presetKey === 'q2' && plan.days[0].date === '09/30') || 
-                               (plan.presetKey === 'q3' && plan.days[0].date === '12/31') || 
-                               (plan.presetKey === 'q4' && plan.days[0].date === '03/31');
-                               
-            if ((hasShiftBug || isMissingProperties) && typeof generatePlanObject === 'function') {
+            if (isMissingProperties && typeof generatePlanObject === 'function') {
               const preset = CHURCH_PLAN_PRESETS[plan.presetKey];
               if (preset) {
                 const freshPlan = generatePlanObject(plan.name, plan.startDate, plan.endDate, plan.target_books || preset.books, plan.presetKey, plan.level || 'normal');
@@ -966,56 +921,26 @@ const db = {
         state.activePlan = null;
       }
     } else {
-      // First run in Demo mode: default to admin with mock logs/plan
+      // First run: default to guest user with clean profile
       state.currentUser = {
-        name: "系統管理員",
-        great_region: "南區",
-        pastoral_zone: "新烏4",
-        small_group: "秀枝",
-        role: "admin",
-        chapters_read: 80,
-        plan_progress: 72,
-        streak: 15,
-        last_read: new Date().toISOString().split('T')[0]
+        name: "訪客",
+        great_region: "",
+        pastoral_zone: "",
+        small_group: "",
+        role: "member",
+        is_demo: false,
+        chapters_read: 0,
+        plan_progress: 0,
+        streak: 0,
+        last_read: null
       };
       localStorage.setItem("user_profile", JSON.stringify(state.currentUser));
-      state.realRole = "admin";
-
-      const defaultDemoPresetKey = Object.keys(CHURCH_PLAN_PRESETS)[0];
-      const defaultDemoPreset = CHURCH_PLAN_PRESETS[defaultDemoPresetKey];
-
-
-      state.activePlan = generatePlanObject(defaultDemoPreset.name, defaultDemoPreset.startDate, defaultDemoPreset.endDate, defaultDemoPreset.books, defaultDemoPresetKey);
-      state.activePlan.progress = 72;
-      state.activePlan.completedChapters = Math.round((state.activePlan.totalChapters * 72) / 100);
-      state.activePlans = [state.activePlan];
-
-      localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
-      localStorage.setItem("selected_plan_key", defaultDemoPresetKey);
-
-      // Fill in simulated logs
-      const completedList = [];
-      let count = 0;
-      for (const day of state.activePlan.days) {
-        for (const ch of day.chapters) {
-          if (count < state.activePlan.completedChapters) {
-            completedList.push({
-              book: ch.book,
-              chapter: ch.chapter,
-              read_at: new Date(state.activePlan.startDate).toISOString(),
-              presetKey: "q1"
-            });
-            count++;
-          } else {
-            break;
-          }
-        }
-        if (count >= state.activePlan.completedChapters) break;
-      }
-      state.readingLogs = completedList;
-      localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs));
-
-      state.currentUser.chapters_read = state.readingLogs.length;
+      state.realRole = "member";
+      state.activePlans = [];
+      state.activePlan = null;
+      state.readingLogs = [];
+      localStorage.setItem("active_reading_plans", "[]");
+      localStorage.setItem("reading_logs", "[]");
     }
 
         this.calculateStreak();
@@ -1112,38 +1037,14 @@ const db = {
     // 優先從 mock_stats.js 動態讀取以避免重複定義
     if (typeof MOCK_GREAT_REGIONS !== 'undefined' && MOCK_GREAT_REGIONS.length > 0) {
       state.orgStructure.regions = [...MOCK_GREAT_REGIONS];
-      const demoRegions = ["示範大區A", "示範大區B", "示範大區C", "示範大區D"];
-      demoRegions.forEach(dr => {
-        if (!state.orgStructure.regions.includes(dr)) {
-          state.orgStructure.regions.push(dr);
-        }
-      });
-
       state.orgStructure.zones = {};
       if (typeof MOCK_PASTORAL_ZONES_BY_REGION !== 'undefined') {
         Object.assign(state.orgStructure.zones, MOCK_PASTORAL_ZONES_BY_REGION);
       }
-      state.orgStructure.zones["示範大區A"] = ["示範牧區甲", "示範牧區乙", "示範牧區丙"];
-      state.orgStructure.zones["示範大區B"] = ["示範牧區丁", "示範牧區戊", "示範牧區己"];
-      state.orgStructure.zones["示範大區C"] = ["示範牧區庚", "示範牧區辛"];
-      state.orgStructure.zones["示範大區D"] = ["示範牧區壬", "示範牧區癸"];
-
       state.orgStructure.groups = {};
       if (typeof MOCK_SMALL_GROUPS !== 'undefined') {
         Object.assign(state.orgStructure.groups, MOCK_SMALL_GROUPS);
       }
-      Object.assign(state.orgStructure.groups, {
-        "示範牧區甲": ["示範小組1", "示範小組2"],
-        "示範牧區乙": ["示範小組3"],
-        "示範牧區丙": ["示範小組4"],
-        "示範牧區丁": ["示範小組5"],
-        "示範牧區戊": ["示範小組6"],
-        "示範牧區己": ["示範小組7"],
-        "示範牧區庚": ["示範小組8"],
-        "示範牧區辛": ["示範小組9"],
-        "示範牧區壬": ["示範小組10"],
-        "示範牧區癸": ["示範小組11"]
-      });
       return;
     }
 
@@ -1483,6 +1384,7 @@ const db = {
       try {
         const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role, managed_regions, managed_zones, managed_groups").eq("is_demo", false);
         console.log(`🔍 [AdminDebug] profiles 查詢結果: ${usersProfiles ? usersProfiles.length : 0} 筆`, profilesError ? `錯誤: ${profilesError.message}` : '');
+        if (profilesError) throw profilesError;
         if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${u.role})`));
         
         let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level");
@@ -1501,6 +1403,7 @@ const db = {
         }
         const { data: allPlans, error: plansError } = await plansQuery;
         console.log(`🔍 [AdminDebug] reading_plans 查詢結果: ${allPlans ? allPlans.length : 0} 筆`, plansError ? `錯誤: ${plansError.message}` : '');
+        if (plansError) throw plansError;
 
         let logsQuery = state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
         if (allPlans && allPlans.length > 0) {
@@ -1509,6 +1412,7 @@ const db = {
         }
         const { data: allLogs, error: logsError } = await logsQuery;
         console.log(`🔍 [AdminDebug] reading_logs 查詢結果: ${allLogs ? allLogs.length : 0} 筆`, logsError ? `錯誤: ${logsError.message}` : '');
+        if (logsError) throw logsError;
         state.allLogsCache = allLogs || [];
 
         // Fetch today's devotional notes (golden verses)
@@ -1625,6 +1529,7 @@ const db = {
             };
           }).filter(Boolean);
         }
+        return [mockUser];
       } catch (err) {
         console.error("Failed to fetch merged users:", err);
       }
@@ -1769,123 +1674,6 @@ const db = {
       churchRank: churchStats.rank,
       churchTotal: churchStats.total
     };
-  },
-
-  async switchDemoRole(role) {
-    loader.show("切換模擬角色中...");
-
-    if (role === "real_user") {
-      // 恢復線上連線狀態
-      state.isSupabaseMode = true;
-      const statusBadge = document.getElementById("connection-status");
-      if (statusBadge) {
-        statusBadge.className = "status-badge online";
-        statusBadge.querySelector(".status-text").textContent = "線上模式";
-      }
-      const placeholder = document.getElementById("sb-disconnected-placeholder");
-
-      if (placeholder) placeholder.classList.add("hidden");
-      
-      const authSection = document.getElementById("sb-auth-section");
-      if (authSection) {
-        authSection.classList.remove("hidden");
-        authSection.className = "card-col span-12";
-      }
-
-      window._cachedAllUsersList = null;
-      await this.loadUserData();
-      await this.loadOrgStructure(); // Re-fetch org structure from Supabase
-      
-      loader.hide();
-      return;
-    }
-
-    // 只要切換非 real_user 的模擬角色，就強制進入本機 Demo 模式沙盒
-    state.isSupabaseMode = false;
-    this.setDemoMode();
-
-    let mockUser = MOCK_USERS_DATA.find(u => u.role === role);
-    if (!mockUser) {
-      mockUser = {
-        name: "模擬組員",
-        great_region: "東區",
-        pastoral_zone: "大安1",
-        small_group: "馬鈴",
-        role: "member",
-        chapters_read: 50,
-        plan_progress: 10,
-        streak: 1,
-        last_read: new Date().toISOString()
-      };
-    }
-
-    // Override currentUser state
-    state.currentUser = {
-      name: mockUser.name,
-      great_region: mockUser.great_region,
-      pastoral_zone: mockUser.pastoral_zone,
-      small_group: mockUser.small_group,
-      role: mockUser.role,
-      is_demo: true,
-      chapters_read: mockUser.chapters_read,
-      plan_progress: mockUser.plan_progress,
-      streak: mockUser.streak,
-      last_read: mockUser.last_read
-    };
-
-    // Setup mock active plan to match their plan_progress
-    const defaultDemoPresetKey = Object.keys(CHURCH_PLAN_PRESETS)[0];
-      const defaultDemoPreset = CHURCH_PLAN_PRESETS[defaultDemoPresetKey];
-
-    state.activePlan = generatePlanObject(defaultDemoPreset.name, defaultDemoPreset.startDate, defaultDemoPreset.endDate, defaultDemoPreset.books, defaultDemoPresetKey);
-    state.activePlan.progress = mockUser.plan_progress;
-    state.activePlan.completedChapters = Math.round((state.activePlan.totalChapters * mockUser.plan_progress) / 100);
-    state.activePlans = [state.activePlan];
-    localStorage.setItem("selected_plan_key", defaultDemoPresetKey);
-
-    const completedList = [];
-    let count = 0;
-    for (const day of state.activePlan.days) {
-      for (const ch of day.chapters) {
-        if (count < state.activePlan.completedChapters) {
-          completedList.push({
-            book: ch.book,
-            chapter: ch.chapter,
-            read_at: new Date(state.activePlan.startDate).toISOString(),
-            presetKey: "q1"
-          });
-          count++;
-        } else {
-          break;
-        }
-      }
-      if (count >= state.activePlan.completedChapters) break;
-    }
-    state.readingLogs = completedList;
-
-    window._cachedAllUsersList = null;
-    this.saveLocalUserStats();
-
-    if (typeof updateAdminNavVisibility === 'function') {
-      updateAdminNavVisibility();
-    }
-
-    // Refresh views
-    updateDashboardView();
-    if (appRouter.currentTab === "stats-view") {
-      await updateStatsView();
-    } else if (appRouter.currentTab === "profile-view") {
-      await (window.renderProfileView || renderProfileView)();
-    } else if (appRouter.currentTab === "admin-view") {
-      const isSimulatedAdmin = state.currentUser.role === "admin";
-      if (!isSimulatedAdmin) {
-        appRouter.switchTab("profile-view");
-      } else {
-        renderAdminUserManagement();
-      }
-    }
-
-    loader.hide();
   },
 
   async getDevotionalNote(date) {
@@ -2162,15 +1950,21 @@ const db = {
   async joinPresetPlan(key, scheduleSettings = null) {
     let preset = (state.globalPlans || []).find(p => p.presetKey === key || p.id === key);
     if (!preset) {
-      preset = CHURCH_PLAN_PRESETS[key];
+      preset = CHURCH_PLAN_PRESETS[key] || Object.values(CHURCH_PLAN_PRESETS).find(p => p.id === key);
     }
-    if (!preset) return;
+    if (!preset) {
+      loader.hide();
+      showToast("找不到該預設計畫。");
+      return null;
+    }
+
+    const presetKey = preset.presetKey || key;
 
         loader.show("加入挑戰計畫中...");
 
     const getCleanDisplayName = (name) => String(name || "").trim();
 
-    const planName = getCleanDisplayName(preset.name, key);
+    const planName = getCleanDisplayName(preset.name, presetKey);
     let startDate = preset.startDate;
     let endDate = preset.endDate;
     const selectedBooks = preset.books;
@@ -2210,9 +2004,7 @@ const db = {
       try {
         const user = await this.getCurrentDbUser();
         if (user) {
-          // 判斷是否為 global_plans 的 UUID key（非 q1~q4 的固定 key）
-          const presetKeys = Object.keys(CHURCH_PLAN_PRESETS);
-          const isGlobalPlanUUID = !presetKeys.includes(key) && key && key.includes('-');
+          const globalPlanId = isUuid(key) ? key : (isUuid(preset.id) ? preset.id : (isUuid(preset.globalPlanId) ? preset.globalPlanId : null));
 
           const insertPayload = {
             user_id: user.id,
@@ -2220,7 +2012,7 @@ const db = {
             start_date: startDate,
             end_date: endDate,
             target_books: selectedBooks,
-            preset_key: key,
+            preset_key: presetKey,
             level: 'normal',
             current_round: 1,
             was_downgraded: false,
@@ -2231,24 +2023,23 @@ const db = {
             rest_weekdays: weeklySchedule.restWeekdays
           };
 
-          // 若是來自月度預設計畫，自動關聯到 global_plans 中的 9 大分類模板 UUID
-          if (isGlobalPlanUUID) {
-            insertPayload.global_plan_id = key;
+          if (globalPlanId) {
+            insertPayload.global_plan_id = globalPlanId;
           }
 
           let existingQuery = state.supabase
             .from("reading_plans")
             .select("*")
             .eq("user_id", user.id);
-          if (isGlobalPlanUUID) existingQuery = existingQuery.eq("global_plan_id", key);
-          else existingQuery = existingQuery.eq("preset_key", key).eq("name", planName);
+          if (globalPlanId) existingQuery = existingQuery.eq("global_plan_id", globalPlanId);
+          else existingQuery = existingQuery.eq("preset_key", presetKey).eq("name", planName);
 
           const { data: existingPlan, error: existingError } = await existingQuery.maybeSingle();
           if (existingError) throw existingError;
 
           if (existingPlan) {
             const existingIsFixed = existingPlan.is_fixed !== false;
-            newPlanObj = generatePlanObject(planName, existingPlan.start_date, existingPlan.end_date, selectedBooks, key, 'normal', existingIsFixed, {
+            newPlanObj = generatePlanObject(planName, existingPlan.start_date, existingPlan.end_date, selectedBooks, presetKey, 'normal', existingIsFixed, {
               readingDaysPerWeek: existingPlan.reading_days_per_week,
               restWeekdays: existingPlan.rest_weekdays
             });
@@ -2261,7 +2052,7 @@ const db = {
             if (!state.activePlans) state.activePlans = [];
             if (!state.activePlans.some(p => p.id === newPlanObj.id)) state.activePlans.push(newPlanObj);
             state.activePlan = newPlanObj;
-            localStorage.setItem("selected_plan_key", key);
+            localStorage.setItem("selected_plan_key", presetKey);
           } else {
             const { data: dbPlan, error } = await state.supabase
               .from("reading_plans")
@@ -2279,7 +2070,7 @@ const db = {
             if (!dbPlan) throw new Error("No plan returned after insert.");
 
             const dbIsFixed = dbPlan.is_fixed !== false;
-            newPlanObj = generatePlanObject(planName, dbPlan.start_date, dbPlan.end_date, selectedBooks, key, 'normal', dbIsFixed, {
+            newPlanObj = generatePlanObject(planName, dbPlan.start_date, dbPlan.end_date, selectedBooks, presetKey, 'normal', dbIsFixed, {
               readingDaysPerWeek: dbPlan.reading_days_per_week,
               restWeekdays: dbPlan.rest_weekdays
             });
@@ -2290,7 +2081,7 @@ const db = {
             if (!state.activePlans) state.activePlans = [];
             state.activePlans.push(newPlanObj);
             state.activePlan = newPlanObj;
-            localStorage.setItem("selected_plan_key", key);
+            localStorage.setItem("selected_plan_key", presetKey);
           }
         }
       } catch (e) {
@@ -2300,14 +2091,14 @@ const db = {
         return null;
       }
     } else {
-      newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, key, 'normal', isFixed, weeklySchedule);
+      newPlanObj = generatePlanObject(planName, startDate, endDate, selectedBooks, presetKey, 'normal', isFixed, weeklySchedule);
       newPlanObj.isFixed = isFixed;
       newPlanObj.is_fixed = isFixed;
       if (!state.activePlans) state.activePlans = [];
       state.activePlans.push(newPlanObj);
       state.activePlan = newPlanObj;
       localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
-      localStorage.setItem("selected_plan_key", key);
+      localStorage.setItem("selected_plan_key", presetKey);
     }
 
     if (newPlanObj && preset.planKind) {
@@ -2325,12 +2116,23 @@ const db = {
     this.saveLocalUserStats();
     this._userDataPromise = null; // 💡 關鍵修復：清除資料加載快取以使快取失效
 
+    state.planDetailOpen = true;
+    state.planActiveSubTab = "today";
+    state.selectedPlanDay = null;
+    window.currentPlanViewState = "DETAIL";
+    if (typeof window.syncActivePlanContext === "function") {
+      window.syncActivePlanContext(newPlanObj);
+    }
+
     loader.hide();
-    renderPlanView();
     updateDashboardView();
 
     if (typeof appRouter !== "undefined" && typeof appRouter.switchTab === "function") {
-      appRouter.switchTab("dashboard-view");
+      await appRouter.switchTab("plan-view", { keepPlanDetail: true });
+    } else if (typeof window.setPlanState === "function") {
+      await window.setPlanState("DETAIL");
+    } else {
+      renderPlanView();
     }
 
     const started = isPlanStarted(newPlanObj);
@@ -2535,7 +2337,7 @@ const db = {
         campaignDefinition: p.campaignDefinition ? window.cloneChurchCampaign(p.campaignDefinition) : null
       });
       });
-      // 自訂計畫：排除掉 presetKey 為 q1~q4 的項目避免重複
+      // 自訂計畫：排除目前內建階段，避免重複顯示。
       const customPlans = loadedList.filter(p => !presetKeys.includes(p.presetKey) && !presetKeys.includes(p.id));
       const masterDefinition = localCampaignOverride || window.CHURCH_CAMPAIGN;
       const masterPlan = {
@@ -2898,6 +2700,63 @@ const db = {
       localStorage.setItem("church_announcements", JSON.stringify(current));
       return true;
     }
+  },
+
+  async getFeatureSetting(key, fallback = false) {
+    const allowedKeys = new Set(["pastoral_sharing_wall"]);
+    if (!allowedKeys.has(key)) {
+      return { enabled: Boolean(fallback), error: new Error("unknown_feature_setting") };
+    }
+
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      try {
+        const { data, error } = await state.supabase
+          .from("app_feature_settings")
+          .select("key, enabled")
+          .eq("key", key)
+          .maybeSingle();
+        if (error) return { enabled: Boolean(fallback), error };
+        return { enabled: data ? data.enabled === true : Boolean(fallback), error: null };
+      } catch (error) {
+        return { enabled: Boolean(fallback), error };
+      }
+    }
+
+    const stored = localStorage.getItem(`nlc_feature_${key}`);
+    return {
+      enabled: stored === null ? Boolean(fallback) : stored === "true",
+      error: null
+    };
+  },
+
+  async updateFeatureSetting(key, enabled) {
+    const allowedKeys = new Set(["pastoral_sharing_wall"]);
+    if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
+    if (!state.currentUser || state.currentUser.role !== "admin") {
+      return { error: new Error("admin_required") };
+    }
+
+    const normalized = enabled === true;
+    if (state.isSupabaseMode && state.supabase && !state.currentUser.is_demo) {
+      try {
+        const { data, error } = await state.supabase
+          .from("app_feature_settings")
+          .upsert({
+            key,
+            enabled: normalized,
+            updated_by: state.currentProfileId || state.currentUser.id || null
+          }, { onConflict: "key" })
+          .select("key, enabled")
+          .single();
+        if (error) return { error };
+        return { data, error: null };
+      } catch (error) {
+        return { error };
+      }
+    }
+
+    localStorage.setItem(`nlc_feature_${key}`, String(normalized));
+    return { data: { key, enabled: normalized }, error: null };
   },
 
   async fetchCareReminders() {

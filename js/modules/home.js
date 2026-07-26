@@ -3,6 +3,37 @@ import { validateVerseSource } from "./verse-validator.mjs";
 import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
 
 const sharingController = new DevotionalSharingController();
+let pastoralSharingWallEnabled = false;
+
+function applyPastoralSharingWallVisibility(enabled) {
+  pastoralSharingWallEnabled = enabled === true;
+  const card = document.getElementById("pastoral-sharing-wall-card");
+  if (!card) return;
+  card.classList.toggle("hidden", !pastoralSharingWallEnabled);
+  card.setAttribute("aria-hidden", pastoralSharingWallEnabled ? "false" : "true");
+  if (!pastoralSharingWallEnabled) {
+    const wall = document.getElementById("home-verse-wall");
+    if (wall) wall.innerHTML = "";
+    document.querySelector(".devotional-card")?.classList.add("hidden");
+  }
+}
+
+async function refreshPastoralSharingWallAvailability() {
+  applyPastoralSharingWallVisibility(false);
+  if (typeof db === "undefined" || typeof db.getFeatureSetting !== "function") return false;
+  const result = await db.getFeatureSetting("pastoral_sharing_wall", false);
+  const enabled = !result.error && result.enabled === true;
+  applyPastoralSharingWallVisibility(enabled);
+  if (enabled) await fetchPastoralVerseWall();
+  return enabled;
+}
+
+window.addEventListener("pastoral-sharing-wall-changed", event => {
+  const enabled = event.detail?.enabled === true;
+  applyPastoralSharingWallVisibility(enabled);
+  if (enabled) fetchPastoralVerseWall();
+});
+
 
 const DAILY_VERSES = [
   { text: "「愛是恆久忍耐，又有恩慈；愛是不嫉妒；愛是不自誇，不張狂，不做害羞的事，不求自己的益處，不輕易發怒，不計算人的惡。」", source: "哥林多前書 13:4-5" },
@@ -388,9 +419,7 @@ export function updateDashboardView() {
   renderPastoralZoneRankingList();
   loadTodayDevotional();
 
-  if (typeof fetchPastoralVerseWall === "function") {
-    fetchPastoralVerseWall();
-  }
+  refreshPastoralSharingWallAvailability();
 
   renderPilgrimageTrail();
   if (!state.pilgrimageControlsInit) {
@@ -719,25 +748,33 @@ window.checkAndPromptTodayCompletion = async function () {
         }, 4000);
       }
     } else {
-      if (confirm("🎉 恭喜完成今日速讀！是否前往「首頁」記錄你最印象深刻的今日金句並分享給小組？")) {
-        appRouter.switchTab("dashboard-view");
-        setTimeout(() => {
-          const dc = document.getElementById("devotional-content");
-          if (dc) {
-            dc.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            dc.focus();
-            const dcCard = dc.closest(".devotional-card");
-            if (dcCard) {
-              dcCard.style.outline = "2.5px solid var(--color-brand)";
-              dcCard.style.boxShadow = "var(--shadow-focus-ring)";
-              setTimeout(() => {
-                dcCard.style.outline = "";
-                dcCard.style.boxShadow = "";
-              }, 4000);
+      (async () => {
+        const confirmed = await window.showConfirmDialog({
+          title: "🎉 恭喜完成今日速讀！",
+          message: "是否前往「首頁」記錄你最印象深刻的今日金句並分享給小組？",
+          confirmText: "前往分享",
+          cancelText: "留在讀經"
+        });
+        if (confirmed) {
+          appRouter.switchTab("dashboard-view");
+          setTimeout(() => {
+            const dc = document.getElementById("devotional-content");
+            if (dc) {
+              dc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              dc.focus();
+              const dcCard = dc.closest(".devotional-card");
+              if (dcCard) {
+                dcCard.style.outline = "2.5px solid var(--color-brand)";
+                dcCard.style.boxShadow = "var(--shadow-focus-ring)";
+                setTimeout(() => {
+                  dcCard.style.outline = "";
+                  dcCard.style.boxShadow = "";
+                }, 4000);
+              }
             }
-          }
-        }, 300);
-      }
+          }, 300);
+        }
+      })();
     }
   }, 1000);
 };
@@ -1258,7 +1295,14 @@ window.saveAnnouncement = async function () {
 };
 
 window.deleteAnnouncement = async function (id) {
-  if (!confirm("確定要刪除此公告嗎？此動作將無法復原。")) return;
+  const confirmed = await window.showConfirmDialog({
+    title: "確定要刪除此公告嗎？",
+    message: "此動作將會立即刪除公告且無法復原。",
+    confirmText: "確認刪除",
+    cancelText: "取消",
+    isDestructive: true
+  });
+  if (!confirmed) return;
 
   const success = await db.deleteAnnouncement(id);
 
@@ -1476,11 +1520,6 @@ async function fetchRandomVerse(event, options = {}) {
   isVerseLoading = true;
   isImgLoading = true;
 
-  localStorage.setItem("has_shared_verse", "true");
-  if (typeof checkAchievements === "function") {
-    checkAchievements();
-  }
-
   setVerseCardLoading(true, options);
 
   if (!state.verseCardMode) {
@@ -1508,42 +1547,7 @@ async function fetchRandomVerse(event, options = {}) {
   }
   const imgPromise = preloadVerseCardImage(nextImageUrl);
 
-  const fetchPromise = (async () => {
-    if (isBlessingMode) {
-      return { text: cardText, source: cardSource };
-    }
-
-    try {
-      const match = cardSource.match(/^([\u4e00-\u9fa5]+)\s*(\d+):(\d+)(?:-(\d+))?$/);
-      if (match) {
-        const chineseBook = match[1];
-        const chapter = match[2];
-        const verseStart = match[3];
-        const verseEnd = match[4];
-        const passage = `${chineseBook} ${chapter}:${verseStart}` + (verseEnd ? `-${verseEnd}` : "");
-
-        const url = `https://bible-api.com/${encodeURIComponent(passage)}?translation=cuv`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.text) {
-            return {
-              text: `「${data.text.trim().replace(/\s+/g, " ").replace(/\n/g, "")}」`,
-              source: cardSource
-            };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Fetch random verse from API failed, falling back to local dataset:", err);
-    }
-    return { text: cardText, source: cardSource };
-  })();
+  const fetchPromise = Promise.resolve({ text: cardText, source: cardSource });
 
   const [result, loadedUrl] = await Promise.all([fetchPromise, imgPromise]);
   applyVerseCardContent(result, loadedUrl);
@@ -1592,13 +1596,6 @@ async function shareAsImage(e) {
             text: (window.APP_COPY && window.APP_COPY.verse.shareText) || "分享今日經文給你"
           });
 
-          localStorage.setItem("has_shared_verse", "true");
-          localStorage.setItem("badge_share_verse_unlocked", "true");
-          if (typeof window.triggerBadgeUnlockNotification === "function") {
-            window.triggerBadgeUnlockNotification("share_verse", "傳遞愛光芒");
-          } else if (typeof checkAchievements === "function") {
-            checkAchievements();
-          }
         } catch (shareError) {
           if (shareError.name !== 'AbortError') {
             fallbackDownload(canvas);
@@ -1630,13 +1627,6 @@ function fallbackDownload(canvas) {
   link.href = canvas.toDataURL('image/png');
   link.click();
 
-  localStorage.setItem("has_shared_verse", "true");
-  localStorage.setItem("badge_share_verse_unlocked", "true");
-  if (typeof window.triggerBadgeUnlockNotification === "function") {
-    window.triggerBadgeUnlockNotification("share_verse", "傳遞愛光芒");
-  } else if (typeof checkAchievements === "function") {
-    checkAchievements();
-  }
 }
 
 async function syncVerseLikes(verseSource) {
@@ -1947,6 +1937,7 @@ async function fetchPastoralVerseWall() {
 
   const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
 
+  if (!pastoralSharingWallEnabled) return;
   const isHistory = (sharingController.tab === "history");
   const historyFilter = sharingController.filter;
   const historyFilterWrapper = document.getElementById("wall-history-filter-wrapper");
@@ -2027,10 +2018,10 @@ async function fetchPastoralVerseWall() {
     }
   } else {
     const defaultMock = [
-      { id: "demo_note1", user_id: "demo1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date(Date.now() - 3600000).toISOString() },
-      { id: "demo_note2", user_id: "demo2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date(Date.now() - 7200000).toISOString() },
-      { id: "demo_note3", user_id: "demo1", content: "敬畏耶和華是智慧的開端；認識至聖者便是聰明。 (箴 9:10)", created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
-      { id: "demo_note4", user_id: "me", content: "我將你的話藏在心裡，免得我得罪你。 (詩 119:11)", created_at: new Date(Date.now() - 86400000).toISOString() }
+      { id: "offline_note1", user_id: "offline1", content: "主是我的力量，我的盾牌；我心裡倚靠他就得幫助。 (詩 28:7)", created_at: new Date(Date.now() - 3600000).toISOString() },
+      { id: "offline_note2", user_id: "offline2", content: "你要保守你心，勝過保守一切，因為一生的果效是由心發出。 (箴 4:23)", created_at: new Date(Date.now() - 7200000).toISOString() },
+      { id: "offline_note3", user_id: "offline1", content: "敬畏耶和華是智慧的開端；認識至聖者便是聰明。 (箴 9:10)", created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
+      { id: "offline_note4", user_id: "me", content: "我將你的話藏在心裡，免得我得罪你。 (詩 119:11)", created_at: new Date(Date.now() - 86400000).toISOString() }
     ];
 
     const localNotesStr = localStorage.getItem("devotional_notes") || "[]";
@@ -2043,8 +2034,8 @@ async function fetchPastoralVerseWall() {
     const mockNotes = [...localNotes, ...defaultMock];
 
     const mockProfileMap = {
-      "demo1": { name: "張弟兄", small_group: "馬鈴薯組" },
-      "demo2": { name: "李姊妹", small_group: "喜樂組" },
+      "offline1": { name: "張弟兄", small_group: "馬鈴薯組" },
+      "offline2": { name: "李姊妹", small_group: "喜樂組" },
       "me": { name: (state.currentUser && state.currentUser.name) || "我", small_group: (state.currentUser && state.currentUser.small_group) || "小組" }
     };
 
@@ -2439,7 +2430,14 @@ window.toggleDevotionalOptions = function (noteId) {
 };
 
 window.deleteDevotionalNote = async function (noteId) {
-  if (!confirm("確定要刪除此則靈修分享嗎？")) return;
+  const confirmed = await window.showConfirmDialog({
+    title: "確定要刪除此則靈修分享嗎？",
+    message: "刪除後此條靈修紀錄將不再對其他人公開。",
+    confirmText: "確認刪除",
+    cancelText: "取消",
+    isDestructive: true
+  });
+  if (!confirmed) return;
 
   try {
     await db.deleteDevotionalNote(noteId);

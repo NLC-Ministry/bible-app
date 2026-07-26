@@ -1,44 +1,6 @@
 // Bible Speed Reading Gamification: Achievements, Fireworks, and Honor Badges
 
-const ACHIEVEMENTS = [
-  {
-    id: "subscribe_plan",
-    title: "開啟新旅程",
-    description: "成功加入一個讀經計畫",
-    triggerText: "加入 1 個計畫點亮第一顆星，最多累積 5 顆星",
-    iconKey: "calendarPlus"
-  },
-  {
-    id: "streak_30",
-    title: "持之以恆",
-    description: "連續打卡 30 天",
-    triggerText: "連續打卡 1 天點亮第一顆星，7、14、21、30 天逐級升星",
-    iconKey: "calendarCheck"
-  },
-  {
-    id: "complete_plan",
-    title: "榮譽桂冠",
-    description: "100% 完成任意一個讀經計畫",
-    triggerText: "完成 1 個計畫點亮第一顆星，最多累積 5 顆星",
-    iconKey: "award"
-  },
-  {
-    id: "share_verse",
-    title: "傳遞愛光芒",
-    description: "分享一次今日經文",
-    triggerText: "分享 1 次點亮第一顆星，5、10、25、50 次逐級升星",
-    iconKey: "share"
-  },
-  {
-    id: "read_all_bible",
-    title: "展開厚聖經",
-    description: "讀完全本聖經所有卷書與章節",
-    triggerText: "讀完 10 章點亮第一顆星，100、500、800、1189 章逐級升星",
-    iconKey: "bookOpen"
-  }
-];
-
-const CAMPAIGN_STAGE_ACHIEVEMENTS = typeof window.createChurchCampaignStageDefinitions === "function"
+const ACHIEVEMENTS = typeof window.createChurchCampaignStageDefinitions === "function"
   ? window.createChurchCampaignStageDefinitions().map(stage => ({
       id: "church_stage_award_" + stage.stageNo,
       title: stage.awardName,
@@ -48,7 +10,6 @@ const CAMPAIGN_STAGE_ACHIEVEMENTS = typeof window.createChurchCampaignStageDefin
       campaignStageNo: stage.stageNo
     }))
   : [];
-ACHIEVEMENTS.push(...CAMPAIGN_STAGE_ACHIEVEMENTS);
 ACHIEVEMENTS.forEach(badge => {
   badge.designVersion = 2;
   badge.maxStars = 5;
@@ -221,10 +182,18 @@ function renderUnlockedBadgesWall() {
   }
 }
 
-window.triggerBadgeUnlockNotification = function(badgeId, badgeName) {
-  const hasNotified = localStorage.getItem(`notified_${badgeId}`) === "true" ||
-    localStorage.getItem("notified_badge-share") === "true";
-  if (hasNotified) return;
+function getAchievementById(badgeId) {
+  return ACHIEVEMENTS.find(achievement => achievement.id === badgeId) || null;
+}
+
+window.getAchievementById = getAchievementById;
+window.triggerBadgeUnlockNotification = function(badgeId) {
+  const badge = getAchievementById(badgeId);
+  if (!badge) {
+    return { ok: false, status: 404, error: "badge_not_found" };
+  }
+  const hasNotified = localStorage.getItem(`notified_${badgeId}`) === "true";
+  if (hasNotified) return { ok: true, alreadyNotified: true, badge };
 
   const isDark = state.theme === "dark" || document.body.classList.contains("dark-theme");
 
@@ -235,14 +204,6 @@ window.triggerBadgeUnlockNotification = function(badgeId, badgeName) {
   }
 
   recordBadgeUnlockDate(badgeId);
-
-  const badge = ACHIEVEMENTS.find(a => a.id === badgeId) || {
-    id: badgeId,
-    title: badgeName,
-    description: `恭喜解鎖：${badgeName}`,
-    triggerText: `完成條件後解鎖「${badgeName}」`,
-    iconKey: "share"
-  };
 
   const page = document.getElementById("badge-detail-page");
   if (page) {
@@ -257,12 +218,10 @@ window.triggerBadgeUnlockNotification = function(badgeId, badgeName) {
   }
 
   localStorage.setItem(`notified_${badgeId}`, "true");
-  if (badgeId === "share_verse" || badgeId === "badge-share") {
-    localStorage.setItem("notified_badge-share", "true");
-  }
   localStorage.setItem(`${badgeId}_unlocked`, "true");
 
   refreshBadgeSurfaces();
+  return { ok: true, badge };
 };
 
 

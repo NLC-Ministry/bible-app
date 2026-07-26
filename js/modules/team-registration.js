@@ -3,12 +3,42 @@
 (function () {
   const getPlanId = plan => {
     if (!plan) return "";
+    if (plan.globalPlanId && /^[0-9a-f-]{36}$/i.test(plan.globalPlanId)) {
+      return String(plan.globalPlanId);
+    }
     const linked = (state.globalPlans || []).find(item =>
       item.id === plan.globalPlanId || item.presetKey === plan.presetKey || item.name === plan.name
     );
-    return String(plan.globalPlanId || linked && (linked.globalPlanId || linked.id) || "");
+    if (linked) {
+      const idVal = linked.globalPlanId || linked.id;
+      if (idVal && /^[0-9a-f-]{36}$/i.test(idVal)) return String(idVal);
+    }
+    if (plan.presetKey && typeof CHURCH_PLAN_PRESETS !== "undefined" && CHURCH_PLAN_PRESETS[plan.presetKey]) {
+      const preset = CHURCH_PLAN_PRESETS[plan.presetKey];
+      if (preset.id && /^[0-9a-f-]{36}$/i.test(preset.id)) return String(preset.id);
+    }
+    let stageNo = plan.stageNo;
+    if (!stageNo && plan.presetKey) {
+      const m = plan.presetKey.match(/\d+/);
+      if (m) stageNo = Number(m[0]);
+    }
+    if (!stageNo && plan.name) {
+      if (plan.name.includes("第一輪") || plan.name.includes("第1階段") || plan.name.includes("第一階段")) stageNo = 1;
+      else if (plan.name.includes("第二輪") || plan.name.includes("第2階段") || plan.name.includes("第二階段")) stageNo = 2;
+    }
+    if (stageNo) {
+      return "00000000-0000-0000-c026-" + String(Number(stageNo) || 0).padStart(12, "0");
+    }
+    return String(plan.id || "");
   };
-  const isSupportedPlan = plan => !!plan && plan.planKind === "church_campaign_stage" && /^[0-9a-f-]{36}$/i.test(getPlanId(plan));
+
+  const isSupportedPlan = plan => {
+    if (!plan) return false;
+    const isCampaign = plan.planKind === "church_campaign_stage" ||
+      (plan.presetKey && (plan.presetKey.startsWith("church_stage_") || plan.presetKey.startsWith("preset-stage-"))) ||
+      (plan.name && (plan.name.includes("熱身賽") || plan.name.includes("第一輪") || plan.name.includes("第二輪")));
+    return !!isCampaign && /^[0-9a-f-]{36}$/i.test(getPlanId(plan));
+  };
   const getTeamContexts = context => {
     if (Array.isArray(context && context.teams)) {
       return context.teams
@@ -242,9 +272,9 @@
     const expectedChapters = getExpectedChapters(plan, totalChapters);
     const behindCount = members.filter(member => Number(member.currentRound || 1) === 1 && Number(member.chaptersRead || 0) < expectedChapters).length;
     const rereadCount = members.filter(member => Number(member.currentRound || 1) > 1).length;
+
     return `<div class="reading-team-stat-grid" aria-label="團隊讀經統計">
-      <article class="reading-team-stat-card reading-team-stat-card--primary"><span>總閱讀章數</span><strong>${totalRead}<small>章</small></strong><span class="nlc-icon" data-icon="bookOpen" aria-hidden="true"></span></article>
-      <article class="reading-team-stat-card"><span>團隊人數</span><strong>${members.length}<small>人</small></strong><span class="nlc-icon" data-icon="people" aria-hidden="true"></span></article>
+      <article class="reading-team-stat-card"><span>總閱讀章數</span><strong>${totalRead}<small>章</small></strong><span class="nlc-icon" data-icon="bookOpen" aria-hidden="true"></span></article>
       <article class="reading-team-stat-card"><span>今日活躍</span><strong>${activeToday}<small>人</small></strong><span class="nlc-icon" data-icon="lightning" aria-hidden="true"></span></article>
       <article class="reading-team-stat-card"><span>進度落後</span><strong>${behindCount}<small>人</small></strong><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span></article>
       <article class="reading-team-stat-card"><span>進入複讀</span><strong>${rereadCount}<small>人</small></strong><span class="nlc-icon" data-icon="refresh" aria-hidden="true"></span></article>
@@ -278,55 +308,32 @@
           <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-dialog-title">我的團隊</h3></div>
           <button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
-        <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以加入另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立團隊或輸入邀請碼即可加入。"}</p>
-        <div class="reading-team-registration-tabs" role="tablist" aria-label="團隊報名方式">
-          <button type="button" role="tab" data-registration-mode="create" aria-selected="true" aria-controls="reading-team-create-form">建立團隊</button>
-          <button type="button" role="tab" data-registration-mode="join" aria-selected="false" aria-controls="reading-team-join-form">輸入邀請碼</button>
-        </div>
-        <form id="reading-team-create-form" class="reading-team-form-card reading-team-registration-panel" data-registration-panel="create" role="tabpanel">
-          <div class="reading-team-registration-panel__heading">
-            <span class="reading-team-form-card__icon"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
-            <div><h4>建立新團隊</h4><p>選擇人數並命名，你會成為隊長。</p></div>
+        <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立團隊即可加入此計畫之團隊。"}</p>
+        
+        <form id="reading-team-create-form" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
+            <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
+            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">設定團隊名稱即可建立，你會成為隊長。</p></div>
           </div>
-          <span class="reading-team-field-label">團隊人數</span>
-          <div class="reading-team-division-switch" role="radiogroup" aria-label="選擇團隊組別">
-            ${availableDivisions.map(division => `<button type="button" role="radio" data-division="${division}" aria-checked="${preferredDivision === division}">${division} 人團隊</button>`).join("")}
+          <div>
+            <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數組別</span>
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--color-brand, #04A9D2); margin-bottom: 1.1rem; padding: 0.2rem 0; display: flex; align-items: center; gap: 0.35rem;">
+              <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
+              <span>${preferredDivision} 人組團隊</span>
+            </div>
           </div>
-          <label for="reading-team-name">團隊名稱</label>
-          <input id="reading-team-name" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊">
-          <button type="submit" class="primary-btn reading-team-submit">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
-          <span class="reading-team-form-hint">建立成功後，邀請碼會立即顯示並可複製分享。</span>
+          <div>
+            <label for="reading-team-name" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
+            <input id="reading-team-name" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊" style="width: 100%;">
+          </div>
+          <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
+          <span class="reading-team-form-hint" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.4rem;">建立成功後，你將獲得團隊邀請碼，可分享給其他夥伴加入。</span>
         </form>
-        <form id="reading-team-join-form" class="reading-team-form-card reading-team-registration-panel" data-registration-panel="join" role="tabpanel" hidden>
-          <div class="reading-team-registration-panel__heading">
-            <span class="reading-team-form-card__icon"><span class="nlc-icon nlc-icon--md" data-icon="lock" aria-hidden="true"></span></span>
-            <div><h4>使用邀請碼加入</h4><p>輸入隊長提供的邀請碼，即可加入指定團隊。</p></div>
-          </div>
-          <label for="reading-team-code">團隊邀請碼</label>
-          <input id="reading-team-code" class="form-control reading-team-code-input" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="輸入邀請碼">
-          <button type="submit" class="primary-btn reading-team-submit">使用邀請碼加入團隊</button>
-          <span class="reading-team-form-hint">邀請碼不分大小寫；每個階段可各加入一支 3 人與 6 人團隊。</span>
-        </form>
-        <p class="reading-team-registration-privacy">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
+        <p class="reading-team-registration-privacy" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
       const error = panel.querySelector("[data-team-error]");
       const showError = message => { error.textContent = message; error.hidden = false; };
       panel.querySelector("[data-team-close]").onclick = close;
-      panel.querySelectorAll("[data-registration-mode]").forEach(button => {
-        button.onclick = () => {
-          const mode = button.dataset.registrationMode;
-          panel.querySelectorAll("[data-registration-mode]").forEach(item => item.setAttribute("aria-selected", String(item === button)));
-          panel.querySelectorAll("[data-registration-panel]").forEach(item => { item.hidden = item.dataset.registrationPanel !== mode; });
-          panel.querySelector(mode === "join" ? "#reading-team-code" : "#reading-team-name")?.focus();
-        };
-      });
-      panel.querySelectorAll("[data-division]").forEach(button => {
-        button.onclick = () => {
-          preferredDivision = Number(button.dataset.division);
-          panel.querySelectorAll("[data-division]").forEach(item => item.setAttribute("aria-checked", String(item === button)));
-          panel.querySelector("[data-division-label]").textContent = preferredDivision;
-        };
-      });
       panel.querySelector("#reading-team-create-form").onsubmit = async event => {
         event.preventDefault();
         error.hidden = true;
@@ -335,16 +342,6 @@
         const result = await db.createReadingTeam(plan, preferredDivision, panel.querySelector("#reading-team-name").value.trim());
         button.disabled = false;
         if (!result.success) return showError(result.message || "建立隊伍失敗，請稍後再試。");
-        await refresh();
-      };
-      panel.querySelector("#reading-team-join-form").onsubmit = async event => {
-        event.preventDefault();
-        error.hidden = true;
-        const button = event.currentTarget.querySelector('button[type="submit"]');
-        button.disabled = true;
-        const result = await db.joinReadingTeam(plan, panel.querySelector("#reading-team-code").value);
-        button.disabled = false;
-        if (!result.success) return showError(result.message || "加入隊伍失敗，請確認邀請碼。");
         await refresh();
       };
       hydrate(panel);
@@ -395,16 +392,34 @@
         preferredDivision = Number(team.division) === 3 ? 6 : 3;
         renderEmpty(allContexts);
       });
-      panel.querySelector("[data-copy-team-code]")?.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(team.inviteCode);
-          showToast("邀請碼已複製。");
-        } catch (_) {
-          showToast(`邀請碼：${team.inviteCode}`);
-        }
-      });
+      const copyBtn = panel.querySelector("[data-copy-team-code]");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(team.inviteCode);
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="checkCircle" aria-hidden="true"></span>已複製`;
+            hydrate(copyBtn);
+            copyBtn.disabled = true;
+            setTimeout(() => {
+              copyBtn.innerHTML = originalHtml;
+              hydrate(copyBtn);
+              copyBtn.disabled = false;
+            }, 2000);
+          } catch (_) {
+            showToast(`邀請碼：${team.inviteCode}`);
+          }
+        });
+      }
       panel.querySelector("[data-leave-team]")?.addEventListener("click", async () => {
-        if (!confirm("確定退出這支隊伍嗎？退出後可使用其他邀請碼重新組隊。")) return;
+        const confirmed = await window.showConfirmDialog({
+          title: "確定退出這支隊伍嗎？",
+          message: "退出後您可使用其他邀請碼重新組隊，但目前隊伍的夥伴會少一人。",
+          confirmText: "確認退出",
+          cancelText: "返回",
+          isDestructive: true
+        });
+        if (!confirmed) return;
         const result = await db.leaveReadingTeam(team.id);
         if (!result.success) {
           const error = panel.querySelector("[data-team-error]");
@@ -415,7 +430,14 @@
         await refresh();
       });
       panel.querySelector("[data-disband-team]")?.addEventListener("click", async () => {
-        if (!confirm("確定解散這支隊伍嗎？所有隊員都會回到尚未組隊狀態。")) return;
+        const confirmed = await window.showConfirmDialog({
+          title: "確定解散這支隊伍嗎？",
+          message: "解散後所有隊員都會回到尚未組隊狀態，邀請碼將會失效。",
+          confirmText: "解散隊伍",
+          cancelText: "返回",
+          isDestructive: true
+        });
+        if (!confirmed) return;
         const result = await db.disbandReadingTeam(team.id);
         if (!result.success) {
           const error = panel.querySelector("[data-team-error]");
@@ -433,15 +455,20 @@
       const result = await db.getMyReadingTeam(plan);
       if (closed) return;
       if (!result.success) {
-        panel.innerHTML = `<header class="reading-team-dialog__header"><h3 id="reading-team-dialog-title">團隊報名</h3><button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button></header><div class="reading-team-empty-error"><p>${escapeHTML(result.message || "目前無法載入團隊資料。")}</p><button type="button" class="secondary-btn" data-team-retry>重新載入</button></div>`;
+        const isAuthExpired = result.message && (result.message.includes("登入狀態已失效") || result.message.includes("重新登入") || result.message.includes("會員資料"));
+        panel.innerHTML = `<header class="reading-team-dialog__header"><h3 id="reading-team-dialog-title">團隊報名</h3><button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button></header><div class="reading-team-empty-error"><p>${escapeHTML(result.message || "目前無法載入團隊資料。")}</p><button type="button" class="secondary-btn" data-team-retry>${isAuthExpired ? "重新登入" : "重新載入"}</button></div>`;
         panel.querySelector("[data-team-close]").onclick = close;
-        panel.querySelector("[data-team-retry]").onclick = refresh;
+        panel.querySelector("[data-team-retry]").onclick = isAuthExpired ? () => { close(); if (typeof auth !== "undefined") auth.login(); } : refresh;
         hydrate(panel);
         return;
       }
       const contexts = getTeamContexts(result.context);
-      if (contexts.length) renderTeam(contexts[0], contexts);
-      else renderEmpty();
+      const targetContext = contexts.find(item => Number(item.team.division) === preferredDivision);
+      if (targetContext) {
+        renderTeam(targetContext, contexts);
+      } else {
+        renderEmpty(contexts);
+      }
     };
 
     await refresh();
@@ -459,9 +486,8 @@
       : 0;
     const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);
     const summary = mode === "stats" ? `
-      <div class="reading-team-summary">
-        <div><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalChapters * members.length} 章</span></div>
-        <div class="reading-team-summary__progress"><span>組隊狀態</span><strong>${Number(team.memberCount)} / ${Number(team.capacity)}</strong><span>${isReady ? "已成隊" : "等待隊員"}</span></div>
+      <div class="reading-team-summary" style="justify-content: center; text-align: center;">
+        <div style="align-items: center;"><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalChapters * members.length} 章</span></div>
       </div>` : "";
     container.classList.toggle("reading-team-inline--stats", mode === "stats");
     container.innerHTML = `
@@ -478,6 +504,105 @@
     hydrate(container);
   };
 
+  function getJoinedReadingTeamContexts(context) {
+    if (Array.isArray(context && context.teams)) {
+      return context.teams
+        .filter(item => item && item.team)
+        .sort((left, right) => Number(left.team.division) - Number(right.team.division));
+    }
+    return context && context.team ? [context] : [];
+  }
+
+  window.renderReadingTeamRegistrationInline = async function renderReadingTeamRegistrationInline(container, plan, options = {}) {
+    if (!container || !isSupportedPlan(plan)) return;
+    
+    // Get existing team memberships first
+    const result = await db.getMyReadingTeam(plan);
+    const joinedContexts = result && result.success ? getJoinedReadingTeamContexts(result.context) : [];
+    
+    const joinedDivisions = new Set(joinedContexts.map(context => Number(context.team.division)));
+    const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
+    
+    let preferredDivision = [3, 6].includes(Number(options.preferredDivision)) ? Number(options.preferredDivision) : 3;
+    if (!availableDivisions.includes(preferredDivision)) preferredDivision = availableDivisions[0] || 3;
+    
+    if (availableDivisions.length === 0) {
+      container.innerHTML = `<div class="p-6 text-center text-muted"><p>你已加入所有組別的團隊（3 人與 6 人團隊）。</p></div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="reading-team-registration-card" style="padding: 1.2rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-card); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
+        <p class="reading-team-dialog__intro" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.2rem;">
+          ${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立新團隊即可加入此計畫之團隊。"}
+        </p>
+        
+        <form id="reading-team-create-form-inline" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
+            <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
+            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">選擇人數並命名，你會成為隊長。</p></div>
+          </div>
+          <div>
+            <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數</span>
+            <div class="reading-team-division-switch" role="radiogroup" aria-label="選擇團隊組別" style="display: flex; gap: 8px;">
+              ${availableDivisions.map(division => `<button type="button" class="secondary-btn" data-division="${division}" aria-checked="${preferredDivision === division}" style="flex: 1; padding: 0.5rem 0.8rem; font-size: 0.85rem;">${division} 人團隊</button>`).join("")}
+            </div>
+          </div>
+          <div>
+            <label for="reading-team-name-inline" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
+            <input id="reading-team-name-inline" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊" style="width: 100%;">
+          </div>
+          <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
+        </form>
+        
+        <p class="reading-team-registration-privacy" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
+        <p class="reading-team-form-error" data-team-error role="alert" hidden style="color: var(--color-danger); font-size: 0.8rem; margin-top: 0.8rem; text-align: center;"></p>
+      </div>`;
+
+    const error = container.querySelector("[data-team-error]");
+    const showError = message => { error.textContent = message; error.hidden = false; };
+
+    // Bind division switches
+    const divisionButtons = container.querySelectorAll("[data-division]");
+    divisionButtons.forEach(button => {
+      if (Number(button.dataset.division) === preferredDivision) {
+        button.classList.add("active");
+        button.style.background = "var(--color-brand-subtle)";
+        button.style.borderColor = "var(--primary-color)";
+        button.style.color = "var(--primary-color)";
+      }
+      button.onclick = () => {
+        preferredDivision = Number(button.dataset.division);
+        divisionButtons.forEach(item => {
+          const isSelected = item === button;
+          item.classList.toggle("active", isSelected);
+          item.style.background = isSelected ? "var(--color-brand-subtle)" : "";
+          item.style.borderColor = isSelected ? "var(--primary-color)" : "";
+          item.style.color = isSelected ? "var(--primary-color)" : "";
+        });
+        container.querySelector("[data-division-label]").textContent = preferredDivision;
+      };
+    });
+
+    // Handle submit events
+    container.querySelector("#reading-team-create-form-inline").onsubmit = async event => {
+      event.preventDefault();
+      error.hidden = true;
+      const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      const nameInput = container.querySelector("#reading-team-name-inline").value.trim();
+      const result = await db.createReadingTeam(plan, preferredDivision, nameInput);
+      submitBtn.disabled = false;
+      if (!result.success) return showError(result.message || "建立隊伍失敗，請稍後再試。");
+      showToast("團隊建立成功！");
+      // Trigger plan view update to stats mode
+      if (window.PlanPageController) {
+        await window.PlanPageController.switchPage(PLAN_PAGE.GROUP, { forceReload: true });
+      }
+    };
+
+    hydrate(container);
+  };
 
   window.isReadingTeamPlan = isSupportedPlan;
 })();

@@ -807,6 +807,118 @@ body.reading-team-modal-open .main-content {
   .reading-team-inline {
     padding: 12px;
   }
+
+  /* Roster card layout for mobile screens to prevent horizontal scroll */
+  .reading-team-roster {
+    min-width: 100% !important;
+  }
+
+  .reading-team-roster__head {
+    display: none !important;
+  }
+
+  .reading-team-roster__row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) 48px !important;
+    grid-template-rows: auto auto auto !important;
+    gap: 8px !important;
+    padding: 12px 14px !important;
+    align-items: center !important;
+    text-align: left !important;
+    background: var(--reading-team-surface) !important;
+    border: 1px solid var(--reading-team-separator) !important;
+    border-radius: 14px !important;
+    margin-bottom: 10px !important;
+    box-shadow: var(--shadow-sm) !important;
+    min-height: auto !important;
+  }
+
+  .reading-team-roster__row--me {
+    background: var(--reading-team-accent-soft) !important;
+    border-color: var(--reading-team-accent-border) !important;
+  }
+
+  .reading-team-roster__person {
+    grid-column: 1 / 4 !important;
+    grid-row: 1 !important;
+  }
+
+  .reading-team-roster__status {
+    grid-column: 1 / 4 !important;
+    grid-row: 2 !important;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    padding-bottom: 2px !important;
+  }
+
+  .reading-team-roster__streak {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+  }
+
+  .reading-team-roster__completed {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+  }
+
+  .reading-team-roster__makeup {
+    grid-column: 3 !important;
+    grid-row: 3 !important;
+  }
+
+  .reading-team-roster__row .reading-team-remind-btn,
+  .reading-team-roster__self {
+    grid-column: 4 !important;
+    grid-row: 1 / 4 !important;
+    justify-self: center !important;
+    align-self: center !important;
+    margin: 0 !important;
+  }
+
+  .reading-team-roster__streak,
+  .reading-team-roster__completed,
+  .reading-team-roster__makeup {
+    display: inline-flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    background: var(--reading-team-surface-raised, #ffffff) !important;
+    border: 1px solid var(--reading-team-separator) !important;
+    padding: 6px 4px !important;
+    border-radius: 8px !important;
+    text-align: center !important;
+  }
+
+  body.dark-theme .reading-team-roster__streak,
+  body.dark-theme .reading-team-roster__completed,
+  body.dark-theme .reading-team-roster__makeup {
+    background: color-mix(in srgb, var(--reading-team-surface) 30%, var(--reading-team-sheet)) !important;
+  }
+
+  .reading-team-roster__streak::before {
+    content: "最高連續" !important;
+    font-size: 0.68rem !important;
+    color: var(--text-secondary) !important;
+    font-weight: normal !important;
+    margin-bottom: 3px !important;
+  }
+
+  .reading-team-roster__completed::before {
+    content: "累計完成" !important;
+    font-size: 0.68rem !important;
+    color: var(--text-secondary) !important;
+    font-weight: normal !important;
+    margin-bottom: 3px !important;
+  }
+
+  .reading-team-roster__makeup::before {
+    content: "補讀天數" !important;
+    font-size: 0.68rem !important;
+    color: var(--text-secondary) !important;
+    font-weight: normal !important;
+    margin-bottom: 3px !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

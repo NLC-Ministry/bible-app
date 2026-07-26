@@ -125,7 +125,7 @@ function openCampaignRuleEditor(plan) {
     stageRows.lastElementChild.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
 
-  stageRows.addEventListener("click", event => {
+  stageRows.addEventListener("click", async event => {
     const removeButton = event.target.closest("[data-remove-stage]");
     if (!removeButton) return;
     const row = removeButton.closest(".campaign-stage-row");
@@ -135,7 +135,14 @@ function openCampaignRuleEditor(plan) {
     }
     const stageNo = Number(row.querySelector('[data-field="stageNo"]').value);
     const stageName = row.querySelector('[data-field="name"]').value.trim() || `第 ${stageNo} 階段`;
-    if (!confirm(`確定刪除「${stageName}」？此輪次的經卷排程也會移除；若已有參加者，該輪進度與打卡紀錄會在發布後一併刪除。發布前不會寫入後台。`)) return;
+    const confirmed = await window.showConfirmDialog({
+      title: "確定刪除此輪次嗎？",
+      message: `確定刪除「${stageName}」？此輪次的經卷排程也會移除；若已有參加者，該輪進度與打卡紀錄會在發布後一併刪除。發布前不會寫入後台。`,
+      confirmText: "確認刪除",
+      cancelText: "取消",
+      isDestructive: true
+    });
+    if (!confirmed) return;
     Array.from(segmentRows.querySelectorAll(".campaign-segment-row")).forEach(segmentRow => {
       if (Number(segmentRow.querySelector('[data-field="stageNo"]').value) === stageNo) segmentRow.remove();
     });
@@ -199,7 +206,14 @@ function openCampaignRuleEditor(plan) {
     result.style.background = "var(--color-success-soft)";
     result.style.color = "var(--color-success-foreground)";
     result.textContent = `\u9a57\u8b49\u901a\u904e\uff1a\u5171 ${validation.chapterCount} \u7ae0\u3002${validation.warnings.join(" ")}`;
-    if (!confirm(`\u78ba\u8a8d\u767c\u5e03\u65b0\u7248\u672c\uff1f\u76ee\u524d\u6392\u7a0b\u5171 ${validation.chapterCount} \u7ae0\u3002`)) return;
+    
+    const confirmed = await window.showConfirmDialog({
+      title: "確認發布新版本？",
+      message: `目前排程共 ${validation.chapterCount} 章，發布後將會更新所有人的挑戰排程。`,
+      confirmText: "確認發布",
+      cancelText: "取消"
+    });
+    if (!confirmed) return;
 
     loader.show("\u6b63\u5728\u767c\u5e03\u6559\u6703\u8a08\u756b\u65b0\u7248\u672c\u2026");
     const published = await db.publishCampaignRules(plan, next);

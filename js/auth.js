@@ -443,6 +443,14 @@ const auth = {
     this._clearFlowState();
     this._resetAppAuthState();
 
+    if (typeof state !== "undefined" && state.supabase && state.supabase.auth && typeof state.supabase.auth.signOut === "function") {
+      try {
+        await state.supabase.auth.signOut();
+      } catch (err) {
+        console.warn("Supabase signOut failed during logout:", err);
+      }
+    }
+
     try {
       if (window.caches) {
         const keys = await caches.keys();

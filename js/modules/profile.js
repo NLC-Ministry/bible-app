@@ -130,9 +130,15 @@ function renderMemberHubProfileLinks() {
   const btnToggle = document.getElementById("btn-toggle-profile-form");
   const formWrapper = document.getElementById("profile-form-wrapper");
   if (btnToggle && hubManaged && formWrapper && formWrapper.classList.contains("hidden")) {
-    btnToggle.innerHTML = typeof iconLabel === "function"
-      ? iconLabel("setting", copy.profileSettings || "帳號設定（本 app）")
-      : (copy.profileSettings || "帳號設定（本 app）");
+    const label = copy.profileSettings || "帳號設定（本 app）";
+    btnToggle.innerHTML = `
+      <span class="settings-row-btn__icon-wrap">
+        <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+      </span>
+      <span class="settings-row-btn__label">${label}</span>
+      <span class="settings-row-btn__chevron">
+        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+      </span>`;
   }
 
   if (typeof hydrateIcons === "function") {
@@ -217,16 +223,11 @@ export async function renderProfileView() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.') || window.location.hostname.startsWith('172.') || window.location.hostname.endsWith('.local');
-  const forceOfflineDemo = isLocalhost && (urlParams.get("demo") === "true" || urlParams.get("offline") === "true");
-  const showDemoData = (forceOfflineDemo && typeof MockStatsService !== 'undefined' && MockStatsService !== null) || (state.currentUser && !!state.currentUser.is_demo);
-
   let greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
     ? state.orgStructure.regions 
     : ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
   
-  if (!showDemoData) {
-    greatRegionsList = greatRegionsList.filter(r => !r.startsWith("示範"));
-  }
+  greatRegionsList = greatRegionsList.filter(r => !r.startsWith("示範"));
   
   greatRegionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
   greatRegionsList.forEach(rName => {
@@ -341,11 +342,7 @@ export async function renderProfileView() {
       db.saveLocalUserStats();
 
       if (isSupabase) {
-        if (saveInfo && saveInfo.aborted && saveInfo.reason === "demo") {
-          showToast("個人資料已儲存 (Demo 模擬模式)");
-        } else {
-          showToast("個人基本資料已儲存成功！");
-        }
+        showToast("個人基本資料已儲存成功！");
       } else {
         showToast("個人資料已儲存至本機 (離線模式)");
       }
@@ -364,26 +361,7 @@ export async function renderProfileView() {
     }
   };
 
-  const demoRoleCard = document.querySelector(".demo-role-card");
-  if (demoRoleCard) {
-    if (!state.isSupabaseMode || isLocalhost) {
-      demoRoleCard.classList.remove("hidden");
-    } else {
-      demoRoleCard.classList.add("hidden");
-    }
-  }
 
-  const demoRoleSelect = document.getElementById("demo-role-select");
-  if (demoRoleSelect) {
-    if (state.isSupabaseMode) {
-      demoRoleSelect.value = "real_user";
-    } else {
-      demoRoleSelect.value = state.currentUser.role || "member";
-    }
-    demoRoleSelect.onchange = async (e) => {
-      await db.switchDemoRole(e.target.value);
-    };
-  }
 
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();
@@ -399,26 +377,7 @@ async function renderCareReminders() {
   containerCol.innerHTML = "";
   containerCol.classList.add("hidden");
 
-  // 🔒 安全防護：虛擬關心提醒 UI 僅在本機測試環境顯示
-  const _hostname = window.location.hostname;
-  const _isLocalhost = _hostname === 'localhost' || _hostname === '127.0.0.1' || _hostname === '::1' ||
-                       _hostname.startsWith('192.168.') || _hostname.startsWith('10.') ||
-                       _hostname.startsWith('172.') || _hostname.endsWith('.local');
-  const isDemoMode = state.currentUser && !!state.currentUser.is_demo;
-  const isSupabaseLive = state.isSupabaseMode && state.supabase && !isDemoMode;
-
-  // Only proceed if: (a) localhost demo mode, OR (b) live Supabase with real user
-  if (isDemoMode && !_isLocalhost) return;
-
-  // 等待 mock_stats.js 動態載入完成（最多 2 秒）
-  // mock_stats.js 是非同步插入的 <script>，可能在 renderCareReminders 被呼叫時還沒載入
-  if (isDemoMode && _isLocalhost) {
-    let waited = 0;
-    while (!window.__mockStatsLoaded && waited < 2000) {
-      await new Promise(r => setTimeout(r, 100));
-      waited += 100;
-    }
-  }
+  const isSupabaseLive = state.isSupabaseMode && state.supabase;
 
   const { data: reminders, error } = await db.fetchCareReminders();
   if (!error && typeof window.updateCareReminderBadge === "function") {
@@ -527,18 +486,11 @@ function populateProfileZones(greatRegion, autoSelect = true) {
     return;
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
-  const forceOfflineDemo = isLocalhost && (urlParams.get("demo") === "true" || urlParams.get("offline") === "true");
-  const showDemoData = (forceOfflineDemo && typeof MockStatsService !== 'undefined' && MockStatsService !== null) || (state.currentUser && !!state.currentUser.is_demo);
-
   let predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion] && state.orgStructure.zones[greatRegion].length > 0) 
     ? state.orgStructure.zones[greatRegion] 
     : ((typeof MOCK_PASTORAL_ZONES_BY_REGION !== "undefined" && MOCK_PASTORAL_ZONES_BY_REGION[greatRegion]) || []);
   
-  if (!showDemoData) {
-    predefinedZones = predefinedZones.filter(z => !z.startsWith("示範"));
-  }
+  predefinedZones = predefinedZones.filter(z => !z.startsWith("示範"));
   
   predefinedZones.forEach(zName => {
     const option = document.createElement("option");
@@ -590,18 +542,11 @@ function populateProfileGroupSelector(autoSelect = true) {
     return;
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.168.');
-  const forceOfflineDemo = isLocalhost && (urlParams.get("demo") === "true" || urlParams.get("offline") === "true");
-  const showDemoData = (forceOfflineDemo && typeof MockStatsService !== 'undefined' && MockStatsService !== null) || (state.currentUser && !!state.currentUser.is_demo);
-
   let predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone] && state.orgStructure.groups[zone].length > 0) 
     ? state.orgStructure.groups[zone] 
     : ((typeof MOCK_SMALL_GROUPS !== "undefined" && MOCK_SMALL_GROUPS[zone]) || []);
 
-  if (!showDemoData) {
-    predefinedGroups = predefinedGroups.filter(g => !g.startsWith("示範"));
-  }
+  predefinedGroups = predefinedGroups.filter(g => !g.startsWith("示範"));
 
   predefinedGroups.forEach(groupName => {
     const option = document.createElement("option");
@@ -689,79 +634,56 @@ export function updateHeaderAvatar() {
         if (user) {
           if (emailEl) emailEl.textContent = user.email || "教會系統登入中";
         } else if (emailEl) {
-          emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
+          emailEl.textContent = "未登入";
         }
         if (typeof refreshUserAvatars === "function") refreshUserAvatars();
       }).catch(() => {
-        if (emailEl) emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
+        if (emailEl) emailEl.textContent = "未登入";
         if (typeof refreshUserAvatars === "function") refreshUserAvatars();
       });
       return;
     }
   }
 
-  if (emailEl) emailEl.textContent = (window.APP_COPY && window.APP_COPY.auth.demoMode) || "Demo 模式";
+  if (emailEl) emailEl.textContent = "未登入";
   if (typeof refreshUserAvatars === "function") refreshUserAvatars();
 }
 
-function initAvatarDropdown() {
-  const container   = document.getElementById("user-avatar-container");
-  const btn         = document.getElementById("user-avatar-btn");
-  const dropdown    = document.getElementById("avatar-dropdown-menu");
-  const btnLogout   = document.getElementById("btn-avatar-logout");
-  const btnProfile  = document.getElementById("btn-avatar-profile");
-
-  if (!btn || !dropdown) return;
-
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isOpen = !dropdown.classList.contains("hidden");
-    dropdown.classList.toggle("hidden", isOpen);
-    btn.setAttribute("aria-expanded", String(!isOpen));
-  });
-
-  document.addEventListener("click", (e) => {
-    if (container && !container.contains(e.target)) {
-      dropdown.classList.add("hidden");
-      btn.setAttribute("aria-expanded", "false");
+async function handleLogoutAndClearCache() {
+  loader.show("\u767b\u51fa\u4e2b\u6e05\u9664\u5feb\u53d6\u4e2d...");
+  try {
+    if (navigator.serviceWorker) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const reg of registrations) {
+        await reg.unregister();
+      }
     }
-  });
-
-  if (btnProfile) {
-    btnProfile.addEventListener("click", (e) => {
-      e.preventDefault();
-      dropdown.classList.add("hidden");
-      if (typeof appRouter !== 'undefined' && appRouter.switchTab) {
-        appRouter.switchTab("profile-view");
+    if (window.caches) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        await caches.delete(key);
       }
-    });
-  }
+    }
+    window.localStorage.removeItem("care_reminder_badge_last_refresh");
 
-  if (btnLogout) {
-    btnLogout.addEventListener("click", async (e) => {
-      e.preventDefault();
-      dropdown.classList.add("hidden");
-      loader.show("\u767b\u51fa\u4e2d...");
-      try {
-        if (typeof auth !== "undefined" && auth.logout) {
-          await auth.logout();
-          return;
-        }
-        if (state.isSupabaseMode && state.supabase?.auth?.signOut) {
-          await state.supabase.auth.signOut();
-        }
-        state.realRole = null;
-        db.updateAuthUI(null);
-        await db.loadUserData();
-        updateHeaderAvatar();
-        alert("\u5df2\u767b\u51fa\u3002");
-        appRouter.switchTab("dashboard-view");
-      } catch (err) {
-        alert(`\u767b\u51fa\u5931\u6557: ${err.message}`);
-      } finally {
-        loader.hide();
-      }
-    });
+    if (typeof auth !== "undefined" && auth.logout) {
+      await auth.logout();
+      return;
+    }
+    if (state.isSupabaseMode && state.supabase?.auth?.signOut) {
+      await state.supabase.auth.signOut();
+    }
+    state.realRole = null;
+    db.updateAuthUI(null);
+    await db.loadUserData();
+    updateHeaderAvatar();
+    alert("\u5df2\u767b\u51fa\u4e2b\u5feb\u53d6\u5df2\u91cd\u8a2d\u3002");
+    window.location.reload(true);
+  } catch (err) {
+    alert(`\u767b\u51fa\u5931\u6557: \${err.message}`);
+    window.location.reload();
+  } finally {
+    loader.hide();
   }
 }
 
@@ -777,15 +699,34 @@ export function init() {
       const copy = (window.APP_COPY && window.APP_COPY.memberHub) || {};
       if (isHidden) {
         formWrapper.classList.remove("hidden");
-        btnToggleForm.innerHTML = iconLabel("chevronUp", "收起個人檔案編輯");
+        btnToggleForm.innerHTML = `
+          <span class="settings-row-btn__icon-wrap">
+            <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
+          </span>
+          <span class="settings-row-btn__label">收起個人檔案編輯</span>`;
       } else {
         formWrapper.classList.add("hidden");
-        btnToggleForm.innerHTML = iconLabel("edit", copy.profileSettings || "編輯個人檔案");
+        const label = copy.profileSettings || "帳號設定（本 app）";
+        btnToggleForm.innerHTML = `
+          <span class="settings-row-btn__icon-wrap">
+            <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+          </span>
+          <span class="settings-row-btn__label">${label}</span>
+          <span class="settings-row-btn__chevron">
+            <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+          </span>`;
       }
+      if (typeof hydrateIcons === "function") hydrateIcons(btnToggleForm);
     };
   }
 
-  initAvatarDropdown();
+  const btnProfileLogout = document.getElementById("btn-profile-logout");
+  if (btnProfileLogout) {
+    btnProfileLogout.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await handleLogoutAndClearCache();
+    });
+  }
 }
 
 window.renderProfileView = renderProfileView;

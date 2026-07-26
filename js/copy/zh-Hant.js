@@ -54,13 +54,6 @@ window.APP_COPY = {
     stripTitle: "我的徽章",
     viewAll: "查看全部",
     triggerLabel: "如何取得",
-    descriptions: {
-      subscribe_plan: "成功加入一個讀經計畫",
-      streak_30: "連續打卡 30 天",
-      complete_plan: "100% 完成任意一個讀經計畫",
-      share_verse: "分享一次今日經文",
-      read_all_bible: "讀完全本聖經所有卷書與章節",
-    },
   },
   stats: {
     heatmapPersonal: "個人讀經活躍度",

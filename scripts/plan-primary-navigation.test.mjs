@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "index.css"), "utf8");
+const db = readFileSync(join(root, "js", "db.js"), "utf8");
 const plan = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
 
 describe("plan primary navigation", () => {
@@ -43,5 +44,29 @@ describe("plan primary navigation", () => {
     expect(plan).toContain("updatePlanPrimaryTabs(target)");
     expect(plan).toContain("stats.insertBefore(members, stats.firstChild)");
     expect(plan).not.toContain("data-plan-page-index");
+  });
+});
+
+describe("plan join navigation", () => {
+  it("previews an available plan before asking for the weekly schedule", () => {
+    const presetFlow = plan.slice(
+      plan.indexOf("function renderPresetPlansList"),
+      plan.indexOf("function isChapterReadForRound")
+    );
+
+    expect(presetFlow).toContain("openPlanDetailsDialog(plan, { onJoin: async () => {");
+    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("openFlexibleScheduleDialog(plan)"));
+  });
+
+  it("opens the joined plan detail instead of returning to the home page", () => {
+    const joinFlow = db.slice(
+      db.indexOf("async joinPresetPlan"),
+      db.indexOf("async joinPlan(", db.indexOf("async joinPresetPlan"))
+    );
+
+    expect(joinFlow).toContain('state.planDetailOpen = true');
+    expect(joinFlow).toContain('window.currentPlanViewState = "DETAIL"');
+    expect(joinFlow).toContain('await appRouter.switchTab("plan-view", { keepPlanDetail: true })');
+    expect(joinFlow).not.toContain('switchTab("dashboard-view")');
   });
 });

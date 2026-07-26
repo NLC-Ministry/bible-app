@@ -1,25 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const exists = path => existsSync(new URL(`../${path}`, import.meta.url));
 const migration = read("supabase/migrations/0019_reading_team_registration.sql");
 const forwardMigration = read("supabase/migrations/0021_enforce_reading_team_uuid_links.sql");
 const dualDivisionMigration = read("supabase/migrations/0022_allow_both_team_divisions.sql");
 const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_reminders.sql");
 const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
+const productionCleanup = read("supabase/migrations/0026_production_cleanup_obsolete_plans_badges.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
 const teamUi = read("js/modules/team-registration.js");
 const profile = read("js/modules/profile.js");
-const reminderFixture = read("supabase/scripts/seed_reading_team_reminder_test.sql");
-const reminderFixtureCleanup = read("supabase/scripts/cleanup_reading_team_reminder_test.sql");
 const teamCss = read("css/team-registration.css");
 const html = read("index.html");
 const app = read("js/app.js");
 const indexCss = read("index.css");
-const teamFixture = read("supabase/scripts/seed_reading_team_test_data.sql");
-const teamFixtureCleanup = read("supabase/scripts/cleanup_reading_team_test_data.sql");
 
 describe("reading competition team schema", () => {
   it("shows unread care reminders without requiring the profile tab to be opened", () => {
@@ -52,23 +50,15 @@ describe("reading competition team schema", () => {
     expect(dualDivisionMigration).toContain("already_in_plan_division");
   });
 
-  it("provides repeatable UUID-linked test teams that need one final real join", () => {
-    expect(teamFixture).toContain("TEST3TEAM");
-    expect(teamFixture).toContain("TEST6TEAM");
-    expect(teamFixture).toContain("'2 / 3'");
-    expect(teamFixture).toContain("'5 / 6'");
-    expect(teamFixture).toContain("team.captain_id");
-    expect(teamFixture).toContain("團報功能測試計畫");
-    expect(teamFixture).toContain("00000000-0000-0000-c026-000000009999");
-    expect(teamFixture).toContain("團報測試隊長");
-    expect(teamFixture).toContain("is_demo, is_active");
-    expect(teamFixture).not.toContain("INSERT INTO auth.users");
-    expect(teamFixture).not.toContain("is_demo = FALSE");
-    expect(teamFixtureCleanup).toContain("TEST3TEAM");
-    expect(teamFixtureCleanup).toContain("TEST6TEAM");
-    expect(teamFixtureCleanup).toContain("00000000-0000-0000-c026-000000009999");
-    expect(teamFixtureCleanup.indexOf("DELETE FROM public.reading_plans"))
-      .toBeLessThan(teamFixtureCleanup.indexOf("DELETE FROM public.global_plans"));
+  it("does not ship fixture seed scripts and removes their UUID-linked data atomically", () => {
+    expect(exists("supabase/scripts/seed_reading_team_test_data.sql")).toBe(false);
+    expect(exists("supabase/scripts/seed_reading_team_reminder_test.sql")).toBe(false);
+    expect(exists("supabase/scripts/cleanup_reading_team_test_data.sql")).toBe(false);
+    expect(productionCleanup).toContain("00000000-0000-0000-c026-000000009999");
+    expect(productionCleanup).toContain("TEST3TEAM");
+    expect(productionCleanup).toContain("TEST6TEAM");
+    expect(productionCleanup.indexOf("DELETE FROM public.reading_plans"))
+      .toBeLessThan(productionCleanup.indexOf("DELETE FROM public.global_plans"));
   });
 
   it("locks concurrent joins and freezes a completed roster", () => {
@@ -141,9 +131,6 @@ describe("NLC and browser integration", () => {
     expect(profile).toContain('startsWith("reading-team:")');
     expect(profile).toContain('isTeamReminder ? "隊友"');
     expect(profile).not.toContain("收到牧長同工的關心提醒");
-    expect(reminderFixture).toContain("[團隊提醒測試]");
-    expect(reminderFixture).toContain("recipient.is_demo = FALSE");
-    expect(reminderFixtureCleanup).toContain("[團隊提醒測試]");
   });
 
   it("keeps personal progress primary and offers optional 3-person or 6-person teams", () => {
@@ -200,7 +187,7 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("openReadingTeamDialog(joinedPlan");
     expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("offerReadingTeamParticipation(joinedPlan)"));
     expect(html).toContain('id="view-reading-team-btn"');
-    expect(html).toContain("我的團隊");
+    expect(html).toContain("牧區小組狀況");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
     expect(html).toContain('id="stats-team-view-select"');
     expect(html).toContain('id="members-team-view-select"');
