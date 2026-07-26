@@ -21,6 +21,7 @@ function isMemberHubManagedProfile() {
 
 function userNeedsOrgSetup() {
   const user = state.currentUser || {};
+  if (user.hasRequiredPlacement === true) return false;
   return !String(user.great_region || "").trim() &&
     !String(user.pastoral_zone || "").trim() &&
     !String(user.small_group || "").trim();
