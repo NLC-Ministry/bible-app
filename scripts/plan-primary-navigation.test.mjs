@@ -55,7 +55,10 @@ describe("plan join navigation", () => {
     );
 
     expect(presetFlow).toContain("openPlanDetailsDialog(plan, { onJoin: async () => {");
-    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("openFlexibleScheduleDialog(plan)"));
+    expect(presetFlow).toContain("openJoinModeDialog(plan)");
+    expect(presetFlow).toContain("await db.joinPresetPlan(key, defaultSchedule)");
+    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("openJoinModeDialog"));
+    expect(presetFlow.indexOf("openJoinModeDialog")).toBeLessThan(presetFlow.indexOf("await db.joinPresetPlan"));
   });
 
   it("opens the joined plan detail instead of returning to the home page", () => {
