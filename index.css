@@ -10261,7 +10261,6 @@ body.dark-theme .custom-confirm-overlay {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important; /* 保持左側封皮與右側文字區塊垂直居中對齊 */
-  text-align: left !important;
   width: 100% !important;
   box-sizing: border-box !important;
 }
@@ -10277,11 +10276,11 @@ body.dark-theme .custom-confirm-overlay {
   min-width: 0 !important;
 }
 
-/* 確保所有標題、日期、文字、標籤等項目皆靠左 */
-.joined-plan-item-card h4,
-.joined-plan-item-card p,
-.joined-plan-item-card span,
-.joined-plan-item-card div {
+/* 只確保右側文字主容器內部的標題、日期、文字、標籤等項目皆靠左，不影響左側封皮 (plan-cover-thumbnail) 內部文字的置中 */
+.joined-plan-item-card > div:last-child h4,
+.joined-plan-item-card > div:last-child p,
+.joined-plan-item-card > div:last-child span,
+.joined-plan-item-card > div:last-child div {
   text-align: left !important;
   justify-content: flex-start !important;
 }
