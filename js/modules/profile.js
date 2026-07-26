@@ -727,6 +727,10 @@ export function init() {
       
       const activeContent = document.getElementById(`profile-tab-content-${targetTab}`);
       if (activeContent) activeContent.classList.remove("hidden");
+      
+      if (targetTab === "badges" && typeof renderBadgeWall === "function") {
+        renderBadgeWall("badges-grid");
+      }
     };
   });
   
