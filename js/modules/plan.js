@@ -1338,10 +1338,13 @@ function renderJoinedPlansList() {
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
                 const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
 
-                if (contexts.length > 0) {
-                  contexts.forEach(context => {
-                    const division = Number(context.team.division);
-                    const teamName = context.team.name || "";
+                const divisions = [3, 6];
+                divisions.forEach(division => {
+                  const hasJoined = joinedDivisions.has(division);
+                  
+                  if (hasJoined) {
+                    const context = contexts.find(c => Number(c.team.division) === division);
+                    const teamName = context ? (context.team.name || "") : "";
                     
                     const badge = document.createElement("div");
                     badge.style.cssText = `
@@ -1368,10 +1371,7 @@ function renderJoinedPlansList() {
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
                     };
                     teamContainer.appendChild(badge);
-                  });
-                } else {
-                  const divisions = [3, 6];
-                  divisions.forEach(division => {
+                  } else {
                     const btn = document.createElement("button");
                     btn.type = "button";
                     btn.style.cssText = `
@@ -1398,8 +1398,8 @@ function renderJoinedPlansList() {
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
                     };
                     teamContainer.appendChild(btn);
-                  });
-                }
+                  }
+                });
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
                 console.error("Error loading team info for card:", err);

@@ -139,50 +139,48 @@ export const PlanActivityCard = React.forwardRef<HTMLDivElement, PlanActivityCar
                 <span>組隊參賽狀態</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {joinedDivisions && joinedDivisions.length > 0 ? (
-                  divisions
-                    .filter((div) => joinedDivisions.includes(div))
-                    .map((div) => {
-                      const teamName = divisionTeamNames[div] || (joinedDivisions.includes(div) ? registeredTeamName : "")
-                      return (
-                        <Button
-                          key={div}
-                          variant="outline"
-                          size="sm"
-                          className="h-10 text-xs border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 hover:bg-emerald-500/10 cursor-default"
-                          disabled={isAnyLoading}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Users className="h-3.5 w-3.5 text-emerald-500" />
-                          <span>已入 {div}人組 {teamName ? `(${teamName})` : ""}</span>
-                        </Button>
-                      )
-                    })
-                ) : (
-                  divisions.map((div) => {
-                    const isThisLoading = submittingDivision === div
+                {divisions.map((div) => {
+                  const hasJoined = joinedDivisions.includes(div)
+                  const teamName = divisionTeamNames[div] || (hasJoined ? registeredTeamName : "")
+                  const isThisLoading = submittingDivision === div
+                  
+                  if (hasJoined) {
                     return (
                       <Button
                         key={div}
-                        variant="default"
+                        variant="outline"
                         size="sm"
-                        className="h-10 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium flex items-center gap-1.5 px-4 shadow-sm active:scale-98 transition-all"
+                        className="h-10 text-xs border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 hover:bg-emerald-500/10 cursor-default"
                         disabled={isAnyLoading}
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          await handleRegister(div)
-                        }}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {isThisLoading ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Users className="h-3.5 w-3.5" />
-                        )}
-                        <span>報名 {div}人組</span>
+                        <Users className="h-3.5 w-3.5 text-emerald-500" />
+                        <span>已入 {div}人組 {teamName ? `(${teamName})` : ""}</span>
                       </Button>
                     )
-                  })
-                )}
+                  }
+
+                  return (
+                    <Button
+                      key={div}
+                      variant="default"
+                      size="sm"
+                      className="h-10 text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium flex items-center gap-1.5 px-4 shadow-sm active:scale-98 transition-all"
+                      disabled={isAnyLoading}
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        await handleRegister(div)
+                      }}
+                    >
+                      {isThisLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Users className="h-3.5 w-3.5" />
+                      )}
+                      <span>報名 {div}人組</span>
+                    </Button>
+                  )
+                })}
               </div>
             </div>
           ) : (
