@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260724_custom_confirm_scroll">
+  <link rel="stylesheet" href="index.css?v=20260726_profile_settings_redesign">
   <link rel="stylesheet" href="css/team-registration.css?v=20260724_mobile_roster_cards">
 
   <!-- Supabase JS Client library -->
@@ -1390,48 +1390,99 @@
                 </div>
               </div>
 
-              <!-- Member Hub identity card -->
-              <div class="member-hub-profile-card" id="profile-member-hub-card">
-                <div class="member-hub-profile-card__header">
-                  <span class="member-hub-profile-card__icon" aria-hidden="true">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="layers"></span>
-                  </span>
-                  <div class="member-hub-profile-card__heading">
-                    <h3 class="member-hub-profile-card__title" id="profile-member-hub-title">新生命會員中心</h3>
-                    <p class="member-hub-profile-card__desc" id="profile-member-hub-desc">
-                      姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
+              <!-- Member Hub identity card & actions (App Style Settings Group) -->
+              <div class="space-y-4" id="profile-settings-container" style="margin-top: 1rem; margin-bottom: 1.5rem;">
+                
+                <!-- 分組一：會員中心連動 -->
+                <div class="app-settings-group">
+                  <div class="app-settings-group__header" id="profile-member-hub-card">
+                    <span class="app-settings-group__header-icon">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
+                    </span>
+                    <div class="app-settings-group__header-text">
+                      <h3 id="profile-member-hub-title" class="text-sm font-medium m-0">新生命會員中心</h3>
+                      <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="app-settings-list">
+                    <!-- 項目 1：管理身份與牧區 -->
+                    <a class="app-settings-item" id="btn-member-hub-structure" target="_blank" rel="noopener noreferrer">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="signpost" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title" id="profile-member-hub-primary-label">管理身份與牧區歸屬</span>
+                          <span class="app-settings-item__subtitle">更新姓名、大區、牧區或所屬小組</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </a>
+
+                    <!-- 項目 2：開啟會員中心 -->
+                    <a class="app-settings-item" id="btn-member-hub-home" target="_blank" rel="noopener noreferrer">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="home" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">開啟會員中心</span>
+                          <span class="app-settings-item__subtitle">前往新生命會員中心服務平台</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </a>
                   </div>
                 </div>
-                <div class="member-hub-profile-card__actions">
-                  <a class="primary-btn member-hub-profile-card__cta" id="btn-member-hub-structure"
-                    href="https://member.newlife.org.tw/pastoral/structure" target="_blank" rel="noopener noreferrer">
-                    <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="signpost"
-                        aria-hidden="true"></span><span id="profile-member-hub-primary-label">管理身份與牧區歸屬</span></span>
-                  </a>
-                  <a class="secondary-btn member-hub-profile-card__cta" id="btn-member-hub-home"
-                    href="https://member.newlife.org.tw" target="_blank" rel="noopener noreferrer">
-                    <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="home"
-                        aria-hidden="true"></span><span>開啟會員中心</span></span>
-                  </a>
+
+                <!-- 分組二：本 App 設定 -->
+                <div class="app-settings-group">
+                  <div class="app-settings-list">
+                    <!-- 項目 3：帳號設定（本 app） -->
+                    <button class="app-settings-item w-full text-left" id="btn-toggle-profile-form" type="button" style="background: none; border: none; cursor: pointer; padding: 0.75rem 1rem;">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title" id="btn-toggle-profile-form-title">帳號設定（本 app）</span>
+                          <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </button>
+                  </div>
                 </div>
+
+                <!-- 分組三：安全與安全性 -->
+                <div class="app-settings-group">
+                  <div class="app-settings-list">
+                    <!-- 項目 4：登出帳號 -->
+                    <button class="app-settings-item app-settings-item--danger w-full text-left" id="btn-profile-logout" type="button" style="background: none; border: none; cursor: pointer; padding: 0.75rem 1rem;">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--danger">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title text-danger">登出帳號</span>
+                          <span class="app-settings-item__subtitle text-danger-muted">清除登入狀態與本機資料快取</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron text-danger">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
               </div>
-
-              <!-- Button to toggle the form -->
-              <button class="settings-row-btn" id="btn-toggle-profile-form">
-                <span class="settings-row-btn__icon-wrap">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-                </span>
-                <span class="settings-row-btn__label">帳號設定（本 app）</span>
-                <span class="settings-row-btn__chevron">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
-                </span>
-              </button>
-
-              <!-- Log Out Button directly in the Profile tab -->
-              <button class="danger-btn w-full" id="btn-profile-logout" style="margin-top: 0.5rem;">
-                <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
-                <span>登出帳號</span>
-              </button>
 
               <!-- Collapsible Profile Form Wrapper -->
               <div id="profile-form-wrapper" class="hidden"
@@ -1939,7 +1990,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260726_org_setup_onboarding"></script>
+  <script type="module" src="js/app.js?v=20260726_profile_settings_redesign"></script>
 </body>
 
 </html>
