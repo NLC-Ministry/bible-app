@@ -10256,6 +10256,49 @@ body.dark-theme .custom-confirm-overlay {
   display: none !important;
 }
 
+/* ─── 讀經計畫卡片左對齊與防跑版樣式修正 (Bible Plan Card Left Alignment Fix) ─── */
+.joined-plan-item-card {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important; /* 保持左側封皮與右側文字區塊垂直居中對齊 */
+  text-align: left !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 確保卡片內部的右側文字主容器強制靠左對齊，消除任何居中 */
+.joined-plan-item-card > div:last-child {
+  flex-grow: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  text-align: left !important;
+  min-width: 0 !important;
+}
+
+/* 確保所有標題、日期、文字、標籤等項目皆靠左 */
+.joined-plan-item-card h4,
+.joined-plan-item-card p,
+.joined-plan-item-card span,
+.joined-plan-item-card div {
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+
+/* 特別針對小組團隊報名控制列 */
+.joined-plan-item-card .plan-card-team-controls {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+  margin-top: 0.6rem !important;
+}
+
+
 
 
 
