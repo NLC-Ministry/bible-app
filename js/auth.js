@@ -182,8 +182,7 @@ const auth = {
       chapters_read: 0,
       plan_progress: 0,
       streak: 0,
-      last_read: null,
-      hasRequiredPlacement: false
+      last_read: null
     };
     state.readingLogs = [];
     state.activePlans = [];

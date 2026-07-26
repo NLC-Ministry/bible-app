@@ -32,29 +32,87 @@ function parseJwt(token: string) {
   }
 }
 
-/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
-function orgFromProjectedOrganization(organization: any) {
-  const org = organization || {};
-  const pick = (...values: any[]) => {
-    for (const value of values) {
-      if (value !== null && value !== undefined && String(value).trim() !== "") {
-        return String(value).trim();
-      }
-    }
-    return null;
-  };
+const LEVEL_DEPTH = {
+  great_region: 0,
+  pastoral_zone: 1,
+  small_group: 2
+};
 
+const LEVEL_NAME_HINTS: Record<string, string[]> = {
+  great_region: ["大區"],
+  pastoral_zone: ["牧區"],
+  small_group: ["小組"]
+};
+
+function pickNameByDepth(segments: any[], depth: number) {
+  if (!Array.isArray(segments)) return null;
+  const match = segments.find((seg) => seg && seg.levelDepth === depth);
+  if (match?.name) return String(match.name).trim() || null;
+  const byIndex = segments[depth];
+  if (byIndex?.name) return String(byIndex.name).trim() || null;
+  return null;
+}
+
+function pickNameByLevelName(segments: any[], hints: string[]) {
+  if (!Array.isArray(segments) || !hints.length) return null;
+  const match = segments.find((seg) => {
+    const label = String(seg?.levelName || "").trim();
+    return hints.some((hint) => label.includes(hint));
+  });
+  return match?.name ? String(match.name).trim() || null : null;
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function orgFromCareChain(careChain: any[]) {
   return {
-    great_region: pick(org.greatRegion, org.placementGreatRegion),
-    pastoral_zone: pick(org.pastoralZone, org.placementPastoralZone),
-    small_group: pick(org.smallGroup, org.placementSmallGroup)
+    great_region: pickNameByDepth(careChain, LEVEL_DEPTH.great_region),
+    pastoral_zone: pickNameByDepth(careChain, LEVEL_DEPTH.pastoral_zone),
+    small_group: pickNameByDepth(careChain, LEVEL_DEPTH.small_group)
   };
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
-function resolveRequiredPlacement(context: any, previousValue = false) {
-  if (typeof context?.hasRequiredPlacement === "boolean") return context.hasRequiredPlacement;
-  return Boolean(previousValue);
+function orgFromHomePath(path: any[]) {
+  if (!Array.isArray(path)) {
+    return { great_region: null, pastoral_zone: null, small_group: null };
+  }
+  return {
+    great_region: pickNameByLevelName(path, LEVEL_NAME_HINTS.great_region) || pickNameByDepth(path, 0),
+    pastoral_zone: pickNameByLevelName(path, LEVEL_NAME_HINTS.pastoral_zone) || pickNameByDepth(path, 1),
+    small_group: pickNameByLevelName(path, LEVEL_NAME_HINTS.small_group) || pickNameByDepth(path, 2)
+  };
+}
+
+/** Legacy Member Hub fields — remove after production validation. */
+function orgFromLegacyOrganization(organization: any) {
+  const org = organization || {};
+  return {
+    great_region: org.homeRegionName ? String(org.homeRegionName).trim() : null,
+    pastoral_zone: org.homeZoneName ? String(org.homeZoneName).trim() : null,
+    small_group: org.homeGroupName ? String(org.homeGroupName).trim() : null
+  };
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
+  const legacy = orgFromLegacyOrganization(contextOrganization);
+  const homeNodeName = contextOrganization?.homeNodeName
+    ? String(contextOrganization.homeNodeName).trim()
+    : null;
+
+  const pick = (field: "great_region" | "pastoral_zone" | "small_group") => {
+    if (platformOrg?.[field]) return platformOrg[field];
+    if (placementOrg?.[field]) return placementOrg[field];
+    if (legacy[field]) return legacy[field];
+    if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
+    return null;
+  };
+
+  return {
+    great_region: pick("great_region"),
+    pastoral_zone: pick("pastoral_zone"),
+    small_group: pick("small_group")
+  };
 }
 
 // Roles that must never be granted or inherited via a WEAK (email-only) account link.
@@ -143,6 +201,9 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const issuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
     const memberHubUrl = trimSlash(Deno.env.get("NLC_MEMBER_HUB_URL") || "https://member.newlife.org.tw");
+    const platformApiUrl = trimSlash(
+      Deno.env.get("NLC_PLATFORM_API_URL") || "https://platform.newlife.org.tw/platform/v1"
+    );
 
     if (!supabaseUrl || !serviceRoleKey) {
       return jsonResponse({ error: "server_not_configured" }, 500);
@@ -194,7 +255,37 @@ Deno.serve(async (req: Request) => {
     const organization = memberContext?.organization || {};
     const memberId = memberIdentity.memberId || null;
     const membershipStatus = memberProfile.membershipStatus || null;
-    const projectedOrgFields = orgFromProjectedOrganization(organization);
+
+    let platformOrganization: any = null;
+    let platformOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
+
+    if (memberId) {
+      const platformResponse = await fetchJsonOptional(
+        `${platformApiUrl}/members/${encodeURIComponent(memberId)}/organization`,
+        { headers: bearerHeaders }
+      );
+      platformOrganization = platformResponse?.organization || null;
+      if (platformOrganization?.careChain) {
+        platformOrgFields = orgFromCareChain(platformOrganization.careChain);
+      }
+    }
+
+    let placementOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
+    const needsPlacementFallback = !platformOrgFields.great_region &&
+      !platformOrgFields.pastoral_zone &&
+      !platformOrgFields.small_group;
+
+    if (needsPlacementFallback) {
+      const placementResponse = await fetchJsonOptional(`${memberHubUrl}/api/me/org-placement`, {
+        headers: bearerHeaders
+      });
+      const homePath = placementResponse?.placement?.home?.path;
+      if (homePath) {
+        placementOrgFields = orgFromHomePath(homePath);
+      }
+    }
+
+    const mergedOrg = mergeOrgSources(platformOrgFields, placementOrgFields, organization);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
@@ -262,16 +353,13 @@ Deno.serve(async (req: Request) => {
     if (!profileId) profileId = crypto.randomUUID();
 
     const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
-    const previousRequiredPlacement = existingProfile?.hasRequiredPlacement === true ||
-      existingProfile?.has_required_placement === true;
-    const hasRequiredPlacement = resolveRequiredPlacement(memberContext, previousRequiredPlacement);
 
     const sourceValues: Record<string, string | null> = {
       email: lookupEmail,
       name: memberProfile.displayName || userinfo.name || userinfo.preferred_username || memberIdentity.username || null,
-      great_region: projectedOrgFields.great_region,
-      pastoral_zone: projectedOrgFields.pastoral_zone,
-      small_group: projectedOrgFields.small_group,
+      great_region: mergedOrg.great_region,
+      pastoral_zone: mergedOrg.pastoral_zone,
+      small_group: mergedOrg.small_group,
       role: syncedRole === "admin" ? "admin" : null
     };
 
@@ -300,7 +388,6 @@ Deno.serve(async (req: Request) => {
       last_seen_at: nowIso,
       updated_at: nowIso
     };
-    profilePayload.has_required_placement = hasRequiredPlacement;
 
     if (memberId) {
       profilePayload.nlc_member_id = memberId;
@@ -344,7 +431,6 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (profileError) throw profileError;
-    profile.hasRequiredPlacement = hasRequiredPlacement;
 
     const { error: clearPrimaryError } = await supabaseAdmin
       .from("user_identities")
@@ -356,12 +442,10 @@ Deno.serve(async (req: Request) => {
     const identityMetadata: Record<string, unknown> = {
       issuer,
       userinfo,
-      member_context: memberContext,
-      has_required_placement: hasRequiredPlacement,
-      has_home: typeof memberContext?.hasHome === "boolean" ? memberContext.hasHome : null
+      member_context: memberContext
     };
-    if (organization) {
-      identityMetadata.projected_organization = organization;
+    if (platformOrganization) {
+      identityMetadata.platform_organization = platformOrganization;
     }
     if (membershipStatus) {
       identityMetadata.membership_status = membershipStatus;
@@ -387,8 +471,7 @@ Deno.serve(async (req: Request) => {
       edge_session: true,
       profile,
       locked_fields: lockedFields,
-      membership_status: membershipStatus,
-      has_required_placement: hasRequiredPlacement
+      membership_status: membershipStatus
     });
   } catch (err) {
     // Log full detail server-side
