@@ -1116,6 +1116,28 @@ function matchesPlanSearch(plan) {
   return getPlanSearchText(plan).includes(planSearchQuery);
 }
 
+function getPlanStartCountdownText(plan) {
+  if (!plan || !plan.startDate) return "";
+  const parts = plan.startDate.split("-");
+  if (parts.length !== 3) return `預計 ${escapeHTML(plan.startDate)} 開始`;
+  
+  const startYear = parseInt(parts[0], 10);
+  const startMonth = parseInt(parts[1], 10) - 1;
+  const startDay = parseInt(parts[2], 10);
+  
+  const start = new Date(startYear, startMonth, startDay);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = start.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 0) {
+    return "今天開始";
+  }
+  return `${diffDays} 天後開始`;
+}
+
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");
@@ -1256,39 +1278,42 @@ function renderJoinedPlansList() {
       } else {
         // Normal active plan: show progress bar
         const progressText = isUpcomingFixed
-          ? `預計 ${escapeHTML(plan.startDate)} 開始`
+          ? `<span style="display: inline-block; padding: 0.22rem 0.5rem; border-radius: 6px; background: color-mix(in srgb, var(--color-warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); font-size: 0.72rem; font-weight: 600; white-space: nowrap;">${getPlanStartCountdownText(plan)}</span>`
           : (currentRound > 1
             ? `已完成第 ${currentRound - 1} 遍 👑<br>第 ${currentRound} 遍：已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`
             : `已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`);
 
         const isTeamPlan = (typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan)) || 
           !!(plan && (plan.planKind === "church_campaign_stage" || (plan.presetKey && (plan.presetKey.startsWith("church_stage_") || plan.presetKey.startsWith("preset-stage-")))));
-        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;"></div>` : "";
+        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; justify-content: flex-start; width: 100%;"></div>` : "";
         const progressHtml = isUpcomingFixed
           ? ""
-          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact">
+          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact" style="width: 100%;">
               <div class="plan-progress-bar" style="width: ${progress}%;"></div>
             </div>`;
 
         card.innerHTML = `
           ${getPlanCoverHtml(plan)}
-          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
-            <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
+            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
+            <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
+              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
+              <span>${plan.startDate} ~ ${plan.endDate}</span>
             </div>
             ${campaignAwardHtml}
             ${progressHtml}
-            <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35;">
+            <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35; width: 100%;">
               ${progressText}
             </div>
-            <div class="joined-plan-schedule-summary">
+            <div class="joined-plan-schedule-summary" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.1rem; width: 100%;">
               <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
               <span>${escapeHTML(weeklyScheduleSummary)}</span>
             </div>
             ${teamHtml}
           </div>
         `;
+
+        if (typeof hydrateIcons === "function") hydrateIcons(card);
 
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
@@ -1307,41 +1332,65 @@ function renderJoinedPlansList() {
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
                 const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
 
-                [3, 6].forEach(division => {
-                  const hasJoined = joinedDivisions.has(division);
+                if (contexts.length > 0) {
+                  contexts.forEach(context => {
+                    const division = Number(context.team.division);
+                    const teamName = context.team.name || "";
+                    
+                    const badge = document.createElement("div");
+                    badge.style.cssText = `
+                      font-size: 0.72rem;
+                      padding: 0.28rem 0.65rem;
+                      border-radius: 9999px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 0.35rem;
+                      cursor: pointer;
+                      background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent);
+                      border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);
+                      color: var(--color-success-foreground);
+                      transition: all 0.2s ease;
+                      font-weight: 500;
+                    `;
+                    badge.innerHTML = `
+                      <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
+                      <span>已入 ${division}人組 (${escapeHTML(teamName)})</span>
+                      <span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>
+                    `;
+                    badge.onclick = (e) => {
+                      e.stopPropagation();
+                      window.openReadingTeamDialog(plan, { preferredDivision: division });
+                    };
+                    teamContainer.appendChild(badge);
+                  });
+                } else {
                   const btn = document.createElement("button");
                   btn.type = "button";
                   btn.style.cssText = `
                     font-size: 0.75rem;
-                    padding: 0.3rem 0.6rem;
-                    border-radius: 8px;
+                    padding: 0.35rem 0.9rem;
+                    border-radius: 9999px;
                     display: inline-flex;
                     align-items: center;
-                    gap: 0.25rem;
+                    gap: 0.35rem;
                     cursor: pointer;
                     margin: 0;
-                    border: 1px solid var(--border-card);
-                    transition: all 0.2s;
+                    background: transparent;
+                    border: 1px solid var(--primary-color);
+                    color: var(--primary-color);
+                    transition: all 0.2s ease;
+                    font-weight: 600;
                   `;
-
-                  if (hasJoined) {
-                    const teamName = contexts.find(c => Number(c.team.division) === division)?.team?.name || "";
-                    btn.className = "secondary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span><span>已入 ${division}人組 (${escapeHTML(teamName)})</span>`;
-                    btn.onclick = (e) => {
-                      e.stopPropagation();
-                      window.openReadingTeamDialog(plan, { preferredDivision: division });
-                    };
-                  } else {
-                    btn.className = "primary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span><span>報名 ${division}人組</span>`;
-                    btn.onclick = (e) => {
-                      e.stopPropagation();
-                      window.openReadingTeamDialog(plan, { preferredDivision: division });
-                    };
-                  }
+                  btn.innerHTML = `
+                    <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
+                    <span>報名小組團隊</span>
+                  `;
+                  btn.onclick = (e) => {
+                    e.stopPropagation();
+                    window.openReadingTeamDialog(plan);
+                  };
                   teamContainer.appendChild(btn);
-                });
+                }
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
                 console.error("Error loading team info for card:", err);

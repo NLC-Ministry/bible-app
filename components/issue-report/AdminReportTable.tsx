@@ -135,8 +135,10 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
               <tr>
                 <th className="px-4 py-3">建立時間</th>
                 <th className="px-4 py-3">分類</th>
-                <th className="px-6 py-3 w-1/2">回報內容</th>
-                <th className="px-4 py-3">回報人姓名 / 牧區 / 小組</th>
+                <th className="px-6 py-3 w-1/3">回報內容</th>
+                <th className="px-4 py-3">姓名</th>
+                <th className="px-4 py-3">牧區</th>
+                <th className="px-4 py-3">小組</th>
                 <th className="px-4 py-3 text-center">操作</th>
               </tr>
             </thead>
@@ -162,15 +164,18 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                   <td className="px-6 py-3.5 break-words leading-relaxed text-sm text-foreground">
                     {report.description}
                   </td>
-                  <td className="px-4 py-3.5 max-w-[200px]">
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     {report.profiles ? (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold text-sm">{report.profiles.name || "未填姓名"}</span>
-                        <span className="text-[10px] text-muted-foreground">{report.profiles.pastoral_zone || "無牧區"} / {report.profiles.small_group || "無小組"}</span>
-                      </div>
+                      <span className="font-semibold text-sm">{report.profiles.name || "未填姓名"}</span>
                     ) : (
                       <span className="text-muted-foreground">訪客 / 離線回報</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-muted-foreground">
+                    {report.profiles ? (report.profiles.pastoral_zone || "無牧區") : "-"}
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-sm text-muted-foreground">
+                    {report.profiles ? (report.profiles.small_group || "無小組") : "-"}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-center">
                     <motion.button
