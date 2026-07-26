@@ -4,12 +4,14 @@ function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
     return {
       home: auth.getMemberHubUrl(""),
-      structure: auth.getMemberHubUrl("pastoral/structure")
+      structure: auth.getMemberHubUrl("pastoral/structure"),
+      onboarding: auth.getMemberHubUrl("onboarding")
     };
   }
   return {
     home: "https://member.newlife.org.tw",
-    structure: "https://member.newlife.org.tw/pastoral/structure"
+    structure: "https://member.newlife.org.tw/pastoral/structure",
+    onboarding: "https://member.newlife.org.tw/onboarding"
   };
 }
 
@@ -26,13 +28,23 @@ function userNeedsOrgSetup() {
     !String(user.small_group || "").trim();
 }
 
-function openMemberHubStructure() {
+function openMemberHubPath(path, fallbackUrl) {
   scheduleProfileSyncOnReturn();
   if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
-    auth.openMemberHub("pastoral/structure");
+    auth.openMemberHub(path);
     return;
   }
-  window.open(getMemberHubUrls().structure, "_blank", "noopener,noreferrer");
+  window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+}
+
+function openMemberHubStructure() {
+  openMemberHubPath("pastoral/structure", getMemberHubUrls().structure);
+}
+
+// Members without a placement have nothing to manage in the pastoral structure
+// tool yet; they need the Member Hub onboarding funnel instead.
+function openMemberHubOnboarding() {
+  openMemberHubPath("onboarding", getMemberHubUrls().onboarding);
 }
 
 function scheduleProfileSyncOnReturn() {
@@ -63,9 +75,10 @@ function renderMemberHubProfileLinks() {
   const structureEl = document.getElementById("btn-member-hub-structure");
   const homeEl = document.getElementById("btn-member-hub-home");
   const avatarHubEl = document.getElementById("btn-avatar-member-hub");
-  if (structureEl) structureEl.href = urls.structure;
+  const identityUrl = needsOrg ? urls.onboarding : urls.structure;
+  if (structureEl) structureEl.href = identityUrl;
   if (homeEl) homeEl.href = urls.home;
-  if (avatarHubEl) avatarHubEl.href = urls.structure;
+  if (avatarHubEl) avatarHubEl.href = identityUrl;
 
   [structureEl, homeEl, avatarHubEl].forEach(function (linkEl) {
     if (!linkEl || linkEl._hubSyncBound) return;
@@ -85,7 +98,11 @@ function renderMemberHubProfileLinks() {
       ? (copy.cardBodyNeedsOrg || descEl.textContent)
       : (copy.cardBody || descEl.textContent);
   }
-  if (primaryLabel) primaryLabel.textContent = copy.manageStructure || "管理身份與牧區歸屬";
+  if (primaryLabel) {
+    primaryLabel.textContent = needsOrg
+      ? (copy.completeOnboarding || "完成身份設定")
+      : (copy.manageStructure || "管理身份與牧區歸屬");
+  }
   if (card) card.classList.toggle("member-hub-profile-card--needs-org", needsOrg);
 
   const formNotice = document.getElementById("profile-member-hub-form-notice");
@@ -100,7 +117,7 @@ function renderMemberHubProfileLinks() {
     formNoticeBtn._hubBound = true;
     formNoticeBtn.addEventListener("click", function (e) {
       e.preventDefault();
-      openMemberHubStructure();
+      openMemberHubOnboarding();
     });
   }
 
@@ -113,7 +130,7 @@ function renderMemberHubProfileLinks() {
       setupLink._hubBound = true;
       setupLink.addEventListener("click", function (e) {
         e.preventDefault();
-        openMemberHubStructure();
+        openMemberHubOnboarding();
       });
     }
   }
