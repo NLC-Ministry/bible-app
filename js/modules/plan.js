@@ -1079,11 +1079,17 @@ function getPlanCoverHtml(plan) {
   const campaignStageNo = plan && plan.planKind === "church_campaign_stage"
     ? Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0)
     : 0;
-  const label = campaignStageNo
-    ? "第" + campaignStageNo
-    : (isCampaign ? "66卷" : escapeHTML(String(plan && plan.name || "讀經").slice(0, 2)));
   const labelFontSize = campaignStageNo >= 10 ? "0.88rem" : "0.95rem";
-  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;}
+
+  if (campaignStageNo) {
+    return `<div class="plan-cover-thumbnail" style="width: 32px; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--primary-color) 30%, transparent); background: color-mix(in srgb, var(--primary-color) 6%, transparent); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--primary-color); font-weight: 600; font-size: 0.72rem; line-height: 1.35; padding: 0.6rem 0.15rem; flex-shrink: 0; align-self: stretch; box-sizing: border-box; text-align: center;">
+      ✦<br>第<br>${campaignStageNo}<br>階<br>段
+    </div>`;
+  }
+
+  const label = isCampaign ? "66卷" : escapeHTML(String(plan && plan.name || "讀經").slice(0, 2));
+  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;
+}
 
 function normalizePlanSearchValue(value) {
   return String(value || "")
@@ -1987,16 +1993,16 @@ function renderPresetPlansList() {
     card.style = "background:var(--bg-card);border:1px solid var(--border-card);border-radius:16px;padding:1rem;display:flex;align-items:center;gap:1rem;cursor:pointer;transition:all .2s ease;";
     card.innerHTML = `
       ${getPlanCoverHtml(plan)}
-      <div style="flex-grow:1;display:flex;flex-direction:column;gap:.3rem;min-width:0;">
-        <h4 style="margin:0;font-size:1.05rem;font-weight:500;color:var(--text-primary);">${escapeHTML(plan.name)}</h4>
-        <div style="font-size:.78rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem;">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
+        <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(plan.name)}</h4>
+        <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
           <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
           <span>${escapeHTML(scheduleLabel)}</span>
         </div>
-        ${description ? `<p style="margin:.15rem 0 0;font-size:.76rem;line-height:1.45;color:var(--text-secondary);">${escapeHTML(description)}</p>` : ""}
-        ${isCampaignStage ? `<div style="font-size:.76rem;font-weight:500;color:var(--primary-color);"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
-        ${upcomingNotice ? `<div style="padding:.42rem .58rem;border-radius:9px;background:var(--bg-secondary);font-size:.74rem;line-height:1.45;color:var(--text-secondary);"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
-        <div style="font-size:.76rem;font-weight:500;color:var(--primary-color);margin-top:.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
+        ${description ? `<p style="margin: .15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--text-secondary); width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHTML(description)}</p>` : ""}
+        ${isCampaignStage ? `<div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); display: flex; align-items: center; gap: 0.25rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
+        ${upcomingNotice ? `<div style="padding: 0.42rem 0.58rem; border-radius: 9px; background: var(--bg-secondary); font-size: 0.74rem; line-height: 1.45; color: var(--text-secondary); width: 100%;"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
+        <div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); margin-top: 0.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
       </div>
     `;
 
