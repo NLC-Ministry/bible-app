@@ -1022,11 +1022,55 @@ const db = {
         state.orgStructure.rawGroups = [];
         state.orgStructure.zones = {};
         state.orgStructure.groups = {};
-        this.ensureCurrentUserOrgStructure();
+         this.ensureCurrentUserOrgStructure();
         return;
       }
     }
     this.loadMockOrgStructure();
+  },
+
+  async syncChurchOrganization(regions, zones, groups) {
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const { data, error } = await state.supabase.rpc("sync_church_organization", {
+          p_regions: regions,
+          p_zones: zones,
+          p_groups: groups
+        });
+        if (error) throw error;
+        // 重新加載最新的組織架構到本地 state
+        await this.loadOrgStructure();
+        return { success: true };
+      } catch (err) {
+        console.error("Failed to sync church organization:", err);
+        return { success: false, error: err.message || err };
+      }
+    }
+    
+    // Demo / 離線模式：直接在前端記憶體更新
+    state.orgStructure.regions = [...regions];
+    state.orgStructure.zones = {};
+    regions.forEach(r => {
+      state.orgStructure.zones[r] = zones.filter(z => z.region_name === r).map(z => z.name);
+    });
+    state.orgStructure.groups = {};
+    zones.forEach(z => {
+      state.orgStructure.groups[z.name] = groups.filter(g => g.zone_name === z.name).map(g => g.name);
+    });
+    
+    // 生成 Mock 的 rawRegions/rawZones/rawGroups 以維持 Supabase 下拉選單相容性
+    state.orgStructure.rawRegions = regions.map((r, i) => ({ id: `r-${i}`, name: r }));
+    state.orgStructure.rawZones = zones.map((z, i) => {
+      const parentReg = state.orgStructure.rawRegions.find(r => r.name === z.region_name);
+      return { id: `z-${i}`, name: z.name, great_region_id: parentReg ? parentReg.id : null };
+    });
+    state.orgStructure.rawGroups = groups.map((g, i) => {
+      const parentZone = state.orgStructure.rawZones.find(z => z.name === g.zone_name);
+      return { id: `g-${i}`, name: g.name, pastoral_zone_id: parentZone ? parentZone.id : null };
+    });
+
+    this.ensureCurrentUserOrgStructure();
+    return { success: true };
   },
 
   loadMockOrgStructure() {
