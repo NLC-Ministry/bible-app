@@ -1626,74 +1626,89 @@
           <!-- 教會組織架構管理 (管理員專屬) -->
           <div class="card-col span-12" style="margin-top: 1.5rem;">
             <div class="glass-card">
-              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <span class="nlc-icon nlc-icon--md" data-icon="layers" aria-hidden="true"
-                  style="color: var(--primary-color);"></span>
-                教會組織架構管理 (管理員專屬)
-              </h3>
-              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.5;">
-                請在此新增、修改或刪除大區、牧區及小組的架構。更新後的架構將立即出現在所有會友的個人基本資料下拉選單中。
-              </p>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                <div>
+                  <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                    <span class="nlc-icon nlc-icon--md" data-icon="layers" aria-hidden="true"
+                      style="color: var(--primary-color);"></span>
+                    教會組織架構管理 (管理員專屬)
+                  </h3>
+                  <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.3rem 0 0 0; line-height: 1.5;">
+                    透過上傳 CSV 檔案或直接貼上表格資料，一次性更新全教會大區、牧區與小組架構。
+                  </p>
+                </div>
+                <button class="tab-btn" id="admin-export-org-btn" style="font-size: 0.75rem; padding: 0.35rem 0.8rem; display: flex; align-items: center; gap: 0.3rem; height: auto; cursor: pointer;">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                  下載當前架構 CSV
+                </button>
+              </div>
 
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-                <!-- 1. 大區管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第一步：選擇大區
-                    <button class="primary-btn" id="admin-add-region-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增大區</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-region" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-region-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-region-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
+              <!-- 當前架構統計摘要 -->
+              <div style="display: flex; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; background: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card)); padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid var(--border-card);">
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前大區數量：<strong id="admin-stat-regions" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+                <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前牧區數量：<strong id="admin-stat-zones" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+                <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前小組數量：<strong id="admin-stat-groups" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+              </div>
+
+              <!-- 匯入操作區 -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; margin-bottom: 1rem;">
+                <!-- 檔案選擇器 -->
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 12px; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem; justify-content: center; align-items: center; border-style: dashed; min-height: 120px; position: relative;">
+                  <span class="nlc-icon nlc-icon--lg" data-icon="uploadCloud" aria-hidden="true" style="color: var(--text-muted); opacity: 0.8;"></span>
+                  <div style="text-align: center;">
+                    <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">拖曳 CSV 檔案至此，或</span>
+                    <label for="admin-org-file-input" style="color: var(--primary-color); font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: underline; margin-left: 2px;">選擇檔案</label>
                   </div>
+                  <input type="file" id="admin-org-file-input" accept=".csv,.txt" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;" aria-label="上傳組織架構 CSV 檔案" />
+                  <div id="admin-org-file-name" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-top: -0.2rem; display: none;"></div>
                 </div>
 
-                <!-- 2. 牧區管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第二步：選擇牧區
-                    <button class="primary-btn" id="admin-add-zone-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增牧區</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-zone" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-zone-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-zone-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
-                  </div>
+                <!-- 文字貼上區 -->
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                  <label for="admin-org-paste-input" style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">或直接貼上 Excel 表格資料 (Tab/逗號分隔)</label>
+                  <textarea id="admin-org-paste-input" class="form-control" placeholder="格式範例：&#13;東區,大安1,大安1A&#13;東區,大安1,大安1B&#13;南區,中山1,中山1A" style="font-size: 0.75rem; font-family: monospace; height: 90px; resize: none; width: 100%; box-sizing: border-box;"></textarea>
+                </div>
+              </div>
+
+              <!-- 解析預覽與比對狀態 (預設隱藏) -->
+              <div id="admin-org-preview-card" style="display: none; background: color-mix(in srgb, var(--primary-color) 3%, var(--bg-card)); border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--border-card)); border-radius: 12px; padding: 1.2rem; margin-top: 1rem; flex-direction: column; gap: 1rem; transition: all 0.2s;">
+                <h4 style="margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="nlc-icon" data-icon="fileText" aria-hidden="true" style="color: var(--primary-color);"></span>
+                  檔案解析比對摘要
+                </h4>
+                
+                <!-- 變動數據徽章 -->
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                  <span style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent); color: var(--color-success-foreground); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ✦ 預計新增：大區 <span id="preview-add-regions">0</span> | 牧區 <span id="preview-add-zones">0</span> | 小組 <span id="preview-add-groups">0</span>
+                  </span>
+                  <span style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--text-muted) 8%, transparent); border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ✦ 預計保留：大區 <span id="preview-keep-regions">0</span> | 牧區 <span id="preview-keep-zones">0</span> | 小組 <span id="preview-keep-groups">0</span>
+                  </span>
+                  <span id="preview-delete-badge" style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--color-danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent); color: var(--color-danger); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ⚠ 預計刪除：大區 <span id="preview-del-regions">0</span> | 牧區 <span id="preview-del-zones">0</span> | 小組 <span id="preview-del-groups">0</span>
+                  </span>
                 </div>
 
-                <!-- 3. 小組管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第三步：選擇小組
-                    <button class="primary-btn" id="admin-add-group-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增小組</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-group" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-group-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-group-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
-                  </div>
+                <!-- 提示警告 -->
+                <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; border-left: 3px solid var(--color-warning); padding-left: 0.6rem;">
+                  <strong>注意事項：</strong><br>
+                  1. 同名項目會自動保留關聯 ID，不會影響任何已綁定之會友進度紀錄與權限。<br>
+                  2. 刪除大區/牧區/小組會導致原先綁定的會友在個人資料中變為「未設定」，但不會刪除會友帳號。
+                </div>
+
+                <!-- 行動按鈕 -->
+                <div style="display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.4rem;">
+                  <button class="tab-btn" id="admin-org-import-cancel" style="font-size: 0.75rem; padding: 0.4rem 1rem; cursor: pointer; height: auto;">取消</button>
+                  <button class="primary-btn" id="admin-org-import-confirm" style="font-size: 0.75rem; padding: 0.4rem 1.2rem; cursor: pointer; height: auto;">確認執行更新</button>
                 </div>
               </div>
             </div>
