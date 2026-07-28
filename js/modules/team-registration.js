@@ -499,6 +499,68 @@
       <section class="reading-team-members" aria-label="團隊成員">
         ${mode === "members" ? renderTeamMemberRoster(members, plan) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>`}
       </section>`;
+
+    // ── 只有在成團/滿人 (isReady) 的狀態下，才在內嵌視窗中渲染並繫結退出與解散按鈕 ──
+    if (isReady) {
+      const currentMember = members.find(m => m.isMe);
+      const footerSection = `
+        <div class="reading-team-inline-actions" style="margin-top: 1.2rem; display: flex; justify-content: flex-end; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 0.8rem;">
+          ${currentMember && currentMember.role === "captain"
+            ? `<button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>`
+            : `<button type="button" class="text-xs text-danger" data-leave-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="logout"></span><span>退出團隊</span></button>`}
+        </div>`;
+
+      container.innerHTML += footerSection;
+
+      const leaveBtn = container.querySelector("[data-leave-team-inline]");
+      if (leaveBtn) {
+        leaveBtn.addEventListener("click", async () => {
+          const confirmed = await window.showConfirmDialog({
+            title: "退出團隊",
+            message: `確定要退出團隊「${team.name || ""}」嗎？\n退出後，您的讀經進度將不再與此團隊同步。`,
+            confirmText: "確定退出",
+            cancelText: "取消"
+          });
+          if (!confirmed) return;
+          
+          loader.show();
+          const result = await db.leaveReadingTeam(plan.globalPlanId || plan.id, team.id);
+          loader.hide();
+          
+          if (result && result.success) {
+            alert("已成功退出團隊。");
+            window.location.reload(true);
+          } else {
+            alert("退出團隊失敗: " + ((result && result.error && result.error.message) || "未知錯誤"));
+          }
+        });
+      }
+
+      const disbandBtn = container.querySelector("[data-disband-team-inline]");
+      if (disbandBtn) {
+        disbandBtn.addEventListener("click", async () => {
+          const confirmed = await window.showConfirmDialog({
+            title: "解散團隊",
+            message: `確定要解散團隊「${team.name || ""}」嗎？\n此動作不可復原，所有隊員都會被移除。`,
+            confirmText: "確定解散",
+            cancelText: "取消"
+          });
+          if (!confirmed) return;
+          
+          loader.show();
+          const result = await db.disbandReadingTeam(plan.globalPlanId || plan.id, team.id);
+          loader.hide();
+          
+          if (result && result.success) {
+            alert("已解散團隊。");
+            window.location.reload(true);
+          } else {
+            alert("解散團隊失敗: " + ((result && result.error && result.error.message) || "未知錯誤"));
+          }
+        });
+      }
+    }
+
     if (mode === "members") bindTeamReminderButtons(container, team, members, totalChapters);
     hydrate(container);
   };
