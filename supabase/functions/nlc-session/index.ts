@@ -301,6 +301,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let memberContext: any = null;
+    let memberContextError: string | null = null;
     try {
       const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
         headers: bearerHeaders
@@ -308,14 +309,11 @@ Deno.serve(async (req: Request) => {
       memberContext = memberResponse?.context || null;
     } catch (err) {
       console.error("Member Hub context fetch failed:", err);
-      return jsonResponse({
-        error: "member_hub_context_failed",
-        message: err instanceof Error ? err.message : String(err)
-      }, 502);
+      memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
     }
 
     if (!memberContext) {
-      return jsonResponse({ error: "member_hub_context_missing" }, 502);
+      memberContextError = memberContextError || "member_hub_context_missing";
     }
 
     const memberProfile = memberContext?.profile || {};
@@ -422,8 +420,8 @@ Deno.serve(async (req: Request) => {
 
     const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
 
-    // Every Logto session treats Member Hub as canonical for org placement.
-    const hubLinked = true;
+    // Member Hub is canonical only when the context endpoint was reachable for this session.
+    const hubLinked = !!memberContext;
     const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
 
     const sourceValues: Record<string, string | null> = {
@@ -456,7 +454,7 @@ Deno.serve(async (req: Request) => {
       is_demo: false,
       is_active: true,
       last_seen_at: nowIso,
-      member_context_synced_at: nowIso,
+      member_context_synced_at: memberContext ? nowIso : (existingProfile?.member_context_synced_at || null),
       updated_at: nowIso
     };
 
@@ -515,6 +513,9 @@ Deno.serve(async (req: Request) => {
       userinfo,
       member_context: memberContext
     };
+    if (memberContextError) {
+      identityMetadata.member_context_error = memberContextError;
+    }
     if (platformOrganization) {
       identityMetadata.platform_organization = platformOrganization;
     }
@@ -542,7 +543,8 @@ Deno.serve(async (req: Request) => {
       edge_session: true,
       profile,
       locked_fields: lockedFields,
-      membership_status: membershipStatus
+      membership_status: membershipStatus,
+      member_context_error: memberContextError
     });
   } catch (err) {
     // Log full detail server-side
