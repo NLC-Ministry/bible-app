@@ -214,27 +214,8 @@ function renderMemberHubProfileLinks() {
     avatarHubEl.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true" style="margin-right: 0.4rem;"></span>${copy.dropdownLabel}`;
   }
 
-  const btnToggle = document.getElementById("btn-toggle-profile-form");
-  const formWrapper = document.getElementById("profile-form-wrapper");
-  if (btnToggle && hubManaged && formWrapper && formWrapper.classList.contains("hidden")) {
-    const label = copy.profileSettings || "帳號設定（本 app）";
-    btnToggle.innerHTML = `
-      <div class="app-settings-item__leading">
-        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
-          <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-        </span>
-        <div class="app-settings-item__meta">
-          <span class="app-settings-item__title" id="btn-toggle-profile-form-title">${label}</span>
-          <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
-        </div>
-      </div>
-      <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
-        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
-      </span>`;
-  }
-
   if (typeof hydrateIcons === "function") {
-    [card, formNotice, summaryOrg, btnProfile, avatarHubEl, btnToggle].forEach(function (el) {
+    [card, formNotice, summaryOrg, btnProfile, avatarHubEl].forEach(function (el) {
       if (el) hydrateIcons(el);
     });
   }
@@ -250,36 +231,10 @@ function updateGoogleLoginVisibility() {
   });
 }
 
-
 export async function renderProfileView() {
   if (typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
   }
-  const lockedFields = new Set(state.profileLockedFields || []);
-  const profileNameInput = document.getElementById("profile-name");
-  if (profileNameInput) {
-    profileNameInput.value = state.currentUser.name || "";
-    profileNameInput.readOnly = lockedFields.has("name");
-    profileNameInput.classList.toggle("readonly-field", lockedFields.has("name"));
-    profileNameInput.title = lockedFields.has("name") ? "此欄位由教會系統提供，不可編輯" : "";
-  }
-
-  const profileEmailInput = document.getElementById("profile-email");
-  if (profileEmailInput) {
-    profileEmailInput.value = state.currentUser.email || "";
-  }
-
-  const greatRegionSelect = document.getElementById("profile-great-region");
-  const customGreatRegionInput = document.getElementById("profile-great-region-custom");
-  const zoneSelect = document.getElementById("profile-zone");
-  const customZoneInput = document.getElementById("profile-zone-custom");
-  const groupSelect = document.getElementById("profile-group");
-  const customGroupInput = document.getElementById("profile-group-custom");
-  const roleDisplay = document.getElementById("profile-role-display");
-
-  if (customGreatRegionInput) customGreatRegionInput.classList.add("hidden");
-  if (customZoneInput) customZoneInput.classList.add("hidden");
-  if (customGroupInput) customGroupInput.classList.add("hidden");
 
   const roleNames = {
     member: "一般組員",
@@ -288,10 +243,6 @@ export async function renderProfileView() {
     great_zone_leader: "大區長",
     admin: "系統管理員"
   };
-
-  if (roleDisplay) {
-    roleDisplay.textContent = roleNames[state.currentUser.role] || "一般組員";
-  }
 
   const summaryName = document.getElementById("profile-summary-name");
   if (summaryName) summaryName.textContent = state.currentUser.name || "新使用者";
@@ -315,147 +266,7 @@ export async function renderProfileView() {
     refreshUserAvatars();
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.') || window.location.hostname.startsWith('172.') || window.location.hostname.endsWith('.local');
-  let greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0)
-    ? state.orgStructure.regions
-    : ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
-
-  greatRegionsList = greatRegionsList.filter(r => !r.startsWith("示範"));
-
-  greatRegionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
-  greatRegionsList.forEach(rName => {
-    const option = document.createElement("option");
-    option.value = rName;
-    option.textContent = rName;
-    greatRegionSelect.appendChild(option);
-  });
-
-  const userGreatRegion = state.currentUser.great_region;
-
-  if (userGreatRegion && userGreatRegion !== "custom" && !greatRegionsList.includes(userGreatRegion)) {
-    const tempOpt = document.createElement("option");
-    tempOpt.value = userGreatRegion;
-    tempOpt.textContent = userGreatRegion;
-    greatRegionSelect.appendChild(tempOpt);
-  }
-
-  const customRegionOpt = document.createElement("option");
-  customRegionOpt.value = "custom";
-  customRegionOpt.textContent = "自訂大區...";
-  greatRegionSelect.appendChild(customRegionOpt);
-
-  greatRegionSelect.value = userGreatRegion || "";
-
-  populateProfileZones(greatRegionSelect.value, true);
-  populateProfileGroupSelector(true);
-
-  const applyProfileFieldLocks = () => {
-    const lockTitle = "\u6b64\u6b04\u4f4d\u7531\u6559\u6703\u7cfb\u7d71\u63d0\u4f9b\uff0c\u4e0d\u53ef\u7de8\u8f2f";
-    const controls = [
-      [greatRegionSelect, customGreatRegionInput, "great_region"],
-      [zoneSelect, customZoneInput, "pastoral_zone"],
-      [groupSelect, customGroupInput, "small_group"]
-    ];
-    controls.forEach(([selectEl, customEl, field]) => {
-      const locked = lockedFields.has(field);
-      if (selectEl) {
-        selectEl.disabled = locked;
-        selectEl.title = locked ? lockTitle : "";
-        selectEl.classList.toggle("readonly-field", locked);
-      }
-      if (customEl) {
-        customEl.readOnly = locked;
-        customEl.disabled = locked;
-        customEl.title = locked ? lockTitle : "";
-        customEl.classList.toggle("readonly-field", locked);
-      }
-    });
-  };
-  applyProfileFieldLocks();
-
   renderMemberHubProfileLinks();
-
-  greatRegionSelect.onchange = () => {
-    if (greatRegionSelect.value === "custom") {
-      customGreatRegionInput.classList.remove("hidden");
-    } else {
-      customGreatRegionInput.classList.add("hidden");
-      customGreatRegionInput.value = "";
-    }
-    populateProfileZones(greatRegionSelect.value, false);
-    populateProfileGroupSelector(false);
-  };
-
-  zoneSelect.onchange = () => {
-    if (zoneSelect.value === "custom") {
-      customZoneInput.classList.remove("hidden");
-    } else {
-      customZoneInput.classList.add("hidden");
-      customZoneInput.value = "";
-    }
-    populateProfileGroupSelector(false);
-  };
-
-  groupSelect.onchange = () => {
-    if (groupSelect.value === "custom") {
-      customGroupInput.classList.remove("hidden");
-    } else {
-      customGroupInput.classList.add("hidden");
-      customGroupInput.value = "";
-    }
-  };
-
-  document.getElementById("profile-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const name = lockedFields.has("name") ? (state.currentUser.name || "") : document.getElementById("profile-name").value.trim();
-    const greatRegion = lockedFields.has("great_region") ? (state.currentUser.great_region || "") : (greatRegionSelect.value === "custom" ? customGreatRegionInput.value.trim() : greatRegionSelect.value);
-    const zone = lockedFields.has("pastoral_zone") ? (state.currentUser.pastoral_zone || "") : (zoneSelect.value === "custom" ? customZoneInput.value.trim() : zoneSelect.value);
-    const group = lockedFields.has("small_group") ? (state.currentUser.small_group || "") : (groupSelect.value === "custom" ? customGroupInput.value.trim() : groupSelect.value);
-
-    if (!greatRegion || !zone || !group) {
-      alert("請完整填寫大區、牧區與小組資料！");
-      return;
-    }
-
-    loader.show("儲存個人資料中...");
-
-    const oldProfile = { ...state.currentUser };
-
-    state.currentUser.name = name;
-    state.currentUser.great_region = greatRegion;
-    state.currentUser.pastoral_zone = zone;
-    state.currentUser.small_group = group;
-
-    try {
-      let saveInfo = null;
-      const isSupabase = !!(state.isSupabaseMode && state.supabase);
-      if (isSupabase) {
-        saveInfo = await db.syncProfileStatsToSupabase();
-      }
-      db.saveLocalUserStats();
-
-      if (isSupabase) {
-        showToast("個人基本資料已儲存成功！");
-      } else {
-        showToast("個人資料已儲存至本機 (離線模式)");
-      }
-      if (typeof updateDashboardView === "function") updateDashboardView();
-    } catch (err) {
-      console.error("Failed to save profile:", err);
-      state.currentUser = oldProfile;
-      const isAdmin = state.currentUser && (state.currentUser.role === "admin");
-      if (isAdmin) {
-        showToast(`儲存個人資料失敗 (開發者除錯): ${err.message || err}`);
-      } else {
-        showToast("儲存個人資料失敗，請稍後再試。");
-      }
-    } finally {
-      loader.hide();
-    }
-  };
-
-
 
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();
@@ -485,115 +296,8 @@ async function renderCareReminders() {
   return;
 }
 
-function populateProfileZones(greatRegion, autoSelect = true) {
-  const zoneSelect = document.getElementById("profile-zone");
-  const customZoneInput = document.getElementById("profile-zone-custom");
-  const userZone = state.currentUser.pastoral_zone;
 
-  zoneSelect.innerHTML = `<option value="">-- 請選擇牧區 --</option>`;
 
-  if (!autoSelect) {
-    customZoneInput.classList.add("hidden");
-    customZoneInput.value = "";
-  }
-
-  if (!greatRegion || greatRegion === "custom") {
-    const customOpt = document.createElement("option");
-    customOpt.value = "custom";
-    customOpt.textContent = "自訂牧區...";
-    zoneSelect.appendChild(customOpt);
-    return;
-  }
-
-  let predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion] && state.orgStructure.zones[greatRegion].length > 0)
-    ? state.orgStructure.zones[greatRegion]
-    : ((typeof MOCK_PASTORAL_ZONES_BY_REGION !== "undefined" && MOCK_PASTORAL_ZONES_BY_REGION[greatRegion]) || []);
-
-  predefinedZones = predefinedZones.filter(z => !z.startsWith("示範"));
-
-  predefinedZones.forEach(zName => {
-    const option = document.createElement("option");
-    option.value = zName;
-    option.textContent = zName;
-    if (autoSelect && userZone === zName) {
-      option.selected = true;
-    }
-    zoneSelect.appendChild(option);
-  });
-
-  if (autoSelect && userZone && userZone !== "custom" && !predefinedZones.includes(userZone)) {
-    const tempOpt = document.createElement("option");
-    tempOpt.value = userZone;
-    tempOpt.textContent = userZone;
-    tempOpt.selected = true;
-    zoneSelect.appendChild(tempOpt);
-  }
-
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "自訂牧區...";
-  zoneSelect.appendChild(customOpt);
-
-  if (autoSelect) {
-    zoneSelect.value = userZone || "";
-  }
-}
-
-function populateProfileGroupSelector(autoSelect = true) {
-  const zoneSelect = document.getElementById("profile-zone");
-  const groupSelect = document.getElementById("profile-group");
-  const customGroupInput = document.getElementById("profile-group-custom");
-  const userGroup = state.currentUser.small_group;
-
-  groupSelect.innerHTML = `<option value="">-- 請選擇小組 --</option>`;
-
-  if (!autoSelect) {
-    customGroupInput.classList.add("hidden");
-    customGroupInput.value = "";
-  }
-
-  const zone = zoneSelect.value;
-  if (!zone || zone === "custom") {
-    const customOpt = document.createElement("option");
-    customOpt.value = "custom";
-    customOpt.textContent = "自訂小組...";
-    groupSelect.appendChild(customOpt);
-    return;
-  }
-
-  let predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone] && state.orgStructure.groups[zone].length > 0)
-    ? state.orgStructure.groups[zone]
-    : ((typeof MOCK_SMALL_GROUPS !== "undefined" && MOCK_SMALL_GROUPS[zone]) || []);
-
-  predefinedGroups = predefinedGroups.filter(g => !g.startsWith("示範"));
-
-  predefinedGroups.forEach(groupName => {
-    const option = document.createElement("option");
-    option.value = groupName;
-    option.textContent = groupName;
-    if (autoSelect && userGroup === groupName) {
-      option.selected = true;
-    }
-    groupSelect.appendChild(option);
-  });
-
-  if (autoSelect && userGroup && userGroup !== "custom" && !predefinedGroups.includes(userGroup)) {
-    const tempOpt = document.createElement("option");
-    tempOpt.value = userGroup;
-    tempOpt.textContent = userGroup;
-    tempOpt.selected = true;
-    groupSelect.appendChild(tempOpt);
-  }
-
-  const customOpt = document.createElement("option");
-  customOpt.value = "custom";
-  customOpt.textContent = "自訂小組...";
-  groupSelect.appendChild(customOpt);
-
-  if (autoSelect) {
-    groupSelect.value = userGroup || "";
-  }
-}
 
 export function updateAdminNavVisibility() {
   const isRealAdmin = !state.isSupabaseMode || (state.realRole === "admin");
@@ -732,48 +436,8 @@ export function init() {
     };
   });
 
-  const btnToggleForm = document.getElementById("btn-toggle-profile-form");
-  const formWrapper = document.getElementById("profile-form-wrapper");
-  if (btnToggleForm && formWrapper) {
-    btnToggleForm.onclick = (e) => {
-      e.preventDefault();
-      const isHidden = formWrapper.classList.contains("hidden");
-      const copy = (window.APP_COPY && window.APP_COPY.memberHub) || {};
-      if (isHidden) {
-        formWrapper.classList.remove("hidden");
-        btnToggleForm.innerHTML = `
-          <div class="app-settings-item__leading">
-            <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
-              <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
-            </span>
-            <div class="app-settings-item__meta">
-              <span class="app-settings-item__title">收起個人檔案編輯</span>
-              <span class="app-settings-item__subtitle">隱藏下方的個人檔案編輯表單</span>
-            </div>
-          </div>
-          <span class="app-settings-item__chevron">
-            <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
-          </span>`;
-      } else {
-        formWrapper.classList.add("hidden");
-        const label = copy.profileSettings || "帳號設定（本 app）";
-        btnToggleForm.innerHTML = `
-          <div class="app-settings-item__leading">
-            <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
-              <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-            </span>
-            <div class="app-settings-item__meta">
-              <span class="app-settings-item__title" id="btn-toggle-profile-form-title">${label}</span>
-              <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
-            </div>
-          </div>
-          <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
-            <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
-          </span>`;
-      }
-      if (typeof hydrateIcons === "function") hydrateIcons(btnToggleForm);
-    };
-  }
+
+
 
   const btnProfileLogout = document.getElementById("btn-profile-logout");
   if (btnProfileLogout) {
