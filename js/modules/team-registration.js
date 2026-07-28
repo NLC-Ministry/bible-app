@@ -561,7 +561,7 @@
       }
     }
 
-    if (mode === "members") bindTeamReminderButtons(container, team, members, totalChapters);
+    bindTeamReminderButtons(container, team, members, totalChapters);
     hydrate(container);
   };
 
