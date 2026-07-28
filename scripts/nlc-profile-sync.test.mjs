@@ -221,4 +221,14 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source).not.toMatch(/return\s+jsonResponse\(\{\s*error:\s*"member_hub_context_missing"/);
     expect(source).toContain("member_context_error");
   });
+
+  it("persists sync attempt status and clears previous errors after successful context sync", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("const memberContextSyncStatus = memberContext ? \"success\" : \"degraded\"");
+    expect(source).toContain("member_context_sync_attempted_at: nowIso");
+    expect(source).toContain("member_context_sync_status: memberContextSyncStatus");
+    expect(source).toContain("member_context_sync_error: memberContextError");
+    expect(source).toContain("member_context_sync_status: memberContextSyncStatus");
+  });
 });

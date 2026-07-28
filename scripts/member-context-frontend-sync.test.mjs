@@ -10,6 +10,12 @@ describe("member context frontend sync metadata", () => {
     expect(dbSource).toMatch(/state\.currentUser\.member_context_synced_at\s*=\s*profile\.member_context_synced_at\s*\|\|\s*""/);
   });
 
+  it("copies member context sync status fields from the projected profile into state.currentUser", () => {
+    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_attempted_at\s*=\s*profile\.member_context_sync_attempted_at\s*\|\|\s*""/);
+    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_status\s*=\s*profile\.member_context_sync_status\s*\|\|\s*""/);
+    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_error\s*=\s*profile\.member_context_sync_error\s*\|\|\s*""/);
+  });
+
   it("preserves member_context_synced_at in the cached nlc profile payload", () => {
     expect(dbSource).toMatch(/localStorage\.setItem\("nlc_supabase_profile",\s*JSON\.stringify\(payload\.profile\)\)/);
   });
@@ -27,5 +33,12 @@ describe("member context frontend sync metadata", () => {
   it("initializes member_context_synced_at for fresh and reset app state", () => {
     expect(stateSource).toContain('member_context_synced_at: ""');
     expect(authSource).toContain('member_context_synced_at: ""');
+  });
+
+  it("initializes member context sync status fields for fresh and reset app state", () => {
+    ["member_context_sync_attempted_at", "member_context_sync_status", "member_context_sync_error"].forEach((field) => {
+      expect(stateSource).toContain(`${field}: ""`);
+      expect(authSource).toContain(`${field}: ""`);
+    });
   });
 });
