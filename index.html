@@ -32,6 +32,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
     crossorigin="anonymous"></script>
   <!-- Tailwind CSS CDN scoped (no preflight to prevent conflict with index.css) -->
+  <script>
+    (function() {
+      const _warn = console.warn;
+      console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+        _warn.apply(console, args);
+      };
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
