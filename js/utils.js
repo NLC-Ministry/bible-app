@@ -531,6 +531,8 @@ function renderBadgeWall(containerId) {
       const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
       
       let iconContent = "";
+      let shellStyle = "width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;";
+
       if (badge.campaignStageNo) {
         const filenames = {
           1: "rock-badge.svg",
@@ -546,7 +548,11 @@ function renderBadgeWall(containerId) {
         };
         const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
         const lockStateClass = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-        iconContent = `<img class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
+        iconContent = `<img class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto;" alt="${safeTitle}" />`;
+        
+        if (!isUnlocked) {
+          shellStyle += " filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;";
+        }
       } else {
         const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
         iconContent = `
@@ -560,7 +566,7 @@ function renderBadgeWall(containerId) {
 
       badgeItem.innerHTML = `
         ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
-        <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;">
+        <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="${shellStyle}">
           ${iconContent}
           ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true" style="z-index: 5;"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
         </div>
