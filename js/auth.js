@@ -397,8 +397,14 @@ const auth = {
 
   async getValidAccessToken(forceRefresh = false) {
     const token = localStorage.getItem(this.keys.accessToken);
+    const refreshToken = localStorage.getItem(this.keys.refreshToken);
     const expiresAt = parseInt(localStorage.getItem(this.keys.expiresAt) || "0", 10);
     const shouldRefresh = forceRefresh || !token || Date.now() > expiresAt - 60000;
+
+    if (forceRefresh && !refreshToken && token && Date.now() < expiresAt - 60000) {
+      console.warn("force_refresh_without_refresh_token: using still-valid Logto access token.");
+      return token;
+    }
 
     if (shouldRefresh) {
       const refreshed = await this.refreshTokens();
