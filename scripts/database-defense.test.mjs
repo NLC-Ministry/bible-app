@@ -40,6 +40,13 @@ describe("database defense migration", () => {
     expect(db).toContain('callEdge({ action: "rpc", function: functionName, args })');
   });
 
+  it("keeps Member Hub-owned org placement canonical in save_profile", () => {
+    expect(edge).toContain("const hubManaged = Boolean(profile.nlc_member_id)");
+    expect(edge).toContain("hubManaged\n          ? (profile.great_region ?? \"\")");
+    expect(db).toContain("const lockedFields = new Set(state.profileLockedFields || [])");
+    expect(db).toContain('if (!lockedFields.has("great_region"))');
+  });
+
   it("contains no client-side read-modify-write fallback for verse counters", () => {
     expect(home).not.toContain('.update({ like_count:');
     expect(home).not.toContain('.insert({ source: verseSource, like_count:');

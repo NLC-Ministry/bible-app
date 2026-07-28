@@ -109,8 +109,46 @@ export function resolveSyncedRole(primaryRole, existingRole, allowedRoles = DEFA
   return "member";
 }
 
-export function buildLockedFields(sourceValues) {
-  return Object.entries(sourceValues)
+const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+
+export function buildLockedFields(sourceValues, options = {}) {
+  const locked = Object.entries(sourceValues)
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
     .map(([field]) => field);
+
+  if (options.hubLinked) {
+    for (const field of HUB_OWNED_ORG_FIELDS) {
+      if (!locked.includes(field)) locked.push(field);
+    }
+  }
+
+  return locked;
+}
+
+/**
+ * Project org placement into profile fields. When hubLinked, Member Hub is
+ * canonical — empty Hub values clear stale local projection instead of
+ * preserving existing profile org fields.
+ */
+export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked) {
+  const hubOrg = {
+    great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
+    pastoral_zone: mergedOrg?.pastoral_zone ? String(mergedOrg.pastoral_zone).trim() : "",
+    small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
+  };
+
+  if (hubLinked) return hubOrg;
+
+  const firstValue = (...values) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+    }
+    return "";
+  };
+
+  return {
+    great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
+    pastoral_zone: firstValue(hubOrg.pastoral_zone, existingProfile?.pastoral_zone),
+    small_group: firstValue(hubOrg.small_group, existingProfile?.small_group)
+  };
 }

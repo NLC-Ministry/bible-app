@@ -4,13 +4,11 @@ function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
     return {
       home: auth.getMemberHubUrl(""),
-      structure: auth.getMemberHubUrl("pastoral/structure"),
       onboarding: auth.getMemberHubUrl("onboarding")
     };
   }
   return {
     home: "https://member.newlife.org.tw",
-    structure: "https://member.newlife.org.tw/pastoral/structure",
     onboarding: "https://member.newlife.org.tw/onboarding"
   };
 }
@@ -87,8 +85,12 @@ function wireMemberHubOrgRefresh() {
     btn.disabled = true;
     try {
       await db.syncNlcSessionWithSupabase(true);
-      renderMemberHubOrgPlacement();
-      renderMemberHubProfileLinks();
+      if (typeof renderProfileView === "function") {
+        await renderProfileView();
+      } else {
+        renderMemberHubOrgPlacement();
+        renderMemberHubProfileLinks();
+      }
       if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
     } catch (err) {
       console.error("Member Hub org sync failed:", err);
@@ -108,12 +110,6 @@ function openMemberHubPath(path, fallbackUrl) {
   window.open(fallbackUrl, "_blank", "noopener,noreferrer");
 }
 
-function openMemberHubStructure() {
-  openMemberHubPath("pastoral/structure", getMemberHubUrls().structure);
-}
-
-// Members without a placement have nothing to manage in the pastoral structure
-// tool yet; they need the Member Hub onboarding funnel instead.
 function openMemberHubOnboarding() {
   openMemberHubPath("onboarding", getMemberHubUrls().onboarding);
 }
@@ -146,7 +142,7 @@ function renderMemberHubProfileLinks() {
   const structureEl = document.getElementById("btn-member-hub-structure");
   const homeEl = document.getElementById("btn-member-hub-home");
   const avatarHubEl = document.getElementById("btn-avatar-member-hub");
-  const identityUrl = needsOrg ? urls.onboarding : urls.structure;
+  const identityUrl = urls.onboarding;
   if (structureEl) structureEl.href = identityUrl;
   if (homeEl) homeEl.href = urls.home;
   if (avatarHubEl) avatarHubEl.href = identityUrl;
@@ -158,6 +154,14 @@ function renderMemberHubProfileLinks() {
       scheduleProfileSyncOnReturn();
     });
   });
+
+  if (structureEl && !structureEl._hubOnboardingBound) {
+    structureEl._hubOnboardingBound = true;
+    structureEl.addEventListener("click", function (e) {
+      e.preventDefault();
+      openMemberHubOnboarding();
+    });
+  }
 
   const card = document.getElementById("profile-member-hub-card");
   const descEl = document.getElementById("profile-member-hub-desc");

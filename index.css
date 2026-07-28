@@ -512,10 +512,12 @@ body.dark-theme {
 }
 
 .member-hub-org-placement {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   border: 1px solid var(--border-card);
   border-radius: var(--radius-sm);
-  padding: 0.85rem;
-  margin-bottom: 0.875rem;
+  padding: 0.85rem 1rem;
   background: color-mix(in srgb, var(--text-primary) 2%, var(--bg-input));
 }
 
@@ -526,12 +528,15 @@ body.dark-theme {
 }
 
 .member-hub-org-placement__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
 }
 
 .member-hub-org-placement__label {
   display: block;
-  margin-bottom: 0.25rem;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 0.76rem;
 }
@@ -546,7 +551,7 @@ body.dark-theme {
 
 .member-hub-org-placement__sync,
 .member-hub-org-placement__empty {
-  margin: 0.65rem 0 0;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.45;
@@ -10097,6 +10102,9 @@ body.dark-theme .custom-confirm-overlay {
 }
 /* ─── App-Style Grouped Settings List (Shadcn & 21st.dev Inspired) ─── */
 .app-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
   margin-bottom: 1.25rem;
 }
 
@@ -10104,7 +10112,6 @@ body.dark-theme .custom-confirm-overlay {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  margin-bottom: 0.5rem;
   padding: 0 0.25rem;
 }
 
@@ -10121,10 +10128,16 @@ body.dark-theme .custom-confirm-overlay {
   font-size: 0.875rem;
 }
 
+.app-settings-group__header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .app-settings-group__header-text p {
   color: var(--text-secondary);
   font-size: 0.75rem;
-  margin-top: 0.125rem;
+  margin: 0;
 }
 
 /* 列表容器：合併成一個圓角卡片，並加上邊框與背景 */
@@ -10204,6 +10217,7 @@ body.dark-theme .custom-confirm-overlay {
 .app-settings-item__meta {
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
   text-align: left;
   min-width: 0;
 }
@@ -10218,7 +10232,7 @@ body.dark-theme .custom-confirm-overlay {
 .app-settings-item__subtitle {
   font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-top: 0.125rem;
+  margin: 0;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -10257,7 +10271,6 @@ body.dark-theme .custom-confirm-overlay {
   border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--border-card));
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
-  margin-bottom: 0.75rem;
 }
 
 .app-settings-group__header.member-hub-profile-card--needs-org .app-settings-group__header-icon {
