@@ -222,7 +222,7 @@ export async function renderAdminUserManagement() {
     listContainer.innerHTML = "";
 
     if (filteredUsers.length === 0) {
-      listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">嚙踝蕭�蕭鞎陬清除踝蕭嚙踝蕭</div>`;
+      listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">無符合搜尋條件的成員</div>`;
       return;
     }
 
@@ -266,7 +266,7 @@ export async function renderAdminUserManagement() {
 
   } catch (err) {
     console.error("Failed to render admin user management:", err);
-    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">�蕭嚙踝蕭鈭�清除�: ${err.message || err}</div>`;
+    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">渲染名單失敗: ${err.message || err}</div>`;
   }
 }
 
@@ -276,7 +276,7 @@ export function openMemberEditBottomSheet(user) {
   const listEl = document.getElementById("bottom-sheet-list");
   if (!overlay || !listEl) return;
 
-  if (titleEl) titleEl.textContent = `��嚙踝蕭 ${user.name} 清除賜�清除踝蕭`;
+  if (titleEl) titleEl.textContent = `變更 ${user.name} 的權限階級`;
   listEl.innerHTML = "";
 
   const roleOptions = [
@@ -300,13 +300,13 @@ export function openMemberEditBottomSheet(user) {
     scopeBtn.type = "button";
 
     let scopeDesc = "";
-    if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "嚙踝蕭�曇澈�堆蕭";
-    else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "嚙踝蕭�曇澈�堆蕭";
-    else if (user.role === "group_leader") scopeDesc = user.managed_groups || user.small_group || "嚙踝蕭�曇澈�堆蕭";
+    if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "未設定";
+    else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "未設定";
+    else if (user.role === "group_leader") scopeDesc = user.managed_groups || user.small_group || "未設定";
 
-    scopeBtn.innerHTML = iconLabel("edit", `�賣嚙賢祐��嚙質清除踝蕭 (${scopeDesc})`);
+    scopeBtn.innerHTML = iconLabel("edit", `修改管理範圍 (${scopeDesc})`);
     scopeBtn.onclick = async () => {
-      console.log(`清除賢嚙� [Debug] �賣嚙賢祐��嚙質清除踝蕭清除踝蕭嚙踝蕭�⊥�清除踝蕭嚙賢�清除踝蕭嚙踝蕭�湛蕭嚙�${user.name}`);
+            console.log(`管理 [Debug] 點擊修改管理範圍按鈕: ${user.name}`);
       closeAdminFilterBottomSheet();
       const resp = await showResponsibilityModal(user.role, user);
       if (!resp) return;
@@ -326,10 +326,10 @@ export function openMemberEditBottomSheet(user) {
           state.currentUser.managed_groups = resp.managed_groups;
           if (typeof renderProfileView === "function") renderProfileView();
         }
-        alert("�清除踝蕭清除賣�嚙賢���嚙質清除踝蕭�蕭");
+                alert("管理範圍修改成功");
         renderAdminUserManagement();
       } else {
-        alert("嚙踝蕭皝蕭��改蕭�哨蕭清除賣�蕭嚙賢�嚙賡清除踝蕭�啗嚙踝蕭");
+                alert("伺服器連線失敗，請稍後再試或聯絡管理員");
       }
     };
     listEl.appendChild(scopeBtn);
@@ -340,7 +340,7 @@ export function openMemberEditBottomSheet(user) {
   headerText.style.color = "var(--text-secondary)";
   headerText.style.margin = "0.2rem 0 0.5rem 0.2rem";
   headerText.style.fontWeight = "bold";
-  headerText.textContent = "�蕭嚙踝蕭皜莎蕭清除質瞉蕭嚙踝蕭�蕭";
+    headerText.textContent = "請選擇變更的權限階級";
   listEl.appendChild(headerText);
 
   roleOptions.forEach(opt => {
@@ -350,7 +350,7 @@ export function openMemberEditBottomSheet(user) {
     btn.type = "button";
     btn.textContent = opt.label;
     btn.onclick = async () => {
-      console.log(`清除賢嚙� [Debug] �蕭嚙踝蕭皜莎蕭清除質瞉蕭嚙踝蕭�綽蕭清除�: ${user.name} -> ${opt.label}`);
+            console.log(`管理 [Debug] 點擊變更權限階級: ${user.name} -> ${opt.label}`);
       closeAdminFilterBottomSheet();
       if (isSelected) return;
 
@@ -379,10 +379,10 @@ export function openMemberEditBottomSheet(user) {
           if (additionalFields.managed_groups !== undefined) state.currentUser.managed_groups = additionalFields.managed_groups;
           if (typeof renderProfileView === "function") renderProfileView();
         }
-        alert("�清除踝蕭嚙賡�清除賣�清除踝蕭�伐蕭清除踝蕭�恬蕭嚙踝蕭�蕭嚙�");
+                alert("權限變更成功");
         renderAdminUserManagement();
       } else {
-        alert("�蕭嚙踝蕭皜莎蕭清除質隞蕭嚙踝蕭�蕭�ｇ蕭清除賡�橘蕭嚙�");
+                alert("權限變更失敗，請重新整理頁面");
       }
     };
     listEl.appendChild(btn);
@@ -864,7 +864,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      regionContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�芯�清除賡�清除踝蕭</span>`;
+            regionContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     if (role === "zone_leader" && zoneContainer) {
@@ -892,7 +892,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�蕭�對蕭嚙賡�清除踝蕭</span>`;
+            zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     if (role === "group_leader" && groupContainer) {
@@ -920,7 +920,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      groupContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�迎蕭嚙質嚙賡�清除踝蕭</span>`;
+            groupContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     const closeModal = (result) => {
@@ -938,7 +938,7 @@ export function showResponsibilityModal(role, user) {
       if (role === "great_zone_leader") {
         const checkedRegions = Array.from(regionContainer.querySelectorAll("input[name='region-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedRegions.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除賣�對蕭嚙賢�嚙�");
+                    alert("請選擇至少一個管轄大區！");
           return;
         }
         closeModal({
@@ -949,7 +949,7 @@ export function showResponsibilityModal(role, user) {
       } else if (role === "zone_leader") {
         const checkedZones = Array.from(zoneContainer.querySelectorAll("input[name='zone-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedZones.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除踝蕭嚙賣嚙踝蕭�蕭");
+                    alert("請選擇至少一個管轄牧區！");
           return;
         }
         closeModal({
@@ -960,7 +960,7 @@ export function showResponsibilityModal(role, user) {
       } else if (role === "group_leader") {
         const checkedGroups = Array.from(groupContainer.querySelectorAll("input[name='group-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedGroups.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除賣�嚙質嚙賢�嚙�");
+                    alert("請選擇至少一個管轄小組！");
           return;
         }
         closeModal({
