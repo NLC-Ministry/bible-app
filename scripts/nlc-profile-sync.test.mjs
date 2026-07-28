@@ -199,18 +199,26 @@ describe("nlc-session member context sync timestamp", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 
     expect(source).toContain("member_context_synced_at");
-    expect(source).toMatch(/member_context_synced_at:\s*nowIso/);
+    expect(source).toMatch(/member_context_synced_at:\s*memberContext\s*\?\s*nowIso/);
     expect(source.indexOf("const nowIso = new Date().toISOString()"))
-      .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
+      .toBeLessThan(source.indexOf("member_context_synced_at: memberContext ? nowIso"));
   });
 
   it("projects org placement from Member Hub for every Logto session", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 
     expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
-    expect(source).toContain("const hubLinked = true");
+    expect(source).toContain("const hubLinked = !!memberContext");
     expect(source).toContain("orgFromMemberContext");
     expect(source).toContain("member_hub_context_failed");
     expect(source).not.toMatch(/fetchJsonOptional\(`\$\{memberHubUrl\}\/api\/me\/context`/);
+  });
+
+  it("does not reject the whole login when Member Hub context is temporarily unavailable", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).not.toMatch(/return\s+jsonResponse\(\{\s*error:\s*"member_hub_context_failed"/);
+    expect(source).not.toMatch(/return\s+jsonResponse\(\{\s*error:\s*"member_hub_context_missing"/);
+    expect(source).toContain("member_context_error");
   });
 });
