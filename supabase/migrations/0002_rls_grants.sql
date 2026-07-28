@@ -1,4 +1,4 @@
-﻿-- Grants required for RLS policies to take effect for browser clients.
+-- Grants required for RLS policies to take effect for browser clients.
 -- RLS policies decide which rows are visible/editable; GRANT decides whether
 -- the role may access the table at all.
 

@@ -1,4 +1,21 @@
-﻿[functions.nlc-session]
+project_id = "bible-app"
+
+[api]
+port = 55321
+
+[db]
+port = 55322
+
+[studio]
+port = 55323
+
+[local_smtp]
+port = 55324
+
+[analytics]
+port = 55327
+
+[functions.nlc-session]
 verify_jwt = false
 
 [functions.nlc-data]

@@ -475,7 +475,7 @@ CREATE POLICY announcements_manage_admin ON public.church_announcements FOR ALL 
 GRANT SELECT ON public.profile_identity_overview TO authenticated;
 GRANT SELECT ON public.member_reading_summary TO authenticated;
 
-﻿-- Grants required for RLS policies to take effect for browser clients.
+-- Grants required for RLS policies to take effect for browser clients.
 -- RLS policies decide which rows are visible/editable; GRANT decides whether
 -- the role may access the table at all.
 
@@ -500,6 +500,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.devotional_notes TO authenticated
 GRANT SELECT, INSERT, DELETE ON public.devotional_likes TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.devotional_comments TO authenticated;
 
+-- Edge Functions use service_role to maintain Member Hub-owned projections.
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_identities TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.great_regions TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pastoral_zones TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.small_groups TO service_role;
+
 -- Admin-managed shared data. RLS policies still restrict writes to admin roles.
 GRANT INSERT, UPDATE, DELETE ON public.great_regions TO authenticated;
 GRANT INSERT, UPDATE, DELETE ON public.pastoral_zones TO authenticated;
@@ -509,4 +517,3 @@ GRANT INSERT, UPDATE, DELETE ON public.church_announcements TO authenticated;
 
 GRANT SELECT ON public.profile_identity_overview TO authenticated;
 GRANT SELECT ON public.member_reading_summary TO authenticated;
-
