@@ -45,4 +45,10 @@ describe("Member Hub org placement refresh", () => {
     expect(profileJs).toContain('"small_group"');
     expect(profileJs).toContain("lockedFields.has");
   });
+
+  it("routes identity management to Member Hub onboarding, not pastoral admin", () => {
+    expect(profileJs).toContain('getMemberHubUrl("onboarding")');
+    expect(profileJs).toContain("identityUrl = urls.onboarding");
+    expect(profileJs).not.toContain("pastoral/structure");
+  });
 });
