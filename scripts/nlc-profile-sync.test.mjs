@@ -4,6 +4,7 @@ import {
   orgFromCareChain,
   orgFromHomePath,
   orgFromLegacyOrganization,
+  orgFromMemberContext,
   mergeOrgSources,
   resolveSyncedRole,
   buildLockedFields,
@@ -51,11 +52,23 @@ describe("orgFromHomePath", () => {
 });
 
 describe("mergeOrgSources", () => {
-  it("prefers Platform org over placement and legacy", () => {
+  it("prefers Platform org over placement and Member Hub context", () => {
     const platform = { great_region: "A", pastoral_zone: "B", small_group: "C" };
     const placement = { great_region: "X", pastoral_zone: "Y", small_group: "Z" };
-    const legacy = { homeRegionName: "L1", homeZoneName: "L2", homeGroupName: "L3" };
-    expect(mergeOrgSources(platform, placement, legacy)).toEqual(platform);
+    const context = { greatRegion: "L1", pastoralZone: "L2", smallGroup: "L3" };
+    expect(mergeOrgSources(platform, placement, context)).toEqual(platform);
+  });
+
+  it("reads canonical Member Hub context fields before legacy names", () => {
+    expect(mergeOrgSources(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { greatRegion: "北區", pastoralZone: "青年牧區", smallGroup: "馬鈴薯" }
+    )).toEqual({
+      great_region: "北區",
+      pastoral_zone: "青年牧區",
+      small_group: "馬鈴薯"
+    });
   });
 
   it("falls back to legacy fields then homeNodeName", () => {
@@ -77,6 +90,20 @@ describe("mergeOrgSources", () => {
       great_region: null,
       pastoral_zone: "恩典小家",
       small_group: null
+    });
+  });
+});
+
+describe("orgFromMemberContext", () => {
+  it("reads canonical greatRegion / pastoralZone / smallGroup fields", () => {
+    expect(orgFromMemberContext({
+      greatRegion: "北區",
+      pastoralZone: "青年牧區",
+      smallGroup: "馬鈴薯"
+    })).toEqual({
+      great_region: "北區",
+      pastoral_zone: "青年牧區",
+      small_group: "馬鈴薯"
     });
   });
 });
@@ -177,10 +204,13 @@ describe("nlc-session member context sync timestamp", () => {
       .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
   });
 
-  it("projects org placement from Member Hub when the profile is hub-linked", () => {
+  it("projects org placement from Member Hub for every Logto session", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 
     expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
-    expect(source).toContain('buildLockedFields(sourceValues, { hubLinked })');
+    expect(source).toContain("const hubLinked = true");
+    expect(source).toContain("orgFromMemberContext");
+    expect(source).toContain("member_hub_context_failed");
+    expect(source).not.toMatch(/fetchJsonOptional\(`\$\{memberHubUrl\}\/api\/me\/context`/);
   });
 });
