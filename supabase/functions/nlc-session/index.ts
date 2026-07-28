@@ -240,6 +240,90 @@ async function fetchJsonOptional(url: string, init?: RequestInit) {
   }
 }
 
+async function resolveLocalOrgLinks(
+  supabaseAdmin: any,
+  profilePayload: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null },
+  memberContext: any
+) {
+  let great_region_id: string | null = null;
+  let pastoral_zone_id: string | null = null;
+  let small_group_id: string | null = null;
+  let orgLinkStatus = memberContext ? "not_linked" : "skipped";
+  let orgLinkError: string | null = null;
+
+  const failed = (err: unknown) => {
+    orgLinkStatus = "failed";
+    orgLinkError = err instanceof Error ? err.message : String(err);
+    console.warn("Member Hub org-tree link failed; continuing session sync with text org fields.", err);
+    return {
+      great_region_id: null,
+      pastoral_zone_id: null,
+      small_group_id: null,
+      orgLinkStatus,
+      orgLinkError
+    };
+  };
+
+  try {
+    // Rebuild the organization tree from authoritative Member Hub data as
+    // members sign in. A degraded sync must never recreate stale local data.
+    if (memberContext && profilePayload.great_region) {
+      const { data: regionData, error: regionError } = await supabaseAdmin
+        .from("great_regions")
+        .upsert(
+          { name: profilePayload.great_region },
+          { onConflict: "name" }
+        )
+        .select("id")
+        .single();
+      if (regionError) return failed(regionError);
+      great_region_id = regionData.id;
+    }
+    if (memberContext && profilePayload.pastoral_zone && great_region_id) {
+      const { data: zoneData, error: zoneError } = await supabaseAdmin
+        .from("pastoral_zones")
+        .upsert(
+          {
+            name: profilePayload.pastoral_zone,
+            great_region_id
+          },
+          { onConflict: "name,great_region_id" }
+        )
+        .select("id")
+        .single();
+      if (zoneError) return failed(zoneError);
+      pastoral_zone_id = zoneData.id;
+    }
+    if (memberContext && profilePayload.small_group && pastoral_zone_id) {
+      const { data: groupData, error: groupError } = await supabaseAdmin
+        .from("small_groups")
+        .upsert(
+          {
+            name: profilePayload.small_group,
+            pastoral_zone_id
+          },
+          { onConflict: "name,pastoral_zone_id" }
+        )
+        .select("id")
+        .single();
+      if (groupError) return failed(groupError);
+      small_group_id = groupData.id;
+    }
+
+    orgLinkStatus = memberContext && hasAnyOrgField(profilePayload) ? "linked" : orgLinkStatus;
+  } catch (err) {
+    return failed(err);
+  }
+
+  return {
+    great_region_id,
+    pastoral_zone_id,
+    small_group_id,
+    orgLinkStatus,
+    orgLinkError
+  };
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin") || "*";
   const localCorsHeaders = {
@@ -463,54 +547,13 @@ Deno.serve(async (req: Request) => {
       profilePayload.nlc_member_id = existingProfile.nlc_member_id;
     }
 
-    let great_region_id: string | null = null;
-    let pastoral_zone_id: string | null = null;
-    let small_group_id: string | null = null;
-
-    // Rebuild the organization tree from authoritative Member Hub data as
-    // members sign in. A degraded sync must never recreate stale local data.
-    if (memberContext && profilePayload.great_region) {
-      const { data: regionData, error: regionError } = await supabaseAdmin
-        .from("great_regions")
-        .upsert(
-          { name: profilePayload.great_region },
-          { onConflict: "name" }
-        )
-        .select("id")
-        .single();
-      if (regionError) throw regionError;
-      great_region_id = regionData.id;
-    }
-    if (memberContext && profilePayload.pastoral_zone && great_region_id) {
-      const { data: zoneData, error: zoneError } = await supabaseAdmin
-        .from("pastoral_zones")
-        .upsert(
-          {
-            name: profilePayload.pastoral_zone,
-            great_region_id
-          },
-          { onConflict: "name,great_region_id" }
-        )
-        .select("id")
-        .single();
-      if (zoneError) throw zoneError;
-      pastoral_zone_id = zoneData.id;
-    }
-    if (memberContext && profilePayload.small_group && pastoral_zone_id) {
-      const { data: groupData, error: groupError } = await supabaseAdmin
-        .from("small_groups")
-        .upsert(
-          {
-            name: profilePayload.small_group,
-            pastoral_zone_id
-          },
-          { onConflict: "name,pastoral_zone_id" }
-        )
-        .select("id")
-        .single();
-      if (groupError) throw groupError;
-      small_group_id = groupData.id;
-    }
+    const {
+      great_region_id,
+      pastoral_zone_id,
+      small_group_id,
+      orgLinkStatus,
+      orgLinkError
+    } = await resolveLocalOrgLinks(supabaseAdmin, profilePayload, memberContext);
 
     profilePayload.great_region_id = (great_region_id || (profilePayload.great_region === existingProfile?.great_region ? existingProfile?.great_region_id : null)) || null;
     profilePayload.pastoral_zone_id = (pastoral_zone_id || (profilePayload.pastoral_zone === existingProfile?.pastoral_zone ? existingProfile?.pastoral_zone_id : null)) || null;
@@ -541,7 +584,9 @@ Deno.serve(async (req: Request) => {
       source: orgResolutionSource,
       placement_available: hasAnyOrgField(placementOrgFields),
       platform_available: hasAnyOrgField(platformOrgFields),
-      context_available: hasAnyOrgField(contextOrgFields)
+      context_available: hasAnyOrgField(contextOrgFields),
+      org_link_status: orgLinkStatus,
+      org_link_error: orgLinkError
     };
     if (memberContextError) {
       identityMetadata.member_context_error = memberContextError;

@@ -4,6 +4,7 @@ import fs from "node:fs";
 const dbSource = fs.readFileSync("js/db.js", "utf8");
 const authSource = fs.readFileSync("js/auth.js", "utf8");
 const stateSource = fs.readFileSync("js/state.js", "utf8");
+const profileSource = fs.readFileSync("js/modules/profile.js", "utf8");
 
 describe("member context frontend sync metadata", () => {
   it("copies member_context_synced_at from the projected profile into state.currentUser", () => {
@@ -22,6 +23,12 @@ describe("member context frontend sync metadata", () => {
 
   it("forces a fresh Logto access token when manually refreshing Member Hub context", () => {
     expect(dbSource).toMatch(/auth\.getValidAccessToken\(force\)/);
+  });
+
+  it("manual org refresh bypasses the cached Edge session and reapplies the returned profile", () => {
+    expect(profileSource).toContain("await db.syncNlcSessionWithSupabase(true)");
+    expect(dbSource).toContain("if (!force && cachedExpiresAt > Date.now() + 60000)");
+    expect(dbSource).toContain("this.applyNlcProfile(payload.profile, payload.locked_fields || [])");
   });
 
   it("does not discard a valid access token when force refresh is requested without a refresh token", () => {
