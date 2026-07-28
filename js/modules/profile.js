@@ -28,6 +28,77 @@ function userNeedsOrgSetup() {
     !String(user.small_group || "").trim();
 }
 
+function formatMemberContextSyncedAt(value) {
+  if (!value) return "尚未同步";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "尚未同步";
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(date).reduce(function (acc, part) {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `已同步自會員中心：${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
+function renderMemberHubOrgPlacement() {
+  const user = state.currentUser || {};
+  const values = {
+    "member-hub-org-great-region": user.great_region || "",
+    "member-hub-org-pastoral-zone": user.pastoral_zone || "",
+    "member-hub-org-small-group": user.small_group || ""
+  };
+
+  Object.entries(values).forEach(function ([id, value]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value || "").trim() || "尚未設定";
+  });
+
+  const hasAnyPlacement = Object.values(values).some(function (value) {
+    return String(value || "").trim();
+  });
+  const emptyEl = document.getElementById("member-hub-org-empty");
+  if (emptyEl) emptyEl.classList.toggle("hidden", hasAnyPlacement);
+
+  const syncEl = document.getElementById("member-hub-org-sync-status");
+  if (syncEl) {
+    syncEl.textContent = isMemberHubManagedProfile()
+      ? formatMemberContextSyncedAt(user.member_context_synced_at || "")
+      : "目前登入方式無法同步會員中心";
+  }
+}
+
+function wireMemberHubOrgRefresh() {
+  const btn = document.getElementById("btn-member-hub-refresh");
+  if (!btn || btn.dataset.wired === "true") return;
+  btn.dataset.wired = "true";
+  btn.addEventListener("click", async function () {
+    if (typeof auth === "undefined" || !auth.isLoggedIn()) {
+      if (typeof showToast === "function") showToast("目前登入方式無法同步會員中心。");
+      return;
+    }
+    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+
+    btn.disabled = true;
+    try {
+      await db.syncNlcSessionWithSupabase(true);
+      renderMemberHubOrgPlacement();
+      renderMemberHubProfileLinks();
+      if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
+    } catch (err) {
+      console.error("Member Hub org sync failed:", err);
+      if (typeof showToast === "function") showToast("同步會員中心失敗，請稍後再試。");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 function openMemberHubPath(path, fallbackUrl) {
   scheduleProfileSyncOnReturn();
   if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
@@ -227,6 +298,8 @@ export async function renderProfileView() {
     const group = state.currentUser.small_group || "";
     summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || "未設定所屬小組";
   }
+  renderMemberHubOrgPlacement();
+  wireMemberHubOrgRefresh();
 
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {

@@ -52,7 +52,8 @@ const state = {
     chapters_read: 0,
     plan_progress: 0,
     streak: 0,
-    last_read: null
+    last_read: null,
+    member_context_synced_at: ""
   },
   orgStructure: {
     regions: [],

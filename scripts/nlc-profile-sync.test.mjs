@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
 import {
   orgFromCareChain,
   orgFromHomePath,
@@ -120,5 +121,16 @@ describe("buildLockedFields", () => {
       pastoral_zone: "",
       small_group: "馬鈴"
     })).toEqual(["name", "great_region", "small_group"]);
+  });
+});
+
+describe("nlc-session member context sync timestamp", () => {
+  it("sets member_context_synced_at from the successful session sync timestamp", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("member_context_synced_at");
+    expect(source).toMatch(/member_context_synced_at:\s*nowIso/);
+    expect(source.indexOf("const nowIso = new Date().toISOString()"))
+      .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
   });
 });
