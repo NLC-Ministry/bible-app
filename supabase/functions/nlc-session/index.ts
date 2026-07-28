@@ -386,6 +386,7 @@ Deno.serve(async (req: Request) => {
       is_demo: false,
       is_active: true,
       last_seen_at: nowIso,
+      member_context_synced_at: nowIso,
       updated_at: nowIso
     };
 
