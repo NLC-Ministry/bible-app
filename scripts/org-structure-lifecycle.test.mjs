@@ -43,4 +43,21 @@ describe("Member Hub organization structure rebuild", () => {
     expect(nlcSession).toContain('onConflict: "name,great_region_id"');
     expect(nlcSession).toContain('onConflict: "name,pastoral_zone_id"');
   });
+
+  it("keeps login/session sync available when local org-tree linking fails", () => {
+    expect(nlcSession).toContain("async function resolveLocalOrgLinks");
+    expect(nlcSession).toContain("org_link_status: orgLinkStatus");
+    expect(nlcSession).toContain("org_link_error: orgLinkError");
+    expect(nlcSession).toContain('console.warn("Member Hub org-tree link failed');
+
+    const rebuildStart = nlcSession.indexOf("async function resolveLocalOrgLinks");
+    const profileUpsert = nlcSession.indexOf('.from("profiles")', rebuildStart);
+    const rebuildBlock = nlcSession.slice(rebuildStart, profileUpsert);
+
+    expect(rebuildStart).toBeGreaterThan(-1);
+    expect(profileUpsert).toBeGreaterThan(rebuildStart);
+    expect(rebuildBlock).not.toContain("throw regionError");
+    expect(rebuildBlock).not.toContain("throw zoneError");
+    expect(rebuildBlock).not.toContain("throw groupError");
+  });
 });

@@ -38,7 +38,7 @@ const INLINE_STYLE_COLOR_HEX =
 
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {
-    if (name === "node_modules" || name === "dist" || name === ".git") continue;
+    if (name === "node_modules" || name === "dist" || name === ".git" || name === ".worktrees") continue;
     const abs = join(dir, name);
     const st = statSync(abs);
     if (st.isDirectory()) walk(abs, acc);
