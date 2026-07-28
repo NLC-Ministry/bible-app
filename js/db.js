@@ -2945,6 +2945,87 @@ const db = {
     return { error: null };
   },
 
+  async fetchAllNotifications() {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
+                        hostname === '::1' || hostname.startsWith('192.168.') ||
+                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
+                        hostname.endsWith('.local');
+
+    if (state.currentUser && state.currentUser.is_demo) {
+      if (!isLocalhost) {
+        return { data: [], error: null };
+      }
+      if (typeof window.getMockCareReminders === 'function') {
+        return { data: window.getMockCareReminders(), error: null };
+      }
+      return { data: [], error: null };
+    }
+
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const profileId = state.currentProfileId;
+        if (!profileId) return { data: [], error: null };
+        const { data, error } = await state.supabase
+          .from("care_reminders")
+          .select(`
+            id,
+            reason,
+            message,
+            status,
+            sent_on,
+            plan_key,
+            sender:profiles!sender_id (name, role)
+          `)
+          .eq("recipient_id", profileId)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        return { data: data || [], error };
+      } catch (e) {
+        return { data: [], error: e };
+      }
+    }
+    return { data: [], error: null };
+  },
+
+  async acknowledgeAllCareReminders() {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
+                        hostname === '::1' || hostname.startsWith('192.168.') ||
+                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
+                        hostname.endsWith('.local');
+
+    if (state.currentUser && state.currentUser.is_demo) {
+      if (isLocalhost && typeof window.getMockCareReminders === 'function') {
+        const mockData = window.getMockCareReminders();
+        if (Array.isArray(mockData)) {
+          mockData.forEach(item => {
+            if (typeof window.dismissMockCareReminder === 'function') {
+              window.dismissMockCareReminder(item.id);
+            }
+          });
+        }
+      }
+      return { error: null };
+    }
+
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const profileId = state.currentProfileId;
+        if (!profileId) return { error: new Error("未登入") };
+        const { error } = await state.supabase
+          .from("care_reminders")
+          .update({ status: "read", read_at: new Date().toISOString() })
+          .eq("recipient_id", profileId)
+          .eq("status", "unread");
+        return { error };
+      } catch (e) {
+        return { error: e };
+      }
+    }
+    return { error: null };
+  },
+
   // 💌 sendCareReminder – 領袖對組員傳送關心提醒
   // recipientId: 收件人 profile ID (UUID)
   // reason: 'behind' | 'inactive' | 'care' | 'encouragement'

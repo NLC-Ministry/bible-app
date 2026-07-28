@@ -1345,6 +1345,8 @@ function renderJoinedPlansList() {
                   if (hasJoined) {
                     const context = contexts.find(c => Number(c.team.division) === division);
                     const teamName = context ? (context.team.name || "") : "";
+                    const isFull = context && context.team && Number(context.team.memberCount) >= Number(context.team.capacity);
+                    const themeColor = isFull ? "var(--color-success-foreground)" : "var(--primary-color)";
                     
                     const badge = document.createElement("div");
                     badge.style.cssText = `
@@ -1354,22 +1356,24 @@ function renderJoinedPlansList() {
                       display: inline-flex;
                       align-items: center;
                       gap: 0.35rem;
-                      cursor: pointer;
-                      background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent);
-                      border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);
-                      color: var(--color-success-foreground);
+                      cursor: ${isFull ? 'default' : 'pointer'};
+                      background: color-mix(in srgb, ${themeColor} 8%, transparent);
+                      border: 1px solid color-mix(in srgb, ${themeColor} 20%, transparent);
+                      color: ${themeColor};
                       transition: all 0.2s ease;
                       font-weight: 500;
                     `;
                     badge.innerHTML = `
                       <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
                       <span>已入 ${division}人組 (${escapeHTML(teamName)})</span>
-                      <span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>
+                      ${!isFull ? `<span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>` : ""}
                     `;
-                    badge.onclick = (e) => {
-                      e.stopPropagation();
-                      window.openReadingTeamDialog(plan, { preferredDivision: division });
-                    };
+                    if (!isFull) {
+                      badge.onclick = (e) => {
+                        e.stopPropagation();
+                        window.openReadingTeamDialog(plan, { preferredDivision: division });
+                      };
+                    }
                     teamContainer.appendChild(badge);
                   } else {
                     const btn = document.createElement("button");

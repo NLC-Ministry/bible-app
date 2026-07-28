@@ -45,6 +45,12 @@ function updateCareReminderBadge(reminders = []) {
     badge.textContent = count === 0 ? "" : badgeText;
   });
 
+  const bellBadge = document.getElementById("notification-bell-badge");
+  if (bellBadge) {
+    bellBadge.hidden = count === 0;
+    bellBadge.textContent = count === 0 ? "" : badgeText;
+  }
+
   document.querySelectorAll('[data-target="profile-view"]').forEach(button => {
     button.setAttribute(
       "aria-label",
@@ -74,6 +80,120 @@ async function refreshCareReminderBadge(options = {}) {
 
 window.updateCareReminderBadge = updateCareReminderBadge;
 window.refreshCareReminderBadge = refreshCareReminderBadge;
+
+function safeEscapeHTML(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function renderNotificationsList() {
+  const container = document.getElementById("notification-list-container");
+  if (!container) return;
+
+  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
+
+  const { data: notifications, error } = await db.fetchAllNotifications();
+
+  if (error || !notifications || notifications.length === 0) {
+    container.innerHTML = `<div class="notification-popover__empty">目前沒有通知</div>`;
+    return;
+  }
+
+  container.innerHTML = "";
+
+  const roleNames = {
+    member: "組員",
+    group_leader: "小組長",
+    zone_leader: "區長",
+    great_zone_leader: "大區長",
+    admin: "系統管理員"
+  };
+
+  notifications.forEach(item => {
+    const div = document.createElement("div");
+    div.className = `notification-item ${item.status === 'unread' ? 'notification-item--unread' : ''}`;
+
+    const sender = item.sender || {};
+    const senderName = sender.name || "領袖";
+    const senderRoleRaw = sender.role || "leader";
+    const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
+    const senderRole = isTeamReminder ? "隊友" : (roleNames[senderRoleRaw] || "領袖");
+
+    const dateStr = item.sent_on || "";
+
+    div.innerHTML = `
+      <div class="notification-item__header">
+        <span class="notification-item__sender">來自${senderRole} ${safeEscapeHTML(senderName)}</span>
+        <span class="notification-item__time">${safeEscapeHTML(dateStr)}</span>
+      </div>
+      <p class="notification-item__body">${safeEscapeHTML(item.message || "加油！一起穩定讀經。")}</p>
+    `;
+
+    div.onclick = async (e) => {
+      e.stopPropagation();
+      if (item.status === 'unread') {
+        div.classList.remove("notification-item--unread");
+        await db.acknowledgeCareReminder(item.id);
+        await refreshCareReminderBadge({ force: true });
+      }
+    };
+
+    container.appendChild(div);
+  });
+
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(container);
+  }
+}
+
+function initNotificationSystem() {
+  const bellBtn = document.getElementById("btn-notification-bell");
+  const popover = document.getElementById("notification-popover");
+  const readAllBtn = document.getElementById("btn-notification-read-all");
+
+  if (!bellBtn || !popover) return;
+
+  bellBtn.onclick = async (e) => {
+    e.stopPropagation();
+    const isHidden = popover.classList.contains("hidden");
+
+    document.querySelectorAll(".options-dropdown").forEach(el => el.classList.add("hidden"));
+
+    if (isHidden) {
+      popover.classList.remove("hidden");
+      await renderNotificationsList();
+    } else {
+      popover.classList.add("hidden");
+    }
+  };
+
+  if (readAllBtn) {
+    readAllBtn.onclick = async (e) => {
+      e.stopPropagation();
+      readAllBtn.disabled = true;
+      const { error } = await db.acknowledgeAllCareReminders();
+      readAllBtn.disabled = false;
+      if (!error) {
+        updateCareReminderBadge([]);
+        await renderNotificationsList();
+      } else {
+        alert("全部已讀失敗: " + (error.message || error));
+      }
+    };
+  }
+
+  document.addEventListener("click", (e) => {
+    if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target) && e.target !== bellBtn) {
+      popover.classList.add("hidden");
+    }
+  });
+}
 
 async function loadModule(name, path) {
   if (moduleCache[name]) {
@@ -245,6 +365,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     initTheme();
   } catch (err) {
     console.error("Failed to initialize theme:", err);
+  }
+
+  try {
+    initNotificationSystem();
+  } catch (err) {
+    console.error("Failed to initialize notification system:", err);
   }
 
   if (typeof ComponentSkeletonLoader !== "undefined") {

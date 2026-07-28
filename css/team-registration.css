@@ -559,6 +559,11 @@ body.reading-team-modal-open .main-content {
   border-color: color-mix(in srgb, var(--reading-team-accent) 55%, var(--reading-team-separator));
 }
 
+.reading-team-member--behind {
+  border-color: color-mix(in srgb, var(--color-danger, #dc4c64) 45%, var(--reading-team-separator)) !important;
+  background-color: color-mix(in srgb, var(--color-danger, #dc4c64) 3%, transparent) !important;
+}
+
 .reading-team-inline--stats .reading-team-remind-btn {
   display: none;
 }
@@ -693,6 +698,12 @@ body.reading-team-modal-open .main-content {
 
 .reading-team-roster__row--me {
   background: var(--reading-team-accent-soft);
+  border-radius: 12px;
+}
+
+.reading-team-roster__row--behind {
+  border: 1px solid color-mix(in srgb, var(--color-danger, #dc4c64) 45%, var(--reading-team-separator)) !important;
+  background-color: color-mix(in srgb, var(--color-danger, #dc4c64) 3%, transparent) !important;
   border-radius: 12px;
 }
 
