@@ -488,73 +488,97 @@ function getBadgeFrameClass(badge) {
 }
 
 function renderBadgeWall(containerId) {
+  console.log('[Badge Debug] renderBadgeWall initialized with containerId:', containerId);
   const container = document.getElementById("badges-grid") || document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = "";
-
-  const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
-  if (!list) {
-    container.innerHTML = `<div class="badge-wall__empty">暫無徽章</div>`;
+  console.log('[Badge Debug] Target container element:', container);
+  if (!container) {
+    console.warn('[Badge Debug] Target container not found in DOM!');
     return;
   }
-  if (container.id === "badges-grid") {
-    updateBadgeWallSummary(list.filter(badge => getBadgeStarState(badge).level > 0).length, list.length);
-  }
-  const getClasses = typeof getHonorBadgeItemClasses === "function"
-    ? getHonorBadgeItemClasses
-    : unlocked => (unlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
+  container.innerHTML = "";
 
-  list.forEach(badge => {
-    const starState = getBadgeStarState(badge);
-    const isUnlocked = starState.level > 0;
-    const badgeItem = document.createElement("div");
-    badgeItem.className = getClasses(isUnlocked) + " honor-badge-item--tile";
-    badgeItem.setAttribute("role", "button");
-    badgeItem.setAttribute("tabindex", "0");
-    badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
-    
-    let iconContent = "";
-    if (badge.campaignStageNo) {
-      const filenames = {
-        1: "rock-badge.svg",
-        2: "iron-badge.svg",
-        3: "copper-badge.svg",
-        4: "bronze-badge.svg",
-        5: "silver-badge.svg",
-        6: "gold-badge.svg",
-        7: "adamantine-badge.svg",
-        8: "ophir-gold-badge.svg",
-        9: "fire-gold-badge.svg",
-        10: "new-jerusalem-badge.svg"
-      };
-      const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
-      iconContent = `<img src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
-    } else {
-      const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-      iconContent = `
-        <div class="honor-badge-hex ${hexState}">
-          <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
-        </div>
-      `;
+  try {
+    const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
+    console.log('[Badge Debug] Achievements list data:', list);
+    if (!list || list.length === 0) {
+      console.warn('[Badge Debug] Achievements list is empty or undefined!');
+      container.innerHTML = `<div class="badge-wall__empty" style="text-align: center; padding: 2rem; color: var(--text-muted);">暫無徽章 (清單未載入或為空)</div>`;
+      return;
     }
 
-    const titleHtml = badge.campaignStageNo ? "" : `<span class="honor-badge-item__title">${safeTitle}</span>`;
+    if (container.id === "badges-grid") {
+      const unlockedCount = list.filter(badge => {
+        const starState = getBadgeStarState(badge);
+        return starState.level > 0;
+      }).length;
+      console.log('[Badge Debug] Unlocked badges count:', unlockedCount, 'out of', list.length);
+      updateBadgeWallSummary(unlockedCount, list.length);
+    }
 
-    badgeItem.innerHTML = `
-      ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
-      <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;">
-        ${iconContent}
-        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true" style="z-index: 5;"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
-      </div>
-      ${titleHtml}
-      ${renderBadgeStars(badge)}
-    `;
-    attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
-    container.appendChild(badgeItem);
-  });
-  if (typeof hydrateIcons === "function") hydrateIcons(container);
-  bindBadgeDetailControls();
+    const getClasses = typeof getHonorBadgeItemClasses === "function"
+      ? getHonorBadgeItemClasses
+      : unlocked => (unlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
+
+    list.forEach((badge, index) => {
+      const starState = getBadgeStarState(badge);
+      const isUnlocked = starState.level > 0;
+      console.log(`[Badge Debug] Processing badge [${index}]:`, badge.title, 'isUnlocked:', isUnlocked, 'starState:', starState);
+      const badgeItem = document.createElement("div");
+      badgeItem.className = getClasses(isUnlocked) + " honor-badge-item--tile";
+      badgeItem.setAttribute("role", "button");
+      badgeItem.setAttribute("tabindex", "0");
+      badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
+      const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
+      
+      let iconContent = "";
+      if (badge.campaignStageNo) {
+        const filenames = {
+          1: "rock-badge.svg",
+          2: "iron-badge.svg",
+          3: "copper-badge.svg",
+          4: "bronze-badge.svg",
+          5: "silver-badge.svg",
+          6: "gold-badge.svg",
+          7: "adamantine-badge.svg",
+          8: "ophir-gold-badge.svg",
+          9: "fire-gold-badge.svg",
+          10: "new-jerusalem-badge.svg"
+        };
+        const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
+        iconContent = `<img src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
+      } else {
+        const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
+        iconContent = `
+          <div class="honor-badge-hex ${hexState}">
+            <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
+          </div>
+        `;
+      }
+
+      const titleHtml = badge.campaignStageNo ? "" : `<span class="honor-badge-item__title">${safeTitle}</span>`;
+
+      badgeItem.innerHTML = `
+        ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
+        <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;">
+          ${iconContent}
+          ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true" style="z-index: 5;"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
+        </div>
+        ${titleHtml}
+        ${renderBadgeStars(badge)}
+      `;
+      attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
+      container.appendChild(badgeItem);
+    });
+
+    if (typeof hydrateIcons === "function") {
+      console.log('[Badge Debug] Hydrating icons inside badge container');
+      hydrateIcons(container);
+    }
+    bindBadgeDetailControls();
+    console.log('[Badge Debug] renderBadgeWall completed successfully!');
+  } catch (err) {
+    console.error('[Badge Debug] Critical error in renderBadgeWall execution:', err);
+  }
 }
 
 
