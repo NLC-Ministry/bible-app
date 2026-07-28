@@ -7513,6 +7513,8 @@ body.reader-nav-hidden.reader-page .mobile-nav-bar,
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  height: auto !important;
+  min-height: 0 !important;
   max-height: 85dvh;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
