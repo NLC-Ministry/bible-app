@@ -521,6 +521,9 @@ const db = {
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     state.currentUser.member_context_synced_at = profile.member_context_synced_at || "";
+    state.currentUser.member_context_sync_attempted_at = profile.member_context_sync_attempted_at || "";
+    state.currentUser.member_context_sync_status = profile.member_context_sync_status || "";
+    state.currentUser.member_context_sync_error = profile.member_context_sync_error || "";
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;
@@ -856,7 +859,11 @@ const db = {
           chapters_read: 0,
           plan_progress: 0,
           streak: 0,
-          last_read: null
+          last_read: null,
+          member_context_synced_at: "",
+          member_context_sync_attempted_at: "",
+          member_context_sync_status: "",
+          member_context_sync_error: ""
         };
         state.readingLogs = [];
         state.activePlans = [];
@@ -873,6 +880,10 @@ const db = {
     const localProfile = localStorage.getItem("user_profile");
     if (localProfile) {
       state.currentUser = JSON.parse(localProfile);
+      state.currentUser.member_context_synced_at = state.currentUser.member_context_synced_at || "";
+      state.currentUser.member_context_sync_attempted_at = state.currentUser.member_context_sync_attempted_at || "";
+      state.currentUser.member_context_sync_status = state.currentUser.member_context_sync_status || "";
+      state.currentUser.member_context_sync_error = state.currentUser.member_context_sync_error || "";
       state.realRole = state.currentUser.role;
       const localLogsStr = localStorage.getItem("reading_logs");
       const rawLocalLogs = localLogsStr ? JSON.parse(localLogsStr) : [];
@@ -961,7 +972,11 @@ const db = {
         chapters_read: 0,
         plan_progress: 0,
         streak: 0,
-        last_read: null
+        last_read: null,
+        member_context_synced_at: "",
+        member_context_sync_attempted_at: "",
+        member_context_sync_status: "",
+        member_context_sync_error: ""
       };
       localStorage.setItem("user_profile", JSON.stringify(state.currentUser));
       state.realRole = "member";
