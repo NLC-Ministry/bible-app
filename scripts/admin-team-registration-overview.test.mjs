@@ -47,6 +47,15 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260729_team_registration_overview");
+    expect(html).toContain("js/app.js?v=20260729_admin_permissions_accordion");
+  });
+
+  it("restores user permission management and makes team status collapsible", () => {
+    expect(html).toContain('id="admin-users-accordion-root"');
+    expect(html).toContain('id="admin-team-status-toggle"');
+    expect(html).toContain('aria-controls="admin-team-status-panel"');
+    expect(admin).toContain('panel.hidden = !willExpand');
+    expect(admin).toContain('toggle.setAttribute("aria-expanded", String(willExpand))');
+    expect(admin).toContain('toggleLabel.textContent = willExpand ? "收起" : "展開"');
   });
 });

@@ -1563,21 +1563,35 @@
             </div>
           </div>
 
+          <!-- 使用者權限管理 (管理員專屬) -->
+          <div class="card-col span-12" style="margin-top: 1.5rem;" id="admin-users-accordion-root">
+            <!-- Rendered dynamically by React -->
+          </div>
+
           <!-- 團隊報名狀況 (管理員專屬) -->
           <div class="card-col span-12" style="margin-top: 1.5rem;" id="admin-team-status-card-wrap">
             <div class="glass-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.2rem;">
+              <button type="button" id="admin-team-status-toggle" aria-expanded="true"
+                aria-controls="admin-team-status-panel"
+                style="width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left;">
                 <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                   <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true" style="color: var(--primary-color);"></span>
                   團隊報名狀況 (管理員專屬)
                 </h3>
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-secondary); font-size: 0.8rem; flex-shrink: 0;">
+                  <span id="admin-team-status-toggle-label">收起</span>
+                  <span id="admin-team-status-toggle-icon" class="nlc-icon nlc-icon--sm" data-icon="chevron-down"
+                    aria-hidden="true" style="transition: transform 0.2s ease; transform: rotate(180deg);"></span>
+                </span>
+              </button>
+              <div id="admin-team-status-panel" style="margin-top: 1.2rem;">
                 <div style="display: flex; gap: 0.5rem; background: var(--bg-input); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-card);">
                   <button type="button" class="tab-btn active" id="admin-team-tab-3" style="font-size: 0.75rem; padding: 0.3rem 0.8rem; border-radius: 6px; cursor: pointer; border: none; font-weight: 500; height: auto;">3 人團隊</button>
                   <button type="button" class="tab-btn" id="admin-team-tab-6" style="font-size: 0.75rem; padding: 0.3rem 0.8rem; border-radius: 6px; cursor: pointer; border: none; font-weight: 500; height: auto;">6 人團隊</button>
                 </div>
-              </div>
-              <div id="admin-team-status-content">
-                <!-- Dynamically loaded -->
+                <div id="admin-team-status-content" style="margin-top: 1.2rem;">
+                  <!-- Dynamically loaded -->
+                </div>
               </div>
             </div>
           </div>
@@ -1850,7 +1864,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260729_team_registration_overview"></script>
+  <script type="module" src="js/app.js?v=20260729_admin_permissions_accordion"></script>
 </body>
 
 </html>

@@ -17,7 +17,7 @@ import './design/icon-registry.js';
 import './design/icons.js';
 import './state.js?v=20260729_tab_navigation_memory';
 import './auth.js';
-import './db.js?v=20260729_team_registration_overview';
+import './db.js?v=20260729_admin_permissions_accordion';
 import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';

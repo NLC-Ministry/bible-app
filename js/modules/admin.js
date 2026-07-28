@@ -885,6 +885,21 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
 export function initAdminTeamRegistration() {
   const tab3 = document.getElementById("admin-team-tab-3");
   const tab6 = document.getElementById("admin-team-tab-6");
+  const toggle = document.getElementById("admin-team-status-toggle");
+  const panel = document.getElementById("admin-team-status-panel");
+  const toggleLabel = document.getElementById("admin-team-status-toggle-label");
+  const toggleIcon = document.getElementById("admin-team-status-toggle-icon");
+
+  if (toggle && panel && !toggle.dataset.bound) {
+    toggle.dataset.bound = "true";
+    toggle.onclick = () => {
+      const willExpand = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(willExpand));
+      panel.hidden = !willExpand;
+      if (toggleLabel) toggleLabel.textContent = willExpand ? "收起" : "展開";
+      if (toggleIcon) toggleIcon.style.transform = willExpand ? "rotate(180deg)" : "rotate(0deg)";
+    };
+  }
 
   if (tab3 && tab6) {
     tab3.onclick = (e) => {
