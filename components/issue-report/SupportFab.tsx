@@ -84,10 +84,10 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
           initial={{ scale: 0, opacity: 0, y: 50 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0, opacity: 0, y: 50 }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.94 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+          className="fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-primary text-primary-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           aria-label="打開問題回報與建議表單"
           type="button"
         >

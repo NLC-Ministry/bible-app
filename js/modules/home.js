@@ -262,9 +262,7 @@ export function updateDashboardView() {
   renderDailyVerse();
   updateAnnouncementsList();
 
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-  }
+
 
   const planSummaryDiv = document.getElementById("active-plan-summary");
   if (state.activePlan) {
@@ -1529,28 +1527,53 @@ async function fetchRandomVerse(event, options = {}) {
   const isBlessingMode = state.verseCardMode === 'blessing';
   let cardText, cardSource;
 
-  if (isBlessingMode) {
-    const randomCard = HEAVENLY_FATHER_CARDS[Math.floor(Math.random() * HEAVENLY_FATHER_CARDS.length)];
-    cardText = randomCard;
-    cardSource = "—— 愛你的天父";
-  } else {
-    const randomLocal = DAILY_VERSES[Math.floor(Math.random() * DAILY_VERSES.length)];
-    cardText = randomLocal.text;
-    cardSource = randomLocal.source;
+  // 使用台北時間生成今日日期字串
+  const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  const storageDateKey = isBlessingMode ? "daily_blessing_saved_date" : "daily_verse_saved_date";
+  const savedDate = localStorage.getItem(storageDateKey);
+  
+  let loadedUrl = "";
+  // 如果是使用者點擊按鈕手動抽卡（event 存在），或是今天尚未儲存過卡片，就重新抽取
+  let shouldGenerate = !!event || savedDate !== todayStr;
+
+  if (!shouldGenerate) {
+    cardText = localStorage.getItem(isBlessingMode ? "daily_blessing_text" : "daily_verse_text");
+    cardSource = localStorage.getItem(isBlessingMode ? "daily_blessing_source" : "daily_verse_source");
+    loadedUrl = localStorage.getItem(isBlessingMode ? "daily_blessing_bg" : "daily_verse_bg");
+  }
+
+  if (!cardText) {
+    if (isBlessingMode) {
+      const randomCard = HEAVENLY_FATHER_CARDS[Math.floor(Math.random() * HEAVENLY_FATHER_CARDS.length)];
+      cardText = randomCard;
+      cardSource = "—— 愛你的天父";
+    } else {
+      const randomLocal = DAILY_VERSES[Math.floor(Math.random() * DAILY_VERSES.length)];
+      cardText = randomLocal.text;
+      cardSource = randomLocal.source;
+    }
+
+    // 儲存至 localStorage
+    localStorage.setItem(storageDateKey, todayStr);
+    localStorage.setItem(isBlessingMode ? "daily_blessing_text" : "daily_verse_text", cardText);
+    localStorage.setItem(isBlessingMode ? "daily_blessing_source" : "daily_verse_source", cardSource);
   }
 
   const preservedImageUrl = options.preserveBackground ? getDisplayedVerseCardImageUrl() : "";
   const nextImageUrl = preservedImageUrl
+    || loadedUrl
     || CURATED_IMAGE_POOL[Math.floor(Math.random() * CURATED_IMAGE_POOL.length)];
+  
   if (!preservedImageUrl) {
     localStorage.setItem("verse_card_bg", nextImageUrl);
+    localStorage.setItem(isBlessingMode ? "daily_blessing_bg" : "daily_verse_bg", nextImageUrl);
   }
   const imgPromise = preloadVerseCardImage(nextImageUrl);
 
   const fetchPromise = Promise.resolve({ text: cardText, source: cardSource });
 
-  const [result, loadedUrl] = await Promise.all([fetchPromise, imgPromise]);
-  applyVerseCardContent(result, loadedUrl);
+  const [result, finalLoadedUrl] = await Promise.all([fetchPromise, imgPromise]);
+  applyVerseCardContent(result, finalLoadedUrl);
 }
 
 async function shareAsImage(e) {
@@ -2482,10 +2505,7 @@ export function init() {
   // ── Subscribe to unified theme change event ──
   window.addEventListener("app:themeChanged", () => {
     // Re-render badge strips when theme changes (they use CSS-dependent colors)
-    if (typeof renderBadgeStrip === "function") {
-      renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-      renderBadgeStrip("plan-badge-strip");
-    }
+
   });
 
   // ── Subscribe to background change event (from profile tab or any other source) ──

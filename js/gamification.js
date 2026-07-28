@@ -35,10 +35,6 @@ function refreshBadgeSurfaces() {
   if (typeof renderBadgeWall === "function") {
     renderBadgeWall("badges-grid");
   }
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-    renderBadgeStrip("plan-badge-strip");
-  }
 }
 
 // Check achievements and trigger popup if newly unlocked
@@ -177,9 +173,7 @@ function launchFireworks() {
 }
 
 function renderUnlockedBadgesWall() {
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("plan-badge-strip");
-  }
+  // Deprecated: Badge strip is removed as badges only display on the profile page
 }
 
 function getAchievementById(badgeId) {

@@ -1079,11 +1079,17 @@ function getPlanCoverHtml(plan) {
   const campaignStageNo = plan && plan.planKind === "church_campaign_stage"
     ? Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0)
     : 0;
-  const label = campaignStageNo
-    ? "第" + campaignStageNo
-    : (isCampaign ? "66卷" : escapeHTML(String(plan && plan.name || "讀經").slice(0, 2)));
   const labelFontSize = campaignStageNo >= 10 ? "0.88rem" : "0.95rem";
-  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;}
+
+  if (campaignStageNo) {
+    return `<div class="plan-cover-thumbnail" style="width: 32px; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--primary-color) 30%, transparent); background: color-mix(in srgb, var(--primary-color) 6%, transparent); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--primary-color); font-weight: 600; font-size: 0.72rem; line-height: 1.35; padding: 0.6rem 0.15rem; flex-shrink: 0; align-self: stretch; box-sizing: border-box; text-align: center;">
+      ✦<br>第<br>${campaignStageNo}<br>階<br>段
+    </div>`;
+  }
+
+  const label = isCampaign ? "66卷" : escapeHTML(String(plan && plan.name || "讀經").slice(0, 2));
+  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;
+}
 
 function normalizePlanSearchValue(value) {
   return String(value || "")
@@ -1114,6 +1120,28 @@ function getPlanSearchText(plan) {
 function matchesPlanSearch(plan) {
   if (!planSearchQuery) return true;
   return getPlanSearchText(plan).includes(planSearchQuery);
+}
+
+function getPlanStartCountdownText(plan) {
+  if (!plan || !plan.startDate) return "";
+  const parts = plan.startDate.split("-");
+  if (parts.length !== 3) return `預計 ${escapeHTML(plan.startDate)} 開始`;
+  
+  const startYear = parseInt(parts[0], 10);
+  const startMonth = parseInt(parts[1], 10) - 1;
+  const startDay = parseInt(parts[2], 10);
+  
+  const start = new Date(startYear, startMonth, startDay);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = start.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays <= 0) {
+    return "今天開始";
+  }
+  return `${diffDays} 天後開始`;
 }
 
 function renderJoinedPlansList() {
@@ -1256,39 +1284,42 @@ function renderJoinedPlansList() {
       } else {
         // Normal active plan: show progress bar
         const progressText = isUpcomingFixed
-          ? `預計 ${escapeHTML(plan.startDate)} 開始`
+          ? `<span style="display: inline-block; padding: 0.22rem 0.5rem; border-radius: 6px; background: color-mix(in srgb, var(--color-warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); font-size: 0.72rem; font-weight: 600; white-space: nowrap;">${getPlanStartCountdownText(plan)}</span>`
           : (currentRound > 1
             ? `已完成第 ${currentRound - 1} 遍 👑<br>第 ${currentRound} 遍：已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`
             : `已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`);
 
         const isTeamPlan = (typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan)) || 
           !!(plan && (plan.planKind === "church_campaign_stage" || (plan.presetKey && (plan.presetKey.startsWith("church_stage_") || plan.presetKey.startsWith("preset-stage-")))));
-        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;"></div>` : "";
+        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; justify-content: flex-start; width: 100%;"></div>` : "";
         const progressHtml = isUpcomingFixed
           ? ""
-          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact">
+          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact" style="width: 100%;">
               <div class="plan-progress-bar" style="width: ${progress}%;"></div>
             </div>`;
 
         card.innerHTML = `
           ${getPlanCoverHtml(plan)}
-          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
-            <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
+            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
+            <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
+              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
+              <span>${plan.startDate} ~ ${plan.endDate}</span>
             </div>
             ${campaignAwardHtml}
             ${progressHtml}
-            <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35;">
+            <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35; width: 100%;">
               ${progressText}
             </div>
-            <div class="joined-plan-schedule-summary">
+            <div class="joined-plan-schedule-summary" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.1rem; width: 100%;">
               <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
               <span>${escapeHTML(weeklyScheduleSummary)}</span>
             </div>
             ${teamHtml}
           </div>
         `;
+
+        if (typeof hydrateIcons === "function") hydrateIcons(card);
 
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
@@ -1307,40 +1338,67 @@ function renderJoinedPlansList() {
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
                 const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
 
-                [3, 6].forEach(division => {
+                const divisions = [3, 6];
+                divisions.forEach(division => {
                   const hasJoined = joinedDivisions.has(division);
-                  const btn = document.createElement("button");
-                  btn.type = "button";
-                  btn.style.cssText = `
-                    font-size: 0.75rem;
-                    padding: 0.3rem 0.6rem;
-                    border-radius: 8px;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.25rem;
-                    cursor: pointer;
-                    margin: 0;
-                    border: 1px solid var(--border-card);
-                    transition: all 0.2s;
-                  `;
-
+                  
                   if (hasJoined) {
-                    const teamName = contexts.find(c => Number(c.team.division) === division)?.team?.name || "";
-                    btn.className = "secondary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span><span>已入 ${division}人組 (${escapeHTML(teamName)})</span>`;
-                    btn.onclick = (e) => {
+                    const context = contexts.find(c => Number(c.team.division) === division);
+                    const teamName = context ? (context.team.name || "") : "";
+                    
+                    const badge = document.createElement("div");
+                    badge.style.cssText = `
+                      font-size: 0.72rem;
+                      padding: 0.28rem 0.65rem;
+                      border-radius: 9999px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 0.35rem;
+                      cursor: pointer;
+                      background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent);
+                      border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);
+                      color: var(--color-success-foreground);
+                      transition: all 0.2s ease;
+                      font-weight: 500;
+                    `;
+                    badge.innerHTML = `
+                      <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
+                      <span>已入 ${division}人組 (${escapeHTML(teamName)})</span>
+                      <span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>
+                    `;
+                    badge.onclick = (e) => {
                       e.stopPropagation();
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
                     };
+                    teamContainer.appendChild(badge);
                   } else {
-                    btn.className = "primary-btn";
-                    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span><span>報名 ${division}人組</span>`;
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.style.cssText = `
+                      font-size: 0.75rem;
+                      padding: 0.35rem 0.9rem;
+                      border-radius: 9999px;
+                      display: inline-flex;
+                      align-items: center;
+                      gap: 0.35rem;
+                      cursor: pointer;
+                      margin: 0;
+                      background: transparent;
+                      border: 1px solid var(--primary-color);
+                      color: var(--primary-color);
+                      transition: all 0.2s ease;
+                      font-weight: 600;
+                    `;
+                    btn.innerHTML = `
+                      <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
+                      <span>報名 ${division}人組</span>
+                    `;
                     btn.onclick = (e) => {
                       e.stopPropagation();
                       window.openReadingTeamDialog(plan, { preferredDivision: division });
                     };
+                    teamContainer.appendChild(btn);
                   }
-                  teamContainer.appendChild(btn);
                 });
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
@@ -1938,16 +1996,16 @@ function renderPresetPlansList() {
     card.style = "background:var(--bg-card);border:1px solid var(--border-card);border-radius:16px;padding:1rem;display:flex;align-items:center;gap:1rem;cursor:pointer;transition:all .2s ease;";
     card.innerHTML = `
       ${getPlanCoverHtml(plan)}
-      <div style="flex-grow:1;display:flex;flex-direction:column;gap:.3rem;min-width:0;">
-        <h4 style="margin:0;font-size:1.05rem;font-weight:500;color:var(--text-primary);">${escapeHTML(plan.name)}</h4>
-        <div style="font-size:.78rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem;">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
+        <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(plan.name)}</h4>
+        <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
           <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
           <span>${escapeHTML(scheduleLabel)}</span>
         </div>
-        ${description ? `<p style="margin:.15rem 0 0;font-size:.76rem;line-height:1.45;color:var(--text-secondary);">${escapeHTML(description)}</p>` : ""}
-        ${isCampaignStage ? `<div style="font-size:.76rem;font-weight:500;color:var(--primary-color);"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
-        ${upcomingNotice ? `<div style="padding:.42rem .58rem;border-radius:9px;background:var(--bg-secondary);font-size:.74rem;line-height:1.45;color:var(--text-secondary);"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
-        <div style="font-size:.76rem;font-weight:500;color:var(--primary-color);margin-top:.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
+        ${description ? `<p style="margin: .15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--text-secondary); width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHTML(description)}</p>` : ""}
+        ${isCampaignStage ? `<div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); display: flex; align-items: center; gap: 0.25rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
+        ${upcomingNotice ? `<div style="padding: 0.42rem 0.58rem; border-radius: 9px; background: var(--bg-secondary); font-size: 0.74rem; line-height: 1.45; color: var(--text-secondary); width: 100%;"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
+        <div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); margin-top: 0.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
       </div>
     `;
 
@@ -4725,9 +4783,7 @@ window.changePersonalTrendRange = function (range) {
 };
 
 function renderPersonalUnlockedBadges() {
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("plan-badge-strip");
-  }
+  // Deprecated: Badge strip is removed as badges only display on the profile page
 }
 
 async function renderMyPersonalRankings() {
@@ -4776,31 +4832,67 @@ async function renderMyPersonalRankings() {
   const myName = state.currentUser.name;
   const myZone = state.currentUser.pastoral_zone || "";
 
+  // ── 多重排序鍵說明 ──
+  // 主排序 progress DESC → 次排序 last_read ASC → 確定性防線 id(name) ASC
+  // 此函數在 leaderboard-utils.js 中定義，透過 window 全域存取
+  const _lbSort = typeof window._lbSortLeaderboard === 'function'
+    ? window._lbSortLeaderboard
+    : (arr, keyFn) => [...arr].sort((a, b) => {
+        const diff = (b.progress ?? 0) - (a.progress ?? 0);
+        if (diff !== 0) return diff;
+        const aT = a.last_read ? new Date(a.last_read).getTime() : Infinity;
+        const bT = b.last_read ? new Date(b.last_read).getTime() : Infinity;
+        if (aT !== bT) return aT - bT;
+        return String(a.name ?? '').localeCompare(String(b.name ?? ''));
+      });
+
+  const _lbDenseRank = typeof window._lbAssignDenseRanks === 'function'
+    ? window._lbAssignDenseRanks
+    : (sorted) => {
+        const total = sorted.length;
+        let rank = 1;
+        return sorted.map((u, i) => {
+          // 計畫未開始（progress = 0）→ 顯示最後名次，讓人有「從最後衝上來」的動力
+          if ((u.progress ?? 0) === 0) return { ...u, rank: total };
+          if (i === 0) return { ...u, rank: 1 };
+          const prev = sorted[i - 1];
+          // prev 若也是未開始，本人也應顯示最後名次（但已在上方 progress===0 攔截）
+          const same = (u.progress ?? 0) === (prev.progress ?? 0)
+            && (u.last_read ?? null) === (prev.last_read ?? null);
+          if (!same) rank = i + 1;
+          return { ...u, rank };
+        });
+      };
+
   const userProgressList = allUsers.map(u => {
     let pct = u.plan_progress || 0;
     if (u.name === myName) {
       pct = state.activePlan ? Math.round((completedDaysCount / state.activePlan.days.length) * 100) : 0;
     }
     return {
+      id: u.id,
       name: u.name,
       pastoral_zone: u.pastoral_zone,
-      progress: pct
+      progress: pct,
+      last_read: u.last_read || null
     };
   });
 
-  // Sort for All Church Rank
-  const sortedAll = [...userProgressList].sort((a, b) => b.progress - a.progress);
-  const myIndexAll = sortedAll.findIndex(u => u.name === myName);
-  const myRankAll = myIndexAll !== -1 ? myIndexAll + 1 : sortedAll.length;
+  // ── 全教會排名（多重排序 + Dense Rank）──
+  const sortedAll = _lbSort(userProgressList);
+  const rankedAll = _lbDenseRank(sortedAll);
+  const myEntryAll = rankedAll.find(u => u.name === myName);
+  const myRankAll = myEntryAll ? myEntryAll.rank : rankedAll.length + 1;
 
   if (elRankAll) elRankAll.textContent = `第 ${myRankAll} 名`;
-  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${sortedAll.length} 人`;
+  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${rankedAll.length} 人`;
 
-  // Sort for Pastoral Zone Rank
+  // ── 牧區排名（多重排序 + Dense Rank）──
   const zoneUsers = userProgressList.filter(u => u.pastoral_zone === myZone);
-  const sortedZone = [...zoneUsers].sort((a, b) => b.progress - a.progress);
-  const myIndexZone = sortedZone.findIndex(u => u.name === myName);
-  const myRankZone = myIndexZone !== -1 ? myIndexZone + 1 : sortedZone.length;
+  const sortedZone = _lbSort(zoneUsers);
+  const rankedZone = _lbDenseRank(sortedZone);
+  const myEntryZone = rankedZone.find(u => u.name === myName);
+  const myRankZone = myEntryZone ? myEntryZone.rank : rankedZone.length + 1;
 
   if (elRankZoneTitle && myZone) elRankZoneTitle.textContent = `${myZone} 個人排行`;
   if (elRankZone) elRankZone.textContent = myZone ? `第 ${myRankZone} 名` : "未選牧區";
@@ -4813,11 +4905,6 @@ async function renderPlanRankingView() {
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
 
-  if (!canUseAdvancedGroupStats()) {
-    const rankingCard = container.closest(".glass-card");
-    if (rankingCard) rankingCard.style.display = "none";
-    return;
-  }
   const rankingCard = container.closest(".glass-card");
   if (rankingCard) rankingCard.style.display = "";
 
@@ -5192,7 +5279,34 @@ async function renderGroupParticipantsRankingTable() {
       };
     });
 
-    groupMembers.sort((a, b) => b.completed - a.completed);
+    // ── 多重排序 + Dense Rank（參與者排行榜）──
+    // 排序一：completed DESC（進度天數高者優先）
+    // 排序二：last_read ASC（相同進度時，最早完成者優先；null 排最後）
+    // 排序三：id ASC（確定性防線，保證跨查詢順序 100% 穩定）
+    groupMembers.sort((a, b) => {
+      const diff = (b.completed ?? 0) - (a.completed ?? 0);
+      if (diff !== 0) return diff;
+      const aT = a.last_read ? new Date(a.last_read).getTime() : Infinity;
+      const bT = b.last_read ? new Date(b.last_read).getTime() : Infinity;
+      if (aT !== bT) return aT - bT;
+      return String(a.id ?? a.name ?? '').localeCompare(String(b.id ?? b.name ?? ''));
+    });
+
+    // Dense Rank：進度 + last_read 完全相同者共享同一名次
+    // 未開始（completed = 0）→ 一律顯示最後名次，讓人感受「從最後衝到最前」的動力
+    const _totalMemberCount = groupMembers.length;
+    let _denseRank = 1;
+    groupMembers = groupMembers.map((m, i) => {
+      // 未開始者：名次 = 總人數（最後一名）
+      if ((m.completed ?? 0) === 0) return { ...m, rank: _totalMemberCount };
+      if (i === 0) return { ...m, rank: 1 };
+      const prev = groupMembers[i - 1];
+      const same = (m.completed ?? 0) === (prev.completed ?? 0)
+        && (m.last_read ?? null) === (prev.last_read ?? null);
+      if (!same) _denseRank = i + 1;
+      return { ...m, rank: _denseRank };
+    });
+
     window._grpScopedProcessedMembers = groupMembers;
 
     if (searchInput && !searchInput.dataset.listenerInitialized) {
@@ -5233,11 +5347,12 @@ window.displayParticipantsList = function (limit = 100) {
   const _careRole = (state.currentUser && state.currentUser.role) || "member";
   const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "admin"].includes(_careRole);
 
-  // Align header columns dynamically based on _canSendCare
+  // 對齊 header 欄位動態調整（含名次欄）
   const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;
   if (headerEl) {
+    // 名次欄寬度 36px
     if (_canSendCare) {
-      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px 44px";
+      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px 44px";
       let reminderHeader = document.getElementById("members-ranking-reminder-col");
       if (!reminderHeader) {
         reminderHeader = Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
@@ -5250,18 +5365,28 @@ window.displayParticipantsList = function (limit = 100) {
         headerEl.appendChild(reminderHeader);
       }
     } else {
-      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px";
+      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px";
       const reminderHeader = document.getElementById("members-ranking-reminder-col")
         || Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
       if (reminderHeader) reminderHeader.remove();
+    }
+    // 論是否已有名次 header—若編影第一個子元素不是名次欄，則插入
+    const firstChild = headerEl.firstElementChild;
+    if (!firstChild || firstChild.id !== "members-ranking-rank-col") {
+      const rankHeader = document.createElement("div");
+      rankHeader.id = "members-ranking-rank-col";
+      rankHeader.style.cssText = "color: var(--text-muted); font-size: 0.78rem; text-align: center;";
+      rankHeader.textContent = "名次";
+      headerEl.insertBefore(rankHeader, firstChild);
     }
   }
 
   visibleItems.forEach(m => {
     const itemRow = document.createElement("div");
+    // 名次欄 36px 加入 grid
     itemRow.style.cssText = `
       display: grid;
-      grid-template-columns: 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
+      grid-template-columns: 36px 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
       gap: 0.4rem;
       align-items: center;
       padding: 0.6rem 0.2rem;
@@ -5275,8 +5400,12 @@ window.displayParticipantsList = function (limit = 100) {
       itemRow.style.borderRadius = "8px";
     }
 
+    const rankNum = m.rank ?? "—";
+    // 名次徽章樣式：Top 3 上色，其餘灰色
+    const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? 'var(--text-secondary)' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
     itemRow.innerHTML = `
-      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">
+      <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center;">#${rankNum}</div>
+      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
         ${escapeHTML(m.name)}
       </div>
       <div class="text-danger">${m.streak}</div>

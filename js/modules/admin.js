@@ -222,7 +222,7 @@ export async function renderAdminUserManagement() {
     listContainer.innerHTML = "";
 
     if (filteredUsers.length === 0) {
-      listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">嚙踝蕭�蕭鞎陬清除踝蕭嚙踝蕭</div>`;
+      listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">無符合搜尋條件的成員</div>`;
       return;
     }
 
@@ -266,7 +266,7 @@ export async function renderAdminUserManagement() {
 
   } catch (err) {
     console.error("Failed to render admin user management:", err);
-    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">�蕭嚙踝蕭鈭�清除�: ${err.message || err}</div>`;
+    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">渲染名單失敗: ${err.message || err}</div>`;
   }
 }
 
@@ -276,7 +276,7 @@ export function openMemberEditBottomSheet(user) {
   const listEl = document.getElementById("bottom-sheet-list");
   if (!overlay || !listEl) return;
 
-  if (titleEl) titleEl.textContent = `��嚙踝蕭 ${user.name} 清除賜�清除踝蕭`;
+  if (titleEl) titleEl.textContent = `變更 ${user.name} 的權限階級`;
   listEl.innerHTML = "";
 
   const roleOptions = [
@@ -300,13 +300,13 @@ export function openMemberEditBottomSheet(user) {
     scopeBtn.type = "button";
 
     let scopeDesc = "";
-    if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "嚙踝蕭�曇澈�堆蕭";
-    else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "嚙踝蕭�曇澈�堆蕭";
-    else if (user.role === "group_leader") scopeDesc = user.managed_groups || user.small_group || "嚙踝蕭�曇澈�堆蕭";
+    if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "未設定";
+    else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "未設定";
+    else if (user.role === "group_leader") scopeDesc = user.managed_groups || user.small_group || "未設定";
 
-    scopeBtn.innerHTML = iconLabel("edit", `�賣嚙賢祐��嚙質清除踝蕭 (${scopeDesc})`);
+    scopeBtn.innerHTML = iconLabel("edit", `修改管理範圍 (${scopeDesc})`);
     scopeBtn.onclick = async () => {
-      console.log(`清除賢嚙� [Debug] �賣嚙賢祐��嚙質清除踝蕭清除踝蕭嚙踝蕭�⊥�清除踝蕭嚙賢�清除踝蕭嚙踝蕭�湛蕭嚙�${user.name}`);
+            console.log(`管理 [Debug] 點擊修改管理範圍按鈕: ${user.name}`);
       closeAdminFilterBottomSheet();
       const resp = await showResponsibilityModal(user.role, user);
       if (!resp) return;
@@ -326,10 +326,10 @@ export function openMemberEditBottomSheet(user) {
           state.currentUser.managed_groups = resp.managed_groups;
           if (typeof renderProfileView === "function") renderProfileView();
         }
-        alert("�清除踝蕭清除賣�嚙賢���嚙質清除踝蕭�蕭");
+                alert("管理範圍修改成功");
         renderAdminUserManagement();
       } else {
-        alert("嚙踝蕭皝蕭��改蕭�哨蕭清除賣�蕭嚙賢�嚙賡清除踝蕭�啗嚙踝蕭");
+                alert("伺服器連線失敗，請稍後再試或聯絡管理員");
       }
     };
     listEl.appendChild(scopeBtn);
@@ -340,7 +340,7 @@ export function openMemberEditBottomSheet(user) {
   headerText.style.color = "var(--text-secondary)";
   headerText.style.margin = "0.2rem 0 0.5rem 0.2rem";
   headerText.style.fontWeight = "bold";
-  headerText.textContent = "�蕭嚙踝蕭皜莎蕭清除質瞉蕭嚙踝蕭�蕭";
+    headerText.textContent = "請選擇變更的權限階級";
   listEl.appendChild(headerText);
 
   roleOptions.forEach(opt => {
@@ -350,7 +350,7 @@ export function openMemberEditBottomSheet(user) {
     btn.type = "button";
     btn.textContent = opt.label;
     btn.onclick = async () => {
-      console.log(`清除賢嚙� [Debug] �蕭嚙踝蕭皜莎蕭清除質瞉蕭嚙踝蕭�綽蕭清除�: ${user.name} -> ${opt.label}`);
+            console.log(`管理 [Debug] 點擊變更權限階級: ${user.name} -> ${opt.label}`);
       closeAdminFilterBottomSheet();
       if (isSelected) return;
 
@@ -379,10 +379,10 @@ export function openMemberEditBottomSheet(user) {
           if (additionalFields.managed_groups !== undefined) state.currentUser.managed_groups = additionalFields.managed_groups;
           if (typeof renderProfileView === "function") renderProfileView();
         }
-        alert("�清除踝蕭嚙賡�清除賣�清除踝蕭�伐蕭清除踝蕭�恬蕭嚙踝蕭�蕭嚙�");
+                alert("權限變更成功");
         renderAdminUserManagement();
       } else {
-        alert("�蕭嚙踝蕭皜莎蕭清除質隞蕭嚙踝蕭�蕭�ｇ蕭清除賡�橘蕭嚙�");
+                alert("權限變更失敗，請重新整理頁面");
       }
     };
     listEl.appendChild(btn);
@@ -392,277 +392,355 @@ export function openMemberEditBottomSheet(user) {
 }
 
 export function initAdminOrgManagement() {
-  const regionSelect = document.getElementById("admin-org-region");
-  const zoneSelect = document.getElementById("admin-org-zone");
-  const groupSelect = document.getElementById("admin-org-group");
+  const exportBtn = document.getElementById("admin-export-org-btn");
+  const fileInput = document.getElementById("admin-org-file-input");
+  const fileNameDiv = document.getElementById("admin-org-file-name");
+  const pasteInput = document.getElementById("admin-org-paste-input");
+  const previewCard = document.getElementById("admin-org-preview-card");
+  const cancelBtn = document.getElementById("admin-org-import-cancel");
+  const confirmBtn = document.getElementById("admin-org-import-confirm");
 
-  if (!regionSelect || !zoneSelect || !groupSelect) return;
+  if (!exportBtn || !fileInput || !pasteInput || !previewCard || !cancelBtn || !confirmBtn) return;
 
-  regionSelect.onchange = () => {
-    populateAdminZones();
+  let pendingImportData = null;
+
+  // 1. 下載範本
+  exportBtn.onclick = () => {
+    exportCurrentOrgCsv();
   };
 
-  zoneSelect.onchange = () => {
-    populateAdminGroups();
+  // 2. 解析處理器
+  const handleParse = (text, sourceName) => {
+    if (!text || !text.trim()) {
+      showToast("請選擇或貼上有效的架構資料");
+      return;
+    }
+    const parsed = parseOrgCsvData(text);
+    if (parsed.length === 0) {
+      showToast("無法解析出任何組織架構資料，請確認格式是否正確");
+      return;
+    }
+
+    // 彙整為大區、牧區、小組
+    const regions = [...new Set(parsed.map(item => item.region).filter(Boolean))];
+    
+    const zoneMap = new Map();
+    parsed.forEach(item => {
+      if (item.zone && item.region) {
+        const key = `${item.zone}||${item.region}`;
+        zoneMap.set(key, { name: item.zone, region_name: item.region });
+      }
+    });
+    const zones = [...zoneMap.values()];
+
+    const groupMap = new Map();
+    parsed.forEach(item => {
+      if (item.group && item.zone) {
+        const key = `${item.group}||${item.zone}`;
+        groupMap.set(key, { name: item.group, zone_name: item.zone });
+      }
+    });
+    const groups = [...groupMap.values()];
+
+    // 進行比對
+    const comparison = compareOrgStructures(regions, zones, groups);
+    
+    // 更新 UI 預覽
+    document.getElementById("preview-add-regions").textContent = comparison.add.regions;
+    document.getElementById("preview-add-zones").textContent = comparison.add.zones;
+    document.getElementById("preview-add-groups").textContent = comparison.add.groups;
+
+    document.getElementById("preview-keep-regions").textContent = comparison.keep.regions;
+    document.getElementById("preview-keep-zones").textContent = comparison.keep.zones;
+    document.getElementById("preview-keep-groups").textContent = comparison.keep.groups;
+
+    document.getElementById("preview-del-regions").textContent = comparison.del.regions;
+    document.getElementById("preview-del-zones").textContent = comparison.del.zones;
+    document.getElementById("preview-del-groups").textContent = comparison.del.groups;
+
+    const delBadge = document.getElementById("preview-delete-badge");
+    const totalDel = comparison.del.regions + comparison.del.zones + comparison.del.groups;
+    if (totalDel > 0) {
+      delBadge.style.display = "inline-flex";
+    } else {
+      delBadge.style.display = "none";
+    }
+
+    pendingImportData = { regions, zones, groups };
+    previewCard.style.display = "flex";
+
+    if (sourceName) {
+      fileNameDiv.textContent = `已選擇檔案：${sourceName} (${parsed.length} 筆資料)`;
+      fileNameDiv.style.display = "block";
+    }
   };
 
-  document.getElementById("admin-add-region-btn").onclick = async () => {
-    const name = prompt("請輸入新大區名稱", "台北大區");
-    if (name && name.trim()) {
-      loader.show("建立中...");
-      const success = await db.createGreatRegion(name.trim());
+  // 檔案選取事件
+  fileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      handleParse(evt.target.result, file.name);
+      pasteInput.value = ""; // 清空文字框避免混淆
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  // 貼上文字框監聽
+  pasteInput.oninput = () => {
+    const val = pasteInput.value;
+    if (val && val.trim()) {
+      handleParse(val, null);
+      fileInput.value = ""; // 清空檔案選擇器
+      fileNameDiv.style.display = "none";
+    } else {
+      clearPending();
+    }
+  };
+
+  // 取消匯入
+  const clearPending = () => {
+    pendingImportData = null;
+    fileInput.value = "";
+    pasteInput.value = "";
+    fileNameDiv.style.display = "none";
+    previewCard.style.display = "none";
+  };
+  cancelBtn.onclick = clearPending;
+
+  // 確認執行更新
+  confirmBtn.onclick = async () => {
+    if (!pendingImportData) return;
+    
+    const confirmMsg = "警告：執行更新將會覆蓋全教會的組織架構，不在名單中的項目將被移除。確定要執行嗎？";
+    const confirmed = await window.showConfirmDialog({
+      title: "確認同步更新",
+      message: confirmMsg,
+      confirmText: "執行更新",
+      cancelText: "取消",
+      isDestructive: true
+    });
+
+    if (confirmed) {
+      loader.show("正在執行同步更新，請稍候...");
+      const result = await db.syncChurchOrganization(
+        pendingImportData.regions,
+        pendingImportData.zones,
+        pendingImportData.groups
+      );
       loader.hide();
-      if (success) {
-        alert("大區建立成功");
+
+      if (result && result.success) {
+        showToast("組織架構同步更新成功！");
+        clearPending();
         renderAdminOrgManagement();
+        // 重新渲染個人設定選單與過濾器選項
         if (typeof renderProfileView === "function") renderProfileView();
+      } else {
+        alert("同步更新失敗：" + (result.error || "未知錯誤"));
       }
     }
   };
+}
 
-  document.getElementById("admin-edit-region-btn").onclick = async () => {
-    const val = regionSelect.value;
-    if (!val) { showToast("請選擇大區"); return; }
-    const opt = regionSelect.options[regionSelect.selectedIndex];
-    const oldName = opt.text;
-    const newName = prompt(`修改大區 ${oldName} 名稱`, oldName);
-    if (newName && newName.trim() && newName.trim() !== oldName) {
-      loader.show("修改中...");
-      const success = await db.updateGreatRegion(val, newName.trim());
-      loader.hide();
-      if (success) {
-        showToast("修改成功");
-        populateAdminRegions();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-delete-region-btn").onclick = async () => {
-    const val = regionSelect.value;
-    if (!val) {
-      showToast("請選擇要刪除的大區");
+function parseOrgCsvData(text) {
+  if (!text || !text.trim()) return [];
+  const lines = text.split(/\r?\n/);
+  const result = [];
+  
+  lines.forEach((line, index) => {
+    // 忽略第一列標頭
+    if (index === 0 && (line.includes("大區") || line.toLowerCase().includes("region") || line.includes("牧區") || line.includes("小組"))) {
       return;
     }
-    const opt = regionSelect.options[regionSelect.selectedIndex];
-    const confirmed = await window.showConfirmDialog({
-      title: "刪除大區確認",
-      message: `確定要刪除大區「${opt.text}」嗎？此操作將同時刪除該大區下屬的所有牧區與小組！`,
-      confirmText: "確定刪除",
-      cancelText: "取消",
-      isDestructive: true
+    
+    // 支援逗號或 Tab 鍵分隔
+    const parts = line.split(/[,\t]/).map(p => p.trim());
+    if (parts.length >= 1 && parts[0]) {
+      const region = parts[0] || "";
+      const zone = parts[1] || "";
+      const group = parts[2] || "";
+      result.push({ region, zone, group });
+    }
+  });
+  
+  return result;
+}
+
+function compareOrgStructures(regions, zones, groups) {
+  const currentRegions = state.orgStructure.regions || [];
+  
+  let currentZones = [];
+  if (state.orgStructure.rawZones) {
+    currentZones = state.orgStructure.rawZones.map(z => {
+      const parentReg = state.orgStructure.rawRegions.find(r => r.id === z.great_region_id);
+      return { name: z.name, region_name: parentReg ? parentReg.name : "" };
     });
-    if (confirmed) {
-      loader.show("刪除中...");
-      const success = await db.deleteGreatRegion(val);
-      loader.hide();
-      if (success) {
-        showToast("大區刪除成功");
-        renderAdminOrgManagement();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-add-zone-btn").onclick = async () => {
-    const regionVal = regionSelect.value;
-    if (!regionVal) {
-      showToast("請先選擇大區");
-      return;
-    }
-    const name = prompt("請輸入新牧區名稱", "第一牧區");
-    if (name && name.trim()) {
-      loader.show("建立中...");
-      const success = await db.createPastoralZone(name.trim(), regionVal);
-      loader.hide();
-      if (success) {
-        showToast("牧區建立成功");
-        populateAdminZones();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-edit-zone-btn").onclick = async () => {
-    const val = zoneSelect.value;
-    if (!val) {
-      showToast("請選擇要修改的牧區");
-      return;
-    }
-    const opt = zoneSelect.options[zoneSelect.selectedIndex];
-    const oldName = opt.text;
-    const newName = prompt(`修改牧區 ${oldName} 名稱`, oldName);
-    if (newName && newName.trim() && newName.trim() !== oldName) {
-      loader.show("修改中...");
-      const success = await db.updatePastoralZone(val, newName.trim());
-      loader.hide();
-      if (success) {
-        showToast("修改成功");
-        populateAdminZones();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-delete-zone-btn").onclick = async () => {
-    const val = zoneSelect.value;
-    if (!val) {
-      showToast("請選擇要刪除的牧區");
-      return;
-    }
-    const opt = zoneSelect.options[zoneSelect.selectedIndex];
-    const confirmed = await window.showConfirmDialog({
-      title: "刪除牧區確認",
-      message: `確定要刪除牧區「${opt.text}」嗎？此操作將同時刪除該牧區下屬的所有小組！`,
-      confirmText: "確定刪除",
-      cancelText: "取消",
-      isDestructive: true
+  } else if (state.orgStructure.zones) {
+    Object.entries(state.orgStructure.zones).forEach(([rName, zNames]) => {
+      zNames.forEach(zName => {
+        currentZones.push({ name: zName, region_name: rName });
+      });
     });
-    if (confirmed) {
-      loader.show("刪除中...");
-      const success = await db.deletePastoralZone(val);
-      loader.hide();
-      if (success) {
-        showToast("牧區刪除成功");
-        populateAdminZones();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
+  }
 
-  document.getElementById("admin-add-group-btn").onclick = async () => {
-    const zoneVal = zoneSelect.value;
-    if (!zoneVal) {
-      showToast("請先選擇牧區");
-      return;
-    }
-    const name = prompt("請輸入新小組名稱", "第一小組");
-    if (name && name.trim()) {
-      loader.show("建立中...");
-      const success = await db.createSmallGroup(name.trim(), zoneVal);
-      loader.hide();
-      if (success) {
-        showToast("小組建立成功");
-        populateAdminGroups();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-edit-group-btn").onclick = async () => {
-    const val = groupSelect.value;
-    if (!val) {
-      showToast("請選擇要修改的小組");
-      return;
-    }
-    const opt = groupSelect.options[groupSelect.selectedIndex];
-    const oldName = opt.text;
-    const newName = prompt(`修改小組 ${oldName} 名稱`, oldName);
-    if (newName && newName.trim() && newName.trim() !== oldName) {
-      loader.show("修改中...");
-      const success = await db.updateSmallGroup(val, newName.trim());
-      loader.hide();
-      if (success) {
-        showToast("修改成功");
-        populateAdminGroups();
-        if (typeof renderProfileView === "function") renderProfileView();
-      }
-    }
-  };
-
-  document.getElementById("admin-delete-group-btn").onclick = async () => {
-    const val = groupSelect.value;
-    if (!val) {
-      showToast("請選擇要刪除的小組");
-      return;
-    }
-    const opt = groupSelect.options[groupSelect.selectedIndex];
-    const confirmed = await window.showConfirmDialog({
-      title: "刪除小組確認",
-      message: `確定要刪除小組「${opt.text}」嗎？此操作將刪除該小組的所有讀經狀態！`,
-      confirmText: "確定刪除",
-      cancelText: "取消",
-      isDestructive: true
+  let currentGroups = [];
+  if (state.orgStructure.rawGroups) {
+    currentGroups = state.orgStructure.rawGroups.map(g => {
+      const parentZone = state.orgStructure.rawZones.find(z => z.id === g.pastoral_zone_id);
+      return { name: g.name, zone_name: parentZone ? parentZone.name : "" };
     });
-    if (confirmed) {
-      loader.show("刪除中...");
-      const success = await db.deleteSmallGroup(val);
-      loader.hide();
-      if (success) {
-        showToast("小組刪除成功");
-        populateAdminGroups();
-        if (typeof renderProfileView === "function") renderProfileView();
+  } else if (state.orgStructure.groups) {
+    Object.entries(state.orgStructure.groups).forEach(([zName, gNames]) => {
+      gNames.forEach(gName => {
+        currentGroups.push({ name: gName, zone_name: zName });
+      });
+    });
+  }
+
+  // 大區比對
+  const addRegions = regions.filter(r => !currentRegions.includes(r));
+  const keepRegions = regions.filter(r => currentRegions.includes(r));
+  const delRegions = currentRegions.filter(r => !regions.includes(r));
+
+  // 牧區比對 (name + region_name)
+  const addZones = zones.filter(z => !currentZones.some(cz => cz.name === z.name && cz.region_name === z.region_name));
+  const keepZones = zones.filter(z => currentZones.some(cz => cz.name === z.name && cz.region_name === z.region_name));
+  const delZones = currentZones.filter(cz => !zones.some(z => z.name === cz.name && z.region_name === cz.region_name));
+
+  // 小組比對 (name + zone_name)
+  const addGroups = groups.filter(g => !currentGroups.some(cg => cg.name === g.name && cg.zone_name === g.zone_name));
+  const keepGroups = groups.filter(g => currentGroups.some(cg => cg.name === g.name && cg.zone_name === g.zone_name));
+  const delGroups = currentGroups.filter(cg => !groups.some(g => g.name === cg.name && g.zone_name === cg.zone_name));
+
+  return {
+    add: { regions: addRegions.length, zones: addZones.length, groups: addGroups.length },
+    keep: { regions: keepRegions.length, zones: keepZones.length, groups: keepGroups.length },
+    del: { regions: delRegions.length, zones: delZones.length, groups: delGroups.length }
+  };
+}
+
+function exportCurrentOrgCsv() {
+  let rows = [["大區", "牧區", "小組"]];
+  
+  if (state.isSupabaseMode && state.orgStructure.rawRegions) {
+    const regions = state.orgStructure.rawRegions || [];
+    const zones = state.orgStructure.rawZones || [];
+    const groups = state.orgStructure.rawGroups || [];
+    
+    if (groups.length > 0) {
+      groups.forEach(g => {
+        const zone = zones.find(z => z.id === g.pastoral_zone_id);
+        const zoneName = zone ? zone.name : "";
+        const region = zone ? regions.find(r => r.id === zone.great_region_id) : null;
+        const regionName = region ? region.name : "";
+        rows.push([regionName, zoneName, g.name]);
+      });
+      
+      zones.forEach(z => {
+        const hasGroups = groups.some(g => g.pastoral_zone_id === z.id);
+        if (!hasGroups) {
+          const region = regions.find(r => r.id === z.great_region_id);
+          const regionName = region ? region.name : "";
+          rows.push([regionName, z.name, ""]);
+        }
+      });
+      
+      regions.forEach(r => {
+        const hasZones = zones.some(z => z.great_region_id === r.id);
+        if (!hasZones) {
+          rows.push([r.name, "", ""]);
+        }
+      });
+    } else {
+      if (zones.length > 0) {
+        zones.forEach(z => {
+          const region = regions.find(r => r.id === z.great_region_id);
+          const regionName = region ? region.name : "";
+          rows.push([regionName, z.name, ""]);
+        });
+        regions.forEach(r => {
+          const hasZones = zones.some(z => z.great_region_id === r.id);
+          if (!hasZones) {
+            rows.push([r.name, "", ""]);
+          }
+        });
+      } else {
+        regions.forEach(r => {
+          rows.push([r.name, "", ""]);
+        });
       }
     }
-  };
+  } else {
+    const regions = state.orgStructure.regions || [];
+    const zones = state.orgStructure.zones || {};
+    const groups = state.orgStructure.groups || {};
+    
+    regions.forEach(r => {
+      const rZones = zones[r] || [];
+      if (rZones.length > 0) {
+        rZones.forEach(z => {
+          const zGroups = groups[z] || [];
+          if (zGroups.length > 0) {
+            zGroups.forEach(g => {
+              rows.push([r, z, g]);
+            });
+          } else {
+            rows.push([r, z, ""]);
+          }
+        });
+      } else {
+        rows.push([r, "", ""]);
+      }
+    });
+  }
+  
+  const csvContent = "\uFEFF" + rows.map(r => r.map(cell => {
+    const text = String(cell || "");
+    if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  }).join(",")).join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `church_organization_${new Date().toISOString().slice(0,10)}.csv`);
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 export function renderAdminOrgManagement() {
-  const regionSelect = document.getElementById("admin-org-region");
-  const zoneSelect = document.getElementById("admin-org-zone");
-  const groupSelect = document.getElementById("admin-org-group");
+  const statRegions = document.getElementById("admin-stat-regions");
+  const statZones = document.getElementById("admin-stat-zones");
+  const statGroups = document.getElementById("admin-stat-groups");
 
-  if (!regionSelect || !zoneSelect || !groupSelect) return;
+  if (!statRegions || !statZones || !statGroups) return;
 
-  regionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
-  if (state.isSupabaseMode && state.orgStructure.rawRegions) {
-    state.orgStructure.rawRegions.forEach(r => {
-      regionSelect.innerHTML += `<option value="${r.id}">${r.name}</option>`;
-    });
-  } else {
-    state.orgStructure.regions.forEach(rName => {
-      regionSelect.innerHTML += `<option value="${rName}">${rName}</option>`;
-    });
+  const regionsCount = state.orgStructure.regions ? state.orgStructure.regions.length : 0;
+  
+  let zonesCount = 0;
+  if (state.orgStructure.rawZones) {
+    zonesCount = state.orgStructure.rawZones.length;
+  } else if (state.orgStructure.zones) {
+    zonesCount = Object.values(state.orgStructure.zones).flat().length;
   }
 
-  zoneSelect.innerHTML = `<option value="">-- 請先選擇大區以載入牧區 --</option>`;
-  groupSelect.innerHTML = `<option value="">-- 請先選擇牧區以載入小組 --</option>`;
-}
-
-export function populateAdminZones() {
-  const regionSelect = document.getElementById("admin-org-region");
-  const zoneSelect = document.getElementById("admin-org-zone");
-  const groupSelect = document.getElementById("admin-org-group");
-
-  zoneSelect.innerHTML = `<option value="">-- 請選擇牧區 --</option>`;
-  groupSelect.innerHTML = `<option value="">-- 請先選擇牧區以載入小組 --</option>`;
-
-  const regionVal = regionSelect.value;
-  if (!regionVal) return;
-
-  if (state.isSupabaseMode && state.orgStructure.rawZones) {
-    const regionZones = state.orgStructure.rawZones.filter(z => z.great_region_id === regionVal);
-    regionZones.forEach(z => {
-      zoneSelect.innerHTML += `<option value="${z.id}">${z.name}</option>`;
-    });
-  } else {
-    const regionZones = state.orgStructure.zones[regionVal] || [];
-    regionZones.forEach(zName => {
-      zoneSelect.innerHTML += `<option value="${zName}">${zName}</option>`;
-    });
+  let groupsCount = 0;
+  if (state.orgStructure.rawGroups) {
+    groupsCount = state.orgStructure.rawGroups.length;
+  } else if (state.orgStructure.groups) {
+    groupsCount = Object.values(state.orgStructure.groups).flat().length;
   }
-}
 
-export function populateAdminGroups() {
-  const zoneSelect = document.getElementById("admin-org-zone");
-  const groupSelect = document.getElementById("admin-org-group");
-
-  groupSelect.innerHTML = `<option value="">-- 請選擇小組 --</option>`;
-
-  const zoneVal = zoneSelect.value;
-  if (!zoneVal) return;
-
-  if (state.isSupabaseMode && state.orgStructure.rawGroups) {
-    const zoneGroups = state.orgStructure.rawGroups.filter(g => g.pastoral_zone_id === zoneVal);
-    zoneGroups.forEach(g => {
-      groupSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
-    });
-  } else {
-    const zoneGroups = state.orgStructure.groups[zoneVal] || [];
-    zoneGroups.forEach(gName => {
-      groupSelect.innerHTML += `<option value="${gName}">${gName}</option>`;
-    });
-  }
+  statRegions.textContent = regionsCount;
+  statZones.textContent = zonesCount;
+  statGroups.textContent = groupsCount;
 }
 
 export function showResponsibilityModal(role, user) {
@@ -786,7 +864,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      regionContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�芯�清除賡�清除踝蕭</span>`;
+            regionContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     if (role === "zone_leader" && zoneContainer) {
@@ -814,7 +892,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�蕭�對蕭嚙賡�清除踝蕭</span>`;
+            zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     if (role === "group_leader" && groupContainer) {
@@ -842,7 +920,7 @@ export function showResponsibilityModal(role, user) {
           </label>
         `;
       });
-      groupContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">嚙踝蕭�迎蕭嚙質嚙賡�清除踝蕭</span>`;
+            groupContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
     const closeModal = (result) => {
@@ -860,7 +938,7 @@ export function showResponsibilityModal(role, user) {
       if (role === "great_zone_leader") {
         const checkedRegions = Array.from(regionContainer.querySelectorAll("input[name='region-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedRegions.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除賣�對蕭嚙賢�嚙�");
+                    alert("請選擇至少一個管轄大區！");
           return;
         }
         closeModal({
@@ -871,7 +949,7 @@ export function showResponsibilityModal(role, user) {
       } else if (role === "zone_leader") {
         const checkedZones = Array.from(zoneContainer.querySelectorAll("input[name='zone-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedZones.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除踝蕭嚙賣嚙踝蕭�蕭");
+                    alert("請選擇至少一個管轄牧區！");
           return;
         }
         closeModal({
@@ -882,7 +960,7 @@ export function showResponsibilityModal(role, user) {
       } else if (role === "group_leader") {
         const checkedGroups = Array.from(groupContainer.querySelectorAll("input[name='group-checkbox']:checked")).map(cb => cb.dataset.name);
         if (checkedGroups.length === 0) {
-          alert("�ｇ蕭嚙踝蕭�喉蕭清除質悻嚙踝蕭�蕭清除賣�嚙質嚙賢�嚙�");
+                    alert("請選擇至少一個管轄小組！");
           return;
         }
         closeModal({

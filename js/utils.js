@@ -395,6 +395,7 @@ function getCampaignStageCompletedRounds(stageNo) {
   const target = Number(stageNo || 0);
   let completedRounds = Number(localStorage.getItem(`church_stage_completed_rounds_${target}`) || 0);
   (state.activePlans || []).forEach(plan => {
+    if (!plan) return;
     const planStageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (plan.planKind !== "church_campaign_stage" || planStageNo !== target) return;
     const currentRound = Math.max(1, Number(plan.currentRound || 1));
@@ -407,6 +408,7 @@ function getCampaignStageCompletedRounds(stageNo) {
 function getCampaignStageCurrentRound(stageNo) {
   const target = Number(stageNo || 0);
   return (state.activePlans || []).reduce((maxRound, plan) => {
+    if (!plan) return maxRound;
     const planStageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (plan.planKind !== "church_campaign_stage" || planStageNo !== target) return maxRound;
     return Math.max(maxRound, Number(plan.currentRound || 1));
@@ -455,17 +457,7 @@ function updateBadgeWallSummary(unlockedCount, total) {
   }
 }
 
-function bindBadgeStripProfileLink() {
-  const linkBtn = document.getElementById("dashboard-badge-strip-link");
-  if (!linkBtn || linkBtn._badgeStripLinkBound) return;
-  linkBtn._badgeStripLinkBound = true;
-  linkBtn.addEventListener("click", function (e) {
-    e.preventDefault();
-    if (typeof window.navigateToBadgeWall === "function") {
-      window.navigateToBadgeWall();
-    }
-  });
-}
+
 
 function attachBadgeOpenHandlers(element, badge, isUnlocked) {
   const openDetail = function () {
@@ -496,98 +488,129 @@ function getBadgeFrameClass(badge) {
 }
 
 function renderBadgeWall(containerId) {
+  console.log('[Badge Debug] renderBadgeWall initialized with containerId:', containerId);
   const container = document.getElementById("badges-grid") || document.getElementById(containerId);
-  if (!container) return;
-  container.innerHTML = "";
-
-  const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
-  if (!list) {
-    container.innerHTML = `<div class="badge-wall__empty">暫無徽章</div>`;
+  console.log('[Badge Debug] Target container element:', container);
+  if (!container) {
+    console.warn('[Badge Debug] Target container not found in DOM!');
     return;
   }
-  if (container.id === "badges-grid") {
-    updateBadgeWallSummary(list.filter(badge => getBadgeStarState(badge).level > 0).length, list.length);
-  }
-  const getClasses = typeof getHonorBadgeItemClasses === "function"
-    ? getHonorBadgeItemClasses
-    : unlocked => (unlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
-
-  list.forEach(badge => {
-    const starState = getBadgeStarState(badge);
-    const isUnlocked = starState.level > 0;
-    const badgeItem = document.createElement("div");
-    badgeItem.className = getClasses(isUnlocked) + " honor-badge-item--tile";
-    badgeItem.setAttribute("role", "button");
-    badgeItem.setAttribute("tabindex", "0");
-    badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
-    const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    const tierClass = getBadgeFrameClass(badge);
-    badgeItem.innerHTML = `
-      ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
-      <div class="honor-badge-item__icon-wrap honor-badge-hex-shell">
-        <div class="honor-badge-hex ${hexState} ${tierClass}">
-          <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
-        </div>
-        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
-      </div>
-      <span class="honor-badge-item__title">${safeTitle}</span>
-      ${renderBadgeStars(badge)}
-    `;
-    attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
-    container.appendChild(badgeItem);
-  });
-  if (typeof hydrateIcons === "function") hydrateIcons(container);
-  bindBadgeDetailControls();
-}
-
-function renderBadgeStrip(containerId, options) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const opts = options || {};
   container.innerHTML = "";
-  const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
-  if (!list) return;
-  if (opts.linkToProfile) bindBadgeStripProfileLink();
 
-  list.forEach(badge => {
-    const starState = getBadgeStarState(badge);
-    const isUnlocked = starState.level > 0;
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "badge-strip__item " + (isUnlocked ? "unlocked" : "locked");
-    item.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const tierClass = getBadgeFrameClass(badge);
-    const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    item.innerHTML = `
-      <span class="honor-badge-hex-shell honor-badge-hex-shell--sm">
-        <span class="honor-badge-hex ${hexState} ${tierClass}">
-          <span class="nlc-icon nlc-icon--sm" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
-        </span>
-        ${!isUnlocked ? `<span class="honor-badge-hex__lock" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="lock"></span></span>` : ""}
-        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
-      </span>
-      ${renderBadgeStars(badge, true)}
-    `;
-    attachBadgeOpenHandlers(item, badge, isUnlocked);
-    container.appendChild(item);
-  });
-  if (typeof hydrateIcons === "function") hydrateIcons(container);
+  try {
+    const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
+    console.log('[Badge Debug] Achievements list data:', list);
+    if (!list || list.length === 0) {
+      console.warn('[Badge Debug] Achievements list is empty or undefined!');
+      container.innerHTML = `<div class="badge-wall__empty" style="text-align: center; padding: 2rem; color: var(--text-muted);">暫無徽章 (清單未載入或為空)</div>`;
+      return;
+    }
+
+    if (container.id === "badges-grid") {
+      const unlockedCount = list.filter(badge => {
+        const starState = getBadgeStarState(badge);
+        return starState.level > 0;
+      }).length;
+      console.log('[Badge Debug] Unlocked badges count:', unlockedCount, 'out of', list.length);
+      updateBadgeWallSummary(unlockedCount, list.length);
+    }
+
+    const getClasses = typeof getHonorBadgeItemClasses === "function"
+      ? getHonorBadgeItemClasses
+      : unlocked => (unlocked ? "honor-badge-item unlocked" : "honor-badge-item locked");
+
+    list.forEach((badge, index) => {
+      const starState = getBadgeStarState(badge);
+      const isUnlocked = starState.level > 0;
+      console.log(`[Badge Debug] Processing badge [${index}]:`, badge.title, 'isUnlocked:', isUnlocked, 'starState:', starState);
+      const badgeItem = document.createElement("div");
+      badgeItem.className = getClasses(isUnlocked) + " honor-badge-item--tile";
+      badgeItem.setAttribute("role", "button");
+      badgeItem.setAttribute("tabindex", "0");
+      badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
+      const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
+      
+      let iconContent = "";
+      let shellStyle = "width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;";
+
+      if (badge.campaignStageNo) {
+        const filenames = {
+          1: "rock-badge.svg",
+          2: "iron-badge.svg",
+          3: "copper-badge.svg",
+          4: "bronze-badge.svg",
+          5: "silver-badge.svg",
+          6: "gold-badge.svg",
+          7: "adamantine-badge.svg",
+          8: "ophir-gold-badge.svg",
+          9: "fire-gold-badge.svg",
+          10: "new-jerusalem-badge.svg"
+        };
+        const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
+        const lockStateClass = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
+        
+        const imgFilterStyle = !isUnlocked
+          ? "filter: grayscale(1) saturate(0) brightness(0.75) contrast(1.05); opacity: 0.75;"
+          : "";
+          
+        iconContent = `<img width="200" height="240" class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${imgFilterStyle}" alt="${safeTitle}" />`;
+        
+        // ── 覆蓋 CSS 變數，關閉 ::after 背景圖渲染，防止與 <img> 產生重疊重影 ──
+        shellStyle += " --campaign-medal-frame: none !important;";
+      } else {
+        const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
+        iconContent = `
+          <div class="honor-badge-hex ${hexState}">
+            <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
+          </div>
+        `;
+      }
+
+      const titleHtml = badge.campaignStageNo ? "" : `<span class="honor-badge-item__title">${safeTitle}</span>`;
+
+      badgeItem.innerHTML = `
+        ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
+        <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="${shellStyle}">
+          ${iconContent}
+          ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true" style="z-index: 5;"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
+        </div>
+        ${titleHtml}
+        ${renderBadgeStars(badge)}
+      `;
+      attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
+      container.appendChild(badgeItem);
+    });
+
+    if (typeof hydrateIcons === "function") {
+      console.log('[Badge Debug] Hydrating icons inside badge container');
+      hydrateIcons(container);
+    }
+    bindBadgeDetailControls();
+    console.log('[Badge Debug] renderBadgeWall completed successfully!');
+  } catch (err) {
+    console.error('[Badge Debug] Critical error in renderBadgeWall execution:', err);
+  }
 }
+
+
 
 window.navigateToBadgeWall = function () {
   if (typeof appRouter !== "undefined" && typeof appRouter.switchTab === "function") {
     appRouter.switchTab("profile-view");
   }
   requestAnimationFrame(function () {
-    const target = document.getElementById("profile-badges-card-col");
+    const badgesTrigger = document.querySelector('.profile-tab-trigger[data-profile-tab="badges"]');
+    if (badgesTrigger) {
+      badgesTrigger.click();
+    }
+    const target = document.getElementById("profile-badges-inner-card");
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   });
 };
 
-window.renderBadgeStrip = renderBadgeStrip;
+
 
 window.getBadgeMilestoneConfig = getBadgeMilestoneConfig;
 window.getBadgeProgressValue = getBadgeProgressValue;
@@ -1597,7 +1620,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
 function calculatePlanProgress() {
   calculateAllPlansProgress();
   if (state.activePlan && state.activePlans) {
-    const currentInList = state.activePlans.find(p => p.presetKey === state.activePlan.presetKey);
+    const currentInList = state.activePlans.find(p => p && p.presetKey === state.activePlan.presetKey);
     if (currentInList) {
       state.activePlan = currentInList;
     }
@@ -1627,6 +1650,7 @@ function calculateAllPlansProgress() {
   }
 
   visibleActivePlans.forEach(plan => {
+    if (!plan) return;
     // 💡 數據一致性修正：直接從打卡日誌計算實際讀過的最大遍數
     let maxReadRound = plan.currentRound || 1;
     if (state.readingLogs) {
