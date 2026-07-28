@@ -262,9 +262,7 @@ export function updateDashboardView() {
   renderDailyVerse();
   updateAnnouncementsList();
 
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-  }
+
 
   const planSummaryDiv = document.getElementById("active-plan-summary");
   if (state.activePlan) {
@@ -2507,10 +2505,7 @@ export function init() {
   // ── Subscribe to unified theme change event ──
   window.addEventListener("app:themeChanged", () => {
     // Re-render badge strips when theme changes (they use CSS-dependent colors)
-    if (typeof renderBadgeStrip === "function") {
-      renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-      renderBadgeStrip("plan-badge-strip");
-    }
+
   });
 
   // ── Subscribe to background change event (from profile tab or any other source) ──

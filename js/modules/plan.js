@@ -4783,9 +4783,7 @@ window.changePersonalTrendRange = function (range) {
 };
 
 function renderPersonalUnlockedBadges() {
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("plan-badge-strip");
-  }
+  // Deprecated: Badge strip is removed as badges only display on the profile page
 }
 
 async function renderMyPersonalRankings() {

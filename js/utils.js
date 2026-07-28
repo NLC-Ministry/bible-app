@@ -395,6 +395,7 @@ function getCampaignStageCompletedRounds(stageNo) {
   const target = Number(stageNo || 0);
   let completedRounds = Number(localStorage.getItem(`church_stage_completed_rounds_${target}`) || 0);
   (state.activePlans || []).forEach(plan => {
+    if (!plan) return;
     const planStageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (plan.planKind !== "church_campaign_stage" || planStageNo !== target) return;
     const currentRound = Math.max(1, Number(plan.currentRound || 1));
@@ -407,6 +408,7 @@ function getCampaignStageCompletedRounds(stageNo) {
 function getCampaignStageCurrentRound(stageNo) {
   const target = Number(stageNo || 0);
   return (state.activePlans || []).reduce((maxRound, plan) => {
+    if (!plan) return maxRound;
     const planStageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (plan.planKind !== "church_campaign_stage" || planStageNo !== target) return maxRound;
     return Math.max(maxRound, Number(plan.currentRound || 1));
@@ -455,17 +457,7 @@ function updateBadgeWallSummary(unlockedCount, total) {
   }
 }
 
-function bindBadgeStripProfileLink() {
-  const linkBtn = document.getElementById("dashboard-badge-strip-link");
-  if (!linkBtn || linkBtn._badgeStripLinkBound) return;
-  linkBtn._badgeStripLinkBound = true;
-  linkBtn.addEventListener("click", function (e) {
-    e.preventDefault();
-    if (typeof window.navigateToBadgeWall === "function") {
-      window.navigateToBadgeWall();
-    }
-  });
-}
+
 
 function attachBadgeOpenHandlers(element, badge, isUnlocked) {
   const openDetail = function () {
@@ -541,39 +533,7 @@ function renderBadgeWall(containerId) {
   bindBadgeDetailControls();
 }
 
-function renderBadgeStrip(containerId, options) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const opts = options || {};
-  container.innerHTML = "";
-  const list = window.ACHIEVEMENTS || (typeof ACHIEVEMENTS !== "undefined" ? ACHIEVEMENTS : null);
-  if (!list) return;
-  if (opts.linkToProfile) bindBadgeStripProfileLink();
 
-  list.forEach(badge => {
-    const starState = getBadgeStarState(badge);
-    const isUnlocked = starState.level > 0;
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "badge-strip__item " + (isUnlocked ? "unlocked" : "locked");
-    item.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
-    const tierClass = getBadgeFrameClass(badge);
-    const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    item.innerHTML = `
-      <span class="honor-badge-hex-shell honor-badge-hex-shell--sm">
-        <span class="honor-badge-hex ${hexState} ${tierClass}">
-          <span class="nlc-icon nlc-icon--sm" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
-        </span>
-        ${!isUnlocked ? `<span class="honor-badge-hex__lock" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="lock"></span></span>` : ""}
-        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
-      </span>
-      ${renderBadgeStars(badge, true)}
-    `;
-    attachBadgeOpenHandlers(item, badge, isUnlocked);
-    container.appendChild(item);
-  });
-  if (typeof hydrateIcons === "function") hydrateIcons(container);
-}
 
 window.navigateToBadgeWall = function () {
   if (typeof appRouter !== "undefined" && typeof appRouter.switchTab === "function") {
@@ -591,7 +551,7 @@ window.navigateToBadgeWall = function () {
   });
 };
 
-window.renderBadgeStrip = renderBadgeStrip;
+
 
 window.getBadgeMilestoneConfig = getBadgeMilestoneConfig;
 window.getBadgeProgressValue = getBadgeProgressValue;
@@ -1601,7 +1561,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
 function calculatePlanProgress() {
   calculateAllPlansProgress();
   if (state.activePlan && state.activePlans) {
-    const currentInList = state.activePlans.find(p => p.presetKey === state.activePlan.presetKey);
+    const currentInList = state.activePlans.find(p => p && p.presetKey === state.activePlan.presetKey);
     if (currentInList) {
       state.activePlan = currentInList;
     }
@@ -1631,6 +1591,7 @@ function calculateAllPlansProgress() {
   }
 
   visibleActivePlans.forEach(plan => {
+    if (!plan) return;
     // 💡 數據一致性修正：直接從打卡日誌計算實際讀過的最大遍數
     let maxReadRound = plan.currentRound || 1;
     if (state.readingLogs) {
