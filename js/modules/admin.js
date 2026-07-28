@@ -1049,6 +1049,7 @@ export function init() {
 
   initAdminOrgManagement();
   initAdminFiltersUI();
+  initAdminTeamRegistration();
 }
 
 // Bind to window for global access compatibility
@@ -1059,3 +1060,162 @@ window.renderAdminFeatureSettings = renderAdminFeatureSettings;
 window.openAdminFilterBottomSheet = openAdminFilterBottomSheet;
 window.closeAdminFilterBottomSheet = closeAdminFilterBottomSheet;
 window.initAdminUserManagement = init;
+
+let activeTeamDivision = 3;
+let cachedTeamsData = null;
+
+export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
+  const contentEl = document.getElementById("admin-team-status-content");
+  if (!contentEl) return;
+
+  const isAdmin = state.currentUser && state.currentUser.role === "admin";
+  const cardWrap = document.getElementById("admin-team-status-card-wrap");
+  if (cardWrap) {
+    cardWrap.classList.toggle("hidden", !isAdmin);
+  }
+  if (!isAdmin) return;
+
+  if (!cachedTeamsData || forceRefresh) {
+    contentEl.innerHTML = `
+      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        讀取團隊報名資料中...
+      </div>
+    `;
+
+    if (!state.globalPlans || state.globalPlans.length === 0) {
+      await db.loadGlobalPlans();
+    }
+
+    const fetchedData = [];
+    for (const plan of state.globalPlans) {
+      const stats = await db.getReadingTeamStatistics(plan);
+      if (stats && stats.success && stats.context) {
+        fetchedData.push({
+          plan,
+          summary: stats.context.summary || {},
+          teams: stats.context.teams || []
+        });
+      }
+    }
+    cachedTeamsData = fetchedData;
+  }
+
+  const filteredPlans = cachedTeamsData.map(item => {
+    const teams = item.teams.filter(t => Number(t.division) === Number(activeTeamDivision));
+    return {
+      ...item,
+      teams
+    };
+  }).filter(item => item.teams.length > 0);
+
+  if (filteredPlans.length === 0) {
+    contentEl.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        目前無 ${activeTeamDivision} 人團隊的報名資料。
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  filteredPlans.forEach(item => {
+    const planName = item.plan.name || "未命名計畫";
+    const signupCount = item.teams.filter(t => t.status === "signup").length;
+    const readyCount = item.teams.filter(t => t.status === "ready").length;
+    const totalMembers = item.teams.reduce((acc, t) => acc + (t.memberCount || 0), 0);
+
+    html += `
+      <div class="team-plan-section" style="margin-bottom: 2rem;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+          <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true" style="color: var(--primary-color);"></span>
+          計畫：${planName}
+        </h4>
+        <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          <span>招募中：<strong style="color: var(--primary-color);">${signupCount}</strong> 隊</span>
+          <span>已成隊：<strong style="color: var(--color-success-foreground);">${readyCount}</strong> 隊</span>
+          <span>總報名人數：<strong>${totalMembers}</strong> 人</span>
+        </div>
+        
+        <div style="overflow-x: auto; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
+          <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊伍名稱</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px;">狀態</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 120px;">隊長</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px; text-align: center;">人數</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">成員名單</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+
+    item.teams.forEach(team => {
+      const captain = team.members.find(m => m.role === "captain") || {};
+      const membersText = team.members.map(m => {
+        const roleText = m.role === "captain" ? " (隊長)" : "";
+        return `${m.name}${roleText}`;
+      }).join("、 ");
+
+      const statusBadge = team.status === "ready" 
+        ? `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--color-success-foreground) 10%, transparent); color: var(--color-success-foreground); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);">已成隊</span>`
+        : `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);">招募中</span>`;
+
+      const isFull = Number(team.memberCount) >= Number(activeTeamDivision);
+      const countStyle = isFull 
+        ? `color: var(--color-success-foreground); font-weight: 700;`
+        : `color: var(--text-secondary);`;
+
+      html += `
+        <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
+          <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
+          <td style="padding: 0.75rem 0.8rem;">${statusBadge}</td>
+          <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name || "未知"}</td>
+          <td style="padding: 0.75rem 0.8rem; text-align: center; ${countStyle}">${team.memberCount} / ${activeTeamDivision}人</td>
+          <td style="padding: 0.75rem 0.8rem; color: var(--text-secondary); font-size: 0.78rem;">${membersText || "無成員"}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  contentEl.innerHTML = html;
+  
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(contentEl);
+  }
+}
+
+export function initAdminTeamRegistration() {
+  const tab3 = document.getElementById("admin-team-tab-3");
+  const tab6 = document.getElementById("admin-team-tab-6");
+
+  if (tab3 && tab6) {
+    tab3.onclick = (e) => {
+      e.preventDefault();
+      if (activeTeamDivision === 3) return;
+      activeTeamDivision = 3;
+      tab3.classList.add("active");
+      tab6.classList.remove("active");
+      renderAdminTeamRegistrationStatus();
+    };
+
+    tab6.onclick = (e) => {
+      e.preventDefault();
+      if (activeTeamDivision === 6) return;
+      activeTeamDivision = 6;
+      tab6.classList.add("active");
+      tab3.classList.remove("active");
+      renderAdminTeamRegistrationStatus();
+    };
+  }
+}
+
+window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
+window.initAdminTeamRegistration = initAdminTeamRegistration;
