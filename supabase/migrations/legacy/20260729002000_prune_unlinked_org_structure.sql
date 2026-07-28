@@ -1,8 +1,5 @@
--- Remove legacy organization rows that are not connected to any user.
---
--- Delete from the leaves upward so a parent is retained whenever it is still
--- needed by a linked descendant. Do not use a cascading truncate here because
--- profiles references these tables and user data must remain intact.
+-- Apply the safe organization cleanup to environments where the earlier
+-- legacy cleanup migration has already been recorded as applied.
 DELETE FROM public.small_groups AS small_group
 WHERE NOT EXISTS (
   SELECT 1

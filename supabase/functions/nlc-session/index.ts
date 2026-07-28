@@ -472,25 +472,49 @@ Deno.serve(async (req: Request) => {
     let pastoral_zone_id: string | null = null;
     let small_group_id: string | null = null;
 
-    if (profilePayload.great_region) {
-      const { data: regionData } = await supabaseAdmin
+    // Rebuild the organization tree from authoritative Member Hub data as
+    // members sign in. A degraded sync must never recreate stale local data.
+    if (memberContext && profilePayload.great_region) {
+      const { data: regionData, error: regionError } = await supabaseAdmin
         .from("great_regions")
+        .upsert(
+          { name: profilePayload.great_region },
+          { onConflict: "name" }
+        )
         .select("id")
-        .eq("name", profilePayload.great_region)
-        .maybeSingle();
-      if (regionData) great_region_id = regionData.id;
+        .single();
+      if (regionError) throw regionError;
+      great_region_id = regionData.id;
     }
-    if (profilePayload.pastoral_zone) {
-      let query = supabaseAdmin.from("pastoral_zones").select("id").eq("name", profilePayload.pastoral_zone);
-      if (great_region_id) query = query.eq("great_region_id", great_region_id);
-      const { data: zoneData } = await query.maybeSingle();
-      if (zoneData) pastoral_zone_id = zoneData.id;
+    if (memberContext && profilePayload.pastoral_zone && great_region_id) {
+      const { data: zoneData, error: zoneError } = await supabaseAdmin
+        .from("pastoral_zones")
+        .upsert(
+          {
+            name: profilePayload.pastoral_zone,
+            great_region_id
+          },
+          { onConflict: "name,great_region_id" }
+        )
+        .select("id")
+        .single();
+      if (zoneError) throw zoneError;
+      pastoral_zone_id = zoneData.id;
     }
-    if (profilePayload.small_group) {
-      let query = supabaseAdmin.from("small_groups").select("id").eq("name", profilePayload.small_group);
-      if (pastoral_zone_id) query = query.eq("pastoral_zone_id", pastoral_zone_id);
-      const { data: groupData } = await query.maybeSingle();
-      if (groupData) small_group_id = groupData.id;
+    if (memberContext && profilePayload.small_group && pastoral_zone_id) {
+      const { data: groupData, error: groupError } = await supabaseAdmin
+        .from("small_groups")
+        .upsert(
+          {
+            name: profilePayload.small_group,
+            pastoral_zone_id
+          },
+          { onConflict: "name,pastoral_zone_id" }
+        )
+        .select("id")
+        .single();
+      if (groupError) throw groupError;
+      small_group_id = groupData.id;
     }
 
     profilePayload.great_region_id = (great_region_id || (profilePayload.great_region === existingProfile?.great_region ? existingProfile?.great_region_id : null)) || null;

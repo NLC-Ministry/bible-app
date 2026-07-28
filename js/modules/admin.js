@@ -789,11 +789,22 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
           <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
             <thead>
               <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
-                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊伍名稱</th>
-                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px;">狀態</th>
-                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 120px;">隊長</th>
-                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px; text-align: center;">人數</th>
-                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">成員名單</th>
+                ${Number(activeTeamDivision) === 3 ? `
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長所屬牧區</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊名</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員1 (隊長)</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員2</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員3</th>
+                ` : `
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長所屬牧區</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊名</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員1 (隊長)</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員2</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員3</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員4</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員5</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員6</th>
+                `}
               </tr>
             </thead>
             <tbody>
@@ -801,27 +812,21 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
 
     item.teams.forEach(team => {
       const captain = team.members.find(m => m.role === "captain") || {};
-      const membersText = team.members.map(m => {
-        const roleText = m.role === "captain" ? " (隊長)" : "";
-        return `${m.name}${roleText}`;
-      }).join("、 ");
+      const captainZone = captain.pastoralZone || "未設定";
+      const otherMembers = team.members.filter(m => m.role !== "captain");
 
-      const statusBadge = team.status === "ready" 
-        ? `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--color-success-foreground) 10%, transparent); color: var(--color-success-foreground); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);">已成隊</span>`
-        : `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);">招募中</span>`;
-
-      const isFull = Number(team.memberCount) >= Number(activeTeamDivision);
-      const countStyle = isFull 
-        ? `color: var(--color-success-foreground); font-weight: 700;`
-        : `color: var(--text-secondary);`;
+      let membersCells = "";
+      for (let i = 0; i < Number(activeTeamDivision) - 1; i++) {
+        const m = otherMembers[i];
+        membersCells += `<td style="padding: 0.75rem 0.8rem; color: var(--text-secondary);">${m ? m.name : "-"}</td>`;
+      }
 
       html += `
         <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
+          <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${captainZone}</td>
           <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
-          <td style="padding: 0.75rem 0.8rem;">${statusBadge}</td>
-          <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name || "未知"}</td>
-          <td style="padding: 0.75rem 0.8rem; text-align: center; ${countStyle}">${team.memberCount} / ${activeTeamDivision}人</td>
-          <td style="padding: 0.75rem 0.8rem; color: var(--text-secondary); font-size: 0.78rem;">${membersText || "無成員"}</td>
+          <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name ? (captain.name + " (隊長)") : "-"}</td>
+          ${membersCells}
         </tr>
       `;
     });
