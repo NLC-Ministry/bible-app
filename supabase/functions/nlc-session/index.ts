@@ -83,19 +83,75 @@ function orgFromHomePath(path: any[]) {
   };
 }
 
-/** Legacy Member Hub fields — remove after production validation. */
-function orgFromLegacyOrganization(organization: any) {
+function pickOrgField(org: any, ...keys: string[]) {
+  for (const key of keys) {
+    const value = org?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return null;
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function orgFromMemberContext(organization: any) {
   const org = organization || {};
   return {
-    great_region: org.homeRegionName ? String(org.homeRegionName).trim() : null,
-    pastoral_zone: org.homeZoneName ? String(org.homeZoneName).trim() : null,
-    small_group: org.homeGroupName ? String(org.homeGroupName).trim() : null
+    great_region: pickOrgField(org, "greatRegion", "homeRegionName"),
+    pastoral_zone: pickOrgField(org, "pastoralZone", "homeZoneName"),
+    small_group: pickOrgField(org, "smallGroup", "homeGroupName")
+  };
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function buildLockedFields(sourceValues: Record<string, string | null>, options: { hubLinked?: boolean } = {}) {
+  const locked = Object.entries(sourceValues)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+    .map(([field]) => field);
+
+  if (options.hubLinked) {
+    for (const field of HUB_OWNED_ORG_FIELDS) {
+      if (!locked.includes(field)) locked.push(field);
+    }
+  }
+
+  return locked;
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function projectOrgFieldsFromHub(
+  mergedOrg: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null },
+  existingProfile: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null } | null,
+  hubLinked: boolean
+) {
+  const hubOrg = {
+    great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
+    pastoral_zone: mergedOrg?.pastoral_zone ? String(mergedOrg.pastoral_zone).trim() : "",
+    small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
+  };
+
+  if (hubLinked) return hubOrg;
+
+  const firstValue = (...values: any[]) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+    }
+    return "";
+  };
+
+  return {
+    great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
+    pastoral_zone: firstValue(hubOrg.pastoral_zone, existingProfile?.pastoral_zone),
+    small_group: firstValue(hubOrg.small_group, existingProfile?.small_group)
   };
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
-  const legacy = orgFromLegacyOrganization(contextOrganization);
+  const contextOrg = orgFromMemberContext(contextOrganization);
   const homeNodeName = contextOrganization?.homeNodeName
     ? String(contextOrganization.homeNodeName).trim()
     : null;
@@ -103,7 +159,7 @@ function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganizatio
   const pick = (field: "great_region" | "pastoral_zone" | "small_group") => {
     if (platformOrg?.[field]) return platformOrg[field];
     if (placementOrg?.[field]) return placementOrg[field];
-    if (legacy[field]) return legacy[field];
+    if (contextOrg[field]) return contextOrg[field];
     if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
     return null;
   };
@@ -245,10 +301,22 @@ Deno.serve(async (req: Request) => {
     }
 
     let memberContext: any = null;
-    const memberResponse = await fetchJsonOptional(`${memberHubUrl}/api/me/context`, {
-      headers: bearerHeaders
-    });
-    memberContext = memberResponse?.context || null;
+    try {
+      const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
+        headers: bearerHeaders
+      });
+      memberContext = memberResponse?.context || null;
+    } catch (err) {
+      console.error("Member Hub context fetch failed:", err);
+      return jsonResponse({
+        error: "member_hub_context_failed",
+        message: err instanceof Error ? err.message : String(err)
+      }, 502);
+    }
+
+    if (!memberContext) {
+      return jsonResponse({ error: "member_hub_context_missing" }, 502);
+    }
 
     const memberProfile = memberContext?.profile || {};
     const memberIdentity = memberContext?.identity || {};
@@ -354,18 +422,20 @@ Deno.serve(async (req: Request) => {
 
     const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
 
+    // Every Logto session treats Member Hub as canonical for org placement.
+    const hubLinked = true;
+    const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
+
     const sourceValues: Record<string, string | null> = {
       email: lookupEmail,
       name: memberProfile.displayName || userinfo.name || userinfo.preferred_username || memberIdentity.username || null,
-      great_region: mergedOrg.great_region,
-      pastoral_zone: mergedOrg.pastoral_zone,
-      small_group: mergedOrg.small_group,
+      great_region: projectedOrg.great_region || null,
+      pastoral_zone: projectedOrg.pastoral_zone || null,
+      small_group: projectedOrg.small_group || null,
       role: syncedRole === "admin" ? "admin" : null
     };
 
-    const lockedFields = Object.entries(sourceValues)
-      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
-      .map(([field]) => field);
+    const lockedFields = buildLockedFields(sourceValues, { hubLinked });
 
     const firstValue = (...values: any[]) => {
       for (const value of values) {
@@ -379,9 +449,9 @@ Deno.serve(async (req: Request) => {
       id: profileId,
       name: firstValue(sourceValues.name, existingProfile?.name, "NLC User"),
       email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
-      great_region: firstValue(sourceValues.great_region, existingProfile?.great_region),
-      pastoral_zone: firstValue(sourceValues.pastoral_zone, existingProfile?.pastoral_zone),
-      small_group: firstValue(sourceValues.small_group, existingProfile?.small_group),
+      great_region: projectedOrg.great_region,
+      pastoral_zone: projectedOrg.pastoral_zone,
+      small_group: projectedOrg.small_group,
       role: syncedRole,
       is_demo: false,
       is_active: true,

@@ -4,9 +4,11 @@ import {
   orgFromCareChain,
   orgFromHomePath,
   orgFromLegacyOrganization,
+  orgFromMemberContext,
   mergeOrgSources,
   resolveSyncedRole,
-  buildLockedFields
+  buildLockedFields,
+  projectOrgFieldsFromHub
 } from "./lib/nlc-profile-sync.mjs";
 
 describe("orgFromCareChain", () => {
@@ -50,11 +52,23 @@ describe("orgFromHomePath", () => {
 });
 
 describe("mergeOrgSources", () => {
-  it("prefers Platform org over placement and legacy", () => {
+  it("prefers Platform org over placement and Member Hub context", () => {
     const platform = { great_region: "A", pastoral_zone: "B", small_group: "C" };
     const placement = { great_region: "X", pastoral_zone: "Y", small_group: "Z" };
-    const legacy = { homeRegionName: "L1", homeZoneName: "L2", homeGroupName: "L3" };
-    expect(mergeOrgSources(platform, placement, legacy)).toEqual(platform);
+    const context = { greatRegion: "L1", pastoralZone: "L2", smallGroup: "L3" };
+    expect(mergeOrgSources(platform, placement, context)).toEqual(platform);
+  });
+
+  it("reads canonical Member Hub context fields before legacy names", () => {
+    expect(mergeOrgSources(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { greatRegion: "北區", pastoralZone: "青年牧區", smallGroup: "馬鈴薯" }
+    )).toEqual({
+      great_region: "北區",
+      pastoral_zone: "青年牧區",
+      small_group: "馬鈴薯"
+    });
   });
 
   it("falls back to legacy fields then homeNodeName", () => {
@@ -76,6 +90,20 @@ describe("mergeOrgSources", () => {
       great_region: null,
       pastoral_zone: "恩典小家",
       small_group: null
+    });
+  });
+});
+
+describe("orgFromMemberContext", () => {
+  it("reads canonical greatRegion / pastoralZone / smallGroup fields", () => {
+    expect(orgFromMemberContext({
+      greatRegion: "北區",
+      pastoralZone: "青年牧區",
+      smallGroup: "馬鈴薯"
+    })).toEqual({
+      great_region: "北區",
+      pastoral_zone: "青年牧區",
+      small_group: "馬鈴薯"
     });
   });
 });
@@ -122,6 +150,48 @@ describe("buildLockedFields", () => {
       small_group: "馬鈴"
     })).toEqual(["name", "great_region", "small_group"]);
   });
+
+  it("always locks org fields for Member Hub-linked users", () => {
+    expect(buildLockedFields({
+      name: "王小明",
+      email: "a@b.c",
+      great_region: null,
+      pastoral_zone: null,
+      small_group: null
+    }, { hubLinked: true })).toEqual([
+      "name",
+      "email",
+      "great_region",
+      "pastoral_zone",
+      "small_group"
+    ]);
+  });
+});
+
+describe("projectOrgFieldsFromHub", () => {
+  it("uses Member Hub values directly when hub-linked, clearing stale local org fields", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: "北區", pastoral_zone: null, small_group: null },
+      { great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴" },
+      true
+    )).toEqual({
+      great_region: "北區",
+      pastoral_zone: "",
+      small_group: ""
+    });
+  });
+
+  it("falls back to existing profile org fields when not hub-linked", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴" },
+      false
+    )).toEqual({
+      great_region: "東區",
+      pastoral_zone: "大安1",
+      small_group: "馬鈴"
+    });
+  });
 });
 
 describe("nlc-session member context sync timestamp", () => {
@@ -134,11 +204,13 @@ describe("nlc-session member context sync timestamp", () => {
       .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
   });
 
-  it("writes Member Hub organization source values before falling back to existing profile values", () => {
+  it("projects org placement from Member Hub for every Logto session", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 
-    expect(source).toMatch(/great_region:\s*firstValue\(sourceValues\.great_region,\s*existingProfile\?\.great_region\)/);
-    expect(source).toMatch(/pastoral_zone:\s*firstValue\(sourceValues\.pastoral_zone,\s*existingProfile\?\.pastoral_zone\)/);
-    expect(source).toMatch(/small_group:\s*firstValue\(sourceValues\.small_group,\s*existingProfile\?\.small_group\)/);
+    expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
+    expect(source).toContain("const hubLinked = true");
+    expect(source).toContain("orgFromMemberContext");
+    expect(source).toContain("member_hub_context_failed");
+    expect(source).not.toMatch(/fetchJsonOptional\(`\$\{memberHubUrl\}\/api\/me\/context`/);
   });
 });

@@ -355,12 +355,6 @@ Deno.serve(async (req: Request) => {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
       const updatePayload = {
         name: payload.name ?? profile.name ?? "",
-        great_region: payload.great_region ?? profile.great_region ?? "",
-        pastoral_zone: payload.pastoral_zone ?? profile.pastoral_zone ?? "",
-        small_group: payload.small_group ?? profile.small_group ?? "",
-        great_region_id: payload.great_region_id ?? null,
-        pastoral_zone_id: payload.pastoral_zone_id ?? null,
-        small_group_id: payload.small_group_id ?? null,
         updated_at: new Date().toISOString()
       };
 
@@ -374,12 +368,10 @@ Deno.serve(async (req: Request) => {
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
       if (!savedProfile) return jsonResponse({ error: "profile_write_not_verified" }, 500);
 
-      const expectedFields = ["name", "great_region", "pastoral_zone", "small_group"];
-      const mismatches = expectedFields.filter(field => String((savedProfile as any)[field] || "") !== String((updatePayload as any)[field] || ""));
-      if (mismatches.length > 0) {
+      if (String((savedProfile as any).name || "") !== String(updatePayload.name || "")) {
         return jsonResponse({
           error: "profile_write_mismatch",
-          mismatches,
+          mismatches: ["name"],
           expected: updatePayload,
           actual: savedProfile,
           project_url: supabaseUrl,

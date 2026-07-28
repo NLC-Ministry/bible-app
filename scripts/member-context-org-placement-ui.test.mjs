@@ -36,7 +36,7 @@ describe("Member Hub org placement refresh", () => {
     expect(html).toContain('id="btn-member-hub-refresh"');
     expect(profileJs).toContain('document.getElementById("btn-member-hub-refresh")');
     expect(profileJs).toContain("syncNlcSessionWithSupabase(true)");
-    expect(profileJs).toContain("renderMemberHubOrgPlacement()");
+    expect(profileJs).toContain("renderProfileView()");
   });
 
   it("keeps Hub-owned organization fields locked for Logto users", () => {
@@ -44,5 +44,19 @@ describe("Member Hub org placement refresh", () => {
     expect(profileJs).toContain('"pastoral_zone"');
     expect(profileJs).toContain('"small_group"');
     expect(profileJs).toContain("lockedFields.has");
+  });
+
+  it("routes identity management to Member Hub onboarding, not pastoral admin", () => {
+    expect(profileJs).toContain('getMemberHubUrl("onboarding")');
+    expect(profileJs).toContain("identityUrl = urls.onboarding");
+    expect(profileJs).not.toContain("pastoral/structure");
+  });
+
+  it("styles the profile logout action with theme-aware danger tokens", () => {
+    expect(html).toContain('class="profile-logout-btn"');
+    expect(css).toContain("--color-danger-foreground");
+    expect(css).toContain("--color-danger-muted");
+    expect(css).toContain(".profile-logout-btn");
+    expect(html).not.toContain("hover:text-danger");
   });
 });
