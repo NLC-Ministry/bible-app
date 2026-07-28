@@ -1260,6 +1260,7 @@ const db = {
     const editedRegion = state.currentUser.great_region || "";
     const editedZone = state.currentUser.pastoral_zone || "";
     const editedGroup = state.currentUser.small_group || "";
+    const lockedFields = new Set(state.profileLockedFields || []);
 
     const user = await this.getCurrentDbUser();
     if (!user) {
@@ -1273,15 +1274,22 @@ const db = {
 
       const profilePayload = {
         id: user.id,
-        name: editedName,
-        great_region: editedRegion,
-        pastoral_zone: editedZone,
-        small_group: editedGroup,
-        great_region_id: regionObj ? regionObj.id : null,
-        pastoral_zone_id: zoneObj ? zoneObj.id : null,
-        small_group_id: groupObj ? groupObj.id : null,
+        name: lockedFields.has("name") ? (state.currentUser.name || "") : editedName,
         updated_at: new Date().toISOString()
       };
+
+      if (!lockedFields.has("great_region")) {
+        profilePayload.great_region = editedRegion;
+        profilePayload.great_region_id = regionObj ? regionObj.id : null;
+      }
+      if (!lockedFields.has("pastoral_zone")) {
+        profilePayload.pastoral_zone = editedZone;
+        profilePayload.pastoral_zone_id = zoneObj ? zoneObj.id : null;
+      }
+      if (!lockedFields.has("small_group")) {
+        profilePayload.small_group = editedGroup;
+        profilePayload.small_group_id = groupObj ? groupObj.id : null;
+      }
 
 
 

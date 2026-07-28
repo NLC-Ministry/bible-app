@@ -36,7 +36,7 @@ describe("Member Hub org placement refresh", () => {
     expect(html).toContain('id="btn-member-hub-refresh"');
     expect(profileJs).toContain('document.getElementById("btn-member-hub-refresh")');
     expect(profileJs).toContain("syncNlcSessionWithSupabase(true)");
-    expect(profileJs).toContain("renderMemberHubOrgPlacement()");
+    expect(profileJs).toContain("renderProfileView()");
   });
 
   it("keeps Hub-owned organization fields locked for Logto users", () => {

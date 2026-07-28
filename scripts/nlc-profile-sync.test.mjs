@@ -6,7 +6,8 @@ import {
   orgFromLegacyOrganization,
   mergeOrgSources,
   resolveSyncedRole,
-  buildLockedFields
+  buildLockedFields,
+  projectOrgFieldsFromHub
 } from "./lib/nlc-profile-sync.mjs";
 
 describe("orgFromCareChain", () => {
@@ -122,6 +123,48 @@ describe("buildLockedFields", () => {
       small_group: "馬鈴"
     })).toEqual(["name", "great_region", "small_group"]);
   });
+
+  it("always locks org fields for Member Hub-linked users", () => {
+    expect(buildLockedFields({
+      name: "王小明",
+      email: "a@b.c",
+      great_region: null,
+      pastoral_zone: null,
+      small_group: null
+    }, { hubLinked: true })).toEqual([
+      "name",
+      "email",
+      "great_region",
+      "pastoral_zone",
+      "small_group"
+    ]);
+  });
+});
+
+describe("projectOrgFieldsFromHub", () => {
+  it("uses Member Hub values directly when hub-linked, clearing stale local org fields", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: "北區", pastoral_zone: null, small_group: null },
+      { great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴" },
+      true
+    )).toEqual({
+      great_region: "北區",
+      pastoral_zone: "",
+      small_group: ""
+    });
+  });
+
+  it("falls back to existing profile org fields when not hub-linked", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { great_region: "東區", pastoral_zone: "大安1", small_group: "馬鈴" },
+      false
+    )).toEqual({
+      great_region: "東區",
+      pastoral_zone: "大安1",
+      small_group: "馬鈴"
+    });
+  });
 });
 
 describe("nlc-session member context sync timestamp", () => {
@@ -132,5 +175,12 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source).toMatch(/member_context_synced_at:\s*nowIso/);
     expect(source.indexOf("const nowIso = new Date().toISOString()"))
       .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
+  });
+
+  it("projects org placement from Member Hub when the profile is hub-linked", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
+    expect(source).toContain('buildLockedFields(sourceValues, { hubLinked })');
   });
 });

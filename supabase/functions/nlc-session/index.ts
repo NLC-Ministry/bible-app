@@ -94,6 +94,52 @@ function orgFromLegacyOrganization(organization: any) {
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function buildLockedFields(sourceValues: Record<string, string | null>, options: { hubLinked?: boolean } = {}) {
+  const locked = Object.entries(sourceValues)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+    .map(([field]) => field);
+
+  if (options.hubLinked) {
+    for (const field of HUB_OWNED_ORG_FIELDS) {
+      if (!locked.includes(field)) locked.push(field);
+    }
+  }
+
+  return locked;
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function projectOrgFieldsFromHub(
+  mergedOrg: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null },
+  existingProfile: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null } | null,
+  hubLinked: boolean
+) {
+  const hubOrg = {
+    great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
+    pastoral_zone: mergedOrg?.pastoral_zone ? String(mergedOrg.pastoral_zone).trim() : "",
+    small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
+  };
+
+  if (hubLinked) return hubOrg;
+
+  const firstValue = (...values: any[]) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+    }
+    return "";
+  };
+
+  return {
+    great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
+    pastoral_zone: firstValue(hubOrg.pastoral_zone, existingProfile?.pastoral_zone),
+    small_group: firstValue(hubOrg.small_group, existingProfile?.small_group)
+  };
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
   const legacy = orgFromLegacyOrganization(contextOrganization);
   const homeNodeName = contextOrganization?.homeNodeName
@@ -354,18 +400,19 @@ Deno.serve(async (req: Request) => {
 
     const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
 
+    const hubLinked = Boolean(memberId || existingProfile?.nlc_member_id);
+    const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
+
     const sourceValues: Record<string, string | null> = {
       email: lookupEmail,
       name: memberProfile.displayName || userinfo.name || userinfo.preferred_username || memberIdentity.username || null,
-      great_region: mergedOrg.great_region,
-      pastoral_zone: mergedOrg.pastoral_zone,
-      small_group: mergedOrg.small_group,
+      great_region: projectedOrg.great_region || null,
+      pastoral_zone: projectedOrg.pastoral_zone || null,
+      small_group: projectedOrg.small_group || null,
       role: syncedRole === "admin" ? "admin" : null
     };
 
-    const lockedFields = Object.entries(sourceValues)
-      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
-      .map(([field]) => field);
+    const lockedFields = buildLockedFields(sourceValues, { hubLinked });
 
     const firstValue = (...values: any[]) => {
       for (const value of values) {
@@ -379,9 +426,9 @@ Deno.serve(async (req: Request) => {
       id: profileId,
       name: firstValue(sourceValues.name, existingProfile?.name, "NLC User"),
       email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
-      great_region: firstValue(sourceValues.great_region, existingProfile?.great_region),
-      pastoral_zone: firstValue(sourceValues.pastoral_zone, existingProfile?.pastoral_zone),
-      small_group: firstValue(sourceValues.small_group, existingProfile?.small_group),
+      great_region: projectedOrg.great_region,
+      pastoral_zone: projectedOrg.pastoral_zone,
+      small_group: projectedOrg.small_group,
       role: syncedRole,
       is_demo: false,
       is_active: true,

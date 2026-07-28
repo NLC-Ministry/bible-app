@@ -87,8 +87,12 @@ function wireMemberHubOrgRefresh() {
     btn.disabled = true;
     try {
       await db.syncNlcSessionWithSupabase(true);
-      renderMemberHubOrgPlacement();
-      renderMemberHubProfileLinks();
+      if (typeof renderProfileView === "function") {
+        await renderProfileView();
+      } else {
+        renderMemberHubOrgPlacement();
+        renderMemberHubProfileLinks();
+      }
       if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
     } catch (err) {
       console.error("Member Hub org sync failed:", err);

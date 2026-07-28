@@ -353,14 +353,27 @@ Deno.serve(async (req: Request) => {
     }
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
+      const hubManaged = Boolean(profile.nlc_member_id);
       const updatePayload = {
         name: payload.name ?? profile.name ?? "",
-        great_region: payload.great_region ?? profile.great_region ?? "",
-        pastoral_zone: payload.pastoral_zone ?? profile.pastoral_zone ?? "",
-        small_group: payload.small_group ?? profile.small_group ?? "",
-        great_region_id: payload.great_region_id ?? null,
-        pastoral_zone_id: payload.pastoral_zone_id ?? null,
-        small_group_id: payload.small_group_id ?? null,
+        great_region: hubManaged
+          ? (profile.great_region ?? "")
+          : (payload.great_region ?? profile.great_region ?? ""),
+        pastoral_zone: hubManaged
+          ? (profile.pastoral_zone ?? "")
+          : (payload.pastoral_zone ?? profile.pastoral_zone ?? ""),
+        small_group: hubManaged
+          ? (profile.small_group ?? "")
+          : (payload.small_group ?? profile.small_group ?? ""),
+        great_region_id: hubManaged
+          ? (profile.great_region_id ?? null)
+          : (payload.great_region_id ?? null),
+        pastoral_zone_id: hubManaged
+          ? (profile.pastoral_zone_id ?? null)
+          : (payload.pastoral_zone_id ?? null),
+        small_group_id: hubManaged
+          ? (profile.small_group_id ?? null)
+          : (payload.small_group_id ?? null),
         updated_at: new Date().toISOString()
       };
 
