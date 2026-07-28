@@ -53,7 +53,10 @@ const state = {
     plan_progress: 0,
     streak: 0,
     last_read: null,
-    member_context_synced_at: ""
+    member_context_synced_at: "",
+    member_context_sync_attempted_at: "",
+    member_context_sync_status: "",
+    member_context_sync_error: ""
   },
   orgStructure: {
     regions: [],

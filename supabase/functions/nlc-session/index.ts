@@ -443,6 +443,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const nowIso = new Date().toISOString();
+    const memberContextSyncStatus = memberContext ? "success" : "degraded";
     const profilePayload: Record<string, any> = {
       id: profileId,
       name: firstValue(sourceValues.name, existingProfile?.name, "NLC User"),
@@ -455,6 +456,9 @@ Deno.serve(async (req: Request) => {
       is_active: true,
       last_seen_at: nowIso,
       member_context_synced_at: memberContext ? nowIso : (existingProfile?.member_context_synced_at || null),
+      member_context_sync_attempted_at: nowIso,
+      member_context_sync_status: memberContextSyncStatus,
+      member_context_sync_error: memberContextError,
       updated_at: nowIso
     };
 

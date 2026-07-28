@@ -44,6 +44,23 @@ function formatMemberContextSyncedAt(value) {
   return `已同步自會員中心：${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+function formatMemberContextAttemptedAt(value) {
+  if (!value) return "尚未同步";
+  return formatMemberContextSyncedAt(value).replace("已同步自會員中心：", "");
+}
+
+function formatMemberContextSyncStatus(user) {
+  const status = user && user.member_context_sync_status;
+  const syncedAt = user && user.member_context_synced_at;
+  const attemptedAt = user && user.member_context_sync_attempted_at;
+
+  if (status === "degraded" || status === "failed") {
+    return `會員中心同步暫時失敗，保留既有資料。最近一次同步嘗試：${formatMemberContextAttemptedAt(attemptedAt || "")}`;
+  }
+
+  return formatMemberContextSyncedAt(syncedAt || "");
+}
+
 function renderMemberHubOrgPlacement() {
   const user = state.currentUser || {};
   const values = {
@@ -66,7 +83,7 @@ function renderMemberHubOrgPlacement() {
   const syncEl = document.getElementById("member-hub-org-sync-status");
   if (syncEl) {
     syncEl.textContent = isMemberHubManagedProfile()
-      ? formatMemberContextSyncedAt(user.member_context_synced_at || "")
+      ? formatMemberContextSyncStatus(user)
       : "目前登入方式無法同步會員中心";
   }
 }

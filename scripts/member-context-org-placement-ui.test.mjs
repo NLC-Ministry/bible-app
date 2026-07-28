@@ -25,8 +25,11 @@ describe("Member Hub org placement UI", () => {
 
   it("renders placement values and formats the Member Hub sync timestamp", () => {
     expect(profileJs).toContain("function formatMemberContextSyncedAt");
+    expect(profileJs).toContain("function formatMemberContextSyncStatus");
     expect(profileJs).toContain("function renderMemberHubOrgPlacement");
     expect(profileJs).toContain("已同步自會員中心");
+    expect(profileJs).toContain("會員中心同步暫時失敗");
+    expect(profileJs).toContain("最近一次同步嘗試");
     expect(profileJs).toContain("尚未設定");
   });
 });
