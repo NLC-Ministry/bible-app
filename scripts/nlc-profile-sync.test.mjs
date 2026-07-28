@@ -52,11 +52,35 @@ describe("orgFromHomePath", () => {
 });
 
 describe("mergeOrgSources", () => {
-  it("prefers Platform org over placement and Member Hub context", () => {
+  it("prefers Member Hub context over Platform org values", () => {
     const platform = { great_region: "A", pastoral_zone: "B", small_group: "C" };
-    const placement = { great_region: "X", pastoral_zone: "Y", small_group: "Z" };
+    const placement = { great_region: null, pastoral_zone: null, small_group: null };
     const context = { greatRegion: "L1", pastoralZone: "L2", smallGroup: "L3" };
-    expect(mergeOrgSources(platform, placement, context)).toEqual(platform);
+    expect(mergeOrgSources(platform, placement, context)).toEqual({
+      great_region: "L1",
+      pastoral_zone: "L2",
+      small_group: "L3"
+    });
+  });
+
+  it("prefers org-placement when it is available over other org sources", () => {
+    const platform = { great_region: "舊大區", pastoral_zone: "舊牧區", small_group: "舊小組" };
+    const placement = { great_region: "新大區", pastoral_zone: "新牧區", small_group: "新小組" };
+    const context = { greatRegion: "背景大區", pastoralZone: "背景牧區", smallGroup: "背景小組" };
+
+    expect(mergeOrgSources(platform, placement, context)).toEqual(placement);
+  });
+
+  it("prefers Member Hub homeNodeName fallback over stale Platform pastoral zone", () => {
+    expect(mergeOrgSources(
+      { great_region: null, pastoral_zone: "舊牧區", small_group: null },
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { homeNodeName: "目前牧區" }
+    )).toEqual({
+      great_region: null,
+      pastoral_zone: "目前牧區",
+      small_group: null
+    });
   });
 
   it("reads canonical Member Hub context fields before legacy names", () => {
@@ -212,6 +236,24 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source).toContain("orgFromMemberContext");
     expect(source).toContain("member_hub_context_failed");
     expect(source).not.toMatch(/fetchJsonOptional\(`\$\{memberHubUrl\}\/api\/me\/context`/);
+  });
+
+  it("does not depend on the cookie-only org-placement endpoint for delegated Edge sync", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).not.toContain("const placementResponse = await fetchJsonOptional(`${memberHubUrl}/api/me/org-placement`");
+    expect(source).not.toContain("const needsPlacementFallback = !platformOrgFields.great_region");
+  });
+
+  it("records which upstream source supplied the projected organization fields", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("const contextOrgFields = orgFromMemberContext(organization)");
+    expect(source).toContain("const orgResolutionSource = hasAnyOrgField(placementOrgFields)");
+    expect(source).toContain("member_hub_org_placement");
+    expect(source).toContain("member_hub_context");
+    expect(source).toContain("platform_organization");
+    expect(source).toContain("identityMetadata.org_resolution_source = orgResolutionSource");
   });
 
   it("does not reject the whole login when Member Hub context is temporarily unavailable", () => {

@@ -157,10 +157,10 @@ function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganizatio
     : null;
 
   const pick = (field: "great_region" | "pastoral_zone" | "small_group") => {
-    if (platformOrg?.[field]) return platformOrg[field];
     if (placementOrg?.[field]) return placementOrg[field];
     if (contextOrg[field]) return contextOrg[field];
     if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
+    if (platformOrg?.[field]) return platformOrg[field];
     return null;
   };
 
@@ -208,6 +208,10 @@ function jsonResponse(body: unknown, status = 200) {
 
 function trimSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function hasAnyOrgField(org: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null }) {
+  return Boolean(org.great_region || org.pastoral_zone || org.small_group);
 }
 
 async function fetchJson(url: string, init?: RequestInit) {
@@ -337,21 +341,12 @@ Deno.serve(async (req: Request) => {
     }
 
     let placementOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
-    const needsPlacementFallback = !platformOrgFields.great_region &&
-      !platformOrgFields.pastoral_zone &&
-      !platformOrgFields.small_group;
 
-    if (needsPlacementFallback) {
-      const placementResponse = await fetchJsonOptional(`${memberHubUrl}/api/me/org-placement`, {
-        headers: bearerHeaders
-      });
-      const homePath = placementResponse?.placement?.home?.path;
-      if (homePath) {
-        placementOrgFields = orgFromHomePath(homePath);
-      }
-    }
-
+    const contextOrgFields = orgFromMemberContext(organization);
     const mergedOrg = mergeOrgSources(platformOrgFields, placementOrgFields, organization);
+    const orgResolutionSource = hasAnyOrgField(placementOrgFields)
+      ? "member_hub_org_placement"
+      : (hasAnyOrgField(contextOrgFields) ? "member_hub_context" : (hasAnyOrgField(platformOrgFields) ? "platform_organization" : "none"));
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false }
@@ -516,6 +511,13 @@ Deno.serve(async (req: Request) => {
       issuer,
       userinfo,
       member_context: memberContext
+    };
+    identityMetadata.org_resolution_source = orgResolutionSource;
+    identityMetadata.org_resolution = {
+      source: orgResolutionSource,
+      placement_available: hasAnyOrgField(placementOrgFields),
+      platform_available: hasAnyOrgField(platformOrgFields),
+      context_available: hasAnyOrgField(contextOrgFields)
     };
     if (memberContextError) {
       identityMetadata.member_context_error = memberContextError;

@@ -84,13 +84,13 @@ export function mergeOrgSources(platformOrg, placementOrg, contextOrganization) 
     : null;
 
   const pick = (field) => {
-    const fromPlatform = platformOrg?.[field];
-    if (fromPlatform) return fromPlatform;
     const fromPlacement = placementOrg?.[field];
     if (fromPlacement) return fromPlacement;
     const fromContext = contextOrg[field];
     if (fromContext) return fromContext;
     if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
+    const fromPlatform = platformOrg?.[field];
+    if (fromPlatform) return fromPlatform;
     return null;
   };
 
