@@ -511,6 +511,53 @@ body.dark-theme {
   box-sizing: border-box;
 }
 
+.member-hub-org-placement {
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  margin-bottom: 0.875rem;
+  background: color-mix(in srgb, var(--text-primary) 2%, var(--bg-input));
+}
+
+.member-hub-org-placement__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.member-hub-org-placement__item {
+  min-width: 0;
+}
+
+.member-hub-org-placement__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.member-hub-org-placement__value {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: var(--type-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.member-hub-org-placement__sync,
+.member-hub-org-placement__empty {
+  margin: 0.65rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .member-hub-org-placement__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .member-hub-form-notice {
   display: flex;
   flex-direction: column;
@@ -2766,16 +2813,16 @@ body:not(.dark-theme) .settings-row-btn:hover {
   .reader-layout {
     grid-template-columns: 1fr;
   }
-  
+
   .reader-sidebar {
     position: static;
   }
-  
+
   .grid-layout {
     display: flex;
     flex-direction: column;
   }
-  
+
   .stats-overview-row {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -2809,20 +2856,20 @@ body:not(.dark-theme) .settings-row-btn:hover {
   .header-container {
     padding: 0 1rem;
   }
-  
+
   .nav-tabs {
     display: none; /* Hide header tabs on mobile */
   }
-  
+
   .main-content {
     padding: 1.5rem 1rem calc(var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px) + 1rem) 1rem;
   }
-  
+
   .main-footer {
     padding: 1.5rem 1rem;
     margin-bottom: calc(var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px));
   }
-  
+
   .dashboard-hero {
     flex-direction: column;
     gap: 1.5rem;
@@ -2830,7 +2877,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
     text-align: center;
     padding: 1.5rem;
   }
-  
+
   .streak-card {
     flex-direction: row;
     justify-content: center;
@@ -10048,7 +10095,6 @@ body.dark-theme .custom-confirm-overlay {
     height: 0px;
   }
 }
-
 /* ─── App-Style Grouped Settings List (Shadcn & 21st.dev Inspired) ─── */
 .app-settings-group {
   margin-bottom: 1.25rem;
@@ -10441,8 +10487,3 @@ body.dark-theme .custom-confirm-overlay {
   margin: 0;
   word-break: break-all;
 }
-
-
-
-
-

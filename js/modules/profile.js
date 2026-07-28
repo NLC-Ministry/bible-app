@@ -28,6 +28,77 @@ function userNeedsOrgSetup() {
     !String(user.small_group || "").trim();
 }
 
+function formatMemberContextSyncedAt(value) {
+  if (!value) return "尚未同步";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "尚未同步";
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(date).reduce(function (acc, part) {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `已同步自會員中心：${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
+function renderMemberHubOrgPlacement() {
+  const user = state.currentUser || {};
+  const values = {
+    "member-hub-org-great-region": user.great_region || "",
+    "member-hub-org-pastoral-zone": user.pastoral_zone || "",
+    "member-hub-org-small-group": user.small_group || ""
+  };
+
+  Object.entries(values).forEach(function ([id, value]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value || "").trim() || "尚未設定";
+  });
+
+  const hasAnyPlacement = Object.values(values).some(function (value) {
+    return String(value || "").trim();
+  });
+  const emptyEl = document.getElementById("member-hub-org-empty");
+  if (emptyEl) emptyEl.classList.toggle("hidden", hasAnyPlacement);
+
+  const syncEl = document.getElementById("member-hub-org-sync-status");
+  if (syncEl) {
+    syncEl.textContent = isMemberHubManagedProfile()
+      ? formatMemberContextSyncedAt(user.member_context_synced_at || "")
+      : "目前登入方式無法同步會員中心";
+  }
+}
+
+function wireMemberHubOrgRefresh() {
+  const btn = document.getElementById("btn-member-hub-refresh");
+  if (!btn || btn.dataset.wired === "true") return;
+  btn.dataset.wired = "true";
+  btn.addEventListener("click", async function () {
+    if (typeof auth === "undefined" || !auth.isLoggedIn()) {
+      if (typeof showToast === "function") showToast("目前登入方式無法同步會員中心。");
+      return;
+    }
+    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+
+    btn.disabled = true;
+    try {
+      await db.syncNlcSessionWithSupabase(true);
+      renderMemberHubOrgPlacement();
+      renderMemberHubProfileLinks();
+      if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
+    } catch (err) {
+      console.error("Member Hub org sync failed:", err);
+      if (typeof showToast === "function") showToast("同步會員中心失敗，請稍後再試。");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 function openMemberHubPath(path, fallbackUrl) {
   scheduleProfileSyncOnReturn();
   if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
@@ -197,7 +268,7 @@ export async function renderProfileView() {
   if (profileEmailInput) {
     profileEmailInput.value = state.currentUser.email || "";
   }
-  
+
   const greatRegionSelect = document.getElementById("profile-great-region");
   const customGreatRegionInput = document.getElementById("profile-great-region-custom");
   const zoneSelect = document.getElementById("profile-zone");
@@ -232,6 +303,8 @@ export async function renderProfileView() {
     const group = state.currentUser.small_group || "";
     summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || "未設定所屬小組";
   }
+  renderMemberHubOrgPlacement();
+  wireMemberHubOrgRefresh();
 
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {
@@ -244,12 +317,12 @@ export async function renderProfileView() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1' || window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.') || window.location.hostname.startsWith('172.') || window.location.hostname.endsWith('.local');
-  let greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0) 
-    ? state.orgStructure.regions 
+  let greatRegionsList = (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0)
+    ? state.orgStructure.regions
     : ["東區", "南區", "西區", "北區", "青少年", "慶典", "創藝"];
-  
+
   greatRegionsList = greatRegionsList.filter(r => !r.startsWith("示範"));
-  
+
   greatRegionSelect.innerHTML = `<option value="">-- 請選擇大區 --</option>`;
   greatRegionsList.forEach(rName => {
     const option = document.createElement("option");
@@ -257,7 +330,7 @@ export async function renderProfileView() {
     option.textContent = rName;
     greatRegionSelect.appendChild(option);
   });
-  
+
   const userGreatRegion = state.currentUser.great_region;
 
   if (userGreatRegion && userGreatRegion !== "custom" && !greatRegionsList.includes(userGreatRegion)) {
@@ -346,9 +419,9 @@ export async function renderProfileView() {
     }
 
     loader.show("儲存個人資料中...");
-    
+
     const oldProfile = { ...state.currentUser };
-    
+
     state.currentUser.name = name;
     state.currentUser.great_region = greatRegion;
     state.currentUser.pastoral_zone = zone;
@@ -403,7 +476,7 @@ async function renderCareReminders() {
     window.updateCareReminderBadge(reminders || []);
   }
 
-  /* 
+  /*
     ── 測試保留註解：維持單元測試(expect(profile).toContain)綠燈 ──
     * 收到的關心提醒
     * startsWith("reading-team:")
@@ -432,12 +505,12 @@ function populateProfileZones(greatRegion, autoSelect = true) {
     return;
   }
 
-  let predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion] && state.orgStructure.zones[greatRegion].length > 0) 
-    ? state.orgStructure.zones[greatRegion] 
+  let predefinedZones = (state.orgStructure && state.orgStructure.zones && state.orgStructure.zones[greatRegion] && state.orgStructure.zones[greatRegion].length > 0)
+    ? state.orgStructure.zones[greatRegion]
     : ((typeof MOCK_PASTORAL_ZONES_BY_REGION !== "undefined" && MOCK_PASTORAL_ZONES_BY_REGION[greatRegion]) || []);
-  
+
   predefinedZones = predefinedZones.filter(z => !z.startsWith("示範"));
-  
+
   predefinedZones.forEach(zName => {
     const option = document.createElement("option");
     option.value = zName;
@@ -488,8 +561,8 @@ function populateProfileGroupSelector(autoSelect = true) {
     return;
   }
 
-  let predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone] && state.orgStructure.groups[zone].length > 0) 
-    ? state.orgStructure.groups[zone] 
+  let predefinedGroups = (state.orgStructure && state.orgStructure.groups && state.orgStructure.groups[zone] && state.orgStructure.groups[zone].length > 0)
+    ? state.orgStructure.groups[zone]
     : ((typeof MOCK_SMALL_GROUPS !== "undefined" && MOCK_SMALL_GROUPS[zone]) || []);
 
   predefinedGroups = predefinedGroups.filter(g => !g.startsWith("示範"));
@@ -642,23 +715,23 @@ export function init() {
     trigger.onclick = (e) => {
       e.preventDefault();
       const targetTab = trigger.getAttribute("data-profile-tab");
-      
+
       tabTriggers.forEach(t => t.classList.remove("active"));
       trigger.classList.add("active");
-      
+
       document.querySelectorAll(".profile-tab-content").forEach(content => {
         content.classList.add("hidden");
       });
-      
+
       const activeContent = document.getElementById(`profile-tab-content-${targetTab}`);
       if (activeContent) activeContent.classList.remove("hidden");
-      
+
       if (targetTab === "badges" && typeof window.renderBadgeWall === "function") {
         window.renderBadgeWall("badges-grid");
       }
     };
   });
-  
+
   const btnToggleForm = document.getElementById("btn-toggle-profile-form");
   const formWrapper = document.getElementById("profile-form-wrapper");
   if (btnToggleForm && formWrapper) {

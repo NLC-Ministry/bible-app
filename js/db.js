@@ -520,6 +520,7 @@ const db = {
     state.currentUser.role = profile.role || "member";
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
+    state.currentUser.member_context_synced_at = profile.member_context_synced_at || "";
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;

@@ -133,7 +133,7 @@
   function renderMember(member, totalChapters, plan) {
     const { read, progress } = getMemberProgress(member, totalChapters);
     const canRemind = Boolean(member.userId && !member.isMe);
-    
+
     let isBehind = false;
     if (plan && Number(member.currentRound || 1) === 1) {
       const expectedChapters = getExpectedChapters(plan, totalChapters);
@@ -316,7 +316,7 @@
           <button type="button" class="reading-team-close" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
         <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立團隊即可加入此計畫之團隊。"}</p>
-        
+
         <form id="reading-team-create-form" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
           <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
             <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
@@ -529,11 +529,11 @@
             cancelText: "取消"
           });
           if (!confirmed) return;
-          
+
           loader.show();
           const result = await db.leaveReadingTeam(plan.globalPlanId || plan.id, team.id);
           loader.hide();
-          
+
           if (result && result.success) {
             alert("已成功退出團隊。");
             window.location.reload(true);
@@ -553,11 +553,11 @@
             cancelText: "取消"
           });
           if (!confirmed) return;
-          
+
           loader.show();
           const result = await db.disbandReadingTeam(plan.globalPlanId || plan.id, team.id);
           loader.hide();
-          
+
           if (result && result.success) {
             alert("已解散團隊。");
             window.location.reload(true);
@@ -583,17 +583,17 @@
 
   window.renderReadingTeamRegistrationInline = async function renderReadingTeamRegistrationInline(container, plan, options = {}) {
     if (!container || !isSupportedPlan(plan)) return;
-    
+
     // Get existing team memberships first
     const result = await db.getMyReadingTeam(plan);
     const joinedContexts = result && result.success ? getJoinedReadingTeamContexts(result.context) : [];
-    
+
     const joinedDivisions = new Set(joinedContexts.map(context => Number(context.team.division)));
     const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
-    
+
     let preferredDivision = [3, 6].includes(Number(options.preferredDivision)) ? Number(options.preferredDivision) : 3;
     if (!availableDivisions.includes(preferredDivision)) preferredDivision = availableDivisions[0] || 3;
-    
+
     if (availableDivisions.length === 0) {
       container.innerHTML = `<div class="p-6 text-center text-muted"><p>你已加入所有組別的團隊（3 人與 6 人團隊）。</p></div>`;
       return;
@@ -604,7 +604,7 @@
         <p class="reading-team-dialog__intro" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.2rem;">
           ${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立新團隊即可加入此計畫之團隊。"}
         </p>
-        
+
         <form id="reading-team-create-form-inline" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
           <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
             <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
@@ -622,7 +622,7 @@
           </div>
           <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
         </form>
-        
+
         <p class="reading-team-registration-privacy" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
         <p class="reading-team-form-error" data-team-error role="alert" hidden style="color: var(--color-danger); font-size: 0.8rem; margin-top: 0.8rem; text-align: center;"></p>
       </div>`;

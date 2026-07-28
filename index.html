@@ -66,7 +66,7 @@
             <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
             <span id="global-back-label">&#x9996;&#x9801;</span>
           </button>
-          
+
           <!-- 新增：計畫詳情專用的極簡返回鈕 -->
           <button id="top-bar-back-btn"
             onclick="if (typeof window.planGoBack === 'function') { window.planGoBack(); } else if (appRouter.currentTab === 'plan-view') { state.planDetailOpen = false; if (typeof window.renderPlanView === 'function') window.renderPlanView(); appRouter.updateNavigationChrome(); }"
@@ -75,7 +75,7 @@
             <span>計畫</span>
           </button>
         </div>
-        
+
         <!-- 中間：標題與核心切換按鈕 -->
         <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
           <span class="brand-text">新生命聖經速讀計畫</span>
@@ -383,7 +383,7 @@
                   <button type="button" id="btn-wall-tab-today" class="segment-btn active" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: var(--bg-card); color: var(--color-brand); cursor: pointer; font-weight: 600; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">今日即時</button>
                   <button type="button" id="btn-wall-tab-history" class="segment-btn" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center;">歷史回顧</button>
                 </div>
-                
+
                 <!-- Right: Shadcn select style (Dropdown) -->
                 <div id="wall-history-filter-wrapper" class="hidden" style="display: flex; align-items: center; flex-shrink: 1; max-width: 140px; width: 100%;">
                   <select id="wall-history-filter" class="form-control" style="width: 100%; padding: 0 1.5rem 0 0.5rem; font-size: 0.72rem; border-radius: 6px; height: 32px; line-height: 1; border: 1px solid var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer; outline: none; font-weight: 500;">
@@ -1355,7 +1355,7 @@
                     <h3 class="card-title" id="members-ranking-title"
                       style="margin-bottom: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary);">
                       參與者總覽</h3>
-                    <button id="btn-toggle-members-collapse" type="button" class="tab-btn" 
+                    <button id="btn-toggle-members-collapse" type="button" class="tab-btn"
                       style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                       <span>收合</span> <span>▲</span>
                     </button>
@@ -1426,7 +1426,7 @@
               <div id="profile-tab-content-settings" class="profile-tab-content">
                 <!-- Member Hub identity card & actions (App Style Settings Group) -->
                 <div class="space-y-4" id="profile-settings-container" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
-                
+
                 <!-- 分組一：會員中心連動 -->
                 <div class="app-settings-group">
                   <div class="app-settings-group__header" id="profile-member-hub-card">
@@ -1438,7 +1438,7 @@
                       <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
                     </div>
                   </div>
-                  
+
                   <div class="app-settings-list">
                     <!-- 項目 1：管理身份與牧區 -->
                     <a class="app-settings-item" id="btn-member-hub-structure" target="_blank" rel="noopener noreferrer">
@@ -1457,6 +1457,40 @@
                     </a>
 
 
+                  </div>
+                  <div class="member-hub-org-placement" id="member-hub-org-placement" aria-live="polite">
+                    <div class="member-hub-org-placement__grid">
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">大區</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-great-region">尚未設定</strong>
+                      </div>
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">牧區</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone">尚未設定</strong>
+                      </div>
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">小組</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-small-group">尚未設定</strong>
+                      </div>
+                    </div>
+                    <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未同步</p>
+                    <p class="member-hub-org-placement__empty hidden" id="member-hub-org-empty">
+                      會員中心尚未提供完整組織歸屬，請至會員中心更新。
+                    </p>
+                  </div>
+                  <div class="app-settings-list">
+                    <button type="button" class="app-settings-item w-full text-left" id="btn-member-hub-refresh"
+                      style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">重新同步</span>
+                          <span class="app-settings-item__subtitle">重新取得會員中心的大區、牧區與小組</span>
+                        </div>
+                      </div>
+                    </button>
                   </div>
                 </div>
 
@@ -1711,7 +1745,7 @@
                   <span class="nlc-icon" data-icon="fileText" aria-hidden="true" style="color: var(--primary-color);"></span>
                   檔案解析比對摘要
                 </h4>
-                
+
                 <!-- 變動數據徽章 -->
                 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                   <span style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent); color: var(--color-success-foreground); display: inline-flex; align-items: center; gap: 0.2rem;">

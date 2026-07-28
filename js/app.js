@@ -106,7 +106,7 @@ async function renderNotificationsList() {
   }
 
   container.innerHTML = "";
-  
+
   const roleNames = {
     member: "組員",
     group_leader: "小組長",
@@ -118,13 +118,13 @@ async function renderNotificationsList() {
   notifications.forEach(item => {
     const div = document.createElement("div");
     div.className = `notification-item ${item.status === 'unread' ? 'notification-item--unread' : ''}`;
-    
+
     const sender = item.sender || {};
     const senderName = sender.name || "領袖";
     const senderRoleRaw = sender.role || "leader";
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder ? "隊友" : (roleNames[senderRoleRaw] || "領袖");
-    
+
     const dateStr = item.sent_on || "";
 
     div.innerHTML = `
@@ -146,7 +146,7 @@ async function renderNotificationsList() {
 
     container.appendChild(div);
   });
-  
+
   if (typeof hydrateIcons === "function") {
     hydrateIcons(container);
   }
@@ -162,9 +162,9 @@ function initNotificationSystem() {
   bellBtn.onclick = async (e) => {
     e.stopPropagation();
     const isHidden = popover.classList.contains("hidden");
-    
+
     document.querySelectorAll(".options-dropdown").forEach(el => el.classList.add("hidden"));
-    
+
     if (isHidden) {
       popover.classList.remove("hidden");
       await renderNotificationsList();

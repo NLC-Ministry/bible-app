@@ -5406,7 +5406,7 @@ window.displayParticipantsList = function (limit = 100) {
 
     const rankNum = m.rank ?? "—";
     // 名次徽章樣式：Top 3 上色，其餘灰色
-    const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? '#a3a3a3' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
+    const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? 'var(--text-secondary)' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
     itemRow.innerHTML = `
       <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center;">#${rankNum}</div>
       <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
