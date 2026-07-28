@@ -109,6 +109,119 @@ function findPlanByContextId(planId) {
 // Router for Switching Views
 const appRouter = {
   currentTab: "dashboard-view",
+  tabScrollPositions: Object.create(null),
+  isTabTransitioning: false,
+
+  getScrollContainer() {
+    return document.querySelector(".main-content") || document.scrollingElement || window;
+  },
+
+  getScrollTop() {
+    const container = this.getScrollContainer();
+    if (container === window) return window.scrollY || 0;
+    return Number(container && container.scrollTop) || 0;
+  },
+
+  captureTabScroll(tabId = this.currentTab) {
+    if (!tabId) return;
+    this.tabScrollPositions[tabId] = this.getScrollTop();
+  },
+
+  prefersReducedMotion() {
+    return typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  },
+
+  setScrollTop(top, behavior = "auto") {
+    const container = this.getScrollContainer();
+    const resolvedBehavior = this.prefersReducedMotion() ? "auto" : behavior;
+    const position = Math.max(0, Number(top) || 0);
+
+    if (container && typeof container.scrollTo === "function") {
+      container.scrollTo({ top: position, behavior: resolvedBehavior });
+    } else if (container && container !== window) {
+      container.scrollTop = position;
+    } else if (typeof window.scrollTo === "function") {
+      window.scrollTo({ top: position, behavior: resolvedBehavior });
+    }
+  },
+
+  restoreTabScroll(tabId) {
+    const position = this.tabScrollPositions[tabId] || 0;
+    return new Promise(resolve => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          this.setScrollTop(position, "auto");
+          resolve();
+        });
+      });
+    });
+  },
+
+  scrollActiveTabToTop(options = {}) {
+    const behavior = options.behavior || "smooth";
+    this.tabScrollPositions[this.currentTab] = 0;
+    this.setScrollTop(0, behavior);
+  },
+
+  isTabAtRoot(tabId) {
+    if (tabId === "plan-view") {
+      const route = String(window.currentPlanViewState || "LIST").toUpperCase();
+      const inlineReaderOpen = !!(state.inlineReader && state.inlineReader.active);
+      return route === "LIST" && !state.planDetailOpen && !inlineReaderOpen;
+    }
+
+    if (tabId === "profile-view") {
+      const badgeDetail = document.getElementById("badge-detail-page");
+      const badgeDetailOpen = !!(badgeDetail && !badgeDetail.classList.contains("hidden"));
+      const selectedSection = document.querySelector(".profile-tab-trigger.active");
+      const settingsSelected = !selectedSection || selectedSection.getAttribute("data-profile-tab") === "settings";
+      return !badgeDetailOpen && settingsSelected;
+    }
+
+    return true;
+  },
+
+  async resetTabToRoot(tabId) {
+    if (tabId === "plan-view") {
+      if (state.inlineReader && state.inlineReader.active && typeof window.closePlanInlineReader === "function") {
+        window.closePlanInlineReader();
+      }
+
+      if (typeof window.setPlanState === "function") {
+        await window.setPlanState("LIST");
+      } else {
+        window.currentPlanViewState = "LIST";
+        state.planDetailOpen = false;
+        if (typeof window.renderPlanView === "function") await window.renderPlanView();
+      }
+      return;
+    }
+
+    if (tabId === "profile-view") {
+      if (typeof window.closeBadgeDetailPage === "function") window.closeBadgeDetailPage();
+      const settingsTrigger = document.querySelector('.profile-tab-trigger[data-profile-tab="settings"]');
+      if (settingsTrigger && !settingsTrigger.classList.contains("active")) settingsTrigger.click();
+    }
+  },
+
+  async handleTabClick(tabId) {
+    if (!tabId) return;
+    if (this.isTabTransitioning) return;
+
+    if (tabId !== this.currentTab) {
+      await this.switchTab(tabId, { fromTabBar: true, restoreTabScroll: true });
+      return;
+    }
+
+    if (!this.isTabAtRoot(tabId)) {
+      await this.resetTabToRoot(tabId);
+      this.scrollActiveTabToTop({ behavior: "auto" });
+      return;
+    }
+
+    this.scrollActiveTabToTop({ behavior: "smooth" });
+  },
 
   init() {
     const tabs = document.querySelectorAll(".tab-btn, .mobile-nav-btn");
@@ -117,7 +230,7 @@ const appRouter = {
         e.preventDefault();
         const target = btn.getAttribute("data-target");
         if (target) {
-          this.switchTab(target);
+          this.handleTabClick(target);
         }
       });
     });
@@ -333,8 +446,7 @@ const appRouter = {
     // This sync stub exists only for backwards-compatibility with any legacy
     // code that calls appRouter.switchTab synchronously before app.js loads.
     if (typeof appRouter.switchTab === 'function' && appRouter.switchTab !== this.switchTab) {
-      appRouter.switchTab(tabId, options);
-      return;
+      return appRouter.switchTab(tabId, options);
     }
 
     // Fallback (should never be reached in production):

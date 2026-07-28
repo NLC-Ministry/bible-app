@@ -15,7 +15,7 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js';
 import './design/icons.js';
-import './state.js?v=20260728_badge_img_refactor';
+import './state.js?v=20260729_tab_navigation_memory';
 import './auth.js';
 import './db.js?v=20260724_clean_demo_mode';
 import './utils.js?v=20260728_badge_img_refactor';
@@ -223,6 +223,12 @@ appRouter.switchTab = async function (tabId, options = {}) {
     return;
   }
   isSwitching = true;
+  this.isTabTransitioning = true;
+
+  const previousTab = this.currentTab;
+  if (previousTab && previousTab !== tabId && typeof this.captureTabScroll === "function") {
+    this.captureTabScroll(previousTab);
+  }
 
   try {
     // ── Pre-flight: reader-state cleanup ──
@@ -357,8 +363,13 @@ appRouter.switchTab = async function (tabId, options = {}) {
     this.updateNavigationChrome();
     refreshCareReminderBadge();
 
+    if (options.restoreTabScroll && typeof this.restoreTabScroll === "function") {
+      await this.restoreTabScroll(tabId);
+    }
+
   } finally {
     // ── 7. Always release the lock, even on error ──
+    this.isTabTransitioning = false;
     isSwitching = false;
   }
 };

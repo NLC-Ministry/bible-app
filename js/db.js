@@ -1995,6 +1995,60 @@ const db = {
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      return {
+        success: true,
+        context: {
+          summary: {
+            teamCount: 3,
+            readyTeamCount: 2,
+            memberCount: 12,
+            division3Teams: 2,
+            division6Teams: 1
+          },
+          teams: [
+            {
+              id: "mock-team-1",
+              name: "聖靈果子隊",
+              division: 3,
+              status: "ready",
+              memberCount: 3,
+              members: [
+                { userId: "user-1", name: "張茂松", role: "captain", pastoralZone: "大安區" },
+                { userId: "user-2", name: "李家同", role: "member", pastoralZone: "大安區" },
+                { userId: "user-3", name: "王建煊", role: "member", pastoralZone: "信義區" }
+              ]
+            },
+            {
+              id: "mock-team-2",
+              name: "信心得勝隊",
+              division: 3,
+              status: "signup",
+              memberCount: 2,
+              members: [
+                { userId: "user-4", name: "陳之藩", role: "captain", pastoralZone: "新莊區" },
+                { userId: "user-5", name: "胡適", role: "member", pastoralZone: "板橋區" }
+              ]
+            },
+            {
+              id: "mock-team-3",
+              name: "恩典滿滿隊",
+              division: 6,
+              status: "ready",
+              memberCount: 6,
+              members: [
+                { userId: "user-6", name: "林語堂", role: "captain", pastoralZone: "士林區" },
+                { userId: "user-7", name: "梁實秋", role: "member", pastoralZone: "北投區" },
+                { userId: "user-8", name: "徐志摩", role: "member", pastoralZone: "士林區" },
+                { userId: "user-9", name: "朱自清", role: "member", pastoralZone: "大同區" },
+                { userId: "user-10", name: "沈從文", role: "member", pastoralZone: "中山區" },
+                { userId: "user-11", name: "巴金", role: "member", pastoralZone: "士林區" }
+              ]
+            }
+          ]
+        }
+      };
+    }
     const result = await this._callReadingTeamRpc("get_reading_team_statistics", { p_global_plan_id: planId });
     return result.success ? { success: true, context: result.data || { summary: {}, teams: [] } } : result;
   },

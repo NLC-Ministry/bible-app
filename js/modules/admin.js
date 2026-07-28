@@ -749,25 +749,25 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
     cachedTeamsData = fetchedData;
   }
 
-  const filteredPlans = cachedTeamsData.map(item => {
+  const processedPlans = cachedTeamsData.map(item => {
     const teams = item.teams.filter(t => Number(t.division) === Number(activeTeamDivision));
     return {
       ...item,
       teams
     };
-  }).filter(item => item.teams.length > 0);
+  });
 
-  if (filteredPlans.length === 0) {
+  if (processedPlans.length === 0) {
     contentEl.innerHTML = `
       <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-        目前無 ${activeTeamDivision} 人團隊的報名資料。
+        目前無任何速讀計畫的資料。
       </div>
     `;
     return;
   }
 
   let html = "";
-  filteredPlans.forEach(item => {
+  processedPlans.forEach(item => {
     const planName = item.plan.name || "未命名計畫";
     const signupCount = item.teams.filter(t => t.status === "signup").length;
     const readyCount = item.teams.filter(t => t.status === "ready").length;
@@ -784,7 +784,17 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
           <span>已成隊：<strong style="color: var(--color-success-foreground);">${readyCount}</strong> 隊</span>
           <span>總報名人數：<strong>${totalMembers}</strong> 人</span>
         </div>
-        
+    `;
+
+    if (item.teams.length === 0) {
+      html += `
+        <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; background: var(--bg-input); border-radius: 8px; border: 1px dashed var(--border-card);">
+          此計畫目前無 ${activeTeamDivision} 人團隊的報名資料。
+        </div>
+      </div>
+      `;
+    } else {
+      html += `
         <div style="overflow-x: auto; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
           <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
             <thead>
@@ -808,35 +818,36 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
               </tr>
             </thead>
             <tbody>
-    `;
+      `;
 
-    item.teams.forEach(team => {
-      const captain = team.members.find(m => m.role === "captain") || {};
-      const captainZone = captain.pastoralZone || "未設定";
-      const otherMembers = team.members.filter(m => m.role !== "captain");
+      item.teams.forEach(team => {
+        const captain = team.members.find(m => m.role === "captain") || {};
+        const captainZone = captain.pastoralZone || "未設定";
+        const otherMembers = team.members.filter(m => m.role !== "captain");
 
-      let membersCells = "";
-      for (let i = 0; i < Number(activeTeamDivision) - 1; i++) {
-        const m = otherMembers[i];
-        membersCells += `<td style="padding: 0.75rem 0.8rem; color: var(--text-secondary);">${m ? m.name : "-"}</td>`;
-      }
+        let membersCells = "";
+        for (let i = 0; i < Number(activeTeamDivision) - 1; i++) {
+          const m = otherMembers[i];
+          membersCells += `<td style="padding: 0.75rem 0.8rem; color: var(--text-secondary);">${m ? m.name : "-"}</td>`;
+        }
+
+        html += `
+          <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
+            <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${captainZone}</td>
+            <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
+            <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name ? (captain.name + " (隊長)") : "-"}</td>
+            ${membersCells}
+          </tr>
+        `;
+      });
 
       html += `
-        <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
-          <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${captainZone}</td>
-          <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
-          <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name ? (captain.name + " (隊長)") : "-"}</td>
-          ${membersCells}
-        </tr>
-      `;
-    });
-
-    html += `
             </tbody>
           </table>
         </div>
       </div>
-    `;
+      `;
+    }
   });
 
   contentEl.innerHTML = html;
