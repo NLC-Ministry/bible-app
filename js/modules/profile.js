@@ -181,8 +181,8 @@ function updateGoogleLoginVisibility() {
 
 
 export async function renderProfileView() {
-  if (typeof renderBadgeWall === "function") {
-    renderBadgeWall("badges-grid");
+  if (typeof window.renderBadgeWall === "function") {
+    window.renderBadgeWall("badges-grid");
   }
   const lockedFields = new Set(state.profileLockedFields || []);
   const profileNameInput = document.getElementById("profile-name");
@@ -728,8 +728,8 @@ export function init() {
       const activeContent = document.getElementById(`profile-tab-content-${targetTab}`);
       if (activeContent) activeContent.classList.remove("hidden");
       
-      if (targetTab === "badges" && typeof renderBadgeWall === "function") {
-        renderBadgeWall("badges-grid");
+      if (targetTab === "badges" && typeof window.renderBadgeWall === "function") {
+        window.renderBadgeWall("badges-grid");
       }
     };
   });
