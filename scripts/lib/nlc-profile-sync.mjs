@@ -52,17 +52,33 @@ export function orgFromHomePath(path) {
   };
 }
 
-export function orgFromLegacyOrganization(organization) {
+function pickOrgField(org, ...keys) {
+  for (const key of keys) {
+    const value = org?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return null;
+}
+
+/** Reads canonical Member Hub context organization fields with legacy fallbacks. */
+export function orgFromMemberContext(organization) {
   const org = organization || {};
   return {
-    great_region: org.homeRegionName ? String(org.homeRegionName).trim() : null,
-    pastoral_zone: org.homeZoneName ? String(org.homeZoneName).trim() : null,
-    small_group: org.homeGroupName ? String(org.homeGroupName).trim() : null
+    great_region: pickOrgField(org, "greatRegion", "homeRegionName"),
+    pastoral_zone: pickOrgField(org, "pastoralZone", "homeZoneName"),
+    small_group: pickOrgField(org, "smallGroup", "homeGroupName")
   };
 }
 
+/** @deprecated Use orgFromMemberContext — kept for test compatibility. */
+export function orgFromLegacyOrganization(organization) {
+  return orgFromMemberContext(organization);
+}
+
 export function mergeOrgSources(platformOrg, placementOrg, contextOrganization) {
-  const legacy = orgFromLegacyOrganization(contextOrganization);
+  const contextOrg = orgFromMemberContext(contextOrganization);
   const homeNodeName = contextOrganization?.homeNodeName
     ? String(contextOrganization.homeNodeName).trim()
     : null;
@@ -72,8 +88,8 @@ export function mergeOrgSources(platformOrg, placementOrg, contextOrganization) 
     if (fromPlatform) return fromPlatform;
     const fromPlacement = placementOrg?.[field];
     if (fromPlacement) return fromPlacement;
-    const fromLegacy = legacy[field];
-    if (fromLegacy) return fromLegacy;
+    const fromContext = contextOrg[field];
+    if (fromContext) return fromContext;
     if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
     return null;
   };
@@ -109,8 +125,46 @@ export function resolveSyncedRole(primaryRole, existingRole, allowedRoles = DEFA
   return "member";
 }
 
-export function buildLockedFields(sourceValues) {
-  return Object.entries(sourceValues)
+const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+
+export function buildLockedFields(sourceValues, options = {}) {
+  const locked = Object.entries(sourceValues)
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
     .map(([field]) => field);
+
+  if (options.hubLinked) {
+    for (const field of HUB_OWNED_ORG_FIELDS) {
+      if (!locked.includes(field)) locked.push(field);
+    }
+  }
+
+  return locked;
+}
+
+/**
+ * Project org placement into profile fields. When hubLinked, Member Hub is
+ * canonical — empty Hub values clear stale local projection instead of
+ * preserving existing profile org fields.
+ */
+export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked) {
+  const hubOrg = {
+    great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
+    pastoral_zone: mergedOrg?.pastoral_zone ? String(mergedOrg.pastoral_zone).trim() : "",
+    small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
+  };
+
+  if (hubLinked) return hubOrg;
+
+  const firstValue = (...values) => {
+    for (const value of values) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+    }
+    return "";
+  };
+
+  return {
+    great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
+    pastoral_zone: firstValue(hubOrg.pastoral_zone, existingProfile?.pastoral_zone),
+    small_group: firstValue(hubOrg.small_group, existingProfile?.small_group)
+  };
 }

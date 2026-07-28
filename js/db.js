@@ -750,11 +750,11 @@ const db = {
             state.currentUser.is_demo = !!profile.is_demo;
             state.realRole = profile.role;
           } else {
-            // First-time login: create profile automatically in Supabase
+            // First-time login: create profile without local org placement (Hub-owned).
             state.currentUser.name = (user.user_metadata && user.user_metadata.full_name) || "新使用者";
-            state.currentUser.great_region = "東區";
-            state.currentUser.pastoral_zone = "大安1";
-            state.currentUser.small_group = "馬鈴";
+            state.currentUser.great_region = "";
+            state.currentUser.pastoral_zone = "";
+            state.currentUser.small_group = "";
             state.currentUser.role = "member";
             state.currentUser.is_demo = false;
             state.realRole = "member";
@@ -763,9 +763,9 @@ const db = {
               await state.supabase.from("profiles").insert({
                 id: user.id,
                 name: state.currentUser.name,
-                great_region: state.currentUser.great_region,
-                pastoral_zone: state.currentUser.pastoral_zone,
-                small_group: state.currentUser.small_group,
+                great_region: "",
+                pastoral_zone: "",
+                small_group: "",
                 role: state.currentUser.role
               });
             } catch (dbErr) {
@@ -775,7 +775,11 @@ const db = {
         } else {
           // OIDC profiles are created and updated by the nlc-session Edge Function.
           const profile = profileResult.data;
-          if (profile) this.applyNlcProfile(profile);
+          const localSyncedAt = state.currentUser.member_context_synced_at || "";
+          const remoteSyncedAt = profile?.member_context_synced_at || "";
+          if (profile && (!localSyncedAt || (remoteSyncedAt && remoteSyncedAt >= localSyncedAt))) {
+            this.applyNlcProfile(profile);
+          }
           state.currentUser.is_demo = false;
         }
 
@@ -1254,72 +1258,70 @@ const db = {
       return { aborted: true, reason: "demo" };
     }
 
-    // 💡 關鍵修復：在呼叫 getCurrentDbUser() 之前，先備份使用者剛剛填寫的編輯資料
-    // 因為 getCurrentDbUser() 會調用 syncNlcSessionWithSupabase()，這會從快取中載入舊資料並覆寫 state.currentUser！
     const editedName = state.currentUser.name || "";
-    const editedRegion = state.currentUser.great_region || "";
-    const editedZone = state.currentUser.pastoral_zone || "";
-    const editedGroup = state.currentUser.small_group || "";
+    const lockedFields = new Set(state.profileLockedFields || []);
 
     const user = await this.getCurrentDbUser();
     if (!user) {
       throw new Error("Current login session is unavailable. Please sign in again.");
     }
 
-    {
-      const regionObj = state.orgStructure && state.orgStructure.rawRegions ? state.orgStructure.rawRegions.find(r => r.name === editedRegion) : null;
-      const zoneObj = state.orgStructure && state.orgStructure.rawZones ? state.orgStructure.rawZones.find(z => z.name === editedZone) : null;
-      const groupObj = state.orgStructure && state.orgStructure.rawGroups ? state.orgStructure.rawGroups.find(g => g.name === editedGroup) : null;
+    const displayName = lockedFields.has("name") ? (state.currentUser.name || "") : editedName;
+    const profilePayload = {
+      id: user.id,
+      name: displayName,
+      updated_at: new Date().toISOString()
+    };
 
-      const profilePayload = {
-        id: user.id,
-        name: editedName,
-        great_region: editedRegion,
-        pastoral_zone: editedZone,
-        small_group: editedGroup,
-        great_region_id: regionObj ? regionObj.id : null,
-        pastoral_zone_id: zoneObj ? zoneObj.id : null,
-        small_group_id: groupObj ? groupObj.id : null,
-        updated_at: new Date().toISOString()
-      };
-
-
-
-      const saveResult = state.supabase.saveProfile
-        ? await state.supabase.saveProfile(profilePayload)
-        : await state.supabase.from("profiles").upsert(profilePayload, { onConflict: "id" }).select("*").single();
-      const { data, error } = saveResult;
-      if (error) throw new Error(error.message || error.error || error);
-      if (state.supabase.saveProfile && !saveResult.project_url) {
+    let verifiedProfile = null;
+    if (state.supabase.saveProfile) {
+      const saveResult = await state.supabase.saveProfile(profilePayload);
+      if (saveResult.error) throw new Error(saveResult.error.message || saveResult.error.error || saveResult.error);
+      if (!saveResult.project_url) {
         throw new Error("個人資料暫時無法儲存，請稍後再試。");
       }
-
-      if (!state.supabase.saveProfile) {
-        saveResult.project_url = state.supabaseConfig && state.supabaseConfig.url ? state.supabaseConfig.url : null;
-        saveResult.profile = data || null;
-      }
-
-      let verifiedProfile = data || null;
-      if (!verifiedProfile || verifiedProfile.id !== user.id) {
-        const verifyResult = await state.supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (verifyResult.error) throw new Error(verifyResult.error.message || verifyResult.error.error || verifyResult.error);
-        verifiedProfile = verifyResult.data || null;
-      }
-
-      if (!verifiedProfile || verifiedProfile.id !== user.id) {
-
-        throw new Error("個人資料尚未成功儲存，請稍後再試。");
-      }
-
-      // 💡 關鍵修復：儲存成功後，立即更新 LocalStorage 快取檔案，防止重新整理或快取載入時再次被舊資料覆寫！
-      localStorage.setItem("nlc_supabase_profile", JSON.stringify(verifiedProfile));
-      this.applyNlcProfile(verifiedProfile);
-      return saveResult;
+      verifiedProfile = saveResult.profile || saveResult.data || null;
+    } else {
+      const { data, error } = await state.supabase
+        .from("profiles")
+        .update({ name: displayName, updated_at: profilePayload.updated_at })
+        .eq("id", user.id)
+        .select("*")
+        .single();
+      if (error) throw new Error(error.message || error.error || error);
+      verifiedProfile = data || null;
     }
+
+    if (!verifiedProfile || verifiedProfile.id !== user.id) {
+      const verifyResult = await state.supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (verifyResult.error) throw new Error(verifyResult.error.message || verifyResult.error.error || verifyResult.error);
+      verifiedProfile = verifyResult.data || null;
+    }
+
+    if (!verifiedProfile || verifiedProfile.id !== user.id) {
+      throw new Error("個人資料尚未成功儲存，請稍後再試。");
+    }
+
+    if (typeof auth !== "undefined" && auth.isLoggedIn()) {
+      const cachedProfile = localStorage.getItem("nlc_supabase_profile");
+      if (cachedProfile) {
+        try {
+          const merged = { ...JSON.parse(cachedProfile), name: verifiedProfile.name };
+          localStorage.setItem("nlc_supabase_profile", JSON.stringify(merged));
+          this.applyNlcProfile(merged, state.profileLockedFields);
+          return { profile: merged };
+        } catch (_err) {
+          // fall through to verified profile
+        }
+      }
+    }
+
+    state.currentUser.name = verifiedProfile.name || state.currentUser.name;
+    return { profile: verifiedProfile };
   },
 
   // Calculate streak based on reading logs
