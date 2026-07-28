@@ -513,17 +513,41 @@ function renderBadgeWall(containerId) {
     badgeItem.setAttribute("tabindex", "0");
     badgeItem.setAttribute("aria-label", (isUnlocked ? "已點亮：" : "尚未點亮：") + badge.title);
     const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
-    const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-    const tierClass = getBadgeFrameClass(badge);
-    badgeItem.innerHTML = `
-      ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
-      <div class="honor-badge-item__icon-wrap honor-badge-hex-shell">
-        <div class="honor-badge-hex ${hexState} ${tierClass}">
+    
+    let iconContent = "";
+    if (badge.campaignStageNo) {
+      const filenames = {
+        1: "rock-badge.svg",
+        2: "iron-badge.svg",
+        3: "copper-badge.svg",
+        4: "bronze-badge.svg",
+        5: "silver-badge.svg",
+        6: "gold-badge.svg",
+        7: "adamantine-badge.svg",
+        8: "ophir-gold-badge.svg",
+        9: "fire-gold-badge.svg",
+        10: "new-jerusalem-badge.svg"
+      };
+      const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
+      iconContent = `<img src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
+    } else {
+      const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
+      iconContent = `
+        <div class="honor-badge-hex ${hexState}">
           <span class="nlc-icon nlc-icon--md" data-icon="${badge.iconKey || "award"}" aria-hidden="true"></span>
         </div>
-        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
+      `;
+    }
+
+    const titleHtml = badge.campaignStageNo ? "" : `<span class="honor-badge-item__title">${safeTitle}</span>`;
+
+    badgeItem.innerHTML = `
+      ${!isUnlocked ? `<div class="honor-badge-item__lock"><span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span></div>` : ""}
+      <div class="honor-badge-item__icon-wrap honor-badge-hex-shell" style="width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;">
+        ${iconContent}
+        ${isUnlocked ? `<span class="honor-badge-hex__check" aria-hidden="true" style="z-index: 5;"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle"></span></span>` : ""}
       </div>
-      <span class="honor-badge-item__title">${safeTitle}</span>
+      ${titleHtml}
       ${renderBadgeStars(badge)}
     `;
     attachBadgeOpenHandlers(badgeItem, badge, isUnlocked);
