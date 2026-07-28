@@ -548,11 +548,13 @@ function renderBadgeWall(containerId) {
         };
         const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
         const lockStateClass = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
-        iconContent = `<img class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto;" alt="${safeTitle}" />`;
         
-        if (!isUnlocked) {
-          shellStyle += " filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;";
-        }
+        const imgFilterStyle = !isUnlocked
+          ? "filter: grayscale(1) saturate(0) brightness(0.75) contrast(1.05); opacity: 0.75;"
+          : "";
+          
+        iconContent = `<img width="200" height="240" class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${imgFilterStyle}" alt="${safeTitle}" />`;
+        
         // ── 覆蓋 CSS 變數，關閉 ::after 背景圖渲染，防止與 <img> 產生重疊重影 ──
         shellStyle += " --campaign-medal-frame: none !important;";
       } else {
