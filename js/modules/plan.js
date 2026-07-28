@@ -4849,10 +4849,14 @@ async function renderMyPersonalRankings() {
   const _lbDenseRank = typeof window._lbAssignDenseRanks === 'function'
     ? window._lbAssignDenseRanks
     : (sorted) => {
+        const total = sorted.length;
         let rank = 1;
         return sorted.map((u, i) => {
+          // 計畫未開始（progress = 0）→ 顯示最後名次，讓人有「從最後衝上來」的動力
+          if ((u.progress ?? 0) === 0) return { ...u, rank: total };
           if (i === 0) return { ...u, rank: 1 };
           const prev = sorted[i - 1];
+          // prev 若也是未開始，本人也應顯示最後名次（但已在上方 progress===0 攔截）
           const same = (u.progress ?? 0) === (prev.progress ?? 0)
             && (u.last_read ?? null) === (prev.last_read ?? null);
           if (!same) rank = i + 1;
@@ -5289,8 +5293,12 @@ async function renderGroupParticipantsRankingTable() {
     });
 
     // Dense Rank：進度 + last_read 完全相同者共享同一名次
+    // 未開始（completed = 0）→ 一律顯示最後名次，讓人感受「從最後衝到最前」的動力
+    const _totalMemberCount = groupMembers.length;
     let _denseRank = 1;
     groupMembers = groupMembers.map((m, i) => {
+      // 未開始者：名次 = 總人數（最後一名）
+      if ((m.completed ?? 0) === 0) return { ...m, rank: _totalMemberCount };
       if (i === 0) return { ...m, rank: 1 };
       const prev = groupMembers[i - 1];
       const same = (m.completed ?? 0) === (prev.completed ?? 0)

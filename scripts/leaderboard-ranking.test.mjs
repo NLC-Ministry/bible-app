@@ -171,7 +171,7 @@ describe("情況 D：多人同分不同完成時間", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// 情況 E：all completed = 0（未開始）→ 按 id ASC 排列
+// 情況 E：all completed = 0（未開始）→ 全部顯示最後名次（總人數）
 // ─────────────────────────────────────────────────────────────────
 describe("情況 E：所有人未開始（completed = 0）", () => {
   const users = [
@@ -180,14 +180,31 @@ describe("情況 E：所有人未開始（completed = 0）", () => {
     makeUser({ id: "id-gamma", name: "Gamma", completed: 0, last_read: null }),
   ];
 
-  it("按 id ASC 字典序穩定排列：alpha < beta < gamma", () => {
+  it("排序後按 id ASC 字典序穩定排列：alpha < beta < gamma", () => {
     const sorted = sortLeaderboard(users);
     expect(sorted.map(u => u.id)).toEqual(["id-alpha", "id-beta", "id-gamma"]);
   });
 
-  it("所有人共享 Dense Rank #1", () => {
+  it("所有人名次皆為總人數（最後一名），而非 #1", () => {
     const lb = buildLeaderboard(users);
-    lb.forEach(u => expect(u.rank).toBe(1));
+    const total = users.length; // 3
+    lb.forEach(u => expect(u.rank).toBe(total));
+  });
+
+  it("單人未開始 → 名次 = 1（= 總人數 = 1）", () => {
+    const lb = buildLeaderboard([makeUser({ id: "only", name: "Only", completed: 0 })]);
+    expect(lb[0].rank).toBe(1); // total = 1，所以最後名次 = 1
+  });
+
+  it("部分開始、部分未開始：未開始者顯示總人數名次", () => {
+    const started = makeUser({ id: "id-s", name: "Started", completed: 10, last_read: "2026-07-01T00:00:00Z" });
+    const notStarted1 = makeUser({ id: "id-n1", name: "N1", completed: 0, last_read: null });
+    const notStarted2 = makeUser({ id: "id-n2", name: "N2", completed: 0, last_read: null });
+    const lb = buildLeaderboard([notStarted1, notStarted2, started]);
+    const total = 3;
+    expect(lb.find(u => u.name === "Started").rank).toBe(1);
+    expect(lb.find(u => u.name === "N1").rank).toBe(total);
+    expect(lb.find(u => u.name === "N2").rank).toBe(total);
   });
 });
 

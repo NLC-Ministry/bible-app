@@ -67,8 +67,15 @@ export function sortLeaderboard(users) {
 export function assignDenseRanks(sortedUsers) {
   if (!sortedUsers || sortedUsers.length === 0) return [];
 
+  const total = sortedUsers.length;
   let currentRank = 1;
+
   return sortedUsers.map((user, index) => {
+    // 未開始（completed = 0）→ 顯示最後名次（= 總人數）
+    // 讓每個人都感受「從最後名從頭衝」的動力
+    const score = user.completed ?? user.progress ?? 0;
+    if (score === 0) return { ...user, rank: total };
+
     if (index === 0) {
       return { ...user, rank: 1 };
     }
@@ -77,7 +84,7 @@ export function assignDenseRanks(sortedUsers) {
     const sameCompleted = (user.completed ?? 0) === (prev.completed ?? 0);
     const sameLastRead = (user.last_read ?? null) === (prev.last_read ?? null);
     if (sameCompleted && sameLastRead) {
-      // 同分同時間 → 沿用上一個名次
+      // 同分同時間 → 決用上一個名次
       return { ...user, rank: currentRank };
     } else {
       // 不同分或不同時間 → 名次遞增（Dense: +1，不跳號）
