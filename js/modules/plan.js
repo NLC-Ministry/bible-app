@@ -4832,31 +4832,63 @@ async function renderMyPersonalRankings() {
   const myName = state.currentUser.name;
   const myZone = state.currentUser.pastoral_zone || "";
 
+  // ── 多重排序鍵說明 ──
+  // 主排序 progress DESC → 次排序 last_read ASC → 確定性防線 id(name) ASC
+  // 此函數在 leaderboard-utils.js 中定義，透過 window 全域存取
+  const _lbSort = typeof window._lbSortLeaderboard === 'function'
+    ? window._lbSortLeaderboard
+    : (arr, keyFn) => [...arr].sort((a, b) => {
+        const diff = (b.progress ?? 0) - (a.progress ?? 0);
+        if (diff !== 0) return diff;
+        const aT = a.last_read ? new Date(a.last_read).getTime() : Infinity;
+        const bT = b.last_read ? new Date(b.last_read).getTime() : Infinity;
+        if (aT !== bT) return aT - bT;
+        return String(a.name ?? '').localeCompare(String(b.name ?? ''));
+      });
+
+  const _lbDenseRank = typeof window._lbAssignDenseRanks === 'function'
+    ? window._lbAssignDenseRanks
+    : (sorted) => {
+        let rank = 1;
+        return sorted.map((u, i) => {
+          if (i === 0) return { ...u, rank: 1 };
+          const prev = sorted[i - 1];
+          const same = (u.progress ?? 0) === (prev.progress ?? 0)
+            && (u.last_read ?? null) === (prev.last_read ?? null);
+          if (!same) rank = i + 1;
+          return { ...u, rank };
+        });
+      };
+
   const userProgressList = allUsers.map(u => {
     let pct = u.plan_progress || 0;
     if (u.name === myName) {
       pct = state.activePlan ? Math.round((completedDaysCount / state.activePlan.days.length) * 100) : 0;
     }
     return {
+      id: u.id,
       name: u.name,
       pastoral_zone: u.pastoral_zone,
-      progress: pct
+      progress: pct,
+      last_read: u.last_read || null
     };
   });
 
-  // Sort for All Church Rank
-  const sortedAll = [...userProgressList].sort((a, b) => b.progress - a.progress);
-  const myIndexAll = sortedAll.findIndex(u => u.name === myName);
-  const myRankAll = myIndexAll !== -1 ? myIndexAll + 1 : sortedAll.length;
+  // ── 全教會排名（多重排序 + Dense Rank）──
+  const sortedAll = _lbSort(userProgressList);
+  const rankedAll = _lbDenseRank(sortedAll);
+  const myEntryAll = rankedAll.find(u => u.name === myName);
+  const myRankAll = myEntryAll ? myEntryAll.rank : rankedAll.length + 1;
 
   if (elRankAll) elRankAll.textContent = `第 ${myRankAll} 名`;
-  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${sortedAll.length} 人`;
+  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${rankedAll.length} 人`;
 
-  // Sort for Pastoral Zone Rank
+  // ── 牧區排名（多重排序 + Dense Rank）──
   const zoneUsers = userProgressList.filter(u => u.pastoral_zone === myZone);
-  const sortedZone = [...zoneUsers].sort((a, b) => b.progress - a.progress);
-  const myIndexZone = sortedZone.findIndex(u => u.name === myName);
-  const myRankZone = myIndexZone !== -1 ? myIndexZone + 1 : sortedZone.length;
+  const sortedZone = _lbSort(zoneUsers);
+  const rankedZone = _lbDenseRank(sortedZone);
+  const myEntryZone = rankedZone.find(u => u.name === myName);
+  const myRankZone = myEntryZone ? myEntryZone.rank : rankedZone.length + 1;
 
   if (elRankZoneTitle && myZone) elRankZoneTitle.textContent = `${myZone} 個人排行`;
   if (elRankZone) elRankZone.textContent = myZone ? `第 ${myRankZone} 名` : "未選牧區";
@@ -5243,7 +5275,30 @@ async function renderGroupParticipantsRankingTable() {
       };
     });
 
-    groupMembers.sort((a, b) => b.completed - a.completed);
+    // ── 多重排序 + Dense Rank（參與者排行榜）──
+    // 排序一：completed DESC（進度天數高者優先）
+    // 排序二：last_read ASC（相同進度時，最早完成者優先；null 排最後）
+    // 排序三：id ASC（確定性防線，保證跨查詢順序 100% 穩定）
+    groupMembers.sort((a, b) => {
+      const diff = (b.completed ?? 0) - (a.completed ?? 0);
+      if (diff !== 0) return diff;
+      const aT = a.last_read ? new Date(a.last_read).getTime() : Infinity;
+      const bT = b.last_read ? new Date(b.last_read).getTime() : Infinity;
+      if (aT !== bT) return aT - bT;
+      return String(a.id ?? a.name ?? '').localeCompare(String(b.id ?? b.name ?? ''));
+    });
+
+    // Dense Rank：進度 + last_read 完全相同者共享同一名次
+    let _denseRank = 1;
+    groupMembers = groupMembers.map((m, i) => {
+      if (i === 0) return { ...m, rank: 1 };
+      const prev = groupMembers[i - 1];
+      const same = (m.completed ?? 0) === (prev.completed ?? 0)
+        && (m.last_read ?? null) === (prev.last_read ?? null);
+      if (!same) _denseRank = i + 1;
+      return { ...m, rank: _denseRank };
+    });
+
     window._grpScopedProcessedMembers = groupMembers;
 
     if (searchInput && !searchInput.dataset.listenerInitialized) {
@@ -5284,11 +5339,12 @@ window.displayParticipantsList = function (limit = 100) {
   const _careRole = (state.currentUser && state.currentUser.role) || "member";
   const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "admin"].includes(_careRole);
 
-  // Align header columns dynamically based on _canSendCare
+  // 對齊 header 欄位動態調整（含名次欄）
   const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;
   if (headerEl) {
+    // 名次欄寬度 36px
     if (_canSendCare) {
-      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px 44px";
+      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px 44px";
       let reminderHeader = document.getElementById("members-ranking-reminder-col");
       if (!reminderHeader) {
         reminderHeader = Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
@@ -5301,18 +5357,28 @@ window.displayParticipantsList = function (limit = 100) {
         headerEl.appendChild(reminderHeader);
       }
     } else {
-      headerEl.style.gridTemplateColumns = "1fr 80px 80px 70px 90px";
+      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px";
       const reminderHeader = document.getElementById("members-ranking-reminder-col")
         || Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
       if (reminderHeader) reminderHeader.remove();
+    }
+    // 論是否已有名次 header—若編影第一個子元素不是名次欄，則插入
+    const firstChild = headerEl.firstElementChild;
+    if (!firstChild || firstChild.id !== "members-ranking-rank-col") {
+      const rankHeader = document.createElement("div");
+      rankHeader.id = "members-ranking-rank-col";
+      rankHeader.style.cssText = "color: var(--text-muted); font-size: 0.78rem; text-align: center;";
+      rankHeader.textContent = "名次";
+      headerEl.insertBefore(rankHeader, firstChild);
     }
   }
 
   visibleItems.forEach(m => {
     const itemRow = document.createElement("div");
+    // 名次欄 36px 加入 grid
     itemRow.style.cssText = `
       display: grid;
-      grid-template-columns: 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
+      grid-template-columns: 36px 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
       gap: 0.4rem;
       align-items: center;
       padding: 0.6rem 0.2rem;
@@ -5326,8 +5392,12 @@ window.displayParticipantsList = function (limit = 100) {
       itemRow.style.borderRadius = "8px";
     }
 
+    const rankNum = m.rank ?? "—";
+    // 名次徽章樣式：Top 3 上色，其餘灰色
+    const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? '#94a3b8' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
     itemRow.innerHTML = `
-      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'};">
+      <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center;">#${rankNum}</div>
+      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
         ${escapeHTML(m.name)}
       </div>
       <div class="text-danger">${m.streak}</div>
