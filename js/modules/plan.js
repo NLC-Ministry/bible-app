@@ -4869,11 +4869,6 @@ async function renderPlanRankingView() {
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
 
-  if (!canUseAdvancedGroupStats()) {
-    const rankingCard = container.closest(".glass-card");
-    if (rankingCard) rankingCard.style.display = "none";
-    return;
-  }
   const rankingCard = container.closest(".glass-card");
   if (rankingCard) rankingCard.style.display = "";
 
