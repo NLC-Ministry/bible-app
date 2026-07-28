@@ -345,6 +345,11 @@ appRouter.switchTab = async function (tabId, options = {}) {
       if (mod && typeof mod.renderAdminFeatureSettings === 'function') {
         await mod.renderAdminFeatureSettings();
       }
+      if (mod && typeof mod.renderAdminTeamRegistrationStatus === 'function') {
+        await mod.renderAdminTeamRegistrationStatus(true);
+      } else if (typeof window.renderAdminTeamRegistrationStatus === 'function') {
+        await window.renderAdminTeamRegistrationStatus(true);
+      }
     }
 
     // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──

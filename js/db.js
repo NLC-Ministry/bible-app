@@ -1011,51 +1011,94 @@ const db = {
   },
 
   async loadOrgStructure() {
+    state.orgStructure = {
+      regions: [],
+      zones: {},
+      groups: {},
+      rawRegions: [],
+      rawZones: [],
+      rawGroups: []
+    };
+
     if (state.isSupabaseMode && state.supabase) {
       try {
-        // 💡 效能優化：平行化讀取組織結構，避免 3 次序列網路查詢
-        const [regionsResult, zonesResult, groupsResult] = await Promise.all([
-          state.supabase.from("great_regions").select("id, name"),
-          state.supabase.from("pastoral_zones").select("id, name, great_region_id"),
-          state.supabase.from("small_groups").select("id, name, pastoral_zone_id")
-        ]);
+        // 從 profiles 表取得所有不重複的使用者大區、牧區、小組資料以重構組織架構
+        const { data: users, error } = await state.supabase
+          .from("profiles")
+          .select("great_region, pastoral_zone, small_group");
 
-        if (regionsResult.error) throw regionsResult.error;
-        if (zonesResult.error) throw zonesResult.error;
-        if (groupsResult.error) throw groupsResult.error;
+        if (error) throw error;
 
-        const regions = regionsResult.data || [];
-        const zones = zonesResult.data || [];
-        const groups = groupsResult.data || [];
+        const regionsSet = new Set();
+        const zonesMap = new Map(); // region -> Set of zones
+        const groupsMap = new Map(); // zone -> Set of groups
 
-        state.orgStructure.regions = regions.map(r => r.name);
-        state.orgStructure.rawRegions = regions;
-        state.orgStructure.rawZones = zones;
-        state.orgStructure.rawGroups = groups;
+        (users || []).forEach(u => {
+          const region = (u.great_region || "").trim();
+          const zone = (u.pastoral_zone || "").trim();
+          const group = (u.small_group || "").trim();
+
+          if (region) {
+            regionsSet.add(region);
+            if (zone) {
+              if (!zonesMap.has(region)) zonesMap.set(region, new Set());
+              zonesMap.get(region).add(zone);
+
+              if (group) {
+                if (!groupsMap.has(zone)) groupsMap.set(zone, new Set());
+                groupsMap.get(zone).add(group);
+              }
+            }
+          }
+        });
+
+        const regions = Array.from(regionsSet).sort();
+        state.orgStructure.regions = regions;
 
         state.orgStructure.zones = {};
-        regions.forEach(region => {
-          const regionZones = zones.filter(z => z.great_region_id === region.id).map(z => z.name);
-          state.orgStructure.zones[region.name] = regionZones;
+        regions.forEach(r => {
+          const regionZones = zonesMap.has(r) ? Array.from(zonesMap.get(r)).sort() : [];
+          state.orgStructure.zones[r] = regionZones;
         });
 
         state.orgStructure.groups = {};
-        zones.forEach(zone => {
-          const zoneGroups = groups.filter(g => g.pastoral_zone_id === zone.id).map(g => g.name);
-          state.orgStructure.groups[zone.name] = zoneGroups;
+        zonesMap.forEach((zoneSet, r) => {
+          zoneSet.forEach(z => {
+            const zoneGroups = groupsMap.has(z) ? Array.from(groupsMap.get(z)).sort() : [];
+            state.orgStructure.groups[z] = zoneGroups;
+          });
         });
+
+        // 生成相容的 rawRegions/rawZones/rawGroups
+        state.orgStructure.rawRegions = regions.map(r => ({ id: r, name: r }));
+        
+        const rawZones = [];
+        zonesMap.forEach((zoneSet, r) => {
+          zoneSet.forEach(z => {
+            rawZones.push({ id: z, name: z, great_region_id: r });
+          });
+        });
+        state.orgStructure.rawZones = rawZones;
+
+        const rawGroups = [];
+        groupsMap.forEach((groupSet, z) => {
+          groupSet.forEach(g => {
+            rawGroups.push({ id: g, name: g, pastoral_zone_id: z });
+          });
+        });
+        state.orgStructure.rawGroups = rawGroups;
 
         this.ensureCurrentUserOrgStructure();
         return;
       } catch (err) {
-        console.error("Failed to load schema from Supabase:", err);
+        console.error("Failed to load dynamic org structure from Supabase:", err);
         state.orgStructure.regions = [];
         state.orgStructure.rawRegions = [];
         state.orgStructure.rawZones = [];
         state.orgStructure.rawGroups = [];
         state.orgStructure.zones = {};
         state.orgStructure.groups = {};
-         this.ensureCurrentUserOrgStructure();
+        this.ensureCurrentUserOrgStructure();
         return;
       }
     }
@@ -1063,46 +1106,7 @@ const db = {
   },
 
   async syncChurchOrganization(regions, zones, groups) {
-    if (state.isSupabaseMode && state.supabase) {
-      try {
-        const { data, error } = await state.supabase.rpc("sync_church_organization", {
-          p_regions: regions,
-          p_zones: zones,
-          p_groups: groups
-        });
-        if (error) throw error;
-        // 重新加載最新的組織架構到本地 state
-        await this.loadOrgStructure();
-        return { success: true };
-      } catch (err) {
-        console.error("Failed to sync church organization:", err);
-        return { success: false, error: err.message || err };
-      }
-    }
-    
-    // Demo / 離線模式：直接在前端記憶體更新
-    state.orgStructure.regions = [...regions];
-    state.orgStructure.zones = {};
-    regions.forEach(r => {
-      state.orgStructure.zones[r] = zones.filter(z => z.region_name === r).map(z => z.name);
-    });
-    state.orgStructure.groups = {};
-    zones.forEach(z => {
-      state.orgStructure.groups[z.name] = groups.filter(g => g.zone_name === z.name).map(g => g.name);
-    });
-    
-    // 生成 Mock 的 rawRegions/rawZones/rawGroups 以維持 Supabase 下拉選單相容性
-    state.orgStructure.rawRegions = regions.map((r, i) => ({ id: `r-${i}`, name: r }));
-    state.orgStructure.rawZones = zones.map((z, i) => {
-      const parentReg = state.orgStructure.rawRegions.find(r => r.name === z.region_name);
-      return { id: `z-${i}`, name: z.name, great_region_id: parentReg ? parentReg.id : null };
-    });
-    state.orgStructure.rawGroups = groups.map((g, i) => {
-      const parentZone = state.orgStructure.rawZones.find(z => z.name === g.zone_name);
-      return { id: `g-${i}`, name: g.name, pastoral_zone_id: parentZone ? parentZone.id : null };
-    });
-
-    this.ensureCurrentUserOrgStructure();
+    // 組織架構已改為動態從使用者資料重構，不需手動更新組織表
     return { success: true };
   },
 

@@ -391,357 +391,8 @@ export function openMemberEditBottomSheet(user) {
   overlay.classList.add("active");
 }
 
-export function initAdminOrgManagement() {
-  const exportBtn = document.getElementById("admin-export-org-btn");
-  const fileInput = document.getElementById("admin-org-file-input");
-  const fileNameDiv = document.getElementById("admin-org-file-name");
-  const pasteInput = document.getElementById("admin-org-paste-input");
-  const previewCard = document.getElementById("admin-org-preview-card");
-  const cancelBtn = document.getElementById("admin-org-import-cancel");
-  const confirmBtn = document.getElementById("admin-org-import-confirm");
 
-  if (!exportBtn || !fileInput || !pasteInput || !previewCard || !cancelBtn || !confirmBtn) return;
 
-  let pendingImportData = null;
-
-  // 1. 下載範本
-  exportBtn.onclick = () => {
-    exportCurrentOrgCsv();
-  };
-
-  // 2. 解析處理器
-  const handleParse = (text, sourceName) => {
-    if (!text || !text.trim()) {
-      showToast("請選擇或貼上有效的架構資料");
-      return;
-    }
-    const parsed = parseOrgCsvData(text);
-    if (parsed.length === 0) {
-      showToast("無法解析出任何組織架構資料，請確認格式是否正確");
-      return;
-    }
-
-    // 彙整為大區、牧區、小組
-    const regions = [...new Set(parsed.map(item => item.region).filter(Boolean))];
-    
-    const zoneMap = new Map();
-    parsed.forEach(item => {
-      if (item.zone && item.region) {
-        const key = `${item.zone}||${item.region}`;
-        zoneMap.set(key, { name: item.zone, region_name: item.region });
-      }
-    });
-    const zones = [...zoneMap.values()];
-
-    const groupMap = new Map();
-    parsed.forEach(item => {
-      if (item.group && item.zone) {
-        const key = `${item.group}||${item.zone}`;
-        groupMap.set(key, { name: item.group, zone_name: item.zone });
-      }
-    });
-    const groups = [...groupMap.values()];
-
-    // 進行比對
-    const comparison = compareOrgStructures(regions, zones, groups);
-    
-    // 更新 UI 預覽
-    document.getElementById("preview-add-regions").textContent = comparison.add.regions;
-    document.getElementById("preview-add-zones").textContent = comparison.add.zones;
-    document.getElementById("preview-add-groups").textContent = comparison.add.groups;
-
-    document.getElementById("preview-keep-regions").textContent = comparison.keep.regions;
-    document.getElementById("preview-keep-zones").textContent = comparison.keep.zones;
-    document.getElementById("preview-keep-groups").textContent = comparison.keep.groups;
-
-    document.getElementById("preview-del-regions").textContent = comparison.del.regions;
-    document.getElementById("preview-del-zones").textContent = comparison.del.zones;
-    document.getElementById("preview-del-groups").textContent = comparison.del.groups;
-
-    const delBadge = document.getElementById("preview-delete-badge");
-    const totalDel = comparison.del.regions + comparison.del.zones + comparison.del.groups;
-    if (totalDel > 0) {
-      delBadge.style.display = "inline-flex";
-    } else {
-      delBadge.style.display = "none";
-    }
-
-    pendingImportData = { regions, zones, groups };
-    previewCard.style.display = "flex";
-
-    if (sourceName) {
-      fileNameDiv.textContent = `已選擇檔案：${sourceName} (${parsed.length} 筆資料)`;
-      fileNameDiv.style.display = "block";
-    }
-  };
-
-  // 檔案選取事件
-  fileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      handleParse(evt.target.result, file.name);
-      pasteInput.value = ""; // 清空文字框避免混淆
-    };
-    reader.readAsText(file, "UTF-8");
-  };
-
-  // 貼上文字框監聽
-  pasteInput.oninput = () => {
-    const val = pasteInput.value;
-    if (val && val.trim()) {
-      handleParse(val, null);
-      fileInput.value = ""; // 清空檔案選擇器
-      fileNameDiv.style.display = "none";
-    } else {
-      clearPending();
-    }
-  };
-
-  // 取消匯入
-  const clearPending = () => {
-    pendingImportData = null;
-    fileInput.value = "";
-    pasteInput.value = "";
-    fileNameDiv.style.display = "none";
-    previewCard.style.display = "none";
-  };
-  cancelBtn.onclick = clearPending;
-
-  // 確認執行更新
-  confirmBtn.onclick = async () => {
-    if (!pendingImportData) return;
-    
-    const confirmMsg = "警告：執行更新將會覆蓋全教會的組織架構，不在名單中的項目將被移除。確定要執行嗎？";
-    const confirmed = await window.showConfirmDialog({
-      title: "確認同步更新",
-      message: confirmMsg,
-      confirmText: "執行更新",
-      cancelText: "取消",
-      isDestructive: true
-    });
-
-    if (confirmed) {
-      loader.show("正在執行同步更新，請稍候...");
-      const result = await db.syncChurchOrganization(
-        pendingImportData.regions,
-        pendingImportData.zones,
-        pendingImportData.groups
-      );
-      loader.hide();
-
-      if (result && result.success) {
-        showToast("組織架構同步更新成功！");
-        clearPending();
-        renderAdminOrgManagement();
-        // 重新渲染個人設定選單與過濾器選項
-        if (typeof renderProfileView === "function") renderProfileView();
-      } else {
-        alert("同步更新失敗：" + (result.error || "未知錯誤"));
-      }
-    }
-  };
-}
-
-function parseOrgCsvData(text) {
-  if (!text || !text.trim()) return [];
-  const lines = text.split(/\r?\n/);
-  const result = [];
-  
-  lines.forEach((line, index) => {
-    // 忽略第一列標頭
-    if (index === 0 && (line.includes("大區") || line.toLowerCase().includes("region") || line.includes("牧區") || line.includes("小組"))) {
-      return;
-    }
-    
-    // 支援逗號或 Tab 鍵分隔
-    const parts = line.split(/[,\t]/).map(p => p.trim());
-    if (parts.length >= 1 && parts[0]) {
-      const region = parts[0] || "";
-      const zone = parts[1] || "";
-      const group = parts[2] || "";
-      result.push({ region, zone, group });
-    }
-  });
-  
-  return result;
-}
-
-function compareOrgStructures(regions, zones, groups) {
-  const currentRegions = state.orgStructure.regions || [];
-  
-  let currentZones = [];
-  if (state.orgStructure.rawZones) {
-    currentZones = state.orgStructure.rawZones.map(z => {
-      const parentReg = state.orgStructure.rawRegions.find(r => r.id === z.great_region_id);
-      return { name: z.name, region_name: parentReg ? parentReg.name : "" };
-    });
-  } else if (state.orgStructure.zones) {
-    Object.entries(state.orgStructure.zones).forEach(([rName, zNames]) => {
-      zNames.forEach(zName => {
-        currentZones.push({ name: zName, region_name: rName });
-      });
-    });
-  }
-
-  let currentGroups = [];
-  if (state.orgStructure.rawGroups) {
-    currentGroups = state.orgStructure.rawGroups.map(g => {
-      const parentZone = state.orgStructure.rawZones.find(z => z.id === g.pastoral_zone_id);
-      return { name: g.name, zone_name: parentZone ? parentZone.name : "" };
-    });
-  } else if (state.orgStructure.groups) {
-    Object.entries(state.orgStructure.groups).forEach(([zName, gNames]) => {
-      gNames.forEach(gName => {
-        currentGroups.push({ name: gName, zone_name: zName });
-      });
-    });
-  }
-
-  // 大區比對
-  const addRegions = regions.filter(r => !currentRegions.includes(r));
-  const keepRegions = regions.filter(r => currentRegions.includes(r));
-  const delRegions = currentRegions.filter(r => !regions.includes(r));
-
-  // 牧區比對 (name + region_name)
-  const addZones = zones.filter(z => !currentZones.some(cz => cz.name === z.name && cz.region_name === z.region_name));
-  const keepZones = zones.filter(z => currentZones.some(cz => cz.name === z.name && cz.region_name === z.region_name));
-  const delZones = currentZones.filter(cz => !zones.some(z => z.name === cz.name && z.region_name === cz.region_name));
-
-  // 小組比對 (name + zone_name)
-  const addGroups = groups.filter(g => !currentGroups.some(cg => cg.name === g.name && cg.zone_name === g.zone_name));
-  const keepGroups = groups.filter(g => currentGroups.some(cg => cg.name === g.name && cg.zone_name === g.zone_name));
-  const delGroups = currentGroups.filter(cg => !groups.some(g => g.name === cg.name && g.zone_name === cg.zone_name));
-
-  return {
-    add: { regions: addRegions.length, zones: addZones.length, groups: addGroups.length },
-    keep: { regions: keepRegions.length, zones: keepZones.length, groups: keepGroups.length },
-    del: { regions: delRegions.length, zones: delZones.length, groups: delGroups.length }
-  };
-}
-
-function exportCurrentOrgCsv() {
-  let rows = [["大區", "牧區", "小組"]];
-  
-  if (state.isSupabaseMode && state.orgStructure.rawRegions) {
-    const regions = state.orgStructure.rawRegions || [];
-    const zones = state.orgStructure.rawZones || [];
-    const groups = state.orgStructure.rawGroups || [];
-    
-    if (groups.length > 0) {
-      groups.forEach(g => {
-        const zone = zones.find(z => z.id === g.pastoral_zone_id);
-        const zoneName = zone ? zone.name : "";
-        const region = zone ? regions.find(r => r.id === zone.great_region_id) : null;
-        const regionName = region ? region.name : "";
-        rows.push([regionName, zoneName, g.name]);
-      });
-      
-      zones.forEach(z => {
-        const hasGroups = groups.some(g => g.pastoral_zone_id === z.id);
-        if (!hasGroups) {
-          const region = regions.find(r => r.id === z.great_region_id);
-          const regionName = region ? region.name : "";
-          rows.push([regionName, z.name, ""]);
-        }
-      });
-      
-      regions.forEach(r => {
-        const hasZones = zones.some(z => z.great_region_id === r.id);
-        if (!hasZones) {
-          rows.push([r.name, "", ""]);
-        }
-      });
-    } else {
-      if (zones.length > 0) {
-        zones.forEach(z => {
-          const region = regions.find(r => r.id === z.great_region_id);
-          const regionName = region ? region.name : "";
-          rows.push([regionName, z.name, ""]);
-        });
-        regions.forEach(r => {
-          const hasZones = zones.some(z => z.great_region_id === r.id);
-          if (!hasZones) {
-            rows.push([r.name, "", ""]);
-          }
-        });
-      } else {
-        regions.forEach(r => {
-          rows.push([r.name, "", ""]);
-        });
-      }
-    }
-  } else {
-    const regions = state.orgStructure.regions || [];
-    const zones = state.orgStructure.zones || {};
-    const groups = state.orgStructure.groups || {};
-    
-    regions.forEach(r => {
-      const rZones = zones[r] || [];
-      if (rZones.length > 0) {
-        rZones.forEach(z => {
-          const zGroups = groups[z] || [];
-          if (zGroups.length > 0) {
-            zGroups.forEach(g => {
-              rows.push([r, z, g]);
-            });
-          } else {
-            rows.push([r, z, ""]);
-          }
-        });
-      } else {
-        rows.push([r, "", ""]);
-      }
-    });
-  }
-  
-  const csvContent = "\uFEFF" + rows.map(r => r.map(cell => {
-    const text = String(cell || "");
-    if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
-      return `"${text.replace(/"/g, '""')}"`;
-    }
-    return text;
-  }).join(",")).join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", `church_organization_${new Date().toISOString().slice(0,10)}.csv`);
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-export function renderAdminOrgManagement() {
-  const statRegions = document.getElementById("admin-stat-regions");
-  const statZones = document.getElementById("admin-stat-zones");
-  const statGroups = document.getElementById("admin-stat-groups");
-
-  if (!statRegions || !statZones || !statGroups) return;
-
-  const regionsCount = state.orgStructure.regions ? state.orgStructure.regions.length : 0;
-  
-  let zonesCount = 0;
-  if (state.orgStructure.rawZones) {
-    zonesCount = state.orgStructure.rawZones.length;
-  } else if (state.orgStructure.zones) {
-    zonesCount = Object.values(state.orgStructure.zones).flat().length;
-  }
-
-  let groupsCount = 0;
-  if (state.orgStructure.rawGroups) {
-    groupsCount = state.orgStructure.rawGroups.length;
-  } else if (state.orgStructure.groups) {
-    groupsCount = Object.values(state.orgStructure.groups).flat().length;
-  }
-
-  statRegions.textContent = regionsCount;
-  statZones.textContent = zonesCount;
-  statGroups.textContent = groupsCount;
-}
 
 export function showResponsibilityModal(role, user) {
   return new Promise((resolve) => {
@@ -1047,15 +698,173 @@ export function init() {
     };
   }
 
-  initAdminOrgManagement();
   initAdminFiltersUI();
+  initAdminTeamRegistration();
 }
 
 // Bind to window for global access compatibility
 window.renderAdminUserManagement = renderAdminUserManagement;
-window.renderAdminOrgManagement = renderAdminOrgManagement;
 window.initAdminFiltersUI = initAdminFiltersUI;
 window.renderAdminFeatureSettings = renderAdminFeatureSettings;
 window.openAdminFilterBottomSheet = openAdminFilterBottomSheet;
 window.closeAdminFilterBottomSheet = closeAdminFilterBottomSheet;
 window.initAdminUserManagement = init;
+
+let activeTeamDivision = 3;
+let cachedTeamsData = null;
+
+export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
+  const contentEl = document.getElementById("admin-team-status-content");
+  if (!contentEl) return;
+
+  const isAdmin = state.currentUser && state.currentUser.role === "admin";
+  const cardWrap = document.getElementById("admin-team-status-card-wrap");
+  if (cardWrap) {
+    cardWrap.classList.toggle("hidden", !isAdmin);
+  }
+  if (!isAdmin) return;
+
+  if (!cachedTeamsData || forceRefresh) {
+    contentEl.innerHTML = `
+      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        讀取團隊報名資料中...
+      </div>
+    `;
+
+    if (!state.globalPlans || state.globalPlans.length === 0) {
+      await db.loadGlobalPlans();
+    }
+
+    const fetchedData = [];
+    for (const plan of state.globalPlans) {
+      const stats = await db.getReadingTeamStatistics(plan);
+      if (stats && stats.success && stats.context) {
+        fetchedData.push({
+          plan,
+          summary: stats.context.summary || {},
+          teams: stats.context.teams || []
+        });
+      }
+    }
+    cachedTeamsData = fetchedData;
+  }
+
+  const filteredPlans = cachedTeamsData.map(item => {
+    const teams = item.teams.filter(t => Number(t.division) === Number(activeTeamDivision));
+    return {
+      ...item,
+      teams
+    };
+  }).filter(item => item.teams.length > 0);
+
+  if (filteredPlans.length === 0) {
+    contentEl.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        目前無 ${activeTeamDivision} 人團隊的報名資料。
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  filteredPlans.forEach(item => {
+    const planName = item.plan.name || "未命名計畫";
+    const signupCount = item.teams.filter(t => t.status === "signup").length;
+    const readyCount = item.teams.filter(t => t.status === "ready").length;
+    const totalMembers = item.teams.reduce((acc, t) => acc + (t.memberCount || 0), 0);
+
+    html += `
+      <div class="team-plan-section" style="margin-bottom: 2rem;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+          <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true" style="color: var(--primary-color);"></span>
+          計畫：${planName}
+        </h4>
+        <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          <span>招募中：<strong style="color: var(--primary-color);">${signupCount}</strong> 隊</span>
+          <span>已成隊：<strong style="color: var(--color-success-foreground);">${readyCount}</strong> 隊</span>
+          <span>總報名人數：<strong>${totalMembers}</strong> 人</span>
+        </div>
+        
+        <div style="overflow-x: auto; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
+          <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊伍名稱</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px;">狀態</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 120px;">隊長</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px; text-align: center;">人數</th>
+                <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">成員名單</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+
+    item.teams.forEach(team => {
+      const captain = team.members.find(m => m.role === "captain") || {};
+      const membersText = team.members.map(m => {
+        const roleText = m.role === "captain" ? " (隊長)" : "";
+        return `${m.name}${roleText}`;
+      }).join("、 ");
+
+      const statusBadge = team.status === "ready" 
+        ? `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--color-success-foreground) 10%, transparent); color: var(--color-success-foreground); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);">已成隊</span>`
+        : `<span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; border-radius: 4px; background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); border: 1px solid color-mix(in srgb, var(--primary-color) 20%, transparent);">招募中</span>`;
+
+      const isFull = Number(team.memberCount) >= Number(activeTeamDivision);
+      const countStyle = isFull 
+        ? `color: var(--color-success-foreground); font-weight: 700;`
+        : `color: var(--text-secondary);`;
+
+      html += `
+        <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
+          <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
+          <td style="padding: 0.75rem 0.8rem;">${statusBadge}</td>
+          <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name || "未知"}</td>
+          <td style="padding: 0.75rem 0.8rem; text-align: center; ${countStyle}">${team.memberCount} / ${activeTeamDivision}人</td>
+          <td style="padding: 0.75rem 0.8rem; color: var(--text-secondary); font-size: 0.78rem;">${membersText || "無成員"}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  contentEl.innerHTML = html;
+  
+  if (typeof hydrateIcons === "function") {
+    hydrateIcons(contentEl);
+  }
+}
+
+export function initAdminTeamRegistration() {
+  const tab3 = document.getElementById("admin-team-tab-3");
+  const tab6 = document.getElementById("admin-team-tab-6");
+
+  if (tab3 && tab6) {
+    tab3.onclick = (e) => {
+      e.preventDefault();
+      if (activeTeamDivision === 3) return;
+      activeTeamDivision = 3;
+      tab3.classList.add("active");
+      tab6.classList.remove("active");
+      renderAdminTeamRegistrationStatus();
+    };
+
+    tab6.onclick = (e) => {
+      e.preventDefault();
+      if (activeTeamDivision === 6) return;
+      activeTeamDivision = 6;
+      tab6.classList.add("active");
+      tab3.classList.remove("active");
+      renderAdminTeamRegistrationStatus();
+    };
+  }
+}
+
+window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
+window.initAdminTeamRegistration = initAdminTeamRegistration;
