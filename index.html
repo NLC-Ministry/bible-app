@@ -133,6 +133,23 @@
             </svg>
           </button>
 
+          <!-- Notification Bell & Dropdown Popover -->
+          <div class="notification-menu-container" style="position: relative; display: flex; align-items: center; justify-content: center;">
+            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button">
+              <span class="nlc-icon nlc-icon--sm" data-icon="bell" aria-hidden="true"></span>
+              <span class="notification-bell-badge" id="notification-bell-badge" hidden></span>
+            </button>
+            <div class="notification-popover hidden" id="notification-popover">
+              <div class="notification-popover__header">
+                <span class="notification-popover__title">通知</span>
+                <button class="notification-popover__read-all-btn" id="btn-notification-read-all" type="button">全部已讀</button>
+              </div>
+              <div class="notification-popover__content" id="notification-list-container">
+                <div class="notification-popover__empty">目前沒有通知</div>
+              </div>
+            </div>
+          </div>
+
           <!-- Plan Options Menu (visible only when viewing plan details) -->
           <div class="options-menu-container hidden" id="global-plan-options-container"
             style="position: relative; display: flex; align-items: center; justify-content: center;">
