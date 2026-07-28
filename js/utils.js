@@ -545,7 +545,8 @@ function renderBadgeWall(containerId) {
           10: "new-jerusalem-badge.svg"
         };
         const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
-        iconContent = `<img class="campaign-medal-stage-${badge.campaignStageNo}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
+        const lockStateClass = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
+        iconContent = `<img class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${!isUnlocked ? 'filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;' : ''}" alt="${safeTitle}" />`;
       } else {
         const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
         iconContent = `
