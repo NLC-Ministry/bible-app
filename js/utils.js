@@ -553,6 +553,8 @@ function renderBadgeWall(containerId) {
         if (!isUnlocked) {
           shellStyle += " filter: grayscale(1) saturate(0) brightness(0.72) contrast(1.08); opacity: 0.72;";
         }
+        // ── 覆蓋 CSS 變數，關閉 ::after 背景圖渲染，防止與 <img> 產生重疊重影 ──
+        shellStyle += " --campaign-medal-frame: none !important;";
       } else {
         const hexState = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
         iconContent = `
