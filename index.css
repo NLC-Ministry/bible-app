@@ -25,6 +25,8 @@
   --color-success-border: color-mix(in srgb, var(--color-success-foreground) 24%, transparent);
   --color-warning: #FE7615;
   --color-danger: #FC365A;
+  --color-danger-foreground: #C92D49;
+  --color-danger-muted: color-mix(in srgb, var(--color-danger) 62%, var(--text-secondary));
   --color-info: #4A4A4A;
 
   --bg-app: #FAFAFA;
@@ -160,6 +162,9 @@ body.dark-theme {
 
   --color-success-foreground: #7AEAA0;
   --color-success-border: color-mix(in srgb, var(--color-success-foreground) 30%, transparent);
+
+  --color-danger-foreground: #FF7A93;
+  --color-danger-muted: color-mix(in srgb, var(--color-danger) 70%, var(--text-secondary));
 
   --color-progress-track: color-mix(in srgb, var(--text-muted) 18%, transparent);
   --color-icon-default: #FAFAFA;
@@ -3822,15 +3827,15 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 button.logout-btn {
   cursor: pointer;
-  color: var(--color-danger);
+  color: var(--color-danger-foreground);
   font-weight: var(--type-weight-strong);
   transition: background 0.15s ease, color 0.15s ease;
-  border-top: 1px solid var(--border-card, rgba(255,255,255,0.08));
+  border-top: 1px solid var(--border-card);
 }
 
 button.logout-btn:hover {
   background: var(--color-danger-subtle);
-  color: var(--color-danger);
+  color: var(--color-danger-foreground);
 }
 
 .light-theme .avatar-dropdown {
@@ -3845,10 +3850,6 @@ button.logout-btn:hover {
 
 .light-theme .dropdown-divider {
   background: rgba(0,0,0,0.07);
-}
-
-.light-theme button.logout-btn {
-  border-top-color: rgba(0,0,0,0.07);
 }
 
 @media (max-width: 480px) {
@@ -5671,6 +5672,9 @@ body.warm-theme {
 
   --color-success-foreground: #2A7A48;
   --color-success-border: color-mix(in srgb, var(--color-success-foreground) 28%, transparent);
+
+  --color-danger-foreground: #C92D49;
+  --color-danger-muted: color-mix(in srgb, var(--color-danger) 58%, var(--text-secondary));
 
   --color-progress-track: color-mix(in srgb, var(--text-muted) 18%, transparent);
   --color-icon-default: #5C4731;
@@ -10250,19 +10254,56 @@ body.dark-theme .custom-confirm-overlay {
 
 /* 登出特殊樣式 */
 .app-settings-item--danger:hover {
-  background: rgba(252, 54, 90, 0.05);
+  background: var(--color-danger-subtle);
 }
 
 .app-settings-item--danger:active {
-  background: rgba(252, 54, 90, 0.08);
+  background: color-mix(in srgb, var(--color-danger) 16%, var(--bg-card));
 }
 
 .text-danger {
-  color: var(--color-danger) !important;
+  color: var(--color-danger-foreground) !important;
 }
 
 .text-danger-muted {
-  color: color-mix(in srgb, var(--color-danger) 70%, var(--text-secondary)) !important;
+  color: var(--color-danger-muted) !important;
+}
+
+.profile-settings-logout {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.25;
+  color: var(--color-danger-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.profile-logout-btn:hover {
+  color: var(--color-danger-foreground);
+  background: var(--color-danger-subtle);
+}
+
+.profile-logout-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 22%, transparent);
+}
+
+.profile-logout-btn .nlc-icon {
+  color: currentColor;
 }
 
 /* Onboarding alert state for the Member Hub card when user needs to setup pastoral structure */

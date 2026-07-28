@@ -83,13 +83,23 @@ function orgFromHomePath(path: any[]) {
   };
 }
 
-/** Legacy Member Hub fields — remove after production validation. */
-function orgFromLegacyOrganization(organization: any) {
+function pickOrgField(org: any, ...keys: string[]) {
+  for (const key of keys) {
+    const value = org?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return null;
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function orgFromMemberContext(organization: any) {
   const org = organization || {};
   return {
-    great_region: org.homeRegionName ? String(org.homeRegionName).trim() : null,
-    pastoral_zone: org.homeZoneName ? String(org.homeZoneName).trim() : null,
-    small_group: org.homeGroupName ? String(org.homeGroupName).trim() : null
+    great_region: pickOrgField(org, "greatRegion", "homeRegionName"),
+    pastoral_zone: pickOrgField(org, "pastoralZone", "homeZoneName"),
+    small_group: pickOrgField(org, "smallGroup", "homeGroupName")
   };
 }
 
@@ -141,7 +151,7 @@ function projectOrgFieldsFromHub(
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
-  const legacy = orgFromLegacyOrganization(contextOrganization);
+  const contextOrg = orgFromMemberContext(contextOrganization);
   const homeNodeName = contextOrganization?.homeNodeName
     ? String(contextOrganization.homeNodeName).trim()
     : null;
@@ -149,7 +159,7 @@ function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganizatio
   const pick = (field: "great_region" | "pastoral_zone" | "small_group") => {
     if (platformOrg?.[field]) return platformOrg[field];
     if (placementOrg?.[field]) return placementOrg[field];
-    if (legacy[field]) return legacy[field];
+    if (contextOrg[field]) return contextOrg[field];
     if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
     return null;
   };
@@ -291,10 +301,22 @@ Deno.serve(async (req: Request) => {
     }
 
     let memberContext: any = null;
-    const memberResponse = await fetchJsonOptional(`${memberHubUrl}/api/me/context`, {
-      headers: bearerHeaders
-    });
-    memberContext = memberResponse?.context || null;
+    try {
+      const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
+        headers: bearerHeaders
+      });
+      memberContext = memberResponse?.context || null;
+    } catch (err) {
+      console.error("Member Hub context fetch failed:", err);
+      return jsonResponse({
+        error: "member_hub_context_failed",
+        message: err instanceof Error ? err.message : String(err)
+      }, 502);
+    }
+
+    if (!memberContext) {
+      return jsonResponse({ error: "member_hub_context_missing" }, 502);
+    }
 
     const memberProfile = memberContext?.profile || {};
     const memberIdentity = memberContext?.identity || {};
@@ -400,7 +422,8 @@ Deno.serve(async (req: Request) => {
 
     const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
 
-    const hubLinked = Boolean(memberId || existingProfile?.nlc_member_id);
+    // Every Logto session treats Member Hub as canonical for org placement.
+    const hubLinked = true;
     const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
 
     const sourceValues: Record<string, string | null> = {

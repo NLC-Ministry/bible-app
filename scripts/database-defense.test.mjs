@@ -41,10 +41,13 @@ describe("database defense migration", () => {
   });
 
   it("keeps Member Hub-owned org placement canonical in save_profile", () => {
-    expect(edge).toContain("const hubManaged = Boolean(profile.nlc_member_id)");
-    expect(edge).toContain("hubManaged\n          ? (profile.great_region ?? \"\")");
-    expect(db).toContain("const lockedFields = new Set(state.profileLockedFields || [])");
-    expect(db).toContain('if (!lockedFields.has("great_region"))');
+    expect(edge).toContain('if (action === "save_profile")');
+    expect(edge).toContain("name: payload.name ?? profile.name ?? \"\"");
+    expect(edge).not.toContain("payload.great_region");
+    expect(edge).not.toContain("payload.pastoral_zone");
+    expect(edge).not.toContain("payload.small_group");
+    expect(db).not.toContain("profilePayload.great_region");
+    expect(db).not.toContain('from("profiles").upsert(profilePayload');
   });
 
   it("contains no client-side read-modify-write fallback for verse counters", () => {

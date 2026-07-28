@@ -51,4 +51,12 @@ describe("Member Hub org placement refresh", () => {
     expect(profileJs).toContain("identityUrl = urls.onboarding");
     expect(profileJs).not.toContain("pastoral/structure");
   });
+
+  it("styles the profile logout action with theme-aware danger tokens", () => {
+    expect(html).toContain('class="profile-logout-btn"');
+    expect(css).toContain("--color-danger-foreground");
+    expect(css).toContain("--color-danger-muted");
+    expect(css).toContain(".profile-logout-btn");
+    expect(html).not.toContain("hover:text-danger");
+  });
 });
