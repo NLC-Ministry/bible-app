@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import React from "react"
 import { UserBadgeCard } from "../UserBadgeCard"
 
 describe("UserBadgeCard Component Tests", () => {
