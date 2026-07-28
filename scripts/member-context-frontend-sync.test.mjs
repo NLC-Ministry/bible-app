@@ -18,6 +18,12 @@ describe("member context frontend sync metadata", () => {
     expect(dbSource).toMatch(/auth\.getValidAccessToken\(force\)/);
   });
 
+  it("does not discard a valid access token when force refresh is requested without a refresh token", () => {
+    expect(authSource).toContain("force_refresh_without_refresh_token");
+    expect(authSource).toMatch(/forceRefresh\s*&&\s*!refreshToken\s*&&\s*token\s*&&\s*Date\.now\(\)\s*<\s*expiresAt\s*-\s*60000/);
+    expect(authSource).toMatch(/return\s+token/);
+  });
+
   it("initializes member_context_synced_at for fresh and reset app state", () => {
     expect(stateSource).toContain('member_context_synced_at: ""');
     expect(authSource).toContain('member_context_synced_at: ""');
