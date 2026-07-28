@@ -33,6 +33,7 @@ const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_gr
 const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders"]);
 const TEAM_RPC_FUNCTIONS = new Set([
   "get_my_reading_team",
+  "get_reading_team_registration_overview",
   "get_reading_team_statistics",
   "create_reading_team",
   "join_reading_team_by_code",
@@ -298,7 +299,8 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "feature_archived" }, 403);
       }
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
-      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+      if (["publish_global_plan_rules", "get_reading_team_registration_overview"].includes(functionName)
+        && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;

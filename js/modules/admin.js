@@ -731,28 +731,30 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
       </div>
     `;
 
-    if (!state.globalPlans || state.globalPlans.length === 0) {
-      await db.loadGlobalPlans();
+    const result = await db.getReadingTeamRegistrationOverview();
+    if (!result || !result.success) {
+      const message = escapeHTML(result && result.message ? result.message : "團隊報名資料讀取失敗，請稍後再試。");
+      contentEl.innerHTML = `
+        <div class="admin-team-status-empty" role="status" style="padding:2rem; display:flex; flex-direction:column; align-items:center; gap:0.75rem; text-align:center; color:var(--text-secondary);">
+          <strong>目前無法載入團隊報名資料</strong>
+          <span>${message}</span>
+          <button type="button" class="secondary-btn" id="admin-team-status-retry">重新整理</button>
+        </div>
+      `;
+      const retryButton = document.getElementById("admin-team-status-retry");
+      if (retryButton) retryButton.onclick = () => renderAdminTeamRegistrationStatus(true);
+      return;
     }
-
-    const fetchedData = [];
-    for (const plan of state.globalPlans) {
-      const stats = await db.getReadingTeamStatistics(plan);
-      if (stats && stats.success && stats.context) {
-        fetchedData.push({
-          plan,
-          summary: stats.context.summary || {},
-          teams: stats.context.teams || []
-        });
-      }
-    }
-    cachedTeamsData = fetchedData;
+    cachedTeamsData = result.context || { summary: {}, plans: [] };
   }
 
-  const processedPlans = cachedTeamsData.map(item => {
-    const teams = item.teams.filter(t => Number(t.division) === Number(activeTeamDivision));
+  const overviewPlans = Array.isArray(cachedTeamsData.plans) ? cachedTeamsData.plans : [];
+  const processedPlans = overviewPlans.map(item => {
+    const allTeams = Array.isArray(item.teams) ? item.teams : [];
+    const teams = allTeams.filter(team => Number(team.division) === Number(activeTeamDivision));
     return {
       ...item,
+      plan: item,
       teams
     };
   });
@@ -760,16 +762,28 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
   if (processedPlans.length === 0) {
     contentEl.innerHTML = `
       <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-        目前無任何速讀計畫的資料。
+        目前尚無任何計畫的團隊報名資料。
       </div>
     `;
     return;
   }
 
+  const formatPlanDate = value => {
+    if (!value) return "";
+    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("zh-TW", {
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(date);
+  };
+
   let html = "";
   processedPlans.forEach(item => {
-    const planName = item.plan.name || "未命名計畫";
-    const signupCount = item.teams.filter(t => t.status === "signup").length;
+    const planName = escapeHTML(item.plan.name || "未命名計畫");
+    const planStart = formatPlanDate(item.plan.startDate);
+    const planEnd = formatPlanDate(item.plan.endDate);
+    const planPeriod = planStart && planEnd ? `${planStart}－${planEnd}` : "";
+    const signupCount = item.teams.filter(team => team.status === "forming").length;
     const readyCount = item.teams.filter(t => t.status === "ready").length;
     const totalMembers = item.teams.reduce((acc, t) => acc + (t.memberCount || 0), 0);
 
@@ -779,6 +793,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
           <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true" style="color: var(--primary-color);"></span>
           計畫：${planName}
         </h4>
+        ${planPeriod ? `<p style="margin: 0 0 0.65rem; color: var(--text-muted); font-size: 0.75rem;">計畫期間：${planPeriod}</p>` : ""}
         <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
           <span>招募中：<strong style="color: var(--primary-color);">${signupCount}</strong> 隊</span>
           <span>已成隊：<strong style="color: var(--color-success-foreground);">${readyCount}</strong> 隊</span>
@@ -821,21 +836,31 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
       `;
 
       item.teams.forEach(team => {
-        const captain = team.members.find(m => m.role === "captain") || {};
-        const captainZone = captain.pastoralZone || "未設定";
-        const otherMembers = team.members.filter(m => m.role !== "captain");
+        const members = Array.isArray(team.members) ? team.members : [];
+        const captain = members.find(member => member.role === "captain") || {};
+        const captainZone = escapeHTML(team.captainPastoralZone || captain.pastoralZone || "未設定");
+        const otherMembers = members.filter(member => member.role !== "captain");
+        const teamName = escapeHTML(team.name || "未命名隊伍");
+        const captainName = captain.name ? `${escapeHTML(captain.name)}（隊長）` : "-";
+        const teamStatus = team.status === "ready" ? "已成隊" : "招募中";
+        const memberCount = Number(team.memberCount || members.length || 0);
 
         let membersCells = "";
         for (let i = 0; i < Number(activeTeamDivision) - 1; i++) {
           const m = otherMembers[i];
-          membersCells += `<td style="padding: 0.75rem 0.8rem; color: var(--text-secondary);">${m ? m.name : "-"}</td>`;
+          const memberName = m && m.name ? escapeHTML(m.name) : "-";
+          const memberZone = m && m.pastoralZone ? `<small style="display:block; margin-top:0.2rem; color:var(--text-muted);">${escapeHTML(m.pastoralZone)}</small>` : "";
+          membersCells += `<td style="padding: 0.75rem 0.8rem; color: var(--text-secondary);">${memberName}${memberZone}</td>`;
         }
 
         html += `
           <tr style="border-bottom: 1px solid var(--border-card); transition: background-color 0.2s;">
             <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${captainZone}</td>
-            <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${team.name || "未命名隊伍"}</td>
-            <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captain.name ? (captain.name + " (隊長)") : "-"}</td>
+            <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">
+              ${teamName}
+              <small style="display:block; margin-top:0.2rem; color:var(--text-muted); font-weight:400;">${teamStatus} · ${memberCount}/${activeTeamDivision} 人</small>
+            </td>
+            <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captainName}</td>
             ${membersCells}
           </tr>
         `;

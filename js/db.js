@@ -1992,6 +1992,38 @@ const db = {
     return result.success ? { success: true, context: result.data || { teams: [], team: null, members: [] } } : result;
   },
 
+  async getReadingTeamRegistrationOverview() {
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      const mockStats = await this.getReadingTeamStatistics({
+        id: "00000000-0000-4000-8000-000000000001"
+      });
+      const visiblePlan = (state.globalPlans || []).find(plan => !plan.isHidden && !plan.is_hidden) || {};
+      const teams = mockStats.success && mockStats.context ? mockStats.context.teams || [] : [];
+      return {
+        success: true,
+        context: {
+          summary: {
+            planCount: teams.length > 0 ? 1 : 0,
+            teamCount: teams.length,
+            memberCount: teams.reduce((total, team) => total + Number(team.memberCount || 0), 0)
+          },
+          plans: teams.length > 0 ? [{
+            id: visiblePlan.id || "demo-plan",
+            name: visiblePlan.name || "示範速讀計畫",
+            startDate: visiblePlan.startDate || visiblePlan.start_date || null,
+            endDate: visiblePlan.endDate || visiblePlan.end_date || null,
+            teamCount: teams.length,
+            memberCount: teams.reduce((total, team) => total + Number(team.memberCount || 0), 0),
+            teams
+          }] : []
+        }
+      };
+    }
+
+    const result = await this._callReadingTeamRpc("get_reading_team_registration_overview", {});
+    return result.success ? { success: true, context: result.data || { summary: {}, plans: [] } } : result;
+  },
+
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };
