@@ -130,10 +130,17 @@
     return { read, progress };
   }
 
-  function renderMember(member, totalChapters) {
+  function renderMember(member, totalChapters, plan) {
     const { read, progress } = getMemberProgress(member, totalChapters);
     const canRemind = Boolean(member.userId && !member.isMe);
-    return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}">
+    
+    let isBehind = false;
+    if (plan && Number(member.currentRound || 1) === 1) {
+      const expectedChapters = getExpectedChapters(plan, totalChapters);
+      isBehind = Number(member.chaptersRead || 0) < expectedChapters;
+    }
+
+    return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}${isBehind ? " reading-team-member--behind" : ""}">
       <div class="reading-team-member__avatar">${escapeHTML(String(member.name || "隊員").slice(0, 1))}</div>
       <div class="reading-team-member__body">
         <div class="reading-team-member__title"><strong>${escapeHTML(member.name || "未命名隊員")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
@@ -254,7 +261,7 @@
         <div class="reading-team-roster__head" aria-hidden="true">
           <span>成員</span><span>最高連續</span><span>累計完成</span><span>補讀</span><span>進度狀態</span><span>提醒</span>
         </div>
-        ${rows.map(({ member, metrics }) => `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}">
+        ${rows.map(({ member, metrics }) => `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
           <div class="reading-team-roster__person"><strong>${escapeHTML(member.name || "未命名隊員")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
           <strong class="reading-team-roster__streak">${metrics.streak}</strong>
           <strong class="reading-team-roster__completed">${metrics.completed}</strong>
@@ -369,7 +376,7 @@
         ${!isReady ? `<div class="reading-team-invite"><div><span>隊伍邀請碼</span><strong>${escapeHTML(team.inviteCode)}</strong></div><button type="button" class="secondary-btn" data-copy-team-code><span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true"></span>複製邀請碼</button></div>` : `<div class="reading-team-ready"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle" aria-hidden="true"></span><span>名單已滿員並鎖定，團隊統計會固定以 ${Number(team.capacity)} 人計算。</span></div>`}
         <section class="reading-team-members" aria-labelledby="reading-team-members-title">
           <div class="reading-team-section-title"><h4 id="reading-team-members-title">隊員狀況</h4><span>只有同隊成員可查看</span></div>
-          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>
+          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan)).join("")}</div>
         </section>
         <footer class="reading-team-dialog__footer">
           ${!isReady ? (isCaptain
@@ -497,7 +504,7 @@
       ${summary}
       ${mode === "stats" ? renderTeamStatGrid(members, totalChapters, plan) : ""}
       <section class="reading-team-members" aria-label="團隊成員">
-        ${mode === "members" ? renderTeamMemberRoster(members, plan) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters)).join("")}</div>`}
+        ${mode === "members" ? renderTeamMemberRoster(members, plan) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan)).join("")}</div>`}
       </section>`;
 
     // ── 只有在成團/滿人 (isReady) 的狀態下，才在內嵌視窗中渲染並繫結退出與解散按鈕 ──

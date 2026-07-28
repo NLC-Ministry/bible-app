@@ -1346,6 +1346,7 @@ function renderJoinedPlansList() {
                     const context = contexts.find(c => Number(c.team.division) === division);
                     const teamName = context ? (context.team.name || "") : "";
                     const isFull = context && context.team && Number(context.team.memberCount) >= Number(context.team.capacity);
+                    const themeColor = isFull ? "var(--color-success-foreground)" : "var(--primary-color)";
                     
                     const badge = document.createElement("div");
                     badge.style.cssText = `
@@ -1356,9 +1357,9 @@ function renderJoinedPlansList() {
                       align-items: center;
                       gap: 0.35rem;
                       cursor: ${isFull ? 'default' : 'pointer'};
-                      background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent);
-                      border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent);
-                      color: var(--color-success-foreground);
+                      background: color-mix(in srgb, ${themeColor} 8%, transparent);
+                      border: 1px solid color-mix(in srgb, ${themeColor} 20%, transparent);
+                      color: ${themeColor};
                       transition: all 0.2s ease;
                       font-weight: 500;
                     `;
