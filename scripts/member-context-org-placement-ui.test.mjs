@@ -30,3 +30,19 @@ describe("Member Hub org placement UI", () => {
     expect(profileJs).toContain("尚未設定");
   });
 });
+
+describe("Member Hub org placement refresh", () => {
+  it("wires the refresh button to force a Member Hub session sync and re-render", () => {
+    expect(html).toContain('id="btn-member-hub-refresh"');
+    expect(profileJs).toContain('document.getElementById("btn-member-hub-refresh")');
+    expect(profileJs).toContain("syncNlcSessionWithSupabase(true)");
+    expect(profileJs).toContain("renderMemberHubOrgPlacement()");
+  });
+
+  it("keeps Hub-owned organization fields locked for Logto users", () => {
+    expect(profileJs).toContain('"great_region"');
+    expect(profileJs).toContain('"pastoral_zone"');
+    expect(profileJs).toContain('"small_group"');
+    expect(profileJs).toContain("lockedFields.has");
+  });
+});

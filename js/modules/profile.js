@@ -73,6 +73,32 @@ function renderMemberHubOrgPlacement() {
   }
 }
 
+function wireMemberHubOrgRefresh() {
+  const btn = document.getElementById("btn-member-hub-refresh");
+  if (!btn || btn.dataset.wired === "true") return;
+  btn.dataset.wired = "true";
+  btn.addEventListener("click", async function () {
+    if (typeof auth === "undefined" || !auth.isLoggedIn()) {
+      if (typeof showToast === "function") showToast("目前登入方式無法同步會員中心。");
+      return;
+    }
+    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+
+    btn.disabled = true;
+    try {
+      await db.syncNlcSessionWithSupabase(true);
+      renderMemberHubOrgPlacement();
+      renderMemberHubProfileLinks();
+      if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
+    } catch (err) {
+      console.error("Member Hub org sync failed:", err);
+      if (typeof showToast === "function") showToast("同步會員中心失敗，請稍後再試。");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 function openMemberHubPath(path, fallbackUrl) {
   scheduleProfileSyncOnReturn();
   if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
@@ -273,6 +299,7 @@ export async function renderProfileView() {
     summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || "未設定所屬小組";
   }
   renderMemberHubOrgPlacement();
+  wireMemberHubOrgRefresh();
 
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {
