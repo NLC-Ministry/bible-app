@@ -552,7 +552,7 @@ const db = {
       return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null, locked_fields: cachedLockedFields };
     }
 
-    const accessToken = await auth.getValidAccessToken();
+    const accessToken = await auth.getValidAccessToken(force);
     const idToken = localStorage.getItem(auth.keys.idToken);
 
     const cfg = state.supabaseConfig || {};

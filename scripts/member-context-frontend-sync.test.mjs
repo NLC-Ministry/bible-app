@@ -14,6 +14,10 @@ describe("member context frontend sync metadata", () => {
     expect(dbSource).toMatch(/localStorage\.setItem\("nlc_supabase_profile",\s*JSON\.stringify\(payload\.profile\)\)/);
   });
 
+  it("forces a fresh Logto access token when manually refreshing Member Hub context", () => {
+    expect(dbSource).toMatch(/auth\.getValidAccessToken\(force\)/);
+  });
+
   it("initializes member_context_synced_at for fresh and reset app state", () => {
     expect(stateSource).toContain('member_context_synced_at: ""');
     expect(authSource).toContain('member_context_synced_at: ""');

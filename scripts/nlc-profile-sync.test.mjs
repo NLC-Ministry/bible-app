@@ -133,4 +133,12 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source.indexOf("const nowIso = new Date().toISOString()"))
       .toBeLessThan(source.indexOf("member_context_synced_at: nowIso"));
   });
+
+  it("writes Member Hub organization source values before falling back to existing profile values", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toMatch(/great_region:\s*firstValue\(sourceValues\.great_region,\s*existingProfile\?\.great_region\)/);
+    expect(source).toMatch(/pastoral_zone:\s*firstValue\(sourceValues\.pastoral_zone,\s*existingProfile\?\.pastoral_zone\)/);
+    expect(source).toMatch(/small_group:\s*firstValue\(sourceValues\.small_group,\s*existingProfile\?\.small_group\)/);
+  });
 });
