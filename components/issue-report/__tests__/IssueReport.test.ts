@@ -5,8 +5,22 @@ import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../Issue
 import { convertToCSV } from "../AdminReportView.tsx";
 import { AdminUsersAccordion } from "../AdminUsersAccordion.tsx";
 import { SupportFab } from "../SupportFab.tsx";
-import { ReportDrawer } from "../ReportDrawer.tsx";
+import { ReportDrawer, reportSchema } from "../ReportDrawer.tsx";
 import { AdminReportTable } from "../AdminReportTable.tsx";
+
+vi.mock("react-hook-form", () => ({
+  useForm: () => ({
+    register: vi.fn(),
+    handleSubmit: (fn: any) => fn,
+    watch: vi.fn().mockReturnValue(""),
+    formState: { errors: {} },
+    reset: vi.fn()
+  })
+}));
+
+vi.mock("@hookform/resolvers/zod", () => ({
+  zodResolver: () => vi.fn()
+}));
 
 class MockIDBRequest {
   result: any;
@@ -394,6 +408,41 @@ describe("Issue Report System Tests", () => {
         (React as any).useState = origUseState;
         (React as any).useEffect = origUseEffect;
       }
+    });
+
+    it("Zod Schema 驗證：正確通過合法的分類與長度，並能進行 XSS 過濾轉義", () => {
+      const validData = {
+        category: "bug",
+        description: "這是一個合法的錯誤描述，帶有 <script>alert('xss')</script>"
+      };
+      const result = reportSchema.safeParse(validData);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.description).not.toContain("<script>");
+        expect(result.data.description).toBe("這是一個合法的錯誤描述，帶有 ");
+      }
+    });
+
+    it("Zod Schema 驗證：不合法的分類應被拒絕", () => {
+      const invalidData = {
+        category: "invalid-category",
+        description: "合法的問題描述長度內容"
+      };
+      const result = reportSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it("Zod Schema 驗證：長度太長（超過 500 字）或空白內容應被拒絕", () => {
+      const emptyData = {
+        category: "bug",
+        description: ""
+      };
+      const tooLongData = {
+        category: "bug",
+        description: "a".repeat(501)
+      };
+      expect(reportSchema.safeParse(emptyData).success).toBe(false);
+      expect(reportSchema.safeParse(tooLongData).success).toBe(false);
     });
   });
 

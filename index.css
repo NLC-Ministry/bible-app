@@ -2813,16 +2813,16 @@ body:not(.dark-theme) .settings-row-btn:hover {
   .reader-layout {
     grid-template-columns: 1fr;
   }
-  
+
   .reader-sidebar {
     position: static;
   }
-  
+
   .grid-layout {
     display: flex;
     flex-direction: column;
   }
-  
+
   .stats-overview-row {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -2856,20 +2856,20 @@ body:not(.dark-theme) .settings-row-btn:hover {
   .header-container {
     padding: 0 1rem;
   }
-  
+
   .nav-tabs {
     display: none; /* Hide header tabs on mobile */
   }
-  
+
   .main-content {
     padding: 1.5rem 1rem calc(var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px) + 1rem) 1rem;
   }
-  
+
   .main-footer {
     padding: 1.5rem 1rem;
     margin-bottom: calc(var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px));
   }
-  
+
   .dashboard-hero {
     flex-direction: column;
     gap: 1.5rem;
@@ -2877,7 +2877,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
     text-align: center;
     padding: 1.5rem;
   }
-  
+
   .streak-card {
     flex-direction: row;
     justify-content: center;
@@ -10092,4 +10092,253 @@ body.dark-theme .custom-confirm-overlay {
     width: 0px;
     height: 0px;
   }
+}
+/* ─── App-Style Grouped Settings List (Shadcn & 21st.dev Inspired) ─── */
+.app-settings-group {
+  margin-bottom: 1.25rem;
+}
+
+.app-settings-group__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.app-settings-group__header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand);
+}
+
+.app-settings-group__header-text h3 {
+  color: var(--text-primary);
+  font-weight: var(--type-weight-strong);
+  font-size: 0.875rem;
+}
+
+.app-settings-group__header-text p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+/* 列表容器：合併成一個圓角卡片，並加上邊框與背景 */
+.app-settings-list {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 列表項目 */
+.app-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  text-decoration: none;
+  background: transparent;
+  transition: var(--transition-smooth);
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  outline: none;
+}
+
+.app-settings-item:last-child {
+  border-bottom: none;
+}
+
+.app-settings-item:hover {
+  background: color-mix(in srgb, var(--color-brand) 5%, var(--bg-card));
+  text-decoration: none;
+}
+
+.app-settings-item:active {
+  transform: scale(0.995);
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--bg-card));
+}
+
+.app-settings-item__leading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 左側圖示裝飾背景 */
+.app-settings-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.app-settings-icon-wrap--brand {
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+}
+
+.app-settings-icon-wrap--neutral {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-secondary);
+}
+
+.app-settings-icon-wrap--danger {
+  background: rgba(252, 54, 90, 0.12);
+  color: var(--color-danger);
+}
+
+/* 設定文字區域 */
+.app-settings-item__meta {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  min-width: 0;
+}
+
+.app-settings-item__title {
+  font-size: 0.9rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.app-settings-item__subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.125rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-settings-item__chevron {
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  transition: transform 0.2s ease;
+}
+
+/* 登出特殊樣式 */
+.app-settings-item--danger:hover {
+  background: rgba(252, 54, 90, 0.05);
+}
+
+.app-settings-item--danger:active {
+  background: rgba(252, 54, 90, 0.08);
+}
+
+.text-danger {
+  color: var(--color-danger) !important;
+}
+
+.text-danger-muted {
+  color: color-mix(in srgb, var(--color-danger) 70%, var(--text-secondary)) !important;
+}
+
+/* Onboarding alert state for the Member Hub card when user needs to setup pastoral structure */
+.app-settings-group__header.member-hub-profile-card--needs-org {
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--border-card));
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.app-settings-group__header.member-hub-profile-card--needs-org .app-settings-group__header-icon {
+  color: var(--color-warning);
+}
+
+/* ─── Profile Segmented Tabs Switcher (iOS / Shadcn UI style) ─── */
+.profile-tabs-list {
+  display: flex;
+  background: color-mix(in srgb, var(--text-primary) 6%, var(--bg-card));
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin: 1rem 0 1.25rem 0;
+  gap: 2px;
+}
+
+.profile-tab-trigger {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  border-radius: calc(var(--radius-md) - 3px);
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong);
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: var(--transition-smooth);
+  outline: none;
+}
+
+.profile-tab-trigger:hover {
+  color: var(--text-primary);
+}
+
+.profile-tab-trigger.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.profile-tab-content.hidden {
+  display: none !important;
+}
+
+/* ─── 讀經計畫卡片左對齊與防跑版樣式修正 (Bible Plan Card Left Alignment Fix) ─── */
+.joined-plan-item-card {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important; /* 保持左側封皮與右側文字區塊垂直居中對齊 */
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 確保卡片內部的右側文字主容器強制靠左對齊，消除任何居中 */
+.joined-plan-item-card > div:last-child {
+  flex-grow: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  text-align: left !important;
+  min-width: 0 !important;
+}
+
+/* 只確保右側文字主容器內部的標題、日期、文字、標籤等項目皆靠左，不影響左側封皮 (plan-cover-thumbnail) 內部文字的置中 */
+.joined-plan-item-card > div:last-child h4,
+.joined-plan-item-card > div:last-child p,
+.joined-plan-item-card > div:last-child span,
+.joined-plan-item-card > div:last-child div {
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+
+/* 特別針對小組團隊報名控制列 */
+.joined-plan-item-card .plan-card-team-controls {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+  margin-top: 0.6rem !important;
 }

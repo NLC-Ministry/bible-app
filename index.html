@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260724_custom_confirm_scroll">
+  <link rel="stylesheet" href="index.css?v=20260726_profile_settings_redesign">
   <link rel="stylesheet" href="css/team-registration.css?v=20260724_mobile_roster_cards">
 
   <!-- Supabase JS Client library -->
@@ -32,6 +32,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
     crossorigin="anonymous"></script>
   <!-- Tailwind CSS CDN scoped (no preflight to prevent conflict with index.css) -->
+  <script>
+    (function() {
+      const _warn = console.warn;
+      console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
+        _warn.apply(console, args);
+      };
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -57,7 +66,7 @@
             <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
             <span id="global-back-label">&#x9996;&#x9801;</span>
           </button>
-          
+
           <!-- 新增：計畫詳情專用的極簡返回鈕 -->
           <button id="top-bar-back-btn"
             onclick="if (typeof window.planGoBack === 'function') { window.planGoBack(); } else if (appRouter.currentTab === 'plan-view') { state.planDetailOpen = false; if (typeof window.renderPlanView === 'function') window.renderPlanView(); appRouter.updateNavigationChrome(); }"
@@ -66,7 +75,7 @@
             <span>計畫</span>
           </button>
         </div>
-        
+
         <!-- 中間：標題與核心切換按鈕 -->
         <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
           <span class="brand-text">新生命聖經速讀計畫</span>
@@ -357,7 +366,7 @@
                   <button type="button" id="btn-wall-tab-today" class="segment-btn active" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: var(--bg-card); color: var(--color-brand); cursor: pointer; font-weight: 600; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">今日即時</button>
                   <button type="button" id="btn-wall-tab-history" class="segment-btn" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center;">歷史回顧</button>
                 </div>
-                
+
                 <!-- Right: Shadcn select style (Dropdown) -->
                 <div id="wall-history-filter-wrapper" class="hidden" style="display: flex; align-items: center; flex-shrink: 1; max-width: 140px; width: 100%;">
                   <select id="wall-history-filter" class="form-control" style="width: 100%; padding: 0 1.5rem 0 0.5rem; font-size: 0.72rem; border-radius: 6px; height: 32px; line-height: 1; border: 1px solid var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer; outline: none; font-weight: 500;">
@@ -1329,7 +1338,7 @@
                     <h3 class="card-title" id="members-ranking-title"
                       style="margin-bottom: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary);">
                       參與者總覽</h3>
-                    <button id="btn-toggle-members-collapse" type="button" class="tab-btn" 
+                    <button id="btn-toggle-members-collapse" type="button" class="tab-btn"
                       style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                       <span>收合</span> <span>▲</span>
                     </button>
@@ -1390,133 +1399,188 @@
                 </div>
               </div>
 
-              <!-- Member Hub identity card -->
-              <div class="member-hub-profile-card" id="profile-member-hub-card">
-                <div class="member-hub-profile-card__header">
-                  <span class="member-hub-profile-card__icon" aria-hidden="true">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="layers"></span>
-                  </span>
-                  <div class="member-hub-profile-card__heading">
-                    <h3 class="member-hub-profile-card__title" id="profile-member-hub-title">新生命會員中心</h3>
-                    <p class="member-hub-profile-card__desc" id="profile-member-hub-desc">
-                      姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
-                  </div>
-                </div>
-                <div class="member-hub-org-placement" id="member-hub-org-placement" aria-live="polite">
-                  <div class="member-hub-org-placement__grid">
-                    <div class="member-hub-org-placement__item">
-                      <span class="member-hub-org-placement__label">大區</span>
-                      <strong class="member-hub-org-placement__value" id="member-hub-org-great-region">尚未設定</strong>
-                    </div>
-                    <div class="member-hub-org-placement__item">
-                      <span class="member-hub-org-placement__label">牧區</span>
-                      <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone">尚未設定</strong>
-                    </div>
-                    <div class="member-hub-org-placement__item">
-                      <span class="member-hub-org-placement__label">小組</span>
-                      <strong class="member-hub-org-placement__value" id="member-hub-org-small-group">尚未設定</strong>
+              <!-- iOS/Shadcn-style Tab Switcher -->
+              <div class="profile-tabs-list">
+                <button type="button" class="profile-tab-trigger active" data-profile-tab="settings">帳號設定</button>
+                <button type="button" class="profile-tab-trigger" data-profile-tab="badges">我的徽章</button>
+              </div>
+
+              <!-- Tab Content 1: Settings -->
+              <div id="profile-tab-content-settings" class="profile-tab-content">
+                <!-- Member Hub identity card & actions (App Style Settings Group) -->
+                <div class="space-y-4" id="profile-settings-container" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+
+                <!-- 分組一：會員中心連動 -->
+                <div class="app-settings-group">
+                  <div class="app-settings-group__header" id="profile-member-hub-card">
+                    <span class="app-settings-group__header-icon">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
+                    </span>
+                    <div class="app-settings-group__header-text">
+                      <h3 id="profile-member-hub-title" class="text-sm font-medium m-0">新生命會員中心</h3>
+                      <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
                     </div>
                   </div>
-                  <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未同步</p>
-                  <p class="member-hub-org-placement__empty hidden" id="member-hub-org-empty">
-                    會員中心尚未提供完整組織歸屬，請至會員中心更新。
-                  </p>
+
+                  <div class="app-settings-list">
+                    <!-- 項目 1：管理身份與牧區 -->
+                    <a class="app-settings-item" id="btn-member-hub-structure" target="_blank" rel="noopener noreferrer">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="signpost" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title" id="profile-member-hub-primary-label">管理身份與牧區歸屬</span>
+                          <span class="app-settings-item__subtitle">更新姓名、大區、牧區或所屬小組</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </a>
+
+
+                  </div>
+                  <div class="member-hub-org-placement" id="member-hub-org-placement" aria-live="polite">
+                    <div class="member-hub-org-placement__grid">
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">大區</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-great-region">尚未設定</strong>
+                      </div>
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">牧區</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone">尚未設定</strong>
+                      </div>
+                      <div class="member-hub-org-placement__item">
+                        <span class="member-hub-org-placement__label">小組</span>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-small-group">尚未設定</strong>
+                      </div>
+                    </div>
+                    <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未同步</p>
+                    <p class="member-hub-org-placement__empty hidden" id="member-hub-org-empty">
+                      會員中心尚未提供完整組織歸屬，請至會員中心更新。
+                    </p>
+                  </div>
+                  <div class="app-settings-list">
+                    <button type="button" class="app-settings-item w-full text-left" id="btn-member-hub-refresh"
+                      style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">重新同步</span>
+                          <span class="app-settings-item__subtitle">重新取得會員中心的大區、牧區與小組</span>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-                <div class="member-hub-profile-card__actions">
-                  <a class="primary-btn member-hub-profile-card__cta" id="btn-member-hub-structure"
-                    href="https://member.newlife.org.tw/pastoral/structure" target="_blank" rel="noopener noreferrer">
-                    <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="signpost"
-                        aria-hidden="true"></span><span id="profile-member-hub-primary-label">管理身份與牧區歸屬</span></span>
-                  </a>
-                  <a class="secondary-btn member-hub-profile-card__cta" id="btn-member-hub-home"
-                    href="https://member.newlife.org.tw" target="_blank" rel="noopener noreferrer">
-                    <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="home"
-                        aria-hidden="true"></span><span>開啟會員中心</span></span>
-                  </a>
-                  <button type="button" class="secondary-btn member-hub-profile-card__cta" id="btn-member-hub-refresh">
-                    <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="refresh"
-                        aria-hidden="true"></span><span>重新同步</span></span>
+
+                <!-- 分組二：本 App 設定 -->
+                <div class="app-settings-group">
+                  <div class="app-settings-list">
+                    <!-- 項目 3：帳號設定（本 app） -->
+                    <a class="app-settings-item w-full text-left" id="btn-toggle-profile-form" role="button" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title" id="btn-toggle-profile-form-title">帳號設定（本 app）</span>
+                          <span class="app-settings-item__subtitle" id="btn-toggle-profile-form-subtitle">設定與修改此 App 內部的欄位</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron" id="btn-toggle-profile-form-chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                      </span>
+                    </a>
+
+                    <!-- Collapsible Profile Form Wrapper -->
+                    <div id="profile-form-wrapper" class="hidden"
+                      style="padding: 1.25rem 1rem; border-top: 1px solid var(--border-default); background: color-mix(in srgb, var(--text-primary) 2%, var(--bg-card));">
+                      <div class="member-hub-form-notice hidden" id="profile-member-hub-form-notice">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
+                        <p id="profile-member-hub-form-notice-text">若欄位無法編輯，請至會員中心更新；儲存於此的變更僅適用於本 app 可編輯項目。</p>
+                      </div>
+                      <form id="profile-form">
+                        <div class="form-group">
+                          <label for="profile-name">姓名</label>
+                          <input type="text" id="profile-name" class="form-control" placeholder="請輸入真實姓名" required>
+                        </div>
+
+                        <div class="form-group">
+                          <label for="profile-email">電子信箱</label>
+                          <input type="email" id="profile-email" class="form-control readonly-field" readonly style="cursor: not-allowed; background: rgba(255,255,255,0.05); opacity: 0.75;" title="此欄位由登入系統提供，不可編輯">
+                        </div>
+
+                        <div class="form-group">
+                          <label for="profile-great-region">所屬大區</label>
+                          <select id="profile-great-region" class="form-control">
+                            <option value="">-- 請選擇大區 --</option>
+                          </select>
+                          <input type="text" id="profile-great-region-custom" class="form-control hidden"
+                            placeholder="請輸入自訂大區名稱" style="margin-top: 0.5rem;">
+                        </div>
+
+                        <div class="form-group">
+                          <label for="profile-zone">所屬牧區</label>
+                          <select id="profile-zone" class="form-control">
+                            <option value="">-- 請選擇牧區 --</option>
+                          </select>
+                          <input type="text" id="profile-zone-custom" class="form-control hidden" placeholder="請輸入自訂牧區名稱"
+                            style="margin-top: 0.5rem;">
+                        </div>
+
+                        <div class="form-group">
+                          <label for="profile-group">所屬小組</label>
+                          <select id="profile-group" class="form-control">
+                            <option value="">-- 請選擇小組 --</option>
+                            <!-- Populated dynamically based on Zone -->
+                          </select>
+                          <input type="text" id="profile-group-custom" class="form-control hidden" placeholder="請輸入自訂小組名稱"
+                            style="margin-top: 0.5rem;">
+                        </div>
+
+                        <div class="form-group">
+                          <label>你的帳號角色</label>
+                          <p id="profile-role-display"
+                            style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 500; color: var(--text-primary);">
+                            組員</p>
+                        </div>
+
+                        <button type="submit" class="primary-btn w-full">儲存基本資料</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Less Prominent Logout Link at the bottom of Settings list -->
+                <div style="text-align: center; margin-top: 2rem; margin-bottom: 0.5rem;">
+                  <button id="btn-profile-logout" type="button" class="text-xs text-secondary hover:text-danger transition-colors" style="background: none; border: none; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 0.35rem; opacity: 0.7;">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
+                    <span>登出帳號</span>
                   </button>
                 </div>
               </div>
-
-              <!-- Button to toggle the form -->
-              <button class="settings-row-btn" id="btn-toggle-profile-form">
-                <span class="settings-row-btn__icon-wrap">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-                </span>
-                <span class="settings-row-btn__label">帳號設定（本 app）</span>
-                <span class="settings-row-btn__chevron">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
-                </span>
-              </button>
-
-              <!-- Log Out Button directly in the Profile tab -->
-              <button class="danger-btn w-full" id="btn-profile-logout" style="margin-top: 0.5rem;">
-                <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
-                <span>登出帳號</span>
-              </button>
-
-              <!-- Collapsible Profile Form Wrapper -->
-              <div id="profile-form-wrapper" class="hidden"
-                style="margin-top: 1rem; border-top: 1px solid var(--border-card); padding-top: 1.5rem;">
-                <div class="member-hub-form-notice hidden" id="profile-member-hub-form-notice">
-                  <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
-                  <p id="profile-member-hub-form-notice-text">若欄位無法編輯，請至會員中心更新；儲存於此的變更僅適用於本 app 可編輯項目。</p>
-                  <button type="button" class="secondary-btn member-hub-form-notice__link"
-                    id="btn-member-hub-form-notice">前往會員中心</button>
-                </div>
-                <form id="profile-form">
-                  <div class="form-group">
-                    <label for="profile-name">姓名</label>
-                    <input type="text" id="profile-name" class="form-control" placeholder="請輸入真實姓名" required>
-                  </div>
-
-                  <div class="form-group">
-                    <label for="profile-email">電子信箱</label>
-                    <input type="email" id="profile-email" class="form-control readonly-field" readonly style="cursor: not-allowed; background: rgba(255,255,255,0.05); opacity: 0.75;" title="此欄位由登入系統提供，不可編輯">
-                  </div>
-
-                  <div class="form-group">
-                    <label for="profile-great-region">所屬大區</label>
-                    <select id="profile-great-region" class="form-control">
-                      <option value="">-- 請選擇大區 --</option>
-                    </select>
-                    <input type="text" id="profile-great-region-custom" class="form-control hidden"
-                      placeholder="請輸入自訂大區名稱" style="margin-top: 0.5rem;">
-                  </div>
-
-                  <div class="form-group">
-                    <label for="profile-zone">所屬牧區</label>
-                    <select id="profile-zone" class="form-control">
-                      <option value="">-- 請選擇牧區 --</option>
-                    </select>
-                    <input type="text" id="profile-zone-custom" class="form-control hidden" placeholder="請輸入自訂牧區名稱"
-                      style="margin-top: 0.5rem;">
-                  </div>
-
-                  <div class="form-group">
-                    <label for="profile-group">所屬小組</label>
-                    <select id="profile-group" class="form-control">
-                      <option value="">-- 請選擇小組 --</option>
-                      <!-- Populated dynamically based on Zone -->
-                    </select>
-                    <input type="text" id="profile-group-custom" class="form-control hidden" placeholder="請輸入自訂小組名稱"
-                      style="margin-top: 0.5rem;">
-                  </div>
-
-                  <div class="form-group">
-                    <label>你的帳號角色</label>
-                    <p id="profile-role-display"
-                      style="margin: 0; padding: 0.5rem 0; font-size: 0.95rem; font-weight: 500; color: var(--text-primary);">
-                      組員</p>
-                  </div>
-
-                  <button type="submit" class="primary-btn w-full">儲存基本資料</button>
-
-
-                </form>
               </div>
+
+              <!-- Tab Content 2: Badges -->
+              <div id="profile-tab-content-badges" class="profile-tab-content hidden">
+                <div class="profile-badges-card badge-wall" id="profile-badges-inner-card" style="border: none; padding: 0.5rem 0; background: transparent;">
+                  <div class="badge-wall__header dashboard-panel-card__header card-header-flex" style="padding-top: 0;">
+                    <h3 class="dashboard-panel-card__title card-title" style="font-size: 1rem;">
+                      <span class="dashboard-panel-card__title-icon" aria-hidden="true">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="trophy"></span>
+                      </span>
+                      <span class="dashboard-panel-card__title-text">我的榮譽徽章</span>
+                    </h3>
+                    <span class="stat-badge stat-badge--neutral badge-wall__count" id="badge-wall-summary">0 / 10</span>
+                  </div>
+                  <div id="badges-grid" class="badges-grid" style="margin-top: 0.75rem;"></div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -1524,22 +1588,6 @@
           <!-- Care Reminders Card -->
           <div class="card-col span-12 hidden" id="profile-care-reminders-col" style="height: auto !important;">
             <!-- Populated dynamically by profile.js -->
-          </div>
-
-          <!-- Honor Badges Wall Card -->
-          <div class="card-col span-12" id="profile-badges-card-col">
-            <div class="profile-badges-card badge-wall" id="profile-badges-inner-card">
-              <div class="badge-wall__header dashboard-panel-card__header card-header-flex">
-                <h3 class="dashboard-panel-card__title card-title">
-                  <span class="dashboard-panel-card__title-icon" aria-hidden="true">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="trophy"></span>
-                  </span>
-                  <span class="dashboard-panel-card__title-text">我的榮譽徽章</span>
-                </h3>
-                <span class="stat-badge stat-badge--neutral badge-wall__count" id="badge-wall-summary">0 / 10</span>
-              </div>
-              <div id="badges-grid" class="badges-grid"></div>
-            </div>
           </div>
 
 
@@ -1617,79 +1665,94 @@
                 <!-- React will mount AdminUsersAccordion here -->
               </div>
             </div>
+          </div>
 
+          <!-- 教會組織架構管理 (管理員專屬) -->
+          <div class="card-col span-12" style="margin-top: 1.5rem;">
+            <div class="glass-card">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                <div>
+                  <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                    <span class="nlc-icon nlc-icon--md" data-icon="layers" aria-hidden="true"
+                      style="color: var(--primary-color);"></span>
+                    教會組織架構管理 (管理員專屬)
+                  </h3>
+                  <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.3rem 0 0 0; line-height: 1.5;">
+                    透過上傳 CSV 檔案或直接貼上表格資料，一次性更新全教會大區、牧區與小組架構。
+                  </p>
+                </div>
+                <button class="tab-btn" id="admin-export-org-btn" style="font-size: 0.75rem; padding: 0.35rem 0.8rem; display: flex; align-items: center; gap: 0.3rem; height: auto; cursor: pointer;">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                  下載當前架構 CSV
+                </button>
+              </div>
 
+              <!-- 當前架構統計摘要 -->
+              <div style="display: flex; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; background: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card)); padding: 0.75rem 1rem; border-radius: 12px; border: 1px solid var(--border-card);">
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前大區數量：<strong id="admin-stat-regions" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+                <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前牧區數量：<strong id="admin-stat-zones" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+                <div style="width: 1px; background: var(--border-card); align-self: stretch;"></div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary);">
+                  當前小組數量：<strong id="admin-stat-groups" style="color: var(--text-primary); font-size: 0.9rem;">--</strong> 個
+                </div>
+              </div>
 
-            <!-- 教會組織架構管理 (管理員專屬) -->
-            <div class="glass-card" style="margin-top: 1.5rem;">
-              <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <span class="nlc-icon nlc-icon--md" data-icon="layers" aria-hidden="true"
-                  style="color: var(--primary-color);"></span>
-                教會組織架構管理 (管理員專屬)
-              </h3>
-              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.5;">
-                請在此新增、修改或刪除大區、牧區及小組的架構。更新後的架構將立即出現在所有會友的個人基本資料下拉選單中。
-              </p>
-
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-                <!-- 1. 大區管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第一步：選擇大區
-                    <button class="primary-btn" id="admin-add-region-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增大區</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-region" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-region-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-region-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
+              <!-- 匯入操作區 -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; margin-bottom: 1rem;">
+                <!-- 檔案選擇器 -->
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 12px; padding: 1.2rem; display: flex; flex-direction: column; gap: 0.8rem; justify-content: center; align-items: center; border-style: dashed; min-height: 120px; position: relative;">
+                  <span class="nlc-icon nlc-icon--lg" data-icon="uploadCloud" aria-hidden="true" style="color: var(--text-muted); opacity: 0.8;"></span>
+                  <div style="text-align: center;">
+                    <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">拖曳 CSV 檔案至此，或</span>
+                    <label for="admin-org-file-input" style="color: var(--primary-color); font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: underline; margin-left: 2px;">選擇檔案</label>
                   </div>
+                  <input type="file" id="admin-org-file-input" accept=".csv,.txt" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;" aria-label="上傳組織架構 CSV 檔案" />
+                  <div id="admin-org-file-name" style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-top: -0.2rem; display: none;"></div>
                 </div>
 
-                <!-- 2. 牧區管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第二步：選擇牧區
-                    <button class="primary-btn" id="admin-add-zone-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增牧區</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-zone" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-zone-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-zone-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
-                  </div>
+                <!-- 文字貼上區 -->
+                <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                  <label for="admin-org-paste-input" style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">或直接貼上 Excel 表格資料 (Tab/逗號分隔)</label>
+                  <textarea id="admin-org-paste-input" class="form-control" placeholder="格式範例：&#13;東區,大安1,大安1A&#13;東區,大安1,大安1B&#13;南區,中山1,中山1A" style="font-size: 0.75rem; font-family: monospace; height: 90px; resize: none; width: 100%; box-sizing: border-box;"></textarea>
+                </div>
+              </div>
+
+              <!-- 解析預覽與比對狀態 (預設隱藏) -->
+              <div id="admin-org-preview-card" style="display: none; background: color-mix(in srgb, var(--primary-color) 3%, var(--bg-card)); border: 1px solid color-mix(in srgb, var(--primary-color) 20%, var(--border-card)); border-radius: 12px; padding: 1.2rem; margin-top: 1rem; flex-direction: column; gap: 1rem; transition: all 0.2s;">
+                <h4 style="margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                  <span class="nlc-icon" data-icon="fileText" aria-hidden="true" style="color: var(--primary-color);"></span>
+                  檔案解析比對摘要
+                </h4>
+
+                <!-- 變動數據徽章 -->
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                  <span style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--color-success-foreground) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-success-foreground) 20%, transparent); color: var(--color-success-foreground); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ✦ 預計新增：大區 <span id="preview-add-regions">0</span> | 牧區 <span id="preview-add-zones">0</span> | 小組 <span id="preview-add-groups">0</span>
+                  </span>
+                  <span style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--text-muted) 8%, transparent); border: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent); color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ✦ 預計保留：大區 <span id="preview-keep-regions">0</span> | 牧區 <span id="preview-keep-zones">0</span> | 小組 <span id="preview-keep-groups">0</span>
+                  </span>
+                  <span id="preview-delete-badge" style="font-size: 0.72rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 6px; background: color-mix(in srgb, var(--color-danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-danger) 20%, transparent); color: var(--color-danger); display: inline-flex; align-items: center; gap: 0.2rem;">
+                    ⚠ 預計刪除：大區 <span id="preview-del-regions">0</span> | 牧區 <span id="preview-del-zones">0</span> | 小組 <span id="preview-del-groups">0</span>
+                  </span>
                 </div>
 
-                <!-- 3. 小組管理 -->
-                <div
-                  style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
-                  <h4
-                    style="margin: 0; font-size: 0.85rem; font-weight: 500; color: var(--text-primary); display: flex; justify-content: space-between; align-items: center;">
-                    第三步：選擇小組
-                    <button class="primary-btn" id="admin-add-group-btn"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem; height: auto; cursor: pointer;"><span
-                        class="btn-with-icon"><span class="nlc-icon" data-icon="plus"
-                          aria-hidden="true"></span><span>新增小組</span></span></button>
-                  </h4>
-                  <div style="display: flex; gap: 0.3rem;">
-                    <select id="admin-org-group" class="form-control" style="font-size: 0.8rem;"></select>
-                    <button class="tab-btn" id="admin-edit-group-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">修改</button>
-                    <button class="danger-btn" id="admin-delete-group-btn"
-                      style="font-size: 0.75rem; padding: 0.3rem 0.6rem; height: auto; cursor: pointer;">刪除</button>
-                  </div>
+                <!-- 提示警告 -->
+                <div style="font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; border-left: 3px solid var(--color-warning); padding-left: 0.6rem;">
+                  <strong>注意事項：</strong><br>
+                  1. 同名項目會自動保留關聯 ID，不會影響任何已綁定之會友進度紀錄與權限。<br>
+                  2. 刪除大區/牧區/小組會導致原先綁定的會友在個人資料中變為「未設定」，但不會刪除會友帳號。
+                </div>
+
+                <!-- 行動按鈕 -->
+                <div style="display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.4rem;">
+                  <button class="tab-btn" id="admin-org-import-cancel" style="font-size: 0.75rem; padding: 0.4rem 1rem; cursor: pointer; height: auto;">取消</button>
+                  <button class="primary-btn" id="admin-org-import-confirm" style="font-size: 0.75rem; padding: 0.4rem 1.2rem; cursor: pointer; height: auto;">確認執行更新</button>
                 </div>
               </div>
             </div>
@@ -1963,7 +2026,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260726_org_setup_onboarding"></script>
+  <script type="module" src="js/app.js?v=20260728_badge_img_refactor"></script>
 </body>
 
 </html>

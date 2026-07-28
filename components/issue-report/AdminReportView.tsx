@@ -49,10 +49,18 @@ export const AdminReportView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchReports = async () => {
+    const state = (window as any).state;
+    const currentUser = state?.currentUser;
+    const role = currentUser?.role || 'member';
+    const realRole = state?.realRole || role;
+    const isUserAdmin = role === 'admin' || realRole === 'admin';
+    if (!isUserAdmin) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const state = (window as any).state;
       const supabase = state?.supabase;
       const cfg = state?.supabaseConfig || {};
       const supabaseUrl = cfg.url || "";
@@ -110,6 +118,16 @@ export const AdminReportView: React.FC = () => {
   useEffect(() => {
     fetchReports();
   }, []);
+
+  const state = (window as any).state;
+  const currentUser = state?.currentUser;
+  const role = currentUser?.role || 'member';
+  const realRole = state?.realRole || role;
+  const isUserAdmin = role === 'admin' || realRole === 'admin';
+
+  if (!isUserAdmin) {
+    return null;
+  }
 
   const handleExportCSV = () => {
     if (reports.length === 0) return;

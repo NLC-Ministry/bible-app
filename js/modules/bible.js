@@ -987,10 +987,7 @@ window.applyAppTheme = function(themeName) {
   if (typeof renderBadgeWall === "function") {
     renderBadgeWall("badges-grid");
   }
-  if (typeof renderBadgeStrip === "function") {
-    renderBadgeStrip("dashboard-badge-strip", { linkToProfile: true });
-    renderBadgeStrip("plan-badge-strip");
-  }
+
   
   document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.theme === themeName);

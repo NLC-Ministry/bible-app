@@ -370,6 +370,34 @@ const db = {
         ({ response, payload } = await send(true));
       }
 
+      // ── 503 / Edge Runtime 暫時中斷：指数退避重試（最多 3 次）──
+      const isServiceDegraded =
+        response.status === 503 ||
+        payload?.code === "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED" ||
+        (response.status >= 500 && response.status < 600);
+
+      if (isServiceDegraded) {
+        const MAX_RETRIES = 3;
+        const RETRY_DELAYS_MS = [1000, 2000, 4000]; // 1秒, 2秒, 4秒
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          const delayMs = RETRY_DELAYS_MS[attempt] ?? 4000;
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          try {
+            ({ response, payload } = await send(false));
+            // 重試成功，離開迴圈
+            if (response.ok) break;
+            // 如果還是 5xx，繼續重試
+            const stillDegraded =
+              response.status === 503 ||
+              payload?.code === "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED" ||
+              (response.status >= 500 && response.status < 600);
+            if (!stillDegraded) break;
+          } catch (_retryErr) {
+            // 網路錯誤，繼續等候下一次重試
+          }
+        }
+      }
+
       if (!response.ok) return { data: null, error: payload };
       if (payload.profile) this.applyNlcProfile(payload.profile, payload.locked_fields || null);
       return {
@@ -1023,11 +1051,55 @@ const db = {
         state.orgStructure.rawGroups = [];
         state.orgStructure.zones = {};
         state.orgStructure.groups = {};
-        this.ensureCurrentUserOrgStructure();
+         this.ensureCurrentUserOrgStructure();
         return;
       }
     }
     this.loadMockOrgStructure();
+  },
+
+  async syncChurchOrganization(regions, zones, groups) {
+    if (state.isSupabaseMode && state.supabase) {
+      try {
+        const { data, error } = await state.supabase.rpc("sync_church_organization", {
+          p_regions: regions,
+          p_zones: zones,
+          p_groups: groups
+        });
+        if (error) throw error;
+        // 重新加載最新的組織架構到本地 state
+        await this.loadOrgStructure();
+        return { success: true };
+      } catch (err) {
+        console.error("Failed to sync church organization:", err);
+        return { success: false, error: err.message || err };
+      }
+    }
+    
+    // Demo / 離線模式：直接在前端記憶體更新
+    state.orgStructure.regions = [...regions];
+    state.orgStructure.zones = {};
+    regions.forEach(r => {
+      state.orgStructure.zones[r] = zones.filter(z => z.region_name === r).map(z => z.name);
+    });
+    state.orgStructure.groups = {};
+    zones.forEach(z => {
+      state.orgStructure.groups[z.name] = groups.filter(g => g.zone_name === z.name).map(g => g.name);
+    });
+    
+    // 生成 Mock 的 rawRegions/rawZones/rawGroups 以維持 Supabase 下拉選單相容性
+    state.orgStructure.rawRegions = regions.map((r, i) => ({ id: `r-${i}`, name: r }));
+    state.orgStructure.rawZones = zones.map((z, i) => {
+      const parentReg = state.orgStructure.rawRegions.find(r => r.name === z.region_name);
+      return { id: `z-${i}`, name: z.name, great_region_id: parentReg ? parentReg.id : null };
+    });
+    state.orgStructure.rawGroups = groups.map((g, i) => {
+      const parentZone = state.orgStructure.rawZones.find(z => z.name === g.zone_name);
+      return { id: `g-${i}`, name: g.name, pastoral_zone_id: parentZone ? parentZone.id : null };
+    });
+
+    this.ensureCurrentUserOrgStructure();
+    return { success: true };
   },
 
   loadMockOrgStructure() {
@@ -2614,31 +2686,75 @@ const db = {
   },
 
   async fetchAnnouncements() {
+    const CACHE_KEY = "church_announcements";
+    const CACHE_TS_KEY = "church_announcements_fetched_at";
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 分鐘內不重新拉取
+
+    // 共用：從 localStorage 讀取快取公告
+    const getLocalCache = () => {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    };
+
+    // 共用：預設公告（全部快取失效時的退退模式）
+    const FALLBACK_DEFAULT = [
+      {
+        id: 'default-welcome',
+        title: '歡迎使用速讀挑戰系統！',
+        content: '親愛的弟兄姊妹平安，歡迎加入教會季度速讀挑戰。讓我們一起藉著每日讀經，更加認識神、親近神！如有任何問題，請洽詢教會同工。',
+        created_at: new Date().toISOString()
+      }
+    ];
+
     if (state.isSupabaseMode && state.supabase) {
+      // 如果快取尚在 TTL 內，直接回傳 localStorage 中的版本
+      const cachedTs = Number(localStorage.getItem(CACHE_TS_KEY) || 0);
+      if (Date.now() - cachedTs < CACHE_TTL_MS) {
+        const cached = getLocalCache();
+        if (cached && cached.length > 0) return cached;
+      }
+
       try {
         const { data, error } = await state.supabase
           .from('church_announcements')
           .select('*')
           .order('created_at', { ascending: false });
+
         if (error) {
-          console.error("Error fetching announcements from Supabase:", error);
-          return [];
+          const isDegraded =
+            error?.code === 'SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED' ||
+            String(error?.message).toLowerCase().includes('503') ||
+            String(error?.message).toLowerCase().includes('unavailable');
+          if (isDegraded) {
+            console.warn("[Announcements] Edge Runtime 暫時中斷，使用本地快取公告");
+          } else {
+            console.error("Error fetching announcements from Supabase:", error);
+          }
+          return getLocalCache() || FALLBACK_DEFAULT;
         }
-        return data || [];
+
+        const result = data || [];
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(result));
+          localStorage.setItem(CACHE_TS_KEY, String(Date.now()));
+        } catch { /* localStorage 滿了時靜默失效 */ }
+        return result;
+
       } catch (e) {
-        console.error("Error fetching announcements:", e);
-        return [];
+        const isDegraded =
+          String(e?.message).includes('503') ||
+          String(e?.message).toLowerCase().includes('unavailable');
+        if (isDegraded) {
+          console.warn("[Announcements] Edge Runtime 503，從本地快取讀取公告");
+        } else {
+          console.error("Error fetching announcements:", e);
+        }
+        return getLocalCache() || FALLBACK_DEFAULT;
       }
     } else {
-      const local = localStorage.getItem("church_announcements");
-      return local ? JSON.parse(local) : [
-        { 
-          id: 'default-welcome', 
-          title: '歡迎使用速讀挑戰系統！', 
-          content: '親愛的弟兄姊妹平安，歡迎加入教會季度速讀挑戰。讓我們一起藉著每日讀經，更加認識神、親近神！如有任何問題，請洽詢教會同工。',
-          created_at: new Date().toISOString() 
-        }
-      ];
+      return getLocalCache() || FALLBACK_DEFAULT;
     }
   },
 
