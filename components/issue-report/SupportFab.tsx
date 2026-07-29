@@ -33,8 +33,8 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
     if (typeof window === "undefined") return;
 
     let lastScrollY = window.scrollY;
-    let throttleTimeout: any = null;
-    let scrollStopTimeout: any = null;
+    let throttleTimeout: ReturnType<typeof setTimeout> | null = null;
+    let scrollStopTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const handleScroll = (event: Event) => {
       if (throttleTimeout) return;
@@ -87,11 +87,11 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-primary text-primary-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+          className="issue-report-fab fixed bottom-28 right-6 z-sheet flex h-14 w-14 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           aria-label="打開問題回報與建議表單"
           type="button"
         >
-          <MessageSquare className="h-6 w-6" />
+          <MessageSquare className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" strokeWidth={2} />
         </motion.button>
       )}
     </AnimatePresence>

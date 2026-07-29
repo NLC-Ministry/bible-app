@@ -1663,6 +1663,35 @@ vercel-live-feedback,
   height: 100%;
 }
 
+/* Issue report FAB + submit — flat brand chrome (React island) */
+.issue-report-fab {
+  background-color: var(--color-brand) !important;
+  color: #ffffff !important;
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-lg);
+}
+.issue-report-fab:hover {
+  background-color: var(--color-brand-hover) !important;
+}
+.issue-report-fab:active {
+  background-color: var(--color-brand-active) !important;
+}
+.issue-report-fab:focus-visible {
+  box-shadow: var(--shadow-lg), var(--shadow-focus-ring);
+}
+.issue-report-submit {
+  background-color: var(--color-brand) !important;
+  color: #ffffff !important;
+  font-weight: var(--type-weight-strong);
+  box-shadow: var(--shadow-sm);
+}
+.issue-report-submit:hover:not(:disabled) {
+  background-color: var(--color-brand-hover) !important;
+}
+.issue-report-submit:active:not(:disabled) {
+  background-color: var(--color-brand-active) !important;
+}
+
 .glass-card:hover {
   border-color: color-mix(in srgb, var(--color-brand) 30%, var(--border-card));
 }
