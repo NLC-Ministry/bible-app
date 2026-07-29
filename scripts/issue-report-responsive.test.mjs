@@ -57,4 +57,13 @@ describe("Issue report responsive drawer shell", () => {
     expect(reportDrawer).toMatch(/<DrawerFooter className="[^"]*shrink-0/);
     expect(reportDrawer).toMatch(/<form[^>]+className="flex min-h-0 flex-1 flex-col"/);
   });
+
+  it("realigns focused form fields after the mobile keyboard changes the visual viewport", () => {
+    expect(reportDrawer).toContain("reportFormBody");
+    expect(reportDrawer).toContain("handleReportFieldFocus");
+    expect(reportDrawer).toMatch(/onFocus=\{handleReportFieldFocus\}/);
+    expect(reportDrawer).toContain("requestAnimationFrame");
+    expect(reportDrawer).toContain("scrollIntoView");
+    expect(reportDrawer).toContain('block: "nearest"');
+  });
 });
