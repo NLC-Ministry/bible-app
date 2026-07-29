@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const fab = readFileSync(join(root, "components/issue-report/SupportFab.tsx"), "utf8");
-const drawer = readFileSync(join(root, "components/issue-report/ReportDrawer.tsx"), "utf8");
+const reportDrawer = readFileSync(join(root, "components/issue-report/ReportDrawer.tsx"), "utf8");
+const uiDrawerPath = join(root, "components/ui/drawer.tsx");
 
 describe("Tailwind CDN design-token bridge", () => {
   it("maps shadcn semantic colors to Bible app CSS variables", () => {
@@ -30,28 +31,44 @@ describe("Tailwind CDN design-token bridge", () => {
   });
 });
 
+describe("shadcn Vaul drawer wrapper", () => {
+  it("provides stock DrawerContent/DrawerClose with app z-tokens", () => {
+    expect(existsSync(uiDrawerPath)).toBe(true);
+    const uiDrawer = readFileSync(uiDrawerPath, "utf8");
+    expect(uiDrawer).toContain('from "vaul"');
+    expect(uiDrawer).toContain("DrawerContent");
+    expect(uiDrawer).toContain("DrawerClose");
+    expect(uiDrawer).toContain("DrawerHeader");
+    expect(uiDrawer).toContain("DrawerFooter");
+    expect(uiDrawer).toContain("z-overlay");
+    expect(uiDrawer).toContain("z-sheet");
+    expect(uiDrawer).not.toContain("z-50");
+  });
+});
+
 describe("Issue report FAB + drawer token restyle", () => {
   it("does not hardcode emerald success colors or unbounded z-[9999]", () => {
     expect(fab).not.toContain("emerald-");
-    expect(drawer).not.toContain("emerald-");
+    expect(reportDrawer).not.toContain("emerald-");
     expect(fab).not.toContain("z-[9999]");
-    expect(drawer).not.toContain("z-[9999]");
+    expect(reportDrawer).not.toContain("z-[9999]");
   });
 
-  it("uses solid card surface and design-system success tokens in the drawer", () => {
-    expect(drawer).not.toContain("bg-card/95");
-    expect(drawer).toMatch(/success-subtle|color-success-subtle|--color-success/);
-    expect(drawer).toMatch(/font-medium|type-weight-strong|font-\[var\(--type-weight-strong\)\]/);
+  it("uses design-system success tokens in the drawer", () => {
+    expect(reportDrawer).toMatch(/success-subtle|color-success-subtle|--color-success/);
   });
 
-  it("uses a square shadcn icon Button for the drawer close control", () => {
-    expect(drawer).toContain('from "../ui/button');
-    expect(drawer).toContain('variant="ghost"');
-    expect(drawer).toContain('size="icon"');
-    expect(drawer).toContain('aria-label="關閉"');
-    expect(drawer).toContain("absolute right-0 top-0");
-    expect(drawer).toContain("text-muted-foreground");
-    expect(drawer).toContain("hover:bg-transparent");
+  it("composes stock ui/drawer instead of hand-styled vaul + custom close chrome", () => {
+    expect(reportDrawer).toMatch(/from ["'].*ui\/drawer/);
+    expect(reportDrawer).not.toContain('from "vaul"');
+    expect(reportDrawer).toContain("DrawerContent");
+    expect(reportDrawer).toContain("DrawerHeader");
+    expect(reportDrawer).toContain("DrawerFooter");
+    expect(reportDrawer).toContain("DrawerClose");
+    expect(reportDrawer).not.toContain("aria-label=\"關閉\"");
+    expect(reportDrawer).not.toContain("absolute right-0 top-0");
+    expect(reportDrawer).not.toContain("issue-report-submit");
+    expect(reportDrawer).not.toContain("whileHover");
   });
 
   it("keeps the FAB flat brand without glass chrome", () => {

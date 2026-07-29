@@ -1679,19 +1679,6 @@ vercel-live-feedback,
 .issue-report-fab:focus-visible {
   box-shadow: var(--shadow-lg), var(--shadow-focus-ring);
 }
-.issue-report-submit {
-  background-color: var(--color-brand) !important;
-  color: #ffffff !important;
-  font-weight: var(--type-weight-strong);
-  box-shadow: var(--shadow-sm);
-}
-.issue-report-submit:hover:not(:disabled) {
-  background-color: var(--color-brand-hover) !important;
-}
-.issue-report-submit:active:not(:disabled) {
-  background-color: var(--color-brand-active) !important;
-}
-
 .glass-card:hover {
   border-color: color-mix(in srgb, var(--color-brand) 30%, var(--border-card));
 }
