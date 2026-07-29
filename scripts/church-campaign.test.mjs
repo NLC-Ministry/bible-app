@@ -209,7 +209,7 @@ describe("joined plan options menu", () => {
     expect(planSource).toContain("formatCampaignReadingRange");
     expect(planSource).toContain("完成本階段可獲得");
     expect(planSource).toContain("campaignAwardEarned");
-    expect(planSource).toContain('campaignStageNo >= 10 ? "0.88rem"');
+    expect(planSource).toContain("plan-cover-thumbnail--icon");
     expect(planSource).toContain("white-space: nowrap");
     expect(gamification).toContain('const ACHIEVEMENTS = typeof window.createChurchCampaignStageDefinitions');
     expect(gamification).toContain("church_stage_award_");
