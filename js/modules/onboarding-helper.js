@@ -261,5 +261,8 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
 if (typeof globalThis.addEventListener === "function") {
   globalThis.addEventListener("beforeinstallprompt", captureInstallPrompt);
 }
+if (globalThis.__bibleDeferredInstallPrompt) {
+  captureInstallPrompt(globalThis.__bibleDeferredInstallPrompt);
+}
 
 globalThis.openOnboardingHelper = openOnboardingHelper;
