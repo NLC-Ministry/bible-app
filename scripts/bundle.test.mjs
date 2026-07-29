@@ -71,6 +71,17 @@ describe("assertParses", () => {
   });
 });
 
+describe("emitBundle esbuild invocation", () => {
+  it("writes esbuild output to a file instead of capturing stdout", () => {
+    const source = readFileSync(join(root, "scripts/bundle.mjs"), "utf8");
+    expect(source).toContain("--outfile=");
+    expect(source).toContain("ENOBUFS");
+    expect(source).not.toMatch(
+      /execSync\(`\$\{esbuildCmd\} "\$\{entryPoint\}" --bundle --minify --target=es2020`/
+    );
+  });
+});
+
 describe("emitBundle guards", () => {
   it("throws a descriptive error when index.html has no local stylesheet", () => {
     const dir = mkdtempSync(join(tmpdir(), "bundle-nocss-"));

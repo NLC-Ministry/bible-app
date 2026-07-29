@@ -9,8 +9,10 @@ import {
   lstatSync,
   unlinkSync,
   rmdirSync,
-  copyFileSync
+  copyFileSync,
+  mkdtempSync
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execSync } from "node:child_process";
@@ -89,28 +91,32 @@ export function emitBundle({ root, outDir }) {
 
   console.log(`⚡ [esbuild] Bundling ${entryPoint}...`);
   const esbuildCmd = "npx esbuild";
-  
+  const tmpOutDir = mkdtempSync(join(tmpdir(), "bible-esbuild-"));
+  const tmpOutFile = join(tmpOutDir, "app.bundle.js");
+
   let bundleJs;
-  console.log("DEBUG: Running execSync command...");
   try {
-    bundleJs = execSync(`${esbuildCmd} "${entryPoint}" --bundle --minify --target=es2020`, {
-      encoding: "utf8",
-      cwd: root
-    });
-    console.log("DEBUG: execSync success! code length:", bundleJs ? bundleJs.length : 0);
+    // Write to a file instead of capturing stdout — minified React bundles exceed
+    // Node's default execSync maxBuffer and fail with ENOBUFS.
+    execSync(
+      `${esbuildCmd} "${entryPoint}" --bundle --minify --target=es2020 --alias:@=. --outfile="${tmpOutFile}"`,
+      {
+        encoding: "utf8",
+        cwd: root,
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
+    bundleJs = readFileSync(tmpOutFile, "utf8");
   } catch (err) {
-    console.log("DEBUG: execSync caught exception:", err);
     console.error("esbuild failed stderr:", err.stderr || err.message);
     throw new Error(`esbuild compilation failed: ${err.message}`);
+  } finally {
+    rmDirRecursive(tmpOutDir);
   }
 
-  console.log("DEBUG: Running assertParses...");
   assertParses(bundleJs);
-  console.log("DEBUG: assertParses success!");
 
-  console.log("DEBUG: Reading stylesheet sources: " + stylesheets.join(", "));
   const cssContent = stylesheets.map((stylesheet) => readSource(stylesheet)).join("\n\n");
-  console.log("DEBUG: stylesheets read success, length = " + cssContent.length);
 
   // 💡 一勞永逸的快取清除法：動態產生當次建置版號，並替換程式中的 placeholder 欄位
   const buildVer = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
