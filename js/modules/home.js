@@ -4,6 +4,7 @@ import { DevotionalSharingController } from "./devotional-sharing-controller.mjs
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
+let dashboardSecondaryWorkTimer = null;
 
 function applyPastoralSharingWallVisibility(enabled) {
   pastoralSharingWallEnabled = enabled === true;
@@ -33,6 +34,34 @@ window.addEventListener("pastoral-sharing-wall-changed", event => {
   applyPastoralSharingWallVisibility(enabled);
   if (enabled) fetchPastoralVerseWall();
 });
+
+function scheduleDashboardSecondaryWork() {
+  if (dashboardSecondaryWorkTimer !== null) {
+    clearTimeout(dashboardSecondaryWorkTimer);
+  }
+
+  const scheduleAfterPaint = typeof window.requestAnimationFrame === "function"
+    ? window.requestAnimationFrame.bind(window)
+    : callback => window.setTimeout(callback, 0);
+
+  scheduleAfterPaint(() => {
+    dashboardSecondaryWorkTimer = window.setTimeout(() => {
+      dashboardSecondaryWorkTimer = null;
+      calculateAndRenderPersonalRankings();
+      renderPastoralZoneRankingList();
+      loadTodayDevotional();
+      refreshPastoralSharingWallAvailability();
+      renderPilgrimageTrail();
+      if (!state.pilgrimageControlsInit) {
+        initPilgrimageControls();
+        state.pilgrimageControlsInit = true;
+      }
+      if (typeof hydrateIcons === "function") {
+        hydrateIcons(document.getElementById("dashboard-view"));
+      }
+    }, 0);
+  });
+}
 
 
 const DAILY_VERSES = [
@@ -413,21 +442,7 @@ export function updateDashboardView() {
     `;
   }
 
-  calculateAndRenderPersonalRankings();
-  renderPastoralZoneRankingList();
-  loadTodayDevotional();
-
-  refreshPastoralSharingWallAvailability();
-
-  renderPilgrimageTrail();
-  if (!state.pilgrimageControlsInit) {
-    initPilgrimageControls();
-    state.pilgrimageControlsInit = true;
-  }
-
-  if (typeof hydrateIcons === "function") {
-    hydrateIcons(document.getElementById("dashboard-view"));
-  }
+  scheduleDashboardSecondaryWork();
 }
 
 async function calculateAndRenderPersonalRankings() {
@@ -2536,4 +2551,3 @@ window.updateDashboardView = updateDashboardView;
 window.fetchPastoralVerseWall = fetchPastoralVerseWall;
 window.initDevotionalControls = init;
 window.changeVerseCardBackground = changeVerseCardBackground;
-
