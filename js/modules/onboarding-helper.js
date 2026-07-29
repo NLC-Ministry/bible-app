@@ -73,7 +73,6 @@ export function markOnboardingSeen({ storage = globalThis.localStorage, config =
   }
 }
 
-let activeStepIndex = 0;
 let lastTrigger = null;
 let deferredInstallPrompt = null;
 
@@ -102,25 +101,31 @@ export function getInstallInstructions(userAgent = globalThis.navigator?.userAge
   return "請使用瀏覽器選單將此頁加入主畫面，之後就能更快回來讀經。";
 }
 
-function stepIndexFor(id) {
-  const index = getOnboardingSteps().findIndex((step) => step.id === id);
-  return index >= 0 ? index : 0;
+function iconForStep(stepId) {
+  if (stepId === "install") return "home";
+  if (stepId === "join-plan") return "people";
+  return "bookOpen";
 }
 
-function renderStep(dialog) {
-  const steps = getOnboardingSteps();
-  const step = steps[activeStepIndex] || steps[0];
-  dialog.querySelector("[data-onboarding-title]").textContent = step.title;
-  dialog.querySelector("[data-onboarding-body]").textContent = step.body;
-  dialog.querySelector("[data-onboarding-primary]").textContent = step.primaryLabel;
-  dialog.querySelector("[data-onboarding-count]").textContent = `${activeStepIndex + 1} / ${steps.length}`;
-  dialog.querySelector("[data-onboarding-prev]").disabled = activeStepIndex === 0;
-  dialog.querySelector("[data-onboarding-next]").textContent = activeStepIndex === steps.length - 1 ? "完成" : "下一步";
-  dialog.querySelector("[data-onboarding-dots]").innerHTML = steps
-    .map((item, index) => `<span class="release-onboarding-dialog__dot${index === activeStepIndex ? " is-active" : ""}" aria-label="${item.title}"></span>`)
-    .join("");
-  const guide = dialog.querySelector("[data-onboarding-install-guide]");
-  if (guide) guide.hidden = true;
+function renderActionRows() {
+  return getOnboardingSteps().map((step) => `
+    <article class="release-onboarding-action" data-onboarding-action-card="${step.id}">
+      <span class="release-onboarding-action__icon nlc-icon nlc-icon--md" data-icon="${iconForStep(step.id)}" aria-hidden="true"></span>
+      <div class="release-onboarding-action__content">
+        <h3>${step.title}</h3>
+        <p>${step.body}</p>
+        ${step.id === "install" ? `
+          <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
+            <strong>安裝方式</strong>
+            <p data-onboarding-install-guide-text></p>
+          </div>
+        ` : ""}
+      </div>
+      <button type="button" class="release-onboarding-action__button" data-onboarding-action="${step.id}">
+        ${step.primaryLabel}
+      </button>
+    </article>
+  `).join("");
 }
 
 function showInstallGuide() {
@@ -132,8 +137,8 @@ function showInstallGuide() {
   guide.focus?.();
 }
 
-async function runPrimaryAction() {
-  const step = getOnboardingSteps()[activeStepIndex];
+async function runPrimaryAction(stepId) {
+  const step = getOnboardingSteps().find((item) => item.id === stepId);
   if (!step) return;
 
   if (step.id === "install") {
@@ -169,28 +174,17 @@ function dialogTemplate() {
     <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
     <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
       <button type="button" class="release-onboarding-dialog__close" data-onboarding-close aria-label="關閉使用說明">×</button>
-      <p class="release-onboarding-dialog__eyebrow">使用說明</p>
-      <div class="release-onboarding-dialog__preview" aria-hidden="true">
-        <span class="release-onboarding-dialog__preview-icon nlc-icon nlc-icon--lg" data-icon="home"></span>
-        <span class="release-onboarding-dialog__preview-line"></span>
-        <span class="release-onboarding-dialog__preview-check">已準備好</span>
+      <div class="release-onboarding-dialog__header">
+        <p class="release-onboarding-dialog__eyebrow">使用說明</p>
+        <h2 class="release-onboarding-dialog__title" id="release-onboarding-title">一起開始今天的讀經！</h2>
+        <p class="release-onboarding-dialog__body">三個小功能，幫你更快開始今天的讀經。</p>
       </div>
-      <h2 class="release-onboarding-dialog__title" id="release-onboarding-title" data-onboarding-title></h2>
-      <p class="release-onboarding-dialog__body" data-onboarding-body></p>
-      <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
-        <strong>安裝方式</strong>
-        <p data-onboarding-install-guide-text></p>
-      </div>
-      <p class="release-onboarding-dialog__count" data-onboarding-count></p>
-      <div class="release-onboarding-dialog__dots" data-onboarding-dots aria-hidden="true"></div>
-      <div class="release-onboarding-dialog__actions">
-        <button type="button" class="pill-btn" data-onboarding-prev>上一步</button>
-        <button type="button" class="pill-btn" data-onboarding-next>下一步</button>
-        <button type="button" class="primary-btn" data-onboarding-primary></button>
+      <div class="release-onboarding-dialog__actions" data-onboarding-actions>
+        ${renderActionRows()}
       </div>
       <div class="release-onboarding-dialog__footer">
         <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-later>稍後再看</button>
-        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-dismiss>不要再顯示此版本</button>
+        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-dismiss>不再顯示這個提示</button>
       </div>
     </section>
   `;
@@ -205,37 +199,25 @@ export function closeOnboardingHelper({ remember = false, storage = globalThis.l
 
 export function openOnboardingHelper({ startStep = "install", trigger = null, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
   document.getElementById("release-onboarding-root")?.remove();
-  activeStepIndex = stepIndexFor(startStep);
   lastTrigger = trigger;
 
   const root = document.createElement("div");
   root.id = "release-onboarding-root";
   root.className = "release-onboarding-root";
-  root.innerHTML = dialogTemplate();
+  root.innerHTML = dialogTemplate(config);
   document.body.appendChild(root);
   document.addEventListener("keydown", handleDialogKeydown);
 
   const dialog = root.querySelector("#release-onboarding-dialog");
-  renderStep(dialog);
   globalThis.hydrateIcons?.(root);
 
   root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
-  root.querySelector("[data-onboarding-primary]").addEventListener("click", () => {
-    runPrimaryAction().catch((error) => console.warn("Onboarding action failed:", error));
-  });
-  root.querySelector("[data-onboarding-prev]").addEventListener("click", () => {
-    activeStepIndex = Math.max(0, activeStepIndex - 1);
-    renderStep(dialog);
-  });
-  root.querySelector("[data-onboarding-next]").addEventListener("click", () => {
-    if (activeStepIndex >= getOnboardingSteps().length - 1) {
-      closeOnboardingHelper({ storage, config });
-      return;
-    }
-    activeStepIndex += 1;
-    renderStep(dialog);
+  root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      runPrimaryAction(button.dataset.onboardingAction).catch((error) => console.warn("Onboarding action failed:", error));
+    });
   });
   dialog.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;

@@ -10621,28 +10621,31 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-root {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--z-modal, 700);
 }
 
 .release-onboarding-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.58);
+  background: rgba(15, 15, 15, 0.46);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .release-onboarding-dialog {
   position: fixed;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(92vw, 420px);
-  max-height: min(86vh, 560px);
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(100vw, 34rem);
+  max-height: min(88dvh, 42rem);
   overflow: auto;
   background: var(--bg-card);
   border: 1px solid var(--border-card);
-  border-radius: 8px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  padding: 1.25rem;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: var(--shadow-up-lg, 0 -10px 24px rgba(0, 0, 0, 0.18));
+  padding: 1.1rem;
 }
 
 .release-onboarding-dialog__close {
@@ -10659,54 +10662,21 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .release-onboarding-dialog__close:focus-visible,
-.release-onboarding-dialog .pill-btn:focus-visible,
-.release-onboarding-dialog .primary-btn:focus-visible,
+.release-onboarding-action__button:focus-visible,
 .release-onboarding-dialog__footer-btn:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
   box-shadow: var(--shadow-focus-ring);
 }
 
-.release-onboarding-dialog__eyebrow,
-.release-onboarding-dialog__count {
+.release-onboarding-dialog__header {
+  padding-right: 2.25rem;
+}
+
+.release-onboarding-dialog__eyebrow {
   margin: 0 0 0.5rem;
   color: var(--text-muted);
   font-size: 0.78rem;
-}
-
-.release-onboarding-dialog__preview {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 0.7rem;
-  margin: 0 0 1rem;
-  padding: 0.75rem;
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-secondary));
-}
-
-.release-onboarding-dialog__preview-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 8px;
-  background: var(--primary-color);
-  color: #fff;
-}
-
-.release-onboarding-dialog__preview-line {
-  height: 0.5rem;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 18%, transparent));
-}
-
-.release-onboarding-dialog__preview-check {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--primary-color);
-  white-space: nowrap;
 }
 
 .release-onboarding-dialog__title {
@@ -10718,12 +10688,73 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-dialog__body {
   margin: 0 0 1rem;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.55;
+}
+
+.release-onboarding-dialog__actions {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.release-onboarding-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card));
+}
+
+.release-onboarding-action__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+}
+
+.release-onboarding-action__content {
+  min-width: 0;
+}
+
+.release-onboarding-action__content h3 {
+  margin: 0 0 0.25rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.35;
+}
+
+.release-onboarding-action__content p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.release-onboarding-action__button {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 2.25rem;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: var(--type-weight-strong);
 }
 
 .release-onboarding-install-guide {
-  margin: 0 0 1rem;
-  padding: 0.8rem 0.9rem;
+  grid-column: 1 / -1;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
   border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
   border-radius: 8px;
   background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-card));
@@ -10753,25 +10784,6 @@ body.dark-theme .custom-confirm-overlay {
   line-height: 1.55;
 }
 
-.release-onboarding-dialog__dots {
-  display: flex;
-  gap: 0.35rem;
-  margin: -0.2rem 0 0.85rem;
-}
-
-.release-onboarding-dialog__dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
-}
-
-.release-onboarding-dialog__dot.is-active {
-  width: 1.35rem;
-  background: var(--primary-color);
-}
-
-.release-onboarding-dialog__actions,
 .release-onboarding-dialog__footer {
   display: flex;
   flex-wrap: wrap;
@@ -10789,4 +10801,16 @@ body.dark-theme .custom-confirm-overlay {
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0.45rem 0.2rem;
+}
+
+@media (min-width: 768px) {
+  .release-onboarding-dialog {
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    border-bottom: 1px solid var(--border-card);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg, 0 18px 48px rgba(0, 0, 0, 0.22));
+    padding: 1.25rem;
+  }
 }

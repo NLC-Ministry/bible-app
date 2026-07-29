@@ -126,7 +126,7 @@ describe("release onboarding helper state", () => {
 });
 
 describe("release onboarding helper dialog", () => {
-  it("renders an accessible dialog with the first step", () => {
+  it("renders an accessible shadcn-style helper sheet with all actions", () => {
     document.body.innerHTML = "";
     openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
 
@@ -134,10 +134,17 @@ describe("release onboarding helper dialog", () => {
     expect(dialog).toBeTruthy();
     expect(dialog.getAttribute("role")).toBe("dialog");
     expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.textContent).toContain("一起開始今天的讀經！");
     expect(dialog.textContent).toContain("加到主畫面");
-    expect(dialog.textContent).toContain("像 App 一樣快速打開，每天讀經更方便。");
+    expect(dialog.textContent).toContain("和教會朋友一起加入計畫");
+    expect(dialog.textContent).toContain("追蹤你的讀經進度");
     expect(dialog.textContent).toContain("稍後再看");
-    expect(dialog.textContent).toContain("不要再顯示此版本");
+    expect(dialog.textContent).toContain("不再顯示這個提示");
+    expect(dialog.textContent).not.toContain("0.1.0");
+    expect(dialog.textContent).not.toContain("版本");
+    expect(dialog.querySelector("[data-onboarding-prev]")).toBeNull();
+    expect(dialog.querySelector("[data-onboarding-next]")).toBeNull();
+    expect(dialog.querySelector("[data-onboarding-count]")).toBeNull();
   });
 
   it("moves focus into the dialog when opened", () => {
@@ -191,10 +198,13 @@ describe("release onboarding helper dialog", () => {
     expect(document.activeElement).toBe(lastControl);
   });
 
-  it("can start from the join-plan step for manual recall", () => {
+  it("keeps every helper action visible during manual recall", () => {
     document.body.innerHTML = "";
     openOnboardingHelper({ startStep: "join-plan", manual: true });
-    expect(document.getElementById("release-onboarding-dialog").textContent).toContain("和教會朋友一起加入計畫");
+    const dialog = document.getElementById("release-onboarding-dialog");
+    expect(dialog.textContent).toContain("加到主畫面");
+    expect(dialog.textContent).toContain("和教會朋友一起加入計畫");
+    expect(dialog.textContent).toContain("追蹤你的讀經進度");
   });
 
   it("dismisses the current version only when remember is requested", () => {
@@ -214,9 +224,7 @@ describe("release onboarding helper dialog", () => {
     const storage = createMemoryStorage();
     openOnboardingHelper({ manual: true, storage, config: { onboardingVersion: "0.1.0" } });
 
-    document.querySelector("[data-onboarding-next]").click();
-    document.querySelector("[data-onboarding-next]").click();
-    document.querySelector("[data-onboarding-next]").click();
+    document.querySelector("[data-onboarding-later]").click();
 
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBeNull();
   });
@@ -237,7 +245,7 @@ describe("release onboarding helper actions", () => {
     };
     captureInstallPrompt(prompt);
     openOnboardingHelper({ startStep: "install" });
-    document.querySelector("[data-onboarding-primary]").click();
+    document.querySelector('[data-onboarding-action="install"]').click();
     await Promise.resolve();
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
@@ -249,7 +257,7 @@ describe("release onboarding helper actions", () => {
     const guide = document.querySelector("[data-onboarding-install-guide]");
     expect(guide.hidden).toBe(true);
 
-    document.querySelector("[data-onboarding-primary]").click();
+    document.querySelector('[data-onboarding-action="install"]').click();
     await Promise.resolve();
 
     expect(guide.hidden).toBe(false);
@@ -262,7 +270,7 @@ describe("release onboarding helper actions", () => {
     const switchTab = vi.fn();
     globalThis.appRouter = { switchTab };
     openOnboardingHelper({ startStep: "join-plan" });
-    document.querySelector("[data-onboarding-primary]").click();
+    document.querySelector('[data-onboarding-action="join-plan"]').click();
     await Promise.resolve();
     expect(switchTab).toHaveBeenCalledWith("plan-view", { onboardingPlanDestination: "discover" });
   });
@@ -273,7 +281,7 @@ describe("release onboarding helper actions", () => {
     globalThis.appRouter = { switchTab };
     globalThis.state = { activePlan: { id: "active-plan" } };
     openOnboardingHelper({ startStep: "track-progress" });
-    document.querySelector("[data-onboarding-primary]").click();
+    document.querySelector('[data-onboarding-action="track-progress"]').click();
     await Promise.resolve();
     expect(switchTab).toHaveBeenCalledWith("plan-view", { onboardingPlanDestination: "active-progress" });
   });
@@ -294,16 +302,16 @@ describe("release onboarding accessibility behavior", () => {
 
   it("keeps dialog dimensions bounded for mobile layouts", () => {
     const css = readFileSync("index.css", "utf8");
-    expect(css).toContain("width: min(92vw, 420px)");
-    expect(css).toContain("max-height: min(86vh, 560px)");
+    expect(css).toContain("width: min(100vw, 34rem)");
+    expect(css).toContain("max-height: min(88dvh, 42rem)");
     expect(css).toContain("overflow: auto");
+    expect(css).toContain("@media (min-width: 768px)");
   });
 
   it("uses visible keyboard focus styles for every dialog control type", () => {
     const css = readFileSync("index.css", "utf8");
     expect(css).toContain(".release-onboarding-dialog__close:focus-visible");
-    expect(css).toContain(".release-onboarding-dialog .pill-btn:focus-visible");
-    expect(css).toContain(".release-onboarding-dialog .primary-btn:focus-visible");
+    expect(css).toContain(".release-onboarding-action__button:focus-visible");
     expect(css).toContain(".release-onboarding-dialog__footer-btn:focus-visible");
   });
 
