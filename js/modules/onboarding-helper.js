@@ -294,6 +294,7 @@ function applyInstallPromptOutcome(choice, installGuideOptions) {
   deferredInstallPrompt = null;
 
   if (installPromptState === "accepted") {
+    setInstallStatus("");
     showInstallGuide({ ...installGuideOptions, standalone: true });
     setInstallActionLabel("已安裝");
   } else {

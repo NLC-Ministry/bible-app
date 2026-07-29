@@ -523,6 +523,31 @@ describe("release onboarding helper actions", () => {
     expect(getInstallPromptState()).toBe("accepted");
   });
 
+  it("hides the pending install status after accepting the native prompt", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const status = document.querySelector("[data-onboarding-install-status]");
+    expect(status.textContent).not.toContain("正在開啟安裝提示…");
+    expect(status.hidden).toBe(true);
+  });
+
   it("falls back to manual Android steps when native install prompt is dismissed", async () => {
     document.body.innerHTML = "";
     const prompt = {
