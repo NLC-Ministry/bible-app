@@ -121,9 +121,49 @@ window.showConfirmDialog = showConfirmDialog;
 
 // ── User Avatar (shadcn-inspired: image + initials fallback) ──
 
+/** Known invented placeholders — never treat as a real display name. */
+const INVENTED_DISPLAY_NAMES = new Set([
+  "新使用者",
+  "NLC User",
+  "系統管理員",
+  "訪客"
+]);
+
+/**
+ * Resolve a displayable person name. Returns null when missing or invented.
+ * @param {string|{name?: string}|null|undefined} source
+ * @returns {string|null}
+ */
+function getDisplayName(source) {
+  const raw = typeof source === "string"
+    ? source
+    : (source && typeof source === "object" ? source.name : "");
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return null;
+  if (INVENTED_DISPLAY_NAMES.has(trimmed)) return null;
+  return trimmed;
+}
+
+/**
+ * True while Member Hub identity/org should still show skeletons.
+ * @param {object} [user]
+ */
+function isMemberContextPending(user) {
+  if (typeof state !== "undefined" && state.profileIdentityLoading) return true;
+  const u = user || (typeof state !== "undefined" ? state.currentUser : null) || {};
+  const hubSession = typeof auth !== "undefined" &&
+    typeof auth.isLoggedIn === "function" &&
+    auth.isLoggedIn() &&
+    typeof auth.isMemberHubSession === "function" &&
+    auth.isMemberHubSession();
+  if (!hubSession) return false;
+  const status = String(u.member_context_sync_status || "").trim();
+  return !status;
+}
+
 function getUserAvatarInitial(name) {
-  const trimmed = String(name || "").trim();
-  if (!trimmed) return "N";
+  const trimmed = String(getDisplayName(name) || "").trim();
+  if (!trimmed) return "";
   return trimmed.charAt(0).toUpperCase();
 }
 
@@ -135,7 +175,7 @@ function normalizeAvatarUrl(url) {
 }
 
 function getUserAvatarContext() {
-  const name = state.currentUser?.name || "NLC User";
+  const name = getDisplayName(state.currentUser) || "";
   let avatarUrl = normalizeAvatarUrl(state.currentUser?.avatar_url);
 
   if (!avatarUrl && typeof auth !== "undefined" && auth.isLoggedIn() && typeof auth._parseJwt === "function") {
@@ -165,7 +205,7 @@ function resolveUserAvatarContext(done) {
         user?.user_metadata?.avatar_url || user?.user_metadata?.picture
       );
       done({
-        name: state.currentUser?.name || user?.email || "NLC User",
+        name: getDisplayName(state.currentUser) || getDisplayName(user?.email) || "",
         avatarUrl
       });
     }).catch(() => done(base));
@@ -178,16 +218,17 @@ function resolveUserAvatarContext(done) {
 /**
  * Render avatar into a container (header button or profile summary).
  * @param {HTMLElement|null} container
- * @param {{ size?: "header"|"lg"|"sm", name?: string, avatarUrl?: string }} [options]
+ * @param {{ size?: "header"|"lg"|"sm", name?: string, avatarUrl?: string, pending?: boolean }} [options]
  */
 function renderUserAvatar(container, options) {
   if (!container) return;
 
   const opts = options || {};
   const ctx = getUserAvatarContext();
-  const name = opts.name || ctx.name || "NLC User";
+  const name = getDisplayName(opts.name != null ? opts.name : ctx.name) || "";
   const avatarUrl = opts.avatarUrl != null ? normalizeAvatarUrl(opts.avatarUrl) : ctx.avatarUrl;
-  const initial = getUserAvatarInitial(name);
+  const pending = opts.pending === true ||
+    (opts.pending !== false && isMemberContextPending() && !name && !avatarUrl);
   const size = opts.size || "sm";
   const sizeClass = size === "header"
     ? " nlc-avatar--header"
@@ -196,10 +237,22 @@ function renderUserAvatar(container, options) {
       : " nlc-avatar--sm";
 
   container.innerHTML = "";
+
+  if (pending) {
+    const skel = document.createElement("span");
+    skel.className = "nlc-avatar nlc-avatar--skeleton" + sizeClass;
+    skel.setAttribute("aria-busy", "true");
+    skel.setAttribute("aria-label", "載入中");
+    skel.innerHTML = '<span class="skeleton-shimmer" style="display:block;width:100%;height:100%;border-radius:50%;"></span>';
+    container.appendChild(skel);
+    return;
+  }
+
+  const initial = getUserAvatarInitial(name) || "·";
   const root = document.createElement("span");
   root.className = "nlc-avatar" + sizeClass;
   root.setAttribute("role", "img");
-  root.setAttribute("aria-label", name);
+  root.setAttribute("aria-label", name || "使用者");
 
   const fallback = document.createElement("span");
   fallback.className = "nlc-avatar__fallback";
@@ -862,8 +915,15 @@ const ComponentSkeletonLoader = {
   },
 
   clearBootInlineSkeletons() {
-    this.restoreInlineSkeleton("#profile-summary-name");
-    this.restoreInlineSkeleton("#dropdown-user-name");
+    // Do not restore cached HTML — it often contains invented names like「新使用者」.
+    ["#profile-summary-name", "#dropdown-user-name"].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      delete el.dataset.inlineOriginalHtml;
+    });
+    if (typeof window.paintProfileIdentityChrome === "function") {
+      window.paintProfileIdentityChrome();
+    }
     // Clear the plan list skeleton so it doesn't persist if user hasn't visited the plan tab yet.
     // renderJoinedPlansList() (called by renderPlanView) will repopulate it with real data.
     const joinedList = document.getElementById("joined-plans-list");
@@ -1082,6 +1142,14 @@ const ComponentSkeletonLoader = {
       `;
     }
 
+    if (type === "placement-value") {
+      return `<span class="skeleton-wrapper" style="display:inline-block;min-width:3.5rem;">${this._bar(options.width || "4.5rem", options.height || "1rem", "4px")}</span>`;
+    }
+
+    if (type === "role-badge") {
+      return `<span class="skeleton-wrapper" style="display:inline-block;">${this._bar(options.width || "4rem", options.height || "1.25rem", "999px")}</span>`;
+    }
+
     return "";
   },
 
@@ -1127,6 +1195,8 @@ const ComponentSkeletonLoader = {
 window.ComponentSkeletonLoader = ComponentSkeletonLoader;
 
 window.showToast = showToast;
+window.getDisplayName = getDisplayName;
+window.isMemberContextPending = isMemberContextPending;
 window.getUserAvatarInitial = getUserAvatarInitial;
 window.normalizeAvatarUrl = normalizeAvatarUrl;
 window.getUserAvatarContext = getUserAvatarContext;

@@ -3698,7 +3698,15 @@ body:not(.dark-theme) .settings-row-btn:hover {
   min-width: 0;
 }
 
-/* shadcn-inspired Avatar — image with initials fallback */
+.nlc-avatar--skeleton {
+  overflow: hidden;
+  background: var(--skeleton-base);
+  border: 1px solid var(--border-card);
+}
+.nlc-avatar--skeleton .skeleton-shimmer {
+  min-width: 100%;
+  min-height: 100%;
+}
 .nlc-avatar {
   position: relative;
   display: inline-flex;

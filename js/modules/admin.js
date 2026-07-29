@@ -779,7 +779,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
 
   let html = "";
   processedPlans.forEach(item => {
-    const planName = escapeHTML(item.plan.name || "未命名計畫");
+    const planName = escapeHTML(item.plan.name || "（無名稱）");
     const planStart = formatPlanDate(item.plan.startDate);
     const planEnd = formatPlanDate(item.plan.endDate);
     const planPeriod = planStart && planEnd ? `${planStart}－${planEnd}` : "";
@@ -840,7 +840,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
         const captain = members.find(member => member.role === "captain") || {};
         const captainZone = escapeHTML(team.captainPastoralZone || captain.pastoralZone || "未設定");
         const otherMembers = members.filter(member => member.role !== "captain");
-        const teamName = escapeHTML(team.name || "未命名隊伍");
+        const teamName = escapeHTML(team.name || "（無名稱）");
         const captainName = captain.name ? escapeHTML(captain.name) : "-";
         const teamStatus = team.status === "ready" ? "已成隊" : "招募中";
         const memberCount = Number(team.memberCount || members.length || 0);

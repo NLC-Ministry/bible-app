@@ -140,15 +140,16 @@
       isBehind = Number(member.chaptersRead || 0) < expectedChapters;
     }
 
+    const memberLabel = String(member.name || "").trim() || "—";
     return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}${isBehind ? " reading-team-member--behind" : ""}">
-      <div class="reading-team-member__avatar">${escapeHTML(String(member.name || "隊員").slice(0, 1))}</div>
+      <div class="reading-team-member__avatar">${escapeHTML(memberLabel.slice(0, 1))}</div>
       <div class="reading-team-member__body">
-        <div class="reading-team-member__title"><strong>${escapeHTML(member.name || "未命名隊員")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
+        <div class="reading-team-member__title"><strong>${escapeHTML(memberLabel)}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
         <div class="reading-team-member__meta"><span>${member.hasJoinedPlan ? `第 ${Number(member.currentRound || 1)} 遍・${read} 章` : "尚未加入本計畫"}</span><span>最後閱讀：${escapeHTML(formatLastRead(member.lastReadAt))}</span></div>
-        <div class="reading-team-progress" role="progressbar" aria-label="${escapeHTML(member.name || "隊員")}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
+        <div class="reading-team-progress" role="progressbar" aria-label="${escapeHTML(memberLabel)}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
       </div>
       <strong class="reading-team-member__percent">${progress}%</strong>
-      ${canRemind ? `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="提醒 ${escapeHTML(member.name || "隊員")}讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span></button>` : ""}
+      ${canRemind ? `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="提醒 ${escapeHTML(memberLabel)}讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span></button>` : ""}
     </article>`;
   }
 
@@ -262,7 +263,7 @@
           <span>成員</span><span>最高連續</span><span>累計完成</span><span>補讀</span><span>進度狀態</span><span>提醒</span>
         </div>
         ${rows.map(({ member, metrics }) => `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
-          <div class="reading-team-roster__person"><strong>${escapeHTML(member.name || "未命名隊員")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
+          <div class="reading-team-roster__person"><strong>${escapeHTML(String(member.name || "").trim() || "—")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
           <strong class="reading-team-roster__streak">${metrics.streak}</strong>
           <strong class="reading-team-roster__completed">${metrics.completed}</strong>
           <strong class="reading-team-roster__makeup">${metrics.makeup}</strong>
