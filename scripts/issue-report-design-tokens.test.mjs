@@ -50,6 +50,8 @@ describe("Issue report FAB + drawer token restyle", () => {
     expect(drawer).toContain('size="icon"');
     expect(drawer).toContain('aria-label="關閉"');
     expect(drawer).toContain("absolute right-0 top-0");
+    expect(drawer).toContain("text-muted-foreground");
+    expect(drawer).toContain("hover:bg-transparent");
   });
 
   it("keeps the FAB flat brand without glass chrome", () => {

@@ -112,9 +112,9 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
               size="icon"
               onClick={handleClose}
               aria-label="關閉"
-              className="absolute right-0 top-0"
+              className="absolute right-0 top-0 text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-1 focus-visible:ring-offset-0"
             >
-              <X />
+              <X strokeWidth={1.75} />
             </Button>
           </div>
 
