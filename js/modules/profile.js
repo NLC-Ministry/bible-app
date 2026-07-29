@@ -53,9 +53,10 @@ function formatMemberContextSyncStatus(user) {
   const status = user && user.member_context_sync_status;
   const syncedAt = user && user.member_context_synced_at;
   const attemptedAt = user && user.member_context_sync_attempted_at;
+  const syncError = user && user.member_context_sync_error;
 
-  if (status === "degraded" || status === "failed") {
-    return `會員中心同步暫時失敗，保留既有資料。最近一次同步嘗試：${formatMemberContextAttemptedAt(attemptedAt || "")}`;
+  if (status === "degraded" || status === "failed" || syncError) {
+    return `會員中心同步暫時失敗，保留既有資料。最近一次同步嘗試：${formatMemberContextAttemptedAt(attemptedAt || syncedAt || "")}`;
   }
 
   return formatMemberContextSyncedAt(syncedAt || "");

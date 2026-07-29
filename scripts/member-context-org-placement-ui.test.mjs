@@ -30,6 +30,7 @@ describe("Member Hub org placement UI", () => {
     expect(profileJs).toContain("已同步自會員中心");
     expect(profileJs).toContain("會員中心同步暫時失敗");
     expect(profileJs).toContain("最近一次同步嘗試");
+    expect(profileJs).toContain("member_context_sync_error");
     expect(profileJs).toContain("尚未設定");
   });
 });
