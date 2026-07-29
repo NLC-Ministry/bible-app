@@ -116,6 +116,20 @@ function renderStep(dialog) {
   dialog.querySelector("[data-onboarding-count]").textContent = `${activeStepIndex + 1} / ${steps.length}`;
   dialog.querySelector("[data-onboarding-prev]").disabled = activeStepIndex === 0;
   dialog.querySelector("[data-onboarding-next]").textContent = activeStepIndex === steps.length - 1 ? "完成" : "下一步";
+  dialog.querySelector("[data-onboarding-dots]").innerHTML = steps
+    .map((item, index) => `<span class="release-onboarding-dialog__dot${index === activeStepIndex ? " is-active" : ""}" aria-label="${item.title}"></span>`)
+    .join("");
+  const guide = dialog.querySelector("[data-onboarding-install-guide]");
+  if (guide) guide.hidden = true;
+}
+
+function showInstallGuide() {
+  const guide = document.querySelector("[data-onboarding-install-guide]");
+  const text = document.querySelector("[data-onboarding-install-guide-text]");
+  if (!guide || !text) return;
+  text.textContent = getInstallInstructions();
+  guide.hidden = false;
+  guide.focus?.();
 }
 
 async function runPrimaryAction() {
@@ -124,12 +138,16 @@ async function runPrimaryAction() {
 
   if (step.id === "install") {
     if (deferredInstallPrompt?.prompt) {
-      await deferredInstallPrompt.prompt();
-      deferredInstallPrompt = null;
+      try {
+        await deferredInstallPrompt.prompt();
+        deferredInstallPrompt = null;
+      } catch (error) {
+        console.warn("Browser install prompt failed:", error);
+        showInstallGuide();
+      }
       return;
     }
-    const body = document.querySelector("[data-onboarding-body]");
-    if (body) body.textContent = getInstallInstructions();
+    showInstallGuide();
     return;
   }
 
@@ -152,9 +170,19 @@ function dialogTemplate() {
     <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
       <button type="button" class="release-onboarding-dialog__close" data-onboarding-close aria-label="關閉使用說明">×</button>
       <p class="release-onboarding-dialog__eyebrow">使用說明</p>
+      <div class="release-onboarding-dialog__preview" aria-hidden="true">
+        <span class="release-onboarding-dialog__preview-icon nlc-icon nlc-icon--lg" data-icon="home"></span>
+        <span class="release-onboarding-dialog__preview-line"></span>
+        <span class="release-onboarding-dialog__preview-check">已準備好</span>
+      </div>
       <h2 class="release-onboarding-dialog__title" id="release-onboarding-title" data-onboarding-title></h2>
       <p class="release-onboarding-dialog__body" data-onboarding-body></p>
+      <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
+        <strong>安裝方式</strong>
+        <p data-onboarding-install-guide-text></p>
+      </div>
       <p class="release-onboarding-dialog__count" data-onboarding-count></p>
+      <div class="release-onboarding-dialog__dots" data-onboarding-dots aria-hidden="true"></div>
       <div class="release-onboarding-dialog__actions">
         <button type="button" class="pill-btn" data-onboarding-prev>上一步</button>
         <button type="button" class="pill-btn" data-onboarding-next>下一步</button>
@@ -189,6 +217,7 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
 
   const dialog = root.querySelector("#release-onboarding-dialog");
   renderStep(dialog);
+  globalThis.hydrateIcons?.(root);
 
   root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
