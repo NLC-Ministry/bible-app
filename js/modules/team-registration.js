@@ -149,7 +149,7 @@
         <div class="reading-team-progress" role="progressbar" aria-label="${escapeHTML(memberLabel)}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
       </div>
       <strong class="reading-team-member__percent">${progress}%</strong>
-      ${canRemind ? `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="提醒 ${escapeHTML(memberLabel)}讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span></button>` : ""}
+      ${canRemind ? `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(memberLabel)}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>` : ""}
     </article>`;
   }
 
@@ -268,7 +268,7 @@
           <strong class="reading-team-roster__completed">${metrics.completed}</strong>
           <strong class="reading-team-roster__makeup">${metrics.makeup}</strong>
           <span class="reading-team-roster__status ${metrics.statusClass}">${metrics.statusStr}</span>
-          ${member.isMe ? '<span class="reading-team-roster__self">—</span>' : `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="提醒 ${escapeHTML(member.name || "隊員")}讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="remind" aria-hidden="true"></span></button>`}
+          ${member.isMe ? '<span class="reading-team-roster__self">—</span>' : `<button type="button" class="reading-team-remind-btn" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(member.name || "隊員")}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>`}
         </article>`).join("")}
       </div>
     </div>`;

@@ -564,8 +564,22 @@ body.reading-team-modal-open .main-content {
   background-color: color-mix(in srgb, var(--color-danger, #dc4c64) 3%, transparent) !important;
 }
 
-.reading-team-inline--stats .reading-team-remind-btn {
+.reading-team-remind-btn__label {
   display: none;
+}
+
+.reading-team-inline--stats .reading-team-remind-btn {
+  border-radius: 999px;
+  gap: 5px;
+  padding: 0 10px;
+  width: auto;
+}
+
+.reading-team-inline--stats .reading-team-remind-btn__label {
+  display: inline;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .reading-team-member__avatar {

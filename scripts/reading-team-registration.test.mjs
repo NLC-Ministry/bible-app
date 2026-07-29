@@ -164,6 +164,10 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("補讀");
     expect(teamUi).toContain("進度狀態");
     expect(teamUi).toContain("data-team-remind-user");
+    expect(teamUi).toContain('data-icon="poke"');
+    expect(teamUi).toContain('reading-team-remind-btn__label">戳一下');
+    expect(teamCss).toContain(".reading-team-inline--stats .reading-team-remind-btn__label");
+    expect(teamCss).not.toMatch(/\.reading-team-inline--stats \.reading-team-remind-btn\s*\{\s*display:\s*none/);
     expect(db).toContain("sendReadingTeamReminder");
     expect(teamUi).toContain("加入後，你可以查看自己的團隊與夥伴進度");
     expect(teamUi).toContain("只有同隊成員可查看");
