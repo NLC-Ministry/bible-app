@@ -10674,6 +10674,41 @@ body.dark-theme .custom-confirm-overlay {
   font-size: 0.78rem;
 }
 
+.release-onboarding-dialog__preview {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-secondary));
+}
+
+.release-onboarding-dialog__preview-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.release-onboarding-dialog__preview-line {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 18%, transparent));
+}
+
+.release-onboarding-dialog__preview-check {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
 .release-onboarding-dialog__title {
   margin: 0 2rem 0.75rem 0;
   font-size: 1.25rem;
@@ -10684,6 +10719,56 @@ body.dark-theme .custom-confirm-overlay {
   margin: 0 0 1rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.release-onboarding-install-guide {
+  margin: 0 0 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--bg-card));
+  color: var(--text-primary);
+}
+
+.release-onboarding-install-guide:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.release-onboarding-install-guide[hidden] {
+  display: none;
+}
+
+.release-onboarding-install-guide strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.86rem;
+}
+
+.release-onboarding-install-guide p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.release-onboarding-dialog__dots {
+  display: flex;
+  gap: 0.35rem;
+  margin: -0.2rem 0 0.85rem;
+}
+
+.release-onboarding-dialog__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+
+.release-onboarding-dialog__dot.is-active {
+  width: 1.35rem;
+  background: var(--primary-color);
 }
 
 .release-onboarding-dialog__actions,
