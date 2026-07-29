@@ -4,7 +4,7 @@ import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ReportPipeline, ValidateReportBlock } from "./IssueReportBlocks.ts";
+import { ReportPipeline } from "./IssueReportBlocks.ts";
 import {
   Drawer,
   DrawerClose,
@@ -19,17 +19,26 @@ import {
   NativeSelectOption,
 } from "../ui/native-select.tsx";
 
+// Zod v4 renamed the enum error-customization key from `errorMap` to `error`.
+// The schema only validates shape here — sanitization happens exactly once at
+// the storage boundary (ReportPipeline -> ValidateReportBlock), so we must not
+// also transform/sanitize here or descriptions get double HTML-escaped.
 export const reportSchema = z.object({
   category: z.enum(["bug", "ui", "data", "other"], {
-    errorMap: () => ({ message: "請選擇有效的問題分類" })
+    error: () => "請選擇有效的問題分類"
   }),
   description: z.string()
+    .trim()
     .min(1, "請填寫問題描述")
     .max(500, "問題描述最多限制 500 字")
-    .transform((val) => ValidateReportBlock.sanitize(val.trim()))
 });
 
 type ReportFormValues = z.infer<typeof reportSchema>;
+
+/** Counter stays muted until the 500-char upper bound is exceeded. */
+export function descriptionCounterClassName(length: number): string {
+  return length > 500 ? "text-xs text-destructive" : "text-xs text-muted-foreground";
+}
 
 interface ReportDrawerProps {
   isOpen: boolean;
@@ -154,13 +163,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 >
                   問題描述
                 </label>
-                <span
-                  className={`text-xs ${
-                    watchDescription.length < 1 || watchDescription.length > 500
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  }`}
-                >
+                <span className={descriptionCounterClassName(watchDescription.length)}>
                   {watchDescription.length} / 500 字
                 </span>
               </div>
