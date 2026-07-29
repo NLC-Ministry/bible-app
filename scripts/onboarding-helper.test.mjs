@@ -96,6 +96,13 @@ describe("release onboarding helper dialog", () => {
     expect(dialog.textContent).toContain("不要再顯示此版本");
   });
 
+  it("moves focus into the dialog when opened", () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
+
+    expect(document.activeElement).toBe(document.getElementById("release-onboarding-dialog"));
+  });
+
   it("can start from the join-plan step for manual recall", () => {
     document.body.innerHTML = "";
     openOnboardingHelper({ startStep: "join-plan", manual: true });

@@ -89,7 +89,7 @@ function renderStep(dialog) {
 function dialogTemplate() {
   return `
     <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
-    <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title">
+    <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
       <button type="button" class="release-onboarding-dialog__close" data-onboarding-close aria-label="關閉使用說明">×</button>
       <p class="release-onboarding-dialog__eyebrow">使用說明</p>
       <h2 class="release-onboarding-dialog__title" id="release-onboarding-title" data-onboarding-title></h2>
