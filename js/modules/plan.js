@@ -616,6 +616,27 @@ async function prepareReadingTeamSubview(mode) {
 }
 
 
+function openPlanTeamInvitePanel() {
+  const joinedContainer = document.getElementById("joined-plans-list-container");
+  const presetContainer = document.getElementById("preset-plans-list-container");
+  const sidebarCard = document.getElementById("plan-sidebar-info-card");
+  const joinTeamContainer = document.getElementById("join-team-container");
+
+  if (joinedContainer) joinedContainer.classList.add("hidden");
+  if (presetContainer) presetContainer.classList.add("hidden");
+  if (sidebarCard) sidebarCard.classList.add("hidden");
+  if (joinTeamContainer) joinTeamContainer.classList.remove("hidden");
+  setupGlobalJoinTeamForm();
+  document.getElementById("global-team-code-input")?.focus();
+}
+
+function closePlanTeamInvitePanel() {
+  const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
+  const fallbackMine = document.querySelector('#plan-list-status-pills .pill-btn[data-filter="mine"]');
+  const target = activePill || fallbackMine;
+  if (target) target.click();
+}
+
 function initPlanControls() {
   ensurePlanRouteShell();
   renderPresetPlansList();
@@ -672,6 +693,24 @@ function initPlanControls() {
       planSearchInput.value = "";
       updatePlanSearchQuery("");
       planSearchInput.focus();
+    });
+  }
+
+  const openInviteBtn = document.getElementById("btn-open-plan-team-invite");
+  if (openInviteBtn && !openInviteBtn.dataset.planInviteBound) {
+    openInviteBtn.dataset.planInviteBound = "true";
+    openInviteBtn.addEventListener("click", event => {
+      event.preventDefault();
+      openPlanTeamInvitePanel();
+    });
+  }
+
+  const closeInviteBtn = document.getElementById("btn-close-plan-team-invite");
+  if (closeInviteBtn && !closeInviteBtn.dataset.planInviteBound) {
+    closeInviteBtn.dataset.planInviteBound = "true";
+    closeInviteBtn.addEventListener("click", event => {
+      event.preventDefault();
+      closePlanTeamInvitePanel();
     });
   }
 
@@ -954,12 +993,6 @@ function initPlanControls() {
         if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
         if (sidebarCard) sidebarCard.classList.remove("hidden");
         renderPresetPlansList();
-      } else if (filter === "join-team") {
-        if (joinedContainer) joinedContainer.classList.add("hidden");
-        if (presetContainer) presetContainer.classList.add("hidden");
-        if (joinTeamContainer) joinTeamContainer.classList.remove("hidden");
-        if (sidebarCard) sidebarCard.classList.add("hidden");
-        setupGlobalJoinTeamForm();
       } else {
         if (joinedContainer) joinedContainer.classList.remove("hidden");
         if (presetContainer) presetContainer.classList.add("hidden");

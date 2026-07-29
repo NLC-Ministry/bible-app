@@ -237,4 +237,18 @@ describe("NLC and browser integration", () => {
     expect(db).toContain("getPlanFilterAliases");
     expect(plan).toContain("canUseAdvancedGroupStats");
   });
+
+  it("promotes invite-code team joining above plan list filters", () => {
+    expect(html).toContain('id="plan-team-invite-shortcut"');
+    expect(html).toContain('id="btn-open-plan-team-invite"');
+    expect(html).toContain("有邀請碼？加入團隊");
+    expect(html).toContain('id="join-team-container"');
+    expect(html).toContain('id="btn-close-plan-team-invite"');
+    expect(html).not.toContain('data-filter="join-team"');
+    expect(plan).toContain("function openPlanTeamInvitePanel");
+    expect(plan).toContain("function closePlanTeamInvitePanel");
+    expect(plan).toContain('document.getElementById("btn-open-plan-team-invite")');
+    expect(plan).toContain('document.getElementById("btn-close-plan-team-invite")');
+    expect(plan).not.toContain('filter === "join-team"');
+  });
 });
