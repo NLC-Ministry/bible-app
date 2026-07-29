@@ -519,17 +519,10 @@ body.reading-team-modal-open .main-content {
 }
 
 .reading-team-remind-btn {
-  align-items: center;
   background: color-mix(in srgb, var(--color-warning-text, #d97706) 10%, var(--reading-team-surface));
   border: 1px solid color-mix(in srgb, var(--color-warning-text, #d97706) 35%, var(--reading-team-separator));
-  border-radius: 50%;
   color: var(--color-warning-text, #d97706);
-  cursor: pointer;
-  display: inline-flex;
-  height: 36px;
-  justify-content: center;
   transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
-  width: 36px;
 }
 
 .reading-team-remind-btn:hover,
@@ -553,8 +546,12 @@ body.reading-team-modal-open .main-content {
 }
 
 .reading-team-inline--stats .reading-team-remind-btn {
+  block-size: 44px;
   border-radius: 999px;
   gap: 5px;
+  inline-size: auto;
+  min-block-size: 44px;
+  min-inline-size: 44px;
   padding: 0 10px;
   width: auto;
 }
