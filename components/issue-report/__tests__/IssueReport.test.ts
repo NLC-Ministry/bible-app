@@ -1,5 +1,6 @@
 // components/issue-report/__tests__/IssueReport.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "fs";
 import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
 import { convertToCSV } from "../AdminReportView.tsx";
@@ -52,6 +53,23 @@ if (typeof globalThis.indexedDB === "undefined") {
   };
   (globalThis as any).indexedDB = mockIndexedDB;
 }
+
+describe("Design System Form Control Font Size", () => {
+  it("uses the 16px text class for shared React text-entry controls", () => {
+    const inputSource = readFileSync("components/ui/input.tsx", "utf8");
+    const textareaSource = readFileSync("components/ui/textarea.tsx", "utf8");
+    const selectSource = readFileSync("components/ui/native-select.tsx", "utf8");
+
+    expect(inputSource).toContain('FORM_CONTROL_TEXT_CLASS = "text-base"');
+    expect(inputSource).toContain("FORM_CONTROL_TEXT_CLASS");
+    expect(textareaSource).toContain("FORM_CONTROL_TEXT_CLASS");
+    expect(selectSource).toContain("FORM_CONTROL_TEXT_CLASS");
+
+    expect(inputSource).not.toMatch(/<input[\s\S]*?\btext-sm\b/i);
+    expect(textareaSource).not.toMatch(/<textarea[\s\S]*?\btext-sm\b/i);
+    expect(selectSource).not.toMatch(/<select[\s\S]*?\btext-sm\b/i);
+  });
+});
 
 describe("Issue Report System Tests", () => {
   beforeEach(() => {
