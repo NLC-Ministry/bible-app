@@ -18,6 +18,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "../ui/native-select.tsx";
+import { Textarea } from "../ui/textarea.tsx";
 
 export const reportSchema = z.object({
   category: z.enum(["bug", "ui", "data", "other"], {
@@ -163,13 +164,13 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                   {watchDescription.length} / 500 字
                 </span>
               </div>
-              <textarea
+              <Textarea
                 id="description"
                 disabled={isLoading}
                 {...register("description")}
                 rows={4}
                 placeholder="請詳細描述您遇到的問題或建議，最少 1 個字，最多 500 個字..."
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-foreground"
               />
               {errors.description && (
                 <span className="mt-0.5 text-xs text-destructive">{errors.description.message}</span>

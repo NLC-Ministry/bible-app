@@ -8,6 +8,9 @@ import { AdminUsersAccordion } from "../AdminUsersAccordion.tsx";
 import { SupportFab } from "../SupportFab.tsx";
 import { ReportDrawer, reportSchema, descriptionCounterClassName } from "../ReportDrawer.tsx";
 import { AdminReportTable } from "../AdminReportTable.tsx";
+import { Input } from "../../ui/input.tsx";
+import { Textarea } from "../../ui/textarea.tsx";
+import { NativeSelect } from "../../ui/native-select.tsx";
 
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
@@ -68,6 +71,29 @@ describe("Design System Form Control Font Size", () => {
     expect(inputSource).not.toMatch(/<input[\s\S]*?\btext-sm\b/i);
     expect(textareaSource).not.toMatch(/<textarea[\s\S]*?\btext-sm\b/i);
     expect(selectSource).not.toMatch(/<select[\s\S]*?\btext-sm\b/i);
+  });
+
+  it("keeps text-base when callers provide a smaller text class", () => {
+    const input = (Input as any).render({ className: "text-sm" }, null);
+    const textarea = (Textarea as any).render({ className: "text-sm" }, null);
+    const select = NativeSelect({ className: "text-sm" });
+
+    expect(input.props.className).toContain("text-base");
+    expect(input.props.className).not.toContain("text-sm");
+    expect(textarea.props.className).toContain("text-base");
+    expect(textarea.props.className).not.toContain("text-sm");
+    expect(select.props.children[0].props.className).toContain("text-base");
+    expect(select.props.children[0].props.className).not.toContain("text-sm");
+  });
+
+  it("routes issue-report text entry controls through shared primitives", () => {
+    const reportDrawerSource = readFileSync("components/issue-report/ReportDrawer.tsx", "utf8");
+    const adminUsersSource = readFileSync("components/issue-report/AdminUsersAccordion.tsx", "utf8");
+
+    expect(reportDrawerSource).toContain("<Textarea");
+    expect(reportDrawerSource).not.toMatch(/<textarea\b/);
+    expect(adminUsersSource).toContain("<Input");
+    expect(adminUsersSource).not.toMatch(/<input\b/);
   });
 });
 

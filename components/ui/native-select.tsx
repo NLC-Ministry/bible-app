@@ -23,7 +23,8 @@ function NativeSelect({
           `h-11 w-full min-w-0 appearance-none rounded-md border border-input bg-background px-3 py-2 pr-9 ${FORM_CONTROL_TEXT_CLASS} text-foreground shadow-none transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed data-[size=sm]:h-9 data-[size=sm]:py-1`,
           "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring",
           "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
-          className
+          className,
+          FORM_CONTROL_TEXT_CLASS
         )}
         {...props}
       />

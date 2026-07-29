@@ -2,6 +2,7 @@
 import React from "react";
 import { Users, ChevronDown, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { Input } from "../ui/input.tsx";
 
 export const AdminUsersAccordion: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -92,11 +93,11 @@ export const AdminUsersAccordion: React.FC = () => {
             <label htmlFor="admin-search-user" className="text-xs font-medium text-muted-foreground">
               搜尋使用者
             </label>
-            <input
+            <Input
               id="admin-search-user"
               type="search"
               placeholder="輸入姓名或 Email"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2"
             />
             <div className="flex flex-wrap gap-2" aria-label="依組織篩選使用者">
               <button type="button" id="chip-filter-region" className="filter-chip">
