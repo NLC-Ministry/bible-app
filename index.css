@@ -9679,7 +9679,9 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   z-index: 12;
   margin: -0.4rem 0 1rem;
   padding: 0;
-  background: var(--bg-main);
+  /* Solid, opaque page-background token (--bg-main was never defined, so the
+     bar rendered transparent once the backdrop-blur was removed). */
+  background: var(--bg-app);
   border-bottom: 1px solid var(--border-card);
 }
 .plan-detail-tab-strip__scroller {
