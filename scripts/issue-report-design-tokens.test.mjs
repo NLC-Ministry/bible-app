@@ -43,6 +43,14 @@ describe("Issue report FAB + drawer token restyle", () => {
     expect(drawer).toMatch(/font-medium|type-weight-strong|font-\[var\(--type-weight-strong\)\]/);
   });
 
+  it("uses a square shadcn icon Button for the drawer close control", () => {
+    expect(drawer).toContain('from "../ui/button');
+    expect(drawer).toContain('variant="ghost"');
+    expect(drawer).toContain('size="icon"');
+    expect(drawer).toContain('aria-label="關閉"');
+    expect(drawer).toContain("shrink-0");
+  });
+
   it("keeps the FAB flat brand without glass chrome", () => {
     expect(fab).toContain("bg-primary");
     expect(fab).toContain("issue-report-fab");
