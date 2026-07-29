@@ -19,16 +19,20 @@ describe("vercel.json", () => {
     expect(headerFor("/index.html")).toContain("no-store");
   });
 
-  it("marks hashed app JS immutable and long-lived", () => {
+  it("keeps app JS revalidatable so missing assets cannot be cached for a year", () => {
     const value = headerFor("/app.(.*).js");
-    expect(value).toContain("immutable");
-    expect(value).toContain("max-age=31536000");
+    expect(value).toContain("no-cache");
+    expect(value).toContain("must-revalidate");
+    expect(value).not.toContain("immutable");
+    expect(value).not.toContain("max-age=31536000");
   });
 
-  it("marks hashed CSS immutable and long-lived", () => {
+  it("keeps CSS revalidatable so missing stylesheets cannot be cached for a year", () => {
     const value = headerFor("/(.*)\\.css");
-    expect(value).toContain("immutable");
-    expect(value).toContain("max-age=31536000");
+    expect(value).toContain("no-cache");
+    expect(value).toContain("must-revalidate");
+    expect(value).not.toContain("immutable");
+    expect(value).not.toContain("max-age=31536000");
   });
 
   it("keeps the Service Worker updateable", () => {
