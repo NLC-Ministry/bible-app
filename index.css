@@ -9672,14 +9672,15 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 /* Plan detail tab-strip architecture */
 .plan-detail-tab-strip {
   position: sticky;
-  top: 0;
+  /* .main-content has ~1rem top padding; pin a small even gap below the top bar.
+     The matching negative top margin keeps the unpinned gap identical, so the
+     tabs don't jump when they start sticking, while staying uncramped. */
+  top: -0.4rem;
   z-index: 12;
-  margin: -0.35rem -0.25rem 0.45rem;
-  padding: 0.2rem 0.25rem 0;
-  background: color-mix(in srgb, var(--bg-main) 94%, transparent);
+  margin: -0.4rem 0 1rem;
+  padding: 0;
+  background: var(--bg-main);
   border-bottom: 1px solid var(--border-card);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 .plan-detail-tab-strip__scroller {
   position: relative;
@@ -9699,30 +9700,30 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
-  padding: 0.72rem 0.15rem 0.78rem;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  padding: 0.5rem 0.15rem 0.55rem;
+  transition: color 0.2s ease;
 }
-.plan-detail-tab-btn:hover { background: color-mix(in srgb, var(--color-brand) 6%, transparent); }
+.plan-detail-tab-btn:hover { color: var(--text-primary); }
 .plan-detail-tab-btn.active { color: var(--color-brand); }
 .plan-detail-tab-btn:focus-visible { outline: 2px solid var(--color-brand); outline-offset: -3px; border-radius: 8px; }
+/* shadcn line-variant style: slim flat 2px underline sitting on the baseline. */
 #tab-indicator {
   position: absolute;
   left: 0;
-  bottom: 0;
+  bottom: -1px;
   width: 0;
-  height: 3px;
-  border-radius: 999px 999px 0 0;
+  height: 2px;
   background: var(--color-brand);
   transform: translateX(0);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .plan-detail-tabs { display: none !important; }
 @media (max-width: 380px) {
-  .plan-detail-tab-btn { font-size: 0.78rem; padding-inline: 0.05rem; }
+  .plan-detail-tab-btn { font-size: 0.8rem; padding-inline: 0.05rem; }
 }
 .plan-view-window { width: 100%; overflow: hidden; }
 #plan-view-wrapper { display: flex; width: 100%; transform: translateX(0%); transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
