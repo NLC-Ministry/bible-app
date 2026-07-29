@@ -6285,22 +6285,6 @@ select,
   -webkit-user-select: text;
 }
 
-:where(
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-  textarea,
-  select,
-  .form-control,
-  .reader-search-input,
-  #plan-search-input,
-  .inline-select,
-  .reader-select-compact,
-  .announcement-form-panel__input,
-  .announcement-form-panel__textarea,
-  .devotional-textarea
-) {
-  font-size: var(--form-control-text-size);
-}
-
 .app-layout {
   width: 100%;
   max-width: 100%;
@@ -11391,4 +11375,20 @@ body.dark-theme .custom-confirm-overlay {
     box-shadow: var(--shadow-lg, 0 18px 48px rgba(0, 0, 0, 0.22));
     padding: 1.25rem;
   }
+}
+
+/* Mobile form control font-size safety net */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select,
+.form-control,
+.reader-search-input,
+#plan-search-input,
+.inline-select,
+.reader-select-compact,
+.announcement-form-panel__input,
+.announcement-form-panel__textarea,
+.devotional-textarea,
+.member-search-wrapper input {
+  font-size: var(--form-control-text-size);
 }
