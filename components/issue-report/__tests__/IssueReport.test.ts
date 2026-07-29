@@ -193,7 +193,10 @@ describe("Issue Report System Tests", () => {
         expect(button.props.className).toContain("fixed");
         expect(button.props.className).toContain("bottom-28");
         expect(button.props.className).toContain("right-6");
-        expect(button.props.className).toContain("z-[9999]");
+        expect(button.props.className).toContain("z-sheet");
+        expect(button.props.className).not.toContain("z-[9999]");
+        expect(button.props.className).toContain("issue-report-fab");
+        expect(button.props.className).not.toContain("backdrop-blur");
         
         // Verify click action handler exists
         expect(typeof button.props.onClick).toBe("function");

@@ -46,7 +46,46 @@
     tailwind.config = {
       corePlugins: {
         preflight: false,
-      }
+      },
+      theme: {
+        extend: {
+          colors: {
+            primary: "var(--color-brand)",
+            "primary-foreground": "#FFFFFF",
+            background: "var(--bg-app)",
+            foreground: "var(--text-primary)",
+            card: "var(--bg-card)",
+            "card-foreground": "var(--text-primary)",
+            muted: "var(--bg-input)",
+            "muted-foreground": "var(--text-muted)",
+            accent: "var(--color-brand-muted)",
+            "accent-foreground": "var(--text-primary)",
+            destructive: "var(--color-danger)",
+            "destructive-foreground": "var(--color-danger-foreground)",
+            border: "var(--border-default)",
+            input: "var(--border-card)",
+            ring: "var(--color-brand-ring)",
+          },
+          borderRadius: {
+            sm: "var(--radius-sm)",
+            md: "var(--radius-md)",
+            lg: "var(--radius-lg)",
+          },
+          boxShadow: {
+            sm: "var(--shadow-sm)",
+            md: "var(--shadow-md)",
+            lg: "var(--shadow-lg)",
+            "up-md": "var(--shadow-up-md)",
+            "up-lg": "var(--shadow-up-lg)",
+          },
+          zIndex: {
+            overlay: "var(--z-overlay)",
+            sheet: "var(--z-sheet)",
+            modal: "var(--z-modal)",
+            toast: "var(--z-toast)",
+          },
+        },
+      },
     }
   </script>
 </head>
