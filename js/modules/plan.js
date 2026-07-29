@@ -1177,6 +1177,49 @@ function getPlanStartCountdownText(plan) {
   return `${diffDays} 天後開始`;
 }
 
+function getPlanStorageKey(plan) {
+  return plan && (plan.presetKey || plan.globalPlanId || plan.id || "");
+}
+
+async function openJoinedPlanProgress(plan) {
+  if (!plan) return;
+  state.activePlan = plan;
+  state.planDetailOpen = true;
+  state.planActiveSubTab = "today";
+  window.currentPlanViewState = PLAN_ROUTE.DETAIL;
+  if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(plan);
+  state.selectedPlanDay = null;
+  localStorage.setItem("selected_plan_key", getPlanStorageKey(plan));
+  if (isPlanExpired(plan)) showToast("此計畫已過期，僅供查看紀錄與統計。");
+  if (typeof window.setPlanState === "function") {
+    await window.setPlanState(PLAN_ROUTE.DETAIL);
+  } else {
+    await renderPlanView();
+  }
+}
+
+async function openJoinedPlanTeam(plan) {
+  await openJoinedPlanProgress(plan);
+  if (window.PlanPageController) {
+    await window.PlanPageController.switchPrimaryView(PLAN_PRIMARY_VIEW.STATS);
+  }
+}
+
+async function joinPlanSoloFromCard(plan, key) {
+  const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
+  const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
+  if (joinedPlan) await openJoinedPlanProgress(joinedPlan);
+  return joinedPlan;
+}
+
+async function createTeamFromPlanCard(plan, key) {
+  const joinedPlan = await joinPlanSoloFromCard(plan, key);
+  if (joinedPlan && typeof window.openReadingTeamDialog === "function") {
+    await window.openReadingTeamDialog(joinedPlan, { preferredDivision: 3 });
+  }
+  return joinedPlan;
+}
+
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");
@@ -1268,22 +1311,9 @@ function renderJoinedPlansList() {
         cursor: pointer;
         transition: all 0.2s ease;
       `;
-      card.onclick = async () => {
-        state.activePlan = plan;
-        state.planDetailOpen = true;
-        state.planActiveSubTab = "today";
-        window.currentPlanViewState = PLAN_ROUTE.DETAIL;
-        if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
-        state.selectedPlanDay = null; // reset to first uncompleted day
-        localStorage.setItem("selected_plan_key", plan.presetKey || "");
-        if (isPlanExpired(plan)) {
-          showToast("此計畫已過期，僅供查看紀錄與統計。");
-        }
-        if (typeof window.setPlanState === 'function') {
-          await window.setPlanState(PLAN_ROUTE.DETAIL);
-        } else {
-          renderPlanView();
-        }
+      card.onclick = async event => {
+        if (event.target.closest("[data-plan-card-action]")) return;
+        await openJoinedPlanProgress(plan);
       };
 
       const progress = plan.progress || 0;
@@ -1349,10 +1379,25 @@ function renderJoinedPlansList() {
               <span>${escapeHTML(weeklyScheduleSummary)}</span>
             </div>
             ${teamHtml}
+            <div class="plan-card-participation-actions">
+              <button type="button" class="primary-btn plan-card-action-btn" data-plan-card-action="continue">繼續讀經</button>
+              ${isTeamPlan ? `<button type="button" class="secondary-btn plan-card-action-btn" data-plan-card-action="team">建立 / 加入團隊</button>` : ""}
+            </div>
           </div>
         `;
 
         if (typeof hydrateIcons === "function") hydrateIcons(card);
+
+        card.querySelector('[data-plan-card-action="continue"]')?.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          await openJoinedPlanProgress(plan);
+        });
+        card.querySelector('[data-plan-card-action="team"]')?.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          await openJoinedPlanTeam(plan);
+        });
 
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
@@ -1370,6 +1415,11 @@ function renderJoinedPlansList() {
 
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
                 const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
+
+                const participationLabel = document.createElement("div");
+                participationLabel.className = "plan-card-participation-state";
+                participationLabel.textContent = contexts.length > 0 ? "團隊讀經中" : "個人讀經中";
+                teamContainer.appendChild(participationLabel);
 
                 const divisions = [3, 6];
                 divisions.forEach(division => {
@@ -2042,28 +2092,41 @@ function renderPresetPlansList() {
         ${description ? `<p style="margin: .15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--text-secondary); width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHTML(description)}</p>` : ""}
         ${isCampaignStage ? `<div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); display: flex; align-items: center; gap: 0.25rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
         ${upcomingNotice ? `<div style="padding: 0.42rem 0.58rem; border-radius: 9px; background: var(--bg-secondary); font-size: 0.74rem; line-height: 1.45; color: var(--text-secondary); width: 100%;"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
-        <div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); margin-top: 0.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
+        <div class="plan-card-participation-actions">
+          <button type="button" class="secondary-btn plan-card-action-btn" data-plan-card-action="details">${isUpcomingFixed ? "預覽詳情" : "查看詳情"}</button>
+          <button type="button" class="primary-btn plan-card-action-btn" data-plan-card-action="solo-join">自己加入</button>
+          ${isCampaignStage ? `<button type="button" class="secondary-btn plan-card-action-btn" data-plan-card-action="team-create">建立團隊</button>` : ""}
+        </div>
       </div>
     `;
 
 
-    card.onclick = () => {
+    const openDetails = () => {
       openPlanDetailsDialog(plan, { onJoin: async () => {
-        // Step 1: Ask personal vs team BEFORE joining
-        const joinMode = await openJoinModeDialog(plan);
-        if (joinMode === null) return; // dismissed via backdrop
-
-        // Step 2: Join with default 7-day schedule (user can edit later from the plan menu)
-        const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
-        const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
-        if (!joinedPlan) return;
-
-        // Step 3: If a team size was chosen, open team setup for that division
-        if ((joinMode === 3 || joinMode === 6) && typeof window.openReadingTeamDialog === "function") {
-          await window.openReadingTeamDialog(joinedPlan, { preferredDivision: joinMode });
-        }
+        await joinPlanSoloFromCard(plan, key);
       }});
     };
+
+    card.onclick = event => {
+      if (event.target.closest("[data-plan-card-action]")) return;
+      openDetails();
+    };
+
+    card.querySelector('[data-plan-card-action="details"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openDetails();
+    });
+    card.querySelector('[data-plan-card-action="solo-join"]')?.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      await joinPlanSoloFromCard(plan, key);
+    });
+    card.querySelector('[data-plan-card-action="team-create"]')?.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      await createTeamFromPlanCard(plan, key);
+    });
 
     container.appendChild(card);
   });

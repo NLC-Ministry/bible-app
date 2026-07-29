@@ -116,6 +116,22 @@ describe("reading competition team schema", () => {
 });
 
 describe("NLC and browser integration", () => {
+  it("models plan cards around solo and team participation actions", () => {
+    expect(plan).toContain("async function openJoinedPlanProgress(plan)");
+    expect(plan).toContain("async function openJoinedPlanTeam(plan)");
+    expect(plan).toContain("async function joinPlanSoloFromCard(plan, key)");
+    expect(plan).toContain("async function createTeamFromPlanCard(plan, key)");
+    expect(plan).toContain('data-plan-card-action="continue"');
+    expect(plan).toContain('data-plan-card-action="team"');
+    expect(plan).toContain('data-plan-card-action="solo-join"');
+    expect(plan).toContain('data-plan-card-action="team-create"');
+    expect(plan).toContain("個人讀經中");
+    expect(plan).toContain("團隊讀經中");
+    expect(plan).toContain("建立 / 加入團隊");
+    expect(plan).toContain("自己加入");
+    expect(plan).toContain("建立團隊");
+  });
+
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
     for (const name of [
       "get_my_reading_team",
