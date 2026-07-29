@@ -7,3 +7,5 @@
 - GREEN: focused tests passed, 37/37; full `npm test` passed, 406/406 across 49 files.
 - Follow-up RED: the new HTML `font-size: 16` regression failed because the bare-number fallback also accepted CSS declarations.
 - Follow-up GREEN: unitless values are accepted only for JSX numeric `fontSize` styles at or above 16; HTML `font-size: 16` and `12`, plus JSX `fontSize: 12`, are rejected.
+- Review RED: an existing shared `Textarea` consumer still applied `text-sm`, and the class audit could falsely attribute nearby helper text to a previous control.
+- Review GREEN: removed the direct `text-sm` from the remaining shared `Textarea` consumer, expanded the audit across TSX component files, and constrained class scanning to the control opening tag.
