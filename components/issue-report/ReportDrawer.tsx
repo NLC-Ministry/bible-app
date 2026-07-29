@@ -77,6 +77,17 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
     setMessage(null);
   };
 
+  const handleReportFieldFocus = (event: React.FocusEvent<HTMLDivElement>) => {
+    const reportFormBody = event.currentTarget;
+    const target = event.target;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!reportFormBody.contains(target)) return;
+        target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      });
+    });
+  };
+
   const onSubmit = async (data: ReportFormValues) => {
     setIsLoading(true);
     setMessage(null);
@@ -112,7 +123,10 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
         </DrawerHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scroll-pb-32 px-4 pb-2 overscroll-contain">
+          <div
+            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scroll-pb-32 px-4 pb-2 overscroll-contain"
+            onFocus={handleReportFieldFocus}
+          >
             {message && (
               <div
                 className={reportMessageClassName}
