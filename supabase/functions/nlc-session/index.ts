@@ -567,6 +567,25 @@ Deno.serve(async (req: Request) => {
 
     if (profileError) throw profileError;
 
+    // Prune only after an authoritative Hub projection has been committed.
+    // The database function applies a grace period so concurrent sessions can
+    // finish linking nodes they have just upserted.
+    let orgCleanupStatus = memberContext ? "pending" : "skipped";
+    let orgCleanupResult: any = null;
+    let orgCleanupError: string | null = null;
+    if (memberContext) {
+      const { data: cleanupData, error: cleanupError } = await supabaseAdmin
+        .rpc("prune_orphaned_church_org_nodes", {});
+      if (cleanupError) {
+        orgCleanupStatus = "failed";
+        orgCleanupError = cleanupError.message || String(cleanupError);
+        console.warn("Orphaned organization cleanup failed; continuing session sync.", cleanupError);
+      } else {
+        orgCleanupStatus = "success";
+        orgCleanupResult = cleanupData;
+      }
+    }
+
     const { error: clearPrimaryError } = await supabaseAdmin
       .from("user_identities")
       .update({ is_primary: false, updated_at: nowIso })
@@ -586,7 +605,10 @@ Deno.serve(async (req: Request) => {
       platform_available: hasAnyOrgField(platformOrgFields),
       context_available: hasAnyOrgField(contextOrgFields),
       org_link_status: orgLinkStatus,
-      org_link_error: orgLinkError
+      org_link_error: orgLinkError,
+      org_cleanup_status: orgCleanupStatus,
+      org_cleanup_result: orgCleanupResult,
+      org_cleanup_error: orgCleanupError
     };
     if (memberContextError) {
       identityMetadata.member_context_error = memberContextError;
