@@ -75,6 +75,7 @@ export function markOnboardingSeen({ storage = globalThis.localStorage, config =
 
 let lastTrigger = null;
 let deferredInstallPrompt = null;
+let installPromptState = "unavailable";
 
 function handleDialogKeydown(event) {
   if (event.key === "Escape") {
@@ -85,6 +86,11 @@ function handleDialogKeydown(event) {
 export function captureInstallPrompt(event) {
   event?.preventDefault?.();
   deferredInstallPrompt = event;
+  installPromptState = event?.prompt ? "available" : "unavailable";
+}
+
+export function getInstallPromptState() {
+  return installPromptState;
 }
 
 export function getInstallPlatform({
@@ -237,6 +243,7 @@ function renderActionRows() {
               <strong data-onboarding-install-guide-title>安裝方式</strong>
             </div>
             <p data-onboarding-install-guide-body></p>
+            <p class="release-onboarding-install-guide__status" data-onboarding-install-status hidden></p>
             <ol class="release-onboarding-install-guide__steps" data-onboarding-install-guide-steps></ol>
             <div class="release-onboarding-install-guide__support">
               <span>詳細說明</span>
@@ -265,6 +272,27 @@ function renderInstallStepIcon(icon) {
   const path = INSTALL_STEP_ICON_PATHS[icon] || INSTALL_STEP_ICON_PATHS["app-window"];
   const svgTag = "svg";
   return `<${svgTag} viewBox="0 0 24 24" focusable="false" aria-hidden="true">${path}</${svgTag}>`;
+}
+
+function setInstallStatus(message) {
+  const status = document.querySelector("[data-onboarding-install-status]");
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+function applyInstallPromptOutcome(choice, installGuideOptions) {
+  const outcome = choice?.outcome;
+  installPromptState = outcome === "accepted" ? "accepted" : "dismissed";
+  deferredInstallPrompt = null;
+
+  if (installPromptState === "dismissed") {
+    showInstallGuide({
+      ...installGuideOptions,
+      hasPrompt: false
+    });
+    setInstallStatus("也可以手動加入主畫面。");
+  }
 }
 
 function showInstallGuide(options = {}) {
@@ -305,11 +333,23 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   if (step.id === "install") {
     if (deferredInstallPrompt?.prompt) {
       try {
-        await deferredInstallPrompt.prompt();
-        deferredInstallPrompt = null;
+        setInstallStatus("正在開啟安裝提示…");
+        const promptEvent = deferredInstallPrompt;
+        const choicePromise = promptEvent.userChoice?.catch(() => null);
+        choicePromise?.then((choice) => applyInstallPromptOutcome(choice, installGuideOptions));
+        const promptResult = promptEvent.prompt();
+        const choice = await choicePromise;
+        await promptResult;
+        if (!choicePromise) applyInstallPromptOutcome(choice, installGuideOptions);
       } catch (error) {
+        installPromptState = "failed";
+        deferredInstallPrompt = null;
         console.warn("Browser install prompt failed:", error);
-        showInstallGuide(installGuideOptions);
+        showInstallGuide({
+          ...installGuideOptions,
+          hasPrompt: false
+        });
+        setInstallStatus("安裝提示沒有開啟，請改用手動方式。");
       }
       return;
     }

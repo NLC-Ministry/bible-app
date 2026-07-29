@@ -10,6 +10,7 @@ import {
   getInstallGuideModel,
   getInstallInstructions,
   getInstallPlatform,
+  getInstallPromptState,
   getOnboardingSteps,
   getOnboardingVersion,
   markOnboardingSeen,
@@ -351,6 +352,58 @@ describe("release onboarding helper actions", () => {
     document.querySelector('[data-onboarding-action="install"]').click();
     await Promise.resolve();
     expect(prompt.prompt).toHaveBeenCalledOnce();
+  });
+
+  it("records accepted Android native install prompt outcome", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    expect(getInstallPromptState()).toBe("available");
+
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("accepted");
+  });
+
+  it("falls back to manual Android steps when native install prompt is dismissed", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getInstallPromptState()).toBe("dismissed");
+    expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+    expect(document.querySelector("[data-onboarding-install-status]").textContent).toContain("也可以手動加入");
   });
 
   it("opens a compact iOS step-by-step install guide when native prompt is unavailable", async () => {
