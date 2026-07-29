@@ -41,6 +41,20 @@ describe("Issue report responsive drawer shell", () => {
     expect(uiDrawer).toMatch(/max-h-\[(?:85dvh|min\(96dvh)/);
     expect(reportDrawer).toMatch(/overflow-y-auto/);
     expect(reportDrawer).toMatch(/min-h-0/);
+    expect(reportDrawer).toMatch(/scroll-pb-(?:28|32|36)/);
     expect(reportDrawer).toMatch(/safe-area-inset-bottom/);
+  });
+
+  it("opts into Vaul keyboard-safe input repositioning", () => {
+    expect(uiDrawer).toMatch(/fixed\s*=\s*true/);
+    expect(uiDrawer).toMatch(/repositionInputs\s*=\s*true/);
+    expect(uiDrawer).toContain("fixed={fixed}");
+    expect(uiDrawer).toContain("repositionInputs={repositionInputs}");
+  });
+
+  it("keeps non-scrolling drawer chrome stable while the form body scrolls", () => {
+    expect(reportDrawer).toMatch(/<DrawerHeader className="shrink-0"/);
+    expect(reportDrawer).toMatch(/<DrawerFooter className="[^"]*shrink-0/);
+    expect(reportDrawer).toMatch(/<form[^>]+className="flex min-h-0 flex-1 flex-col"/);
   });
 });

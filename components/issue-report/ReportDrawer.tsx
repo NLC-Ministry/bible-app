@@ -108,7 +108,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
         </DrawerHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scroll-pb-32 px-4 pb-2 overscroll-contain">
             {message && (
               <div
                 className={reportMessageClassName}
@@ -186,7 +186,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          <DrawerFooter className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <DrawerFooter className="shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <button
               type="submit"
               disabled={isLoading || watchDescription.length < 1 || watchDescription.length > 500}
