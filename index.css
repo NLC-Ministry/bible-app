@@ -9733,6 +9733,20 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   background: var(--bg-app);
   border-bottom: 1px solid var(--border-card);
 }
+/* Extend the same solid fill up into the sticky offset above the bar so scrolled
+   content never peeks through as a thin "crack" between the top bar and the tabs.
+   The scroll container's overflow clips this at the top bar, so it works at any
+   breakpoint regardless of the container's exact top padding. */
+.plan-detail-tab-strip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 4rem;
+  background: var(--bg-app);
+  pointer-events: none;
+}
 .plan-detail-tab-strip__scroller {
   position: relative;
   display: grid;
