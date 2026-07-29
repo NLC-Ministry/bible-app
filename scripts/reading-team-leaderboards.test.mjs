@@ -79,7 +79,9 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain('role="progressbar"');
     expect(plan).toContain('aria-valuenow="${progressPercent}"');
     expect(css).toContain(".reading-team-ranking-list .bar-race-bar-shell");
-    expect(css).toContain("height: 8px");
+    expect(css).toContain("height: 10px");
+    expect(css).toContain("background: color-mix(in srgb, var(--text-primary) 14%, var(--bg-card))");
+    expect(css).toContain("body.dark-theme .reading-team-ranking-list .bar-race-bar-shell");
     expect(plan).toContain("settleRequest");
     expect(plan).toContain("團隊排行榜載入逾時");
     expect(plan).toContain("data-team-ranking-retry");

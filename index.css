@@ -4864,10 +4864,16 @@ button.logout-btn:hover {
 }
 
 .reading-team-ranking-list .bar-race-bar-shell {
-  background: var(--bg-input);
-  border: 0;
+  background: color-mix(in srgb, var(--text-primary) 14%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--text-primary) 25%, var(--border-card));
   border-radius: 999px;
-  height: 8px;
+  box-sizing: border-box;
+  height: 10px;
+}
+
+body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
+  background: color-mix(in srgb, var(--text-primary) 22%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--text-primary) 34%, var(--border-card));
 }
 
 .reading-team-ranking-list .bar-race-details {
