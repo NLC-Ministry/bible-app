@@ -41,5 +41,7 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("data-team-ranking-retry");
     expect(plan).toContain("db.getReadingTeamStatistics(state.activePlan)");
     expect(plan).toContain("completedAt(team)");
+    expect(plan).toContain("Promise.allSettled");
+    expect(plan).toContain("Promise.resolve().then(() => renderReadingTeamLeaderboards())");
   });
 });

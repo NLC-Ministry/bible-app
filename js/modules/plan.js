@@ -5047,10 +5047,17 @@ async function renderReadingTeamLeaderboards() {
   });
 }
 async function renderPlanRankingView() {
-  await Promise.all([
-    renderMyPersonalRankings(),
-    renderReadingTeamLeaderboards()
+  const rankingResults = await Promise.allSettled([
+    Promise.resolve().then(() => renderReadingTeamLeaderboards()),
+    Promise.resolve().then(() => renderMyPersonalRankings())
   ]);
+  rankingResults.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(index === 0
+        ? "Failed to render reading-team leaderboards"
+        : "Failed to render personal rankings", result.reason);
+    }
+  });
 
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
