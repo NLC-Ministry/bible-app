@@ -143,6 +143,24 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
     activeStepIndex += 1;
     renderStep(dialog);
   });
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeOnboardingHelper({ storage, config });
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const controls = [...dialog.querySelectorAll("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])")];
+    if (controls.length === 0) return;
+
+    event.preventDefault();
+    const currentIndex = controls.indexOf(document.activeElement);
+    const nextIndex = event.shiftKey
+      ? (currentIndex <= 0 ? controls.length - 1 : currentIndex - 1)
+      : (currentIndex === controls.length - 1 ? 0 : currentIndex + 1);
+    controls[nextIndex].focus();
+  });
 
   dialog.focus?.();
 }

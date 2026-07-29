@@ -103,6 +103,50 @@ describe("release onboarding helper dialog", () => {
     expect(document.activeElement).toBe(document.getElementById("release-onboarding-dialog"));
   });
 
+  it("closes when Escape is pressed", () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
+
+    document.getElementById("release-onboarding-dialog").dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true
+    }));
+
+    expect(document.getElementById("release-onboarding-dialog")).toBeNull();
+  });
+
+  it("restores focus to its trigger when closed", () => {
+    document.body.innerHTML = '<button type="button" id="onboarding-trigger">Open</button>';
+    const trigger = document.getElementById("onboarding-trigger");
+    trigger.focus();
+
+    openOnboardingHelper({ trigger, config: { onboardingVersion: "0.1.0" } });
+    closeOnboardingHelper();
+
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps Tab and Shift+Tab focus within dialog controls", () => {
+    document.body.innerHTML = '<button type="button" id="outside-control">Outside</button>';
+    openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
+
+    const dialog = document.getElementById("release-onboarding-dialog");
+    const controls = [...dialog.querySelectorAll("button:not([disabled])")];
+    const firstControl = controls[0];
+    const lastControl = controls.at(-1);
+
+    lastControl.focus();
+    lastControl.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    expect(document.activeElement).toBe(firstControl);
+
+    firstControl.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true
+    }));
+    expect(document.activeElement).toBe(lastControl);
+  });
+
   it("can start from the join-plan step for manual recall", () => {
     document.body.innerHTML = "";
     openOnboardingHelper({ startStep: "join-plan", manual: true });
