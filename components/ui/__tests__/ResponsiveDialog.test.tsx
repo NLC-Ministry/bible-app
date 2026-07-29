@@ -108,8 +108,15 @@ describe("ResponsiveDialog Component Tests", () => {
     // 驗證關閉按鈕是否出現在 DOM 中
     const closeBtn = document.body.querySelector(
       '[data-testid="responsive-dialog-close-btn"]'
-    )
+    ) as HTMLButtonElement
     expect(closeBtn).not.toBeNull()
+    expect(closeBtn.tagName).toBe("BUTTON")
+    expect(closeBtn.getAttribute("aria-label")).toBe("Close")
+
+    act(() => {
+      closeBtn.click()
+    })
+    expect(handleClose).toHaveBeenCalledTimes(1)
   })
 
   it("當 Viewport 寬度為 480px 時，組件確實在 DOM 中渲染為 Drawer 版面", async () => {
