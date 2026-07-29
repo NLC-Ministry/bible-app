@@ -5,7 +5,6 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ReportPipeline, ValidateReportBlock } from "./IssueReportBlocks.ts";
-import { Button } from "../ui/button.tsx";
 import {
   Drawer,
   DrawerClose,
@@ -180,10 +179,10 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
           </div>
 
           <DrawerFooter>
-            <Button
+            <button
               type="submit"
               disabled={isLoading || watchDescription.length < 1 || watchDescription.length > 500}
-              className="w-full"
+              className="primary-btn w-full"
             >
               {isLoading ? (
                 <>
@@ -193,11 +192,11 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
               ) : (
                 "提交報告"
               )}
-            </Button>
+            </button>
             <DrawerClose asChild>
-              <Button type="button" variant="outline" className="w-full">
+              <button type="button" className="secondary-btn w-full">
                 取消
-              </Button>
+              </button>
             </DrawerClose>
           </DrawerFooter>
         </form>
