@@ -4155,8 +4155,12 @@ button.logout-btn:hover {
   padding-bottom: 0.5rem;
 }
 .circular-action-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1;
+  padding: 0;
   border-radius: 50%;
   background: var(--bg-card);
   border: 1px solid var(--border-card);
@@ -5615,8 +5619,11 @@ body.dark-theme .pastoral-race-progress {
   font-size: 0.78rem;
 }
 .plan-detail-compact .circular-action-btn {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1;
 }
 .plan-detail-compact .plan-cover-card {
   aspect-ratio: 16 / 7.2;
@@ -6514,6 +6521,61 @@ select,
 
 .mobile-nav-btn.active .nlc-icon {
   color: var(--color-icon-brand);
+}
+
+/* Icon-only controls: shadcn-style square touch targets for close/search/back actions. */
+.icon-button {
+  appearance: none;
+  inline-size: 44px;
+  block-size: 44px;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.08s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-button:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  color: var(--text-primary);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.icon-button:active {
+  transform: scale(0.96);
+}
+
+.icon-button--subtle,
+.dialog-close-button {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-button--ghost {
+  background: transparent;
+}
+
+.icon-button--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 22%, transparent);
 }
 
 button,

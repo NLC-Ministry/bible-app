@@ -100,6 +100,27 @@ Body font: Inter + Noto Sans TC.
 | `.stat-card--primary` | Stats bento hero tile |
 | `.stat-card--neutral` | Stats bento tile |
 
+### Close / dismiss controls
+
+Use `.dialog-close-button.icon-button` for vanilla dialog/card close buttons.
+
+Use `.icon-button` variants for icon-only actions:
+
+| Class | Role |
+|-------|------|
+| `.icon-button` | Default square icon-only control |
+| `.icon-button--subtle` | Transparent close button on cards/dialogs |
+| `.icon-button--ghost` | Bordered transparent icon action |
+| `.icon-button--danger` | Destructive icon action |
+| `.dialog-close-button` | Dialog and card dismiss affordance |
+
+Rules:
+
+- Do not use `.circular-action-btn` for dialog close buttons.
+- Do not inline width/height on close buttons.
+- Every icon-only close button must resolve to a square `44px` touch target.
+- React-backed dialogs/drawers use shadcn/Radix close primitives (`Button`, `DrawerClose`, `ResponsiveDialog`) rather than ad hoc close chrome.
+
 ## Chart colors (JS)
 
 Defined in `js/design-tokens.js`:
