@@ -348,7 +348,7 @@ window.PlanPageController = {
     const statsTab = document.getElementById("plan-primary-tab-stats");
     if (statsTab) {
       if (isTeamPlan) {
-        statsTab.textContent = "團隊統計";
+        statsTab.textContent = "團隊";
         forceHidden(statsTab, !hasTeam);
       } else {
         statsTab.textContent = "團體統計";

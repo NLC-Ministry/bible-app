@@ -228,6 +228,7 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain('reading-team-');
     expect(plan).toContain('data-reading-team-division');
     expect(plan).toContain('readingTeamDefaultPlan');
+    expect(plan).toContain('statsTab.textContent = "團隊"');
     expect(teamUi).toContain("renderMyReadingTeamInline");
     expect(teamUi).toContain("data-team-view-division");
     expect(teamUi).toContain("data-add-other-team");

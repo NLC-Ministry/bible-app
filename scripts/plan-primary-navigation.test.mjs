@@ -46,20 +46,26 @@ describe("plan primary navigation", () => {
     expect(plan).toContain("stats.insertBefore(members, stats.firstChild)");
     expect(plan).not.toContain("data-plan-page-index");
   });
+
+  it("labels the team-enabled plan primary tab as team rather than statistics", () => {
+    expect(plan).toContain('statsTab.textContent = "團隊"');
+    expect(plan).toContain('statsTab.textContent = "團體統計"');
+    expect(plan).not.toContain('statsTab.textContent = "團隊統計"');
+  });
 });
 
 describe("plan join navigation", () => {
-  it("previews an available plan before asking for the weekly schedule", () => {
+  it("previews an available plan and exposes solo and team participation actions", () => {
     const presetFlow = plan.slice(
       plan.indexOf("function renderPresetPlansList"),
       plan.indexOf("function isChapterReadForRound")
     );
 
     expect(presetFlow).toContain("openPlanDetailsDialog(plan, { onJoin: async () => {");
-    expect(presetFlow).toContain("openJoinModeDialog(plan)");
-    expect(presetFlow).toContain("await db.joinPresetPlan(key, defaultSchedule)");
-    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("openJoinModeDialog"));
-    expect(presetFlow.indexOf("openJoinModeDialog")).toBeLessThan(presetFlow.indexOf("await db.joinPresetPlan"));
+    expect(presetFlow).toContain("joinPlanSoloFromCard(plan, key)");
+    expect(presetFlow).toContain("createTeamFromPlanCard(plan, key)");
+    expect(presetFlow).not.toContain("openJoinModeDialog(plan)");
+    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("joinPlanSoloFromCard(plan, key)"));
   });
 
   it("opens the joined plan detail instead of returning to the home page", () => {
