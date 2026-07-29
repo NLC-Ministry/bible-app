@@ -7211,19 +7211,7 @@ input:checked + .slider:before {
   color: var(--text-primary);
 }
 .bottom-sheet-close-x {
-  background: transparent;
-  border: none;
-  font-size: 14px;
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.bottom-sheet-close-x:active {
-  transform: scale(0.9) !important;
 }
 
 .bottom-sheet-body {
@@ -7422,8 +7410,7 @@ body.reader-modal-open .main-content {
 .overlay-version,
 .view-mode-btn,
 .search-cancel-btn,
-.search-clear-btn,
-.bottom-sheet-close-x {
+.search-clear-btn {
   min-width: 44px;
   min-height: 44px;
 }

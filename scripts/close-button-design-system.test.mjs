@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const css = read("index.css");
+const html = read("index.html");
 const designSystem = read("docs/design-system.md");
 
 describe("close button design system", () => {
@@ -21,5 +22,25 @@ describe("close button design system", () => {
     expect(designSystem).toContain("Use `.dialog-close-button.icon-button`");
     expect(designSystem).toContain("Do not use `.circular-action-btn` for dialog close buttons");
     expect(designSystem).toContain("Do not inline width/height on close buttons");
+  });
+});
+
+describe("static close button usage", () => {
+  it("does not use circular-action-btn for close buttons", () => {
+    expect(html).not.toMatch(/id="btn-close-plan-team-invite"[^>]*class="[^"]*circular-action-btn/);
+    expect(html).not.toMatch(/aria-label="[^"]*關閉[^"]*"[^>]*class="[^"]*circular-action-btn/);
+  });
+
+  it("uses the central icon button primitive for static close controls", () => {
+    expect(html).toContain('id="btn-close-plan-team-invite"');
+    expect(html).toMatch(/id="btn-close-plan-team-invite"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
+    expect(html).toMatch(/id="typography-sheet-close-btn"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
+    expect(html).toMatch(/id="btn-close-bottom-sheet"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
+  });
+
+  it("keeps bottom-sheet close controls square through the shared primitive", () => {
+    expect(css).toContain(".bottom-sheet-close-x");
+    expect(css).toContain(".bottom-sheet-close-btn");
+    expect(css).not.toMatch(/\.bottom-sheet-close-x\s*\{[^}]*width:\s*32px/);
   });
 });
