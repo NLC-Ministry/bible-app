@@ -58,8 +58,11 @@
             "card-foreground": "var(--text-primary)",
             muted: "var(--bg-input)",
             "muted-foreground": "var(--text-muted)",
-            accent: "var(--color-brand-muted)",
+            /* Neutral hover surface for ghost/outline — not brand cyan */
+            accent: "color-mix(in srgb, var(--text-primary) 6%, var(--bg-card))",
             "accent-foreground": "var(--text-primary)",
+            secondary: "color-mix(in srgb, var(--text-primary) 8%, var(--bg-card))",
+            "secondary-foreground": "var(--text-primary)",
             destructive: "var(--color-danger)",
             "destructive-foreground": "var(--color-danger-foreground)",
             border: "var(--border-default)",

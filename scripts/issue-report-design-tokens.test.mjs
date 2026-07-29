@@ -19,7 +19,8 @@ describe("Tailwind CDN design-token bridge", () => {
     expect(html).toMatch(/["']card-foreground["']\s*:\s*["']var\(--text-primary\)["']/);
     expect(html).toMatch(/muted:\s*["']var\(--bg-input\)["']/);
     expect(html).toMatch(/["']muted-foreground["']\s*:\s*["']var\(--text-muted\)["']/);
-    expect(html).toMatch(/accent:\s*["']var\(--color-brand-muted\)["']/);
+    expect(html).toMatch(/accent:\s*["']color-mix\(in srgb, var\(--text-primary\) 6%, var\(--bg-card\)\)["']/);
+    expect(html).toMatch(/secondary:\s*["']color-mix\(in srgb, var\(--text-primary\) 8%, var\(--bg-card\)\)["']/);
     expect(html).toMatch(/destructive:\s*["']var\(--color-danger\)["']/);
     expect(html).toMatch(/["']destructive-foreground["']\s*:\s*["']var\(--color-danger-foreground\)["']/);
     expect(html).toMatch(/border:\s*["']var\(--border-default\)["']/);
@@ -48,7 +49,7 @@ describe("Issue report FAB + drawer token restyle", () => {
     expect(drawer).toContain('variant="ghost"');
     expect(drawer).toContain('size="icon"');
     expect(drawer).toContain('aria-label="關閉"');
-    expect(drawer).toContain("shrink-0");
+    expect(drawer).toContain("absolute right-0 top-0");
   });
 
   it("keeps the FAB flat brand without glass chrome", () => {
