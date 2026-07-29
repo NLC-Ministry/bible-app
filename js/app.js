@@ -160,6 +160,19 @@ function initNotificationSystem() {
 
   if (!bellBtn || !popover) return;
 
+  function openPopover() {
+    popover.classList.remove("hidden");
+    bellBtn.setAttribute("aria-expanded", "true");
+    const firstFocusable = popover.querySelector("button, [tabindex]");
+    if (firstFocusable) firstFocusable.focus();
+  }
+
+  function closePopover() {
+    popover.classList.add("hidden");
+    bellBtn.setAttribute("aria-expanded", "false");
+    bellBtn.focus();
+  }
+
   bellBtn.onclick = async (e) => {
     e.stopPropagation();
     const isHidden = popover.classList.contains("hidden");
@@ -167,10 +180,10 @@ function initNotificationSystem() {
     document.querySelectorAll(".options-dropdown").forEach(el => el.classList.add("hidden"));
 
     if (isHidden) {
-      popover.classList.remove("hidden");
+      openPopover();
       await renderNotificationsList();
     } else {
-      popover.classList.add("hidden");
+      closePopover();
     }
   };
 
@@ -189,9 +202,15 @@ function initNotificationSystem() {
     };
   }
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !popover.classList.contains("hidden")) {
+      closePopover();
+    }
+  });
+
   document.addEventListener("click", (e) => {
-    if (popover && !popover.classList.contains("hidden") && !popover.contains(e.target) && e.target !== bellBtn) {
-      popover.classList.add("hidden");
+    if (!popover.classList.contains("hidden") && !popover.contains(e.target) && e.target !== bellBtn) {
+      closePopover();
     }
   });
 }

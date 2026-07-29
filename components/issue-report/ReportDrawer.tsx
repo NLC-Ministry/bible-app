@@ -14,6 +14,10 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "../ui/drawer.tsx";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "../ui/native-select.tsx";
 
 export const reportSchema = z.object({
   category: z.enum(["bug", "ui", "data", "other"], {
@@ -127,17 +131,16 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
               >
                 問題分類
               </label>
-              <select
+              <NativeSelect
                 id="category"
                 disabled={isLoading}
                 {...register("category")}
-                className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="bug">Bug 錯誤</option>
-                <option value="ui">UI 建議</option>
-                <option value="data">資料問題</option>
-                <option value="other">其他</option>
-              </select>
+                <NativeSelectOption value="bug">Bug 錯誤</NativeSelectOption>
+                <NativeSelectOption value="ui">UI 建議</NativeSelectOption>
+                <NativeSelectOption value="data">資料問題</NativeSelectOption>
+                <NativeSelectOption value="other">其他</NativeSelectOption>
+              </NativeSelect>
               {errors.category && (
                 <span className="mt-0.5 text-xs text-destructive">{errors.category.message}</span>
               )}

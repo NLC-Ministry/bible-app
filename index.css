@@ -63,6 +63,14 @@
   --type-weight-strong: 500;
   --type-weight-regular: 400;
 
+  /* Popover / dropdown surface — shared by notification popover, options-dropdown */
+  --surface-popover: rgba(255, 255, 255, 0.92);
+  --border-popover: var(--border-card);
+  --popover-backdrop-blur: blur(16px);
+  --popover-radius: var(--radius-lg);
+  --popover-shadow: var(--shadow-lg);
+  --popover-padding: 0.9rem 1.1rem;
+
   --skeleton-base: color-mix(in srgb, var(--text-primary) 6%, var(--bg-card));
   --skeleton-highlight: color-mix(in srgb, var(--text-primary) 2%, var(--bg-card));
   --skeleton-on-dark-base: rgba(255, 255, 255, 0.14);
@@ -154,6 +162,10 @@ body.dark-theme {
   --color-brand-ring: color-mix(in srgb, #04A9D2 20%, transparent);
 
   --primary-color: var(--color-brand);
+
+  --surface-popover: rgba(24, 24, 27, 0.92);
+  --border-popover: rgba(255, 255, 255, 0.12);
+  --popover-backdrop-blur: blur(16px);
 
   --skeleton-base: rgba(255, 255, 255, 0.06);
   --skeleton-highlight: rgba(255, 255, 255, 0.14);
@@ -4473,12 +4485,14 @@ button.logout-btn:hover {
   position: absolute;
   right: 0;
   top: 42px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
+  background: var(--surface-popover);
+  backdrop-filter: var(--popover-backdrop-blur);
+  -webkit-backdrop-filter: var(--popover-backdrop-blur);
+  border: 1px solid var(--border-popover);
+  border-radius: var(--radius-md);
   width: 170px;
-  box-shadow: var(--shadow-lg);
-  z-index: 99;
+  box-shadow: var(--popover-shadow);
+  z-index: var(--z-dropdown);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -5283,12 +5297,12 @@ button.logout-btn:hover {
 #plan-options-dropdown {
   min-width: 220px;
   padding: 0.55rem;
-  border-radius: 18px;
-  background: rgba(24, 24, 27, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border-radius: var(--popover-radius);
+  background: var(--surface-popover);
+  border: 1px solid var(--border-popover);
+  box-shadow: var(--popover-shadow);
+  backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
+  -webkit-backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
 }
 #plan-options-dropdown .options-dropdown-item {
   min-height: 44px;
@@ -10481,15 +10495,15 @@ body.dark-theme .custom-confirm-overlay {
   right: 0;
   width: 320px;
   max-width: calc(100vw - 2rem);
-  background: rgba(30, 30, 46, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
+  background: var(--surface-popover);
+  backdrop-filter: var(--popover-backdrop-blur);
+  -webkit-backdrop-filter: var(--popover-backdrop-blur);
+  border: 1px solid var(--border-popover);
+  border-radius: var(--popover-radius);
+  box-shadow: var(--popover-shadow);
   display: flex;
   flex-direction: column;
-  z-index: 1050;
+  z-index: var(--z-dropdown);
   opacity: 1;
   transform: scale(1);
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -10504,30 +10518,30 @@ body.dark-theme .custom-confirm-overlay {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--popover-padding);
+  border-bottom: 1px solid var(--border-popover);
 }
 
 .notification-popover__title {
   font-size: 0.95rem;
-  font-weight: var(--type-weight-strong, 600);
-  color: var(--text-primary, #ffffff);
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
 }
 
 .notification-popover__read-all-btn {
   background: transparent;
   border: none;
-  color: var(--color-brand, #04A9D2);
+  color: var(--color-brand);
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: var(--type-weight-strong);
   cursor: pointer;
   padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: background 0.15s ease;
 }
 
 .notification-popover__read-all-btn:hover {
-  background: rgba(4, 169, 210, 0.1);
+  background: var(--color-brand-subtle);
 }
 
 .notification-popover__content {
@@ -10539,7 +10553,7 @@ body.dark-theme .custom-confirm-overlay {
 .notification-popover__empty {
   padding: 2.2rem 1rem;
   text-align: center;
-  color: var(--text-muted, #8a8a8a);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -10548,7 +10562,7 @@ body.dark-theme .custom-confirm-overlay {
   display: flex;
   flex-direction: column;
   padding: 0.8rem 1.1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-popover) 40%, transparent);
   cursor: pointer;
   transition: background-color 0.2s ease;
   position: relative;
@@ -10559,11 +10573,11 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .notification-item:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: color-mix(in srgb, var(--text-primary) 3%, transparent);
 }
 
 .notification-item--unread {
-  background-color: rgba(4, 169, 210, 0.05);
+  background-color: var(--color-brand-muted);
 }
 
 .notification-item--unread::before {
@@ -10574,7 +10588,7 @@ body.dark-theme .custom-confirm-overlay {
   transform: translateY(-50%);
   width: 6px;
   height: 6px;
-  background-color: var(--color-brand, #04A9D2);
+  background-color: var(--color-brand);
   border-radius: 50%;
 }
 
@@ -10583,13 +10597,13 @@ body.dark-theme .custom-confirm-overlay {
   justify-content: space-between;
   align-items: center;
   font-size: 0.76rem;
-  color: var(--text-muted, #8a8a8a);
+  color: var(--text-muted);
   margin-bottom: 0.25rem;
 }
 
 .notification-item__sender {
-  font-weight: 600;
-  color: var(--text-secondary, #d4d4d8);
+  font-weight: var(--type-weight-strong);
+  color: var(--text-secondary);
 }
 
 .notification-item__time {
