@@ -216,6 +216,15 @@ describe("NLC and browser integration", () => {
     expect(db).toContain("目前找不到你的會員資料");
   });
 
+  it("keeps inline team reminder controls inside mobile member rows", () => {
+    expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member");
+    expect(teamCss).toContain("grid-template-columns: 40px minmax(0, 1fr) minmax(44px, auto)");
+    expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member__body");
+    expect(teamCss).toContain("grid-column: 2 / 4");
+    expect(teamCss).toContain(".reading-team-inline--stats .reading-team-remind-btn");
+    expect(teamCss).toContain("max-width: 100%");
+  });
+
   it("uses adaptive semantic surfaces in light, dark, and warm themes", () => {
     expect(teamCss).toContain("--reading-team-surface:");
     expect(teamCss).toContain("--reading-team-surface-raised:");
