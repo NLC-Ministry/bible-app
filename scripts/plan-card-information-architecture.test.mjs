@@ -66,4 +66,18 @@ describe("plan card information architecture", () => {
     expect(coverRenderer).not.toContain("✦<br>第<br>");
     expect(coverRenderer).toContain("plan-cover-thumbnail--icon");
   });
+
+  it("keeps plan card actions flat without glossy or lifted button states", () => {
+    const planCardCss = css.slice(
+      css.indexOf("/* Plan cards: one card, clear hierarchy, stable action area */"),
+      css.indexOf("/* ==================== 🔔 Notification Bell & Dropdown CSS ====================")
+    );
+
+    expect(planCardCss).toContain(".plan-card .primary-btn::after");
+    expect(planCardCss).toContain("content: none");
+    expect(planCardCss).toContain("backdrop-filter: none");
+    expect(planCardCss).toContain("box-shadow: none");
+    expect(planCardCss).not.toContain("translateY(-1px)");
+    expect(planCardCss).not.toContain("linear-gradient");
+  });
 });
