@@ -22,6 +22,7 @@ import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
 import './modules/team-registration.js?v=20260723_team_dual_division';
+import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js?v=20260729_release_010';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -283,6 +284,11 @@ appRouter.switchTab = async function (tabId, options = {}) {
         state.planDetailOpen = false;
       }
     }
+    if (tabId === "plan-view" && options.onboardingPlanDestination === "active-progress" && state.activePlan) {
+      state.planDetailOpen = true;
+      state.planActiveSubTab = "today";
+      window.currentPlanViewState = "DETAIL";
+    }
 
     // ── 5. Load module + render (fully awaited) ──
     if (typeof window.syncActivePlanContext === 'function') {
@@ -311,6 +317,13 @@ appRouter.switchTab = async function (tabId, options = {}) {
         await mod.renderPlanView();
       } else if (typeof window.renderPlanView === 'function') {
         await window.renderPlanView();
+      }
+      if (options.onboardingPlanDestination === "discover") {
+        if (mod && typeof mod.showDiscoverPlans === "function") {
+          await mod.showDiscoverPlans();
+        } else if (typeof window.showDiscoverPlans === "function") {
+          await window.showDiscoverPlans();
+        }
       }
 
     } else if (tabId === "stats-view") {
@@ -417,8 +430,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Initialize Database Connection & Auth
   // db.init() handles: OIDC callback, session sync, and returns early after auth is established.
   // loadUserData() is called exactly once after init() to populate state.
+  let initialSessionSyncSucceeded = false;
   try {
-    await db.init();
+    initialSessionSyncSucceeded = await db.init() === true;
   } catch (err) {
     console.error('Failed to initialize database connection & auth:', err);
   }
@@ -442,7 +456,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   // Load all user data in one shot. db.init() guarantees auth is resolved before we reach here.
   try {
-    await Promise.all([
+    const [, initialDataLoadSucceeded] = await Promise.all([
       db.loadOrgStructure(),
       db.loadUserData(true)
     ]);
@@ -458,6 +472,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Render the initial view only after ALL data is ready
     await appRouter.switchTab('dashboard-view');
+    maybeShowReleaseOnboarding({
+      auth,
+      syncComplete: initialSessionSyncSucceeded && initialDataLoadSucceeded === true,
+      storage: window.localStorage,
+      config: window.APP_CONFIG
+    });
   } catch (err) {
     console.error('Failed to load initial data & render dashboard:', err);
   } finally {
@@ -483,6 +503,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast("離線讀經進度已同步");
     }
   });
+
   // ── Background pre-warm: silently load plan module & render plan list ──
   // While the user sees the dashboard, we load plan.js and call renderPlanView()
   // in the background. This guarantees the plan tab shows real data immediately
