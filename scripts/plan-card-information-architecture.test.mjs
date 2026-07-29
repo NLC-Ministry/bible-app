@@ -49,4 +49,21 @@ describe("plan card information architecture", () => {
     expect(joinedList).not.toContain("card.style = `");
     expect(presetList).not.toContain("card.style = ");
   });
+
+  it("follows compact item-style cards without pill actions or duplicate vertical stage media", () => {
+    const planCardCss = css.slice(
+      css.indexOf("/* Plan cards: one card, clear hierarchy, stable action area */"),
+      css.indexOf("/* ==================== 🔔 Notification Bell & Dropdown CSS ====================")
+    );
+    const coverRenderer = plan.slice(
+      plan.indexOf("function getPlanCoverHtml"),
+      plan.indexOf("function renderPlanCardHeader")
+    );
+
+    expect(planCardCss).not.toMatch(/border-radius:\s*9999?px/);
+    expect(planCardCss).not.toContain("border-radius: 20px");
+    expect(coverRenderer).not.toContain("flex-direction: column");
+    expect(coverRenderer).not.toContain("✦<br>第<br>");
+    expect(coverRenderer).toContain("plan-cover-thumbnail--icon");
+  });
 });

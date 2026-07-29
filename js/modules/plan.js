@@ -1133,16 +1133,14 @@ function getPlanCoverHtml(plan) {
   const campaignStageNo = plan && plan.planKind === "church_campaign_stage"
     ? Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0)
     : 0;
-  const labelFontSize = campaignStageNo >= 10 ? "0.88rem" : "0.95rem";
-
   if (campaignStageNo) {
-    return `<div class="plan-cover-thumbnail" style="width: 32px; border-radius: 12px; border: 1.5px solid color-mix(in srgb, var(--primary-color) 30%, transparent); background: color-mix(in srgb, var(--primary-color) 6%, transparent); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--primary-color); font-weight: 600; font-size: 0.72rem; line-height: 1.35; padding: 0.6rem 0.15rem; flex-shrink: 0; align-self: stretch; box-sizing: border-box; text-align: center;">
-      ✦<br>第<br>${campaignStageNo}<br>階<br>段
+    return `<div class="plan-cover-thumbnail plan-cover-thumbnail--icon" style="background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-card)); color: var(--primary-color); border-color: color-mix(in srgb, var(--primary-color) 24%, var(--border-card));">
+      <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
     </div>`;
   }
 
   const label = isCampaign ? "66卷" : escapeHTML(String(plan && plan.name || "讀經").slice(0, 2));
-  return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;
+  return `<div class="plan-cover-thumbnail" style="background: ${bg};">${label}</div>`;
 }
 
 function renderPlanCardHeader({ eyebrow = "", title = "", meta = "", description = "" } = {}) {
