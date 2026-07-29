@@ -116,6 +116,18 @@ describe("reading competition team schema", () => {
 });
 
 describe("NLC and browser integration", () => {
+  it("styles plan participation controls for touch-safe responsive layouts", () => {
+    expect(indexCss).toContain(".plan-team-invite-shortcut");
+    expect(indexCss).toContain(".plan-team-invite-shortcut__action");
+    expect(indexCss).toContain(".plan-card-participation-actions");
+    expect(indexCss).toContain(".plan-card-action-btn");
+    expect(indexCss).toContain(".plan-card-participation-state");
+    expect(indexCss).toContain("min-height: 44px");
+    expect(indexCss).toContain("@media (max-width: 640px)");
+    expect(plan).toContain("primary-btn plan-card-action-btn");
+    expect(plan).toContain("secondary-btn plan-card-action-btn");
+  });
+
   it("models plan cards around solo and team participation actions", () => {
     expect(plan).toContain("async function openJoinedPlanProgress(plan)");
     expect(plan).toContain("async function openJoinedPlanTeam(plan)");
