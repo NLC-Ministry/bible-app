@@ -1442,7 +1442,9 @@
                 <div id="profile-summary-avatar"></div>
                 <div class="profile-summary-header__meta">
                   <h2 id="profile-summary-name"
-                    style="font-size: 1.4rem; font-weight: 500; color: var(--text-primary); margin: 0;">新使用者</h2>
+                    style="font-size: 1.4rem; font-weight: 500; color: var(--text-primary); margin: 0;"
+                    aria-busy="true"><span class="skeleton-shimmer skeleton-inline"
+                      style="display:inline-block;width:6rem;height:1.2rem;border-radius:4px;vertical-align:middle;"></span></h2>
                   <p id="profile-summary-org" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
                     <span class="skeleton-wrapper"
                       style="display:inline-flex;flex-direction:column;gap:0.35rem;min-width:8rem;">
@@ -1453,7 +1455,7 @@
                     </span>
                   </p>
                   <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.25rem;">
-                    <span id="profile-summary-role" class="role-badge">一般組員</span>
+                    <span id="profile-summary-role" class="role-badge" aria-busy="true"></span>
                   </div>
                 </div>
               </div>
@@ -1504,15 +1506,15 @@
                     <div class="member-hub-org-placement__grid">
                       <div class="member-hub-org-placement__item">
                         <span class="member-hub-org-placement__label">大區</span>
-                        <strong class="member-hub-org-placement__value" id="member-hub-org-great-region">尚未設定</strong>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-great-region" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                       <div class="member-hub-org-placement__item">
                         <span class="member-hub-org-placement__label">牧區</span>
-                        <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone">尚未設定</strong>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                       <div class="member-hub-org-placement__item">
                         <span class="member-hub-org-placement__label">小組</span>
-                        <strong class="member-hub-org-placement__value" id="member-hub-org-small-group">尚未設定</strong>
+                        <strong class="member-hub-org-placement__value" id="member-hub-org-small-group" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                     </div>
                     <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未同步</p>

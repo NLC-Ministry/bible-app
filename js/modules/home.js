@@ -507,9 +507,9 @@ async function renderPastoralZoneRankingList() {
   } else {
     const mockUser = {
       name: state.currentUser.name,
-      great_region: state.currentUser.great_region || "東區",
-      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
-      small_group: state.currentUser.small_group || "馬鈴",
+      great_region: state.currentUser.great_region || "",
+      pastoral_zone: state.currentUser.pastoral_zone || "",
+      small_group: state.currentUser.small_group || "",
       role: state.currentUser.role || "member",
       chapters_read: state.currentUser.chapters_read,
       plan_progress: state.currentUser.plan_progress,
@@ -841,9 +841,9 @@ async function renderTodayGroupProgress() {
 
   const mockUser = {
     name: state.currentUser.name,
-    great_region: state.currentUser.great_region || "東區",
-    pastoral_zone: state.currentUser.pastoral_zone || "大安1",
-    small_group: state.currentUser.small_group || "馬鈴",
+    great_region: state.currentUser.great_region || "",
+    pastoral_zone: state.currentUser.pastoral_zone || "",
+    small_group: state.currentUser.small_group || "",
     role: state.currentUser.role || "member"
   };
 
@@ -2059,7 +2059,7 @@ async function fetchPastoralVerseWall() {
     const mockProfileMap = {
       "offline1": { name: "張弟兄", small_group: "馬鈴薯組" },
       "offline2": { name: "李姊妹", small_group: "喜樂組" },
-      "me": { name: (state.currentUser && state.currentUser.name) || "我", small_group: (state.currentUser && state.currentUser.small_group) || "小組" }
+      "me": { name: (state.currentUser && state.currentUser.name) || "我", small_group: (state.currentUser && state.currentUser.small_group) || "" }
     };
 
     let processedMock = mockNotes.map(n => {
@@ -2108,7 +2108,8 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
   commentNodes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   
   commentNodes.forEach(c => {
-    const commProfile = profileMap[c.user_id] || { name: "未知組員" };
+    const commProfile = profileMap[c.user_id] || { name: "" };
+    const commName = String(commProfile.name || "").trim() || "—";
     const isOp = c.user_id === noteOwnerId;
     
     // 巢狀縮排線與樣式
@@ -2122,17 +2123,17 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
       : "";
       
     // 動態產生精美的 Dicebear 頭像
-    const commAvatarUrl = `https://api.dicebear.com/8.x/lorelei/svg?seed=${encodeURIComponent(commProfile.name)}`;
+    const commAvatarUrl = `https://api.dicebear.com/8.x/lorelei/svg?seed=${encodeURIComponent(commName)}`;
       
     html += `
       <div class="comment-node mb-3.5 ${paddingLeftClass}">
         <div class="p-3 rounded-lg border transition-all duration-200 hover:bg-white/[0.01]" style="background: color-mix(in srgb, var(--text-primary) 1%, var(--bg-card)); border-color: var(--border-card);">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center space-x-2">
-              <img src="${commAvatarUrl}" alt="${escapeHTML(commProfile.name)}" class="w-5.5 h-5.5 rounded-full border border-white/10" style="width: 22px; height: 22px; background-color: var(--color-brand-subtle);" />
+              <img src="${commAvatarUrl}" alt="${escapeHTML(commName)}" class="w-5.5 h-5.5 rounded-full border border-white/10" style="width: 22px; height: 22px; background-color: var(--color-brand-subtle);" />
               <div class="flex flex-col">
                 <div class="flex items-center space-x-1.5">
-                  <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.78rem;">${escapeHTML(commProfile.name)}</span>
+                  <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.78rem;">${escapeHTML(commName)}</span>
                   ${isOp ? `<span class="privacy-badge stat-badge stat-badge--success text-[8px]" style="padding: 1px 4px; font-size: 8px; line-height: 1; border-radius: 9999px;">OP</span>` : ""}
                 </div>
               </div>
@@ -2151,7 +2152,7 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
           <!-- 巢狀回覆輸入框 -->
           <div id="reply-input-box-${c.id}" class="hidden mt-3 pt-3 border-t border-dashed border-slate-200/10">
             <div class="flex items-center space-x-2">
-              <input type="text" id="reply-input-${c.id}" placeholder="回覆 ${escapeHTML(commProfile.name)}..." class="form-control" style="font-size: 0.75rem; padding: 0.35rem 1rem; border-radius: 9999px; flex: 1;">
+              <input type="text" id="reply-input-${c.id}" placeholder="回覆 ${escapeHTML(commName)}..." class="form-control" style="font-size: 0.75rem; padding: 0.35rem 1rem; border-radius: 9999px; flex: 1;">
               <button type="button" class="primary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalReply('${c.note_id}', '${c.id}')">發送</button>
               <button type="button" class="secondary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap;" onclick="window.hideReplyInputBox('${c.id}')">取消</button>
             </div>
@@ -2174,8 +2175,8 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
   window.expandedNoteIds = window.expandedNoteIds || new Set();
 
   notes.forEach(note => {
-    const profile = profileMap[note.user_id] || { name: "未知成員", small_group: "小組" };
-    const initial = profile.name ? profile.name.charAt(0) : "神";
+    const profile = profileMap[note.user_id] || { name: "", small_group: "" };
+    const initial = profile.name ? profile.name.charAt(0) : "·";
 
     const colors = [
       "from-pink-500/20 to-rose-500/20 text-rose-500 dark:text-rose-300",
@@ -2279,8 +2280,8 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
             ${escapeHTML(initial)}
           </div>
           <div class="flex flex-col">
-            <span class="text-xs font-medium" style="color: var(--text-primary);">${escapeHTML(profile.name)}</span>
-            <span class="text-[10px]" style="color: var(--text-muted);">${escapeHTML(profile.small_group || "小組")}</span>
+            <span class="text-xs font-medium" style="color: var(--text-primary);">${escapeHTML(String(profile.name || "").trim() || "—")}</span>
+            <span class="text-[10px]" style="color: var(--text-muted);">${escapeHTML(String(profile.small_group || "").trim() || "—")}</span>
           </div>
         </div>
         <div class="flex items-center space-x-2">
