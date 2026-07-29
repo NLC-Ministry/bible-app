@@ -59,6 +59,12 @@ export function shouldAutoShowOnboarding({ auth, syncComplete, storage = globalT
   }
 }
 
+export function maybeShowReleaseOnboarding(options = {}) {
+  if (!shouldAutoShowOnboarding(options)) return false;
+  globalThis.setTimeout(() => openOnboardingHelper(options), 250);
+  return true;
+}
+
 export function markOnboardingSeen({ storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
   try {
     storage?.setItem(ONBOARDING_STORAGE_KEY, getOnboardingVersion(config));

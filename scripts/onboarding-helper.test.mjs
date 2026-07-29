@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import * as onboardingHelper from "../js/modules/onboarding-helper.js";
 import {
   ONBOARDING_STORAGE_KEY,
   closeOnboardingHelper,
@@ -74,6 +75,28 @@ describe("release onboarding helper state", () => {
       storage,
       config: { onboardingVersion: "0.1.0" }
     })).toBe(false);
+  });
+
+  it("defers opening the helper after eligibility is confirmed", () => {
+    document.body.innerHTML = "";
+    vi.useFakeTimers();
+
+    expect(typeof onboardingHelper.maybeShowReleaseOnboarding).toBe("function");
+
+    const shown = onboardingHelper.maybeShowReleaseOnboarding({
+      auth: { loggedIn: true },
+      syncComplete: true,
+      storage: createMemoryStorage(),
+      config: { onboardingVersion: "0.1.0" }
+    });
+
+    expect(shown).toBe(true);
+    expect(document.getElementById("release-onboarding-dialog")).toBeNull();
+
+    vi.advanceTimersByTime(250);
+    expect(document.getElementById("release-onboarding-dialog")).toBeTruthy();
+
+    vi.useRealTimers();
   });
 
   it("stores the current onboarding version when dismissed", () => {

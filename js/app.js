@@ -458,6 +458,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Render the initial view only after ALL data is ready
     await appRouter.switchTab('dashboard-view');
+    maybeShowReleaseOnboarding({
+      auth,
+      syncComplete: true,
+      storage: window.localStorage,
+      config: window.APP_CONFIG
+    });
   } catch (err) {
     console.error('Failed to load initial data & render dashboard:', err);
   } finally {
@@ -483,6 +489,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast("離線讀經進度已同步");
     }
   });
+
   // ── Background pre-warm: silently load plan module & render plan list ──
   // While the user sees the dashboard, we load plan.js and call renderPlanView()
   // in the background. This guarantees the plan tab shows real data immediately
@@ -536,3 +543,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("[IssueReportAdmin] Failed to mount AdminUsersAccordion component:", err);
   }
 });
+
+import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js?v=20260729_release_010';
