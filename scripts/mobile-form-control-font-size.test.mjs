@@ -27,6 +27,13 @@ const protectedSelectors = [
   ".devotional-textarea",
   ".member-search-wrapper input"
 ];
+const textEntrySourceFiles = [
+  "components/ui/input.tsx",
+  "components/ui/textarea.tsx",
+  "components/ui/native-select.tsx",
+  "components/issue-report/ReportDrawer.tsx",
+  "components/issue-report/AdminUsersAccordion.tsx"
+];
 
 const cssRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
   selectors: match[1].trim(),
@@ -45,7 +52,7 @@ function listJavaScriptFiles(directory) {
 
 function findSmallInlineControlFontSizes(source, file) {
   const violations = [];
-  const controlPattern = /<(input|textarea|select)\b[^>]*>/gi;
+  const controlPattern = /<(input|textarea|select|Input|Textarea|NativeSelect)\b[^>]*>/gi;
 
   for (const match of source.matchAll(controlPattern)) {
     const [, tagName] = match;
@@ -53,17 +60,22 @@ function findSmallInlineControlFontSizes(source, file) {
     const type = tag.match(/\btype\s*=\s*["']?([^\s"'>]+)/i)?.[1]?.toLowerCase();
     if (tagName.toLowerCase() === "input" && nonTextualInputTypes.has(type)) continue;
 
-    const style = tag.match(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/i)?.[2];
-    const fontSize = style?.match(/\bfont-size\s*:\s*([0-9]*\.?[0-9]+)\s*(px|rem)\b/i);
-    if (!fontSize) continue;
+    const styleAttribute = tag.match(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/i)?.[2];
+    const cssFontSize = styleAttribute?.match(/\bfont-size\s*:\s*([^;]+)/i)?.[1];
+    const jsxFontSize = tag.match(/\bfontSize\s*:\s*([^,}]+)/i)?.[1];
+    const rawFontSize = cssFontSize ?? jsxFontSize;
+    if (rawFontSize === undefined) continue;
 
-    const size = Number(fontSize[1]);
-    const unit = fontSize[2].toLowerCase();
-    const isTooSmall = (unit === "px" && size < 16) || (unit === "rem" && size < 1);
-    if (!isTooSmall) continue;
+    const value = rawFontSize.trim().replace(/^["']|["']$/g, "");
+    const numericFontSize = value.match(/^([0-9]*\.?[0-9]+)(px|rem)$/i);
+    const isSafe = numericFontSize
+      ? (numericFontSize[2].toLowerCase() === "px" && Number(numericFontSize[1]) >= 16) ||
+        (numericFontSize[2].toLowerCase() === "rem" && Number(numericFontSize[1]) >= 1)
+      : /^\d+(?:\.\d+)?$/.test(value) && Number(value) >= 16;
+    if (isSafe) continue;
 
     const line = source.slice(0, match.index).split("\n").length;
-    violations.push(`${file}:${line} has inline font-size: ${fontSize[1]}${unit}`);
+    violations.push(`${file}:${line} has inline font-size: ${value}`);
   }
 
   return violations;
@@ -120,11 +132,40 @@ describe("mobile form control font-size safety", () => {
   });
 
   it("does not set an inline font size below 16px on text-entry controls", () => {
-    const sourceFiles = ["index.html", ...listJavaScriptFiles("js")].sort();
+    const sourceFiles = ["index.html", ...listJavaScriptFiles("js"), ...textEntrySourceFiles].sort();
     const violations = sourceFiles.flatMap((file) =>
       findSmallInlineControlFontSizes(readFileSync(file, "utf8"), file)
     );
 
     expect(violations).toEqual([]);
   });
+});
+
+describe("React text-entry controls avoid small text classes", () => {
+  it("does not use text-sm or text-xs directly on shared text-entry controls", () => {
+    textEntrySourceFiles.forEach((file) => {
+      const source = readFileSync(file, "utf8");
+      expect(source).not.toMatch(/<(input|textarea|select)\b[\s\S]*?\btext-(xs|sm)\b/i);
+      expect(source).not.toMatch(/<(Input|Textarea|NativeSelect)\b[\s\S]*?\btext-(xs|sm)\b/i);
+    });
+  });
+});
+
+describe("inline text-entry font-size audit", () => {
+  it("accepts only demonstrably safe px/rem values, including JSX styles", () => {
+    expect(findSmallInlineControlFontSizes('<Input style={{ fontSize: "16px" }} />', "fixture.tsx")).toEqual([]);
+    expect(findSmallInlineControlFontSizes('<Textarea style={{ fontSize: "1rem" }} />', "fixture.tsx")).toEqual([]);
+    expect(findSmallInlineControlFontSizes('<NativeSelect style={{ fontSize: "var(--small-size)" }} />', "fixture.tsx")).toEqual([
+      expect.stringContaining("fixture.tsx:1 has inline font-size")
+    ]);
+  });
+
+  it.each(["0.8em", "75%", "12pt", "calc(1rem - 2px)", "var(--small-size)"])(
+    "rejects ambiguous inline font-size values: %s",
+    (fontSize) => {
+      expect(findSmallInlineControlFontSizes(`<input style="font-size: ${fontSize}">`, "fixture.html")).toEqual([
+        expect.stringContaining("fixture.html:1 has inline font-size")
+      ]);
+    }
+  );
 });

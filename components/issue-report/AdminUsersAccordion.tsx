@@ -4,6 +4,10 @@ import { Users, ChevronDown, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Input } from "../ui/input.tsx";
 
+const adminSearchLabelClassName = "text-xs font-medium text-muted-foreground";
+const adminHelperClassName = "text-xs text-muted-foreground";
+const adminLoadingClassName = "text-center py-6 text-xs text-muted-foreground";
+
 export const AdminUsersAccordion: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedCount, setSelectedCount] = React.useState(0);
@@ -90,7 +94,7 @@ export const AdminUsersAccordion: React.FC = () => {
       >
         <div className="p-4">
           <div className="flex flex-col gap-3 mb-4">
-            <label htmlFor="admin-search-user" className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="admin-search-user" className={adminSearchLabelClassName}>
               搜尋使用者
             </label>
             <Input
@@ -110,7 +114,7 @@ export const AdminUsersAccordion: React.FC = () => {
                 <span>篩選小組</span> <span className="chip-arrow">展開</span>
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">點選使用者即可設定一般會友、小組長、牧區長、大區長或系統管理員權限。</p>
+            <p className={adminHelperClassName}>點選使用者即可設定一般會友、小組長、牧區長、大區長或系統管理員權限。</p>
           </div>
           <div
             id="admin-users-list-scroll-area" 
@@ -119,7 +123,7 @@ export const AdminUsersAccordion: React.FC = () => {
           >
             {/* Target element populated by Vanilla JS modules/admin.js */}
             <div id="admin-users-list">
-              <div className="text-center py-6 text-xs text-muted-foreground">
+              <div className={adminLoadingClassName}>
                 載入中或名單為空...
               </div>
             </div>

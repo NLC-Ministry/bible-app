@@ -37,6 +37,11 @@ export function descriptionCounterClassName(length: number): string {
   return length > 500 ? "text-xs text-destructive" : "text-xs text-muted-foreground";
 }
 
+const reportMessageClassName = "flex items-center gap-2 rounded-md border p-3 text-sm font-medium";
+const reportFieldLabelClassName = "text-sm font-medium text-muted-foreground";
+const reportErrorClassName = "mt-0.5 text-xs text-destructive";
+const reportHelperClassName = "text-xs text-muted-foreground";
+
 interface ReportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -106,7 +111,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
             {message && (
               <div
-                className="flex items-center gap-2 rounded-md border p-3 text-sm font-medium"
+                className={reportMessageClassName}
                 style={
                   message.type === "success"
                     ? {
@@ -133,7 +138,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="category"
-                className="text-sm font-medium text-muted-foreground"
+                className={reportFieldLabelClassName}
               >
                 問題分類
               </label>
@@ -148,7 +153,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 <NativeSelectOption value="other">其他</NativeSelectOption>
               </NativeSelect>
               {errors.category && (
-                <span className="mt-0.5 text-xs text-destructive">{errors.category.message}</span>
+                <span className={reportErrorClassName}>{errors.category.message}</span>
               )}
             </div>
 
@@ -156,7 +161,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="description"
-                  className="text-sm font-medium text-muted-foreground"
+                  className={reportFieldLabelClassName}
                 >
                   問題描述
                 </label>
@@ -173,9 +178,9 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 className="text-foreground"
               />
               {errors.description && (
-                <span className="mt-0.5 text-xs text-destructive">{errors.description.message}</span>
+                <span className={reportErrorClassName}>{errors.description.message}</span>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className={reportHelperClassName}>
                 * 系統將自動附帶當前 URL、瀏覽器與登入資訊，以加速除錯。
               </p>
             </div>
