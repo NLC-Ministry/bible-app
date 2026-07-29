@@ -166,6 +166,15 @@ describe("release onboarding helper dialog", () => {
     expect(document.getElementById("release-onboarding-dialog")).toBeNull();
   });
 
+  it("closes when the backdrop is clicked", () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
+
+    document.querySelector("[data-onboarding-backdrop]").click();
+
+    expect(document.getElementById("release-onboarding-dialog")).toBeNull();
+  });
+
   it("restores focus to its trigger when closed", () => {
     document.body.innerHTML = '<button type="button" id="onboarding-trigger">Open</button>';
     const trigger = document.getElementById("onboarding-trigger");
@@ -332,6 +341,14 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain(".release-onboarding-dialog__close:focus-visible");
     expect(css).toContain(".release-onboarding-action__button:focus-visible");
     expect(css).toContain(".release-onboarding-dialog__footer-btn:focus-visible");
+  });
+
+  it("uses a larger subtle close button treatment for the dialog dismiss control", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-dialog__close {");
+    expect(css).toContain("min-width: 2.5rem");
+    expect(css).toContain("min-height: 2.5rem");
+    expect(css).toContain("background: color-mix(");
   });
 
   it("does not rely on an undefined text button class", () => {
