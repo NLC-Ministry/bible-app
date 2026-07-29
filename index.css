@@ -1,4 +1,5 @@
 /* CSS Reset & Variables */
+/* 2026-07-30: production cache-bust after immutable cached stylesheet 404. */
 * {
   margin: 0;
   padding: 0;
