@@ -4903,8 +4903,154 @@ async function renderMyPersonalRankings() {
   if (elRankZoneTotal) elRankZoneTotal.textContent = myZone ? `共 ${sortedZone.length} 人` : "請設定所屬牧區";
 }
 
+async function renderReadingTeamLeaderboards() {
+  const sections = [
+    { division: 3, key: "division3", container: document.getElementById("reading-team-ranking-3") },
+    { division: 6, key: "division6", container: document.getElementById("reading-team-ranking-6") }
+  ].filter(section => section.container);
+  if (sections.length === 0) return;
+
+  const skeleton = typeof ComponentSkeletonLoader !== "undefined"
+    ? ComponentSkeletonLoader.getHtml("bar-race", { count: 3 })
+    : '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">載入中…</div>';
+  sections.forEach(section => {
+    section.container.className = "bar-race-list";
+    section.container.innerHTML = skeleton;
+  });
+
+  if (!state.activePlan) {
+    sections.forEach(section => {
+      section.container.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">請先選擇計畫</div>';
+    });
+    return;
+  }
+
+  const settleRequest = (request, timeoutMs) => new Promise(resolve => {
+    let finished = false;
+    const finish = value => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish({
+      success: false,
+      message: "團隊排行榜載入逾時，請重新載入。"
+    }), timeoutMs);
+    Promise.resolve()
+      .then(request)
+      .then(finish, error => finish({ success: false, message: error && error.message }));
+  });
+
+  let result = await settleRequest(
+    () => db.getReadingTeamLeaderboards(state.activePlan),
+    12000
+  );
+
+  // Rolling-deployment compatibility: administrators can temporarily reuse the
+  // existing aggregate statistics RPC until the dedicated leaderboard RPC is live.
+  if ((!result || !result.success) && typeof db.getReadingTeamStatistics === "function") {
+    const fallback = await settleRequest(
+      () => db.getReadingTeamStatistics(state.activePlan),
+      8000
+    );
+    if (fallback && fallback.success) {
+      const fallbackTeams = Array.isArray(fallback.context && fallback.context.teams)
+        ? fallback.context.teams
+        : [];
+      result = {
+        success: true,
+        context: {
+          division3: fallbackTeams.filter(team => Number(team.division) === 3),
+          division6: fallbackTeams.filter(team => Number(team.division) === 6)
+        }
+      };
+    }
+  }
+
+  if (!result || !result.success) {
+    const message = escapeHTML(result && result.message || "目前無法載入團隊排行榜。");
+    sections.forEach(section => {
+      section.container.innerHTML = `
+        <div style="padding:1.25rem;text-align:center;color:var(--text-muted);">
+          <div>${message}</div>
+          <button type="button" class="secondary-btn" data-team-ranking-retry style="margin-top:0.75rem;">重新載入</button>
+        </div>
+      `;
+      const retryButton = section.container.querySelector("[data-team-ranking-retry]");
+      if (retryButton) retryButton.onclick = () => renderReadingTeamLeaderboards();
+    });
+    return;
+  }
+
+  const context = result.context || {};
+  sections.forEach(section => {
+    const teams = Array.isArray(context[section.key]) ? [...context[section.key]] : [];
+    const completedAt = team => {
+      const time = team && team.lastReadAt ? new Date(team.lastReadAt).getTime() : Infinity;
+      return Number.isFinite(time) ? time : Infinity;
+    };
+    teams.sort((a, b) => {
+      const scoreDiff = Number(b.chaptersRead || 0) - Number(a.chaptersRead || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      const aTime = completedAt(a);
+      const bTime = completedAt(b);
+      if (aTime !== bTime) return aTime - bTime;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
+    });
+
+    if (teams.length === 0) {
+      section.container.innerHTML = `<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">目前尚無 ${section.division} 人團隊</div>`;
+      return;
+    }
+
+    const maxChapters = Math.max(...teams.map(team => Number(team.chaptersRead || 0)), 1);
+    section.container.innerHTML = '<div class="bar-race-track"></div>';
+    const track = section.container.querySelector(".bar-race-track");
+
+    let calculatedRank = 1;
+    teams.forEach((team, index) => {
+      const chaptersRead = Math.max(0, Number(team.chaptersRead || 0));
+      const memberCount = Math.max(0, Number(team.memberCount || 0));
+      const previousTeam = index > 0 ? teams[index - 1] : null;
+      const sharesRank = previousTeam
+        && chaptersRead === Math.max(0, Number(previousTeam.chaptersRead || 0))
+        && completedAt(team) === completedAt(previousTeam);
+      if (index > 0 && !sharesRank) calculatedRank = index + 1;
+      const serverRank = Number(team.rank);
+      const rank = Number.isFinite(serverRank) && serverRank > 0 ? serverRank : calculatedRank;
+      const statusLabel = team.status === "ready" ? "已成隊" : "組隊中";
+      const width = Math.max(4, Math.round(chaptersRead / maxChapters * 100));
+      const row = document.createElement("div");
+      row.className = "bar-race-row";
+      row.style.setProperty("--target-width", `${width}%`);
+      row.style.transitionDelay = `${index * 70}ms`;
+      row.innerHTML = `
+        <div class="bar-race-rank">${rank}</div>
+        <div class="bar-race-main">
+          <div class="bar-race-meta">
+            <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}</span>
+            <span class="bar-race-members">${memberCount}/${section.division} 人・${statusLabel}</span>
+          </div>
+          <div class="bar-race-bar-shell">
+            <div class="bar-race-bar"></div>
+            <span class="bar-race-value">${chaptersRead} 章</span>
+          </div>
+        </div>
+      `;
+      track.appendChild(row);
+    });
+
+    requestAnimationFrame(() => {
+      track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
+    });
+  });
+}
 async function renderPlanRankingView() {
-  await renderMyPersonalRankings();
+  await Promise.all([
+    renderMyPersonalRankings(),
+    renderReadingTeamLeaderboards()
+  ]);
 
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;

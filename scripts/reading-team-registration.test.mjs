@@ -9,6 +9,7 @@ const dualDivisionMigration = read("supabase/migrations/0022_allow_both_team_div
 const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_reminders.sql");
 const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
 const productionCleanup = read("supabase/migrations/0026_production_cleanup_obsolete_plans_badges.sql");
+const secureTeamNamesMigration = read("supabase/migrations/0037_secure_unique_reading_team_names.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -48,6 +49,18 @@ describe("reading competition team schema", () => {
     expect(dualDivisionMigration).toContain("UNIQUE (global_plan_id, user_id, division)");
     expect(dualDivisionMigration).toContain("FOREIGN KEY (team_id, global_plan_id, division)");
     expect(dualDivisionMigration).toContain("already_in_plan_division");
+  });
+
+  it("normalizes team names and prevents duplicates and unsafe hidden markup", () => {
+    expect(secureTeamNamesMigration).toContain("normalize_reading_team_name");
+    expect(secureTeamNamesMigration).toContain("idx_reading_teams_plan_division_normalized_name");
+    expect(secureTeamNamesMigration).toContain("reading_teams_name_safe_check");
+    expect(secureTeamNamesMigration).toContain("duplicate_team_name");
+    expect(secureTeamNamesMigration).toContain("pg_advisory_xact_lock");
+    expect(secureTeamNamesMigration).toContain("[[:cntrl:]<>]");
+    expect(secureTeamNamesMigration).toContain("duplicate_number");
+    expect(db).toContain('duplicate_team_name: "這個團隊名稱已有人使用，請換一個名稱。"');
+    expect(teamUi).toContain("escapeHTML(team.name");
   });
 
   it("does not ship fixture seed scripts and removes their UUID-linked data atomically", () => {
