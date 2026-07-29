@@ -76,6 +76,7 @@ export function markOnboardingSeen({ storage = globalThis.localStorage, config =
 let lastTrigger = null;
 let deferredInstallPrompt = null;
 let installPromptState = "unavailable";
+let installPromptInFlight = null;
 
 function handleDialogKeydown(event) {
   if (event.key === "Escape") {
@@ -229,7 +230,8 @@ function iconForStep(stepId) {
   return "bookOpen";
 }
 
-function renderActionRows() {
+function renderActionRows(installGuideOptions = {}) {
+  const installGuideModel = getInstallGuideModel(installGuideOptions);
   return getOnboardingSteps().map((step) => `
     <article class="release-onboarding-action" data-onboarding-action-card="${step.id}">
       <span class="release-onboarding-action__icon nlc-icon nlc-icon--md" data-icon="${iconForStep(step.id)}" aria-hidden="true"></span>
@@ -253,7 +255,7 @@ function renderActionRows() {
         ` : ""}
       </div>
       <button type="button" class="release-onboarding-action__button" data-onboarding-action="${step.id}">
-        ${step.primaryLabel}
+        ${step.id === "install" ? installGuideModel.primaryLabel : step.primaryLabel}
       </button>
     </article>
   `).join("");
@@ -331,27 +333,34 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   if (!step) return;
 
   if (step.id === "install") {
-    if (deferredInstallPrompt?.prompt) {
-      try {
-        setInstallStatus("正在開啟安裝提示…");
-        const promptEvent = deferredInstallPrompt;
-        const choicePromise = promptEvent.userChoice?.catch(() => null);
-        choicePromise?.then((choice) => applyInstallPromptOutcome(choice, installGuideOptions));
-        const promptResult = promptEvent.prompt();
-        const choice = await choicePromise;
-        await promptResult;
-        if (!choicePromise) applyInstallPromptOutcome(choice, installGuideOptions);
-      } catch (error) {
-        installPromptState = "failed";
-        deferredInstallPrompt = null;
-        console.warn("Browser install prompt failed:", error);
-        showInstallGuide({
-          ...installGuideOptions,
-          hasPrompt: false
-        });
-        setInstallStatus("安裝提示沒有開啟，請改用手動方式。");
-      }
-      return;
+    const installGuideModel = getInstallGuideModel(installGuideOptions);
+    if (installGuideModel.canPrompt && deferredInstallPrompt?.prompt) {
+      if (installPromptInFlight) return installPromptInFlight;
+
+      const promptEvent = deferredInstallPrompt;
+      installPromptInFlight = (async () => {
+        try {
+          setInstallStatus("正在開啟安裝提示…");
+          const choicePromise = promptEvent.userChoice?.catch(() => null);
+          choicePromise?.then((choice) => applyInstallPromptOutcome(choice, installGuideOptions));
+          const promptResult = promptEvent.prompt();
+          const choice = await choicePromise;
+          await promptResult;
+          if (!choicePromise) applyInstallPromptOutcome(choice, installGuideOptions);
+        } catch (error) {
+          installPromptState = "failed";
+          deferredInstallPrompt = null;
+          console.warn("Browser install prompt failed:", error);
+          showInstallGuide({
+            ...installGuideOptions,
+            hasPrompt: false
+          });
+          setInstallStatus("安裝提示沒有開啟，請改用手動方式。");
+        } finally {
+          installPromptInFlight = null;
+        }
+      })();
+      return installPromptInFlight;
     }
     showInstallGuide(installGuideOptions);
     return;
@@ -370,7 +379,7 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   }
 }
 
-function dialogTemplate() {
+function dialogTemplate(installGuideOptions = {}) {
   return `
     <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
     <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
@@ -381,7 +390,7 @@ function dialogTemplate() {
         <p class="release-onboarding-dialog__body">三個小功能，幫你更快開始今天的讀經。</p>
       </div>
       <div class="release-onboarding-dialog__actions" data-onboarding-actions>
-        ${renderActionRows()}
+        ${renderActionRows(installGuideOptions)}
       </div>
       <div class="release-onboarding-dialog__footer">
         <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-later>稍後再看</button>
@@ -411,7 +420,7 @@ export function openOnboardingHelper({
   const root = document.createElement("div");
   root.id = "release-onboarding-root";
   root.className = "release-onboarding-root";
-  root.innerHTML = dialogTemplate(config);
+  root.innerHTML = dialogTemplate(installGuideOptions);
   document.body.appendChild(root);
   document.addEventListener("keydown", handleDialogKeydown);
 
@@ -430,7 +439,15 @@ export function openOnboardingHelper({
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
   root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      runPrimaryAction(button.dataset.onboardingAction, { installGuideOptions }).catch((error) => console.warn("Onboarding action failed:", error));
+      const actionPromise = runPrimaryAction(button.dataset.onboardingAction, { installGuideOptions });
+      if (button.dataset.onboardingAction === "install" && installPromptInFlight) {
+        button.disabled = true;
+        actionPromise.finally(() => {
+          button.disabled = false;
+        }).catch((error) => console.warn("Onboarding action failed:", error));
+        return;
+      }
+      actionPromise.catch((error) => console.warn("Onboarding action failed:", error));
     });
   });
   dialog.addEventListener("keydown", (event) => {

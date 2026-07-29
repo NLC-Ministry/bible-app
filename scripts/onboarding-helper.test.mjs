@@ -354,6 +354,73 @@ describe("release onboarding helper actions", () => {
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
 
+  it("does not prompt twice while the native install choice is pending", async () => {
+    document.body.innerHTML = "";
+    let resolveChoice;
+    const userChoice = new Promise((resolve) => {
+      resolveChoice = resolve;
+    });
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    installButton.click();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("available");
+    expect(installButton.disabled).toBe(true);
+
+    resolveChoice({ outcome: "accepted" });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("accepted");
+    expect(installButton.disabled).toBe(false);
+  });
+
+  it("uses the supplied install guide label and preserves manual install behavior", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
+
+    expect(document.querySelector('[data-onboarding-action="install"]').textContent.trim()).toBe("查看 iPhone 安裝方式");
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+    captureInstallPrompt({ preventDefault() {} });
+  });
+
   it("records accepted Android native install prompt outcome", async () => {
     document.body.innerHTML = "";
     const prompt = {
