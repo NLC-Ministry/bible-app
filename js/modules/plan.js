@@ -621,20 +621,32 @@ function openPlanTeamInvitePanel() {
   const presetContainer = document.getElementById("preset-plans-list-container");
   const sidebarCard = document.getElementById("plan-sidebar-info-card");
   const joinTeamContainer = document.getElementById("join-team-container");
+  const trigger = document.getElementById("btn-open-plan-team-invite");
 
   if (joinedContainer) joinedContainer.classList.add("hidden");
   if (presetContainer) presetContainer.classList.add("hidden");
   if (sidebarCard) sidebarCard.classList.add("hidden");
   if (joinTeamContainer) joinTeamContainer.classList.remove("hidden");
+  trigger?.setAttribute("aria-expanded", "true");
   setupGlobalJoinTeamForm();
   document.getElementById("global-team-code-input")?.focus();
 }
 
-function closePlanTeamInvitePanel() {
+function resetPlanTeamInvitePanel({ restoreFocus = false } = {}) {
+  const joinTeamContainer = document.getElementById("join-team-container");
+  const trigger = document.getElementById("btn-open-plan-team-invite");
   const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
   const fallbackMine = document.querySelector('#plan-list-status-pills .pill-btn[data-filter="mine"]');
   const target = activePill || fallbackMine;
+
+  if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
+  trigger?.setAttribute("aria-expanded", "false");
   if (target) target.click();
+  if (restoreFocus) trigger?.focus();
+}
+
+function closePlanTeamInvitePanel() {
+  resetPlanTeamInvitePanel({ restoreFocus: true });
 }
 
 function initPlanControls() {
@@ -974,6 +986,7 @@ function initPlanControls() {
     pill.addEventListener("click", () => {
       listPills.forEach(p => p.classList.remove("active"));
       pill.classList.add("active");
+      openInviteBtn?.setAttribute("aria-expanded", "false");
       const filter = pill.getAttribute("data-filter");
 
       const joinedContainer = document.getElementById("joined-plans-list-container");
@@ -1220,6 +1233,36 @@ async function createTeamFromPlanCard(plan, key) {
   return joinedPlan;
 }
 
+function updateJoinedPlanTeamAction(card, plan, contexts = []) {
+  const actions = card.querySelector(".plan-card-participation-actions");
+  const teamAction = card.querySelector('[data-plan-card-action="team"]');
+  const continueAction = card.querySelector('[data-plan-card-action="continue"]');
+  if (!actions || !teamAction || !continueAction) return;
+
+  const hasTeamContexts = contexts.length > 0;
+  teamAction.textContent = hasTeamContexts ? "查看團隊" : "建立 / 加入團隊";
+  teamAction.classList.toggle("primary-btn", hasTeamContexts);
+  teamAction.classList.toggle("secondary-btn", !hasTeamContexts);
+  continueAction.classList.toggle("primary-btn", !hasTeamContexts);
+  continueAction.classList.toggle("secondary-btn", hasTeamContexts);
+
+  if (hasTeamContexts) {
+    actions.prepend(teamAction);
+  } else {
+    actions.append(teamAction);
+  }
+
+  teamAction.onclick = async event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (hasTeamContexts) {
+      await openJoinedPlanTeam(plan);
+    } else if (typeof window.openReadingTeamDialog === "function") {
+      await window.openReadingTeamDialog(plan, { preferredDivision: 3 });
+    }
+  };
+}
+
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");
@@ -1283,14 +1326,14 @@ function renderJoinedPlansList() {
         container.innerHTML = `
           <div class="empty-state" style="text-align: center; padding: 3rem 0;">
             <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-weight: 500;">您目前沒有加入任何讀經計畫。</p>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">${(window.APP_COPY && window.APP_COPY.plan.clickFindPlans) || "請點擊頂部「找計畫」瀏覽並加入！"}</p>
+            <p style="font-size: 0.88rem; color: var(--text-muted);">${(window.APP_COPY && window.APP_COPY.plan.clickFindPlans) || "請點擊頂部「探索計畫」瀏覽並加入！"}</p>
           </div>
         `;
       } else {
         container.innerHTML = `
           <div class="empty-state" style="text-align: center; padding: 3rem 0; width: 100%;">
-            <p style="color: var(--text-secondary); margin-bottom: 1rem; font-weight: 500;">目前沒有已過期的計畫</p>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">前往「找計畫」加入新挑戰吧！</p>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem; font-weight: 500;">目前沒有已結束的計畫</p>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">前往「探索計畫」加入新挑戰吧！</p>
           </div>
         `;
       }
@@ -1388,17 +1431,13 @@ function renderJoinedPlansList() {
 
         if (typeof hydrateIcons === "function") hydrateIcons(card);
 
+        if (isTeamPlan) updateJoinedPlanTeamAction(card, plan, []);
+
         card.querySelector('[data-plan-card-action="continue"]')?.addEventListener("click", async event => {
           event.preventDefault();
           event.stopPropagation();
           await openJoinedPlanProgress(plan);
         });
-        card.querySelector('[data-plan-card-action="team"]')?.addEventListener("click", async event => {
-          event.preventDefault();
-          event.stopPropagation();
-          await openJoinedPlanTeam(plan);
-        });
-
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
           if (teamContainer) {
@@ -1415,6 +1454,7 @@ function renderJoinedPlansList() {
 
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
                 const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
+                updateJoinedPlanTeamAction(card, plan, contexts);
 
                 const participationLabel = document.createElement("div");
                 participationLabel.className = "plan-card-participation-state";
@@ -1428,7 +1468,9 @@ function renderJoinedPlansList() {
                   if (hasJoined) {
                     const context = contexts.find(c => Number(c.team.division) === division);
                     const teamName = context ? (context.team.name || "") : "";
-                    const isFull = context && context.team && Number(context.team.memberCount) >= Number(context.team.capacity);
+                    const memberCount = Number(context && context.team && context.team.memberCount || 0);
+                    const capacity = Number(context && context.team && context.team.capacity || division);
+                    const isFull = memberCount >= capacity;
                     const themeColor = isFull ? "var(--color-success-foreground)" : "var(--primary-color)";
                     
                     const badge = document.createElement("div");
@@ -1448,7 +1490,7 @@ function renderJoinedPlansList() {
                     `;
                     badge.innerHTML = `
                       <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
-                      <span>已入 ${division}人組 (${escapeHTML(teamName)})</span>
+                      <span>已入 ${division}人組 (${escapeHTML(teamName)}・${memberCount}/${capacity})</span>
                       ${!isFull ? `<span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>` : ""}
                     `;
                     if (!isFull) {
@@ -1674,16 +1716,24 @@ async function joinTeamGlobally(inviteCode) {
     }
 
     // Auto join the plan itself if not joined yet
+    let effectivePlan = matchingPlan;
     const hasJoinedPlan = (state.activePlans || []).some(p =>
       p.id === matchingPlan.id || p.presetKey === matchingPlan.presetKey || p.globalPlanId === matchingPlan.globalPlanId
     );
 
     if (!hasJoinedPlan) {
       const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
-      await db.joinPresetPlan(matchingPlan.presetKey || matchingPlan.id, defaultSchedule);
+      const joinedPlan = await db.joinPresetPlan(matchingPlan.presetKey || matchingPlan.id, defaultSchedule);
+      if (!joinedPlan) {
+        return {
+          success: false,
+          message: "已加入團隊，但無法自動加入對應讀經計畫。請重新整理後再試。"
+        };
+      }
+      effectivePlan = joinedPlan;
     }
 
-    return { success: true, plan: matchingPlan, result: joinResult };
+    return { success: true, plan: effectivePlan, result: joinResult };
   } catch (err) {
     console.error("joinTeamGlobally error:", err);
     return { success: false, message: "加入失敗：" + (err.message || err) };
@@ -1726,7 +1776,7 @@ function setupGlobalJoinTeamForm() {
         showToast(`已成功加入「${res.plan.name}」團隊！`);
         input.value = "";
 
-        if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
+        resetPlanTeamInvitePanel();
         if (res.plan) {
           await openJoinedPlanTeam(res.plan);
         } else {

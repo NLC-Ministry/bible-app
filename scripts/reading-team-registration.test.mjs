@@ -144,6 +144,19 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("建立團隊");
   });
 
+  it("derives the joined-plan team action from current team contexts", () => {
+    const actionFlow = plan.slice(
+      plan.indexOf("function updateJoinedPlanTeamAction"),
+      plan.indexOf("function renderJoinedPlansList")
+    );
+
+    expect(actionFlow).toContain('teamAction.textContent = hasTeamContexts ? "查看團隊" : "建立 / 加入團隊"');
+    expect(actionFlow).toContain("await openJoinedPlanTeam(plan)");
+    expect(actionFlow).toContain("await window.openReadingTeamDialog(plan, { preferredDivision: 3 })");
+    expect(actionFlow.indexOf("actions.prepend(teamAction)")).toBeGreaterThan(-1);
+    expect(actionFlow).toContain("actions.append(teamAction)");
+  });
+
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
     for (const name of [
       "get_my_reading_team",
@@ -281,12 +294,45 @@ describe("NLC and browser integration", () => {
     expect(plan).not.toContain('filter === "join-team"');
   });
 
+  it("keeps the invite panel trigger and reset flow accessible", () => {
+    const trigger = html.match(/<button[^>]+id="btn-open-plan-team-invite"[^>]*>/)?.[0] || "";
+    const panelFlow = plan.slice(
+      plan.indexOf("function openPlanTeamInvitePanel"),
+      plan.indexOf("function initPlanControls")
+    );
+
+    expect(trigger).toContain('aria-controls="join-team-container"');
+    expect(trigger).toContain('aria-expanded="false"');
+    expect(panelFlow).toContain('trigger?.setAttribute("aria-expanded", "true")');
+    expect(panelFlow).toContain('trigger?.setAttribute("aria-expanded", "false")');
+    expect(panelFlow).toContain("function resetPlanTeamInvitePanel");
+    expect(panelFlow).toContain("resetPlanTeamInvitePanel({ restoreFocus: true })");
+    expect(panelFlow).toContain("if (restoreFocus) trigger?.focus()");
+    expect(plan).toContain('openInviteBtn?.setAttribute("aria-expanded", "false")');
+  });
+
+  it("returns the effective auto-joined plan and fails when plan joining fails", () => {
+    const globalJoinFlow = plan.slice(
+      plan.indexOf("async function joinTeamGlobally"),
+      plan.indexOf("window.joinTeamGlobally")
+    );
+
+    expect(globalJoinFlow).toContain("let effectivePlan = matchingPlan");
+    expect(globalJoinFlow).toContain("const joinedPlan = await db.joinPresetPlan");
+    expect(globalJoinFlow).toContain("if (!joinedPlan)");
+    expect(globalJoinFlow).toContain("effectivePlan = joinedPlan");
+    expect(globalJoinFlow).toContain("plan: effectivePlan");
+    expect(globalJoinFlow.indexOf("if (!joinedPlan)")).toBeLessThan(globalJoinFlow.indexOf("effectivePlan = joinedPlan"));
+  });
+
   it("routes invite-code success into the resolved plan team surface", () => {
     const formFlow = plan.slice(
       plan.indexOf("function setupGlobalJoinTeamForm"),
       plan.indexOf("function openPlanDetailsDialog")
     );
+    expect(formFlow).toContain("resetPlanTeamInvitePanel()");
     expect(formFlow).toContain("await openJoinedPlanTeam(res.plan)");
+    expect(formFlow.indexOf("resetPlanTeamInvitePanel()")).toBeLessThan(formFlow.indexOf("await openJoinedPlanTeam(res.plan)"));
     expect(formFlow).toContain("已成功加入");
     expect(formFlow).toContain("團隊");
     expect(formFlow).not.toContain('const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn"))');
