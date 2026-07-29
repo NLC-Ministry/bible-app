@@ -4,14 +4,10 @@ import { Drawer as DrawerPrimitive } from "vaul"
 import { cn } from "@/lib/utils"
 
 const Drawer = ({
-  fixed = true,
-  repositionInputs = true,
   shouldScaleBackground = false,
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) => (
   <DrawerPrimitive.Root
-    fixed={fixed}
-    repositionInputs={repositionInputs}
     shouldScaleBackground={shouldScaleBackground}
     {...props}
   />

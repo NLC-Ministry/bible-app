@@ -36,34 +36,31 @@ describe("Issue report visibility lifecycle", () => {
     expect(fab).toContain('attributeFilter: ["class"]');
   });
 });
-describe("Issue report responsive drawer shell", () => {
-  it("caps drawer height and scrolls the form body with safe footer padding", () => {
-    expect(uiDrawer).toMatch(/max-h-\[(?:85dvh|min\(96dvh)/);
-    expect(reportDrawer).toMatch(/overflow-y-auto/);
-    expect(reportDrawer).toMatch(/min-h-0/);
-    expect(reportDrawer).toMatch(/scroll-pb-(?:28|32|36)/);
-    expect(reportDrawer).toMatch(/safe-area-inset-bottom/);
+describe("Issue report responsive composer surface", () => {
+  it("uses a report-specific full-screen mobile composer instead of a Vaul drawer", () => {
+    expect(reportDrawer).not.toMatch(/from ["'].*ui\/drawer/);
+    expect(reportDrawer).not.toContain("DrawerContent");
+    expect(reportDrawer).not.toContain("DrawerFooter");
+    expect(reportDrawer).toContain("role=\"dialog\"");
+    expect(reportDrawer).toContain("aria-modal=\"true\"");
+    expect(reportDrawer).toContain("h-[100dvh]");
+    expect(reportDrawer).toContain("md:h-auto");
   });
 
-  it("opts into Vaul keyboard-safe input repositioning", () => {
-    expect(uiDrawer).toMatch(/fixed\s*=\s*true/);
-    expect(uiDrawer).toMatch(/repositionInputs\s*=\s*true/);
-    expect(uiDrawer).toContain("fixed={fixed}");
-    expect(uiDrawer).toContain("repositionInputs={repositionInputs}");
+  it("keeps the whole report form in one natural scroll flow for mobile keyboard stability", () => {
+    expect(reportDrawer).toContain("overflow-y-auto");
+    expect(reportDrawer).toContain("safe-area-inset-bottom");
+    expect(reportDrawer).toContain("primary-btn w-full");
+    expect(reportDrawer).toContain("secondary-btn w-full");
+    expect(reportDrawer).not.toContain("scrollIntoView");
+    expect(reportDrawer).not.toContain("requestAnimationFrame");
+    expect(reportDrawer).not.toContain("onFocus={handleReportFieldFocus}");
   });
 
-  it("keeps non-scrolling drawer chrome stable while the form body scrolls", () => {
-    expect(reportDrawer).toMatch(/<DrawerHeader className="shrink-0"/);
-    expect(reportDrawer).toMatch(/<DrawerFooter className="[^"]*shrink-0/);
-    expect(reportDrawer).toMatch(/<form[^>]+className="flex min-h-0 flex-1 flex-col"/);
-  });
-
-  it("realigns focused form fields after the mobile keyboard changes the visual viewport", () => {
-    expect(reportDrawer).toContain("reportFormBody");
-    expect(reportDrawer).toContain("handleReportFieldFocus");
-    expect(reportDrawer).toMatch(/onFocus=\{handleReportFieldFocus\}/);
-    expect(reportDrawer).toContain("requestAnimationFrame");
-    expect(reportDrawer).toContain("scrollIntoView");
-    expect(reportDrawer).toContain('block: "nearest"');
+  it("leaves the shared Vaul drawer wrapper generic", () => {
+    expect(uiDrawer).not.toMatch(/fixed\s*=\s*true/);
+    expect(uiDrawer).not.toMatch(/repositionInputs\s*=\s*true/);
+    expect(uiDrawer).not.toContain("fixed={fixed}");
+    expect(uiDrawer).not.toContain("repositionInputs={repositionInputs}");
   });
 });

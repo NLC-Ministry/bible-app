@@ -1,19 +1,10 @@
 // components/issue-report/ReportDrawer.tsx
 import React from "react";
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, X } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ReportPipeline } from "./IssueReportBlocks.ts";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "../ui/drawer.tsx";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -77,17 +68,6 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
     setMessage(null);
   };
 
-  const handleReportFieldFocus = (event: React.FocusEvent<HTMLDivElement>) => {
-    const reportFormBody = event.currentTarget;
-    const target = event.target;
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        if (!reportFormBody.contains(target)) return;
-        target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-      });
-    });
-  };
-
   const onSubmit = async (data: ReportFormValues) => {
     setIsLoading(true);
     setMessage(null);
@@ -112,21 +92,43 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
     }
   };
 
-  return (
-    <Drawer open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DrawerContent className="mx-auto max-w-lg">
-        <DrawerHeader className="shrink-0">
-          <DrawerTitle>問題與建議回報</DrawerTitle>
-          <DrawerDescription>
-            請詳細描述您遇到的問題，系統將自動附帶調試資訊。
-          </DrawerDescription>
-        </DrawerHeader>
+  if (!isOpen) return null;
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-          <div
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scroll-pb-32 px-4 pb-2 overscroll-contain"
-            onFocus={handleReportFieldFocus}
-          >
+  return (
+    <div className="fixed inset-0 z-modal bg-background md:flex md:items-center md:justify-center md:bg-black/70 md:p-6">
+      <section
+        className="flex h-[100dvh] w-full flex-col bg-background md:h-auto md:max-h-[90dvh] md:max-w-lg md:rounded-lg md:border md:border-border md:shadow-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="issue-report-title"
+        aria-describedby="issue-report-description"
+      >
+        <header className="shrink-0 border-b border-border p-4 text-center sm:text-left">
+          <div className="flex items-start justify-between gap-3">
+            <div className="grid gap-1.5">
+              <h2 id="issue-report-title" className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                問題與建議回報
+              </h2>
+              <p id="issue-report-description" className="text-sm text-muted-foreground">
+                請詳細描述您遇到的問題，系統將自動附帶調試資訊。
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-btn h-9 w-9 shrink-0 p-0"
+              onClick={handleClose}
+              aria-label="關閉問題回報"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+          <div className="flex flex-col gap-4">
+            <p className="sr-only">
+            請詳細描述您遇到的問題，系統將自動附帶調試資訊。
+            </p>
             {message && (
               <div
                 className={reportMessageClassName}
@@ -202,31 +204,29 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 * 系統將自動附帶當前 URL、瀏覽器與登入資訊，以加速除錯。
               </p>
             </div>
-          </div>
 
-          <DrawerFooter className="shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <button
-              type="submit"
-              disabled={isLoading || watchDescription.length < 1 || watchDescription.length > 500}
-              className="primary-btn w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  正在提交...
-                </>
-              ) : (
-                "提交報告"
-              )}
-            </button>
-            <DrawerClose asChild>
-              <button type="button" className="secondary-btn w-full">
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="submit"
+                disabled={isLoading || watchDescription.length < 1 || watchDescription.length > 500}
+                className="primary-btn w-full"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    正在提交...
+                  </>
+                ) : (
+                  "提交報告"
+                )}
+              </button>
+              <button type="button" className="secondary-btn w-full" onClick={handleClose}>
                 取消
               </button>
-            </DrawerClose>
-          </DrawerFooter>
+            </div>
+          </div>
         </form>
-      </DrawerContent>
-    </Drawer>
+      </section>
+    </div>
   );
 };

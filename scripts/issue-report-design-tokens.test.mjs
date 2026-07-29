@@ -46,7 +46,7 @@ describe("shadcn Vaul drawer wrapper", () => {
   });
 });
 
-describe("Issue report FAB + drawer token restyle", () => {
+describe("Issue report FAB + composer token restyle", () => {
   it("does not hardcode emerald success colors or unbounded z-[9999]", () => {
     expect(fab).not.toContain("emerald-");
     expect(reportDrawer).not.toContain("emerald-");
@@ -54,21 +54,19 @@ describe("Issue report FAB + drawer token restyle", () => {
     expect(reportDrawer).not.toContain("z-[9999]");
   });
 
-  it("uses design-system success tokens in the drawer", () => {
+  it("uses design-system success tokens in the composer", () => {
     expect(reportDrawer).toMatch(/success-subtle|color-success-subtle|--color-success/);
   });
 
-  it("composes stock ui/drawer instead of hand-styled vaul + custom close chrome", () => {
-    expect(reportDrawer).toMatch(/from ["'].*ui\/drawer/);
+  it("uses a report-specific composer instead of a Vaul drawer for text entry", () => {
+    expect(reportDrawer).not.toMatch(/from ["'].*ui\/drawer/);
     expect(reportDrawer).not.toContain('from "vaul"');
-    expect(reportDrawer).toContain("DrawerContent");
-    expect(reportDrawer).toContain("DrawerHeader");
-    expect(reportDrawer).toContain("DrawerFooter");
-    expect(reportDrawer).toContain("DrawerClose");
+    expect(reportDrawer).not.toContain("DrawerContent");
+    expect(reportDrawer).not.toContain("DrawerFooter");
+    expect(reportDrawer).toContain('role="dialog"');
+    expect(reportDrawer).toContain('aria-modal="true"');
     expect(reportDrawer).toContain("primary-btn");
     expect(reportDrawer).toContain("secondary-btn");
-    expect(reportDrawer).not.toContain("aria-label=\"關閉\"");
-    expect(reportDrawer).not.toContain("absolute right-0 top-0");
     expect(reportDrawer).not.toContain("issue-report-submit");
     expect(reportDrawer).not.toContain("whileHover");
   });
