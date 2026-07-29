@@ -55,7 +55,7 @@ export function shouldAutoShowOnboarding({ auth, syncComplete, storage = globalT
   try {
     return storage?.getItem(ONBOARDING_STORAGE_KEY) !== version;
   } catch {
-    return true;
+    return globalThis.__bibleOnboardingSeenInSession !== version;
   }
 }
 
@@ -135,13 +135,14 @@ async function runPrimaryAction() {
 
   if (step.id === "join-plan") {
     closeOnboardingHelper();
-    await globalThis.appRouter?.switchTab?.("plan-view");
+    await globalThis.appRouter?.switchTab?.("plan-view", { onboardingPlanDestination: "discover" });
     return;
   }
 
   if (step.id === "track-progress") {
     closeOnboardingHelper();
-    await globalThis.appRouter?.switchTab?.("plan-view", { keepPlanDetail: Boolean(globalThis.state?.activePlan) });
+    const destination = globalThis.state?.activePlan ? "active-progress" : "discover";
+    await globalThis.appRouter?.switchTab?.("plan-view", { onboardingPlanDestination: destination });
   }
 }
 
@@ -160,8 +161,8 @@ function dialogTemplate() {
         <button type="button" class="primary-btn" data-onboarding-primary></button>
       </div>
       <div class="release-onboarding-dialog__footer">
-        <button type="button" class="text-btn" data-onboarding-later>稍後再看</button>
-        <button type="button" class="text-btn" data-onboarding-dismiss>不要再顯示此版本</button>
+        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-later>稍後再看</button>
+        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-dismiss>不要再顯示此版本</button>
       </div>
     </section>
   `;
@@ -201,7 +202,7 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   });
   root.querySelector("[data-onboarding-next]").addEventListener("click", () => {
     if (activeStepIndex >= getOnboardingSteps().length - 1) {
-      closeOnboardingHelper({ remember: true, storage, config });
+      closeOnboardingHelper({ storage, config });
       return;
     }
     activeStepIndex += 1;
@@ -227,3 +228,5 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
 if (typeof globalThis.addEventListener === "function") {
   globalThis.addEventListener("beforeinstallprompt", captureInstallPrompt);
 }
+
+globalThis.openOnboardingHelper = openOnboardingHelper;

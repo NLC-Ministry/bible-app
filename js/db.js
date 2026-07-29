@@ -271,10 +271,10 @@ const db = {
 
           // Sync Logto login through the Edge Function so Supabase RLS can resolve profiles.
           if (auth.isLoggedIn()) {
-            await this.syncNlcSessionWithSupabase(true);
+            const sessionSync = await this.syncNlcSessionWithSupabase(true);
             this.updateAuthUI({ user: { id: state.currentProfileId || auth.getLogtoSubject() } });
             this.refreshRoleDependentUI();
-            return; // loadUserData() will be called in main.js
+            return Boolean(sessionSync?.edge_session && state.currentProfileId); // loadUserData() will be called in main.js
           }
         }
 
@@ -303,10 +303,12 @@ const db = {
             console.error("Error in onAuthStateChange callback:", err);
           }
         });
+        return false;
       } catch (e) {
         console.error("Supabase connection failed:", e);
         const message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uFF08" + (e.message || e) + "\uFF09\uFF0C\u8acb\u91cd\u65b0\u767b\u5165\u3002";
         this.showConnectionError(message);
+        return false;
       }
     } else {
       if (forceOfflineDemo) {
@@ -316,6 +318,7 @@ const db = {
         console.error("Supabase config is missing or invalid!");
         this.showConnectionError();
       }
+      return false;
     }
   },
 
@@ -738,6 +741,12 @@ const db = {
         if (profileResult.error) console.error("❌ profile load failed:", profileResult.error);
         if (logsResult.error) console.error("❌ reading_logs load failed:", logsResult.error);
         if (plansResult.error) console.error("❌ reading_plans load failed:", plansResult.error);
+        const initialDataLoadSucceeded = ![
+          globalPlansResult,
+          profileResult,
+          logsResult,
+          plansResult
+        ].some(result => result.error);
 
         // 處理 global_plans
         if (globalPlansResult.data) {
@@ -855,7 +864,7 @@ const db = {
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
         }
-        return;
+        return initialDataLoadSucceeded;
       } else {
         // Online mode but not logged in: clear state and return early
         state.currentUser = {
@@ -879,7 +888,7 @@ const db = {
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
         }
-        return;
+        return false;
       }
     }
 
@@ -1002,6 +1011,7 @@ const db = {
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
         }
+        return false;
       } finally {
         this._userDataPromise = null;
       }

@@ -10644,6 +10644,15 @@ body.dark-theme .custom-confirm-overlay {
   cursor: pointer;
 }
 
+.release-onboarding-dialog__close:focus-visible,
+.release-onboarding-dialog .pill-btn:focus-visible,
+.release-onboarding-dialog .primary-btn:focus-visible,
+.release-onboarding-dialog__footer-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
 .release-onboarding-dialog__eyebrow,
 .release-onboarding-dialog__count {
   margin: 0 0 0.5rem;
@@ -10673,4 +10682,12 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-dialog__footer {
   margin-top: 0.8rem;
   justify-content: space-between;
+}
+
+.release-onboarding-dialog__footer-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.45rem 0.2rem;
 }

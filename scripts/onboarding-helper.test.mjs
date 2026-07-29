@@ -105,6 +105,24 @@ describe("release onboarding helper state", () => {
     markOnboardingSeen({ storage, config: { onboardingVersion: "0.1.0" } });
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
   });
+
+  it("shows at most once per session when storage access fails", () => {
+    const storage = {
+      getItem() {
+        throw new Error("storage unavailable");
+      },
+      setItem() {
+        throw new Error("storage unavailable");
+      }
+    };
+    const config = { onboardingVersion: "0.1.0" };
+
+    delete globalThis.__bibleOnboardingSeenInSession;
+    expect(shouldAutoShowOnboarding({ auth: { loggedIn: true }, syncComplete: true, storage, config })).toBe(true);
+    markOnboardingSeen({ storage, config });
+    expect(shouldAutoShowOnboarding({ auth: { loggedIn: true }, syncComplete: true, storage, config })).toBe(false);
+    delete globalThis.__bibleOnboardingSeenInSession;
+  });
 });
 
 describe("release onboarding helper dialog", () => {
@@ -190,6 +208,18 @@ describe("release onboarding helper dialog", () => {
     closeOnboardingHelper({ remember: true, storage, config: { onboardingVersion: "0.1.0" } });
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
   });
+
+  it("does not dismiss automatic onboarding when manual recall is completed", () => {
+    document.body.innerHTML = "";
+    const storage = createMemoryStorage();
+    openOnboardingHelper({ manual: true, storage, config: { onboardingVersion: "0.1.0" } });
+
+    document.querySelector("[data-onboarding-next]").click();
+    document.querySelector("[data-onboarding-next]").click();
+    document.querySelector("[data-onboarding-next]").click();
+
+    expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBeNull();
+  });
 });
 
 describe("release onboarding helper actions", () => {
@@ -212,13 +242,25 @@ describe("release onboarding helper actions", () => {
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
 
-  it("navigates to plan tab from join-plan action", () => {
+  it("opens discoverable plans from the join-plan action", async () => {
     document.body.innerHTML = "";
     const switchTab = vi.fn();
     globalThis.appRouter = { switchTab };
     openOnboardingHelper({ startStep: "join-plan" });
     document.querySelector("[data-onboarding-primary]").click();
-    expect(switchTab).toHaveBeenCalledWith("plan-view");
+    await Promise.resolve();
+    expect(switchTab).toHaveBeenCalledWith("plan-view", { onboardingPlanDestination: "discover" });
+  });
+
+  it("opens the active plan progress from the progress action", async () => {
+    document.body.innerHTML = "";
+    const switchTab = vi.fn();
+    globalThis.appRouter = { switchTab };
+    globalThis.state = { activePlan: { id: "active-plan" } };
+    openOnboardingHelper({ startStep: "track-progress" });
+    document.querySelector("[data-onboarding-primary]").click();
+    await Promise.resolve();
+    expect(switchTab).toHaveBeenCalledWith("plan-view", { onboardingPlanDestination: "active-progress" });
   });
 });
 
@@ -240,5 +282,18 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain("width: min(92vw, 420px)");
     expect(css).toContain("max-height: min(86vh, 560px)");
     expect(css).toContain("overflow: auto");
+  });
+
+  it("uses visible keyboard focus styles for every dialog control type", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-dialog__close:focus-visible");
+    expect(css).toContain(".release-onboarding-dialog .pill-btn:focus-visible");
+    expect(css).toContain(".release-onboarding-dialog .primary-btn:focus-visible");
+    expect(css).toContain(".release-onboarding-dialog__footer-btn:focus-visible");
+  });
+
+  it("does not rely on an undefined text button class", () => {
+    const helper = readFileSync("js/modules/onboarding-helper.js", "utf8");
+    expect(helper).not.toContain('class="text-btn"');
   });
 });

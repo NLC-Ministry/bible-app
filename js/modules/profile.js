@@ -1,5 +1,4 @@
 import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
-import { openOnboardingHelper } from "./onboarding-helper.js";
 
 function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
@@ -394,7 +393,7 @@ function wireReleaseOnboardingHelp() {
   if (btn && !btn._releaseOnboardingBound) {
     btn._releaseOnboardingBound = true;
     btn.addEventListener("click", function () {
-      openOnboardingHelper({ manual: true, trigger: btn, config: window.APP_CONFIG });
+      window.openOnboardingHelper?.({ manual: true, trigger: btn, config: window.APP_CONFIG });
     });
   }
 

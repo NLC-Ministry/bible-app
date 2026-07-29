@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+const lockfile = JSON.parse(readFileSync("package-lock.json", "utf8"));
 const buildConfig = readFileSync("build-config.js", "utf8");
 const sw = readFileSync("sw.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
+const db = readFileSync("js/db.js", "utf8");
 describe("Bible app release version contract", () => {
   it("declares product version 0.1.0", () => {
     expect(pkg.version).toBe("0.1.0");
+  });
+
+  it("keeps package-lock metadata aligned with package.json", () => {
+    expect(lockfile.version).toBe(pkg.version);
+    expect(lockfile.packages[""].version).toBe(pkg.version);
   });
 
   it("generates runtime APP_CONFIG and APP_VERSION for browser support", () => {
@@ -38,5 +45,19 @@ describe("release onboarding startup timing", () => {
     expect(loadUserData).toBeGreaterThan(-1);
     expect(firstDashboard).toBeGreaterThan(loadUserData);
     expect(onboarding).toBeGreaterThan(firstDashboard);
+  });
+
+  it("only marks the initial session sync successful after a Logto profile sync", () => {
+    expect(db).toContain("const sessionSync = await this.syncNlcSessionWithSupabase(true)");
+    expect(db).toContain("return Boolean(sessionSync?.edge_session && state.currentProfileId)");
+    expect(db).toContain("return false;");
+  });
+
+  it("does not auto-show after a failed initial sync and does auto-show after both startup syncs succeed", () => {
+    expect(app).toContain("let initialSessionSyncSucceeded = false");
+    expect(app).toContain("initialSessionSyncSucceeded = await db.init() === true");
+    expect(app).toContain("initialDataLoadSucceeded");
+    expect(app).toContain("syncComplete: initialSessionSyncSucceeded && initialDataLoadSucceeded === true");
+    expect(app).not.toContain("syncComplete: true");
   });
 });
