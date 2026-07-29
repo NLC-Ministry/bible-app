@@ -10784,6 +10784,30 @@ body.dark-theme .custom-confirm-overlay {
   line-height: 1.55;
 }
 
+.release-onboarding-install-guide__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.release-onboarding-install-guide__links a {
+  color: var(--color-brand);
+  font-size: 0.82rem;
+  font-weight: var(--type-weight-strong);
+  text-decoration: none;
+}
+
+.release-onboarding-install-guide__links a:hover {
+  text-decoration: underline;
+}
+
+.release-onboarding-install-guide__links a:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .release-onboarding-dialog__footer {
   display: flex;
   flex-wrap: wrap;
