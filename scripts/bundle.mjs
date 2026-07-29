@@ -169,6 +169,19 @@ export function emitBundle({ root, outDir }) {
     console.log("DEBUG: Copying modules...");
     cpDirRecursive(modulesSrc, join(outDir, "modules"));
   }
+  const issueReportEntry = join(root, "js", "modules", "issue-report-ui.js");
+  if (existsSync(issueReportEntry)) {
+    const issueReportOut = join(outDir, "modules", "issue-report-ui.bundle.js");
+    mkdirSync(join(outDir, "modules"), { recursive: true });
+    execSync(
+      `${esbuildCmd} "${issueReportEntry}" --bundle --minify --target=es2020 --alias:@=. --outfile="${issueReportOut}"`,
+      {
+        encoding: "utf8",
+        cwd: root,
+        stdio: ["ignore", "pipe", "pipe"],
+      }
+    );
+  }
   console.log("DEBUG: emitBundle complete!");
 
   return { jsFile, cssFile };

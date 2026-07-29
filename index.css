@@ -10739,13 +10739,26 @@ body.dark-theme .custom-confirm-overlay {
   position: absolute;
   right: 0.75rem;
   top: 0.75rem;
-  width: 2rem;
-  height: 2rem;
-  border: 0;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 8%, var(--border-card));
   border-radius: 999px;
-  background: transparent;
-  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card));
+  color: var(--text-secondary);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.release-onboarding-dialog__close:hover {
+  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--text-primary) 14%, var(--border-card));
+  color: var(--text-primary);
 }
 
 .release-onboarding-dialog__close:focus-visible,

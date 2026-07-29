@@ -1,11 +1,6 @@
 // js/app.js
 
-// Import all support and core files to be bundled by esbuild in correct order
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { IssueReportFab } from '../components/issue-report/IssueReportFab.tsx';
-import { AdminReportView } from '../components/issue-report/AdminReportView.tsx';
-import { AdminUsersAccordion } from '../components/issue-report/AdminUsersAccordion.tsx';
+// Import support and core files needed before first paint.
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
@@ -20,8 +15,7 @@ import './auth.js';
 import './db.js?v=20260729_team_rank_focus';
 import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
-import './modules/campaign-rule-editor.js?v=20260720_round_editor';
-import './modules/team-registration.js?v=20260729_team_stats_poke';
+
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -36,6 +30,7 @@ if (buildVersion.includes("__BUILD_VERSION__")) {
 const moduleCache = {};
 const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260729_release_010';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
+const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
 let careReminderBadgeLastRefresh = 0;
 
@@ -286,6 +281,38 @@ async function loadModule(name, path) {
   }
 }
 
+async function loadIssueReportUi(options = {}) {
+  const mod = await loadModule('issue-report-ui', ISSUE_REPORT_UI_MODULE_PATH);
+  if (mod && typeof mod.mountIssueReportUi === "function") {
+    mod.mountIssueReportUi(options);
+  }
+  return mod;
+}
+
+function scheduleIssueReportUiLoad(options = {}) {
+  const load = () => {
+    loadIssueReportUi(options).catch(err => {
+      console.warn("[IssueReport] Lazy UI load failed; continuing without report UI.", err);
+    });
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(load, { timeout: 5000 });
+  } else {
+    window.setTimeout(load, 2500);
+  }
+}
+
+async function ensurePlanFeatureModulesLoaded() {
+  await loadModule('team-registration', './modules/team-registration.js?v=' + buildVersion);
+  if (state.currentUser && state.currentUser.role === 'admin') {
+    await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
+  }
+}
+
+async function ensureAdminFeatureModulesLoaded() {
+  await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
+}
+
 // ─── Tab Switching: isSwitching guard prevents concurrent race conditions ───
 let isSwitching = false;
 
@@ -385,6 +412,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
     } else if (tabId === "plan-view") {
       const mod = await loadModule('plan', './modules/plan.js?v=' + buildVersion);
+      await ensurePlanFeatureModulesLoaded();
       if (mod && typeof mod.renderPlanView === 'function') {
         await mod.renderPlanView();
       } else if (typeof window.renderPlanView === 'function') {
@@ -430,6 +458,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
     } else if (tabId === "admin-view") {
       const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
+      await ensureAdminFeatureModulesLoaded();
       // Run both admin renders, await the async one
       if (mod && typeof mod.renderAdminUserManagement === 'function') {
         await mod.renderAdminUserManagement();
@@ -447,6 +476,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       } else if (typeof window.renderAdminTeamRegistrationStatus === 'function') {
         await window.renderAdminTeamRegistrationStatus(true);
       }
+      await loadIssueReportUi({ includeAdmin: true });
     }
 
     // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──
@@ -540,10 +570,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Update role-dependent UI now that profile data is loaded
     if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
 
-    await refreshCareReminderBadge({ force: true });
-
     // Render the initial view only after ALL data is ready
     await appRouter.switchTab('dashboard-view');
+    refreshCareReminderBadge({ force: true });
     maybeShowReleaseOnboarding({
       auth,
       syncComplete: initialSessionSyncSucceeded && initialDataLoadSucceeded === true,
@@ -576,6 +605,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  scheduleIssueReportUiLoad({ includeAdmin: false });
+
   // ── Background pre-warm: silently load plan module & render plan list ──
   // While the user sees the dashboard, we load plan.js and call renderPlanView()
   // in the background. This guarantees the plan tab shows real data immediately
@@ -583,7 +614,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // We intentionally do NOT await this (fire-and-forget) to keep startup fast.
   loadModule('plan', './modules/plan.js?v=' + buildVersion).then(mod => {
     if (mod && typeof mod.renderPlanView === 'function') {
-      mod.renderPlanView().catch(() => {});
+      ensurePlanFeatureModulesLoaded()
+        .then(() => mod.renderPlanView())
+        .catch(() => {});
     }
   }).catch(() => {});
 
@@ -593,39 +626,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // Mount the React IssueReportFab component to document.body
-  try {
-    const reportRoot = document.createElement("div");
-    reportRoot.id = "issue-report-root";
-    document.body.appendChild(reportRoot);
-    const root = createRoot(reportRoot);
-    root.render(React.createElement(IssueReportFab));
-    console.log("[IssueReport] Mounted IssueReportFab React component successfully.");
-  } catch (err) {
-    console.error("[IssueReport] Failed to mount React component:", err);
-  }
-
-  // Mount the React AdminReportView component to #admin-reports-root
-  try {
-    const adminReportsRoot = document.getElementById("admin-reports-root");
-    if (adminReportsRoot) {
-      const root = createRoot(adminReportsRoot);
-      root.render(React.createElement(AdminReportView));
-      console.log("[IssueReportAdmin] Mounted AdminReportView React component successfully.");
-    }
-  } catch (err) {
-    console.error("[IssueReportAdmin] Failed to mount AdminReportView component:", err);
-  }
-
-  // Mount the React AdminUsersAccordion component to #admin-users-accordion-root
-  try {
-    const adminUsersAccordionRoot = document.getElementById("admin-users-accordion-root");
-    if (adminUsersAccordionRoot) {
-      const root = createRoot(adminUsersAccordionRoot);
-      root.render(React.createElement(AdminUsersAccordion));
-      console.log("[IssueReportAdmin] Mounted AdminUsersAccordion React component successfully.");
-    }
-  } catch (err) {
-    console.error("[IssueReportAdmin] Failed to mount AdminUsersAccordion component:", err);
-  }
 });
