@@ -5151,42 +5151,62 @@ async function renderPlanRankingView() {
 
   const maxChapters = Math.max(...pastoralStats.map(item => item.total_chapters), 1);
   const renderRace = () => {
+    container.className = "pastoral-race-list";
     container.innerHTML = `
-      <div class="bar-race-toolbar">
+      <div class="pastoral-race-toolbar">
         <div>
-          <div class="bar-race-title">牧區動態長條圖競賽</div>
-          <div class="bar-race-subtitle">依總累計閱讀章數排序</div>
+          <div class="pastoral-race-title">即時閱讀表現</div>
+          <div class="pastoral-race-subtitle">以目前最高累計章數為 100%</div>
         </div>
-        <button type="button" class="bar-race-replay" onclick="window.replayPastoralRace()" title="重新播放排行動畫">重播</button>
+        <div class="pastoral-race-actions">
+          <span class="pastoral-race-count">共 ${pastoralStats.length} 個牧區</span>
+          <button type="button" class="pastoral-race-replay" data-pastoral-race-replay title="重新播放排行動畫">
+            <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+            重播
+          </button>
+        </div>
       </div>
-      <div class="bar-race-track"></div>
+      <div class="pastoral-race-track"></div>
     `;
-    const track = container.querySelector(".bar-race-track");
+    const track = container.querySelector(".pastoral-race-track");
 
     pastoralStats.forEach((item, index) => {
-      const pct = Math.max(4, Math.round((item.total_chapters / maxChapters) * 100));
+      const pct = Math.min(100, Math.round((item.total_chapters / maxChapters) * 100));
+      const placementClass = index === 0
+        ? " pastoral-race-row--leader"
+        : index < 3 ? " pastoral-race-row--podium" : "";
       const row = document.createElement("div");
-      row.className = "bar-race-row";
+      row.className = `pastoral-race-row${placementClass}`;
       row.style.setProperty("--target-width", `${pct}%`);
-      row.style.transitionDelay = `${index * 90}ms`;
+      row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
-        <div class="bar-race-rank">${index + 1}</div>
-        <div class="bar-race-main">
-          <div class="bar-race-meta">
-            <span class="bar-race-name">${escapeHTML(item.name)}</span>
-            <span class="bar-race-members">${item.members} 人</span>
+        <div class="pastoral-race-rank" aria-label="第 ${index + 1} 名">${index + 1}</div>
+        <div class="pastoral-race-main">
+          <div class="pastoral-race-heading">
+            <div class="pastoral-race-identity">
+              <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
+              <span class="pastoral-race-members">${item.members} 人參與</span>
+            </div>
+            <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>
           </div>
-          <div class="bar-race-bar-shell">
-            <div class="bar-race-bar"></div>
-            <span class="bar-race-value">${item.total_chapters} 章</span>
+          <div class="pastoral-race-progress-meta">
+            <span>相對閱讀速度</span>
+            <strong>${pct}%</strong>
+          </div>
+          <div class="pastoral-race-progress" role="progressbar" aria-label="${escapeHTML(item.name)}相對閱讀速度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-valuetext="${item.total_chapters} 章，相對進度 ${pct}%">
+            <div class="pastoral-race-progress-fill"></div>
           </div>
         </div>
       `;
       track.appendChild(row);
     });
 
+    const replayButton = container.querySelector("[data-pastoral-race-replay]");
+    if (replayButton) replayButton.onclick = renderRace;
+    if (typeof hydrateIcons === "function") hydrateIcons(container);
+
     requestAnimationFrame(() => {
-      track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
+      track.querySelectorAll(".pastoral-race-row").forEach(row => row.classList.add("is-running"));
     });
   };
 

@@ -55,6 +55,21 @@ describe("reading team leaderboards", () => {
     expect(css).toContain("max-height: 456px");
   });
 
+  it("renders the pastoral speed leaderboard as accessible determinate progress cards", () => {
+    expect(html).toContain("牧區速度排行榜");
+    expect(plan).toContain('container.className = "pastoral-race-list"');
+    expect(plan).toContain("以目前最高累計章數為 100%");
+    expect(plan).toContain("共 ${pastoralStats.length} 個牧區");
+    expect(plan).toContain("const pct = Math.min(100");
+    expect(plan).toContain('class="pastoral-race-progress" role="progressbar"');
+    expect(plan).toContain('aria-valuenow="${pct}"');
+    expect(plan).toContain('data-pastoral-race-replay');
+    expect(css).toContain(".pastoral-race-row--leader");
+    expect(css).toContain(".pastoral-race-progress-fill");
+    expect(css).toContain("height: 12px");
+    const pastoralStyles = css.match(/\/\* Pastoral speed leaderboard[\s\S]*?\/\* Stacked Percentage Bar \*\//)?.[0] || "";
+    expect(pastoralStyles).not.toContain("linear-gradient");
+  });
   it("requires an authenticated profile without exposing member identities", () => {
     expect(migration).toContain("resolve_reading_team_actor");
     expect(migration).toContain("TO authenticated, service_role");
