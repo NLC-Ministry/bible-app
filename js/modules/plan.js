@@ -5130,15 +5130,21 @@ async function renderPlanRankingView() {
     : "";
 
   let pastoralStats = [];
+  let unassignedPastoralCount = 0;
   try {
     const allUsers = await db.fetchMergedUsersList();
     const zoneMap = {};
+    const unassignedZoneLabels = new Set(["未設定", "未設定牧區", "未分類"]);
     const completionTime = item => {
       const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
       return Number.isFinite(timestamp) ? timestamp : Infinity;
     };
     allUsers.forEach(u => {
-      const zone = u.pastoral_zone || "未設定";
+      const zone = String(u.pastoral_zone || "").trim();
+      if (!zone || unassignedZoneLabels.has(zone)) {
+        unassignedPastoralCount += 1;
+        return;
+      }
       if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0, completed_at: null };
       zoneMap[zone].total_chapters += (u.chapters_read || 0);
       zoneMap[zone].members += 1;
@@ -5160,7 +5166,7 @@ async function renderPlanRankingView() {
     console.error("Failed to load pastoral rankings", e);
   }
 
-  if (pastoralStats.length === 0) {
+  if (pastoralStats.length === 0 && unassignedPastoralCount === 0) {
     container.innerHTML = `<div style="text-align: center; padding: 1.5rem; color: var(--text-muted);">目前沒有排行資料</div>`;
     return;
   }
@@ -5203,7 +5209,15 @@ async function renderPlanRankingView() {
           </button>
         </div>
       </div>
-      <div class="pastoral-race-track"></div>
+      <div class="pastoral-race-track">
+        ${pastoralStats.length === 0 ? '<div class="pastoral-race-empty">目前沒有已設定牧區的排行資料</div>' : ""}
+      </div>
+      ${unassignedPastoralCount > 0 ? `
+        <div class="pastoral-race-unassigned" role="note">
+          <span class="nlc-icon nlc-icon--sm" data-icon="user" aria-hidden="true"></span>
+          <span>另有 <strong>${unassignedPastoralCount}</strong> 人尚未設定牧區，不列入排名</span>
+        </div>
+      ` : ""}
     `;
     const track = container.querySelector(".pastoral-race-track");
 

@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260729_pastoral_tie_rank">
+  <link rel="stylesheet" href="index.css?v=20260729_pastoral_unassigned_summary">
   <link rel="stylesheet" href="css/team-registration.css?v=20260729_team_stats_poke">
 
   <!-- Supabase JS Client library -->
@@ -1194,10 +1194,19 @@
                 </div>
               </details>
             </div>
-            <div class="glass-card">
-              <h3 class="card-title"
-                style="margin-bottom: 1.2rem; font-size: 1.15rem; font-weight: 500; color: var(--text-primary);">
-                牧區速度排行榜</h3>
+            <details class="glass-card reading-team-ranking-card pastoral-ranking-card" data-pastoral-ranking-details open>
+              <summary class="reading-team-ranking-header pastoral-ranking-header">
+                <span class="reading-team-ranking-copy">
+                  <span class="card-title">牧區速度排行榜</span>
+                  <span class="reading-team-ranking-rule">依閱讀章數與完成時間排序；兩者相同則並列</span>
+                </span>
+                <span class="reading-team-ranking-toggle" aria-hidden="true">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
+                  <span class="reading-team-ranking-toggle__expanded">收起</span>
+                  <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                </span>
+              </summary>
+              <div class="pastoral-ranking-content">
 
               <!-- Table Headers -->
               <div
@@ -1231,7 +1240,8 @@
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
+            </details>
           </div>
 
 
@@ -1993,7 +2003,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260729_pastoral_tie_rank"></script>
+  <script type="module" src="js/app.js?v=20260729_pastoral_unassigned_summary"></script>
 </body>
 
 </html>
