@@ -83,3 +83,31 @@ describe("React close button usage", () => {
     expect(responsiveDialog).not.toContain("w-8 h-8 flex items-center justify-center");
   });
 });
+
+const files = {
+  html,
+  plan,
+  teamRegistration,
+  onboardingHelper,
+  responsiveDialog,
+};
+
+describe("close button anti-regression guards", () => {
+  it("does not add inline width/height close-button chrome in common UI files", () => {
+    for (const [name, source] of Object.entries(files)) {
+      expect(source, name).not.toMatch(/aria-label="[^"]*(關閉|Close)[^"]*"[^>]*style="[^"]*(width|inline-size):\s*\d+px[^"]*(height|block-size):\s*\d+px/);
+    }
+  });
+
+  it("does not use circular-action-btn for close or dismiss controls", () => {
+    for (const [name, source] of Object.entries(files)) {
+      expect(source, name).not.toMatch(/(關閉|Close)[\s\S]{0,240}circular-action-btn/);
+      expect(source, name).not.toMatch(/circular-action-btn[\s\S]{0,240}(關閉|Close)/);
+    }
+  });
+
+  it("keeps icon-only controls square under global touch target rules", () => {
+    expect(css).toMatch(/\.icon-button\s*\{[\s\S]*inline-size:\s*44px[\s\S]*block-size:\s*44px[\s\S]*min-inline-size:\s*44px[\s\S]*min-block-size:\s*44px[\s\S]*aspect-ratio:\s*1/);
+    expect(css).toMatch(/\.circular-action-btn\s*\{[\s\S]*width:\s*44px[\s\S]*height:\s*44px[\s\S]*min-width:\s*44px[\s\S]*min-height:\s*44px[\s\S]*aspect-ratio:\s*1/);
+  });
+});
