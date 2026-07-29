@@ -87,36 +87,34 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
           onClick={handleClose}
         />
         <Drawer.Content
-          className="fixed inset-x-0 bottom-0 z-sheet mx-auto flex max-w-lg flex-col rounded-t-lg border border-border bg-card p-6 shadow-up-lg focus:outline-none"
+          className="fixed inset-x-0 bottom-0 z-sheet mx-auto flex max-w-lg flex-col rounded-t-lg border border-border bg-card p-6 pt-4 shadow-up-lg focus:outline-none"
           role="dialog"
           aria-labelledby="issue-report-title"
         >
           {/* Drag Handle indicator */}
           <div className="mx-auto mb-4 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30" />
 
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <Drawer.Title
-                id="issue-report-title"
-                className="text-lg font-medium text-foreground"
-                style={{ fontWeight: "var(--type-weight-strong)" }}
-              >
-                問題與建議回報
-              </Drawer.Title>
-              <Drawer.Description className="mt-0.5 text-xs text-muted-foreground">
-                請詳細描述您遇到的問題，系統將自動附帶調試資訊。
-              </Drawer.Description>
-            </div>
+          {/* Header — close uses standard shadcn Dialog absolute icon Button */}
+          <div className="relative mb-3 border-b border-border pb-3 pr-12">
+            <Drawer.Title
+              id="issue-report-title"
+              className="text-lg font-medium text-foreground"
+              style={{ fontWeight: "var(--type-weight-strong)" }}
+            >
+              問題與建議回報
+            </Drawer.Title>
+            <Drawer.Description className="mt-0.5 text-xs text-muted-foreground">
+              請詳細描述您遇到的問題，系統將自動附帶調試資訊。
+            </Drawer.Description>
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={handleClose}
               aria-label="關閉"
-              className="shrink-0 rounded-full text-muted-foreground"
+              className="absolute right-0 top-0"
             >
-              <X className="h-4 w-4" strokeWidth={2} />
+              <X />
             </Button>
           </div>
 
