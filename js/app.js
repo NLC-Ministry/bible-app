@@ -290,15 +290,23 @@ async function loadIssueReportUi(options = {}) {
 }
 
 function scheduleIssueReportUiLoad(options = {}) {
+  let loadStarted = false;
   const load = () => {
+    if (loadStarted) return;
+    loadStarted = true;
     loadIssueReportUi(options).catch(err => {
       console.warn("[IssueReport] Lazy UI load failed; continuing without report UI.", err);
     });
   };
+
+  const fallbackTimer = window.setTimeout(load, 1500);
   if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(load, { timeout: 5000 });
+    window.requestIdleCallback(() => {
+      window.clearTimeout(fallbackTimer);
+      load();
+    }, { timeout: 1200 });
   } else {
-    window.setTimeout(load, 2500);
+    window.setTimeout(load, 250);
   }
 }
 
@@ -587,6 +595,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // Mount the report action independently of PWA initialization so a slow service worker cannot hide it.
+  scheduleIssueReportUiLoad({ includeAdmin: false });
+
   // PWA registration and authenticated offline reading queue.
   try {
     await initializePwa();
@@ -604,8 +615,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast("離線讀經進度已同步");
     }
   });
-
-  scheduleIssueReportUiLoad({ includeAdmin: false });
 
   // ── Background pre-warm: silently load plan module & render plan list ──
   // While the user sees the dashboard, we load plan.js and call renderPlanView()

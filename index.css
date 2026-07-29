@@ -1677,7 +1677,14 @@ vercel-live-feedback,
 
 /* Issue report FAB — flat brand chrome + token-driven position */
 .issue-report-fab {
+  align-items: center;
   background-color: var(--color-brand) !important;
+  display: flex;
+  height: 3.5rem;
+  justify-content: center;
+  position: fixed;
+  width: 3.5rem;
+  z-index: var(--z-sheet);
   color: #ffffff !important;
   border-color: var(--border-default);
   box-shadow: var(--shadow-lg);

@@ -14,6 +14,16 @@ describe("startup performance contract", () => {
     expect(app).toContain("import(path)");
   });
 
+  it("schedules the issue report UI before PWA initialization can delay it", () => {
+    const reportSchedule = app.lastIndexOf("scheduleIssueReportUiLoad({ includeAdmin: false })");
+    const pwaInitialization = app.indexOf("await initializePwa()");
+
+    expect(reportSchedule).toBeGreaterThan(-1);
+    expect(pwaInitialization).toBeGreaterThan(-1);
+    expect(reportSchedule).toBeLessThan(pwaInitialization);
+    expect(app).toContain("window.setTimeout(load, 1500)");
+  });
+
   it("keeps registration helper modules lazy until their surfaces need them", () => {
     expect(app).not.toContain("import './modules/campaign-rule-editor.js");
     expect(app).not.toContain("import './modules/team-registration.js");

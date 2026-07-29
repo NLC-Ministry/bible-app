@@ -27,6 +27,25 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
     };
   }, []);
 
+  const getLoginGateVisible = React.useCallback(() => {
+    if (typeof document === "undefined") return false;
+    const loginGate = document.getElementById("login-gate");
+    return Boolean(loginGate && !loginGate.classList.contains("hidden"));
+  }, []);
+  const [isLoginGateVisible, setIsLoginGateVisible] = React.useState(getLoginGateVisible);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const loginGate = document.getElementById("login-gate");
+    if (!loginGate) return;
+
+    const syncLoginGateVisibility = () => setIsLoginGateVisible(getLoginGateVisible());
+    syncLoginGateVisibility();
+    const observer = new MutationObserver(syncLoginGateVisibility);
+    observer.observe(loginGate, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [getLoginGateVisible]);
+
   const [isVisible, setIsVisible] = React.useState(true);
 
   React.useEffect(() => {
@@ -72,7 +91,7 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
     (currentPath || "") === "/login" ||
     (currentPath || "").startsWith("/auth") ||
     (currentPath || "") === "/signup" ||
-    (typeof document !== "undefined" && document.getElementById("login-gate") && !document.getElementById("login-gate")?.classList.contains("hidden"));
+    isLoginGateVisible;
 
   if (isExcluded) return null;
 
