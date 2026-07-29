@@ -69,6 +69,18 @@ describe("dynamic close button usage", () => {
   });
 });
 
+describe("reading team icon action usage", () => {
+  it("uses the shared icon-button primitive for icon-only reminder actions", () => {
+    const reminderTags = [...teamRegistration.matchAll(/<button[^>]*class="[^"]*reading-team-remind-btn[^"]*"[^>]*>/g)].map(match => match[0]);
+    expect(reminderTags.length).toBeGreaterThan(0);
+    for (const tag of reminderTags) {
+      expect(tag).toMatch(/class="[^"]*reading-team-remind-btn[^"]*icon-button/);
+    }
+    expect(teamCss).not.toMatch(/\.reading-team-remind-btn\s*\{[^}]*height:\s*36px/);
+    expect(teamCss).not.toMatch(/\.reading-team-remind-btn\s*\{[^}]*width:\s*36px/);
+  });
+});
+
 const responsiveDialog = read("components/ui/ResponsiveDialog.tsx");
 
 describe("React close button usage", () => {
