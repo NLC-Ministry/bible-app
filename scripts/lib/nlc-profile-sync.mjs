@@ -155,3 +155,47 @@ export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked) {
     small_group: firstValue(hubOrg.small_group, existingProfile?.small_group)
   };
 }
+
+function copyOrgFields(org) {
+  return {
+    great_region: org?.great_region || null,
+    pastoral_zone: org?.pastoral_zone || null,
+    small_group: org?.small_group || null
+  };
+}
+
+export function buildOrgProjectionAudit({
+  memberContext,
+  organization,
+  platformOrgFields,
+  placementOrgFields,
+  contextOrgFields,
+  mergedOrg,
+  projectedOrg,
+  existingProfile,
+  orgResolutionSource,
+  memberContextError
+}) {
+  const canonicalPlacement = {
+    placementNodeId: organization?.placementNodeId || null,
+    placementNodeName: organization?.placementNodeName || null,
+    placementLevelName: organization?.placementLevelName || null,
+    hasRequiredPlacement: memberContext?.hasRequiredPlacement ?? null
+  };
+
+  return {
+    source: orgResolutionSource || "none",
+    status: projectedOrg?.great_region || projectedOrg?.pastoral_zone || projectedOrg?.small_group ? "projected" : "empty",
+    member_context_available: Boolean(memberContext),
+    member_context_error: memberContextError || null,
+    canonical_placement: canonicalPlacement,
+    inputs: {
+      platform: copyOrgFields(platformOrgFields),
+      placement: copyOrgFields(placementOrgFields),
+      context: copyOrgFields(contextOrgFields),
+      merged: copyOrgFields(mergedOrg)
+    },
+    existing_profile: copyOrgFields(existingProfile),
+    projected_profile: copyOrgFields(projectedOrg)
+  };
+}
