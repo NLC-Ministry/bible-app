@@ -6200,8 +6200,8 @@ async function updateStatsView(filterPresetKey = null) {
   // Dynamically calculate pastoralStats in frontend from the filtered users list!
   const zoneMap = {};
   unfilteredAllUsers.forEach(u => {
-    const zone = u.pastoral_zone || "未知";
-    const region = u.great_region || "未知";
+    const zone = u.pastoral_zone || "未分類";
+    const region = u.great_region || "未分類";
     if (!zoneMap[zone]) {
       zoneMap[zone] = {
         name: zone,

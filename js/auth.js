@@ -214,7 +214,10 @@ const auth = {
   _applyTokenProfileFallback() {
     const payload = this._parseJwt(localStorage.getItem(this.keys.idToken) || "");
     if (!payload) return;
-    state.currentUser.name = payload.name || payload.nickname || payload.preferred_username || payload.email || payload.sub || "NLC User";
+    const name = (typeof getDisplayName === "function"
+      ? getDisplayName(payload.name || payload.nickname || payload.preferred_username || payload.email || "")
+      : String(payload.name || payload.nickname || payload.preferred_username || payload.email || "").trim()) || "";
+    state.currentUser.name = name;
     state.currentUser.role = state.currentUser.role || "member";
     state.realRole = state.currentUser.role;
   },

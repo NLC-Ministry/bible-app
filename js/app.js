@@ -120,7 +120,7 @@ async function renderNotificationsList() {
     div.className = `notification-item ${item.status === 'unread' ? 'notification-item--unread' : ''}`;
 
     const sender = item.sender || {};
-    const senderName = sender.name || "領袖";
+    const senderName = String(sender.name || "").trim() || "—";
     const senderRoleRaw = sender.role || "leader";
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder ? "隊友" : (roleNames[senderRoleRaw] || "領袖");
@@ -324,10 +324,16 @@ appRouter.switchTab = async function (tabId, options = {}) {
       // syncNlcSessionWithSupabase is optional; render profile regardless of outcome
       if (typeof auth !== "undefined" && auth.isLoggedIn() &&
           typeof db !== "undefined" && typeof db.syncNlcSessionWithSupabase === "function") {
+        state.profileIdentityLoading = true;
+        if (typeof window.applyProfileIdentitySkeletons === "function") {
+          window.applyProfileIdentitySkeletons();
+        }
         try {
           await db.syncNlcSessionWithSupabase(true);
         } catch (err) {
           console.warn("Profile tab sync failed (non-fatal):", err);
+        } finally {
+          state.profileIdentityLoading = false;
         }
       }
       if (typeof window.syncActivePlanContext === 'function') {

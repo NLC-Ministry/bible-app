@@ -64,28 +64,163 @@ function formatMemberContextSyncStatus(user) {
 
 function renderMemberHubOrgPlacement() {
   const user = state.currentUser || {};
+  const pending = typeof isMemberContextPending === "function"
+    ? isMemberContextPending(user)
+    : false;
+  const ids = [
+    "member-hub-org-great-region",
+    "member-hub-org-pastoral-zone",
+    "member-hub-org-small-group"
+  ];
   const values = {
     "member-hub-org-great-region": user.great_region || "",
     "member-hub-org-pastoral-zone": user.pastoral_zone || "",
     "member-hub-org-small-group": user.small_group || ""
   };
 
-  Object.entries(values).forEach(function ([id, value]) {
+  ids.forEach(function (id) {
     const el = document.getElementById(id);
-    if (el) el.textContent = String(value || "").trim() || "尚未設定";
+    if (!el) return;
+    if (pending) {
+      el.setAttribute("aria-busy", "true");
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("placement-value", el);
+      } else {
+        el.innerHTML = '<span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span>';
+      }
+      return;
+    }
+    el.removeAttribute("aria-busy");
+    el.textContent = String(values[id] || "").trim() || "尚未設定";
   });
 
   const hasAnyPlacement = Object.values(values).some(function (value) {
     return String(value || "").trim();
   });
   const emptyEl = document.getElementById("member-hub-org-empty");
-  if (emptyEl) emptyEl.classList.toggle("hidden", hasAnyPlacement);
+  if (emptyEl) emptyEl.classList.toggle("hidden", pending || hasAnyPlacement);
 
   const syncEl = document.getElementById("member-hub-org-sync-status");
   if (syncEl) {
-    syncEl.textContent = isMemberHubManagedProfile()
-      ? formatMemberContextSyncStatus(user)
-      : "目前登入方式無法同步會員中心";
+    if (pending) {
+      syncEl.textContent = "同步中…";
+    } else if (isMemberHubManagedProfile()) {
+      syncEl.textContent = formatMemberContextSyncStatus(user);
+    } else {
+      syncEl.textContent = "目前登入方式無法同步會員中心";
+    }
+  }
+}
+
+function applyProfileIdentitySkeletons() {
+  if (typeof ComponentSkeletonLoader === "undefined") return;
+  ComponentSkeletonLoader.setInlineSkeleton("#profile-summary-name", { width: "6rem", height: "1.2rem" });
+  ComponentSkeletonLoader.fill("profile-org", "#profile-summary-org");
+  const roleEl = document.getElementById("profile-summary-role");
+  if (roleEl) {
+    roleEl.setAttribute("aria-busy", "true");
+    ComponentSkeletonLoader.fill("role-badge", roleEl);
+  }
+  ["member-hub-org-great-region", "member-hub-org-pastoral-zone", "member-hub-org-small-group"].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.setAttribute("aria-busy", "true");
+      ComponentSkeletonLoader.fill("placement-value", el);
+    }
+  });
+  if (typeof renderUserAvatar === "function") {
+    renderUserAvatar(document.getElementById("profile-summary-avatar"), {
+      size: "lg",
+      pending: true
+    });
+  }
+}
+
+function paintProfileIdentityChrome() {
+  const roleNames = {
+    member: "一般組員",
+    group_leader: "小組長",
+    zone_leader: "區長 (牧區負責人)",
+    great_zone_leader: "大區長",
+    admin: "系統管理員"
+  };
+
+  const user = state.currentUser || {};
+  const pending = typeof isMemberContextPending === "function"
+    ? isMemberContextPending(user)
+    : Boolean(state.profileIdentityLoading);
+  const displayName = typeof getDisplayName === "function" ? getDisplayName(user) : String(user.name || "").trim() || null;
+  const nameUnset = (typeof COPY !== "undefined" && COPY.memberHub && COPY.memberHub.nameUnset)
+    ? COPY.memberHub.nameUnset
+    : "尚未取得姓名";
+  const orgUnset = (typeof COPY !== "undefined" && COPY.memberHub && COPY.memberHub.orgUnset)
+    ? COPY.memberHub.orgUnset
+    : "未設定所屬小組";
+
+  const summaryName = document.getElementById("profile-summary-name");
+  if (summaryName) {
+    if (pending && !displayName) {
+      summaryName.setAttribute("aria-busy", "true");
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("inline", summaryName, { width: "6rem", height: "1.2rem" });
+      }
+    } else {
+      summaryName.removeAttribute("aria-busy");
+      summaryName.textContent = displayName || nameUnset;
+    }
+  }
+
+  const summaryOrg = document.getElementById("profile-summary-org");
+  if (summaryOrg) {
+    if (pending) {
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("profile-org", summaryOrg);
+      }
+    } else {
+      const region = user.great_region || "";
+      const zone = user.pastoral_zone || "";
+      const group = user.small_group || "";
+      summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || orgUnset;
+    }
+  }
+
+  const summaryRole = document.getElementById("profile-summary-role");
+  if (summaryRole) {
+    const role = String(user.role || "").trim();
+    if (pending && !role) {
+      summaryRole.setAttribute("aria-busy", "true");
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("role-badge", summaryRole);
+      }
+    } else if (role && roleNames[role]) {
+      summaryRole.removeAttribute("aria-busy");
+      summaryRole.textContent = roleNames[role];
+    } else if (pending) {
+      summaryRole.setAttribute("aria-busy", "true");
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("role-badge", summaryRole);
+      }
+    } else {
+      summaryRole.removeAttribute("aria-busy");
+      summaryRole.textContent = "";
+    }
+  }
+
+  const dropdownName = document.getElementById("dropdown-user-name");
+  if (dropdownName) {
+    if (pending && !displayName) {
+      if (typeof ComponentSkeletonLoader !== "undefined") {
+        ComponentSkeletonLoader.fill("inline", dropdownName, { width: "5.5rem", height: "0.95rem" });
+      }
+    } else {
+      dropdownName.textContent = displayName || nameUnset;
+    }
+  }
+
+  renderMemberHubOrgPlacement();
+
+  if (typeof refreshUserAvatars === "function") {
+    refreshUserAvatars();
   }
 }
 
@@ -258,36 +393,8 @@ export async function renderProfileView() {
     window.renderBadgeWall("badges-grid");
   }
 
-  const roleNames = {
-    member: "一般組員",
-    group_leader: "小組長",
-    zone_leader: "區長 (牧區負責人)",
-    great_zone_leader: "大區長",
-    admin: "系統管理員"
-  };
-
-  const summaryName = document.getElementById("profile-summary-name");
-  if (summaryName) summaryName.textContent = state.currentUser.name || "新使用者";
-
-  const summaryOrg = document.getElementById("profile-summary-org");
-  if (summaryOrg) {
-    const region = state.currentUser.great_region || "";
-    const zone = state.currentUser.pastoral_zone || "";
-    const group = state.currentUser.small_group || "";
-    summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || "未設定所屬小組";
-  }
-  renderMemberHubOrgPlacement();
+  paintProfileIdentityChrome();
   wireMemberHubOrgRefresh();
-
-  const summaryRole = document.getElementById("profile-summary-role");
-  if (summaryRole) {
-    summaryRole.textContent = roleNames[state.currentUser.role] || "一般組員";
-  }
-
-  if (typeof refreshUserAvatars === "function") {
-    refreshUserAvatars();
-  }
-
   renderMemberHubProfileLinks();
 
   if (typeof updateAdminNavVisibility === 'function') {
@@ -349,11 +456,14 @@ export function updateHeaderAvatar() {
   const emailEl = document.getElementById("dropdown-user-email");
   const roleEl = document.getElementById("dropdown-user-role");
 
-  const userName = state.currentUser.name || "NLC User";
+  const userName = (typeof getDisplayName === "function" ? getDisplayName(state.currentUser) : String(state.currentUser.name || "").trim()) || "";
   const userRole = state.currentUser.role || "member";
   const roleLabel = roleNames[userRole] || userRole;
+  const nameUnset = (typeof COPY !== "undefined" && COPY.memberHub && COPY.memberHub.nameUnset)
+    ? COPY.memberHub.nameUnset
+    : "尚未取得姓名";
 
-  if (nameEl) nameEl.textContent = userName;
+  if (nameEl) nameEl.textContent = userName || nameUnset;
   if (roleEl) roleEl.textContent = roleLabel;
 
   if (typeof auth !== "undefined" && auth.isLoggedIn()) {
@@ -471,6 +581,8 @@ export function init() {
 }
 
 window.renderProfileView = renderProfileView;
+window.paintProfileIdentityChrome = paintProfileIdentityChrome;
+window.applyProfileIdentitySkeletons = applyProfileIdentitySkeletons;
 window.updateHeaderAvatar = updateHeaderAvatar;
 window.updateAdminNavVisibility = updateAdminNavVisibility;
 window.initProfileControls = init;

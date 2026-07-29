@@ -43,12 +43,14 @@ const state = {
   isSupabaseMode: false,
   supabase: null,
   realRole: null, // Authentic user role from DB
+  /** True while profile tab / boot is waiting on Member Hub identity sync */
+  profileIdentityLoading: false,
   currentUser: {
-    name: "系統管理員",
-    great_region: "東區",
-    pastoral_zone: "大安1",
-    small_group: "馬鈴",
-    role: "admin",
+    name: "",
+    great_region: "",
+    pastoral_zone: "",
+    small_group: "",
+    role: "",
     chapters_read: 0,
     plan_progress: 0,
     streak: 0,

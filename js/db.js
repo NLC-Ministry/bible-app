@@ -513,7 +513,13 @@ const db = {
     if (!profile) return;
     state.currentProfileId = profile.id;
     state.currentUser.id = profile.id;
-    state.currentUser.name = profile.name || state.currentUser.name || "NLC User";
+    state.currentUser.name = (typeof getDisplayName === "function"
+      ? getDisplayName(profile)
+      : String(profile.name || "").trim()) ||
+      (typeof getDisplayName === "function"
+        ? getDisplayName(state.currentUser)
+        : String(state.currentUser.name || "").trim()) ||
+      "";
     state.currentUser.great_region = profile.great_region || "";
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
@@ -754,7 +760,9 @@ const db = {
             state.realRole = profile.role;
           } else {
             // First-time login: create profile without local org placement (Hub-owned).
-            state.currentUser.name = (user.user_metadata && user.user_metadata.full_name) || "新使用者";
+            state.currentUser.name = (typeof getDisplayName === "function"
+              ? getDisplayName(user.user_metadata && user.user_metadata.full_name)
+              : String((user.user_metadata && user.user_metadata.full_name) || "").trim()) || "";
             state.currentUser.great_region = "";
             state.currentUser.pastoral_zone = "";
             state.currentUser.small_group = "";
@@ -765,7 +773,7 @@ const db = {
             try {
               await state.supabase.from("profiles").insert({
                 id: user.id,
-                name: state.currentUser.name,
+                name: state.currentUser.name || null,
                 great_region: "",
                 pastoral_zone: "",
                 small_group: "",
@@ -961,9 +969,9 @@ const db = {
         state.activePlan = null;
       }
     } else {
-      // First run: default to guest user with clean profile
+      // First run: default to empty guest profile (no invented display name)
       state.currentUser = {
-        name: "訪客",
+        name: "",
         great_region: "",
         pastoral_zone: "",
         small_group: "",
