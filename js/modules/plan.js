@@ -4903,6 +4903,11 @@ async function renderMyPersonalRankings() {
   if (elRankZoneTotal) elRankZoneTotal.textContent = myZone ? `共 ${sortedZone.length} 人` : "請設定所屬牧區";
 }
 
+function updateReadingTeamRankingSummary(division, text) {
+  const summary = document.querySelector(`[data-team-ranking-summary="${division}"]`);
+  if (summary) summary.textContent = text;
+}
+
 function focusReadingTeamRanking(container) {
   if (!container || container.hidden) return;
   const myTeamRow = container.querySelector(".bar-race-row--mine");
@@ -4920,18 +4925,11 @@ function focusReadingTeamRanking(container) {
 
 function bindReadingTeamRankingToggles(sections) {
   sections.forEach(section => {
-    const button = document.querySelector(`[data-team-ranking-toggle="${section.division}"]`);
-    if (!button || button.dataset.bound === "true") return;
-    button.dataset.bound = "true";
-    button.addEventListener("click", () => {
-      const willExpand = section.container.hidden;
-      section.container.hidden = !willExpand;
-      button.setAttribute("aria-expanded", String(willExpand));
-      button.setAttribute("aria-label", `${willExpand ? "收起" : "展開"} ${section.division} 人團隊排行榜`);
-      button.classList.toggle("is-collapsed", !willExpand);
-      const label = button.querySelector("[data-team-ranking-toggle-label]");
-      if (label) label.textContent = willExpand ? "收起" : "展開";
-      if (willExpand) requestAnimationFrame(() => focusReadingTeamRanking(section.container));
+    const details = section.container.closest("[data-team-ranking-details]");
+    if (!details || details.dataset.bound === "true") return;
+    details.dataset.bound = "true";
+    details.addEventListener("toggle", () => {
+      if (details.open) requestAnimationFrame(() => focusReadingTeamRanking(section.container));
     });
   });
 }
@@ -4949,12 +4947,16 @@ async function renderReadingTeamLeaderboards() {
     : '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">載入中…</div>';
   sections.forEach(section => {
     section.container.className = "bar-race-list reading-team-ranking-list";
+    section.container.setAttribute("aria-busy", "true");
     section.container.innerHTML = skeleton;
+    updateReadingTeamRankingSummary(section.division, "團隊排行榜載入中…");
   });
 
   if (!state.activePlan) {
     sections.forEach(section => {
+      section.container.removeAttribute("aria-busy");
       section.container.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">請先選擇計畫</div>';
+      updateReadingTeamRankingSummary(section.division, "尚未選擇計畫");
     });
     return;
   }
@@ -4978,15 +4980,16 @@ async function renderReadingTeamLeaderboards() {
 
   let result = await settleRequest(
     () => db.getReadingTeamLeaderboards(state.activePlan),
-    12000
+    8000
   );
 
   // Rolling-deployment compatibility: administrators can temporarily reuse the
   // existing aggregate statistics RPC until the dedicated leaderboard RPC is live.
-  if ((!result || !result.success) && typeof db.getReadingTeamStatistics === "function") {
+  const canUseAdminFallback = state.currentUser && state.currentUser.role === "admin";
+  if ((!result || !result.success) && canUseAdminFallback && typeof db.getReadingTeamStatistics === "function") {
     const fallback = await settleRequest(
       () => db.getReadingTeamStatistics(state.activePlan),
-      8000
+      5000
     );
     if (fallback && fallback.success) {
       const fallbackTeams = Array.isArray(fallback.context && fallback.context.teams)
@@ -5005,6 +5008,8 @@ async function renderReadingTeamLeaderboards() {
   if (!result || !result.success) {
     const message = escapeHTML(result && result.message || "目前無法載入團隊排行榜。");
     sections.forEach(section => {
+      section.container.removeAttribute("aria-busy");
+      updateReadingTeamRankingSummary(section.division, "讀取失敗・請重新載入");
       section.container.innerHTML = `
         <div style="padding:1.25rem;text-align:center;color:var(--text-muted);">
           <div>${message}</div>
@@ -5020,6 +5025,7 @@ async function renderReadingTeamLeaderboards() {
   const context = result.context || {};
   sections.forEach(section => {
     const teams = Array.isArray(context[section.key]) ? [...context[section.key]] : [];
+    section.container.removeAttribute("aria-busy");
     const completedAt = team => {
       const time = team && team.lastReadAt ? new Date(team.lastReadAt).getTime() : Infinity;
       return Number.isFinite(time) ? time : Infinity;
@@ -5035,6 +5041,7 @@ async function renderReadingTeamLeaderboards() {
 
     if (teams.length === 0) {
       section.container.innerHTML = `<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">目前尚無 ${section.division} 人團隊</div>`;
+      updateReadingTeamRankingSummary(section.division, "共 0 隊");
       return;
     }
 
@@ -5054,10 +5061,10 @@ async function renderReadingTeamLeaderboards() {
       const serverRank = Number(team.rank);
       const rank = Number.isFinite(serverRank) && serverRank > 0 ? serverRank : calculatedRank;
       const statusLabel = team.status === "ready" ? "已成隊" : "組隊中";
-      const width = Math.max(4, Math.round(chaptersRead / maxChapters * 100));
+      const progressPercent = Math.min(100, Math.round(chaptersRead / maxChapters * 100));
       const row = document.createElement("div");
       row.className = `bar-race-row${team.isMine ? " bar-race-row--mine" : ""}`;
-      row.style.setProperty("--target-width", `${width}%`);
+      row.style.setProperty("--target-width", `${progressPercent}%`);
       row.dataset.teamRank = String(rank);
       row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
@@ -5065,11 +5072,14 @@ async function renderReadingTeamLeaderboards() {
         <div class="bar-race-main">
           <div class="bar-race-meta">
             <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}${team.isMine ? '<span class="bar-race-mine-badge">我的團隊</span>' : ""}</span>
-            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
+            <span class="bar-race-percent">${progressPercent}%</span>
           </div>
-          <div class="bar-race-bar-shell">
+          <div class="bar-race-bar-shell" role="progressbar" aria-label="${escapeHTML(team.name || "未命名隊伍")}閱讀進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPercent}">
             <div class="bar-race-bar"></div>
-            <span class="bar-race-value">${chaptersRead} 章</span>
+          </div>
+          <div class="bar-race-details">
+            <span class="bar-race-chapters">${chaptersRead} 章</span>
+            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
           </div>
         </div>
       `;
@@ -5077,13 +5087,14 @@ async function renderReadingTeamLeaderboards() {
     });
 
     const myTeamRow = track.querySelector(".bar-race-row--mine");
-    const summary = document.querySelector(`[data-team-ranking-summary="${section.division}"]`);
-    if (summary) {
-      const myTeam = teams.find(team => team.isMine);
-      summary.textContent = myTeamRow
-        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}`
-        : `尚未加入 ${section.division} 人團隊`;
-    }
+    const myTeam = teams.find(team => team.isMine);
+    const teamCountLabel = `共 ${teams.length} 隊`;
+    updateReadingTeamRankingSummary(
+      section.division,
+      myTeamRow
+        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}・${teamCountLabel}`
+        : `${teamCountLabel}・尚未加入 ${section.division} 人團隊`
+    );
 
     requestAnimationFrame(() => {
       track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
@@ -5122,13 +5133,29 @@ async function renderPlanRankingView() {
   try {
     const allUsers = await db.fetchMergedUsersList();
     const zoneMap = {};
+    const completionTime = item => {
+      const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
+      return Number.isFinite(timestamp) ? timestamp : Infinity;
+    };
     allUsers.forEach(u => {
       const zone = u.pastoral_zone || "未設定";
-      if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0 };
+      if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0, completed_at: null };
       zoneMap[zone].total_chapters += (u.chapters_read || 0);
       zoneMap[zone].members += 1;
+      const userCompletedAt = u.last_read_at || u.last_read || null;
+      if (userCompletedAt) {
+        const userTime = new Date(userCompletedAt).getTime();
+        const zoneTime = zoneMap[zone].completed_at ? new Date(zoneMap[zone].completed_at).getTime() : -Infinity;
+        if (Number.isFinite(userTime) && userTime > zoneTime) zoneMap[zone].completed_at = userCompletedAt;
+      }
     });
-    pastoralStats = Object.values(zoneMap).sort((a, b) => b.total_chapters - a.total_chapters);
+    pastoralStats = Object.values(zoneMap).sort((a, b) => {
+      const chapterDiff = b.total_chapters - a.total_chapters;
+      if (chapterDiff !== 0) return chapterDiff;
+      const timeDiff = completionTime(a) - completionTime(b);
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
+    });
   } catch (e) {
     console.error("Failed to load pastoral rankings", e);
   }
@@ -5139,43 +5166,91 @@ async function renderPlanRankingView() {
   }
 
   const maxChapters = Math.max(...pastoralStats.map(item => item.total_chapters), 1);
+  const pastoralCompletionTime = item => {
+    const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  const formatPastoralCompletion = value => {
+    if (!value) return "尚無完成時間";
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      const [, month, day] = text.split("-");
+      return `完成 ${Number(month)}/${Number(day)}`;
+    }
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "尚無完成時間";
+    return `完成 ${new Intl.DateTimeFormat("zh-TW", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(date)}`;
+  };
   const renderRace = () => {
+    container.className = "pastoral-race-list";
     container.innerHTML = `
-      <div class="bar-race-toolbar">
+      <div class="pastoral-race-toolbar">
         <div>
-          <div class="bar-race-title">牧區動態長條圖競賽</div>
-          <div class="bar-race-subtitle">依總累計閱讀章數排序</div>
+          <div class="pastoral-race-title">即時閱讀表現</div>
+          <div class="pastoral-race-subtitle">以目前最高累計章數為 100%</div>
         </div>
-        <button type="button" class="bar-race-replay" onclick="window.replayPastoralRace()" title="重新播放排行動畫">重播</button>
+        <div class="pastoral-race-actions">
+          <span class="pastoral-race-count">共 ${pastoralStats.length} 個牧區</span>
+          <button type="button" class="pastoral-race-replay" data-pastoral-race-replay title="重新播放排行動畫">
+            <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+            重播
+          </button>
+        </div>
       </div>
-      <div class="bar-race-track"></div>
+      <div class="pastoral-race-track"></div>
     `;
-    const track = container.querySelector(".bar-race-track");
+    const track = container.querySelector(".pastoral-race-track");
 
+    let calculatedRank = 1;
     pastoralStats.forEach((item, index) => {
-      const pct = Math.max(4, Math.round((item.total_chapters / maxChapters) * 100));
+      const previousItem = index > 0 ? pastoralStats[index - 1] : null;
+      const sharesRank = previousItem
+        && item.total_chapters === previousItem.total_chapters
+        && pastoralCompletionTime(item) === pastoralCompletionTime(previousItem);
+      if (index > 0 && !sharesRank) calculatedRank = index + 1;
+      const rank = calculatedRank;
+      const pct = Math.min(100, Math.round((item.total_chapters / maxChapters) * 100));
+      const placementClass = rank === 1
+        ? " pastoral-race-row--leader"
+        : rank <= 3 ? " pastoral-race-row--podium" : "";
       const row = document.createElement("div");
-      row.className = "bar-race-row";
+      row.className = `pastoral-race-row${placementClass}`;
       row.style.setProperty("--target-width", `${pct}%`);
-      row.style.transitionDelay = `${index * 90}ms`;
+      row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
-        <div class="bar-race-rank">${index + 1}</div>
-        <div class="bar-race-main">
-          <div class="bar-race-meta">
-            <span class="bar-race-name">${escapeHTML(item.name)}</span>
-            <span class="bar-race-members">${item.members} 人</span>
+        <div class="pastoral-race-rank" aria-label="第 ${rank} 名">${rank}</div>
+        <div class="pastoral-race-main">
+          <div class="pastoral-race-heading">
+            <div class="pastoral-race-identity">
+              <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
+              <span class="pastoral-race-members">${item.members} 人參與・${formatPastoralCompletion(item.completed_at)}</span>
+            </div>
+            <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>
           </div>
-          <div class="bar-race-bar-shell">
-            <div class="bar-race-bar"></div>
-            <span class="bar-race-value">${item.total_chapters} 章</span>
+          <div class="pastoral-race-progress-meta">
+            <span>相對閱讀速度</span>
+            <strong>${pct}%</strong>
+          </div>
+          <div class="pastoral-race-progress" role="progressbar" aria-label="${escapeHTML(item.name)}相對閱讀速度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-valuetext="${item.total_chapters} 章，相對進度 ${pct}%">
+            <div class="pastoral-race-progress-fill"></div>
           </div>
         </div>
       `;
       track.appendChild(row);
     });
 
+    const replayButton = container.querySelector("[data-pastoral-race-replay]");
+    if (replayButton) replayButton.onclick = renderRace;
+    if (typeof hydrateIcons === "function") hydrateIcons(container);
+
     requestAnimationFrame(() => {
-      track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
+      track.querySelectorAll(".pastoral-race-row").forEach(row => row.classList.add("is-running"));
     });
   };
 

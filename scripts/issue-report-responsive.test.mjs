@@ -21,12 +21,21 @@ describe("Issue report responsive FAB position", () => {
     expect(fabBlock).toMatch(/--app-bottom-nav-height/);
     expect(fabBlock).toMatch(/--app-safe-bottom/);
     expect(fabBlock).toMatch(/safe-area-inset-right/);
+    expect(fabBlock).toMatch(/position:\s*fixed/);
+    expect(fabBlock).toMatch(/z-index:\s*var\(--z-sheet\)/);
     expect(css).toMatch(
       /@media\s*\(min-width:\s*769px\)\s*\{[^}]*\.issue-report-fab\s*\{[^}]*bottom:\s*calc\(\s*var\(--app-safe-bottom/s
     );
   });
 });
 
+describe("Issue report visibility lifecycle", () => {
+  it("reacts when the login gate is hidden after authentication", () => {
+    expect(fab).toContain("isLoginGateVisible");
+    expect(fab).toContain("MutationObserver");
+    expect(fab).toContain('attributeFilter: ["class"]');
+  });
+});
 describe("Issue report responsive drawer shell", () => {
   it("caps drawer height and scrolls the form body with safe footer padding", () => {
     expect(uiDrawer).toMatch(/max-h-\[(?:85dvh|min\(96dvh)/);

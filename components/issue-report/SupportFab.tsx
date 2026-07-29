@@ -8,6 +8,12 @@ interface SupportFabProps {
   isOpen: boolean;
 }
 
+function isLoginGateVisibleNow(): boolean {
+  if (typeof document === "undefined") return false;
+  const loginGate = document.getElementById("login-gate");
+  return Boolean(loginGate && !loginGate.classList.contains("hidden"));
+}
+
 export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
   const [currentPath, setCurrentPath] = React.useState(
     typeof window !== "undefined" ? window.location.pathname : ""
@@ -25,6 +31,20 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
       window.removeEventListener("popstate", handleLocationChange);
       clearInterval(interval);
     };
+  }, []);
+
+  const [isLoginGateVisible, setIsLoginGateVisible] = React.useState(isLoginGateVisibleNow());
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    const loginGate = document.getElementById("login-gate");
+    if (!loginGate) return;
+
+    const syncLoginGateVisibility = () => setIsLoginGateVisible(isLoginGateVisibleNow());
+    syncLoginGateVisibility();
+    const observer = new MutationObserver(syncLoginGateVisibility);
+    observer.observe(loginGate, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   const [isVisible, setIsVisible] = React.useState(true);
@@ -72,7 +92,7 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
     (currentPath || "") === "/login" ||
     (currentPath || "").startsWith("/auth") ||
     (currentPath || "") === "/signup" ||
-    (typeof document !== "undefined" && document.getElementById("login-gate") && !document.getElementById("login-gate")?.classList.contains("hidden"));
+    isLoginGateVisible;
 
   if (isExcluded) return null;
 
