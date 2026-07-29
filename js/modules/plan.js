@@ -7610,7 +7610,6 @@ window.openCareReminderDialog = function(member) {
           border: 1.5px solid var(--border-card);
           background: var(--bg-input);
           color: var(--text-primary);
-          font-size: 0.88rem;
           resize: vertical;
           font-family: inherit;
           outline: none;

@@ -200,6 +200,10 @@ body.dark-theme {
 .type-emphasis { font-size: 1rem; font-weight: var(--type-weight-strong); line-height: 1.625; color: color-mix(in srgb, var(--text-primary) 90%, transparent); }
 .type-brand-title { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1; letter-spacing: normal; color: color-mix(in srgb, var(--text-primary) 85%, transparent); }
 
+:root {
+  --form-control-text-size: 1rem;
+}
+
 /* Stat bento cards */
 .stat-card { border-radius: 1rem; padding: 1rem; border: 1px solid var(--border-default); display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; text-align: left; }
 .stat-card--primary { grid-column: span 2 / span 2; background: var(--color-brand-muted); border-color: var(--color-brand-border); min-height: 90px; }
@@ -11400,4 +11404,20 @@ body.dark-theme .custom-confirm-overlay {
     box-shadow: var(--shadow-lg, 0 18px 48px rgba(0, 0, 0, 0.22));
     padding: 1.25rem;
   }
+}
+
+/* Mobile form control font-size safety net */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select,
+.form-control,
+.reader-search-input,
+#plan-search-input,
+.inline-select,
+.reader-select-compact,
+.announcement-form-panel__input,
+.announcement-form-panel__textarea,
+.devotional-textarea,
+.member-search-wrapper input {
+  font-size: var(--form-control-text-size);
 }

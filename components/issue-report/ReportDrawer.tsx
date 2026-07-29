@@ -18,6 +18,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "../ui/native-select.tsx";
+import { Textarea } from "../ui/textarea.tsx";
 
 // Zod v4 renamed the enum error-customization key from `errorMap` to `error`.
 // The schema only validates shape here — sanitization happens exactly once at
@@ -39,6 +40,11 @@ type ReportFormValues = z.infer<typeof reportSchema>;
 export function descriptionCounterClassName(length: number): string {
   return length > 500 ? "text-xs text-destructive" : "text-xs text-muted-foreground";
 }
+
+const reportMessageClassName = "flex items-center gap-2 rounded-md border p-3 text-sm font-medium";
+const reportFieldLabelClassName = "text-sm font-medium text-muted-foreground";
+const reportErrorClassName = "mt-0.5 text-xs text-destructive";
+const reportHelperClassName = "text-xs text-muted-foreground";
 
 interface ReportDrawerProps {
   isOpen: boolean;
@@ -109,7 +115,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
             {message && (
               <div
-                className="flex items-center gap-2 rounded-md border p-3 text-sm font-medium"
+                className={reportMessageClassName}
                 style={
                   message.type === "success"
                     ? {
@@ -136,7 +142,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="category"
-                className="text-sm font-medium text-muted-foreground"
+                className={reportFieldLabelClassName}
               >
                 問題分類
               </label>
@@ -151,7 +157,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 <NativeSelectOption value="other">其他</NativeSelectOption>
               </NativeSelect>
               {errors.category && (
-                <span className="mt-0.5 text-xs text-destructive">{errors.category.message}</span>
+                <span className={reportErrorClassName}>{errors.category.message}</span>
               )}
             </div>
 
@@ -159,7 +165,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="description"
-                  className="text-sm font-medium text-muted-foreground"
+                  className={reportFieldLabelClassName}
                 >
                   問題描述
                 </label>
@@ -167,18 +173,18 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                   {watchDescription.length} / 500 字
                 </span>
               </div>
-              <textarea
+              <Textarea
                 id="description"
                 disabled={isLoading}
                 {...register("description")}
                 rows={4}
                 placeholder="請詳細描述您遇到的問題或建議，最少 1 個字，最多 500 個字..."
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-foreground"
               />
               {errors.description && (
-                <span className="mt-0.5 text-xs text-destructive">{errors.description.message}</span>
+                <span className={reportErrorClassName}>{errors.description.message}</span>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className={reportHelperClassName}>
                 * 系統將自動附帶當前 URL、瀏覽器與登入資訊，以加速除錯。
               </p>
             </div>
