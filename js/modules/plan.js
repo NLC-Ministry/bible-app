@@ -1727,8 +1727,11 @@ function setupGlobalJoinTeamForm() {
         input.value = "";
 
         if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
-        const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn")).find(p => p.getAttribute("data-filter") === "mine");
-        if (minePill) minePill.click();
+        if (res.plan) {
+          await openJoinedPlanTeam(res.plan);
+        } else {
+          closePlanTeamInvitePanel();
+        }
       } else {
         errorEl.textContent = (res && res.message) || "加入失敗，請確認邀請碼是否正確。";
         errorEl.style.display = "block";

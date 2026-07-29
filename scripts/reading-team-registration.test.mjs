@@ -267,4 +267,15 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain('document.getElementById("btn-close-plan-team-invite")');
     expect(plan).not.toContain('filter === "join-team"');
   });
+
+  it("routes invite-code success into the resolved plan team surface", () => {
+    const formFlow = plan.slice(
+      plan.indexOf("function setupGlobalJoinTeamForm"),
+      plan.indexOf("function openPlanDetailsDialog")
+    );
+    expect(formFlow).toContain("await openJoinedPlanTeam(res.plan)");
+    expect(formFlow).toContain("已成功加入");
+    expect(formFlow).toContain("團隊");
+    expect(formFlow).not.toContain('const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn"))');
+  });
 });
