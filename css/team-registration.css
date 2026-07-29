@@ -833,6 +833,33 @@ body.reading-team-modal-open .main-content {
     padding: 12px;
   }
 
+  .reading-team-inline--stats .reading-team-member {
+    align-items: center;
+    grid-template-columns: 40px minmax(0, 1fr) minmax(44px, auto);
+    grid-template-rows: auto auto;
+  }
+
+  .reading-team-inline--stats .reading-team-member__avatar {
+    grid-row: 1 / 3;
+  }
+
+  .reading-team-inline--stats .reading-team-member__body {
+    grid-column: 2 / 4;
+    min-width: 0;
+  }
+
+  .reading-team-inline--stats .reading-team-member__percent {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .reading-team-inline--stats .reading-team-remind-btn {
+    grid-column: 3;
+    justify-self: end;
+    max-width: 100%;
+    min-width: 44px;
+  }
+
   /* Roster card layout for mobile screens to prevent horizontal scroll */
   .reading-team-roster {
     min-width: 100% !important;
