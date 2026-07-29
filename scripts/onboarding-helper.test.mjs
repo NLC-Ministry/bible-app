@@ -242,6 +242,21 @@ describe("release onboarding helper actions", () => {
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
 
+  it("opens a visible install guide when browser install prompt is unavailable", async () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ startStep: "install" });
+
+    const guide = document.querySelector("[data-onboarding-install-guide]");
+    expect(guide.hidden).toBe(true);
+
+    document.querySelector("[data-onboarding-primary]").click();
+    await Promise.resolve();
+
+    expect(guide.hidden).toBe(false);
+    expect(guide.textContent).toContain("加入主畫面");
+    expect(document.activeElement).toBe(guide);
+  });
+
   it("opens discoverable plans from the join-plan action", async () => {
     document.body.innerHTML = "";
     const switchTab = vi.fn();
