@@ -101,6 +101,23 @@ export function getInstallInstructions(userAgent = globalThis.navigator?.userAge
   return "請使用瀏覽器選單將此頁加入主畫面，之後就能更快回來讀經。";
 }
 
+function getInstallReferenceLinks() {
+  return [
+    {
+      label: "iPhone",
+      href: "https://support.apple.com/zh-tw/guide/iphone/iphea86e5236/ios"
+    },
+    {
+      label: "iPad",
+      href: "https://support.apple.com/zh-tw/guide/ipad/ipad8f1f7a29/26/ipados/26"
+    },
+    {
+      label: "Android",
+      href: "https://support.google.com/chrome/answer/9658361?hl=zh-Hant&co=GENIE.Platform%3DAndroid"
+    }
+  ];
+}
+
 function iconForStep(stepId) {
   if (stepId === "install") return "home";
   if (stepId === "join-plan") return "people";
@@ -118,6 +135,7 @@ function renderActionRows() {
           <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
             <strong>安裝方式</strong>
             <p data-onboarding-install-guide-text></p>
+            <div class="release-onboarding-install-guide__links" data-onboarding-install-guide-links aria-label="安裝參考連結"></div>
           </div>
         ` : ""}
       </div>
@@ -131,8 +149,12 @@ function renderActionRows() {
 function showInstallGuide() {
   const guide = document.querySelector("[data-onboarding-install-guide]");
   const text = document.querySelector("[data-onboarding-install-guide-text]");
-  if (!guide || !text) return;
+  const links = document.querySelector("[data-onboarding-install-guide-links]");
+  if (!guide || !text || !links) return;
   text.textContent = getInstallInstructions();
+  links.innerHTML = getInstallReferenceLinks()
+    .map(({ label, href }) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+    .join("");
   guide.hidden = false;
   guide.focus?.();
 }
