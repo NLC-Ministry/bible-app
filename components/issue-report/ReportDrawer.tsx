@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ReportPipeline, ValidateReportBlock } from "./IssueReportBlocks.ts";
+import { Button } from "../ui/button.tsx";
 
 // Define form validation schema using Zod with strict limits and XSS sanitization
 export const reportSchema = z.object({
@@ -107,14 +108,16 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 請詳細描述您遇到的問題，系統將自動附帶調試資訊。
               </Drawer.Description>
             </div>
-            <button
-              onClick={handleClose}
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              aria-label="關閉"
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              aria-label="關閉"
+              className="shrink-0 rounded-full text-muted-foreground"
             >
-              <X className="h-[var(--icon-size-sm)] w-[var(--icon-size-sm)]" strokeWidth={2} />
-            </button>
+              <X className="h-4 w-4" strokeWidth={2} />
+            </Button>
           </div>
 
           {/* Message Alert Panel */}
