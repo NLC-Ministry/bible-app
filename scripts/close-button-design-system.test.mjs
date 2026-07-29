@@ -92,10 +92,32 @@ const files = {
   responsiveDialog,
 };
 
+const openingTagPattern = /<(?!!|\/)[^>]+>/g;
+const closeLabelPattern = /\baria-label\s*=\s*["'][^"']*(?:關閉|Close)[^"']*["']/i;
+const stylePattern = /\bstyle\s*=\s*["']([^"']*)["']/i;
+const widthPattern = /(?:width|inline-size)\s*:\s*\d+px\b/i;
+const heightPattern = /(?:height|block-size)\s*:\s*\d+px\b/i;
+
+const hasInlineCloseButtonChrome = source => [...source.matchAll(openingTagPattern)].some(([tag]) => {
+  const style = tag.match(stylePattern)?.[1];
+  return closeLabelPattern.test(tag) && style && widthPattern.test(style) && heightPattern.test(style);
+});
+
+const inlineCloseButtonChromeFixtures = [
+  '<button aria-label="Close" style="width: 30px; height: 30px">',
+  '<button style="height: 30px; width: 30px" aria-label="Close">',
+];
+
 describe("close button anti-regression guards", () => {
+  it("detects inline close-button chrome regardless of attribute or property order", () => {
+    for (const fixture of inlineCloseButtonChromeFixtures) {
+      expect(hasInlineCloseButtonChrome(fixture)).toBe(true);
+    }
+  });
+
   it("does not add inline width/height close-button chrome in common UI files", () => {
     for (const [name, source] of Object.entries(files)) {
-      expect(source, name).not.toMatch(/aria-label="[^"]*(關閉|Close)[^"]*"[^>]*style="[^"]*(width|inline-size):\s*\d+px[^"]*(height|block-size):\s*\d+px/);
+      expect(hasInlineCloseButtonChrome(source), name).toBe(false);
     }
   });
 
