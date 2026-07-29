@@ -65,6 +65,8 @@ describe("Issue report FAB + drawer token restyle", () => {
     expect(reportDrawer).toContain("DrawerHeader");
     expect(reportDrawer).toContain("DrawerFooter");
     expect(reportDrawer).toContain("DrawerClose");
+    expect(reportDrawer).toContain("primary-btn");
+    expect(reportDrawer).toContain("secondary-btn");
     expect(reportDrawer).not.toContain("aria-label=\"關閉\"");
     expect(reportDrawer).not.toContain("absolute right-0 top-0");
     expect(reportDrawer).not.toContain("issue-report-submit");
