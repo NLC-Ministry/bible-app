@@ -105,4 +105,20 @@ describe("plan card information architecture", () => {
     expect(joinedList).not.toContain('action: "team"');
     expect(joinedList).not.toContain('[data-plan-card-action="team"]');
   });
+
+  it("renders joined plans in chronological start-date order", () => {
+    const sorter = plan.slice(
+      plan.indexOf("function getJoinedPlanStartTime"),
+      plan.indexOf("function renderJoinedPlansList")
+    );
+    const joinedList = plan.slice(
+      plan.indexOf("function renderJoinedPlansList"),
+      plan.indexOf("function formatCampaignReadingRange")
+    );
+
+    expect(sorter).toContain("function sortJoinedPlansChronologically");
+    expect(sorter).toContain("leftStart - rightStart");
+    expect(sorter).toContain("localeCompare");
+    expect(joinedList).toContain("plansToRender = sortJoinedPlansChronologically(plansToRender)");
+  });
 });

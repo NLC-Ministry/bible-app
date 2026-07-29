@@ -1324,6 +1324,27 @@ function updateJoinedPlanTeamAction(card, plan, contexts = []) {
   };
 }
 
+function getJoinedPlanStartTime(plan) {
+  if (!plan || !plan.startDate) return Number.MAX_SAFE_INTEGER;
+  const date = new Date(`${plan.startDate}T00:00:00`);
+  const time = date.getTime();
+  return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
+}
+
+function sortJoinedPlansChronologically(plans) {
+  return [...(plans || [])].sort((left, right) => {
+    const leftStart = getJoinedPlanStartTime(left);
+    const rightStart = getJoinedPlanStartTime(right);
+    if (leftStart !== rightStart) return leftStart - rightStart;
+
+    const leftStage = Number(left && (left.stageNumber || left.stage || left.stageIndex) || 0);
+    const rightStage = Number(right && (right.stageNumber || right.stage || right.stageIndex) || 0);
+    if (leftStage !== rightStage) return leftStage - rightStage;
+
+    return String(left && left.name || "").localeCompare(String(right && right.name || ""), "zh-Hant");
+  });
+}
+
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");
@@ -1371,6 +1392,7 @@ function renderJoinedPlansList() {
     });
 
     plansToRender = plansToRender.filter(matchesPlanSearch);
+    plansToRender = sortJoinedPlansChronologically(plansToRender);
 
     if (plansToRender.length === 0 && planSearchQuery) {
       container.innerHTML = `
