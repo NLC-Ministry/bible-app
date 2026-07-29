@@ -4612,10 +4612,30 @@ button.logout-btn:hover {
 }
 .reading-team-ranking-header {
   align-items: flex-start;
+  cursor: pointer;
   display: flex;
   gap: 0.75rem;
   justify-content: space-between;
   margin-bottom: 1rem;
+}
+
+.reading-team-ranking-header::-webkit-details-marker {
+  display: none;
+}
+
+.reading-team-ranking-header::marker {
+  content: "";
+}
+
+.reading-team-ranking-card:not([open]) .reading-team-ranking-header {
+  margin-bottom: 0;
+}
+
+.reading-team-ranking-copy,
+.reading-team-ranking-header .card-title,
+.reading-team-ranking-rule,
+.reading-team-ranking-summary {
+  display: block;
 }
 
 .reading-team-ranking-header .card-title {
@@ -4657,8 +4677,20 @@ button.logout-btn:hover {
   transition: transform 0.18s ease;
 }
 
-.reading-team-ranking-toggle.is-collapsed .nlc-icon {
+.reading-team-ranking-card:not([open]) .reading-team-ranking-toggle .nlc-icon {
   transform: rotate(180deg);
+}
+
+.reading-team-ranking-toggle__collapsed {
+  display: none;
+}
+
+.reading-team-ranking-card:not([open]) .reading-team-ranking-toggle__expanded {
+  display: none;
+}
+
+.reading-team-ranking-card:not([open]) .reading-team-ranking-toggle__collapsed {
+  display: inline;
 }
 
 .reading-team-ranking-list {

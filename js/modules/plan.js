@@ -4903,6 +4903,11 @@ async function renderMyPersonalRankings() {
   if (elRankZoneTotal) elRankZoneTotal.textContent = myZone ? `共 ${sortedZone.length} 人` : "請設定所屬牧區";
 }
 
+function updateReadingTeamRankingSummary(division, text) {
+  const summary = document.querySelector(`[data-team-ranking-summary="${division}"]`);
+  if (summary) summary.textContent = text;
+}
+
 function focusReadingTeamRanking(container) {
   if (!container || container.hidden) return;
   const myTeamRow = container.querySelector(".bar-race-row--mine");
@@ -4920,18 +4925,11 @@ function focusReadingTeamRanking(container) {
 
 function bindReadingTeamRankingToggles(sections) {
   sections.forEach(section => {
-    const button = document.querySelector(`[data-team-ranking-toggle="${section.division}"]`);
-    if (!button || button.dataset.bound === "true") return;
-    button.dataset.bound = "true";
-    button.addEventListener("click", () => {
-      const willExpand = section.container.hidden;
-      section.container.hidden = !willExpand;
-      button.setAttribute("aria-expanded", String(willExpand));
-      button.setAttribute("aria-label", `${willExpand ? "收起" : "展開"} ${section.division} 人團隊排行榜`);
-      button.classList.toggle("is-collapsed", !willExpand);
-      const label = button.querySelector("[data-team-ranking-toggle-label]");
-      if (label) label.textContent = willExpand ? "收起" : "展開";
-      if (willExpand) requestAnimationFrame(() => focusReadingTeamRanking(section.container));
+    const details = section.container.closest("[data-team-ranking-details]");
+    if (!details || details.dataset.bound === "true") return;
+    details.dataset.bound = "true";
+    details.addEventListener("toggle", () => {
+      if (details.open) requestAnimationFrame(() => focusReadingTeamRanking(section.container));
     });
   });
 }
@@ -4949,12 +4947,16 @@ async function renderReadingTeamLeaderboards() {
     : '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">載入中…</div>';
   sections.forEach(section => {
     section.container.className = "bar-race-list reading-team-ranking-list";
+    section.container.setAttribute("aria-busy", "true");
     section.container.innerHTML = skeleton;
+    updateReadingTeamRankingSummary(section.division, "團隊排行榜載入中…");
   });
 
   if (!state.activePlan) {
     sections.forEach(section => {
+      section.container.removeAttribute("aria-busy");
       section.container.innerHTML = '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">請先選擇計畫</div>';
+      updateReadingTeamRankingSummary(section.division, "尚未選擇計畫");
     });
     return;
   }
@@ -4978,15 +4980,16 @@ async function renderReadingTeamLeaderboards() {
 
   let result = await settleRequest(
     () => db.getReadingTeamLeaderboards(state.activePlan),
-    12000
+    8000
   );
 
   // Rolling-deployment compatibility: administrators can temporarily reuse the
   // existing aggregate statistics RPC until the dedicated leaderboard RPC is live.
-  if ((!result || !result.success) && typeof db.getReadingTeamStatistics === "function") {
+  const canUseAdminFallback = state.currentUser && state.currentUser.role === "admin";
+  if ((!result || !result.success) && canUseAdminFallback && typeof db.getReadingTeamStatistics === "function") {
     const fallback = await settleRequest(
       () => db.getReadingTeamStatistics(state.activePlan),
-      8000
+      5000
     );
     if (fallback && fallback.success) {
       const fallbackTeams = Array.isArray(fallback.context && fallback.context.teams)
@@ -5005,6 +5008,8 @@ async function renderReadingTeamLeaderboards() {
   if (!result || !result.success) {
     const message = escapeHTML(result && result.message || "目前無法載入團隊排行榜。");
     sections.forEach(section => {
+      section.container.removeAttribute("aria-busy");
+      updateReadingTeamRankingSummary(section.division, "讀取失敗・請重新載入");
       section.container.innerHTML = `
         <div style="padding:1.25rem;text-align:center;color:var(--text-muted);">
           <div>${message}</div>
@@ -5020,6 +5025,7 @@ async function renderReadingTeamLeaderboards() {
   const context = result.context || {};
   sections.forEach(section => {
     const teams = Array.isArray(context[section.key]) ? [...context[section.key]] : [];
+    section.container.removeAttribute("aria-busy");
     const completedAt = team => {
       const time = team && team.lastReadAt ? new Date(team.lastReadAt).getTime() : Infinity;
       return Number.isFinite(time) ? time : Infinity;
@@ -5035,6 +5041,7 @@ async function renderReadingTeamLeaderboards() {
 
     if (teams.length === 0) {
       section.container.innerHTML = `<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">目前尚無 ${section.division} 人團隊</div>`;
+      updateReadingTeamRankingSummary(section.division, "共 0 隊");
       return;
     }
 
@@ -5077,13 +5084,14 @@ async function renderReadingTeamLeaderboards() {
     });
 
     const myTeamRow = track.querySelector(".bar-race-row--mine");
-    const summary = document.querySelector(`[data-team-ranking-summary="${section.division}"]`);
-    if (summary) {
-      const myTeam = teams.find(team => team.isMine);
-      summary.textContent = myTeamRow
-        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}`
-        : `尚未加入 ${section.division} 人團隊`;
-    }
+    const myTeam = teams.find(team => team.isMine);
+    const teamCountLabel = `共 ${teams.length} 隊`;
+    updateReadingTeamRankingSummary(
+      section.division,
+      myTeamRow
+        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}・${teamCountLabel}`
+        : `${teamCountLabel}・尚未加入 ${section.division} 人團隊`
+    );
 
     requestAnimationFrame(() => {
       track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));

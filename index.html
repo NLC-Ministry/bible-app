@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260729_team_rank_focus">
+  <link rel="stylesheet" href="index.css?v=20260729_team_rank_status_collapse">
   <link rel="stylesheet" href="css/team-registration.css?v=20260729_team_stats_poke">
 
   <!-- Supabase JS Client library -->
@@ -1152,45 +1152,47 @@
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem;">
-              <div class="glass-card reading-team-ranking-card">
-                <div class="reading-team-ranking-header">
-                  <div>
-                    <h3 class="card-title">3 人團隊排行榜</h3>
-                    <p class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</p>
-                    <p class="reading-team-ranking-summary" data-team-ranking-summary="3">正在讀取我的排名…</p>
-                  </div>
-                  <button type="button" class="reading-team-ranking-toggle" data-team-ranking-toggle="3" aria-controls="reading-team-ranking-3" aria-expanded="true" aria-label="收起 3 人團隊排行榜">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
-                    <span data-team-ranking-toggle-label>收起</span>
-                  </button>
-                </div>
+              <details class="glass-card reading-team-ranking-card" data-team-ranking-details="3" open>
+                <summary class="reading-team-ranking-header">
+                  <span class="reading-team-ranking-copy">
+                    <span class="card-title" role="heading" aria-level="3">3 人團隊排行榜</span>
+                    <span class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</span>
+                    <span class="reading-team-ranking-summary" data-team-ranking-summary="3">團隊排行榜載入中…</span>
+                  </span>
+                  <span class="reading-team-ranking-toggle" data-team-ranking-toggle="3" aria-hidden="true">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
+                    <span class="reading-team-ranking-toggle__expanded">收起</span>
+                    <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                  </span>
+                </summary>
                 <div id="reading-team-ranking-3" class="bar-race-list" aria-live="polite">
                   <div class="skeleton-wrapper" style="display:flex;flex-direction:column;gap:0.65rem;">
                     <div class="skeleton-shimmer" style="height:54px;border-radius:10px;"></div>
                     <div class="skeleton-shimmer" style="height:54px;border-radius:10px;"></div>
                   </div>
                 </div>
-              </div>
+              </details>
 
-              <div class="glass-card reading-team-ranking-card">
-                <div class="reading-team-ranking-header">
-                  <div>
-                    <h3 class="card-title">6 人團隊排行榜</h3>
-                    <p class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</p>
-                    <p class="reading-team-ranking-summary" data-team-ranking-summary="6">正在讀取我的排名…</p>
-                  </div>
-                  <button type="button" class="reading-team-ranking-toggle" data-team-ranking-toggle="6" aria-controls="reading-team-ranking-6" aria-expanded="true" aria-label="收起 6 人團隊排行榜">
-                    <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp" aria-hidden="true"></span>
-                    <span data-team-ranking-toggle-label>收起</span>
-                  </button>
-                </div>
+              <details class="glass-card reading-team-ranking-card" data-team-ranking-details="6" open>
+                <summary class="reading-team-ranking-header">
+                  <span class="reading-team-ranking-copy">
+                    <span class="card-title" role="heading" aria-level="3">6 人團隊排行榜</span>
+                    <span class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</span>
+                    <span class="reading-team-ranking-summary" data-team-ranking-summary="6">團隊排行榜載入中…</span>
+                  </span>
+                  <span class="reading-team-ranking-toggle" data-team-ranking-toggle="6" aria-hidden="true">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
+                    <span class="reading-team-ranking-toggle__expanded">收起</span>
+                    <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                  </span>
+                </summary>
                 <div id="reading-team-ranking-6" class="bar-race-list" aria-live="polite">
                   <div class="skeleton-wrapper" style="display:flex;flex-direction:column;gap:0.65rem;">
                     <div class="skeleton-shimmer" style="height:54px;border-radius:10px;"></div>
                     <div class="skeleton-shimmer" style="height:54px;border-radius:10px;"></div>
                   </div>
                 </div>
-              </div>
+              </details>
             </div>
             <div class="glass-card">
               <h3 class="card-title"
@@ -1991,7 +1993,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260729_team_rank_focus"></script>
+  <script type="module" src="js/app.js?v=20260729_team_rank_status_collapse"></script>
 </body>
 
 </html>
