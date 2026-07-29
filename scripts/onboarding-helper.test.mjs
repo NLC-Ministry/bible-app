@@ -175,6 +175,15 @@ describe("release onboarding helper dialog", () => {
     expect(document.getElementById("release-onboarding-dialog")).toBeNull();
   });
 
+  it("closes when the overlay root outside the dialog is clicked", () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ config: { onboardingVersion: "0.1.0" } });
+
+    document.getElementById("release-onboarding-root").click();
+
+    expect(document.getElementById("release-onboarding-dialog")).toBeNull();
+  });
+
   it("restores focus to its trigger when closed", () => {
     document.body.innerHTML = '<button type="button" id="onboarding-trigger">Open</button>';
     const trigger = document.getElementById("onboarding-trigger");

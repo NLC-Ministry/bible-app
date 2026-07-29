@@ -235,6 +235,11 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   globalThis.hydrateIcons?.(root);
 
   backdrop?.addEventListener("click", () => closeOnboardingHelper({ storage, config }));
+  root.addEventListener("click", (event) => {
+    if (event.target === root || event.target === backdrop) {
+      closeOnboardingHelper({ storage, config });
+    }
+  });
   root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
