@@ -68,3 +68,18 @@ describe("dynamic close button usage", () => {
     expect(teamCss).not.toContain(".reading-team-close {");
   });
 });
+
+const responsiveDialog = read("components/ui/ResponsiveDialog.tsx");
+
+describe("React close button usage", () => {
+  it("uses existing shadcn Button for ResponsiveDialog close chrome", () => {
+    expect(responsiveDialog).toContain('import { Button } from "@/components/ui/button"');
+    expect(responsiveDialog).toContain('import { X } from "lucide-react"');
+    expect(responsiveDialog).toContain('<Button');
+    expect(responsiveDialog).toContain('variant="ghost"');
+    expect(responsiveDialog).toContain('size="icon"');
+    expect(responsiveDialog).toContain("<X");
+    expect(responsiveDialog).toContain('data-testid="responsive-dialog-close-btn"');
+    expect(responsiveDialog).not.toContain("w-8 h-8 flex items-center justify-center");
+  });
+});
