@@ -52,43 +52,30 @@ export function orgFromHomePath(path) {
   };
 }
 
-function pickOrgField(org, ...keys) {
-  for (const key of keys) {
-    const value = org?.[key];
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      return String(value).trim();
-    }
-  }
-  return null;
-}
-
-/** Reads canonical Member Hub context organization fields with legacy fallbacks. */
 export function orgFromMemberContext(organization) {
   const org = organization || {};
-  return {
-    great_region: pickOrgField(org, "greatRegion", "homeRegionName"),
-    pastoral_zone: pickOrgField(org, "pastoralZone", "homeZoneName"),
-    small_group: pickOrgField(org, "smallGroup", "homeGroupName")
-  };
-}
+  const nodeName = org.placementNodeName ? String(org.placementNodeName).trim() : "";
+  const levelName = org.placementLevelName ? String(org.placementLevelName).trim() : "";
+  const result = { great_region: null, pastoral_zone: null, small_group: null };
+  if (!nodeName || !levelName) return result;
 
-/** @deprecated Use orgFromMemberContext — kept for test compatibility. */
-export function orgFromLegacyOrganization(organization) {
-  return orgFromMemberContext(organization);
+  for (const [field, hints] of Object.entries(LEVEL_NAME_HINTS)) {
+    if (hints.some((hint) => levelName.includes(hint))) {
+      result[field] = nodeName;
+      break;
+    }
+  }
+  return result;
 }
 
 export function mergeOrgSources(platformOrg, placementOrg, contextOrganization) {
   const contextOrg = orgFromMemberContext(contextOrganization);
-  const homeNodeName = contextOrganization?.homeNodeName
-    ? String(contextOrganization.homeNodeName).trim()
-    : null;
 
   const pick = (field) => {
     const fromPlacement = placementOrg?.[field];
     if (fromPlacement) return fromPlacement;
     const fromContext = contextOrg[field];
     if (fromContext) return fromContext;
-    if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
     const fromPlatform = platformOrg?.[field];
     if (fromPlatform) return fromPlatform;
     return null;

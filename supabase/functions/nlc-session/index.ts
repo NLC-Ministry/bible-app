@@ -83,24 +83,25 @@ function orgFromHomePath(path: any[]) {
   };
 }
 
-function pickOrgField(org: any, ...keys: string[]) {
-  for (const key of keys) {
-    const value = org?.[key];
-    if (value !== null && value !== undefined && String(value).trim() !== "") {
-      return String(value).trim();
-    }
-  }
-  return null;
-}
-
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function orgFromMemberContext(organization: any) {
   const org = organization || {};
-  return {
-    great_region: pickOrgField(org, "greatRegion", "homeRegionName"),
-    pastoral_zone: pickOrgField(org, "pastoralZone", "homeZoneName"),
-    small_group: pickOrgField(org, "smallGroup", "homeGroupName")
+  const nodeName = org.placementNodeName ? String(org.placementNodeName).trim() : "";
+  const levelName = org.placementLevelName ? String(org.placementLevelName).trim() : "";
+  const result: Record<"great_region" | "pastoral_zone" | "small_group", string | null> = {
+    great_region: null,
+    pastoral_zone: null,
+    small_group: null
   };
+  if (!nodeName || !levelName) return result;
+
+  for (const [field, hints] of Object.entries(LEVEL_NAME_HINTS)) {
+    if (hints.some((hint) => levelName.includes(hint))) {
+      result[field as "great_region" | "pastoral_zone" | "small_group"] = nodeName;
+      break;
+    }
+  }
+  return result;
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
@@ -152,14 +153,10 @@ function projectOrgFieldsFromHub(
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
   const contextOrg = orgFromMemberContext(contextOrganization);
-  const homeNodeName = contextOrganization?.homeNodeName
-    ? String(contextOrganization.homeNodeName).trim()
-    : null;
 
   const pick = (field: "great_region" | "pastoral_zone" | "small_group") => {
     if (placementOrg?.[field]) return placementOrg[field];
     if (contextOrg[field]) return contextOrg[field];
-    if (field === "pastoral_zone" && homeNodeName) return homeNodeName;
     if (platformOrg?.[field]) return platformOrg[field];
     return null;
   };
