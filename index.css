@@ -10495,10 +10495,10 @@ body.dark-theme .custom-confirm-overlay {
   right: 0;
   width: 320px;
   max-width: calc(100vw - 2rem);
-  background: var(--surface-popover);
-  backdrop-filter: var(--popover-backdrop-blur);
-  -webkit-backdrop-filter: var(--popover-backdrop-blur);
-  border: 1px solid var(--border-popover);
+  background: var(--bg-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-card);
   border-radius: var(--popover-radius);
   box-shadow: var(--popover-shadow);
   display: flex;
@@ -10519,8 +10519,8 @@ body.dark-theme .custom-confirm-overlay {
   align-items: center;
   justify-content: space-between;
   padding: var(--popover-padding);
-  background: color-mix(in srgb, var(--surface-popover) 88%, rgba(255, 255, 255, 0.08));
-  border-bottom: 1px solid var(--border-popover);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-card);
 }
 
 .notification-popover__title {
