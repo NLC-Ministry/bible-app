@@ -598,13 +598,27 @@
             </button>
           </div>
 
+          <div class="card-col span-12 plan-team-invite-shortcut" id="plan-team-invite-shortcut">
+            <div class="plan-team-invite-shortcut__body">
+              <span class="plan-team-invite-shortcut__icon">
+                <span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span>
+              </span>
+              <div class="plan-team-invite-shortcut__copy">
+                <strong>有邀請碼？加入團隊</strong>
+                <span>輸入隊長提供的邀請碼，系統會自動找到對應的讀經計畫。</span>
+              </div>
+            </div>
+            <button class="primary-btn plan-team-invite-shortcut__action" id="btn-open-plan-team-invite" type="button" aria-controls="join-team-container" aria-expanded="false">
+              <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span><span>輸入邀請碼</span></span>
+            </button>
+          </div>
+
           <!-- Status Pills Row -->
           <div class="card-col span-12">
             <div class="status-pills-row" id="plan-list-status-pills">
               <button class="pill-btn active" data-filter="mine">我的計畫</button>
-              <button class="pill-btn" data-filter="saved">找計畫</button>
-              <button class="pill-btn" data-filter="completed">已過期</button>
-              <button class="pill-btn" data-filter="join-team">加入團隊</button>
+              <button class="pill-btn" data-filter="saved">探索計畫</button>
+              <button class="pill-btn" data-filter="completed">已結束</button>
             </div>
           </div>
 
@@ -652,9 +666,12 @@
           <!-- Join Team Container -->
           <div class="card-col span-7 hidden" id="join-team-container">
             <div class="glass-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
-              <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem;">
+              <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem; justify-content: space-between;">
                 <span class="nlc-icon nlc-icon--md" data-icon="lock" style="color: var(--color-brand);" aria-hidden="true"></span>
                 <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-primary);">使用邀請碼加入團隊</h3>
+                <button type="button" class="circular-action-btn" id="btn-close-plan-team-invite" aria-label="關閉邀請碼輸入">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
+                </button>
               </div>
               <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted); line-height: 1.5;">
                 輸入隊長提供給你的團隊邀請碼。加入後，你將與隊友一同挑戰該讀經計畫，並可隨時查看隊友們的閱讀進度！
@@ -681,7 +698,7 @@
               style="height: auto; background: var(--bg-card); border: 1px solid var(--border-card); margin-bottom: 0;">
               <h3 class="card-title" style="margin-bottom: 0.5rem;">每日陪你靈修</h3>
               <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
-                歡迎加入教會季度速讀挑戰！點擊頂部 <strong>找計畫</strong> 即可瀏覽並選擇欲加入的挑戰計畫，與弟兄姊妹一起在神的話語中得勝！
+                歡迎加入教會季度速讀挑戰！點擊頂部 <strong>探索計畫</strong> 即可瀏覽並選擇欲加入的挑戰計畫，與弟兄姊妹一起在神的話語中得勝！
               </p>
             </div>
 

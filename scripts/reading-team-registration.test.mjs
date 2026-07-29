@@ -116,6 +116,47 @@ describe("reading competition team schema", () => {
 });
 
 describe("NLC and browser integration", () => {
+  it("styles plan participation controls for touch-safe responsive layouts", () => {
+    expect(indexCss).toContain(".plan-team-invite-shortcut");
+    expect(indexCss).toContain(".plan-team-invite-shortcut__action");
+    expect(indexCss).toContain(".plan-card-participation-actions");
+    expect(indexCss).toContain(".plan-card-action-btn");
+    expect(indexCss).toContain(".plan-card-participation-state");
+    expect(indexCss).toContain("min-height: 44px");
+    expect(indexCss).toContain("@media (max-width: 640px)");
+    expect(plan).toContain("primary-btn plan-card-action-btn");
+    expect(plan).toContain("secondary-btn plan-card-action-btn");
+  });
+
+  it("models plan cards around solo and team participation actions", () => {
+    expect(plan).toContain("async function openJoinedPlanProgress(plan)");
+    expect(plan).toContain("async function openJoinedPlanTeam(plan)");
+    expect(plan).toContain("async function joinPlanSoloFromCard(plan, key)");
+    expect(plan).toContain("async function createTeamFromPlanCard(plan, key)");
+    expect(plan).toContain('data-plan-card-action="continue"');
+    expect(plan).toContain('data-plan-card-action="team"');
+    expect(plan).toContain('data-plan-card-action="solo-join"');
+    expect(plan).toContain('data-plan-card-action="team-create"');
+    expect(plan).toContain("個人讀經中");
+    expect(plan).toContain("團隊讀經中");
+    expect(plan).toContain("建立 / 加入團隊");
+    expect(plan).toContain("自己加入");
+    expect(plan).toContain("建立團隊");
+  });
+
+  it("derives the joined-plan team action from current team contexts", () => {
+    const actionFlow = plan.slice(
+      plan.indexOf("function updateJoinedPlanTeamAction"),
+      plan.indexOf("function renderJoinedPlansList")
+    );
+
+    expect(actionFlow).toContain('teamAction.textContent = hasTeamContexts ? "查看團隊" : "建立 / 加入團隊"');
+    expect(actionFlow).toContain("await openJoinedPlanTeam(plan)");
+    expect(actionFlow).toContain("await window.openReadingTeamDialog(plan, { preferredDivision: 3 })");
+    expect(actionFlow.indexOf("actions.prepend(teamAction)")).toBeGreaterThan(-1);
+    expect(actionFlow).toContain("actions.append(teamAction)");
+  });
+
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
     for (const name of [
       "get_my_reading_team",
@@ -212,6 +253,7 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain('reading-team-');
     expect(plan).toContain('data-reading-team-division');
     expect(plan).toContain('readingTeamDefaultPlan');
+    expect(plan).toContain('statsTab.textContent = "團隊"');
     expect(teamUi).toContain("renderMyReadingTeamInline");
     expect(teamUi).toContain("data-team-view-division");
     expect(teamUi).toContain("data-add-other-team");
@@ -236,5 +278,62 @@ describe("NLC and browser integration", () => {
     expect(teamUi).not.toContain("small_group");
     expect(db).toContain("getPlanFilterAliases");
     expect(plan).toContain("canUseAdvancedGroupStats");
+  });
+
+  it("promotes invite-code team joining above plan list filters", () => {
+    expect(html).toContain('id="plan-team-invite-shortcut"');
+    expect(html).toContain('id="btn-open-plan-team-invite"');
+    expect(html).toContain("有邀請碼？加入團隊");
+    expect(html).toContain('id="join-team-container"');
+    expect(html).toContain('id="btn-close-plan-team-invite"');
+    expect(html).not.toContain('data-filter="join-team"');
+    expect(plan).toContain("function openPlanTeamInvitePanel");
+    expect(plan).toContain("function closePlanTeamInvitePanel");
+    expect(plan).toContain('document.getElementById("btn-open-plan-team-invite")');
+    expect(plan).toContain('document.getElementById("btn-close-plan-team-invite")');
+    expect(plan).not.toContain('filter === "join-team"');
+  });
+
+  it("keeps the invite panel trigger and reset flow accessible", () => {
+    const trigger = html.match(/<button[^>]+id="btn-open-plan-team-invite"[^>]*>/)?.[0] || "";
+    const panelFlow = plan.slice(
+      plan.indexOf("function openPlanTeamInvitePanel"),
+      plan.indexOf("function initPlanControls")
+    );
+
+    expect(trigger).toContain('aria-controls="join-team-container"');
+    expect(trigger).toContain('aria-expanded="false"');
+    expect(panelFlow).toContain('trigger?.setAttribute("aria-expanded", "true")');
+    expect(panelFlow).toContain("function resetPlanTeamInvitePanel");
+    expect(panelFlow).toContain("resetPlanTeamInvitePanelState({");
+    expect(panelFlow).toContain("restoreFocus");
+    expect(panelFlow).toContain("resetPlanTeamInvitePanel({ restoreFocus: true })");
+    expect(plan).toContain('openInviteBtn?.setAttribute("aria-expanded", "false")');
+  });
+
+  it("delegates successful and already-joined team results to effective plan resolution", () => {
+    const globalJoinFlow = plan.slice(
+      plan.indexOf("async function joinTeamGlobally"),
+      plan.indexOf("window.joinTeamGlobally")
+    );
+
+    expect(globalJoinFlow).toContain("res.success || isAlreadyJoinedTeamResult(res)");
+    expect(globalJoinFlow).toContain("resolveTeamJoinEffectivePlan({");
+    expect(globalJoinFlow).toContain("return db.joinPresetPlan");
+    expect(globalJoinFlow).toContain("if (!effectivePlan)");
+    expect(globalJoinFlow).toContain("plan: effectivePlan");
+  });
+
+  it("routes invite-code success into the resolved plan team surface", () => {
+    const formFlow = plan.slice(
+      plan.indexOf("function setupGlobalJoinTeamForm"),
+      plan.indexOf("function openPlanDetailsDialog")
+    );
+    expect(formFlow).toContain("resetPlanTeamInvitePanel()");
+    expect(formFlow).toContain("await openJoinedPlanTeam(res.plan)");
+    expect(formFlow.indexOf("resetPlanTeamInvitePanel()")).toBeLessThan(formFlow.indexOf("await openJoinedPlanTeam(res.plan)"));
+    expect(formFlow).toContain("已成功加入");
+    expect(formFlow).toContain("團隊");
+    expect(formFlow).not.toContain('const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn"))');
   });
 });
