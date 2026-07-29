@@ -11093,26 +11093,48 @@ body.dark-theme .custom-confirm-overlay {
   font-weight: var(--type-weight-strong);
   line-height: 1.2;
   cursor: pointer;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
-.plan-card__primary-action {
+.plan-card .primary-btn::after {
+  content: none;
+}
+
+.plan-card__primary-action,
+.plan-card .primary-btn.plan-card-action-btn {
   border: 1px solid var(--primary-color);
   background: var(--primary-color);
   color: var(--color-white);
+  box-shadow: none;
 }
 
 .plan-card__secondary-action,
-.plan-card-team-controls__badge {
+.plan-card-team-controls__badge,
+.plan-card .secondary-btn.plan-card-action-btn {
   border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
   background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-card));
   color: var(--primary-color);
+  box-shadow: none;
 }
 
 .plan-card__primary-action:hover,
 .plan-card__secondary-action:hover,
+.plan-card .primary-btn.plan-card-action-btn:hover,
+.plan-card .secondary-btn.plan-card-action-btn:hover,
 .plan-card-team-controls__badge.is-open:hover {
-  transform: translateY(-1px);
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card));
+  box-shadow: none;
+  transform: none;
+}
+
+.plan-card__primary-action:hover,
+.plan-card .primary-btn.plan-card-action-btn:hover {
+  background: var(--primary-color);
+  color: var(--color-white);
 }
 
 .plan-card__primary-action:focus-visible,
