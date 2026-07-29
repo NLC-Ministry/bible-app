@@ -3,7 +3,6 @@ import fs from "node:fs";
 import {
   orgFromCareChain,
   orgFromHomePath,
-  orgFromLegacyOrganization,
   orgFromMemberContext,
   mergeOrgSources,
   resolveSyncedRole,
@@ -52,13 +51,13 @@ describe("orgFromHomePath", () => {
 });
 
 describe("mergeOrgSources", () => {
-  it("prefers Member Hub context over Platform org values", () => {
+  it("projects canonical Member Hub placement into the matching local org field", () => {
     const platform = { great_region: "A", pastoral_zone: "B", small_group: "C" };
     const placement = { great_region: null, pastoral_zone: null, small_group: null };
-    const context = { greatRegion: "L1", pastoralZone: "L2", smallGroup: "L3" };
+    const context = { placementNodeName: "L3", placementLevelName: "小組" };
     expect(mergeOrgSources(platform, placement, context)).toEqual({
-      great_region: "L1",
-      pastoral_zone: "L2",
+      great_region: "A",
+      pastoral_zone: "B",
       small_group: "L3"
     });
   });
@@ -66,82 +65,65 @@ describe("mergeOrgSources", () => {
   it("prefers org-placement when it is available over other org sources", () => {
     const platform = { great_region: "舊大區", pastoral_zone: "舊牧區", small_group: "舊小組" };
     const placement = { great_region: "新大區", pastoral_zone: "新牧區", small_group: "新小組" };
-    const context = { greatRegion: "背景大區", pastoralZone: "背景牧區", smallGroup: "背景小組" };
+    const context = { placementNodeName: "背景小組", placementLevelName: "小組" };
 
     expect(mergeOrgSources(platform, placement, context)).toEqual(placement);
   });
 
-  it("prefers Member Hub homeNodeName fallback over stale Platform pastoral zone", () => {
+  it("projects canonical placement levels independently", () => {
     expect(mergeOrgSources(
-      { great_region: null, pastoral_zone: "舊牧區", small_group: null },
       { great_region: null, pastoral_zone: null, small_group: null },
-      { homeNodeName: "目前牧區" }
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { placementNodeName: "目前牧區", placementLevelName: "牧區" }
     )).toEqual({
       great_region: null,
       pastoral_zone: "目前牧區",
       small_group: null
     });
-  });
 
-  it("reads canonical Member Hub context fields before legacy names", () => {
     expect(mergeOrgSources(
       { great_region: null, pastoral_zone: null, small_group: null },
       { great_region: null, pastoral_zone: null, small_group: null },
-      { greatRegion: "北區", pastoralZone: "青年牧區", smallGroup: "馬鈴薯" }
+      { placementNodeName: "北區", placementLevelName: "大區" }
     )).toEqual({
       great_region: "北區",
-      pastoral_zone: "青年牧區",
-      small_group: "馬鈴薯"
+      pastoral_zone: null,
+      small_group: null
     });
   });
 
-  it("falls back to legacy fields then homeNodeName", () => {
+  it("ignores unsupported canonical placement levels instead of guessing", () => {
     expect(mergeOrgSources(
       { great_region: null, pastoral_zone: null, small_group: null },
       { great_region: null, pastoral_zone: null, small_group: null },
-      { homeRegionName: "東區", homeZoneName: "大安1", homeGroupName: "馬鈴" }
-    )).toEqual({
-      great_region: "東區",
-      pastoral_zone: "大安1",
-      small_group: "馬鈴"
-    });
-
-    expect(mergeOrgSources(
-      { great_region: null, pastoral_zone: null, small_group: null },
-      { great_region: null, pastoral_zone: null, small_group: null },
-      { homeNodeName: "恩典小家" }
+      { placementNodeName: "恩典小家", placementLevelName: "小家" }
     )).toEqual({
       great_region: null,
-      pastoral_zone: "恩典小家",
+      pastoral_zone: null,
       small_group: null
     });
   });
 });
 
 describe("orgFromMemberContext", () => {
-  it("reads canonical greatRegion / pastoralZone / smallGroup fields", () => {
+  it("reads canonical Member Hub placement fields", () => {
     expect(orgFromMemberContext({
-      greatRegion: "北區",
-      pastoralZone: "青年牧區",
-      smallGroup: "馬鈴薯"
+      placementNodeName: "馬鈴薯",
+      placementLevelName: "小組"
     })).toEqual({
-      great_region: "北區",
-      pastoral_zone: "青年牧區",
+      great_region: null,
+      pastoral_zone: null,
       small_group: "馬鈴薯"
     });
   });
-});
 
-describe("orgFromLegacyOrganization", () => {
-  it("reads deprecated homeRegionName fields", () => {
-    expect(orgFromLegacyOrganization({
-      homeRegionName: "東區",
-      homeZoneName: "大安1",
-      homeGroupName: "馬鈴"
+  it("returns empty local projection when canonical placement is incomplete", () => {
+    expect(orgFromMemberContext({
+      placementNodeName: "馬鈴薯"
     })).toEqual({
-      great_region: "東區",
-      pastoral_zone: "大安1",
-      small_group: "馬鈴"
+      great_region: null,
+      pastoral_zone: null,
+      small_group: null
     });
   });
 });
@@ -233,7 +215,8 @@ describe("nlc-session member context sync timestamp", () => {
 
     expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
     expect(source).toContain("const hubLinked = !!memberContext");
-    expect(source).toContain("orgFromMemberContext");
+    expect(source).toContain("placementLevelName");
+    expect(source).toContain("placementNodeName");
     expect(source).toContain("member_hub_context_failed");
     expect(source).not.toMatch(/fetchJsonOptional\(`\$\{memberHubUrl\}\/api\/me\/context`/);
   });
