@@ -181,7 +181,9 @@ function forceUserPayload(table: string, payload: any, profileId: string, action
     });
     return Array.isArray(payload) ? rows : rows[0];
   }
-  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments"];
+  // issue_reports is included so a member's report is always attributed to the
+  // authenticated caller (server-authoritative user_id), never a client-supplied one.
+  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "issue_reports"];
   if (writeProtected.includes(table)) {
     const rows = normalizeRows(payload).map(row => {
       const copy = { ...row };
@@ -385,8 +387,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl, profile_id: profile.id });
     }
 
+    // Any authenticated member may file an issue report (insert only). Reads and
+    // deletes stay admin-only via canRead / canAdminWrite below. user_id is forced
+    // to the caller in forceUserPayload so a member cannot spoof another user.
+    const canReportInsert = action === "insert" && table === "issue_reports";
     const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
-    const canOwnWrite = ["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table);
+    const canOwnWrite = (["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table)) || canReportInsert;
     const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && isAdmin(profile);
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
 

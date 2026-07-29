@@ -76,7 +76,8 @@ describe("Design System Form Control Font Size", () => {
   it("keeps text-base when callers provide a smaller text class", () => {
     const input = (Input as any).render({ className: "text-sm" }, null);
     const textarea = (Textarea as any).render({ className: "text-sm" }, null);
-    const select = NativeSelect({ className: "text-sm" });
+    // NativeSelect is a forwardRef component, so call its .render like the others above.
+    const select = (NativeSelect as any).render({ className: "text-sm" }, null);
 
     expect(input.props.className).toContain("text-base");
     expect(input.props.className).not.toContain("text-sm");
