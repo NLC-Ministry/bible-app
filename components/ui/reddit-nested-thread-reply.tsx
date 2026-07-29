@@ -136,7 +136,7 @@ const Comment: React.FC<CommentProps> = ({ comment, depth = 0, onReply, isOp = f
                   placeholder="What are your thoughts?"
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
-                  className="min-h-[80px] text-sm resize-none"
+                  className="min-h-[80px] resize-none"
                 />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleReplySubmit} disabled={!replyText.trim()}>Comment</Button>

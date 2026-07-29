@@ -50,6 +50,33 @@ function listJavaScriptFiles(directory) {
   });
 }
 
+function listReactComponentFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return listReactComponentFiles(path);
+    return entry.isFile() && /\.tsx$/.test(entry.name) ? [path] : [];
+  });
+}
+
+function findSmallControlTextClasses(source, file) {
+  const violations = [];
+  const controlPattern = /<(input|textarea|select|Input|Textarea|NativeSelect)\b[^>]*>/gi;
+
+  for (const match of source.matchAll(controlPattern)) {
+    const [, tagName] = match;
+    const tag = match[0];
+    const type = tag.match(/\btype\s*=\s*["']?([^\s"'>]+)/i)?.[1]?.toLowerCase();
+    if (tagName.toLowerCase() === "input" && nonTextualInputTypes.has(type)) continue;
+    if (!/\bclassName\s*=/.test(tag) && !/\bclass\s*=/.test(tag)) continue;
+    if (!/\btext-(xs|sm)\b/.test(tag)) continue;
+
+    const line = source.slice(0, match.index).split("\n").length;
+    violations.push(`${file}:${line} applies text-xs/text-sm to a text-entry control`);
+  }
+
+  return violations;
+}
+
 function findSmallInlineControlFontSizes(source, file) {
   const violations = [];
   const controlPattern = /<(input|textarea|select|Input|Textarea|NativeSelect)\b[^>]*>/gi;
@@ -144,12 +171,26 @@ describe("mobile form control font-size safety", () => {
 });
 
 describe("React text-entry controls avoid small text classes", () => {
-  it("does not use text-sm or text-xs directly on shared text-entry controls", () => {
-    textEntrySourceFiles.forEach((file) => {
-      const source = readFileSync(file, "utf8");
-      expect(source).not.toMatch(/<(input|textarea|select)\b[\s\S]*?\btext-(xs|sm)\b/i);
-      expect(source).not.toMatch(/<(Input|Textarea|NativeSelect)\b[\s\S]*?\btext-(xs|sm)\b/i);
-    });
+  it("does not use text-sm or text-xs directly on text-entry controls", () => {
+    const sourceFiles = [...new Set([...textEntrySourceFiles, ...listReactComponentFiles("components")])].sort();
+    const violations = sourceFiles.flatMap((file) =>
+      findSmallControlTextClasses(readFileSync(file, "utf8"), file)
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it("audits only the control opening tag so nearby helper text can stay compact", () => {
+    expect(
+      findSmallControlTextClasses(
+        '<Textarea className="min-h-[80px]" />\n<p className="text-sm">Helper</p>',
+        "fixture.tsx"
+      )
+    ).toEqual([]);
+
+    expect(
+      findSmallControlTextClasses('<Textarea className="min-h-[80px] text-sm" />', "fixture.tsx")
+    ).toEqual([expect.stringContaining("fixture.tsx:1 applies text-xs/text-sm")]);
   });
 });
 
