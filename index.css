@@ -163,9 +163,9 @@ body.dark-theme {
 
   --primary-color: var(--color-brand);
 
-  --surface-popover: rgba(24, 24, 27, 0.92);
+  --surface-popover: rgba(24, 24, 27, 0.86);
   --border-popover: rgba(255, 255, 255, 0.12);
-  --popover-backdrop-blur: blur(16px);
+  --popover-backdrop-blur: blur(24px);
 
   --skeleton-base: rgba(255, 255, 255, 0.06);
   --skeleton-highlight: rgba(255, 255, 255, 0.14);
