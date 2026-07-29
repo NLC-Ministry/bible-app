@@ -7,7 +7,10 @@ import {
   closeOnboardingHelper,
   captureInstallPrompt,
   createMemoryStorage,
+  getInstallGuideModel,
   getInstallInstructions,
+  getInstallPlatform,
+  getInstallPromptState,
   getOnboardingSteps,
   getOnboardingVersion,
   markOnboardingSeen,
@@ -249,6 +252,89 @@ describe("release onboarding helper dialog", () => {
 });
 
 describe("release onboarding helper actions", () => {
+  it("detects installed, iOS, Android prompt, Android manual, desktop, and generic install platforms", () => {
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: true
+    })).toBe("installed");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit Safari",
+      standalone: false
+    })).toBe("ios");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      standalone: false,
+      hasTouch: true
+    })).toBe("ios");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Linux; Android 15; Pixel Chrome/140 Mobile Safari",
+      hasPrompt: true
+    })).toBe("android-prompt");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Linux; Android 15; Pixel Chrome/140 Mobile Safari",
+      hasPrompt: false
+    })).toBe("android-manual");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Macintosh; Intel Mac OS X 15_0 AppleWebKit Chrome/140 Safari",
+      hasPrompt: true
+    })).toBe("desktop");
+
+    expect(getInstallPlatform({
+      userAgent: "Unknown browser",
+      hasPrompt: false
+    })).toBe("generic");
+  });
+
+  it("returns concise Traditional Chinese install guide models per platform", () => {
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: false,
+      hasPrompt: false
+    })).toMatchObject({
+      platform: "ios",
+      title: "在 Safari 加到主畫面",
+      primaryLabel: "查看 iPhone 安裝方式",
+      canPrompt: false,
+      installed: false
+    });
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: false,
+      hasPrompt: false
+    }).steps).toEqual([
+      { icon: "share", label: "點 Safari 下方的分享按鈕。" },
+      { icon: "add-square", label: "選擇「加入主畫面」。" },
+      { icon: "check", label: "點右上角「新增」。" }
+    ]);
+
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+      hasPrompt: true
+    })).toMatchObject({
+      platform: "android-prompt",
+      title: "安裝成 App",
+      primaryLabel: "安裝 App",
+      canPrompt: true,
+      installed: false
+    });
+
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPad Safari",
+      standalone: true
+    })).toMatchObject({
+      platform: "installed",
+      title: "已經加到主畫面",
+      primaryLabel: "已安裝",
+      canPrompt: false,
+      installed: true
+    });
+  });
+
   it("shows iOS home-screen instructions when install prompt is unavailable", () => {
     expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("Safari");
     expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("加入主畫面");
@@ -268,9 +354,299 @@ describe("release onboarding helper actions", () => {
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
 
-  it("opens a visible install guide when browser install prompt is unavailable", async () => {
+  it("does not prompt twice while the native install choice is pending", async () => {
     document.body.innerHTML = "";
-    openOnboardingHelper({ startStep: "install" });
+    let resolveChoice;
+    const userChoice = new Promise((resolve) => {
+      resolveChoice = resolve;
+    });
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    installButton.click();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("available");
+    expect(installButton.disabled).toBe(true);
+
+    resolveChoice({ outcome: "accepted" });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("accepted");
+    expect(installButton.disabled).toBe(false);
+  });
+
+  it("fails promptly when the browser prompt rejects before user choice settles", async () => {
+    document.body.innerHTML = "";
+    let resolveChoice;
+    const userChoice = new Promise((resolve) => {
+      resolveChoice = resolve;
+    });
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(() => Promise.reject(new Error("prompt failed"))),
+      userChoice
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getInstallPromptState()).toBe("failed");
+      expect(installButton.disabled).toBe(false);
+      expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+      expect(document.querySelector("[data-onboarding-install-status]").textContent).toContain("手動方式");
+
+      resolveChoice({ outcome: "accepted" });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(getInstallPromptState()).toBe("failed");
+    } finally {
+      resolveChoice({ outcome: "dismissed" });
+      await Promise.resolve();
+      await Promise.resolve();
+      closeOnboardingHelper();
+    }
+  });
+
+  it("keeps accepted install state when the action is activated again", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(getInstallPromptState()).toBe("accepted");
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(installButton.textContent.trim()).toBe("已安裝");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("已經加到主畫面");
+  });
+
+  it("uses the supplied install guide label and preserves manual install behavior", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
+
+    expect(document.querySelector('[data-onboarding-action="install"]').textContent.trim()).toBe("查看 iPhone 安裝方式");
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+    captureInstallPrompt({ preventDefault() {} });
+  });
+
+  it("records accepted Android native install prompt outcome", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    expect(getInstallPromptState()).toBe("available");
+
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("accepted");
+  });
+
+  it("hides the pending install status after accepting the native prompt", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const status = document.querySelector("[data-onboarding-install-status]");
+    expect(status.textContent).not.toContain("正在開啟安裝提示…");
+    expect(status.hidden).toBe(true);
+  });
+
+  it("falls back to manual Android steps when native install prompt is dismissed", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getInstallPromptState()).toBe("dismissed");
+    expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+    expect(document.querySelector("[data-onboarding-install-status]").textContent).toContain("也可以手動加入");
+  });
+
+  it("keeps Android manual steps and label when activated again after dismissal", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(installButton.textContent.trim()).toBe("查看 Android 安裝方式");
+    expect(document.querySelector("[data-onboarding-install-guide]").dataset.onboardingPlatform).toBe("android-manual");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+  });
+
+  it("keeps Android manual steps and label when activated again after prompt rejection", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(() => Promise.reject(new Error("prompt failed"))),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("failed");
+    expect(installButton.textContent.trim()).toBe("查看 Android 安裝方式");
+    expect(document.querySelector("[data-onboarding-install-guide]").dataset.onboardingPlatform).toBe("android-manual");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+  });
+
+  it("opens a compact iOS step-by-step install guide when native prompt is unavailable", async () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
 
     const guide = document.querySelector("[data-onboarding-install-guide]");
     expect(guide.hidden).toBe(true);
@@ -279,8 +655,47 @@ describe("release onboarding helper actions", () => {
     await Promise.resolve();
 
     expect(guide.hidden).toBe(false);
-    expect(guide.textContent).toContain("加入主畫面");
+    expect(guide.dataset.onboardingPlatform).toBe("ios");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("在 Safari 加到主畫面");
+    expect(document.querySelector("[data-onboarding-install-guide-body]").textContent).toContain("三個步驟");
+
+    const stepItems = [...document.querySelectorAll("[data-onboarding-install-guide-steps] li")];
+    const steps = stepItems.map((item) => item.querySelector("[data-onboarding-install-guide-step-label]").textContent.trim());
+    expect(steps).toEqual([
+      "點 Safari 下方的分享按鈕。",
+      "選擇「加入主畫面」。",
+      "點右上角「新增」。"
+    ]);
+    expect(stepItems.map((item) => item.querySelector("[data-onboarding-install-guide-step-icon]").dataset.installStepIcon)).toEqual([
+      "share",
+      "add-square",
+      "check"
+    ]);
     expect(document.activeElement).toBe(guide);
+  });
+
+  it("keeps support links secondary to platform-specific install steps", async () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
+
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+
+    const guideText = document.querySelector("[data-onboarding-install-guide]").textContent;
+    const firstStepIndex = guideText.indexOf("點 Safari 下方的分享按鈕");
+    const linkIndex = guideText.indexOf("詳細說明");
+    expect(firstStepIndex).toBeGreaterThan(-1);
+    expect(linkIndex).toBeGreaterThan(firstStepIndex);
+
+    const links = [...document.querySelectorAll("[data-onboarding-install-guide-links] a")];
+    expect(links.map((link) => link.textContent.trim())).toEqual(["iPhone", "iPad"]);
   });
 
   it("shows Traditional Chinese install reference links for iPhone, iPad, and Android", async () => {
@@ -325,6 +740,35 @@ describe("release onboarding helper actions", () => {
 });
 
 describe("release onboarding accessibility behavior", () => {
+  it("styles install guidance as compact progressive disclosure", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-install-guide__steps");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon svg");
+    expect(css).toContain(".release-onboarding-install-guide__support");
+    expect(css).toContain(".release-onboarding-install-guide__status");
+  });
+
+  it("keeps install helper copy free from platform implementation terms", () => {
+    const copy = [
+      JSON.stringify(getOnboardingSteps()),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      })),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      })),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Unknown browser",
+        hasPrompt: false
+      }))
+    ].join(" ");
+    expect(copy).not.toMatch(/PWA|beforeinstallprompt|cache|release|onboarding/i);
+  });
+
   it("closes on Escape and returns focus to the manual trigger", () => {
     document.body.innerHTML = '<button id="trigger">使用說明</button>';
     const trigger = document.getElementById("trigger");
@@ -359,6 +803,18 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain("min-height: 2.5rem");
     expect(css).toContain("border: 0");
     expect(css).toContain("background: transparent");
+  });
+
+  it("reserves a stable icon cell for every install guide step", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-install-guide__steps {");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon {");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon svg {");
+    expect(css).toContain("grid-template-columns: 2rem minmax(0, 1fr)");
+    expect(css).toContain("width: 2rem");
+    expect(css).toContain("height: 2rem");
+    expect(css).toContain("width: 1.05rem");
+    expect(css).toContain("height: 1.05rem");
   });
 
   it("does not rely on an undefined text button class", () => {
