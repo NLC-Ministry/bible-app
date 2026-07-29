@@ -100,22 +100,6 @@ body.reading-team-modal-open .main-content {
   line-height: 1.6;
 }
 
-.reading-team-close {
-  align-items: center;
-  appearance: none;
-  background: var(--reading-team-surface);
-  border: 1px solid var(--reading-team-separator);
-  border-radius: 50%;
-  color: var(--text-secondary, #b8b8b8);
-  cursor: pointer;
-  display: inline-flex;
-  height: 44px;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
-  width: 44px;
-}
-
 .reading-team-choice-grid {
   display: grid;
   gap: 12px;

@@ -1843,8 +1843,8 @@ function openPlanDetailsDialog(plan, options = {}) {
       style="width:min(520px,100%);height:auto!important;max-height:84vh;overflow:auto;padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);position:relative;">
       
       <!-- X Close Button -->
-      <button type="button" id="plan-details-x-btn" aria-label="關閉"
-        style="position:absolute;top:1rem;right:1rem;width:30px;height:30px;border-radius:50%;border:none;background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all 0.15s ease;">
+      <button type="button" id="plan-details-x-btn" class="dialog-close-button icon-button icon-button--subtle" aria-label="關閉"
+        style="position:absolute;top:1rem;right:1rem;">
         <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
       </button>
 
@@ -1867,14 +1867,6 @@ function openPlanDetailsDialog(plan, options = {}) {
   
   const xBtn = overlay.querySelector("#plan-details-x-btn");
   xBtn.addEventListener("click", close);
-  xBtn.addEventListener("mouseenter", () => {
-    xBtn.style.color = "var(--text-primary)";
-    xBtn.style.background = "var(--bg-secondary)";
-  });
-  xBtn.addEventListener("mouseleave", () => {
-    xBtn.style.color = "var(--text-secondary)";
-    xBtn.style.background = "transparent";
-  });
 
   const closeButton = overlay.querySelector("#plan-details-close");
   closeButton.addEventListener("click", close);
@@ -6256,7 +6248,7 @@ window.showPlanStatsModal = function () {
     <h3 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
       <span class="nlc-icon" data-icon="barChart" aria-hidden="true"></span> 詳細數據統計
     </h3>
-    <button class="circular-action-btn" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-card); background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; color: var(--text-secondary);" onclick="this.closest('.modal-overlay').remove()" aria-label="關閉"><span class="nlc-icon" data-icon="closeLg" aria-hidden="true"></span></button>
+    <button aria-label="關閉" class="dialog-close-button icon-button icon-button--subtle" onclick="this.closest('.modal-overlay').remove()"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
   `;
 
   headerDiv.querySelector("button").onclick = (e) => {

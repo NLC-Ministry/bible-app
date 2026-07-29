@@ -796,13 +796,12 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain(".release-onboarding-dialog__footer-btn:focus-visible");
   });
 
-  it("uses a larger subtle close button treatment for the dialog dismiss control", () => {
+  it("uses the shared subtle icon button treatment for the dialog dismiss control", () => {
     const css = readFileSync("index.css", "utf8");
+    const helper = readFileSync("js/modules/onboarding-helper.js", "utf8");
     expect(css).toContain(".release-onboarding-dialog__close {");
-    expect(css).toContain("min-width: 2.5rem");
-    expect(css).toContain("min-height: 2.5rem");
-    expect(css).toContain("border: 0");
-    expect(css).toContain("background: transparent");
+    expect(helper).toContain("release-onboarding-dialog__close dialog-close-button icon-button icon-button--subtle");
+    expect(css).not.toMatch(/\.release-onboarding-dialog__close\s*\{[^}]*min-(?:width|height)/);
   });
 
   it("reserves a stable icon cell for every install guide step", () => {
