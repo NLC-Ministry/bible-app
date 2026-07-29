@@ -2112,11 +2112,11 @@ const db = {
         success: true,
         context: {
           division3: [
-            { id: "mock-team-1", name: "聖靈果子隊", division: 3, status: "ready", memberCount: 3, chaptersRead: 126, rank: 1 },
-            { id: "mock-team-2", name: "信心得勝隊", division: 3, status: "forming", memberCount: 2, chaptersRead: 74, rank: 2 }
+            { id: "mock-team-1", name: "聖靈果子隊", division: 3, status: "ready", memberCount: 3, chaptersRead: 126, rank: 1, captainPastoralZone: "大安牧區", isMine: true },
+            { id: "mock-team-2", name: "信心得勝隊", division: 3, status: "forming", memberCount: 2, chaptersRead: 74, rank: 2, captainPastoralZone: "信義牧區", isMine: false }
           ],
           division6: [
-            { id: "mock-team-3", name: "恩典滿滿隊", division: 6, status: "ready", memberCount: 6, chaptersRead: 238, rank: 1 }
+            { id: "mock-team-3", name: "恩典滿滿隊", division: 6, status: "ready", memberCount: 6, chaptersRead: 238, rank: 1, captainPastoralZone: "中山牧區", isMine: true }
           ]
         }
       };
@@ -2124,9 +2124,27 @@ const db = {
     const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
       p_global_plan_id: planId
     });
-    return result.success
-      ? { success: true, context: result.data || { division3: [], division6: [] } }
-      : result;
+    if (!result.success) return result;
+
+    const context = result.data || { division3: [], division6: [] };
+    const leaderboardTeams = [
+      ...(Array.isArray(context.division3) ? context.division3 : []),
+      ...(Array.isArray(context.division6) ? context.division6 : [])
+    ];
+    if (!leaderboardTeams.some(team => typeof team.isMine === "boolean")) {
+      const ownResult = await this.getMyReadingTeam(plan);
+      const ownContexts = ownResult.success && ownResult.context
+        ? (Array.isArray(ownResult.context.teams) ? ownResult.context.teams : [ownResult.context])
+        : [];
+      const ownTeamIds = new Set(ownContexts.map(item => item && item.team && String(item.team.id)).filter(Boolean));
+      ["division3", "division6"].forEach(key => {
+        context[key] = (Array.isArray(context[key]) ? context[key] : []).map(team => ({
+          ...team,
+          isMine: ownTeamIds.has(String(team.id))
+        }));
+      });
+    }
+    return { success: true, context };
   },
 
   async createReadingTeam(plan, division, name) {

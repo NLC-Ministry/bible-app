@@ -4903,18 +4903,52 @@ async function renderMyPersonalRankings() {
   if (elRankZoneTotal) elRankZoneTotal.textContent = myZone ? `共 ${sortedZone.length} 人` : "請設定所屬牧區";
 }
 
+function focusReadingTeamRanking(container) {
+  if (!container || container.hidden) return;
+  const myTeamRow = container.querySelector(".bar-race-row--mine");
+  if (!myTeamRow) {
+    container.scrollTop = 0;
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const rowRect = myTeamRow.getBoundingClientRect();
+  const rowTop = container.scrollTop + rowRect.top - containerRect.top;
+  const centeredOffset = rowTop - (container.clientHeight - rowRect.height) / 2;
+  const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+  container.scrollTop = Math.min(maxScroll, Math.max(0, centeredOffset));
+}
+
+function bindReadingTeamRankingToggles(sections) {
+  sections.forEach(section => {
+    const button = document.querySelector(`[data-team-ranking-toggle="${section.division}"]`);
+    if (!button || button.dataset.bound === "true") return;
+    button.dataset.bound = "true";
+    button.addEventListener("click", () => {
+      const willExpand = section.container.hidden;
+      section.container.hidden = !willExpand;
+      button.setAttribute("aria-expanded", String(willExpand));
+      button.setAttribute("aria-label", `${willExpand ? "收起" : "展開"} ${section.division} 人團隊排行榜`);
+      button.classList.toggle("is-collapsed", !willExpand);
+      const label = button.querySelector("[data-team-ranking-toggle-label]");
+      if (label) label.textContent = willExpand ? "收起" : "展開";
+      if (willExpand) requestAnimationFrame(() => focusReadingTeamRanking(section.container));
+    });
+  });
+}
+
 async function renderReadingTeamLeaderboards() {
   const sections = [
     { division: 3, key: "division3", container: document.getElementById("reading-team-ranking-3") },
     { division: 6, key: "division6", container: document.getElementById("reading-team-ranking-6") }
   ].filter(section => section.container);
   if (sections.length === 0) return;
+  bindReadingTeamRankingToggles(sections);
 
   const skeleton = typeof ComponentSkeletonLoader !== "undefined"
     ? ComponentSkeletonLoader.getHtml("bar-race", { count: 3 })
     : '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">載入中…</div>';
   sections.forEach(section => {
-    section.container.className = "bar-race-list";
+    section.container.className = "bar-race-list reading-team-ranking-list";
     section.container.innerHTML = skeleton;
   });
 
@@ -5022,15 +5056,16 @@ async function renderReadingTeamLeaderboards() {
       const statusLabel = team.status === "ready" ? "已成隊" : "組隊中";
       const width = Math.max(4, Math.round(chaptersRead / maxChapters * 100));
       const row = document.createElement("div");
-      row.className = "bar-race-row";
+      row.className = `bar-race-row${team.isMine ? " bar-race-row--mine" : ""}`;
       row.style.setProperty("--target-width", `${width}%`);
+      row.dataset.teamRank = String(rank);
       row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
         <div class="bar-race-rank">${rank}</div>
         <div class="bar-race-main">
           <div class="bar-race-meta">
-            <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}</span>
-            <span class="bar-race-members">${memberCount}/${section.division} 人・${statusLabel}</span>
+            <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}${team.isMine ? '<span class="bar-race-mine-badge">我的團隊</span>' : ""}</span>
+            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
           </div>
           <div class="bar-race-bar-shell">
             <div class="bar-race-bar"></div>
@@ -5041,8 +5076,18 @@ async function renderReadingTeamLeaderboards() {
       track.appendChild(row);
     });
 
+    const myTeamRow = track.querySelector(".bar-race-row--mine");
+    const summary = document.querySelector(`[data-team-ranking-summary="${section.division}"]`);
+    if (summary) {
+      const myTeam = teams.find(team => team.isMine);
+      summary.textContent = myTeamRow
+        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}`
+        : `尚未加入 ${section.division} 人團隊`;
+    }
+
     requestAnimationFrame(() => {
       track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
+      requestAnimationFrame(() => focusReadingTeamRanking(section.container));
     });
   });
 }
