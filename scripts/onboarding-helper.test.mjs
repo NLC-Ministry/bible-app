@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ONBOARDING_STORAGE_KEY,
   closeOnboardingHelper,
+  captureInstallPrompt,
   createMemoryStorage,
+  getInstallInstructions,
   getOnboardingSteps,
   getOnboardingVersion,
   markOnboardingSeen,
@@ -163,5 +165,35 @@ describe("release onboarding helper dialog", () => {
     openOnboardingHelper({ storage, config: { onboardingVersion: "0.1.0" } });
     closeOnboardingHelper({ remember: true, storage, config: { onboardingVersion: "0.1.0" } });
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
+  });
+});
+
+describe("release onboarding helper actions", () => {
+  it("shows iOS home-screen instructions when install prompt is unavailable", () => {
+    expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("Safari");
+    expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("加入主畫面");
+  });
+
+  it("uses captured browser install prompt for install action", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({ startStep: "install" });
+    document.querySelector("[data-onboarding-primary]").click();
+    await Promise.resolve();
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+  });
+
+  it("navigates to plan tab from join-plan action", () => {
+    document.body.innerHTML = "";
+    const switchTab = vi.fn();
+    globalThis.appRouter = { switchTab };
+    openOnboardingHelper({ startStep: "join-plan" });
+    document.querySelector("[data-onboarding-primary]").click();
+    expect(switchTab).toHaveBeenCalledWith("plan-view");
   });
 });
