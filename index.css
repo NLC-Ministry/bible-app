@@ -64,9 +64,9 @@
   --type-weight-regular: 400;
 
   /* Popover / dropdown surface — shared by notification popover, options-dropdown */
-  --surface-popover: rgba(255, 255, 255, 0.92);
+  --surface-popover: var(--bg-card);
   --border-popover: var(--border-card);
-  --popover-backdrop-blur: blur(16px);
+  --popover-backdrop-blur: none;
   --popover-radius: var(--radius-lg);
   --popover-shadow: var(--shadow-lg);
   --popover-padding: 0.9rem 1.1rem;
