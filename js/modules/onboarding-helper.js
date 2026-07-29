@@ -66,3 +66,83 @@ export function markOnboardingSeen({ storage = globalThis.localStorage, config =
     globalThis.__bibleOnboardingSeenInSession = getOnboardingVersion(config);
   }
 }
+
+let activeStepIndex = 0;
+let lastTrigger = null;
+
+function stepIndexFor(id) {
+  const index = getOnboardingSteps().findIndex((step) => step.id === id);
+  return index >= 0 ? index : 0;
+}
+
+function renderStep(dialog) {
+  const steps = getOnboardingSteps();
+  const step = steps[activeStepIndex] || steps[0];
+  dialog.querySelector("[data-onboarding-title]").textContent = step.title;
+  dialog.querySelector("[data-onboarding-body]").textContent = step.body;
+  dialog.querySelector("[data-onboarding-primary]").textContent = step.primaryLabel;
+  dialog.querySelector("[data-onboarding-count]").textContent = `${activeStepIndex + 1} / ${steps.length}`;
+  dialog.querySelector("[data-onboarding-prev]").disabled = activeStepIndex === 0;
+  dialog.querySelector("[data-onboarding-next]").textContent = activeStepIndex === steps.length - 1 ? "完成" : "下一步";
+}
+
+function dialogTemplate() {
+  return `
+    <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
+    <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title">
+      <button type="button" class="release-onboarding-dialog__close" data-onboarding-close aria-label="關閉使用說明">×</button>
+      <p class="release-onboarding-dialog__eyebrow">使用說明</p>
+      <h2 class="release-onboarding-dialog__title" id="release-onboarding-title" data-onboarding-title></h2>
+      <p class="release-onboarding-dialog__body" data-onboarding-body></p>
+      <p class="release-onboarding-dialog__count" data-onboarding-count></p>
+      <div class="release-onboarding-dialog__actions">
+        <button type="button" class="pill-btn" data-onboarding-prev>上一步</button>
+        <button type="button" class="pill-btn" data-onboarding-next>下一步</button>
+        <button type="button" class="primary-btn" data-onboarding-primary></button>
+      </div>
+      <div class="release-onboarding-dialog__footer">
+        <button type="button" class="text-btn" data-onboarding-later>稍後再看</button>
+        <button type="button" class="text-btn" data-onboarding-dismiss>不要再顯示此版本</button>
+      </div>
+    </section>
+  `;
+}
+
+export function closeOnboardingHelper({ remember = false, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
+  if (remember) markOnboardingSeen({ storage, config });
+  document.getElementById("release-onboarding-root")?.remove();
+  if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
+}
+
+export function openOnboardingHelper({ startStep = "install", trigger = null, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
+  document.getElementById("release-onboarding-root")?.remove();
+  activeStepIndex = stepIndexFor(startStep);
+  lastTrigger = trigger;
+
+  const root = document.createElement("div");
+  root.id = "release-onboarding-root";
+  root.className = "release-onboarding-root";
+  root.innerHTML = dialogTemplate();
+  document.body.appendChild(root);
+
+  const dialog = root.querySelector("#release-onboarding-dialog");
+  renderStep(dialog);
+
+  root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
+  root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
+  root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
+  root.querySelector("[data-onboarding-prev]").addEventListener("click", () => {
+    activeStepIndex = Math.max(0, activeStepIndex - 1);
+    renderStep(dialog);
+  });
+  root.querySelector("[data-onboarding-next]").addEventListener("click", () => {
+    if (activeStepIndex >= getOnboardingSteps().length - 1) {
+      closeOnboardingHelper({ remember: true, storage, config });
+      return;
+    }
+    activeStepIndex += 1;
+    renderStep(dialog);
+  });
+
+  dialog.focus?.();
+}
