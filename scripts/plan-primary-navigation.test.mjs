@@ -8,6 +8,7 @@ const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "index.css"), "utf8");
 const db = readFileSync(join(root, "js", "db.js"), "utf8");
 const plan = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
+const app = readFileSync(join(root, "js", "app.js"), "utf8");
 
 describe("plan primary navigation", () => {
   it("places the four primary views in task-priority order above the content", () => {
@@ -71,5 +72,13 @@ describe("plan join navigation", () => {
     expect(joinFlow).toContain('window.currentPlanViewState = "DETAIL"');
     expect(joinFlow).toContain('await appRouter.switchTab("plan-view", { keepPlanDetail: true })');
     expect(joinFlow).not.toContain('switchTab("dashboard-view")');
+  });
+
+  it("routes onboarding plan actions to discoverable plans or active progress", () => {
+    expect(app).toContain('options.onboardingPlanDestination === "active-progress"');
+    expect(app).toContain('options.onboardingPlanDestination === "discover"');
+    expect(plan).toContain("async function showDiscoverPlans");
+    expect(plan).toContain('document.querySelector(\'#plan-list-status-pills .pill-btn[data-filter="saved"]\')?.click()');
+    expect(plan).toContain("window.showDiscoverPlans = showDiscoverPlans");
   });
 });

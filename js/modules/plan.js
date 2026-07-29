@@ -7308,6 +7308,11 @@ async function setPlanState(newState) {
   }
 }
 
+async function showDiscoverPlans() {
+  await setPlanState(PLAN_ROUTE.LIST);
+  document.querySelector('#plan-list-status-pills .pill-btn[data-filter="saved"]')?.click();
+}
+
 function planGoBack() {
   if (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS) {
     setPlanState(PLAN_ROUTE.DETAIL);
@@ -7333,7 +7338,7 @@ window.initPlanControls = init;
 if (typeof renderPlanView === 'function') {
   window.renderPlanView = renderPlanView;
 }
-export { renderPlanView };
+export { renderPlanView, showDiscoverPlans };
 if (typeof updateStatsView === 'function') {
   window.updateStatsView = updateStatsView;
 }
@@ -7378,6 +7383,7 @@ function planToggleGroupProgress() {
 
 window.fetchGroupRankings = fetchGroupRankings;
 window.setPlanState = setPlanState;
+window.showDiscoverPlans = showDiscoverPlans;
 window.planGoBack = planGoBack;
 window.planToggleGroupProgress = planToggleGroupProgress;
 window.togglePlanDetailSubTab = planToggleGroupProgress;

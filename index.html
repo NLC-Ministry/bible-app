@@ -177,11 +177,13 @@
 
           <!-- Notification Bell & Dropdown Popover -->
           <div class="notification-menu-container" style="position: relative; display: flex; align-items: center; justify-content: center;">
-            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button">
+            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button"
+              aria-haspopup="dialog" aria-expanded="false" aria-controls="notification-popover">
               <span class="nlc-icon nlc-icon--sm" data-icon="bell" aria-hidden="true"></span>
               <span class="notification-bell-badge" id="notification-bell-badge" hidden></span>
             </button>
-            <div class="notification-popover hidden" id="notification-popover">
+            <div class="notification-popover hidden" id="notification-popover"
+              role="dialog" aria-label="通知">
               <div class="notification-popover__header">
                 <span class="notification-popover__title">通知</span>
                 <button class="notification-popover__read-all-btn" id="btn-notification-read-all" type="button">全部已讀</button>
@@ -1519,7 +1521,7 @@
                         </div>
                       </div>
                       <span class="app-settings-item__chevron">
-                        <span class="nlc-icon nlc-icon--sm" data-icon="chevron-right" aria-hidden="true"></span>
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
                       </span>
                     </a>
 
@@ -1559,6 +1561,26 @@
                       </div>
                     </button>
                   </div>
+                </div>
+
+                <div class="app-settings-group" id="profile-help-settings-group">
+                  <div class="app-settings-list">
+                    <button type="button" class="app-settings-item w-full text-left" id="btn-release-onboarding-help">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="bookOpen" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">使用說明</span>
+                          <span class="app-settings-item__subtitle">查看加到主畫面、加入計畫與追蹤進度</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+                      </span>
+                    </button>
+                  </div>
+                  <p class="profile-app-version" id="profile-app-version">版本 0.1.0</p>
                 </div>
 
 
