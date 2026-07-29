@@ -7,7 +7,7 @@ const cleanupMigration = readFileSync(
 );
 const nlcSession = readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 const continuousCleanupMigration = readFileSync(
-  "supabase/migrations/0035_prune_orphaned_org_nodes_on_sync.sql",
+  "supabase/migrations/0036_prune_orphaned_org_nodes_on_sync.sql",
   "utf8"
 );
 

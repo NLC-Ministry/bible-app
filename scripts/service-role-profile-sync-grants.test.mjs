@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(
-  new URL("../supabase/migrations/0034_grant_service_role_profile_sync.sql", import.meta.url),
+  new URL("../supabase/migrations/0035_grant_service_role_profile_sync.sql", import.meta.url),
   "utf8"
 );
 
