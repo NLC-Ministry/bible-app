@@ -413,16 +413,27 @@ describe("Issue Report System Tests", () => {
       }
     });
 
-    it("Zod Schema 驗證：正確通過合法的分類與長度，並能進行 XSS 過濾轉義", () => {
+    it("Zod Schema 驗證：通過合法的分類與長度並修剪空白（消毒交由提交管線單一處理）", () => {
       const validData = {
         category: "bug",
-        description: "這是一個合法的錯誤描述，帶有 <script>alert('xss')</script>"
+        description: "  這是一個合法的錯誤描述  "
       };
       const result = reportSchema.safeParse(validData);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.description).not.toContain("<script>");
-        expect(result.data.description).toBe("這是一個合法的錯誤描述，帶有 ");
+        // Schema only validates + trims; sanitization is done exactly once at
+        // the storage boundary (ValidateReportBlock), so it is NOT applied here.
+        expect(result.data.category).toBe("bug");
+        expect(result.data.description).toBe("這是一個合法的錯誤描述");
+      }
+    });
+
+    it("Zod Schema 驗證：不合法的分類回傳中文錯誤訊息（Zod v4 error API）", () => {
+      const result = reportSchema.safeParse({ category: "hacker", description: "合法內容" });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const catIssue = result.error.issues.find((i) => i.path[0] === "category");
+        expect(catIssue?.message).toBe("請選擇有效的問題分類");
       }
     });
 

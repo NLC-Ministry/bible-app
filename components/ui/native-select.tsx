@@ -3,19 +3,23 @@ import { ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-function NativeSelect({
-  className,
-  size = "default",
-  ...props
-}: Omit<React.ComponentProps<"select">, "size"> & {
-  size?: "sm" | "default"
-}) {
+// Must forward the ref to the underlying <select> so form libraries
+// (e.g. react-hook-form's register) can read/control the selected value.
+// Under React 18 a plain function component silently drops the ref, which
+// leaves the registered value undefined and breaks validation on submit.
+const NativeSelect = React.forwardRef<
+  HTMLSelectElement,
+  Omit<React.ComponentProps<"select">, "size"> & {
+    size?: "sm" | "default"
+  }
+>(({ className, size = "default", ...props }, ref) => {
   return (
     <div
       className="group/native-select relative w-full has-[select:disabled]:opacity-50"
       data-slot="native-select-wrapper"
     >
       <select
+        ref={ref}
         data-slot="native-select"
         data-size={size}
         className={cn(
@@ -33,7 +37,8 @@ function NativeSelect({
       />
     </div>
   )
-}
+})
+NativeSelect.displayName = "NativeSelect"
 
 function NativeSelectOption({
   className,
