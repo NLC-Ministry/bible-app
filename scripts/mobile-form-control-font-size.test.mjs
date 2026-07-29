@@ -68,10 +68,12 @@ function findSmallInlineControlFontSizes(source, file) {
 
     const value = rawFontSize.trim().replace(/^["']|["']$/g, "");
     const numericFontSize = value.match(/^([0-9]*\.?[0-9]+)(px|rem)$/i);
+    const unitlessJsxFontSize = cssFontSize === undefined && jsxFontSize !== undefined &&
+      /^\d+(?:\.\d+)?$/.test(value);
     const isSafe = numericFontSize
       ? (numericFontSize[2].toLowerCase() === "px" && Number(numericFontSize[1]) >= 16) ||
         (numericFontSize[2].toLowerCase() === "rem" && Number(numericFontSize[1]) >= 1)
-      : /^\d+(?:\.\d+)?$/.test(value) && Number(value) >= 16;
+      : unitlessJsxFontSize && Number(value) >= 16;
     if (isSafe) continue;
 
     const line = source.slice(0, match.index).split("\n").length;
@@ -155,8 +157,21 @@ describe("inline text-entry font-size audit", () => {
   it("accepts only demonstrably safe px/rem values, including JSX styles", () => {
     expect(findSmallInlineControlFontSizes('<Input style={{ fontSize: "16px" }} />', "fixture.tsx")).toEqual([]);
     expect(findSmallInlineControlFontSizes('<Textarea style={{ fontSize: "1rem" }} />', "fixture.tsx")).toEqual([]);
+    expect(findSmallInlineControlFontSizes('<Input style={{ fontSize: 16 }} />', "fixture.tsx")).toEqual([]);
     expect(findSmallInlineControlFontSizes('<NativeSelect style={{ fontSize: "var(--small-size)" }} />', "fixture.tsx")).toEqual([
       expect.stringContaining("fixture.tsx:1 has inline font-size")
+    ]);
+  });
+
+  it.each(["16", "12"])("rejects unitless HTML font-size values: %s", (fontSize) => {
+    expect(findSmallInlineControlFontSizes(`<input style="font-size: ${fontSize}">`, "fixture.html")).toEqual([
+      expect.stringContaining(`fixture.html:1 has inline font-size: ${fontSize}`)
+    ]);
+  });
+
+  it("rejects a unitless JSX fontSize below 16", () => {
+    expect(findSmallInlineControlFontSizes('<Textarea style={{ fontSize: 12 }} />', "fixture.tsx")).toEqual([
+      expect.stringContaining("fixture.tsx:1 has inline font-size: 12")
     ]);
   });
 

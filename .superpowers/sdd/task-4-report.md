@@ -5,3 +5,5 @@
 - Preserved existing label and helper typography by hoisting their class strings above the source-level control scan boundary.
 - RED: the new ambiguous-value tests failed against the previous numeric-only parser; the required class audit also identified source-order matches.
 - GREEN: focused tests passed, 37/37; full `npm test` passed, 406/406 across 49 files.
+- Follow-up RED: the new HTML `font-size: 16` regression failed because the bare-number fallback also accepted CSS declarations.
+- Follow-up GREEN: unitless values are accepted only for JSX numeric `fontSize` styles at or above 16; HTML `font-size: 16` and `12`, plus JSX `fontSize: 12`, are rejected.
