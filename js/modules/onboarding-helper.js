@@ -91,11 +91,12 @@ export function getInstallPlatform({
   userAgent = globalThis.navigator?.userAgent || "",
   standalone = globalThis.navigator?.standalone,
   displayModeStandalone = globalThis.matchMedia?.("(display-mode: standalone)")?.matches,
-  hasPrompt = Boolean(deferredInstallPrompt?.prompt)
+  hasPrompt = Boolean(deferredInstallPrompt?.prompt),
+  hasTouch = globalThis.navigator?.maxTouchPoints > 1
 } = {}) {
   const ua = String(userAgent);
   if (standalone || displayModeStandalone) return "installed";
-  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && hasTouch)) return "ios";
   if (/Android/i.test(ua)) return hasPrompt ? "android-prompt" : "android-manual";
   if (hasPrompt) return "desktop";
   return "generic";

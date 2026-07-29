@@ -263,6 +263,12 @@ describe("release onboarding helper actions", () => {
     })).toBe("ios");
 
     expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15",
+      standalone: false,
+      hasTouch: true
+    })).toBe("ios");
+
+    expect(getInstallPlatform({
       userAgent: "Mozilla/5.0 Linux; Android 15; Pixel Chrome/140 Mobile Safari",
       hasPrompt: true
     })).toBe("android-prompt");
