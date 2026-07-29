@@ -177,11 +177,13 @@
 
           <!-- Notification Bell & Dropdown Popover -->
           <div class="notification-menu-container" style="position: relative; display: flex; align-items: center; justify-content: center;">
-            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button">
+            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button"
+              aria-haspopup="dialog" aria-expanded="false" aria-controls="notification-popover">
               <span class="nlc-icon nlc-icon--sm" data-icon="bell" aria-hidden="true"></span>
               <span class="notification-bell-badge" id="notification-bell-badge" hidden></span>
             </button>
-            <div class="notification-popover hidden" id="notification-popover">
+            <div class="notification-popover hidden" id="notification-popover"
+              role="dialog" aria-label="通知">
               <div class="notification-popover__header">
                 <span class="notification-popover__title">通知</span>
                 <button class="notification-popover__read-all-btn" id="btn-notification-read-all" type="button">全部已讀</button>
