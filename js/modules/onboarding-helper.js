@@ -232,9 +232,16 @@ function renderActionRows() {
         <p>${step.body}</p>
         ${step.id === "install" ? `
           <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
-            <strong>安裝方式</strong>
-            <p data-onboarding-install-guide-text></p>
-            <div class="release-onboarding-install-guide__links" data-onboarding-install-guide-links aria-label="安裝參考連結"></div>
+            <div class="release-onboarding-install-guide__heading">
+              <span class="release-onboarding-install-guide__badge" data-onboarding-install-guide-badge>安裝</span>
+              <strong data-onboarding-install-guide-title>安裝方式</strong>
+            </div>
+            <p data-onboarding-install-guide-body></p>
+            <ol class="release-onboarding-install-guide__steps" data-onboarding-install-guide-steps></ol>
+            <div class="release-onboarding-install-guide__support">
+              <span>詳細說明</span>
+              <div class="release-onboarding-install-guide__links" data-onboarding-install-guide-links aria-label="安裝參考連結"></div>
+            </div>
           </div>
         ` : ""}
       </div>
@@ -245,20 +252,53 @@ function renderActionRows() {
   `).join("");
 }
 
-function showInstallGuide() {
+const INSTALL_STEP_ICON_PATHS = {
+  share: '<path d="M12 3v10"/><path d="m8 7 4-4 4 4"/><path d="M5 11v8h14v-8"/>',
+  "add-square": '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M12 8v8"/><path d="M8 12h8"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  "more-vertical": '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  "app-window": '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M8 9h8"/><path d="M8 13h5"/>'
+};
+
+function renderInstallStepIcon(icon) {
+  const path = INSTALL_STEP_ICON_PATHS[icon] || INSTALL_STEP_ICON_PATHS["app-window"];
+  const svgTag = "svg";
+  return `<${svgTag} viewBox="0 0 24 24" focusable="false" aria-hidden="true">${path}</${svgTag}>`;
+}
+
+function showInstallGuide(options = {}) {
   const guide = document.querySelector("[data-onboarding-install-guide]");
-  const text = document.querySelector("[data-onboarding-install-guide-text]");
+  const title = document.querySelector("[data-onboarding-install-guide-title]");
+  const body = document.querySelector("[data-onboarding-install-guide-body]");
+  const badge = document.querySelector("[data-onboarding-install-guide-badge]");
+  const steps = document.querySelector("[data-onboarding-install-guide-steps]");
   const links = document.querySelector("[data-onboarding-install-guide-links]");
-  if (!guide || !text || !links) return;
-  text.textContent = getInstallInstructions();
-  links.innerHTML = getInstallReferenceLinks()
+  if (!guide || !title || !body || !badge || !steps || !links) return;
+
+  const model = getInstallGuideModel(options);
+  guide.dataset.onboardingPlatform = model.platform;
+  badge.textContent = model.installed ? "完成" : "安裝";
+  title.textContent = model.title;
+  body.textContent = model.body;
+  steps.innerHTML = model.steps
+    .map((step) => `
+      <li>
+        <span class="release-onboarding-install-guide__step-icon" data-onboarding-install-guide-step-icon data-install-step-icon="${step.icon}" aria-hidden="true">
+          ${renderInstallStepIcon(step.icon)}
+        </span>
+        <span data-onboarding-install-guide-step-label>${step.label}</span>
+      </li>
+    `)
+    .join("");
+  links.innerHTML = model.links
     .map(({ label, href }) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`)
     .join("");
   guide.hidden = false;
   guide.focus?.();
 }
 
-async function runPrimaryAction(stepId) {
+async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   const step = getOnboardingSteps().find((item) => item.id === stepId);
   if (!step) return;
 
@@ -269,11 +309,11 @@ async function runPrimaryAction(stepId) {
         deferredInstallPrompt = null;
       } catch (error) {
         console.warn("Browser install prompt failed:", error);
-        showInstallGuide();
+        showInstallGuide(installGuideOptions);
       }
       return;
     }
-    showInstallGuide();
+    showInstallGuide(installGuideOptions);
     return;
   }
 
@@ -318,7 +358,13 @@ export function closeOnboardingHelper({ remember = false, storage = globalThis.l
   if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
 }
 
-export function openOnboardingHelper({ startStep = "install", trigger = null, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
+export function openOnboardingHelper({
+  startStep = "install",
+  trigger = null,
+  storage = globalThis.localStorage,
+  config = globalThis.APP_CONFIG || {},
+  installGuideOptions = {}
+} = {}) {
   document.getElementById("release-onboarding-root")?.remove();
   lastTrigger = trigger;
 
@@ -344,7 +390,7 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
   root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      runPrimaryAction(button.dataset.onboardingAction).catch((error) => console.warn("Onboarding action failed:", error));
+      runPrimaryAction(button.dataset.onboardingAction, { installGuideOptions }).catch((error) => console.warn("Onboarding action failed:", error));
     });
   });
   dialog.addEventListener("keydown", (event) => {

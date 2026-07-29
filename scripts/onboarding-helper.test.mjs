@@ -353,9 +353,16 @@ describe("release onboarding helper actions", () => {
     expect(prompt.prompt).toHaveBeenCalledOnce();
   });
 
-  it("opens a visible install guide when browser install prompt is unavailable", async () => {
+  it("opens a compact iOS step-by-step install guide when native prompt is unavailable", async () => {
     document.body.innerHTML = "";
-    openOnboardingHelper({ startStep: "install" });
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
 
     const guide = document.querySelector("[data-onboarding-install-guide]");
     expect(guide.hidden).toBe(true);
@@ -364,8 +371,47 @@ describe("release onboarding helper actions", () => {
     await Promise.resolve();
 
     expect(guide.hidden).toBe(false);
-    expect(guide.textContent).toContain("加入主畫面");
+    expect(guide.dataset.onboardingPlatform).toBe("ios");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("在 Safari 加到主畫面");
+    expect(document.querySelector("[data-onboarding-install-guide-body]").textContent).toContain("三個步驟");
+
+    const stepItems = [...document.querySelectorAll("[data-onboarding-install-guide-steps] li")];
+    const steps = stepItems.map((item) => item.querySelector("[data-onboarding-install-guide-step-label]").textContent.trim());
+    expect(steps).toEqual([
+      "點 Safari 下方的分享按鈕。",
+      "選擇「加入主畫面」。",
+      "點右上角「新增」。"
+    ]);
+    expect(stepItems.map((item) => item.querySelector("[data-onboarding-install-guide-step-icon]").dataset.installStepIcon)).toEqual([
+      "share",
+      "add-square",
+      "check"
+    ]);
     expect(document.activeElement).toBe(guide);
+  });
+
+  it("keeps support links secondary to platform-specific install steps", async () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      }
+    });
+
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+
+    const guideText = document.querySelector("[data-onboarding-install-guide]").textContent;
+    const firstStepIndex = guideText.indexOf("點 Safari 下方的分享按鈕");
+    const linkIndex = guideText.indexOf("詳細說明");
+    expect(firstStepIndex).toBeGreaterThan(-1);
+    expect(linkIndex).toBeGreaterThan(firstStepIndex);
+
+    const links = [...document.querySelectorAll("[data-onboarding-install-guide-links] a")];
+    expect(links.map((link) => link.textContent.trim())).toEqual(["iPhone", "iPad"]);
   });
 
   it("shows Traditional Chinese install reference links for iPhone, iPad, and Android", async () => {
