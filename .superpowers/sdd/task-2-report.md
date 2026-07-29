@@ -35,4 +35,4 @@ None.
 - TDD RED: the focused suite failed on the missing `.steps` selector (`33 passed, 1 failed`).
 - TDD GREEN: focused suite passed (`34 tests`).
 - Full suite passed (`48 files, 375 tests`).
-- Commit: `9fca5ff fix(onboarding): reserve install step icon cells`.
+- Commit: `cce2724 fix(onboarding): reserve install step icon cells`.
