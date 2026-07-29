@@ -22,7 +22,6 @@ import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
 import './modules/team-registration.js?v=20260729_team_stats_poke';
-import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js?v=20260729_release_010';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -35,7 +34,61 @@ if (buildVersion.includes("__BUILD_VERSION__")) {
   buildVersion = "dev_" + Date.now();
 }
 const moduleCache = {};
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260729_release_010';
+const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
+let releaseOnboardingModulePromise = null;
 let careReminderBadgeLastRefresh = 0;
+
+function getReleaseOnboardingVersion(config = window.APP_CONFIG || {}) {
+  return String(config.onboardingVersion || config.appVersion || "0.1.0");
+}
+
+function isReleaseOnboardingLoginEligible(authClient) {
+  if (!authClient) return false;
+  if (typeof authClient.isLoggedIn === "function") return authClient.isLoggedIn();
+  return Boolean(authClient.loggedIn);
+}
+
+function shouldAutoShowReleaseOnboarding({ auth: authClient, syncComplete, storage = window.localStorage, config = window.APP_CONFIG || {} } = {}) {
+  if (!isReleaseOnboardingLoginEligible(authClient)) return false;
+  if (!syncComplete) return false;
+  const version = getReleaseOnboardingVersion(config);
+  try {
+    return storage?.getItem(RELEASE_ONBOARDING_STORAGE_KEY) !== version;
+  } catch {
+    return window.__bibleOnboardingSeenInSession !== version;
+  }
+}
+
+async function loadReleaseOnboardingHelper() {
+  if (!releaseOnboardingModulePromise) {
+    releaseOnboardingModulePromise = import(RELEASE_ONBOARDING_MODULE_PATH).then((mod) => {
+      if (window.__bibleDeferredInstallPrompt && typeof mod.captureInstallPrompt === "function") {
+        mod.captureInstallPrompt(window.__bibleDeferredInstallPrompt);
+      }
+      return mod;
+    });
+  }
+  return releaseOnboardingModulePromise;
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  window.__bibleDeferredInstallPrompt = event;
+});
+
+window.openOnboardingHelper = async function openLazyOnboardingHelper(options = {}) {
+  const mod = await loadReleaseOnboardingHelper();
+  return mod.openOnboardingHelper(options);
+};
+
+function maybeShowReleaseOnboarding(options = {}) {
+  if (!shouldAutoShowReleaseOnboarding(options)) return false;
+  window.setTimeout(() => {
+    window.openOnboardingHelper?.(options);
+  }, 250);
+  return true;
+}
 
 function updateCareReminderBadge(reminders = []) {
   const count = Array.isArray(reminders) ? reminders.length : 0;

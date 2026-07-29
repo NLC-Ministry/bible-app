@@ -163,9 +163,9 @@ body.dark-theme {
 
   --primary-color: var(--color-brand);
 
-  --surface-popover: rgba(24, 24, 27, 0.92);
-  --border-popover: rgba(255, 255, 255, 0.12);
-  --popover-backdrop-blur: blur(16px);
+  --surface-popover: rgba(24, 24, 27, 0.74);
+  --border-popover: rgba(255, 255, 255, 0.16);
+  --popover-backdrop-blur: blur(28px) saturate(165%);
 
   --skeleton-base: rgba(255, 255, 255, 0.06);
   --skeleton-highlight: rgba(255, 255, 255, 0.14);
@@ -5386,8 +5386,8 @@ button.logout-btn:hover {
   background: var(--surface-popover);
   border: 1px solid var(--border-popover);
   box-shadow: var(--popover-shadow);
-  backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
-  -webkit-backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
+  backdrop-filter: var(--popover-backdrop-blur);
+  -webkit-backdrop-filter: var(--popover-backdrop-blur);
 }
 #plan-options-dropdown .options-dropdown-item {
   min-height: 44px;
@@ -10580,10 +10580,10 @@ body.dark-theme .custom-confirm-overlay {
   right: 0;
   width: 320px;
   max-width: calc(100vw - 2rem);
-  background: var(--surface-popover);
-  backdrop-filter: var(--popover-backdrop-blur);
-  -webkit-backdrop-filter: var(--popover-backdrop-blur);
-  border: 1px solid var(--border-popover);
+  background: var(--bg-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-card);
   border-radius: var(--popover-radius);
   box-shadow: var(--popover-shadow);
   display: flex;
@@ -10604,7 +10604,8 @@ body.dark-theme .custom-confirm-overlay {
   align-items: center;
   justify-content: space-between;
   padding: var(--popover-padding);
-  border-bottom: 1px solid var(--border-popover);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-card);
 }
 
 .notification-popover__title {
@@ -10633,6 +10634,7 @@ body.dark-theme .custom-confirm-overlay {
   max-height: 320px;
   overflow-y: auto;
   padding: 0.5rem 0;
+  background: transparent;
 }
 
 .notification-popover__empty {
@@ -10867,6 +10869,30 @@ body.dark-theme .custom-confirm-overlay {
   color: var(--text-secondary);
   font-size: 0.9rem;
   line-height: 1.55;
+}
+
+.release-onboarding-install-guide__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.release-onboarding-install-guide__links a {
+  color: var(--color-brand);
+  font-size: 0.82rem;
+  font-weight: var(--type-weight-strong);
+  text-decoration: none;
+}
+
+.release-onboarding-install-guide__links a:hover {
+  text-decoration: underline;
+}
+
+.release-onboarding-install-guide__links a:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .release-onboarding-dialog__footer {

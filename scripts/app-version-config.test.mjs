@@ -32,9 +32,16 @@ describe("Bible app release version contract", () => {
 });
 
 describe("release onboarding startup timing", () => {
-  it("imports the onboarding helper from the app entry", () => {
+  it("keeps the onboarding UI module out of the app entry's static imports", () => {
     expect(app).toContain("maybeShowReleaseOnboarding");
-    expect(app).toContain("./modules/onboarding-helper.js?v=");
+    expect(app).toContain("RELEASE_ONBOARDING_MODULE_PATH");
+    expect(app).toContain("import(RELEASE_ONBOARDING_MODULE_PATH)");
+    expect(app).not.toContain("import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js");
+  });
+
+  it("captures install prompt cheaply before the lazy helper loads", () => {
+    expect(app).toContain("window.__bibleDeferredInstallPrompt");
+    expect(app).toContain('window.addEventListener("beforeinstallprompt"');
   });
 
   it("checks onboarding only after initial data load and dashboard render", () => {

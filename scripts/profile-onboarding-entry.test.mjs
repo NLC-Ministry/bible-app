@@ -22,6 +22,7 @@ describe("Profile Settings onboarding recall entry", () => {
 
   it("uses the bundled onboarding controller for automatic and manual opening", () => {
     expect(app).toContain("maybeShowReleaseOnboarding");
+    expect(app).toContain("loadReleaseOnboardingHelper");
     expect(helper).toContain("globalThis.openOnboardingHelper = openOnboardingHelper");
     expect(profile).not.toContain('from "./onboarding-helper.js"');
   });

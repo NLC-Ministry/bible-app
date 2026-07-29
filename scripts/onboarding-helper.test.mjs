@@ -265,6 +265,25 @@ describe("release onboarding helper actions", () => {
     expect(document.activeElement).toBe(guide);
   });
 
+  it("shows Traditional Chinese install reference links for iPhone, iPad, and Android", async () => {
+    document.body.innerHTML = "";
+    openOnboardingHelper({ startStep: "install" });
+
+    document.querySelector('[data-onboarding-action="install"]').click();
+    await Promise.resolve();
+
+    const links = [...document.querySelectorAll("[data-onboarding-install-guide-links] a")];
+    const labels = links.map((link) => link.textContent.trim());
+    const hrefs = links.map((link) => link.getAttribute("href"));
+
+    expect(labels).toEqual(["iPhone", "iPad", "Android"]);
+    expect(hrefs).toEqual([
+      "https://support.apple.com/zh-tw/guide/iphone/iphea86e5236/ios",
+      "https://support.apple.com/zh-tw/guide/ipad/ipad8f1f7a29/26/ipados/26",
+      "https://support.google.com/chrome/answer/9658361?hl=zh-Hant&co=GENIE.Platform%3DAndroid"
+    ]);
+  });
+
   it("opens discoverable plans from the join-plan action", async () => {
     document.body.innerHTML = "";
     const switchTab = vi.fn();
