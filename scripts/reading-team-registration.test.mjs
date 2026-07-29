@@ -218,11 +218,13 @@ describe("NLC and browser integration", () => {
 
   it("keeps inline team reminder controls inside mobile member rows", () => {
     expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member");
-    expect(teamCss).toContain("grid-template-columns: 40px minmax(0, 1fr) minmax(44px, auto)");
+    expect(teamCss).toContain("grid-template-columns: 40px minmax(0, 1fr) 44px");
     expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member__body");
     expect(teamCss).toContain("grid-column: 2 / 4");
     expect(teamCss).toContain(".reading-team-inline--stats .reading-team-remind-btn");
-    expect(teamCss).toContain("max-width: 100%");
+    expect(teamCss).toContain("inline-size: 44px");
+    expect(teamCss).toContain(".reading-team-inline--stats .reading-team-remind-btn__label");
+    expect(teamCss).toContain("display: none");
   });
 
   it("uses adaptive semantic surfaces in light, dark, and warm themes", () => {

@@ -835,7 +835,7 @@ body.reading-team-modal-open .main-content {
 
   .reading-team-inline--stats .reading-team-member {
     align-items: center;
-    grid-template-columns: 40px minmax(0, 1fr) minmax(44px, auto);
+    grid-template-columns: 40px minmax(0, 1fr) 44px;
     grid-template-rows: auto auto;
   }
 
@@ -854,10 +854,18 @@ body.reading-team-modal-open .main-content {
   }
 
   .reading-team-inline--stats .reading-team-remind-btn {
+    block-size: 44px;
+    border-radius: 50%;
     grid-column: 3;
+    inline-size: 44px;
     justify-self: end;
-    max-width: 100%;
+    max-inline-size: 44px;
     min-width: 44px;
+    padding: 0;
+  }
+
+  .reading-team-inline--stats .reading-team-remind-btn__label {
+    display: none;
   }
 
   /* Roster card layout for mobile screens to prevent horizontal scroll */
