@@ -5,6 +5,7 @@ const migration = readFileSync("supabase/migrations/0034_admin_team_registration
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
+const css = readFileSync("index.css", "utf8");
 const html = readFileSync("index.html", "utf8");
 
 describe("admin team registration overview", () => {
@@ -48,14 +49,24 @@ describe("admin team registration overview", () => {
 
   it("bumps the app cache key", () => {
     expect(html).toContain("js/app.js?v=20260729_admin_permissions_accordion");
+    expect(html).toContain("index.css?v=20260729_admin_team_sticky_header");
   });
 
-  it("restores user permission management and makes team status collapsible", () => {
+  it("restores user permission management and uses native team disclosure", () => {
     expect(html).toContain('id="admin-users-accordion-root"');
-    expect(html).toContain('id="admin-team-status-toggle"');
+    expect(html).toContain('<details class="glass-card admin-team-status-disclosure"');
+    expect(html).toContain('<summary id="admin-team-status-toggle"');
     expect(html).toContain('aria-controls="admin-team-status-panel"');
-    expect(admin).toContain('panel.hidden = !willExpand');
-    expect(admin).toContain('toggle.setAttribute("aria-expanded", String(willExpand))');
-    expect(admin).toContain('toggleLabel.textContent = willExpand ? "收起" : "展開"');
+    expect(css).toContain(".admin-team-status-disclosure:not([open])");
+    expect(admin).not.toContain("panel.hidden = !willExpand");
+  });
+
+  it("keeps the roster header visible and labels the captain only once", () => {
+    expect(admin).toContain('class="admin-team-table-scroll"');
+    expect(admin).toContain('max-height: min(60vh, 32rem)');
+    expect(admin).toContain('<thead style="position: sticky; top: 0; z-index: 2;');
+    expect(admin).toContain('>隊長</th>');
+    expect(admin).not.toContain('隊員1 (隊長)');
+    expect(admin).not.toContain('${escapeHTML(captain.name)}（隊長）');
   });
 });

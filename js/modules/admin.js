@@ -810,20 +810,20 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
       `;
     } else {
       html += `
-        <div style="overflow-x: auto; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
+        <div class="admin-team-table-scroll" style="overflow: auto; max-height: min(60vh, 32rem); background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
           <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
-            <thead>
+            <thead style="position: sticky; top: 0; z-index: 2; background: var(--bg-input);">
               <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
                 ${Number(activeTeamDivision) === 3 ? `
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長所屬牧區</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊名</th>
-                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員1 (隊長)</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員2</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員3</th>
                 ` : `
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長所屬牧區</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊名</th>
-                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員1 (隊長)</th>
+                  <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員2</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員3</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊員4</th>
@@ -841,7 +841,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
         const captainZone = escapeHTML(team.captainPastoralZone || captain.pastoralZone || "未設定");
         const otherMembers = members.filter(member => member.role !== "captain");
         const teamName = escapeHTML(team.name || "未命名隊伍");
-        const captainName = captain.name ? `${escapeHTML(captain.name)}（隊長）` : "-";
+        const captainName = captain.name ? escapeHTML(captain.name) : "-";
         const teamStatus = team.status === "ready" ? "已成隊" : "招募中";
         const memberCount = Number(team.memberCount || members.length || 0);
 
@@ -885,21 +885,6 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
 export function initAdminTeamRegistration() {
   const tab3 = document.getElementById("admin-team-tab-3");
   const tab6 = document.getElementById("admin-team-tab-6");
-  const toggle = document.getElementById("admin-team-status-toggle");
-  const panel = document.getElementById("admin-team-status-panel");
-  const toggleLabel = document.getElementById("admin-team-status-toggle-label");
-  const toggleIcon = document.getElementById("admin-team-status-toggle-icon");
-
-  if (toggle && panel && !toggle.dataset.bound) {
-    toggle.dataset.bound = "true";
-    toggle.onclick = () => {
-      const willExpand = toggle.getAttribute("aria-expanded") !== "true";
-      toggle.setAttribute("aria-expanded", String(willExpand));
-      panel.hidden = !willExpand;
-      if (toggleLabel) toggleLabel.textContent = willExpand ? "收起" : "展開";
-      if (toggleIcon) toggleIcon.style.transform = willExpand ? "rotate(180deg)" : "rotate(0deg)";
-    };
-  }
 
   if (tab3 && tab6) {
     tab3.onclick = (e) => {

@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260726_profile_settings_redesign">
+  <link rel="stylesheet" href="index.css?v=20260729_admin_team_sticky_header">
   <link rel="stylesheet" href="css/team-registration.css?v=20260724_mobile_roster_cards">
 
   <!-- Supabase JS Client library -->
@@ -1570,20 +1570,20 @@
 
           <!-- 團隊報名狀況 (管理員專屬) -->
           <div class="card-col span-12" style="margin-top: 1.5rem;" id="admin-team-status-card-wrap">
-            <div class="glass-card">
-              <button type="button" id="admin-team-status-toggle" aria-expanded="true"
-                aria-controls="admin-team-status-panel"
+            <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure" open>
+              <summary id="admin-team-status-toggle" aria-controls="admin-team-status-panel"
                 style="width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left;">
-                <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                <span class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                   <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true" style="color: var(--primary-color);"></span>
                   團隊報名狀況 (管理員專屬)
-                </h3>
-                <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-secondary); font-size: 0.8rem; flex-shrink: 0;">
-                  <span id="admin-team-status-toggle-label">收起</span>
-                  <span id="admin-team-status-toggle-icon" class="nlc-icon nlc-icon--sm" data-icon="chevron-down"
-                    aria-hidden="true" style="transition: transform 0.2s ease; transform: rotate(180deg);"></span>
                 </span>
-              </button>
+                <span style="display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-secondary); font-size: 0.8rem; flex-shrink: 0;">
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                  <span id="admin-team-status-toggle-icon" class="nlc-icon nlc-icon--sm" data-icon="chevron-down"
+                    aria-hidden="true"></span>
+                </span>
+              </summary>
               <div id="admin-team-status-panel" style="margin-top: 1.2rem;">
                 <div style="display: flex; gap: 0.5rem; background: var(--bg-input); padding: 0.25rem; border-radius: 8px; border: 1px solid var(--border-card);">
                   <button type="button" class="tab-btn active" id="admin-team-tab-3" style="font-size: 0.75rem; padding: 0.3rem 0.8rem; border-radius: 6px; cursor: pointer; border: none; font-weight: 500; height: auto;">3 人團隊</button>
@@ -1593,7 +1593,7 @@
                   <!-- Dynamically loaded -->
                 </div>
               </div>
-            </div>
+            </details>
           </div>
 
           <!-- 問題與建議回報管理 (管理員專屬) -->

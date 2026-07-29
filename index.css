@@ -2803,6 +2803,34 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: none !important;
 }
 
+.admin-team-status-disclosure > summary {
+  list-style: none;
+}
+
+.admin-team-status-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-team-status-toggle-label--closed {
+  display: none;
+}
+
+.admin-team-status-disclosure:not([open]) .admin-team-status-toggle-label--open {
+  display: none;
+}
+
+.admin-team-status-disclosure:not([open]) .admin-team-status-toggle-label--closed {
+  display: inline;
+}
+
+#admin-team-status-toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.admin-team-status-disclosure[open] #admin-team-status-toggle-icon {
+  transform: rotate(180deg);
+}
+
 /* Footer Styling */
 .main-footer {
   text-align: center;
