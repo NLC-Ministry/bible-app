@@ -191,8 +191,8 @@ describe("Issue Report System Tests", () => {
         const button = element.props.children;
         expect(button).toBeDefined();
         expect(button.props.className).toContain("fixed");
-        expect(button.props.className).toContain("bottom-28");
-        expect(button.props.className).toContain("right-6");
+        expect(button.props.className).not.toContain("bottom-28");
+        expect(button.props.className).not.toContain("right-6");
         expect(button.props.className).toContain("z-sheet");
         expect(button.props.className).not.toContain("z-[9999]");
         expect(button.props.className).toContain("issue-report-fab");

@@ -85,41 +85,41 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
   return (
     <Drawer open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DrawerContent className="mx-auto max-w-lg">
-        <DrawerHeader>
+        <DrawerHeader className="shrink-0">
           <DrawerTitle>問題與建議回報</DrawerTitle>
           <DrawerDescription>
             請詳細描述您遇到的問題，系統將自動附帶調試資訊。
           </DrawerDescription>
         </DrawerHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
-          {message && (
-            <div
-              className="mx-4 mb-2 flex items-center gap-2 rounded-md border p-3 text-sm font-medium"
-              style={
-                message.type === "success"
-                  ? {
-                      backgroundColor: "var(--color-success-subtle)",
-                      borderColor: "var(--color-success-border)",
-                      color: "var(--color-success-foreground)",
-                    }
-                  : {
-                      backgroundColor: "var(--color-danger-subtle)",
-                      borderColor: "var(--color-danger)",
-                      color: "var(--color-danger-foreground)",
-                    }
-              }
-            >
-              {message.type === "success" ? (
-                <CheckCircle className="h-4 w-4 shrink-0" />
-              ) : (
-                <AlertCircle className="h-4 w-4 shrink-0" />
-              )}
-              <span>{message.text}</span>
-            </div>
-          )}
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
+            {message && (
+              <div
+                className="flex items-center gap-2 rounded-md border p-3 text-sm font-medium"
+                style={
+                  message.type === "success"
+                    ? {
+                        backgroundColor: "var(--color-success-subtle)",
+                        borderColor: "var(--color-success-border)",
+                        color: "var(--color-success-foreground)",
+                      }
+                    : {
+                        backgroundColor: "var(--color-danger-subtle)",
+                        borderColor: "var(--color-danger)",
+                        color: "var(--color-danger-foreground)",
+                      }
+                }
+              >
+                {message.type === "success" ? (
+                  <CheckCircle className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
+                <span>{message.text}</span>
+              </div>
+            )}
 
-          <div className="flex flex-col gap-4 px-4">
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="category"
@@ -178,7 +178,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          <DrawerFooter>
+          <DrawerFooter className="pb-[max(1rem,env(safe-area-inset-bottom))]">
             <button
               type="submit"
               disabled={isLoading || watchDescription.length < 1 || watchDescription.length > 500}
