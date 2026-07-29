@@ -10946,6 +10946,109 @@ body.dark-theme .custom-confirm-overlay {
   margin-top: 0.6rem !important;
 }
 
+.plan-team-invite-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.plan-team-invite-shortcut__body {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.plan-team-invite-shortcut__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  flex: 0 0 auto;
+}
+
+.plan-team-invite-shortcut__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.plan-team-invite-shortcut__copy strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan-team-invite-shortcut__copy span {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.plan-team-invite-shortcut__action,
+.plan-card-action-btn {
+  min-height: 44px;
+  white-space: normal;
+}
+
+.plan-card-participation-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.plan-card-action-btn {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.plan-card-participation-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0.22rem 0.58rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+@media (max-width: 640px) {
+  .plan-team-invite-shortcut {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .plan-team-invite-shortcut__action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .plan-card-participation-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .plan-card-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* ==================== 🔔 Notification Bell & Dropdown CSS ==================== */
 .notification-bell-badge {
   position: absolute;
