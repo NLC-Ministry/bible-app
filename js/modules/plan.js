@@ -1,5 +1,11 @@
 // Combined plan and stats module
 
+import {
+  isAlreadyJoinedTeamResult,
+  resetPlanTeamInvitePanelState,
+  resolveTeamJoinEffectivePlan
+} from "./plan-team-navigation-helpers.mjs";
+
 // Reading plans tab view controller
 
 window._currentStatsTab = 'personal';
@@ -639,10 +645,12 @@ function resetPlanTeamInvitePanel({ restoreFocus = false } = {}) {
   const fallbackMine = document.querySelector('#plan-list-status-pills .pill-btn[data-filter="mine"]');
   const target = activePill || fallbackMine;
 
-  if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
-  trigger?.setAttribute("aria-expanded", "false");
-  if (target) target.click();
-  if (restoreFocus) trigger?.focus();
+  resetPlanTeamInvitePanelState({
+    panel: joinTeamContainer,
+    trigger,
+    target,
+    restoreFocus
+  });
 }
 
 function closePlanTeamInvitePanel() {
@@ -1697,7 +1705,7 @@ async function joinTeamGlobally(inviteCode) {
       if (!planId) continue;
 
       const res = await db.joinReadingTeam(plan, code);
-      if (res && res.success) {
+      if (res && (res.success || isAlreadyJoinedTeamResult(res))) {
         joinResult = res;
         matchingPlan = plan;
         break;
@@ -1708,29 +1716,27 @@ async function joinTeamGlobally(inviteCode) {
       }
     }
 
-    if (!joinResult || !joinResult.success) {
+    if (!joinResult || (!joinResult.success && !isAlreadyJoinedTeamResult(joinResult))) {
       return {
         success: false,
         message: (joinResult && joinResult.message) || "找不到這組邀請碼，請向隊長確認。"
       };
     }
 
-    // Auto join the plan itself if not joined yet
-    let effectivePlan = matchingPlan;
-    const hasJoinedPlan = (state.activePlans || []).some(p =>
-      p.id === matchingPlan.id || p.presetKey === matchingPlan.presetKey || p.globalPlanId === matchingPlan.globalPlanId
-    );
-
-    if (!hasJoinedPlan) {
-      const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
-      const joinedPlan = await db.joinPresetPlan(matchingPlan.presetKey || matchingPlan.id, defaultSchedule);
-      if (!joinedPlan) {
-        return {
-          success: false,
-          message: "已加入團隊，但無法自動加入對應讀經計畫。請重新整理後再試。"
-        };
+    const effectivePlan = await resolveTeamJoinEffectivePlan({
+      teamJoinResult: joinResult,
+      matchingPlan,
+      activePlans: state.activePlans || [],
+      joinPlan: async plan => {
+        const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
+        return db.joinPresetPlan(plan.presetKey || plan.id, defaultSchedule);
       }
-      effectivePlan = joinedPlan;
+    });
+    if (!effectivePlan) {
+      return {
+        success: false,
+        message: "已加入團隊，但無法自動加入對應讀經計畫。請重新整理後再試。"
+      };
     }
 
     return { success: true, plan: effectivePlan, result: joinResult };
@@ -1773,7 +1779,13 @@ function setupGlobalJoinTeamForm() {
     try {
       const res = await window.joinTeamGlobally(code);
       if (res && res.success) {
-        showToast(`已成功加入「${res.plan.name}」團隊！`);
+        const planName = res.plan && res.plan.name ? res.plan.name : "對應讀經計畫";
+        const teamData = res.result && res.result.data;
+        const teamName = teamData && (teamData.teamName || teamData.name || teamData.team && teamData.team.name)
+          || res.result && (res.result.teamName || res.result.name);
+        showToast(teamName
+          ? `已成功加入「${planName}」的「${teamName}」團隊！`
+          : `已成功加入「${planName}」的團隊！`);
         input.value = "";
 
         resetPlanTeamInvitePanel();

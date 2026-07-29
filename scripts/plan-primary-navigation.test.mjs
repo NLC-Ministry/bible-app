@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  isAlreadyJoinedTeamResult,
+  resetPlanTeamInvitePanelState,
+  resolveTeamJoinEffectivePlan
+} from "../js/modules/plan-team-navigation-helpers.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const html = readFileSync(join(root, "index.html"), "utf8");
@@ -86,5 +92,94 @@ describe("plan join navigation", () => {
     expect(plan).toContain("async function showDiscoverPlans");
     expect(plan).toContain('document.querySelector(\'#plan-list-status-pills .pill-btn[data-filter="saved"]\')?.click()');
     expect(plan).toContain("window.showDiscoverPlans = showDiscoverPlans");
+  });
+});
+
+describe("plan team invite navigation helpers", () => {
+  it("recognizes already-joined team results from structured and fallback values", () => {
+    expect(isAlreadyJoinedTeamResult({ error: { code: "already_in_plan_division" } })).toBe(true);
+    expect(isAlreadyJoinedTeamResult({ code: "already_in_plan_team" })).toBe(true);
+    expect(isAlreadyJoinedTeamResult({ error: "already_in_plan_division" })).toBe(true);
+    expect(isAlreadyJoinedTeamResult({ message: "你已加入這個人數組別的團隊。" })).toBe(true);
+    expect(isAlreadyJoinedTeamResult({ error: { code: "reading_team_full" }, message: "這個團隊已額滿。" })).toBe(false);
+  });
+
+  it("returns a matching joined plan without auto-joining it again", async () => {
+    const matchingPlan = { id: "global-plan", presetKey: "summer-plan" };
+    const joinPlan = vi.fn();
+
+    const effectivePlan = await resolveTeamJoinEffectivePlan({
+      teamJoinResult: { success: true },
+      matchingPlan,
+      activePlans: [{ id: "reading-plan", presetKey: "summer-plan" }],
+      joinPlan
+    });
+
+    expect(effectivePlan).toBe(matchingPlan);
+    expect(joinPlan).not.toHaveBeenCalled();
+  });
+
+  it("returns the auto-joined plan when team joining succeeds", async () => {
+    const matchingPlan = { id: "global-plan" };
+    const joinedPlan = { id: "reading-plan", globalPlanId: "global-plan" };
+    const joinPlan = vi.fn().mockResolvedValue(joinedPlan);
+
+    const effectivePlan = await resolveTeamJoinEffectivePlan({
+      teamJoinResult: { success: true },
+      matchingPlan,
+      activePlans: [],
+      joinPlan
+    });
+
+    expect(effectivePlan).toBe(joinedPlan);
+    expect(joinPlan).toHaveBeenCalledWith(matchingPlan);
+  });
+
+  it("returns failure when automatic plan joining fails", async () => {
+    const joinPlan = vi.fn().mockResolvedValue(null);
+
+    const effectivePlan = await resolveTeamJoinEffectivePlan({
+      teamJoinResult: { success: true },
+      matchingPlan: { id: "global-plan" },
+      activePlans: [],
+      joinPlan
+    });
+
+    expect(effectivePlan).toBeNull();
+  });
+
+  it("retries plan participation after an already-in-team result", async () => {
+    const joinedPlan = { id: "reading-plan", globalPlanId: "global-plan" };
+    const joinPlan = vi.fn().mockResolvedValue(joinedPlan);
+
+    const effectivePlan = await resolveTeamJoinEffectivePlan({
+      teamJoinResult: { success: false, error: { code: "already_in_plan_division" } },
+      matchingPlan: { id: "global-plan" },
+      activePlans: [],
+      joinPlan
+    });
+
+    expect(effectivePlan).toBe(joinedPlan);
+    expect(joinPlan).toHaveBeenCalledOnce();
+  });
+
+  it("resets the invite panel and restores focus to its trigger", () => {
+    const dom = new JSDOM(`
+      <section id="invite-panel"></section>
+      <button id="invite-trigger" aria-expanded="true">Open</button>
+      <button id="active-filter">Mine</button>
+    `);
+    const panel = dom.window.document.getElementById("invite-panel");
+    const trigger = dom.window.document.getElementById("invite-trigger");
+    const target = dom.window.document.getElementById("active-filter");
+    const clickHandler = vi.fn();
+    target.addEventListener("click", clickHandler);
+
+    resetPlanTeamInvitePanelState({ panel, trigger, target, restoreFocus: true });
+
+    expect(panel.classList.contains("hidden")).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(clickHandler).toHaveBeenCalledOnce();
+    expect(dom.window.document.activeElement).toBe(trigger);
   });
 });

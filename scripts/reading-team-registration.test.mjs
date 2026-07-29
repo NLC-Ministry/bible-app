@@ -304,25 +304,24 @@ describe("NLC and browser integration", () => {
     expect(trigger).toContain('aria-controls="join-team-container"');
     expect(trigger).toContain('aria-expanded="false"');
     expect(panelFlow).toContain('trigger?.setAttribute("aria-expanded", "true")');
-    expect(panelFlow).toContain('trigger?.setAttribute("aria-expanded", "false")');
     expect(panelFlow).toContain("function resetPlanTeamInvitePanel");
+    expect(panelFlow).toContain("resetPlanTeamInvitePanelState({");
+    expect(panelFlow).toContain("restoreFocus");
     expect(panelFlow).toContain("resetPlanTeamInvitePanel({ restoreFocus: true })");
-    expect(panelFlow).toContain("if (restoreFocus) trigger?.focus()");
     expect(plan).toContain('openInviteBtn?.setAttribute("aria-expanded", "false")');
   });
 
-  it("returns the effective auto-joined plan and fails when plan joining fails", () => {
+  it("delegates successful and already-joined team results to effective plan resolution", () => {
     const globalJoinFlow = plan.slice(
       plan.indexOf("async function joinTeamGlobally"),
       plan.indexOf("window.joinTeamGlobally")
     );
 
-    expect(globalJoinFlow).toContain("let effectivePlan = matchingPlan");
-    expect(globalJoinFlow).toContain("const joinedPlan = await db.joinPresetPlan");
-    expect(globalJoinFlow).toContain("if (!joinedPlan)");
-    expect(globalJoinFlow).toContain("effectivePlan = joinedPlan");
+    expect(globalJoinFlow).toContain("res.success || isAlreadyJoinedTeamResult(res)");
+    expect(globalJoinFlow).toContain("resolveTeamJoinEffectivePlan({");
+    expect(globalJoinFlow).toContain("return db.joinPresetPlan");
+    expect(globalJoinFlow).toContain("if (!effectivePlan)");
     expect(globalJoinFlow).toContain("plan: effectivePlan");
-    expect(globalJoinFlow.indexOf("if (!joinedPlan)")).toBeLessThan(globalJoinFlow.indexOf("effectivePlan = joinedPlan"));
   });
 
   it("routes invite-code success into the resolved plan team surface", () => {
