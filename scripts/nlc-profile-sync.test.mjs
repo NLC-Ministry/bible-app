@@ -7,7 +7,8 @@ import {
   mergeOrgSources,
   resolveSyncedRole,
   buildLockedFields,
-  projectOrgFieldsFromHub
+  projectOrgFieldsFromHub,
+  buildOrgProjectionAudit
 } from "./lib/nlc-profile-sync.mjs";
 
 describe("orgFromCareChain", () => {
@@ -200,6 +201,78 @@ describe("projectOrgFieldsFromHub", () => {
   });
 });
 
+describe("buildOrgProjectionAudit", () => {
+  it("captures canonical placement, every org source, and the final profile projection", () => {
+    const audit = buildOrgProjectionAudit({
+      memberContext: { hasRequiredPlacement: true },
+      organization: {
+        placementNodeId: "node-1",
+        placementNodeName: "馬鈴薯",
+        placementLevelName: "小組"
+      },
+      platformOrgFields: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: null },
+      placementOrgFields: { great_region: null, pastoral_zone: null, small_group: null },
+      contextOrgFields: { great_region: null, pastoral_zone: null, small_group: "馬鈴薯" },
+      mergedOrg: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: "馬鈴薯" },
+      projectedOrg: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: "馬鈴薯" },
+      existingProfile: { great_region: "", pastoral_zone: "", small_group: "" },
+      orgResolutionSource: "member_hub_context",
+      memberContextError: null
+    });
+
+    expect(audit).toMatchObject({
+      source: "member_hub_context",
+      status: "projected",
+      member_context_available: true,
+      canonical_placement: {
+        placementNodeId: "node-1",
+        placementNodeName: "馬鈴薯",
+        placementLevelName: "小組",
+        hasRequiredPlacement: true
+      },
+      inputs: {
+        platform: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: null },
+        context: { great_region: null, pastoral_zone: null, small_group: "馬鈴薯" },
+        merged: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: "馬鈴薯" }
+      },
+      projected_profile: { great_region: "北大區", pastoral_zone: "青年牧區", small_group: "馬鈴薯" }
+    });
+  });
+
+  it("marks an available Member Hub context as empty when no source projected org labels", () => {
+    const audit = buildOrgProjectionAudit({
+      memberContext: { hasRequiredPlacement: true },
+      organization: {
+        placementNodeId: "home-1",
+        placementNodeName: "恩典小家",
+        placementLevelName: "小家"
+      },
+      platformOrgFields: { great_region: null, pastoral_zone: null, small_group: null },
+      placementOrgFields: { great_region: null, pastoral_zone: null, small_group: null },
+      contextOrgFields: { great_region: null, pastoral_zone: null, small_group: null },
+      mergedOrg: { great_region: null, pastoral_zone: null, small_group: null },
+      projectedOrg: { great_region: "", pastoral_zone: "", small_group: "" },
+      existingProfile: { great_region: "舊大區", pastoral_zone: "舊牧區", small_group: "舊小組" },
+      orgResolutionSource: "none",
+      memberContextError: null
+    });
+
+    expect(audit.status).toBe("empty");
+    expect(audit.member_context_available).toBe(true);
+    expect(audit.canonical_placement).toEqual({
+      placementNodeId: "home-1",
+      placementNodeName: "恩典小家",
+      placementLevelName: "小家",
+      hasRequiredPlacement: true
+    });
+    expect(audit.projected_profile).toEqual({
+      great_region: null,
+      pastoral_zone: null,
+      small_group: null
+    });
+  });
+});
+
 describe("nlc-session member context sync timestamp", () => {
   it("sets member_context_synced_at from the successful session sync timestamp", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
@@ -255,5 +328,14 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source).toContain("member_context_sync_status: memberContextSyncStatus");
     expect(source).toContain("member_context_sync_error: memberContextError");
     expect(source).toContain("member_context_sync_status: memberContextSyncStatus");
+  });
+
+  it("persists and logs org projection diagnostics for production troubleshooting", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("const orgProjectionAudit = buildOrgProjectionAudit");
+    expect(source).toContain("identityMetadata.org_projection_audit = orgProjectionAudit");
+    expect(source).toContain('console.info("nlc-session org projection"');
+    expect(source).toContain("org_projection_debug: orgProjectionAudit");
   });
 });

@@ -151,6 +151,63 @@ function projectOrgFieldsFromHub(
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function copyOrgFields(org: any) {
+  return {
+    great_region: org?.great_region || null,
+    pastoral_zone: org?.pastoral_zone || null,
+    small_group: org?.small_group || null
+  };
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+function buildOrgProjectionAudit({
+  memberContext,
+  organization,
+  platformOrgFields,
+  placementOrgFields,
+  contextOrgFields,
+  mergedOrg,
+  projectedOrg,
+  existingProfile,
+  orgResolutionSource,
+  memberContextError
+}: {
+  memberContext: any;
+  organization: any;
+  platformOrgFields: any;
+  placementOrgFields: any;
+  contextOrgFields: any;
+  mergedOrg: any;
+  projectedOrg: any;
+  existingProfile: any;
+  orgResolutionSource: string;
+  memberContextError: string | null;
+}) {
+  const canonicalPlacement = {
+    placementNodeId: organization?.placementNodeId || null,
+    placementNodeName: organization?.placementNodeName || null,
+    placementLevelName: organization?.placementLevelName || null,
+    hasRequiredPlacement: memberContext?.hasRequiredPlacement ?? null
+  };
+
+  return {
+    source: orgResolutionSource || "none",
+    status: projectedOrg?.great_region || projectedOrg?.pastoral_zone || projectedOrg?.small_group ? "projected" : "empty",
+    member_context_available: Boolean(memberContext),
+    member_context_error: memberContextError || null,
+    canonical_placement: canonicalPlacement,
+    inputs: {
+      platform: copyOrgFields(platformOrgFields),
+      placement: copyOrgFields(placementOrgFields),
+      context: copyOrgFields(contextOrgFields),
+      merged: copyOrgFields(mergedOrg)
+    },
+    existing_profile: copyOrgFields(existingProfile),
+    projected_profile: copyOrgFields(projectedOrg)
+  };
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
   const contextOrg = orgFromMemberContext(contextOrganization);
 
@@ -499,6 +556,19 @@ Deno.serve(async (req: Request) => {
     // Member Hub is canonical only when the context endpoint was reachable for this session.
     const hubLinked = !!memberContext;
     const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
+    const orgProjectionAudit = buildOrgProjectionAudit({
+      memberContext,
+      organization,
+      platformOrgFields,
+      placementOrgFields,
+      contextOrgFields,
+      mergedOrg,
+      projectedOrg,
+      existingProfile,
+      orgResolutionSource,
+      memberContextError
+    });
+    console.info("nlc-session org projection", JSON.stringify(orgProjectionAudit));
 
     const sourceValues: Record<string, string | null> = {
       email: lookupEmail,
@@ -607,6 +677,7 @@ Deno.serve(async (req: Request) => {
       org_cleanup_result: orgCleanupResult,
       org_cleanup_error: orgCleanupError
     };
+    identityMetadata.org_projection_audit = orgProjectionAudit;
     if (memberContextError) {
       identityMetadata.member_context_error = memberContextError;
     }
@@ -638,7 +709,8 @@ Deno.serve(async (req: Request) => {
       profile,
       locked_fields: lockedFields,
       membership_status: membershipStatus,
-      member_context_error: memberContextError
+      member_context_error: memberContextError,
+      org_projection_debug: orgProjectionAudit
     });
   } catch (err) {
     // Log full detail server-side
