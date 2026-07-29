@@ -2167,7 +2167,7 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
           <!-- 巢狀回覆輸入框 -->
           <div id="reply-input-box-${c.id}" class="hidden mt-3 pt-3 border-t border-dashed border-slate-200/10">
             <div class="flex items-center space-x-2">
-              <input type="text" id="reply-input-${c.id}" placeholder="回覆 ${escapeHTML(commName)}..." class="form-control" style="font-size: 0.75rem; padding: 0.35rem 1rem; border-radius: 9999px; flex: 1;">
+              <input type="text" id="reply-input-${c.id}" placeholder="回覆 ${escapeHTML(commName)}..." class="form-control" style="padding: 0.35rem 1rem; border-radius: 9999px; flex: 1;">
               <button type="button" class="primary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalReply('${c.note_id}', '${c.id}')">發送</button>
               <button type="button" class="secondary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap;" onclick="window.hideReplyInputBox('${c.id}')">取消</button>
             </div>
@@ -2340,7 +2340,7 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
         </div>
 
         <div id="comment-input-container-${note.id}" class="flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
-          <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="font-size: 0.8rem; padding: 0.4rem 1.1rem; border-radius: 9999px; flex: 1;">
+          <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="padding: 0.4rem 1.1rem; border-radius: 9999px; flex: 1;">
           <button type="button" class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
         </div>
       </div>

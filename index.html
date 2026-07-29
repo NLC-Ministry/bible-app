@@ -430,7 +430,7 @@
 
                 <!-- Right: Shadcn select style (Dropdown) -->
                 <div id="wall-history-filter-wrapper" class="hidden" style="display: flex; align-items: center; flex-shrink: 1; max-width: 140px; width: 100%;">
-                  <select id="wall-history-filter" class="form-control" style="width: 100%; padding: 0 1.5rem 0 0.5rem; font-size: 0.72rem; border-radius: 6px; height: 32px; line-height: 1; border: 1px solid var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer; outline: none; font-weight: 500;">
+                  <select id="wall-history-filter" class="form-control" style="width: 100%; padding: 0 1.5rem 0 0.5rem; border-radius: 6px; height: 32px; line-height: 1; border: 1px solid var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer; outline: none; font-weight: 500;">
                     <option value="all">全小組 / 牧區</option>
                     <option value="mine">僅看自己</option>
                   </select>
@@ -662,7 +662,7 @@
               <form id="global-join-team-form" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="display: flex; flex-direction: column; gap: 0.45rem;">
                   <label for="global-team-code-input" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">團隊邀請碼</label>
-                  <input id="global-team-code-input" class="form-control" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="請輸入邀請碼" style="padding: 0.65rem 0.8rem; font-size: 0.95rem; border-radius: 10px; text-transform: uppercase;">
+                  <input id="global-team-code-input" class="form-control" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="請輸入邀請碼" style="padding: 0.65rem 0.8rem; border-radius: 10px; text-transform: uppercase;">
                 </div>
                 <button type="submit" class="primary-btn" id="global-join-team-submit-btn" style="padding: 0.65rem; border-radius: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer;">
                   <span class="nlc-icon" data-icon="check" aria-hidden="true"></span>
@@ -708,7 +708,7 @@
                 </h4>
                 <input type="hidden" id="admin-edit-plan-id">
                 <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱"
-                  style="font-size: 0.85rem; padding: 0.4rem;">
+                  style="padding: 0.4rem;">
                 <div class="form-group" style="display: flex; gap: 1rem; align-items: center; font-size: 0.85rem; color: var(--text-primary);">
                   <span style="font-weight: 500;">排程類型：</span>
                   <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
@@ -722,13 +722,13 @@
                 </div>
                 <div id="admin-plan-date-inputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                   <input type="date" id="admin-plan-start-date" class="form-control"
-                    style="font-size: 0.85rem; padding: 0.4rem;">
+                    style="padding: 0.4rem;">
                   <input type="date" id="admin-plan-end-date" class="form-control"
-                    style="font-size: 0.85rem; padding: 0.4rem;">
+                    style="padding: 0.4rem;">
                 </div>
                 <div id="admin-plan-duration-container" style="display: none;">
                   <input type="number" id="admin-plan-duration-days" class="form-control" placeholder="計畫總天數 (例如 90)"
-                    style="font-size: 0.85rem; padding: 0.4rem; width: 100%;" min="1">
+                    style="padding: 0.4rem; width: 100%;" min="1">
                 </div>
                 <div class="form-group">
                   <div style="display: flex; gap: 0.2rem; margin-bottom: 0.4rem; justify-content: space-between;">
@@ -1273,11 +1273,11 @@
                   <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">查看範圍</h3>
                 </div>
                 <select id="members-admin-region-select" class="form-control"
-                  style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+                  style="width: auto; min-width: 140px; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
                 <select id="members-admin-zone-select" class="form-control"
-                  style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+                  style="width: auto; min-width: 140px; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
                 <select id="members-admin-group-select" class="form-control"
-                  style="width: auto; min-width: 140px; font-size: 0.82rem; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
+                  style="width: auto; min-width: 140px; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
 
                 <!-- Hidden master select for backward-compatibility -->
                 <select id="members-zone-selector" class="form-control hidden" style="display: none;"></select>

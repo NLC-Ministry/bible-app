@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 const css = readFileSync("index.css", "utf8");
+const nonTextualInputTypes = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit"
+]);
 const safetySectionMarker = "/* Mobile form control font-size safety net */";
 const protectedSelectors = [
   ".form-control",
@@ -21,6 +34,40 @@ const cssRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
   start: match.index,
   end: match.index + match[0].length
 }));
+
+function listJavaScriptFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return listJavaScriptFiles(path);
+    return entry.isFile() && /\.m?js$/.test(entry.name) ? [path] : [];
+  });
+}
+
+function findSmallInlineControlFontSizes(source, file) {
+  const violations = [];
+  const controlPattern = /<(input|textarea|select)\b[^>]*>/gi;
+
+  for (const match of source.matchAll(controlPattern)) {
+    const [, tagName] = match;
+    const tag = match[0];
+    const type = tag.match(/\btype\s*=\s*["']?([^\s"'>]+)/i)?.[1]?.toLowerCase();
+    if (tagName.toLowerCase() === "input" && nonTextualInputTypes.has(type)) continue;
+
+    const style = tag.match(/\bstyle\s*=\s*(["'])([\s\S]*?)\1/i)?.[2];
+    const fontSize = style?.match(/\bfont-size\s*:\s*([0-9]*\.?[0-9]+)\s*(px|rem)\b/i);
+    if (!fontSize) continue;
+
+    const size = Number(fontSize[1]);
+    const unit = fontSize[2].toLowerCase();
+    const isTooSmall = (unit === "px" && size < 16) || (unit === "rem" && size < 1);
+    if (!isTooSmall) continue;
+
+    const line = source.slice(0, match.index).split("\n").length;
+    violations.push(`${file}:${line} has inline font-size: ${fontSize[1]}${unit}`);
+  }
+
+  return violations;
+}
 
 describe("mobile form control font-size safety", () => {
   it("defines a 16px minimum form-control text token", () => {
@@ -70,5 +117,14 @@ describe("mobile form control font-size safety", () => {
     const html = readFileSync("index.html", "utf8");
     expect(html).not.toMatch(/maximum-scale\s*=\s*1/i);
     expect(html).not.toMatch(/user-scalable\s*=\s*no/i);
+  });
+
+  it("does not set an inline font size below 16px on text-entry controls", () => {
+    const sourceFiles = ["index.html", ...listJavaScriptFiles("js")].sort();
+    const violations = sourceFiles.flatMap((file) =>
+      findSmallInlineControlFontSizes(readFileSync(file, "utf8"), file)
+    );
+
+    expect(violations).toEqual([]);
   });
 });
