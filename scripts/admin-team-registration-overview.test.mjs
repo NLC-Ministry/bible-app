@@ -48,7 +48,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260729_admin_permissions_accordion");
+    expect(html).toContain("js/app.js?v=20260729_tab_navigation_memory");
     expect(html).toContain("index.css?v=20260729_admin_team_sticky_header");
   });
 
