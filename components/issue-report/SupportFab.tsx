@@ -8,6 +8,12 @@ interface SupportFabProps {
   isOpen: boolean;
 }
 
+function isLoginGateVisibleNow(): boolean {
+  if (typeof document === "undefined") return false;
+  const loginGate = document.getElementById("login-gate");
+  return Boolean(loginGate && !loginGate.classList.contains("hidden"));
+}
+
 export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
   const [currentPath, setCurrentPath] = React.useState(
     typeof window !== "undefined" ? window.location.pathname : ""
@@ -27,24 +33,19 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
     };
   }, []);
 
-  const getLoginGateVisible = React.useCallback(() => {
-    if (typeof document === "undefined") return false;
-    const loginGate = document.getElementById("login-gate");
-    return Boolean(loginGate && !loginGate.classList.contains("hidden"));
-  }, []);
-  const [isLoginGateVisible, setIsLoginGateVisible] = React.useState(getLoginGateVisible);
+  const [isLoginGateVisible, setIsLoginGateVisible] = React.useState(isLoginGateVisibleNow());
 
   React.useEffect(() => {
     if (typeof document === "undefined") return;
     const loginGate = document.getElementById("login-gate");
     if (!loginGate) return;
 
-    const syncLoginGateVisibility = () => setIsLoginGateVisible(getLoginGateVisible());
+    const syncLoginGateVisibility = () => setIsLoginGateVisible(isLoginGateVisibleNow());
     syncLoginGateVisibility();
     const observer = new MutationObserver(syncLoginGateVisibility);
     observer.observe(loginGate, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
-  }, [getLoginGateVisible]);
+  }, []);
 
   const [isVisible, setIsVisible] = React.useState(true);
 

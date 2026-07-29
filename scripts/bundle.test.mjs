@@ -76,6 +76,7 @@ describe("emitBundle esbuild invocation", () => {
     const source = readFileSync(join(root, "scripts/bundle.mjs"), "utf8");
     expect(source).toContain("--outfile=");
     expect(source).toContain("ENOBUFS");
+    expect(source).toMatch(/issueReportEntry[\s\S]*--format=esm/);
     expect(source).not.toMatch(
       /execSync\(`\$\{esbuildCmd\} "\$\{entryPoint\}" --bundle --minify --target=es2020`/
     );
@@ -132,9 +133,14 @@ describe("emitBundle (integration, real repo)", () => {
       // modules folder copied
       expect(existsSync(join(out, "modules"))).toBe(true);
       expect(readdirSync(join(out, "modules")).length).toBeGreaterThan(0);
+      const issueReportBundle = rf(join(out, "modules", "issue-report-ui.bundle.js"), "utf8");
+      expect(issueReportBundle).toMatch(/export\s*\{[^}]*mountIssueReportUi/);
       // contains app bundle code
       const bundle = rf(join(out, jsFile), "utf8");
       expect(bundle.includes("Lazy-loading")).toBe(true);
+      expect(bundle).not.toContain("__BUILD_VERSION__");
+      expect(bundle).toContain("issue-report-ui.bundle.js");
+      expect(bundle).toMatch(/\d{14}_clean_demo_mode_v20/);
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

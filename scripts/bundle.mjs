@@ -120,7 +120,7 @@ export function emitBundle({ root, outDir }) {
 
   // 💡 一勞永逸的快取清除法：動態產生當次建置版號，並替換程式中的 placeholder 欄位
   const buildVer = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-  const processedJs = bundleJs.replace(/"__BUILD_VERSION__"/g, `"${buildVer}"`);
+  const processedJs = bundleJs.replace(/__BUILD_VERSION__/g, buildVer);
 
   const jsFile = `app.${contentHash(processedJs)}.js`;
   const cssFile = `index.${contentHash(cssContent)}.css`;
@@ -174,7 +174,7 @@ export function emitBundle({ root, outDir }) {
     const issueReportOut = join(outDir, "modules", "issue-report-ui.bundle.js");
     mkdirSync(join(outDir, "modules"), { recursive: true });
     execSync(
-      `${esbuildCmd} "${issueReportEntry}" --bundle --minify --target=es2020 --alias:@=. --outfile="${issueReportOut}"`,
+      `${esbuildCmd} "${issueReportEntry}" --bundle --minify --target=es2020 --format=esm --alias:@=. --outfile="${issueReportOut}"`,
       {
         encoding: "utf8",
         cwd: root,
