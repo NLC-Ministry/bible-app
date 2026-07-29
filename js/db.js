@@ -1969,7 +1969,8 @@ const db = {
       team_plan_not_found: "這個計畫目前未開放團隊報名。",
       team_statistics_admin_required: "目前無法查看這項團隊資料。",
       invalid_team_division: "團隊只能選擇 3 人組或 6 人組。",
-      invalid_team_name: "請輸入 1 至 40 字的團隊名稱。",
+      invalid_team_name: "請輸入 1 至 40 字的團隊名稱，且不可包含控制字元或 HTML 尖括號。",
+      duplicate_team_name: "這個團隊名稱已有人使用，請換一個名稱。",
       already_in_plan_team: "你已加入這個人數組別的團隊。",
       already_in_plan_division: "你已加入這個人數組別的團隊；仍可參加另一種人數的團隊。",
       team_invite_not_found: "找不到這組邀請碼，請向隊長確認。",
@@ -2101,6 +2102,31 @@ const db = {
     }
     const result = await this._callReadingTeamRpc("get_reading_team_statistics", { p_global_plan_id: planId });
     return result.success ? { success: true, context: result.data || { summary: {}, teams: [] } } : result;
+  },
+
+  async getReadingTeamLeaderboards(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "這個計畫目前未開放團隊排行榜。" };
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      return {
+        success: true,
+        context: {
+          division3: [
+            { id: "mock-team-1", name: "聖靈果子隊", division: 3, status: "ready", memberCount: 3, chaptersRead: 126, rank: 1 },
+            { id: "mock-team-2", name: "信心得勝隊", division: 3, status: "forming", memberCount: 2, chaptersRead: 74, rank: 2 }
+          ],
+          division6: [
+            { id: "mock-team-3", name: "恩典滿滿隊", division: 6, status: "ready", memberCount: 6, chaptersRead: 238, rank: 1 }
+          ]
+        }
+      };
+    }
+    const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
+      p_global_plan_id: planId
+    });
+    return result.success
+      ? { success: true, context: result.data || { division3: [], division6: [] } }
+      : result;
   },
 
   async createReadingTeam(plan, division, name) {
