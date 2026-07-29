@@ -93,4 +93,16 @@ describe("plan card information architecture", () => {
     expect(planCardCss).toContain("font-size: 0.72rem");
     expect(planCardCss).toContain("max-width: 100%");
   });
+
+  it("does not duplicate joined-plan team entry points", () => {
+    const joinedList = plan.slice(
+      plan.indexOf("function renderJoinedPlansList"),
+      plan.indexOf("function formatCampaignReadingRange")
+    );
+
+    expect(joinedList).toContain("plan-card-team-controls");
+    expect(joinedList).toContain("報名 ${division}人組");
+    expect(joinedList).not.toContain('action: "team"');
+    expect(joinedList).not.toContain('[data-plan-card-action="team"]');
+  });
 });

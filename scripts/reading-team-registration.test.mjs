@@ -134,7 +134,6 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("async function joinPlanSoloFromCard(plan, key)");
     expect(plan).toContain("async function createTeamFromPlanCard(plan, key)");
     expect(plan).toContain('data-plan-card-action="continue"');
-    expect(plan).toContain('data-plan-card-action="team"');
     expect(plan).toContain('data-plan-card-action="solo-join"');
     expect(plan).toContain('data-plan-card-action="team-create"');
     expect(plan).toContain("個人讀經中");

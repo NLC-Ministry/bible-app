@@ -1496,8 +1496,7 @@ function renderJoinedPlansList() {
           ]),
           progress: progressHtml,
           actions: renderPlanCardActions([
-            { kind: "primary", icon: isUpcomingFixed ? "calendarThirty" : "bookOpen", label: isUpcomingFixed ? "查看計畫" : "繼續讀經", action: "continue" },
-            isTeamPlan && { kind: "secondary", icon: "people", label: "建立 / 加入團隊", action: "team" }
+            { kind: "primary", icon: isUpcomingFixed ? "calendarThirty" : "bookOpen", label: isUpcomingFixed ? "查看計畫" : "繼續讀經", action: "continue" }
           ]),
           after: teamHtml
         });
@@ -1510,11 +1509,6 @@ function renderJoinedPlansList() {
           event.preventDefault();
           event.stopPropagation();
           await openJoinedPlanProgress(plan);
-        });
-        card.querySelector('[data-plan-card-action="team"]')?.addEventListener("click", async event => {
-          event.preventDefault();
-          event.stopPropagation();
-          await openJoinedPlanTeam(plan);
         });
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
