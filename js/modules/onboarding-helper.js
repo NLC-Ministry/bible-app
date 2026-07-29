@@ -230,9 +230,11 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   document.body.appendChild(root);
   document.addEventListener("keydown", handleDialogKeydown);
 
+  const backdrop = root.querySelector("[data-onboarding-backdrop]");
   const dialog = root.querySelector("#release-onboarding-dialog");
   globalThis.hydrateIcons?.(root);
 
+  backdrop?.addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
