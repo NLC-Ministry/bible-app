@@ -509,6 +509,35 @@ describe("release onboarding helper actions", () => {
 });
 
 describe("release onboarding accessibility behavior", () => {
+  it("styles install guidance as compact progressive disclosure", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-install-guide__steps");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon svg");
+    expect(css).toContain(".release-onboarding-install-guide__support");
+    expect(css).toContain(".release-onboarding-install-guide__status");
+  });
+
+  it("keeps install helper copy free from platform implementation terms", () => {
+    const copy = [
+      JSON.stringify(getOnboardingSteps()),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Mozilla/5.0 iPhone Safari",
+        standalone: false,
+        hasPrompt: false
+      })),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      })),
+      JSON.stringify(getInstallGuideModel({
+        userAgent: "Unknown browser",
+        hasPrompt: false
+      }))
+    ].join(" ");
+    expect(copy).not.toMatch(/PWA|beforeinstallprompt|cache|release|onboarding/i);
+  });
+
   it("closes on Escape and returns focus to the manual trigger", () => {
     document.body.innerHTML = '<button id="trigger">使用說明</button>';
     const trigger = document.getElementById("trigger");
@@ -553,8 +582,8 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain("grid-template-columns: 2rem minmax(0, 1fr)");
     expect(css).toContain("width: 2rem");
     expect(css).toContain("height: 2rem");
-    expect(css).toContain("width: 1.1rem");
-    expect(css).toContain("height: 1.1rem");
+    expect(css).toContain("width: 1.05rem");
+    expect(css).toContain("height: 1.05rem");
   });
 
   it("does not rely on an undefined text button class", () => {
