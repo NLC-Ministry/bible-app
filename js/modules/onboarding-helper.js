@@ -297,7 +297,10 @@ function applyInstallPromptOutcome(choice, installGuideOptions) {
     showInstallGuide({ ...installGuideOptions, standalone: true });
     setInstallActionLabel("已安裝");
   } else {
-    showInstallGuide({ ...installGuideOptions, hasPrompt: false });
+    installGuideOptions.hasPrompt = false;
+    const manualInstallGuideModel = getInstallGuideModel(installGuideOptions);
+    showInstallGuide(installGuideOptions);
+    setInstallActionLabel(manualInstallGuideModel.primaryLabel);
     setInstallStatus("也可以手動加入主畫面。");
   }
 }
@@ -360,10 +363,10 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
           installPromptState = "failed";
           deferredInstallPrompt = null;
           console.warn("Browser install prompt failed:", error);
-          showInstallGuide({
-            ...installGuideOptions,
-            hasPrompt: false
-          });
+          installGuideOptions.hasPrompt = false;
+          const manualInstallGuideModel = getInstallGuideModel(installGuideOptions);
+          showInstallGuide(installGuideOptions);
+          setInstallActionLabel(manualInstallGuideModel.primaryLabel);
           setInstallStatus("安裝提示沒有開啟，請改用手動方式。");
         } finally {
           installPromptInFlight = null;
@@ -425,11 +428,12 @@ export function openOnboardingHelper({
 } = {}) {
   document.getElementById("release-onboarding-root")?.remove();
   lastTrigger = trigger;
+  const effectiveInstallGuideOptions = { ...installGuideOptions };
 
   const root = document.createElement("div");
   root.id = "release-onboarding-root";
   root.className = "release-onboarding-root";
-  root.innerHTML = dialogTemplate(installGuideOptions);
+  root.innerHTML = dialogTemplate(effectiveInstallGuideOptions);
   document.body.appendChild(root);
   document.addEventListener("keydown", handleDialogKeydown);
 
@@ -448,7 +452,9 @@ export function openOnboardingHelper({
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
   root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      const actionPromise = runPrimaryAction(button.dataset.onboardingAction, { installGuideOptions });
+      const actionPromise = runPrimaryAction(button.dataset.onboardingAction, {
+        installGuideOptions: effectiveInstallGuideOptions
+      });
       if (button.dataset.onboardingAction === "install" && installPromptInFlight) {
         button.disabled = true;
         actionPromise.finally(() => {

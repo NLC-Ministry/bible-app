@@ -549,6 +549,69 @@ describe("release onboarding helper actions", () => {
     expect(document.querySelector("[data-onboarding-install-status]").textContent).toContain("也可以手動加入");
   });
 
+  it("keeps Android manual steps and label when activated again after dismissal", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(installButton.textContent.trim()).toBe("查看 Android 安裝方式");
+    expect(document.querySelector("[data-onboarding-install-guide]").dataset.onboardingPlatform).toBe("android-manual");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+  });
+
+  it("keeps Android manual steps and label when activated again after prompt rejection", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(() => Promise.reject(new Error("prompt failed"))),
+      userChoice: Promise.resolve({ outcome: "dismissed" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(getInstallPromptState()).toBe("failed");
+    expect(installButton.textContent.trim()).toBe("查看 Android 安裝方式");
+    expect(document.querySelector("[data-onboarding-install-guide]").dataset.onboardingPlatform).toBe("android-manual");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("從瀏覽器選單加入");
+  });
+
   it("opens a compact iOS step-by-step install guide when native prompt is unavailable", async () => {
     document.body.innerHTML = "";
     openOnboardingHelper({
