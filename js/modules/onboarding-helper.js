@@ -87,18 +87,18 @@ export function captureInstallPrompt(event) {
   deferredInstallPrompt = event;
 }
 
-export function getInstallInstructions(userAgent = globalThis.navigator?.userAgent || "", standalone = globalThis.navigator?.standalone) {
+export function getInstallPlatform({
+  userAgent = globalThis.navigator?.userAgent || "",
+  standalone = globalThis.navigator?.standalone,
+  displayModeStandalone = globalThis.matchMedia?.("(display-mode: standalone)")?.matches,
+  hasPrompt = Boolean(deferredInstallPrompt?.prompt)
+} = {}) {
   const ua = String(userAgent);
-  if (standalone || globalThis.matchMedia?.("(display-mode: standalone)")?.matches) {
-    return "你已經可以像 App 一樣從主畫面打開。";
-  }
-  if (/iPhone|iPad|iPod/i.test(ua)) {
-    return "請在 Safari 點選分享按鈕，選擇「加入主畫面」。";
-  }
-  if (/Android/i.test(ua)) {
-    return "請在瀏覽器選單中選擇「安裝應用程式」或「加入主畫面」。";
-  }
-  return "請使用瀏覽器選單將此頁加入主畫面，之後就能更快回來讀經。";
+  if (standalone || displayModeStandalone) return "installed";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  if (/Android/i.test(ua)) return hasPrompt ? "android-prompt" : "android-manual";
+  if (hasPrompt) return "desktop";
+  return "generic";
 }
 
 function getInstallReferenceLinks() {
@@ -116,6 +116,104 @@ function getInstallReferenceLinks() {
       href: "https://support.google.com/chrome/answer/9658361?hl=zh-Hant&co=GENIE.Platform%3DAndroid"
     }
   ];
+}
+
+function getInstallGuideLinks(platform) {
+  const links = getInstallReferenceLinks();
+  if (platform === "ios") return links.filter((link) => link.label === "iPhone" || link.label === "iPad");
+  if (platform === "android-manual" || platform === "android-prompt") return links.filter((link) => link.label === "Android");
+  return links;
+}
+
+export function getInstallGuideModel(options = {}) {
+  const platform = getInstallPlatform(options);
+  const models = {
+    installed: {
+      platform,
+      title: "已經加到主畫面",
+      body: "你現在已經可以像 App 一樣快速打開。",
+      primaryLabel: "已安裝",
+      steps: [
+        { icon: "app-window", label: "下次請從主畫面上的「新生命聖經速讀計畫」圖示開啟。" }
+      ],
+      canPrompt: false,
+      installed: true
+    },
+    ios: {
+      platform,
+      title: "在 Safari 加到主畫面",
+      body: "照著三個步驟，就能像 App 一樣每天快速打開。",
+      primaryLabel: "查看 iPhone 安裝方式",
+      steps: [
+        { icon: "share", label: "點 Safari 下方的分享按鈕。" },
+        { icon: "add-square", label: "選擇「加入主畫面」。" },
+        { icon: "check", label: "點右上角「新增」。" }
+      ],
+      canPrompt: false,
+      installed: false
+    },
+    "android-prompt": {
+      platform,
+      title: "安裝成 App",
+      body: "你的瀏覽器支援直接安裝，點一下就會開啟安裝提示。",
+      primaryLabel: "安裝 App",
+      steps: [
+        { icon: "download", label: "點「安裝 App」。" },
+        { icon: "check", label: "在瀏覽器提示中選擇「安裝」。" },
+        { icon: "app-window", label: "之後從主畫面圖示打開。" }
+      ],
+      canPrompt: true,
+      installed: false
+    },
+    "android-manual": {
+      platform,
+      title: "從瀏覽器選單加入",
+      body: "如果沒有跳出安裝提示，可以從瀏覽器選單手動加入。",
+      primaryLabel: "查看 Android 安裝方式",
+      steps: [
+        { icon: "more-vertical", label: "點右上角「⋮」選單。" },
+        { icon: "add-square", label: "選擇「加到主畫面」或「安裝應用程式」。" },
+        { icon: "check", label: "點「新增」或「安裝」。" }
+      ],
+      canPrompt: false,
+      installed: false
+    },
+    desktop: {
+      platform,
+      title: "安裝到電腦",
+      body: "可從網址列或瀏覽器選單安裝，之後像桌面 App 一樣開啟。",
+      primaryLabel: "安裝 App",
+      steps: [
+        { icon: "download", label: "點網址列右側的安裝圖示，或打開瀏覽器選單。" },
+        { icon: "check", label: "選擇「安裝」。" },
+        { icon: "app-window", label: "之後從 Dock、開始功能表或啟動台開啟。" }
+      ],
+      canPrompt: true,
+      installed: false
+    },
+    generic: {
+      platform,
+      title: "加入主畫面",
+      body: "不同瀏覽器的名稱略有不同，可以從選單找到加入或安裝選項。",
+      primaryLabel: "查看安裝方式",
+      steps: [
+        { icon: "more-vertical", label: "打開瀏覽器選單。" },
+        { icon: "add-square", label: "尋找「加入主畫面」、「安裝」或「新增到桌面」。" },
+        { icon: "app-window", label: "完成後從主畫面圖示開啟。" }
+      ],
+      canPrompt: false,
+      installed: false
+    }
+  };
+
+  return {
+    ...models[platform],
+    links: getInstallGuideLinks(platform)
+  };
+}
+
+export function getInstallInstructions(userAgent = globalThis.navigator?.userAgent || "", standalone = globalThis.navigator?.standalone) {
+  return getInstallGuideModel({ userAgent, standalone }).steps.map((step) => step.label).join(" ");
 }
 
 function iconForStep(stepId) {

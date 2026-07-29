@@ -7,7 +7,9 @@ import {
   closeOnboardingHelper,
   captureInstallPrompt,
   createMemoryStorage,
+  getInstallGuideModel,
   getInstallInstructions,
+  getInstallPlatform,
   getOnboardingSteps,
   getOnboardingVersion,
   markOnboardingSeen,
@@ -249,6 +251,83 @@ describe("release onboarding helper dialog", () => {
 });
 
 describe("release onboarding helper actions", () => {
+  it("detects installed, iOS, Android prompt, Android manual, desktop, and generic install platforms", () => {
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: true
+    })).toBe("installed");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit Safari",
+      standalone: false
+    })).toBe("ios");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Linux; Android 15; Pixel Chrome/140 Mobile Safari",
+      hasPrompt: true
+    })).toBe("android-prompt");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Linux; Android 15; Pixel Chrome/140 Mobile Safari",
+      hasPrompt: false
+    })).toBe("android-manual");
+
+    expect(getInstallPlatform({
+      userAgent: "Mozilla/5.0 Macintosh; Intel Mac OS X 15_0 AppleWebKit Chrome/140 Safari",
+      hasPrompt: true
+    })).toBe("desktop");
+
+    expect(getInstallPlatform({
+      userAgent: "Unknown browser",
+      hasPrompt: false
+    })).toBe("generic");
+  });
+
+  it("returns concise Traditional Chinese install guide models per platform", () => {
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: false,
+      hasPrompt: false
+    })).toMatchObject({
+      platform: "ios",
+      title: "在 Safari 加到主畫面",
+      primaryLabel: "查看 iPhone 安裝方式",
+      canPrompt: false,
+      installed: false
+    });
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPhone Safari",
+      standalone: false,
+      hasPrompt: false
+    }).steps).toEqual([
+      { icon: "share", label: "點 Safari 下方的分享按鈕。" },
+      { icon: "add-square", label: "選擇「加入主畫面」。" },
+      { icon: "check", label: "點右上角「新增」。" }
+    ]);
+
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+      hasPrompt: true
+    })).toMatchObject({
+      platform: "android-prompt",
+      title: "安裝成 App",
+      primaryLabel: "安裝 App",
+      canPrompt: true,
+      installed: false
+    });
+
+    expect(getInstallGuideModel({
+      userAgent: "Mozilla/5.0 iPad Safari",
+      standalone: true
+    })).toMatchObject({
+      platform: "installed",
+      title: "已經加到主畫面",
+      primaryLabel: "已安裝",
+      canPrompt: false,
+      installed: true
+    });
+  });
+
   it("shows iOS home-screen instructions when install prompt is unavailable", () => {
     expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("Safari");
     expect(getInstallInstructions("Mozilla/5.0 iPhone Safari", false)).toContain("加入主畫面");
