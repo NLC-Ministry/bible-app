@@ -57,6 +57,9 @@ describe("reading team leaderboards", () => {
 
   it("renders the pastoral speed leaderboard as accessible determinate progress cards", () => {
     expect(html).toContain("牧區速度排行榜");
+    expect(html).toContain('<details class="glass-card reading-team-ranking-card pastoral-ranking-card" data-pastoral-ranking-details open>');
+    expect(html).toContain('class="reading-team-ranking-header pastoral-ranking-header"');
+    expect(html).toContain("依閱讀章數與完成時間排序；兩者相同則並列");
     expect(plan).toContain('container.className = "pastoral-race-list"');
     expect(plan).toContain("以目前最高累計章數為 100%");
     expect(plan).toContain("共 ${pastoralStats.length} 個牧區");
@@ -65,6 +68,10 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("const timeDiff = completionTime(a) - completionTime(b)");
     expect(plan).toContain("item.total_chapters === previousItem.total_chapters");
     expect(plan).toContain("pastoralCompletionTime(item) === pastoralCompletionTime(previousItem)");
+    expect(plan).toContain('const unassignedZoneLabels = new Set(["未設定", "未設定牧區", "未分類"])');
+    expect(plan).toContain("unassignedPastoralCount += 1");
+    expect(plan).toContain("人尚未設定牧區，不列入排名");
+    expect(css).toContain(".pastoral-race-unassigned");
     expect(plan).toContain('aria-label="第 ${rank} 名">${rank}');
     expect(plan).toContain("formatPastoralCompletion(item.completed_at)");
     expect(db).toContain("last_read_at: currentPlanLastReadAt");

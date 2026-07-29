@@ -4980,6 +4980,35 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   gap: 0.7rem;
 }
 
+.pastoral-race-empty {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 1rem 0.5rem;
+  text-align: center;
+}
+
+.pastoral-race-unassigned {
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  color: var(--text-muted);
+  display: flex;
+  font-size: 0.76rem;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.pastoral-race-unassigned .nlc-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.pastoral-race-unassigned strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--type-weight-strong);
+}
 .pastoral-race-row {
   --pastoral-race-fill: var(--color-brand);
   align-items: center;
