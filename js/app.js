@@ -22,6 +22,7 @@ import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 import './modules/campaign-rule-editor.js?v=20260720_round_editor';
 import './modules/team-registration.js?v=20260723_team_dual_division';
+import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js?v=20260729_release_010';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -543,5 +544,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("[IssueReportAdmin] Failed to mount AdminUsersAccordion component:", err);
   }
 });
-
-import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js?v=20260729_release_010';
