@@ -1091,6 +1091,60 @@ function getPlanCoverHtml(plan) {
   return `<div class="plan-cover-thumbnail" style="width: 72px; height: 72px; border-radius: 12px; background: ${bg}; display: flex; align-items: center; justify-content: center; color: var(--color-black); font-weight: 500; font-size: ${labelFontSize}; line-height: 1; white-space: nowrap; overflow: visible; flex-shrink: 0; box-shadow: var(--shadow-sm);">${label}</div>`;
 }
 
+function renderPlanCardHeader({ eyebrow = "", title = "", meta = "", description = "" } = {}) {
+  return `
+    <div class="plan-card__header">
+      ${eyebrow ? `<div class="plan-card__eyebrow">${eyebrow}</div>` : ""}
+      <h4 class="plan-card__title">${title}</h4>
+      ${meta ? `<div class="plan-card__meta">${meta}</div>` : ""}
+      ${description ? `<p class="plan-card__description">${description}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderPlanCardStatusSummary(items = []) {
+  const rows = items.filter(Boolean).map(item => `
+    <div class="plan-card__status-row ${item.tone ? `plan-card__status-row--${escapeHTML(item.tone)}` : ""}">
+      ${item.icon ? `<span class="nlc-icon nlc-icon--sm" data-icon="${escapeHTML(item.icon)}" aria-hidden="true"></span>` : ""}
+      <span class="plan-card__status-label">${item.label ? `${escapeHTML(item.label)}：` : ""}</span>
+      <span class="plan-card__status-value">${item.value || ""}</span>
+    </div>
+  `).join("");
+
+  if (!rows) return "";
+  return `<div class="plan-card__status">${rows}</div>`;
+}
+
+function renderPlanCardActions(actions = []) {
+  const buttons = actions.filter(Boolean).map(action => {
+    const kind = action.kind === "primary" ? "primary" : "secondary";
+    const icon = action.icon ? `<span class="nlc-icon nlc-icon--sm" data-icon="${escapeHTML(action.icon)}" aria-hidden="true"></span>` : "";
+    const dataAction = action.action ? ` data-plan-card-action="${escapeHTML(action.action)}"` : "";
+    return `
+      <button type="button" class="plan-card__${kind}-action"${dataAction}>
+        ${icon}<span>${escapeHTML(action.label || "")}</span>
+      </button>
+    `;
+  }).join("");
+
+  if (!buttons) return "";
+  return `<div class="plan-card__actions">${buttons}</div>`;
+}
+
+function renderPlanCardShell({ plan, variant = "", header = "", status = "", progress = "", actions = "", after = "" } = {}) {
+  const variantClass = variant ? ` plan-card--${escapeHTML(variant)}` : "";
+  return `
+    ${getPlanCoverHtml(plan)}
+    <div class="plan-card__main${variantClass}">
+      ${header}
+      ${status}
+      ${progress}
+      ${actions}
+      ${after}
+    </div>
+  `;
+}
+
 function normalizePlanSearchValue(value) {
   return String(value || "")
     .normalize("NFKC")
@@ -1223,18 +1277,7 @@ function renderJoinedPlansList() {
 
     plansToRender.forEach(plan => {
       const card = document.createElement("div");
-      card.className = "joined-plan-item-card";
-      card.style = `
-        background: var(--bg-card);
-        border: 1px solid var(--border-card);
-        border-radius: 16px;
-        padding: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      `;
+      card.className = "plan-card joined-plan-item-card";
       card.onclick = async () => {
         state.activePlan = plan;
         state.planDetailOpen = true;
@@ -1258,66 +1301,92 @@ function renderJoinedPlansList() {
       const isCampaignStage = plan.planKind === "church_campaign_stage";
       const campaignAwardName = plan.awardName || plan.campaignDefinition && plan.campaignDefinition.awardName || "";
       const campaignAwardEarned = isCampaignStage && (currentRound > 1 || progress >= 100);
-      const campaignAwardHtml = isCampaignStage ? `<div style="margin-top:.25rem;padding:.42rem .6rem;border-radius:10px;background:var(--bg-secondary);color:${campaignAwardEarned ? "var(--color-success-foreground)" : "var(--primary-color)"};font-size:.75rem;font-weight:500;display:flex;align-items:center;gap:.35rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span><span>${campaignAwardEarned ? "已獲得" : "完成可獲得"} ${escapeHTML(campaignAwardName)}</span></div>` : "";
       const weeklyScheduleSummary = formatFlexibleScheduleSummary(plan);
       const isUpcomingFixed = isFixedPlanUpcoming(plan);
+      const dateMeta = `
+        <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
+        <span>${escapeHTML(plan.startDate)} ~ ${escapeHTML(plan.endDate)}</span>
+      `;
 
       if (filter === "completed") {
         // Expired plan: show status label instead of progress bar
         const isCompleted = (currentRound > 1) || (progress === 100);
         const statusText = isCompleted ? "已完成" : "未完成";
-        const statusColor = isCompleted ? "var(--color-success-foreground)" : "var(--color-danger)";
 
-        card.innerHTML = `
-          ${getPlanCoverHtml(plan)}
-          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
-            <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
-              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> <span>${plan.startDate} ~ ${plan.endDate}</span>
-            </div>
-            ${campaignAwardHtml}
-            <div style="font-size: 0.82rem; font-weight: 600; color: ${statusColor}; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;">
-              狀態：${statusText}
-            </div>
-          </div>
-        `;
+        card.innerHTML = renderPlanCardShell({
+          plan,
+          variant: "completed",
+          header: renderPlanCardHeader({
+            title: escapeHTML(plan.name),
+            meta: dateMeta
+          }),
+          status: renderPlanCardStatusSummary([
+            isCampaignStage && {
+              icon: "award",
+              label: "獎項",
+              value: `${campaignAwardEarned ? "已獲得" : "完成可獲得"} ${escapeHTML(campaignAwardName)}`,
+              tone: campaignAwardEarned ? "success" : "brand"
+            },
+            {
+              icon: isCompleted ? "check" : "hourglass",
+              label: "狀態",
+              value: escapeHTML(statusText),
+              tone: isCompleted ? "success" : "danger"
+            }
+          ]),
+          actions: renderPlanCardActions([
+            { kind: "secondary", icon: "calendarThirty", label: "查看紀錄", action: "open-detail" }
+          ])
+        });
       } else {
         // Normal active plan: show progress bar
         const progressText = isUpcomingFixed
-          ? `<span style="display: inline-block; padding: 0.22rem 0.5rem; border-radius: 6px; background: color-mix(in srgb, var(--color-warning) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent); color: var(--color-warning); font-size: 0.72rem; font-weight: 600; white-space: nowrap;">${getPlanStartCountdownText(plan)}</span>`
+          ? escapeHTML(getPlanStartCountdownText(plan))
           : (currentRound > 1
             ? `已完成第 ${currentRound - 1} 遍 👑<br>第 ${currentRound} 遍：已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`
             : `已讀 ${progress}% (${plan.completedChapters} / ${plan.currentRoundTotalChapters || plan.totalChapters} 章)`);
 
         const isTeamPlan = (typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan)) || 
           !!(plan && (plan.planKind === "church_campaign_stage" || (plan.presetKey && (plan.presetKey.startsWith("church_stage_") || plan.presetKey.startsWith("preset-stage-")))));
-        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; justify-content: flex-start; width: 100%;"></div>` : "";
+        const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls"></div>` : "";
         const progressHtml = isUpcomingFixed
           ? ""
           : `<div class="plan-progress-wrapper plan-progress-wrapper--compact" style="width: 100%;">
               <div class="plan-progress-bar" style="width: ${progress}%;"></div>
             </div>`;
 
-        card.innerHTML = `
-          ${getPlanCoverHtml(plan)}
-          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
-            <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${plan.name}</h4>
-            <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
-              <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
-              <span>${plan.startDate} ~ ${plan.endDate}</span>
-            </div>
-            ${campaignAwardHtml}
-            ${progressHtml}
-            <div style="font-size: 0.76rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35; width: 100%;">
-              ${progressText}
-            </div>
-            <div class="joined-plan-schedule-summary" style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.1rem; width: 100%;">
-              <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
-              <span>${escapeHTML(weeklyScheduleSummary)}</span>
-            </div>
-            ${teamHtml}
-          </div>
-        `;
+        card.innerHTML = renderPlanCardShell({
+          plan,
+          variant: isUpcomingFixed ? "upcoming" : "joined",
+          header: renderPlanCardHeader({
+            title: escapeHTML(plan.name),
+            meta: dateMeta
+          }),
+          status: renderPlanCardStatusSummary([
+            isCampaignStage && {
+              icon: "award",
+              label: "獎項",
+              value: `${campaignAwardEarned ? "已獲得" : "完成可獲得"} ${escapeHTML(campaignAwardName)}`,
+              tone: campaignAwardEarned ? "success" : "brand"
+            },
+            {
+              icon: isUpcomingFixed ? "hourglass" : "bookOpen",
+              label: isUpcomingFixed ? "開始時間" : "進度",
+              value: progressText,
+              tone: isUpcomingFixed ? "warning" : "neutral"
+            },
+            {
+              icon: "calendarThirty",
+              label: "安排",
+              value: `<span class="joined-plan-schedule-summary">${escapeHTML(weeklyScheduleSummary)}</span>`
+            }
+          ]),
+          progress: progressHtml,
+          actions: renderPlanCardActions([
+            { kind: "primary", icon: isUpcomingFixed ? "calendarThirty" : "bookOpen", label: isUpcomingFixed ? "查看計畫" : "繼續讀經", action: "open-detail" }
+          ]),
+          after: teamHtml
+        });
 
         if (typeof hydrateIcons === "function") hydrateIcons(card);
 
@@ -1328,9 +1397,9 @@ function renderJoinedPlansList() {
             const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
 
             if (isDemo || !isLoggedIn) {
-              teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--text-muted);">👥 團隊功能需登入正式帳號</span>`;
+              teamContainer.innerHTML = `<span class="plan-card-team-controls__hint">團隊功能需登入正式帳號</span>`;
             } else {
-              teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--text-muted);">正在載入團隊狀態...</span>`;
+              teamContainer.innerHTML = `<span class="plan-card-team-controls__hint">正在載入團隊狀態...</span>`;
               db.getMyReadingTeam(plan).then(result => {
                 if (!teamContainer.parentElement) return;
                 teamContainer.innerHTML = "";
@@ -1349,20 +1418,8 @@ function renderJoinedPlansList() {
                     const themeColor = isFull ? "var(--color-success-foreground)" : "var(--primary-color)";
                     
                     const badge = document.createElement("div");
-                    badge.style.cssText = `
-                      font-size: 0.72rem;
-                      padding: 0.28rem 0.65rem;
-                      border-radius: 9999px;
-                      display: inline-flex;
-                      align-items: center;
-                      gap: 0.35rem;
-                      cursor: ${isFull ? 'default' : 'pointer'};
-                      background: color-mix(in srgb, ${themeColor} 8%, transparent);
-                      border: 1px solid color-mix(in srgb, ${themeColor} 20%, transparent);
-                      color: ${themeColor};
-                      transition: all 0.2s ease;
-                      font-weight: 500;
-                    `;
+                    badge.className = `plan-card-team-controls__badge ${isFull ? "is-full" : "is-open"}`;
+                    badge.style.color = themeColor;
                     badge.innerHTML = `
                       <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
                       <span>已入 ${division}人組 (${escapeHTML(teamName)})</span>
@@ -1378,21 +1435,7 @@ function renderJoinedPlansList() {
                   } else {
                     const btn = document.createElement("button");
                     btn.type = "button";
-                    btn.style.cssText = `
-                      font-size: 0.75rem;
-                      padding: 0.35rem 0.9rem;
-                      border-radius: 9999px;
-                      display: inline-flex;
-                      align-items: center;
-                      gap: 0.35rem;
-                      cursor: pointer;
-                      margin: 0;
-                      background: transparent;
-                      border: 1px solid var(--primary-color);
-                      color: var(--primary-color);
-                      transition: all 0.2s ease;
-                      font-weight: 600;
-                    `;
+                    btn.className = "plan-card__secondary-action plan-card-team-controls__button";
                     btn.innerHTML = `
                       <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
                       <span>報名 ${division}人組</span>
@@ -1407,7 +1450,7 @@ function renderJoinedPlansList() {
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
                 console.error("Error loading team info for card:", err);
-                teamContainer.innerHTML = `<span style="font-size: 0.73rem; color: var(--color-danger);">無法載入團隊資料</span>`;
+                teamContainer.innerHTML = `<span class="plan-card-team-controls__hint plan-card-team-controls__hint--danger">無法載入團隊資料</span>`;
               });
             }
           }
@@ -1996,41 +2039,68 @@ function renderPresetPlansList() {
       : "";
 
     const card = document.createElement("div");
-    card.className = "joined-plan-item-card";
-    card.style = "background:var(--bg-card);border:1px solid var(--border-card);border-radius:16px;padding:1rem;display:flex;align-items:center;gap:1rem;cursor:pointer;transition:all .2s ease;";
-    card.innerHTML = `
-      ${getPlanCoverHtml(plan)}
-      <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; align-items: flex-start; text-align: left;">
-        <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--text-primary); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(plan.name)}</h4>
-        <div style="font-size: 0.76rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; width: 100%;">
-          <span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span>
+    card.className = "plan-card joined-plan-item-card";
+    card.innerHTML = renderPlanCardShell({
+      plan,
+      variant: isUpcomingFixed ? "available-upcoming" : "available",
+      header: renderPlanCardHeader({
+        title: escapeHTML(plan.name),
+        meta: `
+          <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
           <span>${escapeHTML(scheduleLabel)}</span>
-        </div>
-        ${description ? `<p style="margin: .15rem 0 0; font-size: 0.76rem; line-height: 1.45; color: var(--text-secondary); width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${escapeHTML(description)}</p>` : ""}
-        ${isCampaignStage ? `<div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); display: flex; align-items: center; gap: 0.25rem;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span> 完成獲得 ${escapeHTML(awardName)}</div>` : ""}
-        ${upcomingNotice ? `<div style="padding: 0.42rem 0.58rem; border-radius: 9px; background: var(--bg-secondary); font-size: 0.74rem; line-height: 1.45; color: var(--text-secondary); width: 100%;"><span class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span> ${escapeHTML(upcomingNotice)}</div>` : ""}
-        <div style="font-size: 0.76rem; font-weight: 500; color: var(--primary-color); margin-top: 0.15rem;">${isUpcomingFixed ? "預覽計畫詳情" : "查看計畫詳情"}</div>
-      </div>
-    `;
-
+        `,
+        description: description ? escapeHTML(description) : ""
+      }),
+      status: renderPlanCardStatusSummary([
+        isCampaignStage && {
+          icon: "award",
+          label: "完成獎勵",
+          value: escapeHTML(awardName)
+        },
+        upcomingNotice && {
+          icon: "hourglass",
+          label: "開放狀態",
+          value: escapeHTML(upcomingNotice),
+          tone: "warning"
+        }
+      ]),
+      actions: renderPlanCardActions([
+        { kind: "primary", icon: "bookOpen", label: "自己加入", action: "join-solo" },
+        { kind: "secondary", icon: "people", label: "建立團隊", action: "join-team" }
+      ])
+    });
 
     card.onclick = () => {
       openPlanDetailsDialog(plan, { onJoin: async () => {
         // Step 1: Ask personal vs team BEFORE joining
         const joinMode = await openJoinModeDialog(plan);
-        if (joinMode === null) return; // dismissed via backdrop
-
-        // Step 2: Join with default 7-day schedule (user can edit later from the plan menu)
-        const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
-        const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
-        if (!joinedPlan) return;
-
-        // Step 3: If a team size was chosen, open team setup for that division
-        if ((joinMode === 3 || joinMode === 6) && typeof window.openReadingTeamDialog === "function") {
-          await window.openReadingTeamDialog(joinedPlan, { preferredDivision: joinMode });
-        }
+        await joinPresetPlan(joinMode);
       }});
     };
+
+    async function joinPresetPlan(joinMode) {
+      if (joinMode === null) return;
+
+      // Step 2: Join with default 7-day schedule (user can edit later from the plan menu)
+      const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
+      const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
+      if (!joinedPlan) return;
+
+      // Step 3: If a team size was chosen, open team setup for that division
+      if ((joinMode === 3 || joinMode === 6) && typeof window.openReadingTeamDialog === "function") {
+        await window.openReadingTeamDialog(joinedPlan, { preferredDivision: joinMode });
+      }
+    }
+
+    card.querySelector('[data-plan-card-action="join-solo"]')?.addEventListener("click", async event => {
+      event.stopPropagation();
+      await joinPresetPlan("solo");
+    });
+    card.querySelector('[data-plan-card-action="join-team"]')?.addEventListener("click", async event => {
+      event.stopPropagation();
+      const joinMode = await openJoinModeDialog(plan);
+      await joinPresetPlan(joinMode);
+    });
 
     container.appendChild(card);
   });

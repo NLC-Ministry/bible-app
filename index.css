@@ -10905,45 +10905,242 @@ body.dark-theme .custom-confirm-overlay {
   display: none !important;
 }
 
-/* ─── 讀經計畫卡片左對齊與防跑版樣式修正 (Bible Plan Card Left Alignment Fix) ─── */
-.joined-plan-item-card {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important; /* 保持左側封皮與右側文字區塊垂直居中對齊 */
-  width: 100% !important;
-  box-sizing: border-box !important;
+/* Plan cards: one card, clear hierarchy, stable action area */
+.plan-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 
-/* 確保卡片內部的右側文字主容器強制靠左對齊，消除任何居中 */
-.joined-plan-item-card > div:last-child {
-  flex-grow: 1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  text-align: left !important;
-  min-width: 0 !important;
+.plan-card:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 28%, var(--border-card));
+  box-shadow: var(--shadow-md);
 }
 
-/* 只確保右側文字主容器內部的標題、日期、文字、標籤等項目皆靠左，不影響左側封皮 (plan-cover-thumbnail) 內部文字的置中 */
-.joined-plan-item-card > div:last-child h4,
-.joined-plan-item-card > div:last-child p,
-.joined-plan-item-card > div:last-child span,
-.joined-plan-item-card > div:last-child div {
-  text-align: left !important;
-  justify-content: flex-start !important;
+.plan-card:active {
+  transform: scale(0.997);
 }
 
-/* 特別針對小組團隊報名控制列 */
-.joined-plan-item-card .plan-card-team-controls {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  gap: 0.5rem !important;
-  width: 100% !important;
-  margin-top: 0.6rem !important;
+.plan-card__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plan-card__header {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.plan-card__eyebrow {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.25;
+}
+
+.plan-card__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.plan-card__meta span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0.05rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.plan-card__status {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.62rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--border-card) 80%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card));
+}
+
+.plan-card__status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.plan-card__status-row .nlc-icon {
+  margin-top: 0.08rem;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.plan-card__status-row--brand,
+.plan-card__status-row--brand .nlc-icon {
+  color: var(--primary-color);
+}
+
+.plan-card__status-row--success,
+.plan-card__status-row--success .nlc-icon {
+  color: var(--color-success-foreground);
+}
+
+.plan-card__status-row--warning,
+.plan-card__status-row--warning .nlc-icon {
+  color: var(--color-warning);
+}
+
+.plan-card__status-row--danger,
+.plan-card__status-row--danger .nlc-icon {
+  color: var(--color-danger);
+}
+
+.plan-card__status-label {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.plan-card__status-value {
+  min-width: 0;
+}
+
+.plan-card__actions,
+.plan-card-team-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.plan-card__primary-action,
+.plan-card__secondary-action,
+.plan-card-team-controls__badge {
+  min-height: 2.35rem;
+  margin: 0;
+  padding: 0.48rem 0.78rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.2;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.plan-card__primary-action {
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: var(--color-white);
+}
+
+.plan-card__secondary-action,
+.plan-card-team-controls__badge {
+  border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-card));
+  color: var(--primary-color);
+}
+
+.plan-card__primary-action:hover,
+.plan-card__secondary-action:hover,
+.plan-card-team-controls__badge.is-open:hover {
+  transform: translateY(-1px);
+}
+
+.plan-card__primary-action:focus-visible,
+.plan-card__secondary-action:focus-visible,
+.plan-card-team-controls__badge:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.plan-card-team-controls__badge.is-full {
+  cursor: default;
+}
+
+.plan-card-team-controls__hint {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.plan-card-team-controls__hint--danger {
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .plan-card {
+    gap: 0.75rem;
+    padding: 0.9rem;
+    border-radius: 12px;
+  }
+
+  .plan-card__main {
+    gap: 0.65rem;
+  }
+
+  .plan-card__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan-card--available .plan-card__actions,
+  .plan-card--available-upcoming .plan-card__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plan-card__primary-action,
+  .plan-card__secondary-action {
+    width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
 }
 
 /* ==================== 🔔 Notification Bell & Dropdown CSS ==================== */
