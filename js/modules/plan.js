@@ -5133,13 +5133,29 @@ async function renderPlanRankingView() {
   try {
     const allUsers = await db.fetchMergedUsersList();
     const zoneMap = {};
+    const completionTime = item => {
+      const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
+      return Number.isFinite(timestamp) ? timestamp : Infinity;
+    };
     allUsers.forEach(u => {
       const zone = u.pastoral_zone || "未設定";
-      if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0 };
+      if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0, completed_at: null };
       zoneMap[zone].total_chapters += (u.chapters_read || 0);
       zoneMap[zone].members += 1;
+      const userCompletedAt = u.last_read_at || u.last_read || null;
+      if (userCompletedAt) {
+        const userTime = new Date(userCompletedAt).getTime();
+        const zoneTime = zoneMap[zone].completed_at ? new Date(zoneMap[zone].completed_at).getTime() : -Infinity;
+        if (Number.isFinite(userTime) && userTime > zoneTime) zoneMap[zone].completed_at = userCompletedAt;
+      }
     });
-    pastoralStats = Object.values(zoneMap).sort((a, b) => b.total_chapters - a.total_chapters);
+    pastoralStats = Object.values(zoneMap).sort((a, b) => {
+      const chapterDiff = b.total_chapters - a.total_chapters;
+      if (chapterDiff !== 0) return chapterDiff;
+      const timeDiff = completionTime(a) - completionTime(b);
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
+    });
   } catch (e) {
     console.error("Failed to load pastoral rankings", e);
   }
@@ -5150,6 +5166,27 @@ async function renderPlanRankingView() {
   }
 
   const maxChapters = Math.max(...pastoralStats.map(item => item.total_chapters), 1);
+  const pastoralCompletionTime = item => {
+    const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  const formatPastoralCompletion = value => {
+    if (!value) return "尚無完成時間";
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      const [, month, day] = text.split("-");
+      return `完成 ${Number(month)}/${Number(day)}`;
+    }
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "尚無完成時間";
+    return `完成 ${new Intl.DateTimeFormat("zh-TW", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(date)}`;
+  };
   const renderRace = () => {
     container.className = "pastoral-race-list";
     container.innerHTML = `
@@ -5170,22 +5207,29 @@ async function renderPlanRankingView() {
     `;
     const track = container.querySelector(".pastoral-race-track");
 
+    let calculatedRank = 1;
     pastoralStats.forEach((item, index) => {
+      const previousItem = index > 0 ? pastoralStats[index - 1] : null;
+      const sharesRank = previousItem
+        && item.total_chapters === previousItem.total_chapters
+        && pastoralCompletionTime(item) === pastoralCompletionTime(previousItem);
+      if (index > 0 && !sharesRank) calculatedRank = index + 1;
+      const rank = calculatedRank;
       const pct = Math.min(100, Math.round((item.total_chapters / maxChapters) * 100));
-      const placementClass = index === 0
+      const placementClass = rank === 1
         ? " pastoral-race-row--leader"
-        : index < 3 ? " pastoral-race-row--podium" : "";
+        : rank <= 3 ? " pastoral-race-row--podium" : "";
       const row = document.createElement("div");
       row.className = `pastoral-race-row${placementClass}`;
       row.style.setProperty("--target-width", `${pct}%`);
       row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
-        <div class="pastoral-race-rank" aria-label="第 ${index + 1} 名">${index + 1}</div>
+        <div class="pastoral-race-rank" aria-label="第 ${rank} 名">${rank}</div>
         <div class="pastoral-race-main">
           <div class="pastoral-race-heading">
             <div class="pastoral-race-identity">
               <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
-              <span class="pastoral-race-members">${item.members} 人參與</span>
+              <span class="pastoral-race-members">${item.members} 人參與・${formatPastoralCompletion(item.completed_at)}</span>
             </div>
             <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>
           </div>

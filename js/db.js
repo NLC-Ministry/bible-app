@@ -1470,12 +1470,19 @@ const db = {
         (!currentPlanId && !currentPresetKey && !logPlanId && !logPresetKey);
       if (!matchesPlan) return;
       const round = log.round || 1;
-      currentPlanLogMap.set(`${log.book}_${log.chapter}_${round}`, log);
+      const logKey = `${log.book}_${log.chapter}_${round}`;
+      const existingLog = currentPlanLogMap.get(logKey);
+      const candidateReadAt = String(log.read_at || "");
+      const existingReadAt = String(existingLog && existingLog.read_at || "");
+      if (!existingLog || (candidateReadAt && (!existingReadAt || candidateReadAt < existingReadAt))) {
+        currentPlanLogMap.set(logKey, log);
+      }
     });
     const currentPlanLogs = Array.from(currentPlanLogMap.values());
-    const currentPlanLastRead = currentPlanLogs.length > 0
-      ? currentPlanLogs.map(log => log.read_at).filter(Boolean).sort().reverse()[0]?.substring(0, 10)
+    const currentPlanLastReadAt = currentPlanLogs.length > 0
+      ? currentPlanLogs.map(log => log.read_at).filter(Boolean).sort().reverse()[0] || null
       : null;
+    const currentPlanLastRead = currentPlanLastReadAt ? currentPlanLastReadAt.substring(0, 10) : null;
 
     const mockUser = {
       name: state.currentUser.name,
@@ -1485,7 +1492,8 @@ const db = {
       role: state.currentUser.role || "member",
       chapters_read: currentPlanLogs.length,
       plan_progress: state.activePlan ? (state.activePlan.progress || 0) : 0,
-      last_read: currentPlanLastRead
+      last_read: currentPlanLastRead,
+      last_read_at: currentPlanLastReadAt
     };
 
     if (state.isSupabaseMode && state.supabase) {
@@ -1589,7 +1597,10 @@ const db = {
             filteredLogs.forEach(l => {
               const r = l.round || 1;
               const key = `${l.book}_${l.chapter}_${r}`;
-              if (!uniqueLogsMap[key]) {
+              const existingLog = uniqueLogsMap[key];
+              const candidateReadAt = String(l.read_at || "");
+              const existingReadAt = String(existingLog && existingLog.read_at || "");
+              if (!existingLog || (candidateReadAt && (!existingReadAt || candidateReadAt < existingReadAt))) {
                 uniqueLogsMap[key] = l;
               }
             });
@@ -1610,10 +1621,12 @@ const db = {
             }
 
             let lastRead = null;
+            let lastReadAt = null;
             if (uniqueLogs.length > 0) {
               const sortedLogs = [...uniqueLogs].sort((a, b) => new Date(b.read_at) - new Date(a.read_at));
               if (sortedLogs[0] && sortedLogs[0].read_at) {
-                lastRead = sortedLogs[0].read_at.substring(0, 10);
+                lastReadAt = sortedLogs[0].read_at;
+                lastRead = lastReadAt.substring(0, 10);
               }
             }
 
@@ -1628,6 +1641,7 @@ const db = {
               plan_progress: planProgress,
               streak: profile.streak || 0,
               last_read: lastRead,
+              last_read_at: lastReadAt,
               plan_id: uPlan ? uPlan.id : null,
               presetKey: uPlan ? uPlan.preset_key : null,
               globalPlanId: uPlan ? uPlan.global_plan_id : null,

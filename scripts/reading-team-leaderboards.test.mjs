@@ -61,6 +61,15 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("以目前最高累計章數為 100%");
     expect(plan).toContain("共 ${pastoralStats.length} 個牧區");
     expect(plan).toContain("const pct = Math.min(100");
+    expect(plan).toContain("const chapterDiff = b.total_chapters - a.total_chapters");
+    expect(plan).toContain("const timeDiff = completionTime(a) - completionTime(b)");
+    expect(plan).toContain("item.total_chapters === previousItem.total_chapters");
+    expect(plan).toContain("pastoralCompletionTime(item) === pastoralCompletionTime(previousItem)");
+    expect(plan).toContain('aria-label="第 ${rank} 名">${rank}');
+    expect(plan).toContain("formatPastoralCompletion(item.completed_at)");
+    expect(db).toContain("last_read_at: currentPlanLastReadAt");
+    expect(db).toContain("last_read_at: lastReadAt");
+    expect(db).toContain("candidateReadAt < existingReadAt");
     expect(plan).toContain('class="pastoral-race-progress" role="progressbar"');
     expect(plan).toContain('aria-valuenow="${pct}"');
     expect(plan).toContain('data-pastoral-race-replay');
