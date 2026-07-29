@@ -80,4 +80,17 @@ describe("plan card information architecture", () => {
     expect(planCardCss).not.toContain("translateY(-1px)");
     expect(planCardCss).not.toContain("linear-gradient");
   });
+
+  it("keeps team controls visually subordinate to primary plan actions", () => {
+    const planCardCss = css.slice(
+      css.indexOf("/* Plan cards: one card, clear hierarchy, stable action area */"),
+      css.indexOf("/* ==================== 🔔 Notification Bell & Dropdown CSS ====================")
+    );
+
+    expect(planCardCss).toContain(".plan-card-team-controls__badge");
+    expect(planCardCss).toContain(".plan-card-team-controls__button");
+    expect(planCardCss).toContain("min-height: 1.75rem");
+    expect(planCardCss).toContain("font-size: 0.72rem");
+    expect(planCardCss).toContain("max-width: 100%");
+  });
 });
