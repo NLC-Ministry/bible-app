@@ -1864,30 +1864,50 @@
 
   <!-- Import application modules -->
   <script>
-    // 💡 行動端除錯工具：將所有 JavaScript 執行期錯誤捕獲並以紅底白字橫幅顯示在畫面上，協助排查手機端緩存或載入錯誤
-    window.onerror = function (message, source, lineno, colno, error) {
-      // 判斷是否為無用資訊的 Script error
-      let errorMsg = message;
-      if (message === "Script error.") {
-        errorMsg = "【跨域或快取引起的腳本錯誤】請檢查員嘗試「強制重新整理 (Ctrl+F5)」或清除快取！最新版本號已更新。";
+    (function installRuntimeErrorDiagnostics() {
+      const runtimeErrors = window.__bibleRuntimeErrors = window.__bibleRuntimeErrors || [];
+
+      function normalizeErrorDetails(kind, details) {
+        return {
+          kind,
+          message: String(details.message || "Unknown runtime error"),
+          source: details.source ? String(details.source) : "",
+          line: Number(details.line || 0),
+          column: Number(details.column || 0),
+          stack: details.stack ? String(details.stack).split("\n").slice(0, 6).join("\n") : "",
+          at: new Date().toISOString()
+        };
       }
 
-      // 如果有完整的 error object，印出詳細的 call stack 追蹤
-      if (error && error.stack) {
-        errorMsg += "\n追蹤: " + error.stack.split('\n').slice(0, 2).join('\n');
+      function recordRuntimeError(kind, details) {
+        const entry = normalizeErrorDetails(kind, details);
+        runtimeErrors.push(entry);
+        if (runtimeErrors.length > 20) runtimeErrors.shift();
+        console.error("[BibleApp Runtime Error]", entry);
       }
 
-      const filename = source ? source.split('/').pop().split('?')[0] : "可能是外部 CDN 或快取檔案";
-      const errText = `【JS 執行錯誤】\n訊息: ${errorMsg}\n檔案: ${filename}\n位置: 第 ${lineno || "未知"} 行，第 ${colno || "未知"} 字元`;
-      console.error(errText, error);
+      window.onerror = function (message, source, lineno, colno, error) {
+        recordRuntimeError("error", {
+          message,
+          source,
+          line: lineno,
+          column: colno,
+          stack: error && error.stack
+        });
+        return false;
+      };
 
-      const errDiv = document.createElement("div");
-      errDiv.style.cssText = "position:fixed;top:15px;left:15px;right:15px;background:rgba(239,68,68,0.95);color:white;padding:12px;border-radius:8px;font-size:11px;font-family:monospace;z-index:999999;box-shadow:0 4px 15px rgba(0,0,0,0.3);pointer-events:none;white-space:pre-wrap;line-height:1.5;font-weight: 500;border:2px solid #fecaca;";
-      errDiv.textContent = errText;
-      document.body.appendChild(errDiv);
-      setTimeout(() => { errDiv.remove(); }, 15000);
-      return false;
-    };
+      window.addEventListener("unhandledrejection", function (event) {
+        const reason = event.reason || {};
+        recordRuntimeError("unhandledrejection", {
+          message: reason.message || reason,
+          source: reason.fileName || "",
+          line: reason.lineNumber,
+          column: reason.columnNumber,
+          stack: reason.stack
+        });
+      });
+    })();
 
     // 定義測試/虛擬資料的預設空白回退，防止在生產環境中因為 mock_stats.js 檔案被 gitignore 排除（404）而導致程式崩潰
     window.MOCK_USERS_DATA = [];

@@ -10742,9 +10742,9 @@ body.dark-theme .custom-confirm-overlay {
   min-width: 2.5rem;
   min-height: 2.5rem;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--text-primary) 8%, var(--border-card));
+  border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card));
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -10756,8 +10756,7 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .release-onboarding-dialog__close:hover {
-  background: color-mix(in srgb, var(--text-primary) 8%, var(--bg-card));
-  border-color: color-mix(in srgb, var(--text-primary) 14%, var(--border-card));
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
   color: var(--text-primary);
 }
 
