@@ -395,6 +395,82 @@ describe("release onboarding helper actions", () => {
     expect(installButton.disabled).toBe(false);
   });
 
+  it("fails promptly when the browser prompt rejects before user choice settles", async () => {
+    document.body.innerHTML = "";
+    let resolveChoice;
+    const userChoice = new Promise((resolve) => {
+      resolveChoice = resolve;
+    });
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(() => Promise.reject(new Error("prompt failed"))),
+      userChoice
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    try {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getInstallPromptState()).toBe("failed");
+      expect(installButton.disabled).toBe(false);
+      expect(document.querySelector("[data-onboarding-install-guide]").hidden).toBe(false);
+      expect(document.querySelector("[data-onboarding-install-status]").textContent).toContain("手動方式");
+
+      resolveChoice({ outcome: "accepted" });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(getInstallPromptState()).toBe("failed");
+    } finally {
+      resolveChoice({ outcome: "dismissed" });
+      await Promise.resolve();
+      await Promise.resolve();
+      closeOnboardingHelper();
+    }
+  });
+
+  it("keeps accepted install state when the action is activated again", async () => {
+    document.body.innerHTML = "";
+    const prompt = {
+      preventDefault() {},
+      prompt: vi.fn(async () => {}),
+      userChoice: Promise.resolve({ outcome: "accepted" })
+    };
+
+    captureInstallPrompt(prompt);
+    openOnboardingHelper({
+      startStep: "install",
+      installGuideOptions: {
+        userAgent: "Mozilla/5.0 Linux; Android 15 Chrome/140 Mobile Safari",
+        hasPrompt: true
+      }
+    });
+    const installButton = document.querySelector('[data-onboarding-action="install"]');
+
+    installButton.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    installButton.click();
+    await Promise.resolve();
+
+    expect(getInstallPromptState()).toBe("accepted");
+    expect(prompt.prompt).toHaveBeenCalledOnce();
+    expect(installButton.textContent.trim()).toBe("已安裝");
+    expect(document.querySelector("[data-onboarding-install-guide-title]").textContent).toBe("已經加到主畫面");
+  });
+
   it("uses the supplied install guide label and preserves manual install behavior", async () => {
     document.body.innerHTML = "";
     const prompt = {

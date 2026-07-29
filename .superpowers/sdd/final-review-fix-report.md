@@ -1,3 +1,4 @@
 # Final Review Fix Report
 
 2026-07-29: Added an in-flight native install-prompt guard and disabled the install action until `userChoice` settles, preventing duplicate prompts and preserving accepted state. Bound the install action label to the supplied guide model and used `canPrompt` to preserve iOS/manual behavior even when a stale prompt event exists. Added focused regressions for double activation, accepted settlement, label rendering, and manual fallback.
+2026-07-29: Fixed native install prompt lifecycle ordering so prompt rejection immediately enters failed/manual fallback state, re-enables the action, and cannot be overwritten by a later choice settlement. Accepted outcomes now render an installed state and keep repeat activation from implying another prompt is available. Added focused regressions for both final review findings; focused and full Vitest suites pass.

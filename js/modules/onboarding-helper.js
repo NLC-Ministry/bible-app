@@ -283,16 +283,21 @@ function setInstallStatus(message) {
   status.hidden = !message;
 }
 
+function setInstallActionLabel(label) {
+  const button = document.querySelector('[data-onboarding-action="install"]');
+  if (button) button.textContent = label;
+}
+
 function applyInstallPromptOutcome(choice, installGuideOptions) {
   const outcome = choice?.outcome;
   installPromptState = outcome === "accepted" ? "accepted" : "dismissed";
   deferredInstallPrompt = null;
 
-  if (installPromptState === "dismissed") {
-    showInstallGuide({
-      ...installGuideOptions,
-      hasPrompt: false
-    });
+  if (installPromptState === "accepted") {
+    showInstallGuide({ ...installGuideOptions, standalone: true });
+    setInstallActionLabel("已安裝");
+  } else {
+    showInstallGuide({ ...installGuideOptions, hasPrompt: false });
     setInstallStatus("也可以手動加入主畫面。");
   }
 }
@@ -333,6 +338,11 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   if (!step) return;
 
   if (step.id === "install") {
+    if (installPromptState === "accepted") {
+      showInstallGuide({ ...installGuideOptions, standalone: true });
+      setInstallActionLabel("已安裝");
+      return;
+    }
     const installGuideModel = getInstallGuideModel(installGuideOptions);
     if (installGuideModel.canPrompt && deferredInstallPrompt?.prompt) {
       if (installPromptInFlight) return installPromptInFlight;
@@ -342,11 +352,10 @@ async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
         try {
           setInstallStatus("正在開啟安裝提示…");
           const choicePromise = promptEvent.userChoice?.catch(() => null);
-          choicePromise?.then((choice) => applyInstallPromptOutcome(choice, installGuideOptions));
           const promptResult = promptEvent.prompt();
-          const choice = await choicePromise;
           await promptResult;
-          if (!choicePromise) applyInstallPromptOutcome(choice, installGuideOptions);
+          const choice = await choicePromise;
+          applyInstallPromptOutcome(choice, installGuideOptions);
         } catch (error) {
           installPromptState = "failed";
           deferredInstallPrompt = null;
