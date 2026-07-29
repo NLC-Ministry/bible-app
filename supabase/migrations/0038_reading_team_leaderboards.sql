@@ -1,6 +1,6 @@
 -- Public-to-authenticated team leaderboards without exposing member identities.
 -- Three-person and six-person teams are ranked independently by current-round
--- completed chapters. Equal chapter totals share the same dense rank.
+-- completed chapters, then by the earliest time that total was reached. Exact ties share a rank.
 
 CREATE OR REPLACE FUNCTION public.get_reading_team_leaderboards(
   p_global_plan_id UUID,
@@ -67,9 +67,9 @@ BEGIN
   ), ranked_teams AS (
     SELECT
       team_rollup.*,
-      DENSE_RANK() OVER (
+      RANK() OVER (
         PARTITION BY division
-        ORDER BY chapters_read DESC
+        ORDER BY chapters_read DESC, last_read_at ASC NULLS LAST
       )::INTEGER AS team_rank
     FROM team_rollup
   )

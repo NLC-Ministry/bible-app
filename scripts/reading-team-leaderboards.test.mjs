@@ -12,7 +12,7 @@ describe("reading team leaderboards", () => {
   it("ranks 3-person and 6-person teams independently by current-round chapters", () => {
     expect(migration).toContain("get_reading_team_leaderboards");
     expect(migration).toMatch(/FILTER \([\s\S]*reading_log\.round = COALESCE\(plan\.current_round, 1\)/);
-    expect(migration).toMatch(/DENSE_RANK\(\)[\s\S]*PARTITION BY division[\s\S]*ORDER BY chapters_read DESC/);
+    expect(migration).toMatch(/RANK\(\)[\s\S]*PARTITION BY division[\s\S]*ORDER BY chapters_read DESC, last_read_at ASC NULLS LAST/);
     expect(migration).toContain("'division3'");
     expect(migration).toContain("'division6'");
   });
@@ -36,5 +36,10 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain('escapeHTML(team.name || "未命名隊伍")');
     expect(plan).toContain("memberCount}/${section.division}");
     expect(plan).toContain("chaptersRead} 章");
+    expect(plan).toContain("settleRequest");
+    expect(plan).toContain("團隊排行榜載入逾時");
+    expect(plan).toContain("data-team-ranking-retry");
+    expect(plan).toContain("db.getReadingTeamStatistics(state.activePlan)");
+    expect(plan).toContain("completedAt(team)");
   });
 });
