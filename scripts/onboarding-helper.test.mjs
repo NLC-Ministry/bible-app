@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import * as onboardingHelper from "../js/modules/onboarding-helper.js";
 import {
@@ -218,5 +219,26 @@ describe("release onboarding helper actions", () => {
     openOnboardingHelper({ startStep: "join-plan" });
     document.querySelector("[data-onboarding-primary]").click();
     expect(switchTab).toHaveBeenCalledWith("plan-view");
+  });
+});
+
+describe("release onboarding accessibility behavior", () => {
+  it("closes on Escape and returns focus to the manual trigger", () => {
+    document.body.innerHTML = '<button id="trigger">使用說明</button>';
+    const trigger = document.getElementById("trigger");
+    trigger.focus();
+    openOnboardingHelper({ manual: true, trigger });
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    expect(document.getElementById("release-onboarding-dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps dialog dimensions bounded for mobile layouts", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain("width: min(92vw, 420px)");
+    expect(css).toContain("max-height: min(86vh, 560px)");
+    expect(css).toContain("overflow: auto");
   });
 });

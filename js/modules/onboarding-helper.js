@@ -77,6 +77,12 @@ let activeStepIndex = 0;
 let lastTrigger = null;
 let deferredInstallPrompt = null;
 
+function handleDialogKeydown(event) {
+  if (event.key === "Escape") {
+    closeOnboardingHelper();
+  }
+}
+
 export function captureInstallPrompt(event) {
   event?.preventDefault?.();
   deferredInstallPrompt = event;
@@ -163,6 +169,7 @@ function dialogTemplate() {
 
 export function closeOnboardingHelper({ remember = false, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
   if (remember) markOnboardingSeen({ storage, config });
+  document.removeEventListener("keydown", handleDialogKeydown);
   document.getElementById("release-onboarding-root")?.remove();
   if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
 }
@@ -177,6 +184,7 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   root.className = "release-onboarding-root";
   root.innerHTML = dialogTemplate();
   document.body.appendChild(root);
+  document.addEventListener("keydown", handleDialogKeydown);
 
   const dialog = root.querySelector("#release-onboarding-dialog");
   renderStep(dialog);
@@ -200,11 +208,6 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
     renderStep(dialog);
   });
   dialog.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeOnboardingHelper({ storage, config });
-      return;
-    }
     if (event.key !== "Tab") return;
 
     const controls = [...dialog.querySelectorAll("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex=\"-1\"])")];
