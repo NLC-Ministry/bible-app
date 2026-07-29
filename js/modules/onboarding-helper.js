@@ -75,6 +75,8 @@ export function markOnboardingSeen({ storage = globalThis.localStorage, config =
 
 let lastTrigger = null;
 let deferredInstallPrompt = null;
+let installPromptState = "unavailable";
+let installPromptInFlight = null;
 
 function handleDialogKeydown(event) {
   if (event.key === "Escape") {
@@ -85,20 +87,26 @@ function handleDialogKeydown(event) {
 export function captureInstallPrompt(event) {
   event?.preventDefault?.();
   deferredInstallPrompt = event;
+  installPromptState = event?.prompt ? "available" : "unavailable";
 }
 
-export function getInstallInstructions(userAgent = globalThis.navigator?.userAgent || "", standalone = globalThis.navigator?.standalone) {
+export function getInstallPromptState() {
+  return installPromptState;
+}
+
+export function getInstallPlatform({
+  userAgent = globalThis.navigator?.userAgent || "",
+  standalone = globalThis.navigator?.standalone,
+  displayModeStandalone = globalThis.matchMedia?.("(display-mode: standalone)")?.matches,
+  hasPrompt = Boolean(deferredInstallPrompt?.prompt),
+  hasTouch = globalThis.navigator?.maxTouchPoints > 1
+} = {}) {
   const ua = String(userAgent);
-  if (standalone || globalThis.matchMedia?.("(display-mode: standalone)")?.matches) {
-    return "你已經可以像 App 一樣從主畫面打開。";
-  }
-  if (/iPhone|iPad|iPod/i.test(ua)) {
-    return "請在 Safari 點選分享按鈕，選擇「加入主畫面」。";
-  }
-  if (/Android/i.test(ua)) {
-    return "請在瀏覽器選單中選擇「安裝應用程式」或「加入主畫面」。";
-  }
-  return "請使用瀏覽器選單將此頁加入主畫面，之後就能更快回來讀經。";
+  if (standalone || displayModeStandalone) return "installed";
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && hasTouch)) return "ios";
+  if (/Android/i.test(ua)) return hasPrompt ? "android-prompt" : "android-manual";
+  if (hasPrompt) return "desktop";
+  return "generic";
 }
 
 function getInstallReferenceLinks() {
@@ -118,13 +126,112 @@ function getInstallReferenceLinks() {
   ];
 }
 
+function getInstallGuideLinks(platform) {
+  const links = getInstallReferenceLinks();
+  if (platform === "ios") return links.filter((link) => link.label === "iPhone" || link.label === "iPad");
+  if (platform === "android-manual" || platform === "android-prompt") return links.filter((link) => link.label === "Android");
+  return links;
+}
+
+export function getInstallGuideModel(options = {}) {
+  const platform = getInstallPlatform(options);
+  const models = {
+    installed: {
+      platform,
+      title: "已經加到主畫面",
+      body: "你現在已經可以像 App 一樣快速打開。",
+      primaryLabel: "已安裝",
+      steps: [
+        { icon: "app-window", label: "下次請從主畫面上的「新生命聖經速讀計畫」圖示開啟。" }
+      ],
+      canPrompt: false,
+      installed: true
+    },
+    ios: {
+      platform,
+      title: "在 Safari 加到主畫面",
+      body: "照著三個步驟，就能像 App 一樣每天快速打開。",
+      primaryLabel: "查看 iPhone 安裝方式",
+      steps: [
+        { icon: "share", label: "點 Safari 下方的分享按鈕。" },
+        { icon: "add-square", label: "選擇「加入主畫面」。" },
+        { icon: "check", label: "點右上角「新增」。" }
+      ],
+      canPrompt: false,
+      installed: false
+    },
+    "android-prompt": {
+      platform,
+      title: "安裝成 App",
+      body: "你的瀏覽器支援直接安裝，點一下就會開啟安裝提示。",
+      primaryLabel: "安裝 App",
+      steps: [
+        { icon: "download", label: "點「安裝 App」。" },
+        { icon: "check", label: "在瀏覽器提示中選擇「安裝」。" },
+        { icon: "app-window", label: "之後從主畫面圖示打開。" }
+      ],
+      canPrompt: true,
+      installed: false
+    },
+    "android-manual": {
+      platform,
+      title: "從瀏覽器選單加入",
+      body: "如果沒有跳出安裝提示，可以從瀏覽器選單手動加入。",
+      primaryLabel: "查看 Android 安裝方式",
+      steps: [
+        { icon: "more-vertical", label: "點右上角「⋮」選單。" },
+        { icon: "add-square", label: "選擇「加到主畫面」或「安裝應用程式」。" },
+        { icon: "check", label: "點「新增」或「安裝」。" }
+      ],
+      canPrompt: false,
+      installed: false
+    },
+    desktop: {
+      platform,
+      title: "安裝到電腦",
+      body: "可從網址列或瀏覽器選單安裝，之後像桌面 App 一樣開啟。",
+      primaryLabel: "安裝 App",
+      steps: [
+        { icon: "download", label: "點網址列右側的安裝圖示，或打開瀏覽器選單。" },
+        { icon: "check", label: "選擇「安裝」。" },
+        { icon: "app-window", label: "之後從 Dock、開始功能表或啟動台開啟。" }
+      ],
+      canPrompt: true,
+      installed: false
+    },
+    generic: {
+      platform,
+      title: "加入主畫面",
+      body: "不同瀏覽器的名稱略有不同，可以從選單找到加入或安裝選項。",
+      primaryLabel: "查看安裝方式",
+      steps: [
+        { icon: "more-vertical", label: "打開瀏覽器選單。" },
+        { icon: "add-square", label: "尋找「加入主畫面」、「安裝」或「新增到桌面」。" },
+        { icon: "app-window", label: "完成後從主畫面圖示開啟。" }
+      ],
+      canPrompt: false,
+      installed: false
+    }
+  };
+
+  return {
+    ...models[platform],
+    links: getInstallGuideLinks(platform)
+  };
+}
+
+export function getInstallInstructions(userAgent = globalThis.navigator?.userAgent || "", standalone = globalThis.navigator?.standalone) {
+  return getInstallGuideModel({ userAgent, standalone }).steps.map((step) => step.label).join(" ");
+}
+
 function iconForStep(stepId) {
   if (stepId === "install") return "home";
   if (stepId === "join-plan") return "people";
   return "bookOpen";
 }
 
-function renderActionRows() {
+function renderActionRows(installGuideOptions = {}) {
+  const installGuideModel = getInstallGuideModel(installGuideOptions);
   return getOnboardingSteps().map((step) => `
     <article class="release-onboarding-action" data-onboarding-action-card="${step.id}">
       <span class="release-onboarding-action__icon nlc-icon nlc-icon--md" data-icon="${iconForStep(step.id)}" aria-hidden="true"></span>
@@ -133,48 +240,142 @@ function renderActionRows() {
         <p>${step.body}</p>
         ${step.id === "install" ? `
           <div class="release-onboarding-install-guide" data-onboarding-install-guide tabindex="-1" aria-live="polite" hidden>
-            <strong>安裝方式</strong>
-            <p data-onboarding-install-guide-text></p>
-            <div class="release-onboarding-install-guide__links" data-onboarding-install-guide-links aria-label="安裝參考連結"></div>
+            <div class="release-onboarding-install-guide__heading">
+              <span class="release-onboarding-install-guide__badge" data-onboarding-install-guide-badge>安裝</span>
+              <strong data-onboarding-install-guide-title>安裝方式</strong>
+            </div>
+            <p data-onboarding-install-guide-body></p>
+            <p class="release-onboarding-install-guide__status" data-onboarding-install-status hidden></p>
+            <ol class="release-onboarding-install-guide__steps" data-onboarding-install-guide-steps></ol>
+            <div class="release-onboarding-install-guide__support">
+              <span>詳細說明</span>
+              <div class="release-onboarding-install-guide__links" data-onboarding-install-guide-links aria-label="安裝參考連結"></div>
+            </div>
           </div>
         ` : ""}
       </div>
       <button type="button" class="release-onboarding-action__button" data-onboarding-action="${step.id}">
-        ${step.primaryLabel}
+        ${step.id === "install" ? installGuideModel.primaryLabel : step.primaryLabel}
       </button>
     </article>
   `).join("");
 }
 
-function showInstallGuide() {
+const INSTALL_STEP_ICON_PATHS = {
+  share: '<path d="M12 3v10"/><path d="m8 7 4-4 4 4"/><path d="M5 11v8h14v-8"/>',
+  "add-square": '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M12 8v8"/><path d="M8 12h8"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  "more-vertical": '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  "app-window": '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M8 9h8"/><path d="M8 13h5"/>'
+};
+
+function renderInstallStepIcon(icon) {
+  const path = INSTALL_STEP_ICON_PATHS[icon] || INSTALL_STEP_ICON_PATHS["app-window"];
+  const svgTag = "svg";
+  return `<${svgTag} viewBox="0 0 24 24" focusable="false" aria-hidden="true">${path}</${svgTag}>`;
+}
+
+function setInstallStatus(message) {
+  const status = document.querySelector("[data-onboarding-install-status]");
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+function setInstallActionLabel(label) {
+  const button = document.querySelector('[data-onboarding-action="install"]');
+  if (button) button.textContent = label;
+}
+
+function applyInstallPromptOutcome(choice, installGuideOptions) {
+  const outcome = choice?.outcome;
+  installPromptState = outcome === "accepted" ? "accepted" : "dismissed";
+  deferredInstallPrompt = null;
+
+  if (installPromptState === "accepted") {
+    setInstallStatus("");
+    showInstallGuide({ ...installGuideOptions, standalone: true });
+    setInstallActionLabel("已安裝");
+  } else {
+    installGuideOptions.hasPrompt = false;
+    const manualInstallGuideModel = getInstallGuideModel(installGuideOptions);
+    showInstallGuide(installGuideOptions);
+    setInstallActionLabel(manualInstallGuideModel.primaryLabel);
+    setInstallStatus("也可以手動加入主畫面。");
+  }
+}
+
+function showInstallGuide(options = {}) {
   const guide = document.querySelector("[data-onboarding-install-guide]");
-  const text = document.querySelector("[data-onboarding-install-guide-text]");
+  const title = document.querySelector("[data-onboarding-install-guide-title]");
+  const body = document.querySelector("[data-onboarding-install-guide-body]");
+  const badge = document.querySelector("[data-onboarding-install-guide-badge]");
+  const steps = document.querySelector("[data-onboarding-install-guide-steps]");
   const links = document.querySelector("[data-onboarding-install-guide-links]");
-  if (!guide || !text || !links) return;
-  text.textContent = getInstallInstructions();
-  links.innerHTML = getInstallReferenceLinks()
+  if (!guide || !title || !body || !badge || !steps || !links) return;
+
+  const model = getInstallGuideModel(options);
+  guide.dataset.onboardingPlatform = model.platform;
+  badge.textContent = model.installed ? "完成" : "安裝";
+  title.textContent = model.title;
+  body.textContent = model.body;
+  steps.innerHTML = model.steps
+    .map((step) => `
+      <li>
+        <span class="release-onboarding-install-guide__step-icon" data-onboarding-install-guide-step-icon data-install-step-icon="${step.icon}" aria-hidden="true">
+          ${renderInstallStepIcon(step.icon)}
+        </span>
+        <span data-onboarding-install-guide-step-label>${step.label}</span>
+      </li>
+    `)
+    .join("");
+  links.innerHTML = model.links
     .map(({ label, href }) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`)
     .join("");
   guide.hidden = false;
   guide.focus?.();
 }
 
-async function runPrimaryAction(stepId) {
+async function runPrimaryAction(stepId, { installGuideOptions = {} } = {}) {
   const step = getOnboardingSteps().find((item) => item.id === stepId);
   if (!step) return;
 
   if (step.id === "install") {
-    if (deferredInstallPrompt?.prompt) {
-      try {
-        await deferredInstallPrompt.prompt();
-        deferredInstallPrompt = null;
-      } catch (error) {
-        console.warn("Browser install prompt failed:", error);
-        showInstallGuide();
-      }
+    if (installPromptState === "accepted") {
+      showInstallGuide({ ...installGuideOptions, standalone: true });
+      setInstallActionLabel("已安裝");
       return;
     }
-    showInstallGuide();
+    const installGuideModel = getInstallGuideModel(installGuideOptions);
+    if (installGuideModel.canPrompt && deferredInstallPrompt?.prompt) {
+      if (installPromptInFlight) return installPromptInFlight;
+
+      const promptEvent = deferredInstallPrompt;
+      installPromptInFlight = (async () => {
+        try {
+          setInstallStatus("正在開啟安裝提示…");
+          const choicePromise = promptEvent.userChoice?.catch(() => null);
+          const promptResult = promptEvent.prompt();
+          await promptResult;
+          const choice = await choicePromise;
+          applyInstallPromptOutcome(choice, installGuideOptions);
+        } catch (error) {
+          installPromptState = "failed";
+          deferredInstallPrompt = null;
+          console.warn("Browser install prompt failed:", error);
+          installGuideOptions.hasPrompt = false;
+          const manualInstallGuideModel = getInstallGuideModel(installGuideOptions);
+          showInstallGuide(installGuideOptions);
+          setInstallActionLabel(manualInstallGuideModel.primaryLabel);
+          setInstallStatus("安裝提示沒有開啟，請改用手動方式。");
+        } finally {
+          installPromptInFlight = null;
+        }
+      })();
+      return installPromptInFlight;
+    }
+    showInstallGuide(installGuideOptions);
     return;
   }
 
@@ -191,7 +392,7 @@ async function runPrimaryAction(stepId) {
   }
 }
 
-function dialogTemplate() {
+function dialogTemplate(installGuideOptions = {}) {
   return `
     <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
     <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
@@ -202,7 +403,7 @@ function dialogTemplate() {
         <p class="release-onboarding-dialog__body">三個小功能，幫你更快開始今天的讀經。</p>
       </div>
       <div class="release-onboarding-dialog__actions" data-onboarding-actions>
-        ${renderActionRows()}
+        ${renderActionRows(installGuideOptions)}
       </div>
       <div class="release-onboarding-dialog__footer">
         <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-later>稍後再看</button>
@@ -219,14 +420,21 @@ export function closeOnboardingHelper({ remember = false, storage = globalThis.l
   if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
 }
 
-export function openOnboardingHelper({ startStep = "install", trigger = null, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
+export function openOnboardingHelper({
+  startStep = "install",
+  trigger = null,
+  storage = globalThis.localStorage,
+  config = globalThis.APP_CONFIG || {},
+  installGuideOptions = {}
+} = {}) {
   document.getElementById("release-onboarding-root")?.remove();
   lastTrigger = trigger;
+  const effectiveInstallGuideOptions = { ...installGuideOptions };
 
   const root = document.createElement("div");
   root.id = "release-onboarding-root";
   root.className = "release-onboarding-root";
-  root.innerHTML = dialogTemplate(config);
+  root.innerHTML = dialogTemplate(effectiveInstallGuideOptions);
   document.body.appendChild(root);
   document.addEventListener("keydown", handleDialogKeydown);
 
@@ -245,7 +453,17 @@ export function openOnboardingHelper({ startStep = "install", trigger = null, st
   root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
   root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      runPrimaryAction(button.dataset.onboardingAction).catch((error) => console.warn("Onboarding action failed:", error));
+      const actionPromise = runPrimaryAction(button.dataset.onboardingAction, {
+        installGuideOptions: effectiveInstallGuideOptions
+      });
+      if (button.dataset.onboardingAction === "install" && installPromptInFlight) {
+        button.disabled = true;
+        actionPromise.finally(() => {
+          button.disabled = false;
+        }).catch((error) => console.warn("Onboarding action failed:", error));
+        return;
+      }
+      actionPromise.catch((error) => console.warn("Onboarding action failed:", error));
     });
   });
   dialog.addEventListener("keydown", (event) => {

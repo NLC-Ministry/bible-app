@@ -11258,11 +11258,93 @@ body.dark-theme .custom-confirm-overlay {
   font-size: 0.86rem;
 }
 
+.release-onboarding-install-guide__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.release-onboarding-install-guide__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  min-height: 1.35rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+  font-size: 0.72rem;
+  font-weight: var(--type-weight-strong);
+}
+
 .release-onboarding-install-guide p {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.9rem;
   line-height: 1.55;
+}
+
+.release-onboarding-install-guide__status {
+  margin: 0.55rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.release-onboarding-install-guide__status[hidden] {
+  display: none;
+}
+
+.release-onboarding-install-guide__steps {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.release-onboarding-install-guide__steps li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  min-height: 2rem;
+  line-height: 1.45;
+}
+
+.release-onboarding-install-guide__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--primary-color) 14%, var(--bg-card));
+  color: var(--primary-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.release-onboarding-install-guide__step-icon svg {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.release-onboarding-install-guide__support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  margin-top: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .release-onboarding-install-guide__links {

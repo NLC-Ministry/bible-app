@@ -1,0 +1,7 @@
+# Final Review Fix Report
+
+2026-07-29: Cleared the pending install status when the native prompt is accepted before rendering the installed-success guide. Added a regression confirming accepted outcomes hide and remove `正在開啟安裝提示…`; focused onboarding tests and the full Vitest suite pass.
+
+2026-07-29: Added an in-flight native install-prompt guard and disabled the install action until `userChoice` settles, preventing duplicate prompts and preserving accepted state. Bound the install action label to the supplied guide model and used `canPrompt` to preserve iOS/manual behavior even when a stale prompt event exists. Added focused regressions for double activation, accepted settlement, label rendering, and manual fallback.
+2026-07-29: Fixed native install prompt lifecycle ordering so prompt rejection immediately enters failed/manual fallback state, re-enables the action, and cannot be overwritten by a later choice settlement. Accepted outcomes now render an installed state and keep repeat activation from implying another prompt is available. Added focused regressions for both final review findings; focused and full Vitest suites pass.
+2026-07-29: Stabilized Android manual fallback options after dismissed or failed native prompts. Repeat activation now keeps manual Android steps, derives the `查看 Android 安裝方式` action label from the effective model, and cannot imply another native prompt is available. Added regressions for repeat activation after both outcomes.
