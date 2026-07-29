@@ -49,6 +49,9 @@ describe("reading team leaderboards", () => {
     expect(css).toContain(".reading-team-ranking-card:not([open])");
     expect(css).toContain(".reading-team-ranking-list[hidden]");
     expect(css).toContain(".reading-team-ranking-list .bar-race-row--mine");
+    expect(css).toContain("background: color-mix(in srgb, var(--color-achievement) 18%, var(--bg-card))");
+    expect(css).toContain(".bar-race-row--mine .bar-race-bar");
+    expect(css).toContain("border-left-width: 5px");
     expect(css).toContain("max-height: 456px");
   });
 
@@ -71,6 +74,12 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain('escapeHTML(team.name || "未命名隊伍")');
     expect(plan).toContain("memberCount}/${section.division}");
     expect(plan).toContain("chaptersRead} 章");
+    expect(plan).toContain("const progressPercent = Math.min(100");
+    expect(plan).toContain('class="bar-race-percent">${progressPercent}%');
+    expect(plan).toContain('role="progressbar"');
+    expect(plan).toContain('aria-valuenow="${progressPercent}"');
+    expect(css).toContain(".reading-team-ranking-list .bar-race-bar-shell");
+    expect(css).toContain("height: 8px");
     expect(plan).toContain("settleRequest");
     expect(plan).toContain("團隊排行榜載入逾時");
     expect(plan).toContain("data-team-ranking-retry");

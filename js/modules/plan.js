@@ -5061,10 +5061,10 @@ async function renderReadingTeamLeaderboards() {
       const serverRank = Number(team.rank);
       const rank = Number.isFinite(serverRank) && serverRank > 0 ? serverRank : calculatedRank;
       const statusLabel = team.status === "ready" ? "已成隊" : "組隊中";
-      const width = Math.max(4, Math.round(chaptersRead / maxChapters * 100));
+      const progressPercent = Math.min(100, Math.round(chaptersRead / maxChapters * 100));
       const row = document.createElement("div");
       row.className = `bar-race-row${team.isMine ? " bar-race-row--mine" : ""}`;
-      row.style.setProperty("--target-width", `${width}%`);
+      row.style.setProperty("--target-width", `${progressPercent}%`);
       row.dataset.teamRank = String(rank);
       row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
@@ -5072,11 +5072,14 @@ async function renderReadingTeamLeaderboards() {
         <div class="bar-race-main">
           <div class="bar-race-meta">
             <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}${team.isMine ? '<span class="bar-race-mine-badge">我的團隊</span>' : ""}</span>
-            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
+            <span class="bar-race-percent">${progressPercent}%</span>
           </div>
-          <div class="bar-race-bar-shell">
+          <div class="bar-race-bar-shell" role="progressbar" aria-label="${escapeHTML(team.name || "未命名隊伍")}閱讀進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPercent}">
             <div class="bar-race-bar"></div>
-            <span class="bar-race-value">${chaptersRead} 章</span>
+          </div>
+          <div class="bar-race-details">
+            <span class="bar-race-chapters">${chaptersRead} 章</span>
+            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
           </div>
         </div>
       `;
