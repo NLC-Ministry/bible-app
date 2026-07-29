@@ -31,6 +31,11 @@ export const reportSchema = z.object({
 
 type ReportFormValues = z.infer<typeof reportSchema>;
 
+/** Counter stays muted until the 500-char upper bound is exceeded. */
+export function descriptionCounterClassName(length: number): string {
+  return length > 500 ? "text-xs text-destructive" : "text-xs text-muted-foreground";
+}
+
 interface ReportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -154,13 +159,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose }) =
                 >
                   問題描述
                 </label>
-                <span
-                  className={`text-xs ${
-                    watchDescription.length < 1 || watchDescription.length > 500
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  }`}
-                >
+                <span className={descriptionCounterClassName(watchDescription.length)}>
                   {watchDescription.length} / 500 字
                 </span>
               </div>

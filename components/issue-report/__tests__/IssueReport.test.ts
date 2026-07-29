@@ -5,7 +5,7 @@ import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../Issue
 import { convertToCSV } from "../AdminReportView.tsx";
 import { AdminUsersAccordion } from "../AdminUsersAccordion.tsx";
 import { SupportFab } from "../SupportFab.tsx";
-import { ReportDrawer, reportSchema } from "../ReportDrawer.tsx";
+import { ReportDrawer, reportSchema, descriptionCounterClassName } from "../ReportDrawer.tsx";
 import { AdminReportTable } from "../AdminReportTable.tsx";
 
 vi.mock("react-hook-form", () => ({
@@ -446,6 +446,13 @@ describe("Issue Report System Tests", () => {
       };
       expect(reportSchema.safeParse(emptyData).success).toBe(false);
       expect(reportSchema.safeParse(tooLongData).success).toBe(false);
+    });
+
+    it("字數計數器在觸及 500 字上限前不顯示 destructive 紅字", () => {
+      expect(descriptionCounterClassName(0)).toBe("text-xs text-muted-foreground");
+      expect(descriptionCounterClassName(1)).toBe("text-xs text-muted-foreground");
+      expect(descriptionCounterClassName(500)).toBe("text-xs text-muted-foreground");
+      expect(descriptionCounterClassName(501)).toBe("text-xs text-destructive");
     });
   });
 
