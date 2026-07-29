@@ -348,7 +348,8 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain(".release-onboarding-dialog__close {");
     expect(css).toContain("min-width: 2.5rem");
     expect(css).toContain("min-height: 2.5rem");
-    expect(css).toContain("background: color-mix(");
+    expect(css).toContain("border: 0");
+    expect(css).toContain("background: transparent");
   });
 
   it("does not rely on an undefined text button class", () => {
