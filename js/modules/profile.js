@@ -1,4 +1,5 @@
 import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
+import { openOnboardingHelper } from "./onboarding-helper.js";
 
 function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
@@ -388,6 +389,21 @@ function updateGoogleLoginVisibility() {
   });
 }
 
+function wireReleaseOnboardingHelp() {
+  const btn = document.getElementById("btn-release-onboarding-help");
+  if (btn && !btn._releaseOnboardingBound) {
+    btn._releaseOnboardingBound = true;
+    btn.addEventListener("click", function () {
+      openOnboardingHelper({ manual: true, trigger: btn, config: window.APP_CONFIG });
+    });
+  }
+
+  const versionEl = document.getElementById("profile-app-version");
+  if (versionEl) {
+    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.0"}`;
+  }
+}
+
 export async function renderProfileView() {
   if (typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
@@ -396,6 +412,7 @@ export async function renderProfileView() {
   paintProfileIdentityChrome();
   wireMemberHubOrgRefresh();
   renderMemberHubProfileLinks();
+  wireReleaseOnboardingHelp();
 
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();
