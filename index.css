@@ -163,9 +163,9 @@ body.dark-theme {
 
   --primary-color: var(--color-brand);
 
-  --surface-popover: rgba(24, 24, 27, 0.86);
-  --border-popover: rgba(255, 255, 255, 0.12);
-  --popover-backdrop-blur: blur(24px);
+  --surface-popover: rgba(24, 24, 27, 0.74);
+  --border-popover: rgba(255, 255, 255, 0.16);
+  --popover-backdrop-blur: blur(28px) saturate(165%);
 
   --skeleton-base: rgba(255, 255, 255, 0.06);
   --skeleton-highlight: rgba(255, 255, 255, 0.14);
@@ -5301,8 +5301,8 @@ button.logout-btn:hover {
   background: var(--surface-popover);
   border: 1px solid var(--border-popover);
   box-shadow: var(--popover-shadow);
-  backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
-  -webkit-backdrop-filter: var(--popover-backdrop-blur) saturate(150%);
+  backdrop-filter: var(--popover-backdrop-blur);
+  -webkit-backdrop-filter: var(--popover-backdrop-blur);
 }
 #plan-options-dropdown .options-dropdown-item {
   min-height: 44px;
@@ -10519,6 +10519,7 @@ body.dark-theme .custom-confirm-overlay {
   align-items: center;
   justify-content: space-between;
   padding: var(--popover-padding);
+  background: color-mix(in srgb, var(--surface-popover) 88%, rgba(255, 255, 255, 0.08));
   border-bottom: 1px solid var(--border-popover);
 }
 
@@ -10548,6 +10549,7 @@ body.dark-theme .custom-confirm-overlay {
   max-height: 320px;
   overflow-y: auto;
   padding: 0.5rem 0;
+  background: transparent;
 }
 
 .notification-popover__empty {
