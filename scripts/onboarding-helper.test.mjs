@@ -492,6 +492,18 @@ describe("release onboarding accessibility behavior", () => {
     expect(css).toContain("background: transparent");
   });
 
+  it("reserves a stable icon cell for every install guide step", () => {
+    const css = readFileSync("index.css", "utf8");
+    expect(css).toContain(".release-onboarding-install-guide__steps {");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon {");
+    expect(css).toContain(".release-onboarding-install-guide__step-icon svg {");
+    expect(css).toContain("grid-template-columns: 2rem minmax(0, 1fr)");
+    expect(css).toContain("width: 2rem");
+    expect(css).toContain("height: 2rem");
+    expect(css).toContain("width: 1.1rem");
+    expect(css).toContain("height: 1.1rem");
+  });
+
   it("does not rely on an undefined text button class", () => {
     const helper = readFileSync("js/modules/onboarding-helper.js", "utf8");
     expect(helper).not.toContain('class="text-btn"');
