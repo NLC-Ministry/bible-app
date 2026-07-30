@@ -5787,13 +5787,13 @@ body.dark-theme .pastoral-race-progress {
   min-height: 44px;
   padding: 0.62rem 0.75rem;
   border-radius: 12px;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
   font-size: 0.94rem;
   font-weight: var(--type-weight-strong);
   gap: 0.7rem;
 }
 #plan-options-dropdown .options-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text-primary) 7%, var(--surface-popover));
 }
 #plan-options-dropdown .options-dropdown-item .menu-icon {
   width: 1.35rem;
@@ -5802,6 +5802,7 @@ body.dark-theme .pastoral-race-progress {
   flex-shrink: 0;
   font-size: 1rem;
   background: transparent;
+  color: var(--text-secondary);
 }
 #plan-options-dropdown .options-dropdown-item.danger-item {
   color: #ff6b6b;
@@ -11456,15 +11457,34 @@ body.dark-theme .custom-confirm-overlay {
 /* ==================== 🔔 Notification Bell & Dropdown CSS ==================== */
 .notification-bell-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 9px;
-  height: 9px;
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  box-sizing: border-box;
   background-color: var(--color-danger, #FC365A);
-  border: 1.5px solid var(--bg-header, #12121e);
-  border-radius: 50%;
+  border: 2px solid var(--bg-header, #12121e);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--type-weight-strong);
+  line-height: 1;
   box-shadow: 0 0 0 2px rgba(252, 54, 90, 0.2);
   pointer-events: none;
+}
+
+.notification-bell-badge[hidden] {
+  display: none;
+}
+
+#btn-notification-bell,
+.notification-menu-container {
+  overflow: visible;
 }
 
 .notification-popover {
