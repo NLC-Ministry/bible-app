@@ -11414,7 +11414,12 @@ body.dark-theme .custom-confirm-overlay {
 .plan-card-participation-item__button:focus-visible {
   background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-card));
   border-color: color-mix(in srgb, var(--primary-color) 26%, var(--border-card));
-  outline: none;
+}
+
+.plan-card-participation-item__button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
 }
 
 .plan-card-participation-item--success .plan-card-participation-item__media {
