@@ -1,6 +1,7 @@
 // js/modules/home.js
 import { validateVerseSource } from "./verse-validator.mjs";
 import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
+import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -298,6 +299,12 @@ export function updateDashboardView() {
     const progress = state.activePlan.progress || 0;
     const currentRound = state.activePlan.currentRound || 1;
     const started = isPlanStarted(state.activePlan);
+    const countdownText = started
+      ? ""
+      : formatUpcomingPlanCountdown(state.activePlan.startDate);
+    const waitingLabel = countdownText
+      ? `等待開始・${countdownText}`
+      : "等待開始";
     const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === 'admin';
     const isPlanAvailable = started || isAdmin;
     let statusText = "";
@@ -308,7 +315,7 @@ export function updateDashboardView() {
         statusText = `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
       }
     } else {
-      statusText = `<span class="text-brand" style="font-weight: 500;">等待開始</span> (將於 ${state.activePlan.startDate} 開始)`;
+      statusText = `<span class="text-brand" style="font-weight: 500;">${waitingLabel}</span> (將於 ${state.activePlan.startDate} 開始)`;
     }
 
     const streakDays = state.currentUser.streak || 0;
@@ -375,7 +382,7 @@ export function updateDashboardView() {
           <h4 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0;">${state.activePlan.name}</h4>
           ${started
         ? '<span class="stat-badge stat-badge--success">進行中</span>'
-        : '<span class="stat-badge stat-badge--brand">等待開始</span>'
+        : `<span class="stat-badge stat-badge--brand">${waitingLabel}</span>`
       }
         </div>
         <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.2rem;">

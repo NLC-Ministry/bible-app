@@ -37,6 +37,6 @@ describe("Member Hub-only permission management", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_team_registration_cancel_safe");
+    expect(html).toContain("js/app.js?v=20260730_home_plan_countdown");
   });
 });
