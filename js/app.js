@@ -97,11 +97,6 @@ function updateCareReminderBadge(reminders = []) {
   const count = unreadReminderKeys.size;
   const badgeText = count > 9 ? "9+" : String(count);
 
-  document.querySelectorAll("[data-care-reminder-badge]").forEach(badge => {
-    badge.hidden = count === 0;
-    badge.textContent = count === 0 ? "" : badgeText;
-  });
-
   const bellBadge = document.getElementById("notification-bell-badge");
   if (bellBadge) {
     bellBadge.hidden = count === 0;
@@ -115,12 +110,6 @@ function updateCareReminderBadge(reminders = []) {
     );
   }
 
-  document.querySelectorAll('[data-target="profile-view"]').forEach(button => {
-    button.setAttribute(
-      "aria-label",
-      count > 0 ? `個人，${count} 則未讀關心提醒` : "個人"
-    );
-  });
 }
 
 async function refreshCareReminderBadge(options = {}) {

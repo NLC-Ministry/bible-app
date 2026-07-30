@@ -11,6 +11,8 @@ describe("header notification and plan options menu", () => {
     expect(app).toContain('if (!reminder || reminder.status === "read") return');
     expect(app).toContain("const count = unreadReminderKeys.size");
     expect(app).toContain("通知，${count} 則未讀");
+    expect(app).not.toContain('[data-care-reminder-badge]');
+    expect(app).not.toContain("個人，${count} 則未讀關心提醒");
   });
 
   it("keeps the numeric bell badge visible outside the circular button", () => {
