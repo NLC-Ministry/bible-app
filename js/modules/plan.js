@@ -1294,36 +1294,6 @@ async function createTeamFromPlanCard(plan, key) {
   return joinedPlan;
 }
 
-function updateJoinedPlanTeamAction(card, plan, contexts = []) {
-  const actions = card.querySelector(".plan-card-participation-actions");
-  const teamAction = card.querySelector('[data-plan-card-action="team"]');
-  const continueAction = card.querySelector('[data-plan-card-action="continue"]');
-  if (!actions || !teamAction || !continueAction) return;
-
-  const hasTeamContexts = contexts.length > 0;
-  teamAction.textContent = hasTeamContexts ? "查看團隊" : "建立 / 加入團隊";
-  teamAction.classList.toggle("primary-btn", hasTeamContexts);
-  teamAction.classList.toggle("secondary-btn", !hasTeamContexts);
-  continueAction.classList.toggle("primary-btn", !hasTeamContexts);
-  continueAction.classList.toggle("secondary-btn", hasTeamContexts);
-
-  if (hasTeamContexts) {
-    actions.prepend(teamAction);
-  } else {
-    actions.append(teamAction);
-  }
-
-  teamAction.onclick = async event => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (hasTeamContexts) {
-      await openJoinedPlanTeam(plan);
-    } else if (typeof window.openReadingTeamDialog === "function") {
-      await window.openReadingTeamDialog(plan, { preferredDivision: 3 });
-    }
-  };
-}
-
 function getJoinedPlanStartTime(plan) {
   if (!plan || !plan.startDate) return Number.MAX_SAFE_INTEGER;
   const date = new Date(`${plan.startDate}T00:00:00`);
@@ -1436,6 +1406,27 @@ function renderPlanParticipationItem(model) {
       ${actionHtml ? `<div class="plan-card-participation-item__actions">${actionHtml}</div>` : ""}
     </div>
   `;
+}
+
+function bindPlanParticipationItemActions(card, plan, model) {
+  if (!card || !plan || !model || !model.action) return;
+  card.querySelectorAll("[data-plan-participation-action]").forEach(button => {
+    button.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = button.getAttribute("data-plan-participation-action");
+      const division = Number(button.getAttribute("data-plan-participation-division") || model.action.division || 3);
+
+      if (action === "open-team") {
+        await openJoinedPlanTeam(plan);
+        return;
+      }
+
+      if (action === "join-team-division" && typeof window.openReadingTeamDialog === "function") {
+        await window.openReadingTeamDialog(plan, { preferredDivision: division });
+      }
+    });
+  });
 }
 
 function renderJoinedPlansList() {
@@ -1618,8 +1609,6 @@ function renderJoinedPlansList() {
 
         if (typeof hydrateIcons === "function") hydrateIcons(card);
 
-        if (isTeamPlan) updateJoinedPlanTeamAction(card, plan, []);
-
         card.querySelector('[data-plan-card-action="continue"]')?.addEventListener("click", async event => {
           event.preventDefault();
           event.stopPropagation();
@@ -1628,72 +1617,24 @@ function renderJoinedPlansList() {
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
           if (teamContainer) {
+            teamContainer.classList.add("plan-card-participation-slot");
             const isDemo = state.currentUser && state.currentUser.is_demo;
             const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
 
             if (isDemo || !isLoggedIn) {
-              teamContainer.innerHTML = `<span class="plan-card-team-controls__hint">團隊功能需登入正式帳號</span>`;
+              teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">團隊功能需登入正式帳號</span>`;
             } else {
-              teamContainer.innerHTML = `<span class="plan-card-team-controls__hint">正在載入團隊狀態...</span>`;
+              teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
               db.getMyReadingTeam(plan).then(result => {
                 if (!teamContainer.parentElement) return;
-                teamContainer.innerHTML = "";
-
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
-                const joinedDivisions = new Set(contexts.map(c => Number(c.team.division)));
-                updateJoinedPlanTeamAction(card, plan, contexts);
-
-                const participationLabel = document.createElement("div");
-                participationLabel.className = "plan-card-participation-state";
-                participationLabel.textContent = contexts.length > 0 ? "團隊讀經中" : "個人讀經中";
-                teamContainer.appendChild(participationLabel);
-
-                const divisions = [3, 6];
-                divisions.forEach(division => {
-                  const hasJoined = joinedDivisions.has(division);
-                  
-                  if (hasJoined) {
-                    const context = contexts.find(c => Number(c.team.division) === division);
-                    const teamName = context ? (context.team.name || "") : "";
-                    const memberCount = Number(context && context.team && context.team.memberCount || 0);
-                    const capacity = Number(context && context.team && context.team.capacity || division);
-                    const isFull = memberCount >= capacity;
-                    const themeColor = isFull ? "var(--color-success-foreground)" : "var(--primary-color)";
-                    
-                    const badge = document.createElement("div");
-                    badge.className = `plan-card-team-controls__badge ${isFull ? "is-full" : "is-open"}`;
-                    badge.style.color = themeColor;
-                    badge.innerHTML = `
-                      <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
-                      <span>已入 ${division}人組 (${escapeHTML(teamName)}・${memberCount}/${capacity})</span>
-                      ${!isFull ? `<span class="nlc-icon nlc-icon--sm" data-icon="setting" style="opacity: 0.6; margin-left: 2px;" aria-hidden="true"></span>` : ""}
-                    `;
-                    if (!isFull) {
-                      badge.onclick = (e) => {
-                        e.stopPropagation();
-                        window.openReadingTeamDialog(plan, { preferredDivision: division });
-                      };
-                    }
-                    teamContainer.appendChild(badge);
-                  } else {
-                    const btn = document.createElement("button");
-                    btn.type = "button";
-                    btn.className = "plan-card__secondary-action plan-card-team-controls__button";
-                    btn.innerHTML = `
-                      <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
-                      <span>報名 ${division}人組</span>
-                    `;
-                    btn.onclick = (e) => {
-                      e.stopPropagation();
-                      window.openReadingTeamDialog(plan, { preferredDivision: division });
-                    };
-                    teamContainer.appendChild(btn);
-                  }
-                });
+                const participationModel = getPlanParticipationModel(plan, contexts);
+                teamContainer.innerHTML = renderPlanParticipationItem(participationModel);
+                bindPlanParticipationItemActions(card, plan, participationModel);
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {
                 console.error("Error loading team info for card:", err);
-                teamContainer.innerHTML = `<span class="plan-card-team-controls__hint plan-card-team-controls__hint--danger">無法載入團隊資料</span>`;
+                teamContainer.innerHTML = `<span class="plan-card-participation-item__hint plan-card-participation-item__hint--danger">無法載入團隊資料</span>`;
               });
             }
           }

@@ -101,7 +101,7 @@ describe("plan card information architecture", () => {
     );
 
     expect(joinedList).toContain("plan-card-team-controls");
-    expect(joinedList).toContain("報名 ${division}人組");
+    expect(joinedList).toContain("bindPlanParticipationItemActions(card, plan, participationModel)");
     expect(joinedList).not.toContain('action: "team"');
     expect(joinedList).not.toContain('[data-plan-card-action="team"]');
   });
@@ -139,5 +139,20 @@ describe("plan card information architecture", () => {
     expect(plan).toContain("plan-card-participation-item__description");
     expect(plan).toContain("plan-card-participation-item__actions");
     expect(plan).toContain('data-plan-participation-action="${escapeHTML(model.action.action)}"');
+  });
+
+  it("does not render joined-card participation as scattered badge fragments", () => {
+    const joinedList = plan.slice(
+      plan.indexOf("function renderJoinedPlansList"),
+      plan.indexOf("function formatCampaignReadingRange")
+    );
+
+    expect(joinedList).toContain("renderPlanParticipationItem(participationModel)");
+    expect(joinedList).toContain("bindPlanParticipationItemActions(card, plan, participationModel)");
+    // The card element itself is legitimately built with document.createElement("div");
+    // assert only that the scattered team fragments are gone.
+    expect(joinedList).not.toContain("plan-card-team-controls__badge");
+    expect(joinedList).not.toContain("plan-card-team-controls__button");
+    expect(joinedList).not.toContain("plan-card-participation-state");
   });
 });

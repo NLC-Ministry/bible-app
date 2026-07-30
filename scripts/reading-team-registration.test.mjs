@@ -143,17 +143,13 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("建立團隊");
   });
 
-  it("derives the joined-plan team action from current team contexts", () => {
-    const actionFlow = plan.slice(
-      plan.indexOf("function updateJoinedPlanTeamAction"),
-      plan.indexOf("function renderJoinedPlansList")
-    );
-
-    expect(actionFlow).toContain('teamAction.textContent = hasTeamContexts ? "查看團隊" : "建立 / 加入團隊"');
-    expect(actionFlow).toContain("await openJoinedPlanTeam(plan)");
-    expect(actionFlow).toContain("await window.openReadingTeamDialog(plan, { preferredDivision: 3 })");
-    expect(actionFlow.indexOf("actions.prepend(teamAction)")).toBeGreaterThan(-1);
-    expect(actionFlow).toContain("actions.append(teamAction)");
+  it("models joined-plan participation through the shared participation item", () => {
+    expect(plan).toContain("function getPlanParticipationModel");
+    expect(plan).toContain("function renderPlanParticipationItem");
+    expect(plan).toContain("function bindPlanParticipationItemActions");
+    expect(plan).toContain("團隊讀經中");
+    expect(plan).toContain("個人讀經中");
+    expect(plan).toContain("報名 ${availableDivision}人組");
   });
 
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
