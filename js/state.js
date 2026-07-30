@@ -576,6 +576,10 @@ window.dataVersion = dataVersion;
 window.setDataVersion = setDataVersion;
 
 window.state = state;
+window.getUserRoleCode = getUserRoleCode;
+window.getRoleDefinition = getRoleDefinition;
+window.getRoleLabel = getRoleLabel;
+window.hasWholeChurchPlanScope = hasWholeChurchPlanScope;
 window.currentActivePlanId = getActivePlanContextId();
 window.currentActivePlanKey = null;
 window.getActivePlanContextId = getActivePlanContextId;

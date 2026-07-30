@@ -64,7 +64,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_hub_role_uuid_authority");
+    expect(html).toContain("js/app.js?v=20260730_hub_role_uuid_authority_v2");
     expect(html).toContain("index.css?v=20260730_unjoined_plan_invites_v2");
     expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });

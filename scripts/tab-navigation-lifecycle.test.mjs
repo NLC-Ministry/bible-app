@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260730_hub_role_uuid_authority");
-    expect(appSource).toContain("./state.js?v=20260730_hub_role_uuid_authority");
+    expect(htmlSource).toContain("js/app.js?v=20260730_hub_role_uuid_authority_v2");
+    expect(appSource).toContain("./state.js?v=20260730_hub_role_uuid_authority_v2");
   });
 });

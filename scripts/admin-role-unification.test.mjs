@@ -33,6 +33,8 @@ describe("Member Hub UUID role authority", () => {
 
   it("removes local role assignment and derives authorization from the linked definition", () => {
     expect(state).toContain("function getUserRoleCode");
+    expect(state).toContain("window.getUserRoleCode = getUserRoleCode");
+    expect(state).toContain("window.getRoleDefinition = getRoleDefinition");
     expect(state).toContain("user.role_definition?.code");
     expect(db).not.toContain("async updateUserRole");
     expect(admin).toContain("權限由教會系統統一管理");
