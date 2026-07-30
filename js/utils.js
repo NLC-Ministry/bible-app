@@ -1895,16 +1895,20 @@ function getVisiblePlans(plans) {
 // Defined here (in utils.js, which loads early) so db.init() and other
 // early callers don't have to wait for profile.js to lazy-load.
 function updateAdminNavVisibility() {
-  const isRealAdmin = !state.isSupabaseMode || state.realRole === 'admin';
-  const isSimulatedAdmin = state.currentUser && state.currentUser.role === 'admin';
-  const shouldShowNav = isRealAdmin && isSimulatedAdmin;
+  const managementRoles = ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'];
+  const currentRole = (state.currentUser && state.currentUser.role) || 'member';
+  const realRole = state.realRole || currentRole;
+  const canManagePlans = managementRoles.includes(currentRole)
+    && (!state.isSupabaseMode || managementRoles.includes(realRole));
+  const isSystemAdmin = currentRole === 'admin'
+    && (!state.isSupabaseMode || realRole === 'admin');
 
   document.querySelectorAll('.admin-only-nav').forEach(btn => {
-    btn.classList.toggle('hidden', !shouldShowNav);
+    btn.classList.toggle('hidden', !canManagePlans);
   });
 
   document.querySelectorAll('.admin-only-plan-card').forEach(card => {
-    card.classList.toggle('hidden', !shouldShowNav);
+    card.classList.toggle('hidden', !isSystemAdmin);
   });
 }
 

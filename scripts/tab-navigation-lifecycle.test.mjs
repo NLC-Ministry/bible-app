@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    const expectedAppCacheKey = "js/app.js?v=20260730_plan_join_confirmation";
+    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_conflict_resolution";
 
     expect(htmlSource).toContain(expectedAppCacheKey);
     expect(appSource).toContain("./state.js?v=20260729_tab_navigation_memory");

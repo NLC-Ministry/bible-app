@@ -702,27 +702,138 @@ export function init() {
   initAdminTeamRegistration();
 }
 
+const MANAGEMENT_ROLES = ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'];
+
+function isSystemAdministrator() {
+  const role = (state.currentUser && state.currentUser.role) || 'member';
+  const realRole = state.realRole || role;
+  return role === 'admin' && (!state.isSupabaseMode || realRole === 'admin');
+}
+
+function setAdminPrimaryPanel(panelName) {
+  const isAdmin = isSystemAdministrator();
+  const requested = panelName === 'permissions' && isAdmin ? 'permissions' : 'plans';
+  const tabs = document.getElementById('admin-primary-tabs');
+  const permissionsPanel = document.getElementById('admin-permissions-panel');
+  const plansPanel = document.getElementById('admin-plans-panel');
+  if (tabs) tabs.classList.toggle('hidden', !isAdmin);
+  if (permissionsPanel) permissionsPanel.classList.toggle('hidden', requested !== 'permissions');
+  if (plansPanel) plansPanel.classList.toggle('hidden', requested !== 'plans');
+  document.querySelectorAll('[data-admin-panel]').forEach(button => {
+    const active = button.dataset.adminPanel === requested;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
+function mountPlanManagementSections() {
+  const participantSlot = document.getElementById('admin-plan-participants-slot');
+  const statisticsSlot = document.getElementById('admin-plan-statistics-slot');
+  const orgHeader = document.getElementById('plan-org-stats-header');
+  const memberList = document.getElementById('member-list-container');
+  const statsSection = document.getElementById('stats-group-section');
+  if (participantSlot && orgHeader && orgHeader.parentElement !== participantSlot) participantSlot.appendChild(orgHeader);
+  if (participantSlot && memberList && memberList.parentElement !== participantSlot) participantSlot.appendChild(memberList);
+  if (statisticsSlot && statsSection && statsSection.parentElement !== statisticsSlot) statisticsSlot.appendChild(statsSection);
+}
+
+function getManagementPlans() {
+  const seen = new Set();
+  return [...(state.activePlans || []), ...(state.globalPlans || [])].reduce((plans, sourcePlan) => {
+    const key = String(sourcePlan.globalPlanId || sourcePlan.id || sourcePlan.presetKey || sourcePlan.name || '');
+    if (!key || seen.has(key)) return plans;
+    seen.add(key);
+
+    let plan = sourcePlan;
+    if ((!Array.isArray(plan.days) || plan.days.length === 0) && typeof generatePlanObject === 'function') {
+      const books = plan.books || plan.target_books || [];
+      if (books.length > 0) {
+        plan = generatePlanObject(plan.name, plan.startDate || plan.start_date, plan.endDate || plan.end_date, books, plan.presetKey || plan.id, plan.level || 'normal', plan.isFixed !== false && plan.is_fixed !== false);
+        plan.globalPlanId = sourcePlan.globalPlanId || sourcePlan.id;
+        plan.id = sourcePlan.id || plan.id;
+        plan.name = sourcePlan.name || plan.name;
+      }
+    }
+    plans.push(plan);
+    return plans;
+  }, []);
+}
+
+async function selectManagementPlan(planKey) {
+  const plans = getManagementPlans();
+  const plan = plans.find(item => [item.globalPlanId, item.id, item.presetKey, item.name].filter(Boolean).map(String).includes(String(planKey))) || plans[0] || null;
+  if (!plan) return;
+  state.activePlan = plan;
+  if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
+  localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
+  window.currentPlanViewState = 'ORG_STATS';
+  if (typeof window.renderPlanMembersView === 'function') await window.renderPlanMembersView();
+  await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content');
+  await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6');
+}
+
+export async function renderAdminPlanManagement() {
+  const role = (state.currentUser && state.currentUser.role) || 'member';
+  if (!MANAGEMENT_ROLES.includes(role)) return;
+  setAdminPrimaryPanel('plans');
+  mountPlanManagementSections();
+
+  const select = document.getElementById('admin-management-plan-select');
+  const plans = getManagementPlans();
+  if (select) {
+    select.innerHTML = '';
+    if (plans.length === 0) {
+      select.options.add(new Option('目前沒有可管理的計畫', ''));
+      select.disabled = true;
+    } else {
+      select.disabled = false;
+      plans.forEach(plan => select.options.add(new Option(plan.name || '未命名計畫', String(plan.globalPlanId || plan.id || plan.presetKey || plan.name))));
+      const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
+      const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
+      select.value = matchingOption ? matchingOption.value : select.options[0].value;
+      select.onchange = () => selectManagementPlan(select.value);
+      await selectManagementPlan(select.value);
+    }
+  }
+
+  document.querySelectorAll('[data-admin-panel]').forEach(button => {
+    button.onclick = () => setAdminPrimaryPanel(button.dataset.adminPanel);
+  });
+  if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));
+}
+
 // Bind to window for global access compatibility
 window.renderAdminUserManagement = renderAdminUserManagement;
 window.initAdminFiltersUI = initAdminFiltersUI;
 window.renderAdminFeatureSettings = renderAdminFeatureSettings;
+window.renderAdminPlanManagement = renderAdminPlanManagement;
 window.openAdminFilterBottomSheet = openAdminFilterBottomSheet;
 window.closeAdminFilterBottomSheet = closeAdminFilterBottomSheet;
 window.initAdminUserManagement = init;
 
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
+let cachedTeamsDataKey = "";
 
-export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
-  const contentEl = document.getElementById("admin-team-status-content");
+export async function renderAdminTeamRegistrationStatus(forceRefresh = false, division = 3, contentId = division === 6 ? "admin-team-status-content-6" : "admin-team-status-content") {
+  const contentEl = document.getElementById(contentId);
   if (!contentEl) return;
 
-  const isAdmin = state.currentUser && state.currentUser.role === "admin";
-  const cardWrap = document.getElementById("admin-team-status-card-wrap");
-  if (cardWrap) {
-    cardWrap.classList.toggle("hidden", !isAdmin);
+  const currentUser = state.currentUser || {};
+  const role = currentUser.role;
+  if (!MANAGEMENT_ROLES.includes(role)) return;
+
+  const scopeCacheKey = [
+    currentUser.id || currentUser.name || "anonymous",
+    role,
+    currentUser.managed_regions || currentUser.great_region || "",
+    currentUser.managed_zones || currentUser.pastoral_zone || "",
+    currentUser.managed_groups || currentUser.small_group || ""
+  ].join("|");
+  if (cachedTeamsDataKey !== scopeCacheKey) {
+    cachedTeamsData = null;
+    cachedTeamsDataKey = scopeCacheKey;
   }
-  if (!isAdmin) return;
 
   if (!cachedTeamsData || forceRefresh) {
     contentEl.innerHTML = `
@@ -742,16 +853,22 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
         </div>
       `;
       const retryButton = document.getElementById("admin-team-status-retry");
-      if (retryButton) retryButton.onclick = () => renderAdminTeamRegistrationStatus(true);
+      if (retryButton) retryButton.onclick = () => renderAdminTeamRegistrationStatus(true, division, contentId);
       return;
     }
     cachedTeamsData = result.context || { summary: {}, plans: [] };
   }
 
-  const overviewPlans = Array.isArray(cachedTeamsData.plans) ? cachedTeamsData.plans : [];
+  let overviewPlans = Array.isArray(cachedTeamsData.plans) ? cachedTeamsData.plans : [];
+  const selectedPlan = state.activePlan;
+  if (selectedPlan) {
+    const selectedKeys = [selectedPlan.globalPlanId, selectedPlan.id, selectedPlan.presetKey, selectedPlan.name]
+      .filter(Boolean).map(String);
+    overviewPlans = overviewPlans.filter(item => selectedKeys.includes(String(item.id)) || selectedKeys.includes(String(item.name)));
+  }
   const processedPlans = overviewPlans.map(item => {
     const allTeams = Array.isArray(item.teams) ? item.teams : [];
-    const teams = allTeams.filter(team => Number(team.division) === Number(activeTeamDivision));
+    const teams = allTeams.filter(team => Number(team.division) === Number(division));
     return {
       ...item,
       plan: item,
@@ -804,7 +921,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
     if (item.teams.length === 0) {
       html += `
         <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; background: var(--bg-input); border-radius: 8px; border: 1px dashed var(--border-card);">
-          此計畫目前無 ${activeTeamDivision} 人團隊的報名資料。
+          此計畫目前無 ${division} 人團隊的報名資料。
         </div>
       </div>
       `;
@@ -814,7 +931,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
           <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
             <thead style="position: sticky; top: 0; z-index: 2; background: var(--bg-input);">
               <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
-                ${Number(activeTeamDivision) === 3 ? `
+                ${Number(division) === 3 ? `
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長所屬牧區</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊名</th>
                   <th style="padding: 0.6rem 0.8rem; font-weight: 600; color: var(--text-secondary);">隊長</th>
@@ -846,7 +963,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
         const memberCount = Number(team.memberCount || members.length || 0);
 
         let membersCells = "";
-        for (let i = 0; i < Number(activeTeamDivision) - 1; i++) {
+        for (let i = 0; i < Number(division) - 1; i++) {
           const m = otherMembers[i];
           const memberName = m && m.name ? escapeHTML(m.name) : "-";
           const memberZone = m && m.pastoralZone ? `<small style="display:block; margin-top:0.2rem; color:var(--text-muted);">${escapeHTML(m.pastoralZone)}</small>` : "";
@@ -858,7 +975,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false) {
             <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">${captainZone}</td>
             <td style="padding: 0.75rem 0.8rem; font-weight: 500; color: var(--text-primary);">
               ${teamName}
-              <small style="display:block; margin-top:0.2rem; color:var(--text-muted); font-weight:400;">${teamStatus} · ${memberCount}/${activeTeamDivision} 人</small>
+              <small style="display:block; margin-top:0.2rem; color:var(--text-muted); font-weight:400;">${teamStatus} · ${memberCount}/${division} 人</small>
             </td>
             <td style="padding: 0.75rem 0.8rem; color: var(--text-primary);">${captainName}</td>
             ${membersCells}

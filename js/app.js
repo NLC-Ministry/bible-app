@@ -12,7 +12,7 @@ import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260729_tab_navigation_memory';
 import './auth.js';
-import './db.js?v=20260729_team_rank_focus';
+import './db.js?v=20260730_team_scope_any_member';
 import './utils.js?v=20260728_badge_img_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 
@@ -469,26 +469,26 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "admin-view") {
+      await loadModule('plan', './modules/plan.js?v=' + buildVersion);
       const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
-      await ensureAdminFeatureModulesLoaded();
-      // Run both admin renders, await the async one
-      if (mod && typeof mod.renderAdminUserManagement === 'function') {
-        await mod.renderAdminUserManagement();
-      } else if (typeof window.renderAdminUserManagement === 'function') {
-        await window.renderAdminUserManagement();
+      const isSystemAdmin = state.currentUser && state.currentUser.role === 'admin'
+        && (!state.isSupabaseMode || (state.realRole || state.currentUser.role) === 'admin');
+
+      if (isSystemAdmin) {
+        await ensureAdminFeatureModulesLoaded();
+        if (mod && typeof mod.renderAdminUserManagement === 'function') {
+          await mod.renderAdminUserManagement();
+        } else if (typeof window.renderAdminUserManagement === 'function') {
+          await window.renderAdminUserManagement();
+        }
+        await loadIssueReportUi({ includeAdmin: true });
       }
-      if (typeof window.renderAdminOrgManagement === 'function') {
-        window.renderAdminOrgManagement(); // sync, no await needed
+
+      if (mod && typeof mod.renderAdminPlanManagement === 'function') {
+        await mod.renderAdminPlanManagement();
+      } else if (typeof window.renderAdminPlanManagement === 'function') {
+        await window.renderAdminPlanManagement();
       }
-      if (mod && typeof mod.renderAdminFeatureSettings === 'function') {
-        await mod.renderAdminFeatureSettings();
-      }
-      if (mod && typeof mod.renderAdminTeamRegistrationStatus === 'function') {
-        await mod.renderAdminTeamRegistrationStatus(true);
-      } else if (typeof window.renderAdminTeamRegistrationStatus === 'function') {
-        await window.renderAdminTeamRegistrationStatus(true);
-      }
-      await loadIssueReportUi({ includeAdmin: true });
     }
 
     // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──
