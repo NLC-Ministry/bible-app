@@ -82,11 +82,6 @@ const state = {
     progress: null,
     group: null,
     growth: null
-  },
-  adminFilters: {
-    region: null,
-    zone: null,
-    group: null
   }
 };
 

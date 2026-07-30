@@ -2,11 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { IssueReportFab } from '../../components/issue-report/IssueReportFab.tsx';
 import { AdminReportView } from '../../components/issue-report/AdminReportView.tsx';
-import { AdminUsersAccordion } from '../../components/issue-report/AdminUsersAccordion.tsx';
 
 let issueReportMounted = false;
 let adminReportsMounted = false;
-let adminUsersMounted = false;
 
 function mountReactComponent(rootEl, Component) {
   const root = createRoot(rootEl);
@@ -33,11 +31,4 @@ export function mountIssueReportUi({ includeAdmin = false } = {}) {
     }
   }
 
-  if (!adminUsersMounted) {
-    const adminUsersAccordionRoot = document.getElementById("admin-users-accordion-root");
-    if (adminUsersAccordionRoot) {
-      mountReactComponent(adminUsersAccordionRoot, AdminUsersAccordion);
-      adminUsersMounted = true;
-    }
-  }
 }

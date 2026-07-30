@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260730_public_pastoral_ranking");
-    expect(appSource).toContain("./state.js?v=20260730_public_pastoral_ranking");
+    expect(htmlSource).toContain("js/app.js?v=20260730_remove_local_permission_management");
+    expect(appSource).toContain("./state.js?v=20260730_remove_local_permission_management");
   });
 });

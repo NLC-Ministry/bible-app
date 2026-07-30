@@ -35,12 +35,10 @@ describe("static close button usage", () => {
     expect(html).toContain('id="btn-close-plan-team-invite"');
     expect(html).toMatch(/id="btn-close-plan-team-invite"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
     expect(html).toMatch(/id="typography-sheet-close-btn"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
-    expect(html).toMatch(/id="btn-close-bottom-sheet"[^>]*class="[^"]*dialog-close-button[^"]*icon-button/);
   });
 
-  it("keeps bottom-sheet close controls square through the shared primitive", () => {
+  it("keeps reader bottom-sheet close controls square through the shared primitive", () => {
     expect(css).toContain(".bottom-sheet-close-x");
-    expect(css).toContain(".bottom-sheet-close-btn");
     expect(css).not.toMatch(/\.bottom-sheet-close-x\s*\{[^}]*width:\s*32px/);
   });
 });

@@ -64,13 +64,13 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_public_pastoral_ranking");
-    expect(html).toContain("index.css?v=20260730_public_pastoral_ranking");
+    expect(html).toContain("js/app.js?v=20260730_remove_local_permission_management");
+    expect(html).toContain("index.css?v=20260730_remove_local_permission_management");
     expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });
 
-  it("restores user permission management and uses native team disclosure", () => {
-    expect(html).toContain('id="admin-users-accordion-root"');
+  it("removes local user permission management and uses native team disclosure", () => {
+    expect(html).not.toContain('id="admin-users-accordion-root"');
     expect(html).toContain('<details class="glass-card admin-team-status-disclosure"');
     expect(html).toContain('<summary id="admin-team-status-toggle"');
     expect(html).toContain('aria-controls="admin-team-status-panel"');

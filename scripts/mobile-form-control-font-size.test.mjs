@@ -32,7 +32,6 @@ const textEntrySourceFiles = [
   "components/ui/textarea.tsx",
   "components/ui/native-select.tsx",
   "components/issue-report/ReportDrawer.tsx",
-  "components/issue-report/AdminUsersAccordion.tsx"
 ];
 
 const cssRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({

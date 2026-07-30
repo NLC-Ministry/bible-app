@@ -38,7 +38,7 @@ describe("Member Hub UUID role authority", () => {
     expect(state).toContain("window.getRoleDefinition = getRoleDefinition");
     expect(state).toContain("user.role_definition?.code");
     expect(db).not.toContain("async updateUserRole");
-    expect(admin).toContain("權限由教會系統統一管理");
+    expect(admin).not.toContain("renderAdminUserManagement");
     expect(dataEdge).toContain("role_assignment_managed_by_member_hub");
     expect(profile).toContain("roleDefinition?.label");
     expect(plan).not.toContain("isRealAdmin");

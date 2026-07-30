@@ -10,10 +10,10 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260730_public_pastoral_ranking';
-import './auth.js?v=20260730_public_pastoral_ranking';
-import './db.js?v=20260730_public_pastoral_ranking';
-import './utils.js?v=20260730_public_pastoral_ranking';
+import './state.js?v=20260730_remove_local_permission_management';
+import './auth.js?v=20260730_remove_local_permission_management';
+import './db.js?v=20260730_remove_local_permission_management';
+import './utils.js?v=20260730_remove_local_permission_management';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
@@ -479,11 +479,6 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
       if (isSystemAdmin) {
         await ensureAdminFeatureModulesLoaded();
-        if (mod && typeof mod.renderAdminUserManagement === 'function') {
-          await mod.renderAdminUserManagement();
-        } else if (typeof window.renderAdminUserManagement === 'function') {
-          await window.renderAdminUserManagement();
-        }
         await loadIssueReportUi({ includeAdmin: true });
       }
 

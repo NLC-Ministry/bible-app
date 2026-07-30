@@ -1,242 +1,5 @@
 // js/modules/admin.js
 
-export function updateFilterChipsUI() {
-  const chipRegion = document.getElementById("chip-filter-region");
-  const chipZone = document.getElementById("chip-filter-zone");
-
-  if (chipRegion) {
-    if (state.adminFilters.region) {
-      chipRegion.classList.add("active");
-      chipRegion.innerHTML = `<span>${state.adminFilters.region}</span> <span class="chip-clear" data-clear="region">清除</span>`;
-    } else {
-      chipRegion.classList.remove("active");
-      chipRegion.innerHTML = `<span>篩選大區</span> <span class="chip-arrow">展開</span>`;
-    }
-  }
-
-  if (chipZone) {
-    if (state.adminFilters.zone) {
-      chipZone.classList.add("active");
-      chipZone.innerHTML = `<span>${state.adminFilters.zone}</span> <span class="chip-clear" data-clear="zone">清除</span>`;
-    } else {
-      chipZone.classList.remove("active");
-      chipZone.innerHTML = `<span>篩選牧區</span> <span class="chip-arrow">展開</span>`;
-    }
-  }
-
-}
-
-export function openAdminFilterBottomSheet(type) {
-  if (!["region", "zone"].includes(type)) return;
-  const overlay = document.getElementById("global-bottom-sheet");
-  const titleEl = document.getElementById("bottom-sheet-title");
-  const listEl = document.getElementById("bottom-sheet-list");
-  if (!overlay || !listEl) return;
-
-  let title = "請選擇篩選條件";
-  let options = [];
-  let selectedValue = state.adminFilters[type];
-
-  const getPredefinedRegions = () => {
-    return (state.orgStructure && state.orgStructure.regions && state.orgStructure.regions.length > 0)
-      ? state.orgStructure.regions
-      : ["第一大區", "第二大區", "第三大區", "第四大區", "第五大區", "第六大區", "第七大區"];
-  };
-
-  const getPredefinedZones = () => {
-    if (state.adminFilters.region) {
-      return state.orgStructure.zones[state.adminFilters.region] || [];
-    }
-    const all = [];
-    if (state.orgStructure && state.orgStructure.zones) {
-      Object.values(state.orgStructure.zones).forEach(arr => {
-        if (Array.isArray(arr)) all.push(...arr);
-      });
-    }
-    return Array.from(new Set(all));
-  };
-
-
-  if (type === "region") {
-    title = "選擇大區";
-    options = getPredefinedRegions();
-  } else if (type === "zone") {
-    title = "選擇牧區";
-    options = getPredefinedZones();
-  }
-
-  if (titleEl) titleEl.textContent = title;
-  listEl.innerHTML = "";
-
-  const allBtn = document.createElement("button");
-  allBtn.className = `bottom-sheet-item ${!selectedValue ? "selected" : ""}`;
-  allBtn.type = "button";
-  allBtn.textContent = `全部${type === "region" ? "大區" : "牧區"}`;
-  allBtn.onclick = () => {
-    console.log(`管理 [Debug] Bottom Sheet 選擇清除條件: ${type}`);
-    state.adminFilters[type] = null;
-    if (type === "region") {
-      state.adminFilters.zone = null;
-    } else if (type === "zone") {
-    }
-    updateFilterChipsUI();
-    closeAdminFilterBottomSheet();
-    renderAdminUserManagement();
-  };
-  listEl.appendChild(allBtn);
-
-  options.forEach(opt => {
-    const btn = document.createElement("button");
-    btn.className = `bottom-sheet-item ${selectedValue === opt ? "selected" : ""}`;
-    btn.type = "button";
-    btn.textContent = opt;
-    btn.onclick = () => {
-      console.log(`管理 [Debug] Bottom Sheet 選擇條件: ${type} = ${opt}`);
-      state.adminFilters[type] = opt;
-      if (type === "region") {
-        state.adminFilters.zone = null;
-      } else if (type === "zone") {
-      }
-      updateFilterChipsUI();
-      closeAdminFilterBottomSheet();
-      renderAdminUserManagement();
-    };
-    listEl.appendChild(btn);
-  });
-
-  overlay.classList.add("active");
-}
-
-export function closeAdminFilterBottomSheet() {
-  console.log("管理 [Debug] 關閉篩選 Bottom Sheet");
-  const overlay = document.getElementById("global-bottom-sheet");
-  if (overlay) overlay.classList.remove("active");
-}
-
-export function initAdminFiltersUI() {
-  ["region", "zone"].forEach(type => {
-    const chip = document.getElementById(`chip-filter-${type}`);
-    if (chip) {
-      chip.onclick = (e) => {
-        e.preventDefault();
-        const clearBtn = e.target.closest(".chip-clear");
-        if (clearBtn) {
-          console.log(`管理 [Debug] 清除篩選條件: ${type}`);
-          e.stopPropagation();
-          state.adminFilters[type] = null;
-          if (type === "region") {
-            state.adminFilters.zone = null;
-          } else if (type === "zone") {
-          }
-          updateFilterChipsUI();
-          renderAdminUserManagement();
-        } else {
-          console.log(`管理 [Debug] 點擊篩選按鈕開啟 Bottom Sheet: ${type}`);
-          openAdminFilterBottomSheet(type);
-        }
-      };
-    }
-  });
-
-  const closeBtn = document.getElementById("btn-close-bottom-sheet");
-  if (closeBtn) {
-    closeBtn.onclick = (e) => {
-      console.log("管理 [Debug] 點擊關閉按鈕關閉 Bottom Sheet");
-      e.preventDefault();
-      closeAdminFilterBottomSheet();
-    };
-  }
-
-  const overlay = document.getElementById("global-bottom-sheet");
-  if (overlay) {
-    overlay.onclick = (e) => {
-      if (e.target === overlay) {
-        console.log("管理 [Debug] 點擊背景關閉 Bottom Sheet");
-        e.preventDefault();
-        closeAdminFilterBottomSheet();
-      }
-    };
-  }
-
-  updateFilterChipsUI();
-}
-
-export async function renderAdminUserManagement() {
-  const listContainer = document.getElementById("admin-users-list");
-  if (!listContainer) return;
-
-  const searchInput = document.getElementById("admin-search-user");
-  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-
-  ComponentSkeletonLoader.show('members', listContainer);
-
-  try {
-    const [users, roleDefinitions] = await Promise.all([
-      db.fetchMergedUsersList(null, true),
-      db.fetchRoleDefinitions()
-    ]);
-    state.roleDefinitions = roleDefinitions;
-    
-    const roleOrder = Object.fromEntries(roleDefinitions.map(role => [role.code, role.sort_order]));
-    const sortedUsers = [...users].sort((a, b) => {
-      if (a.name === state.currentUser.name) return -1;
-      if (b.name === state.currentUser.name) return 1;
-      return (roleOrder[getUserRoleCode(a)] || 99) - (roleOrder[getUserRoleCode(b)] || 99);
-    });
-
-    const filteredUsers = sortedUsers.filter(u => {
-      const matchName = u.name.toLowerCase().includes(query);
-      const matchEmail = u.email ? u.email.toLowerCase().includes(query) : false;
-      const matchRegion = !state.adminFilters.region || u.great_region === state.adminFilters.region;
-      const matchZone = !state.adminFilters.zone || u.pastoral_zone === state.adminFilters.zone;
-      return (matchName || matchEmail) && matchRegion && matchZone;
-    });
-
-    listContainer.innerHTML = "";
-
-    if (filteredUsers.length === 0) {
-      listContainer.innerHTML = `<div style="text-align: center; padding: 2.5rem; color: var(--text-muted);">無符合搜尋條件的成員</div>`;
-      return;
-    }
-
-    const roleLabels = Object.fromEntries(roleDefinitions.map(role => [role.code, role.label]));
-
-    filteredUsers.forEach(user => {
-      const roleLabel = user.role_definition?.label || roleLabels[getUserRoleCode(user)] || getUserRoleCode(user);
-      
-      const item = document.createElement("div");
-      item.className = "member-list-item";
-      
-      item.innerHTML = `
-        <div class="member-info-left">
-          <div class="member-name-row">
-            <span class="member-name-text">${escapeHTML(user.name)}</span>
-            <span class="role-badge-pill">${escapeHTML(roleLabel)}</span>
-          </div>
-          <div class="member-sub-text">
-            ${escapeHTML(user.great_region)} / ${escapeHTML(user.pastoral_zone)} / ${escapeHTML(user.small_group)}
-          </div>
-          ${user.email ? `<div class="member-email-text">${escapeHTML(user.email)}</div>` : ''}
-        </div>
-        <div class="member-arrow-right">
-          ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "sm", className: "nlc-icon" }) : ""}
-        </div>
-      `;
-
-      item.onclick = (e) => {
-        e.preventDefault();
-        if (typeof showToast === "function") showToast("權限由教會系統統一管理，請至教會系統調整。");
-      };
-
-      listContainer.appendChild(item);
-    });
-
-  } catch (err) {
-    console.error("Failed to render admin user management:", err);
-    listContainer.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2.5rem;">渲染名單失敗: ${err.message || err}</div>`;
-  }
-}
-
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
   const status = document.getElementById("admin-pastoral-wall-status");
@@ -301,18 +64,7 @@ export async function renderAdminFeatureSettings() {
 }
 
 export function init() {
-  const searchInput = document.getElementById("admin-search-user");
-  if (searchInput) {
-    let debounceTimer;
-    searchInput.oninput = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        renderAdminUserManagement();
-      }, 300);
-    };
-  }
-
-  initAdminFiltersUI();
+  void renderAdminFeatureSettings();
   initAdminTeamRegistration();
 
   // Bind unjoined plan members section collapse toggle
@@ -352,12 +104,12 @@ function isSystemAdministrator() {
 
 function setAdminPrimaryPanel(panelName) {
   const isAdmin = isSystemAdministrator();
-  const requested = panelName === 'permissions' && isAdmin ? 'permissions' : 'plans';
+  const requested = panelName === 'system' && isAdmin ? 'system' : 'plans';
   const tabs = document.getElementById('admin-primary-tabs');
-  const permissionsPanel = document.getElementById('admin-permissions-panel');
+  const systemPanel = document.getElementById('admin-system-panel');
   const plansPanel = document.getElementById('admin-plans-panel');
   if (tabs) tabs.classList.toggle('hidden', !isAdmin);
-  if (permissionsPanel) permissionsPanel.classList.toggle('hidden', requested !== 'permissions');
+  if (systemPanel) systemPanel.classList.toggle('hidden', requested !== 'system');
   if (plansPanel) plansPanel.classList.toggle('hidden', requested !== 'plans');
   document.querySelectorAll('[data-admin-panel]').forEach(button => {
     const active = button.dataset.adminPanel === requested;
@@ -482,14 +234,8 @@ export async function renderAdminPlanManagement() {
 }
 
 // Bind to window for global access compatibility
-window.renderAdminUserManagement = renderAdminUserManagement;
-window.initAdminFiltersUI = initAdminFiltersUI;
 window.renderAdminFeatureSettings = renderAdminFeatureSettings;
 window.renderAdminPlanManagement = renderAdminPlanManagement;
-window.openAdminFilterBottomSheet = openAdminFilterBottomSheet;
-window.closeAdminFilterBottomSheet = closeAdminFilterBottomSheet;
-window.initAdminUserManagement = init;
-
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
 let cachedTeamsDataKey = "";

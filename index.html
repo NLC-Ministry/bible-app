@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260730_public_pastoral_ranking">
+  <link rel="stylesheet" href="index.css?v=20260730_remove_local_permission_management">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_size_modal_chooser">
 
   <!-- Supabase JS Client library -->
@@ -1681,14 +1681,14 @@
       <!-- VIEW 6: ADMIN CONSOLE -->
       <section id="admin-view" class="view-pane hidden">
         <nav id="admin-primary-tabs" class="admin-primary-tabs hidden" role="tablist" aria-label="管理分頁">
-          <button type="button" class="admin-primary-tab" id="admin-tab-permissions" role="tab"
-            aria-selected="false" aria-controls="admin-permissions-panel" data-admin-panel="permissions">權限管理</button>
+          <button type="button" class="admin-primary-tab" id="admin-tab-system" role="tab"
+            aria-selected="false" aria-controls="admin-system-panel" data-admin-panel="system">系統管理</button>
           <button type="button" class="admin-primary-tab active" id="admin-tab-plans" role="tab"
             aria-selected="true" aria-controls="admin-plans-panel" data-admin-panel="plans">計畫管理</button>
         </nav>
 
-        <div id="admin-permissions-panel" class="grid-layout hidden" role="tabpanel"
-          aria-labelledby="admin-tab-permissions">
+        <div id="admin-system-panel" class="grid-layout hidden" role="tabpanel"
+          aria-labelledby="admin-tab-system">
           <div class="card-col span-12">
             <div class="glass-card admin-feature-settings-card">
               <div class="admin-feature-settings-card__copy">
@@ -1712,9 +1712,6 @@
               </div>
               <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
             </div>
-          </div>
-          <div class="card-col span-12" id="admin-users-accordion-root">
-            <!-- Rendered dynamically by React -->
           </div>
           <div class="card-col span-12" id="admin-reports-root">
             <!-- Rendered dynamically by React -->
@@ -1990,22 +1987,6 @@
     window.dismissMockCareReminder = function() {};
   </script>
 
-  <!-- Global Premium Bottom Sheet (Mobile Drawer) -->
-  <div id="global-bottom-sheet" class="bottom-sheet-overlay">
-    <div class="bottom-sheet-container">
-      <div class="bottom-sheet-handle"></div>
-      <div class="bottom-sheet-header">
-        <h4 id="bottom-sheet-title">選擇篩選條件</h4>
-        <button id="btn-close-bottom-sheet" class="bottom-sheet-close-btn dialog-close-button icon-button icon-button--subtle" type="button" aria-label="關閉">
-          <span class="nlc-icon nlc-icon--sm" data-icon="closeLg" aria-hidden="true"></span>
-        </button>
-      </div>
-      <div class="bottom-sheet-content" id="bottom-sheet-list">
-        <!-- populated dynamically -->
-      </div>
-    </div>
-  </div>
-
   <!-- YouVersion Immersive Badge Detail Page -->
   <div id="badge-detail-page" class="hidden fixed inset-0 w-full h-full overflow-y-auto z-50 pb-12">
 
@@ -2059,7 +2040,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260730_public_pastoral_ranking"></script>
+  <script type="module" src="js/app.js?v=20260730_remove_local_permission_management"></script>
 </body>
 
 </html>

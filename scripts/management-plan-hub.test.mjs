@@ -19,12 +19,12 @@ describe("management plan hub", () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it("gives system administrators permission and plan tabs", () => {
-    expect(html).toContain('data-admin-panel="permissions">\u6b0a\u9650\u7ba1\u7406</button>');
+  it("gives system administrators system and plan tabs", () => {
+    expect(html).toContain('data-admin-panel="system">\u7cfb\u7d71\u7ba1\u7406</button>');
     expect(html).toContain('data-admin-panel="plans">\u8a08\u756b\u7ba1\u7406</button>');
-    expect(html).toContain('id="admin-users-accordion-root"');
+    expect(html).not.toContain('id="admin-users-accordion-root"');
     expect(html).toContain('id="admin-reports-root"');
-    expect(admin).toContain("panelName === 'permissions' && isAdmin");
+    expect(admin).toContain("panelName === 'system' && isAdmin");
   });
 
   it("keeps plan management available above the small-group level", () => {
