@@ -1357,7 +1357,10 @@ function bindPlanParticipationItemActions(card, plan, model) {
         return;
       }
 
-      if (action === "join-team-division" && typeof window.openReadingTeamDialog === "function") {
+      if (
+        (action === "join-team-division" || action === "open-team-dialog")
+        && typeof window.openReadingTeamDialog === "function"
+      ) {
         await window.openReadingTeamDialog(plan, { preferredDivision: division });
       }
     });

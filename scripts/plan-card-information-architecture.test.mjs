@@ -118,7 +118,7 @@ describe("plan card information architecture", () => {
     expect(participation).toContain('"team-full"');
     expect(participation).toContain('"team-open"');
     expect(participation).toContain('variant: "solo"');
-    expect(participation).toContain('action: "join-team-division"');
+    expect(participation).toContain('action: "open-team-dialog"');
     expect(plan).toContain('from "./plan-participation-helpers.mjs"');
     expect(plan).toContain("getPlanParticipationModel(plan,");
   });
