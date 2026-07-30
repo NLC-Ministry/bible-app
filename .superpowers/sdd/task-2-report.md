@@ -1,38 +1,129 @@
-# Task 2 Report: Adaptive Install Guide UI
+# Task 2 Report: Render Participation As A Compact Item
 
-## Status
+## Summary
 
-DONE
+Added `renderPlanParticipationItem(model)` to `js/modules/plan.js`, immediately after
+`getPlanParticipationModel(...)` (which ends at line 1412). Followed the brief's TDD
+steps exactly; code and test matched the brief verbatim with no contradictions.
+
+## RED evidence
+
+Added the test from brief Step 1 to `scripts/plan-card-information-architecture.test.mjs`
+(new `it("renders participation status with shadcn item-style parts", ...)` block, appended
+after the existing `"models joined-plan participation as one item contract"` test).
+
+Command:
+```
+npx vitest --run scripts/plan-card-information-architecture.test.mjs
+```
+
+Output (relevant excerpt):
+```
+ ❯ scripts/plan-card-information-architecture.test.mjs:135:18
+    133|
+    134|   it("renders participation status with shadcn item-style parts", () =…
+    135|     expect(plan).toContain("function renderPlanParticipationItem");
+       |                  ^
+    136|     expect(plan).toContain("plan-card-participation-item__media");
+    137|     expect(plan).toContain("plan-card-participation-item__content");
+```
+Failed as expected: `renderPlanParticipationItem` did not exist yet in `js/modules/plan.js`.
 
 ## Implementation
 
-- Updated `js/modules/onboarding-helper.js` to consume `getInstallGuideModel(options)`.
-- Added platform dataset, adaptive title/body, ordered step labels, reserved icon DOM slots, and platform-filtered support links.
-- Added the required local lucide-style SVG path helper for vanilla ESM.
-- Passed `installGuideOptions` through `openOnboardingHelper` and the install action handler.
-- Kept the guide as inline progressive disclosure inside the existing onboarding dialog; no nested modal or dialog layer was added.
-- Replaced the legacy install-guide UI test and added the support-link ordering test in `scripts/onboarding-helper.test.mjs`.
+Inserted after `getPlanParticipationModel(...)` (line 1412), before `renderJoinedPlansList()`,
+exactly as given in brief Step 3 — no modifications:
 
-## Verification
+```js
+function renderPlanParticipationItem(model) {
+  if (!model) return "";
+  const actionHtml = model.action ? `
+    <button
+      type="button"
+      class="plan-card-participation-item__button"
+      data-plan-participation-action="${escapeHTML(model.action.action)}"
+      data-plan-participation-division="${escapeHTML(String(model.action.division || ""))}"
+    >
+      ${escapeHTML(model.action.label)}
+    </button>
+  ` : "";
 
-- TDD RED: `npx vitest --run scripts/onboarding-helper.test.mjs` failed with 2 expected new UI failures and 31 passing tests.
-- TDD GREEN: `npx vitest --run scripts/onboarding-helper.test.mjs` passed: 1 file, 33 tests.
-- Full suite: `npm test` passed: 48 files, 374 tests.
-- `git diff --check` passed.
+  return `
+    <div class="plan-card-participation-item plan-card-participation-item--${escapeHTML(model.variant)} plan-card-participation-item--${escapeHTML(model.tone)}">
+      <div class="plan-card-participation-item__media" aria-hidden="true">
+        <span class="nlc-icon nlc-icon--sm" data-icon="${escapeHTML(model.icon)}"></span>
+      </div>
+      <div class="plan-card-participation-item__content">
+        <div class="plan-card-participation-item__title">${escapeHTML(model.title)}</div>
+        <div class="plan-card-participation-item__description">${escapeHTML(model.description)}</div>
+      </div>
+      ${actionHtml ? `<div class="plan-card-participation-item__actions">${actionHtml}</div>` : ""}
+    </div>
+  `;
+}
+```
+
+`escapeHTML` referenced as a runtime global (not imported) — consistent with existing usage
+elsewhere in `js/modules/plan.js` (e.g. lines 1142, 1159-1178), which also calls `escapeHTML`
+without importing it.
+
+## GREEN evidence
+
+Command:
+```
+npx vitest --run scripts/plan-card-information-architecture.test.mjs
+```
+Output:
+```
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  08:13:44
+   Duration  181ms
+```
+
+## Full regression check
+
+Command:
+```
+npm test
+```
+Output:
+```
+ Test Files  53 passed (53)
+      Tests  459 passed (459)
+   Start at  08:13:48
+   Duration  4.63s
+```
+No regressions.
+
+## Files changed
+
+- `js/modules/plan.js` — added `renderPlanParticipationItem(model)` after
+  `getPlanParticipationModel(...)`.
+- `scripts/plan-card-information-architecture.test.mjs` — added the failing-then-passing
+  renderer test.
 
 ## Commit
 
-- `8b6fbaf feat(onboarding): show adaptive install steps`
+`340b66f` — `feat(plan): render compact participation item`
 
-## Concerns
+(Note: `.superpowers/sdd/task-1-report.md` showed as modified in `git status` prior to this
+commit but was pre-existing/unrelated to this task and was deliberately left out of the
+commit — only the two files above were staged.)
 
-None.
+## Self-review
 
-## Review Fix: Stable Install-Step Icon Cells
-
-- Added scoped CSS for the install-step list, fixed `2rem` icon cells, and fixed `1.1rem` SVG drawing boxes.
-- Added a focused CSS guard in `scripts/onboarding-helper.test.mjs`.
-- TDD RED: the focused suite failed on the missing `.steps` selector (`33 passed, 1 failed`).
-- TDD GREEN: focused suite passed (`34 tests`).
-- Full suite passed (`48 files, 375 tests`).
-- Commit: `cce2724 fix(onboarding): reserve install step icon cells`.
+- Function placed exactly where instructed (immediately after `getPlanParticipationModel`,
+  before `renderJoinedPlansList`).
+- Code matches brief Step 3 verbatim — no edits, no "improvements."
+- Test matches brief Step 1 verbatim — no edits.
+- `escapeHTML` correctly treated as an ambient global per repo convention (script-tag/global
+  architecture per top-level CLAUDE.md; also directly confirmed by existing call sites in
+  the same file).
+- No other files touched; no CSS added for the new `.plan-card-participation-item*` classes
+  (out of scope per this task's brief — brief only requires markup/JS, not styling).
+- `renderPlanParticipationItem` is not yet wired into any caller (e.g.
+  `renderJoinedPlansList`) — per the brief, this task's scope is limited to producing the
+  renderer function itself; wiring it into the list rendering path is presumably a
+  subsequent task.
+- No blockers encountered; brief's test and code were consistent with each other.
