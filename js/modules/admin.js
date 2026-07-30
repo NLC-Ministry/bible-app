@@ -815,6 +815,34 @@ let activeTeamDivision = 3;
 let cachedTeamsData = null;
 let cachedTeamsDataKey = "";
 
+function getSelectedManagementOrgFilter() {
+  const role = (state.currentUser && state.currentUser.role) || "member";
+  const region = document.getElementById("members-admin-region-select")?.value || "";
+  const zone = document.getElementById("members-admin-zone-select")?.value || "";
+  const group = document.getElementById("members-admin-group-select")?.value || "";
+  if (group) return { type: "group", value: group };
+  if (zone) return { type: "zone", value: zone };
+  if (region) return { type: "region", value: region.replace(/^region:/, "") };
+  if (role === "group_leader") return { type: "all_groups", value: "" };
+  if (role === "zone_leader") return { type: "all_zones", value: "" };
+  if (role === "great_zone_leader") return { type: "all_regions", value: "" };
+  return { type: "all", value: "" };
+}
+
+function teamMatchesManagementOrgFilter(team, filter = getSelectedManagementOrgFilter()) {
+  if (!filter || filter.type.startsWith("all")) return true;
+  const members = Array.isArray(team && team.members) ? team.members : [];
+  const field = filter.type === "region" ? "greatRegion" : filter.type === "zone" ? "pastoralZone" : "smallGroup";
+  return members.some(member => String(member && (member[field] || member[
+    field === "greatRegion" ? "great_region" : field === "pastoralZone" ? "pastoral_zone" : "small_group"
+  ]) || "").split(",").map(value => value.trim()).filter(Boolean).includes(filter.value));
+}
+
+async function refreshAdminTeamRegistrationFilters() {
+  await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
+  await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
+}
+
 export async function renderAdminTeamRegistrationStatus(forceRefresh = false, division = 3, contentId = division === 6 ? "admin-team-status-content-6" : "admin-team-status-content") {
   const contentEl = document.getElementById(contentId);
   if (!contentEl) return;
@@ -868,7 +896,9 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
   }
   const processedPlans = overviewPlans.map(item => {
     const allTeams = Array.isArray(item.teams) ? item.teams : [];
-    const teams = allTeams.filter(team => Number(team.division) === Number(division));
+    const activeOrgFilter = getSelectedManagementOrgFilter();
+    const teams = allTeams.filter(team => Number(team.division) === Number(division))
+      .filter(team => teamMatchesManagementOrgFilter(team, activeOrgFilter));
     return {
       ...item,
       plan: item,
@@ -1025,4 +1055,5 @@ export function initAdminTeamRegistration() {
 }
 
 window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
+window.refreshAdminTeamRegistrationFilters = refreshAdminTeamRegistrationFilters;
 window.initAdminTeamRegistration = initAdminTeamRegistration;

@@ -63,7 +63,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_conflict_resolution";
+    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_management_org_filters";
     const expectedTeamCssCacheKey = "css/team-registration.css?v=20260730_pr167_conflict_resolution";
 
     expect(html).toContain(expectedAppCacheKey);
