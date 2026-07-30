@@ -100,6 +100,118 @@ body.reading-team-modal-open .main-content {
   line-height: 1.6;
 }
 
+.plan-join-confirmation-overlay {
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.42);
+}
+
+.plan-join-confirmation-dialog {
+  width: min(100%, 420px);
+  max-height: min(80dvh, 520px);
+  overflow: auto;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: 0 20px 44px rgb(15 23 42 / 0.18);
+  padding: 1rem;
+}
+
+.plan-join-confirmation-dialog__header {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plan-join-confirmation-dialog__eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.plan-join-confirmation-dialog h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.plan-join-confirmation-dialog p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.plan-join-confirmation-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.plan-join-confirmation-dialog__footer button {
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+.plan-join-confirmation-dialog__cancel.secondary-btn,
+.plan-join-confirmation-dialog__confirm.primary-btn {
+  box-shadow: none;
+  transform: none;
+}
+
+.plan-join-confirmation-dialog__cancel.secondary-btn {
+  background: var(--bg-card);
+  border-color: var(--border-card);
+  color: var(--text-primary);
+}
+
+.plan-join-confirmation-dialog__cancel.secondary-btn:hover,
+.plan-join-confirmation-dialog__cancel.secondary-btn:focus-visible {
+  background: var(--bg-secondary);
+  border-color: var(--border-strong, var(--border-card));
+  box-shadow: none;
+  transform: none;
+}
+
+.plan-join-confirmation-dialog__confirm.primary-btn {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-button-text, #fff);
+}
+
+.plan-join-confirmation-dialog__confirm.primary-btn::after {
+  content: none;
+}
+
+.plan-join-confirmation-dialog__confirm.primary-btn:hover,
+.plan-join-confirmation-dialog__confirm.primary-btn:focus-visible {
+  background: var(--color-brand-active, var(--color-brand));
+  border-color: var(--color-brand-active, var(--color-brand));
+  box-shadow: none;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .plan-join-confirmation-overlay {
+    align-items: flex-end !important;
+    padding: 0.75rem;
+  }
+
+  .plan-join-confirmation-dialog {
+    width: 100%;
+    max-height: 72dvh;
+  }
+
+  .plan-join-confirmation-dialog__footer {
+    flex-direction: column-reverse;
+  }
+
+  .plan-join-confirmation-dialog__footer button {
+    width: 100%;
+  }
+}
+
 .reading-team-choice-grid {
   display: grid;
   gap: 12px;

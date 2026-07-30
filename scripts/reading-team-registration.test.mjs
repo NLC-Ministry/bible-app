@@ -427,6 +427,15 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain('data-icon="chevronRight"');
   });
 
+  it("styles plan join confirmation as a compact non-pill dialog", () => {
+    expect(teamCss).toContain(".plan-join-confirmation-overlay");
+    expect(teamCss).toContain(".plan-join-confirmation-dialog");
+    expect(teamCss).toContain("border-radius: 12px");
+    expect(teamCss).toContain(".plan-join-confirmation-dialog__footer");
+    expect(teamCss).toContain("@media (max-width: 640px)");
+    expect(teamCss).not.toMatch(/\.plan-join-confirmation-dialog__[^{]+\{[^}]*border-radius:\s*999/i);
+  });
+
   it("connects joining to My Team and integrates team data into existing group views", () => {
     expect(plan).not.toContain("chooseReadingPlanParticipation(plan)");
     expect(plan).toContain("openJoinModeDialog(plan)");
