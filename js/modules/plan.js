@@ -2317,13 +2317,9 @@ function renderPresetPlansList() {
     card.querySelector('[data-plan-card-action="team-create"]')?.addEventListener("click", async event => {
       event.preventDefault();
       event.stopPropagation();
-      await confirmPlanJoin({
-        plan,
-        mode: "team",
-        onConfirm: async () => {
-          await createTeamFromPlanCard(plan, key);
-        }
-      });
+      // Opening team registration is navigation only. Creating a team inside
+      // that dialog is the commit point; cancelling must never join a solo plan.
+      await createTeamFromPlanCard(plan, key);
     });
 
     container.appendChild(card);
@@ -2806,33 +2802,45 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     const taskRound = ch.round || currentRound;
     const { cssClass, content } = getChapterCheckboxState(ch, taskRound);
     const roundLabelHtml = taskRound >= 2
-      ? `<div class="task-round-label round-${taskRound}">第${taskRound}遍</div>`
+      ? `<span class="task-round-label round-${taskRound}">第${taskRound}遍</span>`
       : "";
 
-    taskItem.setAttribute("role", "button");
-    taskItem.setAttribute("tabindex", "0");
+    const isCurrentRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
     taskItem.innerHTML = `
-      <div class="task-checkbox ${cssClass}"
-           data-is-current-read="${ch.isRead ? 'true' : 'false'}"
-           onclick="event.stopPropagation(); window.toggleYouVersionChapter(this, '${ch.book}', ${ch.chapter}, ${ch.round || currentRound})">
-        ${content}
-      </div>
-      <div class="task-title">
-        ${ch.book} ${ch.chapter}章
-      </div>
-      ${roundLabelHtml}
-      <div class="task-arrow">
-        ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "sm", className: "nlc-icon" }) : ""}
-      </div>
+      <button type="button"
+              class="task-read-toggle"
+              data-is-current-read="${isCurrentRead ? 'true' : 'false'}"
+              aria-pressed="${isCurrentRead ? 'true' : 'false'}"
+              aria-label="${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}">
+        <span class="task-checkbox ${cssClass}" aria-hidden="true">
+          ${content}
+        </span>
+      </button>
+      <button type="button" class="task-open-button" aria-label="閱讀 ${ch.book} ${ch.chapter}章">
+        <span class="task-title">
+          ${ch.book} ${ch.chapter}章
+        </span>
+        ${roundLabelHtml}
+        <span class="task-arrow" aria-hidden="true">
+          ${typeof renderIcon === "function" ? renderIcon("chevronRight", { size: "sm", className: "nlc-icon" }) : ""}
+        </span>
+      </button>
     `;
-    const openChapter = () => window.openPlanChapterInReader(ch.book, ch.chapter, state.selectedPlanDay, ch.round || currentRound);
-    taskItem.addEventListener("click", openChapter);
-    taskItem.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openChapter();
-      }
+
+    const readToggle = taskItem.querySelector(".task-read-toggle");
+    const openButton = taskItem.querySelector(".task-open-button");
+    const openChapter = () => window.openPlanChapterInReader(ch.book, ch.chapter, state.selectedPlanDay, taskRound);
+
+    readToggle.addEventListener("click", event => {
+      event.stopPropagation();
+      if (readToggle.dataset.pending === "true") return;
+      readToggle.dataset.pending = "true";
+      window.toggleYouVersionChapter(readToggle, ch.book, ch.chapter, taskRound);
+      window.setTimeout(() => {
+        delete readToggle.dataset.pending;
+      }, 450);
     });
+    openButton.addEventListener("click", openChapter);
     container.appendChild(taskItem);
   });
 }
@@ -2917,6 +2925,10 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
+  if (checkboxEl) {
+    checkboxEl.setAttribute("aria-pressed", String(willBeChecked));
+    checkboxEl.setAttribute("aria-label", `${book} ${chapter}章，${willBeChecked ? "取消已讀" : "標記已讀"}`);
+  }
   const selectedDay = state.activePlan && state.activePlan.days
     ? state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay)
     : null;
@@ -5325,6 +5337,18 @@ function focusPastoralRaceRanking(container) {
   container.scrollTop = Math.min(maxScroll, Math.max(0, centeredOffset));
 }
 
+function bindPastoralRankingToggle(container) {
+  const details = container && container.closest("[data-pastoral-ranking-details]");
+  if (!details || details.dataset.focusBound === "true") return;
+  details.dataset.focusBound = "true";
+  details.addEventListener("toggle", () => {
+    if (!details.open) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => focusPastoralRaceRanking(container));
+    });
+  });
+}
+
 async function renderPlanRankingView() {
   const rankingResults = await Promise.allSettled([
     Promise.resolve().then(() => renderReadingTeamLeaderboards()),
@@ -5340,6 +5364,7 @@ async function renderPlanRankingView() {
 
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
+  bindPastoralRankingToggle(container);
 
   const rankingCard = container.closest(".glass-card");
   if (rankingCard) rankingCard.style.display = "";

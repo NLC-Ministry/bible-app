@@ -338,6 +338,7 @@
     const overlay = createOverlay("reading-team-dialog", "reading-team-dialog-title");
     const panel = overlay.firstElementChild;
     let preferredDivision = [3, 6].includes(Number(options.preferredDivision)) ? Number(options.preferredDivision) : 3;
+    let returnDivision = null;
     let closed = false;
 
     const close = () => { closed = true; removeOverlay(overlay); };
@@ -371,7 +372,11 @@
       }).join("");
       panel.innerHTML = `
         <header class="reading-team-dialog__header">
-          <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-dialog-title">我的團隊</h3></div>
+          <div>
+            ${joinedContexts.length ? `<button type="button" class="reading-team-back-button" data-team-back><span class="nlc-icon nlc-icon--sm" data-icon="chevronLeft" aria-hidden="true"></span><span>返回我的團隊</span></button>` : ""}
+            <p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p>
+            <h3 id="reading-team-dialog-title">我的團隊</h3>
+          </div>
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
         <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加 3 人團隊與 6 人團隊，章節進度只需打卡一次。"}</p>
@@ -403,6 +408,12 @@
       const error = panel.querySelector("[data-team-error]");
       const showError = message => { error.textContent = message; error.hidden = false; };
       panel.querySelector("[data-team-close]").onclick = close;
+      panel.querySelector("[data-team-back]")?.addEventListener("click", () => {
+        const returnContext = joinedContexts.find(context =>
+          Number(context.team.division) === Number(returnDivision)
+        ) || joinedContexts[0];
+        if (returnContext) renderTeam(returnContext, joinedContexts);
+      });
       panel.querySelectorAll("[data-division-choice]").forEach(button => {
         button.addEventListener("click", () => {
           preferredDivision = Number(button.dataset.divisionChoice);
@@ -431,6 +442,7 @@
 
     const renderTeam = (context, allContexts = [context]) => {
       const team = context.team;
+      returnDivision = Number(team.division);
       const members = Array.isArray(context.members) ? context.members : [];
       const totalChapters = Number(plan.currentRoundTotalChapters || plan.totalChapters || 0);
       const averageProgress = members.length
@@ -475,6 +487,7 @@
         };
       });
       panel.querySelector("[data-add-other-team]")?.addEventListener("click", () => {
+        returnDivision = Number(team.division);
         preferredDivision = nextAvailableDivision || (Number(team.division) === 3 ? 6 : 3);
         renderEmpty(allContexts);
       });

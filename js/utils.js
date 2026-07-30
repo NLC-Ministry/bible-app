@@ -532,6 +532,24 @@ const CAMPAIGN_MEDAL_FRAME_CLASSES = Array.from({ length: 10 }, (_, index) =>
   `campaign-medal-stage-${index + 1}`
 );
 
+const CAMPAIGN_MEDAL_FILENAMES = Object.freeze({
+  1: "rock-badge.svg",
+  2: "iron-badge.svg",
+  3: "copper-badge.svg",
+  4: "bronze-badge.svg",
+  5: "silver-badge.svg",
+  6: "gold-badge.svg",
+  7: "adamantine-badge.svg",
+  8: "ophir-gold-badge.svg",
+  9: "fire-gold-badge.svg",
+  10: "new-jerusalem-badge.svg"
+});
+
+function getCampaignMedalPath(stageNo) {
+  const filename = CAMPAIGN_MEDAL_FILENAMES[Number(stageNo)];
+  return filename ? `assets/badges/complete/${filename}?v=20260730_badge_vector_quality` : "";
+}
+
 function getBadgeFrameClass(badge) {
   const stageNo = Number(badge && badge.campaignStageNo || 0);
   if (stageNo >= 1 && stageNo <= CAMPAIGN_MEDAL_FRAME_CLASSES.length) {
@@ -584,29 +602,17 @@ function renderBadgeWall(containerId) {
       const safeTitle = typeof escapeHTML === "function" ? escapeHTML(badge.title) : badge.title;
       
       let iconContent = "";
-      let shellStyle = "width: 4.5rem; height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;";
+      let shellStyle = "height: auto; aspect-ratio: 200/240; display: flex; align-items: center; justify-content: center; position: relative;";
 
       if (badge.campaignStageNo) {
-        const filenames = {
-          1: "rock-badge.svg",
-          2: "iron-badge.svg",
-          3: "copper-badge.svg",
-          4: "bronze-badge.svg",
-          5: "silver-badge.svg",
-          6: "gold-badge.svg",
-          7: "adamantine-badge.svg",
-          8: "ophir-gold-badge.svg",
-          9: "fire-gold-badge.svg",
-          10: "new-jerusalem-badge.svg"
-        };
-        const filename = filenames[badge.campaignStageNo] || "rock-badge.svg";
+        const medalPath = getCampaignMedalPath(badge.campaignStageNo);
         const lockStateClass = isUnlocked ? "honor-badge-hex--unlocked" : "honor-badge-hex--locked";
         
         const imgFilterStyle = !isUnlocked
           ? "filter: grayscale(1) saturate(0) brightness(0.75) contrast(1.05); opacity: 0.75;"
           : "";
           
-        iconContent = `<img width="200" height="240" class="campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="assets/badges/complete/${filename}" style="width: 100%; height: auto; aspect-ratio: 200/240; object-fit: contain; display: block; margin: 0 auto; ${imgFilterStyle}" alt="${safeTitle}" />`;
+        iconContent = `<img width="200" height="240" class="campaign-medal-image campaign-medal-stage-${badge.campaignStageNo} ${lockStateClass}" src="${medalPath}" loading="lazy" decoding="async" style="${imgFilterStyle}" alt="${safeTitle}" />`;
         
         // ── 覆蓋 CSS 變數，關閉 ::after 背景圖渲染，防止與 <img> 產生重疊重影 ──
         shellStyle += " --campaign-medal-frame: none !important;";
@@ -700,6 +706,7 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
   const hero = document.getElementById("badge-detail-hero");
   const shield = document.getElementById("detail-shield");
   const icon = document.getElementById("detail-icon");
+  const medalImage = document.getElementById("detail-medal-image");
   const title = document.getElementById("detail-title");
   const desc = document.getElementById("detail-desc");
   const timeline = document.getElementById("detail-timeline-container");
@@ -738,13 +745,34 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     triggerCard.classList.toggle("hidden", !triggerCopy);
   }
 
+  const campaignMedalPath = getCampaignMedalPath(badge.campaignStageNo);
   if (icon) {
     icon.className = "nlc-icon";
+    if (campaignMedalPath) icon.classList.add("hidden");
     icon.style.fontSize = "3rem";
     icon.setAttribute("data-icon", badge.iconKey || "award");
     icon.innerHTML = typeof renderIcon === "function"
       ? renderIcon(badge.iconKey || "award", { size: "hero", className: "nlc-icon" })
       : "";
+  }
+  if (medalImage) {
+    medalImage.className = "campaign-medal-image";
+    if (campaignMedalPath) {
+      medalImage.classList.add(getBadgeFrameClass(badge));
+      medalImage.src = campaignMedalPath;
+      medalImage.alt = badge.title || "";
+      medalImage.fetchPriority = "high";
+      medalImage.style.filter = isUnlocked
+        ? ""
+        : "grayscale(1) saturate(0) brightness(0.75) contrast(1.05)";
+      medalImage.style.opacity = isUnlocked ? "" : "0.75";
+    } else {
+      medalImage.classList.add("hidden");
+      medalImage.removeAttribute("src");
+      medalImage.alt = "";
+      medalImage.style.filter = "";
+      medalImage.style.opacity = "";
+    }
   }
 
   // Apply Shield styles based on unlock state (theme via CSS)
@@ -769,6 +797,11 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     shield.style.borderStyle = "";
     shield.style.borderWidth = "";
     shield.style.color = "";
+    if (campaignMedalPath) {
+      shield.style.setProperty("--campaign-medal-frame", "none", "important");
+    } else {
+      shield.style.removeProperty("--campaign-medal-frame");
+    }
   }
 
   // Dynamic milestone configurations for YouVersion level circles

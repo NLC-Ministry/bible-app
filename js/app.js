@@ -13,7 +13,7 @@ import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
 import './db.js?v=20260730_performance_refactor';
-import './utils.js?v=20260730_performance_refactor';
+import './utils.js?v=20260730_badge_vector_quality';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';

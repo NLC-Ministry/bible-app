@@ -187,7 +187,7 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("建立團隊");
   });
 
-  it("requires a confirmation dialog before preset plan solo join or team setup", () => {
+  it("confirms solo joins while team registration stays cancel-safe", () => {
     expect(plan).toContain("async function confirmPlanJoin");
     expect(plan).toContain('role="dialog"');
     expect(plan).toContain('aria-modal="true"');
@@ -208,8 +208,9 @@ describe("NLC and browser integration", () => {
       teamHandlerStart,
       plan.indexOf("container.appendChild(card)", teamHandlerStart)
     );
-    expect(teamHandler).toContain("confirmPlanJoin");
-    expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
+    expect(teamHandler).not.toContain("confirmPlanJoin");
+    expect(teamHandler).toContain("createTeamFromPlanCard(plan, key)");
+    expect(teamHandler).not.toContain("joinPlanSoloFromCard");
   });
 
   it("requires confirmation before joining from preset plan details", () => {
@@ -240,7 +241,11 @@ describe("NLC and browser integration", () => {
     );
     expect(teamDialog).toContain("availableDivisions = [3, 6]");
     expect(teamDialog).toContain("data-division-choice");
+    expect(teamDialog).toContain("data-team-back");
+    expect(teamDialog).toContain("returnDivision");
+    expect(teamDialog).toContain("renderTeam(returnContext, joinedContexts)");
     expect(teamDialog).toContain("db.createReadingTeam(plan, preferredDivision");
+    expect(teamCss).toContain(".reading-team-back-button");
   });
 
   it("focuses the safest action when the plan join confirmation opens", async () => {

@@ -27,6 +27,6 @@
     <path d="M20 198 43 188h114l23 10-12 13 10 16-35-7H57l-35 7 10-16Z" fill="url(#gold-ribbon)" stroke="#FFF" stroke-opacity=".48" stroke-width="3" stroke-linejoin="round"/>
     <path d="M43 188 52 181h96l9 7-11 38H54Z" fill="url(#gold-ribbon)" stroke="#FFF" stroke-opacity=".68" stroke-width="3" stroke-linejoin="round"/>
     <path d="M57 191h86" stroke="#FFF" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
-    <text x="100" y="215" text-anchor="middle" font-family="Noto Sans TC, system-ui, sans-serif" font-size="19" font-weight="700" letter-spacing="1.5" fill="#392300" stroke="#000" stroke-opacity=".16" stroke-width=".7" paint-order="stroke">黃金</text>
+    <text x="100" y="215" text-anchor="middle" font-family="Noto Sans TC, system-ui, sans-serif" font-size="22" font-weight="700" letter-spacing="1.5" fill="#392300" stroke="#000" stroke-opacity=".16" stroke-width=".7" paint-order="stroke">黃金</text>
   </g>
 </svg>

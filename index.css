@@ -955,6 +955,10 @@ body.dark-theme .honor-badge-hex--unlocked::after {
   min-height: 0;
 }
 
+.honor-badge-item--tile .honor-badge-hex-shell {
+  width: 4.5rem;
+}
+
 .honor-badge-item.unlocked,
 .honor-badge-item.locked {
   background: transparent;
@@ -4510,6 +4514,48 @@ button.logout-btn:hover {
 .plan-task-item:hover {
   background: rgba(255, 255, 255, 0.02) !important;
 }
+.plan-task-item .task-read-toggle,
+.plan-task-item .task-open-button {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.plan-task-item .task-read-toggle {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 48px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.plan-task-item .task-open-button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  text-align: left;
+  cursor: pointer;
+}
+.plan-task-item .task-read-toggle:focus-visible,
+.plan-task-item .task-open-button:focus-visible {
+  outline: 2px solid var(--color-brand-ring);
+  outline-offset: 2px;
+}
+.plan-task-item .task-read-toggle:active .task-checkbox {
+  transform: scale(0.92);
+}
 .plan-task-item .task-checkbox {
   width: 24px;
   height: 24px;
@@ -4518,7 +4564,7 @@ button.logout-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  pointer-events: none;
   transition: all 0.2s ease;
   flex-shrink: 0;
   background: transparent !important;
@@ -9816,23 +9862,26 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 }
 
 /* Each campaign award keeps a dedicated SVG frame; stars only track completed rounds. */
-.honor-badge-hex-shell:has(.campaign-medal-stage-1) { --campaign-medal-frame: url("assets/badges/complete/rock-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-2) { --campaign-medal-frame: url("assets/badges/complete/iron-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-3) { --campaign-medal-frame: url("assets/badges/complete/copper-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-4) { --campaign-medal-frame: url("assets/badges/complete/bronze-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-5) { --campaign-medal-frame: url("assets/badges/complete/silver-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-6) { --campaign-medal-frame: url("assets/badges/complete/gold-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-7) { --campaign-medal-frame: url("assets/badges/complete/adamantine-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-8) { --campaign-medal-frame: url("assets/badges/complete/ophir-gold-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-9) { --campaign-medal-frame: url("assets/badges/complete/fire-gold-badge.svg"); }
-.honor-badge-hex-shell:has(.campaign-medal-stage-10) { --campaign-medal-frame: url("assets/badges/complete/new-jerusalem-badge.svg"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-1) { --campaign-medal-frame: url("assets/badges/complete/rock-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-2) { --campaign-medal-frame: url("assets/badges/complete/iron-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-3) { --campaign-medal-frame: url("assets/badges/complete/copper-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-4) { --campaign-medal-frame: url("assets/badges/complete/bronze-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-5) { --campaign-medal-frame: url("assets/badges/complete/silver-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-6) { --campaign-medal-frame: url("assets/badges/complete/gold-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-7) { --campaign-medal-frame: url("assets/badges/complete/adamantine-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-8) { --campaign-medal-frame: url("assets/badges/complete/ophir-gold-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-9) { --campaign-medal-frame: url("assets/badges/complete/fire-gold-badge.svg?v=20260730_badge_vector_quality"); }
+.honor-badge-hex-shell:has(.campaign-medal-stage-10) { --campaign-medal-frame: url("assets/badges/complete/new-jerusalem-badge.svg?v=20260730_badge_vector_quality"); }
 
 .honor-badge-hex-shell:has([class*="campaign-medal-stage-"]) {
   aspect-ratio: 200 / 240;
+  /* SVG already contains its own shadow. A second shell filter rasterizes the
+     whole medallion and softens it when displayed on high-DPI screens. */
+  filter: none;
 }
 
 .honor-badge-item--tile .honor-badge-hex-shell:has([class*="campaign-medal-stage-"]) {
-  width: 4.5rem;
+  width: min(6.5rem, 100%);
   margin-bottom: 0.2rem;
 }
 
@@ -9866,6 +9915,29 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   background: var(--campaign-medal-frame) center / contain no-repeat;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.28));
   transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.campaign-medal-image {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 200 / 240;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+#badge-detail-hero .campaign-medal-image {
+  position: absolute;
+  inset: -15%;
+  width: 130%;
+  max-width: none;
+  height: 130%;
+}
+
+.campaign-medal-image.hidden {
+  display: none;
 }
 
 .honor-badge-hex-shell:has([class*="campaign-medal-stage-"]) .honor-badge-hex {
