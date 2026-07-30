@@ -42,7 +42,9 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260730_team_size_modal_chooser");
+    const expectedAppCacheKey = "js/app.js?v=20260730_plan_join_confirmation";
+
+    expect(htmlSource).toContain(expectedAppCacheKey);
     expect(appSource).toContain("./state.js?v=20260729_tab_navigation_memory");
   });
 });

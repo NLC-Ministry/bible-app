@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
+import { JSDOM } from "jsdom";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exists = path => existsSync(new URL(`../${path}`, import.meta.url));
@@ -21,6 +22,47 @@ const teamCss = read("css/team-registration.css");
 const html = read("index.html");
 const app = read("js/app.js");
 const indexCss = read("index.css");
+
+const extractFunction = (source, name, nextName) => {
+  const start = source.indexOf(`async function ${name}`);
+  const end = source.indexOf(`async function ${nextName}`, start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+};
+
+const loadConfirmPlanJoin = () => {
+  const source = extractFunction(plan, "confirmPlanJoin", "joinPlanSoloFromCard");
+  return new Function(
+    "escapeHTML",
+    "hydrateIcons",
+    `${source}; return confirmPlanJoin;`
+  )(
+    value => String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[char])),
+    () => {}
+  );
+};
+
+const withDialogDom = async testFn => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://example.test" });
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  try {
+    await testFn(dom);
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+    dom.window.close();
+  }
+};
 
 describe("reading competition team schema", () => {
   it("shows unread care reminders only on the notification bell", () => {
@@ -143,6 +185,151 @@ describe("NLC and browser integration", () => {
     expect(participation).toContain("建立 / 加入團隊");
     expect(plan).toContain("自己加入");
     expect(plan).toContain("建立團隊");
+  });
+
+  it("requires a confirmation dialog before preset plan solo join or team setup", () => {
+    expect(plan).toContain("async function confirmPlanJoin");
+    expect(plan).toContain('role="dialog"');
+    expect(plan).toContain('aria-modal="true"');
+    expect(plan).toContain('id="plan-join-confirmation-title"');
+    expect(plan).toContain("要加入這個讀經計畫嗎？");
+    expect(plan).toContain("太好了，開始吧");
+    expect(plan).toContain("我再看看");
+
+    const soloHandler = plan.slice(
+      plan.indexOf("card.querySelector('[data-plan-card-action=\"solo-join\"]')"),
+      plan.indexOf("card.querySelector('[data-plan-card-action=\"team-create\"]')")
+    );
+    expect(soloHandler).toContain("confirmPlanJoin");
+    expect(soloHandler.indexOf("confirmPlanJoin")).toBeLessThan(soloHandler.indexOf("joinPlanSoloFromCard"));
+
+    const teamHandlerStart = plan.indexOf("card.querySelector('[data-plan-card-action=\"team-create\"]')");
+    const teamHandler = plan.slice(
+      teamHandlerStart,
+      plan.indexOf("container.appendChild(card)", teamHandlerStart)
+    );
+    expect(teamHandler).toContain("confirmPlanJoin");
+    expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
+  });
+
+  it("requires confirmation before joining from preset plan details", () => {
+    const openDetailsFlow = plan.slice(
+      plan.indexOf("const openDetails = () =>"),
+      plan.indexOf("card.onclick = event =>")
+    );
+    expect(openDetailsFlow).toContain("openPlanDetailsDialog(plan");
+    expect(openDetailsFlow).toContain("onJoin");
+    expect(openDetailsFlow).toContain("confirmPlanJoin");
+    expect(openDetailsFlow).toContain("joinPlanSoloFromCard(plan, key)");
+    expect(openDetailsFlow.indexOf("confirmPlanJoin")).toBeLessThan(openDetailsFlow.indexOf("joinPlanSoloFromCard(plan, key)"));
+  });
+
+  it("opens team setup from preset cards without joining the plan first", () => {
+    const createTeamFlow = plan.slice(
+      plan.indexOf("async function createTeamFromPlanCard"),
+      plan.indexOf("function renderPresetPlans")
+    );
+    expect(createTeamFlow).not.toContain("joinPlanSoloFromCard");
+    expect(createTeamFlow).not.toContain("await db.joinPresetPlan");
+    expect(createTeamFlow).toContain("openReadingTeamDialog(plan");
+    expect(createTeamFlow).not.toContain("preferredDivision: 3");
+
+    const teamDialog = teamUi.slice(
+      teamUi.indexOf("const renderEmpty = (joinedContexts"),
+      teamUi.indexOf("const renderTeam = (context")
+    );
+    expect(teamDialog).toContain("availableDivisions = [3, 6]");
+    expect(teamDialog).toContain("data-division-choice");
+    expect(teamDialog).toContain("db.createReadingTeam(plan, preferredDivision");
+  });
+
+  it("focuses the safest action when the plan join confirmation opens", async () => {
+    await withDialogDom(async () => {
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm: vi.fn()
+      });
+
+      const cancelButton = document.querySelector("[data-plan-confirm-cancel]");
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.click();
+      await expect(pending).resolves.toBe(false);
+    });
+  });
+
+  it("traps keyboard focus in the plan join confirmation and restores prior focus", async () => {
+    const confirmSource = extractFunction(plan, "confirmPlanJoin", "joinPlanSoloFromCard");
+    expect(confirmSource).toContain("previousActiveElement");
+    expect(confirmSource).toContain("focusableElements");
+    expect(confirmSource).toContain("event.shiftKey");
+    expect(confirmSource).toContain("previousActiveElement.focus()");
+
+    await withDialogDom(async () => {
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.textContent = "Open details";
+      document.body.appendChild(trigger);
+      trigger.focus();
+
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm: vi.fn()
+      });
+
+      const cancelButton = document.querySelector("[data-plan-confirm-cancel]");
+      const confirmButton = document.querySelector("[data-plan-confirm-action]");
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "Tab",
+        shiftKey: true,
+        bubbles: true
+      }));
+      expect(document.activeElement).toBe(confirmButton);
+
+      confirmButton.dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true
+      }));
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.click();
+      await expect(pending).resolves.toBe(false);
+      expect(document.activeElement).toBe(trigger);
+    });
+  });
+
+  it("recovers when plan join confirmation fails", async () => {
+    await withDialogDom(async () => {
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const onConfirm = vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(undefined);
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm
+      });
+      const confirmButton = document.querySelector("[data-plan-confirm-action]");
+
+      confirmButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(document.querySelector(".plan-join-confirmation-dialog__error")?.textContent)
+        .toContain("暫時無法加入，請再試一次。");
+      expect(confirmButton.disabled).toBe(false);
+
+      confirmButton.click();
+      await expect(pending).resolves.toBe(true);
+      expect(document.querySelector(".plan-join-confirmation-overlay")).toBeNull();
+      expect(onConfirm).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("models joined-plan participation through the shared participation item", () => {
@@ -296,11 +483,19 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain('data-icon="chevronRight"');
   });
 
+  it("styles plan join confirmation as a compact non-pill dialog", () => {
+    expect(teamCss).toContain(".plan-join-confirmation-overlay");
+    expect(teamCss).toContain(".plan-join-confirmation-dialog");
+    expect(teamCss).toContain("border-radius: 12px");
+    expect(teamCss).toContain(".plan-join-confirmation-dialog__footer");
+    expect(teamCss).toContain("@media (max-width: 640px)");
+    expect(teamCss).not.toMatch(/\.plan-join-confirmation-dialog__[^{]+\{[^}]*border-radius:\s*999/i);
+  });
+
   it("connects joining to My Team and integrates team data into existing group views", () => {
     expect(plan).not.toContain("chooseReadingPlanParticipation(plan)");
     expect(plan).toContain("openJoinModeDialog(plan)");
-    expect(plan).toContain("openReadingTeamDialog(joinedPlan");
-    expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("openReadingTeamDialog(joinedPlan"));
+    expect(plan).toContain("openReadingTeamDialog(plan");
     expect(html).toContain('id="view-reading-team-btn"');
     expect(html).toContain("牧區小組狀況");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
