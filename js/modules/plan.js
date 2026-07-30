@@ -1361,11 +1361,10 @@ async function joinPlanSoloFromCard(plan, key) {
 }
 
 async function createTeamFromPlanCard(plan, key) {
-  const joinedPlan = await joinPlanSoloFromCard(plan, key);
-  if (joinedPlan && typeof window.openReadingTeamDialog === "function") {
-    await window.openReadingTeamDialog(joinedPlan, { preferredDivision: 3 });
+  if (typeof window.openReadingTeamDialog === "function") {
+    await window.openReadingTeamDialog(plan);
   }
-  return joinedPlan;
+  return null;
 }
 
 function getJoinedPlanStartTime(plan) {

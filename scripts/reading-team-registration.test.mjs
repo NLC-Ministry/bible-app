@@ -212,6 +212,25 @@ describe("NLC and browser integration", () => {
     expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
   });
 
+  it("opens team setup from preset cards without joining the plan first", () => {
+    const createTeamFlow = plan.slice(
+      plan.indexOf("async function createTeamFromPlanCard"),
+      plan.indexOf("function renderPresetPlans")
+    );
+    expect(createTeamFlow).not.toContain("joinPlanSoloFromCard");
+    expect(createTeamFlow).not.toContain("await db.joinPresetPlan");
+    expect(createTeamFlow).toContain("openReadingTeamDialog(plan");
+    expect(createTeamFlow).not.toContain("preferredDivision: 3");
+
+    const teamDialog = teamUi.slice(
+      teamUi.indexOf("const renderEmpty = (joinedContexts"),
+      teamUi.indexOf("const renderTeam = (context")
+    );
+    expect(teamDialog).toContain("availableDivisions = [3, 6]");
+    expect(teamDialog).toContain("data-division-choice");
+    expect(teamDialog).toContain("db.createReadingTeam(plan, preferredDivision");
+  });
+
   it("focuses the safest action when the plan join confirmation opens", async () => {
     await withDialogDom(async () => {
       const confirmPlanJoin = loadConfirmPlanJoin();
@@ -411,8 +430,7 @@ describe("NLC and browser integration", () => {
   it("connects joining to My Team and integrates team data into existing group views", () => {
     expect(plan).not.toContain("chooseReadingPlanParticipation(plan)");
     expect(plan).toContain("openJoinModeDialog(plan)");
-    expect(plan).toContain("openReadingTeamDialog(joinedPlan");
-    expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("openReadingTeamDialog(joinedPlan"));
+    expect(plan).toContain("openReadingTeamDialog(plan");
     expect(html).toContain('id="view-reading-team-btn"');
     expect(html).toContain("牧區小組狀況");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
