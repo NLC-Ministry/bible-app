@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const plan = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
+const participation = readFileSync(join(root, "js", "modules", "plan-participation-helpers.mjs"), "utf8");
 const css = readFileSync(join(root, "index.css"), "utf8");
 
 describe("plan card information architecture", () => {
@@ -110,12 +111,16 @@ describe("plan card information architecture", () => {
   });
 
   it("models joined-plan participation as one item contract", () => {
-    expect(plan).toContain("function getPlanParticipationModel");
-    expect(plan).toContain('variant: "team-with-other-division-available"');
-    expect(plan).toContain('"team-full"');
-    expect(plan).toContain('"team-open"');
-    expect(plan).toContain('variant: "solo"');
-    expect(plan).toContain('action: "join-team-division"');
+    // The pure model lives in its own importable helper (see the behavioral
+    // suite in plan-card-participation-model.test.mjs); plan.js consumes it.
+    expect(participation).toContain("export function getPlanParticipationModel");
+    expect(participation).toContain('variant: "team-with-other-division-available"');
+    expect(participation).toContain('"team-full"');
+    expect(participation).toContain('"team-open"');
+    expect(participation).toContain('variant: "solo"');
+    expect(participation).toContain('action: "join-team-division"');
+    expect(plan).toContain('from "./plan-participation-helpers.mjs"');
+    expect(plan).toContain("getPlanParticipationModel(plan,");
   });
 
   it("renders participation status with shadcn item-style parts", () => {
