@@ -1711,6 +1711,20 @@ function isPlanExpired(plan) {
   return todayStr > plan.endDate;
 }
 
+function selectMostRecentActivePlan(plans) {
+  const visiblePlans = getVisiblePlans(plans || []).filter(Boolean);
+  if (visiblePlans.length === 0) return null;
+
+  const sortedPlans = [...visiblePlans].sort((a, b) => {
+    const startCompare = String(b.startDate || b.start_date || "").localeCompare(String(a.startDate || a.start_date || ""));
+    if (startCompare !== 0) return startCompare;
+    const endCompare = String(b.endDate || b.end_date || "").localeCompare(String(a.endDate || a.end_date || ""));
+    if (endCompare !== 0) return endCompare;
+    return String(b.id || b.globalPlanId || b.presetKey || b.name || "").localeCompare(String(a.id || a.globalPlanId || a.presetKey || a.name || ""));
+  });
+  return sortedPlans[0] || null;
+}
+
 function calculateAllPlansProgress() {
   const visibleActivePlans = getVisiblePlans(state.activePlans || []);
 
@@ -1910,6 +1924,7 @@ window.normalizePlanScheduleSettings = normalizePlanScheduleSettings;
 window.calculatePlanProgress = calculatePlanProgress;
 window.isPlanStarted = isPlanStarted;
 window.isPlanExpired = isPlanExpired;
+window.selectMostRecentActivePlan = selectMostRecentActivePlan;
 window.calculateAllPlansProgress = calculateAllPlansProgress;
 window.getHiddenPlanKeys = getHiddenPlanKeys;
 window.isPlanHidden = isPlanHidden;
