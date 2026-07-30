@@ -364,6 +364,9 @@
         : 0;
       const isCaptain = String(team.captainId) === String(state.currentUser && (state.currentUser.id || state.currentProfileId));
       const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);
+      const joinedDivisions = new Set(allContexts.map(item => Number(item && item.team && item.team.division)));
+      const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
+      const nextAvailableDivision = availableDivisions[0] || null;
       panel.innerHTML = `
         <header class="reading-team-dialog__header">
           <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-dialog-title">${escapeHTML(team.name)}</h3></div>
@@ -383,6 +386,7 @@
           ${!isReady ? (isCaptain
             ? '<button type="button" class="reading-team-danger-link" data-disband-team>解散隊伍</button>'
             : '<button type="button" class="reading-team-danger-link" data-leave-team>退出隊伍</button>') : ""}
+          ${nextAvailableDivision ? `<button type="button" class="secondary-btn" data-add-other-team>建立另一種人數團隊（${nextAvailableDivision} 人）</button>` : ""}
           <button type="button" class="primary-btn" data-team-close-footer>關閉</button>
         </footer>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
@@ -396,7 +400,7 @@
         };
       });
       panel.querySelector("[data-add-other-team]")?.addEventListener("click", () => {
-        preferredDivision = Number(team.division) === 3 ? 6 : 3;
+        preferredDivision = nextAvailableDivision || (Number(team.division) === 3 ? 6 : 3);
         renderEmpty(allContexts);
       });
       const copyBtn = panel.querySelector("[data-copy-team-code]");
