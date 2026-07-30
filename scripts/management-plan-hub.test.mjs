@@ -5,6 +5,7 @@ const html = readFileSync("index.html", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
 const utils = readFileSync("js/utils.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
+const plan = readFileSync("js/modules/plan.js", "utf8");
 
 describe("management plan hub", () => {
   it("puts the requested plan management sections in discovery order", () => {
@@ -36,5 +37,17 @@ describe("management plan hub", () => {
     expect(admin).toContain("participantSlot.appendChild(memberList)");
     expect(admin).toContain("statisticsSlot.appendChild(statsSection)");
     expect(app).toContain("renderAdminPlanManagement");
+  });
+
+  it("applies organization filters to participants, statistics, and complete teams", () => {
+    expect(plan).toContain("state.currentUser.managed_regions || state.currentUser.great_region");
+    expect(plan).toContain("state.currentUser.managed_zones || state.currentUser.pastoral_zone");
+    expect(plan).toContain("state.currentUser.managed_groups || state.currentUser.small_group");
+    expect(plan).toContain('return "all_zones"');
+    expect(plan).toContain('return "all_groups"');
+    expect(plan).toContain("window.refreshAdminTeamRegistrationFilters");
+    expect(admin).toContain("teamMatchesManagementOrgFilter");
+    expect(admin).toContain("members.some(member =>");
+    expect(admin).toContain(".filter(team => teamMatchesManagementOrgFilter(team, activeOrgFilter))");
   });
 });

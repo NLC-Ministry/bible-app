@@ -3693,7 +3693,13 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
 
   if (!regionSelect || !zoneSelect || !groupSelect || !masterSelect) return;
 
-  const userKey = state.currentUser ? `${state.currentUser.name}_${state.currentUser.role}` : "anonymous";
+  const userKey = state.currentUser ? [
+    state.currentUser.id || state.currentUser.name,
+    state.currentUser.role,
+    state.currentUser.managed_regions || state.currentUser.great_region || "",
+    state.currentUser.managed_zones || state.currentUser.pastoral_zone || "",
+    state.currentUser.managed_groups || state.currentUser.small_group || ""
+  ].join("|") : "anonymous";
   if (regionSelect.options.length > 1 && regionSelect.dataset.populatedFor === userKey) return;
 
   regionSelect.dataset.populated = "true";
@@ -3735,7 +3741,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   let regions = state.orgStructure.regions || [];
   let myRegions = [];
   if (isGreatZoneLeader) {
-    const userGreatRegion = state.currentUser.great_region || "";
+    const userGreatRegion = (state.currentUser.managed_regions || state.currentUser.great_region || "");
     myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
     regions = regions.filter(r => myRegions.includes(r));
   }
@@ -3768,7 +3774,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
     regionSelect.options.add(new Option("-- 請選擇大區 --", ""));
     regions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
     if (isInitializing) {
-      const userGreatRegion = state.currentUser ? state.currentUser.great_region : "";
+      const userGreatRegion = state.currentUser ? (state.currentUser.managed_regions || state.currentUser.great_region || "") : "";
       if (userGreatRegion) {
         regionSelect.value = "region:" + userGreatRegion;
       }
@@ -3777,13 +3783,12 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
     regionSelect.options.add(new Option(`全部大區 (${myRegions.join(",")})`, ""));
     myRegions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
     if (isInitializing) {
-      const userGreatRegion = state.currentUser ? state.currentUser.great_region : "";
-      if (userGreatRegion && myRegions.includes(userGreatRegion)) {
-        regionSelect.value = "region:" + userGreatRegion;
+      if (myRegions.length === 1) {
+        regionSelect.value = "region:" + myRegions[0];
       }
     }
   } else {
-    const userReg = state.currentUser.great_region || "";
+    const userReg = (state.currentUser.managed_regions || state.currentUser.great_region || "");
     regionSelect.options.add(new Option(userReg ? `大區：${userReg}` : "大區", ""));
     regionSelect.disabled = true;
   }
@@ -3791,38 +3796,32 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   // Update Master Select Value
   function updateMasterValue(isInitialCall = false) {
     let finalVal = "all";
+    const selectedGroup = groupSelect.value;
+    const selectedZone = zoneSelect.value;
+    const selectedRegion = regionSelect.value;
+
     if (isGroupLeader) {
-      const userGroup = state.currentUser.small_group || "";
-      finalVal = userGroup ? `group:${userGroup}` : "all_groups";
+      finalVal = selectedGroup ? `group:${selectedGroup}` : "all_groups";
     } else if (isZoneLeader) {
-      const userZone = state.currentUser.pastoral_zone || "";
-      const selectedGrp = groupSelect.value;
-      finalVal = selectedGrp ? `group:${selectedGrp}` : (userZone ? `zone:${userZone}` : "all_zones");
-    } else if (isGreatZoneLeader) {
-      const selectedGrp = groupSelect.value;
-      const selectedZone = zoneSelect.value;
-      const selectedReg = regionSelect.value;
-      if (selectedGrp) finalVal = `group:${selectedGrp}`;
+      if (selectedGroup) finalVal = `group:${selectedGroup}`;
       else if (selectedZone) finalVal = `zone:${selectedZone}`;
-      else if (selectedReg) finalVal = selectedReg;
+      else finalVal = "all_zones";
+    } else if (isGreatZoneLeader) {
+      if (selectedGroup) finalVal = `group:${selectedGroup}`;
+      else if (selectedZone) finalVal = `zone:${selectedZone}`;
+      else if (selectedRegion) finalVal = selectedRegion;
       else finalVal = "all_great_region";
     } else if (isAdmin) {
-      const selectedGrp = groupSelect.value;
-      const selectedZone = zoneSelect.value;
-      const selectedReg = regionSelect.value;
-      if (selectedGrp) finalVal = `group:${selectedGrp}`;
+      if (selectedGroup) finalVal = `group:${selectedGroup}`;
       else if (selectedZone) finalVal = `zone:${selectedZone}`;
-      else if (selectedReg) finalVal = selectedReg;
+      else if (selectedRegion) finalVal = selectedRegion;
       else finalVal = "all";
     }
 
     masterSelect.innerHTML = "";
     masterSelect.options.add(new Option(finalVal, finalVal));
     masterSelect.value = finalVal;
-
-    if (!isInitialCall) {
-      masterSelect.dispatchEvent(new Event("change"));
-    }
+    if (!isInitialCall) masterSelect.dispatchEvent(new Event("change"));
   }
 
   // Handle Region Change
@@ -3848,7 +3847,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         const zones = getZonesForRegion(rName);
         zones.sort().forEach(z => zoneSelect.options.add(new Option(`牧區：${z}`, z)));
         if (isInitializing) {
-          const userZone = state.currentUser ? state.currentUser.pastoral_zone : "";
+          const userZone = state.currentUser ? (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "") : "";
           if (userZone && zones.includes(userZone)) {
             zoneSelect.value = userZone;
           }
@@ -3865,14 +3864,14 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         const zones = getZonesForRegion(rName);
         zones.sort().forEach(z => zoneSelect.options.add(new Option(`牧區：${z}`, z)));
         if (isInitializing) {
-          const userZone = state.currentUser ? state.currentUser.pastoral_zone : "";
+          const userZone = state.currentUser ? (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "") : "";
           if (userZone && zones.includes(userZone)) {
             zoneSelect.value = userZone;
           }
         }
       }
     } else if (isZoneLeader) {
-      const userZone = state.currentUser.pastoral_zone || "";
+      const userZone = (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "");
       const myZones = userZone.split(",").map(s => s.trim()).filter(Boolean);
       if (myZones.length > 1) {
         zoneSelect.options.add(new Option(`全部牧區 (${myZones.join(",")})`, ""));
@@ -3882,7 +3881,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         zoneSelect.disabled = true;
       }
     } else {
-      const userZone = state.currentUser.pastoral_zone || "";
+      const userZone = (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "");
       zoneSelect.options.add(new Option(userZone ? `牧區：${userZone}` : "牧區", ""));
       zoneSelect.disabled = true;
     }
@@ -3909,16 +3908,16 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         const groups = getGroupsForZone(zoneVal);
         groups.sort().forEach(g => groupSelect.options.add(new Option(`小組：${g}`, g)));
         if (isInitializing) {
-          const userGroup = state.currentUser ? state.currentUser.small_group : "";
+          const userGroup = state.currentUser ? (state.currentUser.managed_groups || state.currentUser.small_group || "") : "";
           if (userGroup && groups.includes(userGroup)) {
             groupSelect.value = userGroup;
           }
         }
       }
     } else if (isZoneLeader) {
-      const userZone = state.currentUser.pastoral_zone || "";
+      const userZone = (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "");
       const myZones = userZone.split(",").map(s => s.trim()).filter(Boolean);
-      const activeZone = zoneVal || myZones[0];
+      const activeZone = zoneVal || (myZones.length === 1 ? myZones[0] : "");
       if (!activeZone) {
         groupSelect.options.add(new Option("-- 請先選擇牧區 --", ""));
         groupSelect.disabled = true;
@@ -3927,14 +3926,14 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         const groups = getGroupsForZone(activeZone);
         groups.sort().forEach(g => groupSelect.options.add(new Option(`小組：${g}`, g)));
         if (isInitializing) {
-          const userGroup = state.currentUser ? state.currentUser.small_group : "";
+          const userGroup = state.currentUser ? (state.currentUser.managed_groups || state.currentUser.small_group || "") : "";
           if (userGroup && groups.includes(userGroup)) {
             groupSelect.value = userGroup;
           }
         }
       }
     } else if (isGroupLeader) {
-      const userGroup = state.currentUser.small_group || "";
+      const userGroup = (state.currentUser.managed_groups || state.currentUser.small_group || "");
       const myGroups = userGroup.split(",").map(s => s.trim()).filter(Boolean);
       if (myGroups.length > 1) {
         groupSelect.options.add(new Option(`全部小組 (${myGroups.join(",")})`, ""));
@@ -4028,39 +4027,18 @@ function getActiveOrgFilter() {
   const regionSelect = document.getElementById("members-admin-region-select");
   const zoneSelect = document.getElementById("members-admin-zone-select");
   const groupSelect = document.getElementById("members-admin-group-select");
-
   if (!regionSelect || !zoneSelect || !groupSelect) return "all";
 
-  const userRole = (state.currentUser && state.currentUser.role) || "member";
-  const isAdmin = userRole === "admin";
-  const isGreatZoneLeader = userRole === "great_zone_leader";
-  const isZoneLeader = userRole === "zone_leader";
-  const isGroupLeader = userRole === "group_leader";
-
-  if (isGroupLeader) {
-    const userGroup = state.currentUser.small_group || "";
-    return userGroup ? `group:${userGroup}` : "all_groups";
-  } else if (isZoneLeader) {
-    const userZone = state.currentUser.pastoral_zone || "";
-    const selectedGrp = groupSelect.value;
-    return selectedGrp ? `group:${selectedGrp}` : (userZone ? `zone:${userZone}` : "all_zones");
-  } else if (isGreatZoneLeader) {
-    const selectedGrp = groupSelect.value;
-    const selectedZone = zoneSelect.value;
-    const selectedReg = regionSelect.value;
-    if (selectedGrp) return `group:${selectedGrp}`;
-    else if (selectedZone) return `zone:${selectedZone}`;
-    else if (selectedReg) return selectedReg;
-    return "all_great_region";
-  } else if (isAdmin) {
-    const selectedGrp = groupSelect.value;
-    const selectedZone = zoneSelect.value;
-    const selectedReg = regionSelect.value;
-    if (selectedGrp) return `group:${selectedGrp}`;
-    else if (selectedZone) return `zone:${selectedZone}`;
-    else if (selectedReg) return selectedReg;
-    return "all";
-  }
+  const role = (state.currentUser && state.currentUser.role) || "member";
+  const selectedGroup = groupSelect.value;
+  const selectedZone = zoneSelect.value;
+  const selectedRegion = regionSelect.value;
+  if (selectedGroup) return `group:${selectedGroup}`;
+  if (selectedZone) return `zone:${selectedZone}`;
+  if (selectedRegion) return selectedRegion;
+  if (role === "group_leader") return "all_groups";
+  if (role === "zone_leader") return "all_zones";
+  if (role === "great_zone_leader") return "all_great_region";
   return "all";
 }
 
@@ -4087,6 +4065,9 @@ function populateMembersSelector() {
     membersZoneSelector.dataset.listenerInitialized = "true";
     membersZoneSelector.addEventListener("change", async () => {
       await renderPlanMembersView();
+      if (typeof window.refreshAdminTeamRegistrationFilters === "function") {
+        await window.refreshAdminTeamRegistrationFilters();
+      }
     });
   }
 }
@@ -4338,13 +4319,15 @@ async function renderGroupMiniStats(overrideFilter) {
     } else if (effectiveFilter === "me") {
       scopedUsers = allUsers.filter(u => u.name === state.currentUser.name);
     } else if (effectiveFilter === "all_groups") {
-      scopedUsers = allUsers.filter(u => u.small_group === state.currentUser.small_group);
+      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
+      const myGroups = userGroupStr.split(",").map(value => value.trim()).filter(Boolean);
+      scopedUsers = allUsers.filter(u => myGroups.includes(u.small_group));
     } else if (effectiveFilter === "all_great_region") {
-      const userGreatRegion = state.currentUser.great_region || "";
+      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
       const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsers = allUsers.filter(u => myRegions.includes(u.great_region));
     } else if (effectiveFilter === "all_zones") {
-      const userZoneStr = state.currentUser.pastoral_zone || "";
+      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
       const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsers = allUsers.filter(u => myZones.includes(u.pastoral_zone));
     } else if (effectiveFilter.startsWith("region:")) {
@@ -5582,15 +5565,15 @@ async function renderGroupParticipantsRankingTable() {
     if (isAdmin) {
       scopedUsersList = allUsers;
     } else if (isGreatZoneLeader) {
-      const userGreatRegion = state.currentUser.great_region || "";
+      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
       const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myRegions.includes(u.great_region));
     } else if (isZoneLeader) {
-      const userZoneStr = state.currentUser.pastoral_zone || "";
+      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
       const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myZones.includes(u.pastoral_zone));
     } else if (isGroupLeader) {
-      const userGroupStr = state.currentUser.small_group || "";
+      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
       const myGroups = userGroupStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myGroups.includes(u.small_group));
     } else {
@@ -5664,17 +5647,17 @@ async function renderGroupParticipantsRankingTable() {
           groupMembers = allUsers;
           if (rankingTitle) rankingTitle.textContent = "參與者總覽 (全教會排行)";
         } else if (selectedFilter === "all_great_region") {
-          const userGreatRegion = state.currentUser.great_region || "";
+          const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
           const userRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userRegions.includes(u.great_region));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userGreatRegion}排行)`;
         } else if (selectedFilter === "all_zones") {
-          const userZoneStr = state.currentUser.pastoral_zone || "";
+          const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
           const userZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userZones.includes(u.pastoral_zone));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userZoneStr}排行)`;
         } else if (selectedFilter === "all_groups") {
-          const userGroupStr = state.currentUser.small_group || "";
+          const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
           const userGroups = userGroupStr.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userGroups.includes(u.small_group));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userGroupStr}排行)`;
