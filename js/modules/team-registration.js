@@ -352,12 +352,32 @@
       const joinedDivisions = new Set(joinedContexts.map(context => Number(context.team.division)));
       const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
       if (!availableDivisions.includes(preferredDivision)) preferredDivision = availableDivisions[0] || 3;
+      const divisionChoices = availableDivisions.map(division => {
+        const isSelected = division === preferredDivision;
+        const helper = division === 3
+          ? "適合小組內固定三人彼此提醒"
+          : "適合較大的朋友群或牧區小隊一起完成";
+        return `
+          <button
+            type="button"
+            class="reading-team-division-choice${isSelected ? " is-selected" : ""}"
+            data-division-choice="${division}"
+            aria-pressed="${isSelected}"
+          >
+            <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
+            <span class="reading-team-choice__body"><strong>${division} 人團隊</strong><span class="reading-team-choice__description">${helper}</span></span>
+          </button>
+        `;
+      }).join("");
       panel.innerHTML = `
         <header class="reading-team-dialog__header">
           <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-dialog-title">我的團隊</h3></div>
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
-        <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立團隊即可加入此計畫之團隊。"}</p>
+        <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加 3 人團隊與 6 人團隊，章節進度只需打卡一次。"}</p>
+        <div class="reading-team-division-choice-grid" role="group" aria-label="選擇團隊人數">
+          ${divisionChoices}
+        </div>
 
         <form id="reading-team-create-form" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
           <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
@@ -383,6 +403,17 @@
       const error = panel.querySelector("[data-team-error]");
       const showError = message => { error.textContent = message; error.hidden = false; };
       panel.querySelector("[data-team-close]").onclick = close;
+      panel.querySelectorAll("[data-division-choice]").forEach(button => {
+        button.addEventListener("click", () => {
+          preferredDivision = Number(button.dataset.divisionChoice);
+          panel.querySelectorAll("[data-division-choice]").forEach(item => {
+            const isSelected = item === button;
+            item.classList.toggle("is-selected", isSelected);
+            item.setAttribute("aria-pressed", String(isSelected));
+          });
+          panel.querySelector("[data-division-label]").textContent = preferredDivision;
+        });
+      });
       panel.querySelector("#reading-team-create-form").onsubmit = async event => {
         event.preventDefault();
         error.hidden = true;
