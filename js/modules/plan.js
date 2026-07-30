@@ -1411,6 +1411,33 @@ function getPlanParticipationModel(plan, contexts = []) {
   };
 }
 
+function renderPlanParticipationItem(model) {
+  if (!model) return "";
+  const actionHtml = model.action ? `
+    <button
+      type="button"
+      class="plan-card-participation-item__button"
+      data-plan-participation-action="${escapeHTML(model.action.action)}"
+      data-plan-participation-division="${escapeHTML(String(model.action.division || ""))}"
+    >
+      ${escapeHTML(model.action.label)}
+    </button>
+  ` : "";
+
+  return `
+    <div class="plan-card-participation-item plan-card-participation-item--${escapeHTML(model.variant)} plan-card-participation-item--${escapeHTML(model.tone)}">
+      <div class="plan-card-participation-item__media" aria-hidden="true">
+        <span class="nlc-icon nlc-icon--sm" data-icon="${escapeHTML(model.icon)}"></span>
+      </div>
+      <div class="plan-card-participation-item__content">
+        <div class="plan-card-participation-item__title">${escapeHTML(model.title)}</div>
+        <div class="plan-card-participation-item__description">${escapeHTML(model.description)}</div>
+      </div>
+      ${actionHtml ? `<div class="plan-card-participation-item__actions">${actionHtml}</div>` : ""}
+    </div>
+  `;
+}
+
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");

@@ -130,4 +130,14 @@ describe("plan card information architecture", () => {
     expect(plan).toContain('variant: "solo"');
     expect(plan).toContain('action: "join-team-division"');
   });
+
+  it("renders participation status with shadcn item-style parts", () => {
+    expect(plan).toContain("function renderPlanParticipationItem");
+    expect(plan).toContain("plan-card-participation-item__media");
+    expect(plan).toContain("plan-card-participation-item__content");
+    expect(plan).toContain("plan-card-participation-item__title");
+    expect(plan).toContain("plan-card-participation-item__description");
+    expect(plan).toContain("plan-card-participation-item__actions");
+    expect(plan).toContain('data-plan-participation-action="${escapeHTML(model.action.action)}"');
+  });
 });
