@@ -2314,6 +2314,30 @@ const db = {
     return { success: true, context };
   },
 
+  async getPastoralZoneLeaderboard(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到目前計畫，暫時無法載入牧區排行榜。" };
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      const ownZone = String(state.currentUser && state.currentUser.pastoral_zone || "").trim();
+      return {
+        success: true,
+        context: {
+          zones: [
+            { name: ownZone || "第一牧區", memberCount: 12, chaptersRead: 126, lastReadAt: null, isMine: true },
+            { name: "第二牧區", memberCount: 10, chaptersRead: 98, lastReadAt: null, isMine: false }
+          ],
+          unassignedCount: 0
+        }
+      };
+    }
+    const result = await this._callReadingTeamRpc("get_pastoral_zone_leaderboard", {
+      p_global_plan_id: planId
+    });
+    return result.success
+      ? { success: true, context: result.data || { zones: [], unassignedCount: 0 } }
+      : result;
+  },
+
   async createReadingTeam(plan, division, name) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊報名。" };

@@ -5409,36 +5409,27 @@ async function renderPlanRankingView() {
   let pastoralStats = [];
   let unassignedPastoralCount = 0;
   try {
-    const allUsers = await db.fetchMergedUsersList();
-    const zoneMap = {};
-    const unassignedZoneLabels = new Set(["未設定", "未設定牧區", "未分類"]);
+    const result = await db.getPastoralZoneLeaderboard(state.activePlan);
+    if (!result.success) throw result.error || new Error(result.message || "Failed to load pastoral leaderboard");
+    const context = result.context || {};
     const completionTime = item => {
       const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
       return Number.isFinite(timestamp) ? timestamp : Infinity;
     };
-    allUsers.forEach(u => {
-      const zone = String(u.pastoral_zone || "").trim();
-      if (!zone || unassignedZoneLabels.has(zone)) {
-        unassignedPastoralCount += 1;
-        return;
-      }
-      if (!zoneMap[zone]) zoneMap[zone] = { name: zone, total_chapters: 0, members: 0, completed_at: null };
-      zoneMap[zone].total_chapters += (u.chapters_read || 0);
-      zoneMap[zone].members += 1;
-      const userCompletedAt = u.last_read_at || u.last_read || null;
-      if (userCompletedAt) {
-        const userTime = new Date(userCompletedAt).getTime();
-        const zoneTime = zoneMap[zone].completed_at ? new Date(zoneMap[zone].completed_at).getTime() : -Infinity;
-        if (Number.isFinite(userTime) && userTime > zoneTime) zoneMap[zone].completed_at = userCompletedAt;
-      }
-    });
-    pastoralStats = Object.values(zoneMap).sort((a, b) => {
+    pastoralStats = (Array.isArray(context.zones) ? context.zones : []).map(zone => ({
+      name: zone.name || "",
+      total_chapters: Number(zone.chaptersRead || 0),
+      members: Number(zone.memberCount || 0),
+      completed_at: zone.lastReadAt || null,
+      is_mine: zone.isMine === true
+    })).sort((a, b) => {
       const chapterDiff = b.total_chapters - a.total_chapters;
       if (chapterDiff !== 0) return chapterDiff;
       const timeDiff = completionTime(a) - completionTime(b);
       if (timeDiff !== 0) return timeDiff;
       return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
     });
+    unassignedPastoralCount = Number(context.unassignedCount || 0);
   } catch (e) {
     console.error("Failed to load pastoral rankings", e);
   }
@@ -5507,11 +5498,10 @@ async function renderPlanRankingView() {
       if (index > 0 && !sharesRank) calculatedRank = index + 1;
       const rank = calculatedRank;
       const pct = Math.min(100, Math.round((item.total_chapters / maxChapters) * 100));
-      const placementClass = rank === 1
-        ? " pastoral-race-row--leader"
-        : rank <= 3 ? " pastoral-race-row--podium" : "";
+      const placementClass = rank <= 3 ? " pastoral-race-row--podium" : "";
+      const ownershipClass = item.is_mine ? " pastoral-race-row--mine" : "";
       const row = document.createElement("div");
-      row.className = `pastoral-race-row${placementClass}`;
+      row.className = `pastoral-race-row${placementClass}${ownershipClass}`;
       row.style.setProperty("--target-width", `${pct}%`);
       row.style.transitionDelay = `${index * 70}ms`;
       row.innerHTML = `
@@ -5520,6 +5510,7 @@ async function renderPlanRankingView() {
           <div class="pastoral-race-heading">
             <div class="pastoral-race-identity">
               <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
+              ${item.is_mine ? '<span class="pastoral-race-mine-badge">我的牧區</span>' : ""}
               <span class="pastoral-race-members">${item.members} 人參與・${formatPastoralCompletion(item.completed_at)}</span>
             </div>
             <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>

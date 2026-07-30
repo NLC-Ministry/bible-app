@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = read("supabase/migrations/0038_reading_team_leaderboards.sql");
 const focusMigration = read("supabase/migrations/0039_focus_reading_team_leaderboards_on_my_team.sql");
+const pastoralMigration = read("supabase/migrations/0049_public_pastoral_zone_leaderboard.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -65,11 +66,11 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("共 ${pastoralStats.length} 個牧區");
     expect(plan).toContain("const pct = Math.min(100");
     expect(plan).toContain("const chapterDiff = b.total_chapters - a.total_chapters");
+    expect(plan).toContain("db.getPastoralZoneLeaderboard(state.activePlan)");
+    expect(plan).toContain("unassignedPastoralCount = Number(context.unassignedCount || 0)");
     expect(plan).toContain("const timeDiff = completionTime(a) - completionTime(b)");
     expect(plan).toContain("item.total_chapters === previousItem.total_chapters");
     expect(plan).toContain("pastoralCompletionTime(item) === pastoralCompletionTime(previousItem)");
-    expect(plan).toContain('const unassignedZoneLabels = new Set(["未設定", "未設定牧區", "未分類"])');
-    expect(plan).toContain("unassignedPastoralCount += 1");
     expect(plan).toContain("人尚未設定牧區，不列入排名");
     expect(css).toContain(".pastoral-race-unassigned");
     expect(plan).toContain('aria-label="第 ${rank} 名">${rank}');
@@ -80,12 +81,27 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain('class="pastoral-race-progress" role="progressbar"');
     expect(plan).toContain('aria-valuenow="${pct}"');
     expect(plan).toContain('data-pastoral-race-replay');
-    expect(css).toContain(".pastoral-race-row--leader");
+    expect(plan).toContain('const ownershipClass = item.is_mine ? " pastoral-race-row--mine" : ""');
+    expect(plan).toContain("我的牧區");
+    expect(css).toContain(".pastoral-race-row--mine");
+    expect(css).not.toContain(".pastoral-race-row--leader");
     expect(css).toContain(".pastoral-race-progress-fill");
     expect(css).toContain("height: 12px");
     const pastoralStyles = css.match(/\/\* Pastoral speed leaderboard[\s\S]*?\/\* Stacked Percentage Bar \*\//)?.[0] || "";
     expect(pastoralStyles).not.toContain("linear-gradient");
   });
+
+  it("makes the plan-specific pastoral leaderboard available to every authenticated user", () => {
+    expect(pastoralMigration).toContain("get_pastoral_zone_leaderboard");
+    expect(pastoralMigration).toContain("SECURITY DEFINER");
+    expect(pastoralMigration).toContain("TO authenticated, service_role");
+    expect(pastoralMigration).toContain("reading_plan.global_plan_id = p_global_plan_id");
+    expect(pastoralMigration).toContain("'isMine'");
+    expect(pastoralMigration).not.toContain("profile.name");
+    expect(edge).toContain('"get_pastoral_zone_leaderboard"');
+    expect(db).toContain('_callReadingTeamRpc("get_pastoral_zone_leaderboard"');
+  });
+
   it("requires an authenticated profile without exposing member identities", () => {
     expect(migration).toContain("resolve_reading_team_actor");
     expect(migration).toContain("TO authenticated, service_role");

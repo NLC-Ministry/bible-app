@@ -5137,10 +5137,11 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   border-color: color-mix(in srgb, var(--color-brand) 34%, var(--border-card));
 }
 
-.pastoral-race-row--leader {
+.pastoral-race-row--mine {
   --pastoral-race-fill: var(--color-achievement);
   background: color-mix(in srgb, var(--color-achievement) 9%, var(--bg-card));
   border-color: color-mix(in srgb, var(--color-achievement) 42%, var(--border-card));
+  border-left-width: 5px;
 }
 
 .pastoral-race-rank {
@@ -5164,7 +5165,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   color: var(--color-brand);
 }
 
-.pastoral-race-row--leader .pastoral-race-rank {
+.pastoral-race-row--mine .pastoral-race-rank {
   background: var(--color-achievement);
   border-color: var(--color-achievement);
   color: var(--color-black);
@@ -5196,6 +5197,17 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pastoral-race-mine-badge {
+  background: color-mix(in srgb, var(--color-achievement) 24%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--color-achievement) 55%, var(--border-card));
+  border-radius: 999px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: var(--type-weight-strong);
+  padding: 0.12rem 0.42rem;
 }
 
 .pastoral-race-members {

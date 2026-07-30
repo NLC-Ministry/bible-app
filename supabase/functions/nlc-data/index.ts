@@ -37,6 +37,7 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "get_reading_team_registration_overview",
   "get_reading_team_statistics",
   "get_reading_team_leaderboards",
+  "get_pastoral_zone_leaderboard",
   "create_reading_team",
   "join_reading_team_by_code",
   "leave_reading_team",
