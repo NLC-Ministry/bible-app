@@ -10,7 +10,7 @@ const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_r
 const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
 const productionCleanup = read("supabase/migrations/0026_production_cleanup_obsolete_plans_badges.sql");
 const secureTeamNamesMigration = read("supabase/migrations/0037_secure_unique_reading_team_names.sql");
-const captainOnlyTeamExitMigration = read("supabase/migrations/0043_restrict_reading_team_exit_to_captain.sql");
+const captainOnlyTeamExitMigration = read("supabase/migrations/0042_restrict_reading_team_exit_to_captain.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -25,6 +25,7 @@ const indexCss = read("index.css");
 describe("reading competition team schema", () => {
   it("shows unread care reminders only on the notification bell", () => {
     expect(html).not.toContain("data-care-reminder-badge");
+    expect(html).toContain('id="btn-notification-bell"');
     expect(html).toContain('id="notification-bell-badge"');
     expect(app).toContain("refreshCareReminderBadge({ force: true })");
     expect(app).toContain('document.addEventListener("visibilitychange"');
@@ -150,7 +151,8 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("function bindPlanParticipationItemActions");
     expect(participation).toContain("團隊讀經中");
     expect(participation).toContain("個人讀經中");
-    expect(participation).toContain("報名 ${availableDivision}人組");
+    expect(participation).toContain("我的團隊");
+    expect(participation).toContain("open-team-dialog");
   });
 
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {

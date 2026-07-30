@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260730_captain_remove_member");
+    expect(htmlSource).toContain("js/app.js?v=20260730_team_card_action_captain_member");
     expect(appSource).toContain("./state.js?v=20260729_tab_navigation_memory");
   });
 });

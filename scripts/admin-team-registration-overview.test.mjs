@@ -48,8 +48,8 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_captain_remove_member");
-    expect(html).toContain("index.css?v=20260730_captain_remove_member");
+    expect(html).toContain("js/app.js?v=20260730_team_card_action_captain_member");
+    expect(html).toContain("index.css?v=20260730_team_card_action_captain_member");
   });
 
   it("restores user permission management and uses native team disclosure", () => {

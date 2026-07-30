@@ -20,37 +20,34 @@ describe("getPlanParticipationModel", () => {
     expect(getPlanParticipationModel(null, [null, undefined, {}]).variant).toBe("solo");
   });
 
-  it("offers the OTHER division when joined to exactly one (the multi-division fix)", () => {
+  it("offers a single My Team entry when joined to exactly one team", () => {
     const m = getPlanParticipationModel(null, [ctx(3, { memberCount: 2, capacity: 3 })]);
     expect(m.variant).toBe("team-with-other-division-available");
     expect(m.icon).toBe("people");
     expect(m.tone).toBe("brand");
-    expect(m.action).toEqual({ label: "報名 6人組", division: 6, action: "join-team-division" });
+    expect(m.action).toEqual({ label: "我的團隊", division: 3, action: "open-team-dialog" });
     expect(m.description).toBe("3人組・光鹽・2/3");
   });
 
-  it("mirrors the division when joined only to the 6-person team", () => {
+  it("opens My Team for the joined 6-person division instead of nudging the other division", () => {
     const m = getPlanParticipationModel(null, [ctx(6, { memberCount: 4, capacity: 6 })]);
     expect(m.variant).toBe("team-with-other-division-available");
-    expect(m.action.division).toBe(3);
-    expect(m.action.label).toBe("報名 3人組");
+    expect(m.action).toEqual({ label: "我的團隊", division: 6, action: "open-team-dialog" });
   });
 
   it("uses the success tone once the joined team is full", () => {
     const m = getPlanParticipationModel(null, [ctx(3, { memberCount: 3, capacity: 3 })]);
     expect(m.tone).toBe("success");
-    // still offers the other division, since only one is joined
-    expect(m.action.division).toBe(6);
+    expect(m.action).toEqual({ label: "我的團隊", division: 3, action: "open-team-dialog" });
   });
 
-  it("switches to view-team (no available division) when joined to BOTH sizes", () => {
+  it("keeps the same My Team entry when joined to BOTH sizes", () => {
     const m = getPlanParticipationModel(null, [
       ctx(3, { memberCount: 2, capacity: 3 }),
       ctx(6, { memberCount: 5, capacity: 6 })
     ]);
     expect(m.variant).toBe("team-open");
-    expect(m.action).toEqual({ label: "查看團隊", division: 3, action: "open-team" });
-    // never re-offers a division the member already holds
+    expect(m.action).toEqual({ label: "我的團隊", division: 3, action: "open-team-dialog" });
     expect(m.action.action).not.toBe("join-team-division");
   });
 
@@ -61,7 +58,7 @@ describe("getPlanParticipationModel", () => {
     ]);
     expect(m.variant).toBe("team-full");
     expect(m.tone).toBe("success");
-    expect(m.action.action).toBe("open-team");
+    expect(m.action).toEqual({ label: "我的團隊", division: 3, action: "open-team-dialog" });
   });
 
   it("falls back gracefully on missing team fields", () => {
