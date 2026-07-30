@@ -121,4 +121,13 @@ describe("plan card information architecture", () => {
     expect(sorter).toContain("localeCompare");
     expect(joinedList).toContain("plansToRender = sortJoinedPlansChronologically(plansToRender)");
   });
+
+  it("models joined-plan participation as one item contract", () => {
+    expect(plan).toContain("function getPlanParticipationModel");
+    expect(plan).toContain('variant: "team-with-other-division-available"');
+    expect(plan).toContain('"team-full"');
+    expect(plan).toContain('"team-open"');
+    expect(plan).toContain('variant: "solo"');
+    expect(plan).toContain('action: "join-team-division"');
+  });
 });
