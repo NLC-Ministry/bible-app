@@ -228,7 +228,9 @@ function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganizatio
 function sanitizeLeadershipIdentity(memberContext: any) {
   const leadership = memberContext?.leadershipIdentity;
   const assignments = Array.isArray(leadership?.assignments)
-    ? leadership.assignments.map((assignment: any) => ({
+    ? leadership.assignments
+      .filter((assignment: any) => assignment && typeof assignment === "object")
+      .map((assignment: any) => ({
         assignmentId: String(assignment.assignmentId || ""),
         identityKey: String(assignment.identityKey || ""),
         displayName: String(assignment.displayName || ""),
@@ -238,7 +240,8 @@ function sanitizeLeadershipIdentity(memberContext: any) {
         levelName: assignment.levelName ? String(assignment.levelName) : null,
         levelDepth: Number.isFinite(Number(assignment.levelDepth)) ? Number(assignment.levelDepth) : null,
         isPrimary: Boolean(assignment.isPrimary),
-      })).filter((assignment: any) => assignment.assignmentId && assignment.identityKey)
+      }))
+      .filter((assignment: any) => assignment.assignmentId && assignment.identityKey)
     : [];
 
   return {
@@ -629,9 +632,11 @@ Deno.serve(async (req: Request) => {
       member_context_sync_attempted_at: nowIso,
       member_context_sync_status: memberContextSyncStatus,
       member_context_sync_error: memberContextError,
-      member_context_leadership_display_label: leadershipIdentity.displayLabel,
-      member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId,
-      member_context_leadership_assignments: leadershipIdentity.assignments,
+      ...(memberContext ? {
+        member_context_leadership_display_label: leadershipIdentity.displayLabel,
+        member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId,
+        member_context_leadership_assignments: leadershipIdentity.assignments,
+      } : {}),
       updated_at: nowIso
     };
 

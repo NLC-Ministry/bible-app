@@ -289,6 +289,31 @@ it("stores Member Hub leadership identity projection without changing app role p
   expect(source).toContain('role: syncedRole');
 });
 
+describe("nlc-session leadership identity sync", () => {
+  it("preserves the existing projection when Member Hub context is degraded", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain("...(memberContext ? {");
+    expect(source).toContain("member_context_leadership_display_label: leadershipIdentity.displayLabel");
+    expect(source).toContain("member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId");
+    expect(source).toContain("member_context_leadership_assignments: leadershipIdentity.assignments");
+  });
+
+  it("filters malformed leadership assignments before reading assignment fields", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain(".filter((assignment: any) => assignment && typeof assignment === \"object\")");
+    expect(source.indexOf(".filter((assignment: any) => assignment && typeof assignment === \"object\")"))
+      .toBeLessThan(source.indexOf(".map((assignment: any) => ({"));
+  });
+});
+
 describe("nlc-session member context sync timestamp", () => {
   it("sets member_context_synced_at from the successful session sync timestamp", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
