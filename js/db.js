@@ -533,6 +533,11 @@ const db = {
     state.currentUser.member_context_sync_attempted_at = profile.member_context_sync_attempted_at || "";
     state.currentUser.member_context_sync_status = profile.member_context_sync_status || "";
     state.currentUser.member_context_sync_error = profile.member_context_sync_error || "";
+    state.currentUser.member_context_leadership_display_label = profile.member_context_leadership_display_label || "";
+    state.currentUser.member_context_leadership_primary_assignment_id = profile.member_context_leadership_primary_assignment_id || "";
+    state.currentUser.member_context_leadership_assignments = Array.isArray(profile.member_context_leadership_assignments)
+      ? profile.member_context_leadership_assignments
+      : [];
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;

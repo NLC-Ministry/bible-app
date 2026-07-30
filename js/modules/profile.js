@@ -136,6 +136,13 @@ function applyProfileIdentitySkeletons() {
   }
 }
 
+function getLeadershipDisplayLabel(user) {
+  const syncedLabel = String(user.member_context_leadership_display_label || "").trim();
+  if (syncedLabel) return syncedLabel;
+  if (isMemberHubManagedProfile()) return "一般組員";
+  return "";
+}
+
 function paintProfileIdentityChrome() {
   const roleNames = {
     member: "一般組員",
@@ -187,11 +194,15 @@ function paintProfileIdentityChrome() {
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {
     const role = String(user.role || "").trim();
-    if (pending && !role) {
+    const leadershipLabel = getLeadershipDisplayLabel(user);
+    if (pending && !role && !leadershipLabel) {
       summaryRole.setAttribute("aria-busy", "true");
       if (typeof ComponentSkeletonLoader !== "undefined") {
         ComponentSkeletonLoader.fill("role-badge", summaryRole);
       }
+    } else if (leadershipLabel) {
+      summaryRole.removeAttribute("aria-busy");
+      summaryRole.textContent = leadershipLabel;
     } else if (role && roleNames[role]) {
       summaryRole.removeAttribute("aria-busy");
       summaryRole.textContent = roleNames[role];
