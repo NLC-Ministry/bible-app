@@ -76,8 +76,10 @@ Add to `scripts/plan-card-information-architecture.test.mjs`:
 it("models joined-plan participation as one item contract", () => {
   expect(plan).toContain("function getPlanParticipationModel");
   expect(plan).toContain('variant: "team-with-other-division-available"');
-  expect(plan).toContain('variant: "team-full"');
-  expect(plan).toContain('variant: "team-open"');
+  // team-full / team-open are produced via a ternary (variant: isFull ? ...),
+  // so assert the string literals rather than a `variant: "..."` prefix.
+  expect(plan).toContain('"team-full"');
+  expect(plan).toContain('"team-open"');
   expect(plan).toContain('variant: "solo"');
   expect(plan).toContain('action: "join-team-division"');
 });
