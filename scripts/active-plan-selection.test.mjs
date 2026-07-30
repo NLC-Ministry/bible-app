@@ -8,11 +8,13 @@ const db = readFileSync(join(root, "js", "db.js"), "utf8");
 const utils = readFileSync(join(root, "js", "utils.js"), "utf8");
 
 describe("active plan selection", () => {
-  it("uses the most recent visible plan for dashboard-driving active state", () => {
-    expect(utils).toContain("function selectMostRecentActivePlan(plans)");
+  it("uses the nearest current or upcoming visible plan for dashboard-driving active state", () => {
+    expect(utils).toContain("function selectMostRecentActivePlan(plans, currentDate = new Date())");
     expect(utils).toContain("window.selectMostRecentActivePlan = selectMostRecentActivePlan");
-    expect(utils).toContain("b.startDate || b.start_date || \"\"");
-    expect(utils).toContain("return sortedPlans[0] || null;");
+    expect(utils).toContain("const currentPlans = datedPlans.filter(plan => plan.startKey <= todayKey && plan.endKey >= todayKey);");
+    expect(utils).toContain("const upcomingPlans = datedPlans.filter(plan => plan.startKey > todayKey);");
+    expect(utils).toContain("return [...upcomingPlans].sort((a, b) => a.startKey.localeCompare(b.startKey))[0]?.plan || null;");
+    expect(utils).not.toContain("const startCompare = String(b.startDate || b.start_date || \"\").localeCompare");
 
     const dataLoadFlow = db.slice(
       db.indexOf("// 3. Load Active Reading Plans"),
