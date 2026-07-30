@@ -238,7 +238,9 @@ function sanitizeLeadershipIdentity(memberContext: any) {
         nodeId: String(assignment.nodeId || ""),
         nodeName: String(assignment.nodeName || ""),
         levelName: assignment.levelName ? String(assignment.levelName) : null,
-        levelDepth: Number.isFinite(Number(assignment.levelDepth)) ? Number(assignment.levelDepth) : null,
+        levelDepth: assignment.levelDepth === null || assignment.levelDepth === undefined
+          ? null
+          : Number.isFinite(Number(assignment.levelDepth)) ? Number(assignment.levelDepth) : null,
         isPrimary: Boolean(assignment.isPrimary),
       }))
       .filter((assignment: any) => assignment.assignmentId && assignment.identityKey)

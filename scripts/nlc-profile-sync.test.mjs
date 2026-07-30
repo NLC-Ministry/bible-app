@@ -312,6 +312,31 @@ describe("nlc-session leadership identity sync", () => {
     expect(source.indexOf(".filter((assignment: any) => assignment && typeof assignment === \"object\")"))
       .toBeLessThan(source.indexOf(".map((assignment: any) => ({"));
   });
+
+  it("preserves null leadership levelDepth instead of coercing it to root depth", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain("levelDepth: assignment.levelDepth === null || assignment.levelDepth === undefined");
+    expect(source.indexOf("assignment.levelDepth === null || assignment.levelDepth === undefined"))
+      .toBeLessThan(source.indexOf("Number.isFinite(Number(assignment.levelDepth))"));
+  });
+
+  it("protects Hub-owned leadership projection columns from member profile writes", () => {
+    const migration = fs.readFileSync(
+      path.join(rootDir, "supabase/migrations/0041_protect_member_context_leadership_identity.sql"),
+      "utf8"
+    );
+
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION public.protect_profile_member_context_leadership_fields");
+    expect(migration).toContain("member_context_leadership_display_label");
+    expect(migration).toContain("member_context_leadership_primary_assignment_id");
+    expect(migration).toContain("member_context_leadership_assignments");
+    expect(migration).toContain("RAISE EXCEPTION 'member context leadership fields are managed by Member Hub'");
+    expect(migration).toContain("CREATE TRIGGER trg_profiles_protect_member_context_leadership");
+  });
 });
 
 describe("nlc-session member context sync timestamp", () => {
