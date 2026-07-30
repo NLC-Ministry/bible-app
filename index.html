@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260730_management_plan_filter_rules">
+  <link rel="stylesheet" href="index.css?v=20260730_unjoined_plan_invites_v2">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_size_modal_chooser">
 
   <!-- Supabase JS Client library -->
@@ -1303,6 +1303,16 @@
                 <!-- Hidden master select for backward-compatibility -->
                 <select id="members-zone-selector" class="form-control hidden" style="display: none;"></select>
               </div>
+              <section class="admin-unjoined-plan-card" aria-labelledby="admin-unjoined-plan-title">
+                <div class="admin-unjoined-plan-card__header">
+                  <div>
+                    <h2 id="admin-unjoined-plan-title" class="admin-management-section__title">尚未加入計畫</h2>
+                    <p>顯示目前管理範圍內，尚未加入所選計畫的人員。</p>
+                  </div>
+                  <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 人</span>
+                </div>
+                <div id="admin-unjoined-plan-members" class="admin-unjoined-plan-members" aria-live="polite"></div>
+              </section>
             </div>
             <!-- Content: group stats + member list -->
             <div id="plan-org-stats-content" style="display: flex; flex-direction: column; gap: 1.2rem; flex: 1; min-height: 0; overflow-y: auto;">
@@ -2046,7 +2056,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260730_pr167_management_org_filters"></script>
+  <script type="module" src="js/app.js?v=20260730_disable_group_permissions"></script>
 </body>
 
 </html>

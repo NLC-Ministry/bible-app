@@ -12,7 +12,7 @@ import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_remove_legacy_org_entry';
 import './auth.js';
-import './db.js?v=20260730_team_scope_any_member';
+import './db.js?v=20260730_disable_group_permissions';
 import './utils.js?v=20260730_management_plan_filter_rules';
 import './gamification.js?v=20260728_badge_img_refactor';
 

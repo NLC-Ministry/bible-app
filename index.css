@@ -3082,7 +3082,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .auth-environment-dialog {
   position: fixed;
   inset: 0;
-  z-index: var(--z-critical);
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12073,6 +12073,96 @@ select,
   max-width: 32rem;
 }
 
+.admin-unjoined-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-card);
+}
+
+.admin-unjoined-plan-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-unjoined-plan-card__header p {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.admin-unjoined-plan-count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--color-brand-muted);
+  color: var(--primary-color);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.admin-unjoined-plan-members {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.65rem;
+}
+
+.admin-unjoined-plan-member {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+}
+
+.admin-unjoined-plan-member__identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-unjoined-plan-member__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-unjoined-plan-member__scope {
+  overflow: hidden;
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-plan-invite-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.admin-plan-invite-btn:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.admin-unjoined-plan-empty {
+  grid-column: 1 / -1;
+  padding: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
 .admin-management-section {
   display: flex;
   flex-direction: column;

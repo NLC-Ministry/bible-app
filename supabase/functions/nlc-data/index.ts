@@ -41,7 +41,14 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "leave_reading_team",
   "remove_reading_team_member",
   "disband_reading_team",
-  "send_reading_team_reminder"
+  "send_reading_team_reminder",
+  "get_unjoined_plan_members",
+  "send_plan_join_invitation"
+]);
+const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
+  "get_reading_team_registration_overview",
+  "get_unjoined_plan_members",
+  "send_plan_join_invitation"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
@@ -228,8 +235,8 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   if (error) throw error;
   return (profiles || []).filter((candidate: any) => {
     if (candidate.id === profile.id) return true;
-    if (profile.role === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.great_region);
-    if (profile.role === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone);
+    if (profile.role === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.managed_regions || profile.great_region);
+    if (profile.role === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.managed_zones || profile.pastoral_zone);
     return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone)
       && valuesOverlap(candidate.small_group, profile.small_group);
   }).map((candidate: any) => candidate.id);
@@ -310,7 +317,7 @@ Deno.serve(async (req: Request) => {
       if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
-      if (functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)) {
+      if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;
@@ -343,8 +350,8 @@ Deno.serve(async (req: Request) => {
       if (!recipient || recipient.is_active === false) return jsonResponse({ error: "recipient_not_found" }, 404);
 
       const withinScope = isAdmin(profile)
-        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.great_region))
-        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone))
+        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.managed_regions || profile.great_region))
+        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.managed_zones || profile.pastoral_zone))
         || (profile.role === "group_leader"
           && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone)
           && valuesOverlap(recipient.small_group, profile.small_group));
@@ -397,6 +404,11 @@ Deno.serve(async (req: Request) => {
     // Any authenticated member may file an issue report (insert only). Reads and
     // deletes stay admin-only via canRead / canAdminWrite below. user_id is forced
     // to the caller in forceUserPayload so a member cannot spoof another user.
+    if (["insert", "update", "upsert"].includes(action)
+      && table === "profiles"
+      && body.payload?.role === "group_leader") {
+      return jsonResponse({ error: "group_leader_assignment_disabled" }, 403);
+    }
     const canReportInsert = action === "insert" && table === "issue_reports";
     const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
     const canOwnWrite = (["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table)) || canReportInsert;

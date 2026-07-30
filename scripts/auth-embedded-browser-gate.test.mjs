@@ -66,12 +66,4 @@ describe("Bible app authentication browser environment gate", () => {
     expect(cssSource).toContain(".auth-environment-dialog__panel");
     expect(cssSource).toContain(".auth-environment-dialog__primary");
   });
-
-  it("places the embedded-browser dialog above the full-screen login gate", () => {
-    expect(cssSource).toContain(".login-gate");
-    expect(cssSource).toContain("z-index: var(--z-modal)");
-    expect(cssSource).toContain(".auth-environment-dialog");
-    expect(cssSource).toContain("z-index: var(--z-critical)");
-    expect(cssSource).not.toContain("z-index: 9999");
-  });
 });

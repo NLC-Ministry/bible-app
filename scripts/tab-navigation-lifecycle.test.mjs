@@ -42,11 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_management_org_filters";
-
-    expect(htmlSource).toContain(expectedAppCacheKey);
-    expect(appSource).toContain("./state.js?v=20260729_tab_navigation_memory");
-    expect(htmlSource).toContain("js/app.js?v=20260730_remove_legacy_org_entry");
+    expect(htmlSource).toContain("js/app.js?v=20260730_disable_group_permissions");
     expect(appSource).toContain("./state.js?v=20260730_remove_legacy_org_entry");
   });
 });

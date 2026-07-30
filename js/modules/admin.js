@@ -3,7 +3,6 @@
 export function updateFilterChipsUI() {
   const chipRegion = document.getElementById("chip-filter-region");
   const chipZone = document.getElementById("chip-filter-zone");
-  const chipGroup = document.getElementById("chip-filter-group");
 
   if (chipRegion) {
     if (state.adminFilters.region) {
@@ -25,18 +24,10 @@ export function updateFilterChipsUI() {
     }
   }
 
-  if (chipGroup) {
-    if (state.adminFilters.group) {
-      chipGroup.classList.add("active");
-      chipGroup.innerHTML = `<span>${state.adminFilters.group}</span> <span class="chip-clear" data-clear="group">清除</span>`;
-    } else {
-      chipGroup.classList.remove("active");
-      chipGroup.innerHTML = `<span>篩選小組</span> <span class="chip-arrow">展開</span>`;
-    }
-  }
 }
 
 export function openAdminFilterBottomSheet(type) {
+  if (!["region", "zone"].includes(type)) return;
   const overlay = document.getElementById("global-bottom-sheet");
   const titleEl = document.getElementById("bottom-sheet-title");
   const listEl = document.getElementById("bottom-sheet-list");
@@ -65,18 +56,6 @@ export function openAdminFilterBottomSheet(type) {
     return Array.from(new Set(all));
   };
 
-  const getPredefinedGroups = () => {
-    if (state.adminFilters.zone) {
-      return state.orgStructure.groups[state.adminFilters.zone] || [];
-    }
-    const all = [];
-    if (state.orgStructure && state.orgStructure.groups) {
-      Object.values(state.orgStructure.groups).forEach(arr => {
-        if (Array.isArray(arr)) all.push(...arr);
-      });
-    }
-    return Array.from(new Set(all));
-  };
 
   if (type === "region") {
     title = "選擇大區";
@@ -84,9 +63,6 @@ export function openAdminFilterBottomSheet(type) {
   } else if (type === "zone") {
     title = "選擇牧區";
     options = getPredefinedZones();
-  } else if (type === "group") {
-    title = "選擇小組";
-    options = getPredefinedGroups();
   }
 
   if (titleEl) titleEl.textContent = title;
@@ -95,15 +71,13 @@ export function openAdminFilterBottomSheet(type) {
   const allBtn = document.createElement("button");
   allBtn.className = `bottom-sheet-item ${!selectedValue ? "selected" : ""}`;
   allBtn.type = "button";
-  allBtn.textContent = `全部${type === "region" ? "大區" : (type === "zone" ? "牧區" : "小組")}`;
+  allBtn.textContent = `全部${type === "region" ? "大區" : "牧區"}`;
   allBtn.onclick = () => {
     console.log(`管理 [Debug] Bottom Sheet 選擇清除條件: ${type}`);
     state.adminFilters[type] = null;
     if (type === "region") {
       state.adminFilters.zone = null;
-      state.adminFilters.group = null;
     } else if (type === "zone") {
-      state.adminFilters.group = null;
     }
     updateFilterChipsUI();
     closeAdminFilterBottomSheet();
@@ -121,9 +95,7 @@ export function openAdminFilterBottomSheet(type) {
       state.adminFilters[type] = opt;
       if (type === "region") {
         state.adminFilters.zone = null;
-        state.adminFilters.group = null;
       } else if (type === "zone") {
-        state.adminFilters.group = null;
       }
       updateFilterChipsUI();
       closeAdminFilterBottomSheet();
@@ -142,7 +114,7 @@ export function closeAdminFilterBottomSheet() {
 }
 
 export function initAdminFiltersUI() {
-  ["region", "zone", "group"].forEach(type => {
+  ["region", "zone"].forEach(type => {
     const chip = document.getElementById(`chip-filter-${type}`);
     if (chip) {
       chip.onclick = (e) => {
@@ -154,9 +126,7 @@ export function initAdminFiltersUI() {
           state.adminFilters[type] = null;
           if (type === "region") {
             state.adminFilters.zone = null;
-            state.adminFilters.group = null;
           } else if (type === "zone") {
-            state.adminFilters.group = null;
           }
           updateFilterChipsUI();
           renderAdminUserManagement();
@@ -215,8 +185,7 @@ export async function renderAdminUserManagement() {
       const matchEmail = u.email ? u.email.toLowerCase().includes(query) : false;
       const matchRegion = !state.adminFilters.region || u.great_region === state.adminFilters.region;
       const matchZone = !state.adminFilters.zone || u.pastoral_zone === state.adminFilters.zone;
-      const matchGroup = !state.adminFilters.group || u.small_group === state.adminFilters.group;
-      return (matchName || matchEmail) && matchRegion && matchZone && matchGroup;
+      return (matchName || matchEmail) && matchRegion && matchZone;
     });
 
     listContainer.innerHTML = "";
@@ -281,7 +250,6 @@ export function openMemberEditBottomSheet(user) {
 
   const roleOptions = [
     { value: "member", label: "一般會友" },
-    { value: "group_leader", label: "小組長" },
     { value: "zone_leader", label: "牧區長" },
     { value: "great_zone_leader", label: "大區長" },
     { value: "admin", label: "系統管理員" }
@@ -289,7 +257,7 @@ export function openMemberEditBottomSheet(user) {
 
 
 
-  const isLeader = ["great_zone_leader", "zone_leader", "group_leader"].includes(user.role);
+  const isLeader = ["great_zone_leader", "zone_leader"].includes(user.role);
   if (isLeader) {
     const scopeBtn = document.createElement("button");
     scopeBtn.className = "bottom-sheet-item";
@@ -302,7 +270,6 @@ export function openMemberEditBottomSheet(user) {
     let scopeDesc = "";
     if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "未設定";
     else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "未設定";
-    else if (user.role === "group_leader") scopeDesc = user.managed_groups || user.small_group || "未設定";
 
     scopeBtn.innerHTML = iconLabel("edit", `修改管理範圍 (${scopeDesc})`);
     scopeBtn.onclick = async () => {
@@ -355,7 +322,7 @@ export function openMemberEditBottomSheet(user) {
       if (isSelected) return;
 
       let additionalFields = {};
-      if (["great_zone_leader", "zone_leader", "group_leader"].includes(opt.value)) {
+      if (["great_zone_leader", "zone_leader"].includes(opt.value)) {
         const resp = await showResponsibilityModal(opt.value, user);
         if (!resp) return;
         additionalFields = resp;
@@ -432,7 +399,6 @@ export function showResponsibilityModal(role, user) {
     let roleText = "";
     if (role === "great_zone_leader") roleText = "大區長";
     else if (role === "zone_leader") roleText = "牧區長";
-    else if (role === "group_leader") roleText = "小組長";
     
     let htmlContent = `
       <div style="margin-bottom: 0.2rem;">
@@ -463,14 +429,6 @@ export function showResponsibilityModal(role, user) {
           </div>
         </div>
       `;
-    } else if (role === "group_leader") {
-      htmlContent += `
-        <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">勾選管轄小組 (可多選)</label>
-          <div id="modal-groups-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
-          </div>
-        </div>
-      `;
     }
     
     htmlContent += `
@@ -492,11 +450,9 @@ export function showResponsibilityModal(role, user) {
     
     const currentRegions = (user.managed_regions || user.great_region || "").split(",").map(s => s.trim()).filter(Boolean);
     const currentZones = (user.managed_zones || user.pastoral_zone || "").split(",").map(s => s.trim()).filter(Boolean);
-    const currentGroups = (user.managed_groups || user.small_group || "").split(",").map(s => s.trim()).filter(Boolean);
     
     const regionContainer = overlay.querySelector("#modal-regions-container");
     const zoneContainer = overlay.querySelector("#modal-zones-container");
-    const groupContainer = overlay.querySelector("#modal-groups-container");
     
     if (role === "great_zone_leader" && regionContainer) {
       let regions = [];
@@ -546,33 +502,6 @@ export function showResponsibilityModal(role, user) {
             zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
     }
     
-    if (role === "group_leader" && groupContainer) {
-      let groups = [];
-      if (state.isSupabaseMode && state.orgStructure.rawGroups) {
-        state.orgStructure.rawGroups.forEach(g => {
-          const zone = state.orgStructure.rawZones?.find(z => z.id === g.pastoral_zone_id);
-          const zoneSuffix = zone ? ` (${zone.name})` : "";
-          groups.push({ id: g.id, name: g.name, label: `${g.name}${zoneSuffix}` });
-        });
-      } else if (state.orgStructure.groups) {
-        for (const [zName, gList] of Object.entries(state.orgStructure.groups)) {
-          gList.forEach(gName => {
-            groups.push({ id: gName, name: gName, label: `${gName} (${zName})` });
-          });
-        }
-      }
-      let html = "";
-      groups.forEach(g => {
-        const isChecked = currentGroups.includes(g.name) ? "checked" : "";
-        html += `
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
-            <input type="checkbox" name="group-checkbox" value="${g.id}" data-name="${g.name}" ${isChecked} style="cursor: pointer;">
-            <span>${g.label}</span>
-          </label>
-        `;
-      });
-            groupContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
-    }
     
     const closeModal = (result) => {
       overlay.style.opacity = "0";
@@ -607,17 +536,6 @@ export function showResponsibilityModal(role, user) {
           managed_regions: "",
           managed_zones: checkedZones.join(","),
           managed_groups: ""
-        });
-      } else if (role === "group_leader") {
-        const checkedGroups = Array.from(groupContainer.querySelectorAll("input[name='group-checkbox']:checked")).map(cb => cb.dataset.name);
-        if (checkedGroups.length === 0) {
-                    alert("請選擇至少一個管轄小組！");
-          return;
-        }
-        closeModal({
-          managed_regions: "",
-          managed_zones: "",
-          managed_groups: checkedGroups.join(",")
         });
       }
     };
@@ -801,6 +719,7 @@ async function selectManagementPlan(planKey) {
   localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
   window.currentPlanViewState = 'ORG_STATS';
   if (typeof window.renderPlanMembersView === 'function') await window.renderPlanMembersView();
+  await renderAdminUnjoinedPlanMembers(true);
   await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content');
   await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6');
 }
@@ -853,6 +772,9 @@ window.initAdminUserManagement = init;
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
 let cachedTeamsDataKey = "";
+let cachedUnjoinedPlanKey = "";
+let cachedUnjoinedPlanMembers = [];
+let unjoinedPlanRequestId = 0;
 
 function getSelectedManagementOrgFilter() {
   const role = (state.currentUser && state.currentUser.role) || "member";
@@ -877,7 +799,116 @@ function teamMatchesManagementOrgFilter(team, filter = getSelectedManagementOrgF
   ]) || "").split(",").map(value => value.trim()).filter(Boolean).includes(filter.value));
 }
 
+function memberMatchesManagementOrgFilter(member, filter = getSelectedManagementOrgFilter()) {
+  if (!filter || filter.type.startsWith("all")) return true;
+  const field = filter.type === "region" ? "greatRegion" : filter.type === "zone" ? "pastoralZone" : "smallGroup";
+  const fallbackField = field === "greatRegion" ? "great_region" : field === "pastoralZone" ? "pastoral_zone" : "small_group";
+  return String(member && (member[field] || member[fallbackField]) || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean)
+    .includes(filter.value);
+}
+
+async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
+  const container = document.getElementById("admin-unjoined-plan-members");
+  const count = document.getElementById("admin-unjoined-plan-count");
+  if (!container || !count) return;
+
+  const currentUser = state.currentUser || {};
+  const plan = state.activePlan;
+  if (!MANAGEMENT_ROLES.includes(currentUser.role) || !plan) {
+    count.textContent = "0 人";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
+    return;
+  }
+
+  const cacheKey = [
+    currentUser.id || currentUser.name || "anonymous",
+    currentUser.role || "member",
+    currentUser.managed_regions || currentUser.great_region || "",
+    currentUser.managed_zones || currentUser.pastoral_zone || "",
+    plan.globalPlanId || plan.id || "",
+    plan.presetKey || plan.preset_key || ""
+  ].join("|");
+
+  if (forceRefresh || cachedUnjoinedPlanKey !== cacheKey) {
+    const requestId = ++unjoinedPlanRequestId;
+    cachedUnjoinedPlanKey = cacheKey;
+    cachedUnjoinedPlanMembers = [];
+    count.textContent = "讀取中";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">讀取尚未加入的人員中...</div>';
+
+    const result = await db.getUnjoinedPlanMembers(plan);
+    if (requestId !== unjoinedPlanRequestId) return;
+    if (!result || !result.success) {
+      console.warn("Unable to load unjoined plan members", result && (result.error || result.message));
+      count.textContent = "0 人";
+      container.innerHTML = `
+        <div class="admin-unjoined-plan-empty" role="status">
+          <div>目前沒有可顯示的尚未加入人員。</div>
+          <button type="button" class="secondary-btn" id="admin-unjoined-plan-retry" style="margin-top:0.75rem;">重新整理</button>
+        </div>`;
+      const retryButton = document.getElementById("admin-unjoined-plan-retry");
+      if (retryButton) retryButton.onclick = () => renderAdminUnjoinedPlanMembers(true);
+      return;
+    }
+    cachedUnjoinedPlanMembers = Array.isArray(result.context && result.context.members)
+      ? result.context.members
+      : [];
+  }
+
+  const visibleMembers = cachedUnjoinedPlanMembers.filter(member => memberMatchesManagementOrgFilter(member));
+  count.textContent = `${visibleMembers.length} 人`;
+  if (visibleMembers.length === 0) {
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內沒有尚未加入所選計畫的人員。</div>';
+    return;
+  }
+
+  container.innerHTML = visibleMembers.map(member => {
+    const memberId = escapeHTML(String(member.id || ""));
+    const memberName = escapeHTML(member.name || "未命名使用者");
+    const scope = [
+      member.greatRegion || member.great_region,
+      member.pastoralZone || member.pastoral_zone,
+      member.smallGroup || member.small_group
+    ].filter(Boolean).map(value => escapeHTML(String(value))).join("・") || "尚未設定牧養資料";
+    const reminded = member.remindedToday === true || member.reminded_today === true;
+    return `
+      <div class="admin-unjoined-plan-member">
+        <div class="admin-unjoined-plan-member__identity">
+          <div class="admin-unjoined-plan-member__name">${memberName}</div>
+          <div class="admin-unjoined-plan-member__scope">${scope}</div>
+        </div>
+        <button type="button" class="secondary-btn admin-plan-invite-btn" data-plan-invite-member-id="${memberId}" ${reminded ? "disabled" : ""}>
+          ${reminded ? "今天已提醒" : "戳一下"}
+        </button>
+      </div>`;
+  }).join("");
+
+  container.querySelectorAll("[data-plan-invite-member-id]").forEach(button => {
+    button.onclick = async () => {
+      if (button.disabled) return;
+      const memberId = button.dataset.planInviteMemberId;
+      const member = cachedUnjoinedPlanMembers.find(item => String(item.id) === String(memberId));
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "提醒中...";
+      const result = await db.sendPlanJoinInvitation(state.activePlan, memberId);
+      if (!result || !result.success) {
+        button.disabled = false;
+        button.textContent = originalText;
+        if (typeof showToast === "function") showToast(result && result.message ? result.message : "提醒傳送失敗，請稍後再試。");
+        return;
+      }
+      if (member) member.remindedToday = true;
+      button.textContent = "今天已提醒";
+      if (typeof showToast === "function") showToast(`已提醒 ${member && member.name || "這位夥伴"} 加入「${state.activePlan && state.activePlan.name || "所選計畫"}」`);
+    };
+  });
+}
 async function refreshAdminTeamRegistrationFilters() {
+  await renderAdminUnjoinedPlanMembers(false);
   await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
   await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
 }
@@ -1093,6 +1124,7 @@ export function initAdminTeamRegistration() {
   }
 }
 
+window.renderAdminUnjoinedPlanMembers = renderAdminUnjoinedPlanMembers;
 window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
 window.refreshAdminTeamRegistrationFilters = refreshAdminTeamRegistrationFilters;
 window.initAdminTeamRegistration = initAdminTeamRegistration;

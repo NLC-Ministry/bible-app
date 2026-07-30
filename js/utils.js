@@ -1711,18 +1711,33 @@ function isPlanExpired(plan) {
   return todayStr > plan.endDate;
 }
 
-function selectMostRecentActivePlan(plans) {
+function selectMostRecentActivePlan(plans, currentDate = new Date()) {
   const visiblePlans = getVisiblePlans(plans || []).filter(Boolean);
   if (visiblePlans.length === 0) return null;
 
-  const sortedPlans = [...visiblePlans].sort((a, b) => {
-    const startCompare = String(b.startDate || b.start_date || "").localeCompare(String(a.startDate || a.start_date || ""));
-    if (startCompare !== 0) return startCompare;
-    const endCompare = String(b.endDate || b.end_date || "").localeCompare(String(a.endDate || a.end_date || ""));
-    if (endCompare !== 0) return endCompare;
-    return String(b.id || b.globalPlanId || b.presetKey || b.name || "").localeCompare(String(a.id || a.globalPlanId || a.presetKey || a.name || ""));
+  const toDateKey = (value, fallback) => {
+    if (!value) return fallback;
+    const raw = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return fallback;
+    return parsed.toISOString().split("T")[0];
+  };
+  const todayKey = toDateKey(currentDate, new Date().toISOString().split("T")[0]);
+  const datedPlans = visiblePlans.map(plan => {
+    const startKey = toDateKey(plan.startDate || plan.start_date, "0000-00-00");
+    const endKey = toDateKey(plan.endDate || plan.end_date, startKey || "9999-12-31");
+    return { plan, startKey, endKey };
   });
-  return sortedPlans[0] || null;
+  const currentPlans = datedPlans.filter(plan => plan.startKey <= todayKey && plan.endKey >= todayKey);
+  if (currentPlans.length > 0) {
+    return [...currentPlans].sort((a, b) => b.startKey.localeCompare(a.startKey))[0]?.plan || null;
+  }
+  const upcomingPlans = datedPlans.filter(plan => plan.startKey > todayKey);
+  if (upcomingPlans.length > 0) {
+    return [...upcomingPlans].sort((a, b) => a.startKey.localeCompare(b.startKey))[0]?.plan || null;
+  }
+  return [...datedPlans].sort((a, b) => b.endKey.localeCompare(a.endKey))[0]?.plan || null;
 }
 
 function calculateAllPlansProgress() {
