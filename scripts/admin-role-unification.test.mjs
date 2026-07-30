@@ -8,6 +8,7 @@ const authority = read("supabase/migrations/0048_member_hub_role_uuid_authority.
 const state = read("js/state.js");
 const profile = read("js/modules/profile.js");
 const admin = read("js/modules/admin.js");
+const plan = read("js/modules/plan.js");
 const db = read("js/db.js");
 const dataEdge = read("supabase/functions/nlc-data/index.ts");
 const sessionEdge = read("supabase/functions/nlc-session/index.ts");
@@ -40,6 +41,8 @@ describe("Member Hub UUID role authority", () => {
     expect(admin).toContain("權限由教會系統統一管理");
     expect(dataEdge).toContain("role_assignment_managed_by_member_hub");
     expect(profile).toContain("roleDefinition?.label");
+    expect(plan).not.toContain("isRealAdmin");
+    expect(plan).not.toContain("isSimulatedAdmin");
   });
 
   it("gives church pastors whole-church plan scope but not permission management", () => {

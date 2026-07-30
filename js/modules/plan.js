@@ -1060,19 +1060,14 @@ async function renderPlanView() {
       await setPlanState(PLAN_ROUTE.LIST);
     }
 
-    // Admin simulation check
-
-
+    // System administrator controls use the UUID-backed role definition.
+    const isSystemAdmin = getUserRoleCode(state.currentUser) === "admin";
     const adminCard = document.getElementById("admin-plan-card");
     if (adminCard) {
-      if (getUserRoleCode(state.currentUser) === "admin") {
-        adminCard.classList.remove("hidden");
-      } else {
-        adminCard.classList.add("hidden");
-      }
+      adminCard.classList.toggle("hidden", !isSystemAdmin);
     }
 
-    if (isRealAdmin && isSimulatedAdmin && typeof renderAdminPlanManagement === 'function') {
+    if (isSystemAdmin && typeof renderAdminPlanManagement === 'function') {
       renderAdminPlanManagement();
     }
 

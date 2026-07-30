@@ -34,6 +34,6 @@ describe("Member Hub-managed permissions with small-group filters disabled", () 
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_hub_role_uuid_authority_v2");
+    expect(html).toContain("js/app.js?v=20260730_hub_role_uuid_authority_v3");
   });
 });
