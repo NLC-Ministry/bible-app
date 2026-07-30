@@ -6,7 +6,7 @@ import {
   orgFromHomePath,
   orgFromMemberContext,
   mergeOrgSources,
-  resolveSyncedRole,
+  resolveSyncedRoleId,
   buildLockedFields,
   projectOrgFieldsFromHub,
   buildOrgProjectionAudit
@@ -132,24 +132,21 @@ describe("orgFromMemberContext", () => {
   });
 });
 
-describe("resolveSyncedRole", () => {
-  it("maps Hub primaryRole admin to app admin", () => {
-    expect(resolveSyncedRole("admin", "member")).toBe("admin");
+describe("resolveSyncedRoleId", () => {
+  const definitions = [
+    { id: "admin-id", code: "admin", label: "系統管理員", hub_permission_keys: ["system_admin"], hub_permission_labels: ["管理員"] },
+    { id: "pastor-id", code: "senior_pastor", label: "教會牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
+  ];
+
+  it("maps Hub keys and labels to immutable UUIDs", () => {
+    expect(resolveSyncedRoleId({ leadershipIdentity: { assignments: [{ identityKey: "church_pastor" }] } }, definitions, null, "identity")).toBe("pastor-id");
+    expect(resolveSyncedRoleId({ primaryRole: "管理員" }, definitions, null, "member_id")).toBe("admin-id");
   });
 
-  it("preserves SQL-promoted admin when Hub primaryRole is member", () => {
-    expect(resolveSyncedRole("member", "admin")).toBe("admin");
-  });
-
-  it("preserves the church-pastor role", () => {
-    expect(resolveSyncedRole("member", "senior_pastor")).toBe("senior_pastor");
-  });
-
-  it("defaults to member when no existing role", () => {
-    expect(resolveSyncedRole("member", null)).toBe("member");
+  it("preserves the current UUID only during a degraded context sync", () => {
+    expect(resolveSyncedRoleId(null, definitions, "pastor-id", "identity")).toBe("pastor-id");
   });
 });
-
 describe("buildLockedFields", () => {
   it("includes only non-empty source values", () => {
     expect(buildLockedFields({
@@ -276,7 +273,7 @@ describe("buildOrgProjectionAudit", () => {
   });
 });
 
-it("stores Member Hub leadership identity projection without changing app role privileges", () => {
+it("stores Member Hub leadership identity projection and resolves the role UUID", () => {
   const source = fs.readFileSync(
     path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
     "utf8"
@@ -286,7 +283,7 @@ it("stores Member Hub leadership identity projection without changing app role p
   expect(source).toContain("member_context_leadership_primary_assignment_id");
   expect(source).toContain("member_context_leadership_assignments");
   expect(source).toContain("memberContext?.leadershipIdentity");
-  expect(source).toContain('role: syncedRole');
+  expect(source).toContain('role_id: syncedRoleId');
 });
 
 describe("nlc-session leadership identity sync", () => {

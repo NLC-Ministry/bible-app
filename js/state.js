@@ -42,7 +42,7 @@ const state = {
   theme: "light",
   isSupabaseMode: false,
   supabase: null,
-  realRole: null, // Authentic user role from DB
+
   roleDefinitions: [], // Supabase role definitions, keyed by immutable UUID
   /** True while profile tab / boot is waiting on Member Hub identity sync */
   profileIdentityLoading: false,
@@ -51,7 +51,8 @@ const state = {
     great_region: "",
     pastoral_zone: "",
     small_group: "",
-    role: "",
+    role_id: null,
+    role_definition: null,
     chapters_read: 0,
     plan_progress: 0,
     streak: 0,
@@ -89,8 +90,17 @@ const state = {
   }
 };
 
+function getUserRoleCode(user = state.currentUser) {
+  if (typeof user === "string") return user;
+  if (!user) return "member";
+  return user.role_definition?.code
+    || getRoleDefinition(user.role_id)?.code
+    || user.role_code
+    || "member";
+}
+
 function hasWholeChurchPlanScope(userOrRole = state.currentUser) {
-  const role = typeof userOrRole === "string" ? userOrRole : userOrRole?.role;
+  const role = getUserRoleCode(userOrRole);
   return role === "admin" || role === "senior_pastor";
 }
 

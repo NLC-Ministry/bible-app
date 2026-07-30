@@ -7,15 +7,6 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
-const allowedRoles = new Set([
-  "member",
-  "group_leader",
-  "zone_leader",
-  "great_zone_leader",
-  "senior_pastor",
-  "admin"
-]);
-
 function parseJwt(token: string) {
   try {
     const base64Url = token.split(".")[1];
@@ -254,37 +245,54 @@ function sanitizeLeadershipIdentity(memberContext: any) {
   };
 }
 
-// Roles that must never be granted or inherited via a WEAK (email-only) account link.
-const PRIVILEGED_ROLES = new Set([
-  "admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"
-]);
+const MEMBER_ROLE_ID = "10000000-0000-4000-8000-000000000001";
 
-/**
- * Role policy — SECURITY: privilege is only granted/inherited on a STRONG identity
- * link (Logto sub or NLC member id). NLC identity can be phone-primary, so a token's
- * email is not proof of ownership; an email-only profile match must never escalate a
- * login into an admin/leader role. Keep in sync with the unit-tested
- * scripts/lib/nlc-account-link.mjs.
- *
- * TODO(Phase 2): Map org-placement leaderships[].roleName → scoped app roles.
- * See https://nlc-b1ffeeba.mintlify.site/api-reference/authorization-model
- */
-function resolveSyncedRole(
-  primaryRole: string | null | undefined,
-  existingRole: string | null | undefined,
+function normalizePermissionSignal(value: unknown) {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+function collectHubPermissionSignals(memberContext: any) {
+  const leadership = memberContext?.leadershipIdentity || {};
+  const assignments = Array.isArray(leadership.assignments) ? leadership.assignments : [];
+  return {
+    keys: assignments.map((assignment: any) => normalizePermissionSignal(assignment?.identityKey)).filter(Boolean),
+    labels: [
+      memberContext?.primaryRole,
+      leadership.displayLabel,
+      ...assignments.map((assignment: any) => assignment?.displayName)
+    ].map(normalizePermissionSignal).filter(Boolean)
+  };
+}
+
+async function resolveSyncedRoleId(
+  supabaseAdmin: any,
+  memberContext: any,
+  existingRoleId: string | null | undefined,
   linkedBy: "identity" | "member_id" | "email" | "none"
 ) {
   const strong = linkedBy === "identity" || linkedBy === "member_id" || linkedBy === "none";
-  if (primaryRole === "admin" && strong && allowedRoles.has("admin")) return "admin";
-  const existing = existingRole == null ? "" : String(existingRole).trim();
-  if (existing !== "") {
-    if (existing === "senior_pastor") return strong ? "senior_pastor" : "member";
-    if (strong) return existing;
-    return PRIVILEGED_ROLES.has(existing) ? "member" : existing;
-  }
-  return "member";
-}
+  if (!strong) return MEMBER_ROLE_ID;
+  if (!memberContext) return existingRoleId || MEMBER_ROLE_ID;
 
+  const { data: definitions, error } = await supabaseAdmin
+    .from("role_definitions")
+    .select("id, code, label, sort_order, hub_permission_keys, hub_permission_labels")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+
+  const signals = collectHubPermissionSignals(memberContext);
+  const matched = (definitions || []).find((definition: any) => {
+    const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
+    const labels = [
+      definition.code,
+      definition.label,
+      ...(definition.hub_permission_labels || [])
+    ].map(normalizePermissionSignal);
+    return signals.keys.some((value: string) => keys.includes(value))
+      || signals.labels.some((value: string) => labels.includes(value));
+  });
+  return matched?.id || MEMBER_ROLE_ID;
+}
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
 }
@@ -531,7 +539,7 @@ Deno.serve(async (req: Request) => {
 
     let profileId = existingIdentity?.profile_id || null;
     let existingProfile: any = null;
-    // How the existing profile was matched — governs privilege in resolveSyncedRole.
+    // How the existing profile was matched — governs whether Hub permission labels may be trusted.
     let linkSource: "identity" | "member_id" | "email" | "none" = profileId ? "identity" : "none";
 
     const lookupEmail = userinfo.email || memberIdentity.email || null;
@@ -552,7 +560,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Weak link: match by email only. NLC identity can be phone-primary, so the token
-    // email may not be caller-owned; resolveSyncedRole refuses to escalate privilege here.
+    // email may not be caller-owned; role UUID synchronization refuses to escalate privilege here.
     if (!profileId && lookupEmail) {
       const { data: profileByEmail, error: profileLookupError } = await supabaseAdmin
         .from("profiles")
@@ -581,7 +589,7 @@ Deno.serve(async (req: Request) => {
 
     if (!profileId) profileId = crypto.randomUUID();
 
-    const syncedRole = resolveSyncedRole(memberContext?.primaryRole, existingProfile?.role, linkSource);
+    const syncedRoleId = await resolveSyncedRoleId(supabaseAdmin, memberContext, existingProfile?.role_id, linkSource);
 
     // Member Hub is canonical only when the context endpoint was reachable for this session.
     const hubLinked = !!memberContext;
@@ -606,10 +614,10 @@ Deno.serve(async (req: Request) => {
       great_region: projectedOrg.great_region || null,
       pastoral_zone: projectedOrg.pastoral_zone || null,
       small_group: projectedOrg.small_group || null,
-      role: syncedRole === "admin" ? "admin" : null
     };
 
     const lockedFields = buildLockedFields(sourceValues, { hubLinked });
+    if (!lockedFields.includes("role_id")) lockedFields.push("role_id");
 
     const firstValue = (...values: any[]) => {
       for (const value of values) {
@@ -627,7 +635,7 @@ Deno.serve(async (req: Request) => {
       great_region: projectedOrg.great_region,
       pastoral_zone: projectedOrg.pastoral_zone,
       small_group: projectedOrg.small_group,
-      role: syncedRole,
+      role_id: syncedRoleId,
       is_demo: false,
       is_active: true,
       last_seen_at: nowIso,
@@ -664,7 +672,7 @@ Deno.serve(async (req: Request) => {
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(profilePayload, { onConflict: "id" })
-      .select("*")
+      .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
       .single();
 
     if (profileError) throw profileError;
@@ -713,6 +721,19 @@ Deno.serve(async (req: Request) => {
       org_cleanup_error: orgCleanupError
     };
     identityMetadata.org_projection_audit = orgProjectionAudit;
+    const rolePermissionSignals = collectHubPermissionSignals(memberContext);
+    const roleResolutionAudit = {
+      status: linkSource === "email"
+        ? "weak_link_member"
+        : (memberContext ? "member_hub_resolved" : "degraded_preserved"),
+      link_source: linkSource,
+      role_id: profile.role_id,
+      role_code: profile.role_definition?.code || null,
+      permission_keys: rolePermissionSignals.keys,
+      permission_labels: rolePermissionSignals.labels
+    };
+    identityMetadata.role_resolution = roleResolutionAudit;
+    console.info("nlc-session role projection", JSON.stringify(roleResolutionAudit));
     if (memberContextError) {
       identityMetadata.member_context_error = memberContextError;
     }
@@ -745,7 +766,8 @@ Deno.serve(async (req: Request) => {
       locked_fields: lockedFields,
       membership_status: membershipStatus,
       member_context_error: memberContextError,
-      org_projection_debug: orgProjectionAudit
+      org_projection_debug: orgProjectionAudit,
+      role_resolution_debug: roleResolutionAudit
     });
   } catch (err) {
     // Log full detail server-side

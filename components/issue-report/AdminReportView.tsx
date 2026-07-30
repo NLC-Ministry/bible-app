@@ -51,9 +51,10 @@ export const AdminReportView: React.FC = () => {
   const fetchReports = async () => {
     const state = (window as any).state;
     const currentUser = state?.currentUser;
-    const role = currentUser?.role || 'member';
-    const realRole = state?.realRole || role;
-    const isUserAdmin = role === 'admin' || realRole === 'admin';
+    const role = (window as any).getUserRoleCode?.(currentUser)
+      || currentUser?.role_definition?.code
+      || 'member';
+    const isUserAdmin = role === 'admin';
     if (!isUserAdmin) {
       return;
     }
@@ -121,9 +122,10 @@ export const AdminReportView: React.FC = () => {
 
   const state = (window as any).state;
   const currentUser = state?.currentUser;
-  const role = currentUser?.role || 'member';
-  const realRole = state?.realRole || role;
-  const isUserAdmin = role === 'admin' || realRole === 'admin';
+  const role = (window as any).getUserRoleCode?.(currentUser)
+    || currentUser?.role_definition?.code
+    || 'member';
+  const isUserAdmin = role === 'admin';
 
   if (!isUserAdmin) {
     return null;

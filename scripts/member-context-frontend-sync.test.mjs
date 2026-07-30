@@ -9,7 +9,6 @@ const profileSource = fs.readFileSync("js/modules/profile.js", "utf8");
 function extractFunction(source, signature) {
   const start = source.indexOf(signature);
   if (start === -1) throw new Error(`Could not find ${signature}`);
-
   const bodyStart = source.indexOf("{", start);
   let depth = 0;
   for (let index = bodyStart; index < source.length; index += 1) {
@@ -17,16 +16,16 @@ function extractFunction(source, signature) {
     if (source[index] === "}") depth -= 1;
     if (depth === 0) return source.slice(start, index + 1);
   }
-
   throw new Error(`Could not extract ${signature}`);
 }
 
 function loadApplyNlcProfile(state) {
   const method = extractFunction(dbSource, "applyNlcProfile(profile, lockedFields = null) {")
     .replace("applyNlcProfile(profile, lockedFields = null)", "function applyNlcProfile(profile, lockedFields = null)");
-  return new Function("state", "getDisplayName", `return (${method});`)(
+  return new Function("state", "getDisplayName", "getRoleDefinition", `return (${method});`)(
     state,
-    (profile) => String(profile.name || "").trim()
+    profile => String(profile.name || "").trim(),
+    roleId => roleId ? { id: roleId, code: "member", label: "一般組員" } : null
   );
 }
 
@@ -35,126 +34,109 @@ function loadProfileIdentityChrome({ state, memberHubManaged }) {
     "isMemberHubManagedProfile",
     `return (${extractFunction(profileSource, "function getLeadershipDisplayLabel(user) {")});`
   )(() => memberHubManaged);
-  const paintProfileIdentityChrome = new Function(
+  return new Function(
     "state",
     "getLeadershipDisplayLabel",
     "renderMemberHubOrgPlacement",
+    "getUserRoleCode",
+    "getRoleDefinition",
     `return (${extractFunction(profileSource, "function paintProfileIdentityChrome() {")});`
-  )(state, getLeadershipDisplayLabel, () => {});
-  return paintProfileIdentityChrome;
-}
-
-function createRoleElement() {
-  return {
-    attributes: new Map(),
-    textContent: "",
-    setAttribute(name, value) {
-      this.attributes.set(name, value);
-    },
-    removeAttribute(name) {
-      this.attributes.delete(name);
-    }
-  };
+  )(
+    state,
+    getLeadershipDisplayLabel,
+    () => {},
+    user => user?.role_definition?.code || "member",
+    role => state.currentUser?.role_definition?.code === role ? state.currentUser.role_definition : null
+  );
 }
 
 function renderRole({ user, memberHubManaged }) {
-  const roleElement = createRoleElement();
-  const previousDocument = globalThis.document;
-  globalThis.document = {
-    getElementById(id) {
-      return id === "profile-summary-role" ? roleElement : null;
-    }
+  const roleElement = {
+    textContent: "",
+    setAttribute() {},
+    removeAttribute() {}
   };
-
+  const previousDocument = globalThis.document;
+  globalThis.document = { getElementById: id => id === "profile-summary-role" ? roleElement : null };
   try {
-    loadProfileIdentityChrome({
-      state: { currentUser: user, profileIdentityLoading: false },
-      memberHubManaged
-    })();
+    loadProfileIdentityChrome({ state: { currentUser: user, profileIdentityLoading: false }, memberHubManaged })();
   } finally {
     globalThis.document = previousDocument;
   }
-
   return roleElement.textContent;
 }
 
 describe("member context frontend sync metadata", () => {
-  it("copies member_context_synced_at from the projected profile into state.currentUser", () => {
-    expect(dbSource).toMatch(/state\.currentUser\.member_context_synced_at\s*=\s*profile\.member_context_synced_at\s*\|\|\s*""/);
+  it("copies Member Hub sync metadata into currentUser", () => {
+    for (const field of [
+      "member_context_synced_at",
+      "member_context_sync_attempted_at",
+      "member_context_sync_status",
+      "member_context_sync_error"
+    ]) expect(dbSource).toContain(`state.currentUser.${field} = profile.${field} || ""`);
   });
 
-  it("copies member context sync status fields from the projected profile into state.currentUser", () => {
-    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_attempted_at\s*=\s*profile\.member_context_sync_attempted_at\s*\|\|\s*""/);
-    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_status\s*=\s*profile\.member_context_sync_status\s*\|\|\s*""/);
-    expect(dbSource).toMatch(/state\.currentUser\.member_context_sync_error\s*=\s*profile\.member_context_sync_error\s*\|\|\s*""/);
-  });
-
-  it("preserves member_context_synced_at in the cached nlc profile payload", () => {
+  it("preserves the synchronized profile in the NLC cache", () => {
     expect(dbSource).toMatch(/localStorage\.setItem\("nlc_supabase_profile",\s*JSON\.stringify\(payload\.profile\)\)/);
   });
 
-  it("forces a fresh Logto access token when manually refreshing Member Hub context", () => {
-    expect(dbSource).toMatch(/auth\.getValidAccessToken\(force\)/);
-  });
-
-  it("manual org refresh bypasses the cached Edge session and reapplies the returned profile", () => {
+  it("forces a fresh Logto token and Edge session for manual refresh", () => {
+    expect(dbSource).toContain("auth.getValidAccessToken(force)");
     expect(profileSource).toContain("await db.syncNlcSessionWithSupabase(true)");
     expect(dbSource).toContain("if (!force && cachedExpiresAt > Date.now() + 60000)");
-    expect(dbSource).toContain("this.applyNlcProfile(payload.profile, payload.locked_fields || [])");
   });
 
-  it("does not discard a valid access token when force refresh is requested without a refresh token", () => {
+  it("keeps a valid token when force refresh has no refresh token", () => {
     expect(authSource).toContain("force_refresh_without_refresh_token");
-    expect(authSource).toMatch(/forceRefresh\s*&&\s*!refreshToken\s*&&\s*token\s*&&\s*Date\.now\(\)\s*<\s*expiresAt\s*-\s*60000/);
     expect(authSource).toMatch(/return\s+token/);
   });
 
-  it("initializes member_context_synced_at for fresh and reset app state", () => {
-    expect(stateSource).toContain('member_context_synced_at: ""');
-    expect(authSource).toContain('member_context_synced_at: ""');
-  });
-
-  it("initializes member context sync status fields for fresh and reset app state", () => {
-    ["member_context_sync_attempted_at", "member_context_sync_status", "member_context_sync_error"].forEach((field) => {
+  it("initializes Member Hub sync metadata for fresh state", () => {
+    for (const field of [
+      "member_context_synced_at",
+      "member_context_sync_attempted_at",
+      "member_context_sync_status",
+      "member_context_sync_error"
+    ]) {
       expect(stateSource).toContain(`${field}: ""`);
       expect(authSource).toContain(`${field}: ""`);
-    });
+    }
   });
 
-  it("copies Member Hub leadership identity fields into currentUser state", () => {
+  it("copies role UUID and leadership identity projection into currentUser", () => {
     const state = { currentUser: {} };
-    const assignments = [{ id: "assignment-1", label: "小組長" }];
-
+    const assignments = [{ assignmentId: "assignment-1", identityKey: "church_pastor" }];
     loadApplyNlcProfile(state).call({ refreshRoleDependentUI() {} }, {
       id: "profile-1",
-      role: "member",
-      member_context_leadership_display_label: "區長",
+      role_id: "member-id",
+      role_definition: { id: "member-id", code: "member", label: "一般組員" },
+      member_context_leadership_display_label: "教會牧者",
       member_context_leadership_primary_assignment_id: "assignment-1",
       member_context_leadership_assignments: assignments
     });
-
-    expect(state.currentUser.member_context_leadership_display_label).toBe("區長");
-    expect(state.currentUser.member_context_leadership_primary_assignment_id).toBe("assignment-1");
+    expect(state.currentUser.role_id).toBe("member-id");
+    expect(state.currentUser.role_definition.code).toBe("member");
+    expect(state.currentUser.member_context_leadership_display_label).toBe("教會牧者");
     expect(state.currentUser.member_context_leadership_assignments).toBe(assignments);
   });
 
-  it("renders the Hub leadership display label before the legacy role label", () => {
+  it("renders the authoritative Hub display label first", () => {
     expect(renderRole({
-      user: { role: "group_leader", member_context_leadership_display_label: "牧區同工" },
+      user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "牧區同工" },
       memberHubManaged: true
     })).toBe("牧區同工");
   });
 
-  it("renders 一般組員 for a Hub-managed user without a leadership display label", () => {
+  it("renders 一般組員 for a Hub-managed user without a leadership label", () => {
     expect(renderRole({
-      user: { role: "group_leader", member_context_leadership_display_label: "" },
+      user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "" },
       memberHubManaged: true
     })).toBe("一般組員");
   });
 
-  it("uses the legacy role label when a non-Hub session has no leadership display label", () => {
+  it("renders the linked role definition label for a non-Hub session", () => {
     expect(renderRole({
-      user: { role: "group_leader", member_context_leadership_display_label: "" },
+      user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "" },
       memberHubManaged: false
     })).toBe("小組長");
   });

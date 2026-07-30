@@ -10,10 +10,10 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260730_church_pastor_roles';
-import './auth.js';
-import './db.js?v=20260730_church_pastor_roles';
-import './utils.js?v=20260730_church_pastor_roles';
+import './state.js?v=20260730_hub_role_uuid_authority';
+import './auth.js?v=20260730_hub_role_uuid_authority';
+import './db.js?v=20260730_hub_role_uuid_authority';
+import './utils.js?v=20260730_hub_role_uuid_authority';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
@@ -175,7 +175,7 @@ async function renderNotificationsList() {
 
     const sender = item.sender || {};
     const senderName = String(sender.name || "").trim() || "—";
-    const senderRoleRaw = sender.role || "leader";
+    const senderRoleRaw = getUserRoleCode(sender);
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
       ? "隊友"
@@ -319,7 +319,7 @@ function scheduleIssueReportUiLoad(options = {}) {
 
 async function ensurePlanFeatureModulesLoaded() {
   await loadModule('team-registration', './modules/team-registration.js?v=' + buildVersion);
-  if (state.currentUser && state.currentUser.role === 'admin') {
+  if (state.currentUser && getUserRoleCode(state.currentUser) === 'admin') {
     await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
   }
 }
@@ -474,8 +474,8 @@ appRouter.switchTab = async function (tabId, options = {}) {
     } else if (tabId === "admin-view") {
       await loadModule('plan', './modules/plan.js?v=' + buildVersion);
       const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
-      const isSystemAdmin = state.currentUser && state.currentUser.role === 'admin'
-        && (!state.isSupabaseMode || (state.realRole || state.currentUser.role) === 'admin');
+      const isSystemAdmin = getUserRoleCode(state.currentUser) === 'admin';
+
 
       if (isSystemAdmin) {
         await ensureAdminFeatureModulesLoaded();

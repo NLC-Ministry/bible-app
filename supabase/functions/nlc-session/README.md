@@ -13,15 +13,13 @@ This function does not sign Supabase JWTs. Database reads/writes after login are
 
 Org mapping helpers are duplicated from [`scripts/lib/nlc-profile-sync.mjs`](../../../scripts/lib/nlc-profile-sync.mjs) and covered by `scripts/nlc-profile-sync.test.mjs`.
 
-## Role policy (Phase 1)
+## Role policy (Phase 2)
 
-- Hub `primaryRole === "admin"` → app `admin`.
-- Otherwise **preserve** existing `profiles.role` (including SQL-promoted `admin`).
-- Synchronize `memberContext.leadershipIdentity` into display-only profile columns.
-- Do not map leadership identities into `profiles.role`; Bible app privileges remain tied to existing app role logic.
+- Resolve Member Hub `leadershipIdentity.assignments[].identityKey` and labels to `role_definitions.id`, then persist only `profiles.role_id`.
+- If Member Hub context is temporarily unavailable, preserve the existing `role_id`; if an authoritative context has no matching permission label, use the member role UUID.
+- Local role assignment is disabled. Permission labels are administered in the church system; `role_definitions` only stores stable mappings and app capabilities.
 
 ## Required secrets
-
 - `NLC_LOGTO_ISSUER=https://sso.newlife.org.tw/oidc`
 - `NLC_MEMBER_HUB_URL=https://member.newlife.org.tw`
 - `NLC_PLATFORM_API_URL=https://platform.newlife.org.tw/platform/v1`

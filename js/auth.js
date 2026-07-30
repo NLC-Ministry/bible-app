@@ -183,7 +183,8 @@ const auth = {
       great_region: "",
       pastoral_zone: "",
       small_group: "",
-      role: "member",
+      role_id: "10000000-0000-4000-8000-000000000001",
+      role_definition: null,
       chapters_read: 0,
       plan_progress: 0,
       streak: 0,
@@ -304,8 +305,8 @@ const auth = {
       ? getDisplayName(payload.name || payload.nickname || payload.preferred_username || payload.email || "")
       : String(payload.name || payload.nickname || payload.preferred_username || payload.email || "").trim()) || "";
     state.currentUser.name = name;
-    state.currentUser.role = state.currentUser.role || "member";
-    state.realRole = state.currentUser.role;
+    state.currentUser.role_id = state.currentUser.role_id || "10000000-0000-4000-8000-000000000001";
+    state.currentUser.role_definition = state.currentUser.role_definition || getRoleDefinition(state.currentUser.role_id);
   },
 
   async resetLocalLogin() {

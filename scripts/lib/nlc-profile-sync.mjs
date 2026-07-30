@@ -88,31 +88,43 @@ export function mergeOrgSources(platformOrg, placementOrg, contextOrganization) 
   };
 }
 
-const DEFAULT_ALLOWED_ROLES = new Set([
-  "member",
-  "group_leader",
-  "zone_leader",
-  "great_zone_leader",
-  "senior_pastor",
-  "admin"
-]);
+export const MEMBER_ROLE_ID = "10000000-0000-4000-8000-000000000001";
 
-/**
- * Role sync policy (Phase 1): Hub primaryRole admin maps to app admin;
- * otherwise preserve existing Supabase role (including SQL-promoted admin).
- *
- * TODO(Phase 2): Map org-placement leaderships[].roleName → group_leader/zone_leader/great_zone_leader.
- * See https://nlc-b1ffeeba.mintlify.site/api-reference/member-org-placement
- */
-export function resolveSyncedRole(primaryRole, existingRole, allowedRoles = DEFAULT_ALLOWED_ROLES) {
-  if (primaryRole === "admin" && allowedRoles.has("admin")) return "admin";
-  if (existingRole !== null && existingRole !== undefined && String(existingRole).trim() !== "") {
-    const existing = String(existingRole).trim();
-    return existing;
-  }
-  return "member";
+export function normalizePermissionSignal(value) {
+  return String(value || "").trim().toLocaleLowerCase();
 }
 
+export function collectHubPermissionSignals(memberContext) {
+  const leadership = memberContext?.leadershipIdentity || {};
+  const assignments = Array.isArray(leadership.assignments) ? leadership.assignments : [];
+  return {
+    keys: assignments.map(assignment => normalizePermissionSignal(assignment?.identityKey)).filter(Boolean),
+    labels: [
+      memberContext?.primaryRole,
+      leadership.displayLabel,
+      ...assignments.map(assignment => assignment?.displayName)
+    ].map(normalizePermissionSignal).filter(Boolean)
+  };
+}
+
+export function resolveSyncedRoleId(memberContext, definitions, existingRoleId, linkedBy) {
+  const strong = linkedBy === "identity" || linkedBy === "member_id" || linkedBy === "none";
+  if (!strong) return MEMBER_ROLE_ID;
+  if (!memberContext) return existingRoleId || MEMBER_ROLE_ID;
+
+  const signals = collectHubPermissionSignals(memberContext);
+  const matched = (definitions || []).find(definition => {
+    const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
+    const labels = [
+      definition.code,
+      definition.label,
+      ...(definition.hub_permission_labels || [])
+    ].map(normalizePermissionSignal);
+    return signals.keys.some(value => keys.includes(value))
+      || signals.labels.some(value => labels.includes(value));
+  });
+  return matched?.id || MEMBER_ROLE_ID;
+}
 const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
 
 export function buildLockedFields(sourceValues, options = {}) {

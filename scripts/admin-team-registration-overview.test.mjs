@@ -21,7 +21,7 @@ describe("admin team registration overview", () => {
   it("restricts the overview to plan managers across both auth paths", () => {
     expect(migration).toContain("'great_zone_leader', 'zone_leader'");
     expect(migration).not.toContain("actor_profile.role = 'group_leader'");
-    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(profile?.role);');
+    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(getProfileRoleCode(profile));');
     expect(migration).toContain("team_statistics_management_scope_required");
     expect(edge).toContain('PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)');
   });
@@ -64,7 +64,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_church_pastor_roles");
+    expect(html).toContain("js/app.js?v=20260730_hub_role_uuid_authority");
     expect(html).toContain("index.css?v=20260730_unjoined_plan_invites_v2");
     expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });

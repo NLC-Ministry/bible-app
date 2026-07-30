@@ -38,7 +38,7 @@ describe("management plan hub", () => {
       expect(roles).toContain("zone_leader");
       expect(roles).not.toContain("group_leader");
     }
-    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(profile?.role);');
+    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(getProfileRoleCode(profile));');
   });
 
   it("defaults to stage one and lists only current or completed plans with current plans first", () => {

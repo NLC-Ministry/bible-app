@@ -298,7 +298,7 @@ export function updateDashboardView() {
     const progress = state.activePlan.progress || 0;
     const currentRound = state.activePlan.currentRound || 1;
     const started = isPlanStarted(state.activePlan);
-    const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+    const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === 'admin';
     const isPlanAvailable = started || isAdmin;
     let statusText = "";
     if (started) {
@@ -525,7 +525,7 @@ async function renderPastoralZoneRankingList() {
       great_region: state.currentUser.great_region || "",
       pastoral_zone: state.currentUser.pastoral_zone || "",
       small_group: state.currentUser.small_group || "",
-      role: state.currentUser.role || "member",
+      role_code: getUserRoleCode(state.currentUser) || "member",
       chapters_read: state.currentUser.chapters_read,
       plan_progress: state.currentUser.plan_progress,
       last_read: state.currentUser.last_read
@@ -829,7 +829,7 @@ async function renderTodayGroupProgress() {
     const cardTitleEl = cardEl.querySelector('.card-title');
     const searchBoxEl = cardEl.querySelector('.search-box-wrapper');
 
-    if (state.currentUser && state.currentUser.role === 'member') {
+    if (state.currentUser && getUserRoleCode(state.currentUser) === 'member') {
       if (cardTitleEl) {
         cardTitleEl.innerHTML = `
           <span style="color: var(--primary-color);">${typeof renderIcon === "function" ? renderIcon("user", { size: "sm", className: "nlc-icon" }) : ""}</span>
@@ -859,7 +859,7 @@ async function renderTodayGroupProgress() {
     great_region: state.currentUser.great_region || "",
     pastoral_zone: state.currentUser.pastoral_zone || "",
     small_group: state.currentUser.small_group || "",
-    role: state.currentUser.role || "member"
+    role_code: getUserRoleCode(state.currentUser) || "member"
   };
 
   let groupMembers = allUsers.filter(u =>
@@ -1333,7 +1333,7 @@ async function updateAnnouncementsList() {
     ComponentSkeletonLoader.fill("announcement", listContainer, { count: 2 });
   }
 
-  const isAdmin = state.currentUser && (state.currentUser.role === 'admin');
+  const isAdmin = state.currentUser && (getUserRoleCode(state.currentUser) === 'admin');
   const publishBtn = document.getElementById("btn-show-announcement-form");
   if (publishBtn) {
     publishBtn.classList.toggle("hidden", !isAdmin);

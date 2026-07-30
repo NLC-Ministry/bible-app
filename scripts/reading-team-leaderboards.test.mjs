@@ -38,7 +38,7 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("teamCountLabel = `共 ${teams.length} 隊`");
     expect(plan).toContain('updateReadingTeamRankingSummary(section.division, "共 0 隊")');
     expect(plan).toContain('updateReadingTeamRankingSummary(section.division, "讀取失敗・請重新載入")');
-    expect(plan).toContain('state.currentUser.role === "admin"');
+    expect(plan).toContain('hasWholeChurchPlanScope(state.currentUser)');
     expect(plan).toMatch(/getReadingTeamLeaderboards\(state\.activePlan\),\s+8000/);
     expect(html.match(/團隊排行榜載入中…/g)?.length).toBe(2);
     expect(plan).toContain("myTeamRow.getBoundingClientRect()");

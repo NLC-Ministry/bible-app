@@ -1303,11 +1303,14 @@
                 <!-- Hidden master select for backward-compatibility -->
                 <select id="members-zone-selector" class="form-control hidden" style="display: none;"></select>
               </div>
-              <section class="admin-unjoined-plan-card" aria-labelledby="admin-unjoined-plan-title">
-                <div class="admin-unjoined-plan-card__header">
+              <section id="admin-unjoined-plan-section" class="admin-unjoined-plan-card" aria-labelledby="admin-unjoined-plan-title">
+                <div class="admin-unjoined-plan-card__header" style="cursor: pointer; user-select: none;">
                   <div>
-                    <h2 id="admin-unjoined-plan-title" class="admin-management-section__title">尚未加入計畫</h2>
-                    <p>顯示目前管理範圍內，尚未加入所選計畫的人員。</p>
+                    <h2 id="admin-unjoined-plan-title" class="admin-management-section__title" style="display: flex; align-items: center; gap: 0.4rem;">
+                      尚未加入計畫
+                      <span id="admin-unjoined-toggle-arrow" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; transform: rotate(0deg); display: inline-block;">▼</span>
+                    </h2>
+                    <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.5;">顯示目前管理範圍內，尚未加入所選計畫的人員。</p>
                   </div>
                   <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 人</span>
                 </div>
@@ -2056,7 +2059,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260730_church_pastor_roles"></script>
+  <script type="module" src="js/app.js?v=20260730_hub_role_uuid_authority"></script>
 </body>
 
 </html>

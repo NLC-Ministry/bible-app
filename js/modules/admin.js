@@ -181,7 +181,7 @@ export async function renderAdminUserManagement() {
     const sortedUsers = [...users].sort((a, b) => {
       if (a.name === state.currentUser.name) return -1;
       if (b.name === state.currentUser.name) return 1;
-      return (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99);
+      return (roleOrder[getUserRoleCode(a)] || 99) - (roleOrder[getUserRoleCode(b)] || 99);
     });
 
     const filteredUsers = sortedUsers.filter(u => {
@@ -202,7 +202,7 @@ export async function renderAdminUserManagement() {
     const roleLabels = Object.fromEntries(roleDefinitions.map(role => [role.code, role.label]));
 
     filteredUsers.forEach(user => {
-      const roleLabel = user.role_definition?.label || roleLabels[user.role] || user.role;
+      const roleLabel = user.role_definition?.label || roleLabels[getUserRoleCode(user)] || getUserRoleCode(user);
       
       const item = document.createElement("div");
       item.className = "member-list-item";
@@ -225,7 +225,7 @@ export async function renderAdminUserManagement() {
 
       item.onclick = (e) => {
         e.preventDefault();
-        openMemberEditBottomSheet(user);
+        if (typeof showToast === "function") showToast("權限由教會系統統一管理，請至教會系統調整。");
       };
 
       listContainer.appendChild(item);
@@ -237,306 +237,6 @@ export async function renderAdminUserManagement() {
   }
 }
 
-export function openMemberEditBottomSheet(user) {
-  const overlay = document.getElementById("global-bottom-sheet");
-  const titleEl = document.getElementById("bottom-sheet-title");
-  const listEl = document.getElementById("bottom-sheet-list");
-  if (!overlay || !listEl) return;
-
-  if (titleEl) titleEl.textContent = `變更 ${user.name} 的權限階級`;
-  listEl.innerHTML = "";
-
-  const roleOptions = (state.roleDefinitions || [])
-    .filter(role => role.is_assignable)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(role => ({ id: role.id, value: role.code, label: role.label }));
-
-
-
-  const isLeader = ["great_zone_leader", "zone_leader"].includes(user.role);
-  if (isLeader) {
-    const scopeBtn = document.createElement("button");
-    scopeBtn.className = "bottom-sheet-item";
-    scopeBtn.style.background = "var(--color-brand-subtle, rgba(4,169,210,0.12))";
-    scopeBtn.style.borderColor = "var(--color-brand-border, rgba(4,169,210,0.24))";
-    scopeBtn.style.color = "#a5b4fc";
-    scopeBtn.style.marginBottom = "0.8rem";
-    scopeBtn.type = "button";
-
-    let scopeDesc = "";
-    if (user.role === "great_zone_leader") scopeDesc = user.managed_regions || user.great_region || "未設定";
-    else if (user.role === "zone_leader") scopeDesc = user.managed_zones || user.pastoral_zone || "未設定";
-
-    scopeBtn.innerHTML = iconLabel("edit", `修改管理範圍 (${scopeDesc})`);
-    scopeBtn.onclick = async () => {
-            console.log(`管理 [Debug] 點擊修改管理範圍按鈕: ${user.name}`);
-      closeAdminFilterBottomSheet();
-      const resp = await showResponsibilityModal(user.role, user);
-      if (!resp) return;
-
-      loader.show();
-      const success = await db.updateUserRole(user.id, user.role, user.name, resp);
-      loader.hide();
-
-      if (success) {
-        user.managed_regions = resp.managed_regions;
-        user.managed_zones = resp.managed_zones;
-        user.managed_groups = resp.managed_groups;
-
-        if (user.name === state.currentUser.name) {
-          state.currentUser.managed_regions = resp.managed_regions;
-          state.currentUser.managed_zones = resp.managed_zones;
-          state.currentUser.managed_groups = resp.managed_groups;
-          if (typeof renderProfileView === "function") renderProfileView();
-        }
-                alert("管理範圍修改成功");
-        renderAdminUserManagement();
-      } else {
-                alert("伺服器連線失敗，請稍後再試或聯絡管理員");
-      }
-    };
-    listEl.appendChild(scopeBtn);
-  }
-
-  const headerText = document.createElement("div");
-  headerText.style.fontSize = "0.75rem";
-  headerText.style.color = "var(--text-secondary)";
-  headerText.style.margin = "0.2rem 0 0.5rem 0.2rem";
-  headerText.style.fontWeight = "bold";
-    headerText.textContent = "請選擇變更的權限階級";
-  listEl.appendChild(headerText);
-
-  roleOptions.forEach(opt => {
-    const btn = document.createElement("button");
-    const isSelected = user.role === opt.value;
-    btn.className = `bottom-sheet-item ${isSelected ? "selected" : ""}`;
-    btn.type = "button";
-    btn.textContent = opt.label;
-    btn.onclick = async () => {
-            console.log(`管理 [Debug] 點擊變更權限階級: ${user.name} -> ${opt.label}`);
-      closeAdminFilterBottomSheet();
-      if (isSelected) return;
-
-      let additionalFields = {};
-      if (["great_zone_leader", "zone_leader"].includes(opt.value)) {
-        const resp = await showResponsibilityModal(opt.value, user);
-        if (!resp) return;
-        additionalFields = resp;
-      }
-
-      loader.show();
-      const success = await db.updateUserRole(user.id, opt.value, user.name, additionalFields, opt.id);
-      loader.hide();
-
-      if (success) {
-        user.role = opt.value;
-        if (additionalFields.managed_regions !== undefined) user.managed_regions = additionalFields.managed_regions;
-        if (additionalFields.managed_zones !== undefined) user.managed_zones = additionalFields.managed_zones;
-        if (additionalFields.managed_groups !== undefined) user.managed_groups = additionalFields.managed_groups;
-
-        if (user.name === state.currentUser.name) {
-          state.currentUser.role = opt.value;
-          state.realRole = opt.value;
-          if (additionalFields.managed_regions !== undefined) state.currentUser.managed_regions = additionalFields.managed_regions;
-          if (additionalFields.managed_zones !== undefined) state.currentUser.managed_zones = additionalFields.managed_zones;
-          if (additionalFields.managed_groups !== undefined) state.currentUser.managed_groups = additionalFields.managed_groups;
-          if (typeof renderProfileView === "function") renderProfileView();
-        }
-                alert("權限變更成功");
-        renderAdminUserManagement();
-      } else {
-                alert("權限變更失敗，請重新整理頁面");
-      }
-    };
-    listEl.appendChild(btn);
-  });
-
-  overlay.classList.add("active");
-}
-
-
-
-
-export function showResponsibilityModal(role, user) {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.style = `
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(8px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 99999;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    `;
-    
-    const container = document.createElement("div");
-    container.className = "glass-card";
-    container.style = `
-      width: 90%;
-      max-width: 460px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-card);
-      border-radius: 16px;
-      padding: 1.8rem;
-      box-shadow: var(--shadow-lg);
-      transform: translateY(20px);
-      transition: transform 0.3s ease;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    `;
-    
-    let roleText = "";
-    if (role === "great_zone_leader") roleText = "大區長";
-    else if (role === "zone_leader") roleText = "牧區長";
-    
-    let htmlContent = `
-      <div style="margin-bottom: 0.2rem;">
-        <h3 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 500; color: var(--text-primary);">
-          變更 ${roleText} 的管轄範圍
-        </h3>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0; line-height: 1.4;">
-          請在下方列表勾選此成員負責管轄的對象，完成後點擊下方按鈕以儲存。
-        </p>
-      </div>
-      
-      <div style="display: flex; flex-direction: column; gap: 0.8rem; max-height: 380px; overflow-y: auto; padding-right: 0.2rem;">
-    `;
-    
-    if (role === "great_zone_leader") {
-      htmlContent += `
-        <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">勾選管轄大區 (可多選)</label>
-          <div id="modal-regions-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
-          </div>
-        </div>
-      `;
-    } else if (role === "zone_leader") {
-      htmlContent += `
-        <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.3rem;">勾選管轄牧區 (可多選)</label>
-          <div id="modal-zones-container" style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 6px; padding: 0.6rem; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
-          </div>
-        </div>
-      `;
-    }
-    
-    htmlContent += `
-      </div>
-      <div style="display: flex; justify-content: flex-end; gap: 0.6rem; border-top: 1px solid var(--border-card); padding-top: 0.8rem; margin-top: 0.2rem;">
-        <button id="modal-btn-cancel" class="pill-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem;">取消</button>
-        <button id="modal-btn-confirm" class="primary-btn" style="padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 500;">確認變更</button>
-      </div>
-    `;
-    
-    container.innerHTML = htmlContent;
-    overlay.appendChild(container);
-    document.body.appendChild(overlay);
-    
-    setTimeout(() => {
-      overlay.style.opacity = "1";
-      container.style.transform = "translateY(0)";
-    }, 10);
-    
-    const currentRegions = (user.managed_regions || user.great_region || "").split(",").map(s => s.trim()).filter(Boolean);
-    const currentZones = (user.managed_zones || user.pastoral_zone || "").split(",").map(s => s.trim()).filter(Boolean);
-    
-    const regionContainer = overlay.querySelector("#modal-regions-container");
-    const zoneContainer = overlay.querySelector("#modal-zones-container");
-    
-    if (role === "great_zone_leader" && regionContainer) {
-      let regions = [];
-      if (state.isSupabaseMode && state.orgStructure.rawRegions) {
-        regions = state.orgStructure.rawRegions;
-      } else if (state.orgStructure.regions) {
-        regions = state.orgStructure.regions.map(rName => ({ id: rName, name: rName }));
-      }
-      let html = "";
-      regions.forEach(r => {
-        const isChecked = currentRegions.includes(r.name) ? "checked" : "";
-        html += `
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
-            <input type="checkbox" name="region-checkbox" value="${r.id}" data-name="${r.name}" ${isChecked} style="cursor: pointer;">
-            <span>${r.name}</span>
-          </label>
-        `;
-      });
-            regionContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
-    }
-    
-    if (role === "zone_leader" && zoneContainer) {
-      let zones = [];
-      if (state.isSupabaseMode && state.orgStructure.rawZones) {
-        state.orgStructure.rawZones.forEach(z => {
-          const region = state.orgStructure.rawRegions?.find(r => r.id === z.great_region_id);
-          const regionSuffix = region ? ` (${region.name})` : "";
-          zones.push({ id: z.id, name: z.name, label: `${z.name}${regionSuffix}` });
-        });
-      } else if (state.orgStructure.zones) {
-        for (const [rName, zList] of Object.entries(state.orgStructure.zones)) {
-          zList.forEach(zName => {
-            zones.push({ id: zName, name: zName, label: `${zName} (${rName})` });
-          });
-        }
-      }
-      let html = "";
-      zones.forEach(z => {
-        const isChecked = currentZones.includes(z.name) ? "checked" : "";
-        html += `
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-primary); cursor: pointer; padding: 0.15rem 0;">
-            <input type="checkbox" name="zone-checkbox" value="${z.id}" data-name="${z.name}" ${isChecked} style="cursor: pointer;">
-            <span>${z.label}</span>
-          </label>
-        `;
-      });
-            zoneContainer.innerHTML = html || `<span style="font-size: 0.8rem; color: var(--text-muted);">暫無資料</span>`;
-    }
-    
-    
-    const closeModal = (result) => {
-      overlay.style.opacity = "0";
-      container.style.transform = "translateY(20px)";
-      setTimeout(() => {
-        overlay.remove();
-        resolve(result);
-      }, 300);
-    };
-    
-    overlay.querySelector("#modal-btn-cancel").onclick = () => closeModal(null);
-    
-    overlay.querySelector("#modal-btn-confirm").onclick = () => {
-      if (role === "great_zone_leader") {
-        const checkedRegions = Array.from(regionContainer.querySelectorAll("input[name='region-checkbox']:checked")).map(cb => cb.dataset.name);
-        if (checkedRegions.length === 0) {
-                    alert("請選擇至少一個管轄大區！");
-          return;
-        }
-        closeModal({
-          managed_regions: checkedRegions.join(","),
-          managed_zones: "",
-          managed_groups: ""
-        });
-      } else if (role === "zone_leader") {
-        const checkedZones = Array.from(zoneContainer.querySelectorAll("input[name='zone-checkbox']:checked")).map(cb => cb.dataset.name);
-        if (checkedZones.length === 0) {
-                    alert("請選擇至少一個管轄牧區！");
-          return;
-        }
-        closeModal({
-          managed_regions: "",
-          managed_zones: checkedZones.join(","),
-          managed_groups: ""
-        });
-      }
-    };
-  });
-}
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
   const status = document.getElementById("admin-pastoral-wall-status");
@@ -553,7 +253,7 @@ export async function renderAdminFeatureSettings() {
   const feedback = document.getElementById("admin-pastoral-wall-feedback");
   if (!card || !toggle || !feedback) return;
 
-  const isAdmin = state.currentUser && state.currentUser.role === "admin";
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   card.classList.toggle("hidden", !isAdmin);
   if (!isAdmin) return;
 
@@ -614,15 +314,40 @@ export function init() {
 
   initAdminFiltersUI();
   initAdminTeamRegistration();
+
+  // Bind unjoined plan members section collapse toggle
+  const unjoinedHeader = document.querySelector(".admin-unjoined-plan-card__header");
+  if (unjoinedHeader && !unjoinedHeader.dataset.listenerBound) {
+    unjoinedHeader.dataset.listenerBound = "true";
+    unjoinedHeader.addEventListener("click", () => {
+      const section = document.getElementById("admin-unjoined-plan-section") || unjoinedHeader.closest(".admin-unjoined-plan-card");
+      const arrow = document.getElementById("admin-unjoined-toggle-arrow");
+      const membersList = document.getElementById("admin-unjoined-plan-members");
+      const desc = unjoinedHeader?.querySelector(".admin-unjoined-plan-desc");
+
+      if (section && membersList) {
+        const isCollapsed = section.classList.toggle("collapsed");
+        if (isCollapsed) {
+          membersList.style.display = "none";
+          if (desc) desc.style.display = "none";
+          if (arrow) arrow.style.transform = "rotate(-90deg)";
+        } else {
+          membersList.style.display = "";
+          if (desc) desc.style.display = "";
+          if (arrow) arrow.style.transform = "rotate(0deg)";
+        }
+      }
+    });
+  }
 }
 
 const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {
-  const role = (state.currentUser && state.currentUser.role) || 'member';
-  const realRole = state.realRole || role;
-  return role === 'admin' && (!state.isSupabaseMode || realRole === 'admin');
+  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+
+  return role === 'admin';
 }
 
 function setAdminPrimaryPanel(panelName) {
@@ -721,7 +446,7 @@ async function selectManagementPlan(planKey) {
 }
 
 export async function renderAdminPlanManagement() {
-  const role = (state.currentUser && state.currentUser.role) || 'member';
+  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
   if (!MANAGEMENT_ROLES.includes(role)) return;
   setAdminPrimaryPanel('plans');
   mountPlanManagementSections();
@@ -773,7 +498,7 @@ let cachedUnjoinedPlanMembers = [];
 let unjoinedPlanRequestId = 0;
 
 function getSelectedManagementOrgFilter() {
-  const role = (state.currentUser && state.currentUser.role) || "member";
+  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
   const region = document.getElementById("members-admin-region-select")?.value || "";
   const zone = document.getElementById("members-admin-zone-select")?.value || "";
   const group = document.getElementById("members-admin-group-select")?.value || "";
@@ -813,7 +538,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
 
   const currentUser = state.currentUser || {};
   const plan = state.activePlan;
-  if (!MANAGEMENT_ROLES.includes(currentUser.role) || !plan) {
+  if (!MANAGEMENT_ROLES.includes(getUserRoleCode(currentUser)) || !plan) {
     count.textContent = "0 人";
     container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
     return;
@@ -821,7 +546,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
 
   const cacheKey = [
     currentUser.id || currentUser.name || "anonymous",
-    currentUser.role || "member",
+    getUserRoleCode(currentUser) || "member",
     currentUser.managed_regions || currentUser.great_region || "",
     currentUser.managed_zones || currentUser.pastoral_zone || "",
     plan.globalPlanId || plan.id || "",
@@ -914,7 +639,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
   if (!contentEl) return;
 
   const currentUser = state.currentUser || {};
-  const role = currentUser.role;
+  const role = getUserRoleCode(currentUser);
   if (!MANAGEMENT_ROLES.includes(role)) return;
 
   const scopeCacheKey = [

@@ -24,7 +24,7 @@ describe("pastoral sharing wall feature control", () => {
     expect(migration).toContain("my_role FROM public.get_my_profile()) = 'admin'");
     expect(edge).toContain('"app_feature_settings"');
     expect(edge).toContain("ADMIN_WRITE_TABLES");
-    expect(db).toContain('state.currentUser.role !== "admin"');
+    expect(db).toContain('getUserRoleCode(state.currentUser) !== "admin"');
   });
 
   it("prevents archived wall reads and writes through both auth paths", () => {

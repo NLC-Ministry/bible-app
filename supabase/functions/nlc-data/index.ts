@@ -105,7 +105,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
     if (user && !authErr) {
       const { data: profile, error: profileError } = await supabaseAdmin
         .from("profiles")
-        .select("*")
+        .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
         .eq("id", user.id)
         .single();
       if (!profileError && profile) {
@@ -150,7 +150,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
-    .select("*")
+    .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
     .eq("id", identity.profile_id)
     .single();
   if (profileError) throw profileError;
@@ -167,16 +167,20 @@ async function isFeatureEnabled(supabaseAdmin: any, key: string) {
   if (error) return false;
   return data?.enabled === true;
 }
+function getProfileRoleCode(profile: any) {
+  return profile?.role_definition?.code || "member";
+}
+
 function isAdmin(profile: any) {
-  return profile?.role === "admin";
+  return getProfileRoleCode(profile) === "admin";
 }
 
 function hasWholeChurchPlanScope(profile: any) {
-  return ["admin", "senior_pastor"].includes(profile?.role);
+  return ["admin", "senior_pastor"].includes(getProfileRoleCode(profile));
 }
 
 function canManagePlans(profile: any) {
-  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(profile?.role);
+  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(getProfileRoleCode(profile));
 }
 
 function normalizeRows(payload: any) {
@@ -240,8 +244,8 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   if (error) throw error;
   return (profiles || []).filter((candidate: any) => {
     if (candidate.id === profile.id) return true;
-    if (profile.role === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.managed_regions || profile.great_region);
-    if (profile.role === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.managed_zones || profile.pastoral_zone);
+    if (getProfileRoleCode(profile) === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.managed_regions || profile.great_region);
+    if (getProfileRoleCode(profile) === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.managed_zones || profile.pastoral_zone);
     return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone)
       && valuesOverlap(candidate.small_group, profile.small_group);
   }).map((candidate: any) => candidate.id);
@@ -343,7 +347,7 @@ Deno.serve(async (req: Request) => {
       const msg = String(p.message || "").trim();
       if (!msg || msg.length > 300) return jsonResponse({ error: "invalid_message" }, 400);
       const pastoralRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"];
-      if (!pastoralRoles.includes(profile.role) || profile.id === p.recipient_id) {
+      if (!pastoralRoles.includes(getProfileRoleCode(profile)) || profile.id === p.recipient_id) {
         return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
       }
       const { data: recipient, error: recipientError } = await supabaseAdmin
@@ -355,9 +359,9 @@ Deno.serve(async (req: Request) => {
       if (!recipient || recipient.is_active === false) return jsonResponse({ error: "recipient_not_found" }, 404);
 
       const withinScope = hasWholeChurchPlanScope(profile)
-        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.managed_regions || profile.great_region))
-        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.managed_zones || profile.pastoral_zone))
-        || (profile.role === "group_leader"
+        || (getProfileRoleCode(profile) === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.managed_regions || profile.great_region))
+        || (getProfileRoleCode(profile) === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.managed_zones || profile.pastoral_zone))
+        || (getProfileRoleCode(profile) === "group_leader"
           && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone)
           && valuesOverlap(recipient.small_group, profile.small_group));
       if (!withinScope) return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
@@ -386,7 +390,7 @@ Deno.serve(async (req: Request) => {
          .from("profiles")
          .update(updatePayload)
          .eq("id", profile.id)
-         .select("*")
+         .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
          .single();
 
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
@@ -411,8 +415,8 @@ Deno.serve(async (req: Request) => {
     // to the caller in forceUserPayload so a member cannot spoof another user.
     if (["insert", "update", "upsert"].includes(action)
       && table === "profiles"
-      && body.payload?.role === "group_leader") {
-      return jsonResponse({ error: "group_leader_assignment_disabled" }, 403);
+      && Object.prototype.hasOwnProperty.call(body.payload || {}, "role_id")) {
+      return jsonResponse({ error: "role_assignment_managed_by_member_hub" }, 403);
     }
     const canReportInsert = action === "insert" && table === "issue_reports";
     const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
@@ -458,7 +462,7 @@ Deno.serve(async (req: Request) => {
     if (table === "profiles" && ["insert", "update", "upsert"].includes(action)) {
       const { data: verifiedProfile, error: verifyError } = await supabaseAdmin
         .from("profiles")
-        .select("*")
+        .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
         .eq("id", profile.id)
         .maybeSingle();
       if (verifyError) return jsonResponse({ error: verifyError.message, details: verifyError }, 400);

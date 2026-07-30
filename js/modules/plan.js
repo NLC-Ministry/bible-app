@@ -461,10 +461,10 @@ window.addEventListener("planDataChanged", (e) => {
 });
 
 function canUseAdvancedGroupStats() {
-  const allowedRoles = ["admin", "great_zone_leader", "zone_leader"];
-  const currentRole = (state.currentUser && state.currentUser.role) || "member";
-  const realRole = state.realRole || "member";
-  return allowedRoles.includes(currentRole) || allowedRoles.includes(realRole);
+  const allowedRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader"];
+  const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
+
+  return allowedRoles.includes(currentRole);
 }
 
 function getDefaultGroupStatsScope() {
@@ -1061,11 +1061,11 @@ async function renderPlanView() {
     }
 
     // Admin simulation check
-    const isRealAdmin = !state.isSupabaseMode || (state.realRole === "admin");
-    const isSimulatedAdmin = state.currentUser && (state.currentUser.role === "admin");
+
+
     const adminCard = document.getElementById("admin-plan-card");
     if (adminCard) {
-      if (isRealAdmin && isSimulatedAdmin) {
+      if (getUserRoleCode(state.currentUser) === "admin") {
         adminCard.classList.remove("hidden");
       } else {
         adminCard.classList.add("hidden");
@@ -2713,7 +2713,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     return;
   }
 
-  const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === 'admin';
   const started = isPlanStarted(state.activePlan) || isAdmin;
 
   // Render status pill for day
@@ -3800,7 +3800,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
 
   const userKey = state.currentUser ? [
     state.currentUser.id || state.currentUser.name,
-    state.currentUser.role,
+    getUserRoleCode(state.currentUser),
     state.currentUser.managed_regions || state.currentUser.great_region || "",
     state.currentUser.managed_zones || state.currentUser.pastoral_zone || "",
     state.currentUser.managed_groups || state.currentUser.small_group || ""
@@ -3815,7 +3815,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   zoneSelect.disabled = false;
   groupSelect.disabled = false;
 
-  const userRole = (state.currentUser && state.currentUser.role) || "member";
+  const userRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
   const isAdmin = hasWholeChurchPlanScope(userRole);
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
@@ -4134,7 +4134,7 @@ function getActiveOrgFilter() {
   const groupSelect = document.getElementById("members-admin-group-select");
   if (!regionSelect || !zoneSelect || !groupSelect) return "all";
 
-  const role = (state.currentUser && state.currentUser.role) || "member";
+  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
   const selectedGroup = groupSelect.value;
   const selectedZone = zoneSelect.value;
   const selectedRegion = regionSelect.value;
@@ -4482,7 +4482,7 @@ async function renderGroupMiniStats(overrideFilter) {
     }
   } else {
     // If no selector filter is loaded yet, guess label from user role
-    const userRole = state.currentUser.role || "member";
+    const userRole = getUserRoleCode(state.currentUser) || "member";
     if (hasWholeChurchPlanScope(userRole)) {
       scopeLabel = "全教會";
     } else if (userRole === "great_zone_leader") {
@@ -4653,7 +4653,7 @@ function renderGroupGrowthTrend(overrideFilter) {
       else if (selectedFilter.startsWith('zone:')) scopeLabel = selectedFilter.replace('zone:', '');
       else if (selectedFilter.startsWith('group:')) scopeLabel = selectedFilter.replace('group:', '');
     } else {
-      const userRole = state.currentUser.role || 'member';
+      const userRole = getUserRoleCode(state.currentUser) || 'member';
       if (hasWholeChurchPlanScope(userRole)) scopeLabel = '全教會';
       else if (userRole === 'great_zone_leader') scopeLabel = state.currentUser.great_region || '大區';
       else if (userRole === 'zone_leader') scopeLabel = state.currentUser.pastoral_zone || '牧區';
@@ -4829,7 +4829,7 @@ function renderGroupTeamHeatmap(overrideFilter) {
       scopeLabel = selectedFilter.replace("group:", "");
     }
   } else {
-    const userRole = state.currentUser.role || "member";
+    const userRole = getUserRoleCode(state.currentUser) || "member";
     if (hasWholeChurchPlanScope(userRole)) {
       scopeLabel = "全教會";
     } else if (userRole === "great_zone_leader") {
@@ -5557,7 +5557,7 @@ async function renderPlanRankingView() {
 async function renderGroupParticipantsRankingTable() {
   if (!state.activePlan) return;
 
-  const rankingTitle = document.getElementById("ranking-title");
+  const rankingTitle = document.getElementById("ranking-title") || document.getElementById("members-ranking-title");
   const currentPlanIdForStats = state.activePlan.id;
   const currentPresetKeyForStats = state.activePlan.presetKey;
   const uniquePlanLogs = (logs) => {
@@ -5638,7 +5638,7 @@ async function renderGroupParticipantsRankingTable() {
   const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
 
   const userZone = state.currentUser.pastoral_zone || "";
-  const userRole = state.currentUser.role || "member";
+  const userRole = getUserRoleCode(state.currentUser) || "member";
   const isAdmin = hasWholeChurchPlanScope(userRole);
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
@@ -5791,6 +5791,13 @@ async function renderGroupParticipantsRankingTable() {
       }
     }
 
+    if (rankingTitle) {
+      const adminParticipantsTitle = document.getElementById("admin-participants-title");
+      if (adminParticipantsTitle) {
+        adminParticipantsTitle.textContent = rankingTitle.textContent;
+      }
+    }
+
     window._grpScopedUsers = groupMembers;
 
     groupMembers = groupMembers.map(u => {
@@ -5917,7 +5924,7 @@ window.displayParticipantsList = function (limit = 100) {
   const visibleItems = items.slice(0, limit);
 
   // Determine if current user is a leader who can send care reminders
-  const _careRole = (state.currentUser && state.currentUser.role) || "member";
+  const _careRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
   const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "senior_pastor", "admin"].includes(_careRole);
 
   // 對齊 header 欄位動態調整（含名次欄）
@@ -6610,7 +6617,7 @@ async function updateStatsView(filterPresetKey = null) {
     great_region: state.currentUser.great_region || "東區",
     pastoral_zone: state.currentUser.pastoral_zone || "大安1",
     small_group: state.currentUser.small_group || "馬鈴",
-    role: state.currentUser.role || "member",
+    role_code: getUserRoleCode(state.currentUser) || "member",
     chapters_read: 0,
     plan_progress: 0,
     last_read: null
@@ -6618,7 +6625,7 @@ async function updateStatsView(filterPresetKey = null) {
   window.mockUserCache = mockUser;
   rawAllUsers = [...unfilteredAllUsers];
 
-  const role = mockUser.role;
+  const role = getUserRoleCode(mockUser);
 
   // Dynamically calculate pastoralStats in frontend from the filtered users list!
   const zoneMap = {};
@@ -7067,7 +7074,7 @@ function renderHeatmap(teamUsers = []) {
   // Title update based on scope
   const titleEl = document.getElementById("heatmap-card-title");
   if (titleEl) {
-    const role = state.currentUser.role || "member";
+    const role = getUserRoleCode(state.currentUser) || "member";
     if (hasWholeChurchPlanScope(role)) {
       const zoneSelectGroup = document.getElementById("stats-zone-selector");
       const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
@@ -7104,7 +7111,7 @@ function renderHeatmap(teamUsers = []) {
 
 function renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser) {
   let teamUsers = [];
-  const role = mockUser.role || 'member';
+  const role = getUserRoleCode(mockUser) || 'member';
 
   if (hasWholeChurchPlanScope(role)) {
     const zoneSelectGroup = document.getElementById("stats-zone-selector");

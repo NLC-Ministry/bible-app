@@ -1,40 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { resolveSyncedRole, PRIVILEGED_ROLES } from "./nlc-account-link.mjs";
+import { MEMBER_ROLE_ID, resolveSyncedRoleId } from "./nlc-account-link.mjs";
 
-// Security contract: privilege must never be granted or inherited via a WEAK
-// (email-only) account link, because NLC identity can be phone-primary and the
-// email in a token is not guaranteed to be verified/owned by the caller.
-describe("resolveSyncedRole — privilege gating by link strength", () => {
-  it("grants admin from Hub primaryRole ONLY on a strong (identity/member_id) link", () => {
-    expect(resolveSyncedRole("admin", null, "identity")).toBe("admin");
-    expect(resolveSyncedRole("admin", null, "member_id")).toBe("admin");
+const ADMIN_ROLE_ID = "10000000-0000-4000-8000-000000000006";
+const PASTOR_ROLE_ID = "10000000-0000-4000-8000-000000000005";
+const definitions = [
+  { id: ADMIN_ROLE_ID, code: "admin", label: "系統管理員", hub_permission_keys: ["system_admin"], hub_permission_labels: ["管理員"] },
+  { id: PASTOR_ROLE_ID, code: "senior_pastor", label: "教會牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
+];
+
+describe("resolveSyncedRoleId — Member Hub authority and account-link strength", () => {
+  it("maps a stable Hub identity key to its role UUID on a strong link", () => {
+    const context = { leadershipIdentity: { assignments: [{ identityKey: "system_admin" }] } };
+    expect(resolveSyncedRoleId(context, definitions, null, "identity")).toBe(ADMIN_ROLE_ID);
   });
 
-  it("does NOT grant admin from primaryRole on a weak (email) link", () => {
-    expect(resolveSyncedRole("admin", null, "email")).toBe("member");
+  it("uses labels only as a fallback and supports renamed local labels", () => {
+    const context = { leadershipIdentity: { displayLabel: "主任牧師", assignments: [] } };
+    expect(resolveSyncedRoleId(context, definitions, null, "member_id")).toBe(PASTOR_ROLE_ID);
   });
 
-  it("does NOT inherit an existing privileged role on a weak (email) link (takeover guard)", () => {
-    for (const role of PRIVILEGED_ROLES) {
-      expect(resolveSyncedRole(null, role, "email")).toBe("member");
-    }
+  it("never grants or inherits privilege through an email-only link", () => {
+    const context = { primaryRole: "admin", leadershipIdentity: { assignments: [] } };
+    expect(resolveSyncedRoleId(context, definitions, ADMIN_ROLE_ID, "email")).toBe(MEMBER_ROLE_ID);
   });
 
-  it("preserves admin and church pastor on a strong link", () => {
-    expect(resolveSyncedRole(null, "admin", "identity")).toBe("admin");
-    expect(resolveSyncedRole(null, "senior_pastor", "member_id")).toBe("senior_pastor");
+  it("preserves the existing UUID only while Member Hub context is degraded", () => {
+    expect(resolveSyncedRoleId(null, definitions, PASTOR_ROLE_ID, "identity")).toBe(PASTOR_ROLE_ID);
   });
 
-  it("does not inherit the church-pastor role through a weak link", () => {
-    expect(resolveSyncedRole(null, "senior_pastor", "email")).toBe("member");
-  });
-
-  it("preserves a non-privileged existing role even on a weak link (account continuity)", () => {
-    expect(resolveSyncedRole(null, "member", "email")).toBe("member");
-  });
-
-  it("defaults to member when there is no existing role and no admin grant", () => {
-    expect(resolveSyncedRole(null, null, "identity")).toBe("member");
-    expect(resolveSyncedRole(null, "", "none")).toBe("member");
+  it("falls back to member for an authoritative context with no mapped label", () => {
+    const context = { leadershipIdentity: { assignments: [{ identityKey: "unknown" }] } };
+    expect(resolveSyncedRoleId(context, definitions, PASTOR_ROLE_ID, "identity")).toBe(MEMBER_ROLE_ID);
   });
 });

@@ -300,7 +300,7 @@ function refreshUserAvatars() {
  */
 function getIsAdmin(user) {
   if (!user) return false;
-  const role = user.role || "member";
+  const role = getUserRoleCode(user) || "member";
   return role === "admin";
 }
 
@@ -318,7 +318,7 @@ function getIsAdmin(user) {
  */
 function getScopedUsers(allUsers, currentUser) {
   if (!currentUser) return allUsers;
-  const role = currentUser.role || "member";
+  const role = getUserRoleCode(currentUser) || "member";
 
   if (hasWholeChurchPlanScope(role)) {
     return allUsers;
@@ -1895,9 +1895,9 @@ function isPlanHidden(plan) {
 }
 
 function canManageHiddenPlans() {
-  const role = (state.currentUser && state.currentUser.role) || 'member';
-  const realRole = state.realRole || role;
-  return role === 'admin' || realRole === 'admin';
+  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+
+  return role === 'admin';
 }
 
 function getVisiblePlans(plans) {
@@ -1911,12 +1911,12 @@ function getVisiblePlans(plans) {
 // early callers don't have to wait for profile.js to lazy-load.
 function updateAdminNavVisibility() {
   const managementRoles = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
-  const currentRole = (state.currentUser && state.currentUser.role) || 'member';
-  const realRole = state.realRole || currentRole;
-  const canManagePlans = managementRoles.includes(currentRole)
-    && (!state.isSupabaseMode || managementRoles.includes(realRole));
-  const isSystemAdmin = currentRole === 'admin'
-    && (!state.isSupabaseMode || realRole === 'admin');
+  const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+
+  const canManagePlans = managementRoles.includes(currentRole);
+
+  const isSystemAdmin = currentRole === 'admin';
+
 
   document.querySelectorAll('.admin-only-nav').forEach(btn => {
     btn.classList.toggle('hidden', !canManagePlans);

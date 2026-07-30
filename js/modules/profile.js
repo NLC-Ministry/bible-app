@@ -194,7 +194,7 @@ function paintProfileIdentityChrome() {
 
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {
-    const role = String(user.role || "").trim();
+    const role = String(getUserRoleCode(user) || "").trim();
     const leadershipLabel = getLeadershipDisplayLabel(user);
     const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
     if (pending && !role && !leadershipLabel) {
@@ -459,12 +459,12 @@ async function renderCareReminders() {
 
 export function updateAdminNavVisibility() {
   const managementRoles = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
-  const currentRole = (state.currentUser && state.currentUser.role) || 'member';
-  const realRole = state.realRole || currentRole;
-  const canManagePlans = managementRoles.includes(currentRole)
-    && (!state.isSupabaseMode || managementRoles.includes(realRole));
-  const isSystemAdmin = currentRole === 'admin'
-    && (!state.isSupabaseMode || realRole === 'admin');
+  const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+
+  const canManagePlans = managementRoles.includes(currentRole);
+
+  const isSystemAdmin = currentRole === 'admin';
+
 
   document.querySelectorAll('.admin-only-nav').forEach(btn => {
     btn.classList.toggle('hidden', !canManagePlans);
@@ -490,7 +490,7 @@ export function updateHeaderAvatar() {
   const roleEl = document.getElementById("dropdown-user-role");
 
   const userName = (typeof getDisplayName === "function" ? getDisplayName(state.currentUser) : String(state.currentUser.name || "").trim()) || "";
-  const userRole = state.currentUser.role || "member";
+  const userRole = getUserRoleCode(state.currentUser) || "member";
   const roleLabel = roleNames[userRole] || userRole;
   const nameUnset = (typeof COPY !== "undefined" && COPY.memberHub && COPY.memberHub.nameUnset)
     ? COPY.memberHub.nameUnset
@@ -561,7 +561,7 @@ async function handleLogoutAndClearCache() {
     if (state.isSupabaseMode && state.supabase?.auth?.signOut) {
       await state.supabase.auth.signOut();
     }
-    state.realRole = null;
+
     db.updateAuthUI(null);
     await db.loadUserData();
     updateHeaderAvatar();

@@ -192,12 +192,12 @@ const db = {
   async init() {
     const urlParams = new URLSearchParams(window.location.search);
     const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || 
-                        hostname === '127.0.0.1' || 
-                        hostname === '::1' || 
-                        hostname.startsWith('192.168.') || 
-                        hostname.startsWith('10.') || 
-                        hostname.startsWith('172.') || 
+    const isLocalhost = hostname === 'localhost' ||
+                        hostname === '127.0.0.1' ||
+                        hostname === '::1' ||
+                        hostname.startsWith('192.168.') ||
+                        hostname.startsWith('10.') ||
+                        hostname.startsWith('172.') ||
                         hostname.endsWith('.local');
     const forceOfflineDemo = false;
 
@@ -529,7 +529,8 @@ const db = {
     state.currentUser.managed_regions = profile.managed_regions || "";
     state.currentUser.managed_zones = profile.managed_zones || "";
     state.currentUser.managed_groups = profile.managed_groups || "";
-    state.currentUser.role = profile.role || "member";
+    state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
+    state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     state.currentUser.member_context_synced_at = profile.member_context_synced_at || "";
@@ -544,7 +545,7 @@ const db = {
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;
-    state.realRole = state.currentUser.role;
+
     this.refreshRoleDependentUI();
   },
 
@@ -734,7 +735,7 @@ const db = {
         // 避開多個 sequential 網路請求產生的累積延遲與 cold start 問題！
         const [globalPlansResult, profileResult, logsResult, plansResult] = await Promise.all([
           state.supabase.from("global_plans").select("*").order("start_date", { ascending: true }),
-          state.supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+          state.supabase.from("profiles").select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
           window.readingLogRepository
             ? window.readingLogRepository.fetch({
               cacheKey: `reading_logs:${user.id}`,
@@ -772,9 +773,10 @@ const db = {
             state.currentUser.great_region = profile.great_region;
             state.currentUser.pastoral_zone = profile.pastoral_zone;
             state.currentUser.small_group = profile.small_group;
-            state.currentUser.role = profile.role;
+            state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
+            state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = !!profile.is_demo;
-            state.realRole = profile.role;
+
           } else {
             // First-time login: create profile without local org placement (Hub-owned).
             state.currentUser.name = (typeof getDisplayName === "function"
@@ -783,9 +785,10 @@ const db = {
             state.currentUser.great_region = "";
             state.currentUser.pastoral_zone = "";
             state.currentUser.small_group = "";
-            state.currentUser.role = "member";
+            state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
+            state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = false;
-            state.realRole = "member";
+
 
             try {
               await state.supabase.from("profiles").insert({
@@ -794,7 +797,7 @@ const db = {
                 great_region: "",
                 pastoral_zone: "",
                 small_group: "",
-                role: state.currentUser.role
+                role_id: state.currentUser.role_id
               });
             } catch (dbErr) {
               console.error("Failed to auto-create user profile in Supabase:", dbErr);
@@ -871,7 +874,8 @@ const db = {
           great_region: "",
           pastoral_zone: "",
           small_group: "",
-          role: "member",
+          role_id: "10000000-0000-4000-8000-000000000001",
+          role_definition: getRoleDefinition("10000000-0000-4000-8000-000000000001"),
           chapters_read: 0,
           plan_progress: 0,
           streak: 0,
@@ -900,7 +904,7 @@ const db = {
       state.currentUser.member_context_sync_attempted_at = state.currentUser.member_context_sync_attempted_at || "";
       state.currentUser.member_context_sync_status = state.currentUser.member_context_sync_status || "";
       state.currentUser.member_context_sync_error = state.currentUser.member_context_sync_error || "";
-      state.realRole = state.currentUser.role;
+
       const localLogsStr = localStorage.getItem("reading_logs");
       const rawLocalLogs = localLogsStr ? JSON.parse(localLogsStr) : [];
       const uniqueLocalMap = {};
@@ -978,7 +982,8 @@ const db = {
         great_region: "",
         pastoral_zone: "",
         small_group: "",
-        role: "member",
+        role_id: "10000000-0000-4000-8000-000000000001",
+        role_definition: getRoleDefinition("10000000-0000-4000-8000-000000000001"),
         is_demo: false,
         chapters_read: 0,
         plan_progress: 0,
@@ -990,7 +995,7 @@ const db = {
         member_context_sync_error: ""
       };
       localStorage.setItem("user_profile", JSON.stringify(state.currentUser));
-      state.realRole = "member";
+
       state.activePlans = [];
       state.activePlan = null;
       state.readingLogs = [];
@@ -1098,7 +1103,7 @@ const db = {
 
         // 生成相容的 rawRegions/rawZones/rawGroups
         state.orgStructure.rawRegions = regions.map(r => ({ id: r, name: r }));
-        
+
         const rawZones = [];
         zonesMap.forEach((zoneSet, r) => {
           zoneSet.forEach(z => {
@@ -1412,12 +1417,12 @@ const db = {
 
   async fetchRoleDefinitions() {
     const fallback = [
-      { id: "10000000-0000-4000-8000-000000000001", code: "member", label: "一般會友", sort_order: 60, is_assignable: true },
+      { id: "10000000-0000-4000-8000-000000000001", code: "member", label: "一般會友", sort_order: 60, is_assignable: false },
       { id: "10000000-0000-4000-8000-000000000002", code: "group_leader", label: "小組長", sort_order: 50, is_assignable: false },
-      { id: "10000000-0000-4000-8000-000000000003", code: "zone_leader", label: "牧區長", sort_order: 40, is_assignable: true },
-      { id: "10000000-0000-4000-8000-000000000004", code: "great_zone_leader", label: "大區長", sort_order: 30, is_assignable: true },
-      { id: "10000000-0000-4000-8000-000000000005", code: "senior_pastor", label: "教會牧者", sort_order: 20, is_assignable: true },
-      { id: "10000000-0000-4000-8000-000000000006", code: "admin", label: "系統管理員", sort_order: 10, is_assignable: true }
+      { id: "10000000-0000-4000-8000-000000000003", code: "zone_leader", label: "牧區長", sort_order: 40, is_assignable: false },
+      { id: "10000000-0000-4000-8000-000000000004", code: "great_zone_leader", label: "大區長", sort_order: 30, is_assignable: false },
+      { id: "10000000-0000-4000-8000-000000000005", code: "senior_pastor", label: "教會牧者", sort_order: 20, is_assignable: false },
+      { id: "10000000-0000-4000-8000-000000000006", code: "admin", label: "系統管理員", sort_order: 10, is_assignable: false }
     ];
     if (!state.isSupabaseMode || !state.supabase) {
       state.roleDefinitions = fallback;
@@ -1508,7 +1513,7 @@ const db = {
       great_region: state.currentUser.great_region || "",
       pastoral_zone: state.currentUser.pastoral_zone || "",
       small_group: state.currentUser.small_group || "",
-      role: state.currentUser.role || "member",
+      role_code: getUserRoleCode(state.currentUser) || "member",
       chapters_read: currentPlanLogs.length,
       plan_progress: state.activePlan ? (state.activePlan.progress || 0) : 0,
       last_read: currentPlanLastRead,
@@ -1517,11 +1522,11 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups").eq("is_demo", false);
+        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups").eq("is_demo", false);
         console.log(`🔍 [AdminDebug] profiles 查詢結果: ${usersProfiles ? usersProfiles.length : 0} 筆`, profilesError ? `錯誤: ${profilesError.message}` : '');
         if (profilesError) throw profilesError;
-        if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${u.role})`));
-        
+        if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${getUserRoleCode(u)})`));
+
         let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level");
         if (filterPresetKey) {
           const textConditions = planFilterAliases.flatMap(alias => [
@@ -1655,7 +1660,8 @@ const db = {
               great_region: profile.great_region,
               pastoral_zone: profile.pastoral_zone,
               small_group: profile.small_group,
-              role: profile.role,
+              role_id: profile.role_id,
+              role_definition: profile.role_definition,
               chapters_read: uniqueLogs.length,
               plan_progress: planProgress,
               streak: profile.streak || 0,
@@ -1774,7 +1780,7 @@ const db = {
       great_region: state.currentUser.great_region || "東區",
       pastoral_zone: state.currentUser.pastoral_zone || "大安1",
       small_group: state.currentUser.small_group || "馬鈴",
-      role: state.currentUser.role || "member",
+      role_code: getUserRoleCode(state.currentUser) || "member",
       chapters_read: state.currentUser.chapters_read || 0,
       plan_progress: state.currentUser.plan_progress || 0,
       streak: state.currentUser.streak || 0,
@@ -1927,14 +1933,14 @@ const db = {
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const user = await this.getCurrentDbUser();
       if (!user) return false;
-      
+
       const { data: existing } = await state.supabase
         .from("devotional_likes")
         .select("id")
         .eq("note_id", noteId)
         .eq("user_id", user.id)
         .maybeSingle();
-        
+
       if (existing) {
         await state.supabase
           .from("devotional_likes")
@@ -1964,13 +1970,13 @@ const db = {
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const user = await this.getCurrentDbUser();
       if (!user) return null;
-      
+
       const { data, error } = await state.supabase
         .from("devotional_comments")
         .insert([{ note_id: noteId, user_id: user.id, content }])
         .select()
         .single();
-        
+
       if (error) throw error;
       return data;
     } else {
@@ -2143,9 +2149,9 @@ const db = {
         const rightValues = String(right || "").split(",").map(value => value.trim()).filter(Boolean);
         return leftValues.some(value => rightValues.includes(value));
       };
-      const withinScope = candidate => currentUser.role === "admin"
-        || (currentUser.role === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
-        || (currentUser.role === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone));
+      const withinScope = candidate => getUserRoleCode(currentUser) === "admin"
+        || (getUserRoleCode(currentUser) === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
+        || (getUserRoleCode(currentUser) === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone));
       const members = (profiles || [])
         .filter(candidate => String(candidate.id) !== String(currentUser.id || state.currentProfileId || ""))
         .filter(withinScope)
@@ -2657,45 +2663,6 @@ const db = {
     showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
   },
 
-  async updateUserRole(userId, newRole, userName, additionalFields = {}, roleId = null) {
-    const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "senior_pastor", "admin"]);
-    if (!assignableRoles.has(newRole)) {
-      if (typeof showToast === "function") showToast("目前尚未開放小組權限設定。");
-      return false;
-    }
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
-      try {
-        const definition = roleId
-          ? { id: roleId }
-          : (state.roleDefinitions || []).find(role => role.code === newRole);
-        const updateData = definition?.id
-          ? { role_id: definition.id, ...additionalFields }
-          : { role: newRole, ...additionalFields };
-        const { error } = await state.supabase
-          .from("profiles")
-          .update(updateData)
-          .eq("id", userId);
-        if (error) throw error;
-        this._userDataPromise = null; // 💡 關鍵修復：清除資料加載快取以使快取失效
-        return true;
-      } catch (err) {
-        console.error("Failed to update user role in Supabase:", err);
-        showToast(`更新權限失敗: ${err.message || err}`);
-        return false;
-      }
-    } else {
-      // Demo mode: update local MOCK_USERS_DATA
-      const userIndex = MOCK_USERS_DATA.findIndex(u => u.name === userName);
-      if (userIndex !== -1) {
-        MOCK_USERS_DATA[userIndex].role = newRole;
-        Object.assign(MOCK_USERS_DATA[userIndex], additionalFields);
-        this._userDataPromise = null; // 💡 關鍵修復：清除資料加載快取以使快取失效
-        return true;
-      }
-      return false;
-    }
-  },
-
   async loadGlobalPlans() {
     state.globalPlans = [];
 
@@ -3196,7 +3163,7 @@ const db = {
   async updateFeatureSetting(key, enabled) {
     const allowedKeys = new Set(["pastoral_sharing_wall"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
-    if (!state.currentUser || state.currentUser.role !== "admin") {
+    if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
     }
 
@@ -3257,7 +3224,11 @@ const db = {
             status,
             sent_on,
             plan_key,
-            sender:profiles!sender_id (name, role)
+            sender:profiles!sender_id (
+              name,
+              role_id,
+              role_definition:role_definitions!profiles_role_definition_fkey (code, label)
+            )
           `)
           .eq("recipient_id", profileId)
           .eq("status", "unread")
@@ -3326,7 +3297,11 @@ const db = {
             status,
             sent_on,
             plan_key,
-            sender:profiles!sender_id (name, role)
+            sender:profiles!sender_id (
+              name,
+              role_id,
+              role_definition:role_definitions!profiles_role_definition_fkey (code, label)
+            )
           `)
           .eq("recipient_id", profileId)
           .order("created_at", { ascending: false })
