@@ -49,9 +49,9 @@ export function getPlanParticipationModel(plan, contexts = []) {
       tone: isFull ? "success" : "brand",
       icon: "people",
       action: {
-        label: `報名 ${availableDivision}人組`,
-        division: availableDivision,
-        action: "join-team-division"
+        label: "我的團隊",
+        division,
+        action: "open-team-dialog"
       }
     };
   }
@@ -63,9 +63,9 @@ export function getPlanParticipationModel(plan, contexts = []) {
     tone: isFull ? "success" : "brand",
     icon: "people",
     action: {
-      label: "查看團隊",
+      label: "我的團隊",
       division,
-      action: "open-team"
+      action: "open-team-dialog"
     }
   };
 }

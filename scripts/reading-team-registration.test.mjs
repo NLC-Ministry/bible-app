@@ -150,7 +150,8 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("function bindPlanParticipationItemActions");
     expect(participation).toContain("團隊讀經中");
     expect(participation).toContain("個人讀經中");
-    expect(participation).toContain("報名 ${availableDivision}人組");
+    expect(participation).toContain("我的團隊");
+    expect(participation).toContain("open-team-dialog");
   });
 
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
