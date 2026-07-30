@@ -6,6 +6,9 @@ const admin = readFileSync("js/modules/admin.js", "utf8");
 const utils = readFileSync("js/utils.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
 const plan = readFileSync("js/modules/plan.js", "utf8");
+const profile = readFileSync("js/modules/profile.js", "utf8");
+const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
+const css = readFileSync("index.css", "utf8");
 
 describe("management plan hub", () => {
   it("puts the requested plan management sections in discovery order", () => {
@@ -24,11 +27,32 @@ describe("management plan hub", () => {
     expect(admin).toContain("panelName === 'permissions' && isAdmin");
   });
 
-  it("exposes management navigation to every leadership role", () => {
-    for (const role of ['admin', 'great_zone_leader', 'zone_leader', 'group_leader']) {
-      expect(utils).toContain(role);
+  it("keeps plan management available above the small-group level", () => {
+    const adminRoles = admin.match(/const MANAGEMENT_ROLES = \[(.*?)\];/)?.[1] || "";
+    const utilsRoles = utils.match(/const managementRoles = \[(.*?)\];/)?.[1] || "";
+    const profileRoles = profile.match(/const managementRoles = \[(.*?)\];/)?.[1] || "";
+    for (const roles of [adminRoles, utilsRoles, profileRoles]) {
+      expect(roles).toContain("admin");
+      expect(roles).toContain("great_zone_leader");
+      expect(roles).toContain("zone_leader");
+      expect(roles).not.toContain("group_leader");
     }
-    expect(utils).toContain("canManagePlans");
+    expect(edge).toContain('return ["admin", "great_zone_leader", "zone_leader"].includes(profile?.role);');
+  });
+
+  it("defaults to stage one and lists only current or completed plans with current plans first", () => {
+    expect(admin).toContain("getManagementPlanStageNo(plan) === 1");
+    expect(admin).toContain("plans.find(plan => plan.managementStatus === 'ongoing') || stageOnePlan || plans[0]");
+    expect(admin).toContain("!managementPlanSelectionInitialized");
+    expect(admin).toContain("status === 'ongoing' || status === 'completed' || isStageOneBootstrap");
+    expect(admin).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");
+    expect(admin).toContain("sourcePlan.planKind === 'church_campaign'");
+  });
+
+  it("keeps the plan filter in the document flow", () => {
+    const filterRule = css.slice(css.indexOf(".admin-plan-filter-card {"), css.indexOf("}", css.indexOf(".admin-plan-filter-card {")));
+    expect(filterRule).not.toContain("position: sticky");
+    expect(filterRule).not.toContain("top:");
   });
 
   it("renders both team divisions and reuses the existing participant and statistics views", () => {

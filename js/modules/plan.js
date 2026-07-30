@@ -463,7 +463,7 @@ window.addEventListener("planDataChanged", (e) => {
 });
 
 function canUseAdvancedGroupStats() {
-  const allowedRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"];
+  const allowedRoles = ["admin", "great_zone_leader", "zone_leader"];
   const currentRole = (state.currentUser && state.currentUser.role) || "member";
   const realRole = state.realRole || "member";
   return allowedRoles.includes(currentRole) || allowedRoles.includes(realRole);
@@ -778,10 +778,6 @@ function initPlanControls() {
         e.stopPropagation();
         const flexibleScheduleMenuButton = document.getElementById("edit-flexible-plan-schedule-btn");
         if (flexibleScheduleMenuButton) flexibleScheduleMenuButton.style.display = "";
-        const readingTeamMenuButton = document.getElementById("view-reading-team-btn");
-        const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
-        const hasPermission = state.currentUser && ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'].includes(state.currentUser.role);
-        if (readingTeamMenuButton) readingTeamMenuButton.hidden = !isTeamPlan || !hasPermission;
         dropdown.classList.toggle("hidden");
       });
     }
@@ -825,18 +821,6 @@ function initPlanControls() {
       showToast("每週讀經安排已更新，章節已重新分配。");
       renderPlanScheduleView();
       await renderPlanScheduleTracker();
-    });
-  }
-
-  const readingTeamButton = document.getElementById("view-reading-team-btn");
-  if (readingTeamButton) {
-    readingTeamButton.addEventListener("click", async event => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropdown?.classList.add("hidden");
-      if (state.activePlan && window.appRouter) {
-        await window.appRouter.switchTab("admin-view");
-      }
     });
   }
 

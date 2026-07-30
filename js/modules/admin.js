@@ -702,7 +702,8 @@ export function init() {
   initAdminTeamRegistration();
 }
 
-const MANAGEMENT_ROLES = ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'];
+const MANAGEMENT_ROLES = ['admin', 'great_zone_leader', 'zone_leader'];
+let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {
   const role = (state.currentUser && state.currentUser.role) || 'member';
@@ -737,11 +738,27 @@ function mountPlanManagementSections() {
   if (statisticsSlot && statsSection && statsSection.parentElement !== statisticsSlot) statisticsSlot.appendChild(statsSection);
 }
 
+function getManagementPlanStageNo(plan) {
+  const presetMatch = String(plan && plan.presetKey || '').match(/^church_stage_(\d+)$/);
+  return Number(plan && plan.stageNo || (presetMatch && presetMatch[1]) || 0);
+}
+
+function getManagementPlanStatus(plan, today = new Date()) {
+  const startValue = plan && (plan.startDate || plan.start_date);
+  const endValue = plan && (plan.endDate || plan.end_date);
+  const startDate = startValue ? new Date(`${String(startValue).slice(0, 10)}T00:00:00`) : null;
+  const endDate = endValue ? new Date(`${String(endValue).slice(0, 10)}T23:59:59`) : null;
+  if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 'unknown';
+  if (today < startDate) return 'upcoming';
+  if (today > endDate) return 'completed';
+  return 'ongoing';
+}
+
 function getManagementPlans() {
   const seen = new Set();
-  return [...(state.activePlans || []), ...(state.globalPlans || [])].reduce((plans, sourcePlan) => {
+  const plans = [...(state.activePlans || []), ...(state.globalPlans || [])].reduce((result, sourcePlan) => {
     const key = String(sourcePlan.globalPlanId || sourcePlan.id || sourcePlan.presetKey || sourcePlan.name || '');
-    if (!key || seen.has(key)) return plans;
+    if (!key || seen.has(key) || sourcePlan.planKind === 'church_campaign') return result;
     seen.add(key);
 
     let plan = sourcePlan;
@@ -752,11 +769,27 @@ function getManagementPlans() {
         plan.globalPlanId = sourcePlan.globalPlanId || sourcePlan.id;
         plan.id = sourcePlan.id || plan.id;
         plan.name = sourcePlan.name || plan.name;
+        plan.planKind = sourcePlan.planKind;
+        plan.stageNo = sourcePlan.stageNo;
       }
     }
-    plans.push(plan);
-    return plans;
+    const status = getManagementPlanStatus(plan);
+    const isStageOneBootstrap = getManagementPlanStageNo(plan) === 1;
+    if ((status === 'ongoing' || status === 'completed' || isStageOneBootstrap)
+      && !(typeof isPlanHidden === 'function' && isPlanHidden(plan))) {
+      result.push({ ...plan, managementStatus: status });
+    }
+    return result;
   }, []);
+
+  const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 };
+  return plans.sort((left, right) => {
+    const statusDifference = (statusPriority[left.managementStatus] ?? 3) - (statusPriority[right.managementStatus] ?? 3);
+    if (statusDifference !== 0) return statusDifference;
+    const leftEnd = String(left.endDate || left.end_date || '');
+    const rightEnd = String(right.endDate || right.end_date || '');
+    return rightEnd.localeCompare(leftEnd);
+  });
 }
 
 async function selectManagementPlan(planKey) {
@@ -790,7 +823,13 @@ export async function renderAdminPlanManagement() {
       plans.forEach(plan => select.options.add(new Option(plan.name || '未命名計畫', String(plan.globalPlanId || plan.id || plan.presetKey || plan.name))));
       const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
       const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
-      select.value = matchingOption ? matchingOption.value : select.options[0].value;
+      const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
+      const defaultPlan = plans.find(plan => plan.managementStatus === 'ongoing') || stageOnePlan || plans[0];
+      const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
+      select.value = !managementPlanSelectionInitialized
+        ? defaultPlanKey
+        : (matchingOption ? matchingOption.value : select.options[0].value);
+      managementPlanSelectionInitialized = true;
       select.onchange = () => selectManagementPlan(select.value);
       await selectManagementPlan(select.value);
     }

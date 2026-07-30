@@ -301,8 +301,10 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("openJoinModeDialog(plan)");
     expect(plan).toContain("openReadingTeamDialog(joinedPlan");
     expect(plan.indexOf("await db.joinPresetPlan")).toBeLessThan(plan.indexOf("openReadingTeamDialog(joinedPlan"));
-    expect(html).toContain('id="view-reading-team-btn"');
-    expect(html).toContain("牧區小組狀況");
+    expect(html).not.toContain('id="view-reading-team-btn"');
+    const planOptions = html.slice(html.indexOf('id="plan-options-dropdown"'), html.indexOf('</div>', html.indexOf('id="plan-options-dropdown"')));
+    expect(planOptions).not.toContain("\u7267\u5340\u5c0f\u7d44\u72c0\u6cc1");
+    expect(plan).not.toContain("view-reading-team-btn");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
     expect(html).toContain('id="stats-team-view-select"');
     expect(html).toContain('id="members-team-view-select"');
