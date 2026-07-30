@@ -1,7 +1,7 @@
 export const ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 
 export function getOnboardingVersion(config = globalThis.APP_CONFIG || {}) {
-  return String(config.onboardingVersion || config.appVersion || "0.1.0");
+  return String(config.onboardingVersion || config.appVersion || "0.1.1");
 }
 
 export function getOnboardingSteps() {

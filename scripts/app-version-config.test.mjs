@@ -7,9 +7,10 @@ const buildConfig = readFileSync("build-config.js", "utf8");
 const sw = readFileSync("sw.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
 const db = readFileSync("js/db.js", "utf8");
+const indexHtml = readFileSync("index.html", "utf8");
 describe("Bible app release version contract", () => {
-  it("declares product version 0.1.0", () => {
-    expect(pkg.version).toBe("0.1.0");
+  it("declares product version 0.1.1", () => {
+    expect(pkg.version).toBe("0.1.1");
   });
 
   it("keeps package-lock metadata aligned with package.json", () => {
@@ -19,15 +20,19 @@ describe("Bible app release version contract", () => {
 
   it("generates runtime APP_CONFIG and APP_VERSION for browser support", () => {
     expect(buildConfig).toContain('const APP_CONFIG = {');
-    expect(buildConfig).toContain('appVersion: "0.1.0"');
-    expect(buildConfig).toContain('onboardingVersion: "0.1.0"');
+    expect(buildConfig).toContain('appVersion: "0.1.1"');
+    expect(buildConfig).toContain('onboardingVersion: "0.1.1"');
     expect(buildConfig).toContain("window.APP_CONFIG = APP_CONFIG");
     expect(buildConfig).toContain("window.APP_VERSION = APP_CONFIG.appVersion");
   });
 
   it("aligns service worker cache version with the release", () => {
-    expect(sw).toContain('const VERSION = "0.1.0"');
+    expect(sw).toContain('const VERSION = "0.1.1"');
     expect(sw).toContain('version: VERSION');
+  });
+
+  it("keeps the static profile fallback version aligned with the release", () => {
+    expect(indexHtml).toContain("版本 0.1.1");
   });
 });
 

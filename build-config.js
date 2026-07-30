@@ -11,7 +11,7 @@ let nlcMemberHubUrl = process.env.NLC_MEMBER_HUB_URL || "https://member.newlife.
 let nlcScopes = process.env.NLC_SCOPES || "openid profile email member:read.basic";
 let nlcPlatformResource = process.env.NLC_PLATFORM_RESOURCE || "https://platform.newlife.org.tw";
 let nlcPlatformApiUrl = process.env.NLC_PLATFORM_API_URL || "https://platform.newlife.org.tw/platform/v1";
-const appVersion = process.env.APP_VERSION || "0.1.0";
+const appVersion = process.env.APP_VERSION || "0.1.1";
 const onboardingVersion = process.env.ONBOARDING_VERSION || appVersion;
 
 if (fs.existsSync(envPath)) {
@@ -38,7 +38,7 @@ if (fs.existsSync(envPath)) {
 
 // 產生前端可載入的 config.js
 const configContent = `// 連線設定 (由 build-config.js 自動從 .env 產生，請勿直接手動編輯此檔案)
-// Release defaults: appVersion: "0.1.0", onboardingVersion: "0.1.0"
+// Release defaults: appVersion: "0.1.1", onboardingVersion: "0.1.1"
 const APP_CONFIG = {
   appVersion: "${appVersion}",
   onboardingVersion: "${onboardingVersion}"

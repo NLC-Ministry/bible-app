@@ -35,7 +35,7 @@ let releaseOnboardingModulePromise = null;
 let careReminderBadgeLastRefresh = 0;
 
 function getReleaseOnboardingVersion(config = window.APP_CONFIG || {}) {
-  return String(config.onboardingVersion || config.appVersion || "0.1.0");
+  return String(config.onboardingVersion || config.appVersion || "0.1.1");
 }
 
 function isReleaseOnboardingLoginEligible(authClient) {

@@ -410,7 +410,7 @@ function wireReleaseOnboardingHelp() {
 
   const versionEl = document.getElementById("profile-app-version");
   if (versionEl) {
-    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.0"}`;
+    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.1"}`;
   }
 }
 
