@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import {
   orgFromCareChain,
   orgFromHomePath,
@@ -10,6 +11,8 @@ import {
   projectOrgFieldsFromHub,
   buildOrgProjectionAudit
 } from "./lib/nlc-profile-sync.mjs";
+
+const rootDir = path.resolve(import.meta.dirname, "..");
 
 describe("orgFromCareChain", () => {
   it("maps levelDepth 0/1/2 to great_region, pastoral_zone, small_group", () => {
@@ -270,6 +273,71 @@ describe("buildOrgProjectionAudit", () => {
       pastoral_zone: null,
       small_group: null
     });
+  });
+});
+
+it("stores Member Hub leadership identity projection without changing app role privileges", () => {
+  const source = fs.readFileSync(
+    path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+    "utf8"
+  );
+
+  expect(source).toContain("member_context_leadership_display_label");
+  expect(source).toContain("member_context_leadership_primary_assignment_id");
+  expect(source).toContain("member_context_leadership_assignments");
+  expect(source).toContain("memberContext?.leadershipIdentity");
+  expect(source).toContain('role: syncedRole');
+});
+
+describe("nlc-session leadership identity sync", () => {
+  it("preserves the existing projection when Member Hub context is degraded", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain("...(memberContext ? {");
+    expect(source).toContain("member_context_leadership_display_label: leadershipIdentity.displayLabel");
+    expect(source).toContain("member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId");
+    expect(source).toContain("member_context_leadership_assignments: leadershipIdentity.assignments");
+  });
+
+  it("filters malformed leadership assignments before reading assignment fields", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain(".filter((assignment: any) => assignment && typeof assignment === \"object\")");
+    expect(source.indexOf(".filter((assignment: any) => assignment && typeof assignment === \"object\")"))
+      .toBeLessThan(source.indexOf(".map((assignment: any) => ({"));
+  });
+
+  it("preserves null leadership levelDepth instead of coercing it to root depth", () => {
+    const source = fs.readFileSync(
+      path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+      "utf8"
+    );
+
+    expect(source).toContain("levelDepth: assignment.levelDepth === null || assignment.levelDepth === undefined");
+    expect(source.indexOf("assignment.levelDepth === null || assignment.levelDepth === undefined"))
+      .toBeLessThan(source.indexOf("Number.isFinite(Number(assignment.levelDepth))"));
+  });
+
+  it("protects Hub-owned leadership projection columns from member profile writes", () => {
+    const migration = fs.readFileSync(
+      path.join(rootDir, "supabase/migrations/0041_protect_member_context_leadership_identity.sql"),
+      "utf8"
+    );
+
+    expect(migration).toContain("CREATE OR REPLACE FUNCTION public.protect_profile_member_context_leadership_fields");
+    expect(migration).toContain("member_context_leadership_display_label");
+    expect(migration).toContain("member_context_leadership_primary_assignment_id");
+    expect(migration).toContain("member_context_leadership_assignments");
+    expect(migration).toContain("RAISE EXCEPTION 'member context leadership fields are managed by Member Hub'");
+    expect(migration).toContain("CREATE TRIGGER trg_profiles_protect_member_context_leadership");
+    expect(migration).not.toContain("actor_role");
+    expect(migration).not.toContain("senior_pastor");
   });
 });
 
