@@ -518,6 +518,26 @@ body.reading-team-modal-open .main-content {
   padding: 11px 12px;
 }
 
+.reading-team-member__actions,
+.reading-team-roster__actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.reading-team-remove-btn {
+  background: color-mix(in srgb, var(--color-danger, #dc4c64) 9%, var(--reading-team-surface));
+  border: 1px solid color-mix(in srgb, var(--color-danger, #dc4c64) 35%, var(--reading-team-separator));
+  color: var(--color-danger, #dc4c64);
+}
+
+.reading-team-remove-btn:hover,
+.reading-team-remove-btn:focus-visible {
+  background: color-mix(in srgb, var(--color-danger, #dc4c64) 16%, var(--reading-team-surface));
+  border-color: var(--color-danger, #dc4c64);
+}
+
 .reading-team-remind-btn {
   background: color-mix(in srgb, var(--color-warning-text, #d97706) 10%, var(--reading-team-surface));
   border: 1px solid color-mix(in srgb, var(--color-warning-text, #d97706) 35%, var(--reading-team-separator));
@@ -651,7 +671,7 @@ body.reading-team-modal-open .main-content {
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(150px, 1fr) 76px 76px 64px 104px 52px;
+  grid-template-columns: minmax(150px, 1fr) 76px 76px 64px 104px 96px;
   text-align: center;
 }
 
@@ -736,7 +756,7 @@ body.reading-team-modal-open .main-content {
 }
 
 .reading-team-roster__row .reading-team-remind-btn {
-  margin: 0 auto;
+  margin: 0;
 }
 
 @media (max-width: 640px) {
@@ -845,6 +865,11 @@ body.reading-team-modal-open .main-content {
     padding: 0;
   }
 
+  .reading-team-inline--stats .reading-team-member__actions {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
   .reading-team-inline--stats .reading-team-remind-btn__label {
     display: none;
   }
@@ -860,7 +885,7 @@ body.reading-team-modal-open .main-content {
 
   .reading-team-roster__row {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) 48px !important;
+    grid-template-columns: repeat(3, 1fr) 92px !important;
     grid-template-rows: auto auto auto !important;
     gap: 8px !important;
     padding: 12px 14px !important;
@@ -907,7 +932,7 @@ body.reading-team-modal-open .main-content {
     grid-row: 3 !important;
   }
 
-  .reading-team-roster__row .reading-team-remind-btn,
+  .reading-team-roster__actions,
   .reading-team-roster__self {
     grid-column: 4 !important;
     grid-row: 1 / 4 !important;

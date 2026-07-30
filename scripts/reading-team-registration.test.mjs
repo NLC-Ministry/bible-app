@@ -10,6 +10,7 @@ const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_r
 const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
 const productionCleanup = read("supabase/migrations/0026_production_cleanup_obsolete_plans_badges.sql");
 const secureTeamNamesMigration = read("supabase/migrations/0037_secure_unique_reading_team_names.sql");
+const captainOnlyTeamExitMigration = read("supabase/migrations/0043_restrict_reading_team_exit_to_captain.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -22,15 +23,14 @@ const app = read("js/app.js");
 const indexCss = read("index.css");
 
 describe("reading competition team schema", () => {
-  it("shows unread care reminders without requiring the profile tab to be opened", () => {
-    expect(html.match(/data-care-reminder-badge/g)?.length).toBe(2);
-    expect(html).toContain("care-reminder-badge--mobile");
-    expect(html).toContain("care-reminder-badge--desktop");
+  it("shows unread care reminders only on the notification bell", () => {
+    expect(html).not.toContain("data-care-reminder-badge");
+    expect(html).toContain('id="notification-bell-badge"');
     expect(app).toContain("refreshCareReminderBadge({ force: true })");
     expect(app).toContain('document.addEventListener("visibilitychange"');
     expect(app).toContain('count > 9 ? "9+"');
     expect(profile).toContain('window.updateCareReminderBadge(reminders || [])');
-    expect(indexCss).toContain(".care-reminder-badge[hidden]");
+    expect(indexCss).toContain(".notification-bell-badge[hidden]");
   });
 
   it("keeps 3-person and 6-person teams separate from organisation groups", () => {
@@ -159,6 +159,7 @@ describe("NLC and browser integration", () => {
       "create_reading_team",
       "join_reading_team_by_code",
       "leave_reading_team",
+      "remove_reading_team_member",
       "disband_reading_team",
       "send_reading_team_reminder"
     ]) expect(edge).toContain(`"${name}"`);
@@ -171,6 +172,25 @@ describe("NLC and browser integration", () => {
     expect(readAllowlist).not.toContain("reading_team_members");
   });
 
+  it("lets only the captain remove individual members or dissolve the team", () => {
+    expect(teamUi).not.toContain("data-leave-team");
+    expect(teamUi).not.toContain("db.leaveReadingTeam(");
+    expect(teamUi).toContain("data-team-remove-user");
+    expect(teamUi).toContain("移出隊員");
+    expect(teamUi).toContain("db.removeReadingTeamMember(team.id, member.userId)");
+    expect(teamUi).toContain("解散團隊");
+    expect(teamUi).toContain("db.disbandReadingTeam(team.id)");
+    expect(captainOnlyTeamExitMigration).toMatch(/CREATE OR REPLACE FUNCTION public\.remove_reading_team_member/);
+    expect(captainOnlyTeamExitMigration).toMatch(/selected_team\.captain_id <> actor_id[\s\S]*team_member_remove_captain_required/);
+    expect(captainOnlyTeamExitMigration).toContain("team_captain_remove_self_not_allowed");
+    expect(captainOnlyTeamExitMigration).toMatch(/DELETE FROM public\.reading_team_members[\s\S]*user_id = p_member_id/);
+    expect(captainOnlyTeamExitMigration).toMatch(/UPDATE public\.reading_teams[\s\S]*SET status = 'forming'/);
+    expect(db).toContain('_callReadingTeamRpc("remove_reading_team_member"');
+    expect(db).toContain('team_captain_required: "只有隊長可以解散團隊。"');
+    expect(edge).toContain('"remove_reading_team_member"');
+    expect(teamCss).toContain(".reading-team-remove-btn");
+    expect(teamCss).toContain(".reading-team-member__actions");
+  });
   it("delivers team reminders without requiring a table parameter", () => {
     expect(edge).toContain('["save_profile", "rpc", "send_care_reminder"]');
     expect(edge).toContain('const pastoralRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"]');

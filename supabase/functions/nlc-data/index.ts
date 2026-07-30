@@ -39,6 +39,7 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "create_reading_team",
   "join_reading_team_by_code",
   "leave_reading_team",
+  "remove_reading_team_member",
   "disband_reading_team",
   "send_reading_team_reminder"
 ]);

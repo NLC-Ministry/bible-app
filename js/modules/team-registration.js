@@ -130,9 +130,10 @@
     return { read, progress };
   }
 
-  function renderMember(member, totalChapters, plan) {
+  function renderMember(member, totalChapters, plan, options = {}) {
     const { read, progress } = getMemberProgress(member, totalChapters);
     const canRemind = Boolean(member.userId && !member.isMe);
+    const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
 
     let isBehind = false;
     if (plan && Number(member.currentRound || 1) === 1) {
@@ -141,6 +142,10 @@
     }
 
     const memberLabel = String(member.name || "").trim() || "—";
+    const memberActions = [
+      canRemind ? `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(memberLabel)}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>` : "",
+      canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(memberLabel)} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
+    ].join("");
     return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}${isBehind ? " reading-team-member--behind" : ""}">
       <div class="reading-team-member__avatar">${escapeHTML(memberLabel.slice(0, 1))}</div>
       <div class="reading-team-member__body">
@@ -149,10 +154,9 @@
         <div class="reading-team-progress" role="progressbar" aria-label="${escapeHTML(memberLabel)}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
       </div>
       <strong class="reading-team-member__percent">${progress}%</strong>
-      ${canRemind ? `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(memberLabel)}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>` : ""}
+      ${memberActions ? `<div class="reading-team-member__actions">${memberActions}</div>` : ""}
     </article>`;
   }
-
   function bindTeamReminderButtons(container, team, members, totalChapters) {
     if (!container || !team) return;
     container.querySelectorAll("[data-team-remind-user]").forEach(button => {
@@ -175,6 +179,37 @@
     });
   }
 
+  function bindTeamMemberRemovalButtons(container, team, members, onRemoved) {
+    if (!container || !team) return;
+    container.querySelectorAll("[data-team-remove-user]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const member = members.find(item => String(item.userId) === String(button.dataset.teamRemoveUser));
+        if (!member) return;
+        const memberName = String(member.name || "").trim() || "這位隊員";
+        const confirmed = await window.showConfirmDialog({
+          title: "將隊員移出團隊？",
+          message: `確定要將「${memberName}」移出團隊嗎？移出後會空出一個名額。`,
+          confirmText: "移出隊員",
+          cancelText: "取消",
+          isDestructive: true
+        });
+        if (!confirmed) return;
+
+        button.disabled = true;
+        loader.show("移出隊員中...");
+        const result = await db.removeReadingTeamMember(team.id, member.userId);
+        loader.hide();
+        button.disabled = false;
+
+        if (!result || !result.success) {
+          alert("移出隊員失敗: " + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"));
+          return;
+        }
+        showToast(`已將 ${memberName} 移出團隊`);
+        if (typeof onRemoved === "function") await onRemoved();
+      });
+    });
+  }
   function getExpectedChapters(plan, totalChapters) {
     const days = Array.isArray(plan && plan.days) ? plan.days : [];
     const start = new Date(`${plan && plan.startDate || ""}T00:00:00`);
@@ -254,26 +289,32 @@
     };
   }
 
-  function renderTeamMemberRoster(members, plan) {
+  function renderTeamMemberRoster(members, plan, options = {}) {
     const rows = members.map(member => ({ member, metrics: getTeamMemberRosterMetrics(member, plan) }))
       .sort((left, right) => right.metrics.completed - left.metrics.completed || right.metrics.streak - left.metrics.streak);
     return `<div class="reading-team-roster-scroll">
       <div class="reading-team-roster">
         <div class="reading-team-roster__head" aria-hidden="true">
-          <span>成員</span><span>最高連續</span><span>累計完成</span><span>補讀</span><span>進度狀態</span><span>提醒</span>
+          <span>成員</span><span>最高連續</span><span>累計完成</span><span>補讀</span><span>進度狀態</span><span>操作</span>
         </div>
-        ${rows.map(({ member, metrics }) => `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
-          <div class="reading-team-roster__person"><strong>${escapeHTML(String(member.name || "").trim() || "—")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
-          <strong class="reading-team-roster__streak">${metrics.streak}</strong>
-          <strong class="reading-team-roster__completed">${metrics.completed}</strong>
-          <strong class="reading-team-roster__makeup">${metrics.makeup}</strong>
-          <span class="reading-team-roster__status ${metrics.statusClass}">${metrics.statusStr}</span>
-          ${member.isMe ? '<span class="reading-team-roster__self">—</span>' : `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(member.name || "隊員")}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>`}
-        </article>`).join("")}
+        ${rows.map(({ member, metrics }) => {
+          const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
+          const actions = [
+            member.isMe ? "" : `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(member.name || "隊員")}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>`,
+            canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(member.name || "隊員")} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
+          ].join("");
+          return `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
+            <div class="reading-team-roster__person"><strong>${escapeHTML(String(member.name || "").trim() || "—")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
+            <strong class="reading-team-roster__streak">${metrics.streak}</strong>
+            <strong class="reading-team-roster__completed">${metrics.completed}</strong>
+            <strong class="reading-team-roster__makeup">${metrics.makeup}</strong>
+            <span class="reading-team-roster__status ${metrics.statusClass}">${metrics.statusStr}</span>
+            ${actions ? `<div class="reading-team-roster__actions">${actions}</div>` : '<span class="reading-team-roster__self">—</span>'}
+          </article>`;
+        }).join("")}
       </div>
     </div>`;
   }
-
   function renderTeamStatGrid(members, totalChapters, plan) {
     const totalRead = members.reduce((sum, member) => sum + Number(member.chaptersRead || 0), 0);
     const activeToday = members.filter(member => Number(member.todayRead || 0) > 0).length;
@@ -377,18 +418,19 @@
         ${!isReady ? `<div class="reading-team-invite"><div><span>隊伍邀請碼</span><strong>${escapeHTML(team.inviteCode)}</strong></div><button type="button" class="secondary-btn" data-copy-team-code><span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true"></span>複製邀請碼</button></div>` : `<div class="reading-team-ready"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle" aria-hidden="true"></span><span>名單已滿員並鎖定，團隊統計會固定以 ${Number(team.capacity)} 人計算。</span></div>`}
         <section class="reading-team-members" aria-labelledby="reading-team-members-title">
           <div class="reading-team-section-title"><h4 id="reading-team-members-title">隊員狀況</h4><span>只有同隊成員可查看</span></div>
-          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan)).join("")}</div>
+          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCaptain })).join("")}</div>
         </section>
         <footer class="reading-team-dialog__footer">
-          ${!isReady ? (isCaptain
-            ? '<button type="button" class="reading-team-danger-link" data-disband-team>解散隊伍</button>'
-            : '<button type="button" class="reading-team-danger-link" data-leave-team>退出隊伍</button>') : ""}
+          ${isCaptain
+            ? '<button type="button" class="reading-team-danger-link" data-disband-team>解散團隊</button>'
+            : ""}
           <button type="button" class="primary-btn" data-team-close-footer>關閉</button>
         </footer>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
       panel.querySelector("[data-team-close]").onclick = close;
       panel.querySelector("[data-team-close-footer]").onclick = close;
       bindTeamReminderButtons(panel, team, members, totalChapters);
+      bindTeamMemberRemovalButtons(panel, team, members, refresh);
       panel.querySelectorAll("[data-team-view-division]").forEach(button => {
         button.onclick = () => {
           const selected = allContexts.find(item => Number(item.team.division) === Number(button.dataset.teamViewDivision));
@@ -418,29 +460,11 @@
           }
         });
       }
-      panel.querySelector("[data-leave-team]")?.addEventListener("click", async () => {
-        const confirmed = await window.showConfirmDialog({
-          title: "確定退出這支隊伍嗎？",
-          message: "退出後您可使用其他邀請碼重新組隊，但目前隊伍的夥伴會少一人。",
-          confirmText: "確認退出",
-          cancelText: "返回",
-          isDestructive: true
-        });
-        if (!confirmed) return;
-        const result = await db.leaveReadingTeam(team.id);
-        if (!result.success) {
-          const error = panel.querySelector("[data-team-error]");
-          error.textContent = result.message || "退出隊伍失敗。";
-          error.hidden = false;
-          return;
-        }
-        await refresh();
-      });
       panel.querySelector("[data-disband-team]")?.addEventListener("click", async () => {
         const confirmed = await window.showConfirmDialog({
           title: "確定解散這支隊伍嗎？",
-          message: "解散後所有隊員都會回到尚未組隊狀態，邀請碼將會失效。",
-          confirmText: "解散隊伍",
+          message: "只有隊長可以執行此操作。解散後所有隊員都會回到尚未組隊狀態，邀請碼將會失效。",
+          confirmText: "解散團隊",
           cancelText: "返回",
           isDestructive: true
         });
@@ -491,7 +515,10 @@
     const averageProgress = members.length && totalChapters > 0
       ? Math.min(100, Math.round(totalRead / (members.length * totalChapters) * 100))
       : 0;
-    const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);
+    const currentMember = members.find(member => member.isMe);
+    const currentUserId = state.currentUser && state.currentUser.id || state.currentProfileId;
+    const isCurrentUserCaptain = currentMember && currentMember.role === "captain"
+      || String(team.captainId || "") === String(currentUserId || "");
     const summary = mode === "stats" ? `
       <div class="reading-team-summary" style="justify-content: center; text-align: center;">
         <div style="align-items: center;"><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalChapters * members.length} 章</span></div>
@@ -505,71 +532,45 @@
       ${summary}
       ${mode === "stats" ? renderTeamStatGrid(members, totalChapters, plan) : ""}
       <section class="reading-team-members" aria-label="團隊成員">
-        ${mode === "members" ? renderTeamMemberRoster(members, plan) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan)).join("")}</div>`}
+        ${mode === "members" ? renderTeamMemberRoster(members, plan, { canRemoveMembers: isCurrentUserCaptain }) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCurrentUserCaptain })).join("")}</div>`}
       </section>`;
 
-    // ── 只有在成團/滿人 (isReady) 的狀態下，才在內嵌視窗中渲染並繫結退出與解散按鈕 ──
-    if (isReady) {
-      const currentMember = members.find(m => m.isMe);
-      const footerSection = `
+    // Only the captain may manage the roster or dissolve the whole team.
+
+    if (isCurrentUserCaptain) {
+      container.innerHTML += `
         <div class="reading-team-inline-actions" style="margin-top: 1.2rem; display: flex; justify-content: flex-end; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 0.8rem;">
-          ${currentMember && currentMember.role === "captain"
-            ? `<button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>`
-            : `<button type="button" class="text-xs text-danger" data-leave-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="logout"></span><span>退出團隊</span></button>`}
+          <button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>
         </div>`;
 
-      container.innerHTML += footerSection;
-
-      const leaveBtn = container.querySelector("[data-leave-team-inline]");
-      if (leaveBtn) {
-        leaveBtn.addEventListener("click", async () => {
-          const confirmed = await window.showConfirmDialog({
-            title: "退出團隊",
-            message: `確定要退出團隊「${team.name || ""}」嗎？\n退出後，您的讀經進度將不再與此團隊同步。`,
-            confirmText: "確定退出",
-            cancelText: "取消"
-          });
-          if (!confirmed) return;
-
-          loader.show();
-          const result = await db.leaveReadingTeam(plan.globalPlanId || plan.id, team.id);
-          loader.hide();
-
-          if (result && result.success) {
-            alert("已成功退出團隊。");
-            window.location.reload(true);
-          } else {
-            alert("退出團隊失敗: " + ((result && result.error && result.error.message) || "未知錯誤"));
-          }
-        });
-      }
-
       const disbandBtn = container.querySelector("[data-disband-team-inline]");
-      if (disbandBtn) {
-        disbandBtn.addEventListener("click", async () => {
-          const confirmed = await window.showConfirmDialog({
-            title: "解散團隊",
-            message: `確定要解散團隊「${team.name || ""}」嗎？\n此動作不可復原，所有隊員都會被移除。`,
-            confirmText: "確定解散",
-            cancelText: "取消"
-          });
-          if (!confirmed) return;
-
-          loader.show();
-          const result = await db.disbandReadingTeam(plan.globalPlanId || plan.id, team.id);
-          loader.hide();
-
-          if (result && result.success) {
-            alert("已解散團隊。");
-            window.location.reload(true);
-          } else {
-            alert("解散團隊失敗: " + ((result && result.error && result.error.message) || "未知錯誤"));
-          }
+      disbandBtn.addEventListener("click", async () => {
+        const confirmed = await window.showConfirmDialog({
+          title: "解散團隊",
+          message: `確定要解散團隊「${team.name || ""}」嗎？\n此動作不可復原，所有隊員都會被移除。`,
+          confirmText: "解散團隊",
+          cancelText: "取消",
+          isDestructive: true
         });
-      }
+        if (!confirmed) return;
+
+        disbandBtn.disabled = true;
+        loader.show("解散團隊中...");
+        const result = await db.disbandReadingTeam(team.id);
+        loader.hide();
+        disbandBtn.disabled = false;
+
+        if (result && result.success) {
+          alert("已解散團隊。");
+          window.location.reload(true);
+        } else {
+          alert("解散團隊失敗: " + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"));
+        }
+      });
     }
 
     bindTeamReminderButtons(container, team, members, totalChapters);
+    bindTeamMemberRemovalButtons(container, team, members, () => window.location.reload(true));
     hydrate(container);
   };
 

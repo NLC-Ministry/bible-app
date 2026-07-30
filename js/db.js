@@ -1997,6 +1997,8 @@ const db = {
       ready_team_roster_locked: "團隊已額滿，名單目前不能調整。",
       captain_must_disband_team: "隊長需解散尚未成隊的團隊，不能直接退出。",
       team_captain_required: "只有隊長可以解散團隊。",
+      team_member_remove_captain_required: "只有隊長可以將隊員移出團隊。",
+      team_captain_remove_self_not_allowed: "隊長不能將自己移出團隊；若要退出，請解散團隊。",
       reading_team_not_found: "找不到這個團隊。",
       not_a_team_member: "你目前不在這個團隊中。",
       team_reminder_self_not_allowed: "不需要提醒自己，完成閱讀後直接打卡就可以了。",
@@ -2187,6 +2189,13 @@ const db = {
 
   async leaveReadingTeam(teamId) {
     return this._callReadingTeamRpc("leave_reading_team", { p_team_id: teamId });
+  },
+
+  async removeReadingTeamMember(teamId, memberId) {
+    return this._callReadingTeamRpc("remove_reading_team_member", {
+      p_team_id: teamId,
+      p_member_id: memberId
+    });
   },
 
   async disbandReadingTeam(teamId) {
