@@ -86,26 +86,30 @@ function maybeShowReleaseOnboarding(options = {}) {
 }
 
 function updateCareReminderBadge(reminders = []) {
-  const count = Array.isArray(reminders) ? reminders.length : 0;
+  const unreadReminderKeys = new Set();
+  if (Array.isArray(reminders)) {
+    reminders.forEach((reminder, index) => {
+      if (!reminder || reminder.status === "read") return;
+      const reminderId = String(reminder.id || "").trim();
+      unreadReminderKeys.add(reminderId ? `id:${reminderId}` : `row:${index}`);
+    });
+  }
+  const count = unreadReminderKeys.size;
   const badgeText = count > 9 ? "9+" : String(count);
-
-  document.querySelectorAll("[data-care-reminder-badge]").forEach(badge => {
-    badge.hidden = count === 0;
-    badge.textContent = count === 0 ? "" : badgeText;
-  });
 
   const bellBadge = document.getElementById("notification-bell-badge");
   if (bellBadge) {
     bellBadge.hidden = count === 0;
     bellBadge.textContent = count === 0 ? "" : badgeText;
   }
-
-  document.querySelectorAll('[data-target="profile-view"]').forEach(button => {
-    button.setAttribute(
+  const bellButton = document.getElementById("btn-notification-bell");
+  if (bellButton) {
+    bellButton.setAttribute(
       "aria-label",
-      count > 0 ? `個人，${count} 則未讀關心提醒` : "個人"
+      count > 0 ? `通知，${count} 則未讀` : "通知"
     );
-  });
+  }
+
 }
 
 async function refreshCareReminderBadge(options = {}) {

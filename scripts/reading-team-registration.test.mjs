@@ -23,14 +23,13 @@ const indexCss = read("index.css");
 
 describe("reading competition team schema", () => {
   it("shows unread care reminders without requiring the profile tab to be opened", () => {
-    expect(html.match(/data-care-reminder-badge/g)?.length).toBe(2);
-    expect(html).toContain("care-reminder-badge--mobile");
-    expect(html).toContain("care-reminder-badge--desktop");
+    expect(html).toContain('id="btn-notification-bell"');
+    expect(html).toContain('id="notification-bell-badge"');
     expect(app).toContain("refreshCareReminderBadge({ force: true })");
     expect(app).toContain('document.addEventListener("visibilitychange"');
     expect(app).toContain('count > 9 ? "9+"');
     expect(profile).toContain('window.updateCareReminderBadge(reminders || [])');
-    expect(indexCss).toContain(".care-reminder-badge[hidden]");
+    expect(indexCss).toContain(".notification-bell-badge[hidden]");
   });
 
   it("keeps 3-person and 6-person teams separate from organisation groups", () => {
