@@ -845,16 +845,7 @@ const db = {
             }
           });
 
-          const selectedKey = localStorage.getItem("selected_plan_key");
-          if (selectedKey) {
-            state.activePlan = state.activePlans.find(p =>
-              p.presetKey === selectedKey ||
-              p.globalPlanId === selectedKey ||
-              p.id === selectedKey
-            ) || state.activePlans[0];
-          } else {
-            state.activePlan = state.activePlans[0];
-          }
+          state.activePlan = selectMostRecentActivePlan(state.activePlans);
           calculateAllPlansProgress();
         } else {
           state.activePlan = null;
@@ -972,12 +963,7 @@ const db = {
         localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
         calculateAllPlansProgress();
 
-        const selectedKey = localStorage.getItem("selected_plan_key");
-        if (selectedKey) {
-          state.activePlan = state.activePlans.find(p => p.presetKey === selectedKey) || state.activePlans[0] || null;
-        } else {
-          state.activePlan = state.activePlans[0] || null;
-        }
+        state.activePlan = selectMostRecentActivePlan(state.activePlans);
       } else {
         state.activePlans = [];
         state.activePlan = null;
@@ -2496,8 +2482,12 @@ const db = {
     }
 
     if (state.activePlans.length > 0) {
-      state.activePlan = state.activePlans[0];
-      localStorage.setItem("selected_plan_key", state.activePlan.presetKey || "");
+      state.activePlan = selectMostRecentActivePlan(state.activePlans);
+      if (state.activePlan) {
+        localStorage.setItem("selected_plan_key", state.activePlan.presetKey || state.activePlan.id || "");
+      } else {
+        localStorage.removeItem("selected_plan_key");
+      }
     } else {
       state.activePlan = null;
       localStorage.removeItem("selected_plan_key");
