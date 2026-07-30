@@ -23,7 +23,7 @@ describe("admin team registration overview", () => {
     expect(migration).not.toContain("actor_profile.role = 'group_leader'");
     expect(edge).toContain('return ["admin", "great_zone_leader", "zone_leader"].includes(profile?.role);');
     expect(migration).toContain("team_statistics_management_scope_required");
-    expect(edge).toContain('functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)');
+    expect(edge).toContain('PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)');
   });
 
   it("shows a complete team when any member is inside the manager scope", () => {
@@ -64,12 +64,9 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_management_org_filters";
-    const expectedTeamCssCacheKey = "css/team-registration.css?v=20260730_pr167_conflict_resolution";
-
-    expect(html).toContain(expectedAppCacheKey);
-    expect(html).toContain("index.css?v=20260730_management_plan_hub");
-    expect(html).toContain(expectedTeamCssCacheKey);
+    expect(html).toContain("js/app.js?v=20260730_unjoined_plan_invites");
+    expect(html).toContain("index.css?v=20260730_unjoined_plan_invites");
+    expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });
 
   it("restores user permission management and uses native team disclosure", () => {

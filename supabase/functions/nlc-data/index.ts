@@ -41,7 +41,14 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "leave_reading_team",
   "remove_reading_team_member",
   "disband_reading_team",
-  "send_reading_team_reminder"
+  "send_reading_team_reminder",
+  "get_unjoined_plan_members",
+  "send_plan_join_invitation"
+]);
+const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
+  "get_reading_team_registration_overview",
+  "get_unjoined_plan_members",
+  "send_plan_join_invitation"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
@@ -310,7 +317,7 @@ Deno.serve(async (req: Request) => {
       if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
-      if (functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)) {
+      if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;

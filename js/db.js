@@ -1992,7 +1992,12 @@ const db = {
       team_reminder_same_team_required: "只能提醒同一支團隊裡的夥伴。",
       team_reminder_daily_limit: "今天已提醒過這位夥伴，明天再為彼此加油。",
       invalid_reminder_reason: "請重新選擇提醒方式。",
-      invalid_reminder_message: "提醒內容需為 1 至 300 字。",
+      plan_management_scope_required: "你目前沒有可管理這項計畫的權限範圍。",
+      plan_member_outside_scope: "這位使用者不在你的管理範圍內。",
+      plan_invitation_recipient_already_joined: "這位使用者已經加入所選計畫。",
+      plan_invitation_recipient_not_found: "找不到這位使用者，或帳號目前未啟用。",
+      plan_invitation_self_not_allowed: "不需要提醒自己加入計畫。",
+      plan_not_found: "找不到所選計畫，請重新整理後再試。",      invalid_reminder_message: "提醒內容需為 1 至 300 字。",
       forbidden_rpc: "團隊功能暫時無法使用，請稍後再試。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
@@ -2051,6 +2056,31 @@ const db = {
     return result.success ? { success: true, context: result.data || { summary: {}, plans: [] } } : result;
   },
 
+  async getUnjoinedPlanMembers(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到所選計畫，請重新整理後再試。" };
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      return { success: true, context: { planId, planName: plan && plan.name || "", members: [] } };
+    }
+    const result = await this._callReadingTeamRpc("get_unjoined_plan_members", {
+      p_global_plan_id: planId,
+      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+    });
+    return result.success
+      ? { success: true, context: result.data || { planId, planName: plan && plan.name || "", members: [] } }
+      : result;
+  },
+
+  async sendPlanJoinInvitation(plan, recipientId) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到所選計畫，請重新整理後再試。" };
+    const result = await this._callReadingTeamRpc("send_plan_join_invitation", {
+      p_global_plan_id: planId,
+      p_recipient_id: recipientId,
+      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+    });
+    return result.success ? { success: true, context: result.data || { sent: true } } : result;
+  },
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };

@@ -801,6 +801,7 @@ async function selectManagementPlan(planKey) {
   localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
   window.currentPlanViewState = 'ORG_STATS';
   if (typeof window.renderPlanMembersView === 'function') await window.renderPlanMembersView();
+  await renderAdminUnjoinedPlanMembers(true);
   await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content');
   await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6');
 }
@@ -853,6 +854,9 @@ window.initAdminUserManagement = init;
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
 let cachedTeamsDataKey = "";
+let cachedUnjoinedPlanKey = "";
+let cachedUnjoinedPlanMembers = [];
+let unjoinedPlanRequestId = 0;
 
 function getSelectedManagementOrgFilter() {
   const role = (state.currentUser && state.currentUser.role) || "member";
@@ -877,7 +881,116 @@ function teamMatchesManagementOrgFilter(team, filter = getSelectedManagementOrgF
   ]) || "").split(",").map(value => value.trim()).filter(Boolean).includes(filter.value));
 }
 
+function memberMatchesManagementOrgFilter(member, filter = getSelectedManagementOrgFilter()) {
+  if (!filter || filter.type.startsWith("all")) return true;
+  const field = filter.type === "region" ? "greatRegion" : filter.type === "zone" ? "pastoralZone" : "smallGroup";
+  const fallbackField = field === "greatRegion" ? "great_region" : field === "pastoralZone" ? "pastoral_zone" : "small_group";
+  return String(member && (member[field] || member[fallbackField]) || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean)
+    .includes(filter.value);
+}
+
+async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
+  const container = document.getElementById("admin-unjoined-plan-members");
+  const count = document.getElementById("admin-unjoined-plan-count");
+  if (!container || !count) return;
+
+  const currentUser = state.currentUser || {};
+  const plan = state.activePlan;
+  if (!MANAGEMENT_ROLES.includes(currentUser.role) || !plan) {
+    count.textContent = "0 人";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
+    return;
+  }
+
+  const cacheKey = [
+    currentUser.id || currentUser.name || "anonymous",
+    currentUser.role || "member",
+    currentUser.managed_regions || currentUser.great_region || "",
+    currentUser.managed_zones || currentUser.pastoral_zone || "",
+    plan.globalPlanId || plan.id || "",
+    plan.presetKey || plan.preset_key || ""
+  ].join("|");
+
+  if (forceRefresh || cachedUnjoinedPlanKey !== cacheKey) {
+    const requestId = ++unjoinedPlanRequestId;
+    cachedUnjoinedPlanKey = cacheKey;
+    cachedUnjoinedPlanMembers = [];
+    count.textContent = "讀取中";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">讀取尚未加入的人員中...</div>';
+
+    const result = await db.getUnjoinedPlanMembers(plan);
+    if (requestId !== unjoinedPlanRequestId) return;
+    if (!result || !result.success) {
+      const message = escapeHTML(result && result.message ? result.message : "資料讀取失敗，請稍後再試。");
+      count.textContent = "--";
+      container.innerHTML = `
+        <div class="admin-unjoined-plan-empty" role="status">
+          <div>${message}</div>
+          <button type="button" class="secondary-btn" id="admin-unjoined-plan-retry" style="margin-top:0.75rem;">重新整理</button>
+        </div>`;
+      const retryButton = document.getElementById("admin-unjoined-plan-retry");
+      if (retryButton) retryButton.onclick = () => renderAdminUnjoinedPlanMembers(true);
+      return;
+    }
+    cachedUnjoinedPlanMembers = Array.isArray(result.context && result.context.members)
+      ? result.context.members
+      : [];
+  }
+
+  const visibleMembers = cachedUnjoinedPlanMembers.filter(member => memberMatchesManagementOrgFilter(member));
+  count.textContent = `${visibleMembers.length} 人`;
+  if (visibleMembers.length === 0) {
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內的人員都已加入所選計畫。</div>';
+    return;
+  }
+
+  container.innerHTML = visibleMembers.map(member => {
+    const memberId = escapeHTML(String(member.id || ""));
+    const memberName = escapeHTML(member.name || "未命名使用者");
+    const scope = [
+      member.greatRegion || member.great_region,
+      member.pastoralZone || member.pastoral_zone,
+      member.smallGroup || member.small_group
+    ].filter(Boolean).map(value => escapeHTML(String(value))).join("・") || "尚未設定牧養資料";
+    const reminded = member.remindedToday === true || member.reminded_today === true;
+    return `
+      <div class="admin-unjoined-plan-member">
+        <div class="admin-unjoined-plan-member__identity">
+          <div class="admin-unjoined-plan-member__name">${memberName}</div>
+          <div class="admin-unjoined-plan-member__scope">${scope}</div>
+        </div>
+        <button type="button" class="secondary-btn admin-plan-invite-btn" data-plan-invite-member-id="${memberId}" ${reminded ? "disabled" : ""}>
+          ${reminded ? "今天已提醒" : "戳一下"}
+        </button>
+      </div>`;
+  }).join("");
+
+  container.querySelectorAll("[data-plan-invite-member-id]").forEach(button => {
+    button.onclick = async () => {
+      if (button.disabled) return;
+      const memberId = button.dataset.planInviteMemberId;
+      const member = cachedUnjoinedPlanMembers.find(item => String(item.id) === String(memberId));
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "提醒中...";
+      const result = await db.sendPlanJoinInvitation(state.activePlan, memberId);
+      if (!result || !result.success) {
+        button.disabled = false;
+        button.textContent = originalText;
+        if (typeof showToast === "function") showToast(result && result.message ? result.message : "提醒傳送失敗，請稍後再試。");
+        return;
+      }
+      if (member) member.remindedToday = true;
+      button.textContent = "今天已提醒";
+      if (typeof showToast === "function") showToast(`已提醒 ${member && member.name || "這位夥伴"} 加入「${state.activePlan && state.activePlan.name || "所選計畫"}」`);
+    };
+  });
+}
 async function refreshAdminTeamRegistrationFilters() {
+  await renderAdminUnjoinedPlanMembers(false);
   await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
   await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
 }
@@ -1093,6 +1206,7 @@ export function initAdminTeamRegistration() {
   }
 }
 
+window.renderAdminUnjoinedPlanMembers = renderAdminUnjoinedPlanMembers;
 window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
 window.refreshAdminTeamRegistrationFilters = refreshAdminTeamRegistrationFilters;
 window.initAdminTeamRegistration = initAdminTeamRegistration;
