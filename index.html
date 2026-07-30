@@ -1676,6 +1676,30 @@
 
         <div id="admin-permissions-panel" class="grid-layout hidden" role="tabpanel"
           aria-labelledby="admin-tab-permissions">
+          <div class="card-col span-12">
+            <div class="glass-card admin-feature-settings-card">
+              <div class="admin-feature-settings-card__copy">
+                <span class="admin-feature-settings-card__icon" aria-hidden="true">
+                  <span class="nlc-icon nlc-icon--md" data-icon="setting"></span>
+                </span>
+                <div>
+                  <h3 class="card-title">功能開放設定</h3>
+                  <p>可暫時封存牧區靈修分享牆；既有分享、按讚與留言都會保留。</p>
+                </div>
+              </div>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>牧區靈修分享牆</strong>
+                  <span id="admin-pastoral-wall-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-pastoral-wall-toggle"
+                  role="switch" aria-checked="false" aria-label="開放牧區靈修分享牆" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
+            </div>
+          </div>
           <div class="card-col span-12" id="admin-users-accordion-root">
             <!-- Rendered dynamically by React -->
           </div>
@@ -2022,7 +2046,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260730_remove_legacy_org_entry"></script>
+  <script type="module" src="js/app.js?v=20260730_pr167_management_org_filters"></script>
 </body>
 
 </html>

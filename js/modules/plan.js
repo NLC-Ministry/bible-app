@@ -1260,6 +1260,114 @@ async function openJoinedPlanTeam(plan) {
   }
 }
 
+async function confirmPlanJoin({ plan, mode, onConfirm }) {
+  return new Promise(resolve => {
+    const ElementCtor = window.HTMLElement || Element;
+    const previousActiveElement = document.activeElement instanceof ElementCtor
+      ? document.activeElement
+      : null;
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay plan-join-confirmation-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:var(--z-modal,700);";
+
+    const title = mode === "team" ? "要和夥伴一起開始嗎？" : "要加入這個讀經計畫嗎？";
+    const description = mode === "team"
+      ? "你可以先選擇 3 人或 6 人團隊；建立後再把邀請碼分享給朋友。"
+      : "加入後就能在首頁看到今天進度，也可以之後再加入團隊。";
+    const confirmLabel = mode === "team" ? "選擇團隊人數" : "太好了，開始吧";
+
+    overlay.innerHTML = `
+      <section class="plan-join-confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="plan-join-confirmation-title" aria-describedby="plan-join-confirmation-description" tabindex="-1">
+        <header class="plan-join-confirmation-dialog__header">
+          <p class="plan-join-confirmation-dialog__eyebrow">${escapeHTML(plan.name || "讀經計畫")}</p>
+          <h3 id="plan-join-confirmation-title">${title}</h3>
+          <p id="plan-join-confirmation-description">${description}</p>
+        </header>
+        <footer class="plan-join-confirmation-dialog__footer">
+          <p class="plan-join-confirmation-dialog__error" data-plan-confirm-error hidden></p>
+          <button type="button" class="secondary-btn plan-join-confirmation-dialog__cancel" data-plan-confirm-cancel>我再看看</button>
+          <button type="button" class="primary-btn plan-join-confirmation-dialog__confirm" data-plan-confirm-action>${confirmLabel}</button>
+        </footer>
+      </section>`;
+
+    const panel = overlay.firstElementChild;
+    const cancelButton = overlay.querySelector("[data-plan-confirm-cancel]");
+    const confirmButton = overlay.querySelector("[data-plan-confirm-action]");
+    const errorMessage = overlay.querySelector("[data-plan-confirm-error]");
+    let settled = false;
+    const focusableSelector = [
+      "button:not([disabled])",
+      "[href]",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(",");
+    const focusableElements = () => Array.from(overlay.querySelectorAll(focusableSelector))
+      .filter(element => element instanceof ElementCtor && !element.hidden);
+    const close = value => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
+      if (previousActiveElement && document.contains(previousActiveElement)) {
+        previousActiveElement.focus();
+      }
+      resolve(value);
+    };
+    const onKeyDown = event => {
+      if (event.key === "Escape") close(false);
+      if (event.key !== "Tab") return;
+
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    overlay.addEventListener("click", event => {
+      if (event.target === overlay) close(false);
+    });
+    cancelButton.addEventListener("click", () => close(false));
+    confirmButton.addEventListener("click", async () => {
+      confirmButton.disabled = true;
+      if (errorMessage) {
+        errorMessage.hidden = true;
+        errorMessage.textContent = "";
+      }
+      try {
+        await onConfirm();
+        close(true);
+      } catch (err) {
+        console.error("Plan join confirmation failed:", err);
+        if (!overlay.isConnected) return;
+        if (errorMessage) {
+          errorMessage.textContent = "暫時無法加入，請再試一次。";
+          errorMessage.hidden = false;
+        }
+        confirmButton.disabled = false;
+        confirmButton.focus();
+      }
+    });
+    document.addEventListener("keydown", onKeyDown);
+    document.body.appendChild(overlay);
+    if (typeof hydrateIcons === "function") hydrateIcons(overlay);
+    (cancelButton || panel).focus();
+  });
+}
+
 async function joinPlanSoloFromCard(plan, key) {
   const defaultSchedule = { readingDaysPerWeek: 7, restWeekdays: [] };
   const joinedPlan = await db.joinPresetPlan(key, defaultSchedule);
@@ -1268,11 +1376,10 @@ async function joinPlanSoloFromCard(plan, key) {
 }
 
 async function createTeamFromPlanCard(plan, key) {
-  const joinedPlan = await joinPlanSoloFromCard(plan, key);
-  if (joinedPlan && typeof window.openReadingTeamDialog === "function") {
-    await window.openReadingTeamDialog(joinedPlan, { preferredDivision: 3 });
+  if (typeof window.openReadingTeamDialog === "function") {
+    await window.openReadingTeamDialog(plan);
   }
-  return joinedPlan;
+  return null;
 }
 
 function getJoinedPlanStartTime(plan) {
@@ -2181,7 +2288,13 @@ function renderPresetPlansList() {
 
     const openDetails = () => {
       openPlanDetailsDialog(plan, { onJoin: async () => {
-        await joinPlanSoloFromCard(plan, key);
+        await confirmPlanJoin({
+          plan,
+          mode: "solo",
+          onConfirm: async () => {
+            await joinPlanSoloFromCard(plan, key);
+          }
+        });
       }});
     };
 
@@ -2198,12 +2311,24 @@ function renderPresetPlansList() {
     card.querySelector('[data-plan-card-action="solo-join"]')?.addEventListener("click", async event => {
       event.preventDefault();
       event.stopPropagation();
-      await joinPlanSoloFromCard(plan, key);
+      await confirmPlanJoin({
+        plan,
+        mode: "solo",
+        onConfirm: async () => {
+          await joinPlanSoloFromCard(plan, key);
+        }
+      });
     });
     card.querySelector('[data-plan-card-action="team-create"]')?.addEventListener("click", async event => {
       event.preventDefault();
       event.stopPropagation();
-      await createTeamFromPlanCard(plan, key);
+      await confirmPlanJoin({
+        plan,
+        mode: "team",
+        onConfirm: async () => {
+          await createTeamFromPlanCard(plan, key);
+        }
+      });
     });
 
     container.appendChild(card);

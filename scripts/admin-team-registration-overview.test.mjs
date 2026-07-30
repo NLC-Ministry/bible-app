@@ -64,9 +64,12 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_remove_legacy_org_entry");
-    expect(html).toContain("index.css?v=20260730_management_plan_filter_rules");
-    expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
+    const expectedAppCacheKey = "js/app.js?v=20260730_pr167_management_org_filters";
+    const expectedTeamCssCacheKey = "css/team-registration.css?v=20260730_pr167_conflict_resolution";
+
+    expect(html).toContain(expectedAppCacheKey);
+    expect(html).toContain("index.css?v=20260730_management_plan_hub");
+    expect(html).toContain(expectedTeamCssCacheKey);
   });
 
   it("restores user permission management and uses native team disclosure", () => {
