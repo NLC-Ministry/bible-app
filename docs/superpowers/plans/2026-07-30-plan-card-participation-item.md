@@ -55,14 +55,18 @@
   - Return shape:
     ```js
     {
-      variant: "solo" | "team-open" | "team-full" | "team-missing" | "team-with-other-division-available",
+      variant: "solo" | "team-open" | "team-full" | "team-with-other-division-available",
       title: string,
       description: string,
-      tone: "neutral" | "brand" | "success" | "warning",
-      icon: string,
+      tone: "neutral" | "brand" | "success",
+      icon: string,   // registered Lucide keys only: "user" (solo), "people" (team)
       action: null | { label: string, division: 3 | 6, action: "join-team-division" | "open-team" }
     }
     ```
+  - Division availability must be computed against ALL joined divisions (a member
+    may be in both the 3- and 6-person team). When both are joined there is no
+    available division, so the model returns `team-full`/`team-open` with the
+    `open-team` (查看團隊) action.
 
 - [ ] **Step 1: Write the failing architecture test**
 
@@ -99,8 +103,14 @@ function getPlanParticipationModel(plan, contexts = []) {
   const divisions = [3, 6];
   const joinedContexts = normalizedContexts.filter(context => context && context.team);
   const joinedContext = joinedContexts[0] || null;
-  const joinedDivision = joinedContext ? Number(joinedContext.team.division) : null;
-  const availableDivision = divisions.find(division => division !== joinedDivision);
+  // Consider EVERY joined division, not just the first context, so a member who
+  // is in both team sizes is not offered a division they already joined.
+  const joinedDivisions = new Set(
+    joinedContexts
+      .map(context => Number(context.team.division))
+      .filter(division => !Number.isNaN(division))
+  );
+  const availableDivision = divisions.find(division => !joinedDivisions.has(division));
 
   if (!joinedContext) {
     return {
@@ -118,7 +128,7 @@ function getPlanParticipationModel(plan, contexts = []) {
   }
 
   const team = joinedContext.team || {};
-  const division = Number(team.division || joinedDivision || 3);
+  const division = Number(team.division || 3);
   const memberCount = Number(team.memberCount || team.current_count || joinedContext.memberCount || 0);
   const capacity = Number(team.capacity || team.division || division);
   const isFull = capacity > 0 && memberCount >= capacity;
@@ -131,7 +141,7 @@ function getPlanParticipationModel(plan, contexts = []) {
       title: "團隊讀經中",
       description,
       tone: isFull ? "success" : "brand",
-      icon: "users",
+      icon: "people",
       action: {
         label: `報名 ${availableDivision}人組`,
         division: availableDivision,
@@ -145,7 +155,7 @@ function getPlanParticipationModel(plan, contexts = []) {
     title: "團隊讀經中",
     description,
     tone: isFull ? "success" : "brand",
-    icon: "users",
+    icon: "people",
     action: {
       label: "查看團隊",
       division,
@@ -294,9 +304,11 @@ it("does not render joined-card participation as scattered badge fragments", () 
 
   expect(joinedList).toContain("renderPlanParticipationItem(participationModel)");
   expect(joinedList).toContain("bindPlanParticipationItemActions(card, plan, participationModel)");
-  expect(joinedList).not.toContain("document.createElement(\"div\")");
+  // The card element itself is legitimately built with document.createElement("div");
+  // assert only that the scattered team fragments are gone.
   expect(joinedList).not.toContain("plan-card-team-controls__badge");
   expect(joinedList).not.toContain("plan-card-team-controls__button");
+  expect(joinedList).not.toContain("plan-card-participation-state");
 });
 ```
 
@@ -350,41 +362,37 @@ function bindPlanParticipationItemActions(card, plan, model) {
 
 - [ ] **Step 4: Replace the manual team container logic**
 
-Inside `renderJoinedPlansList()`, keep `const teamHtml = isTeamPlan ? '<div class="plan-card-team-controls"></div>' : "";` only as a temporary slot, then replace post-render manual DOM creation with:
+The joined-card team block currently lives inside `if (isTeamPlan) { const teamContainer = card.querySelector(".plan-card-team-controls"); ... }` and loads state via `db.getMyReadingTeam(plan).then(result => ...)`, deriving contexts with `getJoinedReadingTeamContexts(result.context)`. **Preserve** the existing `isDemo || !isLoggedIn` guard and the loading/error hints — only replace the manual badge/button/label DOM assembly with the participation item. Replace the whole team block body with:
 
 ```js
 if (isTeamPlan) {
   const teamContainer = card.querySelector(".plan-card-team-controls");
   if (teamContainer) {
     teamContainer.classList.add("plan-card-participation-slot");
-    teamContainer.innerHTML = renderPlanParticipationItem(getPlanParticipationModel(plan, []));
+    const isDemo = state.currentUser && state.currentUser.is_demo;
+    const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
+
+    if (isDemo || !isLoggedIn) {
+      teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">團隊功能需登入正式帳號</span>`;
+    } else {
+      teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
+      db.getMyReadingTeam(plan).then(result => {
+        if (!teamContainer.parentElement) return;
+        const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
+        const participationModel = getPlanParticipationModel(plan, contexts);
+        teamContainer.innerHTML = renderPlanParticipationItem(participationModel);
+        bindPlanParticipationItemActions(card, plan, participationModel);
+        if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
+      }).catch(err => {
+        console.error("Error loading team info for card:", err);
+        teamContainer.innerHTML = `<span class="plan-card-participation-item__hint plan-card-participation-item__hint--danger">無法載入團隊資料</span>`;
+      });
+    }
   }
 }
 ```
 
-Then replace the async `window.getReadingTeamContextsForPlan(plan)` success branch with:
-
-```js
-const participationModel = getPlanParticipationModel(plan, contexts);
-teamContainer.innerHTML = renderPlanParticipationItem(participationModel);
-bindPlanParticipationItemActions(card, plan, participationModel);
-if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
-```
-
-Keep existing loading and error strings, but render them inside the same slot:
-
-```js
-teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
-teamContainer.innerHTML = `<span class="plan-card-participation-item__hint plan-card-participation-item__hint--danger">無法載入團隊資料</span>`;
-```
-
-Remove manual creation of:
-
-```js
-const participationLabel = document.createElement("div");
-const badge = document.createElement("div");
-const btn = document.createElement("button");
-```
+Remove the manual creation of `participationLabel`, `badge`, and `btn` (the `document.createElement` assembly plus the `plan-card-team-controls__badge`, `plan-card-team-controls__button`, and `plan-card-participation-state` markup). Also remove the now-obsolete `updateJoinedPlanTeamAction(card, plan, ...)` calls in this joined-card block — the participation item owns the action. Do not touch `openJoinedPlanProgress`/`openJoinedPlanTeam`.
 
 - [ ] **Step 5: Run focused tests**
 
@@ -465,16 +473,17 @@ Append inside the existing plan-card CSS section in `index.css`:
   min-width: 0;
 }
 
+/* Light Item row — NOT a nested card: a hairline divider separates it from the
+   card body above, with no inner border, fill, or card radius. */
 .plan-card-participation-item {
   align-items: center;
-  background: color-mix(in srgb, var(--text-primary) 3%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
-  border-radius: var(--radius-md);
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
   display: grid;
   gap: 0.625rem;
   grid-template-columns: 2rem minmax(0, 1fr) auto;
+  margin-top: 0.5rem;
   min-width: 0;
-  padding: 0.625rem;
+  padding-top: 0.625rem;
 }
 
 .plan-card-participation-item__media {
