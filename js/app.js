@@ -10,10 +10,10 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260730_remove_local_permission_management';
-import './auth.js?v=20260730_remove_local_permission_management';
-import './db.js?v=20260730_remove_local_permission_management';
-import './utils.js?v=20260730_remove_local_permission_management';
+import './state.js?v=20260730_public_personal_ranking';
+import './auth.js?v=20260730_public_personal_ranking';
+import './db.js?v=20260730_public_personal_ranking';
+import './utils.js?v=20260730_public_personal_ranking';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';

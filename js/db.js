@@ -2338,6 +2338,38 @@ const db = {
       : result;
   },
 
+  async getPersonalPlanRankingSummary(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到目前計畫，暫時無法載入個人排名。" };
+    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+      return {
+        success: true,
+        context: {
+          churchRank: 1,
+          churchTotal: 1,
+          zoneName: String(state.currentUser && state.currentUser.pastoral_zone || "").trim() || null,
+          zoneRank: 1,
+          zoneTotal: 1
+        }
+      };
+    }
+    const result = await this._callReadingTeamRpc("get_personal_plan_ranking_summary", {
+      p_global_plan_id: planId
+    });
+    return result.success
+      ? {
+          success: true,
+          context: result.data || {
+            churchRank: null,
+            churchTotal: 0,
+            zoneName: null,
+            zoneRank: null,
+            zoneTotal: 0
+          }
+        }
+      : result;
+  },
+
   async createReadingTeam(plan, division, name) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊報名。" };

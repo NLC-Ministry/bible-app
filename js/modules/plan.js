@@ -5088,96 +5088,26 @@ async function renderMyPersonalRankings() {
     ? ComponentSkeletonLoader.getHtml("inline", { width: "3rem", height: "0.8rem" })
     : "—";
 
-  // Calculate completedDaysCount (讀完一遍後直接顯示總天數，避免進入二三遍計算落後/超前不準確)
-  const isCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
-  const completedDaysCount = isCompletedOnce
-    ? state.activePlan.days.length
-    : state.activePlan.days.filter(d => {
-      if (!d.chapters || d.chapters.length === 0) return false;
-      return d.chapters.every(ch => ch.isRead);
-    }).length;
-
-  const planStart = new Date(state.activePlan.startDate);
-  const today = new Date();
-  const diffTime = today.getTime() - planStart.getTime();
-  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-  const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
-
-  let allUsers = [];
+  let result;
   try {
-    allUsers = await db.fetchMergedUsersList();
-  } catch (e) {
-    console.warn("Failed to fetch users list for personal ranking", e);
+    result = await db.getPersonalPlanRankingSummary(state.activePlan);
+  } catch (error) {
+    console.warn("Failed to fetch personal plan ranking summary", error);
+    result = { success: false };
   }
 
-  const myName = state.currentUser.name;
-  const myZone = state.currentUser.pastoral_zone || "";
+  const context = result && result.success ? result.context || {} : {};
+  const churchRank = Number(context.churchRank || 0);
+  const churchTotal = Number(context.churchTotal || 0);
+  const zoneName = String(context.zoneName || state.currentUser.pastoral_zone || "").trim();
+  const zoneRank = Number(context.zoneRank || 0);
+  const zoneTotal = Number(context.zoneTotal || 0);
 
-  // ── 多重排序鍵說明 ──
-  // 主排序 progress DESC → 次排序 last_read ASC → 確定性防線 id(name) ASC
-  // 此函數在 leaderboard-utils.js 中定義，透過 window 全域存取
-  const _lbSort = typeof window._lbSortLeaderboard === 'function'
-    ? window._lbSortLeaderboard
-    : (arr, keyFn) => [...arr].sort((a, b) => {
-        const diff = (b.progress ?? 0) - (a.progress ?? 0);
-        if (diff !== 0) return diff;
-        const aT = a.last_read ? new Date(a.last_read).getTime() : Infinity;
-        const bT = b.last_read ? new Date(b.last_read).getTime() : Infinity;
-        if (aT !== bT) return aT - bT;
-        return String(a.name ?? '').localeCompare(String(b.name ?? ''));
-      });
-
-  const _lbDenseRank = typeof window._lbAssignDenseRanks === 'function'
-    ? window._lbAssignDenseRanks
-    : (sorted) => {
-        const total = sorted.length;
-        let rank = 1;
-        return sorted.map((u, i) => {
-          // 計畫未開始（progress = 0）→ 顯示最後名次，讓人有「從最後衝上來」的動力
-          if ((u.progress ?? 0) === 0) return { ...u, rank: total };
-          if (i === 0) return { ...u, rank: 1 };
-          const prev = sorted[i - 1];
-          // prev 若也是未開始，本人也應顯示最後名次（但已在上方 progress===0 攔截）
-          const same = (u.progress ?? 0) === (prev.progress ?? 0)
-            && (u.last_read ?? null) === (prev.last_read ?? null);
-          if (!same) rank = i + 1;
-          return { ...u, rank };
-        });
-      };
-
-  const userProgressList = allUsers.map(u => {
-    let pct = u.plan_progress || 0;
-    if (u.name === myName) {
-      pct = state.activePlan ? Math.round((completedDaysCount / state.activePlan.days.length) * 100) : 0;
-    }
-    return {
-      id: u.id,
-      name: u.name,
-      pastoral_zone: u.pastoral_zone,
-      progress: pct,
-      last_read: u.last_read || null
-    };
-  });
-
-  // ── 全教會排名（多重排序 + Dense Rank）──
-  const sortedAll = _lbSort(userProgressList);
-  const rankedAll = _lbDenseRank(sortedAll);
-  const myEntryAll = rankedAll.find(u => u.name === myName);
-  const myRankAll = myEntryAll ? myEntryAll.rank : rankedAll.length + 1;
-
-  if (elRankAll) elRankAll.textContent = `第 ${myRankAll} 名`;
-  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${rankedAll.length} 人`;
-
-  // ── 牧區排名（多重排序 + Dense Rank）──
-  const zoneUsers = userProgressList.filter(u => u.pastoral_zone === myZone);
-  const sortedZone = _lbSort(zoneUsers);
-  const rankedZone = _lbDenseRank(sortedZone);
-  const myEntryZone = rankedZone.find(u => u.name === myName);
-  const myRankZone = myEntryZone ? myEntryZone.rank : rankedZone.length + 1;
-
-  if (elRankZoneTitle && myZone) elRankZoneTitle.textContent = `${myZone} 個人排行`;
-  if (elRankZone) elRankZone.textContent = myZone ? `第 ${myRankZone} 名` : "未選牧區";
-  if (elRankZoneTotal) elRankZoneTotal.textContent = myZone ? `共 ${sortedZone.length} 人` : "請設定所屬牧區";
+  if (elRankAll) elRankAll.textContent = churchRank > 0 ? `第 ${churchRank} 名` : "尚未加入";
+  if (elRankAllTotal) elRankAllTotal.textContent = `共 ${churchTotal} 人`;
+  if (elRankZoneTitle) elRankZoneTitle.textContent = zoneName ? `${zoneName} 個人排行` : "牧區個人排行";
+  if (elRankZone) elRankZone.textContent = !zoneName ? "未選牧區" : (zoneRank > 0 ? `第 ${zoneRank} 名` : "尚未加入");
+  if (elRankZoneTotal) elRankZoneTotal.textContent = zoneName ? `共 ${zoneTotal} 人` : "請設定所屬牧區";
 }
 
 function updateReadingTeamRankingSummary(division, text) {
