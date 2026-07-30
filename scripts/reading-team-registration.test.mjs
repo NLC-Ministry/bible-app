@@ -212,6 +212,18 @@ describe("NLC and browser integration", () => {
     expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
   });
 
+  it("requires confirmation before joining from preset plan details", () => {
+    const openDetailsFlow = plan.slice(
+      plan.indexOf("const openDetails = () =>"),
+      plan.indexOf("card.onclick = event =>")
+    );
+    expect(openDetailsFlow).toContain("openPlanDetailsDialog(plan");
+    expect(openDetailsFlow).toContain("onJoin");
+    expect(openDetailsFlow).toContain("confirmPlanJoin");
+    expect(openDetailsFlow).toContain("joinPlanSoloFromCard(plan, key)");
+    expect(openDetailsFlow.indexOf("confirmPlanJoin")).toBeLessThan(openDetailsFlow.indexOf("joinPlanSoloFromCard(plan, key)"));
+  });
+
   it("opens team setup from preset cards without joining the plan first", () => {
     const createTeamFlow = plan.slice(
       plan.indexOf("async function createTeamFromPlanCard"),
@@ -245,6 +257,50 @@ describe("NLC and browser integration", () => {
 
       cancelButton.click();
       await expect(pending).resolves.toBe(false);
+    });
+  });
+
+  it("traps keyboard focus in the plan join confirmation and restores prior focus", async () => {
+    const confirmSource = extractFunction(plan, "confirmPlanJoin", "joinPlanSoloFromCard");
+    expect(confirmSource).toContain("previousActiveElement");
+    expect(confirmSource).toContain("focusableElements");
+    expect(confirmSource).toContain("event.shiftKey");
+    expect(confirmSource).toContain("previousActiveElement.focus()");
+
+    await withDialogDom(async () => {
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.textContent = "Open details";
+      document.body.appendChild(trigger);
+      trigger.focus();
+
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm: vi.fn()
+      });
+
+      const cancelButton = document.querySelector("[data-plan-confirm-cancel]");
+      const confirmButton = document.querySelector("[data-plan-confirm-action]");
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "Tab",
+        shiftKey: true,
+        bubbles: true
+      }));
+      expect(document.activeElement).toBe(confirmButton);
+
+      confirmButton.dispatchEvent(new window.KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true
+      }));
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.click();
+      await expect(pending).resolves.toBe(false);
+      expect(document.activeElement).toBe(trigger);
     });
   });
 

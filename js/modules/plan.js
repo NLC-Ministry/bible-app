@@ -1282,6 +1282,10 @@ async function openJoinedPlanTeam(plan) {
 
 async function confirmPlanJoin({ plan, mode, onConfirm }) {
   return new Promise(resolve => {
+    const ElementCtor = window.HTMLElement || Element;
+    const previousActiveElement = document.activeElement instanceof ElementCtor
+      ? document.activeElement
+      : null;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay plan-join-confirmation-overlay";
     overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:var(--z-modal,700);";
@@ -1311,15 +1315,46 @@ async function confirmPlanJoin({ plan, mode, onConfirm }) {
     const confirmButton = overlay.querySelector("[data-plan-confirm-action]");
     const errorMessage = overlay.querySelector("[data-plan-confirm-error]");
     let settled = false;
+    const focusableSelector = [
+      "button:not([disabled])",
+      "[href]",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(",");
+    const focusableElements = () => Array.from(overlay.querySelectorAll(focusableSelector))
+      .filter(element => element instanceof ElementCtor && !element.hidden);
     const close = value => {
       if (settled) return;
       settled = true;
       document.removeEventListener("keydown", onKeyDown);
       overlay.remove();
+      if (previousActiveElement && document.contains(previousActiveElement)) {
+        previousActiveElement.focus();
+      }
       resolve(value);
     };
     const onKeyDown = event => {
       if (event.key === "Escape") close(false);
+      if (event.key !== "Tab") return;
+
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     overlay.addEventListener("click", event => {
@@ -2273,7 +2308,13 @@ function renderPresetPlansList() {
 
     const openDetails = () => {
       openPlanDetailsDialog(plan, { onJoin: async () => {
-        await joinPlanSoloFromCard(plan, key);
+        await confirmPlanJoin({
+          plan,
+          mode: "solo",
+          onConfirm: async () => {
+            await joinPlanSoloFromCard(plan, key);
+          }
+        });
       }});
     };
 
