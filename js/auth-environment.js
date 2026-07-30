@@ -1,11 +1,18 @@
 export function detectAuthenticationEnvironment(navigatorLike = (typeof navigator !== "undefined" ? navigator : null)) {
   const userAgent = String(navigatorLike && navigatorLike.userAgent || "");
   const lower = userAgent.toLowerCase();
+  const platform = lower.includes("android")
+    ? "android"
+    : /iphone|ipad|ipod/.test(lower)
+      ? "ios"
+      : "unknown";
 
   const standard = {
     kind: "standard_browser",
     app: null,
+    platform,
     canUseInteractiveAuth: true,
+    canAttemptExternalBrowser: false,
     reasonCode: null,
     confidence: "medium"
   };
@@ -13,7 +20,9 @@ export function detectAuthenticationEnvironment(navigatorLike = (typeof navigato
   const embedded = (app, confidence = "high") => ({
     kind: "embedded_browser",
     app,
+    platform,
     canUseInteractiveAuth: false,
+    canAttemptExternalBrowser: platform === "android",
     reasonCode: "embedded_browser_unreliable",
     confidence
   });

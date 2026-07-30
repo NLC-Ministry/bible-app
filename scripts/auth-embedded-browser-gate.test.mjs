@@ -21,11 +21,24 @@ describe("Bible app authentication browser environment gate", () => {
     });
 
     expect(detectAuthenticationEnvironment({
-      userAgent: "Mozilla/5.0 AppleWebKit/605.1.15 Mobile/15E148 Instagram 338.0.0.30.95"
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 338.0.0.30.95"
     })).toMatchObject({
       kind: "embedded_browser",
       app: "instagram",
-      canUseInteractiveAuth: false
+      platform: "ios",
+      canUseInteractiveAuth: false,
+      canAttemptExternalBrowser: false
+    });
+  });
+
+  it("allows Android embedded browsers to attempt a Chrome handoff", () => {
+    expect(detectAuthenticationEnvironment({
+      userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36 Instagram 338.0.0.30.95"
+    })).toMatchObject({
+      kind: "embedded_browser",
+      app: "instagram",
+      platform: "android",
+      canAttemptExternalBrowser: true
     });
   });
 
@@ -57,13 +70,24 @@ describe("Bible app authentication browser environment gate", () => {
   it("routes auth.login through the embedded-browser guidance before OIDC", () => {
     expect(authSource).toContain("detectAuthenticationEnvironment");
     expect(authSource).toContain("shouldGateInteractiveAuth(authEnvironment, options)");
-    expect(authSource).toContain("showEmbeddedBrowserAuthDialog(() => this.login({ ...options, authEnvironmentAcknowledged: true }))");
+    expect(authSource).toContain("showEmbeddedBrowserAuthDialog(authEnvironment)");
+    expect(authSource).not.toContain("authEnvironmentAcknowledged: true");
     expect(authSource).toContain("請使用 Safari / Chrome 繼續");
+    expect(authSource).toContain("複製連結");
+    expect(authSource).toContain("intent://");
   });
 
   it("ships plain design-system styles for the auth environment dialog", () => {
     expect(cssSource).toContain(".auth-environment-dialog");
     expect(cssSource).toContain(".auth-environment-dialog__panel");
     expect(cssSource).toContain(".auth-environment-dialog__primary");
+  });
+
+  it("places the embedded-browser dialog above the full-screen login gate", () => {
+    expect(cssSource).toContain(".login-gate");
+    expect(cssSource).toContain("z-index: var(--z-modal)");
+    expect(cssSource).toContain(".auth-environment-dialog");
+    expect(cssSource).toContain("z-index: var(--z-critical)");
+    expect(cssSource).not.toContain("z-index: 9999");
   });
 });

@@ -3082,7 +3082,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .auth-environment-dialog {
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal);
+  z-index: var(--z-critical);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3123,7 +3123,8 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .auth-environment-dialog__body,
 .auth-environment-dialog__note,
-.auth-environment-dialog__hint {
+.auth-environment-dialog__hint,
+.auth-environment-dialog__status {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.7;
@@ -3138,6 +3139,12 @@ body:not(.dark-theme) .settings-row-btn:hover {
   margin-top: 0.85rem;
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.auth-environment-dialog__status {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-brand);
 }
 
 .auth-environment-dialog__primary {
