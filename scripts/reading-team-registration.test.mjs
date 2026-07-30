@@ -13,6 +13,7 @@ const secureTeamNamesMigration = read("supabase/migrations/0037_secure_unique_re
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
+const participation = read("js/modules/plan-participation-helpers.mjs");
 const teamUi = read("js/modules/team-registration.js");
 const profile = read("js/modules/profile.js");
 const teamCss = read("css/team-registration.css");
@@ -135,20 +136,21 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain('data-plan-card-action="continue"');
     expect(plan).toContain('data-plan-card-action="solo-join"');
     expect(plan).toContain('data-plan-card-action="team-create"');
-    expect(plan).toContain("個人讀經中");
-    expect(plan).toContain("團隊讀經中");
-    expect(plan).toContain("建立 / 加入團隊");
+    // Participation copy now lives in the extracted pure model helper.
+    expect(participation).toContain("個人讀經中");
+    expect(participation).toContain("團隊讀經中");
+    expect(participation).toContain("建立 / 加入團隊");
     expect(plan).toContain("自己加入");
     expect(plan).toContain("建立團隊");
   });
 
   it("models joined-plan participation through the shared participation item", () => {
-    expect(plan).toContain("function getPlanParticipationModel");
+    expect(participation).toContain("export function getPlanParticipationModel");
     expect(plan).toContain("function renderPlanParticipationItem");
     expect(plan).toContain("function bindPlanParticipationItemActions");
-    expect(plan).toContain("團隊讀經中");
-    expect(plan).toContain("個人讀經中");
-    expect(plan).toContain("報名 ${availableDivision}人組");
+    expect(participation).toContain("團隊讀經中");
+    expect(participation).toContain("個人讀經中");
+    expect(participation).toContain("報名 ${availableDivision}人組");
   });
 
   it("allows only the bounded team RPCs and forces the authenticated profile id", () => {
