@@ -213,6 +213,18 @@ describe("NLC and browser integration", () => {
     expect(db).toContain("目前找不到你的會員資料");
   });
 
+  it("keeps the other team-size creation entry visible inside My Team", () => {
+    const renderTeam = teamUi.slice(
+      teamUi.indexOf("const renderTeam = (context"),
+      teamUi.indexOf("const refresh = async")
+    );
+
+    expect(renderTeam).toContain("availableDivisions");
+    expect(renderTeam).toContain("data-add-other-team");
+    expect(renderTeam).toContain("建立另一種人數團隊");
+    expect(renderTeam.indexOf("data-add-other-team")).toBeLessThan(renderTeam.indexOf("querySelector(\"[data-add-other-team]"));
+  });
+
   it("keeps inline team reminder controls inside mobile member rows", () => {
     expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member");
     expect(teamCss).toContain("grid-template-columns: 40px minmax(0, 1fr) 44px");
