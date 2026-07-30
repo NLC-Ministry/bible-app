@@ -1,5 +1,7 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
+import { X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { cn } from "../../lib/utils"
 
 /**
@@ -137,14 +139,17 @@ export function ResponsiveDialog({
 
         {/* 電腦端專屬關閉按鈕 */}
         {isDesktop && (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-full opacity-70 hover:opacity-100 hover:bg-accent hover:text-accent-foreground transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 w-8 h-8 flex items-center justify-center"
+            className="absolute right-4 top-4 rounded-full opacity-70 hover:opacity-100"
             aria-label="Close"
             data-testid="responsive-dialog-close-btn"
           >
-            <span className="text-xl font-light leading-none">×</span>
-          </button>
+            <X className="size-4" aria-hidden="true" />
+          </Button>
         )}
       </div>
     </div>

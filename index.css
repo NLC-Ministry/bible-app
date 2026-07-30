@@ -4160,8 +4160,12 @@ button.logout-btn:hover {
   padding-bottom: 0.5rem;
 }
 .circular-action-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1;
+  padding: 0;
   border-radius: 50%;
   background: var(--bg-card);
   border: 1px solid var(--border-card);
@@ -5620,8 +5624,11 @@ body.dark-theme .pastoral-race-progress {
   font-size: 0.78rem;
 }
 .plan-detail-compact .circular-action-btn {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  aspect-ratio: 1;
 }
 .plan-detail-compact .plan-cover-card {
   aspect-ratio: 16 / 7.2;
@@ -6521,6 +6528,61 @@ select,
   color: var(--color-icon-brand);
 }
 
+/* Icon-only controls: shadcn-style square touch targets for close/search/back actions. */
+.icon-button {
+  appearance: none;
+  inline-size: 44px;
+  block-size: 44px;
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.08s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-button:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  color: var(--text-primary);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.icon-button:active {
+  transform: scale(0.96);
+}
+
+.icon-button--subtle,
+.dialog-close-button {
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-button--ghost {
+  background: transparent;
+}
+
+.icon-button--danger {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 22%, transparent);
+}
+
 button,
 [role="button"],
 .tab-btn,
@@ -7154,19 +7216,7 @@ input:checked + .slider:before {
   color: var(--text-primary);
 }
 .bottom-sheet-close-x {
-  background: transparent;
-  border: none;
-  font-size: 14px;
   color: var(--text-muted);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.bottom-sheet-close-x:active {
-  transform: scale(0.9) !important;
 }
 
 .bottom-sheet-body {
@@ -7365,8 +7415,7 @@ body.reader-modal-open .main-content {
 .overlay-version,
 .view-mode-btn,
 .search-cancel-btn,
-.search-clear-btn,
-.bottom-sheet-close-x {
+.search-clear-btn {
   min-width: 44px;
   min-height: 44px;
 }
@@ -10923,45 +10972,485 @@ body.dark-theme .custom-confirm-overlay {
   display: none !important;
 }
 
-/* ─── 讀經計畫卡片左對齊與防跑版樣式修正 (Bible Plan Card Left Alignment Fix) ─── */
-.joined-plan-item-card {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important; /* 保持左側封皮與右側文字區塊垂直居中對齊 */
-  width: 100% !important;
-  box-sizing: border-box !important;
+/* Plan cards: one card, clear hierarchy, stable action area */
+.plan-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.8rem;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 
-/* 確保卡片內部的右側文字主容器強制靠左對齊，消除任何居中 */
-.joined-plan-item-card > div:last-child {
-  flex-grow: 1 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  text-align: left !important;
-  min-width: 0 !important;
+.plan-card:hover {
+  border-color: color-mix(in srgb, var(--primary-color) 28%, var(--border-card));
+  box-shadow: var(--shadow-md);
 }
 
-/* 只確保右側文字主容器內部的標題、日期、文字、標籤等項目皆靠左，不影響左側封皮 (plan-cover-thumbnail) 內部文字的置中 */
-.joined-plan-item-card > div:last-child h4,
-.joined-plan-item-card > div:last-child p,
-.joined-plan-item-card > div:last-child span,
-.joined-plan-item-card > div:last-child div {
-  text-align: left !important;
-  justify-content: flex-start !important;
+.plan-card:active {
+  transform: scale(0.997);
 }
 
-/* 特別針對小組團隊報名控制列 */
-.joined-plan-item-card .plan-card-team-controls {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  justify-content: flex-start !important;
+.plan-cover-thumbnail {
+  width: 40px !important;
+  height: 40px !important;
+  flex: 0 0 40px !important;
+  display: inline-flex !important;
   align-items: center !important;
-  gap: 0.5rem !important;
-  width: 100% !important;
-  margin-top: 0.6rem !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+  border: 1px solid color-mix(in srgb, var(--border-card) 88%, transparent) !important;
+  border-radius: 8px !important;
+  color: var(--color-black);
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+.plan-cover-thumbnail--icon {
+  font-size: 0.9rem !important;
+}
+
+.plan-card__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.plan-card__header {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.plan-card__eyebrow {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.25;
+}
+
+.plan-card__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.02rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.plan-card__meta span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 0.05rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.plan-card__status {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.plan-card__status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.plan-card__status-row .nlc-icon {
+  margin-top: 0.08rem;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.plan-card__status-row--brand,
+.plan-card__status-row--brand .nlc-icon {
+  color: var(--primary-color);
+}
+
+.plan-card__status-row--success,
+.plan-card__status-row--success .nlc-icon {
+  color: var(--color-success-foreground);
+}
+
+.plan-card__status-row--warning,
+.plan-card__status-row--warning .nlc-icon {
+  color: var(--color-warning);
+}
+
+.plan-card__status-row--danger,
+.plan-card__status-row--danger .nlc-icon {
+  color: var(--color-danger);
+}
+
+.plan-card__status-label {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.plan-card__status-value {
+  min-width: 0;
+}
+
+.plan-card__actions,
+.plan-card-team-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.plan-card__primary-action,
+.plan-card__secondary-action {
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.46rem 0.7rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.plan-card .primary-btn::after {
+  content: none;
+}
+
+.plan-card__primary-action,
+.plan-card .primary-btn.plan-card-action-btn {
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: var(--color-white);
+  box-shadow: none;
+}
+
+.plan-card__secondary-action,
+.plan-card .secondary-btn.plan-card-action-btn {
+  border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-card));
+  color: var(--primary-color);
+  box-shadow: none;
+}
+
+.plan-card__primary-action:hover,
+.plan-card__secondary-action:hover,
+.plan-card .primary-btn.plan-card-action-btn:hover,
+.plan-card .secondary-btn.plan-card-action-btn:hover {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card));
+  box-shadow: none;
+  transform: none;
+}
+
+.plan-card__primary-action:hover,
+.plan-card .primary-btn.plan-card-action-btn:hover {
+  background: var(--primary-color);
+  color: var(--color-white);
+}
+
+.plan-card__primary-action:focus-visible,
+.plan-card__secondary-action:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.plan-card-team-controls {
+  gap: 0.35rem;
+  margin-top: -0.1rem;
+}
+
+@media (max-width: 640px) {
+  .plan-card {
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+  }
+
+  .plan-card__main {
+    gap: 0.65rem;
+  }
+
+  .plan-card__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan-card--available .plan-card__actions,
+  .plan-card--available-upcoming .plan-card__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plan-card__primary-action,
+  .plan-card__secondary-action {
+    width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+}
+
+.plan-team-invite-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.plan-team-invite-shortcut__body {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.plan-team-invite-shortcut__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  flex: 0 0 auto;
+}
+
+.plan-team-invite-shortcut__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.plan-team-invite-shortcut__copy strong {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.plan-team-invite-shortcut__copy span {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.plan-team-invite-shortcut__action,
+.plan-card-action-btn {
+  min-height: 44px;
+  white-space: normal;
+}
+
+.plan-card-participation-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.plan-card-action-btn {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 640px) {
+  .plan-team-invite-shortcut {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .plan-team-invite-shortcut__action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .plan-card-participation-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .plan-card-action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.plan-card {
+  --plan-card-spacing: 0.75rem;
+}
+
+.plan-card-participation-slot {
+  margin-top: 0.25rem;
+  min-width: 0;
+}
+
+/* Light Item row — NOT a nested card: a hairline divider separates it from the
+   card body above, with no inner border, fill, or card radius. */
+.plan-card-participation-item {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  display: grid;
+  gap: 0.625rem;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  margin-top: 0.5rem;
+  min-width: 0;
+  padding-top: 0.625rem;
+}
+
+.plan-card-participation-item__media {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--primary-color);
+  display: inline-flex;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.plan-card-participation-item__content {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.plan-card-participation-item__title {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.plan-card-participation-item__description {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card-participation-item__actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.plan-card-participation-item__button {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.74rem;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  white-space: nowrap;
+}
+
+.plan-card-participation-item__button:hover,
+.plan-card-participation-item__button:focus-visible {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--primary-color) 26%, var(--border-card));
+}
+
+.plan-card-participation-item__button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.plan-card-participation-item--success .plan-card-participation-item__media {
+  background: color-mix(in srgb, var(--color-success-foreground) 10%, transparent);
+  color: var(--color-success-foreground);
+}
+
+.plan-card-participation-item__hint {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 0.76rem;
+  padding: 0.375rem 0;
+}
+
+.plan-card-participation-item__hint--danger {
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .plan-card-participation-item {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .plan-card-participation-item__actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .plan-card-participation-item__button {
+    min-height: 2rem;
+  }
 }
 
 /* ==================== 🔔 Notification Bell & Dropdown CSS ==================== */
@@ -11143,25 +11632,6 @@ body.dark-theme .custom-confirm-overlay {
   position: absolute;
   right: 0.75rem;
   top: 0.75rem;
-  min-width: 2.5rem;
-  min-height: 2.5rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.35rem;
-  line-height: 1;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.release-onboarding-dialog__close:hover {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
-  color: var(--text-primary);
 }
 
 .release-onboarding-dialog__close:focus-visible,

@@ -396,7 +396,7 @@ function dialogTemplate(installGuideOptions = {}) {
   return `
     <div class="release-onboarding-backdrop" data-onboarding-backdrop></div>
     <section class="release-onboarding-dialog" id="release-onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="release-onboarding-title" tabindex="-1">
-      <button type="button" class="release-onboarding-dialog__close" data-onboarding-close aria-label="關閉使用說明">×</button>
+      <button type="button" class="release-onboarding-dialog__close dialog-close-button icon-button icon-button--subtle" data-onboarding-close aria-label="關閉使用說明"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
       <div class="release-onboarding-dialog__header">
         <p class="release-onboarding-dialog__eyebrow">使用說明</p>
         <h2 class="release-onboarding-dialog__title" id="release-onboarding-title">一起開始今天的讀經！</h2>
@@ -440,7 +440,6 @@ export function openOnboardingHelper({
 
   const backdrop = root.querySelector("[data-onboarding-backdrop]");
   const dialog = root.querySelector("#release-onboarding-dialog");
-  globalThis.hydrateIcons?.(root);
 
   backdrop?.addEventListener("click", () => closeOnboardingHelper({ storage, config }));
   root.addEventListener("click", (event) => {
@@ -480,6 +479,7 @@ export function openOnboardingHelper({
     controls[nextIndex].focus();
   });
 
+  if (typeof globalThis.hydrateIcons === "function") globalThis.hydrateIcons(root);
   dialog.focus?.();
 }
 
