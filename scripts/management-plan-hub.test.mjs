@@ -1,0 +1,40 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+const html = readFileSync("index.html", "utf8");
+const admin = readFileSync("js/modules/admin.js", "utf8");
+const utils = readFileSync("js/utils.js", "utf8");
+const app = readFileSync("js/app.js", "utf8");
+
+describe("management plan hub", () => {
+  it("puts the requested plan management sections in discovery order", () => {
+    const planPanel = html.slice(html.indexOf('id="admin-plans-panel"'), html.indexOf('    </main>', html.indexOf('id="admin-plans-panel"')));
+    const labels = ["\u8a08\u756b\u7be9\u9078", "\u53c3\u8207\u8005\u7e3d\u89bd", "3 \u4eba\u5718\u968a\u5831\u540d\u72c0\u6cc1", "6 \u4eba\u5718\u968a\u5831\u540d\u72c0\u6cc1", "\u5404\u7a2e\u7d71\u8a08"];
+    const positions = labels.map(label => planPanel.indexOf(label));
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
+
+  it("gives system administrators permission and plan tabs", () => {
+    expect(html).toContain('data-admin-panel="permissions">\u6b0a\u9650\u7ba1\u7406</button>');
+    expect(html).toContain('data-admin-panel="plans">\u8a08\u756b\u7ba1\u7406</button>');
+    expect(html).toContain('id="admin-users-accordion-root"');
+    expect(html).toContain('id="admin-reports-root"');
+    expect(admin).toContain("panelName === 'permissions' && isAdmin");
+  });
+
+  it("exposes management navigation to every leadership role", () => {
+    for (const role of ['admin', 'great_zone_leader', 'zone_leader', 'group_leader']) {
+      expect(utils).toContain(role);
+    }
+    expect(utils).toContain("canManagePlans");
+  });
+
+  it("renders both team divisions and reuses the existing participant and statistics views", () => {
+    expect(admin).toContain("renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content')");
+    expect(admin).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
+    expect(admin).toContain("participantSlot.appendChild(memberList)");
+    expect(admin).toContain("statisticsSlot.appendChild(statsSection)");
+    expect(app).toContain("renderAdminPlanManagement");
+  });
+});

@@ -834,8 +834,8 @@ function initPlanControls() {
       event.preventDefault();
       event.stopPropagation();
       dropdown?.classList.add("hidden");
-      if (state.activePlan) {
-        await setPlanState(PLAN_ROUTE.ORG_STATS);
+      if (state.activePlan && window.appRouter) {
+        await window.appRouter.switchTab("admin-view");
       }
     });
   }

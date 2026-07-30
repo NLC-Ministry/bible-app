@@ -48,8 +48,8 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_team_size_modal_chooser");
-    expect(html).toContain("index.css?v=20260730_team_card_action_captain_member");
+    expect(html).toContain("js/app.js?v=20260730_management_plan_hub");
+    expect(html).toContain("index.css?v=20260730_management_plan_hub");
     expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });
 
