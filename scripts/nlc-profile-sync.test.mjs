@@ -336,6 +336,8 @@ describe("nlc-session leadership identity sync", () => {
     expect(migration).toContain("member_context_leadership_assignments");
     expect(migration).toContain("RAISE EXCEPTION 'member context leadership fields are managed by Member Hub'");
     expect(migration).toContain("CREATE TRIGGER trg_profiles_protect_member_context_leadership");
+    expect(migration).not.toContain("actor_role");
+    expect(migration).not.toContain("senior_pastor");
   });
 });
 

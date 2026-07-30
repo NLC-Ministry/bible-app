@@ -4,20 +4,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
-DECLARE
-  actor_role TEXT;
 BEGIN
   IF COALESCE(auth.role(), '') <> 'authenticated' THEN
-    RETURN NEW;
-  END IF;
-
-  SELECT p.role
-  INTO actor_role
-  FROM public.profiles p
-  WHERE p.auth_user_id = auth.uid()
-  LIMIT 1;
-
-  IF actor_role IN ('admin', 'senior_pastor') THEN
     RETURN NEW;
   END IF;
 
