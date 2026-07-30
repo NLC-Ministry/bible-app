@@ -5379,6 +5379,22 @@ async function renderReadingTeamLeaderboards() {
     });
   });
 }
+
+function focusPastoralRaceRanking(container) {
+  if (!container || container.hidden) return;
+  const myPastoralRow = container.querySelector(".pastoral-race-row--mine");
+  if (!myPastoralRow) {
+    container.scrollTop = 0;
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const rowRect = myPastoralRow.getBoundingClientRect();
+  const rowTop = container.scrollTop + rowRect.top - containerRect.top;
+  const centeredOffset = rowTop - (container.clientHeight - rowRect.height) / 2;
+  const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+  container.scrollTop = Math.min(maxScroll, Math.max(0, centeredOffset));
+}
+
 async function renderPlanRankingView() {
   const rankingResults = await Promise.allSettled([
     Promise.resolve().then(() => renderReadingTeamLeaderboards()),
@@ -5533,6 +5549,7 @@ async function renderPlanRankingView() {
 
     requestAnimationFrame(() => {
       track.querySelectorAll(".pastoral-race-row").forEach(row => row.classList.add("is-running"));
+      requestAnimationFrame(() => focusPastoralRaceRanking(container));
     });
   };
 
