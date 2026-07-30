@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import {
   orgFromCareChain,
   orgFromHomePath,
@@ -10,6 +11,8 @@ import {
   projectOrgFieldsFromHub,
   buildOrgProjectionAudit
 } from "./lib/nlc-profile-sync.mjs";
+
+const rootDir = path.resolve(import.meta.dirname, "..");
 
 describe("orgFromCareChain", () => {
   it("maps levelDepth 0/1/2 to great_region, pastoral_zone, small_group", () => {
@@ -271,6 +274,19 @@ describe("buildOrgProjectionAudit", () => {
       small_group: null
     });
   });
+});
+
+it("stores Member Hub leadership identity projection without changing app role privileges", () => {
+  const source = fs.readFileSync(
+    path.join(rootDir, "supabase/functions/nlc-session/index.ts"),
+    "utf8"
+  );
+
+  expect(source).toContain("member_context_leadership_display_label");
+  expect(source).toContain("member_context_leadership_primary_assignment_id");
+  expect(source).toContain("member_context_leadership_assignments");
+  expect(source).toContain("memberContext?.leadershipIdentity");
+  expect(source).toContain('role: syncedRole');
 });
 
 describe("nlc-session member context sync timestamp", () => {

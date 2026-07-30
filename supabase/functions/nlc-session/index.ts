@@ -225,6 +225,29 @@ function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganizatio
   };
 }
 
+function sanitizeLeadershipIdentity(memberContext: any) {
+  const leadership = memberContext?.leadershipIdentity;
+  const assignments = Array.isArray(leadership?.assignments)
+    ? leadership.assignments.map((assignment: any) => ({
+        assignmentId: String(assignment.assignmentId || ""),
+        identityKey: String(assignment.identityKey || ""),
+        displayName: String(assignment.displayName || ""),
+        displayRank: Number.isFinite(Number(assignment.displayRank)) ? Number(assignment.displayRank) : 0,
+        nodeId: String(assignment.nodeId || ""),
+        nodeName: String(assignment.nodeName || ""),
+        levelName: assignment.levelName ? String(assignment.levelName) : null,
+        levelDepth: Number.isFinite(Number(assignment.levelDepth)) ? Number(assignment.levelDepth) : null,
+        isPrimary: Boolean(assignment.isPrimary),
+      })).filter((assignment: any) => assignment.assignmentId && assignment.identityKey)
+    : [];
+
+  return {
+    displayLabel: leadership?.displayLabel ? String(leadership.displayLabel) : null,
+    primaryAssignmentId: leadership?.primaryAssignmentId ? String(leadership.primaryAssignmentId) : null,
+    assignments,
+  };
+}
+
 // Roles that must never be granted or inherited via a WEAK (email-only) account link.
 const PRIVILEGED_ROLES = new Set([
   "admin", "great_zone_leader", "zone_leader", "group_leader"
@@ -461,6 +484,7 @@ Deno.serve(async (req: Request) => {
     const memberProfile = memberContext?.profile || {};
     const memberIdentity = memberContext?.identity || {};
     const organization = memberContext?.organization || {};
+    const leadershipIdentity = sanitizeLeadershipIdentity(memberContext);
     const memberId = memberIdentity.memberId || null;
     const membershipStatus = memberProfile.membershipStatus || null;
 
@@ -605,6 +629,9 @@ Deno.serve(async (req: Request) => {
       member_context_sync_attempted_at: nowIso,
       member_context_sync_status: memberContextSyncStatus,
       member_context_sync_error: memberContextError,
+      member_context_leadership_display_label: leadershipIdentity.displayLabel,
+      member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId,
+      member_context_leadership_assignments: leadershipIdentity.assignments,
       updated_at: nowIso
     };
 
