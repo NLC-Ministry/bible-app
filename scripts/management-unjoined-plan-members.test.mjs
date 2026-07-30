@@ -4,18 +4,20 @@ import { readFileSync } from "node:fs";
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
 describe("management plan unjoined members", () => {
-  it("places the list immediately below the plan selector", () => {
+  it("places the list immediately below the region and zone selectors", () => {
     const html = read("index.html");
     const filterIndex = html.indexOf('id="admin-management-plan-select"');
     const unjoinedIndex = html.indexOf('id="admin-unjoined-plan-members"');
-    const participantsIndex = html.indexOf('id="admin-plan-participants-slot"');
+    const orgFilterIndex = html.indexOf('id="members-admin-group-select"');
+    const orgContentIndex = html.indexOf('id="plan-org-stats-content"');
 
     expect(filterIndex).toBeGreaterThan(-1);
-    expect(unjoinedIndex).toBeGreaterThan(filterIndex);
-    expect(participantsIndex).toBeGreaterThan(unjoinedIndex);
+    expect(orgFilterIndex).toBeGreaterThan(-1);
+    expect(unjoinedIndex).toBeGreaterThan(orgFilterIndex);
+    expect(orgContentIndex).toBeGreaterThan(unjoinedIndex);
     expect(html).toContain("尚未加入計畫");
-    expect(html).toContain("index.css?v=20260730_unjoined_plan_invites");
-    expect(html).toContain("js/app.js?v=20260730_unjoined_plan_invites");
+    expect(html).toContain("index.css?v=20260730_unjoined_plan_invites_v2");
+    expect(html).toContain("js/app.js?v=20260730_unjoined_plan_invites_v2");
   });
 
   it("loads, filters, and reminds unjoined members in the management view", () => {
@@ -29,6 +31,9 @@ describe("management plan unjoined members", () => {
     expect(admin).toContain("戳一下");
     expect(db).toContain('"get_unjoined_plan_members"');
     expect(db).toContain('"send_plan_join_invitation"');
+    expect(db).toContain("_resolveManagementGlobalPlanId");
+    expect(db).toContain("_getUnjoinedPlanMembersFallback");
+    expect(admin).toContain("目前篩選範圍內沒有尚未加入所選計畫的人員。");
   });
 
   it("enforces manager scope and excludes people who already joined", () => {

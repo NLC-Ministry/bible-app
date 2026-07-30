@@ -11989,6 +11989,9 @@ select,
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+  width: 100%;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-card);
 }
 
 .admin-unjoined-plan-card__header {

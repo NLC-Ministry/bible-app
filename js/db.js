@@ -526,6 +526,9 @@ const db = {
     state.currentUser.great_region = profile.great_region || "";
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
+    state.currentUser.managed_regions = profile.managed_regions || "";
+    state.currentUser.managed_zones = profile.managed_zones || "";
+    state.currentUser.managed_groups = profile.managed_groups || "";
     state.currentUser.role = profile.role || "member";
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
@@ -2056,30 +2059,125 @@ const db = {
     return result.success ? { success: true, context: result.data || { summary: {}, plans: [] } } : result;
   },
 
-  async getUnjoinedPlanMembers(plan) {
-    const planId = this._readingTeamPlanId(plan);
-    if (!planId) return { success: false, message: "找不到所選計畫，請重新整理後再試。" };
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+  _resolveManagementGlobalPlanId(plan) {
+    const globalPlans = Array.isArray(state.globalPlans) ? state.globalPlans : [];
+    const identifiers = [
+      plan && plan.globalPlanId,
+      plan && plan.global_plan_id,
+      plan && plan.presetKey,
+      plan && plan.preset_key,
+      plan && plan.name
+    ].filter(Boolean).map(String);
+    const matchedGlobalPlan = globalPlans.find(item => [
+      item.id,
+      item.globalPlanId,
+      item.global_plan_id,
+      item.presetKey,
+      item.preset_key,
+      item.name
+    ].filter(Boolean).map(String).some(value => identifiers.includes(value)));
+    const value = matchedGlobalPlan && (matchedGlobalPlan.id || matchedGlobalPlan.globalPlanId)
+      || plan && (plan.globalPlanId || plan.global_plan_id)
+      || (globalPlans.some(item => String(item.id) === String(plan && plan.id)) ? plan.id : null);
+    return isUuid(value) ? String(value) : null;
+  },
+
+  async _getUnjoinedPlanMembersFallback(plan, planId = null) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: true, context: { planId, planName: plan && plan.name || "", members: [] } };
     }
-    const result = await this._callReadingTeamRpc("get_unjoined_plan_members", {
-      p_global_plan_id: planId,
-      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
-    });
-    return result.success
-      ? { success: true, context: result.data || { planId, planName: plan && plan.name || "", members: [] } }
-      : result;
+    try {
+      const { data: profiles, error: profilesError } = await state.supabase
+        .from("profiles")
+        .select("id, name, great_region, pastoral_zone, small_group, is_active, is_demo")
+        .eq("is_active", true)
+        .eq("is_demo", false);
+      if (profilesError) throw profilesError;
+
+      const aliases = [planId, plan && plan.presetKey, plan && plan.preset_key, plan && plan.name]
+        .filter(Boolean).map(String);
+      let plansQuery = state.supabase
+        .from("reading_plans")
+        .select("user_id, global_plan_id, preset_key, name");
+      if (aliases.length > 0) {
+        const conditions = aliases.flatMap(alias => {
+          const quoted = quotePostgrestValue(alias);
+          const values = [`preset_key.eq.${quoted}`, `name.eq.${quoted}`];
+          if (isUuid(alias)) values.push(`global_plan_id.eq.${quoted}`);
+          return values;
+        });
+        plansQuery = plansQuery.or(conditions.join(","));
+      }
+      const { data: joinedPlans, error: plansError } = await plansQuery;
+      if (plansError) throw plansError;
+
+      const currentUser = state.currentUser || {};
+      const joinedIds = new Set((joinedPlans || []).map(item => String(item.user_id || "")));
+      const overlap = (left, right) => {
+        const leftValues = String(left || "").split(",").map(value => value.trim()).filter(Boolean);
+        const rightValues = String(right || "").split(",").map(value => value.trim()).filter(Boolean);
+        return leftValues.some(value => rightValues.includes(value));
+      };
+      const withinScope = candidate => currentUser.role === "admin"
+        || (currentUser.role === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
+        || (currentUser.role === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone));
+      const members = (profiles || [])
+        .filter(candidate => String(candidate.id) !== String(currentUser.id || state.currentProfileId || ""))
+        .filter(withinScope)
+        .filter(candidate => !joinedIds.has(String(candidate.id)))
+        .map(candidate => ({
+          id: candidate.id,
+          name: candidate.name,
+          greatRegion: candidate.great_region || "",
+          pastoralZone: candidate.pastoral_zone || "",
+          smallGroup: candidate.small_group || "",
+          remindedToday: false
+        }))
+        .sort((left, right) => [left.greatRegion, left.pastoralZone, left.smallGroup, left.name].join("|")
+          .localeCompare([right.greatRegion, right.pastoralZone, right.smallGroup, right.name].join("|"), "zh-Hant"));
+      return { success: true, context: { planId, planName: plan && plan.name || "", members, fallback: true } };
+    } catch (error) {
+      return { success: false, error, message: this._readingTeamErrorMessage(error) };
+    }
+  },
+
+  async getUnjoinedPlanMembers(plan) {
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (planId) {
+      const result = await this._callReadingTeamRpc("get_unjoined_plan_members", {
+        p_global_plan_id: planId,
+        p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+      });
+      if (result.success) {
+        return { success: true, context: result.data || { planId, planName: plan && plan.name || "", members: [] } };
+      }
+      console.warn("get_unjoined_plan_members unavailable; using scoped compatibility query", result.error || result.message);
+    }
+    return this._getUnjoinedPlanMembersFallback(plan, planId);
   },
 
   async sendPlanJoinInvitation(plan, recipientId) {
-    const planId = this._readingTeamPlanId(plan);
-    if (!planId) return { success: false, message: "找不到所選計畫，請重新整理後再試。" };
-    const result = await this._callReadingTeamRpc("send_plan_join_invitation", {
-      p_global_plan_id: planId,
-      p_recipient_id: recipientId,
-      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (planId) {
+      const result = await this._callReadingTeamRpc("send_plan_join_invitation", {
+        p_global_plan_id: planId,
+        p_recipient_id: recipientId,
+        p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+      });
+      if (result.success) return { success: true, context: result.data || { sent: true } };
+      console.warn("send_plan_join_invitation unavailable; using scoped care reminder", result.error || result.message);
+    }
+    const planName = String(plan && plan.name || "所選計畫");
+    const reminderKey = `plan-invite:${planId || plan && (plan.presetKey || plan.preset_key) || planName}`;
+    const fallback = await this.sendCareReminder({
+      recipientId,
+      reason: "encouragement",
+      message: `邀請你加入「${planName}」讀經計畫，一起開始讀經吧！`,
+      planKey: reminderKey
     });
-    return result.success ? { success: true, context: result.data || { sent: true } } : result;
+    return fallback && !fallback.error
+      ? { success: true, context: { sent: true, fallback: true } }
+      : { success: false, error: fallback && fallback.error, message: this._readingTeamErrorMessage(fallback && fallback.error) };
   },
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);

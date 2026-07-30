@@ -235,8 +235,8 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   if (error) throw error;
   return (profiles || []).filter((candidate: any) => {
     if (candidate.id === profile.id) return true;
-    if (profile.role === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.great_region);
-    if (profile.role === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone);
+    if (profile.role === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.managed_regions || profile.great_region);
+    if (profile.role === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.managed_zones || profile.pastoral_zone);
     return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone)
       && valuesOverlap(candidate.small_group, profile.small_group);
   }).map((candidate: any) => candidate.id);
@@ -350,8 +350,8 @@ Deno.serve(async (req: Request) => {
       if (!recipient || recipient.is_active === false) return jsonResponse({ error: "recipient_not_found" }, 404);
 
       const withinScope = isAdmin(profile)
-        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.great_region))
-        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone))
+        || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.managed_regions || profile.great_region))
+        || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.managed_zones || profile.pastoral_zone))
         || (profile.role === "group_leader"
           && valuesOverlap(recipient.pastoral_zone, profile.pastoral_zone)
           && valuesOverlap(recipient.small_group, profile.small_group));

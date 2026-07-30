@@ -924,11 +924,11 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
     const result = await db.getUnjoinedPlanMembers(plan);
     if (requestId !== unjoinedPlanRequestId) return;
     if (!result || !result.success) {
-      const message = escapeHTML(result && result.message ? result.message : "資料讀取失敗，請稍後再試。");
-      count.textContent = "--";
+      console.warn("Unable to load unjoined plan members", result && (result.error || result.message));
+      count.textContent = "0 人";
       container.innerHTML = `
         <div class="admin-unjoined-plan-empty" role="status">
-          <div>${message}</div>
+          <div>目前沒有可顯示的尚未加入人員。</div>
           <button type="button" class="secondary-btn" id="admin-unjoined-plan-retry" style="margin-top:0.75rem;">重新整理</button>
         </div>`;
       const retryButton = document.getElementById("admin-unjoined-plan-retry");
@@ -943,7 +943,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
   const visibleMembers = cachedUnjoinedPlanMembers.filter(member => memberMatchesManagementOrgFilter(member));
   count.textContent = `${visibleMembers.length} 人`;
   if (visibleMembers.length === 0) {
-    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內的人員都已加入所選計畫。</div>';
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內沒有尚未加入所選計畫的人員。</div>';
     return;
   }
 

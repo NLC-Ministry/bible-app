@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260730_unjoined_plan_invites");
+    expect(htmlSource).toContain("js/app.js?v=20260730_unjoined_plan_invites_v2");
     expect(appSource).toContain("./state.js?v=20260730_remove_legacy_org_entry");
   });
 });
