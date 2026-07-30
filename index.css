@@ -11146,8 +11146,7 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .plan-card__primary-action,
-.plan-card__secondary-action,
-.plan-card-team-controls__badge {
+.plan-card__secondary-action {
   min-height: 2.25rem;
   margin: 0;
   padding: 0.46rem 0.7rem;
@@ -11179,7 +11178,6 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .plan-card__secondary-action,
-.plan-card-team-controls__badge,
 .plan-card .secondary-btn.plan-card-action-btn {
   border: 1px solid color-mix(in srgb, var(--primary-color) 45%, var(--border-card));
   background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-card));
@@ -11190,8 +11188,7 @@ body.dark-theme .custom-confirm-overlay {
 .plan-card__primary-action:hover,
 .plan-card__secondary-action:hover,
 .plan-card .primary-btn.plan-card-action-btn:hover,
-.plan-card .secondary-btn.plan-card-action-btn:hover,
-.plan-card-team-controls__badge.is-open:hover {
+.plan-card .secondary-btn.plan-card-action-btn:hover {
   border-color: var(--primary-color);
   background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-card));
   box-shadow: none;
@@ -11205,49 +11202,15 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .plan-card__primary-action:focus-visible,
-.plan-card__secondary-action:focus-visible,
-.plan-card-team-controls__badge:focus-visible {
+.plan-card__secondary-action:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
   box-shadow: var(--shadow-focus-ring);
 }
 
-.plan-card-team-controls__badge.is-full {
-  cursor: default;
-}
-
 .plan-card-team-controls {
   gap: 0.35rem;
   margin-top: -0.1rem;
-}
-
-.plan-card-team-controls__badge,
-.plan-card-team-controls__button {
-  min-height: 1.75rem;
-  max-width: 100%;
-  padding: 0.32rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.plan-card-team-controls__badge span,
-.plan-card-team-controls__button span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plan-card-team-controls__hint {
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  line-height: 1.35;
-}
-
-.plan-card-team-controls__hint--danger {
-  color: var(--color-danger);
 }
 
 @media (max-width: 640px) {
@@ -11348,18 +11311,6 @@ body.dark-theme .custom-confirm-overlay {
   line-height: 1.2;
 }
 
-.plan-card-participation-state {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0.22rem 0.58rem;
-  border-radius: 6px;
-  font-size: 0.73rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-}
-
 @media (max-width: 640px) {
   .plan-team-invite-shortcut {
     align-items: stretch;
@@ -11379,6 +11330,121 @@ body.dark-theme .custom-confirm-overlay {
   .plan-card-action-btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+.plan-card {
+  --plan-card-spacing: 0.75rem;
+}
+
+.plan-card-participation-slot {
+  margin-top: 0.25rem;
+  min-width: 0;
+}
+
+/* Light Item row — NOT a nested card: a hairline divider separates it from the
+   card body above, with no inner border, fill, or card radius. */
+.plan-card-participation-item {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  display: grid;
+  gap: 0.625rem;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  margin-top: 0.5rem;
+  min-width: 0;
+  padding-top: 0.625rem;
+}
+
+.plan-card-participation-item__media {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--primary-color);
+  display: inline-flex;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.plan-card-participation-item__content {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.plan-card-participation-item__title {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.plan-card-participation-item__description {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card-participation-item__actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.plan-card-participation-item__button {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.74rem;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  white-space: nowrap;
+}
+
+.plan-card-participation-item__button:hover,
+.plan-card-participation-item__button:focus-visible {
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--primary-color) 26%, var(--border-card));
+  outline: none;
+}
+
+.plan-card-participation-item--success .plan-card-participation-item__media {
+  background: color-mix(in srgb, var(--color-success-foreground) 10%, transparent);
+  color: var(--color-success-foreground);
+}
+
+.plan-card-participation-item__hint {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 0.76rem;
+  padding: 0.375rem 0;
+}
+
+.plan-card-participation-item__hint--danger {
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .plan-card-participation-item {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .plan-card-participation-item__actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .plan-card-participation-item__button {
+    min-height: 2rem;
   }
 }
 

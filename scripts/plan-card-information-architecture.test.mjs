@@ -81,19 +81,6 @@ describe("plan card information architecture", () => {
     expect(planCardCss).not.toContain("linear-gradient");
   });
 
-  it("keeps team controls visually subordinate to primary plan actions", () => {
-    const planCardCss = css.slice(
-      css.indexOf("/* Plan cards: one card, clear hierarchy, stable action area */"),
-      css.indexOf("/* ==================== 🔔 Notification Bell & Dropdown CSS ====================")
-    );
-
-    expect(planCardCss).toContain(".plan-card-team-controls__badge");
-    expect(planCardCss).toContain(".plan-card-team-controls__button");
-    expect(planCardCss).toContain("min-height: 1.75rem");
-    expect(planCardCss).toContain("font-size: 0.72rem");
-    expect(planCardCss).toContain("max-width: 100%");
-  });
-
   it("does not duplicate joined-plan team entry points", () => {
     const joinedList = plan.slice(
       plan.indexOf("function renderJoinedPlansList"),
@@ -154,5 +141,20 @@ describe("plan card information architecture", () => {
     expect(joinedList).not.toContain("plan-card-team-controls__badge");
     expect(joinedList).not.toContain("plan-card-team-controls__button");
     expect(joinedList).not.toContain("plan-card-participation-state");
+  });
+
+  it("styles plan cards as compact card shells with item-style participation rows", () => {
+    const planCardCss = css.slice(
+      css.indexOf("/* Plan cards: one card, clear hierarchy, stable action area */"),
+      css.indexOf("/* ==================== 🔔 Notification Bell & Dropdown CSS ====================")
+    );
+
+    expect(planCardCss).toContain("--plan-card-spacing");
+    expect(planCardCss).toContain(".plan-card-participation-item");
+    expect(planCardCss).toContain(".plan-card-participation-item__media");
+    expect(planCardCss).toContain(".plan-card-participation-item__content");
+    expect(planCardCss).toContain(".plan-card-participation-item__actions");
+    expect(planCardCss).toContain(".plan-card-participation-item__button");
+    expect(planCardCss).not.toMatch(/plan-card-participation-item__button[\s\S]*border-radius:\s*999/);
   });
 });

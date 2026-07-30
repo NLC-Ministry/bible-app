@@ -121,7 +121,6 @@ describe("NLC and browser integration", () => {
     expect(indexCss).toContain(".plan-team-invite-shortcut__action");
     expect(indexCss).toContain(".plan-card-participation-actions");
     expect(indexCss).toContain(".plan-card-action-btn");
-    expect(indexCss).toContain(".plan-card-participation-state");
     expect(indexCss).toContain("min-height: 44px");
     expect(indexCss).toContain("@media (max-width: 640px)");
     expect(plan).toContain("primary-btn plan-card-action-btn");
