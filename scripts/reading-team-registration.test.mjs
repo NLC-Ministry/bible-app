@@ -247,6 +247,24 @@ describe("NLC and browser integration", () => {
     expect(renderTeam.indexOf("data-add-other-team")).toBeLessThan(renderTeam.indexOf("querySelector(\"[data-add-other-team]"));
   });
 
+  it("opens team setup with an explicit 3-person and 6-person chooser before the create form", () => {
+    const renderEmpty = teamUi.slice(
+      teamUi.indexOf("const renderEmpty = (joinedContexts"),
+      teamUi.indexOf("const renderTeam = (context")
+    );
+
+    expect(renderEmpty).toContain("reading-team-division-choice-grid");
+    expect(renderEmpty).toContain("availableDivisions = [3, 6]");
+    expect(renderEmpty).toContain("availableDivisions.map");
+    expect(renderEmpty).toContain("data-division-choice");
+    expect(renderEmpty).toContain('data-division-choice="${division}"');
+    expect(renderEmpty).toContain("你可以同時參加 3 人團隊與 6 人團隊");
+    expect(renderEmpty).toContain("章節進度只需打卡一次");
+    expect(renderEmpty).toContain("panel.querySelectorAll(\"[data-division-choice]\")");
+    expect(renderEmpty).toContain('id="reading-team-create-form"');
+    expect(renderEmpty.indexOf("reading-team-division-choice-grid")).toBeLessThan(renderEmpty.indexOf('id="reading-team-create-form"'));
+  });
+
   it("keeps inline team reminder controls inside mobile member rows", () => {
     expect(teamCss).toContain(".reading-team-inline--stats .reading-team-member");
     expect(teamCss).toContain("grid-template-columns: 40px minmax(0, 1fr) 44px");
