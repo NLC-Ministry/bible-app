@@ -2633,6 +2633,11 @@ const db = {
   },
 
   async updateUserRole(userId, newRole, userName, additionalFields = {}) {
+    const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "admin"]);
+    if (!assignableRoles.has(newRole)) {
+      if (typeof showToast === "function") showToast("目前尚未開放小組權限設定。");
+      return false;
+    }
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
         const updateData = { role: newRole, ...additionalFields };

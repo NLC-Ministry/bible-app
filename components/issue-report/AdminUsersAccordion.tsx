@@ -27,7 +27,7 @@ export const AdminUsersAccordion: React.FC = () => {
         let activeAdminCount = 0;
         badges.forEach(badge => {
           const text = badge.textContent?.trim();
-          if (text === "系統管理員" || text === "小組長" || text === "大區長" || text === "牧區長") {
+          if (["系統管理員", "大區長", "牧區長"].includes(text || "")) {
             activeAdminCount++;
           }
         });
@@ -109,9 +109,6 @@ export const AdminUsersAccordion: React.FC = () => {
               </button>
               <button type="button" id="chip-filter-zone" className="filter-chip">
                 <span>篩選牧區</span> <span className="chip-arrow">展開</span>
-              </button>
-              <button type="button" id="chip-filter-group" className="filter-chip">
-                <span>篩選小組</span> <span className="chip-arrow">展開</span>
               </button>
             </div>
             <p className={adminHelperClassName}>點選使用者即可設定一般會友、小組長、牧區長、大區長或系統管理員權限。</p>

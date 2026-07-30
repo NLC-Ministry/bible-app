@@ -404,6 +404,11 @@ Deno.serve(async (req: Request) => {
     // Any authenticated member may file an issue report (insert only). Reads and
     // deletes stay admin-only via canRead / canAdminWrite below. user_id is forced
     // to the caller in forceUserPayload so a member cannot spoof another user.
+    if (["insert", "update", "upsert"].includes(action)
+      && table === "profiles"
+      && body.payload?.role === "group_leader") {
+      return jsonResponse({ error: "group_leader_assignment_disabled" }, 403);
+    }
     const canReportInsert = action === "insert" && table === "issue_reports";
     const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
     const canOwnWrite = (["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table)) || canReportInsert;
