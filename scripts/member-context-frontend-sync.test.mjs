@@ -48,4 +48,17 @@ describe("member context frontend sync metadata", () => {
       expect(authSource).toContain(`${field}: ""`);
     });
   });
+
+  it("copies Member Hub leadership identity fields into currentUser state", () => {
+    expect(dbSource).toContain("member_context_leadership_display_label");
+    expect(dbSource).toContain("member_context_leadership_primary_assignment_id");
+    expect(dbSource).toContain("member_context_leadership_assignments");
+    expect(dbSource).toContain("state.currentUser.member_context_leadership_display_label");
+  });
+
+  it("renders Member Hub leadership label before legacy role labels", () => {
+    expect(profileSource).toContain("getLeadershipDisplayLabel");
+    expect(profileSource).toContain("member_context_leadership_display_label");
+    expect(profileSource).toContain('"一般組員"');
+  });
 });
