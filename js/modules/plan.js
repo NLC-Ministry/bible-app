@@ -1300,13 +1300,20 @@ async function confirmPlanJoin({ plan, mode, onConfirm }) {
           <p id="plan-join-confirmation-description">${description}</p>
         </header>
         <footer class="plan-join-confirmation-dialog__footer">
+          <p class="plan-join-confirmation-dialog__error" data-plan-confirm-error hidden></p>
           <button type="button" class="secondary-btn plan-join-confirmation-dialog__cancel" data-plan-confirm-cancel>我再看看</button>
           <button type="button" class="primary-btn plan-join-confirmation-dialog__confirm" data-plan-confirm-action>${confirmLabel}</button>
         </footer>
       </section>`;
 
     const panel = overlay.firstElementChild;
+    const cancelButton = overlay.querySelector("[data-plan-confirm-cancel]");
+    const confirmButton = overlay.querySelector("[data-plan-confirm-action]");
+    const errorMessage = overlay.querySelector("[data-plan-confirm-error]");
+    let settled = false;
     const close = value => {
+      if (settled) return;
+      settled = true;
       document.removeEventListener("keydown", onKeyDown);
       overlay.remove();
       resolve(value);
@@ -1318,17 +1325,31 @@ async function confirmPlanJoin({ plan, mode, onConfirm }) {
     overlay.addEventListener("click", event => {
       if (event.target === overlay) close(false);
     });
-    overlay.querySelector("[data-plan-confirm-cancel]").addEventListener("click", () => close(false));
-    overlay.querySelector("[data-plan-confirm-action]").addEventListener("click", async () => {
-      const button = overlay.querySelector("[data-plan-confirm-action]");
-      button.disabled = true;
-      await onConfirm();
-      close(true);
+    cancelButton.addEventListener("click", () => close(false));
+    confirmButton.addEventListener("click", async () => {
+      confirmButton.disabled = true;
+      if (errorMessage) {
+        errorMessage.hidden = true;
+        errorMessage.textContent = "";
+      }
+      try {
+        await onConfirm();
+        close(true);
+      } catch (err) {
+        console.error("Plan join confirmation failed:", err);
+        if (!overlay.isConnected) return;
+        if (errorMessage) {
+          errorMessage.textContent = "暫時無法加入，請再試一次。";
+          errorMessage.hidden = false;
+        }
+        confirmButton.disabled = false;
+        confirmButton.focus();
+      }
     });
     document.addEventListener("keydown", onKeyDown);
     document.body.appendChild(overlay);
     if (typeof hydrateIcons === "function") hydrateIcons(overlay);
-    panel.focus();
+    (cancelButton || panel).focus();
   });
 }
 

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
+import { JSDOM } from "jsdom";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exists = path => existsSync(new URL(`../${path}`, import.meta.url));
@@ -21,6 +22,47 @@ const teamCss = read("css/team-registration.css");
 const html = read("index.html");
 const app = read("js/app.js");
 const indexCss = read("index.css");
+
+const extractFunction = (source, name, nextName) => {
+  const start = source.indexOf(`async function ${name}`);
+  const end = source.indexOf(`async function ${nextName}`, start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+};
+
+const loadConfirmPlanJoin = () => {
+  const source = extractFunction(plan, "confirmPlanJoin", "joinPlanSoloFromCard");
+  return new Function(
+    "escapeHTML",
+    "hydrateIcons",
+    `${source}; return confirmPlanJoin;`
+  )(
+    value => String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[char])),
+    () => {}
+  );
+};
+
+const withDialogDom = async testFn => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "https://example.test" });
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  try {
+    await testFn(dom);
+  } finally {
+    globalThis.window = previousWindow;
+    globalThis.document = previousDocument;
+    dom.window.close();
+  }
+};
 
 describe("reading competition team schema", () => {
   it("shows unread care reminders only on the notification bell", () => {
@@ -168,6 +210,51 @@ describe("NLC and browser integration", () => {
     );
     expect(teamHandler).toContain("confirmPlanJoin");
     expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
+  });
+
+  it("focuses the safest action when the plan join confirmation opens", async () => {
+    await withDialogDom(async () => {
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm: vi.fn()
+      });
+
+      const cancelButton = document.querySelector("[data-plan-confirm-cancel]");
+      expect(document.activeElement).toBe(cancelButton);
+
+      cancelButton.click();
+      await expect(pending).resolves.toBe(false);
+    });
+  });
+
+  it("recovers when plan join confirmation fails", async () => {
+    await withDialogDom(async () => {
+      const confirmPlanJoin = loadConfirmPlanJoin();
+      const onConfirm = vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(undefined);
+      const pending = confirmPlanJoin({
+        plan: { name: "Test Plan" },
+        mode: "solo",
+        onConfirm
+      });
+      const confirmButton = document.querySelector("[data-plan-confirm-action]");
+
+      confirmButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(document.querySelector(".plan-join-confirmation-dialog__error")?.textContent)
+        .toContain("暫時無法加入，請再試一次。");
+      expect(confirmButton.disabled).toBe(false);
+
+      confirmButton.click();
+      await expect(pending).resolves.toBe(true);
+      expect(document.querySelector(".plan-join-confirmation-overlay")).toBeNull();
+      expect(onConfirm).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("models joined-plan participation through the shared participation item", () => {
