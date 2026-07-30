@@ -145,6 +145,31 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("建立團隊");
   });
 
+  it("requires a confirmation dialog before preset plan solo join or team setup", () => {
+    expect(plan).toContain("async function confirmPlanJoin");
+    expect(plan).toContain('role="dialog"');
+    expect(plan).toContain('aria-modal="true"');
+    expect(plan).toContain('id="plan-join-confirmation-title"');
+    expect(plan).toContain("要加入這個讀經計畫嗎？");
+    expect(plan).toContain("太好了，開始吧");
+    expect(plan).toContain("我再看看");
+
+    const soloHandler = plan.slice(
+      plan.indexOf("card.querySelector('[data-plan-card-action=\"solo-join\"]')"),
+      plan.indexOf("card.querySelector('[data-plan-card-action=\"team-create\"]')")
+    );
+    expect(soloHandler).toContain("confirmPlanJoin");
+    expect(soloHandler.indexOf("confirmPlanJoin")).toBeLessThan(soloHandler.indexOf("joinPlanSoloFromCard"));
+
+    const teamHandlerStart = plan.indexOf("card.querySelector('[data-plan-card-action=\"team-create\"]')");
+    const teamHandler = plan.slice(
+      teamHandlerStart,
+      plan.indexOf("container.appendChild(card)", teamHandlerStart)
+    );
+    expect(teamHandler).toContain("confirmPlanJoin");
+    expect(teamHandler.indexOf("confirmPlanJoin")).toBeLessThan(teamHandler.indexOf("createTeamFromPlanCard"));
+  });
+
   it("models joined-plan participation through the shared participation item", () => {
     expect(participation).toContain("export function getPlanParticipationModel");
     expect(plan).toContain("function renderPlanParticipationItem");
