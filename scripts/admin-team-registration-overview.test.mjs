@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const migration = readFileSync("supabase/migrations/0043_scope_team_registration_overview_by_any_member.sql", "utf8");
+const migration = readFileSync("supabase/migrations/0044_remove_group_leader_plan_management.sql", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
@@ -19,7 +19,9 @@ describe("admin team registration overview", () => {
   });
 
   it("restricts the overview to plan managers across both auth paths", () => {
-    expect(migration).toContain("'great_zone_leader', 'zone_leader', 'group_leader'");
+    expect(migration).toContain("'great_zone_leader', 'zone_leader'");
+    expect(migration).not.toContain("actor_profile.role = 'group_leader'");
+    expect(edge).toContain('return ["admin", "great_zone_leader", "zone_leader"].includes(profile?.role);');
     expect(migration).toContain("team_statistics_management_scope_required");
     expect(edge).toContain('functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)');
   });
@@ -35,7 +37,6 @@ describe("admin team registration overview", () => {
     expect(visibleScope).not.toContain("member.member_role = 'captain'");
     expect(migration).toContain("actor_profile.managed_regions");
     expect(migration).toContain("actor_profile.managed_zones");
-    expect(migration).toContain("actor_profile.managed_groups");
   });
 
   it("loads the overview directly instead of guessing plan ids in the browser", () => {

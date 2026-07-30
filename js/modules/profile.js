@@ -456,7 +456,7 @@ async function renderCareReminders() {
 
 
 export function updateAdminNavVisibility() {
-  const managementRoles = ['admin', 'great_zone_leader', 'zone_leader', 'group_leader'];
+  const managementRoles = ['admin', 'great_zone_leader', 'zone_leader'];
   const currentRole = (state.currentUser && state.currentUser.role) || 'member';
   const realRole = state.realRole || currentRole;
   const canManagePlans = managementRoles.includes(currentRole)

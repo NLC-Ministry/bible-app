@@ -11971,9 +11971,6 @@ select,
   display: flex;
   align-items: center;
   gap: 1rem;
-  position: sticky;
-  top: calc(var(--top-bar-height, 64px) + 0.5rem);
-  z-index: 5;
 }
 
 .admin-plan-filter-card label {

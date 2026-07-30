@@ -46,5 +46,7 @@ describe("primary tab navigation lifecycle", () => {
 
     expect(htmlSource).toContain(expectedAppCacheKey);
     expect(appSource).toContain("./state.js?v=20260729_tab_navigation_memory");
+    expect(htmlSource).toContain("js/app.js?v=20260730_remove_legacy_org_entry");
+    expect(appSource).toContain("./state.js?v=20260730_remove_legacy_org_entry");
   });
 });

@@ -164,7 +164,7 @@ function isAdmin(profile: any) {
 }
 
 function canManagePlans(profile: any) {
-  return ["admin", "great_zone_leader", "zone_leader", "group_leader"].includes(profile?.role);
+  return ["admin", "great_zone_leader", "zone_leader"].includes(profile?.role);
 }
 
 function normalizeRows(payload: any) {
