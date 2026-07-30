@@ -10,7 +10,7 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260729_tab_navigation_memory';
+import './state.js?v=20260730_remove_legacy_org_entry';
 import './auth.js';
 import './db.js?v=20260730_team_scope_any_member';
 import './utils.js?v=20260730_management_plan_filter_rules';

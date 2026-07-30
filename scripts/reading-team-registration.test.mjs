@@ -305,6 +305,8 @@ describe("NLC and browser integration", () => {
     const planOptions = html.slice(html.indexOf('id="plan-options-dropdown"'), html.indexOf('</div>', html.indexOf('id="plan-options-dropdown"')));
     expect(planOptions).not.toContain("\u7267\u5340\u5c0f\u7d44\u72c0\u6cc1");
     expect(plan).not.toContain("view-reading-team-btn");
+    expect(plan).not.toContain("async function enterOrgStatsState");
+    expect(plan).not.toContain("setPlanState(PLAN_ROUTE.ORG_STATS)");
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
     expect(html).toContain('id="stats-team-view-select"');
     expect(html).toContain('id="members-team-view-select"');

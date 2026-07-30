@@ -306,11 +306,8 @@ const appRouter = {
         topBarGroupTrigger.classList.add("hidden");
       }
       if (topBarPlanName && state.activePlan) {
-        if (window.currentPlanViewState === "ORG_STATS") {
-          topBarPlanName.textContent = "牧區小組狀況";
-        } else {
-          topBarPlanName.textContent = state.planActiveSubTab === "settings" ? "調整進度設定" : state.activePlan.name;
-        }
+        topBarPlanName.textContent = state.planActiveSubTab === "settings" ? "調整進度設定" : state.activePlan.name;
+
         topBarPlanName.style.display = "block";
         topBarPlanName.classList.remove("hidden");
       }
