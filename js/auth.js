@@ -205,9 +205,43 @@ const auth = {
     else alert(message);
   },
 
-  showEmbeddedBrowserAuthDialog(onContinue) {
+  _externalBrowserIntentUrl(targetUrl) {
+    const url = new URL(targetUrl);
+    return `intent://${url.host}${url.pathname}${url.search}${url.hash}#Intent;scheme=${url.protocol.replace(":", "")};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
+  },
+
+  async _copyCurrentUrl() {
+    const url = window.location.href;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(url);
+      return true;
+    }
+
+    const input = document.createElement("input");
+    input.value = url;
+    input.setAttribute("readonly", "readonly");
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      input.remove();
+    }
+    return copied;
+  },
+
+  showEmbeddedBrowserAuthDialog(authEnvironment) {
     const existing = document.getElementById("auth-environment-dialog");
     if (existing) existing.remove();
+
+    const canAttemptExternal = authEnvironment && authEnvironment.canAttemptExternalBrowser;
+    const primaryLabel = canAttemptExternal ? "在 Chrome 開啟" : "複製連結";
+    const hint = canAttemptExternal
+      ? "如果沒有自動開啟，請點選右上角選單，選擇「在瀏覽器開啟」。"
+      : "Instagram 無法讓此按鈕直接開啟 Safari。請先複製連結，再點選右上角選單，選擇「在瀏覽器開啟」。";
 
     const dialog = document.createElement("div");
     dialog.className = "auth-environment-dialog";
@@ -223,15 +257,24 @@ const auth = {
         <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用 Safari / Chrome 繼續</h2>
         <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
         <p class="auth-environment-dialog__note">LINE、Instagram、Facebook 等 App 內建瀏覽器有時無法完成社群登入、簡訊或 Email 驗證。</p>
-        <button type="button" class="auth-environment-dialog__primary">在 Safari / Chrome 繼續</button>
-        <p class="auth-environment-dialog__hint">如果沒有自動開啟，請點選右上角選單，選擇「在瀏覽器開啟」。</p>
+        <button type="button" class="auth-environment-dialog__primary">${primaryLabel}</button>
+        <p class="auth-environment-dialog__hint">${hint}</p>
+        <p class="auth-environment-dialog__status" aria-live="polite"></p>
       </div>
     `;
 
     const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
-    continueButton.addEventListener("click", () => {
-      dialog.remove();
-      onContinue();
+    const status = dialog.querySelector(".auth-environment-dialog__status");
+    continueButton.addEventListener("click", async () => {
+      if (canAttemptExternal) {
+        window.location.href = this._externalBrowserIntentUrl(window.location.href);
+        return;
+      }
+
+      const copied = await this._copyCurrentUrl().catch(() => false);
+      status.textContent = copied
+        ? "已複製連結。請從右上角選單選擇「在瀏覽器開啟」，或貼到 Safari / Chrome。"
+        : "請從網址列複製目前頁面連結，並在 Safari / Chrome 開啟。";
     });
 
     dialog.addEventListener("click", event => {
@@ -293,7 +336,7 @@ const auth = {
     try {
       const authEnvironment = detectAuthenticationEnvironment();
       if (shouldGateInteractiveAuth(authEnvironment, options)) {
-        this.showEmbeddedBrowserAuthDialog(() => this.login({ ...options, authEnvironmentAcknowledged: true }));
+        this.showEmbeddedBrowserAuthDialog(authEnvironment);
         return;
       }
 
