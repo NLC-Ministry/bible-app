@@ -163,6 +163,10 @@ function isAdmin(profile: any) {
   return profile?.role === "admin";
 }
 
+function canManagePlans(profile: any) {
+  return ["admin", "great_zone_leader", "zone_leader", "group_leader"].includes(profile?.role);
+}
+
 function normalizeRows(payload: any) {
   if (Array.isArray(payload)) return payload;
   if (payload && typeof payload === "object") return [payload];
@@ -303,8 +307,10 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "feature_archived" }, 403);
       }
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
-      if (["publish_global_plan_rules", "get_reading_team_registration_overview"].includes(functionName)
-        && !isAdmin(profile)) {
+      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+        return jsonResponse({ error: "forbidden_rpc" }, 403);
+      }
+      if (functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;

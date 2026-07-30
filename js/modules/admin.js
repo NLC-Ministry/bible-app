@@ -813,15 +813,26 @@ window.initAdminUserManagement = init;
 
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
+let cachedTeamsDataKey = "";
 
 export async function renderAdminTeamRegistrationStatus(forceRefresh = false, division = 3, contentId = division === 6 ? "admin-team-status-content-6" : "admin-team-status-content") {
   const contentEl = document.getElementById(contentId);
   if (!contentEl) return;
 
-  const isAdmin = state.currentUser && state.currentUser.role === "admin";
-  if (!isAdmin) {
-    contentEl.innerHTML = '<div class="admin-team-status-empty" role="status">團隊完整報名名單目前僅開放系統管理員查看。</div>';
-    return;
+  const currentUser = state.currentUser || {};
+  const role = currentUser.role;
+  if (!MANAGEMENT_ROLES.includes(role)) return;
+
+  const scopeCacheKey = [
+    currentUser.id || currentUser.name || "anonymous",
+    role,
+    currentUser.managed_regions || currentUser.great_region || "",
+    currentUser.managed_zones || currentUser.pastoral_zone || "",
+    currentUser.managed_groups || currentUser.small_group || ""
+  ].join("|");
+  if (cachedTeamsDataKey !== scopeCacheKey) {
+    cachedTeamsData = null;
+    cachedTeamsDataKey = scopeCacheKey;
   }
 
   if (!cachedTeamsData || forceRefresh) {

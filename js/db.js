@@ -1973,6 +1973,7 @@ const db = {
       profile_identity_not_found: "目前找不到你的會員資料，請重新登入後再試。",
       team_plan_not_found: "這個計畫目前未開放團隊報名。",
       team_statistics_admin_required: "目前無法查看這項團隊資料。",
+      team_statistics_management_scope_required: "你目前沒有可查看團隊資料的管理範圍。",
       invalid_team_division: "團隊只能選擇 3 人組或 6 人組。",
       invalid_team_name: "請輸入 1 至 40 字的團隊名稱，且不可包含控制字元或 HTML 尖括號。",
       duplicate_team_name: "這個團隊名稱已有人使用，請換一個名稱。",

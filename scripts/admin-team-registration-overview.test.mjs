@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const migration = readFileSync("supabase/migrations/0034_admin_team_registration_overview.sql", "utf8");
+const migration = readFileSync("supabase/migrations/0043_scope_team_registration_overview_by_any_member.sql", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
@@ -18,11 +18,24 @@ describe("admin team registration overview", () => {
     expect(migration).toContain("'plans'");
   });
 
-  it("restricts the overview to administrators across both auth paths", () => {
-    expect(migration).toMatch(/actor_role <> 'admin'/);
-    expect(migration).toContain("team_statistics_admin_required");
-    expect(edge).toContain('"get_reading_team_registration_overview"');
-    expect(edge).toMatch(/get_reading_team_registration_overview"\]\.includes\(functionName\)[\s\S]*?!isAdmin\(profile\)/);
+  it("restricts the overview to plan managers across both auth paths", () => {
+    expect(migration).toContain("'great_zone_leader', 'zone_leader', 'group_leader'");
+    expect(migration).toContain("team_statistics_management_scope_required");
+    expect(edge).toContain('functionName === "get_reading_team_registration_overview" && !canManagePlans(profile)');
+  });
+
+  it("shows a complete team when any member is inside the manager scope", () => {
+    expect(migration).toContain("visible_team_ids AS");
+    expect(migration).toContain("SELECT DISTINCT member.team_id");
+    expect(migration).toContain("JOIN public.reading_teams AS team ON team.id = visible.team_id");
+    const visibleScope = migration.slice(
+      migration.indexOf("visible_team_ids AS"),
+      migration.indexOf("), team_rollup AS")
+    );
+    expect(visibleScope).not.toContain("member.member_role = 'captain'");
+    expect(migration).toContain("actor_profile.managed_regions");
+    expect(migration).toContain("actor_profile.managed_zones");
+    expect(migration).toContain("actor_profile.managed_groups");
   });
 
   it("loads the overview directly instead of guessing plan ids in the browser", () => {
@@ -35,6 +48,8 @@ describe("admin team registration overview", () => {
     expect(renderSource).toContain("db.getReadingTeamRegistrationOverview()");
     expect(renderSource).not.toContain("for (const plan of state.globalPlans)");
     expect(renderSource).toContain("admin-team-status-retry");
+    expect(renderSource).toContain("MANAGEMENT_ROLES.includes(role)");
+    expect(renderSource).toContain("cachedTeamsDataKey !== scopeCacheKey");
   });
 
   it("groups the visible details by plan and team", () => {
@@ -48,7 +63,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_management_plan_hub");
+    expect(html).toContain("js/app.js?v=20260730_team_scope_any_member");
     expect(html).toContain("index.css?v=20260730_management_plan_hub");
     expect(html).toContain("css/team-registration.css?v=20260730_team_size_modal_chooser");
   });
