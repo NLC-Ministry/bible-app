@@ -5824,11 +5824,15 @@ async function renderGroupParticipantsRankingTable() {
 
     if (searchInput && !searchInput.dataset.listenerInitialized) {
       searchInput.dataset.listenerInitialized = "true";
-      searchInput.addEventListener("input", async () => {
-        await renderGroupParticipantsRankingTable();
+      let searchFrame = null;
+      searchInput.addEventListener("input", () => {
+        if (searchFrame !== null) window.cancelAnimationFrame(searchFrame);
+        searchFrame = window.requestAnimationFrame(() => {
+          searchFrame = null;
+          window.displayParticipantsList(100);
+        });
       });
     }
-
     window.displayParticipantsList(100);
   }
 }
@@ -6860,7 +6864,7 @@ async function updateGroupChart(zoneName) {
     try {
       const { data } = await state.supabase
         .from("view_small_group_stats")
-        .select("*")
+        .select("pastoral_zone, small_group, total_chapters_read")
         .eq("pastoral_zone", zoneName);
 
       if (data) {

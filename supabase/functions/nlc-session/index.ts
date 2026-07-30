@@ -7,6 +7,9 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
+const PROFILE_LOOKUP_SELECT = "id, name, email, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, member_context_synced_at";
+const PROFILE_RESPONSE_SELECT = "id, name, email, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+
 function parseJwt(token: string) {
   try {
     const base64Url = token.split(".")[1];
@@ -548,7 +551,7 @@ Deno.serve(async (req: Request) => {
     if (!profileId && memberId) {
       const { data: profileByMember, error: memberLookupError } = await supabaseAdmin
         .from("profiles")
-        .select("*")
+        .select(PROFILE_LOOKUP_SELECT)
         .eq("nlc_member_id", memberId)
         .maybeSingle();
       if (memberLookupError) throw memberLookupError;
@@ -564,7 +567,7 @@ Deno.serve(async (req: Request) => {
     if (!profileId && lookupEmail) {
       const { data: profileByEmail, error: profileLookupError } = await supabaseAdmin
         .from("profiles")
-        .select("*")
+        .select(PROFILE_LOOKUP_SELECT)
         .ilike("email", lookupEmail)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -580,7 +583,7 @@ Deno.serve(async (req: Request) => {
     if (profileId && !existingProfile) {
       const { data: profileById, error: profileByIdError } = await supabaseAdmin
         .from("profiles")
-        .select("*")
+        .select(PROFILE_LOOKUP_SELECT)
         .eq("id", profileId)
         .maybeSingle();
       if (profileByIdError) throw profileByIdError;
@@ -672,7 +675,7 @@ Deno.serve(async (req: Request) => {
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert(profilePayload, { onConflict: "id" })
-      .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
+      .select(PROFILE_RESPONSE_SELECT)
       .single();
 
     if (profileError) throw profileError;

@@ -72,6 +72,11 @@ class NlcQueryBuilder {
     return this;
   }
 
+  range(from, to) {
+    this.request.range = { from, to };
+    return this;
+  }
+
   single() {
     this.request.returning = "single";
     return this;

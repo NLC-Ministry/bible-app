@@ -509,7 +509,7 @@ async function renderPastoralZoneRankingList() {
   let pastoralStats = [];
   if (state.isSupabaseMode && state.supabase) {
     try {
-      const { data } = await state.supabase.from("view_pastoral_zone_stats").select("*");
+      const { data } = await state.supabase.from("view_pastoral_zone_stats").select("pastoral_zone, total_chapters_read");
       if (data) {
         pastoralStats = data.map(item => ({
           name: item.pastoral_zone,

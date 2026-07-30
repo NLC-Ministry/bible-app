@@ -1,5 +1,9 @@
+import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 
-
+window.__nlcNetworkMetrics = Object.freeze({
+  snapshot: () => networkMetrics.snapshot(),
+  summary: () => networkMetrics.summary()
+});
 /**
  * 依計畫名稱查找目前階段定義的 key。
  * @param {string} name
@@ -354,6 +358,7 @@ const db = {
       if (typeof auth === "undefined") throw new Error("NLC auth client is missing.");
       const send = async (forceRefresh = false) => {
         const accessToken = await auth.getValidAccessToken(forceRefresh);
+        const startedAt = performance.now();
         const response = await fetch(cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data", {
           method: "POST",
           headers: {
@@ -363,7 +368,16 @@ const db = {
           },
           body: JSON.stringify(request)
         });
+        const headersAt = performance.now();
         const payload = await response.json().catch(() => ({}));
+        const completedAt = performance.now();
+        networkMetrics.record({
+          name: `${request.action || "select"}:${request.table || request.function || "unknown"}`,
+          status: response.status,
+          ttfbMs: headersAt - startedAt,
+          totalMs: completedAt - startedAt,
+          payloadBytes: getResponsePayloadBytes(response)
+        });
         return { response, payload };
       };
 
@@ -374,16 +388,18 @@ const db = {
       }
 
       // ── 503 / Edge Runtime 暫時中斷：指数退避重試（最多 3 次）──
-      const isServiceDegraded =
+      const mayRetry = !request.action || request.action === "select";
+      const isServiceDegraded = mayRetry && (
         response.status === 503 ||
         payload?.code === "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED" ||
-        (response.status >= 500 && response.status < 600);
+        (response.status >= 500 && response.status < 600)
+      );
 
       if (isServiceDegraded) {
-        const MAX_RETRIES = 3;
-        const RETRY_DELAYS_MS = [1000, 2000, 4000]; // 1秒, 2秒, 4秒
+        const MAX_RETRIES = 2;
+        const RETRY_DELAYS_MS = [400, 1200];
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-          const delayMs = RETRY_DELAYS_MS[attempt] ?? 4000;
+          const delayMs = RETRY_DELAYS_MS[attempt] ?? 1200;
           await new Promise(resolve => setTimeout(resolve, delayMs));
           try {
             ({ response, payload } = await send(false));
@@ -464,6 +480,10 @@ const db = {
       }
       limit(count) {
         this.request.limit = count;
+        return this;
+      }
+      range(from, to) {
+        this.request.range = { from, to };
         return this;
       }
       single() {
@@ -734,8 +754,8 @@ const db = {
         // 💡 效能優化：平行化載入 global_plans, profiles, reading_logs, reading_plans
         // 避開多個 sequential 網路請求產生的累積延遲與 cold start 問題！
         const [globalPlansResult, profileResult, logsResult, plansResult] = await Promise.all([
-          state.supabase.from("global_plans").select("*").order("start_date", { ascending: true }),
-          state.supabase.from("profiles").select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
+          state.supabase.from("global_plans").select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at").order("start_date", { ascending: true }),
+          state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
           window.readingLogRepository
             ? window.readingLogRepository.fetch({
               cacheKey: `reading_logs:${user.id}`,
@@ -743,7 +763,7 @@ const db = {
               onData: (rows, meta) => this.applyReadingLogsSnapshot(rows, { notify: true, source: meta.source })
             })
             : state.supabase.from("reading_logs").select("book, chapter, read_at, plan_id, round").eq("user_id", user.id),
-          state.supabase.from("reading_plans").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
+          state.supabase.from("reading_plans").select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, level, current_round, was_downgraded, downgrade_locked_until, upgrade_prompt_handled, is_fixed, reading_days_per_week, rest_weekdays, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
         ]);
 
         if (globalPlansResult.error) console.error("❌ global_plans load failed:", globalPlansResult.error);
@@ -1322,7 +1342,7 @@ const db = {
         .from("profiles")
         .update({ name: displayName, updated_at: profilePayload.updated_at })
         .eq("id", user.id)
-        .select("*")
+        .select("id, name")
         .single();
       if (error) throw new Error(error.message || error.error || error);
       verifiedProfile = data || null;
@@ -1331,7 +1351,7 @@ const db = {
     if (!verifiedProfile || verifiedProfile.id !== user.id) {
       const verifyResult = await state.supabase
         .from("profiles")
-        .select("*")
+        .select("id, name")
         .eq("id", user.id)
         .maybeSingle();
       if (verifyResult.error) throw new Error(verifyResult.error.message || verifyResult.error.error || verifyResult.error);
@@ -1974,7 +1994,7 @@ const db = {
       const { data, error } = await state.supabase
         .from("devotional_comments")
         .insert([{ note_id: noteId, user_id: user.id, content }])
-        .select()
+        .select("id, note_id, user_id, content, created_at")
         .single();
 
       if (error) throw error;
@@ -2497,7 +2517,7 @@ const db = {
 
           let existingQuery = state.supabase
             .from("reading_plans")
-            .select("*")
+            .select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, level, current_round, is_fixed, reading_days_per_week, rest_weekdays")
             .eq("user_id", user.id);
           if (globalPlanId) existingQuery = existingQuery.eq("global_plan_id", globalPlanId);
           else existingQuery = existingQuery.eq("preset_key", presetKey).eq("name", planName);
@@ -2525,7 +2545,7 @@ const db = {
             const { data: dbPlan, error } = await state.supabase
               .from("reading_plans")
               .insert(insertPayload)
-              .select()
+              .select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, level, current_round, is_fixed, reading_days_per_week, rest_weekdays")
               .single();
 
             if (error) {
@@ -2727,7 +2747,7 @@ const db = {
       try {
         const { data, error } = await state.supabase
           .from("global_plans")
-          .select("*")
+          .select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at")
           .order("start_date", { ascending: true });
 
         if (error) {
@@ -3093,8 +3113,9 @@ const db = {
       try {
         const { data, error } = await state.supabase
           .from('church_announcements')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .select('id, title, content, is_published, published_at, created_at, updated_at')
+          .order('created_at', { ascending: false })
+          .limit(50);
 
         if (error) {
           const isDegraded =

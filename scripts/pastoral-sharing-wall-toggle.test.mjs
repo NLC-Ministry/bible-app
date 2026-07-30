@@ -30,7 +30,7 @@ describe("pastoral sharing wall feature control", () => {
   it("prevents archived wall reads and writes through both auth paths", () => {
     expect(migration).toContain("public.is_feature_enabled('pastoral_sharing_wall')");
     expect(edge).toContain('return jsonResponse({ error: "feature_archived" }, 403)');
-    expect(edge).toContain('if (action === "select") return jsonResponse({ data: [], profile })');
+    expect(edge).toContain('if (action === "select") return jsonResponse({ data: [] })');
     expect(home).toContain("if (!pastoralSharingWallEnabled) return");
   });
 

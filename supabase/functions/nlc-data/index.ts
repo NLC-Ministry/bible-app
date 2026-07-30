@@ -53,6 +53,7 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "send_plan_join_invitation"
 ]);
+const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -107,7 +108,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
     if (user && !authErr) {
       const { data: profile, error: profileError } = await supabaseAdmin
         .from("profiles")
-        .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
+        .select(PROFILE_SELECT)
         .eq("id", user.id)
         .single();
       if (!profileError && profile) {
@@ -152,7 +153,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
-    .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
+    .select(PROFILE_SELECT)
     .eq("id", identity.profile_id)
     .single();
   if (profileError) throw profileError;
@@ -240,17 +241,35 @@ function valuesOverlap(left: unknown, right: unknown) {
 
 async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   if (hasWholeChurchPlanScope(profile)) return null;
-  const { data: profiles, error } = await supabaseAdmin
+  const splitScope = (value: unknown) => String(value || "")
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
+  const roleCode = getProfileRoleCode(profile);
+  let query = supabaseAdmin
     .from("profiles")
-    .select("id, great_region, pastoral_zone, small_group");
+    .select("id")
+    .eq("is_demo", false)
+    .eq("is_active", true);
+
+  if (roleCode === "great_zone_leader") {
+    const regions = splitScope(profile.managed_regions || profile.great_region);
+    if (!regions.length) return [profile.id];
+    query = query.in("great_region", regions);
+  } else if (roleCode === "zone_leader") {
+    const zones = splitScope(profile.managed_zones || profile.pastoral_zone);
+    if (!zones.length) return [profile.id];
+    query = query.in("pastoral_zone", zones);
+  } else {
+    const zones = splitScope(profile.pastoral_zone);
+    const groups = splitScope(profile.small_group);
+    if (!zones.length || !groups.length) return [profile.id];
+    query = query.in("pastoral_zone", zones).in("small_group", groups);
+  }
+
+  const { data: profiles, error } = await query;
   if (error) throw error;
-  return (profiles || []).filter((candidate: any) => {
-    if (candidate.id === profile.id) return true;
-    if (getProfileRoleCode(profile) === "great_zone_leader") return valuesOverlap(candidate.great_region, profile.managed_regions || profile.great_region);
-    if (getProfileRoleCode(profile) === "zone_leader") return valuesOverlap(candidate.pastoral_zone, profile.managed_zones || profile.pastoral_zone);
-    return valuesOverlap(candidate.pastoral_zone, profile.pastoral_zone)
-      && valuesOverlap(candidate.small_group, profile.small_group);
-  }).map((candidate: any) => candidate.id);
+  return Array.from(new Set([profile.id, ...(profiles || []).map((candidate: any) => candidate.id)]));
 }
 
 async function applyForcedScope(query: any, table: string, action: string, profile: any, supabaseAdmin: any) {
@@ -286,8 +305,18 @@ Deno.serve(async (req: Request) => {
     "Access-Control-Allow-Origin": origin
   };
 
+  const requestStartedAt = performance.now();
   const jsonResponse = (body: unknown, status = 200) => {
-    return new Response(JSON.stringify(body), { status, headers: localCorsHeaders });
+    const serialized = JSON.stringify(body);
+    return new Response(serialized, {
+      status,
+      headers: {
+        ...localCorsHeaders,
+        "Content-Length": String(new TextEncoder().encode(serialized).byteLength),
+        "Server-Timing": `edge;dur=${(performance.now() - requestStartedAt).toFixed(1)}`,
+        "Access-Control-Expose-Headers": "Content-Length, Server-Timing"
+      }
+    });
   };
 
   if (req.method === "OPTIONS") return new Response("ok", { headers: localCorsHeaders });
@@ -337,7 +366,7 @@ Deno.serve(async (req: Request) => {
         : (body.args || {});
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
       if (error) return jsonResponse({ error: error.message, details: error }, 400);
-      return jsonResponse({ data, profile });
+      return jsonResponse({ data });
     }
 
     // ── send_care_reminder: server-side forced sender_id ──
@@ -379,7 +408,7 @@ Deno.serve(async (req: Request) => {
           sent_on: new Date().toISOString().slice(0, 10)
         });
       if (error) return jsonResponse({ error: error.message, details: error, code: error.code }, 400);
-      return jsonResponse({ data: null, profile });
+      return jsonResponse({ data: null });
     }
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
@@ -392,7 +421,7 @@ Deno.serve(async (req: Request) => {
          .from("profiles")
          .update(updatePayload)
          .eq("id", profile.id)
-         .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
+         .select(PROFILE_SELECT)
          .single();
 
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
@@ -430,7 +459,7 @@ Deno.serve(async (req: Request) => {
     const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
     if (devotionalTables.has(table)
       && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
-      if (action === "select") return jsonResponse({ data: [], profile });
+      if (action === "select") return jsonResponse({ data: [] });
       return jsonResponse({ error: "feature_archived" }, 403);
     }
     let query: any;
@@ -453,7 +482,12 @@ Deno.serve(async (req: Request) => {
     ({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));
     if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
     if (body.order?.column) query = query.order(body.order.column, { ascending: body.order.ascending !== false });
-    if (body.limit) query = query.limit(body.limit);
+    if (body.range && Number.isInteger(body.range.from) && Number.isInteger(body.range.to)) {
+      const rangeFrom = Math.max(0, body.range.from);
+      const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + 199);
+      query = query.range(rangeFrom, rangeTo);
+    }
+    if (body.limit) query = query.limit(Math.min(200, Math.max(1, Number(body.limit) || 1)));
     if (body.returning === "single") query = query.single();
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
 
@@ -464,7 +498,7 @@ Deno.serve(async (req: Request) => {
     if (table === "profiles" && ["insert", "update", "upsert"].includes(action)) {
       const { data: verifiedProfile, error: verifyError } = await supabaseAdmin
         .from("profiles")
-        .select("*, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)")
+        .select(PROFILE_SELECT)
         .eq("id", profile.id)
         .maybeSingle();
       if (verifyError) return jsonResponse({ error: verifyError.message, details: verifyError }, 400);
@@ -472,7 +506,7 @@ Deno.serve(async (req: Request) => {
       responseData = verifiedProfile;
     }
 
-    return jsonResponse({ data: responseData, profile });
+    return jsonResponse({ data: responseData });
   } catch (err) {
     console.error("nlc-data failed:", err);
     return jsonResponse({ error: "nlc_data_failed", message: err instanceof Error ? err.message : String(err) }, 500);

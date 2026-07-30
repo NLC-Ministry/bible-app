@@ -21,7 +21,9 @@ describe("startup performance contract", () => {
     expect(reportSchedule).toBeGreaterThan(-1);
     expect(pwaInitialization).toBeGreaterThan(-1);
     expect(reportSchedule).toBeLessThan(pwaInitialization);
-    expect(app).toContain("window.setTimeout(load, 1500)");
+    expect(app).toContain("window.setTimeout(() => {");
+    expect(app).toContain("window.requestIdleCallback(load, { timeout: 5000 })");
+    expect(app).toContain("}, 3000)");
   });
 
   it("keeps registration helper modules lazy until their surfaces need them", () => {

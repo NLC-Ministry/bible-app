@@ -10,10 +10,10 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260730_public_personal_ranking';
-import './auth.js?v=20260730_public_personal_ranking';
-import './db.js?v=20260730_public_personal_ranking';
-import './utils.js?v=20260730_public_personal_ranking';
+import './state.js?v=20260730_performance_refactor';
+import './auth.js?v=20260730_performance_refactor';
+import './db.js?v=20260730_performance_refactor';
+import './utils.js?v=20260730_performance_refactor';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
@@ -306,15 +306,13 @@ function scheduleIssueReportUiLoad(options = {}) {
     });
   };
 
-  const fallbackTimer = window.setTimeout(load, 1500);
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(() => {
-      window.clearTimeout(fallbackTimer);
-      load();
-    }, { timeout: 1200 });
-  } else {
-    window.setTimeout(load, 250);
-  }
+  window.setTimeout(() => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(load, { timeout: 5000 });
+    } else {
+      window.setTimeout(load, 2000);
+    }
+  }, 3000);
 }
 
 async function ensurePlanFeatureModulesLoaded() {

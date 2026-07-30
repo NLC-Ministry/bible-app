@@ -388,7 +388,7 @@
             <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數組別</span>
             <div style="font-size: 0.95rem; font-weight: 600; color: var(--color-brand); margin-bottom: 1.1rem; padding: 0.2rem 0; display: flex; align-items: center; gap: 0.35rem;">
               <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
-              <span>${preferredDivision} 人組團隊</span>
+              <span><span data-division-form-label>${preferredDivision}</span> 人組團隊</span>
             </div>
           </div>
           <div>
@@ -412,6 +412,8 @@
             item.setAttribute("aria-pressed", String(isSelected));
           });
           panel.querySelector("[data-division-label]").textContent = preferredDivision;
+          const formLabel = panel.querySelector("[data-division-form-label]");
+          if (formLabel) formLabel.textContent = preferredDivision;
         });
       });
       panel.querySelector("#reading-team-create-form").onsubmit = async event => {

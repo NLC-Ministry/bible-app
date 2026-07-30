@@ -37,6 +37,6 @@ describe("Member Hub-only permission management", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_public_personal_ranking");
+    expect(html).toContain("js/app.js?v=20260730_performance_refactor");
   });
 });

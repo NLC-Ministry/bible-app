@@ -97,8 +97,9 @@ export const AdminReportView: React.FC = () => {
         body: JSON.stringify({
           table: "issue_reports",
           action: "select",
-          select: "*, profiles(name, pastoral_zone, small_group)",
-          order: { column: "created_at", ascending: false }
+select: "id, created_at, category, description, url, user_agent, status, profiles(name, pastoral_zone, small_group)",
+          order: { column: "created_at", ascending: false },
+          range: { from: 0, to: 99 }
         })
       });
 
