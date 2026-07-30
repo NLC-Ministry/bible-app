@@ -2,6 +2,11 @@
 // auth.js - Logto OIDC & NLC Member Hub Integration Client
 // ============================================================
 
+import {
+  detectAuthenticationEnvironment,
+  shouldGateInteractiveAuth
+} from "./auth-environment.js";
+
 const auth = {
   config: {
     issuer: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.issuer) || "https://sso.newlife.org.tw/oidc",
@@ -200,6 +205,44 @@ const auth = {
     else alert(message);
   },
 
+  showEmbeddedBrowserAuthDialog(onContinue) {
+    const existing = document.getElementById("auth-environment-dialog");
+    if (existing) existing.remove();
+
+    const dialog = document.createElement("div");
+    dialog.className = "auth-environment-dialog";
+    dialog.id = "auth-environment-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "auth-environment-dialog-title");
+    dialog.innerHTML = `
+      <div class="auth-environment-dialog__panel">
+        <div class="auth-environment-dialog__icon" aria-hidden="true">
+          <span class="nlc-icon nlc-icon--sm" data-icon="lock"></span>
+        </div>
+        <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用 Safari / Chrome 繼續</h2>
+        <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
+        <p class="auth-environment-dialog__note">LINE、Instagram、Facebook 等 App 內建瀏覽器有時無法完成社群登入、簡訊或 Email 驗證。</p>
+        <button type="button" class="auth-environment-dialog__primary">在 Safari / Chrome 繼續</button>
+        <p class="auth-environment-dialog__hint">如果沒有自動開啟，請點選右上角選單，選擇「在瀏覽器開啟」。</p>
+      </div>
+    `;
+
+    const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
+    continueButton.addEventListener("click", () => {
+      dialog.remove();
+      onContinue();
+    });
+
+    dialog.addEventListener("click", event => {
+      if (event.target === dialog) dialog.remove();
+    });
+
+    document.body.appendChild(dialog);
+    if (typeof hydrateIcons === "function") hydrateIcons(dialog);
+    continueButton.focus();
+  },
+
   _failCallback(message, detail) {
     if (detail) console.error(message, detail);
     this._clearFlowState();
@@ -246,8 +289,14 @@ const auth = {
     }
   },
 
-  async login() {
+  async login(options = {}) {
     try {
+      const authEnvironment = detectAuthenticationEnvironment();
+      if (shouldGateInteractiveAuth(authEnvironment, options)) {
+        this.showEmbeddedBrowserAuthDialog(() => this.login({ ...options, authEnvironmentAcknowledged: true }));
+        return;
+      }
+
       await this.resetLocalLogin();
       if (!this.config.clientId) {
         console.error("NLC OIDC clientId is missing. Set NLC_CLIENT_ID and rebuild config.js.");

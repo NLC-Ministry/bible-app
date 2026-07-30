@@ -3026,7 +3026,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal);
   padding: 1.5rem;
   box-sizing: border-box;
 }
@@ -3077,6 +3077,94 @@ body:not(.dark-theme) .settings-row-btn:hover {
   color: var(--text-secondary);
   margin-bottom: 2.5rem;
   line-height: 1.6;
+}
+
+.auth-environment-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-critical);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-page);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.auth-environment-dialog__panel {
+  width: min(100%, 420px);
+  padding: 1.35rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+
+.auth-environment-dialog__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  color: var(--color-brand);
+  background: var(--bg-card);
+}
+
+.auth-environment-dialog__title {
+  margin: 0 0 0.55rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.auth-environment-dialog__body,
+.auth-environment-dialog__note,
+.auth-environment-dialog__hint {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.auth-environment-dialog__note {
+  margin-top: 0.65rem;
+}
+
+.auth-environment-dialog__hint {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.auth-environment-dialog__primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 1.15rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-brand);
+  color: var(--color-brand-foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.auth-environment-dialog__primary:hover {
+  background: var(--color-brand-hover);
+}
+
+.auth-environment-dialog__primary:active {
+  background: var(--color-brand-active);
+  transform: translateY(1px);
 }
 
 /* Dark mode overrides for login gate */
