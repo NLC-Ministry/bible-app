@@ -149,6 +149,7 @@ function paintProfileIdentityChrome() {
     group_leader: "小組長",
     zone_leader: "區長 (牧區負責人)",
     great_zone_leader: "大區長",
+    senior_pastor: "教會牧者",
     admin: "系統管理員"
   };
 
@@ -195,6 +196,7 @@ function paintProfileIdentityChrome() {
   if (summaryRole) {
     const role = String(user.role || "").trim();
     const leadershipLabel = getLeadershipDisplayLabel(user);
+    const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
     if (pending && !role && !leadershipLabel) {
       summaryRole.setAttribute("aria-busy", "true");
       if (typeof ComponentSkeletonLoader !== "undefined") {
@@ -203,9 +205,9 @@ function paintProfileIdentityChrome() {
     } else if (leadershipLabel) {
       summaryRole.removeAttribute("aria-busy");
       summaryRole.textContent = leadershipLabel;
-    } else if (role && roleNames[role]) {
+    } else if (role && (roleDefinition || roleNames[role])) {
       summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = roleNames[role];
+      summaryRole.textContent = roleDefinition?.label || roleNames[role];
     } else if (pending) {
       summaryRole.setAttribute("aria-busy", "true");
       if (typeof ComponentSkeletonLoader !== "undefined") {
@@ -456,7 +458,7 @@ async function renderCareReminders() {
 
 
 export function updateAdminNavVisibility() {
-  const managementRoles = ['admin', 'great_zone_leader', 'zone_leader'];
+  const managementRoles = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
   const currentRole = (state.currentUser && state.currentUser.role) || 'member';
   const realRole = state.realRole || currentRole;
   const canManagePlans = managementRoles.includes(currentRole)

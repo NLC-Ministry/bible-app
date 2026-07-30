@@ -43,6 +43,7 @@ const state = {
   isSupabaseMode: false,
   supabase: null,
   realRole: null, // Authentic user role from DB
+  roleDefinitions: [], // Supabase role definitions, keyed by immutable UUID
   /** True while profile tab / boot is waiting on Member Hub identity sync */
   profileIdentityLoading: false,
   currentUser: {
@@ -87,6 +88,23 @@ const state = {
     group: null
   }
 };
+
+function hasWholeChurchPlanScope(userOrRole = state.currentUser) {
+  const role = typeof userOrRole === "string" ? userOrRole : userOrRole?.role;
+  return role === "admin" || role === "senior_pastor";
+}
+
+function getRoleDefinition(roleOrId) {
+  const value = String(roleOrId || "").trim();
+  return (state.roleDefinitions || []).find(definition =>
+    definition.id === value || definition.code === value
+  ) || null;
+}
+
+function getRoleLabel(roleOrId) {
+  const definition = getRoleDefinition(roleOrId);
+  return definition?.label || String(roleOrId || "");
+}
 
 function getActivePlanContextId(plan = state.activePlan) {
   if (!plan) return null;

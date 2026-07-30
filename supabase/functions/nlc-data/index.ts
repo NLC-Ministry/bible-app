@@ -26,7 +26,8 @@ const READ_TABLES = new Set([
   "view_pastoral_zone_stats",
   "view_small_group_stats",
   "care_reminders",
-  "app_feature_settings"
+  "app_feature_settings",
+  "role_definitions"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
@@ -170,8 +171,12 @@ function isAdmin(profile: any) {
   return profile?.role === "admin";
 }
 
+function hasWholeChurchPlanScope(profile: any) {
+  return ["admin", "senior_pastor"].includes(profile?.role);
+}
+
 function canManagePlans(profile: any) {
-  return ["admin", "great_zone_leader", "zone_leader"].includes(profile?.role);
+  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(profile?.role);
 }
 
 function normalizeRows(payload: any) {
@@ -228,7 +233,7 @@ function valuesOverlap(left: unknown, right: unknown) {
 }
 
 async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
-  if (isAdmin(profile)) return null;
+  if (hasWholeChurchPlanScope(profile)) return null;
   const { data: profiles, error } = await supabaseAdmin
     .from("profiles")
     .select("id, great_region, pastoral_zone, small_group");
@@ -256,7 +261,7 @@ async function applyForcedScope(query: any, table: string, action: string, profi
         : query.in("user_id", visibleIds.length ? visibleIds : [profile.id])
     };
   }
-  if (table === "profiles" && !isAdmin(profile)) {
+  if (table === "profiles" && !hasWholeChurchPlanScope(profile)) {
     const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
     return { query: query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]) };
   }
@@ -337,7 +342,7 @@ Deno.serve(async (req: Request) => {
       if (!validReasons.includes(p.reason)) return jsonResponse({ error: "invalid_reason" }, 400);
       const msg = String(p.message || "").trim();
       if (!msg || msg.length > 300) return jsonResponse({ error: "invalid_message" }, 400);
-      const pastoralRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"];
+      const pastoralRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"];
       if (!pastoralRoles.includes(profile.role) || profile.id === p.recipient_id) {
         return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
       }
@@ -349,7 +354,7 @@ Deno.serve(async (req: Request) => {
       if (recipientError) return jsonResponse({ error: recipientError.message }, 400);
       if (!recipient || recipient.is_active === false) return jsonResponse({ error: "recipient_not_found" }, 404);
 
-      const withinScope = isAdmin(profile)
+      const withinScope = hasWholeChurchPlanScope(profile)
         || (profile.role === "great_zone_leader" && valuesOverlap(recipient.great_region, profile.managed_regions || profile.great_region))
         || (profile.role === "zone_leader" && valuesOverlap(recipient.pastoral_zone, profile.managed_zones || profile.pastoral_zone))
         || (profile.role === "group_leader"

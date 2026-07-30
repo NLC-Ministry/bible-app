@@ -32,7 +32,7 @@ describe("permission management with small-group permissions disabled", () => {
   });
 
   it("rejects hidden group-leader assignments in every write path", () => {
-    expect(db).toContain('const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "admin"])');
+    expect(db).toContain('const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "senior_pastor", "admin"])');
     expect(edge).toContain('body.payload?.role === "group_leader"');
     expect(edge).toContain("group_leader_assignment_disabled");
     expect(migration).toContain("BEFORE UPDATE OF role ON public.profiles");
@@ -40,6 +40,6 @@ describe("permission management with small-group permissions disabled", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_disable_group_permissions");
+    expect(html).toContain("js/app.js?v=20260730_church_pastor_roles");
   });
 });

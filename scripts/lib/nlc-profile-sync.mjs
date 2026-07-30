@@ -93,6 +93,7 @@ const DEFAULT_ALLOWED_ROLES = new Set([
   "group_leader",
   "zone_leader",
   "great_zone_leader",
+  "senior_pastor",
   "admin"
 ]);
 
@@ -107,7 +108,7 @@ export function resolveSyncedRole(primaryRole, existingRole, allowedRoles = DEFA
   if (primaryRole === "admin" && allowedRoles.has("admin")) return "admin";
   if (existingRole !== null && existingRole !== undefined && String(existingRole).trim() !== "") {
     const existing = String(existingRole).trim();
-    return existing === "senior_pastor" ? "admin" : existing;
+    return existing;
   }
   return "member";
 }

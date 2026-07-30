@@ -1410,6 +1410,31 @@ const db = {
     }
   },
 
+  async fetchRoleDefinitions() {
+    const fallback = [
+      { id: "10000000-0000-4000-8000-000000000001", code: "member", label: "一般會友", sort_order: 60, is_assignable: true },
+      { id: "10000000-0000-4000-8000-000000000002", code: "group_leader", label: "小組長", sort_order: 50, is_assignable: false },
+      { id: "10000000-0000-4000-8000-000000000003", code: "zone_leader", label: "牧區長", sort_order: 40, is_assignable: true },
+      { id: "10000000-0000-4000-8000-000000000004", code: "great_zone_leader", label: "大區長", sort_order: 30, is_assignable: true },
+      { id: "10000000-0000-4000-8000-000000000005", code: "senior_pastor", label: "教會牧者", sort_order: 20, is_assignable: true },
+      { id: "10000000-0000-4000-8000-000000000006", code: "admin", label: "系統管理員", sort_order: 10, is_assignable: true }
+    ];
+    if (!state.isSupabaseMode || !state.supabase) {
+      state.roleDefinitions = fallback;
+      return fallback;
+    }
+    const { data, error } = await state.supabase
+      .from("role_definitions")
+      .select("id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type")
+      .order("sort_order", { ascending: true });
+    if (error) {
+      console.warn("Role definitions are not available yet; using compatibility labels.", error);
+      state.roleDefinitions = fallback;
+      return fallback;
+    }
+    state.roleDefinitions = Array.isArray(data) && data.length ? data : fallback;
+    return state.roleDefinitions;
+  },
   async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false) {
     if (ignorePlanFilter) {
       filterPresetKey = false;
@@ -1492,7 +1517,7 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role, managed_regions, managed_zones, managed_groups").eq("is_demo", false);
+        const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups").eq("is_demo", false);
         console.log(`🔍 [AdminDebug] profiles 查詢結果: ${usersProfiles ? usersProfiles.length : 0} 筆`, profilesError ? `錯誤: ${profilesError.message}` : '');
         if (profilesError) throw profilesError;
         if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${u.role})`));
@@ -2632,15 +2657,20 @@ const db = {
     showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
   },
 
-  async updateUserRole(userId, newRole, userName, additionalFields = {}) {
-    const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "admin"]);
+  async updateUserRole(userId, newRole, userName, additionalFields = {}, roleId = null) {
+    const assignableRoles = new Set(["member", "zone_leader", "great_zone_leader", "senior_pastor", "admin"]);
     if (!assignableRoles.has(newRole)) {
       if (typeof showToast === "function") showToast("目前尚未開放小組權限設定。");
       return false;
     }
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       try {
-        const updateData = { role: newRole, ...additionalFields };
+        const definition = roleId
+          ? { id: roleId }
+          : (state.roleDefinitions || []).find(role => role.code === newRole);
+        const updateData = definition?.id
+          ? { role_id: definition.id, ...additionalFields }
+          : { role: newRole, ...additionalFields };
         const { error } = await state.supabase
           .from("profiles")
           .update(updateData)

@@ -141,8 +141,8 @@ describe("resolveSyncedRole", () => {
     expect(resolveSyncedRole("member", "admin")).toBe("admin");
   });
 
-  it("normalizes the retired senior-pastor role to admin", () => {
-    expect(resolveSyncedRole("member", "senior_pastor")).toBe("admin");
+  it("preserves the church-pastor role", () => {
+    expect(resolveSyncedRole("member", "senior_pastor")).toBe("senior_pastor");
   });
 
   it("defaults to member when no existing role", () => {

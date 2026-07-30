@@ -141,7 +141,7 @@ describe("campaign data contract and statistics scope", () => {
   });
 
   it("lets admins read all church participants while keeping non-admin scope filters", () => {
-    expect(edge).toContain("if (isAdmin(profile)) return null");
+    expect(edge).toContain("if (hasWholeChurchPlanScope(profile)) return null");
     expect(edge).toContain('query.in("user_id"');
     expect(edge).toContain('query.in("id"');
     expect(edge).toContain('"publish_global_plan_rules"');

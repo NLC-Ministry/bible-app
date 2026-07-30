@@ -171,9 +171,13 @@ export async function renderAdminUserManagement() {
   ComponentSkeletonLoader.show('members', listContainer);
 
   try {
-    const users = await db.fetchMergedUsersList(null, true);
+    const [users, roleDefinitions] = await Promise.all([
+      db.fetchMergedUsersList(null, true),
+      db.fetchRoleDefinitions()
+    ]);
+    state.roleDefinitions = roleDefinitions;
     
-    const roleOrder = { admin: 1, great_zone_leader: 2, zone_leader: 3, group_leader: 4, member: 5 };
+    const roleOrder = Object.fromEntries(roleDefinitions.map(role => [role.code, role.sort_order]));
     const sortedUsers = [...users].sort((a, b) => {
       if (a.name === state.currentUser.name) return -1;
       if (b.name === state.currentUser.name) return 1;
@@ -195,16 +199,10 @@ export async function renderAdminUserManagement() {
       return;
     }
 
-    const roleLabels = {
-      member: "一般會友",
-      group_leader: "小組長",
-      zone_leader: "牧區長",
-      great_zone_leader: "大區長",
-      admin: "系統管理員"
-    };
+    const roleLabels = Object.fromEntries(roleDefinitions.map(role => [role.code, role.label]));
 
     filteredUsers.forEach(user => {
-      const roleLabel = roleLabels[user.role] || user.role;
+      const roleLabel = user.role_definition?.label || roleLabels[user.role] || user.role;
       
       const item = document.createElement("div");
       item.className = "member-list-item";
@@ -248,12 +246,10 @@ export function openMemberEditBottomSheet(user) {
   if (titleEl) titleEl.textContent = `變更 ${user.name} 的權限階級`;
   listEl.innerHTML = "";
 
-  const roleOptions = [
-    { value: "member", label: "一般會友" },
-    { value: "zone_leader", label: "牧區長" },
-    { value: "great_zone_leader", label: "大區長" },
-    { value: "admin", label: "系統管理員" }
-  ];
+  const roleOptions = (state.roleDefinitions || [])
+    .filter(role => role.is_assignable)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(role => ({ id: role.id, value: role.code, label: role.label }));
 
 
 
@@ -329,7 +325,7 @@ export function openMemberEditBottomSheet(user) {
       }
 
       loader.show();
-      const success = await db.updateUserRole(user.id, opt.value, user.name, additionalFields);
+      const success = await db.updateUserRole(user.id, opt.value, user.name, additionalFields, opt.id);
       loader.hide();
 
       if (success) {
@@ -620,7 +616,7 @@ export function init() {
   initAdminTeamRegistration();
 }
 
-const MANAGEMENT_ROLES = ['admin', 'great_zone_leader', 'zone_leader'];
+const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {

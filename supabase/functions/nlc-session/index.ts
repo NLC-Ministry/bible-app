@@ -12,6 +12,7 @@ const allowedRoles = new Set([
   "group_leader",
   "zone_leader",
   "great_zone_leader",
+  "senior_pastor",
   "admin"
 ]);
 
@@ -255,7 +256,7 @@ function sanitizeLeadershipIdentity(memberContext: any) {
 
 // Roles that must never be granted or inherited via a WEAK (email-only) account link.
 const PRIVILEGED_ROLES = new Set([
-  "admin", "great_zone_leader", "zone_leader", "group_leader"
+  "admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"
 ]);
 
 /**
@@ -277,7 +278,7 @@ function resolveSyncedRole(
   if (primaryRole === "admin" && strong && allowedRoles.has("admin")) return "admin";
   const existing = existingRole == null ? "" : String(existingRole).trim();
   if (existing !== "") {
-    if (existing === "senior_pastor") return strong ? "admin" : "member";
+    if (existing === "senior_pastor") return strong ? "senior_pastor" : "member";
     if (strong) return existing;
     return PRIVILEGED_ROLES.has(existing) ? "member" : existing;
   }

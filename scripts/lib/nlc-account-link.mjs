@@ -16,6 +16,7 @@
 
 export const PRIVILEGED_ROLES = [
   "admin",
+  "senior_pastor",
   "great_zone_leader",
   "zone_leader",
   "group_leader",
@@ -42,7 +43,7 @@ export function resolveSyncedRole(primaryRole, existingRole, linkedBy) {
 
   const existing = existingRole == null ? "" : String(existingRole).trim();
   if (existing !== "") {
-    if (existing === "senior_pastor") return strong ? "admin" : "member";
+    if (existing === "senior_pastor") return strong ? "senior_pastor" : "member";
     if (strong) return existing;
     // Weak (email) link: allow account continuity for ordinary members, but never
     // inherit a privileged role that the caller has not strongly proven.

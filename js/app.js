@@ -10,10 +10,10 @@ import './design/design-tokens.js';
 import './design/design-system-helpers.js';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
-import './state.js?v=20260730_remove_legacy_org_entry';
+import './state.js?v=20260730_church_pastor_roles';
 import './auth.js';
-import './db.js?v=20260730_disable_group_permissions';
-import './utils.js?v=20260730_management_plan_filter_rules';
+import './db.js?v=20260730_church_pastor_roles';
+import './utils.js?v=20260730_church_pastor_roles';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
@@ -165,6 +165,7 @@ async function renderNotificationsList() {
     group_leader: "小組長",
     zone_leader: "區長",
     great_zone_leader: "大區長",
+    senior_pastor: "教會牧者",
     admin: "系統管理員"
   };
 
@@ -176,7 +177,9 @@ async function renderNotificationsList() {
     const senderName = String(sender.name || "").trim() || "—";
     const senderRoleRaw = sender.role || "leader";
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
-    const senderRole = isTeamReminder ? "隊友" : (roleNames[senderRoleRaw] || "領袖");
+    const senderRole = isTeamReminder
+      ? "隊友"
+      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "領袖");
 
     const dateStr = item.sent_on || "";
 
@@ -570,8 +573,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   // Load all user data in one shot. db.init() guarantees auth is resolved before we reach here.
   try {
-    const [, initialDataLoadSucceeded] = await Promise.all([
+    const [, , initialDataLoadSucceeded] = await Promise.all([
       db.loadOrgStructure(),
+      db.fetchRoleDefinitions(),
       db.loadUserData(true)
     ]);
 

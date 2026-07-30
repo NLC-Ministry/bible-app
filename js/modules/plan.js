@@ -3816,7 +3816,7 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   groupSelect.disabled = false;
 
   const userRole = (state.currentUser && state.currentUser.role) || "member";
-  const isAdmin = userRole === "admin";
+  const isAdmin = hasWholeChurchPlanScope(userRole);
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
   const isGroupLeader = userRole === "group_leader";
@@ -4483,7 +4483,7 @@ async function renderGroupMiniStats(overrideFilter) {
   } else {
     // If no selector filter is loaded yet, guess label from user role
     const userRole = state.currentUser.role || "member";
-    if (userRole === "admin") {
+    if (hasWholeChurchPlanScope(userRole)) {
       scopeLabel = "全教會";
     } else if (userRole === "great_zone_leader") {
       scopeLabel = state.currentUser.great_region || "大區";
@@ -4654,7 +4654,7 @@ function renderGroupGrowthTrend(overrideFilter) {
       else if (selectedFilter.startsWith('group:')) scopeLabel = selectedFilter.replace('group:', '');
     } else {
       const userRole = state.currentUser.role || 'member';
-      if (userRole === 'admin') scopeLabel = '全教會';
+      if (hasWholeChurchPlanScope(userRole)) scopeLabel = '全教會';
       else if (userRole === 'great_zone_leader') scopeLabel = state.currentUser.great_region || '大區';
       else if (userRole === 'zone_leader') scopeLabel = state.currentUser.pastoral_zone || '牧區';
       else scopeLabel = state.currentUser.small_group || '小組';
@@ -4830,7 +4830,7 @@ function renderGroupTeamHeatmap(overrideFilter) {
     }
   } else {
     const userRole = state.currentUser.role || "member";
-    if (userRole === "admin") {
+    if (hasWholeChurchPlanScope(userRole)) {
       scopeLabel = "全教會";
     } else if (userRole === "great_zone_leader") {
       scopeLabel = state.currentUser.great_region || "大區";
@@ -5267,7 +5267,7 @@ async function renderReadingTeamLeaderboards() {
 
   // Rolling-deployment compatibility: administrators can temporarily reuse the
   // existing aggregate statistics RPC until the dedicated leaderboard RPC is live.
-  const canUseAdminFallback = state.currentUser && state.currentUser.role === "admin";
+  const canUseAdminFallback = hasWholeChurchPlanScope(state.currentUser);
   if ((!result || !result.success) && canUseAdminFallback && typeof db.getReadingTeamStatistics === "function") {
     const fallback = await settleRequest(
       () => db.getReadingTeamStatistics(state.activePlan),
@@ -5639,7 +5639,7 @@ async function renderGroupParticipantsRankingTable() {
 
   const userZone = state.currentUser.pastoral_zone || "";
   const userRole = state.currentUser.role || "member";
-  const isAdmin = userRole === "admin";
+  const isAdmin = hasWholeChurchPlanScope(userRole);
   const isGreatZoneLeader = userRole === "great_zone_leader";
   const isZoneLeader = userRole === "zone_leader";
   const isGroupLeader = userRole === "group_leader";
@@ -5918,7 +5918,7 @@ window.displayParticipantsList = function (limit = 100) {
 
   // Determine if current user is a leader who can send care reminders
   const _careRole = (state.currentUser && state.currentUser.role) || "member";
-  const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "admin"].includes(_careRole);
+  const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "senior_pastor", "admin"].includes(_careRole);
 
   // 對齊 header 欄位動態調整（含名次欄）
   const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;
@@ -6655,13 +6655,13 @@ async function updateStatsView(filterPresetKey = null) {
   rawAllUsers = getScopedUsers(rawAllUsers, mockUser);
 
   // Filter pastoralStats based on Great Region for non-admin roles
-  if (role !== "admin") {
+  if (!hasWholeChurchPlanScope(role)) {
     pastoralStats = pastoralStats.filter(z => z.great_region === mockUser.great_region);
   }
 
   // 1. Determine Stats Scoped Users
   let statsUsers = [];
-  if (role === "admin") {
+  if (hasWholeChurchPlanScope(role)) {
     const zoneSelectGroup = document.getElementById("stats-zone-selector");
     const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
     if (selectedZone) {
@@ -6684,7 +6684,7 @@ async function updateStatsView(filterPresetKey = null) {
   // 2. Update Mini Card Labels based on Scoped Team
   const miniCardLabels = document.querySelectorAll('.stats-overview-row .label');
   if (miniCardLabels.length === 3) {
-    if (role === "admin") {
+    if (hasWholeChurchPlanScope(role)) {
       const zoneSelectGroup = document.getElementById("stats-zone-selector");
       const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
       miniCardLabels[0].textContent = selectedZone ? `${selectedZone} 總閱讀章數` : "全教會總閱讀章數";
@@ -7068,7 +7068,7 @@ function renderHeatmap(teamUsers = []) {
   const titleEl = document.getElementById("heatmap-card-title");
   if (titleEl) {
     const role = state.currentUser.role || "member";
-    if (role === "admin") {
+    if (hasWholeChurchPlanScope(role)) {
       const zoneSelectGroup = document.getElementById("stats-zone-selector");
       const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
       titleEl.textContent = selectedZone
@@ -7106,7 +7106,7 @@ function renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser) {
   let teamUsers = [];
   const role = mockUser.role || 'member';
 
-  if (role === 'admin') {
+  if (hasWholeChurchPlanScope(role)) {
     const zoneSelectGroup = document.getElementById("stats-zone-selector");
     const selectedZone = zoneSelectGroup ? zoneSelectGroup.value : "";
     if (selectedZone) {

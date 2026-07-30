@@ -382,9 +382,9 @@ describe("NLC and browser integration", () => {
   });
   it("delivers team reminders without requiring a table parameter", () => {
     expect(edge).toContain('["save_profile", "rpc", "send_care_reminder"]');
-    expect(edge).toContain('const pastoralRoles = ["admin", "great_zone_leader", "zone_leader", "group_leader"]');
+    expect(edge).toContain('const pastoralRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"]');
     expect(edge).toContain("pastoral_reminder_scope_required");
-    expect(edge).toContain("const withinScope = isAdmin(profile)");
+    expect(edge).toContain("const withinScope = hasWholeChurchPlanScope(profile)");
     expect(db).toContain("response.status === 403");
     expect(profile).toContain("收到的關心提醒");
     expect(profile).toContain('startsWith("reading-team:")');
