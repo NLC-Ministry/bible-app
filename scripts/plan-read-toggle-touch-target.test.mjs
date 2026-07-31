@@ -38,7 +38,7 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260730_badge_vector_quality");
+    expect(html).toContain("index.css?v=20260731_admin_registration_statistics");
   });
 });
 

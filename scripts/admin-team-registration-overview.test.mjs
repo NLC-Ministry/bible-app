@@ -64,8 +64,8 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260730_home_plan_countdown");
-    expect(html).toContain("index.css?v=20260730_badge_vector_quality");
+    expect(html).toContain("js/app.js?v=20260731_admin_registration_statistics");
+    expect(html).toContain("index.css?v=20260731_admin_registration_statistics");
     expect(html).toContain("css/team-registration.css?v=20260730_team_registration_cancel_safe");
   });
 

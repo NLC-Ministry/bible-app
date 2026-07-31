@@ -63,8 +63,145 @@ export async function renderAdminFeatureSettings() {
   if (typeof hydrateIcons === "function") hydrateIcons(card);
 }
 
+let adminRegistrationStatistics = null;
+
+function getAdminRegistrationStatisticsPlans() {
+  return (Array.isArray(state.globalPlans) ? state.globalPlans : [])
+    .filter(plan => plan
+      && typeof isUuid === "function" && isUuid(plan.id)
+      && (plan.planKind || plan.plan_kind) !== "church_campaign")
+    .sort((left, right) => String(right.startDate || right.start_date || "")
+      .localeCompare(String(left.startDate || left.start_date || "")));
+}
+
+function renderAdminRegistrationStatisticsTable(title, label, rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const body = safeRows.length > 0
+    ? safeRows.map(row => `
+        <tr>
+          <td>${escapeHTML(row.label || "未設定")}</td>
+          <td>${Number(row.signupCount || 0)}</td>
+          <td>${Number(row.registeredCount || 0)}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="3" class="admin-registration-statistics__empty">目前沒有資料</td></tr>`;
+  return `
+    <section class="admin-registration-statistics__table-section">
+      <h4>${title}</h4>
+      <div class="admin-registration-statistics__table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>${label}</th>
+              <th>報名人數</th>
+              <th>註冊人數</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </section>`;
+}
+
+function sanitizeRegistrationStatisticsText(value) {
+  return String(value || "未設定")
+    .replaceAll("/", "／")
+    .replace(/[\r\n]+/g, " ")
+    .trim() || "未設定";
+}
+
+export function formatAdminRegistrationStatisticsText(context) {
+  const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
+  const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const formatRows = rows => rows.map(row => [
+    sanitizeRegistrationStatisticsText(row.label),
+    Number(row.signupCount || 0),
+    Number(row.registeredCount || 0)
+  ].join("/"));
+  return [
+    "大區 / 報名人數 / 註冊人數",
+    ...formatRows(greatRegions),
+    "",
+    "牧區 / 報名人數 / 註冊人數",
+    ...formatRows(pastoralZones)
+  ].join("\r\n");
+}
+
+function exportAdminRegistrationStatistics() {
+  if (!adminRegistrationStatistics) return;
+  const text = formatAdminRegistrationStatisticsText(adminRegistrationStatistics);
+  const blob = new Blob(["\uFEFF", text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const planName = String(adminRegistrationStatistics.planName || "讀經計畫")
+    .replace(/[\\/:*?"<>|]/g, "-");
+  anchor.href = url;
+  anchor.download = `報名與註冊統計-${planName}-${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function loadAdminRegistrationStatistics(globalPlanId) {
+  const content = document.getElementById("admin-registration-statistics-content");
+  const exportButton = document.getElementById("admin-registration-statistics-export");
+  if (!content || !exportButton) return;
+  adminRegistrationStatistics = null;
+  exportButton.disabled = true;
+  content.innerHTML = '<div class="admin-registration-statistics__empty">讀取統計資料中…</div>';
+
+  const result = await db.getAdminRegistrationStatistics(globalPlanId);
+  if (!result || !result.success) {
+    content.innerHTML = `
+      <div class="admin-registration-statistics__empty" role="status">
+        ${escapeHTML(result && result.message || "目前無法載入報名與註冊統計。")}
+      </div>`;
+    return;
+  }
+
+  adminRegistrationStatistics = result.context;
+  content.innerHTML = `
+    <div class="admin-registration-statistics__tables">
+      ${renderAdminRegistrationStatisticsTable("大區統計", "大區", result.context.greatRegions)}
+      ${renderAdminRegistrationStatisticsTable("牧區統計", "牧區", result.context.pastoralZones)}
+    </div>`;
+  exportButton.disabled = false;
+}
+
+export async function renderAdminRegistrationStatistics() {
+  const column = document.getElementById("admin-registration-statistics-col");
+  const planSelect = document.getElementById("admin-registration-statistics-plan");
+  const exportButton = document.getElementById("admin-registration-statistics-export");
+  if (!column || !planSelect || !exportButton) return;
+
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
+  column.classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) return;
+
+  const plans = getAdminRegistrationStatisticsPlans();
+  planSelect.innerHTML = "";
+  if (plans.length === 0) {
+    planSelect.options.add(new Option("目前沒有可統計的讀經計畫", ""));
+    planSelect.disabled = true;
+    document.getElementById("admin-registration-statistics-content").innerHTML =
+      '<div class="admin-registration-statistics__empty">目前沒有可統計的讀經計畫。</div>';
+    return;
+  }
+
+  plans.forEach(plan => planSelect.options.add(new Option(plan.name || "未命名計畫", String(plan.id))));
+  const activePlanId = state.activePlan && (state.activePlan.globalPlanId || state.activePlan.id);
+  if (activePlanId && Array.from(planSelect.options).some(option => option.value === String(activePlanId))) {
+    planSelect.value = String(activePlanId);
+  }
+  planSelect.onchange = () => loadAdminRegistrationStatistics(planSelect.value);
+  exportButton.onclick = exportAdminRegistrationStatistics;
+  await loadAdminRegistrationStatistics(planSelect.value);
+  if (typeof hydrateIcons === "function") hydrateIcons(column);
+}
+
 export function init() {
   void renderAdminFeatureSettings();
+  void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
 
   // Bind unjoined plan members section collapse toggle

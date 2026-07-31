@@ -53,12 +53,16 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "send_plan_join_invitation"
 ]);
+const ADMIN_RPC_FUNCTIONS = new Set([
+  "get_admin_registration_statistics"
+]);
 const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
   "publish_global_plan_rules",
-  ...TEAM_RPC_FUNCTIONS
+  ...TEAM_RPC_FUNCTIONS,
+  ...ADMIN_RPC_FUNCTIONS
 ]);
 
 function jsonResponse(body: unknown, status = 200) {
@@ -360,8 +364,13 @@ Deno.serve(async (req: Request) => {
       if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
+      if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
+        return jsonResponse({ error: "forbidden_rpc" }, 403);
+      }
       const rpcName = functionName;
-      const rpcArgs = functionName === "publish_global_plan_rules" || TEAM_RPC_FUNCTIONS.has(functionName)
+      const rpcArgs = functionName === "publish_global_plan_rules"
+        || TEAM_RPC_FUNCTIONS.has(functionName)
+        || ADMIN_RPC_FUNCTIONS.has(functionName)
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);

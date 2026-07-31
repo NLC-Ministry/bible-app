@@ -2110,6 +2110,20 @@ const db = {
     return result.success ? { success: true, context: result.data || { summary: {}, plans: [] } } : result;
   },
 
+  async getAdminRegistrationStatistics(globalPlanId) {
+    if (!isUuid(globalPlanId)) {
+      return { success: false, message: "請先選擇要統計的讀經計畫。" };
+    }
+    const result = await this._callReadingTeamRpc("get_admin_registration_statistics", {
+      p_global_plan_id: String(globalPlanId)
+    });
+    return result.success
+      ? { success: true, context: result.data || {
+          planId: globalPlanId, planName: "", pastoralZones: [], greatRegions: []
+        } }
+      : result;
+  },
+
   _resolveManagementGlobalPlanId(plan) {
     const globalPlans = Array.isArray(state.globalPlans) ? state.globalPlans : [];
     const identifiers = [

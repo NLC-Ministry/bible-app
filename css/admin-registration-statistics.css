@@ -1,0 +1,109 @@
+.admin-registration-statistics {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-registration-statistics__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-registration-statistics__header p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.admin-registration-statistics__eyebrow {
+  color: var(--color-brand) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.admin-registration-statistics__filter {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 28rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.admin-registration-statistics__tables {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-registration-statistics__table-section {
+  min-width: 0;
+}
+
+.admin-registration-statistics__table-section h4 {
+  margin: 0 0 0.55rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.admin-registration-statistics__table-scroll {
+  overflow: auto;
+  max-height: 24rem;
+  border: 1px solid var(--border-card);
+  border-radius: 0.75rem;
+}
+
+.admin-registration-statistics table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.admin-registration-statistics th,
+.admin-registration-statistics td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-card);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-registration-statistics th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.admin-registration-statistics td {
+  color: var(--text-primary);
+}
+
+.admin-registration-statistics tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-registration-statistics__empty {
+  padding: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .admin-registration-statistics__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-registration-statistics__header .secondary-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .admin-registration-statistics__tables {
+    grid-template-columns: 1fr;
+  }
+}
