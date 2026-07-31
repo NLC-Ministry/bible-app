@@ -328,6 +328,9 @@ async function ensureAdminFeatureModulesLoaded() {
 }
 
 async function refreshCurrentAppView() {
+  window._cachedAllUsersList = null;
+  window._cachedAllUsersListKey = null;
+
   if (typeof db !== "undefined") {
     if (typeof db.loadOrgStructure === "function") {
       await db.loadOrgStructure();

@@ -1,5 +1,5 @@
-const REFRESH_THRESHOLD = 80;
-const MAX_PULL_DISTANCE = 104;
+const REFRESH_THRESHOLD = 110;
+const MAX_PULL_DISTANCE = 140;
 const RESET_DELAY_MS = 450;
 
 export function installPullToRefresh({
@@ -24,6 +24,30 @@ export function installPullToRefresh({
   indicator.setAttribute("aria-atomic", "true");
   indicator.textContent = "下拉更新";
   document.body.appendChild(indicator);
+
+  function isPullToRefreshAllowed(target) {
+    if (window.appRouter && window.appRouter.currentTab && window.appRouter.currentTab !== "dashboard-view" && window.appRouter.currentTab !== "plan-view") {
+      return false;
+    }
+    const openModals = document.querySelectorAll(
+      '.bottom-sheet-backdrop:not(.hidden), .modal:not(.hidden), .dialog:not(.hidden), [role="dialog"]:not(.hidden), .overlay:not(.hidden)'
+    );
+    if (openModals.length > 0) return false;
+    if (target && typeof target.closest === "function") {
+      if (
+        target.closest('.bottom-sheet') ||
+        target.closest('.modal') ||
+        target.closest('.dialog') ||
+        target.closest('.overlay') ||
+        target.closest('.scrollable-container') ||
+        target.closest('#reader-view') ||
+        target.closest('#admin-view')
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   function render(nextStatus = status) {
     status = nextStatus;
@@ -70,7 +94,7 @@ export function installPullToRefresh({
   }
 
   function onTouchStart(event) {
-    if (window.scrollY > 0 || status === "refreshing") {
+    if (window.scrollY > 0 || status === "refreshing" || !isPullToRefreshAllowed(event.target)) {
       startPoint = null;
       return;
     }
