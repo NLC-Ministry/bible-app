@@ -35,7 +35,7 @@ BEGIN
   WITH eligible_profiles AS (
     SELECT
       profile.id,
-      COALESCE(NULLIF(BTRIM(profile.pastoral_zone), ''), '未設定') AS label
+      COALESCE(NULLIF(BTRIM(profile.pastoral_zone), ''), '未設定牧區') AS label
     FROM public.profiles AS profile
     WHERE profile.is_active = TRUE
       AND profile.is_demo = FALSE
@@ -59,7 +59,7 @@ BEGIN
         'signupCount', signup_count,
         'registeredCount', registered_count
       )
-      ORDER BY CASE WHEN label = '未設定' THEN 1 ELSE 0 END, label
+      ORDER BY CASE WHEN label = '未設定牧區' THEN 1 ELSE 0 END, label
     ),
     '[]'::JSONB
   )

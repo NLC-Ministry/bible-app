@@ -17,6 +17,7 @@ describe("admin registration statistics", () => {
     expect(migration).toContain("BTRIM(profile.great_region)");
     expect(migration).toContain("BTRIM(profile.pastoral_zone)");
     expect(migration).toContain("'greatRegions'");
+    expect(migration).toContain("'未設定牧區'");
     expect(migration).toContain("'pastoralZones'");
   });
 
