@@ -40,11 +40,8 @@ describe("admin registration statistics", () => {
   });
 
   it("always offers the first stage even before global plans finish loading", () => {
-    expect(admin).toContain("CHURCH_PLAN_PRESETS.church_stage_01");
-    expect(admin).toContain('presetKey: "church_stage_01"');
-    expect(admin).toContain("plansById.has(String(stageOne.id))");
-    expect(admin).toContain("plansById.set(String(plan.id), plan)");
-    expect(admin).toContain("isUuid(plan.id)");
+    expect(admin).toContain("buildAdminRegistrationStatisticsPlans(");
+    expect(admin).not.toContain('typeof isUuid !== "function"');
   });
 
   it("exports UTF-8 text in the requested slash-delimited format", () => {
@@ -58,7 +55,7 @@ describe("admin registration statistics", () => {
 
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
-    expect(html).toContain("css/admin-registration-statistics.css?v=20260731_readonly_user_directory");
-    expect(html).toContain("js/app.js?v=20260731_readonly_user_directory");
+    expect(html).toContain("css/admin-registration-statistics.css?v=20260731_admin_management_refine");
+    expect(html).toContain("js/app.js?v=20260731_admin_management_refine");
   });
 });

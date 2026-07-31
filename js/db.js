@@ -1443,12 +1443,28 @@ const db = {
       return { data: [], error: new Error("admin_user_directory_admin_required") };
     }
     try {
-      const { data, error } = await state.supabase
-        .from("profiles")
-        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)")
-        .eq("is_demo", false)
-        .order("name", { ascending: true });
-      return { data: data || [], error };
+      const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001";
+      const [profilesResult, enrollmentsResult] = await Promise.all([
+        state.supabase
+          .from("profiles")
+          .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)")
+          .eq("is_demo", false)
+          .order("name", { ascending: true }),
+        state.supabase
+          .from("reading_plans")
+          .select("user_id")
+          .eq("global_plan_id", firstStageGlobalPlanId)
+      ]);
+      if (profilesResult.error) return { data: [], error: profilesResult.error };
+      if (enrollmentsResult.error) return { data: [], error: enrollmentsResult.error };
+      const joinedProfileIds = new Set((enrollmentsResult.data || []).map(plan => String(plan.user_id)));
+      return {
+        data: (profilesResult.data || []).map(profile => ({
+          ...profile,
+          joined_stage_one: joinedProfileIds.has(String(profile.id))
+        })),
+        error: null
+      };
     } catch (error) {
       return { data: [], error };
     }

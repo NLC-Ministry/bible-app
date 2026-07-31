@@ -22,7 +22,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="index.css?v=20260731_bulk_plan_invites">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_readonly_user_directory">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_admin_management_refine">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_registration_cancel_safe">
 
   <!-- Supabase JS Client library -->
@@ -1724,32 +1724,45 @@
             </div>
           </div>
           <div class="card-col span-12 hidden" id="admin-user-directory-col">
-            <section class="glass-card admin-user-directory" aria-labelledby="admin-user-directory-title">
-              <div class="admin-registration-statistics__header">
+            <details class="glass-card admin-user-directory" id="admin-user-directory-disclosure" aria-labelledby="admin-user-directory-title" open>
+              <summary class="admin-user-directory__summary">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">使用者管理</p>
                   <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
-                  <p>僅供檢視，資料由會員中心與登入同步流程提供，無法在此修改。</p>
+                  <p>先查看姓名與牧區，點選人員後可展開詳細資料；本區不會修改帳號。</p>
                 </div>
                 <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
-              </div>
+              </summary>
+              <div class="admin-user-directory__body">
               <label class="admin-registration-statistics__filter" for="admin-user-directory-search">
                 <span>搜尋使用者</span>
                 <input type="search" id="admin-user-directory-search" class="form-control"
                   placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
               </label>
+              <fieldset class="admin-user-directory__filters">
+                <legend>篩選條件</legend>
+                <label>
+                  <input type="checkbox" id="admin-user-directory-filter-incomplete">
+                  <span>未填會員資料（沒有牧區或沒有名稱）</span>
+                </label>
+                <label>
+                  <input type="checkbox" id="admin-user-directory-filter-stage-one">
+                  <span>未加入第一階段計畫</span>
+                </label>
+              </fieldset>
               <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入使用者資料…</div>
               </div>
-            </section>
+              </div>
+            </details>
           </div>
           <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
             <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
               <div class="admin-registration-statistics__header">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">權限管理</p>
-                  <h3 class="card-title" id="admin-managed-scopes-title">使用者基本資料與管理範圍</h3>
-                  <p>角色由會員中心同步；在這裡查看使用者基本資料，並設定本專案可管理的多個大區、牧區或小組。</p>
+                  <h3 class="card-title" id="admin-managed-scopes-title">管理範圍設定</h3>
+                  <p>角色由會員中心同步；此處只列出具有管理職責的人員，不包含一般會友，並可設定多個大區、牧區或小組。</p>
                 </div>
               </div>
               <label class="admin-registration-statistics__filter" for="admin-managed-scopes-profile">
@@ -2121,7 +2134,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260731_readonly_user_directory"></script>
+  <script type="module" src="js/app.js?v=20260731_admin_management_refine"></script>
 </body>
 
 </html>
