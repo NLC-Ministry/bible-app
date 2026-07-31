@@ -6065,6 +6065,29 @@ async function renderPlanMembersView() {
     });
   }
 
+  const refreshBtn = document.getElementById("btn-refresh-members-ranking");
+  if (refreshBtn && !refreshBtn.dataset.listenerBound) {
+    refreshBtn.dataset.listenerBound = "true";
+    refreshBtn.addEventListener("click", async () => {
+      window._cachedAllUsersList = null;
+      window._cachedAllUsersListKey = null;
+      if (typeof showToast === "function") showToast("更新排名中...");
+      
+      const membersTitleEl = document.getElementById("members-ranking-title");
+      if (membersTitleEl) {
+        const rankingTitleEl = document.getElementById("ranking-title");
+        if (rankingTitleEl) rankingTitleEl.id = "_ranking-title-backup";
+        membersTitleEl.id = "ranking-title";
+        await renderGroupParticipantsRankingTable();
+        membersTitleEl.id = "members-ranking-title";
+        if (rankingTitleEl) rankingTitleEl.id = "ranking-title";
+      } else {
+        await renderGroupParticipantsRankingTable();
+      }
+      if (typeof showToast === "function") showToast("排名已更新");
+    });
+  }
+
   if (!(await prepareReadingTeamSubview("members"))) return;
 
   // Switch the header filter bars: show members controls, hide stats controls
