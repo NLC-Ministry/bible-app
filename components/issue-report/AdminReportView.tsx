@@ -10,6 +10,7 @@ interface IssueReport {
   url?: string;
   user_agent?: string;
   status: string;
+  metadata?: Record<string, any>;
   profiles?: {
     name?: string;
     pastoral_zone?: string;
@@ -97,7 +98,7 @@ export const AdminReportView: React.FC = () => {
         body: JSON.stringify({
           table: "issue_reports",
           action: "select",
-select: "id, created_at, category, description, url, user_agent, status, profiles(name, pastoral_zone, small_group)",
+          select: "id, created_at, category, description, url, user_agent, status, metadata, profiles(name, pastoral_zone, small_group)",
           order: { column: "created_at", ascending: false },
           range: { from: 0, to: 99 }
         })
@@ -143,6 +144,86 @@ select: "id, created_at, category, description, url, user_agent, status, profile
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleUpdate = async (id: string, status: string, reply: string) => {
+    try {
+      const state = (window as any).state;
+      const supabase = state?.supabase;
+      const cfg = state?.supabaseConfig || {};
+      const supabaseUrl = cfg.url || "";
+      const supabaseAnonKey = cfg.anonKey || "";
+
+      if (!supabase) throw new Error("Supabase client is not initialized");
+
+      let accessToken = "";
+      if (supabase && typeof supabase.auth?.getSession === "function") {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (!sessionErr && session) {
+          accessToken = session.access_token;
+        }
+      }
+      if (!accessToken && (window as any).auth && typeof (window as any).auth.getValidAccessToken === "function") {
+        accessToken = await (window as any).auth.getValidAccessToken();
+      }
+
+      if (!accessToken) {
+        throw new Error("請先登入管理員帳號");
+      }
+
+      const report = reports.find(r => r.id === id);
+      const existingMetadata = report?.metadata || {};
+
+      const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: {
+          "apikey": supabaseAnonKey,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          table: "issue_reports",
+          action: "update",
+          payload: {
+            status,
+            metadata: {
+              ...existingMetadata,
+              reply,
+              replied_at: new Date().toISOString(),
+              replied_by: currentUser?.id || ""
+            }
+          },
+          filters: [
+            { type: "eq", column: "id", value: id }
+          ]
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP 錯誤 ${response.status}`);
+      }
+
+      setReports(prev => prev.map(r => {
+        if (r.id === id) {
+          return {
+            ...r,
+            status,
+            metadata: {
+              ...existingMetadata,
+              reply,
+              replied_at: new Date().toISOString(),
+              replied_by: currentUser?.id || ""
+            }
+          };
+        }
+        return r;
+      }));
+    } catch (err: any) {
+      console.error("[IssueReportAdmin] Update error:", err);
+      throw err;
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -207,6 +288,7 @@ select: "id, created_at, category, description, url, user_agent, status, profile
       onRefresh={fetchReports}
       onExport={handleExportCSV}
       onDelete={handleDelete}
+      onUpdate={handleUpdate}
     />
   );
 };
