@@ -17,7 +17,7 @@ describe("management plan unjoined members", () => {
     expect(orgContentIndex).toBeGreaterThan(unjoinedIndex);
     expect(html).toContain("尚未加入計畫");
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
-    expect(html).toContain("js/app.js?v=20260731_unjoined_stage_one_consistency");
+    expect(html).toContain("js/app.js?v=20260801_timezone_local_fixes");
   });
 
   it("loads, filters, and reminds unjoined members in the management view", () => {

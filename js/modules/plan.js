@@ -4255,10 +4255,11 @@ async function renderPlanStatsView() {
     }
 
     // Calculate expected days up to today (for round 1 logic only)
-    const planStart = new Date(state.activePlan.startDate);
+    const planStart = new Date(state.activePlan.startDate + "T00:00:00");
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const diffTime = today.getTime() - planStart.getTime();
-    const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
+    const diffDays = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
     const expectedDaysCount = Math.min(totalPlanDays, diffDays);
 
     // 3. Progress Status
@@ -4270,7 +4271,7 @@ async function renderPlanStatsView() {
     }
 
     // 4. Makeup/Catch up days (🛡️ 進度救援)
-    const statsStart = new Date(state.activePlan.startDate);
+    const statsStart = new Date(state.activePlan.startDate + "T00:00:00");
     statsStart.setHours(0, 0, 0, 0);
     const targetRoundsVal = getPlanLevelRounds(state.activePlan.level || "normal");
     let catchUpDaysVal = 0;
@@ -4280,7 +4281,7 @@ async function renderPlanStatsView() {
         const d = index + 1;
         const scheduledDate = new Date(statsStart);
         scheduledDate.setDate(statsStart.getDate() + (d - 1));
-        const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+        const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
 
         const roundLogs = (state.readingLogs || []).filter(l =>
           (l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey) &&
@@ -4290,13 +4291,20 @@ async function renderPlanStatsView() {
         let allChaptersCompleted = true;
         let maxReadDateStr = "";
 
+        const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
+          if (!val) return "";
+          const date = val instanceof Date ? val : new Date(val);
+          if (Number.isNaN(date.getTime())) return "";
+          return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+        });
+
         for (const ch of day.chapters) {
           const log = roundLogs.find(l => l.book === ch.book && l.chapter === ch.chapter);
           if (!log) {
             allChaptersCompleted = false;
             break;
           }
-          const logDateStr = log.read_at.substring(0, 10);
+          const logDateStr = toLocalStr(log.read_at);
           if (!maxReadDateStr || logDateStr > maxReadDateStr) {
             maxReadDateStr = logDateStr;
           }
@@ -4547,15 +4555,22 @@ function renderGroupProgressDistribution(overrideFilter) {
 
   let expectedPct = 50;
   if (state.activePlan) {
-    const start = new Date(state.activePlan.startDate);
-    const end = new Date(state.activePlan.endDate);
-    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const start = new Date(state.activePlan.startDate + "T00:00:00");
+    const end = new Date(state.activePlan.endDate + "T00:00:00");
+    const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
     const today = new Date();
-    const elapsed = Math.max(0, Math.min(totalDays, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1));
+    today.setHours(0, 0, 0, 0);
+    const elapsed = Math.max(0, Math.min(totalDays, Math.round((today - start) / (1000 * 60 * 60 * 24)) + 1));
     expectedPct = Math.round((elapsed / totalDays) * 100) || 0;
   }
 
-  const todayStr = new Date().toISOString().substring(0, 10);
+  const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
+    if (!val) return "";
+    const date = val instanceof Date ? val : new Date(val);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+  });
+  const todayStr = toLocalStr(new Date());
   const todayDoneCount = scopedUsers.filter(u => u.last_read === todayStr).length;
   const todayRate = totalCount ? Math.round((todayDoneCount / totalCount) * 100) : 0;
   const totalChapters = scopedUsers.reduce((sum, u) => sum + (u.chapters_read || 0), 0);
@@ -5540,9 +5555,15 @@ async function renderGroupParticipantsRankingTable() {
 
   const calculateCatchUpDays = (userLogs) => {
     if (!state.activePlan || !state.activePlan.days) return 0;
-    const statsStart = new Date(state.activePlan.startDate);
+    const statsStart = new Date(state.activePlan.startDate + "T00:00:00");
     statsStart.setHours(0, 0, 0, 0);
     let catchUpDaysVal = 0;
+    const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
+      if (!val) return "";
+      const date = val instanceof Date ? val : new Date(val);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+    });
     // 第二遍起屬於超前閱讀，不重複算成補讀。
     for (let r = 1; r <= 1; r++) {
       const roundLogs = (userLogs || []).filter(l => (l.round || 1) === r);
@@ -5550,7 +5571,7 @@ async function renderGroupParticipantsRankingTable() {
         const d = index + 1;
         const scheduledDate = new Date(statsStart);
         scheduledDate.setDate(statsStart.getDate() + (d - 1));
-        const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+        const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
 
         let allChaptersCompleted = true;
         let maxReadDateStr = "";
@@ -5561,7 +5582,7 @@ async function renderGroupParticipantsRankingTable() {
             allChaptersCompleted = false;
             break;
           }
-          const logDateStr = log.read_at.substring(0, 10);
+          const logDateStr = toLocalStr(log.read_at);
           if (!maxReadDateStr || logDateStr > maxReadDateStr) {
             maxReadDateStr = logDateStr;
           }
@@ -5586,10 +5607,11 @@ async function renderGroupParticipantsRankingTable() {
       return d.chapters.every(ch => ch.isRead);
     }).length;
 
-  const planStart = new Date(state.activePlan.startDate);
+  const planStart = new Date(state.activePlan.startDate + "T00:00:00");
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const diffTime = today.getTime() - planStart.getTime();
-  const diffDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
+  const diffDays = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
   const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
 
   const userZone = state.currentUser.pastoral_zone || "";
@@ -6146,9 +6168,9 @@ window.showPlanStatsModal = function () {
   const totalCompletionRate = plan.progress || 0;
 
   // 3. Calculate catch-up days (進度救援)
-  const start = new Date(plan.startDate);
+  const start = new Date(plan.startDate + "T00:00:00");
   start.setHours(0, 0, 0, 0);
-  const end = new Date(plan.endDate);
+  const end = new Date(plan.endDate + "T00:00:00");
   end.setHours(0, 0, 0, 0);
   const totalDays = plan.totalDays || (Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
   const todayZero = new Date();
@@ -6157,13 +6179,19 @@ window.showPlanStatsModal = function () {
   const targetRounds = getPlanLevelRounds(plan.level || "normal");
 
   let catchUpDays = 0;
+  const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
+    if (!val) return "";
+    const date = val instanceof Date ? val : new Date(val);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+  });
   // 補讀只屬於第一遍；重讀進度不應疊加到補讀天數。
   for (let r = 1; r <= 1; r++) {
     plan.days.forEach((day, index) => {
       const d = index + 1;
       const scheduledDate = new Date(start);
       scheduledDate.setDate(start.getDate() + (d - 1));
-      const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+      const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
 
       const roundLogs = (state.readingLogs || []).filter(l =>
         (l.plan_id === plan.id || l.presetKey === plan.presetKey) &&
@@ -6179,7 +6207,7 @@ window.showPlanStatsModal = function () {
           allChaptersCompleted = false;
           break;
         }
-        const logDateStr = log.read_at.substring(0, 10);
+        const logDateStr = toLocalStr(log.read_at);
         if (!maxReadDateStr || logDateStr > maxReadDateStr) {
           maxReadDateStr = logDateStr;
         }
@@ -7227,9 +7255,9 @@ function calculateProfileStats(plan) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = new Date(plan.startDate);
+  const start = new Date(plan.startDate + "T00:00:00");
   start.setHours(0, 0, 0, 0);
-  const end = new Date(plan.endDate);
+  const end = new Date(plan.endDate + "T00:00:00");
   end.setHours(0, 0, 0, 0);
 
   const totalDays = plan.totalDays || (Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
@@ -7302,7 +7330,7 @@ function calculateProfileStats(plan) {
 
       const scheduledDate = new Date(start);
       scheduledDate.setDate(start.getDate() + (d - 1));
-      const scheduledDateStr = scheduledDate.toISOString().substring(0, 10);
+      const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
 
       const roundLogs = state.readingLogs.filter(l =>
         (l.plan_id === plan.id || l.presetKey === plan.presetKey) &&
@@ -7312,13 +7340,20 @@ function calculateProfileStats(plan) {
       let allChaptersCompleted = true;
       let maxReadDateStr = "";
 
+      const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
+        if (!val) return "";
+        const date = val instanceof Date ? val : new Date(val);
+        if (Number.isNaN(date.getTime())) return "";
+        return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+      });
+
       for (const ch of day.chapters) {
         const log = roundLogs.find(l => l.book === ch.book && l.chapter === ch.chapter);
         if (!log) {
           allChaptersCompleted = false;
           break;
         }
-        const logDateStr = log.read_at.substring(0, 10);
+        const logDateStr = toLocalStr(log.read_at);
         if (!maxReadDateStr || logDateStr > maxReadDateStr) {
           maxReadDateStr = logDateStr;
         }
