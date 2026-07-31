@@ -43,7 +43,7 @@ describe("management plan hub", () => {
 
   it("defaults to stage one and lists only current or completed plans with current plans first", () => {
     expect(admin).toContain("getManagementPlanStageNo(plan) === 1");
-    expect(admin).toContain("plans.find(plan => plan.managementStatus === 'ongoing') || stageOnePlan || plans[0]");
+    expect(admin).toContain("stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0]");
     expect(admin).toContain("!managementPlanSelectionInitialized");
     expect(admin).toContain("status === 'ongoing' || status === 'completed' || isStageOneBootstrap");
     expect(admin).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");

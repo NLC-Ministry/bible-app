@@ -7,13 +7,13 @@ import './data/bible_verse_counts.js';
 import './copy/zh-Hant.js?v=20260726_org_setup_onboarding';
 import './data/church_campaign.js?v=20260728_badge_img_refactor';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js';
+import './design/design-system-helpers.js?v=20260801_timezone_local_fixes';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
-import './db.js?v=20260731_unjoined_stage_one_consistency';
-import './utils.js?v=20260730_badge_vector_quality';
+import './db.js?v=20260801_timezone_local_fixes';
+import './utils.js?v=20260801_timezone_local_fixes';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';

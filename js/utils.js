@@ -1730,17 +1730,28 @@ function calculatePlanProgress() {
   }
 }
 
+function toLocalYYYYMMDD(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+window.toLocalYYYYMMDD = toLocalYYYYMMDD;
+
 function isPlanStarted(plan) {
   if (!plan) return false;
   if (plan.isFixed === false || plan.is_fixed === false) return true;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalYYYYMMDD(new Date());
   return todayStr >= plan.startDate;
 }
 
 function isPlanExpired(plan) {
   if (!plan || !plan.endDate) return false;
   if (plan.isFixed === false || plan.is_fixed === false) return false;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalYYYYMMDD(new Date());
   return todayStr > plan.endDate;
 }
 
@@ -1752,11 +1763,9 @@ function selectMostRecentActivePlan(plans, currentDate = new Date()) {
     if (!value) return fallback;
     const raw = String(value);
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return fallback;
-    return parsed.toISOString().split("T")[0];
+    return toLocalYYYYMMDD(raw) || fallback;
   };
-  const todayKey = toDateKey(currentDate, new Date().toISOString().split("T")[0]);
+  const todayKey = toDateKey(currentDate, toLocalYYYYMMDD(new Date()));
   const datedPlans = visiblePlans.map(plan => {
     const startKey = toDateKey(plan.startDate || plan.start_date, "0000-00-00");
     const endKey = toDateKey(plan.endDate || plan.end_date, startKey || "9999-12-31");
