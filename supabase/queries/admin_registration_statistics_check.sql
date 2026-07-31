@@ -1,9 +1,6 @@
--- 報名與註冊統計核對
--- 用法：
--- 1. 若要核對特定計畫，將下方 NULL::UUID 改成：
---    '計畫的 UUID'::UUID
--- 2. 若維持 NULL::UUID，會優先選擇目前進行中的非隱藏計畫；
---    若目前沒有進行中的計畫，則選擇開始日期最新的非隱藏計畫。
+-- 第一階段報名與註冊統計核對
+-- 固定計畫：第1階段｜第一輪熱身賽
+-- 計畫 UUID：00000000-0000-0000-c026-000000000001
 --
 -- 定義：
 -- - 註冊人數：profiles 中 is_active = TRUE 且 is_demo = FALSE 的帳號
@@ -11,7 +8,7 @@
 -- - 未填 pastoral_zone 的帳號會列在「未設定牧區」
 
 WITH params AS (
-  SELECT NULL::UUID AS global_plan_id
+  SELECT '00000000-0000-0000-c026-000000000001'::UUID AS global_plan_id
 ),
 selected_plan AS (
   SELECT
