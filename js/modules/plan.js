@@ -5895,6 +5895,21 @@ window.displayParticipantsList = function (limit = 100) {
     items = items.filter(m => m.name.toLowerCase().includes(query));
   }
 
+  // Load previous ranks for trend comparison
+  const activeKey = state.activePlan
+    ? (state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id)
+    : null;
+  const storageKey = `nlc_prev_ranks_${activeKey}`;
+  let prevRanks = {};
+  if (activeKey) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) prevRanks = JSON.parse(raw);
+    } catch (e) {
+      console.warn("Failed to load prev ranks:", e);
+    }
+  }
+
   listContainer.innerHTML = "";
 
   if (items.length === 0) {
@@ -5963,10 +5978,24 @@ window.displayParticipantsList = function (limit = 100) {
     }
 
     const rankNum = m.rank ?? "—";
+    let trendHtml = "";
+    if (rankNum !== "—" && m.completed > 0 && activeKey) {
+      const prevRank = prevRanks[m.id];
+      if (prevRank !== undefined) {
+        if (Number(rankNum) < Number(prevRank)) {
+          trendHtml = `<span style="color: var(--color-success-foreground); font-size: 0.65rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新上升 ${prevRank - rankNum} 名">▲</span>`;
+        } else if (Number(rankNum) > Number(prevRank)) {
+          trendHtml = `<span style="color: var(--color-danger); font-size: 0.65rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新下降 ${rankNum - prevRank} 名">▼</span>`;
+        }
+      }
+    }
+
     // 名次徽章樣式：Top 3 上色，其餘灰色
     const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? 'var(--text-secondary)' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
     itemRow.innerHTML = `
-      <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center;">#${rankNum}</div>
+      <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center; display: flex; align-items: center; justify-content: center; gap: 2px;">
+        #${rankNum}${trendHtml}
+      </div>
       <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
         ${escapeHTML(m.name)}
       </div>
@@ -6047,6 +6076,21 @@ window.displayParticipantsList = function (limit = 100) {
 
     loadMoreRow.appendChild(loadMoreBtn);
     listContainer.appendChild(loadMoreRow);
+  }
+
+  // Save current ranks for next comparison
+  if (activeKey) {
+    const currentRanks = {};
+    (window._grpScopedProcessedMembers || []).forEach(m => {
+      if (m.rank && m.id) {
+        currentRanks[m.id] = m.rank;
+      }
+    });
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(currentRanks));
+    } catch (e) {
+      console.warn("Failed to save current ranks:", e);
+    }
   }
 }
 
