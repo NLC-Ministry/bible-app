@@ -4,28 +4,27 @@ import { readFileSync } from "node:fs";
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
 describe("admin participant basic information", () => {
-  it("carries existing profile fields into the participant view", () => {
+  it("uses the existing admin-only permission profile query", () => {
     const db = read("js/db.js");
-    const plan = read("js/modules/plan.js");
 
+    expect(db).toContain("fetchManagedScopeProfiles");
+    expect(db).toContain('getUserRoleCode(state.currentUser) !== "admin"');
     expect(db).toContain('name, email, great_region, pastoral_zone, small_group');
-    expect(db).toContain('email: profile.email || ""');
-    expect(plan).toContain('email: u.email || ""');
-    expect(plan).toContain('greatRegion: u.great_region || ""');
-    expect(plan).toContain('pastoralZone: u.pastoral_zone || ""');
-    expect(plan).toContain('smallGroup: u.small_group || ""');
-    expect(plan).toContain("roleLabel:");
   });
 
-  it("shows escaped basic details only to system administrators", () => {
+  it("shows escaped basic details in system settings and keeps plan statistics separate", () => {
+    const html = read("index.html");
+    const admin = read("js/modules/admin.js");
     const plan = read("js/modules/plan.js");
-    const css = read("index.css");
+    const css = read("css/admin-registration-statistics.css");
 
-    expect(plan).toContain('const _isSystemAdmin = _careRole === "admin"');
-    expect(plan).toContain('aria-label="參與者基本資料"');
-    expect(plan).toContain('escapeHTML(participantEmail || "未提供電子信箱")');
-    expect(plan).toContain("escapeHTML(participantOrganization)");
-    expect(plan).toContain("escapeHTML(participantRole)");
-    expect(css).toContain(".admin-participant-basic");
+    expect(html).toContain("使用者基本資料與管理範圍");
+    expect(admin).toContain('escapeHTML(profile.name || "尚未取得姓名")');
+    expect(admin).toContain("escapeHTML(email)");
+    expect(admin).toContain("escapeHTML(roleLabel)");
+    expect(admin).toContain("escapeHTML(placement)");
+    expect(css).toContain("repeat(auto-fit, minmax(12rem, 1fr))");
+    expect(plan).not.toContain('aria-label="參與者基本資料"');
+    expect(plan).not.toContain("participantEmail");
   });
 });

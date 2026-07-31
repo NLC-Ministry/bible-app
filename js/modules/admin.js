@@ -107,13 +107,16 @@ function renderManagedScopeProfile(profile) {
   const config = getManagedScopeConfig(profile);
   const roleLabel = profile.role_definition?.label || config.role;
   const placement = [profile.great_region, profile.pastoral_zone, profile.small_group].filter(Boolean).join(" / ") || "尚未設定";
+  const email = String(profile.email || "").trim() || "未提供電子信箱";
   const explicitScopes = config.field ? splitManagedScope(profile[config.field]) : [];
   const effectiveScope = config.role === "admin" || config.role === "senior_pastor"
     ? "全教會"
     : (explicitScopes.join("、") || placement || "僅本人");
   summary.innerHTML = `
+    <span>姓名<strong>${escapeHTML(profile.name || "尚未取得姓名")}</strong></span>
+    <span>電子信箱<strong>${escapeHTML(email)}</strong></span>
     <span>會員中心角色<strong>${escapeHTML(roleLabel)}</strong></span>
-    <span>個人歸屬<strong>${escapeHTML(placement)}</strong></span>
+    <span>牧養歸屬<strong>${escapeHTML(placement)}</strong></span>
     <span>目前有效範圍<strong>${escapeHTML(effectiveScope)}</strong></span>`;
 
   const optionNames = Array.from(new Set([
