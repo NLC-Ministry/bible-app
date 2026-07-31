@@ -39,6 +39,14 @@ describe("admin registration statistics", () => {
     expect(css).toContain(".admin-registration-statistics__tables");
   });
 
+  it("always offers the first stage even before global plans finish loading", () => {
+    expect(admin).toContain("CHURCH_PLAN_PRESETS.church_stage_01");
+    expect(admin).toContain('presetKey: "church_stage_01"');
+    expect(admin).toContain("plansById.has(String(stageOne.id))");
+    expect(admin).toContain("plansById.set(String(plan.id), plan)");
+    expect(admin).toContain("isUuid(plan.id)");
+  });
+
   it("exports UTF-8 text in the requested slash-delimited format", () => {
     expect(admin).toContain('"大區 / 報名人數 / 註冊人數"');
     expect(admin).toContain('"牧區 / 報名人數 / 註冊人數"');
@@ -51,6 +59,6 @@ describe("admin registration statistics", () => {
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
     expect(html).toContain("css/admin-registration-statistics.css?v=20260731_admin_profile_details");
-    expect(html).toContain("js/app.js?v=20260731_admin_profile_details");
+    expect(html).toContain("js/app.js?v=20260731_stage_one_statistics");
   });
 });

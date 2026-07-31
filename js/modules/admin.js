@@ -223,10 +223,22 @@ export async function renderAdminManagedScopes() {
 let adminRegistrationStatistics = null;
 
 function getAdminRegistrationStatisticsPlans() {
-  return (Array.isArray(state.globalPlans) ? state.globalPlans : [])
-    .filter(plan => plan
-      && typeof isUuid === "function" && isUuid(plan.id)
-      && (plan.planKind || plan.plan_kind) !== "church_campaign")
+  const plansById = new Map();
+  const addPlan = plan => {
+    if (!plan || typeof isUuid !== "function" || !isUuid(plan.id)) return;
+    if ((plan.planKind || plan.plan_kind) === "church_campaign") return;
+    plansById.set(String(plan.id), plan);
+  };
+
+  (Array.isArray(state.globalPlans) ? state.globalPlans : []).forEach(addPlan);
+  const stageOne = typeof CHURCH_PLAN_PRESETS !== "undefined"
+    ? CHURCH_PLAN_PRESETS.church_stage_01
+    : null;
+  if (stageOne && !plansById.has(String(stageOne.id))) {
+    addPlan({ ...stageOne, presetKey: "church_stage_01", globalPlanId: stageOne.id });
+  }
+
+  return Array.from(plansById.values())
     .sort((left, right) => String(right.startDate || right.start_date || "")
       .localeCompare(String(left.startDate || left.start_date || "")));
 }
