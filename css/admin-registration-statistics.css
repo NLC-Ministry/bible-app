@@ -92,6 +92,79 @@
   text-align: center;
 }
 
+.admin-managed-scopes {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-managed-scopes__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-card);
+  border-radius: 0.75rem;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.admin-managed-scopes__summary strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.admin-managed-scopes__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.55rem;
+  max-height: 20rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 0.75rem;
+}
+
+.admin-managed-scopes__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.55rem;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.admin-managed-scopes__option input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.admin-managed-scopes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.admin-managed-scopes__help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.admin-managed-scopes__empty {
+  grid-column: 1 / -1;
+  padding: 1rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 720px) {
   .admin-registration-statistics__header {
     align-items: stretch;
@@ -105,5 +178,14 @@
 
   .admin-registration-statistics__tables {
     grid-template-columns: 1fr;
+  }
+
+  .admin-managed-scopes__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-managed-scopes__actions > button {
+    justify-content: center;
+    width: 100%;
   }
 }

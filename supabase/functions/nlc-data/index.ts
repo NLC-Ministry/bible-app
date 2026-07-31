@@ -264,11 +264,12 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
     const zones = splitScope(profile.managed_zones || profile.pastoral_zone);
     if (!zones.length) return [profile.id];
     query = query.in("pastoral_zone", zones);
+  } else if (roleCode === "group_leader") {
+    const groups = splitScope(profile.managed_groups || profile.small_group);
+    if (!groups.length) return [profile.id];
+    query = query.in("small_group", groups);
   } else {
-    const zones = splitScope(profile.pastoral_zone);
-    const groups = splitScope(profile.small_group);
-    if (!zones.length || !groups.length) return [profile.id];
-    query = query.in("pastoral_zone", zones).in("small_group", groups);
+    return [profile.id];
   }
 
   const { data: profiles, error } = await query;

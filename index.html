@@ -22,7 +22,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="index.css?v=20260731_admin_registration_statistics">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_admin_registration_statistics">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_managed_scope_authority">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_registration_cancel_safe">
 
   <!-- Supabase JS Client library -->
@@ -1718,6 +1718,33 @@
               <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
             </div>
           </div>
+          <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
+            <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
+              <div class="admin-registration-statistics__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
+                  <h3 class="card-title" id="admin-managed-scopes-title">管理範圍設定</h3>
+                  <p>角色由會員中心同步；這裡只設定本專案可管理的多個大區、牧區或小組。</p>
+                </div>
+              </div>
+              <label class="admin-registration-statistics__filter" for="admin-managed-scopes-profile">
+                <span>選擇人員</span>
+                <select id="admin-managed-scopes-profile" class="form-control"></select>
+              </label>
+              <div id="admin-managed-scopes-summary" class="admin-managed-scopes__summary"></div>
+              <div id="admin-managed-scopes-options" class="admin-managed-scopes__options"></div>
+              <div class="admin-managed-scopes__actions">
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-select-all">全選</button>
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-clear">清除委派範圍</button>
+                <button type="button" class="primary-btn" id="admin-managed-scopes-save">儲存管理範圍</button>
+              </div>
+              <p class="admin-managed-scopes__help">
+                未設定時會使用此人的會員中心歸屬；系統管理員與教會牧者固定為全教會範圍。
+                儲存時只保留符合目前角色層級的欄位，避免日後換角色時套用過期權限。
+              </p>
+              <p class="admin-feature-setting-feedback hidden" id="admin-managed-scopes-feedback" role="status"></p>
+            </section>
+          </div>
           <div class="card-col span-12 hidden" id="admin-registration-statistics-col">
             <section class="glass-card admin-registration-statistics" aria-labelledby="admin-registration-statistics-title">
               <div class="admin-registration-statistics__header">
@@ -2069,7 +2096,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260731_satellite_admin_authority"></script>
+  <script type="module" src="js/app.js?v=20260731_managed_scope_authority"></script>
 </body>
 
 </html>

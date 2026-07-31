@@ -63,6 +63,155 @@ export async function renderAdminFeatureSettings() {
   if (typeof hydrateIcons === "function") hydrateIcons(card);
 }
 
+let managedScopeProfiles = [];
+
+function splitManagedScope(value) {
+  return String(value || "").split(",").map(item => item.trim()).filter(Boolean);
+}
+
+function getManagedScopeConfig(profile) {
+  const role = getUserRoleCode(profile) || "member";
+  if (role === "great_zone_leader") {
+    return { role, field: "managed_regions", payloadField: "managedRegions", label: "大區", options: state.orgStructure.rawRegions || [] };
+  }
+  if (role === "zone_leader") {
+    return { role, field: "managed_zones", payloadField: "managedZones", label: "牧區", options: state.orgStructure.rawZones || [] };
+  }
+  if (role === "group_leader") {
+    return { role, field: "managed_groups", payloadField: "managedGroups", label: "小組", options: state.orgStructure.rawGroups || [] };
+  }
+  return { role, field: null, payloadField: null, label: "", options: [] };
+}
+
+function renderManagedScopeProfile(profile) {
+  const summary = document.getElementById("admin-managed-scopes-summary");
+  const optionsRoot = document.getElementById("admin-managed-scopes-options");
+  const selectAll = document.getElementById("admin-managed-scopes-select-all");
+  const clear = document.getElementById("admin-managed-scopes-clear");
+  const save = document.getElementById("admin-managed-scopes-save");
+  if (!summary || !optionsRoot || !selectAll || !clear || !save) return;
+  if (!profile) {
+    summary.innerHTML = "";
+    optionsRoot.innerHTML = '<div class="admin-managed-scopes__empty">找不到可設定的人員。</div>';
+    selectAll.disabled = true;
+    clear.disabled = true;
+    save.disabled = true;
+    return;
+  }
+
+  const config = getManagedScopeConfig(profile);
+  const roleLabel = profile.role_definition?.label || config.role;
+  const placement = [profile.great_region, profile.pastoral_zone, profile.small_group].filter(Boolean).join(" / ") || "尚未設定";
+  const explicitScopes = config.field ? splitManagedScope(profile[config.field]) : [];
+  const effectiveScope = config.role === "admin" || config.role === "senior_pastor"
+    ? "全教會"
+    : (explicitScopes.join("、") || placement || "僅本人");
+  summary.innerHTML = `
+    <span>會員中心角色<strong>${escapeHTML(roleLabel)}</strong></span>
+    <span>個人歸屬<strong>${escapeHTML(placement)}</strong></span>
+    <span>目前有效範圍<strong>${escapeHTML(effectiveScope)}</strong></span>`;
+
+  const optionNames = Array.from(new Set([
+    ...config.options.map(option => String(option?.name || option?.id || "").trim()),
+    ...explicitScopes
+  ].filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-Hant"));
+
+  if (!config.field) {
+    const message = config.role === "admin" || config.role === "senior_pastor"
+      ? "此角色固定擁有全教會範圍，不需要另外設定 managed_*。"
+      : "此角色只有本人範圍，不使用 managed_*。";
+    optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">${message}</div>`;
+  } else if (optionNames.length === 0) {
+    optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">目前沒有可選擇的${config.label}資料。</div>`;
+  } else {
+    const selected = new Set(explicitScopes);
+    optionsRoot.innerHTML = optionNames.map(name => `
+      <label class="admin-managed-scopes__option">
+        <input type="checkbox" value="${escapeHTML(name)}" ${selected.has(name) ? "checked" : ""}>
+        <span>${escapeHTML(name)}</span>
+      </label>`).join("");
+  }
+  optionsRoot.dataset.scopeField = config.payloadField || "";
+  selectAll.disabled = !config.field || optionNames.length === 0;
+  clear.disabled = !config.field;
+  save.disabled = !config.field;
+}
+
+function getSelectedManagedScopeProfile() {
+  const select = document.getElementById("admin-managed-scopes-profile");
+  return managedScopeProfiles.find(profile => String(profile.id) === String(select?.value)) || null;
+}
+
+function setManagedScopeFeedback(message, isError = false) {
+  const feedback = document.getElementById("admin-managed-scopes-feedback");
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.classList.toggle("hidden", !message);
+  feedback.style.color = isError ? "var(--color-danger-foreground)" : "var(--color-success-foreground)";
+}
+
+export async function renderAdminManagedScopes() {
+  const column = document.getElementById("admin-managed-scopes-col");
+  const profileSelect = document.getElementById("admin-managed-scopes-profile");
+  const optionsRoot = document.getElementById("admin-managed-scopes-options");
+  const selectAll = document.getElementById("admin-managed-scopes-select-all");
+  const clear = document.getElementById("admin-managed-scopes-clear");
+  const save = document.getElementById("admin-managed-scopes-save");
+  if (!column || !profileSelect || !optionsRoot || !selectAll || !clear || !save) return;
+
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
+  column.classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) return;
+  setManagedScopeFeedback("");
+  profileSelect.disabled = true;
+  optionsRoot.innerHTML = '<div class="admin-managed-scopes__empty">正在載入管理範圍…</div>';
+
+  if (!Array.isArray(state.orgStructure.rawRegions) || state.orgStructure.rawRegions.length === 0) {
+    await db.loadOrgStructure();
+  }
+  const result = await db.fetchManagedScopeProfiles();
+  if (result.error) {
+    optionsRoot.innerHTML = '<div class="admin-managed-scopes__empty">無法載入管理範圍資料。</div>';
+    setManagedScopeFeedback(result.error.message || "無法載入管理範圍資料。", true);
+    return;
+  }
+  managedScopeProfiles = result.data || [];
+  profileSelect.innerHTML = "";
+  managedScopeProfiles.forEach(profile => {
+    const roleLabel = profile.role_definition?.label || getUserRoleCode(profile) || "一般會友";
+    profileSelect.options.add(new Option(`${profile.name || "尚未取得姓名"}（${roleLabel}）`, String(profile.id)));
+  });
+  profileSelect.disabled = managedScopeProfiles.length === 0;
+  profileSelect.onchange = () => {
+    setManagedScopeFeedback("");
+    renderManagedScopeProfile(getSelectedManagedScopeProfile());
+  };
+  selectAll.onclick = () => optionsRoot.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = true; });
+  clear.onclick = () => optionsRoot.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = false; });
+  save.onclick = async () => {
+    const profile = getSelectedManagedScopeProfile();
+    const config = getManagedScopeConfig(profile);
+    if (!profile || !config.payloadField) return;
+    const values = Array.from(optionsRoot.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
+    const payload = { managedRegions: [], managedZones: [], managedGroups: [], [config.payloadField]: values };
+    save.disabled = true;
+    setManagedScopeFeedback("正在儲存…");
+    const updateResult = await db.updateManagedScopes(profile.id, payload);
+    save.disabled = false;
+    if (updateResult.error) {
+      setManagedScopeFeedback(updateResult.error.message || "儲存失敗。", true);
+      return;
+    }
+    profile.managed_regions = (updateResult.data?.managedRegions || []).join(",");
+    profile.managed_zones = (updateResult.data?.managedZones || []).join(",");
+    profile.managed_groups = (updateResult.data?.managedGroups || []).join(",");
+    renderManagedScopeProfile(profile);
+    setManagedScopeFeedback("管理範圍已儲存。");
+    if (typeof showToast === "function") showToast("管理範圍已儲存");
+  };
+  renderManagedScopeProfile(managedScopeProfiles[0] || null);
+}
+
 let adminRegistrationStatistics = null;
 
 function getAdminRegistrationStatisticsPlans() {
@@ -201,6 +350,7 @@ export async function renderAdminRegistrationStatistics() {
 
 export function init() {
   void renderAdminFeatureSettings();
+  void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
 

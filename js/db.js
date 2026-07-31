@@ -1435,6 +1435,56 @@ const db = {
     }
   },
 
+  async fetchManagedScopeProfiles() {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { data: [], error: new Error("managed_scope_requires_supabase") };
+    }
+    if (getUserRoleCode(state.currentUser) !== "admin") {
+      return { data: [], error: new Error("managed_scope_admin_required") };
+    }
+    try {
+      const { data, error } = await state.supabase
+        .from("profiles")
+        .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, scope_type)")
+        .eq("is_demo", false)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      return { data: data || [], error };
+    } catch (error) {
+      return { data: [], error };
+    }
+  },
+
+  async updateManagedScopes(profileId, scopes = {}) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { data: null, error: new Error("managed_scope_requires_supabase") };
+    }
+    if (getUserRoleCode(state.currentUser) !== "admin") {
+      return { data: null, error: new Error("managed_scope_admin_required") };
+    }
+    const normalize = values => Array.from(new Set(
+      (Array.isArray(values) ? values : [])
+        .map(value => String(value || "").trim())
+        .filter(Boolean)
+    ));
+    try {
+      const { data, error } = await state.supabase.rpc("set_profile_managed_scopes", {
+        p_profile_id: profileId,
+        p_managed_regions: normalize(scopes.managedRegions),
+        p_managed_zones: normalize(scopes.managedZones),
+        p_managed_groups: normalize(scopes.managedGroups)
+      });
+      if (!error && String(profileId) === String(state.currentProfileId || state.currentUser?.id)) {
+        state.currentUser.managed_regions = (data?.managedRegions || []).join(",");
+        state.currentUser.managed_zones = (data?.managedZones || []).join(",");
+        state.currentUser.managed_groups = (data?.managedGroups || []).join(",");
+      }
+      return { data, error };
+    } catch (error) {
+      return { data: null, error };
+    }
+  },
+
   async fetchRoleDefinitions() {
     const fallback = [
       { id: "10000000-0000-4000-8000-000000000001", code: "member", label: "一般會友", sort_order: 60, is_assignable: false },
