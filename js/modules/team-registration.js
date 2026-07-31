@@ -539,7 +539,14 @@
         const isAuthExpired = result.message && (result.message.includes("登入狀態已失效") || result.message.includes("重新登入") || result.message.includes("會員資料"));
         panel.innerHTML = `<header class="reading-team-dialog__header"><h3 id="reading-team-dialog-title">團隊報名</h3><button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button></header><div class="reading-team-empty-error"><p>${escapeHTML(result.message || "目前無法載入團隊資料。")}</p><button type="button" class="secondary-btn" data-team-retry>${isAuthExpired ? "重新登入" : "重新載入"}</button></div>`;
         panel.querySelector("[data-team-close]").onclick = close;
-        panel.querySelector("[data-team-retry]").onclick = isAuthExpired ? () => { close(); if (typeof auth !== "undefined") auth.login(); } : refresh;
+        panel.querySelector("[data-team-retry]").onclick = isAuthExpired ? () => {
+          close();
+          if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
+            authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
+          } else if (typeof auth !== "undefined") {
+            auth.login();
+          }
+        } : refresh;
         hydrate(panel);
         return;
       }

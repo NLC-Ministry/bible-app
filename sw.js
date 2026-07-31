@@ -22,8 +22,16 @@ function shouldBypassCache(request) {
   if (request.method !== "GET") return true;
   const url = new URL(request.url);
   const hostname = url.hostname.toLowerCase();
+
+  const hasAuthBridgeSignal = url.searchParams.has("auth_continuation")
+    || url.searchParams.has("auth_bridge_attempted")
+    || url.searchParams.has("openExternalBrowser")
+    || url.searchParams.has("version");
+  const hasOauthCallbackSignal = (url.pathname === "/" || url.pathname === "/index.html")
+    && (url.searchParams.has("code") || url.searchParams.has("state") || url.searchParams.has("error"));
+
   return isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
-    url.pathname.includes("/auth/") || url.pathname.includes("/functions/v1/nlc-");
+    hasAuthBridgeSignal || hasOauthCallbackSignal || url.pathname.includes("/auth/") || url.pathname.includes("/functions/v1/nlc-");
 }
 
 function isBibleRequest(request) {
