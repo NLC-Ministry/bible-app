@@ -29,7 +29,8 @@ describe("public personal plan ranking summary", () => {
   });
 
   it("uses the server summary instead of the permission-scoped profile list", () => {
-    const rankingFunction = plan.match(/async function renderMyPersonalRankings\(\)[\s\S]*?\n}\n\nfunction updateReadingTeamRankingSummary/)?.[0] || "";
+    const normalizedPlan = plan.replace(/\r\n/g, "\n");
+    const rankingFunction = normalizedPlan.match(/async function renderMyPersonalRankings\(\)[\s\S]*?\n}\n\nfunction updateReadingTeamRankingSummary/)?.[0] || "";
     expect(rankingFunction).toContain("db.getPersonalPlanRankingSummary(state.activePlan)");
     expect(rankingFunction).not.toContain("db.fetchMergedUsersList");
     expect(rankingFunction).toContain("churchRank > 0");
