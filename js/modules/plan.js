@@ -5832,7 +5832,8 @@ async function renderGroupParticipantsRankingTable() {
         statusColor: statusColor,
         isMe: isMe,
         isBehind: hasAnyPlanRead && diff < 0,
-        isNotStarted: !hasAnyPlanRead
+        isNotStarted: !hasAnyPlanRead,
+        last_read: u.last_read_at || u.last_read || null
       };
     });
 
