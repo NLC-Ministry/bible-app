@@ -97,13 +97,31 @@ export function normalizePermissionSignal(value) {
 export function collectHubPermissionSignals(memberContext) {
   const leadership = memberContext?.leadershipIdentity || {};
   const assignments = Array.isArray(leadership.assignments) ? leadership.assignments : [];
+  const roles = Array.isArray(memberContext?.roles) ? memberContext.roles : [];
+  const membershipApproved = memberContext?.membershipState === "approved";
+  const normalizedRoles = roles.map(normalizePermissionSignal).filter(Boolean);
+  const satelliteAdminVerified = membershipApproved
+    && normalizedRoles.includes("satellite_admin");
+  const regularKeys = [
+    ...roles,
+    memberContext?.primaryRole,
+    ...assignments.map(assignment => assignment?.identityKey)
+  ].map(normalizePermissionSignal).filter(Boolean)
+    .filter(value => value !== "satellite_admin");
+  const keys = satelliteAdminVerified ? [...regularKeys, "satellite_admin"] : regularKeys;
+  const labels = [
+    memberContext?.primaryRole,
+    leadership.displayLabel,
+    ...assignments.map(assignment => assignment?.displayName)
+  ].map(normalizePermissionSignal).filter(Boolean)
+    .filter(value => value !== "satellite_admin");
   return {
-    keys: assignments.map(assignment => normalizePermissionSignal(assignment?.identityKey)).filter(Boolean),
-    labels: [
-      memberContext?.primaryRole,
-      leadership.displayLabel,
-      ...assignments.map(assignment => assignment?.displayName)
-    ].map(normalizePermissionSignal).filter(Boolean)
+    keys: [...new Set(keys)],
+    labels: [...new Set(labels)],
+    primaryRole: normalizePermissionSignal(memberContext?.primaryRole) === "satellite_admin"
+      ? ""
+      : normalizePermissionSignal(memberContext?.primaryRole),
+    satelliteAdminVerified
   };
 }
 
@@ -113,16 +131,25 @@ export function resolveSyncedRoleId(memberContext, definitions, existingRoleId, 
   if (!memberContext) return existingRoleId || MEMBER_ROLE_ID;
 
   const signals = collectHubPermissionSignals(memberContext);
-  const matched = (definitions || []).find(definition => {
-    const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
-    const labels = [
-      definition.code,
-      definition.label,
-      ...(definition.hub_permission_labels || [])
-    ].map(normalizePermissionSignal);
-    return signals.keys.some(value => keys.includes(value))
-      || signals.labels.some(value => labels.includes(value));
-  });
+  const matched = (definitions || [])
+    .filter(definition => {
+      const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
+      const labels = [
+        definition.code,
+        definition.label,
+        ...(definition.hub_permission_labels || [])
+      ].map(normalizePermissionSignal);
+      const keyMatched = signals.keys.some(value => keys.includes(value));
+      const labelMatched = signals.labels.some(value => labels.includes(value));
+      const adminPrimaryRoleMatched = definition.code === "admin"
+        && Boolean(signals.primaryRole)
+        && labels.includes(signals.primaryRole);
+      // Leadership display text alone must never grant administrative authority.
+      return keyMatched || adminPrimaryRoleMatched || (definition.code !== "admin" && labelMatched);
+    })
+    .sort((left, right) =>
+      Number(left.sort_order ?? 100) - Number(right.sort_order ?? 100)
+    )[0];
   return matched?.id || MEMBER_ROLE_ID;
 }
 const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];

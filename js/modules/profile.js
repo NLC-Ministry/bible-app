@@ -192,22 +192,24 @@ function paintProfileIdentityChrome() {
     }
   }
 
+  const role = String(getUserRoleCode(user) || "").trim();
+  const leadershipLabel = getLeadershipDisplayLabel(user);
+  const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
+  const applicationRoleLabel = roleDefinition?.label || roleNames[role] || "";
+
   const summaryRole = document.getElementById("profile-summary-role");
   if (summaryRole) {
-    const role = String(getUserRoleCode(user) || "").trim();
-    const leadershipLabel = getLeadershipDisplayLabel(user);
-    const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
     if (pending && !role && !leadershipLabel) {
       summaryRole.setAttribute("aria-busy", "true");
       if (typeof ComponentSkeletonLoader !== "undefined") {
         ComponentSkeletonLoader.fill("role-badge", summaryRole);
       }
-    } else if (leadershipLabel) {
+    } else if (role === "admin" && applicationRoleLabel) {
       summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = leadershipLabel;
-    } else if (role && (roleDefinition || roleNames[role])) {
+      summaryRole.textContent = applicationRoleLabel;
+    } else if (leadershipLabel || applicationRoleLabel) {
       summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = roleDefinition?.label || roleNames[role];
+      summaryRole.textContent = leadershipLabel || applicationRoleLabel;
     } else if (pending) {
       summaryRole.setAttribute("aria-busy", "true");
       if (typeof ComponentSkeletonLoader !== "undefined") {
@@ -217,6 +219,15 @@ function paintProfileIdentityChrome() {
       summaryRole.removeAttribute("aria-busy");
       summaryRole.textContent = "";
     }
+  }
+
+  const summaryLeadership = document.getElementById("profile-summary-leadership");
+  if (summaryLeadership) {
+    const showLeadership = role === "admin"
+      && Boolean(leadershipLabel)
+      && leadershipLabel !== applicationRoleLabel;
+    summaryLeadership.textContent = showLeadership ? `服事：${leadershipLabel}` : "";
+    summaryLeadership.classList.toggle("hidden", !showLeadership);
   }
 
   const dropdownName = document.getElementById("dropdown-user-name");

@@ -226,7 +226,7 @@ function sanitizeLeadershipIdentity(memberContext: any) {
     ? leadership.assignments
       .filter((assignment: any) => assignment && typeof assignment === "object")
       .map((assignment: any) => ({
-        assignmentId: String(assignment.assignmentId || ""),
+        assignmentId: assignment.assignmentId ? String(assignment.assignmentId) : null,
         identityKey: String(assignment.identityKey || ""),
         displayName: String(assignment.displayName || ""),
         displayRank: Number.isFinite(Number(assignment.displayRank)) ? Number(assignment.displayRank) : 0,
@@ -238,7 +238,7 @@ function sanitizeLeadershipIdentity(memberContext: any) {
           : Number.isFinite(Number(assignment.levelDepth)) ? Number(assignment.levelDepth) : null,
         isPrimary: Boolean(assignment.isPrimary),
       }))
-      .filter((assignment: any) => assignment.assignmentId && assignment.identityKey)
+      .filter((assignment: any) => assignment.identityKey)
     : [];
 
   return {
@@ -257,13 +257,31 @@ function normalizePermissionSignal(value: unknown) {
 function collectHubPermissionSignals(memberContext: any) {
   const leadership = memberContext?.leadershipIdentity || {};
   const assignments = Array.isArray(leadership.assignments) ? leadership.assignments : [];
+  const roles = Array.isArray(memberContext?.roles) ? memberContext.roles : [];
+  const membershipApproved = memberContext?.membershipState === "approved";
+  const normalizedRoles = roles.map(normalizePermissionSignal).filter(Boolean);
+  const satelliteAdminVerified = membershipApproved
+    && normalizedRoles.includes("satellite_admin");
+  const regularKeys = [
+    ...roles,
+    memberContext?.primaryRole,
+    ...assignments.map((assignment: any) => assignment?.identityKey)
+  ].map(normalizePermissionSignal).filter(Boolean)
+    .filter(value => value !== "satellite_admin");
+  const keys = satelliteAdminVerified ? [...regularKeys, "satellite_admin"] : regularKeys;
+  const labels = [
+    memberContext?.primaryRole,
+    leadership.displayLabel,
+    ...assignments.map((assignment: any) => assignment?.displayName)
+  ].map(normalizePermissionSignal).filter(Boolean)
+    .filter(value => value !== "satellite_admin");
   return {
-    keys: assignments.map((assignment: any) => normalizePermissionSignal(assignment?.identityKey)).filter(Boolean),
-    labels: [
-      memberContext?.primaryRole,
-      leadership.displayLabel,
-      ...assignments.map((assignment: any) => assignment?.displayName)
-    ].map(normalizePermissionSignal).filter(Boolean)
+    keys: [...new Set(keys)],
+    labels: [...new Set(labels)],
+    primaryRole: normalizePermissionSignal(memberContext?.primaryRole) === "satellite_admin"
+      ? ""
+      : normalizePermissionSignal(memberContext?.primaryRole),
+    satelliteAdminVerified
   };
 }
 
@@ -284,16 +302,25 @@ async function resolveSyncedRoleId(
   if (error) throw error;
 
   const signals = collectHubPermissionSignals(memberContext);
-  const matched = (definitions || []).find((definition: any) => {
-    const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
-    const labels = [
-      definition.code,
-      definition.label,
-      ...(definition.hub_permission_labels || [])
-    ].map(normalizePermissionSignal);
-    return signals.keys.some((value: string) => keys.includes(value))
-      || signals.labels.some((value: string) => labels.includes(value));
-  });
+  const matched = (definitions || [])
+    .filter((definition: any) => {
+      const keys = (definition.hub_permission_keys || []).map(normalizePermissionSignal);
+      const labels = [
+        definition.code,
+        definition.label,
+        ...(definition.hub_permission_labels || [])
+      ].map(normalizePermissionSignal);
+      const keyMatched = signals.keys.some((value: string) => keys.includes(value));
+      const labelMatched = signals.labels.some((value: string) => labels.includes(value));
+      const adminPrimaryRoleMatched = definition.code === "admin"
+        && Boolean(signals.primaryRole)
+        && labels.includes(signals.primaryRole);
+      // Leadership display text alone must never grant administrative authority.
+      return keyMatched || adminPrimaryRoleMatched || (definition.code !== "admin" && labelMatched);
+    })
+    .sort((left: any, right: any) =>
+      Number(left.sort_order ?? 100) - Number(right.sort_order ?? 100)
+    )[0];
   return matched?.id || MEMBER_ROLE_ID;
 }
 function jsonResponse(body: unknown, status = 200) {
@@ -488,7 +515,14 @@ Deno.serve(async (req: Request) => {
       const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
         headers: bearerHeaders
       });
-      memberContext = memberResponse?.context || null;
+      const validEnvelope = memberResponse?.ok === true
+        && memberResponse.context
+        && typeof memberResponse.context === "object"
+        && !Array.isArray(memberResponse.context);
+      memberContext = validEnvelope ? memberResponse.context : null;
+      if (!validEnvelope) {
+        memberContextError = "member_hub_context_invalid_envelope";
+      }
     } catch (err) {
       console.error("Member Hub context fetch failed:", err);
       memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -733,7 +767,9 @@ Deno.serve(async (req: Request) => {
       role_id: profile.role_id,
       role_code: profile.role_definition?.code || null,
       permission_keys: rolePermissionSignals.keys,
-      permission_labels: rolePermissionSignals.labels
+      permission_labels: rolePermissionSignals.labels,
+      satellite_admin_verified: rolePermissionSignals.satelliteAdminVerified,
+      member_context_envelope_valid: Boolean(memberContext)
     };
     identityMetadata.role_resolution = roleResolutionAudit;
     console.info("nlc-session role projection", JSON.stringify(roleResolutionAudit));
