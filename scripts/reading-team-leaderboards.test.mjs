@@ -71,10 +71,10 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("const timeDiff = completionTime(a) - completionTime(b)");
     expect(plan).toContain("item.total_chapters === previousItem.total_chapters");
     expect(plan).toContain("pastoralCompletionTime(item) === pastoralCompletionTime(previousItem)");
-    expect(plan).toContain("人尚未設定牧區，不列入排名");
+    expect(plan).not.toContain("人尚未設定牧區，不列入排名");
     expect(css).toContain(".pastoral-race-unassigned");
     expect(plan).toContain('aria-label="第 ${rank} 名">${rank}');
-    expect(plan).toContain("formatPastoralCompletion(item.completed_at)");
+    expect(plan).not.toContain("formatPastoralCompletion(item.completed_at)");
     expect(db).toContain("last_read_at: currentPlanLastReadAt");
     expect(db).toContain("last_read_at: lastReadAt");
     expect(db).toContain("candidateReadAt < existingReadAt");

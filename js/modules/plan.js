@@ -5279,7 +5279,6 @@ async function renderReadingTeamLeaderboards() {
       if (index > 0 && !sharesRank) calculatedRank = index + 1;
       const serverRank = Number(team.rank);
       const rank = Number.isFinite(serverRank) && serverRank > 0 ? serverRank : calculatedRank;
-      const statusLabel = team.status === "ready" ? "已成隊" : "組隊中";
       const progressPercent = Math.min(100, Math.round(chaptersRead / maxChapters * 100));
       const row = document.createElement("div");
       row.className = `bar-race-row${team.isMine ? " bar-race-row--mine" : ""}`;
@@ -5298,7 +5297,7 @@ async function renderReadingTeamLeaderboards() {
           </div>
           <div class="bar-race-details">
             <span class="bar-race-chapters">${chaptersRead} 章</span>
-            <span class="bar-race-members">${team.captainPastoralZone ? `${escapeHTML(team.captainPastoralZone)}・` : ""}${memberCount}/${section.division} 人・${statusLabel}</span>
+            <span class="bar-race-members">${memberCount}/${section.division} 人</span>
           </div>
         </div>
       `;
@@ -5306,12 +5305,11 @@ async function renderReadingTeamLeaderboards() {
     });
 
     const myTeamRow = track.querySelector(".bar-race-row--mine");
-    const myTeam = teams.find(team => team.isMine);
     const teamCountLabel = `共 ${teams.length} 隊`;
     updateReadingTeamRankingSummary(
       section.division,
       myTeamRow
-        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名${myTeam && myTeam.captainPastoralZone ? `・${myTeam.captainPastoralZone}` : ""}・${teamCountLabel}`
+        ? `我的團隊第 ${myTeamRow.dataset.teamRank} 名・${teamCountLabel}`
         : `${teamCountLabel}・尚未加入 ${section.division} 人團隊`
     );
 
@@ -5405,7 +5403,13 @@ async function renderPlanRankingView() {
     console.error("Failed to load pastoral rankings", e);
   }
 
-  if (pastoralStats.length === 0 && unassignedPastoralCount === 0) {
+  const badge = document.getElementById("pastoral-ranking-count-badge");
+  if (badge) {
+    badge.textContent = `共 ${pastoralStats.length} 個牧區`;
+    badge.style.display = pastoralStats.length > 0 ? "inline-block" : "none";
+  }
+
+  if (pastoralStats.length === 0) {
     container.innerHTML = `<div style="text-align: center; padding: 1.5rem; color: var(--text-muted);">目前沒有排行資料</div>`;
     return;
   }
@@ -5441,7 +5445,6 @@ async function renderPlanRankingView() {
           <div class="pastoral-race-subtitle">以目前最高累計章數為 100%</div>
         </div>
         <div class="pastoral-race-actions">
-          <span class="pastoral-race-count">共 ${pastoralStats.length} 個牧區</span>
           <button type="button" class="pastoral-race-replay" data-pastoral-race-replay title="重新播放排行動畫">
             <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
             重播
@@ -5451,12 +5454,6 @@ async function renderPlanRankingView() {
       <div class="pastoral-race-track">
         ${pastoralStats.length === 0 ? '<div class="pastoral-race-empty">目前沒有已設定牧區的排行資料</div>' : ""}
       </div>
-      ${unassignedPastoralCount > 0 ? `
-        <div class="pastoral-race-unassigned" role="note">
-          <span class="nlc-icon nlc-icon--sm" data-icon="user" aria-hidden="true"></span>
-          <span>另有 <strong>${unassignedPastoralCount}</strong> 人尚未設定牧區，不列入排名</span>
-        </div>
-      ` : ""}
     `;
     const track = container.querySelector(".pastoral-race-track");
 
@@ -5482,7 +5479,7 @@ async function renderPlanRankingView() {
             <div class="pastoral-race-identity">
               <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
               ${item.is_mine ? '<span class="pastoral-race-mine-badge">我的牧區</span>' : ""}
-              <span class="pastoral-race-members">${item.members} 人參與・${formatPastoralCompletion(item.completed_at)}</span>
+              <span class="pastoral-race-members">${item.members} 人參與</span>
             </div>
             <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>
           </div>
