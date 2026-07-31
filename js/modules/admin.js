@@ -344,7 +344,7 @@ export async function renderAdminRegistrationStatistics() {
 
   plans.forEach(plan => planSelect.options.add(new Option(plan.name || "未命名計畫", String(plan.id))));
   // Default to the first phase plan (containing "第一期" or "第1期" in name, or fallback to the oldest plan)
-  let defaultPlan = plans.find(plan => (plan.name || "").includes("第一期") || (plan.name || "").includes("第1期"));
+  let defaultPlan = plans.find(plan => (plan.name || "").includes("第1階段") || (plan.name || "").includes("第一輪"));
   if (!defaultPlan && plans.length > 0) {
     defaultPlan = plans[plans.length - 1]; // plans is sorted descending by startDate, so the last is the oldest
   }
@@ -922,7 +922,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
   });
 
   contentEl.innerHTML = html;
-  
+
   if (typeof hydrateIcons === "function") {
     hydrateIcons(contentEl);
   }
