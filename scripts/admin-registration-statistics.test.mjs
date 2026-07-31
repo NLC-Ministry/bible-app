@@ -56,6 +56,6 @@ describe("admin registration statistics", () => {
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
     expect(html).toContain("css/admin-registration-statistics.css?v=20260731_admin_management_refine");
-    expect(html).toContain("js/app.js?v=20260731_admin_management_refine");
+    expect(html).toContain("js/app.js?v=20260731_batched_merged_users");
   });
 });

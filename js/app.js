@@ -12,7 +12,7 @@ import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
-import './db.js?v=20260730_performance_refactor';
+import './db.js?v=20260731_batched_merged_users';
 import './utils.js?v=20260730_badge_vector_quality';
 import './gamification.js?v=20260728_badge_img_refactor';
 

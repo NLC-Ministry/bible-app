@@ -1,4 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
+import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -1650,12 +1651,11 @@ const db = {
         console.log(`🔍 [AdminDebug] reading_plans 查詢結果: ${allPlans ? allPlans.length : 0} 筆`, plansError ? `錯誤: ${plansError.message}` : '');
         if (plansError) throw plansError;
 
-        let logsQuery = state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
-        if (allPlans && allPlans.length > 0) {
-          const planIds = allPlans.map(p => p.id);
-          logsQuery = logsQuery.in("plan_id", planIds);
-        }
-        const { data: allLogs, error: logsError } = await logsQuery;
+        const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
+        const { data: allLogs, error: logsError } = await fetchReadingLogsByPlanIds(
+          state.supabase,
+          planIds
+        );
         console.log(`🔍 [AdminDebug] reading_logs 查詢結果: ${allLogs ? allLogs.length : 0} 筆`, logsError ? `錯誤: ${logsError.message}` : '');
         if (logsError) throw logsError;
         state.allLogsCache = allLogs || [];
