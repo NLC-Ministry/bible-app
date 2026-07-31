@@ -5803,6 +5803,12 @@ async function renderGroupParticipantsRankingTable() {
       return {
         id: u.id,
         name: u.name,
+        email: u.email || "",
+        greatRegion: u.great_region || "",
+        pastoralZone: u.pastoral_zone || "",
+        smallGroup: u.small_group || "",
+        roleLabel: u.role_definition?.label || u.role_definition?.code || "一般會友",
+        roleCode: getUserRoleCode(u),
         streak: streak,
         completed: completed,
         makeup: makeup,
@@ -5885,6 +5891,7 @@ window.displayParticipantsList = function (limit = 100) {
   // Determine if current user is a leader who can send care reminders
   const _careRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
   const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "senior_pastor", "admin"].includes(_careRole);
+  const _isSystemAdmin = _careRole === "admin";
 
   // 對齊 header 欄位動態調整（含名次欄）
   const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;
@@ -5942,10 +5949,26 @@ window.displayParticipantsList = function (limit = 100) {
     const rankNum = m.rank ?? "—";
     // 名次徽章樣式：Top 3 上色，其餘灰色
     const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? 'var(--text-secondary)' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
+    const participantEmail = String(m.email || "").trim();
+    const participantOrganization = [
+      m.greatRegion ? `${m.greatRegion}大區` : "",
+      m.pastoralZone ? `${m.pastoralZone}牧區` : "",
+      m.smallGroup ? `${m.smallGroup}小組` : ""
+    ].filter(Boolean).join("・") || "尚未設定牧養歸屬";
+    const participantRole = String(m.roleLabel || m.roleCode || "一般會友").trim();
+    const adminBasicInfo = _isSystemAdmin
+      ? `
+        <div class="admin-participant-basic" aria-label="參與者基本資料">
+          <div class="admin-participant-basic__line">${escapeHTML(participantEmail || "未提供電子信箱")}</div>
+          <div class="admin-participant-basic__line">${escapeHTML(participantOrganization)}</div>
+          <div class="admin-participant-basic__line admin-participant-basic__role">角色：${escapeHTML(participantRole)}</div>
+        </div>`
+      : "";
     itemRow.innerHTML = `
       <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center;">#${rankNum}</div>
-      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
-        ${escapeHTML(m.name)}
+      <div class="admin-participant-name" style="text-align: left; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
+        <div class="admin-participant-name__primary">${escapeHTML(m.name)}</div>
+        ${adminBasicInfo}
       </div>
       <div class="text-danger">${m.streak}</div>
       <div class="text-success-fg">${m.completed}</div>

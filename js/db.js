@@ -1580,6 +1580,7 @@ const db = {
 
     const mockUser = {
       name: state.currentUser.name,
+      email: state.currentUser.email || "",
       great_region: state.currentUser.great_region || "",
       pastoral_zone: state.currentUser.pastoral_zone || "",
       small_group: state.currentUser.small_group || "",
@@ -1727,6 +1728,7 @@ const db = {
             return {
               id: profile.id,
               name: profile.name,
+              email: profile.email || "",
               great_region: profile.great_region,
               pastoral_zone: profile.pastoral_zone,
               small_group: profile.small_group,
