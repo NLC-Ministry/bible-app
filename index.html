@@ -22,7 +22,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="index.css?v=20260731_bulk_plan_invites">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_admin_profile_details">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_readonly_user_directory">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_registration_cancel_safe">
 
   <!-- Supabase JS Client library -->
@@ -1723,6 +1723,26 @@
               <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
             </div>
           </div>
+          <div class="card-col span-12 hidden" id="admin-user-directory-col">
+            <section class="glass-card admin-user-directory" aria-labelledby="admin-user-directory-title">
+              <div class="admin-registration-statistics__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">使用者管理</p>
+                  <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
+                  <p>僅供檢視，資料由會員中心與登入同步流程提供，無法在此修改。</p>
+                </div>
+                <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
+              </div>
+              <label class="admin-registration-statistics__filter" for="admin-user-directory-search">
+                <span>搜尋使用者</span>
+                <input type="search" id="admin-user-directory-search" class="form-control"
+                  placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
+              </label>
+              <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入使用者資料…</div>
+              </div>
+            </section>
+          </div>
           <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
             <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
               <div class="admin-registration-statistics__header">
@@ -2101,7 +2121,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260731_stage_one_statistics"></script>
+  <script type="module" src="js/app.js?v=20260731_readonly_user_directory"></script>
 </body>
 
 </html>

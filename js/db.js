@@ -1435,6 +1435,25 @@ const db = {
     }
   },
 
+  async fetchAdminUserProfiles() {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { data: [], error: new Error("admin_user_directory_requires_supabase") };
+    }
+    if (getUserRoleCode(state.currentUser) !== "admin") {
+      return { data: [], error: new Error("admin_user_directory_admin_required") };
+    }
+    try {
+      const { data, error } = await state.supabase
+        .from("profiles")
+        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)")
+        .eq("is_demo", false)
+        .order("name", { ascending: true });
+      return { data: data || [], error };
+    } catch (error) {
+      return { data: [], error };
+    }
+  },
+
   async fetchManagedScopeProfiles() {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: [], error: new Error("managed_scope_requires_supabase") };

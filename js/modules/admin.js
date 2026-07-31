@@ -68,6 +68,100 @@ export async function renderAdminFeatureSettings() {
   if (typeof hydrateIcons === "function") hydrateIcons(card);
 }
 
+let adminUserDirectoryProfiles = [];
+
+function formatAdminUserSyncTime(value) {
+  if (!value) return "尚未同步";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "尚未同步";
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
+function renderAdminUserDirectoryList(query = "") {
+  const list = document.getElementById("admin-user-directory-list");
+  const count = document.getElementById("admin-user-directory-count");
+  if (!list || !count) return;
+  const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
+  const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
+    const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
+    return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("zh-Hant")
+      .includes(normalizedQuery);
+  });
+  count.textContent = normalizedQuery
+    ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
+    : `${adminUserDirectoryProfiles.length} 人`;
+  if (filteredProfiles.length === 0) {
+    list.innerHTML = '<div class="admin-user-directory__empty">沒有符合條件的使用者。</div>';
+    return;
+  }
+
+  list.innerHTML = filteredProfiles.map(profile => {
+    const name = String(profile.name || "").trim() || "尚未取得姓名";
+    const email = String(profile.email || "").trim() || "未提供電子信箱";
+    const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
+    const greatRegion = String(profile.great_region || "").trim() || "未設定";
+    const pastoralZone = String(profile.pastoral_zone || "").trim() || "未設定牧區";
+    const smallGroup = String(profile.small_group || "").trim() || "未設定";
+    const syncStatus = String(profile.member_context_sync_status || "").trim();
+    const syncLabel = syncStatus === "success"
+      ? "已同步"
+      : (syncStatus === "degraded" || syncStatus === "failed" ? "同步異常" : "尚未同步");
+    const statusClass = profile.is_active === false ? "inactive" : "active";
+    return `
+      <article class="admin-user-directory__card">
+        <header class="admin-user-directory__card-header">
+          <strong>${escapeHTML(name)}</strong>
+          <span class="admin-user-directory__status admin-user-directory__status--${statusClass}">
+            ${profile.is_active === false ? "已停用" : "啟用中"}
+          </span>
+        </header>
+        <dl class="admin-user-directory__details">
+          <div><dt>電子信箱</dt><dd>${escapeHTML(email)}</dd></div>
+          <div><dt>角色</dt><dd>${escapeHTML(roleLabel)}</dd></div>
+          <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
+          <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
+          <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
+          <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
+        </dl>
+      </article>`;
+  }).join("");
+}
+
+export async function renderAdminUserDirectory() {
+  const column = document.getElementById("admin-user-directory-col");
+  const search = document.getElementById("admin-user-directory-search");
+  const list = document.getElementById("admin-user-directory-list");
+  const count = document.getElementById("admin-user-directory-count");
+  if (!column || !search || !list || !count) return;
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
+  column.classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) return;
+  search.disabled = true;
+  count.textContent = "讀取中…";
+  list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
+  const result = await db.fetchAdminUserProfiles();
+  if (result.error) {
+    count.textContent = "0 人";
+    list.innerHTML = '<div class="admin-user-directory__empty">目前無法載入使用者基本資料。</div>';
+    return;
+  }
+  adminUserDirectoryProfiles = result.data || [];
+  search.disabled = false;
+  search.oninput = () => renderAdminUserDirectoryList(search.value);
+  renderAdminUserDirectoryList(search.value);
+}
+
 let managedScopeProfiles = [];
 
 function splitManagedScope(value) {
@@ -374,6 +468,7 @@ export async function renderAdminRegistrationStatistics() {
 
 export function init() {
   void renderAdminFeatureSettings();
+  void renderAdminUserDirectory();
   void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
