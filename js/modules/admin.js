@@ -92,6 +92,7 @@ function renderAdminUserDirectoryList(query = "") {
   if (!list || !count) return;
   const incompleteOnly = document.getElementById("admin-user-directory-filter-incomplete")?.checked === true;
   const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
+  const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
   const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者"]);
   const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
@@ -99,7 +100,9 @@ function renderAdminUserDirectoryList(query = "") {
     const missingRequiredProfile = !normalizedName || placeholderNames.has(normalizedName)
       || !String(profile.pastoral_zone || "").trim();
     if (incompleteOnly && !missingRequiredProfile) return false;
-    if (notJoinedStageOneOnly && profile.joined_stage_one === true) return false;
+    const eligibleForStageOneInvitation = profile.is_active === true
+      && String(profile.id || "") !== currentProfileId;
+    if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
     return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group]
       .filter(Boolean)
@@ -628,7 +631,7 @@ export async function renderAdminPlanManagement() {
       const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
       const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
       const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
-      const defaultPlan = plans.find(plan => plan.managementStatus === 'ongoing') || stageOnePlan || plans[0];
+      const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0];
       const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
       select.value = !managementPlanSelectionInitialized
         ? defaultPlanKey

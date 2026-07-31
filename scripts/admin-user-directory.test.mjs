@@ -40,7 +40,8 @@ describe("read-only admin user directory", () => {
     expect(method).not.toContain(".upsert(");
     expect(method).toContain('const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001"');
     expect(method).toContain('.from("reading_plans")');
-    expect(method).toContain('.eq("global_plan_id", firstStageGlobalPlanId)');
+    expect(method).toContain('const firstStagePresetKey = "church_stage_01"');
+    expect(method).toContain('.or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`)');
     expect(method).toContain("joined_stage_one:");
   });
 
@@ -62,6 +63,8 @@ describe("read-only admin user directory", () => {
     expect(directory).toContain("placeholderNames.has(normalizedName)");
     expect(directory).toContain("notJoinedStageOneOnly");
     expect(directory).toContain("profile.joined_stage_one === true");
+    expect(directory).toContain("profile.is_active === true");
+    expect(directory).toContain("String(profile.id || \"\") !== currentProfileId");
     expect(directory).toContain("第一階段計畫");
     expect(directory).not.toContain("db.update");
     expect(directory).not.toContain("onclick");

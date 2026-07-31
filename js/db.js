@@ -1445,6 +1445,7 @@ const db = {
     }
     try {
       const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001";
+      const firstStagePresetKey = "church_stage_01";
       const [profilesResult, enrollmentsResult] = await Promise.all([
         state.supabase
           .from("profiles")
@@ -1454,7 +1455,7 @@ const db = {
         state.supabase
           .from("reading_plans")
           .select("user_id")
-          .eq("global_plan_id", firstStageGlobalPlanId)
+          .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`)
       ]);
       if (profilesResult.error) return { data: [], error: profilesResult.error };
       if (enrollmentsResult.error) return { data: [], error: enrollmentsResult.error };

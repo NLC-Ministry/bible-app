@@ -17,7 +17,7 @@ describe("management plan unjoined members", () => {
     expect(orgContentIndex).toBeGreaterThan(unjoinedIndex);
     expect(html).toContain("尚未加入計畫");
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
-    expect(html).toContain("js/app.js?v=20260731_batched_merged_users");
+    expect(html).toContain("js/app.js?v=20260731_unjoined_stage_one_consistency");
   });
 
   it("loads, filters, and reminds unjoined members in the management view", () => {
@@ -34,6 +34,12 @@ describe("management plan unjoined members", () => {
     expect(db).toContain("_resolveManagementGlobalPlanId");
     expect(db).toContain("_getUnjoinedPlanMembersFallback");
     expect(admin).toContain("目前篩選範圍內沒有尚未加入所選計畫的人員。");
+  });
+
+  it("defaults plan management to stage one so its count matches the system directory", () => {
+    const admin = read("js/modules/admin.js");
+    expect(admin).toContain("const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1)");
+    expect(admin).toContain("const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0]");
   });
 
   it("bulk-reminds only visible people who have not been reminded today", () => {
