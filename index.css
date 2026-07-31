@@ -8,6 +8,33 @@
   -webkit-font-smoothing: antialiased;
 }
 
+.pull-to-refresh-status {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+  left: 50%;
+  z-index: var(--z-toast);
+  transform: translate(-50%, var(--pull-distance, 0px));
+  opacity: 0;
+  pointer-events: none;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.pull-to-refresh-status[data-status="pulling"],
+.pull-to-refresh-status[data-status="ready"],
+.pull-to-refresh-status[data-status="refreshing"],
+.pull-to-refresh-status[data-status="done"] {
+  opacity: 1;
+}
+
 :root {
   /* NLC satellite brand + neutral surfaces (Member Hub aligned) */
   --color-brand: #04A9D2;

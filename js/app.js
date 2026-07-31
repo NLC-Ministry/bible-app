@@ -20,6 +20,7 @@ import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
+import { installPullToRefresh } from './pull-to-refresh.mjs';
 
 cleanupProductionStorage(window.localStorage);
 
@@ -325,6 +326,35 @@ async function ensureAdminFeatureModulesLoaded() {
   await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
 }
 
+async function refreshCurrentAppView() {
+  if (typeof db !== "undefined") {
+    if (typeof db.loadOrgStructure === "function") {
+      await db.loadOrgStructure();
+    }
+    if (typeof db.loadUserData === "function") {
+      await db.loadUserData(true);
+    }
+  }
+
+  if (typeof window.syncActivePlanContext === "function") {
+    window.syncActivePlanContext();
+  }
+  if (typeof updateAdminNavVisibility === "function") {
+    updateAdminNavVisibility();
+  }
+
+  const currentTab = appRouter.currentTab || "dashboard-view";
+  await appRouter.switchTab(currentTab, {
+    keepPlanDetail: true,
+    restoreTabScroll: false
+  });
+  await refreshCareReminderBadge({ force: true });
+
+  if (typeof showToast === "function") {
+    showToast("已更新");
+  }
+}
+
 // ─── Tab Switching: isSwitching guard prevents concurrent race conditions ───
 let isSwitching = false;
 
@@ -509,6 +539,13 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
 // Bootstrap the application on DomContentLoaded
 document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    installPullToRefresh({ window, document });
+    window.registerPullToRefresh(refreshCurrentAppView);
+  } catch (err) {
+    console.error("Failed to initialize pull-to-refresh:", err);
+  }
+
   // Initialize Theme
   try {
     initTheme();
