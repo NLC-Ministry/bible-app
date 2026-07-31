@@ -11944,6 +11944,24 @@ select,
   line-height: 1.5;
 }
 
+.admin-unjoined-plan-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+}
+
+#admin-unjoined-plan-invite-all {
+  min-width: 7.5rem;
+  white-space: nowrap;
+}
+
+#admin-unjoined-plan-invite-all:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .admin-unjoined-plan-count {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -12010,6 +12028,18 @@ select,
   color: var(--text-muted);
   font-size: 0.85rem;
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .admin-unjoined-plan-card__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-unjoined-plan-card__actions {
+    justify-content: space-between;
+    width: 100%;
+  }
 }
 .admin-management-section {
   display: flex;

@@ -16,8 +16,8 @@ describe("management plan unjoined members", () => {
     expect(unjoinedIndex).toBeGreaterThan(orgFilterIndex);
     expect(orgContentIndex).toBeGreaterThan(unjoinedIndex);
     expect(html).toContain("尚未加入計畫");
-    expect(html).toContain("index.css?v=20260731_admin_registration_statistics");
-    expect(html).toContain("js/app.js?v=20260731_managed_scope_authority");
+    expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
+    expect(html).toContain("js/app.js?v=20260731_bulk_plan_invites");
   });
 
   it("loads, filters, and reminds unjoined members in the management view", () => {
@@ -34,6 +34,21 @@ describe("management plan unjoined members", () => {
     expect(db).toContain("_resolveManagementGlobalPlanId");
     expect(db).toContain("_getUnjoinedPlanMembersFallback");
     expect(admin).toContain("目前篩選範圍內沒有尚未加入所選計畫的人員。");
+  });
+
+  it("bulk-reminds only visible people who have not been reminded today", () => {
+    const html = read("index.html");
+    const admin = read("js/modules/admin.js");
+    const bulkInvite = read("js/modules/admin-bulk-plan-invite.mjs");
+    expect(html).toContain('id="admin-unjoined-plan-invite-all"');
+    expect(html).toContain("全部戳一下");
+    expect(admin).toContain("wasPlanInviteRemindedToday");
+    expect(admin).toContain("eligibleMembers");
+    expect(admin).toContain("window.confirm");
+    expect(admin).toContain("bulkPlanInviteInProgress");
+    expect(admin).toContain("sendBulkPlanInvitations");
+    expect(bulkInvite).toContain("result.context?.duplicate");
+    expect(bulkInvite).toContain("failedMembers");
   });
 
   it("enforces manager scope and excludes people who already joined", () => {

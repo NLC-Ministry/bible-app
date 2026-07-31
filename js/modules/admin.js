@@ -1,5 +1,10 @@
 // js/modules/admin.js
 
+import {
+  sendBulkPlanInvitations,
+  wasPlanInviteRemindedToday
+} from "./admin-bulk-plan-invite.mjs";
+
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
   const status = document.getElementById("admin-pastoral-wall-status");
@@ -358,7 +363,8 @@ export function init() {
   const unjoinedHeader = document.querySelector(".admin-unjoined-plan-card__header");
   if (unjoinedHeader && !unjoinedHeader.dataset.listenerBound) {
     unjoinedHeader.dataset.listenerBound = "true";
-    unjoinedHeader.addEventListener("click", () => {
+    unjoinedHeader.addEventListener("click", (event) => {
+      if (event.target.closest?.("button")) return;
       const section = document.getElementById("admin-unjoined-plan-section") || unjoinedHeader.closest(".admin-unjoined-plan-card");
       const arrow = document.getElementById("admin-unjoined-toggle-arrow");
       const membersList = document.getElementById("admin-unjoined-plan-members");
@@ -529,6 +535,7 @@ let cachedTeamsDataKey = "";
 let cachedUnjoinedPlanKey = "";
 let cachedUnjoinedPlanMembers = [];
 let unjoinedPlanRequestId = 0;
+let bulkPlanInviteInProgress = false;
 
 function getSelectedManagementOrgFilter() {
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
@@ -564,15 +571,30 @@ function memberMatchesManagementOrgFilter(member, filter = getSelectedManagement
     .includes(filter.value);
 }
 
+function setBulkPlanInviteButton(button, members, options = {}) {
+  if (!button) return [];
+  const eligibleMembers = (Array.isArray(members) ? members : [])
+    .filter(member => !wasPlanInviteRemindedToday(member));
+  const busy = options.busy === true;
+  const total = Number(options.total ?? eligibleMembers.length);
+  button.disabled = busy || eligibleMembers.length === 0;
+  button.textContent = busy
+    ? `發送中 ${Number(options.completed || 0)}/${total}`
+    : (eligibleMembers.length > 0 ? `全部戳一下（${eligibleMembers.length}）` : "今天皆已提醒");
+  return eligibleMembers;
+}
+
 async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
   const container = document.getElementById("admin-unjoined-plan-members");
   const count = document.getElementById("admin-unjoined-plan-count");
-  if (!container || !count) return;
+  const inviteAllButton = document.getElementById("admin-unjoined-plan-invite-all");
+  if (!container || !count || !inviteAllButton) return;
 
   const currentUser = state.currentUser || {};
   const plan = state.activePlan;
   if (!MANAGEMENT_ROLES.includes(getUserRoleCode(currentUser)) || !plan) {
     count.textContent = "0 人";
+    setBulkPlanInviteButton(inviteAllButton, []);
     container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
     return;
   }
@@ -591,6 +613,8 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
     cachedUnjoinedPlanKey = cacheKey;
     cachedUnjoinedPlanMembers = [];
     count.textContent = "讀取中";
+    inviteAllButton.disabled = true;
+    inviteAllButton.textContent = "讀取中…";
     container.innerHTML = '<div class="admin-unjoined-plan-empty">讀取尚未加入的人員中...</div>';
 
     const result = await db.getUnjoinedPlanMembers(plan);
@@ -598,6 +622,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
     if (!result || !result.success) {
       console.warn("Unable to load unjoined plan members", result && (result.error || result.message));
       count.textContent = "0 人";
+      setBulkPlanInviteButton(inviteAllButton, []);
       container.innerHTML = `
         <div class="admin-unjoined-plan-empty" role="status">
           <div>目前沒有可顯示的尚未加入人員。</div>
@@ -614,6 +639,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
 
   const visibleMembers = cachedUnjoinedPlanMembers.filter(member => memberMatchesManagementOrgFilter(member));
   count.textContent = `${visibleMembers.length} 人`;
+  const eligibleMembers = setBulkPlanInviteButton(inviteAllButton, visibleMembers);
   if (visibleMembers.length === 0) {
     container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內沒有尚未加入所選計畫的人員。</div>';
     return;
@@ -627,7 +653,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
       member.pastoralZone || member.pastoral_zone,
       member.smallGroup || member.small_group
     ].filter(Boolean).map(value => escapeHTML(String(value))).join("・") || "尚未設定牧養資料";
-    const reminded = member.remindedToday === true || member.reminded_today === true;
+    const reminded = wasPlanInviteRemindedToday(member);
     return `
       <div class="admin-unjoined-plan-member">
         <div class="admin-unjoined-plan-member__identity">
@@ -639,6 +665,51 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
         </button>
       </div>`;
   }).join("");
+
+  inviteAllButton.onclick = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (bulkPlanInviteInProgress || eligibleMembers.length === 0) return;
+    const planAtStart = state.activePlan;
+    const confirmed = window.confirm(
+      `確定要提醒目前篩選範圍內的 ${eligibleMembers.length} 人加入「${planAtStart?.name || "所選計畫"}」嗎？`
+    );
+    if (!confirmed) return;
+
+    bulkPlanInviteInProgress = true;
+    container.querySelectorAll("[data-plan-invite-member-id]").forEach(button => { button.disabled = true; });
+    let bulkResult = null;
+    try {
+      bulkResult = await sendBulkPlanInvitations({
+        members: eligibleMembers,
+        plan: planAtStart,
+        sendInvitation: (targetPlan, memberId) => db.sendPlanJoinInvitation(targetPlan, memberId),
+        onProgress: progress => setBulkPlanInviteButton(inviteAllButton, eligibleMembers, {
+          busy: true,
+          completed: progress.completed,
+          total: progress.total
+        })
+      });
+    } finally {
+      bulkPlanInviteInProgress = false;
+    }
+
+    const {
+      sentCount = 0,
+      duplicateCount = 0,
+      failedMembers = []
+    } = bulkResult || {};
+    await renderAdminUnjoinedPlanMembers(false);
+    const summary = [
+      `成功 ${sentCount} 人`,
+      duplicateCount > 0 ? `今天已提醒 ${duplicateCount} 人` : "",
+      failedMembers.length > 0 ? `失敗 ${failedMembers.length} 人` : ""
+    ].filter(Boolean).join("、");
+    if (typeof showToast === "function") showToast(`批次提醒完成：${summary}`);
+    if (failedMembers.length > 0) {
+      console.warn("Bulk plan invitation failures", { planId: planAtStart?.id, members: failedMembers });
+    }
+  };
 
   container.querySelectorAll("[data-plan-invite-member-id]").forEach(button => {
     button.onclick = async () => {

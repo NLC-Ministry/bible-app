@@ -21,7 +21,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260731_admin_registration_statistics">
+  <link rel="stylesheet" href="index.css?v=20260731_bulk_plan_invites">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260731_managed_scope_authority">
   <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_registration_cancel_safe">
 
@@ -1316,7 +1316,12 @@
                     </h2>
                     <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.5;">顯示目前管理範圍內，尚未加入所選計畫的人員。</p>
                   </div>
-                  <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 人</span>
+                  <div class="admin-unjoined-plan-card__actions">
+                    <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 人</span>
+                    <button type="button" class="secondary-btn" id="admin-unjoined-plan-invite-all" disabled>
+                      全部戳一下
+                    </button>
+                  </div>
                 </div>
                 <div id="admin-unjoined-plan-members" class="admin-unjoined-plan-members" aria-live="polite"></div>
               </section>
@@ -2096,7 +2101,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260731_managed_scope_authority"></script>
+  <script type="module" src="js/app.js?v=20260731_bulk_plan_invites"></script>
 </body>
 
 </html>

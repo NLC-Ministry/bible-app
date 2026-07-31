@@ -37,6 +37,6 @@ describe("Member Hub-only permission management", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260731_managed_scope_authority");
+    expect(html).toContain("js/app.js?v=20260731_bulk_plan_invites");
   });
 });
