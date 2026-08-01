@@ -5790,18 +5790,19 @@ async function renderGroupParticipantsRankingTable() {
 
       if (hasAnyPlanRead) {
         if (isMe) {
-          completed = completedDaysCount;
+          completed = myPlanReadCount;
           const myUserLogs = (state.readingLogs || []).filter(l =>
             l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey
           );
           makeup = calculateCatchUpDays(myUserLogs);
-          diff = completed - expectedDaysCount;
+          diff = completedDaysCount - expectedDaysCount;
         } else {
-          completed = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
-          completed = Math.min(completed, state.activePlan.days.length);
+          completed = u.chapters_read || 0;
           const otherUserLogs = (state.allLogsCache || []).filter(l => l.user_id === u.id);
           makeup = calculateCatchUpDays(otherUserLogs);
-          diff = completed - expectedDaysCount;
+          const completedDays = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
+          const completedDaysCapped = Math.min(completedDays, state.activePlan.days.length);
+          diff = completedDaysCapped - expectedDaysCount;
         }
       }
 

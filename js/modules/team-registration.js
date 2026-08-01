@@ -259,9 +259,10 @@
     }).filter(Boolean);
 
     const readingDayCount = days.filter(day => Array.isArray(day.chapters) && day.chapters.length > 0).length;
-    const completed = currentRound > 1 ? readingDayCount : completedDetails.length;
+    const completedDays = currentRound > 1 ? readingDayCount : completedDetails.length;
+    const completed = Number(member.chaptersRead || 0);
     const makeup = completedDetails.filter(item => item.latestRead > item.scheduled).length;
-    const diff = completed - expectedDays;
+    const diff = completedDays - expectedDays;
     const currentProgress = Number(member.chaptersRead || 0);
     let statusStr = "未開始";
     let statusClass = "reading-team-status--muted";

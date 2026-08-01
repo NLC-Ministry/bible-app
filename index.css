@@ -8288,6 +8288,15 @@ body.reader-nav-hidden #reader-view .floating-nav-btn {
   pointer-events: none !important;
 }
 
+/* Keep support and bottom chrome out of the scripture surface. */
+body.reader-page .issue-report-fab,
+body.reader-page .mobile-nav-bar,
+#reader-view .reader-bottom-action-bar {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* Mobile nav bar follows the same scroll-hide logic as floating nav buttons.
    Default in reader-view: hidden (translated down).
    When body.reader-nav-awake: slides back into view on tap. */

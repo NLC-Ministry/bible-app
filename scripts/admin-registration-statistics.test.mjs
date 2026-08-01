@@ -68,8 +68,8 @@ describe("admin registration statistics", () => {
   });
 
   it("bumps the browser cache keys for the new UI", () => {
-    expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
+    expect(html).toContain("index.css?v=20260801_immersive_plan_reader");
     expect(html).toContain("css/admin-registration-statistics.css?v=20260801_registration_summary");
-    expect(html).toContain("js/app.js?v=20260801_registration_summary_v2");
+    expect(html).toContain("js/app.js?v=20260801_immersive_plan_reader");
   });
 });

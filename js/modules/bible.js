@@ -1,5 +1,7 @@
 // js/modules/bible.js
 
+import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
+
 export function openReaderLayer(element) {
   if (!element) return;
   element.classList.remove("hidden");
@@ -55,7 +57,6 @@ function initSmartFloatingReaderNav() {
   const bindFloatingButton = (button, direction) => {
     if (!button) return;
     button.addEventListener("click", (event) => {
-      console.log(direction > 0 ? '下一章被點擊了' : '上一章被點擊了');
       event.preventDefault();
       event.stopPropagation();
       navigateToChapter(direction);
@@ -69,7 +70,6 @@ function initSmartFloatingReaderNav() {
   const scrollSurface = readerView.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
   if (scrollSurface) {
     scrollSurface.addEventListener("scroll", hideFloatingNavDuringScroll, { passive: true });
-    // scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true }); // Removed to prevent screen shifting and bottom action bar flashes
   }
 
   readerView.addEventListener("pointerdown", (event) => {
@@ -78,6 +78,89 @@ function initSmartFloatingReaderNav() {
   }, { passive: true });
 
   setNavVisible(true, false);
+}
+let readerBottomDwellController = null;
+
+function getCurrentPlanReaderTask() {
+  const plan = state.activePlan;
+  if (!plan || !state.readerState || !state.readerState.fromPlan) return null;
+  const book = BIBLE_BOOKS.find(item => Number(item.id) === Number(state.readerState.bookId));
+  const day = Array.isArray(plan.days)
+    ? plan.days.find(item => Number(item.dayNum) === Number(state.readerState.planDayNum))
+    : null;
+  if (!book || !day || !Array.isArray(day.chapters)) return null;
+  const round = Number(state.readerState.planRound || plan.currentRound || 1);
+  const chapter = day.chapters.find(item =>
+    item.book === book.name &&
+    Number(item.chapter) === Number(state.readerState.chapter) &&
+    Number(item.round || round) === round
+  );
+  return chapter ? { book, chapter, day, round, plan } : null;
+}
+
+function isCurrentPlanReaderTaskRead(taskContext) {
+  if (!taskContext) return false;
+  const { chapter, round } = taskContext;
+  if (round === 1) return Boolean(chapter.isReadR1 || chapter.isRead);
+  if (round === 2) return Boolean(chapter.isReadR2);
+  return Boolean(chapter.isReadR3);
+}
+
+function getCurrentPlanReaderTargetKey() {
+  const taskContext = getCurrentPlanReaderTask();
+  if (!taskContext) return "";
+  const { book, day, round, plan } = taskContext;
+  return [plan.id || plan.globalPlanId || plan.presetKey || "plan", day.dayNum, round, book.name, state.readerState.chapter].join("|");
+}
+
+async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
+  const taskContext = getCurrentPlanReaderTask();
+  if (!taskContext || getCurrentPlanReaderTargetKey() !== expectedTargetKey) return;
+  if (isCurrentPlanReaderTaskRead(taskContext) || state.readerState.autoMarked || state.readerState.autoMarkInFlight) return;
+  if (taskContext.plan && isPlanExpired(taskContext.plan)) return;
+  if (taskContext.round < Number(taskContext.plan.currentRound || 1)) return;
+
+  const planDayChKey = `${taskContext.book.name}_${state.readerState.chapter}`;
+  state.readerState.autoMarked = true;
+  state.readerState.autoMarkInFlight = true;
+  try {
+    updatePlanCheckboxState(planDayChKey, true);
+    calculatePlanProgress();
+    if (typeof updateDashboardView === "function") updateDashboardView();
+    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true);
+
+    const shouldHandleR1 = taskContext.plan.isPlanCompleted && !taskContext.plan.upgradePromptHandled;
+    const shouldHandleR2 = taskContext.plan.isRound2Completed && !taskContext.plan.round2UpgradePromptHandled;
+    if (shouldHandleR1 || shouldHandleR2) await handleRoundCompletion(taskContext.plan);
+    if (typeof window.checkAndPromptTodayCompletion === "function") {
+      await window.checkAndPromptTodayCompletion();
+    }
+    if (typeof showToast === "function") showToast("已自動記錄為已讀");
+  } catch (error) {
+    console.error("Failed to auto-mark reader progress", error);
+    state.readerState.autoMarked = false;
+    updatePlanCheckboxState(planDayChKey, false);
+    calculatePlanProgress();
+    if (typeof updateDashboardView === "function") updateDashboardView();
+    if (typeof showToast === "function") {
+      showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
+    }
+  } finally {
+    state.readerState.autoMarkInFlight = false;
+  }
+}
+
+function initImmersivePlanReader() {
+  const readerView = document.getElementById("reader-view");
+  const scrollSurface = readerView && readerView.querySelector(".reader-reading-surface");
+  if (!readerView || !scrollSurface || readerView.dataset.immersivePlanReaderBound === "true") return;
+
+  readerView.dataset.immersivePlanReaderBound = "true";
+  readerBottomDwellController = createReaderBottomDwellController({
+    dwellMs: 1000,
+    onComplete: autoMarkCurrentPlanReaderTaskRead
+  });
+  scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
 }
 
 export function initReaderControls() {
@@ -371,6 +454,7 @@ export function initReaderControls() {
   });
 
   initSmartFloatingReaderNav();
+  initImmersivePlanReader();
 
   const markReadBtn = document.getElementById("mark-read-btn");
   if (markReadBtn) {
@@ -734,6 +818,8 @@ export async function renderReaderText() {
   console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
   state.readerState.autoMarked = false;
+  state.readerState.autoMarkInFlight = false;
+  if (readerBottomDwellController) readerBottomDwellController.reset();
   const heading = document.getElementById("bible-title");
   const markReadBtn = document.getElementById("mark-read-btn");
   
@@ -1340,147 +1426,9 @@ window.searchBibleText = async function(query, translation = "CUNP") {
 
 export function updateReaderBottomActionBar() {
   const bar = document.getElementById("reader-bottom-action-bar");
-  const indicator = document.getElementById("reader-progress-indicator");
-  const btn = document.getElementById("reader-capsule-btn");
-  if (!bar || !btn) return;
-
+  if (!bar) return;
   bar.style.display = "none";
   bar.classList.add("hidden");
-
-  const bookObj = BIBLE_BOOKS.find(b => b.id === Number(state.readerState.bookId));
-  if (!bookObj) return;
-
-  const fromPlan = !!(state.readerState && state.readerState.fromPlan && state.activePlan);
-  if (!fromPlan) return;
-
-  let isCatchingUp = false;
-  let elapsedDay = 1;
-
-  if (state.activePlan) {
-    const start = new Date(state.activePlan.startDate);
-    start.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    elapsedDay = Math.max(1, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1);
-    
-    const planDay = state.readerState.planDayNum || 1;
-    isCatchingUp = planDay < elapsedDay;
-  }
-
-  bar.classList.remove("scenario-a", "scenario-b", "scenario-c");
-
-  const logClick = () => {
-    console.log('🧠 [智慧按鈕觸發] 情境：' + (isCatchingUp ? '補讀' : '正常'));
-  };
-
-  const plan = state.activePlan;
-  const planDay = state.readerState.planDayNum || 1;
-  const selectedDay = plan.days.find(d => d.dayNum === planDay);
-  const dayChapters = (selectedDay && selectedDay.chapters) || [];
-
-  const currentRound = state.readerState.planRound || plan.currentRound || 1;
-  const isDayCompletedBefore = dayChapters.length > 0 && dayChapters.every(ch => {
-    const taskRound = ch.round || currentRound;
-    if (taskRound === 1) return ch.isReadR1 || ch.isRead;
-    if (taskRound === 2) return ch.isReadR2;
-    if (taskRound >= 3) return ch.isReadR3;
-    return ch.isRead;
-  });
-
-  if (isDayCompletedBefore) return;
-  
-  const currentChIndex = dayChapters.findIndex(ch => 
-    ch.book === bookObj.name && Number(ch.chapter) === Number(state.readerState.chapter)
-  );
-  const isLastChapterOfDay = currentChIndex === dayChapters.length - 1 || currentChIndex === -1;
-  const totalChapters = dayChapters.length;
-  const readCount = dayChapters.filter(ch => ch.isRead).length;
-
-  if (!isCatchingUp) {
-    bar.classList.add("scenario-b");
-    if (indicator) {
-      indicator.classList.remove("hidden");
-      indicator.textContent = `本日進度 ${readCount}/${totalChapters}`;
-    }
-
-    if (isLastChapterOfDay) {
-      btn.innerHTML = `<span>🎉 大功告成</span>`;
-    } else {
-      btn.innerHTML = iconLabel("chevronRight", (window.APP_COPY && window.APP_COPY.reader.nextChapter) || "下一章");
-    }
-
-    btn.onclick = () => {
-      logClick();
-      
-      const currentRound = state.readerState.planRound || plan.currentRound || 1;
-      db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
-        .then(() => db.saveLocalUserStats());
-      applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
-      calculatePlanProgress();
-      if (typeof updateDashboardView === "function") {
-        updateDashboardView();
-      }
-
-      if (isLastChapterOfDay) {
-        showToast("🎉 本日計畫已全部完成！");
-        appRouter.switchTab("plan-view", { keepPlanDetail: true });
-      } else {
-        const nextCh = dayChapters[currentChIndex + 1];
-        const nextBook = BIBLE_BOOKS.find(b => b.name === nextCh.book || b.eng === nextCh.book);
-        if (nextBook) {
-          state.readerState.bookId = nextBook.id;
-          state.readerState.chapter = Number(nextCh.chapter);
-          renderReaderText();
-        }
-      }
-    };
-  } else {
-    bar.classList.add("scenario-c");
-    if (indicator) indicator.classList.add("hidden");
-    btn.innerHTML = iconLabel("skipForward", (window.APP_COPY && window.APP_COPY.reader.catchUpNextDay) || "補讀下一天");
-
-    btn.onclick = () => {
-      logClick();
-      
-      const currentRound = state.readerState.planRound || plan.currentRound || 1;
-      db.logChapterRead(bookObj.name, state.readerState.chapter, true, currentRound)
-        .then(() => db.saveLocalUserStats());
-      applyMemoryChapterReadState(bookObj.name, state.readerState.chapter, true, currentRound);
-      calculatePlanProgress();
-      if (typeof updateDashboardView === "function") {
-        updateDashboardView();
-      }
-
-      const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
-      if (nextChInfo) {
-        const nextBook = BIBLE_BOOKS.find(b => b.name === nextChInfo.book || b.eng === nextChInfo.book);
-        if (nextBook) {
-          state.readerState.bookId = nextBook.id;
-          state.readerState.chapter = Number(nextChInfo.chapter);
-          state.readerState.planDayNum = nextChInfo.dayNum;
-          renderReaderText();
-        }
-      } else {
-        showToast("🎉 補讀進度已全部追上！");
-        appRouter.switchTab("plan-view", { keepPlanDetail: true });
-      }
-    };
-  }
-}
-
-function applyMemoryChapterReadState(bookName, chapterNum, checked, roundNum) {
-  if (!state.activePlan || !state.activePlan.days) return;
-  state.activePlan.days.forEach(day => {
-    if (!day.chapters) return;
-    day.chapters.forEach(ch => {
-      if (ch.book === bookName && Number(ch.chapter) === Number(chapterNum)) {
-        if (roundNum === 1) ch.isReadR1 = checked;
-        else if (roundNum === 2) ch.isReadR2 = checked;
-        else if (roundNum === 3) ch.isReadR3 = checked;
-        ch.isRead = checked;
-      }
-    });
-  });
 }
 
 function getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters) {
@@ -1542,43 +1490,24 @@ function triggerPredictivePrefetch() {
 }
 
 function handleReaderScroll(event) {
-  const fromPlan = !!(state.readerState && state.readerState.fromPlan && state.activePlan);
-  console.log('📜 [滑動防護] fromPlan:', fromPlan, '是否啟動監聽顯示：', fromPlan ? '是' : '否');
-  
   const bar = document.getElementById("reader-bottom-action-bar");
-  if (!fromPlan) {
-    if (bar) {
-      bar.style.display = "none";
-      bar.classList.add("hidden");
-    }
-    return;
-  }
-
-  const container = event.currentTarget || event.target;
-  const scrollTop = container.scrollTop;
-  const clientHeight = container.clientHeight;
-  const scrollHeight = container.scrollHeight;
-
-  const isBottom = (scrollTop + clientHeight) >= (scrollHeight - 50);
-  console.log('📜 [滑動監聽] 當前滾動高度：', scrollTop, '是否已滑到底：', isBottom);
-
   if (bar) {
-    if (isBottom) {
-      if (bar.style.display === "none" || bar.classList.contains("hidden")) {
-        bar.style.display = "flex";
-        bar.classList.remove("hidden");
-        bar.style.opacity = "0";
-        bar.style.transform = "translateY(20px)";
-        bar.offsetHeight;
-        bar.style.transition = "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-        bar.style.opacity = "1";
-        bar.style.transform = "translateY(0)";
-      }
-    } else {
-      bar.style.display = "none";
-      bar.classList.add("hidden");
-    }
+    bar.style.display = "none";
+    bar.classList.add("hidden");
   }
+
+  if (!readerBottomDwellController) return;
+  const taskContext = getCurrentPlanReaderTask();
+  readerBottomDwellController.handleScroll(event.currentTarget || event.target, {
+    eligible: Boolean(
+      taskContext &&
+      window.appRouter && window.appRouter.currentTab === "reader-view" &&
+      !isCurrentPlanReaderTaskRead(taskContext) &&
+      !state.readerState.autoMarked &&
+      !state.readerState.autoMarkInFlight
+    ),
+    targetKey: getCurrentPlanReaderTargetKey()
+  });
 }
 
 function isTodayScheduleCompleted() {
