@@ -1388,15 +1388,25 @@ const db = {
       return;
     }
 
-    const dates = [...new Set(state.readingLogs.map(log => log.read_at.substring(0, 10)))].sort().reverse();
+    const toLocalYYYYMMDD = (val) => {
+      if (!val) return "";
+      const date = val instanceof Date ? val : new Date(val);
+      if (Number.isNaN(date.getTime())) return "";
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    const dates = [...new Set(state.readingLogs.map(log => toLocalYYYYMMDD(log.read_at)))].filter(Boolean).sort().reverse();
 
     if (dates.length === 0) {
       state.currentUser.streak = 0;
       return;
     }
 
-    const todayStr = new Date().toISOString().substring(0, 10);
-    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().substring(0, 10);
+    const todayStr = toLocalYYYYMMDD(new Date());
+    const yesterdayStr = toLocalYYYYMMDD(new Date(Date.now() - 86400000));
 
     if (dates[0] !== todayStr && dates[0] !== yesterdayStr) {
       state.currentUser.streak = 0;

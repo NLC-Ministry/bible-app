@@ -376,12 +376,26 @@ export function updateDashboardView() {
 
     const progressLabel = isFixed ? "今日進度" : `第 ${todayDayObj ? todayDayObj.dayNum : 1} 天`;
 
+    let dayNum = 1;
+    if (isFixed) {
+      if (todayDayObj) {
+        dayNum = todayDayObj.dayNum;
+      } else {
+        const planStart = new Date(state.activePlan.startDate + "T00:00:00");
+        const todayZero = new Date();
+        todayZero.setHours(0, 0, 0, 0);
+        dayNum = Math.max(1, Math.round((todayZero - planStart) / 86400000) + 1);
+      }
+    } else {
+      dayNum = todayDayObj ? todayDayObj.dayNum : 1;
+    }
+
     planSummaryDiv.innerHTML = `
       <div class="plan-progress-header">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
           <h4 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0;">${state.activePlan.name}</h4>
           ${started
-        ? '<span class="stat-badge stat-badge--success">進行中</span>'
+        ? `<span class="stat-badge stat-badge--success">第 ${dayNum} 天</span>`
         : `<span class="stat-badge stat-badge--brand">${waitingLabel}</span>`
       }
         </div>

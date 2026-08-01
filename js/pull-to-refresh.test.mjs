@@ -40,8 +40,8 @@ describe("installPullToRefresh", () => {
     window.registerPullToRefresh(refresh);
 
     window.dispatchEvent(touchEvent(window, "touchstart", 0));
-    window.dispatchEvent(touchEvent(window, "touchmove", 96));
-    window.dispatchEvent(touchEvent(window, "touchend", 96));
+    window.dispatchEvent(touchEvent(window, "touchmove", 120));
+    window.dispatchEvent(touchEvent(window, "touchend", 120));
     await Promise.resolve();
 
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -68,8 +68,8 @@ describe("installPullToRefresh", () => {
     installPullToRefresh({ window, document, fallbackRefresh });
 
     window.dispatchEvent(touchEvent(window, "touchstart", 0));
-    window.dispatchEvent(touchEvent(window, "touchmove", 96));
-    window.dispatchEvent(touchEvent(window, "touchend", 96));
+    window.dispatchEvent(touchEvent(window, "touchmove", 120));
+    window.dispatchEvent(touchEvent(window, "touchend", 120));
     await Promise.resolve();
 
     expect(fallbackRefresh).toHaveBeenCalledTimes(1);

@@ -74,7 +74,7 @@ describe("managed scope authority", () => {
   });
 
   it("cache-busts the changed application and scope-editor stylesheet", () => {
-    expect(html).toContain("js/app.js?v=20260801_registration_summary");
+    expect(html).toContain("js/app.js?v=20260801_registration_summary_v2");
     expect(html).toContain("css/admin-registration-statistics.css?v=20260801_registration_summary");
   });
 });

@@ -27,12 +27,12 @@ export function getNextReadingPlanDay(plan) {
 
 export function getExpectedPlanDayCount(plan, now = new Date()) {
   if (!plan || !plan.days) return 0;
-  const planStart = new Date(plan.startDate);
+  const planStart = new Date(plan.startDate + "T00:00:00");
   if (isNaN(planStart.getTime())) return 0;
   planStart.setHours(0, 0, 0, 0);
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
-  const elapsedDays = Math.floor((today - planStart) / (1000 * 60 * 60 * 24)) + 1;
+  const elapsedDays = Math.round((today - planStart) / (1000 * 60 * 60 * 24)) + 1;
   const elapsedPlanDays = plan.days.slice(0, Math.max(0, Math.min(plan.days.length, elapsedDays)));
   return elapsedPlanDays.filter(day => day.chapters && day.chapters.length > 0).length;
 }
