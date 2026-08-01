@@ -2529,6 +2529,11 @@ function renderHorizontalDateStrip() {
   const container = document.getElementById("plan-date-carousel");
   if (!container || !state.activePlan) return;
 
+  if (!state.selectedPlanDay) {
+    const nextReadingDay = getNextReadingPlanDay(state.activePlan);
+    state.selectedPlanDay = nextReadingDay ? nextReadingDay.dayNum : 1;
+  }
+
   container.innerHTML = "";
 
   // 1. Calculate active plan start/end dates
