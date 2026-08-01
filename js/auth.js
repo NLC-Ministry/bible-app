@@ -3,6 +3,14 @@
 // ============================================================
 
 import {
+  AUTH_POLICY_VERSION,
+  createAuthContinuation,
+  cleanReturnTo,
+  parseContinuationFromSearchParams,
+  parseAuthContinuation,
+  serializeAuthContinuation
+} from "./auth-continuation.mjs";
+import {
   detectAuthenticationEnvironment,
   shouldGateInteractiveAuth
 } from "./auth-environment.js";
@@ -23,6 +31,10 @@ const auth = {
     expiresAt: "nlc_token_expires_at",
     state: "nlc_auth_state",
     verifier: "nlc_auth_verifier",
+    nonce: "nlc_auth_nonce",
+    flowId: "nlc_auth_flow_id",
+    continuation: "nlc_auth_continuation",
+    continuationVersion: "nlc_auth_continuation_version",
     memberContext: "nlc_member_context",
     supabaseAccessToken: "nlc_supabase_access_token",
     supabaseExpiresAt: "nlc_supabase_expires_at",
@@ -137,11 +149,23 @@ const auth = {
   },
 
   _cleanCallbackUrl() {
-    const urlParams = new URLSearchParams(window.location.search);
-    ["code", "state", "error", "error_description", "scope", "iss"].forEach(key => urlParams.delete(key));
-    const cleanUrl = window.location.origin + window.location.pathname +
-      (urlParams.toString() ? "?" + urlParams.toString() : "") +
-      window.location.hash;
+    const url = new URL(window.location.href);
+    [
+      "code",
+      "state",
+      "error",
+      "error_description",
+      "scope",
+      "iss",
+      "auth_continuation",
+      "auth_bridge_attempted",
+      "openExternalBrowser",
+      "version",
+      "flow_id"
+    ].forEach((key) => url.searchParams.delete(key));
+
+    const urlSearch = url.search;
+    const cleanUrl = `${url.origin}${url.pathname}${urlSearch}${url.hash}`;
     window.history.replaceState({}, document.title, cleanUrl);
   },
 
@@ -171,10 +195,49 @@ const auth = {
   },
 
   _clearFlowState() {
-    sessionStorage.removeItem(this.keys.state);
-    sessionStorage.removeItem(this.keys.verifier);
-    localStorage.removeItem(this.keys.state);
-    localStorage.removeItem(this.keys.verifier);
+    [
+      this.keys.state,
+      this.keys.verifier,
+      this.keys.nonce,
+      this.keys.continuation,
+      this.keys.continuationVersion,
+      this.keys.flowId
+    ].forEach((key) => {
+      sessionStorage.removeItem(key);
+      localStorage.removeItem(key);
+    });
+  },
+
+  _normalizeAuthContinuationInput(input = {}) {
+    const parsedInput =
+      typeof input === "string"
+        ? parseAuthContinuation(input)
+        : (typeof input === "object" && input !== null ? input : {});
+
+    if (parsedInput && parsedInput.version === AUTH_POLICY_VERSION && parsedInput.flowId) {
+      return {
+        version: AUTH_POLICY_VERSION,
+        intent: parsedInput.intent,
+        returnTo: cleanReturnTo(parsedInput.returnTo || "/"),
+        target: parsedInput.target,
+        flowId: parsedInput.flowId
+      };
+    }
+
+    const continuationFromQuery = parseContinuationFromSearchParams(window.location.search);
+    if (continuationFromQuery) {
+      return continuationFromQuery;
+    }
+
+    try {
+      return createAuthContinuation({
+        intent: typeof parsedInput.intent === "string" ? parsedInput.intent : "login",
+        returnTo: typeof input === "string" ? input : parsedInput.returnTo || "/",
+        target: parsedInput.target
+      });
+    } catch {
+      return createAuthContinuation({ intent: "login", returnTo: "/" });
+    }
   },
 
   _resetAppAuthState() {
@@ -211,38 +274,52 @@ const auth = {
     return `intent://${url.host}${url.pathname}${url.search}${url.hash}#Intent;scheme=${url.protocol.replace(":", "")};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
   },
 
-  async _copyCurrentUrl() {
-    const url = window.location.href;
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      await navigator.clipboard.writeText(url);
-      return true;
-    }
-
-    const input = document.createElement("input");
-    input.value = url;
-    input.setAttribute("readonly", "readonly");
-    input.style.position = "fixed";
-    input.style.opacity = "0";
-    document.body.appendChild(input);
-    input.select();
-    let copied = false;
-    try {
-      copied = document.execCommand("copy");
-    } finally {
-      input.remove();
-    }
-    return copied;
+  _addBrowserLaunchTransportParams(targetUrl) {
+    const url = new URL(targetUrl);
+    url.searchParams.set("openExternalBrowser", "1");
+    return url.toString();
   },
 
-  showEmbeddedBrowserAuthDialog(authEnvironment) {
+  _buildBridgeUrl(continuation, authEnvironment) {
+    const base = new URL(window.location.href);
+    const cleanUrl = new URL(base.pathname + base.hash, base.origin);
+    for (const [name, value] of base.searchParams.entries()) {
+      if (["code", "state", "error", "error_description", "openExternalBrowser", "auth_bridge_attempted", "auth_continuation", "version"].includes(name)) {
+        continue;
+      }
+      cleanUrl.searchParams.append(name, value);
+    }
+
+    cleanUrl.searchParams.set("auth_bridge_attempted", "1");
+    cleanUrl.searchParams.set("auth_continuation", continuation || "");
+    cleanUrl.searchParams.set("version", String(AUTH_POLICY_VERSION));
+
+    const withTransport = this._addBrowserLaunchTransportParams(cleanUrl.toString());
+
+    if (this._isIntentOpenRecommended(authEnvironment)) {
+      return this._externalBrowserIntentUrl(withTransport);
+    }
+
+    return withTransport;
+  },
+
+  _isIntentOpenRecommended(authEnvironment) {
+    return !!(authEnvironment && authEnvironment.platform === "android" && authEnvironment.decision === "bridge");
+  },
+
+  _startSystemBrowserTransition(continuation, authEnvironment) {
+    window.location.href = this._buildBridgeUrl(continuation || "", authEnvironment);
+  },
+
+  showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
+    const safeContinuation = this._normalizeAuthContinuationInput(continuation);
+    this._setFlowItem(this.keys.continuation, serializeAuthContinuation(safeContinuation));
+
     const existing = document.getElementById("auth-environment-dialog");
     if (existing) existing.remove();
 
-    const canAttemptExternal = authEnvironment && authEnvironment.canAttemptExternalBrowser;
-    const primaryLabel = canAttemptExternal ? "在 Chrome 開啟" : "複製連結";
-    const hint = canAttemptExternal
-      ? "如果沒有自動開啟，請點選右上角選單，選擇「在瀏覽器開啟」。"
-      : "Instagram 無法讓此按鈕直接開啟 Safari。請先複製連結，再點選右上角選單，選擇「在瀏覽器開啟」。";
+    const primaryLabel = "開啟瀏覽器繼續";
+    const hint = "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。";
 
     const dialog = document.createElement("div");
     dialog.className = "auth-environment-dialog";
@@ -255,7 +332,7 @@ const auth = {
         <div class="auth-environment-dialog__icon" aria-hidden="true">
           <span class="nlc-icon nlc-icon--sm" data-icon="lock"></span>
         </div>
-        <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用 Safari / Chrome 繼續</h2>
+        <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
         <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
         <p class="auth-environment-dialog__note">LINE、Instagram、Facebook 等 App 內建瀏覽器有時無法完成社群登入、簡訊或 Email 驗證。</p>
         <button type="button" class="auth-environment-dialog__primary">${primaryLabel}</button>
@@ -265,17 +342,9 @@ const auth = {
     `;
 
     const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
-    const status = dialog.querySelector(".auth-environment-dialog__status");
-    continueButton.addEventListener("click", async () => {
-      if (canAttemptExternal) {
-        window.location.href = this._externalBrowserIntentUrl(window.location.href);
-        return;
-      }
-
-      const copied = await this._copyCurrentUrl().catch(() => false);
-      status.textContent = copied
-        ? "已複製連結。請從右上角選單選擇「在瀏覽器開啟」，或貼到 Safari / Chrome。"
-        : "請從網址列複製目前頁面連結，並在 Safari / Chrome 開啟。";
+    continueButton.addEventListener("click", () => {
+      const serializedContinuation = this._getFlowItem(this.keys.continuation) || serializeAuthContinuation(safeContinuation);
+      this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
     });
 
     dialog.addEventListener("click", event => {
@@ -333,14 +402,8 @@ const auth = {
     }
   },
 
-  async login(options = {}) {
+  async startInteractiveLogin(continuation) {
     try {
-      const authEnvironment = detectAuthenticationEnvironment();
-      if (shouldGateInteractiveAuth(authEnvironment, options)) {
-        this.showEmbeddedBrowserAuthDialog(authEnvironment);
-        return;
-      }
-
       await this.resetLocalLogin();
       if (!this.config.clientId) {
         console.error("NLC OIDC clientId is missing. Set NLC_CLIENT_ID and rebuild config.js.");
@@ -348,13 +411,27 @@ const auth = {
         return;
       }
 
+      const safeContinuation = this._normalizeAuthContinuationInput(continuation);
       const stateVal = this._generateCodeVerifier();
       const verifierVal = this._generateCodeVerifier();
+      const nonceVal = this._generateCodeVerifier();
       const challenge = await this._generateCodeChallenge(verifierVal);
+      if (!/^[0-9A-Z]{26}$/.test(safeContinuation.flowId || "")) {
+        safeContinuation.flowId = createAuthContinuation({
+          intent: safeContinuation.intent,
+          returnTo: safeContinuation.returnTo
+        }).flowId;
+      }
+
+      const serializedContinuation = serializeAuthContinuation(safeContinuation);
 
       this._clearFlowState();
       this._setFlowItem(this.keys.state, stateVal);
       this._setFlowItem(this.keys.verifier, verifierVal);
+      this._setFlowItem(this.keys.nonce, nonceVal);
+      this._setFlowItem(this.keys.continuation, serializedContinuation);
+      this._setFlowItem(this.keys.continuationVersion, String(AUTH_POLICY_VERSION));
+      this._setFlowItem(this.keys.flowId, safeContinuation.flowId);
 
       const redirectUri = this._getRedirectUri();
       const endpoints = await this._getEndpoints();
@@ -365,17 +442,46 @@ const auth = {
         scope: this.config.scopes,
         state: stateVal,
         code_challenge: challenge,
-        code_challenge_method: "S256"
+        code_challenge_method: "S256",
+        nonce: nonceVal
       });
       if (this.config.platformResource) {
         authParams.set("resource", this.config.platformResource);
       }
 
-      window.location.href = `${endpoints.authorizationEndpoint}?${authParams.toString()}`;
+      window.location.href = `${endpoints.authorizationEndpoint}?${authParams}`;
     } catch (err) {
       console.error("Logto login redirect failed:", err);
       this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
     }
+  },
+
+  async login(options = {}) {
+    return this.startInteractiveLogin(options);
+  },
+
+  async continueFromContinuation(continuation) {
+    await this.startInteractiveLogin(continuation);
+  },
+
+  async maybeResumeInteractiveAuthFromBridge() {
+    const continuation = parseContinuationFromSearchParams(window.location.search);
+    if (!continuation) return false;
+
+    const continuationFromLocation = continuation;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("code") || urlParams.has("state") || urlParams.has("error")) {
+      return false;
+    }
+
+    if (!continuation) return false;
+    const environment = detectAuthenticationEnvironment();
+    if (shouldGateInteractiveAuth(environment, { authEnvironmentAcknowledged: false })) {
+      this.showEmbeddedBrowserAuthDialog(environment, continuationFromLocation);
+      return false;
+    }
+
+    return this.startInteractiveLogin(continuationFromLocation);
   },
 
   async handleCallback() {
@@ -399,6 +505,9 @@ const auth = {
 
     const verifier = this._getFlowItem(this.keys.verifier);
     if (!verifier) return this._failCallback("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+
+    const nonce = this._getFlowItem(this.keys.nonce);
+    if (!nonce) return this._failCallback("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
 
     loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");
     try {
@@ -427,6 +536,15 @@ const auth = {
       }
 
       const data = await response.json();
+      const idPayload = this._parseJwt(data.id_token || "");
+      if (!idPayload || idPayload.nonce !== nonce) {
+        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", {
+          missingIdToken: !data.id_token,
+          expectedNonce: !!nonce,
+          hasPayload: !!idPayload
+        });
+      }
+
       this._saveTokens(data);
       this._cleanCallbackUrl();
       this._applyTokenProfileFallback();
