@@ -37,6 +37,6 @@ describe("Member Hub-only permission management", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260801_upgrade_gate_autoread_stats");
+    expect(html).toContain("js/app.js?v=20260801_confirmed_round_progress");
   });
 });

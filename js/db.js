@@ -1,5 +1,6 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
+import { getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -861,7 +862,15 @@ const db = {
                 || getPresetKeyByName(dbPlan.name);
 
               const isFixed = dbPlan.is_fixed !== false;
-              const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, dbPlan.level || 'normal', isFixed, {
+              const storedRound = Number(dbPlan.current_round || 1);
+              const planLogs = rawLogs.filter(log => log.plan_id === dbPlan.id);
+              const confirmedRound = getConfirmedReadingRound({
+                currentRound: storedRound,
+                upgradePromptHandled: dbPlan.upgrade_prompt_handled,
+                logs: planLogs
+              });
+              const effectiveLevel = confirmedRound === storedRound ? (dbPlan.level || 'normal') : 'normal';
+              const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, effectiveLevel, isFixed, {
                 readingDaysPerWeek: dbPlan.reading_days_per_week,
                 restWeekdays: dbPlan.rest_weekdays
               });
@@ -871,8 +880,8 @@ const db = {
               planObj.is_fixed = isFixed;
               const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
               planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
-              planObj.level = dbPlan.level || 'normal';
-              planObj.currentRound = dbPlan.current_round || 1;
+              planObj.level = effectiveLevel;
+              planObj.currentRound = confirmedRound;
               planObj.wasDowngraded = dbPlan.was_downgraded || false;
               planObj.downgradeLockedUntil = dbPlan.downgrade_locked_until || getLocalPlanDowngradeLock(planObj);
               planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
@@ -1654,7 +1663,7 @@ const db = {
         if (profilesError) throw profilesError;
         if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${getUserRoleCode(u)})`));
 
-        let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level");
+        let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level, upgrade_prompt_handled");
         if (filterPresetKey) {
           const textConditions = planFilterAliases.flatMap(alias => [
             `preset_key.eq.${quotePostgrestValue(alias)}`,
@@ -1756,6 +1765,13 @@ const db = {
             });
             const uniqueLogs = Object.values(uniqueLogsMap);
 
+            const confirmedRound = uPlan
+              ? getConfirmedReadingRound({
+                  currentRound: uPlan.current_round || 1,
+                  upgradePromptHandled: uPlan.upgrade_prompt_handled,
+                  logs: uniqueLogs
+                })
+              : 1;
             let planProgress = 0;
             if (uPlan && uPlan.target_books && uPlan.target_books.length > 0) {
               let totalChapters = 0;
@@ -1763,11 +1779,11 @@ const db = {
                 const b = BIBLE_BOOKS.find(book => book.name === bName);
                 if (b) totalChapters += b.chapters;
               });
-              const levelRounds = uPlan.level === 'super' ? 3 : (uPlan.level === 'breakthrough' ? 2 : 1);
-              totalChapters *= levelRounds;
-              if (totalChapters > 0) {
-                planProgress = Math.min(100, Math.round((uniqueLogs.length / totalChapters) * 100) || 0);
-              }
+              planProgress = getCurrentRoundChapterProgress(
+                uniqueLogs,
+                confirmedRound,
+                totalChapters
+              ).progress;
             }
 
             let lastRead = null;
@@ -1796,8 +1812,8 @@ const db = {
               plan_id: uPlan ? uPlan.id : null,
               presetKey: uPlan ? uPlan.preset_key : null,
               globalPlanId: uPlan ? uPlan.global_plan_id : null,
-              current_round: uPlan ? (uPlan.current_round || 1) : 1,
-              level: uPlan ? (uPlan.level || 'normal') : 'normal',
+              current_round: confirmedRound,
+              level: uPlan && confirmedRound === Number(uPlan.current_round || 1) ? (uPlan.level || 'normal') : 'normal',
               today_devotional: notesByUser[profile.id] || null
             };
           }).filter(Boolean);

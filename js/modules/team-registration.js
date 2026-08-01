@@ -575,8 +575,8 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     const totalChapters = Number(plan && (plan.currentRoundTotalChapters || plan.totalChapters) || 0);
     const {
       averageProgress,
-      completedChapters: totalRead,
-      journeyChapters: totalJourneyChapters
+      currentRoundReadChapters: totalRead,
+      currentRoundTargetChapters: totalJourneyChapters
     } = getTeamOverallPlanProgress(members, totalChapters);
     const currentMember = members.find(member => member.isMe);
     const currentUserId = state.currentUser && state.currentUser.id || state.currentProfileId;

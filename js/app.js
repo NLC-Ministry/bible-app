@@ -13,7 +13,7 @@ import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
 import './auth-launch.mjs';
-import './db.js?v=20260801_registration_summary_v2';
+import './db.js?v=20260801_confirmed_round_progress';
 import './utils.js?v=20260801_timezone_local_fixes';
 import './gamification.js?v=20260728_badge_img_refactor';
 

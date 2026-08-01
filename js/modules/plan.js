@@ -3172,7 +3172,8 @@ window.triggerPlanUpgradeFlow = async function() {
     progress: plan.progress,
     wasDowngraded: plan.wasDowngraded,
     downgradeLockedUntil: plan.downgradeLockedUntil,
-    lastUpgradedRound: plan.lastUpgradedRound
+    lastUpgradedRound: plan.lastUpgradedRound,
+    upgradePromptHandled: plan.upgradePromptHandled
   };
   planUpgradeInFlight = true;
   setPlanUpgradeOverlayBusy(true, upgradeAvailability.nextRoundLabel);
@@ -3213,6 +3214,7 @@ window.triggerPlanUpgradeFlow = async function() {
     plan.wasDowngraded = false;
     plan.downgradeLockedUntil = null;
     plan.lastUpgradedRound = currentRound;
+    plan.upgradePromptHandled = true;
 
     rebuildPlanScheduleForLevel(plan, nextLevel);
     await persistPlanLevelState(plan);
@@ -5956,9 +5958,12 @@ async function renderGroupParticipantsRankingTable() {
       ) || 0)));
       let statusStr = hasAnyPlanRead ? "在進度上" : "未開始";
       let statusColor = "var(--text-muted)";
-      if (hasAnyPlanRead && memberRound > 1) {
-        statusStr = `超前第${memberRound}遍完成${memberProgress}%`;
+      if (hasAnyPlanRead && memberRound === 1 && memberProgress >= 100) {
+        statusStr = "第一遍完成";
         statusColor = "var(--color-success-foreground)";
+      } else if (hasAnyPlanRead && memberRound > 1) {
+        statusStr = `第${memberRound}遍完成${memberProgress}%`;
+        statusColor = memberProgress >= 100 ? "var(--color-success-foreground)" : "var(--color-brand)";
       } else if (hasAnyPlanRead && diff > 0) {
         statusStr = `超前 ${diff}天`;
         statusColor = "var(--color-success-foreground)";
