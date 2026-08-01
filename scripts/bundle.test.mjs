@@ -124,10 +124,11 @@ describe("emitBundle (integration, real repo)", () => {
       expect(jsFile).toMatch(/^app\.[0-9a-f]{8}\.js$/);
       expect(cssFile).toMatch(/^index\.[0-9a-f]{8}\.css$/);
       expect(existsSync(join(out, jsFile))).toBe(true);
+      expect(existsSync(join(out, "app.js"))).toBe(true);
       expect(existsSync(join(out, cssFile))).toBe(true);
       // rewritten HTML: exactly one app script tag, no leftover local js/ tags
       const html = rf(join(out, "index.html"), "utf8");
-      expect(html).toContain(`<script type="module" src="/${jsFile}"></script>`);
+      expect(html).toContain('<script type="module" src="/app.js"></script>');
       expect(html).not.toMatch(/<script\s+src="js\//);
       expect(html).not.toMatch(/<script\s+src="config\.js/);
       expect(html).toContain(`href="/${cssFile}"`);

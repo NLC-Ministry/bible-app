@@ -157,6 +157,7 @@ export function emitBundle({ root, outDir }) {
   console.log("DEBUG: outDir created, writing files...");
 
   writeFileSync(join(outDir, jsFile), processedJs, "utf8");
+  writeFileSync(join(outDir, "app.js"), processedJs, "utf8");
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
   console.log("DEBUG: Files written successfully!");
 
@@ -166,7 +167,7 @@ export function emitBundle({ root, outDir }) {
   let seen = 0;
   let outHtml = html.replace(SCRIPT_RE, () => {
     seen += 1;
-    return seen === total ? `<script type="module" src="/${jsFile}"></script>` : "";
+    return seen === total ? `<script type="module" src="/app.js"></script>` : "";
   });
   let seenStylesheet = 0;
   outHtml = outHtml.replace(CSS_RE, () => {

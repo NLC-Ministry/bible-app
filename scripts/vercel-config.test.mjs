@@ -14,6 +14,11 @@ const headerFor = (source) => {
 describe("vercel.json", () => {
   it("outputs the dist directory", () => expect(cfg.outputDirectory).toBe("dist"));
 
+  it("keeps the stable app entry fresh and recovers stale hashed URLs", () => {
+    expect(headerFor("/app.js")).toContain("no-store");
+    expect(cfg.rewrites).toContainEqual({ source: "/app.:hash.js", destination: "/app.js" });
+  });
+
   it("keeps entry HTML uncacheable", () => {
     expect(headerFor("/")).toContain("no-store");
     expect(headerFor("/index.html")).toContain("no-store");
