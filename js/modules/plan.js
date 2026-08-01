@@ -8,6 +8,10 @@ import {
 import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
+import {
+  removePlanReadingLogs,
+  resetPlanProgressState
+} from "../data/plan-progress-reset.mjs";
 
 // Reading plans tab view controller
 
@@ -864,53 +868,59 @@ function initPlanControls() {
       try {
         const plan = state.activePlan;
         const planId = plan.id;
-        const presetKey = plan.presetKey;
+        let persistedResetAt = null;
 
-        // 1. Clear local memory logs
-        if (state.readingLogs) {
-          state.readingLogs = state.readingLogs.filter(l => !(
-            (planId && l.plan_id === planId) ||
-            (presetKey && l.presetKey === presetKey)
-          ));
-        }
-
-        // 2. Clear progress in memory plan object
-        plan.progress = 0;
-        if (plan.days) {
-          plan.days.forEach(d => {
-            if (d.chapters) {
-              d.chapters.forEach(ch => {
-                ch.isRead = false;
-                for (let r = 1; r <= 10; r++) {
-                  ch[`isReadR${r}`] = false;
-                }
-              });
-            }
-          });
-        }
-
-        // 3. Clear database (if Supabase mode)
+        // 1. Clear the persisted logs before changing local state. A Supabase
+        // enrollment always has a UUID, so never query a non-existent preset_key
+        // column on reading_logs.
         if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
           const user = await db.getCurrentDbUser();
-          if (user && user.id) {
-            let query = state.supabase.from("reading_logs").delete().eq("user_id", user.id);
-            if (planId && planId.length > 5 && planId.includes('-')) {
-              query = query.eq("plan_id", planId);
-            } else if (presetKey) {
-              query = query.eq("preset_key", presetKey);
-            }
-            const { error } = await query;
-            if (error) throw error;
+          if (!user || !user.id || !planId) throw new Error("找不到可重置的讀經計畫資料");
+          const cacheKey = `reading_logs:${user.id}`;
+          const applyDeleteFilters = query => query.eq("user_id", user.id).eq("plan_id", planId);
+          const deleteResult = window.readingLogRepository
+            ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: [cacheKey] })
+            : await applyDeleteFilters(state.supabase.from("reading_logs").delete());
+          if (deleteResult && deleteResult.error) {
+            throw new Error(deleteResult.error.message || deleteResult.error.error || String(deleteResult.error));
           }
+
+          // The database transition guard requires an explicit downgrade marker
+          // when a reset takes an upgraded plan back to round one. Using the
+          // current instant satisfies that guard without locking future upgrades.
+          persistedResetAt = new Date().toISOString();
+          const { error: planResetError } = await state.supabase
+            .from("reading_plans")
+            .update({
+              level: "normal",
+              current_round: 1,
+              upgrade_prompt_handled: false,
+              was_downgraded: true,
+              downgrade_locked_until: persistedResetAt
+            })
+            .eq("id", planId)
+            .eq("user_id", user.id);
+          if (planResetError) throw planResetError;
         }
 
-        // 4. Save to localStorage (if local/demo mode)
+        // 2. Only update memory after the server reset succeeds.
+        state.readingLogs = removePlanReadingLogs(state.readingLogs, plan);
+        resetPlanProgressState(plan);
+        plan.wasDowngraded = Boolean(persistedResetAt);
+        plan.downgradeLockedUntil = persistedResetAt;
+        rebuildPlanScheduleForLevel(plan, "normal");
+        const firstReadingDay = (plan.days || []).find(day => (day.chapters || []).some(ch => Number(ch.round || 1) === 1));
+        if (firstReadingDay) state.selectedPlanDay = firstReadingDay.dayNum;
+        window._cachedAllUsersList = null;
+        window._cachedAllUsersListKey = null;
+
+        // 3. Save to localStorage (if local/demo mode)
         if (!state.isSupabaseMode) {
           localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs || []));
           localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
         }
 
-        // 5. Update UI
+        // 4. Update UI
         if (typeof calculatePlanProgress === "function") {
           calculatePlanProgress();
         }
