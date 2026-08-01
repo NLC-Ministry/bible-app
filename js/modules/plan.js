@@ -3675,6 +3675,11 @@ window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = nu
   state.readerState.returnTab = "plan-view";
   state.readerState.planDayNum = dayNum || null;
   state.readerState.planRound = round || (state.activePlan ? state.activePlan.currentRound || 1 : 1);
+  state.readerState.planContextId = window.getActivePlanContextId?.(state.activePlan)
+    || state.activePlan?.id
+    || state.activePlan?.globalPlanId
+    || state.activePlan?.presetKey
+    || null;
 
   if (typeof saveReaderPreferences === 'function') {
     saveReaderPreferences();
@@ -3738,9 +3743,10 @@ function findInlineReaderLog(task) {
 
 async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
   const task = getCurrentInlineReaderTask();
-  if (!task || getInlineReaderTargetKey() !== expectedTargetKey) return;
-  if (isInlineReaderTaskRead(task) || state.inlineReader.autoMarked || state.inlineReader.autoMarkInFlight) return;
-  if (isPlanExpired(task.plan) || task.round < Number(task.plan.currentRound || 1)) return;
+  if (!task || getInlineReaderTargetKey() !== expectedTargetKey) return false;
+  if (isInlineReaderTaskRead(task)) return true;
+  if (state.inlineReader.autoMarked || state.inlineReader.autoMarkInFlight) return false;
+  if (isPlanExpired(task.plan) || task.round < Number(task.plan.currentRound || 1)) return false;
 
   const readKey = `isReadR${task.round}`;
   const previousRoundRead = Boolean(task.chapter[readKey]);
@@ -3766,6 +3772,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
       await window.checkAndPromptTodayCompletion();
     }
     showToast("已自動標記為已讀");
+    return true;
   } catch (error) {
     console.error("Failed to auto-mark inline reader progress", error);
     task.chapter[readKey] = previousRoundRead;
@@ -3781,17 +3788,26 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
     state.inlineReader.autoMarked = false;
     calculatePlanProgress();
     showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
+    return false;
   } finally {
     state.inlineReader.autoMarkInFlight = false;
   }
 }
 
-function handleInlineReaderScroll(event) {
+function checkInlineReaderBottomDwell(surface = document.querySelector(".main-content")) {
   const task = getCurrentInlineReaderTask();
-  inlineReaderBottomDwellController?.handleScroll(event.currentTarget || event.target, {
+  inlineReaderBottomDwellController?.check(surface, {
     eligible: Boolean(task && !isInlineReaderTaskRead(task) && !state.inlineReader.autoMarked && !state.inlineReader.autoMarkInFlight),
     targetKey: getInlineReaderTargetKey()
   });
+}
+
+function handleInlineReaderScroll(event) {
+  checkInlineReaderBottomDwell(event.currentTarget || event.target);
+}
+
+function scheduleInlineReaderBottomDwellCheck() {
+  requestAnimationFrame(() => requestAnimationFrame(() => checkInlineReaderBottomDwell()));
 }
 
 function initInlineReaderBottomDwell() {
@@ -3806,6 +3822,7 @@ function initInlineReaderBottomDwell() {
   if (scrollSurface.dataset.inlineReaderBottomDwellBound !== "true") {
     scrollSurface.dataset.inlineReaderBottomDwellBound = "true";
     scrollSurface.addEventListener("scroll", handleInlineReaderScroll, { passive: true });
+    scrollSurface.addEventListener("scrollend", handleInlineReaderScroll, { passive: true });
   }
 }
 
@@ -3951,6 +3968,7 @@ async function renderInlineScriptureText() {
   // The plan detail page scrolls inside .main-content, not the browser window.
   const scrollSurface = document.querySelector(".main-content" );
   if (scrollSurface) scrollSurface.scrollTop = 0;
+  scheduleInlineReaderBottomDwellCheck();
 }
 
 window.navigateInlineChapter = function (direction) {

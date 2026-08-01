@@ -25,37 +25,65 @@ describe("immersive plan reader", () => {
     expect(css).toMatch(/reader-bottom-action-bar[\s\S]*?display: none !important/);
   });
 
-  it("recognizes only the actual bottom of the reading surface", () => {
+  it("recognizes the actual bottom with a small layout-rounding tolerance", () => {
     expect(isReaderSurfaceAtBottom(surface())).toBe(true);
-    expect(isReaderSurfaceAtBottom(surface({ scrollTop: 480 }))).toBe(false);
+    expect(isReaderSurfaceAtBottom(surface({ scrollTop: 480 }))).toBe(true);
+    expect(isReaderSurfaceAtBottom(surface({ scrollTop: 470 }))).toBe(false);
   });
 
-  it("waits one full second at the bottom before completing", () => {
+  it("can check after async content rendering without requiring a scroll event", () => {
     const onComplete = vi.fn();
     const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
-    controller.handleScroll(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
     vi.advanceTimersByTime(999);
     expect(onComplete).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(onComplete).toHaveBeenCalledOnce();
-    expect(onComplete).toHaveBeenCalledWith("day-1-genesis-1");
   });
 
   it("cancels completion when the reader leaves the bottom before one second", () => {
     const onComplete = vi.fn();
     const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
-    controller.handleScroll(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
     vi.advanceTimersByTime(500);
-    controller.handleScroll(surface({ scrollTop: 450 }), { eligible: true, targetKey: "day-1-genesis-1" });
+    controller.check(surface({ scrollTop: 450 }), { eligible: true, targetKey: "day-1-genesis-1" });
     vi.advanceTimersByTime(1000);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("auto-marks only a matching unread chapter opened from a plan", () => {
-    expect(bible).toContain("state.readerState.fromPlan");
-    expect(bible).toContain("getCurrentPlanReaderTask()");
-    expect(bible).toContain("!isCurrentPlanReaderTaskRead(taskContext)");
+  it("allows a retry when persistence reports failure", async () => {
+    const onComplete = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
+
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    await vi.advanceTimersByTimeAsync(1000);
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not duplicate a completion while its write is still in flight", async () => {
+    let finishWrite;
+    const onComplete = vi.fn(() => new Promise(resolve => { finishWrite = resolve; }));
+    const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
+
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    await vi.advanceTimersByTimeAsync(1000);
+    controller.check(surface(), { eligible: true, targetKey: "day-1-genesis-1" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(onComplete).toHaveBeenCalledOnce();
+
+    finishWrite(true);
+    await Promise.resolve();
+  });
+
+  it("keeps the plan identity and rechecks after the final scripture render", () => {
+    expect(bible).toContain("state.readerState?.planContextId");
+    expect(bible).toContain("window.findPlanByContextId");
+    expect(bible).toContain("scheduleReaderBottomDwellCheck()");
+    expect(bible).toContain('addEventListener("scrollend", handleReaderScroll');
+    expect(bible).toContain("return false;");
     expect(bible).toContain("dwellMs: 1000");
-    expect(bible).toContain('showToast("已自動記錄為已讀")');
   });
 });

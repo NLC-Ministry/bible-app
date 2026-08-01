@@ -1949,23 +1949,36 @@ window.startReadingCurrentChapter = function () {
 
   let targetBook = null;
   let targetChapter = 1;
+  let targetDayNum = null;
+  let targetRound = Number(state.activePlan.currentRound || 1);
   let found = false;
 
   if (state.activePlan.days) {
     for (const day of state.activePlan.days) {
-      const unread = day.chapters.find(ch => !ch.isRead);
+      const unread = day.chapters.find(ch =>
+        Number(ch.round || targetRound) === targetRound &&
+        !ch[`isReadR${targetRound}`] &&
+        !(targetRound === 1 && ch.isRead)
+      );
       if (unread) {
         targetBook = unread.book;
         targetChapter = Number(unread.chapter);
+        targetDayNum = day.dayNum;
         found = true;
         break;
       }
     }
   }
 
-  if (!found && state.activePlan.days && state.activePlan.days[0] && state.activePlan.days[0].chapters && state.activePlan.days[0].chapters[0]) {
-    targetBook = state.activePlan.days[0].chapters[0].book;
-    targetChapter = Number(state.activePlan.days[0].chapters[0].chapter);
+  if (!found && Array.isArray(state.activePlan.days)) {
+    for (const day of state.activePlan.days) {
+      const firstForRound = (day.chapters || []).find(ch => Number(ch.round || targetRound) === targetRound);
+      if (!firstForRound) continue;
+      targetBook = firstForRound.book;
+      targetChapter = Number(firstForRound.chapter);
+      targetDayNum = day.dayNum;
+      break;
+    }
   }
 
   if (targetBook && typeof BIBLE_BOOKS !== 'undefined') {
@@ -1974,6 +1987,13 @@ window.startReadingCurrentChapter = function () {
       state.readerState.bookId = bookObj.id;
       state.readerState.chapter = targetChapter;
       state.readerState.fromPlan = true;
+      state.readerState.planDayNum = targetDayNum;
+      state.readerState.planRound = targetRound;
+      state.readerState.planContextId = window.getActivePlanContextId?.(state.activePlan)
+        || state.activePlan.id
+        || state.activePlan.globalPlanId
+        || state.activePlan.presetKey
+        || null;
 
       if (typeof saveReaderPreferences === 'function') {
         saveReaderPreferences();

@@ -1,4 +1,4 @@
-export function isReaderSurfaceAtBottom(surface, threshold = 8) {
+export function isReaderSurfaceAtBottom(surface, threshold = 24) {
   if (!surface) return false;
   const remaining = Number(surface.scrollHeight || 0)
     - Number(surface.scrollTop || 0)
@@ -8,12 +8,13 @@ export function isReaderSurfaceAtBottom(surface, threshold = 8) {
 
 export function createReaderBottomDwellController({
   dwellMs = 1000,
-  bottomThreshold = 8,
+  bottomThreshold = 24,
   onComplete = () => {}
 } = {}) {
   let timerId = null;
   let pendingTargetKey = null;
   let completedTargetKey = null;
+  let completingTargetKey = null;
   let pendingSurface = null;
 
   const cancel = () => {
@@ -26,6 +27,7 @@ export function createReaderBottomDwellController({
   const reset = () => {
     cancel();
     completedTargetKey = null;
+    completingTargetKey = null;
   };
 
   const handleScroll = (surface, { eligible = false, targetKey = "" } = {}) => {
@@ -34,7 +36,7 @@ export function createReaderBottomDwellController({
       cancel();
       return;
     }
-    if (completedTargetKey === resolvedTargetKey) return;
+    if (completedTargetKey === resolvedTargetKey || completingTargetKey === resolvedTargetKey) return;
     if (timerId !== null && pendingTargetKey === resolvedTargetKey) return;
 
     cancel();
@@ -47,13 +49,18 @@ export function createReaderBottomDwellController({
       pendingTargetKey = null;
       pendingSurface = null;
       if (!completedKey || !isReaderSurfaceAtBottom(completedSurface, bottomThreshold)) return;
-      completedTargetKey = completedKey;
-      const result = onComplete(completedKey);
-      if (result && typeof result.catch === "function") {
-        result.catch(error => console.error("Unable to complete reader bottom dwell action", error));
-      }
+
+      completingTargetKey = completedKey;
+      Promise.resolve(onComplete(completedKey))
+        .then(result => {
+          if (result !== false) completedTargetKey = completedKey;
+        })
+        .catch(error => console.error("Unable to complete reader bottom dwell action", error))
+        .finally(() => {
+          if (completingTargetKey === completedKey) completingTargetKey = null;
+        });
     }, Math.max(0, Number(dwellMs) || 0));
   };
 
-  return { cancel, reset, handleScroll };
+  return { cancel, reset, handleScroll, check: handleScroll };
 }

@@ -11,6 +11,8 @@ describe("plan inline reader auto-read integration", () => {
     expect(plan).toContain('const scrollSurface = document.querySelector(".main-content")');
     expect(plan).toContain("dwellMs: 1000");
     expect(plan).toContain("initInlineReaderBottomDwell()");
+    expect(plan).toContain("scheduleInlineReaderBottomDwellCheck()");
+    expect(plan).toContain('addEventListener("scrollend", handleInlineReaderScroll');
     expect(plan).not.toContain("window.scrollTo({ top: 0");
   });
 

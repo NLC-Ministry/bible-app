@@ -82,28 +82,35 @@ function initSmartFloatingReaderNav() {
 let readerBottomDwellController = null;
 
 function getCurrentPlanReaderTask() {
-  const plan = state.activePlan;
+  const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
   if (!plan || !state.readerState || !state.readerState.fromPlan) return null;
+
   const book = BIBLE_BOOKS.find(item => Number(item.id) === Number(state.readerState.bookId));
-  const day = Array.isArray(plan.days)
-    ? plan.days.find(item => Number(item.dayNum) === Number(state.readerState.planDayNum))
-    : null;
-  if (!book || !day || !Array.isArray(day.chapters)) return null;
   const round = Number(state.readerState.planRound || plan.currentRound || 1);
-  const chapter = day.chapters.find(item =>
-    item.book === book.name &&
-    Number(item.chapter) === Number(state.readerState.chapter) &&
-    Number(item.round || round) === round
-  );
+  if (!book || !Array.isArray(plan.days)) return null;
+
+  const findChapter = day => Array.isArray(day?.chapters)
+    ? day.chapters.find(item =>
+      item.book === book.name &&
+      Number(item.chapter) === Number(state.readerState.chapter) &&
+      Number(item.round || round) === round
+    )
+    : null;
+
+  let day = plan.days.find(item => Number(item.dayNum) === Number(state.readerState.planDayNum));
+  let chapter = findChapter(day);
+  if (!chapter) {
+    day = plan.days.find(item => Boolean(findChapter(item))) || null;
+    chapter = findChapter(day);
+  }
+
   return chapter ? { book, chapter, day, round, plan } : null;
 }
 
 function isCurrentPlanReaderTaskRead(taskContext) {
   if (!taskContext) return false;
   const { chapter, round } = taskContext;
-  if (round === 1) return Boolean(chapter.isReadR1 || chapter.isRead);
-  if (round === 2) return Boolean(chapter.isReadR2);
-  return Boolean(chapter.isReadR3);
+  return Boolean(chapter[`isReadR${round}`] || (round === 1 && chapter.isRead));
 }
 
 function getCurrentPlanReaderTargetKey() {
@@ -115,10 +122,11 @@ function getCurrentPlanReaderTargetKey() {
 
 async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
   const taskContext = getCurrentPlanReaderTask();
-  if (!taskContext || getCurrentPlanReaderTargetKey() !== expectedTargetKey) return;
-  if (isCurrentPlanReaderTaskRead(taskContext) || state.readerState.autoMarked || state.readerState.autoMarkInFlight) return;
-  if (taskContext.plan && isPlanExpired(taskContext.plan)) return;
-  if (taskContext.round < Number(taskContext.plan.currentRound || 1)) return;
+  if (!taskContext || getCurrentPlanReaderTargetKey() !== expectedTargetKey) return false;
+  if (isCurrentPlanReaderTaskRead(taskContext)) return true;
+  if (state.readerState.autoMarked || state.readerState.autoMarkInFlight) return false;
+  if (taskContext.plan && isPlanExpired(taskContext.plan)) return false;
+  if (taskContext.round < Number(taskContext.plan.currentRound || 1)) return false;
 
   const planDayChKey = `${taskContext.book.name}_${state.readerState.chapter}`;
   const readKey = `isReadR${taskContext.round}`;
@@ -141,6 +149,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
       await window.checkAndPromptTodayCompletion();
     }
     if (typeof showToast === "function") showToast("已自動記錄為已讀");
+    return true;
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);
     state.readerState.autoMarked = false;
@@ -152,6 +161,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     if (typeof showToast === "function") {
       showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
     }
+    return false;
   } finally {
     state.readerState.autoMarkInFlight = false;
   }
@@ -168,6 +178,7 @@ function initImmersivePlanReader() {
     onComplete: autoMarkCurrentPlanReaderTaskRead
   });
   scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
+  scrollSurface.addEventListener("scrollend", handleReaderScroll, { passive: true });
 }
 
 export function initReaderControls() {
@@ -898,6 +909,7 @@ export async function renderReaderText() {
 
   updateReaderFontSize();
   updateReaderBottomActionBar();
+  scheduleReaderBottomDwellCheck();
 }
 
 function renderVersesList(container, verses, bookName, chapter) {
@@ -1496,16 +1508,18 @@ function triggerPredictivePrefetch() {
     });
 }
 
-function handleReaderScroll(event) {
-  const bar = document.getElementById("reader-bottom-action-bar");
-  if (bar) {
-    bar.style.display = "none";
-    bar.classList.add("hidden");
-  }
+function getReaderScrollSurface() {
+  const readerSurface = document.querySelector(".reader-reading-surface");
+  const mainSurface = document.querySelector(".main-content");
+  if (readerSurface && Number(readerSurface.scrollHeight) > Number(readerSurface.clientHeight) + 1) return readerSurface;
+  if (mainSurface && Number(mainSurface.scrollHeight) > Number(mainSurface.clientHeight) + 1) return mainSurface;
+  return readerSurface || mainSurface;
+}
 
-  if (!readerBottomDwellController) return;
+function checkReaderBottomDwell(surface = getReaderScrollSurface()) {
+  if (!readerBottomDwellController || !surface) return;
   const taskContext = getCurrentPlanReaderTask();
-  readerBottomDwellController.handleScroll(event.currentTarget || event.target, {
+  readerBottomDwellController.check(surface, {
     eligible: Boolean(
       taskContext &&
       window.appRouter && window.appRouter.currentTab === "reader-view" &&
@@ -1515,6 +1529,20 @@ function handleReaderScroll(event) {
     ),
     targetKey: getCurrentPlanReaderTargetKey()
   });
+}
+
+function scheduleReaderBottomDwellCheck() {
+  requestAnimationFrame(() => requestAnimationFrame(() => checkReaderBottomDwell()));
+}
+
+function handleReaderScroll(event) {
+  const bar = document.getElementById("reader-bottom-action-bar");
+  if (bar) {
+    bar.style.display = "none";
+    bar.classList.add("hidden");
+  }
+
+  checkReaderBottomDwell(getReaderScrollSurface() || event.currentTarget || event.target);
 }
 
 function isTodayScheduleCompleted() {
