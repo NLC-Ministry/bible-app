@@ -184,6 +184,8 @@ export function emitBundle({ root, outDir }) {
   cpDirRecursive(join(root, "assets"), join(outDir, "assets"));
   console.log("DEBUG: Copying manifest.json...");
   cpDirRecursive(join(root, "manifest.json"), join(outDir, "manifest.json"));
+  const repairPage = join(root, "repair.html");
+  if (existsSync(repairPage)) cpDirRecursive(repairPage, join(outDir, "repair.html"));
   console.log("DEBUG: Copying Service Worker and PWA runtime modules...");
   const serviceWorker = readFileSync(join(root, "sw.js"), "utf8")
     .replaceAll("__BUILD_VERSION__", buildVer)

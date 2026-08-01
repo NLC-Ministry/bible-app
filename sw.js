@@ -39,7 +39,9 @@ function shouldBypassCache(request) {
   const hasOauthCallbackSignal = (url.pathname === "/" || url.pathname === "/index.html")
     && (url.searchParams.has("code") || url.searchParams.has("state") || url.searchParams.has("error"));
 
-  return isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
+  const isRepairPage = url.pathname === "/repair" || url.pathname === "/repair.html";
+
+  return isRepairPage || isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
     hasAuthBridgeSignal || hasOauthCallbackSignal || url.pathname.includes("/auth/") || url.pathname.includes("/functions/v1/nlc-");
 }
 

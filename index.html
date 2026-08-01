@@ -27,6 +27,7 @@
   <script>
     window.showAppStyleRecovery = function () {
       window.__appStylesheetFailed = true;
+      if (window.__appStyleRecoveryBypassed) return;
       const show = function () {
         const recovery = document.getElementById("app-style-recovery");
         if (recovery) recovery.hidden = false;
@@ -34,25 +35,20 @@
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show, { once: true });
       else show();
     };
-    window.recoverAppAssets = async function () {
+    window.recoverAppAssets = function () {
       const button = document.getElementById("app-style-recovery-button");
       if (button) {
         button.disabled = true;
-        button.textContent = "正在修復…";
+        button.textContent = "正在前往修復頁…";
       }
-      try {
-        if ("serviceWorker" in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map(registration => registration.unregister()));
-        }
-        if (window.caches) {
-          const names = await caches.keys();
-          await Promise.all(names
-            .filter(name => name.startsWith("newlife-bible-") || name.startsWith("church-bible-"))
-            .map(name => caches.delete(name)));
-        }
-      } finally {
-        window.location.replace("/?version=" + Date.now());
+      window.location.replace("/repair?version=" + Date.now());
+    };
+    window.continueWithoutStyleRecovery = function () {
+      window.__appStyleRecoveryBypassed = true;
+      const recovery = document.getElementById("app-style-recovery");
+      if (recovery) {
+        recovery.hidden = true;
+        recovery.style.display = "none";
       }
     };
   </script>
@@ -134,6 +130,7 @@
     <div style="font-size:22px;font-weight:700;">畫面樣式需要重新載入</div>
     <div style="max-width:360px;font-size:16px;line-height:1.6;color:#555;">系統偵測到舊版畫面資源，點擊下方按鈕即可修復，不會刪除你的讀經進度或登入資料。</div>
     <button id="app-style-recovery-button" type="button" onclick="window.recoverAppAssets()" style="border:0;border-radius:12px;background:#04A9D2;color:#fff;padding:12px 22px;font-size:16px;font-weight:600;">修復並重新載入</button>
+    <button type="button" onclick="window.continueWithoutStyleRecovery()" style="border:0;background:transparent;color:#555;padding:10px 16px;font-size:15px;text-decoration:underline;">仍然進入系統</button>
   </div>
   <!-- App Container -->
   <div class="app-layout hidden">

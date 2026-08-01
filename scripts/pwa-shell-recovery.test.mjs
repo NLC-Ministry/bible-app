@@ -5,6 +5,7 @@ const html = readFileSync("index.html", "utf8");
 const auth = readFileSync("js/auth.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
 const sw = readFileSync("sw.js", "utf8");
+const repair = readFileSync("repair.html", "utf8");
 
 describe("PWA shell recovery", () => {
   it("clears both current and legacy app cache prefixes during login reset", () => {
@@ -30,6 +31,18 @@ describe("PWA shell recovery", () => {
     expect(html).toContain('.hidden, [hidden] { display: none !important; }');
     expect(html).toContain('onerror="window.showAppStyleRecovery()"');
     expect(html).toContain('id="app-style-recovery-button"');
-    expect(html).toContain('window.location.replace("/?version=" + Date.now())');
+    expect(html).toContain('window.location.replace("/repair?version=" + Date.now())');
+    expect(html).toContain("continueWithoutStyleRecovery");
+    expect(repair).toContain('registration.unregister()');
+    expect(repair).toContain('window.location.replace("/?repaired=1&version=" + Date.now())');
+    expect(sw).toContain('url.pathname === "/repair"');
+  });
+
+  it("keeps the standalone repair page executable", () => {
+    const scriptStart = repair.indexOf("<script>") + "<script>".length;
+    const scriptEnd = repair.indexOf("</script>", scriptStart);
+    expect(scriptStart).toBeGreaterThan("<script>".length - 1);
+    expect(scriptEnd).toBeGreaterThan(scriptStart);
+    expect(() => new Function(repair.slice(scriptStart, scriptEnd))).not.toThrow();
   });
 });

@@ -147,6 +147,7 @@ describe("emitBundle (integration, real repo)", () => {
 
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);
+      expect(existsSync(join(out, "repair.html"))).toBe(true);
       expect(existsSync(join(out, "sw.js"))).toBe(true);
       expect(existsSync(join(out, "js", "pwa", "CacheManager.js"))).toBe(true);
       expect(existsSync(join(out, "js", "pwa", "SupabaseRepository.js"))).toBe(true);

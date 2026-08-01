@@ -23,6 +23,7 @@ describe("vercel.json", () => {
   it("keeps entry HTML uncacheable", () => {
     expect(headerFor("/")).toContain("no-store");
     expect(headerFor("/index.html")).toContain("no-store");
+    expect(headerFor("/repair")).toContain("no-store");
   });
 
   it("caches content-hashed app JS immutably", () => {

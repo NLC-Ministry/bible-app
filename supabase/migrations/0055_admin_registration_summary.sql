@@ -17,7 +17,8 @@ DECLARE
   summary_json JSONB;
 BEGIN
   actor_id := public.resolve_reading_team_actor(p_actor_id);
-  SELECT profile.role INTO actor_role
+  SELECT public.role_code(profile.role_id)
+  INTO actor_role
   FROM public.profiles AS profile
   WHERE profile.id = actor_id;
 
