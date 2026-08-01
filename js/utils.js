@@ -2005,6 +2005,10 @@ function isPlanHidden(plan) {
   return Boolean(plan.isHidden || plan.is_hidden || keys.some(key => hiddenKeys.includes(key)));
 }
 
+function isCampaignStageLocked(plan) {
+  return Boolean(plan && plan.planKind === "church_campaign_stage" && isPlanHidden(plan));
+}
+
 function canManageHiddenPlans() {
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
 
@@ -2059,6 +2063,7 @@ window.calculateAllPlansProgress = calculateAllPlansProgress;
 window.getHiddenPlanKeys = getHiddenPlanKeys;
 window.getPlanVisibilityOverrides = getPlanVisibilityOverrides;
 window.isPlanHidden = isPlanHidden;
+window.isCampaignStageLocked = isCampaignStageLocked;
 window.canManageHiddenPlans = canManageHiddenPlans;
 window.getVisiblePlans = getVisiblePlans;
 window.updateAdminNavVisibility = updateAdminNavVisibility;

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 const read = path => readFileSync(resolve(path), "utf8");
 const migration = read("supabase/migrations/0056_lock_campaign_stages_until_admin_release.sql");
+const visibilityMigration = read("supabase/migrations/0057_show_locked_campaign_stages.sql");
 const planModule = read("js/modules/plan.js");
 const db = read("js/db.js");
 const campaign = read("js/data/church_campaign.js");
@@ -39,9 +40,14 @@ describe("campaign stage release control", () => {
     expect(db).toContain("Global plan visibility update was not verified");
   });
 
-  it("keeps hidden plans out of ordinary member plan lists", () => {
-    expect(planModule).toContain("plansToRender.filter(plan => canManageHiddenPlans() || !isPlanHidden(plan))");
-    expect(db).toContain("hasVisibleStageDefinition");
-    expect(edgeFunction).toContain('query.eq("is_hidden", false)');
+  it("shows locked campaign stages to members without enrollment actions", () => {
+    expect(visibilityMigration).toContain("plan_kind = 'church_campaign_stage'");
+    expect(edgeFunction).toContain('query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage")');
+    expect(planModule).toContain("missingCampaignStages");
+    expect(planModule).toContain("!canManageHiddenPlans() && !isCampaignStageLocked(plan)");
+    expect(planModule).toContain('actions: isLockedStage ? "" : renderPlanCardActions([');
+    expect(planModule).toContain("if (isLockedStage) {");
+    expect(planModule).toContain("openPlanDetailsDialog(plan);");
+    expect(planModule).toContain('icon: "lock"');
   });
 });

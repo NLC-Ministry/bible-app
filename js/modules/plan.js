@@ -2185,13 +2185,24 @@ function renderPresetPlansList() {
     String(plan && (plan.id || plan.globalPlanId || "")).startsWith(legacyCategoryIdPrefix)
     || String(plan && plan.presetKey || "").startsWith("m_");
 
-  const sourcePlans = state.globalPlans && state.globalPlans.length > 0
+  const presetPlanEntries = Object.entries(CHURCH_PLAN_PRESETS).map(([key, plan]) => ({
+    ...plan,
+    id: plan.id || key,
+    presetKey: key
+  }));
+  const loadedPlans = state.globalPlans && state.globalPlans.length > 0
     ? state.globalPlans
-    : Object.entries(CHURCH_PLAN_PRESETS).map(([key, plan]) => ({
-        ...plan,
-        id: plan.id || key,
-        presetKey: key
-      }));
+    : [];
+  const loadedPlanKeys = new Set(loadedPlans.flatMap(plan =>
+    [plan && plan.id, plan && plan.globalPlanId, plan && plan.presetKey].filter(Boolean).map(String)
+  ));
+  const missingCampaignStages = presetPlanEntries.filter(plan =>
+    plan.planKind === "church_campaign_stage"
+    && ![plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String).some(key => loadedPlanKeys.has(key))
+  );
+  const sourcePlans = loadedPlans.length > 0
+    ? [...loadedPlans, ...missingCampaignStages]
+    : presetPlanEntries;
 
   const joinedKeys = new Set((state.activePlans || []).flatMap(plan => [
     plan.id,
@@ -2237,7 +2248,7 @@ function renderPresetPlansList() {
     });
 
     if (isObsolete || isLegacy) return false;
-    if (isHidden && !canManageHiddenPlans()) return false;
+    if (isHidden && !canManageHiddenPlans() && !isCampaignStageLocked(plan)) return false;
     if (!matchesSearch) return false;
     return !isAlreadyJoined;
   });
@@ -2265,6 +2276,7 @@ function renderPresetPlansList() {
   visiblePlans.forEach(plan => {
     const key = plan.id || plan.presetKey;
     const isCampaignStage = plan.planKind === "church_campaign_stage";
+    const isLockedStage = isCampaignStageLocked(plan);
     const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
     const scheduleLabel = isCampaignStage
       ? `第 ${Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo)} 階段・第 ${Number(plan.roundNo || plan.campaignDefinition && plan.campaignDefinition.roundNo)} 輪`
@@ -2280,7 +2292,7 @@ function renderPresetPlansList() {
     card.className = "plan-card joined-plan-item-card";
     card.innerHTML = renderPlanCardShell({
       plan,
-      variant: isUpcomingFixed ? "available-upcoming" : "available",
+      variant: isLockedStage ? "available-locked" : (isUpcomingFixed ? "available-upcoming" : "available"),
       header: renderPlanCardHeader({
         title: escapeHTML(plan.name),
         meta: `
@@ -2295,6 +2307,12 @@ function renderPresetPlansList() {
           label: "完成獎勵",
           value: escapeHTML(awardName)
         },
+        isLockedStage && {
+          icon: "lock",
+          label: "\u958b\u653e\u72c0\u614b",
+          value: "\u5c1a\u672a\u958b\u653e",
+          tone: "warning"
+        },
         upcomingNotice && {
           icon: "hourglass",
           label: "開放狀態",
@@ -2302,13 +2320,17 @@ function renderPresetPlansList() {
           tone: "warning"
         }
       ]),
-      actions: renderPlanCardActions([
+      actions: isLockedStage ? "" : renderPlanCardActions([
         { kind: "primary", icon: "bookOpen", label: "自己加入", action: "solo-join" },
         { kind: "secondary", icon: "people", label: "建立團隊", action: "team-create" }
       ])
     });
 
     const openDetails = () => {
+      if (isLockedStage) {
+        openPlanDetailsDialog(plan);
+        return;
+      }
       openPlanDetailsDialog(plan, { onJoin: async () => {
         await confirmPlanJoin({
           plan,

@@ -401,7 +401,7 @@ CREATE POLICY profiles_select_by_scope ON public.profiles FOR SELECT TO authenti
 CREATE POLICY identities_select_own_or_admin ON public.user_identities FOR SELECT TO authenticated USING (profile_id = public.current_profile_id() OR (SELECT my_role FROM public.get_my_profile()) = 'admin');
 CREATE POLICY identities_manage_admin ON public.user_identities FOR ALL TO authenticated USING ((SELECT my_role FROM public.get_my_profile()) = 'admin') WITH CHECK ((SELECT my_role FROM public.get_my_profile()) = 'admin');
 
-CREATE POLICY global_plans_read_visible ON public.global_plans FOR SELECT TO authenticated USING (is_hidden = FALSE OR (SELECT my_role FROM public.get_my_profile()) = 'admin');
+CREATE POLICY global_plans_read_visible ON public.global_plans FOR SELECT TO authenticated USING (is_hidden = FALSE OR plan_kind = 'church_campaign_stage' OR (SELECT my_role FROM public.get_my_profile()) = 'admin');
 CREATE POLICY global_plans_manage_admin ON public.global_plans FOR ALL TO authenticated USING ((SELECT my_role FROM public.get_my_profile()) = 'admin') WITH CHECK ((SELECT my_role FROM public.get_my_profile()) = 'admin');
 
 CREATE POLICY reading_plans_manage_own ON public.reading_plans FOR ALL TO authenticated USING (user_id = public.current_profile_id()) WITH CHECK (user_id = public.current_profile_id());
