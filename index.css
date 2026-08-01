@@ -10336,6 +10336,72 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 }
 
 
+.plan-persistent-upgrade-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  margin: 0 0 1rem;
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-muted);
+}
+
+.plan-persistent-upgrade-entry[hidden],
+.plan-persistent-upgrade-entry.hidden {
+  display: none !important;
+}
+
+.plan-persistent-upgrade-entry__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 2.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  color: var(--primary-color);
+  background: var(--bg-card);
+}
+
+.plan-persistent-upgrade-entry__copy {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.plan-persistent-upgrade-entry__copy strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.plan-persistent-upgrade-entry__copy span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.plan-persistent-upgrade-entry__action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .plan-persistent-upgrade-entry {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .plan-persistent-upgrade-entry__copy {
+    flex-basis: calc(100% - 3.3rem);
+  }
+
+  .plan-persistent-upgrade-entry__action {
+    width: 100%;
+  }
+}
 /* Admin campaign round editor */
 .campaign-rule-section-heading {
   display: flex;

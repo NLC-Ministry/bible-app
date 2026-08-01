@@ -686,30 +686,58 @@ body.reading-team-modal-open .main-content {
   justify-content: center;
 }
 
+.reading-team-remove-btn,
+.reading-team-remind-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  max-width: 38px !important;
+  max-height: 38px !important;
+  border-radius: 50% !important;
+  flex: 0 0 38px !important;
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
 .reading-team-remove-btn {
-  background: color-mix(in srgb, var(--color-danger, #dc4c64) 9%, var(--reading-team-surface));
-  border: 1px solid color-mix(in srgb, var(--color-danger, #dc4c64) 35%, var(--reading-team-separator));
-  color: var(--color-danger, #dc4c64);
+  background: rgba(239, 68, 68, 0.08) !important;
+  background: color-mix(in srgb, var(--color-danger, #dc4c64) 9%, var(--reading-team-surface)) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
+  border: 1px solid color-mix(in srgb, var(--color-danger, #dc4c64) 35%, var(--reading-team-separator)) !important;
+  color: #dc4c64 !important;
+  color: var(--color-danger, #dc4c64) !important;
 }
 
 .reading-team-remove-btn:hover,
 .reading-team-remove-btn:focus-visible {
-  background: color-mix(in srgb, var(--color-danger, #dc4c64) 16%, var(--reading-team-surface));
-  border-color: var(--color-danger, #dc4c64);
+  background: rgba(239, 68, 68, 0.16) !important;
+  background: color-mix(in srgb, var(--color-danger, #dc4c64) 16%, var(--reading-team-surface)) !important;
+  border-color: #dc4c64 !important;
+  border-color: var(--color-danger, #dc4c64) !important;
 }
 
 .reading-team-remind-btn {
-  background: color-mix(in srgb, var(--color-warning-text, #d97706) 10%, var(--reading-team-surface));
-  border: 1px solid color-mix(in srgb, var(--color-warning-text, #d97706) 35%, var(--reading-team-separator));
-  color: var(--color-warning-text, #d97706);
-  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+  background: rgba(4, 169, 210, 0.08) !important;
+  background: color-mix(in srgb, var(--color-brand, #04a9d2) 9%, var(--reading-team-surface)) !important;
+  border: 1px solid rgba(4, 169, 210, 0.25) !important;
+  border: 1px solid color-mix(in srgb, var(--color-brand, #04a9d2) 35%, var(--reading-team-separator)) !important;
+  color: #04a9d2 !important;
+  color: var(--color-brand, #04a9d2) !important;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease !important;
 }
 
 .reading-team-remind-btn:hover,
 .reading-team-remind-btn:focus-visible {
-  background: color-mix(in srgb, var(--color-warning-text, #d97706) 18%, var(--reading-team-surface));
-  border-color: var(--color-warning-text, #d97706);
-  transform: translateY(-1px);
+  background: rgba(4, 169, 210, 0.16) !important;
+  background: color-mix(in srgb, var(--color-brand, #04a9d2) 16%, var(--reading-team-surface)) !important;
+  border-color: #04a9d2 !important;
+  border-color: var(--color-brand, #04a9d2) !important;
+  transform: translateY(-1px) !important;
 }
 
 .reading-team-member--me {

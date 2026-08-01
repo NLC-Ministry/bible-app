@@ -37,6 +37,6 @@ describe("Member Hub-only permission management", () => {
   });
 
   it("bumps the application cache key", () => {
-    expect(html).toContain("js/app.js?v=20260801_immersive_plan_reader");
+    expect(html).toContain("js/app.js?v=20260801_persistent_plan_upgrade");
   });
 });

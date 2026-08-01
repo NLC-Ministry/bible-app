@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260801_immersive_plan_reader");
+    expect(htmlSource).toContain("js/app.js?v=20260801_persistent_plan_upgrade");
     expect(appSource).toContain("./db.js?v=20260801_registration_summary_v2");
   });
 });

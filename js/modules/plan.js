@@ -6,6 +6,7 @@ import {
   resolveTeamJoinEffectivePlan
 } from "./plan-team-navigation-helpers.mjs";
 import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
+import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 
 // Reading plans tab view controller
 
@@ -1537,6 +1538,7 @@ function renderJoinedPlansList() {
 
       const progress = plan.progress || 0;
       const currentRound = plan.currentRound || 1;
+      const upgradeAvailability = getPlanUpgradeAvailability(plan, { expired: isPlanExpired(plan) });
       const isCampaignStage = plan.planKind === "church_campaign_stage";
       const campaignAwardName = plan.awardName || plan.campaignDefinition && plan.campaignDefinition.awardName || "";
       const campaignAwardEarned = isCampaignStage && (currentRound > 1 || progress >= 100);
@@ -1622,7 +1624,8 @@ function renderJoinedPlansList() {
           ]),
           progress: progressHtml,
           actions: renderPlanCardActions([
-            { kind: "primary", icon: isUpcomingFixed ? "calendarThirty" : "bookOpen", label: isUpcomingFixed ? "查看計畫" : "繼續讀經", action: "continue" }
+            { kind: upgradeAvailability.eligible ? "secondary" : "primary", icon: isUpcomingFixed ? "calendarThirty" : "bookOpen", label: isUpcomingFixed ? "查看計畫" : "繼續讀經", action: "continue" },
+            upgradeAvailability.eligible && { kind: "primary", icon: "trophy", label: `開始${upgradeAvailability.nextRoundLabel}`, action: "upgrade" }
           ]),
           after: teamHtml
         });
@@ -1633,6 +1636,13 @@ function renderJoinedPlansList() {
           event.preventDefault();
           event.stopPropagation();
           await openJoinedPlanProgress(plan);
+        });
+        card.querySelector('[data-plan-card-action="upgrade"]')?.addEventListener("click", async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          state.activePlan = plan;
+          if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(plan);
+          await window.triggerPlanUpgradeFlow();
         });
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
@@ -2642,11 +2652,51 @@ function renderHorizontalDateStrip() {
   // 日曆的垂直捲動位置由使用者手勢完全自主控制。
 }
 
+function renderPersistentPlanUpgradeEntry(plan = state.activePlan) {
+  const schedule = document.getElementById("subview-plan-schedule");
+  if (!schedule) return;
+
+  let entry = document.getElementById("plan-persistent-upgrade-entry");
+  if (!entry) {
+    entry = document.createElement("section");
+    entry.id = "plan-persistent-upgrade-entry";
+    entry.className = "plan-persistent-upgrade-entry hidden";
+    const chaptersCard = schedule.querySelector(".plan-chapters-card");
+    schedule.insertBefore(entry, chaptersCard || schedule.firstChild);
+  }
+
+  const availability = getPlanUpgradeAvailability(plan, { expired: isPlanExpired(plan) });
+  entry.classList.toggle("hidden", !availability.eligible);
+  entry.hidden = !availability.eligible;
+  if (!availability.eligible) {
+    entry.innerHTML = "";
+    return;
+  }
+
+  entry.innerHTML = `
+    <span class="plan-persistent-upgrade-entry__icon" aria-hidden="true">
+      <span class="nlc-icon nlc-icon--md" data-icon="trophy"></span>
+    </span>
+    <span class="plan-persistent-upgrade-entry__copy">
+      <strong>${availability.currentRoundLabel}已完成</strong>
+      <span>當時沒有升級也沒關係，現在可以繼續挑戰${availability.nextRoundLabel}。</span>
+    </span>
+    <button type="button" class="primary-btn plan-persistent-upgrade-entry__action">
+      開始${availability.nextRoundLabel}
+    </button>`;
+
+  entry.querySelector(".plan-persistent-upgrade-entry__action")?.addEventListener("click", () => {
+    window.triggerPlanUpgradeFlow();
+  });
+  if (typeof hydrateIcons === "function") hydrateIcons(entry);
+}
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
   console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：渲染任務章節', '資料版本:', state.dataVersion);
 
   const container = document.getElementById("plan-tasks-list");
   if (!container || !state.activePlan) return;
+
+  renderPersistentPlanUpgradeEntry(state.activePlan);
 
   const currentRequestId = ++lastTrackerRequestId;
 
@@ -2782,18 +2832,6 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 
   const currentRound = state.activePlan.currentRound || 1;
 
-  if (state.activePlan.progress >= 100 && !isPlanExpired(state.activePlan)) {
-    const upgradeBanner = document.createElement("div");
-    upgradeBanner.className = "glass-card congrats-inline-banner";
-    const nextRound = currentRound + 1;
-    upgradeBanner.innerHTML = `
-      <div style="font-size: 2.2rem; margin-bottom: 0.2rem; animation: pulseMedal 2s infinite ease-in-out;">🏆</div>
-      <div style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">您已完成了此遍的讀經進度！</div>
-      <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">恭喜獲得紀念勳章。確認要開始下一遍讀經了嗎？</div>
-      <button onclick="window.triggerPlanUpgradeFlow()" class="primary-btn congrats-banner-btn">🏆 確認升級下一 Level (第 ${nextRound} 遍)</button>
-    `;
-    container.appendChild(upgradeBanner);
-  }
 
   selectedDay.chapters.forEach(ch => {
     const taskItem = document.createElement("div");
@@ -3144,8 +3182,14 @@ window.triggerPlanUpgradeFlow = async function() {
     return;
   }
 
-  const currentRound = plan.currentRound || 1;
-  const nextRound = currentRound + 1;
+  const upgradeAvailability = getPlanUpgradeAvailability(plan, { expired: false });
+  if (!upgradeAvailability.eligible) {
+    showToast("完成目前這一遍後，才能開始下一遍。");
+    return;
+  }
+
+  const currentRound = upgradeAvailability.currentRound;
+  const nextRound = upgradeAvailability.nextRound;
 
   // 記錄此類別完成的遍數，並觸發勳章解鎖檢查
   if (plan.planKind === "church_campaign_stage") {

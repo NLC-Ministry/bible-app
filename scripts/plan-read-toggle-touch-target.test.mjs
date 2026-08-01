@@ -38,7 +38,7 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260801_immersive_plan_reader");
+    expect(html).toContain("index.css?v=20260801_persistent_plan_upgrade");
   });
 });
 

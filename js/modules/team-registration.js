@@ -144,7 +144,7 @@
     const memberLabel = String(member.name || "").trim() || "—";
     const memberActions = [
       canRemind ? `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(memberLabel)}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>` : "",
-      canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(memberLabel)} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
+      canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(memberLabel)} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>` : ""
     ].join("");
     return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}${isBehind ? " reading-team-member--behind" : ""}">
       <div class="reading-team-member__avatar">${escapeHTML(memberLabel.slice(0, 1))}</div>
@@ -302,7 +302,7 @@
           const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
           const actions = [
             member.isMe ? "" : `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(member.name || "隊員")}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>`,
-            canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(member.name || "隊員")} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
+            canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(member.name || "隊員")} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>` : ""
           ].join("");
           return `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
             <div class="reading-team-roster__person"><strong>${escapeHTML(String(member.name || "").trim() || "—")}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
