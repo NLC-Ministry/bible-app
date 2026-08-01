@@ -22,6 +22,7 @@ import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refa
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { installPullToRefresh } from './pull-to-refresh.mjs';
+import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
 
 cleanupProductionStorage(window.localStorage);
 
@@ -539,6 +540,16 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
 // Bootstrap the application on DomContentLoaded
 document.addEventListener("DOMContentLoaded", async () => {
+  // Clear badge notification count on app startup / load
+  clearBadge().catch(err => console.error("Failed to clear badge on startup:", err));
+
+  // Expose iOS 16.4+ notification permission helper for user gesture triggers
+  window.requestPwaNotificationPermission = async () => {
+    const permission = await requestNotificationPermission();
+    console.log("PWA Notification permission status:", permission);
+    return permission;
+  };
+
   try {
     installPullToRefresh({ window, document });
     window.registerPullToRefresh(refreshCurrentAppView);
@@ -674,6 +685,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       refreshCareReminderBadge();
+      clearBadge().catch(err => console.error("Failed to clear badge on visible:", err));
     }
   });
 

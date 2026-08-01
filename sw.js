@@ -88,3 +88,62 @@ self.addEventListener("sync", event => {
 self.addEventListener("message", event => {
   if (event.data?.type === "SYNC_NOW") event.waitUntil(requestClientSync());
 });
+
+// PWA App Badging API 背景推播與角標整合
+self.addEventListener("push", event => {
+  let pushData = {};
+  try {
+    pushData = event.data ? event.data.json() : {};
+  } catch (e) {
+    pushData = { title: event.data ? event.data.text() : "新訊息" };
+  }
+
+  const unreadCount = typeof pushData.unreadCount === "number" ? pushData.unreadCount : 0;
+  
+  const options = {
+    body: pushData.body || "",
+    icon: "/assets/icon-192.png",
+    badge: "/assets/icon-192.png",
+    data: pushData
+  };
+
+  const notificationPromise = self.registration.showNotification(
+    pushData.title || "新生命速讀計畫",
+    options
+  );
+
+  let badgePromise = Promise.resolve();
+  if ("setAppBadge" in navigator) {
+    badgePromise = navigator.setAppBadge(unreadCount).catch(err => {
+      console.error("Service Worker 背景設定角標失敗:", err);
+    });
+  }
+
+  event.waitUntil(Promise.all([notificationPromise, badgePromise]));
+});
+
+// 當使用者點擊通知時，聚焦/開啟視窗並清空角標
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+
+  const clickPromise = self.clients.matchAll({ type: "window", includeUncontrolled: true })
+    .then(windowClients => {
+      for (const client of windowClients) {
+        if ("focus" in client && typeof client.focus === "function") {
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow("/");
+      }
+    })
+    .then(() => {
+      if ("clearAppBadge" in navigator) {
+        return navigator.clearAppBadge().catch(err => {
+          console.error("Service Worker 點擊通知清除角標失敗:", err);
+        });
+      }
+    });
+
+  event.waitUntil(clickPromise);
+});

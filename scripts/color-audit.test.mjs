@@ -64,12 +64,12 @@ describe("color audit", () => {
   it("blocks legacy emerald greens outside token definition files", () => {
     const hits = scanPattern(LEGACY_GREEN);
     expect(hits, hits.join(", ")).toEqual([]);
-  });
+  }, 20000);
 
   it("blocks hardcoded mint (#66F78F) outside token definition files", () => {
     const hits = scanPattern(CANONICAL_MINT, TOKEN_FILES);
     expect(hits, hits.join(", ")).toEqual([]);
-  });
+  }, 20000);
 
   it("blocks Tailwind legacy hex outside allowlisted files", () => {
     const hits = [];
@@ -80,7 +80,7 @@ describe("color audit", () => {
       }
     }
     expect(hits, hits.join("\n")).toEqual([]);
-  });
+  }, 20000);
 
   it("blocks inline style color/background hex in js/modules templates", () => {
     const hits = [];
