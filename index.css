@@ -12235,3 +12235,9 @@ select,
     max-width: none;
   }
 }
+
+
+/* Spacing between 6-person team card and pastoral ranking card */
+.pastoral-ranking-card {
+  margin-top: 1.2rem;
+}
