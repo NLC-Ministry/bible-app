@@ -64,6 +64,8 @@ describe("managed scope authority", () => {
   it("provides an admin multi-select editor without restoring local role assignment", () => {
     expect(html).toContain('id="admin-managed-scopes-col"');
     expect(html).toContain("角色由會員中心同步");
+    expect(html).toContain("不包含一般會友");
+    expect(admin).toContain('(result.data || []).filter(profile => getUserRoleCode(profile) !== "member")');
     expect(admin).toContain("renderAdminManagedScopes");
     expect(admin).toContain("getManagedScopeConfig");
     expect(html).toContain("全選");
@@ -72,7 +74,7 @@ describe("managed scope authority", () => {
   });
 
   it("cache-busts the changed application and scope-editor stylesheet", () => {
-    expect(html).toContain("js/app.js?v=20260731_readonly_user_directory");
-    expect(html).toContain("css/admin-registration-statistics.css?v=20260731_readonly_user_directory");
+    expect(html).toContain("js/app.js?v=20260801_registration_summary_v2");
+    expect(html).toContain("css/admin-registration-statistics.css?v=20260801_registration_summary");
   });
 });

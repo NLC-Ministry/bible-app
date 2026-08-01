@@ -1,4 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
+import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -1397,15 +1398,25 @@ const db = {
       return;
     }
 
-    const dates = [...new Set(state.readingLogs.map(log => log.read_at.substring(0, 10)))].sort().reverse();
+    const toLocalYYYYMMDD = (val) => {
+      if (!val) return "";
+      const date = val instanceof Date ? val : new Date(val);
+      if (Number.isNaN(date.getTime())) return "";
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    const dates = [...new Set(state.readingLogs.map(log => toLocalYYYYMMDD(log.read_at)))].filter(Boolean).sort().reverse();
 
     if (dates.length === 0) {
       state.currentUser.streak = 0;
       return;
     }
 
-    const todayStr = new Date().toISOString().substring(0, 10);
-    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().substring(0, 10);
+    const todayStr = toLocalYYYYMMDD(new Date());
+    const yesterdayStr = toLocalYYYYMMDD(new Date(Date.now() - 86400000));
 
     if (dates[0] !== todayStr && dates[0] !== yesterdayStr) {
       state.currentUser.streak = 0;
@@ -1453,12 +1464,29 @@ const db = {
       return { data: [], error: new Error("admin_user_directory_admin_required") };
     }
     try {
-      const { data, error } = await state.supabase
-        .from("profiles")
-        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)")
-        .eq("is_demo", false)
-        .order("name", { ascending: true });
-      return { data: data || [], error };
+      const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001";
+      const firstStagePresetKey = "church_stage_01";
+      const [profilesResult, enrollmentsResult] = await Promise.all([
+        state.supabase
+          .from("profiles")
+          .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)")
+          .eq("is_demo", false)
+          .order("name", { ascending: true }),
+        state.supabase
+          .from("reading_plans")
+          .select("user_id")
+          .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`)
+      ]);
+      if (profilesResult.error) return { data: [], error: profilesResult.error };
+      if (enrollmentsResult.error) return { data: [], error: enrollmentsResult.error };
+      const joinedProfileIds = new Set((enrollmentsResult.data || []).map(plan => String(plan.user_id)));
+      return {
+        data: (profilesResult.data || []).map(profile => ({
+          ...profile,
+          joined_stage_one: joinedProfileIds.has(String(profile.id))
+        })),
+        error: null
+      };
     } catch (error) {
       return { data: [], error };
     }
@@ -1644,12 +1672,11 @@ const db = {
         console.log(`🔍 [AdminDebug] reading_plans 查詢結果: ${allPlans ? allPlans.length : 0} 筆`, plansError ? `錯誤: ${plansError.message}` : '');
         if (plansError) throw plansError;
 
-        let logsQuery = state.supabase.from("reading_logs").select("user_id, book, chapter, read_at, plan_id, round");
-        if (allPlans && allPlans.length > 0) {
-          const planIds = allPlans.map(p => p.id);
-          logsQuery = logsQuery.in("plan_id", planIds);
-        }
-        const { data: allLogs, error: logsError } = await logsQuery;
+        const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
+        const { data: allLogs, error: logsError } = await fetchReadingLogsByPlanIds(
+          state.supabase,
+          planIds
+        );
         console.log(`🔍 [AdminDebug] reading_logs 查詢結果: ${allLogs ? allLogs.length : 0} 筆`, logsError ? `錯誤: ${logsError.message}` : '');
         if (logsError) throw logsError;
         state.allLogsCache = allLogs || [];
@@ -2198,7 +2225,7 @@ const db = {
     });
     return result.success
       ? { success: true, context: result.data || {
-          planId: globalPlanId, planName: "", pastoralZones: [], greatRegions: []
+          planId: globalPlanId, planName: "", summary: {}, pastoralZones: [], greatRegions: []
         } }
       : result;
   },

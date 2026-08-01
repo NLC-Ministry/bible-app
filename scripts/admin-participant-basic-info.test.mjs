@@ -18,7 +18,8 @@ describe("admin participant basic information", () => {
     const plan = read("js/modules/plan.js");
     const css = read("css/admin-registration-statistics.css");
 
-    expect(html).toContain("使用者基本資料與管理範圍");
+    expect(html).toContain("使用者基本資料");
+    expect(html).toContain("管理範圍設定");
     expect(admin).toContain('escapeHTML(profile.name || "尚未取得姓名")');
     expect(admin).toContain("escapeHTML(email)");
     expect(admin).toContain("escapeHTML(roleLabel)");

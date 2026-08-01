@@ -4,6 +4,7 @@ import {
   sendBulkPlanInvitations,
   wasPlanInviteRemindedToday
 } from "./admin-bulk-plan-invite.mjs";
+import { buildAdminRegistrationStatisticsPlans } from "./admin-registration-plan-options.mjs";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
@@ -89,8 +90,19 @@ function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
   if (!list || !count) return;
+  const incompleteOnly = document.getElementById("admin-user-directory-filter-incomplete")?.checked === true;
+  const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
+  const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
+  const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者"]);
   const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
+    const normalizedName = String(profile.name || "").trim();
+    const missingRequiredProfile = !normalizedName || placeholderNames.has(normalizedName)
+      || !String(profile.pastoral_zone || "").trim();
+    if (incompleteOnly && !missingRequiredProfile) return false;
+    const eligibleForStageOneInvitation = profile.is_active === true
+      && String(profile.id || "") !== currentProfileId;
+    if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
     return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group]
       .filter(Boolean)
@@ -98,7 +110,7 @@ function renderAdminUserDirectoryList(query = "") {
       .toLocaleLowerCase("zh-Hant")
       .includes(normalizedQuery);
   });
-  count.textContent = normalizedQuery
+  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
   if (filteredProfiles.length === 0) {
@@ -119,22 +131,26 @@ function renderAdminUserDirectoryList(query = "") {
       : (syncStatus === "degraded" || syncStatus === "failed" ? "同步異常" : "尚未同步");
     const statusClass = profile.is_active === false ? "inactive" : "active";
     return `
-      <article class="admin-user-directory__card">
-        <header class="admin-user-directory__card-header">
-          <strong>${escapeHTML(name)}</strong>
-          <span class="admin-user-directory__status admin-user-directory__status--${statusClass}">
-            ${profile.is_active === false ? "已停用" : "啟用中"}
+      <details class="admin-user-directory__card">
+        <summary class="admin-user-directory__card-summary">
+          <span class="admin-user-directory__identity">
+            <strong>${escapeHTML(name)}</strong>
+            <span>${escapeHTML(pastoralZone)}</span>
           </span>
-        </header>
-        <dl class="admin-user-directory__details">
-          <div><dt>電子信箱</dt><dd>${escapeHTML(email)}</dd></div>
-          <div><dt>角色</dt><dd>${escapeHTML(roleLabel)}</dd></div>
-          <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
-          <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
-          <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
-          <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
-        </dl>
-      </article>`;
+        </summary>
+        <div class="admin-user-directory__detail-panel">
+          <dl class="admin-user-directory__details">
+            <div><dt>帳號狀態</dt><dd><span class="admin-user-directory__status admin-user-directory__status--${statusClass}">${profile.is_active === false ? "已停用" : "啟用中"}</span></dd></div>
+            <div><dt>電子信箱</dt><dd>${escapeHTML(email)}</dd></div>
+            <div><dt>角色</dt><dd>${escapeHTML(roleLabel)}</dd></div>
+            <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
+            <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
+            <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
+            <div><dt>第一階段計畫</dt><dd>${profile.joined_stage_one === true ? "已加入" : "未加入"}</dd></div>
+            <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
+          </dl>
+        </div>
+      </details>`;
   }).join("");
 }
 
@@ -143,11 +159,15 @@ export async function renderAdminUserDirectory() {
   const search = document.getElementById("admin-user-directory-search");
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
-  if (!column || !search || !list || !count) return;
+  const incompleteFilter = document.getElementById("admin-user-directory-filter-incomplete");
+  const stageOneFilter = document.getElementById("admin-user-directory-filter-stage-one");
+  if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter) return;
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   column.classList.toggle("hidden", !isAdmin);
   if (!isAdmin) return;
   search.disabled = true;
+  incompleteFilter.disabled = true;
+  stageOneFilter.disabled = true;
   count.textContent = "讀取中…";
   list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
   const result = await db.fetchAdminUserProfiles();
@@ -158,7 +178,11 @@ export async function renderAdminUserDirectory() {
   }
   adminUserDirectoryProfiles = result.data || [];
   search.disabled = false;
+  incompleteFilter.disabled = false;
+  stageOneFilter.disabled = false;
   search.oninput = () => renderAdminUserDirectoryList(search.value);
+  incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
+  stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   renderAdminUserDirectoryList(search.value);
 }
 
@@ -277,7 +301,7 @@ export async function renderAdminManagedScopes() {
     setManagedScopeFeedback(result.error.message || "無法載入管理範圍資料。", true);
     return;
   }
-  managedScopeProfiles = result.data || [];
+  managedScopeProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
   profileSelect.innerHTML = "";
   managedScopeProfiles.forEach(profile => {
     const roleLabel = profile.role_definition?.label || getUserRoleCode(profile) || "一般會友";
@@ -317,24 +341,8 @@ export async function renderAdminManagedScopes() {
 let adminRegistrationStatistics = null;
 
 function getAdminRegistrationStatisticsPlans() {
-  const plansById = new Map();
-  const addPlan = plan => {
-    if (!plan || typeof isUuid !== "function" || !isUuid(plan.id)) return;
-    if ((plan.planKind || plan.plan_kind) === "church_campaign") return;
-    plansById.set(String(plan.id), plan);
-  };
-
-  (Array.isArray(state.globalPlans) ? state.globalPlans : []).forEach(addPlan);
-  const stageOne = typeof CHURCH_PLAN_PRESETS !== "undefined"
-    ? CHURCH_PLAN_PRESETS.church_stage_01
-    : null;
-  if (stageOne && !plansById.has(String(stageOne.id))) {
-    addPlan({ ...stageOne, presetKey: "church_stage_01", globalPlanId: stageOne.id });
-  }
-
-  return Array.from(plansById.values())
-    .sort((left, right) => String(right.startDate || right.start_date || "")
-      .localeCompare(String(left.startDate || left.start_date || "")));
+  return buildAdminRegistrationStatisticsPlans(Array.isArray(state.globalPlans) ? state.globalPlans : [],
+    typeof CHURCH_PLAN_PRESETS !== "undefined" ? CHURCH_PLAN_PRESETS : {});
 }
 
 function renderAdminRegistrationStatisticsTable(title, label, rows) {
@@ -372,15 +380,67 @@ function sanitizeRegistrationStatisticsText(value) {
     .trim() || "未設定";
 }
 
+function getAdminRegistrationStatisticsSummary(context) {
+  if (context && context.summary) return context.summary;
+
+  const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const withoutPastoralZone = pastoralZones.find(row => row.label === "未設定牧區") || {};
+  const totalJoined = pastoralZones.reduce((total, row) => total + Number(row.signupCount || 0), 0);
+  const totalRegistered = pastoralZones.reduce((total, row) => total + Number(row.registeredCount || 0), 0);
+  const withoutPastoralZoneJoined = Number(withoutPastoralZone.signupCount || 0);
+  const withoutPastoralZoneRegistered = Number(withoutPastoralZone.registeredCount || 0);
+
+  return {
+    withoutPastoralZoneNotJoined: withoutPastoralZoneRegistered - withoutPastoralZoneJoined,
+    withoutPastoralZoneJoined,
+    withPastoralZoneNotJoined: totalRegistered - totalJoined - (withoutPastoralZoneRegistered - withoutPastoralZoneJoined),
+    withPastoralZoneJoined: totalJoined - withoutPastoralZoneJoined,
+    totalJoined,
+    totalRegistered
+  };
+}
+
+function renderAdminRegistrationStatisticsSummary(context) {
+  const summary = getAdminRegistrationStatisticsSummary(context);
+  const items = [
+    ["無牧區資料未加入計畫", summary.withoutPastoralZoneNotJoined],
+    ["無牧區資料已加入計畫", summary.withoutPastoralZoneJoined],
+    ["有牧區資料未加入計畫", summary.withPastoralZoneNotJoined],
+    ["有牧區資料已加入計畫", summary.withPastoralZoneJoined],
+    ["總參加人數", summary.totalJoined, true],
+    ["總註冊人數", summary.totalRegistered, true]
+  ];
+  return `
+    <section class="admin-registration-statistics__summary" aria-labelledby="admin-registration-statistics-summary-title">
+      <h4 id="admin-registration-statistics-summary-title">牧區資料與計畫參加總覽</h4>
+      <div class="admin-registration-statistics__summary-grid">
+        ${items.map(([label, value, isTotal]) => `
+          <div class="admin-registration-statistics__summary-item${isTotal ? " admin-registration-statistics__summary-item--total" : ""}">
+            <span>${label}</span>
+            <strong>${Number(value || 0)}</strong>
+          </div>`).join("")}
+      </div>
+    </section>`;
+}
+
 export function formatAdminRegistrationStatisticsText(context) {
   const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
   const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const summary = getAdminRegistrationStatisticsSummary(context);
   const formatRows = rows => rows.map(row => [
     sanitizeRegistrationStatisticsText(row.label),
     Number(row.signupCount || 0),
     Number(row.registeredCount || 0)
   ].join("/"));
   return [
+    "統計項目 / 人數",
+    `無牧區資料未加入計畫/${Number(summary.withoutPastoralZoneNotJoined || 0)}`,
+    `無牧區資料已加入計畫/${Number(summary.withoutPastoralZoneJoined || 0)}`,
+    `有牧區資料未加入計畫/${Number(summary.withPastoralZoneNotJoined || 0)}`,
+    `有牧區資料已加入計畫/${Number(summary.withPastoralZoneJoined || 0)}`,
+    `總參加人數/${Number(summary.totalJoined || 0)}`,
+    `總註冊人數/${Number(summary.totalRegistered || 0)}`,
+    "",
     "大區 / 報名人數 / 註冊人數",
     ...formatRows(greatRegions),
     "",
@@ -424,6 +484,7 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
 
   adminRegistrationStatistics = result.context;
   content.innerHTML = `
+    ${renderAdminRegistrationStatisticsSummary(result.context)}
     <div class="admin-registration-statistics__tables">
       ${renderAdminRegistrationStatisticsTable("大區統計", "大區", result.context.greatRegions)}
       ${renderAdminRegistrationStatisticsTable("牧區統計", "牧區", result.context.pastoralZones)}
@@ -623,7 +684,7 @@ export async function renderAdminPlanManagement() {
       const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
       const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
       const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
-      const defaultPlan = plans.find(plan => plan.managementStatus === 'ongoing') || stageOnePlan || plans[0];
+      const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0];
       const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
       select.value = !managementPlanSelectionInitialized
         ? defaultPlanKey

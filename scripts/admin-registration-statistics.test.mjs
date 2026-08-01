@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync("supabase/migrations/0052_admin_registration_statistics.sql", "utf8");
+const summaryMigration = readFileSync("supabase/migrations/0055_admin_registration_summary.sql", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
@@ -39,12 +40,22 @@ describe("admin registration statistics", () => {
     expect(css).toContain(".admin-registration-statistics__tables");
   });
 
+  it("adds the pastoral-zone completeness and plan participation summary", () => {
+    expect(summaryMigration).toContain("'withoutPastoralZoneNotJoined'");
+    expect(summaryMigration).toContain("'withoutPastoralZoneJoined'");
+    expect(summaryMigration).toContain("'withPastoralZoneNotJoined'");
+    expect(summaryMigration).toContain("'withPastoralZoneJoined'");
+    expect(summaryMigration).toContain("'totalJoined'");
+    expect(summaryMigration).toContain("'totalRegistered'");
+    expect(summaryMigration).toContain("NULLIF(BTRIM(profile.pastoral_zone), '') IS NOT NULL");
+    expect(admin).toContain("無牧區資料未加入計畫");
+    expect(admin).toContain("總參加人數");
+    expect(css).toContain(".admin-registration-statistics__summary-grid");
+  });
+
   it("always offers the first stage even before global plans finish loading", () => {
-    expect(admin).toContain("CHURCH_PLAN_PRESETS.church_stage_01");
-    expect(admin).toContain('presetKey: "church_stage_01"');
-    expect(admin).toContain("plansById.has(String(stageOne.id))");
-    expect(admin).toContain("plansById.set(String(plan.id), plan)");
-    expect(admin).toContain("isUuid(plan.id)");
+    expect(admin).toContain("buildAdminRegistrationStatisticsPlans(");
+    expect(admin).not.toContain('typeof isUuid !== "function"');
   });
 
   it("exports UTF-8 text in the requested slash-delimited format", () => {
@@ -58,7 +69,7 @@ describe("admin registration statistics", () => {
 
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
-    expect(html).toContain("css/admin-registration-statistics.css?v=20260731_readonly_user_directory");
-    expect(html).toContain("js/app.js?v=20260731_readonly_user_directory");
+    expect(html).toContain("css/admin-registration-statistics.css?v=20260801_registration_summary");
+    expect(html).toContain("js/app.js?v=20260801_registration_summary_v2");
   });
 });

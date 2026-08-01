@@ -64,7 +64,7 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260731_readonly_user_directory");
+    expect(html).toContain("js/app.js?v=20260801_registration_summary_v2");
     expect(html).toContain("index.css?v=20260731_bulk_plan_invites");
     expect(html).toContain("css/team-registration.css?v=20260730_team_registration_cancel_safe");
   });
