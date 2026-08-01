@@ -2205,7 +2205,7 @@ const db = {
     });
     return result.success
       ? { success: true, context: result.data || {
-          planId: globalPlanId, planName: "", pastoralZones: [], greatRegions: []
+          planId: globalPlanId, planName: "", summary: {}, pastoralZones: [], greatRegions: []
         } }
       : result;
   },

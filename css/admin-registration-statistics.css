@@ -37,6 +37,55 @@
   gap: 1rem;
 }
 
+.admin-registration-statistics__summary {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.admin-registration-statistics__summary h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.admin-registration-statistics__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.admin-registration-statistics__summary-item {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border-card);
+  border-radius: 0.75rem;
+  background: var(--bg-input);
+}
+
+.admin-registration-statistics__summary-item span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.admin-registration-statistics__summary-item strong {
+  color: var(--text-primary);
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.admin-registration-statistics__summary-item--total {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-muted);
+}
+
+.admin-registration-statistics__summary-item--total strong {
+  color: var(--color-brand);
+}
+
 .admin-registration-statistics__table-section {
   min-width: 0;
 }
@@ -382,6 +431,10 @@
 
   .admin-registration-statistics__tables {
     grid-template-columns: 1fr;
+  }
+
+  .admin-registration-statistics__summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-managed-scopes__summary {

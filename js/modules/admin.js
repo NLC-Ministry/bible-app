@@ -380,15 +380,67 @@ function sanitizeRegistrationStatisticsText(value) {
     .trim() || "未設定";
 }
 
+function getAdminRegistrationStatisticsSummary(context) {
+  if (context && context.summary) return context.summary;
+
+  const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const withoutPastoralZone = pastoralZones.find(row => row.label === "未設定牧區") || {};
+  const totalJoined = pastoralZones.reduce((total, row) => total + Number(row.signupCount || 0), 0);
+  const totalRegistered = pastoralZones.reduce((total, row) => total + Number(row.registeredCount || 0), 0);
+  const withoutPastoralZoneJoined = Number(withoutPastoralZone.signupCount || 0);
+  const withoutPastoralZoneRegistered = Number(withoutPastoralZone.registeredCount || 0);
+
+  return {
+    withoutPastoralZoneNotJoined: withoutPastoralZoneRegistered - withoutPastoralZoneJoined,
+    withoutPastoralZoneJoined,
+    withPastoralZoneNotJoined: totalRegistered - totalJoined - (withoutPastoralZoneRegistered - withoutPastoralZoneJoined),
+    withPastoralZoneJoined: totalJoined - withoutPastoralZoneJoined,
+    totalJoined,
+    totalRegistered
+  };
+}
+
+function renderAdminRegistrationStatisticsSummary(context) {
+  const summary = getAdminRegistrationStatisticsSummary(context);
+  const items = [
+    ["無牧區資料未加入計畫", summary.withoutPastoralZoneNotJoined],
+    ["無牧區資料已加入計畫", summary.withoutPastoralZoneJoined],
+    ["有牧區資料未加入計畫", summary.withPastoralZoneNotJoined],
+    ["有牧區資料已加入計畫", summary.withPastoralZoneJoined],
+    ["總參加人數", summary.totalJoined, true],
+    ["總註冊人數", summary.totalRegistered, true]
+  ];
+  return `
+    <section class="admin-registration-statistics__summary" aria-labelledby="admin-registration-statistics-summary-title">
+      <h4 id="admin-registration-statistics-summary-title">牧區資料與計畫參加總覽</h4>
+      <div class="admin-registration-statistics__summary-grid">
+        ${items.map(([label, value, isTotal]) => `
+          <div class="admin-registration-statistics__summary-item${isTotal ? " admin-registration-statistics__summary-item--total" : ""}">
+            <span>${label}</span>
+            <strong>${Number(value || 0)}</strong>
+          </div>`).join("")}
+      </div>
+    </section>`;
+}
+
 export function formatAdminRegistrationStatisticsText(context) {
   const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
   const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const summary = getAdminRegistrationStatisticsSummary(context);
   const formatRows = rows => rows.map(row => [
     sanitizeRegistrationStatisticsText(row.label),
     Number(row.signupCount || 0),
     Number(row.registeredCount || 0)
   ].join("/"));
   return [
+    "統計項目 / 人數",
+    `無牧區資料未加入計畫/${Number(summary.withoutPastoralZoneNotJoined || 0)}`,
+    `無牧區資料已加入計畫/${Number(summary.withoutPastoralZoneJoined || 0)}`,
+    `有牧區資料未加入計畫/${Number(summary.withPastoralZoneNotJoined || 0)}`,
+    `有牧區資料已加入計畫/${Number(summary.withPastoralZoneJoined || 0)}`,
+    `總參加人數/${Number(summary.totalJoined || 0)}`,
+    `總註冊人數/${Number(summary.totalRegistered || 0)}`,
+    "",
     "大區 / 報名人數 / 註冊人數",
     ...formatRows(greatRegions),
     "",
@@ -432,6 +484,7 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
 
   adminRegistrationStatistics = result.context;
   content.innerHTML = `
+    ${renderAdminRegistrationStatisticsSummary(result.context)}
     <div class="admin-registration-statistics__tables">
       ${renderAdminRegistrationStatisticsTable("大區統計", "大區", result.context.greatRegions)}
       ${renderAdminRegistrationStatisticsTable("牧區統計", "牧區", result.context.pastoralZones)}
