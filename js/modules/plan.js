@@ -1015,9 +1015,11 @@ function initPlanControls() {
     startReadingBtn.addEventListener("click", () => {
       if (!state.activePlan || !state.selectedPlanDay) return;
       const day = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
-      if (!day || !day.chapters || day.chapters.length === 0) return;
+      const currentRound = Number(state.activePlan.currentRound || 1);
+      const chapters = (day && day.chapters || []).filter(ch => Number(ch.round || currentRound) === currentRound);
+      if (chapters.length === 0) return;
 
-      const firstUnread = day.chapters.find(ch => !ch.isRead) || day.chapters[0];
+      const firstUnread = chapters.find(ch => !ch[`isReadR${currentRound}`]) || chapters[0];
       window.openPlanInlineReader(firstUnread.book, firstUnread.chapter, state.selectedPlanDay, firstUnread.round || 1);
     });
   }
@@ -2703,6 +2705,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     container.innerHTML = "";
     return;
   }
+  const currentRound = Number(state.activePlan.currentRound || 1);
+  const visibleChapters = (selectedDay.chapters || []).filter(ch =>
+    Number(ch.round || currentRound) === currentRound
+  );
 
   // Render day subtitle
   const daySubtitle = document.getElementById("plan-day-subtitle");
@@ -2746,11 +2752,11 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // Render status pill for day
   const statusPill = document.getElementById("plan-day-status-pill");
   if (statusPill) {
-    if (!selectedDay.chapters || selectedDay.chapters.length === 0) {
+    if (!visibleChapters || visibleChapters.length === 0) {
       statusPill.textContent = (window.APP_COPY && window.APP_COPY.plan.restDayPill) || "休息日";
       statusPill.className = "stat-badge stat-badge--brand";
     } else {
-      const allDone = selectedDay.chapters.every(ch => {
+      const allDone = visibleChapters.every(ch => {
         const currentRound = state.activePlan.currentRound || 1;
         const taskRound = ch.round || currentRound;
         return Boolean(ch["isReadR" + taskRound] || ch.isRead);
@@ -2768,7 +2774,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // Update completion check on the active date card in the calendar dynamically
   const activeCard = document.querySelector(`.plan-day-cell[data-day-num="${state.selectedPlanDay}"]`);
   if (activeCard && state.activePlan) {
-    const isDayCompleted = selectedDay.chapters && selectedDay.chapters.length > 0 && selectedDay.chapters.every(ch => {
+    const isDayCompleted = visibleChapters && visibleChapters.length > 0 && visibleChapters.every(ch => {
       const currentRound = state.activePlan.currentRound || 1;
       const taskRound = ch.round || currentRound;
       return Boolean(ch["isReadR" + taskRound] || ch.isRead);
@@ -2780,9 +2786,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       if (progressContainer) progressContainer.remove();
     } else {
       activeCard.classList.remove("completed");
-      const totalCh = selectedDay.chapters.length;
+      const totalCh = visibleChapters.length;
       let completedCh = 0;
-      selectedDay.chapters.forEach(ch => {
+      visibleChapters.forEach(ch => {
         const currentRound = state.activePlan.currentRound || 1;
         const taskRound = ch.round || currentRound;
         const isRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
@@ -2807,7 +2813,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   }
 
   // Render items
-  if (!selectedDay.chapters || selectedDay.chapters.length === 0) {
+  if (!visibleChapters || visibleChapters.length === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 2rem; background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 14px; color: var(--text-secondary); font-weight: 500; width: 100%;">
         ${(window.APP_COPY && window.APP_COPY.plan.restDayBanner) || "今天是補讀或靈修休息日，好好親近神吧"}
@@ -2816,10 +2822,8 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     return;
   }
 
-  const currentRound = state.activePlan.currentRound || 1;
+  visibleChapters.forEach(ch => {
 
-
-  selectedDay.chapters.forEach(ch => {
     const taskItem = document.createElement("div");
     taskItem.className = "plan-task-item";
 
@@ -3219,6 +3223,12 @@ window.triggerPlanUpgradeFlow = async function() {
     rebuildPlanScheduleForLevel(plan, nextLevel);
     await persistPlanLevelState(plan);
 
+    const firstNextRoundDay = plan.days.find(day => (day.chapters || []).some(chapter =>
+      Number(chapter.round || 1) === nextRound
+    ));
+    if (firstNextRoundDay) state.selectedPlanDay = firstNextRoundDay.dayNum;
+    window._cachedAllUsersList = null;
+    window._cachedAllUsersListKey = null;
 
     calculatePlanProgress();
     await renderPlanView();
@@ -3796,13 +3806,17 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
   }
   if (!state.activePlan) return;
   const day = state.activePlan.days.find(d => d.dayNum === dayNum);
-  if (!day || !day.chapters || day.chapters.length === 0) return;
+  const targetRound = Number(round || state.activePlan.currentRound || 1);
+  const chaptersForRound = (day && day.chapters || []).filter(ch =>
+    Number(ch.round || targetRound) === targetRound
+  );
+  if (chaptersForRound.length === 0) return;
 
   state.inlineReader.active = true;
   document.body.classList.add("plan-inline-reader-open");
   state.inlineReader.dayNum = dayNum;
-  state.inlineReader.chaptersList = day.chapters;
-  state.inlineReader.currentIndex = day.chapters.findIndex(ch =>
+  state.inlineReader.chaptersList = chaptersForRound;
+  state.inlineReader.currentIndex = chaptersForRound.findIndex(ch =>
     ch.book === bookName &&
     Number(ch.chapter) === Number(chapter) &&
     (round == null || Number(ch.round || 1) === Number(round))

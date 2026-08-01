@@ -38,7 +38,7 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260801_confirmed_round_progress");
+    expect(html).toContain("index.css?v=20260801_actual_read_schedule");
   });
 });
 

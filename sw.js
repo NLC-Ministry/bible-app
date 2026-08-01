@@ -1,6 +1,6 @@
 import { CacheManager } from "./js/pwa/CacheManager.js?v=20260729-team-rank";
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.4";
 const cacheManager = new CacheManager({
   prefix: "newlife-bible",
   version: VERSION,

@@ -13,8 +13,8 @@ import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
 import './auth-launch.mjs';
-import './db.js?v=20260801_confirmed_round_progress';
-import './utils.js?v=20260801_timezone_local_fixes';
+import './db.js?v=20260801_actual_read_schedule';
+import './utils.js?v=20260801_actual_read_schedule';
 import './gamification.js?v=20260728_badge_img_refactor';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';

@@ -872,7 +872,9 @@ const db = {
               const effectiveLevel = confirmedRound === storedRound ? (dbPlan.level || 'normal') : 'normal';
               const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, dbPlan.target_books, key, effectiveLevel, isFixed, {
                 readingDaysPerWeek: dbPlan.reading_days_per_week,
-                restWeekdays: dbPlan.rest_weekdays
+                restWeekdays: dbPlan.rest_weekdays,
+                planId: dbPlan.id,
+                presetKey: key
               });
               planObj.id = dbPlan.id;
               planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯

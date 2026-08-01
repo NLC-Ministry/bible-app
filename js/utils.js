@@ -1,3 +1,5 @@
+import { segmentScheduleDaysForRoundCount } from "./data/current-round-progress.mjs";
+
 // ============================================================
 // utils.js — Shared utilities used across all view controllers
 // ============================================================
@@ -1382,7 +1384,9 @@ function rebuildPlanScheduleForLevel(plan, level) {
     plan.isFixed !== false && plan.is_fixed !== false,
     {
       readingDaysPerWeek: plan.readingDaysPerWeek || plan.reading_days_per_week,
-      restWeekdays: plan.restWeekdays || plan.rest_weekdays
+      restWeekdays: plan.restWeekdays || plan.rest_weekdays,
+      planId: plan.id,
+      presetKey: plan.presetKey
     }
   );
   Object.assign(plan, {
@@ -1425,13 +1429,52 @@ function resolveChurchCampaignDefinition(presetKey, name) {
   return stage ? window.cloneChurchCampaign(stage) : null;
 }
 
-function generateChurchCampaignPlanObject(definition, presetKey, scheduleSettings = null) {
+function generateChurchCampaignPlanObject(definition, presetKey, scheduleSettings = null, level = "normal") {
   const weeklySchedule = normalizePlanScheduleSettings(
     false,
     scheduleSettings && scheduleSettings.readingDaysPerWeek,
     scheduleSettings && scheduleSettings.restWeekdays
   );
-  const days = window.buildChurchCampaignDays(definition, BIBLE_BOOKS, weeklySchedule.restWeekdays);
+  const baseDays = window.buildChurchCampaignDays(definition, BIBLE_BOOKS, weeklySchedule.restWeekdays);
+  const roundCount = getPlanLevelRounds(level);
+  const startDate = new Date(`${definition.startDate}T00:00:00`);
+  const lastOffset = Math.max(0, baseDays.length - 1);
+  const completedRoundCount = Math.max(0, roundCount - 1);
+  const baseChapterKeys = new Set(baseDays.flatMap(day => (day.chapters || []).map(chapter =>
+    `${chapter.book}_${chapter.chapter}`
+  )));
+  const planId = scheduleSettings && scheduleSettings.planId;
+  const planPresetKey = scheduleSettings && scheduleSettings.presetKey || presetKey;
+  const matchingLogs = (state.readingLogs || []).filter(log => {
+    const chapterKey = `${log.book}_${log.chapter}`;
+    if (!baseChapterKeys.has(chapterKey)) return false;
+    const logPlanId = log.plan_id || null;
+    const logPresetKey = log.presetKey || log.preset_key || null;
+    if (planId && logPlanId) return String(logPlanId) === String(planId);
+    if (planPresetKey && logPresetKey) return String(logPresetKey) === String(planPresetKey);
+    return !logPlanId && !logPresetKey;
+  });
+  const completedChapterOffsets = [];
+  const roundEndOffsets = [];
+  for (let round = 1; round <= completedRoundCount; round += 1) {
+    const offsets = new Map();
+    matchingLogs.filter(log => Number(log.round || 1) === round).forEach(log => {
+      const readDate = new Date(String(log.read_at || log.readAt || "").slice(0, 10) + "T00:00:00");
+      if (Number.isNaN(readDate.getTime())) return;
+      const offset = Math.max(0, Math.min(lastOffset, Math.floor((readDate - startDate) / 86400000)));
+      offsets.set(`${log.book}_${log.chapter}`, offset);
+    });
+    completedChapterOffsets.push(offsets);
+    const actualOffsets = Array.from(offsets.values());
+    const fallbackOffset = roundEndOffsets.length > 0 ? roundEndOffsets[roundEndOffsets.length - 1] + 1 : 0;
+    roundEndOffsets.push(actualOffsets.length > 0 ? Math.max(...actualOffsets) : fallbackOffset);
+  }
+  const days = segmentScheduleDaysForRoundCount(
+    baseDays,
+    roundCount,
+    roundEndOffsets,
+    completedChapterOffsets
+  );
   days.forEach(day => {
     day.chapters.forEach(chapter => {
       chapter.key = chapter.book + "_" + chapter.chapter + "_" + (chapter.round || 1);
@@ -1440,7 +1483,8 @@ function generateChurchCampaignPlanObject(definition, presetKey, scheduleSetting
   const targetBooks = Array.from(new Set(definition.segments.flatMap(segment =>
     segment.readings.map(reading => reading.book)
   )));
-  const totalChapters = days.reduce((sum, day) => sum + day.chapters.length, 0);
+  const currentRoundTotalChapters = baseDays.reduce((sum, day) => sum + day.chapters.length, 0);
+  const totalChapters = currentRoundTotalChapters * roundCount;
   return {
     name: definition.name,
     description: definition.description || "",
@@ -1448,15 +1492,15 @@ function generateChurchCampaignPlanObject(definition, presetKey, scheduleSetting
     endDate: definition.endDate,
     totalDays: days.length,
     totalChapters,
-    currentRoundTotalChapters: totalChapters,
+    currentRoundTotalChapters,
     completedChapters: 0,
     progress: 0,
     days,
     presetKey,
     target_books: targetBooks,
     targetBooks,
-    level: "normal",
-    currentRound: 1,
+    level,
+    currentRound: roundCount,
     wasDowngraded: false,
     isFixed: true,
     is_fixed: true,
@@ -1487,7 +1531,12 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     return generateChurchCampaignPlanObject(
       campaignDefinition,
       presetKey || window.CHURCH_CAMPAIGN_PRESET_KEY,
-      weeklySchedule
+      {
+        ...weeklySchedule,
+        planId: scheduleSettings && scheduleSettings.planId,
+        presetKey: scheduleSettings && scheduleSettings.presetKey || presetKey
+      },
+      level
     );
   }
   const restWeekdaySet = new Set(weeklySchedule.restWeekdays);

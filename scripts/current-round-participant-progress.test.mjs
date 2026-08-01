@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   getConfirmedReadingRound,
-  getCurrentRoundChapterProgress
+  getCurrentRoundChapterProgress,
+  segmentScheduleDaysForRoundCount
 } from "../js/data/current-round-progress.mjs";
 
 const db = readFileSync("js/db.js", "utf8");
 const plan = readFileSync("js/modules/plan.js", "utf8");
+const utils = readFileSync("js/utils.js", "utf8");
 const firstRoundLogs = Array.from({ length: 50 }, (_, index) => ({
   book: "創世記",
   chapter: index + 1,
@@ -45,11 +47,33 @@ describe("participant overview current-round progress", () => {
     expect(getCurrentRoundChapterProgress(logs, 2, 50).progress).toBe(2);
   });
 
-  it("keeps cumulative count separate and records explicit upgrade confirmation", () => {
+  it("places completed chapters on their actual check dates and the next pass afterward", () => {
+    const days = Array.from({ length: 4 }, (_, index) => ({
+      dayNum: index + 1,
+      isRestDay: false,
+      chapters: index < 2 ? [{ book: "創世記", chapter: index + 1, round: 1 }] : []
+    }));
+    const actualFirstRoundOffsets = new Map([
+      ["創世記_1", 0],
+      ["創世記_2", 1]
+    ]);
+    const scheduled = segmentScheduleDaysForRoundCount(days, 2, [1], [actualFirstRoundOffsets]);
+
+    expect(scheduled[0].chapters).toEqual([expect.objectContaining({ chapter: 1, round: 1 })]);
+    expect(scheduled[1].chapters).toEqual([expect.objectContaining({ chapter: 2, round: 1 })]);
+    expect(scheduled.slice(0, 2).flatMap(day => day.chapters).some(chapter => chapter.round === 2)).toBe(false);
+    expect(scheduled.slice(2).flatMap(day => day.chapters).map(chapter => chapter.round)).toEqual([2, 2]);
+  });
+
+  it("persists confirmation, invalidates old totals, and renders only the active round", () => {
     expect(db).toContain("chapters_read: uniqueLogs.length");
     expect(db).toContain("getConfirmedReadingRound({");
     expect(plan).toContain("plan.upgradePromptHandled = true");
     expect(plan).toContain('statusStr = "第一遍完成"');
     expect(plan).toContain('statusStr = `第${memberRound}遍完成${memberProgress}%`');
+    expect(plan).toContain("const visibleChapters = (selectedDay.chapters || []).filter");
+    expect(plan).toContain("window._cachedAllUsersList = null");
+    expect(utils).toContain("log.read_at || log.readAt");
+    expect(utils).toContain("segmentScheduleDaysForRoundCount(");
   });
 });
