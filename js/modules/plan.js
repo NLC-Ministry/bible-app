@@ -11,7 +11,7 @@ import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
 import {
   removePlanReadingLogs,
   resetPlanProgressState
-} from "../data/plan-progress-reset.mjs";
+} from "./plan-progress-reset.mjs";
 
 // Reading plans tab view controller
 

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   removePlanReadingLogs,
   resetPlanProgressState
-} from "../js/data/plan-progress-reset.mjs";
+} from "../js/modules/plan-progress-reset.mjs";
 
 describe("plan progress reset", () => {
   const plan = {

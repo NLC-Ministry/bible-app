@@ -46,6 +46,30 @@ export function cpDirRecursive(src, dest) {
   }
 }
 
+export function assertRelativeModuleImportsResolve(modulesDir) {
+  if (!existsSync(modulesDir)) throw new Error(`bundle: missing copied modules directory: ${modulesDir}`);
+  const moduleFiles = [];
+  const collectModules = (directory) => {
+    readdirSync(directory).forEach(name => {
+      const path = join(directory, name);
+      if (lstatSync(path).isDirectory()) collectModules(path);
+      else if (/\.(?:js|mjs)$/.test(name)) moduleFiles.push(path);
+    });
+  };
+  collectModules(modulesDir);
+
+  const importPattern = /(?:from\s*|import\s*(?:\(\s*)?)["'](\.[^"'?#]+)(?:[?#][^"']*)?["']/g;
+  moduleFiles.forEach(file => {
+    if (file.endsWith("issue-report-ui.js")) return;
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(importPattern)) {
+      const dependency = join(dirname(file), match[1]);
+      if (!existsSync(dependency)) {
+        throw new Error(`bundle: copied module dependency missing: ${file} -> ${match[1]}`);
+      }
+    }
+  });
+}
 // Matches a local <script src="..."></script> with `src` in ANY attribute position
 const SCRIPT_RE = /<script\b[^>]*?\ssrc="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>\s*<\/script>/g;
 const CSS_RE = /<link\s+rel="stylesheet"\s+href="(?!https?:|\/\/)([^"?#]+)(?:[?#][^"]*)?"[^>]*>/g;
@@ -168,6 +192,7 @@ export function emitBundle({ root, outDir }) {
   if (existsSync(modulesSrc)) {
     console.log("DEBUG: Copying modules...");
     cpDirRecursive(modulesSrc, join(outDir, "modules"));
+    assertRelativeModuleImportsResolve(join(outDir, "modules"));
   }
   const issueReportEntry = join(root, "js", "modules", "issue-report-ui.js");
   if (existsSync(issueReportEntry)) {
