@@ -2012,7 +2012,7 @@ function isCampaignStageLocked(plan) {
 function canManageHiddenPlans() {
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
 
-  return role === 'admin';
+  return ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'].includes(role);
 }
 
 function getVisiblePlans(plans) {

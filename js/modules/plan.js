@@ -2196,12 +2196,11 @@ function renderPresetPlansList() {
   const loadedPlanKeys = new Set(loadedPlans.flatMap(plan =>
     [plan && plan.id, plan && plan.globalPlanId, plan && plan.presetKey].filter(Boolean).map(String)
   ));
-  const missingCampaignStages = presetPlanEntries.filter(plan =>
-    plan.planKind === "church_campaign_stage"
-    && ![plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String).some(key => loadedPlanKeys.has(key))
+  const missingPresets = presetPlanEntries.filter(plan =>
+    ![plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String).some(key => loadedPlanKeys.has(key))
   );
   const sourcePlans = loadedPlans.length > 0
-    ? [...loadedPlans, ...missingCampaignStages]
+    ? [...loadedPlans, ...missingPresets]
     : presetPlanEntries;
 
   const joinedKeys = new Set((state.activePlans || []).flatMap(plan => [

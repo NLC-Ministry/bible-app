@@ -296,7 +296,7 @@ async function applyForcedScope(query: any, table: string, action: string, profi
     return { query: query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]) };
   }
   if (table === "user_identities") return { query: query.eq("profile_id", profile.id) };
-  if (table === "global_plans" && action === "select" && !isAdmin(profile)) return { query: query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage") };
+  if (table === "global_plans" && action === "select" && !canManagePlans(profile)) return { query: query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage") };
   if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
   if (table === "care_reminders" && action === "select") return { query: query.eq("recipient_id", profile.id) };
   if (table === "care_reminders" && action === "update") return { query: query.eq("recipient_id", profile.id) };

@@ -620,7 +620,7 @@ function getManagementPlans() {
     const status = getManagementPlanStatus(plan);
     const isStageOneBootstrap = getManagementPlanStageNo(plan) === 1;
     if ((status === 'ongoing' || status === 'completed' || isStageOneBootstrap)
-      && !(typeof isPlanHidden === 'function' && isPlanHidden(plan))) {
+      && !(typeof isPlanHidden === 'function' && isPlanHidden(plan) && !canManageHiddenPlans())) {
       result.push({ ...plan, managementStatus: status });
     }
     return result;
