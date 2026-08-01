@@ -188,7 +188,9 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
   function bindTeamMemberRemovalButtons(container, team, members, onRemoved) {
     if (!container || !team) return;
     container.querySelectorAll("[data-team-remove-user]").forEach(button => {
-      button.addEventListener("click", async () => {
+      button.addEventListener("click", async event => {
+        event.preventDefault();
+        event.stopPropagation();
         const member = members.find(item => String(item.userId) === String(button.dataset.teamRemoveUser));
         if (!member) return;
         const memberName = String(member.name || "").trim() || "這位隊員";
@@ -202,13 +204,19 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         if (!confirmed) return;
 
         button.disabled = true;
-        loader.show("移出隊員中...");
-        const result = await db.removeReadingTeamMember(team.id, member.userId);
-        loader.hide();
-        button.disabled = false;
+        button.setAttribute("aria-busy", "true");
+        let result;
+        try {
+          result = await db.removeReadingTeamMember(team.id, member.userId);
+        } catch (error) {
+          result = { success: false, error, message: error && error.message };
+        } finally {
+          button.disabled = false;
+          button.removeAttribute("aria-busy");
+        }
 
         if (!result || !result.success) {
-          alert("移出隊員失敗: " + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"));
+          showToast("移除隊員失敗：" + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"));
           return;
         }
         showToast(`已將 ${memberName} 移出團隊`);
@@ -568,6 +576,33 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     return overlay;
   };
 
+  async function refreshInlineReadingTeam(container, plan, team, mode) {
+    const result = await db.getMyReadingTeam(plan);
+    if (!result || !result.success) {
+      showToast(result && result.message || "團隊名單更新失敗，請稍後再試。");
+      return;
+    }
+
+    const contexts = getJoinedReadingTeamContexts(result.context);
+    const refreshedContext = contexts.find(item =>
+      String(item.team && item.team.id || "") === String(team && team.id || "")
+      || Number(item.team && item.team.division) === Number(team && team.division)
+    );
+    if (!refreshedContext) {
+      container.innerHTML = "";
+      container.classList.add("hidden");
+      return;
+    }
+
+    window.renderMyReadingTeamInline(container, plan, refreshedContext, mode);
+    window.dispatchEvent(new CustomEvent("readingTeam:updated", {
+      detail: {
+        planId: String(plan && (plan.globalPlanId || plan.id || plan.presetKey) || ""),
+        teamId: String(refreshedContext.team.id || "")
+      }
+    }));
+  }
+
   window.renderMyReadingTeamInline = function renderMyReadingTeamInline(container, plan, context, mode = "members") {
     if (!container || !context || !context.team) return;
     const team = context.team;
@@ -633,7 +668,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     }
 
     bindTeamReminderButtons(container, team, members, totalChapters);
-    bindTeamMemberRemovalButtons(container, team, members, () => window.location.reload(true));
+    bindTeamMemberRemovalButtons(container, team, members, () => refreshInlineReadingTeam(container, plan, team, mode));
     hydrate(container);
   };
 
