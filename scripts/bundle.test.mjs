@@ -126,15 +126,24 @@ describe("emitBundle (integration, real repo)", () => {
       expect(existsSync(join(out, jsFile))).toBe(true);
       expect(existsSync(join(out, "app.js"))).toBe(true);
       expect(existsSync(join(out, cssFile))).toBe(true);
+      expect(existsSync(join(out, "index.css"))).toBe(true);
       // rewritten HTML: exactly one app script tag, no leftover local js/ tags
       const html = rf(join(out, "index.html"), "utf8");
       expect(html).toContain('<script type="module" src="/app.js"></script>');
       expect(html).not.toMatch(/<script\s+src="js\//);
       expect(html).not.toMatch(/<script\s+src="config\.js/);
-      expect(html).toContain(`href="/${cssFile}"`);
+      expect(html).toContain(`href="/${cssFile}" onerror="window.showAppStyleRecovery()"`);
       expect((html.match(new RegExp(`href="/${cssFile}"`, "g")) || []).length).toBe(1);
       const bundledCss = rf(join(out, cssFile), "utf8");
       expect(bundledCss).toContain(".reading-team-overlay");
+      expect(rf(join(out, "index.css"), "utf8")).toBe(bundledCss);
+      const serviceWorker = rf(join(out, "sw.js"), "utf8");
+      expect(serviceWorker).not.toContain("__BUILD_VERSION__");
+      expect(serviceWorker).not.toContain("__BUILD_CSS_PATH__");
+      expect(serviceWorker).toContain(`"/${cssFile}"`);
+      expect(serviceWorker).toContain('"/index.css"');
+      expect(serviceWorker).toContain('"/app.js"');
+      expect(serviceWorker).toMatch(/const VERSION = "\d{14}"/);
 
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);

@@ -17,6 +17,7 @@ describe("vercel.json", () => {
   it("keeps the stable app entry fresh and recovers stale hashed URLs", () => {
     expect(headerFor("/app.js")).toContain("no-store");
     expect(cfg.rewrites).toContainEqual({ source: "/app.:hash.js", destination: "/app.js" });
+    expect(cfg.rewrites).toContainEqual({ source: "/js/app.js", destination: "/app.js" });
   });
 
   it("keeps entry HTML uncacheable", () => {
@@ -31,8 +32,9 @@ expect(value).toContain("public");
     expect(value).toContain("immutable");
   });
 
-  it("caches content-hashed CSS immutably", () => {
-    const value = headerFor("/(.*)\\.css");
+  it("keeps stable CSS fresh and caches content-hashed CSS immutably", () => {
+    expect(headerFor("/index.css")).toContain("no-store");
+    const value = headerFor("/index.(.*).css");
 expect(value).toContain("public");
     expect(value).toContain("max-age=31536000");
     expect(value).toContain("immutable");

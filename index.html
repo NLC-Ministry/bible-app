@@ -21,9 +21,44 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="index.css?v=20260801_full_plan_reset">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260801_registration_summary">
-  <link rel="stylesheet" href="css/team-registration.css?v=20260730_team_registration_cancel_safe">
+  <style id="critical-visibility-guard">
+    .hidden, [hidden] { display: none !important; }
+  </style>
+  <script>
+    window.showAppStyleRecovery = function () {
+      window.__appStylesheetFailed = true;
+      const show = function () {
+        const recovery = document.getElementById("app-style-recovery");
+        if (recovery) recovery.hidden = false;
+      };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show, { once: true });
+      else show();
+    };
+    window.recoverAppAssets = async function () {
+      const button = document.getElementById("app-style-recovery-button");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "正在修復…";
+      }
+      try {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.unregister()));
+        }
+        if (window.caches) {
+          const names = await caches.keys();
+          await Promise.all(names
+            .filter(name => name.startsWith("newlife-bible-") || name.startsWith("church-bible-"))
+            .map(name => caches.delete(name)));
+        }
+      } finally {
+        window.location.replace("/?version=" + Date.now());
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="index.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
+  <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
 
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
@@ -95,6 +130,11 @@
 </head>
 
 <body class="light-theme">
+  <div id="app-style-recovery" hidden role="alert" style="position:fixed;inset:0;z-index:2147483647;background:#fafafa;color:#171717;padding:env(safe-area-inset-top,24px) 24px env(safe-area-inset-bottom,24px);font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px;">
+    <div style="font-size:22px;font-weight:700;">畫面樣式需要重新載入</div>
+    <div style="max-width:360px;font-size:16px;line-height:1.6;color:#555;">系統偵測到舊版畫面資源，點擊下方按鈕即可修復，不會刪除你的讀經進度或登入資料。</div>
+    <button id="app-style-recovery-button" type="button" onclick="window.recoverAppAssets()" style="border:0;border-radius:12px;background:#04A9D2;color:#fff;padding:12px 22px;font-size:16px;font-weight:600;">修復並重新載入</button>
+  </div>
   <!-- App Container -->
   <div class="app-layout hidden">
 
@@ -2139,7 +2179,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260802_reader_autoread"></script>
+  <script type="module" src="js/app.js?v=20260802_pwa_shell_recovery"></script>
 </body>
 
 </html>

@@ -64,9 +64,9 @@ describe("admin team registration overview", () => {
   });
 
   it("bumps the app cache key", () => {
-    expect(html).toContain("js/app.js?v=20260801_full_plan_reset");
-    expect(html).toContain("index.css?v=20260801_full_plan_reset");
-    expect(html).toContain("css/team-registration.css?v=20260730_team_registration_cancel_safe");
+    expect(html).toContain("js/app.js?v=20260802_pwa_shell_recovery");
+    expect(html).toContain("index.css?v=20260802_pwa_shell_recovery");
+    expect(html).toContain("css/team-registration.css?v=20260802_pwa_shell_recovery");
   });
 
   it("removes local user permission management and uses native team disclosure", () => {

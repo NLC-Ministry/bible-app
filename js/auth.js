@@ -395,7 +395,7 @@ const auth = {
     try {
       if (window.caches) {
         const keys = await caches.keys();
-        await Promise.all(keys.filter(key => key.startsWith("church-bible-")).map(key => caches.delete(key)));
+        await Promise.all(keys.filter(key => key.startsWith("newlife-bible-") || key.startsWith("church-bible-")).map(key => caches.delete(key)));
       }
     } catch (err) {
       console.warn("Could not clear app caches", err);
@@ -677,7 +677,7 @@ const auth = {
     try {
       if (window.caches) {
         const keys = await caches.keys();
-        await Promise.all(keys.filter(key => key.startsWith("church-bible-")).map(key => caches.delete(key)));
+        await Promise.all(keys.filter(key => key.startsWith("newlife-bible-") || key.startsWith("church-bible-")).map(key => caches.delete(key)));
       }
     } catch (err) {
       console.warn("Could not clear app caches during logout", err);

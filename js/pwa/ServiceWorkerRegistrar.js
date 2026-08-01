@@ -20,6 +20,11 @@ export class ServiceWorkerRegistrar extends EventTarget {
     this.registration = await navigator.serviceWorker.register(this.scriptUrl, {
       scope: this.scope, type: "module", updateViaCache: "none"
     });
+    try {
+      await this.registration.update();
+    } catch (error) {
+      console.warn("[PWA] Service Worker update check failed", error);
+    }
     navigator.serviceWorker.addEventListener("message", event => {
       this.dispatchEvent(new CustomEvent("message", { detail: event.data }));
     });

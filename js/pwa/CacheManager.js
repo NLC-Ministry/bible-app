@@ -20,9 +20,12 @@ export class CacheManager {
 
   async precache(urls) {
     const cache = await this.cacheStorage.open(this.staticCacheName);
-    const results = await Promise.allSettled(urls.map(url => cache.add(url)));
-    const failed = results.filter(result => result.status === "rejected");
-    if (failed.length) console.warn(`[PWA] ${failed.length} precache request(s) failed.`);
+    try {
+      await Promise.all(urls.map(url => cache.add(url)));
+    } catch (error) {
+      await this.cacheStorage.delete(this.staticCacheName);
+      throw error;
+    }
   }
 
   async cacheFirst(request, { cacheName = this.staticCacheName } = {}) {

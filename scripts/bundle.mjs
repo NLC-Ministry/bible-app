@@ -159,6 +159,7 @@ export function emitBundle({ root, outDir }) {
   writeFileSync(join(outDir, jsFile), processedJs, "utf8");
   writeFileSync(join(outDir, "app.js"), processedJs, "utf8");
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
+  writeFileSync(join(outDir, "index.css"), cssContent, "utf8");
   console.log("DEBUG: Files written successfully!");
 
   // Rewrite HTML
@@ -172,7 +173,7 @@ export function emitBundle({ root, outDir }) {
   let seenStylesheet = 0;
   outHtml = outHtml.replace(CSS_RE, () => {
     seenStylesheet += 1;
-    return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}">` : "";
+    return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}" onerror="window.showAppStyleRecovery()">` : "";
   });
   console.log("DEBUG: Writing index.html...");
   writeFileSync(join(outDir, "index.html"), outHtml, "utf8");
@@ -184,7 +185,10 @@ export function emitBundle({ root, outDir }) {
   console.log("DEBUG: Copying manifest.json...");
   cpDirRecursive(join(root, "manifest.json"), join(outDir, "manifest.json"));
   console.log("DEBUG: Copying Service Worker and PWA runtime modules...");
-  cpDirRecursive(join(root, "sw.js"), join(outDir, "sw.js"));
+  const serviceWorker = readFileSync(join(root, "sw.js"), "utf8")
+    .replaceAll("__BUILD_VERSION__", buildVer)
+    .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`);
+  writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
   cpDirRecursive(join(root, "js", "pwa"), join(outDir, "js", "pwa"));
 
   // Copy modules folder for lazy loading support

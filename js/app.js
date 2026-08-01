@@ -330,6 +330,14 @@ async function ensureAdminFeatureModulesLoaded() {
 }
 
 async function refreshCurrentAppView() {
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/");
+      await registration?.update();
+    } catch (error) {
+      console.warn("Unable to check for an app shell update", error);
+    }
+  }
   window._cachedAllUsersList = null;
   window._cachedAllUsersListKey = null;
 

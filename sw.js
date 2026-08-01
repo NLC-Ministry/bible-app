@@ -1,12 +1,21 @@
 import { CacheManager } from "./js/pwa/CacheManager.js?v=20260729-team-rank";
 
-const VERSION = "0.1.5";
+const VERSION = "__BUILD_VERSION__";
 const cacheManager = new CacheManager({
   prefix: "newlife-bible",
   version: VERSION,
   fetchImpl: (...args) => globalThis.fetch(...args)
 });
-const APP_SHELL = ["/", "/index.html", "/manifest.json", "/assets/icon-192.png", "/assets/icon-512.png"];
+const BUILD_CSS_PATH = "__BUILD_CSS_PATH__";
+const APP_SHELL = [
+  "/",
+  "/app.js",
+  "/index.css",
+  ...(BUILD_CSS_PATH.startsWith("/") ? [BUILD_CSS_PATH] : []),
+  "/manifest.json",
+  "/assets/icon-192.png",
+  "/assets/icon-512.png"
+];
 
 function isSupabaseApiRequest(request) {
   const url = new URL(request.url);
@@ -62,7 +71,7 @@ self.addEventListener("fetch", event => {
   if (shouldBypassCache(request)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 5000, fallbackUrl: "/index.html" }));
+    event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 8000, fallbackUrl: "/" }));
     return;
   }
 
