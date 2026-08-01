@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "../js/modules/team-progress-metrics.mjs";
 
 const teamUi = readFileSync(new URL("../js/modules/team-registration.js", import.meta.url), "utf8");
 
@@ -61,10 +62,12 @@ describe("reading team dialog navigation", () => {
       hydrateIcons: () => {},
       showToast: () => {},
       loader: { show: () => {}, hide: () => {} },
-      showConfirmDialog: vi.fn().mockResolvedValue(false)
+      showConfirmDialog: vi.fn().mockResolvedValue(false),
+      getMemberOverallPlanProgress,
+      getTeamOverallPlanProgress
     });
 
-    dom.window.eval(teamUi);
+    dom.window.eval(teamUi.replace(/^import[^;]+;\s*/m, ""));
     await dom.window.openReadingTeamDialog(plan, { preferredDivision: 6 });
 
     const addOtherButton = dom.window.document.querySelector("[data-add-other-team]");

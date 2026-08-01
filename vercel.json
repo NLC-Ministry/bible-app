@@ -8,11 +8,11 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/modules/(.*).js",
+      "source": "/modules/(.*)\\.(js|mjs)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
     },
     {
-      "source": "/js/pwa/(.*).js",
+      "source": "/js/pwa/(.*)\\.js",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
     },
     {

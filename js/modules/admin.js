@@ -5,6 +5,7 @@ import {
   wasPlanInviteRemindedToday
 } from "./admin-bulk-plan-invite.mjs";
 import { buildAdminRegistrationStatisticsPlans } from "./admin-registration-plan-options.mjs";
+import { resolveAdminRegistrationSummary } from "./admin-registration-summary.mjs";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
@@ -381,23 +382,7 @@ function sanitizeRegistrationStatisticsText(value) {
 }
 
 function getAdminRegistrationStatisticsSummary(context) {
-  if (context && context.summary) return context.summary;
-
-  const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
-  const withoutPastoralZone = pastoralZones.find(row => row.label === "未設定牧區") || {};
-  const totalJoined = pastoralZones.reduce((total, row) => total + Number(row.signupCount || 0), 0);
-  const totalRegistered = pastoralZones.reduce((total, row) => total + Number(row.registeredCount || 0), 0);
-  const withoutPastoralZoneJoined = Number(withoutPastoralZone.signupCount || 0);
-  const withoutPastoralZoneRegistered = Number(withoutPastoralZone.registeredCount || 0);
-
-  return {
-    withoutPastoralZoneNotJoined: withoutPastoralZoneRegistered - withoutPastoralZoneJoined,
-    withoutPastoralZoneJoined,
-    withPastoralZoneNotJoined: totalRegistered - totalJoined - (withoutPastoralZoneRegistered - withoutPastoralZoneJoined),
-    withPastoralZoneJoined: totalJoined - withoutPastoralZoneJoined,
-    totalJoined,
-    totalRegistered
-  };
+  return resolveAdminRegistrationSummary(context);
 }
 
 function renderAdminRegistrationStatisticsSummary(context) {

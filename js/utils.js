@@ -1308,7 +1308,7 @@ async function persistPlanLevelState(plan) {
     const { error } = await state.supabase.from("reading_plans").update(payload).eq("id", plan.id);
     if (error) {
       console.warn("Failed to persist downgrade lock column, retrying without it", error);
-      await state.supabase.from("reading_plans")
+      const { error: retryError } = await state.supabase.from("reading_plans")
         .update({
           level: plan.level,
           current_round: plan.currentRound || getPlanLevelOrder(plan.level),
@@ -1316,6 +1316,7 @@ async function persistPlanLevelState(plan) {
           upgrade_prompt_handled: !!plan.upgradePromptHandled
         })
         .eq("id", plan.id);
+      if (retryError) throw retryError;
     }
   } else if (!state.isSupabaseMode) {
     localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));

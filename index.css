@@ -10402,6 +10402,68 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
     width: 100%;
   }
 }
+/* The upgrade decision blocks the progress page until scheduling has finished. */
+.plan-upgrade-gate {
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+}
+
+.plan-upgrade-gate__panel {
+  max-width: 420px;
+}
+
+.plan-upgrade-gate__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  margin-bottom: 1rem;
+  border-radius: 50%;
+  color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  border: 1px solid var(--color-brand-border);
+}
+
+.plan-upgrade-gate__eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--color-brand);
+  font-size: 0.82rem;
+  font-weight: var(--type-weight-strong);
+}
+
+.plan-upgrade-gate__status {
+  min-height: 1.4rem;
+  margin: -0.65rem 0 1rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.plan-upgrade-gate__status.is-error {
+  color: var(--color-danger);
+}
+
+.plan-upgrade-gate .congrats-upgrade-btn:disabled,
+.plan-upgrade-gate .congrats-later-btn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.plan-upgrade-gate.is-busy .plan-upgrade-gate__icon {
+  animation: planUpgradePulse 1.1s ease-in-out infinite;
+}
+
+@keyframes planUpgradePulse {
+  50% { transform: scale(1.06); opacity: 0.75; }
+}
+
+/* Keep reporting and global navigation out of the inline reading surface.
+   The inline previous/next chapter controls remain available. */
+body.plan-inline-reader-open .issue-report-fab,
+body.plan-inline-reader-open .mobile-nav-bar {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
 /* Admin campaign round editor */
 .campaign-rule-section-heading {
   display: flex;

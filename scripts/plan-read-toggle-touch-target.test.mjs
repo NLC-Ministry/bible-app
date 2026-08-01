@@ -38,7 +38,7 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260801_persistent_plan_upgrade");
+    expect(html).toContain("index.css?v=20260801_upgrade_gate_autoread_stats");
   });
 });
 

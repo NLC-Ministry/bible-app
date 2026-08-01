@@ -121,13 +121,18 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
   if (taskContext.round < Number(taskContext.plan.currentRound || 1)) return;
 
   const planDayChKey = `${taskContext.book.name}_${state.readerState.chapter}`;
+  const readKey = `isReadR${taskContext.round}`;
+  const previousRoundRead = Boolean(taskContext.chapter[readKey]);
+  const previousRead = Boolean(taskContext.chapter.isRead);
   state.readerState.autoMarked = true;
   state.readerState.autoMarkInFlight = true;
+  taskContext.chapter[readKey] = true;
+  if (taskContext.round === 1) taskContext.chapter.isRead = true;
   try {
     updatePlanCheckboxState(planDayChKey, true);
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
-    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true);
+    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true, taskContext.round);
 
     const shouldHandleR1 = taskContext.plan.isPlanCompleted && !taskContext.plan.upgradePromptHandled;
     const shouldHandleR2 = taskContext.plan.isRound2Completed && !taskContext.plan.round2UpgradePromptHandled;
@@ -139,6 +144,8 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);
     state.readerState.autoMarked = false;
+    taskContext.chapter[readKey] = previousRoundRead;
+    taskContext.chapter.isRead = previousRead;
     updatePlanCheckboxState(planDayChKey, false);
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();

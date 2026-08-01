@@ -1,3 +1,5 @@
+import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team-progress-metrics.mjs";
+
 // Independent 3-person / 6-person competition team registration.
 // Organisation small-group and pastoral-zone scopes are deliberately not used here.
 (function () {
@@ -125,9 +127,13 @@
   }
 
   function getMemberProgress(member, totalChapters) {
-    const read = Number(member.chaptersRead || 0);
-    const progress = totalChapters > 0 ? Math.min(100, Math.round(read / totalChapters * 100)) : 0;
-    return { read, progress };
+    const metrics = getMemberOverallPlanProgress(member, totalChapters);
+    return {
+      read: metrics.currentRoundRead,
+      completedRead: metrics.completedChapters,
+      journeyChapters: metrics.journeyChapters,
+      progress: metrics.progress
+    };
   }
 
   function renderMember(member, totalChapters, plan, options = {}) {
@@ -317,7 +323,7 @@
     </div>`;
   }
   function renderTeamStatGrid(members, totalChapters, plan) {
-    const totalRead = members.reduce((sum, member) => sum + Number(member.chaptersRead || 0), 0);
+    const { completedChapters: totalRead } = getTeamOverallPlanProgress(members, totalChapters);
     const activeToday = members.filter(member => Number(member.todayRead || 0) > 0).length;
     const expectedChapters = getExpectedChapters(plan, totalChapters);
     const behindCount = members.filter(member => Number(member.currentRound || 1) === 1 && Number(member.chaptersRead || 0) < expectedChapters).length;
@@ -446,9 +452,7 @@
       returnDivision = Number(team.division);
       const members = Array.isArray(context.members) ? context.members : [];
       const totalChapters = Number(plan.currentRoundTotalChapters || plan.totalChapters || 0);
-      const averageProgress = members.length
-        ? Math.round(members.reduce((sum, member) => sum + Math.min(100, totalChapters > 0 ? Number(member.chaptersRead || 0) / totalChapters * 100 : 0), 0) / members.length)
-        : 0;
+      const { averageProgress } = getTeamOverallPlanProgress(members, totalChapters);
       const isCaptain = String(team.captainId) === String(state.currentUser && (state.currentUser.id || state.currentProfileId));
       const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);
       const joinedDivisions = new Set(allContexts.map(item => Number(item && item.team && item.team.division)));
@@ -569,17 +573,18 @@
     const team = context.team;
     const members = Array.isArray(context.members) ? context.members : [];
     const totalChapters = Number(plan && (plan.currentRoundTotalChapters || plan.totalChapters) || 0);
-    const totalRead = members.reduce((sum, member) => sum + Number(member.chaptersRead || 0), 0);
-    const averageProgress = members.length && totalChapters > 0
-      ? Math.min(100, Math.round(totalRead / (members.length * totalChapters) * 100))
-      : 0;
+    const {
+      averageProgress,
+      completedChapters: totalRead,
+      journeyChapters: totalJourneyChapters
+    } = getTeamOverallPlanProgress(members, totalChapters);
     const currentMember = members.find(member => member.isMe);
     const currentUserId = state.currentUser && state.currentUser.id || state.currentProfileId;
     const isCurrentUserCaptain = currentMember && currentMember.role === "captain"
       || String(team.captainId || "") === String(currentUserId || "");
     const summary = mode === "stats" ? `
       <div class="reading-team-summary" style="justify-content: center; text-align: center;">
-        <div style="align-items: center;"><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalChapters * members.length} 章</span></div>
+        <div style="align-items: center;"><span>團隊完成狀況</span><strong>${averageProgress}%</strong><span>${totalRead} / ${totalJourneyChapters} 章</span></div>
       </div>` : "";
     container.classList.toggle("reading-team-inline--stats", mode === "stats");
     container.innerHTML = `

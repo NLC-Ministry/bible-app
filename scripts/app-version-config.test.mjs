@@ -27,7 +27,7 @@ describe("Bible app release version contract", () => {
   });
 
   it("aligns service worker cache version with the release", () => {
-    expect(sw).toContain('const VERSION = "0.1.1"');
+    expect(sw).toContain('const VERSION = "0.1.2"');
     expect(sw).toContain('version: VERSION');
   });
 

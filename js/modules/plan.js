@@ -7,6 +7,7 @@ import {
 } from "./plan-team-navigation-helpers.mjs";
 import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
+import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
 
 // Reading plans tab view controller
 
@@ -15,6 +16,7 @@ window._statsTabScope = null;
 
 // Asynchronous Request & Click Debounce state trackers
 let lastTrackerRequestId = 0;
+let planUpgradeInFlight = false;
 let dateClickDebounceTimer = null;
 let viewMode = 'calendar'; // Today reading always shows calendar + chapter list
 let planSearchQuery = '';
@@ -383,6 +385,8 @@ window.PlanPageController = {
       forceHidden(shell.schedule, false);
       forceHidden(shell.level, true);
       state.inlineReader.active = false;
+      document.body.classList.remove("plan-inline-reader-open");
+      inlineReaderBottomDwellController?.cancel();
       const inlineReader = document.getElementById("plan-inline-reader");
       if (inlineReader) inlineReader.classList.add("hidden");
       ensurePlanViewModeToggle();
@@ -1234,6 +1238,7 @@ function getPlanStorageKey(plan) {
 
 async function openJoinedPlanProgress(plan) {
   if (!plan) return;
+  delete plan.upgradeOverlayDismissedRound;
   state.activePlan = plan;
   state.planDetailOpen = true;
   state.planActiveSubTab = "today";
@@ -1640,9 +1645,8 @@ function renderJoinedPlansList() {
         card.querySelector('[data-plan-card-action="upgrade"]')?.addEventListener("click", async event => {
           event.preventDefault();
           event.stopPropagation();
-          state.activePlan = plan;
-          if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(plan);
-          await window.triggerPlanUpgradeFlow();
+          delete plan.upgradeOverlayDismissedRound;
+          await openJoinedPlanProgress(plan);
         });
         if (isTeamPlan) {
           const teamContainer = card.querySelector(".plan-card-team-controls");
@@ -2652,51 +2656,33 @@ function renderHorizontalDateStrip() {
   // 日曆的垂直捲動位置由使用者手勢完全自主控制。
 }
 
-function renderPersistentPlanUpgradeEntry(plan = state.activePlan) {
-  const schedule = document.getElementById("subview-plan-schedule");
-  if (!schedule) return;
-
-  let entry = document.getElementById("plan-persistent-upgrade-entry");
-  if (!entry) {
-    entry = document.createElement("section");
-    entry.id = "plan-persistent-upgrade-entry";
-    entry.className = "plan-persistent-upgrade-entry hidden";
-    const chaptersCard = schedule.querySelector(".plan-chapters-card");
-    schedule.insertBefore(entry, chaptersCard || schedule.firstChild);
-  }
+function renderPlanProgressUpgradeOverlay(plan = state.activePlan) {
+  if (!plan || window.currentPlanViewState !== PLAN_ROUTE.DETAIL) return;
 
   const availability = getPlanUpgradeAvailability(plan, { expired: isPlanExpired(plan) });
-  entry.classList.toggle("hidden", !availability.eligible);
-  entry.hidden = !availability.eligible;
+  const existing = document.getElementById("congrats-modal");
   if (!availability.eligible) {
-    entry.innerHTML = "";
+    if (!planUpgradeInFlight && existing?.dataset.planUpgradePrompt === "true") existing.remove();
     return;
   }
+  if (Number(plan.upgradeOverlayDismissedRound || 0) === availability.currentRound) return;
 
-  entry.innerHTML = `
-    <span class="plan-persistent-upgrade-entry__icon" aria-hidden="true">
-      <span class="nlc-icon nlc-icon--md" data-icon="trophy"></span>
-    </span>
-    <span class="plan-persistent-upgrade-entry__copy">
-      <strong>${availability.currentRoundLabel}已完成</strong>
-      <span>當時沒有升級也沒關係，現在可以繼續挑戰${availability.nextRoundLabel}。</span>
-    </span>
-    <button type="button" class="primary-btn plan-persistent-upgrade-entry__action">
-      開始${availability.nextRoundLabel}
-    </button>`;
+  const planKey = String(plan.id || plan.globalPlanId || plan.presetKey || plan.name || "plan");
+  if (existing &&
+      existing.dataset.planUpgradePrompt === "true" &&
+      existing.dataset.planKey === planKey &&
+      Number(existing.dataset.planRound) === availability.currentRound) return;
 
-  entry.querySelector(".plan-persistent-upgrade-entry__action")?.addEventListener("click", () => {
-    window.triggerPlanUpgradeFlow();
-  });
-  if (typeof hydrateIcons === "function") hydrateIcons(entry);
+  showCongratsModal(plan, availability.currentRound);
 }
+
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
   console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：渲染任務章節', '資料版本:', state.dataVersion);
 
   const container = document.getElementById("plan-tasks-list");
   if (!container || !state.activePlan) return;
 
-  renderPersistentPlanUpgradeEntry(state.activePlan);
+  renderPlanProgressUpgradeOverlay(state.activePlan);
 
   const currentRequestId = ++lastTrackerRequestId;
 
@@ -3093,87 +3079,72 @@ async function checkPlanSchedule(plan) {
 }
 
 function showCongratsModal(plan, round) {
+  const availability = getPlanUpgradeAvailability(plan, { expired: isPlanExpired(plan) });
+  if (!availability.eligible || availability.currentRound !== Number(round)) return;
+
   const oldModal = document.getElementById("congrats-modal");
   if (oldModal) oldModal.remove();
 
   const modal = document.createElement("div");
   modal.id = "congrats-modal";
-  modal.className = "congrats-modal-overlay";
-
-  const nextRound = round + 1;
-  const svgOpen = '<s' + 'vg viewBox="0 0 100 100" width="100%" height="100%">';
-  const svgClose = '</s' + 'vg>';
+  modal.className = "congrats-modal-overlay plan-upgrade-gate";
+  modal.dataset.planUpgradePrompt = "true";
+  modal.dataset.planKey = String(plan.id || plan.globalPlanId || plan.presetKey || plan.name || "plan");
+  modal.dataset.planRound = String(availability.currentRound);
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-labelledby", "plan-upgrade-title");
 
   modal.innerHTML = `
-    <div class="congrats-modal-box">
-      <!-- Confetti Background Effects -->
-      <div class="congrats-confetti-container">
-        <div class="congrats-confetti-p1"></div>
-        <div class="congrats-confetti-p2"></div>
-        <div class="congrats-confetti-p3"></div>
-        <div class="congrats-confetti-p4"></div>
-      </div>
-
-      <!-- Medal Icon -->
-      <div class="congrats-medal-container">
-        ${svgOpen}
-          <!-- Ribbons -->
-          <path d="M35 55 L25 85 L45 85 Z" class="congrats-svg-ribbon-left" />
-          <path d="M65 55 L75 85 L55 85 Z" class="congrats-svg-ribbon-right" />
-          <!-- Outer Glow / Ring -->
-          <circle cx="50" cy="45" r="28" class="congrats-svg-glow-ring" />
-          <!-- Gold Circle -->
-          <circle cx="50" cy="45" r="24" class="congrats-svg-gold-circle" />
-          <!-- Star in center -->
-          <polygon points="50,28 55,38 67,39 58,47 61,59 50,52 39,59 42,47 33,39 45,38" class="congrats-svg-star" />
-          <!-- Inner circle overlay -->
-          <circle cx="50" cy="45" r="16" class="congrats-svg-inner-circle" />
-          
-          <defs>
-            <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" class="congrats-stop-1" />
-              <stop offset="50%" class="congrats-stop-2" />
-              <stop offset="100%" class="congrats-stop-3" />
-            </linearGradient>
-          </defs>
-        ${svgClose}
-      </div>
-
-      <h3 class="congrats-title">🎉 恭喜完成！</h3>
-      <p class="congrats-desc-primary">您已讀完第 ${round} 遍挑戰</p>
-      <p class="congrats-desc-secondary">獲得「第 ${round} 遍讀經紀念勳章」</p>
-
+    <div class="congrats-modal-box plan-upgrade-gate__panel">
+      <span class="plan-upgrade-gate__icon" aria-hidden="true">
+        <span class="nlc-icon nlc-icon--lg" data-icon="trophy"></span>
+      </span>
+      <p class="plan-upgrade-gate__eyebrow">${availability.currentRoundLabel}已完成</p>
+      <h3 class="congrats-title" id="plan-upgrade-title">是否開始${availability.nextRoundLabel}？</h3>
+      <p class="congrats-desc-secondary">確認後會先建立${availability.nextRoundLabel}的閱讀排程，完成後才回到進度頁。</p>
+      <p class="plan-upgrade-gate__status" id="plan-upgrade-status" aria-live="polite"></p>
       <div class="congrats-actions">
-        <button id="btn-modal-upgrade" onclick="window.triggerPlanUpgradeFlow()" class="congrats-upgrade-btn">🏆 確認升級第 ${nextRound} 遍</button>
-        <button id="btn-modal-later" class="congrats-later-btn">稍後再說</button>
+        <button id="btn-modal-upgrade" type="button" class="congrats-upgrade-btn">開始${availability.nextRoundLabel}</button>
+        <button id="btn-modal-later" type="button" class="congrats-later-btn">稍後再說</button>
       </div>
-    </div>
-  `;
-
-  if (!document.getElementById("congrats-anim-style")) {
-    const style = document.createElement("style");
-    style.id = "congrats-anim-style";
-    style.textContent = `
-      @keyframes float {
-        0%, 100% { transform: translateY(0) rotate(0deg); }
-        50% { transform: translateY(-10px) rotate(10deg); }
-      }
-      @keyframes pulseMedal {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
+    </div>`;
 
   document.body.appendChild(modal);
+  if (typeof hydrateIcons === "function") hydrateIcons(modal);
 
-  document.getElementById("btn-modal-later").onclick = () => modal.remove();
+  modal.querySelector("#btn-modal-upgrade")?.addEventListener("click", () => window.triggerPlanUpgradeFlow());
+  modal.querySelector("#btn-modal-later")?.addEventListener("click", () => {
+    plan.upgradeOverlayDismissedRound = availability.currentRound;
+    modal.remove();
+  });
+}
+
+function setPlanUpgradeOverlayBusy(busy, nextRoundLabel = "", errorMessage = "") {
+  const modal = document.getElementById("congrats-modal");
+  if (!modal || modal.dataset.planUpgradePrompt !== "true") return;
+  const panel = modal.querySelector(".plan-upgrade-gate__panel");
+  const upgradeButton = modal.querySelector("#btn-modal-upgrade");
+  const laterButton = modal.querySelector("#btn-modal-later");
+  const status = modal.querySelector("#plan-upgrade-status");
+
+  modal.classList.toggle("is-busy", busy);
+  panel?.setAttribute("aria-busy", String(busy));
+  if (upgradeButton) {
+    upgradeButton.disabled = busy;
+    upgradeButton.textContent = busy ? `正在建立${nextRoundLabel}排程…` : `開始${nextRoundLabel}`;
+  }
+  if (laterButton) laterButton.disabled = busy;
+  if (status) {
+    status.textContent = errorMessage || (busy ? `正在分配${nextRoundLabel}進度，請稍候。` : "");
+    status.classList.toggle("is-error", Boolean(errorMessage));
+  }
 }
 
 window.triggerPlanUpgradeFlow = async function() {
   const plan = state.activePlan;
   if (!plan) return;
+  if (planUpgradeInFlight) return;
 
   if (isPlanExpired(plan)) {
     showToast("計畫時間已過，無法再進行升級。");
@@ -3190,6 +3161,21 @@ window.triggerPlanUpgradeFlow = async function() {
 
   const currentRound = upgradeAvailability.currentRound;
   const nextRound = upgradeAvailability.nextRound;
+  const previousPlanState = {
+    currentRound: plan.currentRound,
+    level: plan.level,
+    days: plan.days,
+    totalDays: plan.totalDays,
+    totalChapters: plan.totalChapters,
+    currentRoundTotalChapters: plan.currentRoundTotalChapters,
+    completedChapters: plan.completedChapters,
+    progress: plan.progress,
+    wasDowngraded: plan.wasDowngraded,
+    downgradeLockedUntil: plan.downgradeLockedUntil,
+    lastUpgradedRound: plan.lastUpgradedRound
+  };
+  planUpgradeInFlight = true;
+  setPlanUpgradeOverlayBusy(true, upgradeAvailability.nextRoundLabel);
 
   // 記錄此類別完成的遍數，並觸發勳章解鎖檢查
   if (plan.planKind === "church_campaign_stage") {
@@ -3231,27 +3217,22 @@ window.triggerPlanUpgradeFlow = async function() {
     rebuildPlanScheduleForLevel(plan, nextLevel);
     await persistPlanLevelState(plan);
 
-    if (state.isSupabaseMode && state.supabase && plan.id) {
-      await state.supabase.from("reading_plans")
-        .update({ current_round: plan.currentRound, level: nextLevel, was_downgraded: false, downgrade_locked_until: null })
-        .eq("id", plan.id);
-    } else if (!state.isSupabaseMode) {
-      localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
-    }
 
     calculatePlanProgress();
+    await renderPlanView();
+    window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
 
     const modal = document.getElementById("congrats-modal");
     if (modal) modal.remove();
-
-    showToast(`恭喜！成功升級到第 ${nextRound} 遍並開始讀經。`);
-
-    renderPlanView();
-    window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
+    showToast(`恭喜！您已成功進入第 ${nextRound} 遍，開始新的讀經旅程。`);
   } catch (err) {
+    Object.assign(plan, previousPlanState);
+    calculatePlanProgress();
     console.error("Failed to upgrade plan:", err);
-    showToast("升級失敗，請重試");
+    setPlanUpgradeOverlayBusy(false, upgradeAvailability.nextRoundLabel, "排程建立失敗，請稍後再試。");
+    showToast("升級失敗，請稍後再試");
   } finally {
+    planUpgradeInFlight = false;
     loader.hide();
   }
 };
@@ -3691,8 +3672,120 @@ state.inlineReader = {
   dayNum: 0,
   chaptersList: [],
   currentIndex: 0,
-  autoMarked: false
+  autoMarked: false,
+  autoMarkInFlight: false
 };
+
+let inlineReaderBottomDwellController = null;
+
+function getCurrentInlineReaderTask() {
+  const plan = state.activePlan;
+  const reader = state.inlineReader;
+  if (!plan || !reader?.active) return null;
+  const chapter = reader.chaptersList[reader.currentIndex];
+  if (!chapter) return null;
+  const round = Number(chapter.round || plan.currentRound || 1);
+  return { plan, chapter, round };
+}
+
+function getInlineReaderTargetKey() {
+  const task = getCurrentInlineReaderTask();
+  if (!task) return "";
+  return [
+    task.plan.id || task.plan.globalPlanId || task.plan.presetKey || "plan",
+    state.inlineReader.dayNum,
+    task.round,
+    task.chapter.book,
+    task.chapter.chapter
+  ].join("|");
+}
+
+function isInlineReaderTaskRead(task) {
+  if (!task) return false;
+  return Boolean(task.chapter[`isReadR${task.round}`] || (task.round === 1 && task.chapter.isRead));
+}
+
+function findInlineReaderLog(task) {
+  return (state.readingLogs || []).find(log =>
+    String(log.book) === String(task.chapter.book) &&
+    Number(log.chapter) === Number(task.chapter.chapter) &&
+    Number(log.round || 1) === task.round &&
+    (log.plan_id === task.plan.id || log.presetKey === task.plan.presetKey || log.preset_key === task.plan.presetKey)
+  );
+}
+
+async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
+  const task = getCurrentInlineReaderTask();
+  if (!task || getInlineReaderTargetKey() !== expectedTargetKey) return;
+  if (isInlineReaderTaskRead(task) || state.inlineReader.autoMarked || state.inlineReader.autoMarkInFlight) return;
+  if (isPlanExpired(task.plan) || task.round < Number(task.plan.currentRound || 1)) return;
+
+  const readKey = `isReadR${task.round}`;
+  const previousRoundRead = Boolean(task.chapter[readKey]);
+  const previousRead = Boolean(task.chapter.isRead);
+  const existingLog = findInlineReaderLog(task);
+  state.inlineReader.autoMarked = true;
+  state.inlineReader.autoMarkInFlight = true;
+  task.chapter[readKey] = true;
+  if (task.round === 1) task.chapter.isRead = true;
+
+  try {
+    calculatePlanProgress();
+    await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round);
+    if (typeof db.saveLocalUserStats === "function") db.saveLocalUserStats();
+    calculatePlanProgress();
+    window.setDataVersion?.(previous => previous + 1);
+    window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
+    if (task.plan.progress >= 100) {
+      await window.closePlanInlineReader();
+      await handleRoundCompletion(task.plan);
+    }
+    if (typeof window.checkAndPromptTodayCompletion === "function") {
+      await window.checkAndPromptTodayCompletion();
+    }
+    showToast("已自動標記為已讀");
+  } catch (error) {
+    console.error("Failed to auto-mark inline reader progress", error);
+    task.chapter[readKey] = previousRoundRead;
+    task.chapter.isRead = previousRead;
+    if (!existingLog && Array.isArray(state.readingLogs)) {
+      state.readingLogs = state.readingLogs.filter(log => !(
+        String(log.book) === String(task.chapter.book) &&
+        Number(log.chapter) === Number(task.chapter.chapter) &&
+        Number(log.round || 1) === task.round &&
+        (log.plan_id === task.plan.id || log.presetKey === task.plan.presetKey || log.preset_key === task.plan.presetKey)
+      ));
+    }
+    state.inlineReader.autoMarked = false;
+    calculatePlanProgress();
+    showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
+  } finally {
+    state.inlineReader.autoMarkInFlight = false;
+  }
+}
+
+function handleInlineReaderScroll(event) {
+  const task = getCurrentInlineReaderTask();
+  inlineReaderBottomDwellController?.handleScroll(event.currentTarget || event.target, {
+    eligible: Boolean(task && !isInlineReaderTaskRead(task) && !state.inlineReader.autoMarked && !state.inlineReader.autoMarkInFlight),
+    targetKey: getInlineReaderTargetKey()
+  });
+}
+
+function initInlineReaderBottomDwell() {
+  const scrollSurface = document.querySelector(".main-content");
+  if (!scrollSurface) return;
+  if (!inlineReaderBottomDwellController) {
+    inlineReaderBottomDwellController = createReaderBottomDwellController({
+      dwellMs: 1000,
+      onComplete: autoMarkInlineReaderTaskRead
+    });
+  }
+  if (scrollSurface.dataset.inlineReaderBottomDwellBound !== "true") {
+    scrollSurface.dataset.inlineReaderBottomDwellBound = "true";
+    scrollSurface.addEventListener("scroll", handleInlineReaderScroll, { passive: true });
+  }
+}
 
 window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null) {
   if (state.activePlan && isPlanExpired(state.activePlan)) {
@@ -3704,6 +3797,7 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
   if (!day || !day.chapters || day.chapters.length === 0) return;
 
   state.inlineReader.active = true;
+  document.body.classList.add("plan-inline-reader-open");
   state.inlineReader.dayNum = dayNum;
   state.inlineReader.chaptersList = day.chapters;
   state.inlineReader.currentIndex = day.chapters.findIndex(ch =>
@@ -3728,11 +3822,14 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
   const inlineReader = document.getElementById("plan-inline-reader");
   if (inlineReader) inlineReader.classList.remove("hidden");
 
+  initInlineReaderBottomDwell();
   renderInlineScriptureText();
 };
 
-window.closePlanInlineReader = function () {
+window.closePlanInlineReader = async function () {
   state.inlineReader.active = false;
+  document.body.classList.remove("plan-inline-reader-open");
+  inlineReaderBottomDwellController?.cancel();
 
   // Show checklist interface elements
   const carousel = document.getElementById("plan-date-carousel");
@@ -3750,7 +3847,7 @@ window.closePlanInlineReader = function () {
   if (inlineReader) inlineReader.classList.add("hidden");
 
   // Re-render checklist to show checked updates
-  renderPlanScheduleTracker(true);
+  await renderPlanScheduleTracker(true);
 };
 
 async function renderInlineScriptureText() {
@@ -3758,6 +3855,8 @@ async function renderInlineScriptureText() {
   if (!currentCh) return;
 
   state.inlineReader.autoMarked = false;
+  state.inlineReader.autoMarkInFlight = false;
+  inlineReaderBottomDwellController?.reset();
 
   // Set Title
   const titleEl = document.getElementById("plan-inline-reader-title");
@@ -3823,8 +3922,9 @@ async function renderInlineScriptureText() {
     }
   }
 
-  // Scroll window to top
-  window.scrollTo({ top: 0, behavior: 'auto' });
+  // The plan detail page scrolls inside .main-content, not the browser window.
+  const scrollSurface = document.querySelector(".main-content" );
+  if (scrollSurface) scrollSurface.scrollTop = 0;
 }
 
 window.navigateInlineChapter = function (direction) {
