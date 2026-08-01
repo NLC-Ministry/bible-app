@@ -245,7 +245,9 @@ const db = {
     if (btnNlcGate) {
       btnNlcGate.addEventListener("click", (e) => {
         e.preventDefault();
-        if (typeof auth !== "undefined") {
+        if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
+          authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
+        } else if (typeof auth !== "undefined") {
           auth.login();
         } else {
           alert("NLC SSO 模組尚未載入，請重新整理頁面。");
@@ -266,6 +268,14 @@ const db = {
         statusBadge.className = "status-badge online";
         statusBadge.querySelector(".status-text").textContent = "線上模式";
         if (placeholder) placeholder.classList.add("hidden");
+
+        const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
+        if (!hasOAuthCallback && typeof authLaunch !== "undefined" && typeof authLaunch.maybeResumeInteractiveAuthFromBridge === "function") {
+          const resumed = await authLaunch.maybeResumeInteractiveAuthFromBridge();
+          if (resumed) {
+            return false;
+          }
+        }
 
         // ── OIDC Callback: Handle Logto redirect ──
         if (typeof auth !== "undefined") {

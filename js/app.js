@@ -12,6 +12,7 @@ import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
 import './auth.js?v=20260730_performance_refactor';
+import './auth-launch.mjs';
 import './db.js?v=20260801_registration_summary_v2';
 import './utils.js?v=20260801_timezone_local_fixes';
 import './gamification.js?v=20260728_badge_img_refactor';

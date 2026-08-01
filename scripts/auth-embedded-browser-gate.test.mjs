@@ -4,30 +4,42 @@ import {
   detectAuthenticationEnvironment,
   shouldGateInteractiveAuth
 } from "../js/auth-environment.js";
+import { AUTH_POLICY_V1_ENVIRONMENT_FIXTURES, AUTH_POLICY_VERSION } from "../js/auth-policy-fixtures.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const authSource = read("js/auth.js");
 const cssSource = read("index.css");
 
 describe("Bible app authentication browser environment gate", () => {
+  it(`matches environment policy fixtures (v${AUTH_POLICY_VERSION})`, () => {
+    for (const fixture of AUTH_POLICY_V1_ENVIRONMENT_FIXTURES) {
+      expect(detectAuthenticationEnvironment({ userAgent: fixture.userAgent })).toMatchObject({
+        kind: fixture.expected.kind,
+        container: fixture.expected.container,
+        browser: fixture.expected.browser,
+        decision: fixture.expected.decision,
+        reasonCode: fixture.expected.reasonCode,
+        confidence: fixture.expected.confidence
+      });
+    }
+  });
+
   it("classifies LINE and Instagram as embedded browsers for interactive auth", () => {
     expect(detectAuthenticationEnvironment({
       userAgent: "Mozilla/5.0 AppleWebKit/605.1.15 Mobile/15E148 Line/14.12.0"
     })).toMatchObject({
       kind: "embedded_browser",
-      app: "line",
-      canUseInteractiveAuth: false,
-      reasonCode: "embedded_browser_unreliable"
+      container: "line",
+      decision: "bridge"
     });
 
     expect(detectAuthenticationEnvironment({
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 338.0.0.30.95"
     })).toMatchObject({
       kind: "embedded_browser",
-      app: "instagram",
+      container: "instagram",
       platform: "ios",
-      canUseInteractiveAuth: false,
-      canAttemptExternalBrowser: false
+      decision: "bridge"
     });
   });
 
@@ -36,9 +48,9 @@ describe("Bible app authentication browser environment gate", () => {
       userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/AP2A) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.0.0 Mobile Safari/537.36 Instagram 338.0.0.30.95"
     })).toMatchObject({
       kind: "embedded_browser",
-      app: "instagram",
+      container: "instagram",
       platform: "android",
-      canAttemptExternalBrowser: true
+      decision: "bridge"
     });
   });
 
@@ -47,16 +59,18 @@ describe("Bible app authentication browser environment gate", () => {
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1"
     })).toMatchObject({
       kind: "standard_browser",
-      app: "safari",
-      canUseInteractiveAuth: true
+      container: null,
+      browser: "safari",
+      decision: "allow"
     });
 
     expect(detectAuthenticationEnvironment({
       userAgent: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36"
     })).toMatchObject({
       kind: "standard_browser",
-      app: "chrome",
-      canUseInteractiveAuth: true
+      container: null,
+      browser: "chrome",
+      decision: "allow"
     });
   });
 
@@ -69,11 +83,10 @@ describe("Bible app authentication browser environment gate", () => {
 
   it("routes auth.login through the embedded-browser guidance before OIDC", () => {
     expect(authSource).toContain("detectAuthenticationEnvironment");
-    expect(authSource).toContain("shouldGateInteractiveAuth(authEnvironment, options)");
-    expect(authSource).toContain("showEmbeddedBrowserAuthDialog(authEnvironment)");
-    expect(authSource).not.toContain("authEnvironmentAcknowledged: true");
-    expect(authSource).toContain("請使用 Safari / Chrome 繼續");
-    expect(authSource).toContain("複製連結");
+    expect(authSource).toContain("startInteractiveLogin(");
+    expect(authSource).toContain("showEmbeddedBrowserAuthDialog");
+    expect(authSource).toContain("請使用手機瀏覽器繼續");
+    expect(authSource).toContain("開啟瀏覽器繼續");
     expect(authSource).toContain("intent://");
   });
 

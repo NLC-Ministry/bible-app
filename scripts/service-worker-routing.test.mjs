@@ -12,6 +12,10 @@ describe("Service Worker data-route isolation", () => {
     for (const path of ["/rest/v1/", "/auth/v1/", "/functions/v1/", "/storage/v1/", "/realtime/v1/"]) {
       expect(source).toContain(`"${path}"`);
     }
+    expect(source).toContain('url.searchParams.has("auth_continuation")');
+    expect(source).toContain('url.searchParams.has("auth_bridge_attempted")');
+    expect(source).toContain('url.searchParams.has("openExternalBrowser")');
+    expect(source).toContain('hasOauthCallbackSignal');
   });
 
   it("returns before respondWith for protected data requests", () => {
