@@ -108,6 +108,7 @@ function createChurchCampaignStageDefinitions(definition = CHURCH_CAMPAIGN) {
       startDate: stage.startDate,
       endDate: stage.endDate,
       isFixed: true,
+      isHidden: Number(stage.stageNo) > 1,
       version: definition.version,
       stageNo: Number(stage.stageNo),
       roundNo: Number(stage.roundNo),

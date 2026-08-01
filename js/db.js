@@ -854,12 +854,30 @@ const db = {
         const plans = plansResult.data || [];
         state.activePlans = [];
         if (plans && plans.length > 0) {
+          const visibleGlobalPlanKeys = new Set((state.globalPlans || []).flatMap(plan =>
+            [plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String)
+          ));
+          const canViewHiddenStages = typeof canManageHiddenPlans === "function" && canManageHiddenPlans();
+
           plans.forEach(dbPlan => {
             try {
               const globalPlanId = dbPlan.global_plan_id || null;
               const key = dbPlan.preset_key
                 || (globalPlanId ? globalPlanId : null)
                 || getPresetKeyByName(dbPlan.name);
+              const presetStageMatch = String(dbPlan.preset_key || "").match(/^church_stage_(\d{2})$/);
+              const idStageMatch = String(globalPlanId || "").match(/^00000000-0000-0000-c026-(\d{12})$/);
+              const campaignStageNo = Number(presetStageMatch && presetStageMatch[1]
+                || idStageMatch && idStageMatch[1]
+                || 0);
+              const enrollmentKeys = [globalPlanId, dbPlan.preset_key].filter(Boolean).map(String);
+              const hasVisibleStageDefinition = enrollmentKeys.some(item => visibleGlobalPlanKeys.has(item));
+              if (!canViewHiddenStages
+                && campaignStageNo >= 2
+                && campaignStageNo <= 10
+                && !hasVisibleStageDefinition) {
+                return;
+              }
 
               const isFixed = dbPlan.is_fixed !== false;
               const storedRound = Number(dbPlan.current_round || 1);
@@ -3136,52 +3154,63 @@ const db = {
   },
 
   async setGlobalPlanHidden(plan, isHidden) {
-    const key = String(plan.id || plan.presetKey || plan.globalPlanId || plan.name || "");
-    const saveLocalHiddenKey = () => {
-      const keys = JSON.parse(localStorage.getItem("hidden_global_plan_keys") || "[]");
-      const nextKeys = isHidden
-        ? Array.from(new Set([...keys, key]))
-        : keys.filter(item => item !== key);
-      localStorage.setItem("hidden_global_plan_keys", JSON.stringify(nextKeys));
-    };
+    const key = String(plan.id || plan.globalPlanId || plan.presetKey || "");
+    if (!key) return false;
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo) && key && key.includes("-")) {
+    const usesRemoteDatabase = state.isSupabaseMode
+      && state.supabase
+      && !(state.currentUser && state.currentUser.is_demo)
+      && key.includes("-");
+
+    if (usesRemoteDatabase) {
       try {
-        const { error } = await state.supabase
+        const { data, error } = await state.supabase
           .from("global_plans")
-          .update({ is_hidden: isHidden })
-          .eq("id", key);
+          .update({ is_hidden: Boolean(isHidden) })
+          .eq("id", key)
+          .select("id, is_hidden")
+          .maybeSingle();
 
-        if (error) {
-          console.warn("Failed to update global plan hidden state in Supabase, falling back to local hidden list:", error);
-          saveLocalHiddenKey();
+        if (error || !data || Boolean(data.is_hidden) !== Boolean(isHidden)) {
+          console.error("Global plan visibility update was not verified:", error || data);
+          return false;
         }
-      } catch (e) {
-        console.warn("Error updating global plan hidden state, falling back to local hidden list:", e);
-        saveLocalHiddenKey();
+      } catch (error) {
+        console.error("Global plan visibility update failed:", error);
+        return false;
       }
     } else {
-      saveLocalHiddenKey();
+      let overrides = {};
+      try {
+        const stored = JSON.parse(localStorage.getItem("global_plan_visibility_overrides") || "{}");
+        if (stored && typeof stored === "object" && !Array.isArray(stored)) overrides = stored;
+      } catch (error) {
+        overrides = {};
+      }
+      overrides[key] = Boolean(isHidden);
+      localStorage.setItem("global_plan_visibility_overrides", JSON.stringify(overrides));
+
+      // Keep the previous hidden-key storage synchronized for older app versions.
+      const hiddenKeys = JSON.parse(localStorage.getItem("hidden_global_plan_keys") || "[]");
+      const nextHiddenKeys = isHidden
+        ? Array.from(new Set([...hiddenKeys, key]))
+        : hiddenKeys.filter(item => item !== key);
+      localStorage.setItem("hidden_global_plan_keys", JSON.stringify(nextHiddenKeys));
     }
 
     if (state.globalPlans) {
-      state.globalPlans = state.globalPlans.map(p => {
-        const matches = [p.id, p.presetKey, p.globalPlanId, p.name].filter(Boolean).map(String).includes(key);
-        return matches ? { ...p, isHidden } : p;
+      state.globalPlans = state.globalPlans.map(item => {
+        const matches = [item.id, item.presetKey, item.globalPlanId].filter(Boolean).map(String).includes(key);
+        return matches ? { ...item, isHidden: Boolean(isHidden), is_hidden: Boolean(isHidden) } : item;
       });
     }
 
-    const localGlobal = localStorage.getItem("global_plans_presets");
-    if (localGlobal) {
-      const list = JSON.parse(localGlobal).map(p => {
-        const matches = [p.id, p.presetKey, p.globalPlanId, p.name].filter(Boolean).map(String).includes(key);
-        return matches ? { ...p, isHidden } : p;
-      });
-      localStorage.setItem("global_plans_presets", JSON.stringify(list));
-    }
-
+    this._userDataPromise = null;
     await this.loadGlobalPlans();
-    return true;
+    const refreshedPlan = (state.globalPlans || []).find(item =>
+      [item.id, item.presetKey, item.globalPlanId].filter(Boolean).map(String).includes(key)
+    );
+    return Boolean(refreshedPlan) && isPlanHidden(refreshedPlan) === Boolean(isHidden);
   },
 
   async deleteGlobalPlan(planId) {

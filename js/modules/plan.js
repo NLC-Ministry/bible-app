@@ -1513,6 +1513,7 @@ function renderJoinedPlansList() {
       });
     });
 
+    plansToRender = plansToRender.filter(plan => canManageHiddenPlans() || !isPlanHidden(plan));
     plansToRender = plansToRender.filter(matchesPlanSearch);
     plansToRender = sortJoinedPlansChronologically(plansToRender);
 
@@ -3523,6 +3524,7 @@ async function renderAdminPlanManagement() {
       const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
       const isCampaign = plan.planKind === "church_campaign" || plan.id === window.CHURCH_CAMPAIGN_ID;
       const isCampaignStage = plan.planKind === "church_campaign_stage";
+      const campaignStageNo = Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0);
 
       let timeColHtml = "";
       if (isFixed) {
@@ -3550,6 +3552,8 @@ async function renderAdminPlanManagement() {
         </td>
         <td style="text-align: center; vertical-align: middle;">
           <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
+            ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.68rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
+            ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.68rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
             <button class="primary-btn admin-campaign-rules-btn" style="font-size:0.68rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
             <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>
             <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">刪除</button>
@@ -3611,15 +3615,29 @@ async function renderAdminPlanManagement() {
       const toggleHiddenBtn = tr.querySelector(".admin-toggle-hidden-plan-btn");
       if (toggleHiddenBtn) {
         toggleHiddenBtn.onclick = async () => {
-          loader.show(hidden ? "正在恢復計畫..." : "正在隱藏計畫...");
+          if (!hidden && typeof window.showConfirmDialog === "function") {
+            const confirmed = await window.showConfirmDialog({
+              title: "暫停開放這個階段？",
+              message: "一般使用者將不再看到或加入這個階段；既有資料不會在此操作中刪除。",
+              confirmText: "暫停開放",
+              cancelText: "取消",
+              isDestructive: true
+            });
+            if (!confirmed) return;
+          }
+
+          loader.show(hidden ? "正在開放階段…" : "正在暫停開放…");
           const success = await db.setGlobalPlanHidden(plan, !hidden);
           loader.hide();
-          if (success) {
-            showToast(hidden ? "計畫已恢復顯示。" : "計畫已隱藏，一般使用者不會看到。");
-            renderAdminPlanManagement();
-            if (typeof renderPresetPlansList === 'function') renderPresetPlansList();
-            if (typeof renderJoinedPlansList === 'function') renderJoinedPlansList();
+          if (!success) {
+            showToast("開放狀態未能儲存，請稍後再試。");
+            return;
           }
+
+          showToast(hidden ? "此階段已開放給使用者。" : "此階段已暫停開放。");
+          renderAdminPlanManagement();
+          if (typeof renderPresetPlansList === "function") renderPresetPlansList();
+          if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
         };
       }
 

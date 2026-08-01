@@ -1979,8 +1979,27 @@ function getHiddenPlanKeys() {
   }
 }
 
+function getPlanVisibilityOverrides() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("global_plan_visibility_overrides") || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function getPlanVisibilityOverride(plan) {
+  if (!plan || state.isSupabaseMode) return undefined;
+  const overrides = getPlanVisibilityOverrides();
+  const keys = [plan.id, plan.presetKey, plan.globalPlanId, plan.name].filter(Boolean).map(String);
+  const matchedKey = keys.find(key => Object.prototype.hasOwnProperty.call(overrides, key));
+  return matchedKey ? Boolean(overrides[matchedKey]) : undefined;
+}
+
 function isPlanHidden(plan) {
   if (!plan) return false;
+  const localOverride = getPlanVisibilityOverride(plan);
+  if (typeof localOverride === "boolean") return localOverride;
   const hiddenKeys = getHiddenPlanKeys();
   const keys = [plan.id, plan.presetKey, plan.globalPlanId, plan.name].filter(Boolean).map(String);
   return Boolean(plan.isHidden || plan.is_hidden || keys.some(key => hiddenKeys.includes(key)));
@@ -2038,6 +2057,7 @@ window.isPlanExpired = isPlanExpired;
 window.selectMostRecentActivePlan = selectMostRecentActivePlan;
 window.calculateAllPlansProgress = calculateAllPlansProgress;
 window.getHiddenPlanKeys = getHiddenPlanKeys;
+window.getPlanVisibilityOverrides = getPlanVisibilityOverrides;
 window.isPlanHidden = isPlanHidden;
 window.canManageHiddenPlans = canManageHiddenPlans;
 window.getVisiblePlans = getVisiblePlans;

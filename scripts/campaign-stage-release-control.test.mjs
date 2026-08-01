@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const read = path => readFileSync(resolve(path), "utf8");
+const migration = read("supabase/migrations/0056_lock_campaign_stages_until_admin_release.sql");
+const planModule = read("js/modules/plan.js");
+const db = read("js/db.js");
+const campaign = read("js/data/church_campaign.js");
+const edgeFunction = read("supabase/functions/nlc-data/index.ts");
+
+describe("campaign stage release control", () => {
+  it("locks stages 2 through 10 while keeping stage 1 open", () => {
+    expect(migration).toContain("WHEN id = '00000000-0000-0000-c026-000000000001'::UUID THEN FALSE");
+    expect(migration).toContain("ELSE TRUE");
+    expect(campaign).toContain("isHidden: Number(stage.stageNo) > 1");
+  });
+
+  it("preserves the administrator visibility choice when campaign rules are republished", () => {
+    expect(migration).toContain("stage_no <> 1");
+    expect(migration).toContain("Deliberately preserve global_plans.is_hidden");
+    const conflictUpdate = migration.match(/ON CONFLICT \(id\) DO UPDATE SET[\s\S]*?published_at = EXCLUDED\.published_at;/)?.[0] || "";
+    expect(conflictUpdate).not.toMatch(/is_hidden\s*=/);
+  });
+
+  it("blocks hidden-stage enrollment and team registration in the database", () => {
+    expect(migration).toContain("campaign_stage_not_open");
+    expect(migration).toContain("trg_reading_plan_stage_open");
+    expect(migration).toContain("trg_reading_log_stage_open");
+    expect(migration).toContain("trg_reading_team_stage_open");
+    expect(migration).toContain("trg_reading_team_member_stage_open");
+  });
+
+  it("shows an administrator release button and verifies persistence", () => {
+    expect(planModule).toContain("admin-toggle-hidden-plan-btn");
+    expect(planModule).toContain("開放給使用者");
+    expect(planModule).toContain("暫停開放");
+    expect(db).toContain('.select("id, is_hidden")');
+    expect(db).toContain("Global plan visibility update was not verified");
+  });
+
+  it("keeps hidden plans out of ordinary member plan lists", () => {
+    expect(planModule).toContain("plansToRender.filter(plan => canManageHiddenPlans() || !isPlanHidden(plan))");
+    expect(db).toContain("hasVisibleStageDefinition");
+    expect(edgeFunction).toContain('query.eq("is_hidden", false)');
+  });
+});

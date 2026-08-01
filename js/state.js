@@ -29,6 +29,7 @@ const CHURCH_PLAN_PRESETS = Object.fromEntries(defaultChurchStagePlans.map(stage
     books: stage.books,
     planKind: "church_campaign_stage",
     isFixed: true,
+    isHidden: stage.isHidden,
     stageNo: stage.stageNo,
     roundNo: stage.roundNo,
     phase: stage.phase,
