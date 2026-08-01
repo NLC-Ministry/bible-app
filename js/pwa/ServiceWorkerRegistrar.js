@@ -9,23 +9,15 @@ export class ServiceWorkerRegistrar extends EventTarget {
   async register() {
     if (!("serviceWorker" in navigator) || !window.isSecureContext) return null;
 
-    let refreshing = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (refreshing) return;
-      if (navigator.serviceWorker.controller) {
-        refreshing = true;
-        window.location.reload();
-      }
+      if (!navigator.serviceWorker.controller) return;
+      document.documentElement.dataset.pwaUpdate = "ready";
+      window.dispatchEvent(new CustomEvent("pwa:update-ready"));
     });
 
     this.registration = await navigator.serviceWorker.register(this.scriptUrl, {
       scope: this.scope, type: "module", updateViaCache: "none"
     });
-    try {
-      await this.registration.update();
-    } catch (error) {
-      console.warn("[PWA] Service Worker update check failed", error);
-    }
     navigator.serviceWorker.addEventListener("message", event => {
       this.dispatchEvent(new CustomEvent("message", { detail: event.data }));
     });
