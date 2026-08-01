@@ -41,6 +41,8 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "get_personal_plan_ranking_summary",
   "create_reading_team",
   "join_reading_team_by_code",
+  "get_reading_team_carryover_offer",
+  "carry_reading_teams_to_stage",
   "leave_reading_team",
   "remove_reading_team_member",
   "disband_reading_team",

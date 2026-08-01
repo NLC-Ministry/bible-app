@@ -2179,6 +2179,10 @@ const db = {
       reading_team_full: "這個團隊已額滿。",
       ready_team_roster_locked: "團隊已額滿，名單目前不能調整。",
       captain_must_disband_team: "隊長需解散尚未成隊的團隊，不能直接退出。",
+      team_carryover_captain_required: "只有上一階段的原隊長可以帶領全隊進入下一階段。",
+      team_carryover_member_conflict: "原團隊中有隊員已加入下一階段的其他團隊，無法整隊帶入。",
+      target_stage_not_open: "下一階段尚未開放報名。",
+      previous_stage_not_found: "找不到上一階段的團隊資料。",
       team_captain_required: "只有隊長可以解散團隊。",
       team_member_remove_captain_required: "只有隊長可以將隊員移出團隊。",
       team_captain_remove_self_not_allowed: "隊長不能將自己移出團隊；若要退出，請解散團隊。",
@@ -2218,6 +2222,28 @@ const db = {
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊報名。" };
     const result = await this._callReadingTeamRpc("get_my_reading_team", { p_global_plan_id: planId });
     return result.success ? { success: true, context: result.data || { teams: [], team: null, members: [] } } : result;
+  },
+
+  async getReadingTeamCarryoverOffer(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到下一階段計畫。" };
+    if (!state.isSupabaseMode || !state.supabase || state.currentUser && state.currentUser.is_demo) {
+      return { success: true, context: { eligible: false, teams: [] } };
+    }
+    const result = await this._callReadingTeamRpc("get_reading_team_carryover_offer", {
+      p_target_global_plan_id: planId
+    });
+    return result.success
+      ? { success: true, context: result.data || { eligible: false, teams: [] } }
+      : result;
+  },
+
+  async carryReadingTeamsToStage(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到下一階段計畫。" };
+    return this._callReadingTeamRpc("carry_reading_teams_to_stage", {
+      p_target_global_plan_id: planId
+    });
   },
 
   async getReadingTeamRegistrationOverview() {
