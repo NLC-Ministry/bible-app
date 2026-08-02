@@ -67,6 +67,42 @@ Chapter text is fetched live from public Bible APIs (bible-api.com, bolls.life) 
 Each view file renders one tab and wires its controls: `dashboard.js` (verse of the day, announcements, devotional), `reader.js` (immersive Bible reader, highlights, TTS, font/version controls), `plan.js` (~4500 lines — plan list, plan detail, daily task checklists, admin plan CRUD, inline reader), `stats.js` (Chart.js dashboards, personal + group/admin scopes), `profile.js` (account settings, badge wall, admin user/org management). `main.js` bootstraps everything in `DOMContentLoaded`.
 
 ## Backend (`supabase/`)
+## Architecture
+
+### Script load order (globals, not modules)
+
+All JS is plain `<script>` tags sharing globals via `window` — **there are no ES module imports**. Load order in `index.html` matters and is deliberate: `config.js` → `bible_data.js` → `bible_verse_counts.js` → `zh-Hant.js` → `design-tokens.js` → `state.js` → `auth.js` → `plan.js` → `db.js` → `utils.js` → `gamification.js` → view files (`dashboard`, `reader`, `stats`, `profile`) → `main.js`. Functions are called across files via `typeof fn === "function"` guards.
+
+### Central state
+
+`js/state.js` defines a single global `state` object (current user, org structure, active plans, reading logs, reader state, highlights, chart instances, admin filters) plus:
+- `CHURCH_PLAN_PRESETS` — the hardcoded quarterly plan definitions (books + monthly breakdown for 2026–2027).
+- `appRouter` — tab/view switcher (`switchTab`, `goBack`, `updateNavigationChrome`). Views are `.view-pane` sections toggled by `.active`; there is no URL routing.
+- Theme management (light/dark/warm) persisted to `localStorage`.
+- `escapeHTML()` — use this for any user-supplied string rendered into innerHTML.
+
+### Data layer — the dual-client shim (`js/db.js`)
+
+`db.js` (~2000 lines) is the entire data-access layer. The key design: `state.supabase` is **either** a real Supabase client **or** an `NlcDataClient` shim, chosen at runtime by login method. Both expose the same `.from(table).select().eq()...` chainable API so callers don't care which is active:
+
+- **Google/email login (dev/localhost only):** real `@supabase/supabase-js` client, RLS-enforced.
+- **NLC Logto SSO (production):** `createNlcDataClient()` returns a shim whose `NlcQueryBuilder` serializes queries to JSON and POSTs them to the `nlc-data` Edge Function, which verifies the Logto token and uses the service role. This exists because the app uses **church Logto auth, not Supabase Auth**, so RLS can't see a Supabase JWT.
+
+When adding data access, use the `state.supabase.from(...)` builder so it works in both modes. Note the shim only implements a subset of PostgREST (`select/insert/update/delete/upsert/eq/is/in/or/order/limit/single/maybeSingle`).
+
+### Auth (`js/auth.js`)
+
+Logto OIDC + PKCE client for NLC SSO. Does discovery on `issuer`, handles the redirect callback, stores tokens in `localStorage` (`nlc_*` keys), and exchanges the Logto token for a Supabase profile via the `nlc-session` Edge Function. `auth.getValidAccessToken()` transparently refreshes; `db.js` retries once on 401.
+
+### Bible text (`js/data/bible_data.js`)
+
+Chapter text is fetched live from public Bible APIs (bible-api.com, bolls.life) with `assertCompleteEnough()` validation (must be Chinese, not truncated to 10 verses) and a small hardcoded `BIBLE_FALLBACK` for offline/failure. `bible_verse_counts.js` holds per-chapter verse counts. `CHURCH_PLAN_PRESETS` book names are Traditional Chinese; `BOLLS_BOOK_CODES` maps English names to API codes.
+
+### Views (`js/views/`)
+
+Each view file renders one tab and wires its controls: `dashboard.js` (verse of the day, announcements, devotional), `reader.js` (immersive Bible reader, highlights, TTS, font/version controls), `plan.js` (~4500 lines — plan list, plan detail, daily task checklists, admin plan CRUD, inline reader), `stats.js` (Chart.js dashboards, personal + group/admin scopes), `profile.js` (account settings, badge wall, admin user/org management). `main.js` bootstraps everything in `DOMContentLoaded`.
+
+## Backend (`supabase/`)
 
 - **Active schema:** `supabase/migrations/` starting at `0001_clean_schema.sql`. Core tables: `profiles` (stable user record), `user_identities` (links login methods → one profile), `reading_plans`, `reading_logs`, `devotional_notes`, `global_plans`, `church_announcements`, and org tables (`great_regions`, `pastoral_zones`, `small_groups`). RLS resolves the caller via `current_profile_id()`.
 - `supabase/migrations_legacy/` — old test-period migrations, kept for reference only. Do not replay on a fresh project.
@@ -76,3 +112,28 @@ Each view file renders one tab and wires its controls: `dashboard.js` (verse of 
 ## Design system
 
 See `docs/design-system.md`. Satellite brand color is **`#04A9D2`** (`--color-brand`; legacy alias `--primary-color`). Rules: no gradient fills on UI chrome (flat colors only), content-first calm reader, three themes (light/dark/warm-sepia). Typography uses **medium (500)** for emphasis and **normal (400)** for body — avoid 600–900 weights on chrome. Neutral shadows only, no brand-tinted glows. Icons are **Lucide** via `data-icon` / `renderIcon()`; prefer these over emoji. UI copy is Traditional Chinese (see `js/copy/zh-Hant.js`).
+
+---
+
+## 💡 Key Architectural Guidelines & Anti-Bug Patterns
+
+Detailed Skill Documentation is persisted at `.agents/skills/bible-study-dev-guidelines/SKILL.md`.
+
+1. **Security & Forced Scope**:
+   - Edge Functions (`nlc-data`) and RPC functions must enforce explicit `user_id` and `plan_id` filtering (`applyForcedScope`) on writes/deletes to prevent accidental cross-tenant data mutation.
+
+2. **Scroll State Preservation**:
+   - When re-rendering container DOM (`innerHTML = ""`, e.g. `renderHorizontalDateStrip`), read `.scrollTop`/`.scrollLeft` beforehand and restore immediately after DOM update to prevent layout jumps.
+
+3. **Async Race-Condition & Session Counter**:
+   - `speechSynthesis.cancel()` triggers ghost `onend`/`onerror` events asynchronously.
+   - Use a global `currentAudioSessionId` counter. In all async callbacks, check `if (sessionId !== currentAudioSessionId) return;` to instantly kill stale events.
+
+4. **Natural Neural TTS Voice Selection**:
+   - Prefer voices containing `Natural`, `Neural`, `Online`, `Ting-Ting`, `Samantha`, `HsiaoChen`, `YunJhe`.
+   - Automatically match voice language: `zh-TW` for Chinese versions (`CUNP`, `RCUV`, `CUV`) and `en-US`/`en-GB` for English versions (`ESV`, `NIV`, `NLT`).
+
+5. **User-Centric UI/UX Controls**:
+   - Use Picker Modals (`#bible-version-picker-modal`) with clear checkmarks instead of single-button infinite loops when options > 3.
+   - Keep bottom-of-page auto-read tracking silent without intrusive toast/modal subtitles.
+   - Mutate memory state (`ch.isRead`, `ch.isReadR1`) synchronously upon log updates and recalculate plan progress on returning to plan view for instant reactivity without page reloads.
