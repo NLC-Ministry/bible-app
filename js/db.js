@@ -246,6 +246,10 @@ const db = {
     if (btnNlcGate) {
       btnNlcGate.addEventListener("click", (e) => {
         e.preventDefault();
+        if (typeof auth !== "undefined" && auth.shouldRepairBeforeLogin?.()) {
+          auth.startLoginRepair();
+          return;
+        }
         if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
           authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
         } else if (typeof auth !== "undefined") {
@@ -258,6 +262,24 @@ const db = {
 
 
 
+    const shouldResumeLoginAfterRepair = urlParams.get("resume_login") === "1"
+      && sessionStorage.getItem("nlc_login_repair_resume_ready") === "1";
+    if (shouldResumeLoginAfterRepair) {
+      sessionStorage.removeItem("nlc_login_repair_resume_ready");
+      urlParams.delete("resume_login");
+      urlParams.delete("repaired");
+      urlParams.delete("version");
+      const cleanSearch = urlParams.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "") + window.location.hash
+      );
+      if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
+        await authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
+        return false;
+      }
+    }
     if (sbUrl && sbKey) {
       try {
         // Initialize Supabase SDK
@@ -663,7 +685,7 @@ const db = {
       btnNlcGate.disabled = false;
       btnNlcGate.style.opacity = "1";
       btnNlcGate.style.cursor = "pointer";
-      btnNlcGate.textContent = "\u91cd\u65b0\u767b\u5165\u6559\u6703\u7cfb\u7d71";
+      btnNlcGate.textContent = "\u4fee\u5fa9\u4e26\u91cd\u65b0\u767b\u5165";
     }
 
     const btnGoogleGate = document.getElementById("btn-gate-google-login");
@@ -678,6 +700,9 @@ const db = {
     if (gateDot && gateText) {
       gateDot.style.backgroundColor = "var(--color-danger)";
       gateText.textContent = message;
+    }
+    if (typeof auth !== "undefined" && typeof auth.markLoginFailure === "function") {
+      auth.markLoginFailure();
     }
 
     const loginGate = document.getElementById("login-gate");

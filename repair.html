@@ -17,17 +17,20 @@
 <body>
   <main>
     <h1 id="repair-title">&#27491;&#22312;&#20462;&#24489;&#30059;&#38754;</h1>
-    <p id="repair-status" role="status">&#27491;&#22312;&#28165;&#38500;&#33290;&#29256;&#30059;&#38754;&#36039;&#28304;&#65292;&#19981;&#26371;&#21034;&#38500;&#20320;&#30340;&#30331;&#20837;&#36039;&#26009;&#25110;&#35712;&#32147;&#36914;&#24230;&#12290;</p>
+    <p id="repair-status" role="status">正在修復舊版資源，不會刪除你的讀經進度。</p>
     <button id="repair-retry" type="button" hidden>&#20877;&#35430;&#19968;&#27425;</button>
   </main>
   <script>
     (function () {
       const status = document.getElementById("repair-status");
       const retry = document.getElementById("repair-retry");
+      const resumeLogin = new URLSearchParams(window.location.search).get("resume_login") === "1";
 
       async function repair() {
         retry.hidden = true;
-        status.textContent = "\u6b63\u5728\u6e05\u9664\u820a\u7248\u756b\u9762\u8cc7\u6e90\uff0c\u4e0d\u6703\u522a\u9664\u4f60\u7684\u767b\u5165\u8cc7\u6599\u6216\u8b80\u7d93\u9032\u5ea6\u3002";
+        status.textContent = resumeLogin
+          ? "\u6b63\u5728\u4fee\u5fa9\u767b\u5165\u8207\u820a\u7248\u756b\u9762\u8cc7\u6e90\uff0c\u4e0d\u6703\u522a\u9664\u4f60\u7684\u8b80\u7d93\u9032\u5ea6\u3002"
+          : "\u6b63\u5728\u6e05\u9664\u820a\u7248\u756b\u9762\u8cc7\u6e90\uff0c\u4e0d\u6703\u522a\u9664\u4f60\u7684\u767b\u5165\u8cc7\u6599\u6216\u8b80\u7d93\u9032\u5ea6\u3002";
         try {
           if ("serviceWorker" in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
@@ -39,6 +42,19 @@
               .filter(name => name.startsWith("newlife-bible-") || name.startsWith("church-bible-"))
               .map(name => caches.delete(name)));
           }
+          if (resumeLogin) {
+            [
+              "nlc_access_token", "nlc_id_token", "nlc_refresh_token", "nlc_token_expires_at",
+              "nlc_auth_state", "nlc_auth_verifier", "nlc_auth_nonce", "nlc_auth_flow_id",
+              "nlc_auth_continuation", "nlc_auth_continuation_version", "nlc_member_context",
+              "nlc_supabase_access_token", "nlc_supabase_expires_at", "nlc_supabase_profile",
+              "nlc_edge_session_expires_at", "nlc_profile_locked_fields", "nlc_login_repair_required"
+            ].forEach(function (key) {
+              localStorage.removeItem(key);
+              sessionStorage.removeItem(key);
+            });
+            sessionStorage.setItem("nlc_login_repair_resume_ready", "1");
+          }
           const stylesheetResponse = await fetch("/index.css?version=" + Date.now(), { cache: "no-store" });
           const stylesheetType = stylesheetResponse.headers.get("content-type") || "";
           if (!stylesheetResponse.ok || !stylesheetType.toLowerCase().includes("text/css")) {
@@ -46,7 +62,8 @@
           }
           sessionStorage.setItem("nlc_asset_repair_completed_at", String(Date.now()));
           window.setTimeout(function () {
-            window.location.replace("/?repaired=1&version=" + Date.now());
+            const resumeParam = resumeLogin ? "&resume_login=1" : "";
+            window.location.replace("/?repaired=1" + resumeParam + "&version=" + Date.now());
           }, 350);
         } catch (error) {
           status.textContent = "\u4fee\u5fa9\u5c1a\u672a\u5b8c\u6210\uff0c\u8acb\u78ba\u8a8d\u7db2\u8def\u5f8c\u518d\u8a66\u4e00\u6b21\u3002";

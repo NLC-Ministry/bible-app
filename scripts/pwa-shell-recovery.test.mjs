@@ -39,7 +39,7 @@ describe("PWA shell recovery", () => {
     expect(repair).toContain('registration.unregister()');
     expect(repair).toContain('fetch("/index.css?version=" + Date.now()');
     expect(repair).toContain('content-type');
-    expect(repair).toContain('window.location.replace("/?repaired=1&version=" + Date.now())');
+    expect(repair).toContain('window.location.replace("/?repaired=1" + resumeParam + "&version=" + Date.now())');
     expect(sw).toContain('url.pathname === "/repair"');
   });
 

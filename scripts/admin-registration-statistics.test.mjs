@@ -70,6 +70,6 @@ describe("admin registration statistics", () => {
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toContain("index.css?v=20260802_profile_preferences");
     expect(html).toContain("css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery");
-    expect(html).toContain("js/app.js?v=20260802_profile_preferences");
+    expect(html).toContain("js/app.js?v=20260802_login_auto_repair");
   });
 });

@@ -38,7 +38,8 @@ const auth = {
     memberContext: "nlc_member_context",
     supabaseAccessToken: "nlc_supabase_access_token",
     supabaseExpiresAt: "nlc_supabase_expires_at",
-    supabaseProfile: "nlc_supabase_profile"
+    supabaseProfile: "nlc_supabase_profile",
+    repairRequired: "nlc_login_repair_required"
   },
 
   metadata: null,
@@ -268,6 +269,41 @@ const auth = {
     if (typeof showToast === "function") showToast(message);
     else alert(message);
   },
+  markLoginFailure() {
+    window.__nlcLoginRepairRequired = true;
+    try {
+      localStorage.setItem(this.keys.repairRequired, String(Date.now()));
+    } catch (error) {
+      console.warn("Could not persist login repair state", error);
+    }
+    const button = document.getElementById("btn-gate-nlc-login");
+    if (button) button.textContent = "修復並重新登入";
+  },
+
+  shouldRepairBeforeLogin() {
+    if (window.__nlcLoginRepairRequired) return true;
+    try {
+      return Boolean(localStorage.getItem(this.keys.repairRequired));
+    } catch {
+      return false;
+    }
+  },
+
+  startLoginRepair() {
+    const repairUrl = new URL("/repair", window.location.origin);
+    repairUrl.searchParams.set("resume_login", "1");
+    repairUrl.searchParams.set("version", String(Date.now()));
+    window.location.assign(repairUrl.toString());
+  },
+
+  clearLoginRepairState() {
+    window.__nlcLoginRepairRequired = false;
+    try {
+      localStorage.removeItem(this.keys.repairRequired);
+    } catch (error) {
+      console.warn("Could not clear login repair state", error);
+    }
+  },
 
   _externalBrowserIntentUrl(targetUrl) {
     const url = new URL(targetUrl);
@@ -361,6 +397,7 @@ const auth = {
     this._clearFlowState();
     this._clearStoredTokens();
     this._resetAppAuthState();
+    this.markLoginFailure();
     this._cleanCallbackUrl();
     if (typeof db !== "undefined" && db.updateAuthUI) db.updateAuthUI(null);
     this._showMessage(message || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
@@ -452,6 +489,7 @@ const auth = {
       window.location.href = `${endpoints.authorizationEndpoint}?${authParams}`;
     } catch (err) {
       console.error("Logto login redirect failed:", err);
+      this.markLoginFailure();
       this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
     }
   },
@@ -559,6 +597,7 @@ const auth = {
   },
 
   _saveTokens(tokenResponse) {
+    this.clearLoginRepairState();
     if (tokenResponse.access_token) localStorage.setItem(this.keys.accessToken, tokenResponse.access_token);
     if (tokenResponse.id_token) localStorage.setItem(this.keys.idToken, tokenResponse.id_token);
     if (tokenResponse.refresh_token) localStorage.setItem(this.keys.refreshToken, tokenResponse.refresh_token);

@@ -42,8 +42,8 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260802_profile_preferences");
-    expect(appSource).toContain("./db.js?v=20260801_full_plan_reset");
+    expect(htmlSource).toContain("js/app.js?v=20260802_login_auto_repair");
+    expect(appSource).toContain("./db.js?v=20260802_login_auto_repair");
     expect(appSource).toContain("./utils.js?v=20260801_full_plan_reset");
   });
 });
