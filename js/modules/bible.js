@@ -963,6 +963,10 @@ function renderVersesList(container, verses, bookName, chapter) {
 function showContextToolbar(verseElement, highlightKey) {
   const toolbar = document.getElementById("context-toolbar");
   if (!toolbar) return;
+
+  if (state.readerState) {
+    state.readerState.lastFocusedVerseNum = Number(verseElement.dataset.verse || 1);
+  }
   
   const rect = verseElement.getBoundingClientRect();
   toolbar.style.top = `${window.scrollY + rect.top}px`;
@@ -976,12 +980,7 @@ function showContextToolbar(verseElement, highlightKey) {
     const action = actionBtn.getAttribute("data-action");
     const color = actionBtn.style.backgroundColor;
 
-    if (action === "speak") {
-      const verseNum = Number(verseElement.dataset.verse || 1);
-      if (typeof window.toggleReaderAudio === "function") {
-        window.toggleReaderAudio(verseNum);
-      }
-    } else if (action === "highlight") {
+    if (action === "highlight") {
       verseElement.style.backgroundColor = color;
       verseElement.classList.add("selected");
       state.highlights[highlightKey] = color;
@@ -1038,6 +1037,7 @@ let isSpeaking = false;
 let speechUtterance = null;
 let currentSpeakingVerseIndex = -1;
 let verseListForSpeaking = [];
+let currentAudioSessionId = 0;
 
 function clearSpeakingHighlight() {
   document.querySelectorAll(".bible-verse.speaking-highlight").forEach(el => {
@@ -1046,8 +1046,11 @@ function clearSpeakingHighlight() {
 }
 
 function stopReaderAudio(quiet = false) {
+  currentAudioSessionId++;
   if (typeof window.speechSynthesis !== "undefined") {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch (_e) {}
   }
   isSpeaking = false;
   currentSpeakingVerseIndex = -1;
@@ -1063,9 +1066,11 @@ function stopReaderAudio(quiet = false) {
   }
 }
 
-function speakNextVerseInQueue() {
-  if (!isSpeaking || currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
-    stopReaderAudio(true);
+function speakNextVerseInQueue(sessionId) {
+  if (sessionId !== currentAudioSessionId || !isSpeaking || currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
+    if (sessionId === currentAudioSessionId) {
+      stopReaderAudio(true);
+    }
     return;
   }
 
@@ -1092,32 +1097,37 @@ function speakNextVerseInQueue() {
     return;
   }
 
-  window.speechSynthesis.cancel();
+  try {
+    window.speechSynthesis.cancel();
+  } catch (_e) {}
+
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
   speechUtterance.lang = "zh-TW";
   speechUtterance.rate = 1.0;
 
   speechUtterance.onend = () => {
-    if (!isSpeaking) return;
+    if (sessionId !== currentAudioSessionId || !isSpeaking) return;
     currentSpeakingVerseIndex++;
-    speakNextVerseInQueue();
+    speakNextVerseInQueue(sessionId);
   };
 
   speechUtterance.onerror = (err) => {
+    if (sessionId !== currentAudioSessionId || !isSpeaking) return;
     console.warn("Speech synthesis error:", err);
-    if (!isSpeaking) return;
     currentSpeakingVerseIndex++;
-    speakNextVerseInQueue();
+    speakNextVerseInQueue(sessionId);
   };
 
   window.speechSynthesis.speak(speechUtterance);
 }
 
 window.toggleReaderAudio = function(startVerseNum = null) {
-  if (isSpeaking && startVerseNum === null) {
+  if (isSpeaking && (startVerseNum === null || startVerseNum === undefined)) {
     stopReaderAudio();
     return;
   }
+
+  stopReaderAudio(true);
 
   const container = document.getElementById("bible-content");
   if (!container) return;
@@ -1137,17 +1147,23 @@ window.toggleReaderAudio = function(startVerseNum = null) {
     const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === Number(startVerseNum));
     if (foundIdx !== -1) startIndex = foundIdx;
   } else {
+    // 1. 優先檢查是否有劃線選取的經文 (.selected)
     const selectedVerseEl = container.querySelector(".bible-verse.selected");
     if (selectedVerseEl && selectedVerseEl.dataset.verse) {
       const selectedNum = Number(selectedVerseEl.dataset.verse);
       const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === selectedNum);
       if (foundIdx !== -1) startIndex = foundIdx;
     }
+    // 2. 次之檢查使用者最後點擊關注的經文 (lastFocusedVerseNum)
+    else if (state.readerState && state.readerState.lastFocusedVerseNum) {
+      const focusedNum = Number(state.readerState.lastFocusedVerseNum);
+      const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === focusedNum);
+      if (foundIdx !== -1) startIndex = foundIdx;
+    }
   }
 
-  if (typeof window.speechSynthesis !== "undefined") {
-    window.speechSynthesis.cancel();
-  }
+  currentAudioSessionId++;
+  const thisSessionId = currentAudioSessionId;
 
   isSpeaking = true;
   currentSpeakingVerseIndex = startIndex;
@@ -1159,7 +1175,7 @@ window.toggleReaderAudio = function(startVerseNum = null) {
   if (typeof showToast === "function") {
     showToast(`開始從第 ${startVerse ? startVerse.verseNum : 1} 節朗讀經文...`);
   }
-  speakNextVerseInQueue();
+  speakNextVerseInQueue(thisSessionId);
 };
 
 window.searchChapterVerses = function(keyword) {
