@@ -8,6 +8,10 @@
                          "destination":  "/app.js"
                      },
                      {
+                         "source":  "/index.:hash.css",
+                         "destination":  "/index.css"
+                     },
+                     {
                          "source":  "/js/app.js",
                          "destination":  "/app.js"
                      }

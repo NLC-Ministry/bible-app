@@ -35,6 +35,7 @@ expect(value).toContain("public");
 
   it("keeps stable CSS fresh and caches content-hashed CSS immutably", () => {
     expect(headerFor("/index.css")).toContain("no-store");
+    expect(cfg.rewrites).toContainEqual({ source: "/index.:hash.css", destination: "/index.css" });
     const value = headerFor("/index.(.*).css");
 expect(value).toContain("public");
     expect(value).toContain("max-age=31536000");

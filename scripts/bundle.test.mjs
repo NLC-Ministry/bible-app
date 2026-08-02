@@ -132,7 +132,7 @@ describe("emitBundle (integration, real repo)", () => {
       expect(html).toContain('<script type="module" src="/app.js"></script>');
       expect(html).not.toMatch(/<script\s+src="js\//);
       expect(html).not.toMatch(/<script\s+src="config\.js/);
-      expect(html).toContain(`href="/${cssFile}" onerror="window.showAppStyleRecovery()"`);
+      expect(html).toContain(`href="/${cssFile}" onerror="window.showAppStyleRecovery(this)"`);
       expect((html.match(new RegExp(`href="/${cssFile}"`, "g")) || []).length).toBe(1);
       const bundledCss = rf(join(out, cssFile), "utf8");
       expect(bundledCss).toContain(".reading-team-overlay");

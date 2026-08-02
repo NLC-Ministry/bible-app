@@ -173,7 +173,7 @@ export function emitBundle({ root, outDir }) {
   let seenStylesheet = 0;
   outHtml = outHtml.replace(CSS_RE, () => {
     seenStylesheet += 1;
-    return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}" onerror="window.showAppStyleRecovery()">` : "";
+    return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}" onerror="window.showAppStyleRecovery(this)">` : "";
   });
   console.log("DEBUG: Writing index.html...");
   writeFileSync(join(outDir, "index.html"), outHtml, "utf8");

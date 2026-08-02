@@ -56,6 +56,23 @@ function isStaticRequest(request) {
     new URL(request.url).pathname === "/manifest.json";
 }
 
+function isVersionedStylesheetRequest(request) {
+  const url = new URL(request.url);
+  return url.origin === self.location.origin && /^\/index\.[0-9a-f]+\.css$/i.test(url.pathname);
+}
+
+async function cacheStaticWithStyleRecovery(request) {
+  const response = await cacheManager.cacheFirst(request);
+  if (response.ok || !isVersionedStylesheetRequest(request)) return response;
+
+  try {
+    const fallback = await fetch(`/index.css?version=${VERSION}`, { cache: "no-store" });
+    return fallback.ok ? fallback : response;
+  } catch (error) {
+    return response;
+  }
+}
+
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     await cacheManager.precache(APP_SHELL);
@@ -83,7 +100,7 @@ self.addEventListener("fetch", event => {
   }
 
   if (isStaticRequest(request)) {
-    event.respondWith(cacheManager.cacheFirst(request));
+    event.respondWith(cacheStaticWithStyleRecovery(request));
   }
 });
 

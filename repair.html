@@ -39,6 +39,11 @@
               .filter(name => name.startsWith("newlife-bible-") || name.startsWith("church-bible-"))
               .map(name => caches.delete(name)));
           }
+          const stylesheetResponse = await fetch("/index.css?version=" + Date.now(), { cache: "no-store" });
+          const stylesheetType = stylesheetResponse.headers.get("content-type") || "";
+          if (!stylesheetResponse.ok || !stylesheetType.toLowerCase().includes("text/css")) {
+            throw new Error("The repaired stylesheet is not available yet.");
+          }
           sessionStorage.setItem("nlc_asset_repair_completed_at", String(Date.now()));
           window.setTimeout(function () {
             window.location.replace("/?repaired=1&version=" + Date.now());

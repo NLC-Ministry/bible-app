@@ -29,13 +29,23 @@ describe("PWA shell recovery", () => {
 
   it("keeps hidden content hidden and offers asset-only recovery when CSS fails", () => {
     expect(html).toContain('.hidden, [hidden] { display: none !important; }');
-    expect(html).toContain('onerror="window.showAppStyleRecovery()"');
+    expect(html).toContain('onerror="window.showAppStyleRecovery(this)"');
+    expect(html).toContain("stableFallbackAttempted");
+    expect(html).toContain('stylesheet.href = "/index.css?version=" + Date.now()');
     expect(html).toContain('id="app-style-recovery-button"');
     expect(html).toContain('window.location.replace("/repair?version=" + Date.now())');
-    expect(html).toContain("continueWithoutStyleRecovery");
+    expect(html).not.toContain("continueWithoutStyleRecovery");
     expect(repair).toContain('registration.unregister()');
+    expect(repair).toContain('fetch("/index.css?version=" + Date.now()');
+    expect(repair).toContain('content-type');
     expect(repair).toContain('window.location.replace("/?repaired=1&version=" + Date.now())');
     expect(sw).toContain('url.pathname === "/repair"');
+  });
+
+  it("falls back to stable CSS when an old hashed stylesheet disappears", () => {
+    expect(sw).toContain("isVersionedStylesheetRequest");
+    expect(sw).toContain('fetch(`/index.css?version=${VERSION}`');
+    expect(sw).toContain("response.ok");
   });
 
   it("keeps the standalone repair page executable", () => {

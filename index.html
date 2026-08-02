@@ -25,9 +25,22 @@
     .hidden, [hidden] { display: none !important; }
   </style>
   <script>
-    window.showAppStyleRecovery = function () {
+    window.showAppStyleRecovery = function (stylesheet) {
+      if (stylesheet && !stylesheet.dataset.stableFallbackAttempted) {
+        let pathname = "";
+        try {
+          pathname = new URL(stylesheet.href, window.location.href).pathname;
+        } catch (error) {
+          pathname = "";
+        }
+        if (/^\/index\.[0-9a-f]+\.css$/i.test(pathname)) {
+          stylesheet.dataset.stableFallbackAttempted = "true";
+          stylesheet.href = "/index.css?version=" + Date.now();
+          return;
+        }
+      }
+
       window.__appStylesheetFailed = true;
-      if (window.__appStyleRecoveryBypassed) return;
       const show = function () {
         const recovery = document.getElementById("app-style-recovery");
         if (recovery) recovery.hidden = false;
@@ -43,18 +56,10 @@
       }
       window.location.replace("/repair?version=" + Date.now());
     };
-    window.continueWithoutStyleRecovery = function () {
-      window.__appStyleRecoveryBypassed = true;
-      const recovery = document.getElementById("app-style-recovery");
-      if (recovery) {
-        recovery.hidden = true;
-        recovery.style.display = "none";
-      }
-    };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
-  <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery()">
+  <link rel="stylesheet" href="index.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
@@ -130,7 +135,6 @@
     <div style="font-size:22px;font-weight:700;">畫面樣式需要重新載入</div>
     <div style="max-width:360px;font-size:16px;line-height:1.6;color:#555;">系統偵測到舊版畫面資源，點擊下方按鈕即可修復，不會刪除你的讀經進度或登入資料。</div>
     <button id="app-style-recovery-button" type="button" onclick="window.recoverAppAssets()" style="border:0;border-radius:12px;background:#04A9D2;color:#fff;padding:12px 22px;font-size:16px;font-weight:600;">修復並重新載入</button>
-    <button type="button" onclick="window.continueWithoutStyleRecovery()" style="border:0;background:transparent;color:#555;padding:10px 16px;font-size:15px;text-decoration:underline;">仍然進入系統</button>
   </div>
   <!-- App Container -->
   <div class="app-layout hidden">
