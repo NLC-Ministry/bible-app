@@ -73,6 +73,13 @@ export const TTSPlayer: React.FC<TTSPlayerProps> = ({
     };
   }, [onEnded, onError]);
 
+  // 1.5 支援 autoPlay 自動播放
+  useEffect(() => {
+    if (autoPlay && text && !isPlaying && !isLoading && !ttsResult) {
+      handleLoadAndTogglePlay();
+    }
+  }, [autoPlay]);
+
   // 2. 觸發語音合成積木
   const handleLoadAndTogglePlay = async () => {
     if (isPlaying && audioRef.current) {
