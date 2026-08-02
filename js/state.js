@@ -75,7 +75,8 @@ const state = {
   readerState: {
     bookId: 1, // Genesis
     chapter: 1,
-    fontSize: 18
+    fontSize: 18,
+    selectedVerseNum: null
   },
   highlights: {}, // Mapping of "Book_Chapter_Verse" to color hex
   statsCharts: {

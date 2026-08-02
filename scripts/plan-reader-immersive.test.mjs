@@ -128,6 +128,9 @@ describe("immersive plan reader", () => {
     expect(bible).toContain('console.info("[AutoRead] Reader bottom detected"');
     expect(bible).not.toContain("自動已讀測試");
     expect(bible).toContain("taskContext.round, taskContext.plan");
+    expect(bible).not.toContain("updatePlanCheckboxState(");
+    expect(bible).toContain("window.renderPlanScheduleTracker?.()");
+    expect(bible).toContain('typeof window.handleRoundCompletion === "function"');
     expect(bible).toContain("return false;");
     expect(bible).toContain("dwellMs: 1000");
   });

@@ -8145,6 +8145,7 @@ if (typeof updateStatsView === 'function') {
 }
 if (typeof renderPlanScheduleTracker === 'function') {
   window.renderPlanScheduleTracker = renderPlanScheduleTracker;
+  window.handleRoundCompletion = handleRoundCompletion;
 }
 if (typeof renderHorizontalDateStrip === 'function') {
   window.renderHorizontalDateStrip = renderHorizontalDateStrip;

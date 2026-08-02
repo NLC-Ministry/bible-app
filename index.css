@@ -12285,3 +12285,31 @@ select,
 .pastoral-ranking-card {
   margin-top: 1.2rem;
 }
+/* Reader audio start selection is independent from persistent verse highlighting. */
+#reader-view .bible-verse.reader-start-selected {
+  position: relative;
+  padding-right: 5.4rem !important;
+  background: var(--color-brand-subtle) !important;
+  outline: 2px solid var(--color-brand) !important;
+  outline-offset: -2px;
+  border-radius: 12px !important;
+}
+
+#reader-view .bible-verse.reader-start-selected::after {
+  content: "朗讀起點";
+  position: absolute;
+  top: 0.42rem;
+  right: 0.5rem;
+  padding: 0.16rem 0.42rem;
+  border-radius: 999px;
+  background: var(--color-brand);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+#reader-view .bible-verse.reader-start-selected:focus-visible {
+  outline-width: 3px !important;
+}

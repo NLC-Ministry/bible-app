@@ -1,6 +1,7 @@
 // js/modules/bible.js
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
+import { resolveReaderStartIndex, selectPreferredChineseVoice } from "./reader-speech.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -140,14 +141,16 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
   taskContext.chapter[readKey] = true;
   if (taskContext.round === 1) taskContext.chapter.isRead = true;
   try {
-    updatePlanCheckboxState(planDayChKey, true);
+    window.renderPlanScheduleTracker?.();
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
     await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true, taskContext.round, taskContext.plan);
 
     const shouldHandleR1 = taskContext.plan.isPlanCompleted && !taskContext.plan.upgradePromptHandled;
     const shouldHandleR2 = taskContext.plan.isRound2Completed && !taskContext.plan.round2UpgradePromptHandled;
-    if (shouldHandleR1 || shouldHandleR2) await handleRoundCompletion(taskContext.plan);
+    if ((shouldHandleR1 || shouldHandleR2) && typeof window.handleRoundCompletion === "function") {
+      await window.handleRoundCompletion(taskContext.plan);
+    }
     if (typeof window.checkAndPromptTodayCompletion === "function") {
       await window.checkAndPromptTodayCompletion();
     }
@@ -159,7 +162,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     state.readerState.autoMarked = false;
     taskContext.chapter[readKey] = previousRoundRead;
     taskContext.chapter.isRead = previousRead;
-    updatePlanCheckboxState(planDayChKey, false);
+    window.renderPlanScheduleTracker?.();
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
     if (typeof showToast === "function") {
@@ -510,7 +513,7 @@ export function initReaderControls() {
       let planDayChKey = null;
       if (state.activePlan) {
         planDayChKey = `${bookObj.name}_${state.readerState.chapter}`;
-        updatePlanCheckboxState(planDayChKey, isChecked);
+        window.renderPlanScheduleTracker?.();
         calculatePlanProgress();
         if (typeof updateDashboardView === "function") {
           updateDashboardView();
@@ -524,7 +527,9 @@ export function initReaderControls() {
             const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
             const shouldHandleR2 = plan.isRound2Completed && !plan.round2UpgradePromptHandled;
             if (shouldHandleR1 || shouldHandleR2) {
-              await handleRoundCompletion(plan);
+              if (typeof window.handleRoundCompletion === "function") {
+                await window.handleRoundCompletion(plan);
+              }
             }
             if (isChecked && typeof window.checkAndPromptTodayCompletion === "function") {
               await window.checkAndPromptTodayCompletion();
@@ -535,7 +540,7 @@ export function initReaderControls() {
           console.error("Failed to update reader progress in background", error);
           markReadBtn.classList.toggle("checked", wasChecked);
           if (state.activePlan && planDayChKey) {
-            updatePlanCheckboxState(planDayChKey, wasChecked);
+            window.renderPlanScheduleTracker?.();
             calculatePlanProgress();
             if (typeof updateDashboardView === "function") {
               updateDashboardView();
@@ -849,6 +854,7 @@ export async function renderReaderText() {
   if (isSpeaking) {
     stopReaderAudio(true);
   }
+  state.readerState.selectedVerseNum = null;
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
   if (readerBottomDwellController) readerBottomDwellController.reset();
@@ -930,6 +936,24 @@ export async function renderReaderText() {
   scheduleReaderBottomDwellCheck();
 }
 
+function setReaderStartSelection(verseElement) {
+  const container = document.getElementById("bible-content");
+  if (!container || !verseElement) return;
+  const wasSelected = verseElement.classList.contains("reader-start-selected");
+  container.querySelectorAll(".bible-verse.reader-start-selected").forEach(item => {
+    item.classList.remove("reader-start-selected");
+    item.setAttribute("aria-pressed", "false");
+  });
+  if (wasSelected) {
+    state.readerState.selectedVerseNum = null;
+    console.info("[ReaderAudio] Start verse selection cleared");
+    return;
+  }
+  verseElement.classList.add("reader-start-selected");
+  verseElement.setAttribute("aria-pressed", "true");
+  state.readerState.selectedVerseNum = Number(verseElement.dataset.verse || 1);
+  console.info("[ReaderAudio] Start verse selected", { verse: state.readerState.selectedVerseNum });
+}
 function renderVersesList(container, verses, bookName, chapter) {
   container.innerHTML = "";
   verses.forEach(v => {
@@ -937,6 +961,10 @@ function renderVersesList(container, verses, bookName, chapter) {
     verseDiv.className = "bible-verse";
     verseDiv.dataset.verse = String(v.verse);
     verseDiv.id = `reader-verse-${v.verse}`;
+    verseDiv.tabIndex = 0;
+    verseDiv.setAttribute("role", "button");
+    verseDiv.setAttribute("aria-pressed", "false");
+    verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選為朗讀起點`);
 
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
     if (state.highlights[highlightKey]) {
@@ -946,9 +974,16 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
 
-    verseDiv.addEventListener("click", (e) => {
+    const toggleSelection = e => {
       e.stopPropagation();
+      setReaderStartSelection(verseDiv);
       showContextToolbar(verseDiv, highlightKey);
+    };
+    verseDiv.addEventListener("click", toggleSelection);
+    verseDiv.addEventListener("keydown", e => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      toggleSelection(e);
     });
 
     container.appendChild(verseDiv);
@@ -1038,6 +1073,16 @@ let speechUtterance = null;
 let currentSpeakingVerseIndex = -1;
 let verseListForSpeaking = [];
 let currentAudioSessionId = 0;
+let preferredReaderVoice = null;
+
+function updateReaderAudioButton(speaking) {
+  const btn = document.getElementById("reader-audio-btn");
+  if (!btn) return;
+  btn.classList.toggle("active", speaking);
+  btn.setAttribute("aria-pressed", speaking ? "true" : "false");
+  btn.setAttribute("aria-label", speaking ? "停止朗讀" : "朗讀經文");
+  btn.title = speaking ? "停止朗讀" : "朗讀經文";
+}
 
 function clearSpeakingHighlight() {
   document.querySelectorAll(".bible-verse.speaking-highlight").forEach(el => {
@@ -1046,34 +1091,45 @@ function clearSpeakingHighlight() {
 }
 
 function stopReaderAudio(quiet = false) {
+  const wasActive = isSpeaking || Boolean(window.speechSynthesis?.speaking) || Boolean(window.speechSynthesis?.pending);
   currentAudioSessionId++;
   if (typeof window.speechSynthesis !== "undefined") {
-    try {
-      window.speechSynthesis.cancel();
-    } catch (_e) {}
+    try { window.speechSynthesis.cancel(); } catch (_e) {}
   }
   isSpeaking = false;
   currentSpeakingVerseIndex = -1;
   verseListForSpeaking = [];
   speechUtterance = null;
   clearSpeakingHighlight();
+  updateReaderAudioButton(false);
+  if (!quiet && wasActive && typeof showToast === "function") showToast("已停止朗讀");
+}
 
-  const btn = document.getElementById("reader-audio-btn");
-  if (btn) btn.classList.remove("active");
-
-  if (!quiet && typeof showToast === "function") {
-    showToast("已停止朗讀");
-  }
+function getInstalledReaderVoice() {
+  if (typeof window.speechSynthesis === "undefined") return Promise.resolve(null);
+  const immediate = window.speechSynthesis.getVoices?.() || [];
+  preferredReaderVoice = selectPreferredChineseVoice(immediate) || preferredReaderVoice;
+  if (preferredReaderVoice) return Promise.resolve(preferredReaderVoice);
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.speechSynthesis.removeEventListener?.("voiceschanged", finish);
+      preferredReaderVoice = selectPreferredChineseVoice(window.speechSynthesis.getVoices?.() || []);
+      resolve(preferredReaderVoice);
+    };
+    window.speechSynthesis.addEventListener?.("voiceschanged", finish, { once: true });
+    window.setTimeout(finish, 400);
+  });
 }
 
 function speakNextVerseInQueue(sessionId) {
-  if (sessionId !== currentAudioSessionId || !isSpeaking || currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
-    if (sessionId === currentAudioSessionId) {
-      stopReaderAudio(true);
-    }
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  if (currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
+    stopReaderAudio(true);
     return;
   }
-
   const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
   if (!currentItem) {
     stopReaderAudio(true);
@@ -1084,100 +1140,69 @@ function speakNextVerseInQueue(sessionId) {
   const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
   if (verseEl) {
     verseEl.classList.add("speaking-highlight");
-    try {
-      verseEl.scrollIntoView({ behavior: "smooth", block: "center" });
-    } catch (_e) {
-      // Fallback
-    }
+    verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
   }
-
-  if (typeof window.speechSynthesis === "undefined") {
-    if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
-    stopReaderAudio(true);
-    return;
-  }
-
-  try {
-    window.speechSynthesis.cancel();
-  } catch (_e) {}
 
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
-  speechUtterance.lang = "zh-TW";
-  speechUtterance.rate = 1.0;
-
+  speechUtterance.lang = preferredReaderVoice?.lang || "zh-TW";
+  if (preferredReaderVoice) speechUtterance.voice = preferredReaderVoice;
+  speechUtterance.rate = 0.92;
+  speechUtterance.pitch = 1;
+  speechUtterance.volume = 1;
   speechUtterance.onend = () => {
     if (sessionId !== currentAudioSessionId || !isSpeaking) return;
     currentSpeakingVerseIndex++;
     speakNextVerseInQueue(sessionId);
   };
-
-  speechUtterance.onerror = (err) => {
+  speechUtterance.onerror = error => {
     if (sessionId !== currentAudioSessionId || !isSpeaking) return;
-    console.warn("Speech synthesis error:", err);
-    currentSpeakingVerseIndex++;
-    speakNextVerseInQueue(sessionId);
+    console.warn("[ReaderAudio] Speech synthesis interrupted", error);
+    stopReaderAudio(true);
+    if (typeof showToast === "function") showToast("朗讀暫時中斷，請再試一次");
   };
-
   window.speechSynthesis.speak(speechUtterance);
 }
 
-window.toggleReaderAudio = function(startVerseNum = null) {
-  if (isSpeaking && (startVerseNum === null || startVerseNum === undefined)) {
+window.toggleReaderAudio = async function(startVerseNum = null) {
+  if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
+    if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
+    return;
+  }
+  if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     stopReaderAudio();
     return;
   }
 
   stopReaderAudio(true);
-
   const container = document.getElementById("bible-content");
   if (!container) return;
-
-  const verseNodes = Array.from(container.querySelectorAll(".bible-verse"));
-  if (verseNodes.length === 0) return;
-
-  verseListForSpeaking = verseNodes.map(el => ({
+  verseListForSpeaking = Array.from(container.querySelectorAll(".bible-verse")).map(el => ({
     verseNum: Number(el.dataset.verse || 0),
-    text: el.querySelector(".verse-text") ? el.querySelector(".verse-text").textContent.trim() : ""
+    text: el.querySelector(".verse-text")?.textContent.trim() || ""
   })).filter(item => item.text.length > 0);
-
   if (verseListForSpeaking.length === 0) return;
 
-  let startIndex = 0;
-  if (startVerseNum !== null && Number.isInteger(Number(startVerseNum))) {
-    const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === Number(startVerseNum));
-    if (foundIdx !== -1) startIndex = foundIdx;
-  } else {
-    // 1. 優先檢查是否有劃線選取的經文 (.selected)
-    const selectedVerseEl = container.querySelector(".bible-verse.selected");
-    if (selectedVerseEl && selectedVerseEl.dataset.verse) {
-      const selectedNum = Number(selectedVerseEl.dataset.verse);
-      const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === selectedNum);
-      if (foundIdx !== -1) startIndex = foundIdx;
-    }
-    // 2. 次之檢查使用者最後點擊關注的經文 (lastFocusedVerseNum)
-    else if (state.readerState && state.readerState.lastFocusedVerseNum) {
-      const focusedNum = Number(state.readerState.lastFocusedVerseNum);
-      const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === focusedNum);
-      if (foundIdx !== -1) startIndex = foundIdx;
-    }
-  }
+  const selectedVerseNum = startVerseNum ?? state.readerState?.selectedVerseNum ?? null;
+  const startIndex = resolveReaderStartIndex(verseListForSpeaking, selectedVerseNum);
+  if (startIndex < 0) return;
 
   currentAudioSessionId++;
-  const thisSessionId = currentAudioSessionId;
-
+  const sessionId = currentAudioSessionId;
   isSpeaking = true;
   currentSpeakingVerseIndex = startIndex;
-
-  const btn = document.getElementById("reader-audio-btn");
-  if (btn) btn.classList.add("active");
+  updateReaderAudioButton(true);
+  preferredReaderVoice = await getInstalledReaderVoice();
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
 
   const startVerse = verseListForSpeaking[startIndex];
-  if (typeof showToast === "function") {
-    showToast(`開始從第 ${startVerse ? startVerse.verseNum : 1} 節朗讀經文...`);
-  }
-  speakNextVerseInQueue(thisSessionId);
+  console.info("[ReaderAudio] Playback started", {
+    verse: startVerse?.verseNum || 1,
+    voice: preferredReaderVoice?.name || "browser default",
+    lang: preferredReaderVoice?.lang || "zh-TW"
+  });
+  if (typeof showToast === "function") showToast(`從第 ${startVerse?.verseNum || 1} 節開始朗讀`);
+  speakNextVerseInQueue(sessionId);
 };
-
 window.searchChapterVerses = function(keyword) {
   const container = document.getElementById("bible-content");
   if (!container) return;
