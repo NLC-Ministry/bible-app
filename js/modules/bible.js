@@ -1,7 +1,7 @@
 // js/modules/bible.js
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
-import { resolveReaderStartIndex, selectPreferredChineseVoice } from "./reader-speech.mjs";
+import { resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -229,6 +229,8 @@ export function initReaderControls() {
       }
     });
   }
+
+  setupVersionPickerEvents();
 
   const navVersionBtn = document.getElementById("reader-nav-version-btn");
   if (navVersionBtn) {
@@ -1041,28 +1043,96 @@ function showContextToolbar(verseElement, highlightKey) {
   }, 10);
 }
 
-window.toggleBibleVersion = function() {
+window.openBibleVersionPicker = function() {
+  const modal = document.getElementById("bible-version-picker-modal");
+  if (!modal) {
+    return window.toggleBibleVersionNext?.();
+  }
+
   const current = state.readerState.version || "CUNP";
-  let next = "CUNP";
-  if (current === "CUNP") next = "RCUVTS";
-  else if (current === "RCUVTS") next = "CUV";
-  else next = "CUNP";
-  
-  state.readerState.version = next;
-  localStorage.setItem("reader_bible_version", next);
-  
+
+  modal.querySelectorAll(".version-option-btn").forEach(btn => {
+    const v = btn.getAttribute("data-version");
+    btn.classList.toggle("active", v === current);
+  });
+
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+};
+
+window.closeBibleVersionPicker = function() {
+  const modal = document.getElementById("bible-version-picker-modal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+};
+
+window.selectBibleVersion = function(newVersion) {
+  if (!newVersion) return;
+  const current = state.readerState.version || "CUNP";
+  window.closeBibleVersionPicker();
+
+  if (current === newVersion) return;
+
+  state.readerState.version = newVersion;
+  localStorage.setItem("reader_bible_version", newVersion);
+
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
-    const label = next === "CUNP" ? "CUNP" : (next === "RCUVTS" ? "RCUV" : "CUV");
+    const label = newVersion === "RCUVTS" ? "RCUV" : newVersion;
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
     const inlineVersion = document.getElementById("reader-version-inline");
     if (inlineVersion) inlineVersion.textContent = label;
   }
-  
-  showToast(`已切換譯本至 ${next === "CUNP" ? "新譯標點和合本" : (next === "RCUVTS" ? "和合本修訂版" : "官話和合本")}`);
+
+  const versionLabels = {
+    CUNP: "新標點和合本",
+    RCUVTS: "和合本修訂版",
+    CUV: "官話和合本",
+    ESV: "ESV (English Standard Version)",
+    NIV: "NIV (New International Version)",
+    NLT: "NLT (New Living Translation)"
+  };
+
+  showToast(`已切換譯本至 ${versionLabels[newVersion] || newVersion}`);
   renderReaderText();
 };
+
+window.toggleBibleVersionNext = function() {
+  const current = state.readerState.version || "CUNP";
+  let next = "CUNP";
+  if (current === "CUNP") next = "RCUVTS";
+  else if (current === "RCUVTS") next = "CUV";
+  else if (current === "CUV") next = "ESV";
+  else if (current === "ESV") next = "NIV";
+  else if (current === "NIV") next = "NLT";
+  else next = "CUNP";
+  window.selectBibleVersion(next);
+};
+
+window.toggleBibleVersion = function() {
+  window.openBibleVersionPicker();
+};
+
+// 綁定 Version Picker Modal 內部事件
+function setupVersionPickerEvents() {
+  const modal = document.getElementById("bible-version-picker-modal");
+  if (!modal || modal.dataset.eventsBound === "true") return;
+  modal.dataset.eventsBound = "true";
+
+  const closeBtn = document.getElementById("version-picker-close");
+  const backdrop = document.getElementById("version-picker-backdrop");
+  closeBtn?.addEventListener("click", window.closeBibleVersionPicker);
+  backdrop?.addEventListener("click", window.closeBibleVersionPicker);
+
+  modal.querySelectorAll(".version-option-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.getAttribute("data-version");
+      if (v) window.selectBibleVersion(v);
+    });
+  });
+}
 
 let isSpeaking = false;
 let speechUtterance = null;
@@ -1101,18 +1171,20 @@ function stopReaderAudio(quiet = false) {
   if (!quiet && wasActive && typeof showToast === "function") showToast("已停止朗讀");
 }
 
-function getInstalledReaderVoice() {
+function getInstalledReaderVoice(targetLang = "zh-TW") {
   if (typeof window.speechSynthesis === "undefined") return Promise.resolve(null);
   const immediate = window.speechSynthesis.getVoices?.() || [];
-  preferredReaderVoice = selectPreferredChineseVoice(immediate) || preferredReaderVoice;
-  if (preferredReaderVoice) return Promise.resolve(preferredReaderVoice);
+  preferredReaderVoice = selectPreferredVoice(immediate, targetLang) || preferredReaderVoice;
+  if (preferredReaderVoice && preferredReaderVoice.lang?.toLowerCase().startsWith(targetLang.slice(0, 2).toLowerCase())) {
+    return Promise.resolve(preferredReaderVoice);
+  }
   return new Promise(resolve => {
     let settled = false;
     const finish = () => {
       if (settled) return;
       settled = true;
       window.speechSynthesis.removeEventListener?.("voiceschanged", finish);
-      preferredReaderVoice = selectPreferredChineseVoice(window.speechSynthesis.getVoices?.() || []);
+      preferredReaderVoice = selectPreferredVoice(window.speechSynthesis.getVoices?.() || [], targetLang);
       resolve(preferredReaderVoice);
     };
     window.speechSynthesis.addEventListener?.("voiceschanged", finish, { once: true });
@@ -1139,8 +1211,12 @@ function speakNextVerseInQueue(sessionId) {
     verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
   }
 
+  const currentVersion = state.readerState?.version || "CUNP";
+  const isEnglish = ["ESV", "NIV", "NLT"].includes(currentVersion);
+  const fallbackLang = isEnglish ? "en-US" : "zh-TW";
+
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
-  speechUtterance.lang = preferredReaderVoice?.lang || "zh-TW";
+  speechUtterance.lang = preferredReaderVoice?.lang || fallbackLang;
   if (preferredReaderVoice) speechUtterance.voice = preferredReaderVoice;
   speechUtterance.rate = 0.92;
   speechUtterance.pitch = 1;
@@ -1187,7 +1263,9 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
   isSpeaking = true;
   currentSpeakingVerseIndex = startIndex;
   updateReaderAudioButton(true);
-  preferredReaderVoice = await getInstalledReaderVoice();
+  const currentVersion = state.readerState?.version || "CUNP";
+  const isEnglish = ["ESV", "NIV", "NLT"].includes(currentVersion);
+  preferredReaderVoice = await getInstalledReaderVoice(isEnglish ? "en-US" : "zh-TW");
   if (sessionId !== currentAudioSessionId || !isSpeaking) return;
 
   const startVerse = verseListForSpeaking[startIndex];

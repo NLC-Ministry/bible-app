@@ -2185,6 +2185,46 @@
     </div>
   </div>
 
+  <!-- Bible Version Picker Modal -->
+  <div id="bible-version-picker-modal" class="version-picker-modal hidden" aria-hidden="true">
+    <div class="version-picker-backdrop" id="version-picker-backdrop"></div>
+    <div class="version-picker-card">
+      <div class="version-picker-header">
+        <h3 class="version-picker-title">選擇聖經譯本</h3>
+        <button type="button" class="version-picker-close" id="version-picker-close" aria-label="關閉選單">✕</button>
+      </div>
+      <div class="version-picker-body">
+        <div class="version-section-label">中文譯本</div>
+        <button type="button" class="version-option-btn" data-version="CUNP">
+          <span class="v-name">CUNP (新標點和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="RCUVTS">
+          <span class="v-name">RCUV (和合本修訂版)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="CUV">
+          <span class="v-name">CUV (官話和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+
+        <div class="version-section-label" style="margin-top: 1.25rem;">英文譯本 (English)</div>
+        <button type="button" class="version-option-btn" data-version="ESV">
+          <span class="v-name">ESV (English Standard Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NIV">
+          <span class="v-name">NIV (New International Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NLT">
+          <span class="v-name">NLT (New Living Translation)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/app.js?v=20260802_login_auto_repair"></script>
 </body>
 

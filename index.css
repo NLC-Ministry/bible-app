@@ -2658,6 +2658,135 @@ body:not(.dark-theme) .settings-row-btn:hover {
   transform: scale(1.1);
 }
 
+/* ── Bible Version Picker Modal ── */
+.version-picker-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.version-picker-modal.hidden {
+  display: none !important;
+}
+
+.version-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.version-picker-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-card, #e2e8f0);
+  border-radius: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-sizing: border-box;
+  animation: versionPickerPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes versionPickerPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.version-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.version-picker-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.version-picker-close {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  line-height: 1;
+}
+
+.version-picker-close:hover {
+  background: var(--bg-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary);
+}
+
+.version-section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+  margin-top: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.version-option-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  margin-top: 0.4rem;
+  border-radius: 12px;
+  border: 1.5px solid var(--border-card, #e2e8f0);
+  background: var(--bg-surface, #f8fafc);
+  color: var(--text-primary, #0f172a);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.version-option-btn:hover {
+  background: var(--bg-hover, #f1f5f9);
+  border-color: var(--color-primary-light, #93c5fd);
+}
+
+.version-option-btn .v-check {
+  display: none;
+  color: var(--color-primary, #1877f2);
+  font-size: 1.1rem;
+}
+
+.version-option-btn.active {
+  background: rgba(24, 119, 242, 0.08);
+  border-color: var(--color-primary, #1877f2);
+  color: var(--color-primary, #1877f2);
+  font-weight: 700;
+}
+
+.version-option-btn.active .v-check {
+  display: inline-block;
+}
+
 /* Plan setup layout */
 .book-selection-box {
   border: 1px solid var(--border-card);
@@ -11212,6 +11341,7 @@ body.dark-theme .custom-confirm-overlay {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
   margin: 0.05rem 0 0;
   color: var(--text-secondary);

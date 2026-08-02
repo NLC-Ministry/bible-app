@@ -94,13 +94,13 @@ function normalizeVerses(rawVerses) {
     .filter(v => v.verse && v.text);
 }
 
-function assertCompleteEnough(result, sourceName) {
+function assertCompleteEnough(result, sourceName, isEnglish = false) {
   if (!result || !Array.isArray(result.verses) || result.verses.length === 0) {
     throw new Error(`${sourceName} 沒有回傳經文`);
   }
 
   const combinedText = result.verses.map(v => v.text).join("");
-  if (!/[\u3400-\u9fff]/.test(combinedText)) {
+  if (!isEnglish && !/[\u3400-\u9fff]/.test(combinedText)) {
     throw new Error(`${sourceName} 回傳的不是中文聖經`);
   }
 
@@ -122,6 +122,7 @@ async function fetchFromBibleApi(bookEngName, chapter, translation) {
     }
   }
 
+  const isEnglish = ["esv", "niv", "nlt", "web", "kjv"].includes(translation.toLowerCase());
   const url = `https://bible-api.com/${encodeURIComponent(queryPassage)}?translation=${encodeURIComponent(translation)}`;
   const targetUrl = url;
   console.log('🌐 [API 發送檢查] 正在線上獲取內文，完整 URL 內容為：', targetUrl);
@@ -129,13 +130,14 @@ async function fetchFromBibleApi(bookEngName, chapter, translation) {
   return assertCompleteEnough({
     reference: data.reference || `${bookEngName} ${chapter}`,
     verses: normalizeVerses(data.verses)
-  }, `bible-api ${translation}`);
+  }, `bible-api ${translation}`, isEnglish);
 }
 
 async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier = null) {
   const bookCode = bookIdentifier;
   if (!bookCode) throw new Error(`Bolls 缺少書卷代碼：${bookEngName}`);
 
+  const isEnglish = ["esv", "niv", "nlt", "kjv"].includes(translation.toLowerCase());
   const url = `https://bolls.life/get-chapter/${encodeURIComponent(translation)}/${encodeURIComponent(bookCode)}/${encodeURIComponent(chapter)}/`;
   const targetUrl = url;
   console.log('🌐 [API 發送檢查] 正在線上獲取內文，完整 URL 內容為：', targetUrl);
@@ -143,7 +145,7 @@ async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier 
   return assertCompleteEnough({
     reference: `${bookEngName} ${chapter}`,
     verses: normalizeVerses(data)
-  }, `Bolls ${translation}`);
+  }, `Bolls ${translation}`, isEnglish);
 }
 const BIBLE_FALLBACK = {
   "Genesis_1": {
@@ -203,7 +205,10 @@ async function fetchBibleChapter(bookEngName, chapter) {
   // Bolls.life requires the numeric book ID (1-66)
   const bollsBookId = getBollsBookId(bookEngName);
   const preferredVersion = (typeof state !== "undefined" && state.readerState && state.readerState.version) || "CUNP";
-  const bollsTranslations = Array.from(new Set([preferredVersion, "CUNP", "CUV", "CUVS", "CUVT", "CUNPS", "RCUVSS", "RCUVTS"]));
+  const isEnglishVersion = ["ESV", "NIV", "NLT"].includes(preferredVersion);
+  const bollsTranslations = isEnglishVersion
+    ? Array.from(new Set([preferredVersion, "ESV", "NIV", "NLT", "CUNP", "CUV"]))
+    : Array.from(new Set([preferredVersion, "CUNP", "CUV", "CUVS", "CUVT", "CUNPS", "RCUVSS", "RCUVTS", "ESV", "NIV", "NLT"]));
   const sources = [];
 
   if (bollsBookId) {
