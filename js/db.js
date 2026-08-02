@@ -1235,12 +1235,13 @@ const db = {
   },
 
   // Save log to DB/LocalStorage
-  async logChapterRead(book, chapter, isChecked, roundOverride = null) {
+  async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null) {
     console.log('🏗️ [系統審計] 進入資料讀寫，當前操作類型：資料庫寫入進度', '資料版本:', state.dataVersion);
     const todayISO = new Date().toISOString();
-    const planId = state.activePlan ? state.activePlan.id : null;
-    const presetKey = state.activePlan ? state.activePlan.presetKey : null;
-    const round = roundOverride || (state.activePlan ? (state.activePlan.currentRound || 1) : 1);
+    const targetPlan = planOverride || state.activePlan;
+    const planId = targetPlan ? targetPlan.id : null;
+    const presetKey = targetPlan ? targetPlan.presetKey : null;
+    const round = roundOverride || (targetPlan ? (targetPlan.currentRound || 1) : 1);
     const isSamePlanLog = (log) => {
       const logPlanId = log.plan_id || null;
       const logPresetKey = log.presetKey || log.preset_key || null;

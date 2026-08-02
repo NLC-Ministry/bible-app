@@ -123,6 +123,10 @@ describe("immersive plan reader", () => {
     expect(bible).toContain('id = "reader-end-sentinel"');
     expect(bible).toContain("observeReaderEndSentinel");
     expect(bible).toContain('addEventListener("scrollend", handleReaderScroll');
+    expect(bible).toContain("mainSurface.addEventListener");
+    expect(bible).toContain("const root = getReaderScrollSurface()");
+    expect(bible).toContain("自動已讀測試：已偵測到本章底部");
+    expect(bible).toContain("taskContext.round, taskContext.plan");
     expect(bible).toContain("return false;");
     expect(bible).toContain("dwellMs: 1000");
   });

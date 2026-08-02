@@ -2542,6 +2542,28 @@ body:not(.dark-theme) .settings-row-btn:hover {
   transition: var(--transition-smooth);
 }
 
+.bible-verse.selected {
+  background-color: rgba(255, 235, 59, 0.35); /* Yellow marker highlight */
+}
+
+.bible-verse.speaking-highlight {
+  background-color: rgba(24, 119, 242, 0.12) !important;
+  border-left: 3px solid var(--color-primary, #1877f2);
+  padding-left: 0.5rem;
+  border-radius: var(--radius-sm, 6px);
+  transition: background-color 0.3s ease, border-left 0.3s ease;
+  animation: speakingGlow 2s infinite alternate ease-in-out;
+}
+
+@keyframes speakingGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(24, 119, 242, 0);
+  }
+  100% {
+    box-shadow: 0 0 8px 1px rgba(24, 119, 242, 0.25);
+  }
+}
+
 .checkbox-btn.checked {
   color: var(--accent-color);
   border-color: var(--accent-color);

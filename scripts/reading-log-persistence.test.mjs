@@ -16,6 +16,12 @@ describe("reading log persistence contract", () => {
     expect(logChapterReadSource).not.toContain('from("reading_logs").update({ read_at: todayISO })');
   });
 
+  it("persists against the plan that opened the reader even if active context changes", () => {
+    expect(logChapterReadSource).toContain("planOverride = null");
+    expect(logChapterReadSource).toContain("const targetPlan = planOverride || state.activePlan");
+    expect(logChapterReadSource).toContain("const planId = targetPlan ? targetPlan.id : null");
+  });
+
   it("fails visibly when an authenticated profile is unavailable", () => {
     expect(logChapterReadSource).toContain('authError.status = 401');
   });
