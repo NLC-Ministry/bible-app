@@ -615,6 +615,23 @@ export function init() {
 
 
 
+  const syncPreferenceThemeState = () => {
+    document.querySelectorAll("[data-profile-theme]").forEach(button => {
+      const isActive = button.dataset.profileTheme === state.theme;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-checked", String(isActive));
+    });
+  };
+  document.querySelectorAll("[data-profile-theme]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (typeof window.applyAppTheme === "function") {
+        window.applyAppTheme(button.dataset.profileTheme);
+      }
+      syncPreferenceThemeState();
+    });
+  });
+  syncPreferenceThemeState();
+  window.addEventListener("app:themeChanged", syncPreferenceThemeState);
   const btnProfileLogout = document.getElementById("btn-profile-logout");
   if (btnProfileLogout) {
     btnProfileLogout.addEventListener("click", async (e) => {

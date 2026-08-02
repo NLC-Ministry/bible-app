@@ -307,12 +307,6 @@ const appRouter = {
     const topBarSubMode = document.getElementById("top-bar-sub-mode");
     const planSettingsIcon = document.getElementById("plan-settings-icon");
 
-    // ── 控制主題切換按鈕的顯示 (只在個人分頁顯示) ──
-    const themeToggle = document.getElementById("theme-toggle");
-    if (themeToggle) {
-      themeToggle.classList.toggle("hidden", this.currentTab !== "profile-view");
-    }
-
     const isPlanDetail = this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen;
 
     if (isPlanDetail) {
@@ -491,23 +485,41 @@ function setBodyThemeClass(themeName) {
   document.body.classList.add(themeName + "-theme");
 }
 
+function applyAppTheme(themeName) {
+  const allowedThemes = new Set(["light", "warm", "dark"]);
+  const nextTheme = allowedThemes.has(themeName) ? themeName : "light";
+  state.theme = nextTheme;
+  setBodyThemeClass(nextTheme);
+  const isReaderPage = window.appRouter && window.appRouter.currentTab === "reader-view";
+  document.body.classList.toggle("reader-page", Boolean(isReaderPage));
+  const appLayout = document.querySelector(".app-layout");
+  if (appLayout) appLayout.classList.toggle("reader-mode", Boolean(isReaderPage));
+  localStorage.setItem("app_theme", nextTheme);
+
+  document.querySelectorAll("[data-profile-theme]").forEach(button => {
+    const isActive = button.dataset.profileTheme === nextTheme;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-checked", String(isActive));
+  });
+  document.querySelectorAll("#reader-settings-dropdown .theme-btn, .theme-option").forEach(button => {
+    button.classList.toggle("active", button.dataset.theme === nextTheme);
+  });
+  if (typeof renderBadgeWall === "function") {
+    renderBadgeWall("badges-grid");
+  }
+
+  window.dispatchEvent(new CustomEvent("app:themeChanged", {
+    detail: { theme: nextTheme }
+  }));
+}
+
+window.applyAppTheme = applyAppTheme;
+
 function initTheme() {
-  const savedTheme = localStorage.getItem("app_theme") || "light";
+  const storedTheme = localStorage.getItem("app_theme");
+  const savedTheme = ["light", "warm", "dark"].includes(storedTheme) ? storedTheme : "light";
   state.theme = savedTheme;
   setBodyThemeClass(savedTheme);
-
-  document.getElementById("theme-toggle").addEventListener("click", () => {
-    state.theme = state.theme === "light" ? "dark" : "light";
-    setBodyThemeClass(state.theme);
-    localStorage.setItem("app_theme", state.theme);
-
-    // ── Unified theme-change broadcast ──
-    // All loaded modules subscribe to 'app:themeChanged' independently.
-    // Do NOT call render functions directly here — modules may not be loaded yet.
-    window.dispatchEvent(new CustomEvent("app:themeChanged", {
-      detail: { theme: state.theme }
-    }));
-  });
 }
 
 // Local Settings & State Loading

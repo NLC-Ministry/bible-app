@@ -1233,34 +1233,6 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-window.applyAppTheme = function(themeName) {
-  state.theme = themeName;
-  if (typeof setBodyThemeClass === "function") {
-    setBodyThemeClass(themeName);
-  } else {
-    document.body.classList.remove("light-theme", "warm-theme", "dark-theme");
-    document.body.classList.add(themeName + "-theme");
-  }
-  const isReaderPage = window.appRouter && window.appRouter.currentTab === "reader-view";
-  document.body.classList.toggle("reader-page", Boolean(isReaderPage));
-  const appLayout = document.querySelector(".app-layout");
-  if (appLayout) appLayout.classList.toggle("reader-mode", Boolean(isReaderPage));
-  localStorage.setItem("app_theme", themeName);
-  
-  if (typeof renderBadgeWall === "function") {
-    renderBadgeWall("badges-grid");
-  }
-
-  
-  document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.theme === themeName);
-  });
-
-  document.querySelectorAll(".theme-option").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.theme === themeName);
-  });
-};
-
 let navOverlayState = {
   activeTab: 'book',
   selectedBookId: 1,

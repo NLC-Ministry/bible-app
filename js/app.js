@@ -427,12 +427,6 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     });
 
-    // ── 3b. Hide theme toggle except on profile-view tab (sync) ──
-    const themeToggle = document.getElementById("theme-toggle");
-    if (themeToggle) {
-      themeToggle.classList.toggle("hidden", tabId !== "profile-view");
-    }
-
     // ── 4. Pre-render state mutations (sync, before any await) ──
     if (tabId === "plan-view" && !options.keepPlanDetail) {
       // Only reset if no active plan: preserve plan detail when re-tapping the plan nav tab

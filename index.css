@@ -572,7 +572,7 @@ body.dark-theme {
 
 .member-hub-org-placement__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -691,7 +691,7 @@ body.dark-theme {
 .badges-grid,
 .profile-badges-card .badges-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.625rem;
   width: 100%;
 }
@@ -1539,28 +1539,9 @@ body {
   overflow: hidden;
 }
 
-#theme-toggle {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  max-width: 44px;
-  max-height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  aspect-ratio: 1 / 1;
-}
-
 .icon-btn:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-hover);
-}
-
-/* Theme Switching Sun/Moon Icons (inline Feather SVGs — not Lucide) */
-#theme-toggle svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
 }
 
 /* Verse card loading skeleton — full overlay until background image is ready */
@@ -5454,7 +5435,7 @@ body.dark-theme .pastoral-race-progress {
 }
 .stacked-progress-legend {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 .stacked-legend-item {
@@ -5575,7 +5556,7 @@ body.dark-theme .pastoral-race-progress {
   background: var(--color-success);
 }
 .distribution-redesign .stacked-progress-legend {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .distribution-redesign .stacked-legend-item {
   padding: 0.8rem 0.9rem;
@@ -5634,7 +5615,7 @@ body.dark-theme .pastoral-race-progress {
 /* Two-row stats layout for progress distribution */
 .distribution-primary-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem;
 }
 .distribution-secondary-stats {
@@ -6612,12 +6593,6 @@ select,
 .header-actions #connection-status,
 .header-actions .user-avatar-container {
   display: none !important;
-}
-
-.header-actions #theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .app-back-btn.is-home {
@@ -7836,7 +7811,7 @@ body.reader-modal-open .main-content {
 
 .sheet-options-row.typography-size-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .sheet-option-btn {
@@ -11089,6 +11064,51 @@ body.dark-theme .custom-confirm-overlay {
 .profile-tab-content.hidden {
   display: none !important;
 }
+
+.profile-preferences-group {
+  margin-bottom: 1rem;
+}
+
+.profile-theme-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.25rem 0;
+}
+
+.profile-theme-option {
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.profile-theme-option.active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  color: var(--text-primary);
+}
+
+.profile-theme-option__swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(100, 116, 139, 0.32);
+  box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.16);
+}
+
+.profile-theme-option__swatch--light { background: #ffffff; }
+.profile-theme-option__swatch--dark { background: #1e293b; }
 
 /* Plan cards: one card, clear hierarchy, stable action area */
 .plan-card {
