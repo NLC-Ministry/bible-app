@@ -20,9 +20,10 @@ describe("PWA shell recovery", () => {
 
   it("uses one complete navigation fallback and build-injected shell assets", () => {
     expect(sw).toContain('const VERSION = "__BUILD_VERSION__"');
+    expect(sw).toContain('const BUILD_JS_PATH = "__BUILD_JS_PATH__"');
     expect(sw).toContain('const BUILD_CSS_PATH = "__BUILD_CSS_PATH__"');
     expect(sw).toContain('"/index.css"');
-    expect(sw).toContain('"/app.js"');
+    expect(sw).toContain('...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : [])');
     expect(sw).toContain('fallbackUrl: "/"');
     expect(sw).not.toContain('fallbackUrl: "/index.html"');
   });

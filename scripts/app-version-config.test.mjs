@@ -29,6 +29,7 @@ describe("Bible app release version contract", () => {
   it("injects a unique service worker cache version during every build", () => {
     expect(sw).toContain('const VERSION = "__BUILD_VERSION__"');
     expect(sw).toContain('const BUILD_CSS_PATH = "__BUILD_CSS_PATH__"');
+    expect(sw).toContain('const BUILD_JS_PATH = "__BUILD_JS_PATH__"');
     expect(sw).toContain('version: VERSION');
   });
 

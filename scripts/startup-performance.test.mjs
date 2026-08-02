@@ -14,6 +14,11 @@ describe("startup performance contract", () => {
     expect(app).toContain("import(path)");
   });
 
+  it("uses the injected production build id instead of cache-busting every launch", () => {
+    expect(app).toContain('if (!/^\\d{14}$/.test(buildVersion))');
+    expect(app).not.toContain('buildVersion.includes("__BUILD_VERSION__")');
+  });
+
   it("schedules the issue report UI before PWA initialization can delay it", () => {
     const reportSchedule = app.lastIndexOf("scheduleIssueReportUiLoad({ includeAdmin: false })");
     const pwaInitialization = app.indexOf("await initializePwa()");
@@ -40,6 +45,14 @@ describe("startup performance contract", () => {
     expect(forcedReminder).toBeGreaterThan(-1);
     expect(firstDashboard).toBeGreaterThan(-1);
     expect(forcedReminder).toBeGreaterThan(firstDashboard);
+  });
+
+  it("does not block first dashboard render on organization-directory loading", () => {
+    const firstDashboard = app.indexOf("await appRouter.switchTab('dashboard-view')");
+    const orgLoad = app.lastIndexOf("db.loadOrgStructure()");
+
+    expect(firstDashboard).toBeGreaterThan(-1);
+    expect(orgLoad).toBeGreaterThan(firstDashboard);
   });
 
   it("defers secondary dashboard widgets after the core dashboard card renders", () => {

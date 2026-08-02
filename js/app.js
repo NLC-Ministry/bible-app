@@ -26,10 +26,11 @@ import { clearBadge, requestNotificationPermission } from '../lib/services/badge
 
 cleanupProductionStorage(window.localStorage);
 
-let buildVersion = "__BUILD_VERSION__" + "_clean_demo_mode_v20";
-if (buildVersion.includes("__BUILD_VERSION__")) {
+let buildVersion = "__BUILD_VERSION__";
+if (!/^\d{14}$/.test(buildVersion)) {
   buildVersion = "dev_" + Date.now();
 }
+buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
 const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260729_release_010';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
@@ -626,8 +627,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   // Load all user data in one shot. db.init() guarantees auth is resolved before we reach here.
   try {
-    const [, , initialDataLoadSucceeded] = await Promise.all([
-      db.loadOrgStructure(),
+    const [, initialDataLoadSucceeded] = await Promise.all([
       db.fetchRoleDefinitions(),
       db.loadUserData(true)
     ]);
@@ -647,6 +647,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       syncComplete: initialSessionSyncSucceeded && initialDataLoadSucceeded === true,
       storage: window.localStorage,
       config: window.APP_CONFIG
+    });
+
+    // Organization-directory data is not required for the first dashboard paint.
+    // Load it in the background so larger churches do not block app startup.
+    db.loadOrgStructure().catch(error => {
+      console.warn("Organization directory load failed after startup", error);
     });
   } catch (err) {
     console.error('Failed to load initial data & render dashboard:', err);

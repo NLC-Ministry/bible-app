@@ -6,10 +6,11 @@ const cacheManager = new CacheManager({
   version: VERSION,
   fetchImpl: (...args) => globalThis.fetch(...args)
 });
+const BUILD_JS_PATH = "__BUILD_JS_PATH__";
 const BUILD_CSS_PATH = "__BUILD_CSS_PATH__";
 const APP_SHELL = [
   "/",
-  "/app.js",
+  ...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : []),
   "/index.css",
   ...(BUILD_CSS_PATH.startsWith("/") ? [BUILD_CSS_PATH] : []),
   "/manifest.json",

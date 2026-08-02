@@ -108,35 +108,36 @@ function parseJwt(token: string) {
 }
 
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
-  // 1. Try verifying as Supabase JWT first (standard Supabase client auth)
-  try {
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(accessToken);
-    if (user && !authErr) {
-      const { data: profile, error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .select(PROFILE_SELECT)
-        .eq("id", user.id)
-        .single();
-      if (!profileError && profile) {
-        return profile;
+  const payload = parseJwt(accessToken);
+  const expectedLogtoIssuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
+  const tokenIssuer = trimSlash(String(payload?.iss || ""));
+  const isLogtoJwt = Boolean(payload?.sub && tokenIssuer === expectedLogtoIssuer);
+
+  // Logto is the production login method. Do not send its JWT to Supabase Auth
+  // first: that request must fail before fallback and adds one remote round trip
+  // to every nlc-data call. Non-Logto tokens still use Supabase verification.
+  if (!isLogtoJwt) {
+    try {
+      const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(accessToken);
+      if (user && !authErr) {
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .select(PROFILE_SELECT)
+          .eq("id", user.id)
+          .single();
+        if (!profileError && profile) return profile;
       }
+    } catch (err) {
+      console.log("Supabase JWT verification failed; checking Logto OIDC:", err);
     }
-  } catch (err) {
-    console.log("Supabase JWT verification bypassed, falling back to Logto OIDC:", err);
   }
 
-  // 2. Fallback to Logto OIDC SSO verification
-  let sub: string | null = null;
-
-  // Try decoding as JWT first (since Logto issues JWT access tokens for API resources)
-  const payload = parseJwt(accessToken);
-  if (payload && payload.sub) {
-    sub = payload.sub;
-  } else {
-    // Fallback to UserInfo endpoint call (e.g. for opaque tokens)
+  let sub: string | null = isLogtoJwt ? String(payload.sub) : null;
+  if (!sub) {
+    // Opaque Logto tokens cannot be decoded locally; resolve them through the
+    // configured OIDC UserInfo endpoint.
     try {
-      const issuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
-      const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+      const discovery = await fetchJson(`${expectedLogtoIssuer}/.well-known/openid-configuration`);
       const userinfo = await fetchJson(discovery.userinfo_endpoint, {
         headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
       });

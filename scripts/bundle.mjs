@@ -168,7 +168,7 @@ export function emitBundle({ root, outDir }) {
   let seen = 0;
   let outHtml = html.replace(SCRIPT_RE, () => {
     seen += 1;
-    return seen === total ? `<script type="module" src="/app.js"></script>` : "";
+    return seen === total ? `<script type="module" src="/${jsFile}"></script>` : "";
   });
   let seenStylesheet = 0;
   outHtml = outHtml.replace(CSS_RE, () => {
@@ -189,6 +189,7 @@ export function emitBundle({ root, outDir }) {
   console.log("DEBUG: Copying Service Worker and PWA runtime modules...");
   const serviceWorker = readFileSync(join(root, "sw.js"), "utf8")
     .replaceAll("__BUILD_VERSION__", buildVer)
+    .replaceAll("__BUILD_JS_PATH__", `/${jsFile}`)
     .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`);
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
   cpDirRecursive(join(root, "js", "pwa"), join(outDir, "js", "pwa"));

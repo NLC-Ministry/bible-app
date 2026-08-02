@@ -129,7 +129,7 @@ describe("emitBundle (integration, real repo)", () => {
       expect(existsSync(join(out, "index.css"))).toBe(true);
       // rewritten HTML: exactly one app script tag, no leftover local js/ tags
       const html = rf(join(out, "index.html"), "utf8");
-      expect(html).toContain('<script type="module" src="/app.js"></script>');
+      expect(html).toContain(`<script type="module" src="/${jsFile}"></script>`);
       expect(html).not.toMatch(/<script\s+src="js\//);
       expect(html).not.toMatch(/<script\s+src="config\.js/);
       expect(html).toContain(`href="/${cssFile}" onerror="window.showAppStyleRecovery(this)"`);
@@ -139,10 +139,11 @@ describe("emitBundle (integration, real repo)", () => {
       expect(rf(join(out, "index.css"), "utf8")).toBe(bundledCss);
       const serviceWorker = rf(join(out, "sw.js"), "utf8");
       expect(serviceWorker).not.toContain("__BUILD_VERSION__");
+      expect(serviceWorker).not.toContain("__BUILD_JS_PATH__");
       expect(serviceWorker).not.toContain("__BUILD_CSS_PATH__");
+      expect(serviceWorker).toContain(`"/${jsFile}"`);
       expect(serviceWorker).toContain(`"/${cssFile}"`);
       expect(serviceWorker).toContain('"/index.css"');
-      expect(serviceWorker).toContain('"/app.js"');
       expect(serviceWorker).toMatch(/const VERSION = "\d{14}"/);
 
       // assets copied
@@ -164,7 +165,9 @@ describe("emitBundle (integration, real repo)", () => {
       expect(bundle.includes("Lazy-loading")).toBe(true);
       expect(bundle).not.toContain("__BUILD_VERSION__");
       expect(bundle).toContain("issue-report-ui.bundle.js");
-      expect(bundle).toMatch(/\d{14}_clean_demo_mode_v20/);
+      expect(bundle).toMatch(/\d{14}/);
+      expect(bundle).toContain("_clean_demo_mode_v20");
+      expect(bundle).not.toMatch(/\.includes\("\d{14}"\)/);
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

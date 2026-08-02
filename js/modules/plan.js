@@ -2347,7 +2347,7 @@ function renderPresetPlansList() {
     });
 
     if (isObsolete || isLegacy) return false;
-    if (isHidden && !canManageHiddenPlans() && !isCampaignStageLocked(plan)) return false;
+    if (isHidden && !canManageHiddenPlans() && !window.isCampaignStageLocked(plan)) return false;
     if (!matchesSearch) return false;
     return !isAlreadyJoined;
   });
@@ -2375,7 +2375,7 @@ function renderPresetPlansList() {
   visiblePlans.forEach(plan => {
     const key = plan.id || plan.presetKey;
     const isCampaignStage = plan.planKind === "church_campaign_stage";
-    const isLockedStage = isCampaignStageLocked(plan);
+    const isLockedStage = window.isCampaignStageLocked(plan);
     const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
     const scheduleLabel = isCampaignStage
       ? `第 ${Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo)} 階段・第 ${Number(plan.roundNo || plan.campaignDefinition && plan.campaignDefinition.roundNo)} 輪`

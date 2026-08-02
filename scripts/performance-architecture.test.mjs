@@ -35,6 +35,13 @@ describe("performance architecture contracts", () => {
     expect(helper).not.toContain(".filter((candidate");
   });
 
+  it("does not send Logto JWTs through Supabase Auth before resolving their identity", () => {
+    const helper = edge.match(/async function resolveProfile[\s\S]*?\r?\n}\r?\n\r?\n/)?.[0] || "";
+    expect(helper).toContain("isLogtoJwt");
+    expect(helper).toContain("if (!isLogtoJwt)");
+    expect(helper.indexOf("const isLogtoJwt")).toBeLessThan(helper.indexOf("supabaseAdmin.auth.getUser"));
+  });
+
   it("adds indexes matching plan and permission filter order", () => {
     expect(indexes).toContain("profiles(great_region)");
     expect(indexes).toContain("reading_plans(global_plan_id, user_id)");

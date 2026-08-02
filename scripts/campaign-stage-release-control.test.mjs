@@ -44,7 +44,8 @@ describe("campaign stage release control", () => {
     expect(visibilityMigration).toContain("plan_kind = 'church_campaign_stage'");
     expect(edgeFunction).toContain('query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage")');
     expect(planModule).toContain("missingCampaignStages");
-    expect(planModule).toContain("!canManageHiddenPlans() && !isCampaignStageLocked(plan)");
+    expect(planModule).toContain("!canManageHiddenPlans() && !window.isCampaignStageLocked(plan)");
+    expect(planModule).toContain("const isLockedStage = window.isCampaignStageLocked(plan)");
     expect(planModule).toContain('actions: isLockedStage ? "" : renderPlanCardActions([');
     expect(planModule).toContain("if (isLockedStage) {");
     expect(planModule).toContain("openPlanDetailsDialog(plan);");
