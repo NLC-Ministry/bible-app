@@ -151,11 +151,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     if ((shouldHandleR1 || shouldHandleR2) && typeof window.handleRoundCompletion === "function") {
       await window.handleRoundCompletion(taskContext.plan);
     }
-    if (typeof window.checkAndPromptTodayCompletion === "function") {
-      await window.checkAndPromptTodayCompletion();
-    }
     console.info("[AutoRead] Reading log persisted", { targetKey: expectedTargetKey });
-    if (typeof showToast === "function") showToast("已自動標記為已讀");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);

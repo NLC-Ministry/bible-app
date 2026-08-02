@@ -3942,11 +3942,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
       await window.closePlanInlineReader();
       await handleRoundCompletion(task.plan);
     }
-    if (typeof window.checkAndPromptTodayCompletion === "function") {
-      await window.checkAndPromptTodayCompletion();
-    }
     console.info("[AutoRead] Inline reading log persisted", { targetKey: expectedTargetKey });
-    showToast("已自動標記為已讀");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark inline reader progress", error);
@@ -4091,7 +4087,9 @@ window.closePlanInlineReader = async function () {
   const inlineReader = document.getElementById("plan-inline-reader");
   if (inlineReader) inlineReader.classList.add("hidden");
 
-  // Re-render checklist to show checked updates
+  // Re-render checklist and date carousel to show checked updates immediately
+  calculatePlanProgress();
+  if (typeof renderHorizontalDateStrip === "function") renderHorizontalDateStrip();
   await renderPlanScheduleTracker(true);
 };
 
@@ -8031,6 +8029,7 @@ async function enterPlanDetailState() {
     await enterPlanListState();
     return;
   }
+  calculatePlanProgress();
   window.currentPlanViewState = PLAN_ROUTE.DETAIL;
   state.planDetailOpen = true;
   state.planActiveSubTab = "today";

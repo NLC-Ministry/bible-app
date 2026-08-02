@@ -735,6 +735,8 @@ async function publishDevotionalNote() {
 }
 
 window.checkAndPromptTodayCompletion = async function () {
+  // 保持靜默打卡已讀，不跳出干擾視覺的恭喜字幕與對話框
+  return;
   if (!state.activePlan) return;
 
   const now = new Date();
