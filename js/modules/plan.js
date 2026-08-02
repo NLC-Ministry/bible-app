@@ -2534,6 +2534,9 @@ function renderHorizontalDateStrip() {
     state.selectedPlanDay = nextReadingDay ? nextReadingDay.dayNum : 1;
   }
 
+  const oldScrollContainer = container.querySelector(".calendar-scroll-container");
+  const savedScrollTop = oldScrollContainer ? oldScrollContainer.scrollTop : null;
+
   container.innerHTML = "";
 
   // 1. Calculate active plan start/end dates
@@ -2780,6 +2783,25 @@ function renderHorizontalDateStrip() {
   };
 
   applyCalendarMaxRows();
+
+  if (savedScrollTop !== null) {
+    scrollContainer.scrollTop = savedScrollTop;
+  } else {
+    // 首次載入或切換計畫時，自動將選取的天數滾動到可見區域（無縫定位，不造成全網頁大跳）
+    const scrollToActiveCell = () => {
+      const activeCell = gridDiv.querySelector(`.plan-day-cell[data-day-num="${state.selectedPlanDay}"]`);
+      if (activeCell) {
+        const containerHeight = scrollContainer.clientHeight;
+        const cellTop = activeCell.offsetTop;
+        const cellHeight = activeCell.offsetHeight;
+        if (containerHeight > 0) {
+          scrollContainer.scrollTop = cellTop - (containerHeight / 2) + (cellHeight / 2);
+        }
+      }
+    };
+    requestAnimationFrame(scrollToActiveCell);
+  }
+
   requestAnimationFrame(applyCalendarMaxRows);
 
   if (container._calendarResizeCleanup) {
