@@ -6,6 +6,26 @@ export function isReaderSurfaceAtBottom(surface, threshold = 24) {
   return remaining <= Math.max(0, Number(threshold) || 0);
 }
 
+export function observeReaderEndSentinel({
+  root = null,
+  sentinel,
+  onChange = () => {},
+  rootMargin = "0px",
+  Observer = globalThis.IntersectionObserver
+} = {}) {
+  if (!sentinel || typeof onChange !== "function" || typeof Observer !== "function") {
+    return { observer: null, disconnect() {} };
+  }
+
+  const observer = new Observer(entries => {
+    entries.forEach(entry => {
+      if (entry.target === sentinel) onChange(Boolean(entry.isIntersecting));
+    });
+  }, { root, threshold: 0.01, rootMargin });
+  observer.observe(sentinel);
+  return { observer, disconnect: () => observer.disconnect() };
+}
+
 export function createReaderBottomDwellController({
   dwellMs = 1000,
   bottomThreshold = 24,
@@ -16,12 +36,14 @@ export function createReaderBottomDwellController({
   let completedTargetKey = null;
   let completingTargetKey = null;
   let pendingSurface = null;
+  let pendingIsAtBottom = null;
 
   const cancel = () => {
     if (timerId !== null) clearTimeout(timerId);
     timerId = null;
     pendingTargetKey = null;
     pendingSurface = null;
+    pendingIsAtBottom = null;
   };
 
   const reset = () => {
@@ -30,9 +52,16 @@ export function createReaderBottomDwellController({
     completingTargetKey = null;
   };
 
-  const handleScroll = (surface, { eligible = false, targetKey = "" } = {}) => {
+  const handleScroll = (surface, {
+    eligible = false,
+    targetKey = "",
+    isAtBottom = null
+  } = {}) => {
     const resolvedTargetKey = String(targetKey || "");
-    if (!eligible || !resolvedTargetKey || !isReaderSurfaceAtBottom(surface, bottomThreshold)) {
+    const checkAtBottom = typeof isAtBottom === "function"
+      ? isAtBottom
+      : () => isReaderSurfaceAtBottom(surface, bottomThreshold);
+    if (!eligible || !resolvedTargetKey || !checkAtBottom()) {
       cancel();
       return;
     }
@@ -42,13 +71,16 @@ export function createReaderBottomDwellController({
     cancel();
     pendingTargetKey = resolvedTargetKey;
     pendingSurface = surface;
+    pendingIsAtBottom = checkAtBottom;
     timerId = setTimeout(() => {
       const completedKey = pendingTargetKey;
       const completedSurface = pendingSurface;
+      const completedIsAtBottom = pendingIsAtBottom;
       timerId = null;
       pendingTargetKey = null;
       pendingSurface = null;
-      if (!completedKey || !isReaderSurfaceAtBottom(completedSurface, bottomThreshold)) return;
+      pendingIsAtBottom = null;
+      if (!completedKey || !completedSurface || !completedIsAtBottom || !completedIsAtBottom()) return;
 
       completingTargetKey = completedKey;
       Promise.resolve(onComplete(completedKey))

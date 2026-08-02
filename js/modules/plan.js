@@ -7,7 +7,7 @@ import {
 } from "./plan-team-navigation-helpers.mjs";
 import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
-import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
+import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import {
   removePlanReadingLogs,
   resetPlanProgressState
@@ -393,6 +393,9 @@ window.PlanPageController = {
       state.inlineReader.active = false;
       document.body.classList.remove("plan-inline-reader-open");
       inlineReaderBottomDwellController?.cancel();
+      inlineReaderEndObserver?.disconnect();
+      inlineReaderEndObserver = null;
+      inlineReaderEndVisible = false;
       const inlineReader = document.getElementById("plan-inline-reader");
       if (inlineReader) inlineReader.classList.add("hidden");
       ensurePlanViewModeToggle();
@@ -3870,6 +3873,8 @@ state.inlineReader = {
 };
 
 let inlineReaderBottomDwellController = null;
+let inlineReaderEndObserver = null;
+let inlineReaderEndVisible = false;
 
 function getCurrentInlineReaderTask() {
   const plan = state.activePlan;
@@ -3960,11 +3965,12 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
   }
 }
 
-function checkInlineReaderBottomDwell(surface = document.querySelector(".main-content")) {
+function checkInlineReaderBottomDwell(surface = document.querySelector(".main-content"), isAtBottom = null) {
   const task = getCurrentInlineReaderTask();
   inlineReaderBottomDwellController?.check(surface, {
     eligible: Boolean(task && !isInlineReaderTaskRead(task) && !state.inlineReader.autoMarked && !state.inlineReader.autoMarkInFlight),
-    targetKey: getInlineReaderTargetKey()
+    targetKey: getInlineReaderTargetKey(),
+    isAtBottom
   });
 }
 
@@ -3972,6 +3978,23 @@ function handleInlineReaderScroll(event) {
   checkInlineReaderBottomDwell(event.currentTarget || event.target);
 }
 
+function bindInlineReaderEndObserver() {
+  inlineReaderEndObserver?.disconnect();
+  inlineReaderEndObserver = null;
+  inlineReaderEndVisible = false;
+  const root = document.querySelector(".main-content");
+  const sentinel = document.getElementById("plan-inline-reader-end-sentinel");
+  if (!root || !sentinel) return;
+  inlineReaderEndObserver = observeReaderEndSentinel({
+    root,
+    sentinel,
+    onChange: isVisible => {
+      inlineReaderEndVisible = isVisible;
+      if (isVisible) checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
+      else inlineReaderBottomDwellController?.cancel();
+    }
+  });
+}
 function scheduleInlineReaderBottomDwellCheck() {
   requestAnimationFrame(() => requestAnimationFrame(() => checkInlineReaderBottomDwell()));
 }
@@ -3982,6 +4005,7 @@ function initInlineReaderBottomDwell() {
   if (!inlineReaderBottomDwellController) {
     inlineReaderBottomDwellController = createReaderBottomDwellController({
       dwellMs: 1000,
+      bottomThreshold: 96,
       onComplete: autoMarkInlineReaderTaskRead
     });
   }
@@ -4039,6 +4063,9 @@ window.closePlanInlineReader = async function () {
   state.inlineReader.active = false;
   document.body.classList.remove("plan-inline-reader-open");
   inlineReaderBottomDwellController?.cancel();
+  inlineReaderEndObserver?.disconnect();
+  inlineReaderEndObserver = null;
+  inlineReaderEndVisible = false;
 
   // Show checklist interface elements
   const carousel = document.getElementById("plan-date-carousel");
@@ -4066,6 +4093,9 @@ async function renderInlineScriptureText() {
   state.inlineReader.autoMarked = false;
   state.inlineReader.autoMarkInFlight = false;
   inlineReaderBottomDwellController?.reset();
+  inlineReaderEndObserver?.disconnect();
+  inlineReaderEndObserver = null;
+  inlineReaderEndVisible = false;
 
   // Set Title
   const titleEl = document.getElementById("plan-inline-reader-title");
@@ -4097,11 +4127,18 @@ async function renderInlineScriptureText() {
           verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.85rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
           container.appendChild(verseDiv);
         });
+        const sentinel = document.createElement("div");
+        sentinel.id = "plan-inline-reader-end-sentinel";
+        sentinel.setAttribute("aria-hidden", "true");
+        sentinel.style.cssText = "height:1px;width:100%;pointer-events:none;";
+        container.appendChild(sentinel);
       } catch (err) {
         container.innerHTML = `<div class="text-danger" style="text-align: center; padding: 2rem;">載入經文失敗: ${err.message || err}</div>`;
       }
     }
   }
+
+  bindInlineReaderEndObserver();
 
   // Prev / Next button states
   const prevBtn = document.getElementById("plan-inline-prev-btn");

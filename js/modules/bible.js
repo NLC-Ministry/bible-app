@@ -1,6 +1,6 @@
 // js/modules/bible.js
 
-import { createReaderBottomDwellController } from "./reader-bottom-dwell.mjs";
+import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -80,6 +80,8 @@ function initSmartFloatingReaderNav() {
   setNavVisible(true, false);
 }
 let readerBottomDwellController = null;
+let readerEndObserver = null;
+let readerEndVisible = false;
 
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
@@ -175,6 +177,7 @@ function initImmersivePlanReader() {
   readerView.dataset.immersivePlanReaderBound = "true";
   readerBottomDwellController = createReaderBottomDwellController({
     dwellMs: 1000,
+    bottomThreshold: 96,
     onComplete: autoMarkCurrentPlanReaderTaskRead
   });
   scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
@@ -838,6 +841,9 @@ export async function renderReaderText() {
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
   if (readerBottomDwellController) readerBottomDwellController.reset();
+  readerEndObserver?.disconnect();
+  readerEndObserver = null;
+  readerEndVisible = false;
   const heading = document.getElementById("bible-title");
   const markReadBtn = document.getElementById("mark-read-btn");
   
@@ -909,6 +915,7 @@ export async function renderReaderText() {
 
   updateReaderFontSize();
   updateReaderBottomActionBar();
+  bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
 }
 
@@ -935,6 +942,11 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     container.appendChild(verseDiv);
   });
+  const sentinel = document.createElement("div");
+  sentinel.id = "reader-end-sentinel";
+  sentinel.setAttribute("aria-hidden", "true");
+  sentinel.style.cssText = "height:1px;width:100%;pointer-events:none;";
+  container.appendChild(sentinel);
 }
 
 function showContextToolbar(verseElement, highlightKey) {
@@ -1516,7 +1528,7 @@ function getReaderScrollSurface() {
   return readerSurface || mainSurface;
 }
 
-function checkReaderBottomDwell(surface = getReaderScrollSurface()) {
+function checkReaderBottomDwell(surface = getReaderScrollSurface(), isAtBottom = null) {
   if (!readerBottomDwellController || !surface) return;
   const taskContext = getCurrentPlanReaderTask();
   readerBottomDwellController.check(surface, {
@@ -1527,10 +1539,28 @@ function checkReaderBottomDwell(surface = getReaderScrollSurface()) {
       !state.readerState.autoMarked &&
       !state.readerState.autoMarkInFlight
     ),
-    targetKey: getCurrentPlanReaderTargetKey()
+    targetKey: getCurrentPlanReaderTargetKey(),
+    isAtBottom
   });
 }
 
+function bindReaderEndObserver() {
+  readerEndObserver?.disconnect();
+  readerEndObserver = null;
+  readerEndVisible = false;
+  const root = document.querySelector(".reader-reading-surface");
+  const sentinel = document.getElementById("reader-end-sentinel");
+  if (!root || !sentinel) return;
+  readerEndObserver = observeReaderEndSentinel({
+    root,
+    sentinel,
+    onChange: isVisible => {
+      readerEndVisible = isVisible;
+      if (isVisible) checkReaderBottomDwell(root, () => readerEndVisible);
+      else readerBottomDwellController?.cancel();
+    }
+  });
+}
 function scheduleReaderBottomDwellCheck() {
   requestAnimationFrame(() => requestAnimationFrame(() => checkReaderBottomDwell()));
 }

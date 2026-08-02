@@ -7,11 +7,13 @@ const css = readFileSync("index.css", "utf8");
 
 describe("plan inline reader auto-read integration", () => {
   it("binds the one-second dwell controller to the actual plan scroll surface", () => {
-    expect(plan).toContain('import { createReaderBottomDwellController }');
+    expect(plan).toContain('import { createReaderBottomDwellController, observeReaderEndSentinel }');
     expect(plan).toContain('const scrollSurface = document.querySelector(".main-content")');
     expect(plan).toContain("dwellMs: 1000");
     expect(plan).toContain("initInlineReaderBottomDwell()");
     expect(plan).toContain("scheduleInlineReaderBottomDwellCheck()");
+    expect(plan).toContain('id = "plan-inline-reader-end-sentinel"');
+    expect(plan).toContain("observeReaderEndSentinel");
     expect(plan).toContain('addEventListener("scrollend", handleInlineReaderScroll');
     expect(plan).not.toContain("window.scrollTo({ top: 0");
   });

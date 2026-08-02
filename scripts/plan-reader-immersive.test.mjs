@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   createReaderBottomDwellController,
-  isReaderSurfaceAtBottom
+  isReaderSurfaceAtBottom,
+  observeReaderEndSentinel
 } from "../js/modules/reader-bottom-dwell.mjs";
 
 const bible = readFileSync("js/modules/bible.js", "utf8");
@@ -41,6 +42,43 @@ describe("immersive plan reader", () => {
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
+  it("observes a rendered end sentinel so mobile sticky chrome cannot hide the bottom", () => {
+    const changes = [];
+    const observed = [];
+    class FakeIntersectionObserver {
+      constructor(callback, options) {
+        this.callback = callback;
+        this.options = options;
+      }
+      observe(target) { observed.push(target); }
+      disconnect() {}
+    }
+    const root = { id: "reader-surface" };
+    const sentinel = { id: "reader-end" };
+    const binding = observeReaderEndSentinel({
+      root,
+      sentinel,
+      onChange: value => changes.push(value),
+      Observer: FakeIntersectionObserver
+    });
+
+    expect(observed).toEqual([sentinel]);
+    expect(binding.observer.options.root).toBe(root);
+    binding.observer.callback([{ target: sentinel, isIntersecting: true }]);
+    binding.observer.callback([{ target: sentinel, isIntersecting: false }]);
+    expect(changes).toEqual([true, false]);
+  });
+  it("accepts an observed sentinel even when sticky mobile chrome skews scroll geometry", () => {
+    const onComplete = vi.fn();
+    const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
+    controller.check(surface({ scrollTop: 300 }), {
+      eligible: true,
+      targetKey: "day-1-genesis-1",
+      isAtBottom: () => true
+    });
+    vi.advanceTimersByTime(1000);
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
   it("cancels completion when the reader leaves the bottom before one second", () => {
     const onComplete = vi.fn();
     const controller = createReaderBottomDwellController({ dwellMs: 1000, onComplete });
@@ -82,6 +120,8 @@ describe("immersive plan reader", () => {
     expect(bible).toContain("state.readerState?.planContextId");
     expect(bible).toContain("window.findPlanByContextId");
     expect(bible).toContain("scheduleReaderBottomDwellCheck()");
+    expect(bible).toContain('id = "reader-end-sentinel"');
+    expect(bible).toContain("observeReaderEndSentinel");
     expect(bible).toContain('addEventListener("scrollend", handleReaderScroll');
     expect(bible).toContain("return false;");
     expect(bible).toContain("dwellMs: 1000");
