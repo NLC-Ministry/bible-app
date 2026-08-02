@@ -356,10 +356,6 @@ Deno.serve(async (req: Request) => {
 
     if (action === "rpc") {
       const functionName = typeof body.function === "string" ? body.function : "";
-      if (["increment_likes", "decrement_likes"].includes(functionName)
-        && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
-        return jsonResponse({ error: "feature_archived" }, 403);
-      }
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
       if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
