@@ -23,7 +23,8 @@ describe("plan inline reader auto-read integration", () => {
     expect(plan).toContain("state.inlineReader.autoMarked");
     expect(plan).toContain("state.inlineReader.autoMarkInFlight");
     expect(plan).toContain("await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round, task.plan)");
-    expect(plan).toContain('showToast("自動已讀測試：已成功寫入本章閱讀紀錄")');
+    expect(plan).toContain('console.info("[AutoRead] Inline reading log persisted"');
+    expect(plan).not.toContain("自動已讀測試");
     expect(plan).toMatch(/await window\.closePlanInlineReader\(\);[\s\S]*await handleRoundCompletion/);
     expect(bible).toContain("true, taskContext.round, taskContext.plan");
     expect(bible).toContain("taskContext.chapter[readKey] = true");

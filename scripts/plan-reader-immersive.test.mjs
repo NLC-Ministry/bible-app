@@ -125,7 +125,8 @@ describe("immersive plan reader", () => {
     expect(bible).toContain('addEventListener("scrollend", handleReaderScroll');
     expect(bible).toContain("mainSurface.addEventListener");
     expect(bible).toContain("const root = getReaderScrollSurface()");
-    expect(bible).toContain("自動已讀測試：已偵測到本章底部");
+    expect(bible).toContain('console.info("[AutoRead] Reader bottom detected"');
+    expect(bible).not.toContain("自動已讀測試");
     expect(bible).toContain("taskContext.round, taskContext.plan");
     expect(bible).toContain("return false;");
     expect(bible).toContain("dwellMs: 1000");

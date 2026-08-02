@@ -1287,11 +1287,41 @@ const db = {
         };
         const cacheKey = `reading_logs:${user.id}`;
         const repository = window.readingLogRepository || null;
+        const throwWriteError = result => {
+          if (!result?.error) return result;
+          const error = new Error(result.error.message || result.error.error || String(result.error));
+          error.status = Number(result.status || result.error.status || 0);
+          error.code = result.error.code || null;
+          throw error;
+        };
+        const insertReadingLog = () => repository
+          ? repository.insert(row, { invalidate: [cacheKey] })
+          : state.supabase.from("reading_logs").insert(row);
+        const updateReadingLog = id => repository
+          ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
+          : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
+        const compatiblePlanWrite = async () => {
+          const existingResult = await state.supabase.from("reading_logs").select("id")
+            .eq("user_id", user.id).eq("plan_id", planId).eq("book", book)
+            .eq("chapter", Number(chapter)).eq("round", Number(round)).limit(1);
+          throwWriteError(existingResult);
+          const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
+          return existingRow?.id ? updateReadingLog(existingRow.id) : insertReadingLog();
+        };
+
         let writeResult;
         if (planId) {
-          writeResult = repository
-            ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
-            : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+          try {
+            writeResult = repository
+              ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+              : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+            throwWriteError(writeResult);
+          } catch (upsertError) {
+            console.warn("[ReadingLog] Upsert failed; retrying with compatible update/insert", {
+              planId, book, chapter: Number(chapter), round: Number(round), error: upsertError
+            });
+            writeResult = await compatiblePlanWrite();
+          }
         } else {
           const deleteResult = repository
             ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
@@ -1299,16 +1329,11 @@ const db = {
             : await state.supabase.from("reading_logs").delete()
               .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
               .eq("round", round).is("plan_id", null);
-          if (deleteResult && deleteResult.error) {
-            throw new Error(deleteResult.error.message || deleteResult.error.error || String(deleteResult.error));
-          }
-          writeResult = repository
-            ? await repository.insert(row, { invalidate: [cacheKey] })
-            : await state.supabase.from("reading_logs").insert(row);
+          throwWriteError(deleteResult);
+          writeResult = await insertReadingLog();
         }
-        if (writeResult && writeResult.error) {
-          throw new Error(writeResult.error.message || writeResult.error.error || String(writeResult.error));
-        }
+        throwWriteError(writeResult);
+        console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
       }
     } else {
       state.readingLogs = state.readingLogs.filter(l => !isSameChapterLog(l));

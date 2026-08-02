@@ -57,15 +57,15 @@ export class PwaCoordinator {
   installReadingLogQueue() {
     if (!window.db || typeof window.db.logChapterRead !== "function" || this.originalLogChapterRead) return;
     this.originalLogChapterRead = window.db.logChapterRead.bind(window.db);
-    window.db.logChapterRead = async (book, chapter, isChecked, roundOverride = null) => {
-      const payload = this.createReadingPayload(book, chapter, isChecked, roundOverride);
+    window.db.logChapterRead = async (book, chapter, isChecked, roundOverride = null, planOverride = null) => {
+      const payload = this.createReadingPayload(book, chapter, isChecked, roundOverride, planOverride);
       if (!navigator.onLine && this.shouldQueue(payload)) {
-        await this.applyLocalReadingChange(book, chapter, isChecked, roundOverride);
+        await this.applyLocalReadingChange(book, chapter, isChecked, roundOverride, planOverride);
         await this.queueReadingOperation(payload);
         return { queued: true, offline: true };
       }
       try {
-        return await this.originalLogChapterRead(book, chapter, isChecked, roundOverride);
+        return await this.originalLogChapterRead(book, chapter, isChecked, roundOverride, planOverride);
       } catch (error) {
         if (!this.shouldQueue(payload) || !this.isNetworkFailure(error)) throw error;
         await this.queueReadingOperation(payload);
@@ -74,8 +74,8 @@ export class PwaCoordinator {
     };
   }
 
-  createReadingPayload(book, chapter, isChecked, roundOverride) {
-    const plan = window.state?.activePlan || null;
+  createReadingPayload(book, chapter, isChecked, roundOverride, planOverride = null) {
+    const plan = planOverride || window.state?.activePlan || null;
     return {
       book,
       chapter: Number(chapter),
@@ -91,10 +91,10 @@ export class PwaCoordinator {
     return Boolean(window.state?.isSupabaseMode && window.state?.supabase);
   }
 
-  async applyLocalReadingChange(book, chapter, isChecked, roundOverride) {
+  async applyLocalReadingChange(book, chapter, isChecked, roundOverride, planOverride = null) {
     const previousMode = window.state.isSupabaseMode;
     window.state.isSupabaseMode = false;
-    try { return await this.originalLogChapterRead(book, chapter, isChecked, roundOverride); }
+    try { return await this.originalLogChapterRead(book, chapter, isChecked, roundOverride, planOverride); }
     finally { window.state.isSupabaseMode = previousMode; }
   }
 
@@ -104,6 +104,38 @@ export class PwaCoordinator {
     await this.syncManager.queue({ type: READING_OPERATION, payload, idempotencyKey: key });
   }
 
+  async persistCheckedReadingLog(dataClient, repository, row, cacheKey) {
+    const throwResultError = result => {
+      if (!result?.error) return result;
+      const error = new Error(result.error.message || result.error.error || String(result.error));
+      error.status = Number(result.status || result.error.status || 0);
+      error.code = result.error.code || null;
+      throw error;
+    };
+    try {
+      const result = repository
+        ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+        : await dataClient.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+      return throwResultError(result);
+    } catch (upsertError) {
+      console.warn("[ReadingLog] Queued upsert failed; retrying compatible update/insert", {
+        planId: row.plan_id, book: row.book, chapter: row.chapter, round: row.round, error: upsertError
+      });
+      const existingResult = await dataClient.from("reading_logs").select("id")
+        .eq("user_id", row.user_id).eq("plan_id", row.plan_id).eq("book", row.book)
+        .eq("chapter", row.chapter).eq("round", row.round).limit(1);
+      throwResultError(existingResult);
+      const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
+      const result = existingRow?.id
+        ? (repository
+          ? await repository.update({ read_at: row.read_at }, query => query.eq("id", existingRow.id), { invalidate: [cacheKey] })
+          : await dataClient.from("reading_logs").update({ read_at: row.read_at }).eq("id", existingRow.id))
+        : (repository
+          ? await repository.insert(row, { invalidate: [cacheKey] })
+          : await dataClient.from("reading_logs").insert(row));
+      return throwResultError(result);
+    }
+  }
   async syncReadingOperation(payload) {
     if (!navigator.onLine) throw new TypeError("Network unavailable");
     const dataClient = window.state?.supabase;
@@ -126,9 +158,7 @@ export class PwaCoordinator {
     };
     let result;
     if (payload.isChecked) {
-      result = repository
-        ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
-        : await dataClient.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+      result = await this.persistCheckedReadingLog(dataClient, repository, row, cacheKey);
     } else {
       const applyFilters = query => {
         query = query.eq("user_id", user.id).eq("book", payload.book)

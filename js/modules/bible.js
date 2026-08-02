@@ -84,10 +84,6 @@ let readerEndObserver = null;
 let readerEndVisible = false;
 let readerAutoReadNoticeKey = "";
 
-function showPlanAutoReadNotice(message) {
-  if (state.readerState?.fromPlan && typeof showToast === "function") showToast(message);
-}
-
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
   if (!plan || !state.readerState || !state.readerState.fromPlan) return null;
@@ -155,7 +151,8 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     if (typeof window.checkAndPromptTodayCompletion === "function") {
       await window.checkAndPromptTodayCompletion();
     }
-    showPlanAutoReadNotice("自動已讀測試：已成功寫入本章閱讀紀錄");
+    console.info("[AutoRead] Reading log persisted", { targetKey: expectedTargetKey });
+    if (typeof showToast === "function") showToast("已自動標記為已讀");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);
@@ -166,7 +163,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
     if (typeof showToast === "function") {
-      showToast("自動已讀測試：寫入失敗，請重新滑到底再試一次");
+      showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
     }
     return false;
   } finally {
@@ -1669,9 +1666,12 @@ function bindReaderEndObserver() {
         const noticeKey = targetKey || `missing|${state.readerState?.bookId}|${state.readerState?.chapter}`;
         if (state.readerState?.fromPlan && readerAutoReadNoticeKey !== noticeKey) {
           readerAutoReadNoticeKey = noticeKey;
-          showPlanAutoReadNotice(targetKey
-            ? "自動已讀測試：已偵測到本章底部，正在寫入紀錄"
-            : "自動已讀測試：已到底，但找不到對應的計畫章節");
+          console.info("[AutoRead] Reader bottom detected", {
+            targetKey: targetKey || null,
+            planContextId: state.readerState?.planContextId || null,
+            bookId: state.readerState?.bookId || null,
+            chapter: state.readerState?.chapter || null
+          });
         }
         checkReaderBottomDwell(root, () => readerEndVisible);
       } else readerBottomDwellController?.cancel();

@@ -3849,9 +3849,9 @@ window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = nu
     || state.activePlan?.globalPlanId
     || state.activePlan?.presetKey
     || null;
-  if (typeof showToast === "function") {
-    showToast("自動已讀測試：已從計畫開啟聖經，請滑到本章最底部");
-  }
+  console.info("[AutoRead] Opened plan chapter in reader", {
+    planContextId: state.readerState.planContextId, book: book.name, chapter: state.readerState.chapter, round: state.readerState.planRound
+  });
 
   if (typeof saveReaderPreferences === 'function') {
     saveReaderPreferences();
@@ -3945,7 +3945,8 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
     if (typeof window.checkAndPromptTodayCompletion === "function") {
       await window.checkAndPromptTodayCompletion();
     }
-    showToast("自動已讀測試：已成功寫入本章閱讀紀錄");
+    console.info("[AutoRead] Inline reading log persisted", { targetKey: expectedTargetKey });
+    showToast("已自動標記為已讀");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark inline reader progress", error);
@@ -3961,7 +3962,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
     }
     state.inlineReader.autoMarked = false;
     calculatePlanProgress();
-    showToast("自動已讀測試：寫入失敗，請重新滑到底再試一次");
+    showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
     return false;
   } finally {
     state.inlineReader.autoMarkInFlight = false;
@@ -3994,7 +3995,7 @@ function bindInlineReaderEndObserver() {
     onChange: isVisible => {
       inlineReaderEndVisible = isVisible;
       if (isVisible) {
-        showToast("自動已讀測試：已偵測到本章底部，正在寫入紀錄");
+        console.info("[AutoRead] Inline reader bottom detected", { targetKey: getInlineReaderTargetKey() || null });
         checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
       } else inlineReaderBottomDwellController?.cancel();
     }
@@ -4036,7 +4037,9 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
 
   state.inlineReader.active = true;
   document.body.classList.add("plan-inline-reader-open");
-  showToast("自動已讀測試：已從計畫開啟聖經，請滑到本章最底部");
+  console.info("[AutoRead] Opened inline plan reader", {
+    planId: state.activePlan?.id || null, book: bookName, chapter: Number(chapter), round: targetRound
+  });
   state.inlineReader.dayNum = dayNum;
   state.inlineReader.chaptersList = chaptersForRound;
   state.inlineReader.currentIndex = chaptersForRound.findIndex(ch =>
