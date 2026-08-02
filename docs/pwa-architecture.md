@@ -33,6 +33,7 @@ The app uses a deliberately limited offline model:
 
 - Navigation: Network First; `/index.html` fallback.
 - Same-origin scripts, CSS, fonts, images, and manifest: Cache First.
+- Missing content-hashed CSS: retry the stable /index.css entry with a build-version query; deployment rewrites stale index.<hash>.css URLs to that stable entry.
 - `bible-api.com` and `bolls.life`: Network First with runtime cache fallback.
 - Non-GET and sensitive API traffic: bypass Service Worker handling.
 
