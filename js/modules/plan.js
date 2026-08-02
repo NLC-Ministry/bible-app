@@ -3849,6 +3849,9 @@ window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = nu
     || state.activePlan?.globalPlanId
     || state.activePlan?.presetKey
     || null;
+  if (typeof showToast === "function") {
+    showToast("自動已讀測試：已從計畫開啟聖經，請滑到本章最底部");
+  }
 
   if (typeof saveReaderPreferences === 'function') {
     saveReaderPreferences();
@@ -3930,7 +3933,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
 
   try {
     calculatePlanProgress();
-    await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round);
+    await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round, task.plan);
     if (typeof db.saveLocalUserStats === "function") db.saveLocalUserStats();
     calculatePlanProgress();
     window.setDataVersion?.(previous => previous + 1);
@@ -3942,7 +3945,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
     if (typeof window.checkAndPromptTodayCompletion === "function") {
       await window.checkAndPromptTodayCompletion();
     }
-    showToast("已自動標記為已讀");
+    showToast("自動已讀測試：已成功寫入本章閱讀紀錄");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark inline reader progress", error);
@@ -3958,7 +3961,7 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
     }
     state.inlineReader.autoMarked = false;
     calculatePlanProgress();
-    showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
+    showToast("自動已讀測試：寫入失敗，請重新滑到底再試一次");
     return false;
   } finally {
     state.inlineReader.autoMarkInFlight = false;
@@ -3990,8 +3993,10 @@ function bindInlineReaderEndObserver() {
     sentinel,
     onChange: isVisible => {
       inlineReaderEndVisible = isVisible;
-      if (isVisible) checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
-      else inlineReaderBottomDwellController?.cancel();
+      if (isVisible) {
+        showToast("自動已讀測試：已偵測到本章底部，正在寫入紀錄");
+        checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
+      } else inlineReaderBottomDwellController?.cancel();
     }
   });
 }
@@ -4031,6 +4036,7 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
 
   state.inlineReader.active = true;
   document.body.classList.add("plan-inline-reader-open");
+  showToast("自動已讀測試：已從計畫開啟聖經，請滑到本章最底部");
   state.inlineReader.dayNum = dayNum;
   state.inlineReader.chaptersList = chaptersForRound;
   state.inlineReader.currentIndex = chaptersForRound.findIndex(ch =>

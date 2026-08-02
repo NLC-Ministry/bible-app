@@ -82,6 +82,11 @@ function initSmartFloatingReaderNav() {
 let readerBottomDwellController = null;
 let readerEndObserver = null;
 let readerEndVisible = false;
+let readerAutoReadNoticeKey = "";
+
+function showPlanAutoReadNotice(message) {
+  if (state.readerState?.fromPlan && typeof showToast === "function") showToast(message);
+}
 
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
@@ -142,7 +147,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     updatePlanCheckboxState(planDayChKey, true);
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
-    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true, taskContext.round);
+    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true, taskContext.round, taskContext.plan);
 
     const shouldHandleR1 = taskContext.plan.isPlanCompleted && !taskContext.plan.upgradePromptHandled;
     const shouldHandleR2 = taskContext.plan.isRound2Completed && !taskContext.plan.round2UpgradePromptHandled;
@@ -150,7 +155,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     if (typeof window.checkAndPromptTodayCompletion === "function") {
       await window.checkAndPromptTodayCompletion();
     }
-    if (typeof showToast === "function") showToast("已自動記錄為已讀");
+    showPlanAutoReadNotice("自動已讀測試：已成功寫入本章閱讀紀錄");
     return true;
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);
@@ -161,7 +166,7 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
     if (typeof showToast === "function") {
-      showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
+      showToast("自動已讀測試：寫入失敗，請重新滑到底再試一次");
     }
     return false;
   } finally {
@@ -182,6 +187,12 @@ function initImmersivePlanReader() {
   });
   scrollSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
   scrollSurface.addEventListener("scrollend", handleReaderScroll, { passive: true });
+  const mainSurface = document.querySelector(".main-content");
+  if (mainSurface && mainSurface !== scrollSurface && mainSurface.dataset.planReaderBottomDwellBound !== "true") {
+    mainSurface.dataset.planReaderBottomDwellBound = "true";
+    mainSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
+    mainSurface.addEventListener("scrollend", handleReaderScroll, { passive: true });
+  }
 }
 
 export function initReaderControls() {
@@ -509,7 +520,7 @@ export function initReaderControls() {
         }
       }
 
-      db.logChapterRead(bookObj.name, state.readerState.chapter, isChecked)
+      db.logChapterRead(bookObj.name, state.readerState.chapter, isChecked, planRound, state.activePlan)
         .then(async () => {
           if (state.activePlan) {
             const plan = state.activePlan;
@@ -838,6 +849,9 @@ export async function renderReaderText() {
 
   console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
+  if (isSpeaking) {
+    stopReaderAudio(true);
+  }
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
   if (readerBottomDwellController) readerBottomDwellController.reset();
@@ -960,10 +974,17 @@ function showContextToolbar(verseElement, highlightKey) {
 
   const actionHandler = (e) => {
     e.stopPropagation();
-    const action = e.target.getAttribute("data-action");
-    const color = e.target.style.backgroundColor;
+    const actionBtn = e.target.closest("[data-action]");
+    if (!actionBtn) return;
+    const action = actionBtn.getAttribute("data-action");
+    const color = actionBtn.style.backgroundColor;
 
-    if (action === "highlight") {
+    if (action === "speak") {
+      const verseNum = Number(verseElement.dataset.verse || 1);
+      if (typeof window.toggleReaderAudio === "function") {
+        window.toggleReaderAudio(verseNum);
+      }
+    } else if (action === "highlight") {
       verseElement.style.backgroundColor = color;
       verseElement.classList.add("selected");
       state.highlights[highlightKey] = color;
@@ -1018,43 +1039,130 @@ window.toggleBibleVersion = function() {
 
 let isSpeaking = false;
 let speechUtterance = null;
+let currentSpeakingVerseIndex = -1;
+let verseListForSpeaking = [];
 
-window.toggleReaderAudio = function() {
-  if (isSpeaking) {
+function clearSpeakingHighlight() {
+  document.querySelectorAll(".bible-verse.speaking-highlight").forEach(el => {
+    el.classList.remove("speaking-highlight");
+  });
+}
+
+function stopReaderAudio(quiet = false) {
+  if (typeof window.speechSynthesis !== "undefined") {
     window.speechSynthesis.cancel();
-    isSpeaking = false;
-    const btn = document.getElementById("reader-audio-btn");
-    if (btn) btn.classList.remove("active");
-    showToast("已停止朗讀");
-  } else {
-    const container = document.getElementById("bible-content");
-    if (!container) return;
-    const verses = Array.from(container.querySelectorAll(".verse-text")).map(el => el.textContent).join(" ");
-    if (!verses) return;
-    
-    window.speechSynthesis.cancel();
-    speechUtterance = new SpeechSynthesisUtterance(verses);
-    speechUtterance.lang = "zh-TW";
-    speechUtterance.rate = 1.0;
-    
-    speechUtterance.onend = () => {
-      isSpeaking = false;
-      const btn = document.getElementById("reader-audio-btn");
-      if (btn) btn.classList.remove("active");
-    };
-    
-    speechUtterance.onerror = () => {
-      isSpeaking = false;
-      const btn = document.getElementById("reader-audio-btn");
-      if (btn) btn.classList.remove("active");
-    };
-    
-    window.speechSynthesis.speak(speechUtterance);
-    isSpeaking = true;
-    const btn = document.getElementById("reader-audio-btn");
-    if (btn) btn.classList.add("active");
-    showToast("開始朗讀經文...");
   }
+  isSpeaking = false;
+  currentSpeakingVerseIndex = -1;
+  verseListForSpeaking = [];
+  speechUtterance = null;
+  clearSpeakingHighlight();
+
+  const btn = document.getElementById("reader-audio-btn");
+  if (btn) btn.classList.remove("active");
+
+  if (!quiet && typeof showToast === "function") {
+    showToast("已停止朗讀");
+  }
+}
+
+function speakNextVerseInQueue() {
+  if (!isSpeaking || currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
+    stopReaderAudio(true);
+    return;
+  }
+
+  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
+  if (!currentItem) {
+    stopReaderAudio(true);
+    return;
+  }
+
+  clearSpeakingHighlight();
+  const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
+  if (verseEl) {
+    verseEl.classList.add("speaking-highlight");
+    try {
+      verseEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_e) {
+      // Fallback
+    }
+  }
+
+  if (typeof window.speechSynthesis === "undefined") {
+    if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
+    stopReaderAudio(true);
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
+  speechUtterance.lang = "zh-TW";
+  speechUtterance.rate = 1.0;
+
+  speechUtterance.onend = () => {
+    if (!isSpeaking) return;
+    currentSpeakingVerseIndex++;
+    speakNextVerseInQueue();
+  };
+
+  speechUtterance.onerror = (err) => {
+    console.warn("Speech synthesis error:", err);
+    if (!isSpeaking) return;
+    currentSpeakingVerseIndex++;
+    speakNextVerseInQueue();
+  };
+
+  window.speechSynthesis.speak(speechUtterance);
+}
+
+window.toggleReaderAudio = function(startVerseNum = null) {
+  if (isSpeaking && startVerseNum === null) {
+    stopReaderAudio();
+    return;
+  }
+
+  const container = document.getElementById("bible-content");
+  if (!container) return;
+
+  const verseNodes = Array.from(container.querySelectorAll(".bible-verse"));
+  if (verseNodes.length === 0) return;
+
+  verseListForSpeaking = verseNodes.map(el => ({
+    verseNum: Number(el.dataset.verse || 0),
+    text: el.querySelector(".verse-text") ? el.querySelector(".verse-text").textContent.trim() : ""
+  })).filter(item => item.text.length > 0);
+
+  if (verseListForSpeaking.length === 0) return;
+
+  let startIndex = 0;
+  if (startVerseNum !== null && Number.isInteger(Number(startVerseNum))) {
+    const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === Number(startVerseNum));
+    if (foundIdx !== -1) startIndex = foundIdx;
+  } else {
+    const selectedVerseEl = container.querySelector(".bible-verse.selected");
+    if (selectedVerseEl && selectedVerseEl.dataset.verse) {
+      const selectedNum = Number(selectedVerseEl.dataset.verse);
+      const foundIdx = verseListForSpeaking.findIndex(v => v.verseNum === selectedNum);
+      if (foundIdx !== -1) startIndex = foundIdx;
+    }
+  }
+
+  if (typeof window.speechSynthesis !== "undefined") {
+    window.speechSynthesis.cancel();
+  }
+
+  isSpeaking = true;
+  currentSpeakingVerseIndex = startIndex;
+
+  const btn = document.getElementById("reader-audio-btn");
+  if (btn) btn.classList.add("active");
+
+  const startVerse = verseListForSpeaking[startIndex];
+  if (typeof showToast === "function") {
+    showToast(`開始從第 ${startVerse ? startVerse.verseNum : 1} 節朗讀經文...`);
+  }
+  speakNextVerseInQueue();
 };
 
 window.searchChapterVerses = function(keyword) {
@@ -1548,7 +1656,7 @@ function bindReaderEndObserver() {
   readerEndObserver?.disconnect();
   readerEndObserver = null;
   readerEndVisible = false;
-  const root = document.querySelector(".reader-reading-surface");
+  const root = getReaderScrollSurface();
   const sentinel = document.getElementById("reader-end-sentinel");
   if (!root || !sentinel) return;
   readerEndObserver = observeReaderEndSentinel({
@@ -1556,8 +1664,17 @@ function bindReaderEndObserver() {
     sentinel,
     onChange: isVisible => {
       readerEndVisible = isVisible;
-      if (isVisible) checkReaderBottomDwell(root, () => readerEndVisible);
-      else readerBottomDwellController?.cancel();
+      if (isVisible) {
+        const targetKey = getCurrentPlanReaderTargetKey();
+        const noticeKey = targetKey || `missing|${state.readerState?.bookId}|${state.readerState?.chapter}`;
+        if (state.readerState?.fromPlan && readerAutoReadNoticeKey !== noticeKey) {
+          readerAutoReadNoticeKey = noticeKey;
+          showPlanAutoReadNotice(targetKey
+            ? "自動已讀測試：已偵測到本章底部，正在寫入紀錄"
+            : "自動已讀測試：已到底，但找不到對應的計畫章節");
+        }
+        checkReaderBottomDwell(root, () => readerEndVisible);
+      } else readerBottomDwellController?.cancel();
     }
   });
 }
