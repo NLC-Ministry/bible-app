@@ -527,12 +527,155 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
     }
 
     groupMembers = groupMembers.map(m =>
-      m.name === state.currentUser.name ? { ...m, chapters_read: myChaptersRead } : m
+      m.name === state.currentUser?.name ? { ...m, chapters_read: myChaptersRead } : m
     );
-    if (!groupMembers.some(m => m.name === state.currentUser.name)) {
-      groupMembers = [{ name: state.currentUser.name, chapters_read: myChaptersRead }, ...groupMembers];
+    if (!groupMembers.some(m => m.name === state.currentUser?.name)) {
+      groupMembers = [{ name: state.currentUser?.name || "我", chapters_read: myChaptersRead }, ...groupMembers];
     }
   }
+
+  const maxChaptersRead = groupMembers.reduce((max, m) => Math.max(max, m.chapters_read || 0), 0);
+  const maxDrawIndex = Math.min(Math.max(16, maxChaptersRead - 1 + 16), TOTAL_PLAN_CHAPTERS - 1);
+
+  const brand = (window.NLC_DESIGN && window.NLC_DESIGN.brand) || "#04A9D2";
+  const brandActive = (window.NLC_DESIGN && window.NLC_DESIGN.brandActive) || "#0396BA";
+  const brandHover = (window.NLC_DESIGN && window.NLC_DESIGN.brandHover) || "#5BB8D4";
+  const success = (window.NLC_DESIGN && window.NLC_DESIGN.success) || "#10b981";
+  const successFg = (window.NLC_DESIGN && window.NLC_DESIGN.successForeground) || "#047857";
+  const palette = {
+    1: { myPath: brand, grpPath: "#8ED4EA", myFill: "rgba(4,169,210,0.15)", grpFill: "rgba(4,169,210,0.08)", myStroke: brand, grpStroke: brandHover, myText: brandActive, grpText: brandHover },
+    2: { myPath: success, grpPath: "#A8F5C0", myFill: "rgba(102,247,143,0.15)", grpFill: "rgba(102,247,143,0.08)", myStroke: success, grpStroke: success, myText: successFg, grpText: successFg },
+    3: { myPath: "#f59e0b", grpPath: "#fcd34d", myFill: "#fef3c7", grpFill: "#fffbeb", myStroke: "#d97706", grpStroke: "#ca8a04", myText: "#92400e", grpText: "#b45309" },
+  };
+  const pal = palette[Math.min(currentRound, 3)];
+
+  const cols = 8;
+  const spacingX = 72;
+  const spacingY = 72;
+  const rowsCount = Math.ceil((maxDrawIndex + 1) / cols);
+  canvas.width = cols * spacingX + 15;
+  canvas.height = rowsCount * spacingY + 15;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  function getTileCoords(index) {
+    const row = Math.floor(index / cols);
+    let col = index % cols;
+    if (row % 2 === 1) col = cols - 1 - col;
+    return { x: col * spacingX + 36, y: row * spacingY + 36 };
+  }
+
+  function drawPathLine(startIndex, endIndex, color, width = 7) {
+    if (endIndex < startIndex) return;
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const s = getTileCoords(startIndex);
+    ctx.moveTo(s.x, s.y);
+    for (let i = startIndex + 1; i <= endIndex; i++) {
+      const p = getTileCoords(i);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+
+  drawPathLine(0, maxDrawIndex, "rgba(226, 232, 240, 0.8)", 7);
+  if (currentRound >= 2 && myR1Count > 1) {
+    drawPathLine(0, Math.min(myR1Count - 1, maxDrawIndex), "rgba(4, 169, 210, 0.2)", 5);
+  }
+  if (maxChaptersRead > 1) {
+    drawPathLine(0, Math.min(maxChaptersRead - 1, maxDrawIndex), pal.grpPath, 6);
+  }
+  if (myChaptersRead > 1) {
+    drawPathLine(0, Math.min(myChaptersRead - 1, maxDrawIndex), pal.myPath, 8);
+  }
+
+  for (let i = 0; i <= maxDrawIndex; i++) {
+    const pos = getTileCoords(i);
+    const ch = planChapters[i];
+    if (!ch) continue;
+
+    const isBookStart = ch.isBookStart;
+    const r = isBookStart ? 22 : 13;
+
+    let fillStyle = "#ffffff";
+    let strokeStyle = "#94a3b8";
+    let textColor = "#64748b";
+    let isBold = false;
+    let strokeW = isBookStart ? 2.5 : 1.5;
+
+    const isMineRead = i < myChaptersRead;
+    const isGrpRead = !isMineRead && i < maxChaptersRead;
+
+    if (isMineRead) {
+      fillStyle = pal.myFill;
+      strokeStyle = pal.myStroke;
+      textColor = pal.myText;
+      isBold = true;
+      strokeW = isBookStart ? 3.5 : 2.5;
+    } else if (isGrpRead) {
+      fillStyle = pal.grpFill;
+      strokeStyle = pal.grpStroke;
+      textColor = pal.grpText;
+      strokeW = isBookStart ? 2.5 : 1.5;
+    }
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    ctx.lineWidth = strokeW;
+    ctx.strokeStyle = strokeStyle;
+    ctx.stroke();
+
+    ctx.fillStyle = textColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (isBookStart) {
+      ctx.font = `bold 10px sans-serif`;
+      ctx.fillText(ch.bookName.substring(0, 2), pos.x, pos.y);
+    } else {
+      ctx.font = isBold ? "bold 8px sans-serif" : "7px sans-serif";
+      ctx.fillText(ch.chapterNum, pos.x, pos.y);
+    }
+  }
+
+  const membersByPos = {};
+  groupMembers.forEach(m => {
+    const posIndex = Math.max(0, (m.chapters_read || 0) - 1);
+    if (!membersByPos[posIndex]) membersByPos[posIndex] = [];
+    membersByPos[posIndex].push(m);
+  });
+
+  Object.entries(membersByPos).forEach(([posStr, list]) => {
+    const posIndex = parseInt(posStr, 10);
+    if (posIndex > maxDrawIndex) return;
+    const tilePos = getTileCoords(posIndex);
+    const count = list.length;
+    list.forEach((m, idx) => {
+      const angle = count > 1 ? (idx * 2 * Math.PI) / count : 0;
+      const offset = count > 1 ? 15 : 0;
+      const x = tilePos.x + Math.cos(angle) * offset;
+      const y = tilePos.y + Math.sin(angle) * offset;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.fillStyle = getMemberColor(m.name);
+      ctx.fill();
+      ctx.lineWidth = m.isMe ? 2 : 1;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 8px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(m.name || "").substring(0, 2), x, y);
+    });
+  });
 }
 
 async function calculateAndRenderPersonalRankings() {
