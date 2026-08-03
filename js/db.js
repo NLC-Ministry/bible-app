@@ -960,6 +960,26 @@ const db = {
         if (typeof updateAdminNavVisibility === 'function') {
           updateAdminNavVisibility();
         }
+
+        // 💡 0秒秒開效能優化：儲存首屏 Profiles 與 Global Plans 本地快照
+        try {
+          if (state.currentUser && state.currentUser.name) {
+            localStorage.setItem("cached_user_profile", JSON.stringify({
+              name: state.currentUser.name,
+              great_region: state.currentUser.great_region,
+              pastoral_zone: state.currentUser.pastoral_zone,
+              small_group: state.currentUser.small_group,
+              role_id: state.currentUser.role_id,
+              role_definition: state.currentUser.role_definition
+            }));
+          }
+          if (Array.isArray(state.globalPlans) && state.globalPlans.length > 0) {
+            localStorage.setItem("cached_global_plans", JSON.stringify(state.globalPlans));
+          }
+        } catch (e) {
+          console.warn("Failed to write fast startup cache:", e);
+        }
+
         return initialDataLoadSucceeded;
       } else {
         // Online mode but not logged in: clear state and return early

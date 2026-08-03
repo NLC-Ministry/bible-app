@@ -38,6 +38,43 @@ const CHURCH_PLAN_PRESETS = Object.fromEntries(defaultChurchStagePlans.map(stage
     campaignDefinition: stage
   }
 ]));
+// 💡 0毫秒秒開優化：讀取首屏本地快照
+let initialCachedUser = {
+  name: "",
+  great_region: "",
+  pastoral_zone: "",
+  small_group: "",
+  role_id: null,
+  role_definition: null,
+  chapters_read: 0,
+  plan_progress: 0,
+  streak: 0,
+  last_read: null,
+  member_context_synced_at: "",
+  member_context_sync_attempted_at: "",
+  member_context_sync_status: "",
+  member_context_sync_error: ""
+};
+let initialCachedGlobalPlans = [];
+try {
+  const profileRaw = localStorage.getItem("cached_user_profile");
+  if (profileRaw) {
+    const parsedProfile = JSON.parse(profileRaw);
+    if (parsedProfile && parsedProfile.name) {
+      Object.assign(initialCachedUser, parsedProfile);
+    }
+  }
+  const plansRaw = localStorage.getItem("cached_global_plans");
+  if (plansRaw) {
+    const parsedPlans = JSON.parse(plansRaw);
+    if (Array.isArray(parsedPlans)) {
+      initialCachedGlobalPlans = parsedPlans;
+    }
+  }
+} catch (e) {
+  console.warn("Fast startup cache read skipped:", e);
+}
+
 // Global Application State
 const state = {
   theme: "light",
@@ -47,22 +84,8 @@ const state = {
   roleDefinitions: [], // Supabase role definitions, keyed by immutable UUID
   /** True while profile tab / boot is waiting on Member Hub identity sync */
   profileIdentityLoading: false,
-  currentUser: {
-    name: "",
-    great_region: "",
-    pastoral_zone: "",
-    small_group: "",
-    role_id: null,
-    role_definition: null,
-    chapters_read: 0,
-    plan_progress: 0,
-    streak: 0,
-    last_read: null,
-    member_context_synced_at: "",
-    member_context_sync_attempted_at: "",
-    member_context_sync_status: "",
-    member_context_sync_error: ""
-  },
+  currentUser: initialCachedUser,
+  globalPlans: initialCachedGlobalPlans,
   orgStructure: {
     regions: [],
     zones: {},  // regionName -> array of zoneNames

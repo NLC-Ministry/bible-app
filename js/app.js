@@ -694,6 +694,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (document.visibilityState === "visible") {
       refreshCareReminderBadge();
       clearBadge().catch(err => console.error("Failed to clear badge on visible:", err));
+
+      // 💡 行動裝置前景切換健康保護：防止 iOS/Android 背景記憶體回收導致的空白或死機
+      try {
+        const isProfileLost = !state.currentUser || !state.currentUser.name;
+        const isPlanLost = !state.activePlan && Array.isArray(state.activePlans) && state.activePlans.length > 0;
+        if ((isProfileLost || isPlanLost) && typeof db !== "undefined" && typeof db.loadUserData === "function") {
+          console.log("⚡ [HealthCheck] Foreground wake detected memory eviction, restoring state...");
+          db.loadUserData().catch(err => console.warn("Failed to restore state on foreground wake:", err));
+        }
+      } catch (e) {
+        console.warn("Visibility health check error:", e);
+      }
     }
   });
 
