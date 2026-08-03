@@ -523,12 +523,12 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
   let groupMembers = [];
   if (Array.isArray(customMembers) && customMembers.length > 0) {
     groupMembers = customMembers.map(m => {
-      const resolvedName = m.name || m.displayName || m.profileName || (m.profile && m.profile.name) || "隊友";
-      const count = (m.chapters_read !== undefined && m.chapters_read !== null) ? Number(m.chapters_read) : 0;
+      const name = m.name || m.displayName || (m.profile && m.profile.name) || "隊友";
+      const chapters_read = Number(m.chapters_read ?? m.completedChapters ?? m.readChapters ?? m.completed_chapters ?? m.completed ?? 0);
       return {
-        name: resolvedName,
-        chapters_read: count,
-        isMe: Boolean(m.isMe || resolvedName === state.currentUser?.name)
+        name,
+        chapters_read,
+        isMe: Boolean(m.isMe || name === state.currentUser?.name)
       };
     });
   } else {
