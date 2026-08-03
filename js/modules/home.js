@@ -510,7 +510,7 @@ async function renderPilgrimageTrail(customMembers = null) {
   if (Array.isArray(customMembers) && customMembers.length > 0) {
     groupMembers = customMembers.map(m => ({
       name: m.name || m.displayName || "隊友",
-      chapters_read: m.chapters_read !== undefined ? m.chapters_read : (m.completed || m.currentRoundReadChapters || m.readChapters || 0),
+      chapters_read: Number(m.chapters_read ?? m.completedChapters ?? m.completed_chapters ?? m.completed ?? m.currentRoundReadChapters ?? m.readChapters ?? 0),
       isMe: Boolean(m.isMe || m.name === state.currentUser?.name)
     }));
   } else {
@@ -1061,6 +1061,8 @@ function getMemberColor(name) {
   const index = Math.abs(hash) % colors.length;
   return colors[index];
 }
+
+window.renderPilgrimageTrail = renderPilgrimageTrail;
 
 function initPilgrimageControls() {
   const board = document.getElementById("pilgrimage-trail-board");

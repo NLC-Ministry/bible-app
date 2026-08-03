@@ -682,9 +682,12 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
 
     bindTeamReminderButtons(container, team, members, totalChapters);
     bindTeamMemberRemovalButtons(container, team, members, () => refreshInlineReadingTeam(container, plan, team, mode));
-    if (typeof renderPilgrimageTrail === "function") {
-      renderPilgrimageTrail(members);
-    }
+    setTimeout(() => {
+      const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
+      if (renderFn) {
+        renderFn(members);
+      }
+    }, 100);
     hydrate(container);
   };
 
