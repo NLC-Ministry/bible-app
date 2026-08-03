@@ -685,7 +685,16 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     setTimeout(() => {
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {
-        renderFn(members, plan);
+        const enrichedMembers = members.map(m => {
+          const stats = typeof getMemberOverallPlanProgress === "function" ? getMemberOverallPlanProgress(m, plan, totalChapters) : null;
+          const chaptersRead = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? 0);
+          return {
+            ...m,
+            chapters_read: Number(chaptersRead || 0),
+            name: m.name || m.displayName || (m.profile && m.profile.name) || "隊友"
+          };
+        });
+        renderFn(enrichedMembers, plan);
       }
     }, 100);
     hydrate(container);

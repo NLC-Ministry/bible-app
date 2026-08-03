@@ -522,11 +522,20 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
 
   let groupMembers = [];
   if (Array.isArray(customMembers) && customMembers.length > 0) {
-    groupMembers = customMembers.map(m => ({
-      name: m.name || m.displayName || "隊友",
-      chapters_read: Number(m.chapters_read ?? m.completedChapters ?? m.completed_chapters ?? m.completed ?? m.currentRoundReadChapters ?? m.readChapters ?? 0),
-      isMe: Boolean(m.isMe || m.name === state.currentUser?.name)
-    }));
+    groupMembers = customMembers.map(m => {
+      let readCount = m.chapters_read ?? m.completedChapters ?? m.completed_chapters ?? m.completed ?? m.currentRoundReadChapters ?? m.readChapters ?? m.totalRead;
+      if ((readCount === undefined || readCount === null || readCount === 0) && typeof window.getMemberOverallPlanProgress === "function" && targetPlan) {
+        try {
+          const stats = window.getMemberOverallPlanProgress(m, targetPlan, TOTAL_PLAN_CHAPTERS);
+          if (stats) readCount = stats.completedChapters || stats.currentRoundReadChapters || stats.readChapters || 0;
+        } catch (e) {}
+      }
+      return {
+        name: m.name || m.displayName || m.profileName || (m.profile && m.profile.name) || "隊友",
+        chapters_read: Number(readCount || 0),
+        isMe: Boolean(m.isMe || m.name === state.currentUser?.name)
+      };
+    });
   } else {
     let allUsers = await db.fetchMergedUsersList();
     const myZone = state.currentUser.pastoral_zone || "";
