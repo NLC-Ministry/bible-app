@@ -733,29 +733,32 @@ export function navigateToChapter(direction) {
         const elapsedDay = Math.max(1, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1);
         const readAheadDayNum = Math.max(elapsedDay + 1, planDay + 1);
 
-        const onCatchUp = () => {
-          const currentRound = plan.currentRound || 1;
-          const nextUncompletedDay = plan.days.find(d => {
-            return d.chapters.some(ch => {
-              const r = ch.round || currentRound;
-              if (r === 1) return !Boolean(ch.isReadR1 || ch.isRead);
-              if (r === 2) return !Boolean(ch.isReadR2);
-              if (r >= 3) return !Boolean(ch.isReadR3);
-              return !Boolean(ch.isRead);
-            });
+        const currentRound = plan.currentRound || 1;
+        const catchUpDay = plan.days.find(d => {
+          if (d.dayNum >= planDay) return false;
+          return d.chapters.some(ch => {
+            const r = ch.round || currentRound;
+            if (r === 1) return !Boolean(ch.isReadR1 || ch.isRead);
+            if (r === 2) return !Boolean(ch.isReadR2);
+            if (r >= 3) return !Boolean(ch.isReadR3);
+            return !Boolean(ch.isRead);
           });
+        });
 
-          if (nextUncompletedDay && nextUncompletedDay.chapters.length > 0) {
-            const firstCh = nextUncompletedDay.chapters[0];
+        const catchUpDayNum = catchUpDay ? catchUpDay.dayNum : null;
+
+        const onCatchUp = () => {
+          if (catchUpDay && catchUpDay.chapters.length > 0) {
+            const firstCh = catchUpDay.chapters[0];
             const book = BIBLE_BOOKS.find(b => b.name === firstCh.book || b.eng === firstCh.book);
             if (book) {
               state.readerState.bookId = book.id;
               state.readerState.chapter = Number(firstCh.chapter);
-              state.readerState.planDayNum = nextUncompletedDay.dayNum;
+              state.readerState.planDayNum = catchUpDay.dayNum;
               renderReaderText();
             }
           } else {
-            showToast("您已完成目前所有的計畫天數！");
+            showToast("您已完成目前所有的歷史補讀進度！");
           }
         };
 
@@ -775,7 +778,13 @@ export function navigateToChapter(direction) {
           }
         };
 
-        showPlanNavigationPrompt(onCatchUp, onReadAhead, readAheadDayNum);
+        showPlanNavigationPrompt({
+          hasCatchUp: Boolean(catchUpDay),
+          catchUpDayNum,
+          readAheadDayNum,
+          onCatchUp,
+          onReadAhead
+        });
         return;
       } else {
         const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
@@ -1803,7 +1812,20 @@ function isTodayScheduleCompleted() {
   });
 }
 
-function showPlanNavigationPrompt(onCatchUp, onReadAhead, readAheadDayNum) {
+function showPlanNavigationPrompt(options = {}) {
+  let onCatchUp = options.onCatchUp;
+  let onReadAhead = options.onReadAhead;
+  let readAheadDayNum = options.readAheadDayNum || 2;
+  let hasCatchUp = options.hasCatchUp || false;
+  let catchUpDayNum = options.catchUpDayNum || null;
+
+  if (typeof options === "function") {
+    onCatchUp = arguments[0];
+    onReadAhead = arguments[1];
+    readAheadDayNum = arguments[2] || 2;
+    hasCatchUp = false;
+  }
+
   // Remove existing dialog if any
   const existing = document.getElementById("plan-nav-prompt-overlay");
   if (existing) existing.remove();
@@ -1817,6 +1839,17 @@ function showPlanNavigationPrompt(onCatchUp, onReadAhead, readAheadDayNum) {
     padding: 1rem;
     animation: fadeIn 0.2s ease;
   `;
+
+  const catchUpBtnHtml = hasCatchUp
+    ? `<button id="plan-nav-catchup-btn" type="button" style="
+        padding: 0.75rem; border-radius: var(--radius-md, 12px); font-size: 0.9rem; font-weight: 500;
+        border: none; background: var(--color-brand); color: white; cursor: pointer;
+      ">繼續補讀第 ${catchUpDayNum || ''} 天未完進度</button>`
+    : '';
+
+  const readAheadStyle = hasCatchUp
+    ? `border: 1.5px solid var(--color-brand); background: var(--bg-input); color: var(--color-brand);`
+    : `border: none; background: var(--color-brand); color: white;`;
 
   overlay.innerHTML = `
     <div id="plan-nav-prompt-dialog" style="
@@ -1837,14 +1870,11 @@ function showPlanNavigationPrompt(onCatchUp, onReadAhead, readAheadDayNum) {
       </div>
 
       <div style="display:flex; flex-direction:column; gap:0.75rem; width:100%;">
-        <button id="plan-nav-catchup-btn" type="button" style="
-          padding: 0.75rem; border-radius: var(--radius-md, 12px); font-size: 0.9rem; font-weight: 500;
-          border: none; background: var(--color-brand); color: white; cursor: pointer;
-        ">繼續補讀未完進度</button>
+        ${catchUpBtnHtml}
 
         <button id="plan-nav-readahead-btn" type="button" style="
           padding: 0.75rem; border-radius: var(--radius-md, 12px); font-size: 0.9rem; font-weight: 500;
-          border: 1.5px solid var(--color-brand); background: var(--bg-input); color: var(--color-brand); cursor: pointer;
+          cursor: pointer; ${readAheadStyle}
         ">超前閱讀第 ${readAheadDayNum} 天進度</button>
 
         <button id="plan-nav-cancel-btn" type="button" style="

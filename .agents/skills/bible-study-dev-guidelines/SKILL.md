@@ -53,7 +53,10 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 
 * **彈窗選單優於循序迴圈 (Picker Modal over Toggle Loop)**：
   - 當可選選項超過 3 個（如 6 大聖經譯本）時，不應使用一直按按鈕的循環切換。
-  - 應彈出直覺彈窗選單 (`#bible-version-picker-modal`)，並高亮當前選項（帶 Checkmark `✓`）。
+  - 應彈出直覺彈窗選購 Modal (`#bible-version-picker-modal`)，並高亮當前選項（帶 Checkmark `✓`）。
+* **動態隱藏無效選項與高亮主要動作 (Smart Prompt Actions)**：
+  - 當使用者進度正常或超前時，**絕對不要顯示無效的「補讀未完成進度」按鈕**。
+  - 動態將真正的目標動作（如「超前閱讀第 N 天進度」）提升為**藍色高亮主要按鈕 (Primary Button)**，避免主次顛倒與誤解。
 * **安靜自動打卡 (Silent Auto-Read)**：
   - 滑到底部自動已讀時，保持靜默打卡，不彈出干擾閱讀視覺的 Toast 與確認彈窗對話框。
 * **記憶體與 UI 即時同步 (Instant State Reactivity)**：
