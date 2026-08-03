@@ -197,11 +197,32 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                     </span>
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap font-medium">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 font-semibold text-[10px] ${
-                      STATUS_MAP[report.status as keyof typeof STATUS_MAP]?.className || STATUS_MAP.pending.className
-                    }`}>
-                      {STATUS_MAP[report.status as keyof typeof STATUS_MAP]?.label || report.status}
-                    </span>
+                    <select
+                      value={report.status || "pending"}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        try {
+                          await onUpdate(report.id, newStatus, report.metadata?.reply || "");
+                        } catch (err: any) {
+                          alert(err.message || "狀態更新失敗");
+                        }
+                      }}
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold border focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer transition-colors ${
+                        report.status === "processing"
+                          ? "bg-blue-950/40 text-blue-400 border-blue-500/40 hover:bg-blue-900/50"
+                          : report.status === "resolved"
+                          ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/40 hover:bg-emerald-900/50"
+                          : report.status === "ignored"
+                          ? "bg-gray-900/80 text-gray-400 border-border/50 hover:bg-gray-800"
+                          : "bg-yellow-950/40 text-yellow-400 border-yellow-500/40 hover:bg-yellow-900/50"
+                      }`}
+                      title="變更問題處理狀態"
+                    >
+                      <option value="pending" className="bg-card text-yellow-400">待處理 (Pending)</option>
+                      <option value="processing" className="bg-card text-blue-400">處理中 (Processing)</option>
+                      <option value="resolved" className="bg-card text-emerald-400">已解決 (Resolved)</option>
+                      <option value="ignored" className="bg-card text-gray-400">已忽略 (Ignored)</option>
+                    </select>
                   </td>
                   <td className="px-6 py-3.5 break-words leading-relaxed text-sm text-foreground">
                     <div>{report.description}</div>
