@@ -1091,12 +1091,6 @@ function openIntegratedSelectionBottomBar(options) {
 
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
-      <div class="yv-bar-header">
-        <span class="yv-selection-label">已選取第 ${selectedVerseNumber} 節</span>
-        <button type="button" class="yv-close-button" data-action="close" aria-label="取消選取" title="取消選取">
-          <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
-        </button>
-      </div>
       <div class="yv-content-row">
         <div class="yv-highlight-section">
           <span class="yv-section-label">螢光標註</span>
