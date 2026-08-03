@@ -1034,6 +1034,10 @@ function openIntegratedSelectionBottomBar(options) {
           <button type="button" class="yv-dot yv-dot-dual" data-action="clear" title="雙色調色盤 / 清除標註"></button>
         </div>
         <div class="yv-action-group">
+          <button type="button" class="yv-tile" data-action="play">
+            <span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span>
+            <span class="yv-tile-label">朗讀</span>
+          </button>
           <button type="button" class="yv-tile" data-action="bookmark">
             <span class="nlc-icon" data-icon="bookmark" aria-hidden="true"></span>
             <span class="yv-tile-label">儲存</span>
@@ -1065,6 +1069,7 @@ function openIntegratedSelectionBottomBar(options) {
     rootElement.innerHTML = "";
     document.removeEventListener("click", onDocClick);
     document.removeEventListener("selectionchange", onSelectionChange);
+    setReaderStartSelection(null);
   };
 
   const onSelectionChange = () => {
@@ -1093,6 +1098,15 @@ function openIntegratedSelectionBottomBar(options) {
       showToast("已完成螢光筆劃線標註！");
       closeBar();
     };
+  });
+
+  barDiv.querySelector('[data-action="play"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const verseNum = Number(verseDiv?.dataset.verse || 1);
+    closeBar();
+    if (typeof window.toggleReaderAudio === "function") {
+      window.toggleReaderAudio(verseNum);
+    }
   });
 
   barDiv.querySelector('[data-action="bookmark"]')?.addEventListener("click", (e) => {
@@ -1352,8 +1366,14 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
     return;
   }
   if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-    stopReaderAudio();
-    return;
+    if (isSpeaking) {
+      stopReaderAudio();
+      return;
+    }
+  }
+
+  if (typeof window.speechSynthesis !== "undefined" && window.speechSynthesis.paused) {
+    try { window.speechSynthesis.resume(); } catch (_e) {}
   }
 
   stopReaderAudio(true);

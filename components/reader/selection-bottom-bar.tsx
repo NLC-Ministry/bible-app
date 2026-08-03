@@ -1,27 +1,45 @@
 import React, { useState } from "react";
-import { Bookmark, Notebook, Copy, Share2, ChevronUp } from "lucide-react";
+import { Play, Bookmark, Notebook, Copy, Share2, ChevronUp } from "lucide-react";
 import { HighlightApiBlock, HIGHLIGHT_COLORS, applySafeHighlightToRange } from "../../lib/blocks/highlight-api.ts";
 
 export interface SelectionBottomBarProps {
   selectedText: string;
   range: Range | null;
   chapterId?: string;
+  verseNum?: number;
   onClose: () => void;
   onToast?: (message: string) => void;
+  onPlay?: (verseNum?: number) => void;
 }
 
 export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
   selectedText,
   range,
   chapterId = "default",
+  verseNum,
   onClose,
-  onToast
+  onToast,
+  onPlay
 }) => {
   const [copied, setCopied] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
 
   if (!selectedText) return null;
+
+  const handlePlay = () => {
+    if (onPlay) {
+      onPlay(verseNum);
+    } else {
+      const toggle = (window as any).toggleReaderAudio;
+      if (typeof toggle === "function") {
+        toggle(verseNum);
+      } else {
+        onToast?.("無法啟動朗讀播放");
+      }
+    }
+    onClose();
+  };
 
   const handleCopy = async () => {
     try {
@@ -143,6 +161,16 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
 
         {/* Right Action Tiles */}
         <div className="yv-action-group">
+          <button
+            type="button"
+            data-testid="btn-play"
+            onClick={handlePlay}
+            className="yv-tile"
+          >
+            <Play className="h-4 w-4 fill-primary text-primary" />
+            <span className="yv-tile-label">朗讀</span>
+          </button>
+
           <button
             type="button"
             data-testid="btn-bookmark"

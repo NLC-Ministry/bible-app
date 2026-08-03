@@ -54,12 +54,11 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 * **深色模式對比度與 Modal 按鈕規範 (Dark Theme Contrast & Modals)**：
   - 彈窗 Modal (如 `#bible-version-picker-modal`) 在 Dark Theme 下，按鈕預設背景**嚴禁為純白全顯狀態 (`background: #fff`)**。
   - 應繼承主題變數 `background: var(--bg-surface, rgba(255, 255, 255, 0.05)) !important` 與 `color: var(--text-primary, #f8fafc) !important`，確保白字高清可讀、無白底融化文字狀況。
-* **YouVersion 奢華風格浮動操作欄 (YouVersion Reader Floating Action Bar)**：
+* **YouVersion 奢華風格浮動操作欄與朗讀起點統一 (YouVersion Action Bar & Play Start-Point)**：
   - 參考 YouVersion 最新 UI/UX：採用深黑玻璃懸浮卡片 (`rgba(24, 24, 28, 0.94)`, `border-radius: 24px`, `backdrop-filter: blur(24px)`)。
-  - 頂部帶有 36px x 4px 拉桿指示條 (Drag Pill Handle)。
-  - 左側獨立螢光筆膠囊包含 4 款色盤（🟡 亮黃 `#facc15`、🩵 亮青 `#38bdf8`、🟢 螢光綠 `#4ade80` 與 🎨 雙色調色盤/清除）。
-  - 右側為 `52px` x `52px` 方形圓角動作按鈕陣列：**🔖 儲存 | 📝 筆記 | 📋 複製 | 📤 分享**。
-  - **取消選取自動消失 (Auto-Hide on Deselect)**：監聽 `selectionchange` 事件，當選取取消或游標折疊時，底部操作列即刻優雅自動關閉。
+  - **點擊即朗讀起點 (Click to Set Reader Start-Point)**：點擊經文或選取文字時，自動判定並設定該節為朗讀起點 (`selectedVerseNum`)，並呈現高亮與 YouVersion 浮動 Action Bar。
+  - Action Bar 第一顆按鈕整合 **▶️ 朗讀 (Play)**，點擊即可直接從該選中節啟動播報。
+  - **統一選取取消 (Unified Deselect)**：監聽 `selectionchange` 或關閉按鈕，取消選取時 Action Bar 與朗讀起點標記 100% 同步優雅關閉。
 * **安靜自動打卡 (Silent Auto-Read)**：
   - 滑到底部自動已讀時，保持靜默打卡，不彈出干擾閱讀視覺的 Toast 與確認彈窗對話框。
 * **記憶體與 UI 即時同步 (Instant State Reactivity)**：
