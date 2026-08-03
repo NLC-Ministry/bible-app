@@ -4827,27 +4827,7 @@ async function renderPlanHistoryView() {
   }
 
   // 8. Render Bible Pilgrimage Trail canvas
-  const pilgrimageCard = document.getElementById("grp-pilgrimage-card");
-  const currentScopeUsers = window._grpScopedUsers || [];
-
-  const rankingZoneSelector = document.getElementById("ranking-zone-selector");
-  const selectedFilter = window._statsTabScope !== null
-    ? window._statsTabScope
-    : (rankingZoneSelector ? rankingZoneSelector.value : null);
-  const isChurchScope = (window._currentStatsTab === 'church') || (selectedFilter === 'all');
-
-  if (currentScopeUsers.length === 0 || isChurchScope) {
-    if (pilgrimageCard) pilgrimageCard.style.display = "none";
-  } else {
-    if (pilgrimageCard) pilgrimageCard.style.display = "";
-    if (typeof renderPilgrimageTrail === 'function') {
-      await renderPilgrimageTrail();
-    }
-    if (typeof initPilgrimageControls === 'function' && !state.pilgrimageControlsInit) {
-      initPilgrimageControls();
-      state.pilgrimageControlsInit = true;
-    }
-  }
+  // Pilgrimage Card is strictly moved to Reading Team Inline view, completely removed from Admin / Group Stats.
 }
 
 async function renderGroupMiniStats(overrideFilter) {

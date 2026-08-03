@@ -472,9 +472,18 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
   if (!canvas) return;
 
   const targetPlan = customPlan || state.activePlan || (Array.isArray(state.activePlans) ? state.activePlans[0] : null) || (Array.isArray(state.globalPlans) ? state.globalPlans[0] : null);
-  const planDays = (targetPlan && Array.isArray(targetPlan.days) && targetPlan.days.length > 0)
-    ? targetPlan.days
-    : (typeof generatePlanObject === "function" ? (generatePlanObject(CHURCH_PLAN_PRESETS.church_stage_01 || {})?.days || []) : []);
+  let planDays = (targetPlan && Array.isArray(targetPlan.days) && targetPlan.days.length > 0) ? targetPlan.days : [];
+  if (planDays.length === 0 && typeof window.createChurchCampaignStageDefinitions === "function" && typeof window.cloneChurchCampaign === "function") {
+    try {
+      const defaultCampaign = window.cloneChurchCampaign();
+      const stages = window.createChurchCampaignStageDefinitions(defaultCampaign);
+      if (stages && stages[0] && Array.isArray(stages[0].days)) {
+        planDays = stages[0].days;
+      }
+    } catch (e) {
+      console.warn("Fallback stage generation error:", e);
+    }
+  }
 
   if (planDays.length === 0) {
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
