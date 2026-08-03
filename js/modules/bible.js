@@ -84,6 +84,8 @@ let readerBottomDwellController = null;
 let readerEndObserver = null;
 let readerEndVisible = false;
 let readerAutoReadNoticeKey = "";
+let selectionBottomBarCleanup = null;
+let selectionBottomBarBindTimer = null;
 
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
@@ -862,6 +864,7 @@ export async function renderReaderText() {
     stopReaderAudio(true);
   }
   state.readerState.selectedVerseNum = null;
+  closeSelectionBottomBar();
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
   if (readerBottomDwellController) readerBottomDwellController.reset();
@@ -943,23 +946,50 @@ export async function renderReaderText() {
   scheduleReaderBottomDwellCheck();
 }
 
+function clearReaderStartSelection() {
+  const container = document.getElementById("bible-content");
+  if (container) {
+    container.querySelectorAll(".bible-verse.reader-start-selected").forEach(item => {
+      item.classList.remove("reader-start-selected");
+      item.setAttribute("aria-pressed", "false");
+    });
+  }
+  if (state.readerState) {
+    state.readerState.selectedVerseNum = null;
+  }
+}
+
+function closeSelectionBottomBar({ clearSelection = true } = {}) {
+  if (selectionBottomBarBindTimer) {
+    clearTimeout(selectionBottomBarBindTimer);
+    selectionBottomBarBindTimer = null;
+  }
+  if (typeof selectionBottomBarCleanup === "function") {
+    selectionBottomBarCleanup();
+    selectionBottomBarCleanup = null;
+  }
+  const rootElement = document.getElementById("selection-bottom-bar-root");
+  if (rootElement) rootElement.innerHTML = "";
+  if (clearSelection) clearReaderStartSelection();
+}
+
 function setReaderStartSelection(verseElement) {
   const container = document.getElementById("bible-content");
-  if (!container || !verseElement) return;
+  if (!container || !verseElement) {
+    clearReaderStartSelection();
+    return false;
+  }
   const wasSelected = verseElement.classList.contains("reader-start-selected");
-  container.querySelectorAll(".bible-verse.reader-start-selected").forEach(item => {
-    item.classList.remove("reader-start-selected");
-    item.setAttribute("aria-pressed", "false");
-  });
+  clearReaderStartSelection();
   if (wasSelected) {
-    state.readerState.selectedVerseNum = null;
     console.info("[ReaderAudio] Start verse selection cleared");
-    return;
+    return false;
   }
   verseElement.classList.add("reader-start-selected");
   verseElement.setAttribute("aria-pressed", "true");
   state.readerState.selectedVerseNum = Number(verseElement.dataset.verse || 1);
   console.info("[ReaderAudio] Start verse selected", { verse: state.readerState.selectedVerseNum });
+  return true;
 }
 function renderVersesList(container, verses, bookName, chapter) {
   container.innerHTML = "";
@@ -984,7 +1014,11 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     const toggleSelection = e => {
       e.stopPropagation();
-      setReaderStartSelection(verseDiv);
+      const isSelected = setReaderStartSelection(verseDiv);
+      if (!isSelected) {
+        closeSelectionBottomBar({ clearSelection: false });
+        return;
+      }
       const verseText = v.text;
       const formattedText = `【${bookName} ${chapter}:${v.verse}】${verseText}`;
       openIntegratedSelectionBottomBar({
@@ -1045,6 +1079,7 @@ function openIntegratedSelectionBottomBar(options) {
   const { selectedText, verseDiv, highlightKey, chapterId } = options;
   const rootElement = document.getElementById("selection-bottom-bar-root");
   if (!rootElement) return;
+  closeSelectionBottomBar({ clearSelection: false });
 
   if (state.readerState && verseDiv) {
     const verseNum = Number(verseDiv.dataset.verse || 1);
@@ -1084,19 +1119,14 @@ function openIntegratedSelectionBottomBar(options) {
   const barDiv = document.getElementById("pwa-selection-bottom-bar");
   if (!barDiv) return;
 
-  const closeBar = () => {
-    rootElement.innerHTML = "";
+  const cleanupListeners = () => {
     document.removeEventListener("click", onDocClick);
-    document.removeEventListener("selectionchange", onSelectionChange);
-    setReaderStartSelection(null);
   };
 
-  const onSelectionChange = () => {
-    if (typeof window === "undefined" || !window.getSelection) return;
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed) {
-      closeBar();
-    }
+  selectionBottomBarCleanup = cleanupListeners;
+
+  const closeBar = (options = {}) => {
+    closeSelectionBottomBar(options);
   };
 
   const onDocClick = (e) => {
@@ -1193,9 +1223,9 @@ function openIntegratedSelectionBottomBar(options) {
     closeBar();
   });
 
-  setTimeout(() => {
+  selectionBottomBarBindTimer = setTimeout(() => {
     document.addEventListener("click", onDocClick);
-    document.addEventListener("selectionchange", onSelectionChange);
+    selectionBottomBarBindTimer = null;
   }, 100);
 }
 
