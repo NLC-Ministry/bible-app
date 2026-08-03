@@ -78,4 +78,14 @@ describe("SelectionBottomBar & Floating Capsule Unit Tests", () => {
       })
     );
   });
+
+  it("測試 F：驗證 HighlightApiBlock 刪除與清除介面", async () => {
+    const deleteSpy = vi.spyOn(HighlightApiBlock, "deleteHighlight").mockResolvedValue({
+      success: true
+    });
+
+    const res = await HighlightApiBlock.deleteHighlight("hl_GEN_1_1_guest");
+    expect(res.success).toBe(true);
+    expect(deleteSpy).toHaveBeenCalledWith("hl_GEN_1_1_guest");
+  });
 });

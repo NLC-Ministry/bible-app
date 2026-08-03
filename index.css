@@ -12795,6 +12795,25 @@ select,
 .youversion-action-bar .yv-dot-cyan { background-color: var(--hl-blue, #a5f3fc); }
 .youversion-action-bar .yv-dot-green { background-color: var(--hl-green, #bbf7d0); }
 .youversion-action-bar .yv-dot-dual { background-color: var(--hl-orange, #fed7aa); }
+.youversion-action-bar .yv-dot-clear {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.youversion-action-bar .yv-dot-clear:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  transform: scale(1.18);
+}
 
 .youversion-action-bar .yv-action-group {
   display: flex;

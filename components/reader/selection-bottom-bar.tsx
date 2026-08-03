@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Copy, Share2 } from "lucide-react";
+import { Play, Copy, Share2, Eraser } from "lucide-react";
 import { HighlightApiBlock, applySafeHighlightToRange } from "../../lib/blocks/highlight-api.ts";
 
 export interface SelectionBottomBarProps {
@@ -60,6 +60,19 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
 
     setIsHighlighting(false);
     onToast?.("已套用柔和螢光標註");
+    onClose?.();
+  };
+
+  const handleClear = async () => {
+    setIsHighlighting(true);
+    const state = (window as any).state;
+    const userId = state?.currentUser?.id || "guest";
+
+    const key = `${chapterId}_${verseNum}`;
+    await HighlightApiBlock.deleteHighlight(`hl_${key}_${userId}`);
+
+    setIsHighlighting(false);
+    onToast?.("已清除劃線標註");
     onClose?.();
   };
 
@@ -167,6 +180,16 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
           }`}
           title="柔橘粉標註"
         />
+        <button
+          type="button"
+          data-testid="color-clear"
+          disabled={isHighlighting}
+          onClick={handleClear}
+          className="h-6 w-6 rounded-full border border-white/20 bg-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 flex items-center justify-center transition-all hover:scale-115 active:scale-95 text-foreground/70 ml-1"
+          title="清除標註"
+        >
+          <Eraser className="h-3 w-3" />
+        </button>
       </div>
 
       {/* 垂直分隔線 Divider */}

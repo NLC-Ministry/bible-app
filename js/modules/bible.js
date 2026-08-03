@@ -1059,6 +1059,9 @@ function openIntegratedSelectionBottomBar(options) {
           <button type="button" class="yv-dot yv-dot-cyan" data-color="#a5f3fc" title="柔藍標註"></button>
           <button type="button" class="yv-dot yv-dot-green" data-color="#bbf7d0" title="柔綠標註"></button>
           <button type="button" class="yv-dot yv-dot-dual" data-color="#fed7aa" title="柔橘粉標註"></button>
+          <button type="button" class="yv-dot-clear" data-action="clear" title="清除標註">
+            <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
+          </button>
         </div>
         <div class="yv-action-group">
           <button type="button" class="yv-tile" data-action="play">
