@@ -728,65 +728,6 @@ export function navigateToChapter(direction) {
 
     if (isLastChapterOfDay) {
       if (isTodayScheduleCompleted()) {
-        const start = new Date(plan.startDate);
-        start.setHours(0, 0, 0, 0);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const elapsedDay = Math.max(1, Math.ceil((today - start) / (1000 * 60 * 60 * 24)) + 1);
-        const readAheadDayNum = Math.max(elapsedDay + 1, planDay + 1);
-
-        const currentRound = plan.currentRound || 1;
-        const catchUpDay = plan.days.find(d => {
-          if (d.dayNum >= planDay) return false;
-          return d.chapters.some(ch => {
-            const r = ch.round || currentRound;
-            if (r === 1) return !Boolean(ch.isReadR1 || ch.isRead);
-            if (r === 2) return !Boolean(ch.isReadR2);
-            if (r >= 3) return !Boolean(ch.isReadR3);
-            return !Boolean(ch.isRead);
-          });
-        });
-
-        const catchUpDayNum = catchUpDay ? catchUpDay.dayNum : null;
-
-        const onCatchUp = () => {
-          if (catchUpDay && catchUpDay.chapters.length > 0) {
-            const firstCh = catchUpDay.chapters[0];
-            const book = BIBLE_BOOKS.find(b => b.name === firstCh.book || b.eng === firstCh.book);
-            if (book) {
-              state.readerState.bookId = book.id;
-              state.readerState.chapter = Number(firstCh.chapter);
-              state.readerState.planDayNum = catchUpDay.dayNum;
-              renderReaderText();
-            }
-          } else {
-            showToast("您已完成目前所有的歷史補讀進度！");
-          }
-        };
-
-        const onReadAhead = () => {
-          const nextDay = plan.days.find(d => d.dayNum === readAheadDayNum);
-          if (nextDay && nextDay.chapters.length > 0) {
-            const firstCh = nextDay.chapters[0];
-            const book = BIBLE_BOOKS.find(b => b.name === firstCh.book || b.eng === firstCh.book);
-            if (book) {
-              state.readerState.bookId = book.id;
-              state.readerState.chapter = Number(firstCh.chapter);
-              state.readerState.planDayNum = nextDay.dayNum;
-              renderReaderText();
-            }
-          } else {
-            showToast("您已到達計畫的最後一天！");
-          }
-        };
-
-        showPlanNavigationPrompt({
-          hasCatchUp: Boolean(catchUpDay),
-          catchUpDayNum,
-          readAheadDayNum,
-          onCatchUp,
-          onReadAhead
-        });
         return;
       } else {
         const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
