@@ -12592,15 +12592,23 @@ select,
 }
 
 /* Light/Default Mode Morandi Verse Highlights */
+#reader-view .bible-verse[data-highlight="#fef08a"],
 .bible-verse[data-highlight="#fef08a"] { background-color: rgba(254, 240, 138, 0.65) !important; border-radius: 4px; }
+#reader-view .bible-verse[data-highlight="#a5f3fc"],
 .bible-verse[data-highlight="#a5f3fc"] { background-color: rgba(165, 243, 252, 0.65) !important; border-radius: 4px; }
+#reader-view .bible-verse[data-highlight="#bbf7d0"],
 .bible-verse[data-highlight="#bbf7d0"] { background-color: rgba(187, 247, 208, 0.65) !important; border-radius: 4px; }
+#reader-view .bible-verse[data-highlight="#fed7aa"],
 .bible-verse[data-highlight="#fed7aa"] { background-color: rgba(254, 215, 170, 0.65) !important; border-radius: 4px; }
 
 /* Dark Mode Morandi Verse Highlights */
+[data-theme="dark"] #reader-view .bible-verse[data-highlight="#fef08a"],
 [data-theme="dark"] .bible-verse[data-highlight="#fef08a"] { background-color: rgba(254, 240, 138, 0.22) !important; border-radius: 4px; }
+[data-theme="dark"] #reader-view .bible-verse[data-highlight="#a5f3fc"],
 [data-theme="dark"] .bible-verse[data-highlight="#a5f3fc"] { background-color: rgba(165, 243, 252, 0.22) !important; border-radius: 4px; }
+[data-theme="dark"] #reader-view .bible-verse[data-highlight="#bbf7d0"],
 [data-theme="dark"] .bible-verse[data-highlight="#bbf7d0"] { background-color: rgba(187, 247, 208, 0.22) !important; border-radius: 4px; }
+[data-theme="dark"] #reader-view .bible-verse[data-highlight="#fed7aa"],
 [data-theme="dark"] .bible-verse[data-highlight="#fed7aa"] { background-color: rgba(254, 215, 170, 0.22) !important; border-radius: 4px; }
 
 /* Bible Version Picker Modal Design System */

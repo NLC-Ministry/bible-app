@@ -1132,20 +1132,22 @@ function openIntegratedSelectionBottomBar(options) {
   barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (verseDiv) {
-      verseDiv.style.backgroundColor = "";
       verseDiv.removeAttribute("data-highlight");
     }
     delete state.highlights[highlightKey];
     localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+
+    // 重置所有色點 active 狀態，不關閉 bar
+    barDiv.querySelectorAll("[data-color]").forEach(b => {
+      b.classList.remove("is-active");
+      b.setAttribute("aria-pressed", "false");
+    });
 
     // Delete sync from Supabase Cloud if available
     if (state.supabase && typeof state.supabase.from === "function") {
       const userId = state.currentUser?.id || "guest";
       state.supabase.from("highlights").delete().eq("id", `hl_${highlightKey}_${userId}`).then(() => {});
     }
-
-    showToast("已清除劃線標註");
-    closeBar();
   });
 
   barDiv.querySelector('[data-action="copy"]')?.addEventListener("click", (e) => {
