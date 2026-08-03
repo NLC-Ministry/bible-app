@@ -489,8 +489,8 @@ Deno.serve(async (req: Request) => {
       userinfo = parseJwt(idToken);
     }
 
-    if (!userinfo || !userinfo.sub || !userinfo.email) {
-      console.log("UserInfo from token is incomplete or missing email; fetching full profile from OIDC UserInfo endpoint.");
+    if (!userinfo || !userinfo.sub) {
+      console.log("UserInfo from token missing sub; fetching full profile from OIDC UserInfo endpoint.");
       try {
         const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
         const userinfoEndpoint = discovery.userinfo_endpoint;
