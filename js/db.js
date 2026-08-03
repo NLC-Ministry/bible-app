@@ -6,6 +6,40 @@ window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
   summary: () => networkMetrics.summary()
 });
+
+const _storageDebounceTimers = {};
+
+export function safeStorageSet(key, value, debounceMs = 0) {
+  const doWrite = () => {
+    try {
+      const strVal = typeof value === "string" ? value : JSON.stringify(value);
+      localStorage.setItem(key, strVal);
+    } catch (err) {
+      if (err && (err.name === "QuotaExceededError" || err.code === 22)) {
+        console.warn("[Storage] QuotaExceededError detected! Clearing non-critical caches...");
+        try {
+          localStorage.removeItem("nlc_all_users_cache");
+          localStorage.removeItem("nlc_all_users_cache_ts");
+          localStorage.removeItem("church_announcements");
+          const strVal = typeof value === "string" ? value : JSON.stringify(value);
+          localStorage.setItem(key, strVal);
+        } catch (e) {
+          console.error("[Storage] Emergency purge failed:", e);
+        }
+      }
+    }
+  };
+
+  if (debounceMs > 0) {
+    if (_storageDebounceTimers[key]) clearTimeout(_storageDebounceTimers[key]);
+    _storageDebounceTimers[key] = setTimeout(doWrite, debounceMs);
+  } else {
+    setTimeout(doWrite, 0);
+  }
+}
+if (typeof window !== "undefined") {
+  window.safeStorageSet = safeStorageSet;
+}
 /**
  * 依計畫名稱查找目前階段定義的 key。
  * @param {string} name
@@ -1037,7 +1071,7 @@ const db = {
         state.activePlans = localCampaignMigration.plans;
         if (localCampaignMigration.migrated) {
           state.readingLogs = localCampaignMigration.logs;
-          localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs));
+          safeStorageSet("reading_logs", state.readingLogs, 500);
         }
         state.activePlans.forEach(plan => {
           if (!plan.presetKey) {
@@ -1078,7 +1112,7 @@ const db = {
             }
           }
         });
-        localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
+        safeStorageSet("active_reading_plans", state.activePlans, 500);
         calculateAllPlansProgress();
 
         state.activePlan = selectMostRecentActivePlan(state.activePlans);
