@@ -468,7 +468,7 @@ export function updateDashboardView() {
 }
 
 async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
-  const canvas = document.getElementById("pilgrimage-canvas");
+  const canvas = document.getElementById("team-pilgrimage-canvas") || document.getElementById("pilgrimage-canvas");
   if (!canvas) return;
 
   const targetPlan = customPlan || state.activePlan || (Array.isArray(state.activePlans) ? state.activePlans[0] : null) || (Array.isArray(state.globalPlans) ? state.globalPlans[0] : null);
@@ -685,6 +685,12 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
       ctx.fillText(String(m.name || "").substring(0, 2), x, y);
     });
   });
+
+  const legendEl = document.getElementById("team-pilgrimage-legend") || document.getElementById("pilgrimage-legend");
+  if (legendEl) {
+    legendEl.innerHTML = `
+      <span class="px-2 py-0.5 rounded-full bg-slate-100/80 dark:bg-zinc-900/50 flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;background:${pal.myStroke};border-radius:50%;"></span>隊友軌跡</span>`;
+  }
 }
 
 async function calculateAndRenderPersonalRankings() {

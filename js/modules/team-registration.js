@@ -628,16 +628,16 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         <span class="stat-badge stat-badge--brand">${mode === "stats" ? "團隊統計" : "組員狀況"}</span>
       </div>
       ${summary}
-      <div class="glass-card-upgrade pilgrimage-card" id="grp-pilgrimage-card" style="display: flex; flex-direction: column; margin: 0.8rem 0; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.8rem; background: var(--bg-card);">
+      <div class="glass-card-upgrade pilgrimage-card" id="team-pilgrimage-card" style="display: flex; flex-direction: column; margin: 0.8rem 0; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.8rem; background: var(--bg-card);">
         <div class="card-header-flex" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
           <h3 class="card-title" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; color: var(--text-primary);">
             團隊賽道地圖 (${Number(team.division)}人組)
           </h3>
-          <div id="pilgrimage-legend" class="text-[10px] space-x-2 text-slate-400 dark:text-zinc-500" style="display: flex; align-items: center; gap: 8px; font-size: 10px;"></div>
+          <div id="team-pilgrimage-legend" class="text-[10px] space-x-2 text-slate-400 dark:text-zinc-500" style="display: flex; align-items: center; gap: 8px; font-size: 10px;"></div>
         </div>
         <div class="trail-scroll-wrapper" style="overflow: auto; max-height: 380px; background: var(--bg-input); border-radius: 12px; border: 1px solid var(--border-card); padding: 0.5rem; position: relative;">
-          <div id="pilgrimage-trail-board" style="position: relative; transform-origin: top left; transition: transform 0.2s ease; display: inline-block;">
-            <canvas id="pilgrimage-canvas" style="display: block;"></canvas>
+          <div id="team-pilgrimage-trail-board" style="position: relative; transform-origin: top left; transition: transform 0.2s ease; display: inline-block;">
+            <canvas id="team-pilgrimage-canvas" style="display: block;"></canvas>
           </div>
         </div>
       </div>
