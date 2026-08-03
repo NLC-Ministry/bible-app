@@ -51,9 +51,9 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 
 ## 🎨 5. 人性化 UI/UX 互動規範 (User-First Design Rules)
 
-* **彈窗選單優於循序迴圈 (Picker Modal over Toggle Loop)**：
-  - 當可選選項超過 3 個（如 6 大聖經譯本）時，不應使用一直按按鈕的循環切換。
-  - 應彈出直覺彈窗選購 Modal (`#bible-version-picker-modal`)，並高亮當前選項（帶 Checkmark `✓`）。
+* **深色模式對比度與 Modal 按鈕規範 (Dark Theme Contrast & Modals)**：
+  - 彈窗 Modal (如 `#bible-version-picker-modal`) 在 Dark Theme 下，按鈕預設背景**嚴禁為純白全顯狀態 (`background: #fff`)**。
+  - 應繼承主題變數 `background: var(--bg-surface, rgba(255, 255, 255, 0.05)) !important` 與 `color: var(--text-primary, #f8fafc) !important`，確保白字高清可讀、無白底融化文字狀況。
 * **黏貼式底部操作列與經文快捷動作 (Sticky Bottom Reader Bar)**：
   - 經文選擇與螢光筆標記**禁止浮動於文字中間**（避免遮擋與突兀感），統一收納至固定於底部的 `#context-toolbar` 操作面板。
   - 上層為黃、橘、綠、粉 4 色螢光筆與清除橡皮擦；下層整合 **📋 複製經文** (帶標準出處格式) 與 **📤 分享經文** (Web Share API)，點擊空白處自動優雅關閉。
