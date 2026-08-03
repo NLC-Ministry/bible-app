@@ -1006,15 +1006,18 @@ function showContextToolbar(verseElement, highlightKey) {
   const toolbar = document.getElementById("context-toolbar");
   if (!toolbar) return;
 
+  const verseNum = Number(verseElement.dataset.verse || 1);
   if (state.readerState) {
-    state.readerState.lastFocusedVerseNum = Number(verseElement.dataset.verse || 1);
+    state.readerState.lastFocusedVerseNum = verseNum;
   }
   
-  const rect = verseElement.getBoundingClientRect();
-  toolbar.style.top = `${window.scrollY + rect.top}px`;
-  toolbar.style.left = `${window.scrollX + rect.left + rect.width / 2}px`;
   toolbar.classList.remove("hidden");
   toolbar.classList.add("active");
+
+  const bookName = BIBLE_BOOKS.find(b => b.id === state.readerState?.bookId)?.name || "";
+  const chapter = state.readerState?.chapter || 1;
+  const verseText = verseElement.querySelector(".verse-text")?.innerText || "";
+  const formattedText = `【${bookName} ${chapter}:${verseNum}】${verseText}`;
 
   const actionHandler = (e) => {
     e.stopPropagation();
@@ -1027,24 +1030,47 @@ function showContextToolbar(verseElement, highlightKey) {
       verseElement.style.backgroundColor = color;
       verseElement.setAttribute("data-highlight", color);
       state.highlights[highlightKey] = color;
+      localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
     } else if (action === "clear") {
       verseElement.style.backgroundColor = "";
       verseElement.removeAttribute("data-highlight");
       delete state.highlights[highlightKey];
+      localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+    } else if (action === "copy") {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(formattedText).then(() => {
+          showToast("經文已複製到剪貼簿！");
+        }).catch(() => {
+          showToast("經文已複製");
+        });
+      } else {
+        showToast("經文： " + formattedText);
+      }
+    } else if (action === "share") {
+      if (navigator.share) {
+        navigator.share({
+          title: `${bookName} ${chapter}:${verseNum}`,
+          text: formattedText,
+          url: window.location.href
+        }).catch(() => {});
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(formattedText).then(() => {
+          showToast("經文已複製，可直接貼上分享！");
+        });
+      }
+    } else if (action === "close") {
+      toolbar.classList.remove("active");
+      toolbar.classList.add("hidden");
+      document.removeEventListener("click", documentClickHandler);
     }
-    
-    localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-    
-    toolbar.classList.remove("active");
-    toolbar.classList.add("hidden");
-    document.removeEventListener("click", documentClickHandler);
   };
 
-  toolbar.querySelectorAll(".toolbar-action").forEach(btn => {
+  toolbar.querySelectorAll("[data-action]").forEach(btn => {
     btn.onclick = actionHandler;
   });
 
-  const documentClickHandler = () => {
+  const documentClickHandler = (e) => {
+    if (toolbar.contains(e.target) || verseElement.contains(e.target)) return;
     toolbar.classList.remove("active");
     toolbar.classList.add("hidden");
     document.removeEventListener("click", documentClickHandler);
@@ -1052,7 +1078,7 @@ function showContextToolbar(verseElement, highlightKey) {
 
   setTimeout(() => {
     document.addEventListener("click", documentClickHandler);
-  }, 10);
+  }, 50);
 }
 
 window.openBibleVersionPicker = function() {

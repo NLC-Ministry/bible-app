@@ -12464,73 +12464,132 @@ select,
   outline-width: 3px !important;
 }
 
-/* Context Floating Toolbar for Verse Highlighter & Reader Start Selection */
+/* Sticky Bottom Context Action Bar for Verse Selection, Highlighter, Copy & Share */
 .context-toolbar {
-  position: absolute;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  position: fixed;
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  z-index: 990;
+  width: calc(100% - 2rem);
+  max-width: 480px;
   background: var(--bg-card, #1e293b);
   border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
-  border-radius: 9999px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  transform: translate(-50%, -125%);
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  pointer-events: none;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
   opacity: 0;
+  pointer-events: none;
+  padding: 0.75rem 1rem;
 }
 
 .context-toolbar.active {
-  display: flex !important;
+  display: block !important;
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
 
 .context-toolbar.hidden {
   display: none !important;
 }
 
-.context-toolbar .toolbar-action {
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+.context-toolbar .toolbar-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.context-toolbar .toolbar-action:hover {
-  transform: scale(1.18);
+.context-toolbar .toolbar-palette {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.context-toolbar .palette-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
 }
 
 .context-toolbar .color-dot {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
 }
 
-.context-toolbar .toolbar-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--border-card, rgba(255, 255, 255, 0.2));
-  margin: 0 0.1rem;
+.context-toolbar .color-dot:hover {
+  transform: scale(1.2);
 }
 
 .context-toolbar .clear-btn {
   width: 26px;
   height: 26px;
   border-radius: 50%;
+  border: none;
   background: rgba(255, 255, 255, 0.1);
   color: var(--text-secondary, #94a3b8);
-  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: auto;
 }
 
 .context-toolbar .clear-btn:hover {
   background: rgba(239, 68, 68, 0.2);
   color: #ef4444;
+}
+
+.context-toolbar .toolbar-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border-card, rgba(255, 255, 255, 0.1));
+}
+
+.context-toolbar .toolbar-action-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
+  background: var(--bg-surface, rgba(255, 255, 255, 0.05));
+  color: var(--text-primary, #f8fafc);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.context-toolbar .toolbar-action-pill:hover {
+  background: var(--color-brand-subtle, rgba(4, 169, 210, 0.15));
+  color: var(--color-brand, #04A9D2);
+}
+
+.context-toolbar .toolbar-action-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.context-toolbar .toolbar-action-close:hover {
+  color: var(--text-primary, #ffffff);
 }
 
 /* Bible Verse Selection & Highlighter Separation */
