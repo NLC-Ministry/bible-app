@@ -25,8 +25,9 @@ describe("issue_reports submission authorization (nlc-data)", () => {
     expect(edge).toContain("copy.user_id = profileId;");
   });
 
-  it("keeps reads of issue_reports admin-only (regression guard)", () => {
-    expect(edge).toMatch(/canRead = action === "select" && \([^\n]*table === "issue_reports" && isAdmin\(profile\)/);
+  it("allows admins to read all reports and members to read their own reports", () => {
+    expect(edge).toContain('table === "issue_reports"');
+    expect(edge).toContain("canReportOwnSelect");
   });
 
   it("keeps issue_reports out of the generic member-write and admin-write Sets", () => {

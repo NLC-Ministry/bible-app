@@ -459,7 +459,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "role_assignment_managed_by_member_hub" }, 403);
     }
     const canReportInsert = action === "insert" && table === "issue_reports";
-    const canRead = action === "select" && (READ_TABLES.has(table) || (table === "issue_reports" && isAdmin(profile)));
+    const canReportOwnSelect = action === "select" && table === "issue_reports" && (
+      isAdmin(profile) || (
+        Array.isArray(body.filters) && body.filters.some((f: any) => f.column === "user_id" && f.value === profile.id)
+      )
+    );
+    const canRead = action === "select" && (READ_TABLES.has(table) || canReportOwnSelect);
     const canOwnWrite = (["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table)) || canReportInsert;
     const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && isAdmin(profile);
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);

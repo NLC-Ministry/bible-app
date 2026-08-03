@@ -216,6 +216,73 @@ export class ReportPipeline {
   }
 }
 
+export class FetchMyReportsPipeline {
+  static async execute(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+      const state = (window as any).state;
+      const currentUser = state?.currentUser;
+      if (!currentUser?.id) {
+        return { success: true, data: [] };
+      }
+
+      const supabase = state?.supabase;
+      const cfg = state?.supabaseConfig || {};
+      const supabaseUrl = cfg.url || "";
+      const supabaseAnonKey = cfg.anonKey || "";
+
+      let accessToken = "";
+      if (supabase && typeof supabase.auth?.getSession === "function") {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) accessToken = session.access_token;
+      }
+      if (!accessToken && (window as any).auth && typeof (window as any).auth.getValidAccessToken === "function") {
+        accessToken = await (window as any).auth.getValidAccessToken();
+      }
+
+      if (accessToken && supabaseUrl) {
+        const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
+        const response = await fetch(functionUrl, {
+          method: "POST",
+          headers: {
+            "apikey": supabaseAnonKey,
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            table: "issue_reports",
+            action: "select",
+            select: "id, created_at, category, description, status, metadata",
+            filters: [{ type: "eq", column: "user_id", value: currentUser.id }],
+            order: { column: "created_at", ascending: false }
+          })
+        });
+
+        if (response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          return { success: true, data: payload.data || [] };
+        }
+      }
+
+      if (supabase && typeof supabase.from === "function") {
+        const { data, error } = await supabase
+          .from("issue_reports")
+          .select("id, created_at, category, description, status, metadata")
+          .eq("user_id", currentUser.id)
+          .order("created_at", { ascending: false });
+
+        if (!error) {
+          return { success: true, data: data || [] };
+        }
+      }
+
+      return { success: true, data: [] };
+    } catch (err: any) {
+      console.error("[IssueReport] Fetch my reports error:", err);
+      return { success: false, error: err.message || "讀取歷史回報失敗" };
+    }
+  }
+}
+
 /**
  * Initialize offline sync trigger when network goes online
  */

@@ -6,6 +6,7 @@ import { initOfflineReportSync } from "./IssueReportBlocks.ts";
 
 export const IssueReportFab: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
+  const [defaultTab, setDefaultTab] = React.useState<"form" | "my-reports">("form");
 
   // Initialize offline sync on component mount
   React.useEffect(() => {
@@ -14,8 +15,8 @@ export const IssueReportFab: React.FC = () => {
 
   return (
     <>
-      <SupportFab isOpen={isOpen} onClick={() => setIsOpen(true)} />
-      <ReportDrawer isOpen={isOpen} onClose={() => setIsOpen(false)} />
+      <SupportFab isOpen={isOpen} onClick={() => { setDefaultTab("form"); setIsOpen(true); }} />
+      <ReportDrawer isOpen={isOpen} onClose={() => setIsOpen(false)} defaultTab={defaultTab} />
     </>
   );
 };
