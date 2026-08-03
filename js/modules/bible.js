@@ -963,6 +963,7 @@ function setReaderStartSelection(verseElement) {
 }
 function renderVersesList(container, verses, bookName, chapter) {
   container.innerHTML = "";
+  const chapterId = `${state.readerState?.bookId || "GEN"}_${chapter}`;
   verses.forEach(v => {
     const verseDiv = document.createElement("div");
     verseDiv.className = "bible-verse";
@@ -974,7 +975,6 @@ function renderVersesList(container, verses, bookName, chapter) {
     verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選為朗讀起點`);
 
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
-    const chapterId = `${state.readerState?.bookId || "GEN"}_${chapter}`;
     if (state.highlights[highlightKey]) {
       verseDiv.style.backgroundColor = state.highlights[highlightKey];
       verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
