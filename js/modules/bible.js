@@ -988,17 +988,19 @@ function renderVersesList(container, verses, bookName, chapter) {
       .then(({ data, error }) => {
         if (!error && data && data.length > 0) {
           data.forEach(hl => {
-            const match = hl.id.match(/^hl_(.+?)_[^_]+$/);
-            if (match && match[1]) {
-              const key = match[1];
-              state.highlights[key] = hl.color;
-              const parts = key.split('_');
-              const verseNum = parts[parts.length - 1];
-              const verseDiv = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
-              if (verseDiv) {
-                verseDiv.style.backgroundColor = hl.color;
-                verseDiv.setAttribute("data-highlight", hl.color);
-              }
+            // id 格式：hl_{highlightKey}_{userId}，userId 為 UUID（不含底線）
+            // 用 lastIndexOf 安全地切除尾部 _userId，保留完整 key
+            const withoutPrefix = hl.id.slice(3); // 移除開頭 "hl_"
+            const lastUnderscore = withoutPrefix.lastIndexOf("_");
+            if (lastUnderscore === -1) return;
+            const key = withoutPrefix.slice(0, lastUnderscore);
+            if (!key) return;
+            state.highlights[key] = hl.color;
+            const parts = key.split('_');
+            const verseNum = parts[parts.length - 1];
+            const verseEl = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
+            if (verseEl) {
+              verseEl.setAttribute("data-highlight", hl.color);
             }
           });
           localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
@@ -1088,11 +1090,17 @@ function openIntegratedSelectionBottomBar(options) {
       e.stopPropagation();
       const color = btn.getAttribute("data-color");
       if (verseDiv) {
-        verseDiv.style.backgroundColor = color;
         verseDiv.setAttribute("data-highlight", color);
       }
       state.highlights[highlightKey] = color;
       localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+
+      // 更新 bar 內各顏色圓點的 active 狀態，不關閉 bar
+      barDiv.querySelectorAll("[data-color]").forEach(b => {
+        const isActive = b.getAttribute("data-color") === color;
+        b.classList.toggle("is-active", isActive);
+        b.setAttribute("aria-pressed", String(isActive));
+      });
 
       // Sync to Supabase Cloud if available
       if (state.supabase && typeof state.supabase.from === "function") {
@@ -1109,9 +1117,6 @@ function openIntegratedSelectionBottomBar(options) {
           }]);
         } catch (_err) {}
       }
-
-      showToast("已完成螢光筆劃線標註！");
-      closeBar();
     };
   });
 
