@@ -591,6 +591,107 @@ const auth = {
     } catch (err) {
       return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", err);
     } finally {
+      this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
+    }
+  },
+
+  async login(options = {}) {
+    return this.startInteractiveLogin(options);
+  },
+
+  async continueFromContinuation(continuation) {
+    await this.startInteractiveLogin(continuation);
+  },
+
+  async maybeResumeInteractiveAuthFromBridge() {
+    const continuation = parseContinuationFromSearchParams(window.location.search);
+    if (!continuation) return false;
+
+    const continuationFromLocation = continuation;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("code") || urlParams.has("state") || urlParams.has("error")) {
+      return false;
+    }
+
+    if (!continuation) return false;
+    const environment = detectAuthenticationEnvironment();
+    if (shouldGateInteractiveAuth(environment, { authEnvironmentAcknowledged: false })) {
+      this.showEmbeddedBrowserAuthDialog(environment, continuationFromLocation);
+      return false;
+    }
+
+    return this.startInteractiveLogin(continuationFromLocation);
+  },
+
+  async handleCallback() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get("code");
+    const stateVal = urlParams.get("state");
+    const authError = urlParams.get("error");
+    const authErrorDescription = urlParams.get("error_description");
+
+    if (authError) {
+      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
+    }
+
+    if (!code && !stateVal) return false;
+    if (!code || !stateVal) return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u8cc7\u6599\u4e0d\u5b8c\u6574\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { code: !!code, state: !!stateVal });
+
+    const savedState = this._getFlowItem(this.keys.state);
+    if (!savedState || savedState !== stateVal) {
+      return this._failCallback("\u767b\u5165\u9a57\u8b49\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { savedState: !!savedState, callbackState: !!stateVal });
+    }
+
+    const verifier = this._getFlowItem(this.keys.verifier);
+    if (!verifier) return this._failCallback("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+
+    const nonce = this._getFlowItem(this.keys.nonce);
+    if (!nonce) return this._failCallback("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+
+    loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");
+    try {
+      const redirectUri = this._getRedirectUri();
+      const endpoints = await this._getEndpoints();
+      const tokenParams = {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        client_id: this.config.clientId,
+        code_verifier: verifier
+      };
+      if (this.config.platformResource) {
+        tokenParams.resource = this.config.platformResource;
+      }
+
+      const response = await fetch(endpoints.tokenEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(tokenParams)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}${errorText ? " - " + errorText : ""}`);
+      }
+
+      const data = await response.json();
+      const idPayload = this._parseJwt(data.id_token || "");
+      if (!idPayload || idPayload.nonce !== nonce) {
+        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", {
+          missingIdToken: !data.id_token,
+          expectedNonce: !!nonce,
+          hasPayload: !!idPayload
+        });
+      }
+
+      this._saveTokens(data);
+      this._cleanCallbackUrl();
+      this._applyTokenProfileFallback();
+      this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
+      return true;
+    } catch (err) {
+      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", err);
+    } finally {
       this._clearFlowState();
       loader.hide();
     }
@@ -606,41 +707,55 @@ const auth = {
     }
   },
 
+  _refreshPromise: null,
+
   async refreshTokens() {
-    const refreshToken = localStorage.getItem(this.keys.refreshToken);
-    if (!refreshToken) return false;
+    if (this._refreshPromise) {
+      return this._refreshPromise;
+    }
+
+    this._refreshPromise = (async () => {
+      const refreshToken = localStorage.getItem(this.keys.refreshToken);
+      if (!refreshToken) return false;
+
+      try {
+        const endpoints = await this._getEndpoints();
+        const refreshParams = new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+          client_id: this.config.clientId
+        });
+        if (this.config.platformResource) {
+          refreshParams.set("resource", this.config.platformResource);
+        }
+        if (this.config.scopes) {
+          refreshParams.set("scope", this.config.scopes);
+        }
+
+        const response = await fetch(endpoints.tokenEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: refreshParams
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          throw new Error(`OIDC refresh failed: ${response.status}${errorText ? " - " + errorText : ""}`);
+        }
+
+        this._saveTokens(await response.json());
+        return true;
+      } catch (err) {
+        console.error("Logto token refresh error:", err);
+        this._clearStoredTokens();
+        return false;
+      }
+    })();
 
     try {
-      const endpoints = await this._getEndpoints();
-      const refreshParams = new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: this.config.clientId
-      });
-      if (this.config.platformResource) {
-        refreshParams.set("resource", this.config.platformResource);
-      }
-      if (this.config.scopes) {
-        refreshParams.set("scope", this.config.scopes);
-      }
-
-      const response = await fetch(endpoints.tokenEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: refreshParams
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(`OIDC refresh failed: ${response.status}${errorText ? " - " + errorText : ""}`);
-      }
-
-      this._saveTokens(await response.json());
-      return true;
-    } catch (err) {
-      console.error("Logto token refresh error:", err);
-      this._clearStoredTokens();
-      return false;
+      return await this._refreshPromise;
+    } finally {
+      this._refreshPromise = null;
     }
   },
 
@@ -667,12 +782,12 @@ const auth = {
       if (!refreshed) {
         this._clearStoredTokens();
         this._resetAppAuthState();
-        throw new Error("\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+        throw new Error("登入狀態已失效，請重新登入。");
       }
     }
 
     const nextToken = localStorage.getItem(this.keys.accessToken);
-    if (!nextToken) throw new Error("\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+    if (!nextToken) throw new Error("登入狀態已失效，請重新登入。");
     if (this.config.platformResource && nextToken.split(".").length !== 3) {
       console.warn(
         "Logto access token is not a JWT. Platform API requires resource=",

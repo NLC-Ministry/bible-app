@@ -309,10 +309,19 @@ const db = {
 
           // Sync Logto login through the Edge Function so Supabase RLS can resolve profiles.
           if (auth.isLoggedIn()) {
-            const sessionSync = await this.syncNlcSessionWithSupabase(true);
-            this.updateAuthUI({ user: { id: state.currentProfileId || auth.getLogtoSubject() } });
+            let sessionSync = null;
+            try {
+              sessionSync = await this.syncNlcSessionWithSupabase(true);
+            } catch (syncErr) {
+              console.warn("⚠️ NLC session sync warning, applying local token profile fallback:", syncErr);
+              if (typeof auth._applyTokenProfileFallback === "function") {
+                auth._applyTokenProfileFallback();
+              }
+            }
+            const userId = state.currentProfileId || (typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null);
+            this.updateAuthUI({ user: { id: userId || "authenticated-user" } });
             this.refreshRoleDependentUI();
-            return Boolean(sessionSync?.edge_session && state.currentProfileId); // loadUserData() will be called in main.js
+            return Boolean(userId || (sessionSync && sessionSync.edge_session));
           }
         }
 
