@@ -12798,12 +12798,10 @@ select,
   transform: scale(1.18);
 }
 
-.youversion-action-bar .yv-dot-yellow { background-color: #facc15; }
-.youversion-action-bar .yv-dot-cyan { background-color: #38bdf8; }
-.youversion-action-bar .yv-dot-green { background-color: #4ade80; }
-.youversion-action-bar .yv-dot-dual {
-  background: linear-gradient(135deg, #fbcfe8 50%, #fed7aa 50%);
-}
+.youversion-action-bar .yv-dot-yellow { background-color: var(--hl-yellow, #fef08a); }
+.youversion-action-bar .yv-dot-cyan { background-color: var(--hl-blue, #a5f3fc); }
+.youversion-action-bar .yv-dot-green { background-color: var(--hl-green, #bbf7d0); }
+.youversion-action-bar .yv-dot-dual { background-color: var(--hl-orange, #fed7aa); }
 
 .youversion-action-bar .yv-action-group {
   display: flex;

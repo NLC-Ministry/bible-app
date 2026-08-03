@@ -1,31 +1,68 @@
 import React, { useState } from "react";
-import { Play, Bookmark, Notebook, Copy, Share2, ChevronUp } from "lucide-react";
-import { HighlightApiBlock, HIGHLIGHT_COLORS, applySafeHighlightToRange } from "../../lib/blocks/highlight-api.ts";
+import { Play, Bookmark, Notebook, Copy, Share2 } from "lucide-react";
+import { HighlightApiBlock, applySafeHighlightToRange } from "../../lib/blocks/highlight-api.ts";
 
 export interface SelectionBottomBarProps {
   selectedText: string;
-  range: Range | null;
+  range?: Range | null;
   chapterId?: string;
   verseNum?: number;
-  onClose: () => void;
+  onClose?: () => void;
   onToast?: (message: string) => void;
   onPlay?: (verseNum?: number) => void;
+  onColorSelect?: (colorHex: string) => void;
 }
+
+// 莫蘭迪/半透明柔和螢光色系 (Harmonized Morandi Palette)
+export const MORANDI_HIGHLIGHT_COLORS = {
+  yellow: "#fef08a", // 柔黃
+  blue: "#a5f3fc",   // 柔藍
+  green: "#bbf7d0",  // 柔綠
+  orange: "#fed7aa"  // 柔橘粉
+};
 
 export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
   selectedText,
-  range,
+  range = null,
   chapterId = "default",
   verseNum,
   onClose,
   onToast,
-  onPlay
+  onPlay,
+  onColorSelect
 }) => {
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
 
   if (!selectedText) return null;
+
+  const handleHighlight = async (colorHex: string) => {
+    setSelectedColor(colorHex);
+    setIsHighlighting(true);
+    onColorSelect?.(colorHex);
+
+    if (range) {
+      applySafeHighlightToRange(range, colorHex);
+    }
+
+    const state = (window as any).state;
+    const userId = state?.currentUser?.id || "guest";
+
+    await HighlightApiBlock.saveHighlight({
+      user_id: userId,
+      chapter_id: chapterId,
+      selected_text: selectedText,
+      start_offset: range?.startOffset || 0,
+      end_offset: range?.endOffset || selectedText.length,
+      color: colorHex
+    });
+
+    setIsHighlighting(false);
+    onToast?.("已套用柔和螢光標註");
+    onClose?.();
+  };
 
   const handlePlay = () => {
     if (onPlay) {
@@ -38,7 +75,7 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
         onToast?.("無法啟動朗讀播放");
       }
     }
-    onClose();
+    onClose?.();
   };
 
   const handleCopy = async () => {
@@ -55,7 +92,7 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
       }
 
       setCopied(true);
-      onToast?.("已複製選取經文！");
+      onToast?.("已複製選取內容");
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("[SelectionBar] Copy error:", err);
@@ -73,7 +110,7 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
         });
       } else {
         await handleCopy();
-        onToast?.("已複製選取內容，可直接貼上分享！");
+        onToast?.("已複製選取內容，可直接分享！");
       }
     } catch (err) {
       // User cancelled share dialog
@@ -82,141 +119,120 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
 
   const handleBookmark = () => {
     setBookmarked(!bookmarked);
-    onToast?.(bookmarked ? "已取消書籤儲存" : "已儲存至我的書籤！");
+    onToast?.(bookmarked ? "已取消書籤儲存" : "已儲存至我的書籤");
   };
 
   const handleNotes = () => {
     onToast?.("開啟靈修筆記...");
   };
 
-  const handleHighlight = async (color: string) => {
-    setIsHighlighting(true);
-
-    if (range) {
-      applySafeHighlightToRange(range, color);
-    }
-
-    const state = (window as any).state;
-    const userId = state?.currentUser?.id || "guest";
-
-    await HighlightApiBlock.saveHighlight({
-      user_id: userId,
-      chapter_id: chapterId,
-      selected_text: selectedText,
-      start_offset: range?.startOffset || 0,
-      end_offset: range?.endOffset || selectedText.length,
-      color
-    });
-
-    setIsHighlighting(false);
-    onToast?.("已完成標註！");
-    onClose();
-  };
-
   return (
     <div
       data-testid="selection-bottom-bar"
-      className="youversion-action-bar active animate-in slide-in-from-bottom-6 duration-300"
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[92vw] sm:max-w-md bg-background/80 backdrop-blur-md border border-white/10 shadow-2xl rounded-full px-3 py-2 flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom-6 duration-200 transition-all"
     >
-      {/* Drag Pill Handle */}
-      <div className="drag-pill" />
-
-      {/* Main Content Row */}
-      <div className="yv-content-row">
-        {/* Left Color Capsule */}
-        <div className="yv-color-capsule">
-          <button
-            type="button"
-            data-testid="color-yellow"
-            disabled={isHighlighting}
-            onClick={() => handleHighlight("#facc15")}
-            className="yv-dot yv-dot-yellow"
-            title="黃色標註"
-          />
-          <button
-            type="button"
-            data-testid="color-cyan"
-            disabled={isHighlighting}
-            onClick={() => handleHighlight("#38bdf8")}
-            className="yv-dot yv-dot-cyan"
-            title="亮青標註"
-          />
-          <button
-            type="button"
-            data-testid="color-green"
-            disabled={isHighlighting}
-            onClick={() => handleHighlight("#4ade80")}
-            className="yv-dot yv-dot-green"
-            title="綠色標註"
-          />
-          <button
-            type="button"
-            data-testid="color-dual"
-            disabled={isHighlighting}
-            onClick={() => handleHighlight(HIGHLIGHT_COLORS.pink)}
-            className="yv-dot yv-dot-dual"
-            title="雙色標註"
-          />
-        </div>
-
-        {/* Right Action Tiles */}
-        <div className="yv-action-group">
-          <button
-            type="button"
-            data-testid="btn-play"
-            onClick={handlePlay}
-            className="yv-tile"
-          >
-            <Play className="h-4 w-4 fill-primary text-primary" />
-            <span className="yv-tile-label">朗讀</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="btn-bookmark"
-            onClick={handleBookmark}
-            className="yv-tile"
-          >
-            <Bookmark className={`h-4 w-4 ${bookmarked ? "fill-amber-400 text-amber-400" : ""}`} />
-            <span className="yv-tile-label">儲存</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="btn-notes"
-            onClick={handleNotes}
-            className="yv-tile"
-          >
-            <Notebook className="h-4 w-4" />
-            <span className="yv-tile-label">筆記</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="btn-copy"
-            onClick={handleCopy}
-            className="yv-tile"
-          >
-            <Copy className={`h-4 w-4 ${copied ? "text-emerald-400" : ""}`} />
-            <span className="yv-tile-label">{copied ? "已複製" : "複製"}</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="btn-share"
-            onClick={handleShare}
-            className="yv-tile"
-          >
-            <Share2 className="h-4 w-4" />
-            <span className="yv-tile-label">分享</span>
-          </button>
-        </div>
+      {/* 柔和螢光色塊 Swatches */}
+      <div className="flex items-center gap-1.5 px-1">
+        <button
+          type="button"
+          data-testid="color-yellow"
+          disabled={isHighlighting}
+          onClick={() => handleHighlight(MORANDI_HIGHLIGHT_COLORS.yellow)}
+          style={{ backgroundColor: MORANDI_HIGHLIGHT_COLORS.yellow }}
+          className={`h-6 w-6 rounded-full border border-black/10 transition-transform hover:scale-115 active:scale-95 ${
+            selectedColor === MORANDI_HIGHLIGHT_COLORS.yellow ? "ring-2 ring-primary ring-offset-2" : ""
+          }`}
+          title="柔黃標註"
+        />
+        <button
+          type="button"
+          data-testid="color-blue"
+          disabled={isHighlighting}
+          onClick={() => handleHighlight(MORANDI_HIGHLIGHT_COLORS.blue)}
+          style={{ backgroundColor: MORANDI_HIGHLIGHT_COLORS.blue }}
+          className={`h-6 w-6 rounded-full border border-black/10 transition-transform hover:scale-115 active:scale-95 ${
+            selectedColor === MORANDI_HIGHLIGHT_COLORS.blue ? "ring-2 ring-primary ring-offset-2" : ""
+          }`}
+          title="柔藍標註"
+        />
+        <button
+          type="button"
+          data-testid="color-green"
+          disabled={isHighlighting}
+          onClick={() => handleHighlight(MORANDI_HIGHLIGHT_COLORS.green)}
+          style={{ backgroundColor: MORANDI_HIGHLIGHT_COLORS.green }}
+          className={`h-6 w-6 rounded-full border border-black/10 transition-transform hover:scale-115 active:scale-95 ${
+            selectedColor === MORANDI_HIGHLIGHT_COLORS.green ? "ring-2 ring-primary ring-offset-2" : ""
+          }`}
+          title="柔綠標註"
+        />
+        <button
+          type="button"
+          data-testid="color-orange"
+          disabled={isHighlighting}
+          onClick={() => handleHighlight(MORANDI_HIGHLIGHT_COLORS.orange)}
+          style={{ backgroundColor: MORANDI_HIGHLIGHT_COLORS.orange }}
+          className={`h-6 w-6 rounded-full border border-black/10 transition-transform hover:scale-115 active:scale-95 ${
+            selectedColor === MORANDI_HIGHLIGHT_COLORS.orange ? "ring-2 ring-primary ring-offset-2" : ""
+          }`}
+          title="柔橘粉標註"
+        />
       </div>
 
-      {/* Bottom Swipe Hint */}
-      <div className="yv-swipe-hint flex items-center justify-center gap-1" onClick={onClose}>
-        <ChevronUp className="h-3 w-3" />
-        <span>向上滑動查看更多</span>
+      {/* 垂直分隔線 Divider */}
+      <div className="h-5 w-[1px] bg-border/50 shrink-0 mx-0.5" />
+
+      {/* 輕量 Ghost Button 功能選單 */}
+      <div className="flex items-center gap-0.5 sm:gap-1">
+        <button
+          type="button"
+          data-testid="btn-play"
+          onClick={handlePlay}
+          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+        >
+          <Play className="h-3.5 w-3.5 fill-primary text-primary mb-0.5" />
+          <span className="text-[10px] leading-none">朗讀</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="btn-bookmark"
+          onClick={handleBookmark}
+          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+        >
+          <Bookmark className={`h-3.5 w-3.5 mb-0.5 ${bookmarked ? "fill-amber-400 text-amber-400" : ""}`} />
+          <span className="text-[10px] leading-none">儲存</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="btn-notes"
+          onClick={handleNotes}
+          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+        >
+          <Notebook className="h-3.5 w-3.5 mb-0.5" />
+          <span className="text-[10px] leading-none">筆記</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="btn-copy"
+          onClick={handleCopy}
+          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+        >
+          <Copy className={`h-3.5 w-3.5 mb-0.5 ${copied ? "text-emerald-400" : ""}`} />
+          <span className="text-[10px] leading-none">{copied ? "已複製" : "複製"}</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="btn-share"
+          onClick={handleShare}
+          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+        >
+          <Share2 className="h-3.5 w-3.5 mb-0.5" />
+          <span className="text-[10px] leading-none">分享</span>
+        </button>
       </div>
     </div>
   );

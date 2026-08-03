@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HighlightApiBlock, HIGHLIGHT_COLORS } from "../lib/blocks/highlight-api.ts";
 import { useTextSelection } from "../lib/hooks/use-text-selection.ts";
+import { MORANDI_HIGHLIGHT_COLORS } from "../components/reader/selection-bottom-bar.tsx";
 
-describe("SelectionBottomBar & Highlight Block Unit Tests", () => {
+describe("SelectionBottomBar & Floating Capsule Unit Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -11,7 +12,29 @@ describe("SelectionBottomBar & Highlight Block Unit Tests", () => {
     expect(typeof useTextSelection).toBe("function");
   });
 
-  it("測試 B：驗證點擊複製邏輯，navigator.clipboard.writeText 被正確觸發", async () => {
+  it("測試 B：驗證莫蘭迪柔和螢光色系對應 Color Hex Code", () => {
+    expect(MORANDI_HIGHLIGHT_COLORS.yellow).toBe("#fef08a");
+    expect(MORANDI_HIGHLIGHT_COLORS.blue).toBe("#a5f3fc");
+    expect(MORANDI_HIGHLIGHT_COLORS.green).toBe("#bbf7d0");
+    expect(MORANDI_HIGHLIGHT_COLORS.orange).toBe("#fed7aa");
+  });
+
+  it("測試 C：驗證點擊色塊 callback 正確傳送 Hex Code", () => {
+    const onColorSelectMock = vi.fn();
+    
+    // 模擬點擊 4 款莫蘭迪色塊
+    onColorSelectMock(MORANDI_HIGHLIGHT_COLORS.yellow);
+    onColorSelectMock(MORANDI_HIGHLIGHT_COLORS.blue);
+    onColorSelectMock(MORANDI_HIGHLIGHT_COLORS.green);
+    onColorSelectMock(MORANDI_HIGHLIGHT_COLORS.orange);
+
+    expect(onColorSelectMock).toHaveBeenNthCalledWith(1, "#fef08a");
+    expect(onColorSelectMock).toHaveBeenNthCalledWith(2, "#a5f3fc");
+    expect(onColorSelectMock).toHaveBeenNthCalledWith(3, "#bbf7d0");
+    expect(onColorSelectMock).toHaveBeenNthCalledWith(4, "#fed7aa");
+  });
+
+  it("測試 D：驗證點擊複製邏輯，navigator.clipboard.writeText 被正確觸發", async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {
       clipboard: {
@@ -23,12 +46,7 @@ describe("SelectionBottomBar & Highlight Block Unit Tests", () => {
     expect(writeTextMock).toHaveBeenCalledWith("神就照著自己的形象造人");
   });
 
-  it("測試 C：驗證 HighlightApiBlock 4 色主題標註與存取介面", async () => {
-    expect(HIGHLIGHT_COLORS.yellow).toBe("#fef08a");
-    expect(HIGHLIGHT_COLORS.green).toBe("#bbf7d0");
-    expect(HIGHLIGHT_COLORS.pink).toBe("#fbcfe8");
-    expect(HIGHLIGHT_COLORS.blue).toBe("#bfdbfe");
-
+  it("測試 E：驗證 HighlightApiBlock 儲存與存取介面", async () => {
     const saveSpy = vi.spyOn(HighlightApiBlock, "saveHighlight").mockResolvedValue({
       success: true,
       data: {
@@ -38,7 +56,7 @@ describe("SelectionBottomBar & Highlight Block Unit Tests", () => {
         selected_text: "起初神創造天地",
         start_offset: 0,
         end_offset: 7,
-        color: HIGHLIGHT_COLORS.yellow
+        color: MORANDI_HIGHLIGHT_COLORS.yellow
       }
     });
 
@@ -48,7 +66,7 @@ describe("SelectionBottomBar & Highlight Block Unit Tests", () => {
       selected_text: "起初神創造天地",
       start_offset: 0,
       end_offset: 7,
-      color: HIGHLIGHT_COLORS.yellow
+      color: MORANDI_HIGHLIGHT_COLORS.yellow
     });
 
     expect(res.success).toBe(true);

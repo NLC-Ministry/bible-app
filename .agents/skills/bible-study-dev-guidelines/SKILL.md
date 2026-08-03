@@ -54,11 +54,11 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 * **深色模式對比度與 Modal 按鈕規範 (Dark Theme Contrast & Modals)**：
   - 彈窗 Modal (如 `#bible-version-picker-modal`) 在 Dark Theme 下，按鈕預設背景**嚴禁為純白全顯狀態 (`background: #fff`)**。
   - 應繼承主題變數 `background: var(--bg-surface, rgba(255, 255, 255, 0.05)) !important` 與 `color: var(--text-primary, #f8fafc) !important`，確保白字高清可讀、無白底融化文字狀況。
-* **YouVersion 奢華風格浮動操作欄與朗讀起點統一 (YouVersion Action Bar & Play Start-Point)**：
-  - 參考 YouVersion 最新 UI/UX：採用深黑玻璃懸浮卡片 (`rgba(24, 24, 28, 0.94)`, `border-radius: 24px`, `backdrop-filter: blur(24px)`)。
-  - **點擊即朗讀起點 (Click to Set Reader Start-Point)**：點擊經文或選取文字時，自動判定並設定該節為朗讀起點 (`selectedVerseNum`)，並呈現高亮與 YouVersion 浮動 Action Bar。
-  - Action Bar 第一顆按鈕整合 **▶️ 朗讀 (Play)**，點擊即可直接從該選中節啟動播報。
-  - **統一選取取消 (Unified Deselect)**：監聽 `selectionchange` 或關閉按鈕，取消選取時 Action Bar 與朗讀起點標記 100% 同步優雅關閉。
+* **極致高質感懸浮毛玻璃膠囊列 (Floating Capsule Selection Bar)**：
+  - **Shadcn / Glassmorphism Container**：極簡圓角膠囊形狀 (`rounded-full`)，懸浮於螢幕底部 16px 處，樣式 `bg-background/80 backdrop-blur-md border border-white/10 shadow-2xl`。
+  - **莫蘭迪柔和螢光色調 (Morandi Swatches)**：採用 **柔黃 (`#fef08a`)、柔藍 (`#a5f3fc`)、柔綠 (`#bbf7d0`)、柔橘粉 (`#fed7aa`)** 莫蘭迪半透明柔和色系，選中帶有 `ring-2 ring-primary ring-offset-2` 外環。
+  - **Cascader & Divided Actions**：中間配置優雅垂直分隔線 (`h-5 w-[1px] bg-border/50`)，右側功能鍵採用極輕量 **Ghost Button** 風格（▶️ 朗讀 | 🔖 儲存 | 📝 筆記 | 📋 複製 | 📤 分享）。
+  - **流暢動畫與安全防護**：Framer Motion / Tailwind 動畫 (`y: 100` -> `y: 0`)，取消選取時平滑隱藏。
 * **安靜自動打卡 (Silent Auto-Read)**：
   - 滑到底部自動已讀時，保持靜默打卡，不彈出干擾閱讀視覺的 Toast 與確認彈窗對話框。
 * **記憶體與 UI 即時同步 (Instant State Reactivity)**：
