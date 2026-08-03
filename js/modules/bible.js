@@ -979,46 +979,6 @@ function renderVersesList(container, verses, bookName, chapter) {
     container.appendChild(verseDiv);
   });
 
-  // Fetch and sync highlights from Supabase Cloud asynchronously
-  if (state.supabase && typeof state.supabase.from === "function") {
-    const currentUserId = state.currentUser?.id;
-    if (currentUserId && currentUserId !== "guest") {
-      state.supabase
-        .from("highlights")
-        .select("*")
-        .eq("chapter_id", chapterId)
-        .eq("user_id", currentUserId)
-        .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            data.forEach(hl => {
-              // 安全防衛：再次確認 user_id 屬於自己，防止 RLS 未生效時的跨帳號污染
-              if (hl.user_id !== currentUserId) return;
-
-              // 從 id 解析 highlightKey：id 格式為 hl_{key}_{userId}
-              // userId 為 UUID（僅含連字號，不含底線），lastIndexOf 安全切割
-              const withoutPrefix = hl.id.slice(3); // 移除 "hl_"
-              const lastUnderscore = withoutPrefix.lastIndexOf("_");
-              if (lastUnderscore === -1) return;
-              const key = withoutPrefix.slice(0, lastUnderscore);
-              if (!key) return;
-
-              // 確認解析出的 key 確實屬於本章節（防止格式異常的舊資料污染）
-              const parts = key.split("_");
-              if (parts.length < 3) return; // 最少需要 書名_章_節
-              const verseNum = parts[parts.length - 1];
-              if (!verseNum || isNaN(Number(verseNum))) return;
-
-              state.highlights[key] = hl.color;
-              const verseEl = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
-              if (verseEl) {
-                verseEl.setAttribute("data-highlight", hl.color);
-              }
-            });
-            localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-          }
-        });
-    }
-  }
 
   const sentinel = document.createElement("div");
   sentinel.id = "reader-end-sentinel";
@@ -1098,7 +1058,7 @@ function openIntegratedSelectionBottomBar(options) {
   };
 
   barDiv.querySelectorAll("[data-color]").forEach(btn => {
-    btn.onclick = async (e) => {
+    btn.onclick = (e) => {
       e.stopPropagation();
       const color = btn.getAttribute("data-color");
       if (verseDiv) {
@@ -1113,22 +1073,6 @@ function openIntegratedSelectionBottomBar(options) {
         b.classList.toggle("is-active", isActive);
         b.setAttribute("aria-pressed", String(isActive));
       });
-
-      // Sync to Supabase Cloud if available
-      if (state.supabase && typeof state.supabase.from === "function") {
-        const userId = state.currentUser?.id || "guest";
-        try {
-          await state.supabase.from("highlights").upsert([{
-            id: `hl_${highlightKey}_${userId}`,
-            user_id: userId,
-            chapter_id: chapterId,
-            selected_text: selectedText,
-            start_offset: 0,
-            end_offset: selectedText.length,
-            color: color
-          }]);
-        } catch (_err) {}
-      }
     };
   });
 
@@ -1154,12 +1098,6 @@ function openIntegratedSelectionBottomBar(options) {
       b.classList.remove("is-active");
       b.setAttribute("aria-pressed", "false");
     });
-
-    // Delete sync from Supabase Cloud if available
-    if (state.supabase && typeof state.supabase.from === "function") {
-      const userId = state.currentUser?.id || "guest";
-      state.supabase.from("highlights").delete().eq("id", `hl_${highlightKey}_${userId}`).then(() => {});
-    }
   });
 
   barDiv.querySelector('[data-action="copy"]')?.addEventListener("click", (e) => {
