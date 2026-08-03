@@ -467,22 +467,27 @@ export function updateDashboardView() {
   scheduleDashboardSecondaryWork();
 }
 
-async function renderPilgrimageTrail(customMembers = null) {
+async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
   const canvas = document.getElementById("pilgrimage-canvas");
   if (!canvas) return;
 
-  if (!state.activePlan || !state.activePlan.days || state.activePlan.days.length === 0) {
+  const targetPlan = customPlan || state.activePlan || (Array.isArray(state.activePlans) ? state.activePlans[0] : null) || (Array.isArray(state.globalPlans) ? state.globalPlans[0] : null);
+  const planDays = (targetPlan && Array.isArray(targetPlan.days) && targetPlan.days.length > 0)
+    ? targetPlan.days
+    : (typeof generatePlanObject === "function" ? (generatePlanObject(CHURCH_PLAN_PRESETS.church_stage_01 || {})?.days || []) : []);
+
+  if (planDays.length === 0) {
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
 
   const ctx = canvas.getContext("2d");
-  const currentRound = state.activePlan.currentRound || 1;
+  const currentRound = (targetPlan && targetPlan.currentRound) || 1;
 
   const planChapters = [];
   let lastBook = null;
-  state.activePlan.days.forEach(day => {
-    if (!day.chapters) return;
+  planDays.forEach(day => {
+    if (!day || !day.chapters) return;
     day.chapters.forEach(ch => {
       const isBookStart = ch.book !== lastBook;
       planChapters.push({

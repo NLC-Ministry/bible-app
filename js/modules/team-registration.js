@@ -685,7 +685,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     setTimeout(() => {
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {
-        renderFn(members);
+        renderFn(members, plan);
       }
     }, 100);
     hydrate(container);
