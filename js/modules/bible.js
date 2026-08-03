@@ -1003,6 +1003,34 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     container.appendChild(verseDiv);
   });
+
+  // Fetch and sync highlights from Supabase Cloud asynchronously
+  if (state.supabase && typeof state.supabase.from === "function") {
+    state.supabase
+      .from("highlights")
+      .select("*")
+      .eq("chapter_id", chapterId)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          data.forEach(hl => {
+            const match = hl.id.match(/^hl_(.+?)_[^_]+$/);
+            if (match && match[1]) {
+              const key = match[1];
+              state.highlights[key] = hl.color;
+              const parts = key.split('_');
+              const verseNum = parts[parts.length - 1];
+              const verseDiv = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
+              if (verseDiv) {
+                verseDiv.style.backgroundColor = hl.color;
+                verseDiv.setAttribute("data-highlight", hl.color);
+              }
+            }
+          });
+          localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+        }
+      });
+  }
+
   const sentinel = document.createElement("div");
   sentinel.id = "reader-end-sentinel";
   sentinel.setAttribute("aria-hidden", "true");
@@ -1083,6 +1111,23 @@ function openIntegratedSelectionBottomBar(options) {
       }
       state.highlights[highlightKey] = color;
       localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+
+      // Sync to Supabase Cloud if available
+      if (state.supabase && typeof state.supabase.from === "function") {
+        const userId = state.currentUser?.id || "guest";
+        try {
+          await state.supabase.from("highlights").upsert([{
+            id: `hl_${highlightKey}_${userId}`,
+            user_id: userId,
+            chapter_id: chapterId,
+            selected_text: selectedText,
+            start_offset: 0,
+            end_offset: selectedText.length,
+            color: color
+          }]);
+        } catch (_err) {}
+      }
+
       showToast("已完成螢光筆劃線標註！");
       closeBar();
     };
@@ -1105,6 +1150,13 @@ function openIntegratedSelectionBottomBar(options) {
     }
     delete state.highlights[highlightKey];
     localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+
+    // Delete sync from Supabase Cloud if available
+    if (state.supabase && typeof state.supabase.from === "function") {
+      const userId = state.currentUser?.id || "guest";
+      state.supabase.from("highlights").delete().eq("id", `hl_${highlightKey}_${userId}`).then(() => {});
+    }
+
     showToast("已清除劃線標註");
     closeBar();
   });
