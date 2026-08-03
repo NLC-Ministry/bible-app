@@ -27,11 +27,12 @@ const READ_TABLES = new Set([
   "view_small_group_stats",
   "care_reminders",
   "app_feature_settings",
-  "role_definitions"
+  "role_definitions",
+  "highlights"
 ]);
-const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes"]);
+const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "highlights"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
-const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders"]);
+const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders", "highlights"]);
 const TEAM_RPC_FUNCTIONS = new Set([
   "get_my_reading_team",
   "get_reading_team_registration_overview",
@@ -214,7 +215,7 @@ function forceUserPayload(table: string, payload: any, profileId: string, action
   }
   // issue_reports is included so a member's report is always attributed to the
   // authenticated caller (server-authoritative user_id), never a client-supplied one.
-  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "issue_reports"];
+  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "issue_reports", "highlights"];
   if (writeProtected.includes(table)) {
     const rows = normalizeRows(payload).map(row => {
       const copy = { ...row };
