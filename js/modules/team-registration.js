@@ -686,7 +686,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {
         const enrichedMembers = members.map(m => {
-          const stats = typeof getMemberOverallPlanProgress === "function" ? getMemberOverallPlanProgress(m, plan, totalChapters) : null;
+          const stats = typeof getMemberOverallPlanProgress === "function" ? getMemberOverallPlanProgress(m, totalChapters) : null;
           const readCount = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? m.readChapters ?? 0);
           return {
             ...m,
