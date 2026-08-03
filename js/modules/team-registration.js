@@ -685,13 +685,32 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     setTimeout(() => {
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {
+        const memberNodes = container.querySelectorAll(".reading-team-member, .reading-team-member-roster__item");
+        const domProgressMap = {};
+        if (memberNodes && memberNodes.length > 0) {
+          memberNodes.forEach(node => {
+            const nameEl = node.querySelector(".reading-team-member__name, .reading-team-member-roster__name");
+            const statEl = node.querySelector(".reading-team-member__stat, .reading-team-member-roster__stat, .reading-team-member__meta");
+            if (nameEl && statEl) {
+              const nameText = (nameEl.textContent || "").trim();
+              const match = (statEl.textContent || "").match(/(\d+)\s*[\/|章]/);
+              if (nameText && match) {
+                domProgressMap[nameText] = parseInt(match[1], 10);
+              }
+            }
+          });
+        }
+
         const enrichedMembers = members.map(m => {
+          const memberName = m.name || m.displayName || (m.profile && m.profile.name) || "隊友";
+          const domCount = domProgressMap[memberName];
           const stats = typeof getMemberOverallPlanProgress === "function" ? getMemberOverallPlanProgress(m, plan, totalChapters) : null;
-          const chaptersRead = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? 0);
+          const calcCount = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? 0);
+          const finalChaptersRead = domCount !== undefined ? domCount : calcCount;
           return {
             ...m,
-            chapters_read: Number(chaptersRead || 0),
-            name: m.name || m.displayName || (m.profile && m.profile.name) || "隊友"
+            chapters_read: Number(finalChaptersRead || 0),
+            name: memberName
           };
         });
         renderFn(enrichedMembers, plan);
