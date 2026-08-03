@@ -57,7 +57,7 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 * **極致高質感懸浮毛玻璃膠囊列 (Floating Capsule Selection Bar)**：
   - **Shadcn / Glassmorphism Container**：極簡圓角膠囊形狀 (`rounded-full`)，懸浮於螢幕底部 16px 處，樣式 `bg-background/80 backdrop-blur-md border border-white/10 shadow-2xl`。
   - **莫蘭迪柔和螢光色調 (Morandi Swatches)**：採用 **柔黃 (`#fef08a`)、柔藍 (`#a5f3fc`)、柔綠 (`#bbf7d0`)、柔橘粉 (`#fed7aa`)** 莫蘭迪半透明柔和色系，選中帶有 `ring-2 ring-primary ring-offset-2` 外環。
-  - **Cascader & Divided Actions**：中間配置優雅垂直分隔線 (`h-5 w-[1px] bg-border/50`)，右側功能鍵採用極輕量 **Ghost Button** 風格（▶️ 朗讀 | 🔖 儲存 | 📝 筆記 | 📋 複製 | 📤 分享）。
+  - **Cascader & Divided Actions**：中間配置優雅垂直分隔線 (`h-5 w-[1px] bg-border/50`)，右側精簡聚焦 3 大 Ghost Button 核心功能（▶️ 朗讀 | 📋 複製 | 📤 分享），完全移除無用之儲存與筆記按鈕。
   - **流暢動畫與安全防護**：Framer Motion / Tailwind 動畫 (`y: 100` -> `y: 0`)，取消選取時平滑隱藏。
 * **安靜自動打卡 (Silent Auto-Read)**：
   - 滑到底部自動已讀時，保持靜默打卡，不彈出干擾閱讀視覺的 Toast 與確認彈窗對話框。

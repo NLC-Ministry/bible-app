@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Play, Bookmark, Notebook, Copy, Share2 } from "lucide-react";
+import { Play, Copy, Share2 } from "lucide-react";
 import { HighlightApiBlock, applySafeHighlightToRange } from "../../lib/blocks/highlight-api.ts";
 
 export interface SelectionBottomBarProps {
@@ -33,7 +33,6 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
 }) => {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
   const [isHighlighting, setIsHighlighting] = useState(false);
 
   if (!selectedText) return null;
@@ -117,15 +116,6 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
     }
   };
 
-  const handleBookmark = () => {
-    setBookmarked(!bookmarked);
-    onToast?.(bookmarked ? "已取消書籤儲存" : "已儲存至我的書籤");
-  };
-
-  const handleNotes = () => {
-    onToast?.("開啟靈修筆記...");
-  };
-
   return (
     <div
       data-testid="selection-bottom-bar"
@@ -182,13 +172,13 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
       {/* 垂直分隔線 Divider */}
       <div className="h-5 w-[1px] bg-border/50 shrink-0 mx-0.5" />
 
-      {/* 輕量 Ghost Button 功能選單 */}
+      {/* 輕量 3 大核心 Ghost Button 功能選單：朗讀、複製、分享 */}
       <div className="flex items-center gap-0.5 sm:gap-1">
         <button
           type="button"
           data-testid="btn-play"
           onClick={handlePlay}
-          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+          className="flex flex-col items-center justify-center h-9 px-2.5 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
         >
           <Play className="h-3.5 w-3.5 fill-primary text-primary mb-0.5" />
           <span className="text-[10px] leading-none">朗讀</span>
@@ -196,29 +186,9 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
 
         <button
           type="button"
-          data-testid="btn-bookmark"
-          onClick={handleBookmark}
-          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
-        >
-          <Bookmark className={`h-3.5 w-3.5 mb-0.5 ${bookmarked ? "fill-amber-400 text-amber-400" : ""}`} />
-          <span className="text-[10px] leading-none">儲存</span>
-        </button>
-
-        <button
-          type="button"
-          data-testid="btn-notes"
-          onClick={handleNotes}
-          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
-        >
-          <Notebook className="h-3.5 w-3.5 mb-0.5" />
-          <span className="text-[10px] leading-none">筆記</span>
-        </button>
-
-        <button
-          type="button"
           data-testid="btn-copy"
           onClick={handleCopy}
-          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+          className="flex flex-col items-center justify-center h-9 px-2.5 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
         >
           <Copy className={`h-3.5 w-3.5 mb-0.5 ${copied ? "text-emerald-400" : ""}`} />
           <span className="text-[10px] leading-none">{copied ? "已複製" : "複製"}</span>
@@ -228,7 +198,7 @@ export const SelectionBottomBar: React.FC<SelectionBottomBarProps> = ({
           type="button"
           data-testid="btn-share"
           onClick={handleShare}
-          className="flex flex-col items-center justify-center h-9 px-2 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+          className="flex flex-col items-center justify-center h-9 px-2.5 text-xs font-medium text-foreground/80 hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
         >
           <Share2 className="h-3.5 w-3.5 mb-0.5" />
           <span className="text-[10px] leading-none">分享</span>

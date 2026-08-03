@@ -1038,14 +1038,6 @@ function openIntegratedSelectionBottomBar(options) {
             <span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span>
             <span class="yv-tile-label">朗讀</span>
           </button>
-          <button type="button" class="yv-tile" data-action="bookmark">
-            <span class="nlc-icon" data-icon="bookmark" aria-hidden="true"></span>
-            <span class="yv-tile-label">儲存</span>
-          </button>
-          <button type="button" class="yv-tile" data-action="notes">
-            <span class="nlc-icon" data-icon="edit" aria-hidden="true"></span>
-            <span class="yv-tile-label">筆記</span>
-          </button>
           <button type="button" class="yv-tile" data-action="copy">
             <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
             <span class="yv-tile-label">複製</span>
@@ -1107,18 +1099,6 @@ function openIntegratedSelectionBottomBar(options) {
     if (typeof window.toggleReaderAudio === "function") {
       window.toggleReaderAudio(verseNum);
     }
-  });
-
-  barDiv.querySelector('[data-action="bookmark"]')?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    showToast("已儲存經文至我的書籤！");
-    closeBar();
-  });
-
-  barDiv.querySelector('[data-action="notes"]')?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    showToast("開啟靈修筆記...");
-    closeBar();
   });
 
   barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
