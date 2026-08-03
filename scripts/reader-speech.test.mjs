@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolveReaderStartIndex, selectPreferredChineseVoice } from "../js/modules/reader-speech.mjs";
+import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice } from "../js/modules/reader-speech.mjs";
 
 const bible = readFileSync("js/modules/bible.js", "utf8");
 const css = readFileSync("index.css", "utf8");
@@ -22,6 +22,11 @@ describe("reader speech controls", () => {
     expect(selectPreferredChineseVoice(voices)?.name).toContain("HsiaoChen");
   });
 
+  it("uses calmer reader speech rates for natural listening", () => {
+    expect(getReaderSpeechRate("zh-TW")).toBe(0.82);
+    expect(getReaderSpeechRate("en-US")).toBe(0.88);
+  });
+
   it("uses a dedicated one-click selection and a stop-first audio toggle", () => {
     expect(bible).toContain("setReaderStartSelection(verseDiv)");
     expect(bible).toContain('classList.contains("reader-start-selected")');
@@ -29,6 +34,8 @@ describe("reader speech controls", () => {
     expect(bible).toContain("state.readerState.selectedVerseNum = null");
     expect(bible).toContain("startVerseNum ?? state.readerState?.selectedVerseNum ?? null");
     expect(bible).toContain("isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending");
+    expect(bible).toContain("resetReaderAudioState()");
+    expect(bible).toContain("warmReaderVoice(targetLang).then");
     expect(bible).not.toContain("lastFocusedVerseNum) {");
     expect(css).toContain("朗讀起點");
   });
@@ -37,6 +44,8 @@ describe("reader speech controls", () => {
     const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
     expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)).toHaveLength(1);
     expect(audioBlock).toContain("speechUtterance.voice = preferredReaderVoice");
-    expect(audioBlock).toContain("speechUtterance.rate = 0.92");
+    expect(audioBlock).toContain("speechUtterance.rate = getReaderSpeechRate");
+    expect(audioBlock).toContain("selectPreferredVoice(immediateVoices, targetLang)");
+    expect(audioBlock).toContain("pendingReaderVoicePromise = getInstalledReaderVoice(targetLang)");
   });
 });

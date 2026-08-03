@@ -51,3 +51,8 @@ export function selectPreferredVoice(voices = [], targetLang = "zh-TW") {
 export function selectPreferredChineseVoice(voices = []) {
   return selectPreferredVoice(voices, "zh-TW");
 }
+
+export function getReaderSpeechRate(targetLang = "zh-TW") {
+  const lang = String(targetLang || "").toLowerCase();
+  return lang.startsWith("en") ? 0.88 : 0.82;
+}

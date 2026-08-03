@@ -42,7 +42,7 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260803_reader_selection_bar");
+    expect(htmlSource).toContain("js/app.js?v=20260803_reader_audio_fix");
     expect(appSource).toContain("./db.js?v=20260802_login_auto_repair");
     expect(appSource).toContain("./utils.js?v=20260801_full_plan_reset");
   });

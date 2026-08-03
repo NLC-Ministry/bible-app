@@ -1,7 +1,7 @@
 // js/modules/bible.js
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
-import { resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
+import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -1086,17 +1086,30 @@ function openIntegratedSelectionBottomBar(options) {
     state.readerState.lastFocusedVerseNum = verseNum;
   }
 
+  const selectedVerseNumber = Number(verseDiv?.dataset.verse || 1);
+  const activeHighlightColor = state.highlights?.[highlightKey] || "";
+
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
+      <div class="yv-bar-header">
+        <span class="yv-selection-label">已選取第 ${selectedVerseNumber} 節</span>
+        <button type="button" class="yv-close-button" data-action="close" aria-label="取消選取" title="取消選取">
+          <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </div>
       <div class="yv-content-row">
-        <div class="yv-color-capsule">
-          <button type="button" class="yv-dot yv-dot-yellow" data-color="#fef08a" title="柔黃標註"></button>
-          <button type="button" class="yv-dot yv-dot-cyan" data-color="#a5f3fc" title="柔藍標註"></button>
-          <button type="button" class="yv-dot yv-dot-green" data-color="#bbf7d0" title="柔綠標註"></button>
-          <button type="button" class="yv-dot yv-dot-dual" data-color="#fed7aa" title="柔橘粉標註"></button>
-          <button type="button" class="yv-dot-clear" data-action="clear" title="清除標註">
-            <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
-          </button>
+        <div class="yv-highlight-section">
+          <span class="yv-section-label">螢光標註</span>
+          <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
+            <button type="button" class="yv-dot yv-dot-yellow${activeHighlightColor === "#fef08a" ? " is-active" : ""}" data-color="#fef08a" title="柔黃標註" aria-label="柔黃標註" aria-pressed="${activeHighlightColor === "#fef08a"}"></button>
+            <button type="button" class="yv-dot yv-dot-cyan${activeHighlightColor === "#a5f3fc" ? " is-active" : ""}" data-color="#a5f3fc" title="柔藍標註" aria-label="柔藍標註" aria-pressed="${activeHighlightColor === "#a5f3fc"}"></button>
+            <button type="button" class="yv-dot yv-dot-green${activeHighlightColor === "#bbf7d0" ? " is-active" : ""}" data-color="#bbf7d0" title="柔綠標註" aria-label="柔綠標註" aria-pressed="${activeHighlightColor === "#bbf7d0"}"></button>
+            <button type="button" class="yv-dot yv-dot-dual${activeHighlightColor === "#fed7aa" ? " is-active" : ""}" data-color="#fed7aa" title="柔橘標註" aria-label="柔橘標註" aria-pressed="${activeHighlightColor === "#fed7aa"}"></button>
+            <span class="yv-section-divider" aria-hidden="true"></span>
+            <button type="button" class="yv-dot-clear" data-action="clear" title="清除標註" aria-label="清除標註">
+              <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
+            </button>
+          </div>
         </div>
         <div class="yv-action-group">
           <button type="button" class="yv-tile" data-action="play">
@@ -1118,6 +1131,7 @@ function openIntegratedSelectionBottomBar(options) {
 
   const barDiv = document.getElementById("pwa-selection-bottom-bar");
   if (!barDiv) return;
+  if (typeof hydrateIcons === "function") hydrateIcons(barDiv);
 
   const cleanupListeners = () => {
     document.removeEventListener("click", onDocClick);
@@ -1326,7 +1340,7 @@ let currentSpeakingVerseIndex = -1;
 let verseListForSpeaking = [];
 let currentAudioSessionId = 0;
 let preferredReaderVoice = null;
-
+let pendingReaderVoicePromise = null;
 function updateReaderAudioButton(speaking) {
   const btn = document.getElementById("reader-audio-btn");
   if (!btn) return;
@@ -1357,6 +1371,15 @@ function stopReaderAudio(quiet = false) {
   if (!quiet && wasActive && typeof showToast === "function") showToast("已停止朗讀");
 }
 
+function resetReaderAudioState() {
+  isSpeaking = false;
+  currentSpeakingVerseIndex = -1;
+  verseListForSpeaking = [];
+  speechUtterance = null;
+  clearSpeakingHighlight();
+  updateReaderAudioButton(false);
+}
+
 function getInstalledReaderVoice(targetLang = "zh-TW") {
   if (typeof window.speechSynthesis === "undefined") return Promise.resolve(null);
   const immediate = window.speechSynthesis.getVoices?.() || [];
@@ -1376,6 +1399,17 @@ function getInstalledReaderVoice(targetLang = "zh-TW") {
     window.speechSynthesis.addEventListener?.("voiceschanged", finish, { once: true });
     window.setTimeout(finish, 400);
   });
+}
+
+function warmReaderVoice(targetLang = "zh-TW") {
+  if (typeof window.speechSynthesis === "undefined") return Promise.resolve(null);
+  if (pendingReaderVoicePromise) return pendingReaderVoicePromise;
+  pendingReaderVoicePromise = getInstalledReaderVoice(targetLang)
+    .catch(() => null)
+    .finally(() => {
+      pendingReaderVoicePromise = null;
+    });
+  return pendingReaderVoicePromise;
 }
 
 function speakNextVerseInQueue(sessionId) {
@@ -1404,7 +1438,7 @@ function speakNextVerseInQueue(sessionId) {
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
   speechUtterance.lang = preferredReaderVoice?.lang || fallbackLang;
   if (preferredReaderVoice) speechUtterance.voice = preferredReaderVoice;
-  speechUtterance.rate = 0.92;
+  speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang);
   speechUtterance.pitch = 1;
   speechUtterance.volume = 1;
   speechUtterance.onend = () => {
@@ -1431,13 +1465,14 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
       stopReaderAudio();
       return;
     }
+    stopReaderAudio(true);
   }
 
   if (typeof window.speechSynthesis !== "undefined" && window.speechSynthesis.paused) {
     try { window.speechSynthesis.resume(); } catch (_e) {}
   }
 
-  stopReaderAudio(true);
+  resetReaderAudioState();
   const container = document.getElementById("bible-content");
   if (!container) return;
   verseListForSpeaking = Array.from(container.querySelectorAll(".bible-verse")).map(el => ({
@@ -1457,8 +1492,12 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
   updateReaderAudioButton(true);
   const currentVersion = state.readerState?.version || "CUNP";
   const isEnglish = ["ESV", "NIV", "NLT"].includes(currentVersion);
-  preferredReaderVoice = await getInstalledReaderVoice(isEnglish ? "en-US" : "zh-TW");
-  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  const targetLang = isEnglish ? "en-US" : "zh-TW";
+  const immediateVoices = window.speechSynthesis.getVoices?.() || [];
+  preferredReaderVoice = selectPreferredVoice(immediateVoices, targetLang) || preferredReaderVoice;
+  warmReaderVoice(targetLang).then(voice => {
+    if (voice && sessionId === currentAudioSessionId && isSpeaking) preferredReaderVoice = voice;
+  });
 
   const startVerse = verseListForSpeaking[startIndex];
   console.info("[ReaderAudio] Playback started", {

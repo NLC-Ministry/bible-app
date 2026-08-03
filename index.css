@@ -12726,25 +12726,25 @@ select,
   display: inline-block !important;
 }
 
-/* YouVersion Style Reader Floating Action Bar */
+/* Reader verse selection bar — compact card inspired by shadcn/ui primitives. */
 .youversion-action-bar {
   position: fixed;
-  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%) translateY(120%);
   z-index: var(--z-modal, 9990);
-  width: calc(100% - 1.5rem);
-  max-width: 440px;
-  background: rgba(24, 24, 28, 0.94);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  width: min(calc(100vw - 1.5rem), 26rem);
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-card);
+  border-radius: 1rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease-out, opacity 0.16s ease;
   opacity: 0;
-  padding: 0.6rem 0.8rem 0.5rem 0.8rem;
-  color: #f8fafc;
+  padding: 0.75rem;
+  color: var(--text-primary);
 }
 
 .youversion-action-bar.active {
@@ -12752,111 +12752,163 @@ select,
   transform: translateX(-50%) translateY(0);
 }
 
-.youversion-action-bar .drag-pill {
-  width: 36px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 2px;
-  margin: 0 auto 0.5rem auto;
+.youversion-action-bar .yv-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  margin-bottom: 0.65rem;
+}
+
+.youversion-action-bar .yv-selection-label,
+.youversion-action-bar .yv-section-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+.youversion-action-bar .yv-close-button,
+.youversion-action-bar .yv-dot-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.youversion-action-bar .yv-close-button:hover,
+.youversion-action-bar .yv-close-button:focus-visible {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  color: var(--text-primary);
 }
 
 .youversion-action-bar .yv-content-row {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.youversion-action-bar .yv-content-row::-webkit-scrollbar {
+  display: none;
+}
+
+.youversion-action-bar .yv-highlight-section {
+  display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
+  min-width: max-content;
   gap: 0.5rem;
 }
 
 .youversion-action-bar .yv-color-capsule {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.6rem;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  justify-content: flex-end;
+  gap: 0.375rem;
+  min-width: 0;
 }
 
 .youversion-action-bar .yv-dot {
-  width: 28px;
-  height: 28px;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
   border-radius: 50%;
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
-  transition: transform 0.15s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.youversion-action-bar .yv-dot:hover {
-  transform: scale(1.18);
+.youversion-action-bar .yv-dot:hover,
+.youversion-action-bar .yv-dot:focus-visible {
+  transform: scale(1.08);
+}
+
+.youversion-action-bar .yv-dot.is-active,
+.youversion-action-bar .yv-dot[aria-pressed="true"] {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px var(--color-brand);
 }
 
 .youversion-action-bar .yv-dot-yellow { background-color: var(--hl-yellow, #fef08a); }
 .youversion-action-bar .yv-dot-cyan { background-color: var(--hl-blue, #a5f3fc); }
 .youversion-action-bar .yv-dot-green { background-color: var(--hl-green, #bbf7d0); }
 .youversion-action-bar .yv-dot-dual { background-color: var(--hl-orange, #fed7aa); }
-.youversion-action-bar .yv-dot-clear {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
+.youversion-action-bar .yv-section-divider {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--border-card);
+  margin: 0 0.125rem;
 }
-.youversion-action-bar .yv-dot-clear:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.4);
-  transform: scale(1.18);
+.youversion-action-bar .yv-dot-clear:hover,
+.youversion-action-bar .yv-dot-clear:focus-visible {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 32%, var(--border-card));
 }
 
 .youversion-action-bar .yv-action-group {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex: 0 0 auto;
+  gap: 0.5rem;
 }
 
 .youversion-action-bar .yv-tile {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: #f8fafc;
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border-card);
+  color: var(--text-primary);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.375rem;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.youversion-action-bar .yv-tile:hover {
-  background: rgba(255, 255, 255, 0.16);
-  transform: translateY(-2px);
+.youversion-action-bar .yv-tile:hover,
+.youversion-action-bar .yv-tile:focus-visible {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  border-color: color-mix(in srgb, var(--text-primary) 20%, var(--border-card));
 }
 
 .youversion-action-bar .yv-tile-label {
-  font-size: 0.65rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
+  color: inherit;
 }
 
-.youversion-action-bar .yv-swipe-hint {
-  text-align: center;
-  font-size: 0.68rem;
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 0.35rem;
-  cursor: pointer;
-  user-select: none;
-}
+@media (max-width: 360px) {
+  .youversion-action-bar {
+    width: calc(100vw - 1rem);
+    padding: 0.625rem;
+  }
 
-.youversion-action-bar .yv-swipe-hint:hover {
-  color: rgba(255, 255, 255, 0.7);
+  .youversion-action-bar .yv-tile {
+    padding: 0 0.25rem;
+    gap: 0.25rem;
+  }
 }

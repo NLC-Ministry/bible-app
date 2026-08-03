@@ -38,7 +38,7 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260802_profile_preferences");
+    expect(html).toContain("index.css?v=20260803_reader_selection_design");
   });
 });
 

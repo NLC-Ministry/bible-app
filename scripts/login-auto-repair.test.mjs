@@ -38,6 +38,6 @@ describe("automatic login repair", () => {
     expect(auth).toContain("this.clearLoginRepairState();");
     expect(app).toContain("./auth.js?v=20260802_login_auto_repair");
     expect(app).toContain("./db.js?v=20260802_login_auto_repair");
-    expect(html).toContain("js/app.js?v=20260803_reader_selection_bar");
+    expect(html).toContain("js/app.js?v=20260803_reader_audio_fix");
   });
 });
