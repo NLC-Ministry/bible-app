@@ -1895,6 +1895,7 @@ function calculateAllPlansProgress() {
       }
     }
 
+    let completed = 0;
     plan.days.forEach(day => {
       day.chapters.forEach(ch => {
         const pId = plan.id || "";
