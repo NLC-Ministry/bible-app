@@ -981,31 +981,43 @@ function renderVersesList(container, verses, bookName, chapter) {
 
   // Fetch and sync highlights from Supabase Cloud asynchronously
   if (state.supabase && typeof state.supabase.from === "function") {
-    state.supabase
-      .from("highlights")
-      .select("*")
-      .eq("chapter_id", chapterId)
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          data.forEach(hl => {
-            // id 格式：hl_{highlightKey}_{userId}，userId 為 UUID（不含底線）
-            // 用 lastIndexOf 安全地切除尾部 _userId，保留完整 key
-            const withoutPrefix = hl.id.slice(3); // 移除開頭 "hl_"
-            const lastUnderscore = withoutPrefix.lastIndexOf("_");
-            if (lastUnderscore === -1) return;
-            const key = withoutPrefix.slice(0, lastUnderscore);
-            if (!key) return;
-            state.highlights[key] = hl.color;
-            const parts = key.split('_');
-            const verseNum = parts[parts.length - 1];
-            const verseEl = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
-            if (verseEl) {
-              verseEl.setAttribute("data-highlight", hl.color);
-            }
-          });
-          localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-        }
-      });
+    const currentUserId = state.currentUser?.id;
+    if (currentUserId && currentUserId !== "guest") {
+      state.supabase
+        .from("highlights")
+        .select("*")
+        .eq("chapter_id", chapterId)
+        .eq("user_id", currentUserId)
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            data.forEach(hl => {
+              // 安全防衛：再次確認 user_id 屬於自己，防止 RLS 未生效時的跨帳號污染
+              if (hl.user_id !== currentUserId) return;
+
+              // 從 id 解析 highlightKey：id 格式為 hl_{key}_{userId}
+              // userId 為 UUID（僅含連字號，不含底線），lastIndexOf 安全切割
+              const withoutPrefix = hl.id.slice(3); // 移除 "hl_"
+              const lastUnderscore = withoutPrefix.lastIndexOf("_");
+              if (lastUnderscore === -1) return;
+              const key = withoutPrefix.slice(0, lastUnderscore);
+              if (!key) return;
+
+              // 確認解析出的 key 確實屬於本章節（防止格式異常的舊資料污染）
+              const parts = key.split("_");
+              if (parts.length < 3) return; // 最少需要 書名_章_節
+              const verseNum = parts[parts.length - 1];
+              if (!verseNum || isNaN(Number(verseNum))) return;
+
+              state.highlights[key] = hl.color;
+              const verseEl = container.querySelector(`.bible-verse[data-verse="${verseNum}"]`);
+              if (verseEl) {
+                verseEl.setAttribute("data-highlight", hl.color);
+              }
+            });
+            localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+          }
+        });
+    }
   }
 
   const sentinel = document.createElement("div");
