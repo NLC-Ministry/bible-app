@@ -1073,7 +1073,7 @@ function openIntegratedSelectionBottomBar(options) {
   };
 
   const onDocClick = (e) => {
-    if (barDiv.contains(e.target) || (verseDiv && verseDiv.contains(e.target))) return;
+    if (barDiv.contains(e.target) || (e.target && e.target.closest && e.target.closest(".bible-verse"))) return;
     closeBar();
   };
 
