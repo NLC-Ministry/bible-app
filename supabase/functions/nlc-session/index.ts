@@ -667,7 +667,7 @@ Deno.serve(async (req: Request) => {
     const memberContextSyncStatus = memberContext ? "success" : "degraded";
     const profilePayload: Record<string, any> = {
       id: profileId,
-      name: firstValue(sourceValues.name, existingProfile?.name) || null,
+      name: firstValue(sourceValues.name, existingProfile?.name, lookupEmail ? lookupEmail.split("@")[0] : null, "教會肢體"),
       email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
       great_region: projectedOrg.great_region,
       pastoral_zone: projectedOrg.pastoral_zone,
