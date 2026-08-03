@@ -1177,6 +1177,9 @@ async function maybeOfferNextStageTeamCarryover() {
 }
 
 async function renderPlanView() {
+  if (typeof appRouter !== "undefined" && appRouter.currentTab && appRouter.currentTab !== "plan-view") {
+    return;
+  }
   try {
     if (state.activePlan && isPlanHidden(state.activePlan) && !canManageHiddenPlans()) {
       const nextVisiblePlan = (state.activePlans || []).find(plan => !isPlanHidden(plan));

@@ -677,17 +677,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // ── Background pre-warm: silently load plan module & render plan list ──
-  // While the user sees the dashboard, we load plan.js and call renderPlanView()
-  // in the background. This guarantees the plan tab shows real data immediately
-  // when tapped — eliminating the skeleton-stuck-forever bug.
-  // We intentionally do NOT await this (fire-and-forget) to keep startup fast.
-  loadModule('plan', './modules/plan.js?v=' + buildVersion).then(mod => {
-    if (mod && typeof mod.renderPlanView === 'function') {
-      ensurePlanFeatureModulesLoaded()
-        .then(() => mod.renderPlanView())
-        .catch(() => {});
-    }
+  // ── Background pre-warm: silently load plan module script only ──
+  loadModule('plan', './modules/plan.js?v=' + buildVersion).then(() => {
+    ensurePlanFeatureModulesLoaded().catch(() => {});
   }).catch(() => {});
 
   document.addEventListener("visibilitychange", () => {
