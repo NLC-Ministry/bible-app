@@ -961,7 +961,7 @@ const db = {
           updateAdminNavVisibility();
         }
 
-        // 💡 0秒秒開效能優化：儲存首屏 Profiles 與 Global Plans 本地快照
+        // 💡 0秒秒開效能優化：儲存首屏 Profiles 本地快照
         try {
           if (state.currentUser && state.currentUser.name) {
             localStorage.setItem("cached_user_profile", JSON.stringify({
@@ -972,9 +972,6 @@ const db = {
               role_id: state.currentUser.role_id,
               role_definition: state.currentUser.role_definition
             }));
-          }
-          if (Array.isArray(state.globalPlans) && state.globalPlans.length > 0) {
-            localStorage.setItem("cached_global_plans", JSON.stringify(state.globalPlans));
           }
         } catch (e) {
           console.warn("Failed to write fast startup cache:", e);
@@ -1715,9 +1712,7 @@ const db = {
   },
 
   async _executeFetchMergedUsersList(filterPresetKey) {
-    const targetFilterKey = filterPresetKey
-      || (state.activePlan ? (state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id) : null);
-    const planFilterAliases = getPlanFilterAliases(targetFilterKey);
+    const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
     const currentPresetKey = state.activePlan ? state.activePlan.presetKey : null;

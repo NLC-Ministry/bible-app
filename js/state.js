@@ -38,7 +38,7 @@ const CHURCH_PLAN_PRESETS = Object.fromEntries(defaultChurchStagePlans.map(stage
     campaignDefinition: stage
   }
 ]));
-// 💡 0毫秒秒開優化：讀取首屏本地快照
+// 💡 0毫秒秒開優化：讀取首屏 Profile 本地快照
 let initialCachedUser = {
   name: "",
   great_region: "",
@@ -55,20 +55,12 @@ let initialCachedUser = {
   member_context_sync_status: "",
   member_context_sync_error: ""
 };
-let initialCachedGlobalPlans = [];
 try {
   const profileRaw = localStorage.getItem("cached_user_profile");
   if (profileRaw) {
     const parsedProfile = JSON.parse(profileRaw);
     if (parsedProfile && parsedProfile.name) {
       Object.assign(initialCachedUser, parsedProfile);
-    }
-  }
-  const plansRaw = localStorage.getItem("cached_global_plans");
-  if (plansRaw) {
-    const parsedPlans = JSON.parse(plansRaw);
-    if (Array.isArray(parsedPlans)) {
-      initialCachedGlobalPlans = parsedPlans;
     }
   }
 } catch (e) {
@@ -85,7 +77,7 @@ const state = {
   /** True while profile tab / boot is waiting on Member Hub identity sync */
   profileIdentityLoading: false,
   currentUser: initialCachedUser,
-  globalPlans: initialCachedGlobalPlans,
+  globalPlans: [],
   orgStructure: {
     regions: [],
     zones: {},  // regionName -> array of zoneNames
