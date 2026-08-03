@@ -6420,7 +6420,7 @@ window.displayParticipantsList = function (limit = 100) {
       <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center; display: flex; align-items: center; justify-content: center; gap: 2px;">
         #${rankNum}${trendHtml}
       </div>
-      <div style="text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
+      <div style="text-align: left; word-break: break-word; white-space: normal; line-height: 1.25; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
         ${escapeHTML(m.name)}
       </div>
       <div class="text-danger">${m.streak}</div>
