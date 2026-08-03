@@ -974,6 +974,7 @@ function renderVersesList(container, verses, bookName, chapter) {
     verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選為朗讀起點`);
 
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
+    const chapterId = `${state.readerState?.bookId || "GEN"}_${chapter}`;
     if (state.highlights[highlightKey]) {
       verseDiv.style.backgroundColor = state.highlights[highlightKey];
       verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
@@ -984,7 +985,14 @@ function renderVersesList(container, verses, bookName, chapter) {
     const toggleSelection = e => {
       e.stopPropagation();
       setReaderStartSelection(verseDiv);
-      showContextToolbar(verseDiv, highlightKey);
+      const verseText = v.text;
+      const formattedText = `【${bookName} ${chapter}:${v.verse}】${verseText}`;
+      openIntegratedSelectionBottomBar({
+        selectedText: formattedText,
+        verseDiv,
+        highlightKey,
+        chapterId
+      });
     };
     verseDiv.addEventListener("click", toggleSelection);
     verseDiv.addEventListener("keydown", e => {
@@ -1002,82 +1010,120 @@ function renderVersesList(container, verses, bookName, chapter) {
   container.appendChild(sentinel);
 }
 
-function showContextToolbar(verseElement, highlightKey) {
-  const toolbar = document.getElementById("context-toolbar");
-  if (!toolbar) return;
+/**
+ * Integrated Reader Selection Bottom Bar Launcher
+ */
+function openIntegratedSelectionBottomBar(options) {
+  const { selectedText, verseDiv, highlightKey, chapterId } = options;
+  const rootElement = document.getElementById("selection-bottom-bar-root");
+  if (!rootElement) return;
 
-  const verseNum = Number(verseElement.dataset.verse || 1);
-  if (state.readerState) {
+  if (state.readerState && verseDiv) {
+    const verseNum = Number(verseDiv.dataset.verse || 1);
     state.readerState.lastFocusedVerseNum = verseNum;
   }
-  
-  toolbar.classList.remove("hidden");
-  toolbar.classList.add("active");
 
-  const bookName = BIBLE_BOOKS.find(b => b.id === state.readerState?.bookId)?.name || "";
-  const chapter = state.readerState?.chapter || 1;
-  const verseText = verseElement.querySelector(".verse-text")?.innerText || "";
-  const formattedText = `【${bookName} ${chapter}:${verseNum}】${verseText}`;
+  rootElement.innerHTML = `
+    <div id="pwa-selection-bottom-bar" class="context-toolbar active">
+      <div class="toolbar-inner">
+        <div class="toolbar-palette">
+          <span class="palette-label">螢光標註：</span>
+          <button type="button" class="toolbar-action color-dot color-dot-yellow" data-color="#fef08a" title="黃色標註"></button>
+          <button type="button" class="toolbar-action color-dot color-dot-green" data-color="#bbf7d0" title="綠色標註"></button>
+          <button type="button" class="toolbar-action color-dot color-dot-pink" data-color="#fbcfe8" title="粉色標註"></button>
+          <button type="button" class="toolbar-action color-dot color-dot-blue" data-color="#bfdbfe" title="藍色標註"></button>
+          <button type="button" class="toolbar-action clear-btn" data-action="clear" title="清除標註">
+            <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="toolbar-actions-row">
+          <button type="button" class="toolbar-action-pill" data-action="copy">
+            <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
+            <span>複製經文</span>
+          </button>
+          <button type="button" class="toolbar-action-pill" data-action="share">
+            <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
+            <span>原生分享</span>
+          </button>
+          <button type="button" class="toolbar-action-close" data-action="close" title="關閉">
+            <span class="nlc-icon" data-icon="x" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 
-  const actionHandler = (e) => {
-    e.stopPropagation();
-    const actionBtn = e.target.closest("[data-action]");
-    if (!actionBtn) return;
-    const action = actionBtn.getAttribute("data-action");
+  const barDiv = document.getElementById("pwa-selection-bottom-bar");
+  if (!barDiv) return;
 
-    if (action === "highlight") {
-      const color = actionBtn.dataset.color || actionBtn.style.backgroundColor;
-      verseElement.style.backgroundColor = color;
-      verseElement.setAttribute("data-highlight", color);
+  const closeBar = () => {
+    rootElement.innerHTML = "";
+    document.removeEventListener("click", onDocClick);
+  };
+
+  const onDocClick = (e) => {
+    if (barDiv.contains(e.target) || (verseDiv && verseDiv.contains(e.target))) return;
+    closeBar();
+  };
+
+  barDiv.querySelectorAll("[data-color]").forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const color = btn.getAttribute("data-color");
+      if (verseDiv) {
+        verseDiv.style.backgroundColor = color;
+        verseDiv.setAttribute("data-highlight", color);
+      }
       state.highlights[highlightKey] = color;
       localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-    } else if (action === "clear") {
-      verseElement.style.backgroundColor = "";
-      verseElement.removeAttribute("data-highlight");
-      delete state.highlights[highlightKey];
-      localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-    } else if (action === "copy") {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        navigator.clipboard.writeText(formattedText).then(() => {
-          showToast("經文已複製到剪貼簿！");
-        }).catch(() => {
-          showToast("經文已複製");
-        });
-      } else {
-        showToast("經文： " + formattedText);
-      }
-    } else if (action === "share") {
-      if (navigator.share) {
-        navigator.share({
-          title: `${bookName} ${chapter}:${verseNum}`,
-          text: formattedText,
-          url: window.location.href
-        }).catch(() => {});
-      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-        navigator.clipboard.writeText(formattedText).then(() => {
-          showToast("經文已複製，可直接貼上分享！");
-        });
-      }
-    } else if (action === "close") {
-      toolbar.classList.remove("active");
-      toolbar.classList.add("hidden");
-      document.removeEventListener("click", documentClickHandler);
-    }
-  };
-
-  toolbar.querySelectorAll("[data-action]").forEach(btn => {
-    btn.onclick = actionHandler;
+      showToast("已完成螢光筆劃線標註！");
+      closeBar();
+    };
   });
 
-  const documentClickHandler = (e) => {
-    if (toolbar.contains(e.target) || verseElement.contains(e.target)) return;
-    toolbar.classList.remove("active");
-    toolbar.classList.add("hidden");
-    document.removeEventListener("click", documentClickHandler);
-  };
+  barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (verseDiv) {
+      verseDiv.style.backgroundColor = "";
+      verseDiv.removeAttribute("data-highlight");
+    }
+    delete state.highlights[highlightKey];
+    localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+    showToast("已清除劃線標註");
+    closeBar();
+  });
+
+  barDiv.querySelector('[data-action="copy"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(selectedText).then(() => {
+        showToast("經文已複製到剪貼簿！");
+      });
+    } else {
+      showToast(selectedText);
+    }
+    closeBar();
+  });
+
+  barDiv.querySelector('[data-action="share"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (navigator.share) {
+      navigator.share({ title: "經文分享", text: selectedText, url: window.location.href }).catch(() => {});
+    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(selectedText).then(() => {
+        showToast("經文已複製，可直接貼上分享！");
+      });
+    }
+    closeBar();
+  });
+
+  barDiv.querySelector('[data-action="close"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeBar();
+  });
 
   setTimeout(() => {
-    document.addEventListener("click", documentClickHandler);
+    document.addEventListener("click", onDocClick);
   }, 50);
 }
 

@@ -555,13 +555,15 @@
         <article class="reader-body reader-body-full reader-reading-surface">
           <div class="reader-header">
             <h2 id="bible-title" class="bible-heading">詩篇 1章</h2>
-            <div class="reader-actions-top"></div>
           </div>
 
           <!-- Bible Content container -->
           <div id="bible-content" class="bible-text-container" style="font-size: 18px;">
             <!-- Generated dynamically -->
           </div>
+
+          <!-- Selection Bottom Bar React Mount Root -->
+          <div id="selection-bottom-bar-root"></div>
 
           <!-- Sticky Bottom Action Bar (Context-Aware Read Tracking) -->
           <div class="reader-bottom-action-bar hidden" id="reader-bottom-action-bar">
@@ -570,18 +572,6 @@
               <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight"
                   aria-hidden="true"></span><span>下一章</span></span>
             </button>
-          </div>
-
-          <!-- Sticky Bottom Context Toolbar for Selected Verse -->
-          <div id="context-toolbar" class="context-toolbar hidden">
-            <button class="toolbar-action" data-action="highlight" style="background-color: #ffeb3b; color: #000;"
-              title="黃色螢光筆"></button>
-            <button class="toolbar-action" data-action="highlight" style="background-color: #ffc107; color: #000;"
-              title="橘色螢光筆"></button>
-            <button class="toolbar-action" data-action="highlight" style="background-color: #a7ffeb; color: #000;"
-              title="綠色螢光筆"></button>
-            <button class="toolbar-action" data-action="clear" title="清除標記"><span class="nlc-icon" data-icon="eraser"
-                aria-hidden="true"></span></button>
           </div>
         </article>
       </section>

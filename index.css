@@ -12522,6 +12522,11 @@ select,
   transition: transform 0.15s ease;
 }
 
+.context-toolbar .color-dot-yellow { background-color: #fef08a; }
+.context-toolbar .color-dot-green { background-color: #bbf7d0; }
+.context-toolbar .color-dot-pink { background-color: #fbcfe8; }
+.context-toolbar .color-dot-blue { background-color: #bfdbfe; }
+
 .context-toolbar .color-dot:hover {
   transform: scale(1.2);
 }
