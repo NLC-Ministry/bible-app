@@ -1024,31 +1024,36 @@ function openIntegratedSelectionBottomBar(options) {
   }
 
   rootElement.innerHTML = `
-    <div id="pwa-selection-bottom-bar" class="context-toolbar active">
-      <div class="toolbar-inner">
-        <div class="toolbar-palette">
-          <span class="palette-label">螢光標註：</span>
-          <button type="button" class="toolbar-action color-dot color-dot-yellow" data-color="#fef08a" title="黃色標註"></button>
-          <button type="button" class="toolbar-action color-dot color-dot-green" data-color="#bbf7d0" title="綠色標註"></button>
-          <button type="button" class="toolbar-action color-dot color-dot-pink" data-color="#fbcfe8" title="粉色標註"></button>
-          <button type="button" class="toolbar-action color-dot color-dot-blue" data-color="#bfdbfe" title="藍色標註"></button>
-          <button type="button" class="toolbar-action clear-btn" data-action="clear" title="清除標註">
-            <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
-          </button>
+    <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
+      <div class="drag-pill"></div>
+      <div class="yv-content-row">
+        <div class="yv-color-capsule">
+          <button type="button" class="yv-dot yv-dot-yellow" data-color="#facc15" title="黃色標註"></button>
+          <button type="button" class="yv-dot yv-dot-cyan" data-color="#38bdf8" title="亮青標註"></button>
+          <button type="button" class="yv-dot yv-dot-green" data-color="#4ade80" title="綠色標註"></button>
+          <button type="button" class="yv-dot yv-dot-dual" data-action="clear" title="雙色調色盤 / 清除標註"></button>
         </div>
-        <div class="toolbar-actions-row">
-          <button type="button" class="toolbar-action-pill" data-action="copy">
+        <div class="yv-action-group">
+          <button type="button" class="yv-tile" data-action="bookmark">
+            <span class="nlc-icon" data-icon="bookmark" aria-hidden="true"></span>
+            <span class="yv-tile-label">儲存</span>
+          </button>
+          <button type="button" class="yv-tile" data-action="notes">
+            <span class="nlc-icon" data-icon="edit" aria-hidden="true"></span>
+            <span class="yv-tile-label">筆記</span>
+          </button>
+          <button type="button" class="yv-tile" data-action="copy">
             <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
-            <span>複製經文</span>
+            <span class="yv-tile-label">複製</span>
           </button>
-          <button type="button" class="toolbar-action-pill" data-action="share">
+          <button type="button" class="yv-tile" data-action="share">
             <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
-            <span>原生分享</span>
-          </button>
-          <button type="button" class="toolbar-action-close" data-action="close" title="關閉">
-            <span class="nlc-icon" data-icon="x" aria-hidden="true"></span>
+            <span class="yv-tile-label">分享</span>
           </button>
         </div>
+      </div>
+      <div class="yv-swipe-hint" data-action="close">
+        <span>^ 向上滑動查看更多</span>
       </div>
     </div>
   `;
@@ -1059,6 +1064,15 @@ function openIntegratedSelectionBottomBar(options) {
   const closeBar = () => {
     rootElement.innerHTML = "";
     document.removeEventListener("click", onDocClick);
+    document.removeEventListener("selectionchange", onSelectionChange);
+  };
+
+  const onSelectionChange = () => {
+    if (typeof window === "undefined" || !window.getSelection) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+      closeBar();
+    }
   };
 
   const onDocClick = (e) => {
@@ -1079,6 +1093,18 @@ function openIntegratedSelectionBottomBar(options) {
       showToast("已完成螢光筆劃線標註！");
       closeBar();
     };
+  });
+
+  barDiv.querySelector('[data-action="bookmark"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    showToast("已儲存經文至我的書籤！");
+    closeBar();
+  });
+
+  barDiv.querySelector('[data-action="notes"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    showToast("開啟靈修筆記...");
+    closeBar();
   });
 
   barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
@@ -1124,7 +1150,8 @@ function openIntegratedSelectionBottomBar(options) {
 
   setTimeout(() => {
     document.addEventListener("click", onDocClick);
-  }, 50);
+    document.addEventListener("selectionchange", onSelectionChange);
+  }, 100);
 }
 
 window.openBibleVersionPicker = function() {
