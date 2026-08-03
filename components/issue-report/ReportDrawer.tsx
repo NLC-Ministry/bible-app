@@ -149,6 +149,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, def
                   ? "border-primary text-primary font-semibold"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
+              style={{ background: "transparent", boxShadow: "none" }}
               onClick={() => setActiveTab("form")}
             >
               📝 填寫回報
@@ -160,6 +161,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, def
                   ? "border-primary text-primary font-semibold"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
+              style={{ background: "transparent", boxShadow: "none" }}
               onClick={() => {
                 setActiveTab("my-reports");
                 setIsFetchingReports(true);
