@@ -685,34 +685,13 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     setTimeout(() => {
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {
-        const memberNodes = container.querySelectorAll(".reading-team-member, .reading-team-member-roster__item, [data-member-id]");
-        const domProgressMap = {};
-        if (memberNodes && memberNodes.length > 0) {
-          memberNodes.forEach(node => {
-            const textContent = (node.textContent || "").trim();
-            const match = textContent.match(/(\d+)\s*[\/|章]/);
-            if (match) {
-              const count = parseInt(match[1], 10);
-              members.forEach(m => {
-                const mName = m.name || m.displayName || (m.profile && m.profile.name);
-                if (mName && textContent.includes(mName)) {
-                  domProgressMap[mName] = count;
-                }
-              });
-            }
-          });
-        }
-
         const enrichedMembers = members.map(m => {
-          const memberName = m.name || m.displayName || (m.profile && m.profile.name) || "隊友";
-          const domCount = domProgressMap[memberName];
           const stats = typeof getMemberOverallPlanProgress === "function" ? getMemberOverallPlanProgress(m, plan, totalChapters) : null;
-          const calcCount = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? 0);
-          const finalChaptersRead = domCount !== undefined ? domCount : calcCount;
+          const readCount = stats ? stats.completedChapters : (m.chapters_read ?? m.completedChapters ?? m.completed ?? m.readChapters ?? 0);
           return {
             ...m,
-            chapters_read: Number(finalChaptersRead || 0),
-            name: memberName
+            name: m.name || m.displayName || (m.profile && m.profile.name) || "隊友",
+            chapters_read: Number(readCount || 0)
           };
         });
         renderFn(enrichedMembers, plan);
