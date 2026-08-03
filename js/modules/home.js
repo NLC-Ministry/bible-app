@@ -329,15 +329,16 @@ export function updateDashboardView() {
     const isFixed = state.activePlan.isFixed !== false && state.activePlan.is_fixed !== false;
 
     let todayDayObj = null;
+    const planDays = Array.isArray(state.activePlan.days) ? state.activePlan.days : [];
     if (isFixed) {
-      todayDayObj = state.activePlan.days.find(d => {
-        if (Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
-        const parts = d.date.split('/');
+      todayDayObj = planDays.find(d => {
+        if (!d || Number(d.year) !== todayYear || Number(d.month) !== todayMonth) return false;
+        const parts = String(d.date || "").split('/');
         return parts.length === 2 && Number(parts[1]) === todayDay;
       });
     } else {
       // 彈性時間計畫：指向第一個未完成的讀經天數
-      todayDayObj = state.activePlan.days.find(d => {
+      todayDayObj = planDays.find(d => {
         const currentRound = state.activePlan.currentRound || 1;
         return d.chapters && d.chapters.some(ch => {
           const taskRound = ch.round || currentRound;
@@ -349,8 +350,8 @@ export function updateDashboardView() {
           return !isRead;
         });
       });
-      if (!todayDayObj) {
-        todayDayObj = state.activePlan.days[state.activePlan.days.length - 1];
+      if (!todayDayObj && planDays.length > 0) {
+        todayDayObj = planDays[planDays.length - 1];
       }
     }
 
