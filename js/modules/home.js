@@ -466,6 +466,69 @@ export function updateDashboardView() {
   scheduleDashboardSecondaryWork();
 }
 
+async function renderPilgrimageTrail(customMembers = null) {
+  const canvas = document.getElementById("pilgrimage-canvas");
+  if (!canvas) return;
+
+  if (!state.activePlan || !state.activePlan.days || state.activePlan.days.length === 0) {
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  const currentRound = state.activePlan.currentRound || 1;
+
+  const planChapters = [];
+  let lastBook = null;
+  state.activePlan.days.forEach(day => {
+    if (!day.chapters) return;
+    day.chapters.forEach(ch => {
+      const isBookStart = ch.book !== lastBook;
+      planChapters.push({
+        bookName: ch.book,
+        chapterNum: ch.chapter,
+        isReadR1: ch.isReadR1 || false,
+        isReadR2: ch.isReadR2 || false,
+        isReadR3: ch.isReadR3 || false,
+        isRead: ch.isRead || false,
+        isBookStart
+      });
+      lastBook = ch.book;
+    });
+  });
+
+  const TOTAL_PLAN_CHAPTERS = planChapters.length;
+  if (TOTAL_PLAN_CHAPTERS === 0) return;
+
+  const myR1Count = planChapters.filter(c => c.isReadR1).length;
+  const myR2Count = planChapters.filter(c => c.isReadR2).length;
+  const myR3Count = planChapters.filter(c => c.isReadR3).length;
+  const myChaptersRead = currentRound === 3 ? myR3Count : (currentRound === 2 ? myR2Count : myR1Count);
+
+  let groupMembers = [];
+  if (Array.isArray(customMembers) && customMembers.length > 0) {
+    groupMembers = customMembers.map(m => ({
+      name: m.name || m.displayName || "隊友",
+      chapters_read: m.chapters_read !== undefined ? m.chapters_read : (m.completed || m.currentRoundReadChapters || m.readChapters || 0),
+      isMe: Boolean(m.isMe || m.name === state.currentUser?.name)
+    }));
+  } else {
+    let allUsers = await db.fetchMergedUsersList();
+    const myZone = state.currentUser.pastoral_zone || "";
+    groupMembers = myZone ? allUsers.filter(u => u.pastoral_zone === myZone) : [];
+    if (!groupMembers || groupMembers.length === 0) {
+      groupMembers = [{ name: state.currentUser.name, chapters_read: myChaptersRead }];
+    }
+
+    groupMembers = groupMembers.map(m =>
+      m.name === state.currentUser.name ? { ...m, chapters_read: myChaptersRead } : m
+    );
+    if (!groupMembers.some(m => m.name === state.currentUser.name)) {
+      groupMembers = [{ name: state.currentUser.name, chapters_read: myChaptersRead }, ...groupMembers];
+    }
+  }
+}
+
 async function calculateAndRenderPersonalRankings() {
   const rankGroupEl = document.getElementById("rank-group");
   const rankZoneEl = document.getElementById("rank-zone");
