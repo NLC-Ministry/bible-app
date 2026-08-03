@@ -1669,10 +1669,10 @@ const db = {
       return this._mergedUsersPromise[cacheKey];
     }
 
-    // 2. Cache expiration validation (5-second TTL)
+    // 2. Cache expiration validation (60-second TTL)
     const cachedEntry = this._mergedUsersCache[cacheKey];
     const now = Date.now();
-    if (cachedEntry && (now - cachedEntry.timestamp < 5000)) {
+    if (cachedEntry && (now - cachedEntry.timestamp < 60000)) {
       return cachedEntry.data;
     }
 
@@ -1739,9 +1739,7 @@ const db = {
     if (state.isSupabaseMode && state.supabase) {
       try {
         const { data: usersProfiles, error: profilesError } = await state.supabase.from("profiles").select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups").eq("is_demo", false);
-        console.log(`🔍 [AdminDebug] profiles 查詢結果: ${usersProfiles ? usersProfiles.length : 0} 筆`, profilesError ? `錯誤: ${profilesError.message}` : '');
         if (profilesError) throw profilesError;
-        if (usersProfiles) console.log('🔍 [AdminDebug] profiles 名單:', usersProfiles.map(u => `${u.name}(${getUserRoleCode(u)})`));
 
         let plansQuery = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, level, upgrade_prompt_handled");
         if (filterPresetKey) {
@@ -1758,7 +1756,6 @@ const db = {
           plansQuery = plansQuery.or([...textConditions, ...uuidConditions].join(","));
         }
         const { data: allPlans, error: plansError } = await plansQuery;
-        console.log(`🔍 [AdminDebug] reading_plans 查詢結果: ${allPlans ? allPlans.length : 0} 筆`, plansError ? `錯誤: ${plansError.message}` : '');
         if (plansError) throw plansError;
 
         const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
@@ -1766,7 +1763,6 @@ const db = {
           state.supabase,
           planIds
         );
-        console.log(`🔍 [AdminDebug] reading_logs 查詢結果: ${allLogs ? allLogs.length : 0} 筆`, logsError ? `錯誤: ${logsError.message}` : '');
         if (logsError) throw logsError;
         state.allLogsCache = allLogs || [];
 

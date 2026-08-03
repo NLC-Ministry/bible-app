@@ -5984,36 +5984,44 @@ async function renderGroupParticipantsRankingTable() {
       if (Number.isNaN(date.getTime())) return "";
       return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
     });
-    // 第二遍起屬於超前閱讀，不重複算成補讀。
-    for (let r = 1; r <= 1; r++) {
-      const roundLogs = (userLogs || []).filter(l => (l.round || 1) === r);
-      state.activePlan.days.forEach((day, index) => {
-        const d = index + 1;
-        const scheduledDate = new Date(statsStart);
-        scheduledDate.setDate(statsStart.getDate() + (d - 1));
-        const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
 
-        let allChaptersCompleted = true;
-        let maxReadDateStr = "";
-
-        for (const ch of day.chapters) {
-          const log = roundLogs.find(l => l.book === ch.book && l.chapter === ch.chapter);
-          if (!log) {
-            allChaptersCompleted = false;
-            break;
-          }
-          const logDateStr = toLocalStr(log.read_at);
-          if (!maxReadDateStr || logDateStr > maxReadDateStr) {
-            maxReadDateStr = logDateStr;
-          }
+    // 💡 效能關鍵升級：建立 logMap (Key: book_chapter -> read_at)，將 O(N) 搜尋優化為 O(1)
+    const logMap = new Map();
+    if (Array.isArray(userLogs)) {
+      for (let i = 0; i < userLogs.length; i++) {
+        const l = userLogs[i];
+        if ((l.round || 1) === 1 && l.book && l.chapter !== undefined) {
+          logMap.set(`${l.book}_${l.chapter}`, l.read_at);
         }
+      }
+    }
 
-        if (allChaptersCompleted && maxReadDateStr) {
-          if (maxReadDateStr > scheduledDateStr) {
-            catchUpDaysVal++;
-          }
+    const days = state.activePlan.days;
+    for (let index = 0; index < days.length; index++) {
+      const day = days[index];
+      const scheduledDate = new Date(statsStart);
+      scheduledDate.setDate(statsStart.getDate() + index);
+      const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
+
+      let allChaptersCompleted = true;
+      let maxReadDateStr = "";
+
+      for (let c = 0; c < day.chapters.length; c++) {
+        const ch = day.chapters[c];
+        const readAt = logMap.get(`${ch.book}_${ch.chapter}`);
+        if (readAt === undefined) {
+          allChaptersCompleted = false;
+          break;
         }
-      });
+        const logDateStr = toLocalStr(readAt);
+        if (!maxReadDateStr || logDateStr > maxReadDateStr) {
+          maxReadDateStr = logDateStr;
+        }
+      }
+
+      if (allChaptersCompleted && maxReadDateStr && maxReadDateStr > scheduledDateStr) {
+        catchUpDaysVal++;
+      }
     }
     return catchUpDaysVal;
   };
