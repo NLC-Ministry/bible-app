@@ -108,7 +108,16 @@ function parseJwt(token: string) {
   }
 }
 
+const PROFILE_CACHE = new Map<string, { profile: any; timestamp: number }>();
+const PROFILE_CACHE_TTL_MS = 15000; // 15 seconds warm Edge Function memory cache
+
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
+  const cached = PROFILE_CACHE.get(accessToken);
+  const now = Date.now();
+  if (cached && (now - cached.timestamp < PROFILE_CACHE_TTL_MS)) {
+    return cached.profile;
+  }
+
   const payload = parseJwt(accessToken);
   const expectedLogtoIssuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
   const tokenIssuer = trimSlash(String(payload?.iss || ""));
@@ -126,7 +135,10 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
           .select(PROFILE_SELECT)
           .eq("id", user.id)
           .single();
-        if (!profileError && profile) return profile;
+        if (!profileError && profile) {
+          PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
+          return profile;
+        }
       }
     } catch (err) {
       console.log("Supabase JWT verification failed; checking Logto OIDC:", err);
@@ -165,6 +177,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
     .eq("id", identity.profile_id)
     .single();
   if (profileError) throw profileError;
+  PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
   return profile;
 }
 

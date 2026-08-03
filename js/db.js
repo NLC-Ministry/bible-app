@@ -1715,7 +1715,9 @@ const db = {
   },
 
   async _executeFetchMergedUsersList(filterPresetKey) {
-    const planFilterAliases = getPlanFilterAliases(filterPresetKey);
+    const targetFilterKey = filterPresetKey
+      || (state.activePlan ? (state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id) : null);
+    const planFilterAliases = getPlanFilterAliases(targetFilterKey);
     const planFilterAliasSet = new Set(planFilterAliases);
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
     const currentPresetKey = state.activePlan ? state.activePlan.presetKey : null;

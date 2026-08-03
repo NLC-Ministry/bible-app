@@ -1883,21 +1883,27 @@ function calculateAllPlansProgress() {
     if (!hasMatchingRoundSchedule && targetRounds > 1) {
       rebuildPlanScheduleForLevel(plan, plan.level || "normal");
     }
-    let completed = 0;
+    // 💡 效能關鍵升級：建立 logSet 雜湊比對表 (O(1))，代替巨量迴圈重複比對
+    const logSet = new Set();
+    if (Array.isArray(state.readingLogs)) {
+      for (let i = 0; i < state.readingLogs.length; i++) {
+        const l = state.readingLogs[i];
+        const logKey = `${l.plan_id || l.presetKey || l.preset_key || ""}_${l.round || 1}_${l.book}_${l.chapter}`;
+        logSet.add(logKey);
+        // 保留相容 key (不指定 plan_id 的全域打卡)
+        logSet.add(`*_${l.round || 1}_${l.book}_${l.chapter}`);
+      }
+    }
+
     plan.days.forEach(day => {
       day.chapters.forEach(ch => {
+        const pId = plan.id || "";
+        const pKey = plan.presetKey || "";
+
         const checkRoundLog = (rTarget) => {
-          return state.readingLogs.some(l => {
-            const logPlanId = l.plan_id || null;
-            const logPresetKey = l.presetKey || l.preset_key || null;
-            const isPlanMatch =
-              (plan.id && logPlanId && logPlanId === plan.id) ||
-              (plan.presetKey && logPresetKey && logPresetKey === plan.presetKey) ||
-              ((plan.id || plan.presetKey) && !logPlanId && !logPresetKey) ||
-              (!plan.id && !plan.presetKey && !logPlanId && !logPresetKey);
-            const isRoundMatch = (l.round || 1) === rTarget;
-            return l.book === ch.book && Number(l.chapter) === Number(ch.chapter) && isPlanMatch && isRoundMatch;
-          });
+          return (pId && logSet.has(`${pId}_${rTarget}_${ch.book}_${ch.chapter}`)) ||
+                 (pKey && logSet.has(`${pKey}_${rTarget}_${ch.book}_${ch.chapter}`)) ||
+                 logSet.has(`*_${rTarget}_${ch.book}_${ch.chapter}`);
         };
 
         const totalRounds = Math.max(plan.currentRound || 1, maxReadRound || 1, 3);
