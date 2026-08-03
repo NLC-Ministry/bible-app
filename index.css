@@ -12463,3 +12463,85 @@ select,
 #reader-view .bible-verse.reader-start-selected:focus-visible {
   outline-width: 3px !important;
 }
+
+/* Context Floating Toolbar for Verse Highlighter & Reader Start Selection */
+.context-toolbar {
+  position: absolute;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-card, #1e293b);
+  border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
+  border-radius: 9999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -125%);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.context-toolbar.active {
+  display: flex !important;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.context-toolbar.hidden {
+  display: none !important;
+}
+
+.context-toolbar .toolbar-action {
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.context-toolbar .toolbar-action:hover {
+  transform: scale(1.18);
+}
+
+.context-toolbar .color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.context-toolbar .toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-card, rgba(255, 255, 255, 0.2));
+  margin: 0 0.1rem;
+}
+
+.context-toolbar .clear-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.85rem;
+}
+
+.context-toolbar .clear-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* Bible Verse Selection & Highlighter Separation */
+.bible-verse.selected {
+  outline: 2px solid var(--color-brand, #04A9D2) !important;
+  outline-offset: -1px;
+  border-radius: 8px !important;
+}
+
+/* Dark mode adjustments for verse highlights */
+[data-theme="dark"] .bible-verse[data-highlight="#fef08a"] { background-color: rgba(254, 240, 138, 0.22) !important; }
+[data-theme="dark"] .bible-verse[data-highlight="#fed7aa"] { background-color: rgba(254, 215, 170, 0.22) !important; }
+[data-theme="dark"] .bible-verse[data-highlight="#bbf7d0"] { background-color: rgba(187, 247, 208, 0.22) !important; }
+[data-theme="dark"] .bible-verse[data-highlight="#fbcfe8"] { background-color: rgba(251, 207, 232, 0.22) !important; }

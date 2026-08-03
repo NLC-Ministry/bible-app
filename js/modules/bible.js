@@ -976,7 +976,7 @@ function renderVersesList(container, verses, bookName, chapter) {
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
     if (state.highlights[highlightKey]) {
       verseDiv.style.backgroundColor = state.highlights[highlightKey];
-      verseDiv.classList.add("selected");
+      verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
     }
 
     verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
@@ -1013,6 +1013,7 @@ function showContextToolbar(verseElement, highlightKey) {
   const rect = verseElement.getBoundingClientRect();
   toolbar.style.top = `${window.scrollY + rect.top}px`;
   toolbar.style.left = `${window.scrollX + rect.left + rect.width / 2}px`;
+  toolbar.classList.remove("hidden");
   toolbar.classList.add("active");
 
   const actionHandler = (e) => {
@@ -1020,21 +1021,22 @@ function showContextToolbar(verseElement, highlightKey) {
     const actionBtn = e.target.closest("[data-action]");
     if (!actionBtn) return;
     const action = actionBtn.getAttribute("data-action");
-    const color = actionBtn.style.backgroundColor;
 
     if (action === "highlight") {
+      const color = actionBtn.dataset.color || actionBtn.style.backgroundColor;
       verseElement.style.backgroundColor = color;
-      verseElement.classList.add("selected");
+      verseElement.setAttribute("data-highlight", color);
       state.highlights[highlightKey] = color;
     } else if (action === "clear") {
       verseElement.style.backgroundColor = "";
-      verseElement.classList.remove("selected");
+      verseElement.removeAttribute("data-highlight");
       delete state.highlights[highlightKey];
     }
     
     localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
     
     toolbar.classList.remove("active");
+    toolbar.classList.add("hidden");
     document.removeEventListener("click", documentClickHandler);
   };
 
@@ -1044,6 +1046,7 @@ function showContextToolbar(verseElement, highlightKey) {
 
   const documentClickHandler = () => {
     toolbar.classList.remove("active");
+    toolbar.classList.add("hidden");
     document.removeEventListener("click", documentClickHandler);
   };
 
