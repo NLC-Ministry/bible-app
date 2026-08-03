@@ -1025,7 +1025,6 @@ function openIntegratedSelectionBottomBar(options) {
 
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
-      <div class="drag-pill"></div>
       <div class="yv-content-row">
         <div class="yv-color-capsule">
           <button type="button" class="yv-dot yv-dot-yellow" data-color="#fef08a" title="柔黃標註"></button>
@@ -1047,9 +1046,6 @@ function openIntegratedSelectionBottomBar(options) {
             <span class="yv-tile-label">分享</span>
           </button>
         </div>
-      </div>
-      <div class="yv-swipe-hint" data-action="close">
-        <span>^ 向上滑動查看更多</span>
       </div>
     </div>
   `;
