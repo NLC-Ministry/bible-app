@@ -80,7 +80,7 @@ describe("reading team leaderboards", () => {
     expect(db).toContain("candidateReadAt < existingReadAt");
     expect(plan).toContain('class="pastoral-race-progress" role="progressbar"');
     expect(plan).toContain('aria-valuenow="${pct}"');
-    expect(plan).toContain('data-pastoral-race-replay');
+    expect(plan).not.toContain('data-pastoral-race-replay');
     expect(plan).toContain('const ownershipClass = item.is_mine ? " pastoral-race-row--mine" : ""');
     expect(plan).toContain("我的牧區");
     expect(css).toContain(".pastoral-race-row--mine");

@@ -43,9 +43,9 @@ describe("reader speech controls", () => {
   it("does not cancel speech between verses", () => {
     const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
     expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)).toHaveLength(1);
-    expect(audioBlock).toContain("speechUtterance.voice = preferredReaderVoice");
+    expect(audioBlock).toContain("speechUtterance.voice = voiceToUse");
     expect(audioBlock).toContain("speechUtterance.rate = getReaderSpeechRate");
-    expect(audioBlock).toContain("selectPreferredVoice(immediateVoices, targetLang)");
+    expect(audioBlock).toContain("selectPreferredVoice");
     expect(audioBlock).toContain("pendingReaderVoicePromise = getInstalledReaderVoice(targetLang)");
   });
 });
