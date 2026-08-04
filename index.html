@@ -1675,6 +1675,74 @@
                     </button>
                   </div>
                 </div>
+
+                <!-- 語音朗讀設定卡片 -->
+                <div class="app-settings-group profile-preferences-group" style="margin-top: 1rem;">
+                  <div class="app-settings-group__header">
+                    <span class="app-settings-group__header-icon">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
+                    </span>
+                    <div class="app-settings-group__header-text">
+                      <h3 class="text-sm font-medium m-0">聖經語音朗讀設定</h3>
+                      <p class="text-xs text-secondary m-0">調整聆聽語速與偏好的發音人聲線</p>
+                    </div>
+                  </div>
+
+                  <div style="padding: 0.8rem 1rem; display: flex; flex-direction: column; gap: 1.2rem;">
+                    <!-- 語速滑桿 -->
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                      <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label for="speech-rate-slider" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">朗讀語速</label>
+                        <span id="speech-rate-val" style="font-size: 0.85rem; font-weight: 600; color: var(--brand-primary, #04A9D2);">1.0x (標準)</span>
+                      </div>
+                      <input type="range" id="speech-rate-slider" min="0.5" max="2.0" step="0.05" value="1.0"
+                        style="width: 100%; accent-color: var(--brand-primary, #04A9D2); cursor: pointer;">
+                      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary);">
+                        <span>0.5x 沉靜慢速</span>
+                        <span>1.0x 標準</span>
+                        <span>2.0x 疾速</span>
+                      </div>
+                    </div>
+
+                    <!-- 聲線 / 性別切換 -->
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                      <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
+                      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" role="radiogroup" aria-label="聲線偏好">
+                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn active" data-speech-gender="auto">
+                          <span>系統預設</span>
+                        </button>
+                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="female">
+                          <span>溫柔女聲</span>
+                        </button>
+                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="male">
+                          <span>穩重男聲</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 具體發音人選單與換一個人按鈕 -->
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                      <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">發音人選單</label>
+                        <button type="button" id="btn-next-voice" class="text-xs text-brand" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 0.2rem; font-size: 0.75rem;">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="refreshCw"></span>
+                          <span>換一個人試試</span>
+                        </button>
+                      </div>
+                      <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
+                        <option value="">載入系統語音中...</option>
+                      </select>
+                    </div>
+
+                    <!-- 操作按鈕列：試聽按鈕 -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem;">
+                      <button type="button" id="btn-preview-speech" class="btn btn--brand btn--sm w-full" style="display: flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.55rem;">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="volume2"></span>
+                        <span>播放試聽語音</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <!-- Tab Content 3: Badges -->

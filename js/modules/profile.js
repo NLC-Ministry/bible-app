@@ -632,12 +632,190 @@ export function init() {
   });
   syncPreferenceThemeState();
   window.addEventListener("app:themeChanged", syncPreferenceThemeState);
+  initSpeechPreferencesControls();
+
   const btnProfileLogout = document.getElementById("btn-profile-logout");
   if (btnProfileLogout) {
     btnProfileLogout.addEventListener("click", async (e) => {
       e.preventDefault();
       await handleLogoutAndClearCache();
     });
+  }
+}
+
+function initSpeechPreferencesControls() {
+  const rateSlider = document.getElementById("speech-rate-slider");
+  const rateLabel = document.getElementById("speech-rate-val");
+  const voiceSelect = document.getElementById("speech-voice-select");
+  const btnNextVoice = document.getElementById("btn-next-voice");
+  const btnPreviewSpeech = document.getElementById("btn-preview-speech");
+  const genderBtns = document.querySelectorAll("[data-speech-gender]");
+
+  if (!rateSlider && !voiceSelect) return;
+
+  // Initialize state.speechSettings if missing
+  state.speechSettings = state.speechSettings || {
+    rate: 1.0,
+    gender: "auto",
+    voiceURI: ""
+  };
+
+  // 1. Sync UI with current state
+  if (rateSlider && rateLabel) {
+    rateSlider.value = state.speechSettings.rate || 1.0;
+    updateRateLabel(rateSlider.value);
+    rateSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value);
+      state.speechSettings.rate = val;
+      updateRateLabel(val);
+      saveSpeechSettings();
+    });
+  }
+
+  function updateRateLabel(val) {
+    if (!rateLabel) return;
+    const num = parseFloat(val);
+    let desc = "標準";
+    if (num < 0.85) desc = "沉靜慢速";
+    else if (num > 1.35) desc = "疾速";
+    else if (num > 1.1) desc = "流暢快速";
+    rateLabel.textContent = `${num.toFixed(2)}x (${desc})`;
+  }
+
+  function saveSpeechSettings() {
+    try {
+      localStorage.setItem("nlc_speech_settings", JSON.stringify(state.speechSettings));
+    } catch (_e) {}
+  }
+
+  // 2. Gender preference toggle
+  if (genderBtns && genderBtns.length > 0) {
+    const currentGender = state.speechSettings.gender || "auto";
+    genderBtns.forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.speechGender === currentGender);
+      btn.addEventListener("click", () => {
+        genderBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        state.speechSettings.gender = btn.dataset.speechGender || "auto";
+        saveSpeechSettings();
+        populateVoices();
+      });
+    });
+  }
+
+  // 3. Populate Voices
+  function populateVoices() {
+    if (!voiceSelect || typeof window.speechSynthesis === "undefined") return;
+    const voices = window.speechSynthesis.getVoices() || [];
+    const chineseVoices = voices.filter(v => {
+      const lang = String(v.lang || "").toLowerCase();
+      return lang.startsWith("zh") || lang.includes("hant");
+    });
+
+    voiceSelect.innerHTML = "";
+    if (chineseVoices.length === 0) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "使用系統預設聲音";
+      voiceSelect.appendChild(opt);
+      return;
+    }
+
+    chineseVoices.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v.voiceURI || v.name;
+      opt.textContent = `${v.name} (${v.lang})`;
+      if (state.speechSettings.voiceURI && (v.voiceURI === state.speechSettings.voiceURI || v.name === state.speechSettings.voiceURI)) {
+        opt.selected = true;
+      }
+      voiceSelect.appendChild(opt);
+    });
+
+    if (!voiceSelect.value && chineseVoices[0]) {
+      voiceSelect.value = chineseVoices[0].voiceURI || chineseVoices[0].name;
+      state.speechSettings.voiceURI = voiceSelect.value;
+      saveSpeechSettings();
+    }
+  }
+
+  if (typeof window.speechSynthesis !== "undefined") {
+    populateVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+    }
+  }
+
+  if (voiceSelect) {
+    voiceSelect.addEventListener("change", (e) => {
+      state.speechSettings.voiceURI = e.target.value;
+      saveSpeechSettings();
+    });
+  }
+
+  // 4. "換一個人試試 (Next Voice)" Button
+  if (btnNextVoice) {
+    btnNextVoice.addEventListener("click", () => {
+      if (!voiceSelect || voiceSelect.options.length <= 1) return;
+      const currentIndex = voiceSelect.selectedIndex;
+      const nextIndex = (currentIndex + 1) % voiceSelect.options.length;
+      voiceSelect.selectedIndex = nextIndex;
+      state.speechSettings.voiceURI = voiceSelect.value;
+      saveSpeechSettings();
+      playPreviewSpeech();
+    });
+  }
+
+  // 5. "播放試聽語音 (Preview)" Button
+  if (btnPreviewSpeech) {
+    btnPreviewSpeech.addEventListener("click", () => {
+      playPreviewSpeech();
+    });
+  }
+
+  function playPreviewSpeech() {
+    if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
+      if (typeof showToast === "function") showToast("您的瀏覽器不支援語音播放", "warning");
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+    } catch (_e) {}
+
+    const text = "神愛世人，甚至將祂的獨生子賜給他們，叫一切信祂的不致滅亡，反得永生。";
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    const voices = window.speechSynthesis.getVoices() || [];
+    const selectedURI = state.speechSettings.voiceURI;
+    const gender = state.speechSettings.gender || "auto";
+
+    let targetVoice = null;
+    if (selectedURI) {
+      targetVoice = voices.find(v => v.voiceURI === selectedURI || v.name === selectedURI);
+    }
+    if (!targetVoice && typeof window.selectPreferredChineseVoice === "function") {
+      targetVoice = window.selectPreferredChineseVoice(voices, { preferredGender: gender });
+    }
+    if (targetVoice) {
+      utterance.voice = targetVoice;
+      utterance.lang = targetVoice.lang || "zh-TW";
+    } else {
+      utterance.lang = "zh-TW";
+    }
+
+    utterance.rate = state.speechSettings.rate || 1.0;
+
+    // Pitch adjustment for male/female fallback simulation if specific voice is not gendered
+    if (gender === "female") {
+      utterance.pitch = 1.15;
+    } else if (gender === "male") {
+      utterance.pitch = 0.85;
+    } else {
+      utterance.pitch = 1.0;
+    }
+
+    window.speechSynthesis.speak(utterance);
+    if (typeof showToast === "function") showToast(`正在試聽：${targetVoice ? targetVoice.name : "系統預設語音"}`, "info");
   }
 }
 

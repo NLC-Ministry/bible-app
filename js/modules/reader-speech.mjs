@@ -8,8 +8,16 @@ export function resolveReaderStartIndex(verses, selectedVerseNum = null) {
   return 0;
 }
 
-export function selectPreferredVoice(voices = [], targetLang = "zh-TW") {
+export function selectPreferredVoice(voices = [], targetLang = "zh-TW", options = {}) {
   if (!Array.isArray(voices) || voices.length === 0) return null;
+
+  const { preferredVoiceURI = "", preferredGender = "auto" } = options;
+
+  // 1. If explicit voiceURI is requested, match it first
+  if (preferredVoiceURI) {
+    const matched = voices.find(v => v.voiceURI === preferredVoiceURI || v.name === preferredVoiceURI);
+    if (matched) return matched;
+  }
 
   const isEnglish = String(targetLang || "").toLowerCase().startsWith("en");
 
@@ -34,6 +42,15 @@ export function selectPreferredVoice(voices = [], targetLang = "zh-TW") {
       else if (lang.startsWith("zh")) value += 70;
       else return -1000;
 
+      // Gender affinity matching if specified
+      if (preferredGender === "female") {
+        if (/female|hsiaochen|mei-jia|yating|ting-ting|sin-ji|xiaoxiao|xiaoyi|hanhan/.test(name)) value += 150;
+        if (/male|yunjhe|yun-lin|yunfeng|yunhao|kangkang/.test(name)) value -= 100;
+      } else if (preferredGender === "male") {
+        if (/male|yunjhe|yun-lin|yunfeng|yunhao|kangkang|daniel|david/.test(name)) value += 150;
+        if (/female|hsiaochen|mei-jia|yating|ting-ting|sin-ji|xiaoxiao|xiaoyi/.test(name)) value -= 100;
+      }
+
       if (/natural|neural|online/.test(name)) value += 80;
       if (/hsiaochen|yunjhe|ting-ting|mei-jia|sin-ji|yating|google/.test(name)) value += 40;
       if (/premium|enhanced/.test(name)) value += 30;
@@ -48,11 +65,14 @@ export function selectPreferredVoice(voices = [], targetLang = "zh-TW") {
   return score(ranked[0]) > -1000 ? ranked[0] : null;
 }
 
-export function selectPreferredChineseVoice(voices = []) {
-  return selectPreferredVoice(voices, "zh-TW");
+export function selectPreferredChineseVoice(voices = [], options = {}) {
+  return selectPreferredVoice(voices, "zh-TW", options);
 }
 
-export function getReaderSpeechRate(targetLang = "zh-TW") {
+export function getReaderSpeechRate(targetLang = "zh-TW", customRate = null) {
+  if (customRate !== null && customRate !== undefined && Number.isFinite(Number(customRate))) {
+    return Math.max(0.5, Math.min(2.0, Number(customRate)));
+  }
   const lang = String(targetLang || "").toLowerCase();
   return lang.startsWith("en") ? 0.88 : 0.82;
 }

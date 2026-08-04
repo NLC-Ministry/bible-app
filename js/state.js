@@ -93,6 +93,14 @@ const state = {
     fontSize: 18,
     selectedVerseNum: null
   },
+  speechSettings: (() => {
+    try {
+      const raw = localStorage.getItem("nlc_speech_settings");
+      return raw ? JSON.parse(raw) : { rate: 1.0, gender: "auto", voiceURI: "" };
+    } catch (_e) {
+      return { rate: 1.0, gender: "auto", voiceURI: "" };
+    }
+  })(),
   highlights: {}, // Mapping of "Book_Chapter_Verse" to color hex
   statsCharts: {
     rank: null,

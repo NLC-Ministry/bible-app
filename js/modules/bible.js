@@ -1326,12 +1326,29 @@ function speakNextVerseInQueue(sessionId) {
   const currentVersion = state.readerState?.version || "CUNP";
   const isEnglish = ["ESV", "NIV", "NLT"].includes(currentVersion);
   const fallbackLang = isEnglish ? "en-US" : "zh-TW";
+  const settings = state.speechSettings || {};
 
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
-  speechUtterance.lang = preferredReaderVoice?.lang || fallbackLang;
-  if (preferredReaderVoice) speechUtterance.voice = preferredReaderVoice;
-  speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang);
-  speechUtterance.pitch = 1;
+
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  let voiceToUse = preferredReaderVoice;
+  if (settings.voiceURI) {
+    const matched = voices.find(v => v.voiceURI === settings.voiceURI || v.name === settings.voiceURI);
+    if (matched) voiceToUse = matched;
+  }
+  if (!voiceToUse && typeof selectPreferredVoice === "function") {
+    voiceToUse = selectPreferredVoice(voices, fallbackLang, settings);
+  }
+
+  speechUtterance.lang = voiceToUse?.lang || fallbackLang;
+  if (voiceToUse) speechUtterance.voice = voiceToUse;
+
+  speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang, settings.rate);
+
+  let pitch = 1.0;
+  if (settings.gender === "female") pitch = 1.15;
+  else if (settings.gender === "male") pitch = 0.85;
+  speechUtterance.pitch = pitch;
   speechUtterance.volume = 1;
   speechUtterance.onend = () => {
     if (sessionId !== currentAudioSessionId || !isSpeaking) return;
