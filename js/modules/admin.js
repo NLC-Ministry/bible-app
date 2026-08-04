@@ -562,8 +562,16 @@ function setAdminPrimaryPanel(panelName) {
   const systemPanel = document.getElementById('admin-system-panel');
   const plansPanel = document.getElementById('admin-plans-panel');
   if (tabs) tabs.classList.toggle('hidden', !isAdmin);
-  if (systemPanel) systemPanel.classList.toggle('hidden', requested !== 'system');
-  if (plansPanel) plansPanel.classList.toggle('hidden', requested !== 'plans');
+  if (systemPanel) {
+    systemPanel.classList.toggle('hidden', requested !== 'system');
+    systemPanel.style.display = requested === 'system' ? 'grid' : 'none';
+  }
+  if (plansPanel) {
+    plansPanel.classList.remove('hidden');
+    plansPanel.style.display = requested === 'plans' ? 'block' : 'none';
+    plansPanel.style.visibility = 'visible';
+    plansPanel.style.opacity = '1';
+  }
   document.querySelectorAll('[data-admin-panel]').forEach(button => {
     const active = button.dataset.adminPanel === requested;
     button.classList.toggle('active', active);
@@ -578,16 +586,26 @@ function mountPlanManagementSections() {
   const memberList = document.getElementById('member-list-container');
   const statsSection = document.getElementById('stats-group-section');
 
+  if (participantSlot) {
+    participantSlot.classList.remove('hidden');
+    participantSlot.style.display = 'block';
+  }
+
+  if (statisticsSlot) {
+    statisticsSlot.classList.remove('hidden');
+    statisticsSlot.style.display = 'block';
+  }
+
   if (participantSlot && orgHeader) {
     if (orgHeader.parentElement !== participantSlot) participantSlot.appendChild(orgHeader);
     orgHeader.classList.remove('hidden');
-    orgHeader.style.display = '';
+    orgHeader.style.display = 'block';
   }
 
   if (participantSlot && memberList) {
     if (memberList.parentElement !== participantSlot) participantSlot.appendChild(memberList);
     memberList.classList.remove('hidden');
-    memberList.style.display = '';
+    memberList.style.display = 'block';
   }
 
   if (statisticsSlot && statsSection) {

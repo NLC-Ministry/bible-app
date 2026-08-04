@@ -508,6 +508,11 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "admin-view") {
+      const adminPane = document.getElementById("admin-view");
+      if (adminPane) {
+        adminPane.classList.remove("hidden");
+        adminPane.style.display = "block";
+      }
       await loadModule('plan', './modules/plan.js?v=' + buildVersion);
       const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
       const isSystemAdmin = getUserRoleCode(state.currentUser) === 'admin';
