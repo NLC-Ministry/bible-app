@@ -807,12 +807,18 @@ function initSpeechPreferencesControls() {
 
     let selectedIndex = 0;
     let foundSaved = false;
+
     filteredVoices.forEach((v, idx) => {
       const opt = document.createElement("option");
       opt.value = v.voiceURI || v.name;
       opt.textContent = formatTaiwanVoiceName(v);
 
-      if (state.speechSettings.voiceURI && (v.voiceURI === state.speechSettings.voiceURI || v.name === state.speechSettings.voiceURI)) {
+      // 當點選「系統預設」時，硬性強選 Google 國語！
+      if (currentGender === "auto" && isGoogleVoice(v)) {
+        opt.selected = true;
+        selectedIndex = idx;
+        foundSaved = true;
+      } else if (currentGender !== "auto" && state.speechSettings.voiceURI && (v.voiceURI === state.speechSettings.voiceURI || v.name === state.speechSettings.voiceURI)) {
         opt.selected = true;
         selectedIndex = idx;
         foundSaved = true;
@@ -820,8 +826,8 @@ function initSpeechPreferencesControls() {
       voiceSelect.appendChild(opt);
     });
 
-    // 點選按鈕時：預先選中該分類的第 1 個 Voice！
-    if (filteredVoices[0]) {
+    // 點選按鈕時：預先選中該分類的對應 Voice（系統預設 100% 選 Google）
+    if (filteredVoices[selectedIndex]) {
       voiceSelect.selectedIndex = selectedIndex;
       voiceSelect.value = filteredVoices[selectedIndex].voiceURI || filteredVoices[selectedIndex].name;
       state.speechSettings.voiceURI = voiceSelect.value;
@@ -836,7 +842,7 @@ function initSpeechPreferencesControls() {
   if (typeof window.speechSynthesis !== "undefined") {
     populateVoices();
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = populateVoices;
+      window.speechSynthesis.onvoiceschanged = () => populateVoices();
     }
   }
 
@@ -848,24 +854,46 @@ function initSpeechPreferencesControls() {
     });
   }
 
-  // 4. "換一個人試試 (Next Voice)" Button
-  if (btnNextVoice) {
-    btnNextVoice.addEventListener("click", () => {
-      if (!voiceSelect || voiceSelect.options.length <= 1) return;
-      const currentIndex = voiceSelect.selectedIndex;
-      const nextIndex = (currentIndex + 1) % voiceSelect.options.length;
-      voiceSelect.selectedIndex = nextIndex;
-      state.speechSettings.voiceURI = voiceSelect.value;
-      saveSpeechSettings();
-      playPreviewSpeech();
+  // 5. "播放 / 暫停 試聽語音" 雙態控制按鈕
+  let isPreviewSpeaking = false;
+
+  if (btnPreviewSpeech) {
+    btnPreviewSpeech.addEventListener("click", () => {
+      if (isPreviewSpeaking) {
+        stopPreviewSpeech();
+      } else {
+        playPreviewSpeech();
+      }
     });
   }
 
-  // 5. "播放試聽語音 (Preview)" Button
-  if (btnPreviewSpeech) {
-    btnPreviewSpeech.addEventListener("click", () => {
-      playPreviewSpeech();
-    });
+  function stopPreviewSpeech() {
+    if (typeof window.speechSynthesis !== "undefined") {
+      try { window.speechSynthesis.cancel(); } catch (_e) {}
+    }
+    isPreviewSpeaking = false;
+    updatePreviewBtnUI(false);
+  }
+
+  function updatePreviewBtnUI(speaking) {
+    if (!btnPreviewSpeech) return;
+    const btnText = document.getElementById("btn-preview-text");
+    const btnIcon = document.getElementById("btn-preview-icon");
+
+    if (speaking) {
+      if (btnText) btnText.textContent = "暫停試聽";
+      if (btnIcon) btnIcon.setAttribute("data-icon", "pause");
+      btnPreviewSpeech.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
+      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(239, 68, 68, 0.35)";
+    } else {
+      if (btnText) btnText.textContent = "播放試聽語音";
+      if (btnIcon) btnIcon.setAttribute("data-icon", "volume2");
+      btnPreviewSpeech.style.background = "linear-gradient(135deg, var(--brand-primary, #04A9D2) 0%, #0284c7 100%)";
+      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(4, 169, 210, 0.35)";
+    }
+    if (typeof window.hydrateIcons === "function") {
+      window.hydrateIcons();
+    }
   }
 
   function playPreviewSpeech() {
@@ -874,9 +902,8 @@ function initSpeechPreferencesControls() {
       return;
     }
 
-    try {
-      window.speechSynthesis.cancel();
-    } catch (_e) {}
+    // Stop ongoing speech
+    stopPreviewSpeech();
 
     const text = "神愛世人，甚至將祂的獨生子賜給他們，叫一切信祂的不致滅亡，反得永生。";
     const utterance = new SpeechSynthesisUtterance(text);
@@ -901,7 +928,6 @@ function initSpeechPreferencesControls() {
 
     utterance.rate = state.speechSettings.rate || 1.0;
 
-    // Pitch adjustment for male/female fallback simulation if specific voice is not gendered
     if (gender === "female") {
       utterance.pitch = 1.15;
     } else if (gender === "male") {
@@ -910,8 +936,23 @@ function initSpeechPreferencesControls() {
       utterance.pitch = 1.0;
     }
 
+    utterance.onstart = () => {
+      isPreviewSpeaking = true;
+      updatePreviewBtnUI(true);
+    };
+
+    utterance.onend = () => {
+      isPreviewSpeaking = false;
+      updatePreviewBtnUI(false);
+    };
+
+    utterance.onerror = () => {
+      isPreviewSpeaking = false;
+      updatePreviewBtnUI(false);
+    };
+
     window.speechSynthesis.speak(utterance);
-    if (typeof showToast === "function") showToast(`正在試聽：${targetVoice ? targetVoice.name : "系統預設語音"}`, "info");
+    if (typeof showToast === "function") showToast(`正在試聽：${targetVoice ? targetVoice.name : "Google 國語 (台灣)"}`, "info");
   }
 }
 

@@ -1331,24 +1331,37 @@ function speakNextVerseInQueue(sessionId) {
   speechUtterance = new SpeechSynthesisUtterance(currentItem.text);
 
   const voices = window.speechSynthesis.getVoices?.() || [];
-  let voiceToUse = preferredReaderVoice;
-  if (settings.voiceURI) {
-    const matched = voices.find(v => v.voiceURI === settings.voiceURI || v.name === settings.voiceURI);
-    if (matched) voiceToUse = matched;
+  let voiceToUse = null;
+
+  if (isEnglish) {
+    // 💡 英文聖經防護：綁定英文 Voice，但完全響應使用者設定的自訂語速 (settings.rate)！
+    if (typeof selectPreferredVoice === "function") {
+      voiceToUse = selectPreferredVoice(voices, "en-US");
+    }
+    speechUtterance.lang = voiceToUse?.lang || "en-US";
+    if (voiceToUse) speechUtterance.voice = voiceToUse;
+    speechUtterance.rate = getReaderSpeechRate("en-US", settings.rate);
+    speechUtterance.pitch = 1.0;
+  } else {
+    // 中文聖經：正常套用使用者偏好的中文語音與語速設定
+    if (settings.voiceURI) {
+      const matched = voices.find(v => v.voiceURI === settings.voiceURI || v.name === settings.voiceURI);
+      if (matched) voiceToUse = matched;
+    }
+    if (!voiceToUse && typeof selectPreferredVoice === "function") {
+      voiceToUse = selectPreferredVoice(voices, fallbackLang, settings);
+    }
+
+    speechUtterance.lang = voiceToUse?.lang || fallbackLang;
+    if (voiceToUse) speechUtterance.voice = voiceToUse;
+
+    speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang, settings.rate);
+
+    let pitch = 1.0;
+    if (settings.gender === "female") pitch = 1.15;
+    else if (settings.gender === "male") pitch = 0.85;
+    speechUtterance.pitch = pitch;
   }
-  if (!voiceToUse && typeof selectPreferredVoice === "function") {
-    voiceToUse = selectPreferredVoice(voices, fallbackLang, settings);
-  }
-
-  speechUtterance.lang = voiceToUse?.lang || fallbackLang;
-  if (voiceToUse) speechUtterance.voice = voiceToUse;
-
-  speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang, settings.rate);
-
-  let pitch = 1.0;
-  if (settings.gender === "female") pitch = 1.15;
-  else if (settings.gender === "male") pitch = 0.85;
-  speechUtterance.pitch = pitch;
   speechUtterance.volume = 1;
   speechUtterance.onend = () => {
     if (sessionId !== currentAudioSessionId || !isSpeaking) return;
