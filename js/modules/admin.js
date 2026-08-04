@@ -861,11 +861,12 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
           <div class="admin-unjoined-plan-member__name">${memberName}</div>
           <div class="admin-unjoined-plan-member__scope">${scope}</div>
         </div>
-        <button type="button" class="secondary-btn admin-plan-invite-btn" data-plan-invite-member-id="${memberId}" ${reminded ? "disabled" : ""}>
-          ${reminded ? "今天已提醒" : "戳一下"}
+        <button type="button" class="secondary-btn admin-plan-invite-btn icon-button" data-plan-invite-member-id="${memberId}" ${reminded ? "disabled" : ""} title="${reminded ? "今天已提醒" : "戳一下提醒"}" aria-label="${reminded ? "今天已提醒" : "戳一下"}">
+          ${reminded ? "今天已提醒" : '<span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span>'}
         </button>
       </div>`;
   }).join("");
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
 
   inviteAllButton.onclick = async (event) => {
     event.preventDefault();

@@ -754,18 +754,20 @@ body.reading-team-modal-open .main-content {
 }
 
 .reading-team-inline--stats .reading-team-remind-btn {
-  block-size: 44px;
-  border-radius: 999px;
-  gap: 5px;
-  inline-size: auto;
-  min-block-size: 44px;
-  min-inline-size: 44px;
-  padding: 0 10px;
-  width: auto;
+  block-size: 38px;
+  border-radius: 50% !important;
+  gap: 0;
+  inline-size: 38px;
+  min-block-size: 38px;
+  min-inline-size: 38px;
+  max-inline-size: 38px;
+  padding: 0 !important;
+  width: 38px !important;
+  height: 38px !important;
 }
 
 .reading-team-inline--stats .reading-team-remind-btn__label {
-  display: inline;
+  display: none !important;
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
