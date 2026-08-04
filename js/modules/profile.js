@@ -718,8 +718,8 @@ function initSpeechPreferencesControls() {
         state.speechSettings.gender = btn.dataset.speechGender || "auto";
         updateGenderBtnsUI();
         saveSpeechSettings();
-        // 點擊按鈕時：重新過濾選單、預先選中該分類第 1 個語音，並自動播放試聽！
-        populateVoices(true);
+        // 點擊按鈕時：僅重新過濾選單，堅決不自動播放語音干擾使用者！
+        populateVoices(false);
       });
     });
   }
