@@ -752,17 +752,31 @@ function initSpeechPreferencesControls() {
 
     const isFemaleVoice = (v) => {
       const name = String(v.name || "").toLowerCase();
-      return /female|hsiaochen|mei-jia|yating|ting-ting|sin-ji|xiaoxiao|xiaoyi|hanhan|szuchin/.test(name);
+      return /female|hsiaochen|mei-jia|yating|ting-ting|sin-ji|xiaoxiao|xiaoyi|hanhan|szuchin|samantha|victoria/.test(name);
     };
 
-    // Filter list according to gender button filter
-    let filteredVoices = taiwanVoices;
+    const isGoogleDefaultVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return v.default || name.includes("google") || name.includes("國語");
+    };
+
+    // Strict 100% filter according to user exact button requirement
+    let filteredVoices = [];
     if (currentGender === "female") {
-      filteredVoices = taiwanVoices.filter(v => !isMaleVoice(v) || isFemaleVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = taiwanVoices;
+      filteredVoices = taiwanVoices.filter(v => isFemaleVoice(v));
+      if (filteredVoices.length === 0) {
+        filteredVoices = voices.filter(v => isFemaleVoice(v));
+      }
     } else if (currentGender === "male") {
-      filteredVoices = taiwanVoices.filter(v => !isFemaleVoice(v) || isMaleVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = taiwanVoices;
+      filteredVoices = taiwanVoices.filter(v => isMaleVoice(v));
+      if (filteredVoices.length === 0) {
+        filteredVoices = voices.filter(v => isMaleVoice(v));
+      }
+    } else {
+      filteredVoices = taiwanVoices.filter(v => isGoogleDefaultVoice(v));
+      if (filteredVoices.length === 0) {
+        filteredVoices = taiwanVoices;
+      }
     }
 
     // Friendly Taiwan Voice Name Formatter
