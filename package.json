@@ -1,6 +1,6 @@
 {
   "name": "church-bible-reading-app",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Church Bible Speed Reading & Statistics Application",
   "main": "app.js",
   "scripts": {

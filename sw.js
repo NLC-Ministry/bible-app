@@ -87,7 +87,6 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const { request } = event;
-  // No respondWith means a true browser network bypass: no CacheStorage read or write.
   if (shouldBypassCache(request)) return;
 
   if (request.mode === "navigate") {
@@ -101,6 +100,11 @@ self.addEventListener("fetch", event => {
   }
 
   if (isStaticRequest(request)) {
+    const url = new URL(request.url);
+    if (url.pathname.includes("/app.") && url.pathname.endsWith(".js")) {
+      event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 3000 }));
+      return;
+    }
     event.respondWith(cacheStaticWithStyleRecovery(request));
   }
 });
@@ -118,7 +122,6 @@ self.addEventListener("message", event => {
   if (event.data?.type === "SYNC_NOW") event.waitUntil(requestClientSync());
 });
 
-// PWA App Badging API 背景推播與角標整合
 self.addEventListener("push", event => {
   let pushData = {};
   try {
@@ -144,14 +147,13 @@ self.addEventListener("push", event => {
   let badgePromise = Promise.resolve();
   if ("setAppBadge" in navigator) {
     badgePromise = navigator.setAppBadge(unreadCount).catch(err => {
-      console.error("Service Worker 背景設定角標失敗:", err);
+      console.error("Service Worker 角標設定失敗:", err);
     });
   }
 
   event.waitUntil(Promise.all([notificationPromise, badgePromise]));
 });
 
-// 當使用者點擊通知時，聚焦/開啟視窗並清空角標
 self.addEventListener("notificationclick", event => {
   event.notification.close();
 
