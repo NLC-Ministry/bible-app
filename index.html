@@ -1720,14 +1720,11 @@
                       </div>
                     </div>
 
-                    <!-- 具體發音人選單與換一個人按鈕 -->
+                    <!-- 具體發音人選單 (由上方性別按鈕過濾) -->
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">發音人選單</label>
-                        <button type="button" id="btn-next-voice" class="text-xs text-brand" style="background: none; border: none; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 0.2rem; font-size: 0.75rem;">
-                          <span class="nlc-icon nlc-icon--sm" data-icon="refreshCw"></span>
-                          <span>換一個人試試</span>
-                        </button>
+                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">選擇聲線發音人</label>
+                        <span style="font-size: 0.72rem; color: var(--text-secondary);">可自由選擇不同音色</span>
                       </div>
                       <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
                         <option value="">載入系統語音中...</option>

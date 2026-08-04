@@ -723,36 +723,90 @@ function initSpeechPreferencesControls() {
     });
   }
 
-  // 3. Populate Voices
+  // 3. Populate Voices strictly for Taiwan Mandarin (zh-TW / zh-Hant-TW)
   function populateVoices() {
     if (!voiceSelect || typeof window.speechSynthesis === "undefined") return;
     const voices = window.speechSynthesis.getVoices() || [];
-    const chineseVoices = voices.filter(v => {
+    
+    // Strict Taiwan Mandarin & Traditional Chinese voice filtering (zh-TW, zh-Hant-TW, tw)
+    let taiwanVoices = voices.filter(v => {
       const lang = String(v.lang || "").toLowerCase();
-      return lang.startsWith("zh") || lang.includes("hant");
+      const name = String(v.name || "").toLowerCase();
+      return lang === "zh-tw" || lang === "zh-hant-tw" || lang.includes("hant-tw") || lang.endsWith("-tw") || name.includes("taiwan") || name.includes("zh-tw");
     });
 
+    // Fallback if no explicit zh-TW found on some legacy devices
+    if (taiwanVoices.length === 0) {
+      taiwanVoices = voices.filter(v => {
+        const lang = String(v.lang || "").toLowerCase();
+        return lang.startsWith("zh") || lang.includes("hant");
+      });
+    }
+
+    const currentGender = state.speechSettings.gender || "auto";
+
+    const isMaleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return /male|yunjhe|yun-lin|yunfeng|yunhao|kangkang|daniel|david|brian|george/.test(name);
+    };
+
+    const isFemaleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return /female|hsiaochen|mei-jia|yating|ting-ting|sin-ji|xiaoxiao|xiaoyi|hanhan|szuchin/.test(name);
+    };
+
+    // Filter list according to gender button filter
+    let filteredVoices = taiwanVoices;
+    if (currentGender === "female") {
+      filteredVoices = taiwanVoices.filter(v => !isMaleVoice(v) || isFemaleVoice(v));
+      if (filteredVoices.length === 0) filteredVoices = taiwanVoices;
+    } else if (currentGender === "male") {
+      filteredVoices = taiwanVoices.filter(v => !isFemaleVoice(v) || isMaleVoice(v));
+      if (filteredVoices.length === 0) filteredVoices = taiwanVoices;
+    }
+
+    // Friendly Taiwan Voice Name Formatter
+    const formatTaiwanVoiceName = (v) => {
+      const name = String(v.name || "");
+      const lower = name.toLowerCase();
+      if (lower.includes("mei-jia") || lower.includes("meijia")) return "美佳 (台灣女聲)";
+      if (lower.includes("hsiaochen") || lower.includes("hsiao-chen")) return "曉臻 (台灣女聲)";
+      if (lower.includes("ting-ting") || lower.includes("tingting")) return "婷婷 (台灣女聲)";
+      if (lower.includes("yunjhe") || lower.includes("yun-jhe")) return "允哲 (台灣男聲)";
+      if (lower.includes("yun-lin") || lower.includes("yunlin")) return "雲林 (台灣男聲)";
+      if (lower.includes("google") && (lower.includes("國語") || lower.includes("taiwan") || lower.includes("zh-tw"))) return "Google 國語 (台灣)";
+      if (lower.includes("sin-ji") || lower.includes("sinji")) return "心怡 (台灣女聲)";
+      
+      let tag = " (台灣)";
+      if (isFemaleVoice(v)) tag = " (台灣女聲)";
+      else if (isMaleVoice(v)) tag = " (台灣男聲)";
+      return `${name}${tag}`;
+    };
+
     voiceSelect.innerHTML = "";
-    if (chineseVoices.length === 0) {
+    if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "使用系統預設聲音";
+      opt.textContent = "使用台灣系統預設語音";
       voiceSelect.appendChild(opt);
       return;
     }
 
-    chineseVoices.forEach(v => {
+    let foundSaved = false;
+    filteredVoices.forEach(v => {
       const opt = document.createElement("option");
       opt.value = v.voiceURI || v.name;
-      opt.textContent = `${v.name} (${v.lang})`;
+      opt.textContent = formatTaiwanVoiceName(v);
+
       if (state.speechSettings.voiceURI && (v.voiceURI === state.speechSettings.voiceURI || v.name === state.speechSettings.voiceURI)) {
         opt.selected = true;
+        foundSaved = true;
       }
       voiceSelect.appendChild(opt);
     });
 
-    if (!voiceSelect.value && chineseVoices[0]) {
-      voiceSelect.value = chineseVoices[0].voiceURI || chineseVoices[0].name;
+    if (!foundSaved && filteredVoices[0]) {
+      voiceSelect.value = filteredVoices[0].voiceURI || filteredVoices[0].name;
       state.speechSettings.voiceURI = voiceSelect.value;
       saveSpeechSettings();
     }
@@ -769,6 +823,7 @@ function initSpeechPreferencesControls() {
     voiceSelect.addEventListener("change", (e) => {
       state.speechSettings.voiceURI = e.target.value;
       saveSpeechSettings();
+      playPreviewSpeech();
     });
   }
 
