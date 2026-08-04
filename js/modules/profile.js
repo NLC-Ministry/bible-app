@@ -724,57 +724,59 @@ function initSpeechPreferencesControls() {
     });
   }
 
-  // 3. Populate Voices with strict 100% Categorization & Pre-selection
+  // 3. Populate Voices with strict 100% Categorization & English Exclusion
   function populateVoices(autoPreviewAfterPopulate = false) {
     if (!voiceSelect || typeof window.speechSynthesis === "undefined") return;
     const voices = window.speechSynthesis.getVoices() || [];
     
-    // Strict Taiwan Mandarin & Traditional Chinese voices (zh-TW, zh-Hant-TW, TW)
-    let taiwanVoices = voices.filter(v => {
+    // 1. Strict Chinese Language Filter: Must be zh / Chinese, AND NO English/UK/US!
+    const chineseVoices = voices.filter(v => {
       const lang = String(v.lang || "").toLowerCase();
       const name = String(v.name || "").toLowerCase();
-      return lang === "zh-tw" || lang === "zh-hant-tw" || lang.includes("hant-tw") || lang.endsWith("-tw") || name.includes("taiwan") || name.includes("zh-tw");
+      // Exclude English voices explicitly!
+      if (lang.startsWith("en") || /english|uk english|us english|united states|united kingdom/.test(name)) {
+        return false;
+      }
+      return lang.startsWith("zh") || lang.includes("hant") || lang.includes("cmn") || name.includes("國語") || name.includes("中文") || name.includes("taiwan");
     });
-
-    if (taiwanVoices.length === 0) {
-      taiwanVoices = voices.filter(v => {
-        const lang = String(v.lang || "").toLowerCase();
-        return lang.startsWith("zh") || lang.includes("hant");
-      });
-    }
 
     const currentGender = state.speechSettings.gender || "auto";
 
-    // Strict 4 Female & 2 Male Voice Keyword Matchers
+    // 2. Strict Female Matcher (Taiwan Female Voices)
     const isFemaleVoice = (v) => {
-      const lower = String(v.name || "").toLowerCase();
-      return /female|hsiaochen|mei-jia|meijia|ting-ting|tingting|sin-ji|sinji|yating|hanhan|szuchin|samantha|victoria/.test(lower);
+      const name = String(v.name || "").toLowerCase();
+      return /female|hsiaochen|hsiao-chen|mei-jia|meijia|ting-ting|tingting|sin-ji|sinji|yating|hanhan|szuchin|xiaoxiao|xiaoyi/.test(name);
     };
 
+    // 3. Strict Male Matcher (Taiwan Male Voices - Only Chinese Male!)
     const isMaleVoice = (v) => {
-      const lower = String(v.name || "").toLowerCase();
-      return /male|yunjhe|yun-jhe|yun-lin|yunlin|yunfeng|yunhao|kangkang|daniel|david|brian|george/.test(lower);
+      const name = String(v.name || "").toLowerCase();
+      return /yunjhe|yun-jhe|yun-lin|yunlin|yunfeng|yunhao|kangkang|male/.test(name);
     };
 
-    const isGoogleDefaultVoice = (v) => {
-      const lower = String(v.name || "").toLowerCase();
-      return v.default || lower.includes("google") || lower.includes("預設");
+    // 4. Strict Google / Default Matcher
+    const isGoogleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return name.includes("google") && (name.includes("國語") || name.includes("taiwan") || name.includes("zh-tw"));
     };
 
-    // 100% Strict Categorized Filter - No Cross Contamination!
     let filteredVoices = [];
     if (currentGender === "female") {
-      filteredVoices = taiwanVoices.filter(v => isFemaleVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = voices.filter(v => isFemaleVoice(v));
+      // 點「溫柔女聲」：100% 只過濾出中文女聲
+      filteredVoices = chineseVoices.filter(v => isFemaleVoice(v));
+      if (filteredVoices.length === 0) filteredVoices = chineseVoices;
     } else if (currentGender === "male") {
-      filteredVoices = taiwanVoices.filter(v => isMaleVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = voices.filter(v => isMaleVoice(v));
+      // 點「穩重男聲」：100% 只過濾出中文男聲
+      filteredVoices = chineseVoices.filter(v => isMaleVoice(v));
     } else {
-      filteredVoices = taiwanVoices.filter(v => isGoogleDefaultVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = taiwanVoices;
+      // 點「系統預設」：直接只顯示 Google 國語 (台灣) 或系統預設首選
+      filteredVoices = chineseVoices.filter(v => isGoogleVoice(v) || v.default);
+      if (filteredVoices.length === 0) {
+        filteredVoices = chineseVoices.slice(0, 1);
+      }
     }
 
-    // Taiwan Voice Display Formatter
+    // Friendly Taiwan Voice Name Formatter
     const formatTaiwanVoiceName = (v) => {
       const name = String(v.name || "");
       const lower = name.toLowerCase();
@@ -782,9 +784,11 @@ function initSpeechPreferencesControls() {
       if (lower.includes("hsiaochen") || lower.includes("hsiao-chen")) return "曉臻 (台灣女聲)";
       if (lower.includes("ting-ting") || lower.includes("tingting")) return "婷婷 (台灣女聲)";
       if (lower.includes("sin-ji") || lower.includes("sinji")) return "心怡 (台灣女聲)";
+      if (lower.includes("yating")) return "雅婷 (台灣女聲)";
+      if (lower.includes("hanhan")) return "涵涵 (台灣女聲)";
       if (lower.includes("yunjhe") || lower.includes("yun-jhe")) return "允哲 (台灣男聲)";
       if (lower.includes("yun-lin") || lower.includes("yunlin")) return "雲林 (台灣男聲)";
-      if (lower.includes("google") && (lower.includes("國語") || lower.includes("taiwan") || lower.includes("zh-tw"))) return "Google 國語 (台灣)";
+      if (lower.includes("google")) return "Google 國語 (台灣)";
       
       let tag = " (台灣)";
       if (isFemaleVoice(v)) tag = " (台灣女聲)";
@@ -796,7 +800,7 @@ function initSpeechPreferencesControls() {
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = currentGender === "female" ? "系統無可用女聲" : (currentGender === "male" ? "系統無可用男聲" : "使用台灣系統預設語音");
+      opt.textContent = currentGender === "female" ? "系統無可用中文女聲" : (currentGender === "male" ? "系統無可用中文男聲" : "Google 國語 (台灣)");
       voiceSelect.appendChild(opt);
       return;
     }
@@ -816,14 +820,14 @@ function initSpeechPreferencesControls() {
       voiceSelect.appendChild(opt);
     });
 
-    // 點選按鈕時：預先選中該分類的第 1 個 Voice
-    if ((!foundSaved || autoPreviewAfterPopulate) && filteredVoices[0]) {
-      voiceSelect.value = filteredVoices[0].voiceURI || filteredVoices[0].name;
+    // 點選按鈕時：預先選中該分類的第 1 個 Voice！
+    if (filteredVoices[0]) {
+      voiceSelect.selectedIndex = selectedIndex;
+      voiceSelect.value = filteredVoices[selectedIndex].voiceURI || filteredVoices[selectedIndex].name;
       state.speechSettings.voiceURI = voiceSelect.value;
       saveSpeechSettings();
     }
 
-    // 點選按鈕時：預先顯示並自動觸發試聽
     if (autoPreviewAfterPopulate) {
       playPreviewSpeech();
     }
