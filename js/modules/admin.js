@@ -577,9 +577,24 @@ function mountPlanManagementSections() {
   const orgHeader = document.getElementById('plan-org-stats-header');
   const memberList = document.getElementById('member-list-container');
   const statsSection = document.getElementById('stats-group-section');
-  if (participantSlot && orgHeader && orgHeader.parentElement !== participantSlot) participantSlot.appendChild(orgHeader);
-  if (participantSlot && memberList && memberList.parentElement !== participantSlot) participantSlot.appendChild(memberList);
-  if (statisticsSlot && statsSection && statsSection.parentElement !== statisticsSlot) statisticsSlot.appendChild(statsSection);
+
+  if (participantSlot && orgHeader) {
+    if (orgHeader.parentElement !== participantSlot) participantSlot.appendChild(orgHeader);
+    orgHeader.classList.remove('hidden');
+    orgHeader.style.display = '';
+  }
+
+  if (participantSlot && memberList) {
+    if (memberList.parentElement !== participantSlot) participantSlot.appendChild(memberList);
+    memberList.classList.remove('hidden');
+    memberList.style.display = '';
+  }
+
+  if (statisticsSlot && statsSection) {
+    if (statsSection.parentElement !== statisticsSlot) statisticsSlot.appendChild(statsSection);
+    statsSection.classList.remove('hidden');
+    statsSection.style.display = 'flex';
+  }
 }
 
 function getManagementPlanStageNo(plan) {
@@ -658,8 +673,6 @@ async function selectManagementPlan(planKey) {
 
 export async function renderAdminPlanManagement() {
   try {
-    const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
-    if (!MANAGEMENT_ROLES.includes(role)) return;
     setAdminPrimaryPanel('plans');
     mountPlanManagementSections();
 
