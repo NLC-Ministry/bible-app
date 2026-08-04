@@ -688,15 +688,35 @@ function initSpeechPreferencesControls() {
     } catch (_e) {}
   }
 
-  // 2. Gender preference toggle
+  // 2. Gender preference toggle with clear selected styles
   if (genderBtns && genderBtns.length > 0) {
-    const currentGender = state.speechSettings.gender || "auto";
+    const updateGenderBtnsUI = () => {
+      const currentGender = state.speechSettings.gender || "auto";
+      genderBtns.forEach(btn => {
+        const isSelected = (btn.dataset.speechGender === currentGender);
+        btn.classList.toggle("active", isSelected);
+        if (isSelected) {
+          btn.style.background = "var(--brand-primary, #04A9D2)";
+          btn.style.color = "#ffffff";
+          btn.style.border = "2px solid var(--brand-primary, #04A9D2)";
+          btn.style.fontWeight = "600";
+          btn.style.boxShadow = "0 2px 8px rgba(4,169,210,0.25)";
+        } else {
+          btn.style.background = "var(--bg-input)";
+          btn.style.color = "var(--text-secondary)";
+          btn.style.border = "1px solid var(--border-card)";
+          btn.style.fontWeight = "400";
+          btn.style.boxShadow = "none";
+        }
+      });
+    };
+
+    updateGenderBtnsUI();
+
     genderBtns.forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.speechGender === currentGender);
       btn.addEventListener("click", () => {
-        genderBtns.forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
         state.speechSettings.gender = btn.dataset.speechGender || "auto";
+        updateGenderBtnsUI();
         saveSpeechSettings();
         populateVoices();
       });
