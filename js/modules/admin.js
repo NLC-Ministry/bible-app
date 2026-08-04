@@ -637,53 +637,63 @@ function getManagementPlans() {
 }
 
 async function selectManagementPlan(planKey) {
-  const plans = getManagementPlans();
-  const plan = plans.find(item => [item.globalPlanId, item.id, item.presetKey, item.name].filter(Boolean).map(String).includes(String(planKey))) || plans[0] || null;
-  if (!plan) return;
-  state.activePlan = plan;
-  if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
-  localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
-  window.currentPlanViewState = 'ORG_STATS';
-  if (typeof window.renderPlanMembersView === 'function') await window.renderPlanMembersView();
-  await renderAdminUnjoinedPlanMembers(true);
-  await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content');
-  await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6');
+  try {
+    const plans = getManagementPlans();
+    const plan = plans.find(item => [item.globalPlanId, item.id, item.presetKey, item.name].filter(Boolean).map(String).includes(String(planKey))) || plans[0] || null;
+    if (!plan) return;
+    state.activePlan = plan;
+    if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
+    localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
+    window.currentPlanViewState = 'ORG_STATS';
+    if (typeof window.renderPlanMembersView === 'function') {
+      try { await window.renderPlanMembersView(); } catch (e) { console.warn("[Admin] renderPlanMembersView error caught:", e); }
+    }
+    try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
+    try { await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
+    try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
+  } catch (err) {
+    console.error("[AdminManagement] Error in selectManagementPlan:", err);
+  }
 }
 
 export async function renderAdminPlanManagement() {
-  const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
-  if (!MANAGEMENT_ROLES.includes(role)) return;
-  setAdminPrimaryPanel('plans');
-  mountPlanManagementSections();
+  try {
+    const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+    if (!MANAGEMENT_ROLES.includes(role)) return;
+    setAdminPrimaryPanel('plans');
+    mountPlanManagementSections();
 
-  const select = document.getElementById('admin-management-plan-select');
-  const plans = getManagementPlans();
-  if (select) {
-    select.innerHTML = '';
-    if (plans.length === 0) {
-      select.options.add(new Option('目前沒有可管理的計畫', ''));
-      select.disabled = true;
-    } else {
-      select.disabled = false;
-      plans.forEach(plan => select.options.add(new Option(plan.name || '未命名計畫', String(plan.globalPlanId || plan.id || plan.presetKey || plan.name))));
-      const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
-      const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
-      const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
-      const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0];
-      const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
-      select.value = !managementPlanSelectionInitialized
-        ? defaultPlanKey
-        : (matchingOption ? matchingOption.value : select.options[0].value);
-      managementPlanSelectionInitialized = true;
-      select.onchange = () => selectManagementPlan(select.value);
-      await selectManagementPlan(select.value);
+    const select = document.getElementById('admin-management-plan-select');
+    const plans = getManagementPlans();
+    if (select) {
+      select.innerHTML = '';
+      if (plans.length === 0) {
+        select.options.add(new Option('目前沒有可管理的計畫', ''));
+        select.disabled = true;
+      } else {
+        select.disabled = false;
+        plans.forEach(plan => select.options.add(new Option(plan.name || '未命名計畫', String(plan.globalPlanId || plan.id || plan.presetKey || plan.name))));
+        const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
+        const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
+        const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
+        const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0];
+        const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
+        select.value = !managementPlanSelectionInitialized
+          ? defaultPlanKey
+          : (matchingOption ? matchingOption.value : select.options[0].value);
+        managementPlanSelectionInitialized = true;
+        select.onchange = () => selectManagementPlan(select.value);
+        await selectManagementPlan(select.value);
+      }
     }
-  }
 
-  document.querySelectorAll('[data-admin-panel]').forEach(button => {
-    button.onclick = () => setAdminPrimaryPanel(button.dataset.adminPanel);
-  });
-  if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));
+    document.querySelectorAll('[data-admin-panel]').forEach(button => {
+      button.onclick = () => setAdminPrimaryPanel(button.dataset.adminPanel);
+    });
+    if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));
+  } catch (err) {
+    console.error("[AdminManagement] Error rendering admin plan management:", err);
+  }
 }
 
 // Bind to window for global access compatibility
