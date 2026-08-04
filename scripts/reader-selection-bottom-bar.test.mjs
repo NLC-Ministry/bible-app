@@ -33,7 +33,7 @@ describe("reader verse selection bottom bar", () => {
   });
 
   it("keeps the redesigned selection toolbar compact and scrollable on narrow screens", () => {
-    expect(bible).toContain('data-icon="close"');
+    expect(bible).toContain('data-icon="share"');
     expect(bible).toContain("hydrateIcons(barDiv)");
     expect(css).toMatch(/\.youversion-action-bar \.yv-content-row \{[\s\S]*flex-direction: row;[\s\S]*overflow-x: auto;[\s\S]*scrollbar-width: none;/);
     expect(css).toMatch(/\.youversion-action-bar \.yv-content-row::-webkit-scrollbar \{[\s\S]*display: none;/);
