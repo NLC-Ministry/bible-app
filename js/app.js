@@ -706,4 +706,93 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // ── Android 返回鍵相容防線：首頁雙擊退出保護與 Tab 返回攔截 ──
+  (function() {
+    let lastBackPress = 0;
+    const doublePressInterval = 2000; // 2 秒
+
+    // 初始化/切換首頁時 push 虛擬 Root 紀錄，用以攔截返回鍵
+    function pushRootState() {
+      if (!window.history.state || !window.history.state.isAppRoot) {
+        window.history.pushState({ isAppRoot: true }, "");
+      }
+    }
+
+    // 監聽 popstate
+    window.addEventListener("popstate", (event) => {
+      // 1. 檢查當前是否有 Vanilla Modal 開啟
+      const versionPicker = document.getElementById("bible-version-picker-modal");
+      const isPickerOpen = versionPicker && !versionPicker.classList.contains("hidden");
+
+      const badgeDetail = document.getElementById("badge-detail-page");
+      const isBadgeOpen = badgeDetail && !badgeDetail.classList.contains("hidden");
+
+      // 判斷是否退回到了底層 (沒有 root state 了)
+      const hasRootState = event.state && event.state.isAppRoot;
+      const hasModalState = event.state && event.state.modalId;
+
+      if (!hasRootState && !hasModalState) {
+        // 如果有任何原生彈窗開啟，攔截返回鍵並優先關閉它們
+        if (isPickerOpen) {
+          const closeBtn = document.getElementById("version-picker-close");
+          if (closeBtn) closeBtn.click();
+          else versionPicker.classList.add("hidden");
+          pushRootState();
+          return;
+        }
+
+        if (isBadgeOpen) {
+          const closeBtn = document.getElementById("badge-page-back-btn");
+          if (closeBtn) closeBtn.click();
+          else if (typeof window.closeBadgeDetailPage === "function") window.closeBadgeDetailPage();
+          else badgeDetail.classList.add("hidden");
+          pushRootState();
+          return;
+        }
+
+        // 沒有彈窗開啟時，執行首頁或 Tab 導航邏輯
+        const currentTab = window.appRouter ? window.appRouter.currentTab : "dashboard-view";
+
+        if (currentTab === "dashboard-view") {
+          // 在首頁：實施雙擊退出保護
+          const now = Date.now();
+          if (now - lastBackPress < doublePressInterval) {
+            window.close();
+          } else {
+            lastBackPress = now;
+            if (typeof showToast === "function") {
+              showToast("再按一次返回鍵退出應用", doublePressInterval);
+            }
+            pushRootState();
+          }
+        } else {
+          // 不在首頁：自動導回首頁，提升操作體驗
+          if (window.appRouter && typeof window.appRouter.switchTab === "function") {
+            window.appRouter.switchTab("dashboard-view").then(() => {
+              pushRootState();
+            }).catch(() => {
+              pushRootState();
+            });
+          } else {
+            pushRootState();
+          }
+        }
+      }
+    });
+
+    // 啟動時與路由切換時，確保 Root State 存在
+    pushRootState();
+
+    // 攔截 switchTab 以在切換 Tab 時重新確認/鎖定 history 狀態
+    if (window.appRouter) {
+      const originalSwitchTab = window.appRouter.switchTab;
+      window.appRouter.switchTab = async function(tabId, options) {
+        const result = await originalSwitchTab.call(this, tabId, options);
+        pushRootState();
+        return result;
+      };
+    }
+  })();
+
 });
+
