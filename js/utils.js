@@ -498,11 +498,42 @@ function getBadgeStarState(badge) {
 
 function renderBadgeStars(badge, compact = false) {
   const starState = getBadgeStarState(badge);
-  const stars = Array.from({ length: starState.displayedStars }, (_, index) => {
+  const roundCount = (badge && badge.campaignStageNo)
+    ? Math.max(1, getCampaignStageCurrentRound(badge.campaignStageNo))
+    : starState.displayedStars;
+
+  if (roundCount === 6) {
+    const items = `<span class="badge-diamond"><span class="nlc-icon" data-icon="gemFill" aria-hidden="true"></span></span>`;
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 6 遍：1 顆鑽石榮譽">${items}</span>`;
+  }
+  if (roundCount === 7) {
+    const items = Array.from({ length: 2 }, () => `<span class="badge-diamond"><span class="nlc-icon" data-icon="gemFill" aria-hidden="true"></span></span>`).join("");
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 7 遍：2 顆鑽石榮譽">${items}</span>`;
+  }
+  if (roundCount === 8) {
+    const items = Array.from({ length: 3 }, () => `<span class="badge-diamond"><span class="nlc-icon" data-icon="gemFill" aria-hidden="true"></span></span>`).join("");
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 8 遍：3 顆鑽石榮譽">${items}</span>`;
+  }
+  if (roundCount === 9) {
+    const items = `<span class="badge-crown"><span class="nlc-icon" data-icon="crownFill" aria-hidden="true"></span></span>`;
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 9 遍：1 個皇冠榮譽">${items}</span>`;
+  }
+  if (roundCount === 10) {
+    const items = Array.from({ length: 2 }, () => `<span class="badge-crown"><span class="nlc-icon" data-icon="crownFill" aria-hidden="true"></span></span>`).join("");
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 10 遍：2 個皇冠榮譽">${items}</span>`;
+  }
+  if (roundCount > 10) {
+    const items = Array.from({ length: 3 }, () => `<span class="badge-crown"><span class="nlc-icon" data-icon="crownFill" aria-hidden="true"></span></span>`).join("");
+    return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="第 ${roundCount} 遍：3 個皇冠最高榮譽">${items}</span>`;
+  }
+
+  // 1 ~ 5 Rounds (Stars)
+  const displayCount = Math.min(5, starState.displayedStars);
+  const stars = Array.from({ length: displayCount }, (_, index) => {
     const isLit = index < starState.level;
     return `<span class="badge-star ${isLit ? "badge-star--lit" : "badge-star--unlit"}"><span class="nlc-icon" data-icon="${isLit ? "starFill" : "star"}" aria-hidden="true"></span></span>`;
   }).join("");
-  return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="已點亮 ${starState.level} 顆，共顯示 ${starState.displayedStars} 顆">${stars}</span>`;
+  return `<span class="badge-stars ${compact ? "badge-stars--compact" : ""}" aria-label="已點亮 ${starState.level} 顆，共顯示 ${displayCount} 顆">${stars}</span>`;
 }
 
 function updateBadgeWallSummary(unlockedCount, total) {

@@ -1077,6 +1077,45 @@ body.dark-theme .honor-badge-hex--unlocked::after {
   margin-top: 0.125rem;
 }
 
+/* ─── Prestige Badge Ratings (Diamonds & Crowns for Rounds 6~10+) ─── */
+.badge-diamond {
+  display: inline-flex;
+  color: #38bdf8;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.6));
+}
+
+.badge-diamond .nlc-icon {
+  --nlc-icon-size: 0.875rem;
+  width: var(--nlc-icon-size);
+  height: var(--nlc-icon-size);
+  color: #38bdf8;
+  fill: rgba(56, 189, 248, 0.85);
+}
+
+.badge-crown {
+  display: inline-flex;
+  color: #f59e0b;
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.75));
+}
+
+.badge-crown .nlc-icon {
+  --nlc-icon-size: 0.9375rem;
+  width: var(--nlc-icon-size);
+  height: var(--nlc-icon-size);
+  color: #fbbf24;
+  fill: #f59e0b;
+}
+
+.badge-stars--compact .badge-diamond .nlc-icon {
+  --nlc-icon-size: 0.625rem;
+}
+
+.badge-stars--compact .badge-crown .nlc-icon {
+  --nlc-icon-size: 0.6875rem;
+}
+
 .badge-stars--compact .nlc-icon {
   --nlc-icon-size: 0.5625rem;
 }

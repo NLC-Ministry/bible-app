@@ -89,5 +89,11 @@
   "layers": "Layers",
   "zap": "Zap",
   "zapFill": "Zap",
-  "inbox": "Inbox"
+  "inbox": "Inbox",
+  "gem": "Gem",
+  "gemFill": "Gem",
+  "diamond": "Gem",
+  "diamondFill": "Gem",
+  "crown": "Crown",
+  "crownFill": "Crown"
 }

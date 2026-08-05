@@ -310,7 +310,7 @@ export function updateDashboardView() {
     let statusText = "";
     if (started) {
       if (currentRound > 1) {
-        statusText = `已完成第 ${currentRound - 1} 遍 👑 | 第 ${currentRound} 遍：${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
+        statusText = `已完成第 ${currentRound - 1} 遍 | 第 ${currentRound} 遍：${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
       } else {
         statusText = `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
       }
