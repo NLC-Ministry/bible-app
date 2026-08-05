@@ -1724,7 +1724,9 @@
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
                         <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">選擇聲線發音人</label>
-                        <span style="font-size: 0.72rem; color: var(--text-secondary);">可自由選擇不同音色</span>
+                        <button type="button" id="btn-show-tts-guide" style="font-size: 0.75rem; color: var(--brand-primary, #04A9D2); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-weight: 500;">
+                          💡 語音包安裝指引
+                        </button>
                       </div>
                       <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
                         <option value="">載入系統語音中...</option>
@@ -2263,9 +2265,50 @@
         </button>
       </div>
     </div>
+  <!-- 語音包安裝指引 Modal -->
+  <div id="tts-guide-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="tts-guide-title">
+    <div class="modal-panel" style="max-width: 480px; width: 90%; padding: 1.5rem; border-radius: 18px; background: var(--bg-panel, #ffffff); color: var(--text-primary); box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-card, #e2e8f0); padding-bottom: 0.75rem;">
+        <h3 id="tts-guide-title" style="margin: 0; font-size: 1.05rem; font-weight: 700; display: flex; align-items: center; gap: 0.4rem; color: var(--text-primary);">
+          <span class="nlc-icon nlc-icon--sm" data-icon="volume2"></span> 語音包安裝與發音設定指引
+        </h3>
+        <button type="button" id="btn-close-tts-guide" style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-secondary); padding: 0; line-height: 1;">&times;</button>
+      </div>
+      <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.5;">
+        若您的手機清單中缺少台灣國語發音人，請依據您的手機系統進行免費開啟：
+      </p>
+
+      <div style="margin-bottom: 1.2rem; background: var(--bg-input, #f8fafc); padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid var(--border-card, #e2e8f0);">
+        <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--brand-primary, #04A9D2); margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.3rem;">
+          🍏 iPhone (iOS) 開啟步驟：
+        </h4>
+        <ol style="font-size: 0.82rem; color: var(--text-primary); padding-left: 1.2rem; margin: 0; line-height: 1.65;">
+          <li>開啟 **「設定」** ➔ 選擇 **「輔助功能」**</li>
+          <li>點選 **「語音內容」** ➔ **「語音」**</li>
+          <li>選擇 **「中文」** ➔ 點擊 **「中文（台灣）」**</li>
+          <li>免費下載 **「美佳」** 或 **「雅婷」**（建議下載高品質版本）</li>
+        </ol>
+      </div>
+
+      <div style="margin-bottom: 1.2rem; background: var(--bg-input, #f8fafc); padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid var(--border-card, #e2e8f0);">
+        <h4 style="font-size: 0.88rem; font-weight: 700; color: var(--brand-primary, #04A9D2); margin: 0 0 0.5rem 0; display: flex; align-items: center; gap: 0.3rem;">
+          🤖 Android 手機開啟步驟：
+        </h4>
+        <ol style="font-size: 0.82rem; color: var(--text-primary); padding-left: 1.2rem; margin: 0; line-height: 1.65;">
+          <li>開啟 **「設定」** ➔ 搜尋 **「文字轉語音」** (TTS)</li>
+          <li>偏好引擎選擇 **「Google 文字轉語音引擎」**</li>
+          <li>點擊右側 **「設定 ⚙️」** ➔ **「安裝語音資料」**</li>
+          <li>選擇 **「中文（台灣）」** 並點擊下載</li>
+        </ol>
+      </div>
+
+      <button type="button" id="btn-confirm-tts-guide" class="btn btn--primary w-full" style="padding: 0.65rem; border-radius: 10px; font-weight: 600; font-size: 0.88rem; background: var(--brand-primary, #04A9D2); border: none; color: #ffffff; cursor: pointer;">
+        我知道了
+      </button>
+    </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260805_zero_popup_clean_https_redirect"></script>
+  <script type="module" src="js/app.js?v=20260805_add_tts_voice_guide_modal"></script>
 </body>
 
 </html>

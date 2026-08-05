@@ -36,10 +36,12 @@ export function selectPreferredVoice(voices = [], targetLang = "zh-TW", options 
       if (/premium|enhanced/.test(name)) value += 30;
       if (/compact|espeak|robotic/.test(name)) value -= 80;
     } else {
-      if (lang === "zh-tw" || lang === "zh-hant-tw") value += 120;
-      else if (lang.includes("hant")) value += 105;
-      else if (lang === "zh-hk") value += 90;
-      else if (lang.startsWith("zh")) value += 70;
+      // Mandarin & Traditional Chinese TTS Voice Scoring
+      if (lang === "zh-tw" || lang === "zh-hant-tw") value += 150;
+      else if (lang.includes("hant") || /taiwan|taiwanese/i.test(name)) value += 130;
+      else if (lang === "zh-cn" || lang === "zh-hans" || lang === "zh-sg" || /mandarin|putonghua/i.test(name)) value += 100;
+      else if (lang.startsWith("zh")) value += 80;
+      else if (lang === "zh-hk" || lang === "yue-hk" || /cantonese|hong kong/i.test(name)) value += 10; // Cantonese as absolute last resort
       else return -1000;
 
       // Gender affinity matching if specified

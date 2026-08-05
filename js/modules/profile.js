@@ -854,6 +854,29 @@ function initSpeechPreferencesControls() {
     });
   }
 
+  // TTS Voice Package Guide Modal Handlers
+  const btnShowTtsGuide = document.getElementById("btn-show-tts-guide");
+  const ttsGuideModal = document.getElementById("tts-guide-modal");
+  const btnCloseTtsGuide = document.getElementById("btn-close-tts-guide");
+  const btnConfirmTtsGuide = document.getElementById("btn-confirm-tts-guide");
+
+  function openTtsGuideModal() {
+    if (ttsGuideModal) ttsGuideModal.classList.remove("hidden");
+  }
+
+  function closeTtsGuideModal() {
+    if (ttsGuideModal) ttsGuideModal.classList.add("hidden");
+  }
+
+  if (btnShowTtsGuide) btnShowTtsGuide.addEventListener("click", openTtsGuideModal);
+  if (btnCloseTtsGuide) btnCloseTtsGuide.addEventListener("click", closeTtsGuideModal);
+  if (btnConfirmTtsGuide) btnConfirmTtsGuide.addEventListener("click", closeTtsGuideModal);
+  if (ttsGuideModal) {
+    ttsGuideModal.addEventListener("click", (e) => {
+      if (e.target === ttsGuideModal) closeTtsGuideModal();
+    });
+  }
+
   // 5. "播放 / 暫停 試聽語音" 雙態控制按鈕
   let isPreviewSpeaking = false;
 
