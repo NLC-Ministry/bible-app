@@ -11,9 +11,7 @@ const BUILD_CSS_PATH = "__BUILD_CSS_PATH__";
 const APP_SHELL = [
   "/",
   ...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : []),
-  // /index.css intentionally excluded: vercel.json sets no-store on this path,
-  // meaning it should never be served from cache. Production HTML uses the
-  // hashed /index.<hash>.css (BUILD_CSS_PATH below) which is the correct entry.
+  "/index.css",
   ...(BUILD_CSS_PATH.startsWith("/") ? [BUILD_CSS_PATH] : []),
   "/manifest.json",
   "/assets/icon-192.png",
