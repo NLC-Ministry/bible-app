@@ -100,7 +100,8 @@ function ensurePlanRouteShell() {
   if (!listView) {
     listView = document.createElement("div");
     listView.id = "plan-list-view";
-    planRoot.insertBefore(listView, legacyList);
+    const listParent = legacyList.parentNode || planRoot;
+    listParent.insertBefore(listView, legacyList);
     listView.appendChild(legacyList);
   }
 
@@ -109,7 +110,8 @@ function ensurePlanRouteShell() {
     detailView = document.createElement("div");
     detailView.id = "plan-detail-view";
     detailView.className = "hidden";
-    planRoot.insertBefore(detailView, legacyDetail);
+    const detailParent = legacyDetail.parentNode || planRoot;
+    detailParent.insertBefore(detailView, legacyDetail);
     detailView.appendChild(legacyDetail);
   }
 
