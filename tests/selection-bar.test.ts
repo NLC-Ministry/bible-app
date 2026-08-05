@@ -36,7 +36,7 @@ describe("SelectionBottomBar & Floating Capsule Unit Tests", () => {
 
   it("測試 D：驗證點擊複製邏輯，navigator.clipboard.writeText 被正確觸發", async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, {
+    vi.stubGlobal("navigator", {
       clipboard: {
         writeText: writeTextMock
       }
@@ -44,6 +44,7 @@ describe("SelectionBottomBar & Floating Capsule Unit Tests", () => {
 
     await navigator.clipboard.writeText("神就照著自己的形象造人");
     expect(writeTextMock).toHaveBeenCalledWith("神就照著自己的形象造人");
+    vi.unstubAllGlobals();
   });
 
   it("測試 E：驗證 HighlightApiBlock 儲存與存取介面", async () => {
