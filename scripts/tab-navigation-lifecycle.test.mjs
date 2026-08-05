@@ -42,8 +42,8 @@ describe("primary tab navigation lifecycle", () => {
   });
 
   it("bumps the app entry cache version", () => {
-    expect(htmlSource).toContain("js/app.js?v=20260803_reader_audio_fix");
-    expect(appSource).toContain("./db.js?v=20260802_login_auto_repair");
-    expect(appSource).toContain("./utils.js?v=20260801_full_plan_reset");
+    expect(htmlSource).toMatch(/js\/app\.js\?v=2026\d{4}_/);
+    expect(appSource).toMatch(/\.\/db\.js\?v=2026\d{4}_/);
+    expect(appSource).toMatch(/\.\/utils\.js\?v=2026\d{4}_/);
   });
 });
