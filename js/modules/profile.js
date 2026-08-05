@@ -855,25 +855,31 @@ function initSpeechPreferencesControls() {
   }
 
   // TTS Voice Package Guide Modal Handlers
+  window.openTtsGuideModal = function () {
+    const modal = document.getElementById("tts-guide-modal");
+    if (modal) {
+      modal.classList.remove("hidden");
+    }
+  };
+
+  window.closeTtsGuideModal = function () {
+    const modal = document.getElementById("tts-guide-modal");
+    if (modal) {
+      modal.classList.add("hidden");
+    }
+  };
+
   const btnShowTtsGuide = document.getElementById("btn-show-tts-guide");
   const ttsGuideModal = document.getElementById("tts-guide-modal");
   const btnCloseTtsGuide = document.getElementById("btn-close-tts-guide");
   const btnConfirmTtsGuide = document.getElementById("btn-confirm-tts-guide");
 
-  function openTtsGuideModal() {
-    if (ttsGuideModal) ttsGuideModal.classList.remove("hidden");
-  }
-
-  function closeTtsGuideModal() {
-    if (ttsGuideModal) ttsGuideModal.classList.add("hidden");
-  }
-
-  if (btnShowTtsGuide) btnShowTtsGuide.addEventListener("click", openTtsGuideModal);
-  if (btnCloseTtsGuide) btnCloseTtsGuide.addEventListener("click", closeTtsGuideModal);
-  if (btnConfirmTtsGuide) btnConfirmTtsGuide.addEventListener("click", closeTtsGuideModal);
+  if (btnShowTtsGuide) btnShowTtsGuide.addEventListener("click", window.openTtsGuideModal);
+  if (btnCloseTtsGuide) btnCloseTtsGuide.addEventListener("click", window.closeTtsGuideModal);
+  if (btnConfirmTtsGuide) btnConfirmTtsGuide.addEventListener("click", window.closeTtsGuideModal);
   if (ttsGuideModal) {
     ttsGuideModal.addEventListener("click", (e) => {
-      if (e.target === ttsGuideModal) closeTtsGuideModal();
+      if (e.target === ttsGuideModal) window.closeTtsGuideModal();
     });
   }
 
