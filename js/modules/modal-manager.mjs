@@ -106,6 +106,10 @@ export function initModalManager() {
 
   window.removeEventListener("keydown", handleGlobalEscKey);
   window.addEventListener("keydown", handleGlobalEscKey);
+
+  // Global event delegation for modal triggers & close actions
+  document.removeEventListener("click", handleGlobalModalClickDelegation);
+  document.addEventListener("click", handleGlobalModalClickDelegation);
 }
 
 function handleGlobalEscKey(e) {
@@ -116,8 +120,31 @@ function handleGlobalEscKey(e) {
   }
 }
 
-// Expose on window for vanilla JS compatibility
+function handleGlobalModalClickDelegation(e) {
+  const openGuideBtn = e.target.closest("#btn-show-tts-guide, [data-open-tts-guide]");
+  if (openGuideBtn) {
+    e.preventDefault();
+    showModal("tts-guide-modal");
+    return;
+  }
+
+  const closeGuideBtn = e.target.closest("#btn-close-tts-guide, #btn-confirm-tts-guide, [data-close-tts-guide]");
+  if (closeGuideBtn) {
+    e.preventDefault();
+    hideModal("tts-guide-modal");
+  }
+}
+
+// Expose on window for vanilla JS & early HTML inline calls compatibility
 if (typeof window !== "undefined") {
+  window.openTtsGuideModal = function () {
+    return showModal("tts-guide-modal");
+  };
+
+  window.closeTtsGuideModal = function () {
+    return hideModal("tts-guide-modal");
+  };
+
   window.ModalManager = {
     showModal,
     hideModal,

@@ -64,4 +64,26 @@ describe("ModalManager UI Architecture & Lifecycle Controller", () => {
 
     expect(isModalOpen("test-modal-1")).toBe(false);
   });
+
+  it("delegates click events for #btn-show-tts-guide unconditionally via initModalManager", () => {
+    document.body.innerHTML = `
+      <button type="button" id="btn-show-tts-guide">Guide</button>
+      <div id="tts-guide-modal" class="hidden" style="display: none;">
+        <button type="button" id="btn-confirm-tts-guide">Confirm</button>
+      </div>
+    `;
+
+    const { initModalManager } = require("../js/modules/modal-manager.mjs");
+    initModalManager();
+
+    const triggerBtn = document.getElementById("btn-show-tts-guide");
+    triggerBtn.click();
+
+    expect(isModalOpen("tts-guide-modal")).toBe(true);
+
+    const confirmBtn = document.getElementById("btn-confirm-tts-guide");
+    confirmBtn.click();
+
+    expect(isModalOpen("tts-guide-modal")).toBe(false);
+  });
 });
