@@ -11,7 +11,7 @@ import './design/design-system-helpers.js?v=20260801_timezone_local_fixes';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
-import './auth.js?v=20260805_fix_auth_dup_callback_android_sync';
+import './auth.js?v=20260805_fix_android_bridge_redirect';
 import './auth-launch.mjs';
 import './db.js?v=20260805_fix_auth_dup_callback_android_sync';
 import './utils.js?v=20260801_full_plan_reset';

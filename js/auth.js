@@ -306,46 +306,79 @@ const auth = {
     }
   },
 
+  // Build an Android Intent URL that opens the target URL in the device's default browser.
+  // Unlike specifying package=com.android.chrome (which fails if Chrome is not installed
+  // or not the default), using action=VIEW with a browser category lets Android pick
+  // whatever the user has set as their default browser.
   _externalBrowserIntentUrl(targetUrl) {
     const url = new URL(targetUrl);
-    return `intent://${url.host}${url.pathname}${url.search}${url.hash}#Intent;scheme=${url.protocol.replace(":", "")};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
+    const scheme = url.protocol.replace(":", "");
+    const fallback = encodeURIComponent(targetUrl);
+    // Primary: use Android system intent (no package lock — system picks default browser)
+    return `intent://${url.host}${url.pathname}${url.search}${url.hash}` +
+      `#Intent;scheme=${scheme};action=android.intent.action.VIEW;` +
+      `category=android.intent.category.BROWSABLE;` +
+      `S.browser_fallback_url=${fallback};end`;
   },
 
-  _addBrowserLaunchTransportParams(targetUrl) {
+  // Build a list of intent URLs to try in order, from most-specific to least-specific.
+  _externalBrowserIntentFallbacks(targetUrl) {
     const url = new URL(targetUrl);
-    url.searchParams.set("openExternalBrowser", "1");
-    return url.toString();
-  },
-
-  _buildBridgeUrl(continuation, authEnvironment) {
-    const base = new URL(window.location.href);
-    const cleanUrl = new URL(base.pathname + base.hash, base.origin);
-    for (const [name, value] of base.searchParams.entries()) {
-      if (["code", "state", "error", "error_description", "openExternalBrowser", "auth_bridge_attempted", "auth_continuation", "version"].includes(name)) {
-        continue;
-      }
-      cleanUrl.searchParams.append(name, value);
-    }
-
-    cleanUrl.searchParams.set("auth_bridge_attempted", "1");
-    cleanUrl.searchParams.set("auth_continuation", continuation || "");
-    cleanUrl.searchParams.set("version", String(AUTH_POLICY_VERSION));
-
-    const withTransport = this._addBrowserLaunchTransportParams(cleanUrl.toString());
-
-    if (this._isIntentOpenRecommended(authEnvironment)) {
-      return this._externalBrowserIntentUrl(withTransport);
-    }
-
-    return withTransport;
-  },
-
-  _isIntentOpenRecommended(authEnvironment) {
-    return !!(authEnvironment && authEnvironment.platform === "android" && authEnvironment.decision === "bridge");
+    const scheme = url.protocol.replace(":", "");
+    const path = `${url.host}${url.pathname}${url.search}${url.hash}`;
+    const fallback = encodeURIComponent(targetUrl);
+    const base = `#Intent;scheme=${scheme};S.browser_fallback_url=${fallback};`;
+    return [
+      // 1. System default browser (no package restriction)
+      `intent://${path}${base}action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`,
+      // 2. Chrome
+      `intent://${path}${base}package=com.android.chrome;end`,
+      // 3. Samsung Internet
+      `intent://${path}${base}package=com.sec.android.app.sbrowser;end`,
+      // 4. Firefox
+      `intent://${path}${base}package=org.mozilla.firefox;end`,
+    ];
   },
 
   _startSystemBrowserTransition(continuation, authEnvironment) {
-    window.location.href = this._buildBridgeUrl(continuation || "", authEnvironment);
+    const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
+
+    if (this._isIntentOpenRecommended(authEnvironment)) {
+      // Strategy 1: Try window.open with _blank first — some Android in-app browsers
+      // honour this and open in the system browser without needing an intent:// URL.
+      const opened = window.open(bridgeUrl, "_blank");
+
+      // Strategy 2: If window.open was blocked or did nothing (returned null or same window),
+      // fall through to intent:// URL after a short delay.
+      // We detect a failed open by checking if the page is still visible after 300ms.
+      const intentUrl = this._externalBrowserIntentUrl(bridgeUrl);
+      const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
+      let fallbackIdx = 0;
+
+      const tryNextIntent = () => {
+        if (fallbackIdx < fallbacks.length) {
+          window.location.href = fallbacks[fallbackIdx++];
+          // If still here after 400ms, try the next fallback
+          setTimeout(() => {
+            if (!document.hidden) tryNextIntent();
+          }, 400);
+        }
+      };
+
+      if (!opened || opened === window) {
+        // window.open failed immediately — try intent chain right away
+        tryNextIntent();
+      } else {
+        // window.open may have succeeded. As backup, also fire the primary intent URL
+        // after 300ms in case the opened tab closed/redirected back.
+        setTimeout(() => {
+          if (!document.hidden) tryNextIntent();
+        }, 300);
+      }
+    } else {
+      // Non-Android: just navigate directly
+      window.location.href = bridgeUrl;
+    }
   },
 
   showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
@@ -355,8 +388,11 @@ const auth = {
     const existing = document.getElementById("auth-environment-dialog");
     if (existing) existing.remove();
 
+    const isAndroid = authEnvironment && authEnvironment.platform === "android";
     const primaryLabel = "開啟瀏覽器繼續";
-    const hint = "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。";
+    const hint = isAndroid
+      ? "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。"
+      : "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。";
 
     const dialog = document.createElement("div");
     dialog.className = "auth-environment-dialog";
@@ -378,11 +414,16 @@ const auth = {
       </div>
     `;
 
+    const statusEl = dialog.querySelector(".auth-environment-dialog__status");
     const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
-    continueButton.addEventListener("click", () => {
+
+    const doTransition = () => {
       const serializedContinuation = this._getFlowItem(this.keys.continuation) || serializeAuthContinuation(safeContinuation);
+      if (statusEl) statusEl.textContent = "正在開啟瀏覽器...";
       this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
-    });
+    };
+
+    continueButton.addEventListener("click", doTransition);
 
     dialog.addEventListener("click", event => {
       if (event.target === dialog) dialog.remove();
@@ -391,6 +432,14 @@ const auth = {
     document.body.appendChild(dialog);
     if (typeof hydrateIcons === "function") hydrateIcons(dialog);
     continueButton.focus();
+
+    // On Android, auto-trigger the browser transition immediately after the dialog
+    // is shown — the user shouldn't need to tap a second time. If the intent URL
+    // works, they'll leave the page. If it fails, the button stays visible so they
+    // can tap it manually as a fallback.
+    if (isAndroid) {
+      setTimeout(doTransition, 100);
+    }
   },
 
   _failCallback(message, detail) {
