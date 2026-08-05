@@ -31,6 +31,7 @@ function formatMemberContextSyncedAt(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "尚未同步";
   const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -914,13 +915,11 @@ function initSpeechPreferencesControls() {
     if (speaking) {
       if (btnText) btnText.textContent = "暫停試聽";
       if (btnIcon) btnIcon.setAttribute("data-icon", "pause");
-      btnPreviewSpeech.style.background = "linear-gradient(135deg, var(--status-danger, #e11d48) 0%, var(--status-danger-dark, #be123c) 100%)";
-      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(225, 29, 72, 0.35)";
+      btnPreviewSpeech.classList.add("shadcn-speech-btn--playing");
     } else {
       if (btnText) btnText.textContent = "播放試聽語音";
       if (btnIcon) btnIcon.setAttribute("data-icon", "volume2");
-      btnPreviewSpeech.style.background = "linear-gradient(135deg, var(--brand-primary, #04A9D2) 0%, #0284c7 100%)";
-      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(4, 169, 210, 0.35)";
+      btnPreviewSpeech.classList.remove("shadcn-speech-btn--playing");
     }
     if (typeof window.hydrateIcons === "function") {
       window.hydrateIcons();

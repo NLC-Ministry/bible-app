@@ -219,14 +219,14 @@ body.dark-theme {
 .type-section-title { font-size: 1.25rem; font-weight: var(--type-weight-strong); line-height: 1.35; letter-spacing: normal; color: var(--text-primary); }
 .type-card-title { font-size: 1.125rem; font-weight: var(--type-weight-strong); line-height: 1.4; letter-spacing: normal; color: var(--text-primary); }
 .type-subsection-title { font-size: 1rem; font-weight: var(--type-weight-strong); line-height: 1.35; letter-spacing: normal; color: var(--text-primary); }
-.type-label { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1.375; color: color-mix(in srgb, var(--text-primary) 85%, transparent); }
-.type-nav { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1.25; letter-spacing: normal; }
+.type-label { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1.375; color: var(--text-secondary); }
+.type-nav { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1.25; letter-spacing: normal; color: var(--text-primary); }
 .type-lead { font-size: 1rem; font-weight: var(--type-weight-regular); line-height: 1.625; color: var(--text-secondary); }
-.type-body { font-size: 1rem; font-weight: var(--type-weight-regular); line-height: 1.625; color: color-mix(in srgb, var(--text-primary) 90%, transparent); }
+.type-body { font-size: 1rem; font-weight: var(--type-weight-regular); line-height: 1.625; color: var(--text-primary); }
 .type-body-muted { font-size: 1rem; font-weight: var(--type-weight-regular); line-height: 1.625; color: var(--text-muted); }
 .type-caption { font-size: 0.875rem; font-weight: var(--type-weight-regular); line-height: 1.5; color: var(--text-muted); }
-.type-emphasis { font-size: 1rem; font-weight: var(--type-weight-strong); line-height: 1.625; color: color-mix(in srgb, var(--text-primary) 90%, transparent); }
-.type-brand-title { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1; letter-spacing: normal; color: color-mix(in srgb, var(--text-primary) 85%, transparent); }
+.type-emphasis { font-size: 1rem; font-weight: var(--type-weight-strong); line-height: 1.625; color: var(--text-primary); }
+.type-brand-title { font-size: 0.875rem; font-weight: var(--type-weight-strong); line-height: 1; letter-spacing: normal; color: var(--text-primary); }
 
 :root {
   --form-control-text-size: 1rem;
@@ -2008,6 +2008,35 @@ body:not(.dark-theme) .secondary-btn:hover {
   border-color: rgba(4, 169, 210, 0.30);
 }
 
+/* ─── Shadcn UI Speech Preview Button ─── */
+.shadcn-speech-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(135deg, var(--brand-primary, #04A9D2) 0%, color-mix(in srgb, var(--brand-primary, #04A9D2) 80%, #0284c7) 100%);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(4, 169, 210, 0.35);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shadcn-speech-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(4, 169, 210, 0.45);
+}
+
+.shadcn-speech-btn--playing {
+  background: linear-gradient(135deg, var(--status-danger, #ef4444) 0%, color-mix(in srgb, var(--status-danger, #ef4444) 80%, #000) 100%);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
 /* ─── Settings row — iOS-style list item ─── */
 .settings-row-btn {
   width: 100%;
@@ -3594,9 +3623,9 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .announcement-badge--success {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.2) 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--status-success) 15%, transparent) 0%, color-mix(in srgb, var(--status-success) 20%, transparent) 100%);
   color: var(--status-success);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid color-mix(in srgb, var(--status-success) 30%, transparent);
 }
 
 .announcement-badge--warning {

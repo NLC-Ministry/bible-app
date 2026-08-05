@@ -4,21 +4,21 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260805_tts_guide_modal_root_cause_fix';
-import './data/church_campaign.js?v=20260805_tts_guide_modal_root_cause_fix';
+import './copy/zh-Hant.js?v=20260805_text_contrast_button_color_harmonization';
+import './data/church_campaign.js?v=20260805_text_contrast_button_color_harmonization';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_tts_guide_modal_root_cause_fix';
-import './design/icon-registry.js?v=20260805_tts_guide_modal_root_cause_fix';
+import './design/design-system-helpers.js?v=20260805_text_contrast_button_color_harmonization';
+import './design/icon-registry.js?v=20260805_text_contrast_button_color_harmonization';
 import './design/icons.js';
-import './state.js?v=20260805_tts_guide_modal_root_cause_fix';
-import './auth.js?v=20260805_tts_guide_modal_root_cause_fix';
+import './state.js?v=20260805_text_contrast_button_color_harmonization';
+import './auth.js?v=20260805_text_contrast_button_color_harmonization';
 import './auth-launch.mjs';
-import './db.js?v=20260805_tts_guide_modal_root_cause_fix';
-import './utils.js?v=20260805_tts_guide_modal_root_cause_fix';
-import './gamification.js?v=20260805_tts_guide_modal_root_cause_fix';
+import './db.js?v=20260805_text_contrast_button_color_harmonization';
+import './utils.js?v=20260805_text_contrast_button_color_harmonization';
+import './gamification.js?v=20260805_text_contrast_button_color_harmonization';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_tts_guide_modal_root_cause_fix';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_text_contrast_button_color_harmonization';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -31,7 +31,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_tts_guide_modal_root_cause_fix';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_text_contrast_button_color_harmonization';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;

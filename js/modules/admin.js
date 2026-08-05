@@ -443,7 +443,8 @@ function exportAdminRegistrationStatistics() {
   const planName = String(adminRegistrationStatistics.planName || "讀經計畫")
     .replace(/[\\/:*?"<>|]/g, "-");
   anchor.href = url;
-  anchor.download = `報名與註冊統計-${planName}-${new Date().toISOString().slice(0, 10)}.txt`;
+  const todayTW = typeof toTaiwanISODate === "function" ? toTaiwanISODate() : new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  anchor.download = `報名與註冊統計-${planName}-${todayTW}.txt`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

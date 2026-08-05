@@ -5141,7 +5141,7 @@ function renderGroupGrowthTrend(overrideFilter) {
   for (let i = DAYS - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const dStr = d.toISOString().substring(0, 10);
+    const dStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate(d) : d.toISOString().substring(0, 10);
     const mmdd = dStr.substring(5).replace('-', '/');
     // Only show every 5th label to avoid crowding on mobile
     labels.push(i % 5 === 0 || i === 0 ? mmdd : '');
@@ -5381,7 +5381,7 @@ function renderPersonalTrendChart() {
     for (let i = 0; i < 7; i++) {
       const d = new Date(sunday);
       d.setDate(sunday.getDate() + i);
-      const dStr = d.toISOString().substring(0, 10);
+      const dStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate(d) : d.toISOString().substring(0, 10);
       dates.push(dStr);
       labels.push(`${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
     }
@@ -5425,7 +5425,7 @@ function renderPersonalTrendChart() {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const dStr = d.toISOString().substring(0, 10);
+      const dStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate(d) : d.toISOString().substring(0, 10);
       dates.push(dStr);
       labels.push(`${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`);
     }
@@ -7609,7 +7609,7 @@ function renderTeamStatsAnalysisDashboard(unfilteredAllUsers, mockUser) {
   const totalTeamCount = teamUsers.length;
 
   // 1. Completion Rate Today
-  const todayStr = new Date().toISOString().substring(0, 10);
+  const todayStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate() : new Date().toISOString().substring(0, 10);
   const completedTodayCount = teamUsers.filter(u => u.last_read === todayStr).length;
   const todayCompletionRate = totalTeamCount > 0 ? Math.round((completedTodayCount / totalTeamCount) * 100) : 0;
 

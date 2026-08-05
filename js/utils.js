@@ -2089,3 +2089,105 @@ window.closeTtsGuideModal = function () {
   }
 };
 
+/**
+ * 🇹🇼 Taiwan Timezone (Asia/Taipei, UTC+8) Utility Functions
+ */
+export function toTaiwanISODate(dateInput) {
+  if (!dateInput) return "";
+  const date = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function getTaiwanTodayISO(dateInput = new Date()) {
+  return toTaiwanISODate(dateInput);
+}
+
+export function formatTaiwanDateTime(dateInput, options = {}) {
+  if (!dateInput) return "";
+  const date = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return String(dateInput);
+
+  if (options.relative) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    const dateTW = toTaiwanISODate(date);
+    const todayTW = toTaiwanISODate(now);
+
+    const timeParts = new Intl.DateTimeFormat("zh-TW", {
+      timeZone: "Asia/Taipei",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).formatToParts(date).reduce((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+    const timeStr = `${timeParts.hour}:${timeParts.minute}`;
+
+    if (dateTW === todayTW) {
+      if (diffHours < 1 && diffMs > 0) {
+        const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+        return `🔥 ${diffMins} 分鐘前`;
+      }
+      return `🔥 今天 ${timeStr}`;
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (dateTW === toTaiwanISODate(yesterday)) {
+      return `昨天 ${timeStr}`;
+    }
+
+    if (diffHours > 0 && diffHours < 24 * 7) {
+      const daysAgo = Math.max(2, Math.floor(diffHours / 24));
+      return `${daysAgo} 天前`;
+    }
+  }
+
+  const fmtParts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: options.includeSeconds ? "2-digit" : undefined,
+    hour12: false
+  }).formatToParts(date).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+
+  let result = `${fmtParts.year}-${fmtParts.month}-${fmtParts.day} ${fmtParts.hour}:${fmtParts.minute}`;
+  if (options.includeSeconds && fmtParts.second) {
+    result += `:${fmtParts.second}`;
+  }
+  return result;
+}
+
+export function toTaiwanISOString(dateInput = new Date()) {
+  const date = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) return new Date().toISOString();
+  return date.toISOString();
+}
+
+window.toTaiwanISODate = toTaiwanISODate;
+window.getTaiwanTodayISO = getTaiwanTodayISO;
+window.formatTaiwanDateTime = formatTaiwanDateTime;
+window.toTaiwanISOString = toTaiwanISOString;
+
+

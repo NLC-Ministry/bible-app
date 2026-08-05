@@ -795,35 +795,12 @@ function getAnnouncementCategory(rawTitle = "", isFirstItem = false) {
 
 function formatRelativeAnnouncementTime(dateString) {
   if (!dateString) return "";
+  if (typeof formatTaiwanDateTime === "function") {
+    return formatTaiwanDateTime(dateString, { relative: true });
+  }
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = diffMs / (1000 * 60 * 60);
-
-  const isToday = date.toDateString() === now.toDateString();
-  const timeStr = date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-  if (isToday) {
-    if (diffHours < 1 && diffMs > 0) {
-      const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-      return `🔥 ${diffMins} 分鐘前`;
-    }
-    return `🔥 今天 ${timeStr}`;
-  }
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) {
-    return `昨天 ${timeStr}`;
-  }
-
-  if (diffHours > 0 && diffHours < 24 * 7) {
-    const daysAgo = Math.max(2, Math.floor(diffHours / 24));
-    return `${daysAgo} 天前`;
-  }
-
-  return date.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+  return date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit' });
 }
 
 async function renderChurchAnnouncements() {
