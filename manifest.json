@@ -3,6 +3,8 @@
   "short_name": "新生命聖經速讀計畫",
   "description": "新生命教會聖經速讀計畫，進度雲端同步。",
   "start_url": "/",
+  "scope": "/",
+  "id": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#FAFAFA",
