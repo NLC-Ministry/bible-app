@@ -4,21 +4,21 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260805_fix_css_app_shell_pwa';
-import './data/church_campaign.js?v=20260805_fix_css_app_shell_pwa';
+import './copy/zh-Hant.js?v=20260805_restore_full_css_design_tokens';
+import './data/church_campaign.js?v=20260805_restore_full_css_design_tokens';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_fix_css_app_shell_pwa';
-import './design/icon-registry.js?v=20260805_fix_css_app_shell_pwa';
+import './design/design-system-helpers.js?v=20260805_restore_full_css_design_tokens';
+import './design/icon-registry.js?v=20260805_restore_full_css_design_tokens';
 import './design/icons.js';
-import './state.js?v=20260805_fix_css_app_shell_pwa';
-import './auth.js?v=20260805_fix_css_app_shell_pwa';
+import './state.js?v=20260805_restore_full_css_design_tokens';
+import './auth.js?v=20260805_restore_full_css_design_tokens';
 import './auth-launch.mjs';
-import './db.js?v=20260805_fix_css_app_shell_pwa';
-import './utils.js?v=20260805_fix_css_app_shell_pwa';
-import './gamification.js?v=20260805_fix_css_app_shell_pwa';
+import './db.js?v=20260805_restore_full_css_design_tokens';
+import './utils.js?v=20260805_restore_full_css_design_tokens';
+import './gamification.js?v=20260805_restore_full_css_design_tokens';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_fix_css_app_shell_pwa';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_restore_full_css_design_tokens';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { installPullToRefresh } from './pull-to-refresh.mjs';
@@ -32,7 +32,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_fix_css_app_shell_pwa';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_restore_full_css_design_tokens';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;

@@ -4093,9 +4093,9 @@ body:not(.dark-theme) .settings-row-btn:hover {
   transition: opacity 0.15s ease;
 }
 
-/* �w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w
+/* -----------------------------------------------------------------
    Header Avatar Dropdown
-�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w�w */
+   ----------------------------------------------------------------- */
 .user-avatar-container {
   position: relative;
   display: flex;
