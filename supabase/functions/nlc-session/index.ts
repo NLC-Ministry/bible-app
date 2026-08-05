@@ -624,7 +624,40 @@ Deno.serve(async (req: Request) => {
       existingProfile = profileById || null;
     }
 
-    if (!profileId) profileId = crypto.randomUUID();
+
+    if (!profileId) {
+      // Guard against silently orphaning existing user data.
+      // If userinfo.sub is known (non-empty), double-check whether this sub has ANY
+      // historical identity record (including soft-deleted / mislinked ones).
+      // If a record exists but profile lookup failed above, something is wrong —
+      // return an error so the user can re-authenticate rather than silently creating
+      // a new empty profile that loses all reading logs and team records.
+      if (userinfo?.sub) {
+        const { data: anyIdentity } = await supabaseAdmin
+          .from("user_identities")
+          .select("profile_id, provider_user_id")
+          .eq("provider_user_id", userinfo.sub)
+          .limit(1)
+          .maybeSingle();
+
+        if (anyIdentity) {
+          // The sub is known but we couldn't load the linked profile — refuse to create
+          // a new UUID to avoid data loss. Return a recoverable error.
+          console.error("nlc-session: sub exists in user_identities but profile lookup failed", {
+            sub: userinfo.sub,
+            linked_profile_id: anyIdentity.profile_id
+          });
+          return jsonResponse({
+            error: "profile_resolution_failed",
+            message: "帳號資料暫時無法讀取，請重新登入。如問題持續，請聯絡教會支援。",
+            sub_known: true
+          }, 409);
+        }
+      }
+      // Confirmed new user (sub never seen before) — safe to create a fresh profile.
+      profileId = crypto.randomUUID();
+    }
+
 
     const syncedRoleId = await resolveSyncedRoleId(supabaseAdmin, memberContext, existingProfile?.role_id, linkSource);
 

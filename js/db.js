@@ -690,6 +690,14 @@ const db = {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.edge_session) {
       console.error("❌ NLC Session Sync Failed Payload:", payload);
+      // Special case: the server detected a known sub but couldn't resolve the profile.
+      // This typically means the Logto sub changed between devices or tokens are mismatched.
+      // Show a specific error and prompt re-login instead of crashing.
+      if (response.status === 409 && payload.error === "profile_resolution_failed") {
+        const msg = payload.message || "帳號資料暫時無法讀取，請重新登入。";
+        this.showConnectionError(msg);
+        throw new Error(msg);
+      }
       throw new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
     }
 

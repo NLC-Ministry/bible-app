@@ -181,9 +181,10 @@ const auth = {
     localStorage.removeItem(this.keys.supabaseProfile);
     localStorage.removeItem("nlc_edge_session_expires_at");
     localStorage.removeItem("nlc_profile_locked_fields");
-    localStorage.removeItem("active_reading_plans");
-    localStorage.removeItem("reading_logs");
-    localStorage.removeItem("selected_plan_key");
+    // NOTE: active_reading_plans / reading_logs / selected_plan_key are intentionally
+    // NOT cleared here — they belong to user data, not auth tokens.
+    // They are only cleared on explicit logout() to avoid wiping local cache
+    // when a token refresh fails (e.g. on Android bridge re-auth).
   },
 
   _getFlowItem(key) {
@@ -494,106 +495,6 @@ const auth = {
     }
   },
 
-  async login(options = {}) {
-    return this.startInteractiveLogin(options);
-  },
-
-  async continueFromContinuation(continuation) {
-    await this.startInteractiveLogin(continuation);
-  },
-
-  async maybeResumeInteractiveAuthFromBridge() {
-    const continuation = parseContinuationFromSearchParams(window.location.search);
-    if (!continuation) return false;
-
-    const continuationFromLocation = continuation;
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has("code") || urlParams.has("state") || urlParams.has("error")) {
-      return false;
-    }
-
-    if (!continuation) return false;
-    const environment = detectAuthenticationEnvironment();
-    if (shouldGateInteractiveAuth(environment, { authEnvironmentAcknowledged: false })) {
-      this.showEmbeddedBrowserAuthDialog(environment, continuationFromLocation);
-      return false;
-    }
-
-    return this.startInteractiveLogin(continuationFromLocation);
-  },
-
-  async handleCallback() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get("code");
-    const stateVal = urlParams.get("state");
-    const authError = urlParams.get("error");
-    const authErrorDescription = urlParams.get("error_description");
-
-    if (authError) {
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
-    }
-
-    if (!code && !stateVal) return false;
-    if (!code || !stateVal) return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u8cc7\u6599\u4e0d\u5b8c\u6574\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { code: !!code, state: !!stateVal });
-
-    const savedState = this._getFlowItem(this.keys.state);
-    if (!savedState || savedState !== stateVal) {
-      return this._failCallback("\u767b\u5165\u9a57\u8b49\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { savedState: !!savedState, callbackState: !!stateVal });
-    }
-
-    const verifier = this._getFlowItem(this.keys.verifier);
-    if (!verifier) return this._failCallback("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
-
-    const nonce = this._getFlowItem(this.keys.nonce);
-    if (!nonce) return this._failCallback("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
-
-    loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");
-    try {
-      const redirectUri = this._getRedirectUri();
-      const endpoints = await this._getEndpoints();
-      const tokenParams = {
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: redirectUri,
-        client_id: this.config.clientId,
-        code_verifier: verifier
-      };
-      if (this.config.platformResource) {
-        tokenParams.resource = this.config.platformResource;
-      }
-
-      const response = await fetch(endpoints.tokenEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(tokenParams)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}${errorText ? " - " + errorText : ""}`);
-      }
-
-      const data = await response.json();
-      const idPayload = this._parseJwt(data.id_token || "");
-      if (!idPayload || idPayload.nonce !== nonce) {
-        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", {
-          missingIdToken: !data.id_token,
-          expectedNonce: !!nonce,
-          hasPayload: !!idPayload
-        });
-      }
-
-      this._saveTokens(data);
-      this._cleanCallbackUrl();
-      this._applyTokenProfileFallback();
-      this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
-      return true;
-    } catch (err) {
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", err);
-    } finally {
-      this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
-    }
-  },
 
   async login(options = {}) {
     return this.startInteractiveLogin(options);
@@ -819,6 +720,10 @@ const auth = {
     this._clearStoredTokens();
     this._clearFlowState();
     this._resetAppAuthState();
+    // Explicitly clear user data cache only on intentional logout
+    localStorage.removeItem("active_reading_plans");
+    localStorage.removeItem("reading_logs");
+    localStorage.removeItem("selected_plan_key");
 
     if (typeof state !== "undefined" && state.supabase && state.supabase.auth && typeof state.supabase.auth.signOut === "function") {
       try {
