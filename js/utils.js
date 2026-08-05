@@ -2067,10 +2067,25 @@ window.isPlanStarted = isPlanStarted;
 window.isPlanExpired = isPlanExpired;
 window.selectMostRecentActivePlan = selectMostRecentActivePlan;
 window.calculateAllPlansProgress = calculateAllPlansProgress;
-window.getHiddenPlanKeys = getHiddenPlanKeys;
-window.getPlanVisibilityOverrides = getPlanVisibilityOverrides;
 window.isPlanHidden = isPlanHidden;
 window.isCampaignStageLocked = isCampaignStageLocked;
 window.canManageHiddenPlans = canManageHiddenPlans;
 window.getVisiblePlans = getVisiblePlans;
 window.updateAdminNavVisibility = updateAdminNavVisibility;
+
+window.openTtsGuideModal = function () {
+  const modal = document.getElementById("tts-guide-modal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+  }
+};
+
+window.closeTtsGuideModal = function () {
+  const modal = document.getElementById("tts-guide-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
+};
+

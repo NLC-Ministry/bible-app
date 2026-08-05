@@ -744,6 +744,147 @@ async function calculateAndRenderPersonalRankings() {
   }
 }
 
+function getAnnouncementCategory(rawTitle = "", isFirstItem = false) {
+  const title = String(rawTitle || "").trim();
+
+  if (/【重要】|\[重要\]|【緊急】|\[緊急\]/i.test(title)) {
+    return {
+      categoryName: "重要急件",
+      badgeClass: "announcement-badge--danger",
+      iconName: "flame",
+      cleanTitle: title.replace(/【重要】|\[重要\]|【緊急】|\[緊急\]/gi, "").trim(),
+      isFeatured: true,
+    };
+  }
+  if (/【主日】|\[主日\]|【聚會】|\[聚會\]|【崇拜】|\[崇拜\]/i.test(title)) {
+    return {
+      categoryName: "主日消息",
+      badgeClass: "announcement-badge--info",
+      iconName: "church",
+      cleanTitle: title.replace(/【主日】|\[主日\]|【聚會】|\[聚會\]|【崇拜】|\[崇拜\]/gi, "").trim(),
+      isFeatured: isFirstItem,
+    };
+  }
+  if (/【活動】|\[活動\]|【報名】|\[報名\]|【特會】|\[特會\]/i.test(title)) {
+    return {
+      categoryName: "活動報名",
+      badgeClass: "announcement-badge--success",
+      iconName: "party-popper",
+      cleanTitle: title.replace(/【活動】|\[活動\]|【報名】|\[報名\]|【特會】|\[特會\]/gi, "").trim(),
+      isFeatured: isFirstItem,
+    };
+  }
+  if (/【提醒】|\[提醒\]|【通知】|\[通知\]|【注意事項】/i.test(title)) {
+    return {
+      categoryName: "溫馨提醒",
+      badgeClass: "announcement-badge--warning",
+      iconName: "bell",
+      cleanTitle: title.replace(/【提醒】|\[提醒\]|【通知】|\[通知\]|【注意事項】/gi, "").trim(),
+      isFeatured: isFirstItem,
+    };
+  }
+
+  return {
+    categoryName: isFirstItem ? "最新公告" : "教會消息",
+    badgeClass: "announcement-badge--default",
+    iconName: isFirstItem ? "sparkles" : "megaphone",
+    cleanTitle: title,
+    isFeatured: isFirstItem,
+  };
+}
+
+function formatRelativeAnnouncementTime(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  const now = new Date();
+  const diffMs = now - date;
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  const isToday = date.toDateString() === now.toDateString();
+  const timeStr = date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  if (isToday) {
+    if (diffHours < 1 && diffMs > 0) {
+      const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+      return `🔥 ${diffMins} 分鐘前`;
+    }
+    return `🔥 今天 ${timeStr}`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return `昨天 ${timeStr}`;
+  }
+
+  if (diffHours > 0 && diffHours < 24 * 7) {
+    const daysAgo = Math.max(2, Math.floor(diffHours / 24));
+    return `${daysAgo} 天前`;
+  }
+
+  return date.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+}
+
+async function renderChurchAnnouncements() {
+  const container = document.getElementById("church-announcements-list");
+  if (!container) return;
+
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
+  const announcements = await db.fetchAnnouncements();
+
+  if (announcements.length === 0) {
+    container.className = "announcements-list";
+    container.innerHTML = `
+      <div class="announcements-empty">
+        <span class="announcements-empty__icon nlc-icon nlc-icon--md" data-icon="inbox" aria-hidden="true"></span>
+        <p class="announcements-empty__text">目前尚無教會公告。</p>
+      </div>`;
+    if (typeof hydrateIcons === "function") hydrateIcons(container);
+    return;
+  }
+
+  container.className = "announcements-list";
+  container.innerHTML = "";
+
+  announcements.forEach((ann, index) => {
+    const item = document.createElement("div");
+    const categoryInfo = getAnnouncementCategory(ann.title, index === 0);
+
+    item.className = `announcement-item${categoryInfo.isFeatured ? " announcement-item--featured" : ""}`;
+
+    const formattedTime = formatRelativeAnnouncementTime(ann.created_at);
+    const displayTitle = categoryInfo.cleanTitle || ann.title;
+
+    item.innerHTML = `
+      <div class="announcement-item__header">
+        <div class="announcement-item__header-left">
+          <div class="announcement-item__icon-avatar" aria-hidden="true">
+            <span class="nlc-icon nlc-icon--sm" data-icon="${categoryInfo.iconName}"></span>
+          </div>
+          <div class="announcement-item__title-group">
+            <div class="announcement-item__tags">
+              <span class="announcement-badge ${categoryInfo.badgeClass}">
+                <span class="nlc-icon nlc-icon--xs" data-icon="${categoryInfo.iconName}" aria-hidden="true"></span>
+                <span>${categoryInfo.categoryName}</span>
+              </span>
+            </div>
+            <h4 class="announcement-item__title">${escapeHTML(displayTitle)}</h4>
+          </div>
+        </div>
+        <div class="announcement-item__meta">
+          <time class="announcement-item__time" datetime="${escapeHTML(ann.created_at || "")}">${formattedTime}</time>
+          ${isAdmin ? `<button type="button" class="circular-action-btn btn-danger-soft announcement-item__delete" onclick="window.deleteAnnouncement('${ann.id}')" title="刪除公告" aria-label="刪除公告"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>` : ''}
+        </div>
+      </div>
+      <p class="announcement-item__body">${escapeHTML(ann.content)}</p>
+    `;
+    container.appendChild(item);
+  });
+
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
+}
+
 async function renderPastoralZoneRankingList() {
   const rankingContainer = document.getElementById("dashboard-pastoral-ranking");
   if (!rankingContainer) return;
