@@ -4,22 +4,22 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260805_tts_guide_unconditional_boot_delegation';
-import './data/church_campaign.js?v=20260805_tts_guide_unconditional_boot_delegation';
+import './copy/zh-Hant.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
+import './data/church_campaign.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_tts_guide_unconditional_boot_delegation';
-import './design/icon-registry.js?v=20260805_tts_guide_unconditional_boot_delegation';
+import './design/design-system-helpers.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
+import './design/icon-registry.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 import './design/icons.js';
-import './state.js?v=20260805_tts_guide_unconditional_boot_delegation';
-import './auth.js?v=20260805_tts_guide_unconditional_boot_delegation';
+import './state.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
+import './auth.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 import './auth-launch.mjs';
-import './db.js?v=20260805_tts_guide_unconditional_boot_delegation';
-import './utils.js?v=20260805_tts_guide_unconditional_boot_delegation';
-import './gamification.js?v=20260805_tts_guide_unconditional_boot_delegation';
+import './db.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
+import './utils.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
+import './gamification.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_tts_guide_unconditional_boot_delegation';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -33,7 +33,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_tts_guide_unconditional_boot_delegation';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_tts_guide_modal_css_and_profile_override_repair';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;

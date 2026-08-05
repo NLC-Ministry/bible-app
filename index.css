@@ -13164,8 +13164,16 @@ select,
   -webkit-backdrop-filter: blur(4px);
 }
 
+.tts-guide-modal-overlay:not(.hidden) {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
 .tts-guide-modal-overlay.hidden {
   display: none !important;
-  opacity: 0;
-  pointer-events: none;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }

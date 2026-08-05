@@ -866,34 +866,8 @@ function initSpeechPreferencesControls() {
   }
 
   // TTS Voice Package Guide Modal Handlers
-  window.openTtsGuideModal = function () {
-    const modal = document.getElementById("tts-guide-modal");
-    if (modal) {
-      modal.classList.remove("hidden");
-      modal.style.display = "flex";
-    }
-  };
-
-  window.closeTtsGuideModal = function () {
-    const modal = document.getElementById("tts-guide-modal");
-    if (modal) {
-      modal.classList.add("hidden");
-      modal.style.display = "none";
-    }
-  };
-
-  const btnShowTtsGuide = document.getElementById("btn-show-tts-guide");
-  const ttsGuideModal = document.getElementById("tts-guide-modal");
-  const btnCloseTtsGuide = document.getElementById("btn-close-tts-guide");
-  const btnConfirmTtsGuide = document.getElementById("btn-confirm-tts-guide");
-
-  if (btnShowTtsGuide) btnShowTtsGuide.addEventListener("click", window.openTtsGuideModal);
-  if (btnCloseTtsGuide) btnCloseTtsGuide.addEventListener("click", window.closeTtsGuideModal);
-  if (btnConfirmTtsGuide) btnConfirmTtsGuide.addEventListener("click", window.closeTtsGuideModal);
-  if (ttsGuideModal) {
-    ttsGuideModal.addEventListener("click", (e) => {
-      if (e.target === ttsGuideModal) window.closeTtsGuideModal();
-    });
+  if (typeof window.ModalManager !== "undefined") {
+    window.ModalManager.registerModal("tts-guide-modal");
   }
 
   // 5. "播放 / 暫停 試聽語音" 雙態控制按鈕

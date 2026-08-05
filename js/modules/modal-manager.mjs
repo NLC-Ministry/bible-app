@@ -29,6 +29,9 @@ export function showModal(target, options = {}) {
 
   el.classList.remove("hidden");
   el.style.display = displayStyle;
+  el.style.opacity = "1";
+  el.style.pointerEvents = "auto";
+  el.style.visibility = "visible";
   el.setAttribute("aria-hidden", "false");
 
   // Prevent duplicate stack entries
@@ -51,6 +54,9 @@ export function hideModal(target, options = {}) {
 
   el.classList.add("hidden");
   el.style.display = "none";
+  el.style.opacity = "0";
+  el.style.pointerEvents = "none";
+  el.style.visibility = "hidden";
   el.setAttribute("aria-hidden", "true");
 
   const idx = activeModalStack.indexOf(el);
