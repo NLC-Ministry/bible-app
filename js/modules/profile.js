@@ -1,4 +1,14 @@
 import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
+import { showModal, hideModal } from "./modal-manager.mjs";
+
+// Unconditional Global TTS Voice Package Guide Modal Handlers
+window.openTtsGuideModal = function () {
+  return showModal("tts-guide-modal");
+};
+
+window.closeTtsGuideModal = function () {
+  return hideModal("tts-guide-modal");
+};
 
 function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {

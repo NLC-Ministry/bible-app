@@ -48,4 +48,18 @@ describe("reader speech controls", () => {
     expect(audioBlock).toContain("selectPreferredVoice");
     expect(audioBlock).toContain("pendingReaderVoicePromise = getInstalledReaderVoice(targetLang)");
   });
+
+  it("provides an accessible, unconditionally registered TTS guide modal overlay", () => {
+    const html = readFileSync("index.html", "utf8");
+    const profile = readFileSync("js/modules/profile.js", "utf8");
+    expect(html).toContain('id="tts-guide-modal"');
+    expect(html).toContain('class="tts-guide-modal-overlay hidden"');
+    expect(html).toContain('onclick="if(event.target===this)window.closeTtsGuideModal?.()"');
+    expect(css).toContain(".tts-guide-modal-overlay {");
+    expect(css).toContain("position: fixed;");
+    expect(css).toContain("z-index: 10000;");
+    expect(css).toContain(".tts-guide-modal-overlay.hidden {");
+    expect(profile).toContain("window.openTtsGuideModal = function");
+    expect(profile).toContain("window.closeTtsGuideModal = function");
+  });
 });
