@@ -365,50 +365,26 @@ const auth = {
 
   _startSystemBrowserTransition(continuation, authEnvironment) {
     const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
+
+    // Primary direct method: Standard HTTPS navigation with openExternalBrowser=1.
+    // LINE (both iOS and Android) natively catches openExternalBrowser=1 on HTTPS URLs
+    // and opens Safari/Chrome directly WITHOUT triggering OS custom scheme popups ("允許/拒絕").
+    window.location.href = bridgeUrl;
+
+    // Secondary fallback: Only try custom URL schemes (x-safari-https:// or intent://)
+    // if after 1500ms the page is still visible (meaning LINE/browser didn't redirect).
     const platform = authEnvironment && authEnvironment.platform;
+    setTimeout(() => {
+      if (document.hidden) return;
 
-    if (platform === "ios") {
-      const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
-      const chromeUrl = bridgeUrl.replace(/^https:\/\//, "googlechromes://");
-
-      window.location.href = safariUrl;
-
-      setTimeout(() => {
-        if (!document.hidden) {
-          window.location.href = chromeUrl;
-        }
-      }, 1200);
-
-      setTimeout(() => {
-        if (!document.hidden) {
-          window.location.href = bridgeUrl;
-        }
-      }, 2500);
-
-    } else if (this._isIntentOpenRecommended(authEnvironment)) {
-      const opened = window.open(bridgeUrl, "_blank");
-      const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
-      let fallbackIdx = 0;
-
-      const tryNextIntent = () => {
-        if (fallbackIdx < fallbacks.length) {
-          window.location.href = fallbacks[fallbackIdx++];
-          setTimeout(() => {
-            if (!document.hidden) tryNextIntent();
-          }, 500);
-        }
-      };
-
-      if (!opened || opened === window) {
-        tryNextIntent();
-      } else {
-        setTimeout(() => {
-          if (!document.hidden) tryNextIntent();
-        }, 400);
+      if (platform === "ios") {
+        const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
+        window.location.href = safariUrl;
+      } else if (this._isIntentOpenRecommended(authEnvironment)) {
+        const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
+        if (fallbacks[0]) window.location.href = fallbacks[0];
       }
-    } else {
-      window.location.href = bridgeUrl;
-    }
+    }, 1500);
   },
 
   showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
