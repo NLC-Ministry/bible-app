@@ -473,9 +473,9 @@ function getCampaignStageCurrentRound(stageNo) {
 function getBadgeMilestoneConfig(badgeId) {
   if (badgeId && badgeId.startsWith("church_stage_award_")) {
     const stageNo = Number(badgeId.replace("church_stage_award_", ""));
-    return { levels: [5, 4, 3, 2, 1], unit: "遍", getValue: () => getCampaignStageCompletedRounds(stageNo) };
+    return { levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], unit: "遍", getValue: () => getCampaignStageCompletedRounds(stageNo) };
   }
-  return { levels: [5, 4, 3, 2, 1], unit: "遍", getValue: () => 0 };
+  return { levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], unit: "遍", getValue: () => 0 };
 }
 
 function getBadgeProgressValue(badgeId) {
@@ -853,9 +853,27 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
     }
   });
 
+  function getMilestoneRatingLabel(lvl) {
+    if (lvl <= 5) return `第 ${lvl} 遍完成 (${lvl} 顆星)`;
+    if (lvl === 6) return `第 6 遍完成 (1 顆鑽石榮譽)`;
+    if (lvl === 7) return `第 7 遍完成 (2 顆鑽石榮譽)`;
+    if (lvl === 8) return `第 8 遍完成 (3 顆鑽石榮譽)`;
+    if (lvl === 9) return `第 9 遍完成 (1 個皇冠榮譽)`;
+    if (lvl === 10) return `第 10 遍完成 (2 個皇冠榮譽)`;
+    return `第 ${lvl} 遍完成 (3 個皇冠至尊榮譽)`;
+  }
+
   // Update star-level display pill
   if (levelPill) {
-    levelPill.textContent = `★ ${Math.max(1, badgeStarState.level)}`;
+    const roundCount = currentVal || Math.max(1, badgeStarState.level);
+    let ratingText = `★ ${roundCount} 遍`;
+    if (roundCount === 6) ratingText = "1 鑽石";
+    if (roundCount === 7) ratingText = "2 鑽石";
+    if (roundCount === 8) ratingText = "3 鑽石";
+    if (roundCount === 9) ratingText = "1 皇冠";
+    if (roundCount === 10) ratingText = "2 皇冠";
+    if (roundCount > 10) ratingText = "3 皇冠";
+    levelPill.textContent = ratingText;
     levelPill.style.display = "block";
     levelPill.classList.toggle("is-unlit", badgeStarState.level === 0);
   }
@@ -864,6 +882,7 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
   timeline.innerHTML = "";
   conf.levels.forEach(lvl => {
     const isLvlUnlocked = currentVal >= lvl;
+    const milestoneTitle = getMilestoneRatingLabel(lvl);
     
     const item = document.createElement("div");
     item.className = "badge-milestone-item";
@@ -883,12 +902,14 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
         localStorage.setItem(`date_unlocked_${badge.id}_lvl_${lvl}`, dateStr);
       }
       contentBox.innerHTML = `
+        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">${milestoneTitle}</div>
         <div class="badge-milestone-done">完成於 ${dateStr}</div>
       `;
     } else {
       const diff = lvl - currentVal;
       const pct = Math.min(100, Math.floor((currentVal / lvl) * 100));
       contentBox.innerHTML = `
+        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">${milestoneTitle}</div>
         <div class="badge-milestone-remaining">還差 ${diff} ${conf.unit}</div>
         <div class="badge-milestone-track">
           <div class="badge-milestone-fill" style="width: ${pct}%;"></div>

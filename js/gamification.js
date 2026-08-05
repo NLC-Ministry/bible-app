@@ -5,7 +5,7 @@ const ACHIEVEMENTS = typeof window.createChurchCampaignStageDefinitions === "fun
       id: "church_stage_award_" + stage.stageNo,
       title: stage.awardName,
       description: "完成「" + stage.name + "」讀經計畫",
-      triggerText: "第一遍進行中先顯示一顆未亮星；每完成一遍點亮一顆星",
+      triggerText: "完成1~5遍點亮1~5顆星；完成6~8遍獲得1~3顆鑽石；完成9~10+遍獲得1~3個皇冠至尊榮譽",
       iconKey: "award",
       campaignStageNo: stage.stageNo
     }))

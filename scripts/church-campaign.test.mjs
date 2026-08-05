@@ -215,7 +215,7 @@ describe("joined plan options menu", () => {
     expect(gamification).toContain("church_stage_award_");
     expect(gamification).toContain("badge.designVersion = 2");
     expect(gamification).toContain("badge.maxStars = 5");
-    expect(gamification).toContain("第一遍進行中先顯示一顆未亮星");
+    expect(gamification).toContain("完成1~5遍點亮1~5顆星");
     expect(gamification).not.toContain("badge_cat");
     expect(planSource).toContain("church_stage_completed_rounds_");
   });
