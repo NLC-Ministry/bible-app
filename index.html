@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>新生命聖經速讀計畫</title>
+  <title>?��??��?經速�?計畫</title>
   <!-- PWA Manifest & Mobile Meta -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#04A9D2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="新生命聖經速讀計畫">
+  <meta name="apple-mobile-web-app-title" content="?��??��?經速�?計畫">
   <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
   <link rel="icon" href="assets/bible-reading-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -52,7 +52,7 @@
       const button = document.getElementById("app-style-recovery-button");
       if (button) {
         button.disabled = true;
-        button.textContent = "正在前往修復頁…";
+        button.textContent = "�?��?��?修復?��?;
       }
       window.location.replace("/repair?version=" + Date.now());
     };
@@ -95,7 +95,7 @@
             "card-foreground": "var(--text-primary)",
             muted: "var(--bg-input)",
             "muted-foreground": "var(--text-muted)",
-            /* Neutral hover surface for ghost/outline — not brand cyan */
+            /* Neutral hover surface for ghost/outline ??not brand cyan */
             accent: "color-mix(in srgb, var(--text-primary) 6%, var(--bg-card))",
             "accent-foreground": "var(--text-primary)",
             secondary: "color-mix(in srgb, var(--text-primary) 8%, var(--bg-card))",
@@ -132,9 +132,9 @@
 
 <body class="light-theme">
   <div id="app-style-recovery" hidden role="alert" style="position:fixed;inset:0;z-index:2147483647;background:#fafafa;color:#171717;padding:env(safe-area-inset-top,24px) 24px env(safe-area-inset-bottom,24px);font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px;">
-    <div style="font-size:22px;font-weight:700;">畫面樣式需要重新載入</div>
-    <div style="max-width:360px;font-size:16px;line-height:1.6;color:#555;">系統偵測到舊版畫面資源，點擊下方按鈕即可修復，不會刪除你的讀經進度或登入資料。</div>
-    <button id="app-style-recovery-button" type="button" onclick="window.recoverAppAssets()" style="border:0;border-radius:12px;background:#04A9D2;color:#fff;padding:12px 22px;font-size:16px;font-weight:600;">修復並重新載入</button>
+    <div style="font-size:22px;font-weight:700;">?�面�???�要�??��???/div>
+    <div style="max-width:360px;font-size:16px;line-height:1.6;color:#555;">系統?�測?��??�畫?��?源�?點�?下方?��??�可修復，�??�刪?��??��?經進度?�登?��??��?/div>
+    <button id="app-style-recovery-button" type="button" onclick="window.recoverAppAssets()" style="border:0;border-radius:12px;background:#04A9D2;color:#fff;padding:12px 22px;font-size:16px;font-weight:600;">修復並�??��???/button>
   </div>
   <!-- App Container -->
   <div class="app-layout hidden">
@@ -143,7 +143,7 @@
     <header class="main-header">
       <div class="header-container" style="display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative;">
         <div class="header-leading" style="display: flex; align-items: center; min-width: 70px;">
-          <a href="#" class="brand-mark" id="brand-logo" aria-label="回到首頁">
+          <a href="#" class="brand-mark" id="brand-logo" aria-label="?�到首�?">
             <img class="brand-icon-img" src="assets/bible-reading-icon.svg" alt="" width="44" height="44">
           </a>
           <button class="app-back-btn is-home" id="global-back-btn" type="button" title="&#x8FD4;&#x56DE;">
@@ -151,7 +151,7 @@
             <span id="global-back-label">&#x9996;&#x9801;</span>
           </button>
 
-          <!-- 新增：計畫詳情專用的極簡返回鈕 -->
+          <!-- ?��?：�??�詳?��??��?極簡返�???-->
           <button id="top-bar-back-btn"
             onclick="if (typeof window.planGoBack === 'function') { window.planGoBack(); } else if (appRouter.currentTab === 'plan-view') { state.planDetailOpen = false; if (typeof window.renderPlanView === 'function') window.renderPlanView(); appRouter.updateNavigationChrome(); }"
             class="hidden" style="display: none; align-items: center; gap: 4px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.88rem; font-weight: 500; padding: 0;">
@@ -160,9 +160,9 @@
           </button>
         </div>
 
-        <!-- 中間：標題與核心切換按鈕 -->
+        <!-- 中�?：�?題�??��??��??��? -->
         <div id="top-bar-title-area" style="display: flex; align-items: center; justify-content: center; flex-grow: 1;">
-          <span class="brand-text">新生命聖經速讀計畫</span>
+          <span class="brand-text">?��??��?經速�?計畫</span>
           <span id="top-bar-plan-name" class="hidden"
             style="display: none; max-width: 58vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; font-weight: 500; color: var(--text-primary); text-align: center;">
             計畫
@@ -180,7 +180,7 @@
           <button class="tab-btn" data-target="plan-view">
             <span>&#x8A08;&#x756B;</span>
           </button>
-          <button class="tab-btn" data-target="profile-view" aria-label="個人">
+          <button class="tab-btn" data-target="profile-view" aria-label="?�人">
             <span>&#x500B;&#x4EBA;</span>
           </button>
           <button class="tab-btn admin-only-nav hidden" data-target="admin-view">
@@ -192,23 +192,23 @@
           <!-- Connection Status Badge -->
           <div class="status-badge offline" id="connection-status">
             <span class="indicator"></span>
-            <span class="status-text">離線模式</span>
+            <span class="status-text">?��?模�?</span>
           </div>
           <!-- Notification Bell & Dropdown Popover -->
           <div class="notification-menu-container" style="position: relative; display: flex; align-items: center; justify-content: center;">
-            <button class="icon-btn" id="btn-notification-bell" title="通知" style="position: relative;" type="button"
+            <button class="icon-btn" id="btn-notification-bell" title="?�知" style="position: relative;" type="button"
               aria-haspopup="dialog" aria-expanded="false" aria-controls="notification-popover">
               <span class="nlc-icon nlc-icon--sm" data-icon="bell" aria-hidden="true"></span>
               <span class="notification-bell-badge" id="notification-bell-badge" hidden></span>
             </button>
             <div class="notification-popover hidden" id="notification-popover"
-              role="dialog" aria-label="通知">
+              role="dialog" aria-label="?�知">
               <div class="notification-popover__header">
-                <span class="notification-popover__title">通知</span>
-                <button class="notification-popover__read-all-btn" id="btn-notification-read-all" type="button">全部已讀</button>
+                <span class="notification-popover__title">?�知</span>
+                <button class="notification-popover__read-all-btn" id="btn-notification-read-all" type="button">?�部已�?</button>
               </div>
               <div class="notification-popover__content" id="notification-list-container">
-                <div class="notification-popover__empty">目前沒有通知</div>
+                <div class="notification-popover__empty">?��?沒�??�知</div>
               </div>
             </div>
           </div>
@@ -216,25 +216,25 @@
           <!-- Plan Options Menu (visible only when viewing plan details) -->
           <div class="options-menu-container hidden" id="global-plan-options-container"
             style="position: relative; display: flex; align-items: center; justify-content: center;">
-            <button class="icon-btn" id="btn-plan-options" title="計畫選項" style="position: relative;">
+            <button class="icon-btn" id="btn-plan-options" title="計畫?��?" style="position: relative;">
               <span class="nlc-icon nlc-icon--sm" data-icon="more" aria-hidden="true"></span>
             </button>
             <div class="options-dropdown hidden" id="plan-options-dropdown" style="right: 0; left: auto; top: 48px;">
               <button class="options-dropdown-item" id="view-plan-details-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="book"
-                    aria-hidden="true"></span></span><span>計畫詳情</span>
+                    aria-hidden="true"></span></span><span>計畫詳�?</span>
               </button>
               <button class="options-dropdown-item" id="edit-flexible-plan-schedule-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="calendarThirty"
-                    aria-hidden="true"></span></span><span>每週讀經安排</span>
+                    aria-hidden="true"></span></span><span>每週�?經�???/span>
               </button>
               <button class="options-dropdown-item" id="delete-plan-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="logout"
-                    aria-hidden="true"></span></span><span>退出此計畫</span>
+                    aria-hidden="true"></span></span><span>?�?�此計畫</span>
               </button>
               <button class="options-dropdown-item" id="reset-plan-progress-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="refresh"
-                    aria-hidden="true"></span></span><span>重置此計畫進度</span>
+                    aria-hidden="true"></span></span><span>?�置此�??�進度</span>
               </button>
             </div>
           </div>
@@ -249,9 +249,9 @@
       <section id="dashboard-view" class="view-pane hidden">
         <div class="grid-layout">
           <!-- Main Column: Personal Progress & Announcements -->
-          <!-- 進行中的計畫 (Active Plan Summary) -->
+          <!-- ?��?中�?計畫 (Active Plan Summary) -->
           <div class="glass-card card-col span-8 bento-card active-plan-card">
-            <h3 class="card-title">進行中的計畫</h3>
+            <h3 class="card-title">?��?中�?計畫</h3>
             <div id="active-plan-summary">
               <div class="skeleton-wrapper" style="display:flex;flex-direction:column;gap:1rem;padding:0.25rem 0;">
                 <div class="skeleton-shimmer" style="height:18px;width:62%;border-radius:6px;"></div>
@@ -271,7 +271,7 @@
             </div>
           </div>
 
-          <!-- 每日金句 (Verse of the Day) -->
+          <!-- 每日?�句 (Verse of the Day) -->
           <div id="verse-card"
             class="card-col span-4 bento-card relative w-full min-h-[320px] rounded-2xl overflow-hidden cursor-default shadow-lg is-loading"
             style="position: relative; width: 100%; min-height: 320px; overflow: hidden; border-radius: 1rem; cursor: default;">
@@ -317,12 +317,12 @@
                   <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <div style="display: flex; align-items: center; align-self: center;">
                       <div class="verse-mode-toggle" style="display: flex; background: rgba(0, 0, 0, 0.2); padding: 1.5px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); width: fit-content; gap: 1px; height: 18px; align-items: center; user-select: none;">
-                        <button id="btn-mode-verse" type="button" class="active" style="font-size: 0.6rem; font-weight: 600; padding: 0 6px; height: 15px; min-height: 15px; border-radius: 4px; border: none; cursor: pointer; color: #ffffff; background: rgba(255,255,255,0.22); transition: all 0.2s; outline: none; line-height: 1; display: flex; align-items: center; justify-content: center; box-shadow: none;">每日金句</button>
+                        <button id="btn-mode-verse" type="button" class="active" style="font-size: 0.6rem; font-weight: 600; padding: 0 6px; height: 15px; min-height: 15px; border-radius: 4px; border: none; cursor: pointer; color: #ffffff; background: rgba(255,255,255,0.22); transition: all 0.2s; outline: none; line-height: 1; display: flex; align-items: center; justify-content: center; box-shadow: none;">每日?�句</button>
                         <button id="btn-mode-blessing" type="button" style="font-size: 0.6rem; font-weight: 600; padding: 0 6px; height: 15px; min-height: 15px; border-radius: 4px; border: none; cursor: pointer; color: rgba(255,255,255,0.7); background: transparent; transition: all 0.2s; outline: none; line-height: 1; display: flex; align-items: center; justify-content: center; box-shadow: none;">天父小卡</button>
                       </div>
                     </div>
                     <!-- Right Top Background Switcher Button -->
-                    <button id="btn-change-verse-bg" type="button" title="更換底圖" class="hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-1" style="color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; margin-top: 0;">
+                    <button id="btn-change-verse-bg" type="button" title="?��?底�?" class="hover:opacity-80 transition-opacity bg-transparent border-0 cursor-pointer p-1" style="color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center; margin-top: 0;">
                       <span class="nlc-icon nlc-icon--inline" data-icon="layers" style="opacity: 0.9;"></span>
                     </button>
                   </div>
@@ -343,26 +343,26 @@
                 <div id="verse-card-toolbar"
                   class="flex items-center justify-between w-full pt-2.5 border-t border-white/10 mt-auto text-slate-300"
                   style="display: flex; align-items: center; justify-content: space-between; width: 100%; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.6rem; margin-top: auto; color: rgba(203, 213, 225, 0.9); font-size: 0.72rem;">
-                  <!-- 1. 純按讚按鈕 -->
+                  <!-- 1. 純�?讚�???-->
                   <button id="like-btn" class="flex items-center justify-center flex-1 py-1 text-xs"
                     style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: inherit;">
                     <span class="nlc-icon nlc-icon--sm" data-icon="heart" aria-hidden="true"></span>
                     <span id="like-count-text">0</span>
                   </button>
 
-                  <!-- 2. 換一句按鈕（唯一允許觸發抽卡的入口） -->
+                  <!-- 2. ?��??��??��??��??�許觸發?�卡?�入??? -->
                   <button id="draw-card-btn"
                     class="flex items-center justify-center flex-1 py-1 text-xs text-slate-200"
                     style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: #e2e8f0;">
                     <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
-                    <span>換一句</span>
+                    <span>?��???/span>
                   </button>
 
-                  <!-- 3. 分享按鈕 -->
+                  <!-- 3. ?�享?��? -->
                   <button id="share-card-btn" class="flex items-center justify-center flex-1 py-1 text-xs"
                     style="display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.35rem; flex: 1; padding: 0.15rem 0; font-size: 0.72rem; background: none; border: none; cursor: pointer; color: inherit;">
                     <span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true"></span>
-                    <span>分享</span>
+                    <span>?�享</span>
                   </button>
                 </div>
 
@@ -370,34 +370,34 @@
             </div>
           </div>
 
-          <!-- 教會公告 (Church Announcements) -->
+          <!-- ?��??��? (Church Announcements) -->
           <div class="glass-card card-col span-12 bento-card dashboard-panel-card announcements-card">
             <div class="dashboard-panel-card__header card-header-flex">
               <h3 class="dashboard-panel-card__title card-title">
                 <span class="dashboard-panel-card__title-icon" aria-hidden="true">
                   <span class="nlc-icon nlc-icon--sm" data-icon="bell"></span>
                 </span>
-                <span class="dashboard-panel-card__title-text">教會公告</span>
+                <span class="dashboard-panel-card__title-text">?��??��?</span>
               </h3>
               <button type="button" class="secondary-btn dashboard-panel-card__action admin-only-nav hidden"
                 id="btn-show-announcement-form" onclick="window.openAnnouncementForm()">
                 <span class="btn-with-icon"><span class="nlc-icon nlc-icon--sm" data-icon="megaphone"
-                    aria-hidden="true"></span><span>發布公告</span></span>
+                    aria-hidden="true"></span><span>?��??��?</span></span>
               </button>
             </div>
 
-            <!-- 公告編輯表單 (管理員專屬，預設隱藏) -->
+            <!-- ?��?編輯表單 (管�??��?屬�??�設?��?) -->
             <div id="admin-announcement-form-container" class="announcement-form-panel hidden">
-              <h4 class="announcement-form-panel__title">發布教會公告</h4>
+              <h4 class="announcement-form-panel__title">?��??��??��?</h4>
               <input type="text" id="announcement-title-input" class="form-control announcement-form-panel__input"
-                placeholder="公告標題">
+                placeholder="?��?標�?">
               <textarea id="announcement-content-input" class="form-control announcement-form-panel__textarea"
-                placeholder="公告內容..." rows="4"></textarea>
+                placeholder="?��??�容..." rows="4"></textarea>
               <div class="announcement-form-panel__actions">
                 <button type="button" class="pill-btn announcement-form-panel__cancel"
-                  onclick="window.closeAnnouncementForm()">取消</button>
+                  onclick="window.closeAnnouncementForm()">?��?</button>
                 <button type="button" class="primary-btn announcement-form-panel__submit"
-                  onclick="window.saveAnnouncement()">發布</button>
+                  onclick="window.saveAnnouncement()">?��?</button>
               </div>
             </div>
 
@@ -417,7 +417,7 @@
             </div>
           </div>
 
-          <!-- 首頁最下方的金句牆區塊 (符合 UI/UX 設計風格的牧區靈修分享牆) -->
+          <!-- 首�??�下方?��??��??��?(符�? UI/UX 設�?風格?�牧?�?�修?�享?? -->
           <div class="glass-card dashboard-panel-card sharing-wall-card span-12 mt-6 hidden"
             id="pastoral-sharing-wall-card" aria-hidden="true">
             <div class="dashboard-panel-card__header card-header-flex" style="margin-bottom: 1rem;">
@@ -425,12 +425,12 @@
                 <span class="dashboard-panel-card__title-icon" aria-hidden="true">
                   <span class="nlc-icon nlc-icon--sm" data-icon="heart" style="color: var(--color-brand);"></span>
                 </span>
-                <span class="dashboard-panel-card__title-text">牧區靈修分享牆</span>
+                <span class="dashboard-panel-card__title-text">?��??�修?�享??/span>
               </h3>
               <button type="button" id="btn-toggle-devotional-box" class="premium-action-btn"
                 style="display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; font-size: 0.72rem; border-radius: 8px; font-weight: 600; padding: 0.35rem 0.75rem; height: 30px; background-color: var(--primary-color); border: 0; color: white; cursor: pointer; transition: all 0.2s;">
                 <span class="nlc-icon nlc-icon--sm" data-icon="edit" style="width:11px; height:11px;"></span>
-                <span>分享心得</span>
+                <span>?�享心�?</span>
               </button>
             </div>
 
@@ -439,52 +439,52 @@
               <div class="sharing-wall-controls" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 1.25rem; width: 100%; flex-wrap: nowrap; overflow: hidden;">
                 <!-- Left: Shadcn tabs style (Segmented Control) -->
                 <div class="segment-control" style="display: inline-flex; align-items: center; background: var(--bg-input); padding: 3px; border-radius: 8px; border: 1px solid var(--border-card); height: 34px; box-sizing: border-box; flex-shrink: 0; min-width: 150px;">
-                  <button type="button" id="btn-wall-tab-today" class="segment-btn active" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: var(--bg-card); color: var(--color-brand); cursor: pointer; font-weight: 600; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">今日即時</button>
-                  <button type="button" id="btn-wall-tab-history" class="segment-btn" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center;">歷史回顧</button>
+                  <button type="button" id="btn-wall-tab-today" class="segment-btn active" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: var(--bg-card); color: var(--color-brand); cursor: pointer; font-weight: 600; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);">今日?��?</button>
+                  <button type="button" id="btn-wall-tab-history" class="segment-btn" style="padding: 0 0.8rem; font-size: 0.75rem; border-radius: 6px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-weight: 500; transition: all 0.15s; white-space: nowrap; height: 26px; display: flex; align-items: center; justify-content: center;">歷史?�顧</button>
                 </div>
 
                 <!-- Right: Shadcn select style (Dropdown) -->
                 <div id="wall-history-filter-wrapper" class="hidden" style="display: flex; align-items: center; flex-shrink: 1; max-width: 140px; width: 100%;">
                   <select id="wall-history-filter" class="form-control" style="width: 100%; padding: 0 1.5rem 0 0.5rem; border-radius: 6px; height: 32px; line-height: 1; border: 1px solid var(--border-card); background-color: var(--bg-card); color: var(--text-primary); cursor: pointer; outline: none; font-weight: 500;">
-                    <option value="all">全小組 / 牧區</option>
-                    <option value="mine">僅看自己</option>
+                    <option value="all">?��?�?/ ?��?</option>
+                    <option value="mine">?��??�己</option>
                   </select>
                 </div>
               </div>
-              <!-- 發布金句/心得的區塊 -->
+              <!-- ?��??�句/心�??��?�?-->
               <div class="mb-6 devotional-card hidden">
                 <div class="flex items-center space-x-3 mb-3">
                   <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
                     style="background-color: var(--color-brand-subtle); color: var(--color-brand);">
-                    我
+                    ??
                   </div>
-                  <span class="text-xs font-bold" style="color: var(--text-primary);">記錄並分享今日金句與靈修心得</span>
+                  <span class="text-xs font-bold" style="color: var(--text-primary);">記�?並�?享�??��??��??�修心�?</span>
                 </div>
                 <div class="form-group devotional-field relative mb-3">
                   <textarea id="devotional-content" class="form-control"
-                    placeholder="今天速讀完之後，哪一節經文讓你最印象深刻？在這裡分享給同小組的家人們吧！" rows="3" style="resize: none;"></textarea>
+                    placeholder="今天?��?完�?後�??��?節經�?讓�??�?�象深刻？在?�裡?�享給�?小�??�家人們吧�? rows="3" style="resize: none;"></textarea>
                   <div id="devotional-save-status"
                     class="devotional-save-status absolute bottom-2 right-3 text-[10px] flex items-center space-x-1"
                     style="color: var(--text-muted); opacity: 0;" aria-live="polite">
                     <span class="devotional-save-status__dot w-1.5 h-1.5 rounded-full inline-block"
                        style="background-color: var(--color-success-foreground);"></span>
-                    <span>已儲存</span>
+                    <span>已儲�?/span>
                   </div>
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-[10px] font-medium" style="color: var(--text-muted);" id="devotional-word-count">字數:
-                    0 字</span>
+                    0 �?/span>
                   <button type="button" class="premium-action-btn" id="btn-save-devotional"
                     style="padding: 0.35rem 0.9rem; font-size: 0.72rem; border-radius: 9999px; font-weight: 600; gap: 0.25rem;">
                     <span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true" style="width:12px; height:12px;"></span>
-                    <span>發佈</span>
+                    <span>?��?</span>
                   </button>
                 </div>
               </div>
 
-              <!-- 金句卡片瀑布流動態渲染主容器 -->
+              <!-- ?�句?��??��?流�??�渲?�主容器 -->
               <div id="home-verse-wall" class="space-y-4 pb-4">
-                <!-- 骨架屏加載狀態（預設） -->
+                <!-- 骨架屏�?載�??��??�設�?-->
                 <div class="animate-pulse p-4 rounded-2xl bg-zinc-900/20 h-24 w-full border border-zinc-800/30"></div>
               </div>
             </div>
@@ -541,20 +541,20 @@
           <button type="button" class="reader-icon-btn" id="reader-search-close-btn" title="&#x95DC;&#x9589;"><span
               class="nlc-icon" data-icon="closeLg"></span></button>
         </div>
-        <!-- ── Floating Navigation Buttons ── -->
+        <!-- ?�?� Floating Navigation Buttons ?�?� -->
         <div class="reader-floating-nav">
-          <button type="button" class="floating-nav-btn prev" id="floating-prev-btn" title="上一章" aria-label="上一章">
+          <button type="button" class="floating-nav-btn prev" id="floating-prev-btn" title="上�?�? aria-label="上�?�?>
             <span class="nlc-icon nlc-icon--lg nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
           </button>
-          <button type="button" class="floating-nav-btn next" id="floating-next-btn" title="下一章" aria-label="下一章">
+          <button type="button" class="floating-nav-btn next" id="floating-next-btn" title="下�?�? aria-label="下�?�?>
             <span class="nlc-icon nlc-icon--lg" data-icon="chevronRight" aria-hidden="true"></span>
           </button>
         </div>
 
-        <!-- ── Main Bible Text Area ── -->
+        <!-- ?�?� Main Bible Text Area ?�?� -->
         <article class="reader-body reader-body-full reader-reading-surface">
           <div class="reader-header">
-            <h2 id="bible-title" class="bible-heading">詩篇 1章</h2>
+            <h2 id="bible-title" class="bible-heading">詩�? 1�?/h2>
           </div>
 
           <!-- Bible Content container -->
@@ -567,10 +567,10 @@
 
           <!-- Sticky Bottom Action Bar (Context-Aware Read Tracking) -->
           <div class="reader-bottom-action-bar hidden" id="reader-bottom-action-bar">
-            <div class="progress-indicator" id="reader-progress-indicator">本日進度 2/3</div>
+            <div class="progress-indicator" id="reader-progress-indicator">?�日?�度 2/3</div>
             <button type="button" class="capsule-action-btn" id="reader-capsule-btn">
               <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight"
-                  aria-hidden="true"></span><span>下一章</span></span>
+                  aria-hidden="true"></span><span>下�?�?/span></span>
             </button>
           </div>
         </article>
@@ -579,7 +579,7 @@
 
       <!-- VIEW 3: READING PLANS -->
       <section id="plan-view" class="view-pane hidden">
-        <!-- 子檢視 1: 計畫列表 (預設顯示) -->
+        <!-- 子檢�?1: 計畫?�表 (?�設顯示) -->
         <div id="plan-list-subview" class="grid-layout">
           <!-- Top YouVersion Style Header -->
           <div class="card-col span-12"
@@ -587,18 +587,18 @@
             <h2
               style="font-size: 2.2rem; font-weight: 500; color: var(--text-primary); margin: 0; font-family: 'Outfit', sans-serif;">
               計畫</h2>
-            <button class="circular-action-btn" id="btn-toggle-plan-search" type="button" title="搜尋計畫"
-              aria-label="搜尋計畫" aria-expanded="false" aria-controls="plan-search-panel">
+            <button class="circular-action-btn" id="btn-toggle-plan-search" type="button" title="?��?計畫"
+              aria-label="?��?計畫" aria-expanded="false" aria-controls="plan-search-panel">
               <span class="nlc-icon nlc-icon--sm" data-icon="search" aria-hidden="true"></span>
             </button>
           </div>
 
           <div class="card-col span-12 plan-search-panel hidden" id="plan-search-panel">
-            <label class="sr-only" for="plan-search-input">搜尋讀經計畫</label>
+            <label class="sr-only" for="plan-search-input">?��?讀經�???/label>
             <span class="nlc-icon nlc-icon--sm plan-search-panel__icon" data-icon="search" aria-hidden="true"></span>
             <input id="plan-search-input" type="search" inputmode="search" maxlength="80"
-              placeholder="搜尋計畫名稱、階段或獎項" autocomplete="off">
-            <button id="btn-clear-plan-search" class="plan-search-panel__clear hidden" type="button" aria-label="清除搜尋">
+              placeholder="?��?計畫?�稱?��?段�??��?" autocomplete="off">
+            <button id="btn-clear-plan-search" class="plan-search-panel__clear hidden" type="button" aria-label="清除?��?">
               <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
             </button>
           </div>
@@ -609,21 +609,21 @@
                 <span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span>
               </span>
               <div class="plan-team-invite-shortcut__copy">
-                <strong>有邀請碼？加入團隊</strong>
-                <span>輸入隊長提供的邀請碼，系統會自動找到對應的讀經計畫。</span>
+                <strong>?��?請碼？�??��???/strong>
+                <span>輸入?�長?��??��?請碼，系統�??��??�到對�??��?經�??��?/span>
               </div>
             </div>
             <button class="primary-btn plan-team-invite-shortcut__action" id="btn-open-plan-team-invite" type="button" aria-controls="join-team-container" aria-expanded="false">
-              <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span><span>輸入邀請碼</span></span>
+              <span class="btn-with-icon"><span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span><span>輸入?�請碼</span></span>
             </button>
           </div>
 
           <!-- Status Pills Row -->
           <div class="card-col span-12">
             <div class="status-pills-row" id="plan-list-status-pills">
-              <button class="pill-btn active" data-filter="mine">我的計畫</button>
-              <button class="pill-btn" data-filter="saved">探索計畫</button>
-              <button class="pill-btn" data-filter="completed">已結束</button>
+              <button class="pill-btn active" data-filter="mine">?��?計畫</button>
+              <button class="pill-btn" data-filter="saved">?�索計畫</button>
+              <button class="pill-btn" data-filter="completed">已�???/button>
             </div>
           </div>
 
@@ -673,22 +673,22 @@
             <div class="glass-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem;">
               <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.25rem; justify-content: space-between;">
                 <span class="nlc-icon nlc-icon--md" data-icon="lock" style="color: var(--color-brand);" aria-hidden="true"></span>
-                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-primary);">使用邀請碼加入團隊</h3>
-                <button type="button" id="btn-close-plan-team-invite" class="dialog-close-button icon-button icon-button--subtle" aria-label="關閉邀請碼輸入">
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: var(--text-primary);">使用?�請碼?�入?��?</h3>
+                <button type="button" id="btn-close-plan-team-invite" class="dialog-close-button icon-button icon-button--subtle" aria-label="?��??�請碼輸入">
                   <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
                 </button>
               </div>
               <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted); line-height: 1.5;">
-                輸入隊長提供給你的團隊邀請碼。加入後，你將與隊友一同挑戰該讀經計畫，並可隨時查看隊友們的閱讀進度！
+                輸入?�長?��?給�??��??��?請碼?��??��?，�?將�??��?一?��??�該讀經�??��?並可?��??��??��??��??��??�度�?
               </p>
               <form id="global-join-team-form" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="display: flex; flex-direction: column; gap: 0.45rem;">
-                  <label for="global-team-code-input" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">團隊邀請碼</label>
-                  <input id="global-team-code-input" class="form-control" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="請輸入邀請碼" style="padding: 0.65rem 0.8rem; border-radius: 10px; text-transform: uppercase;">
+                  <label for="global-team-code-input" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">?��??�請碼</label>
+                  <input id="global-team-code-input" class="form-control" maxlength="16" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="請輸?��?請碼" style="padding: 0.65rem 0.8rem; border-radius: 10px; text-transform: uppercase;">
                 </div>
                 <button type="submit" class="primary-btn" id="global-join-team-submit-btn" style="padding: 0.65rem; border-radius: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer;">
                   <span class="nlc-icon" data-icon="check" aria-hidden="true"></span>
-                  <span>立即加入團隊</span>
+                  <span>立即?�入?��?</span>
                 </button>
                 <div id="global-join-team-error" style="display: none; color: var(--color-danger); font-size: 0.82rem; padding: 0.5rem 0.75rem; background: var(--color-danger-muted, rgba(239, 68, 68, 0.1)); border-radius: 8px;" role="alert"></div>
               </form>
@@ -701,13 +701,13 @@
             <!-- Church Quarterly Intro Card -->
             <div class="glass-card"
               style="height: auto; background: var(--bg-card); border: 1px solid var(--border-card); margin-bottom: 0;">
-              <h3 class="card-title" style="margin-bottom: 0.5rem;">每日陪你靈修</h3>
+              <h3 class="card-title" style="margin-bottom: 0.5rem;">每日?��??�修</h3>
               <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
-                歡迎加入教會季度速讀挑戰！點擊頂部 <strong>探索計畫</strong> 即可瀏覽並選擇欲加入的挑戰計畫，與弟兄姊妹一起在神的話語中得勝！
+                歡�??�入?��?�?��?��??�戰！�??��???<strong>?�索計畫</strong> ?�可?�覽並選?�欲?�入?��??��??��??��??��?妹�?起在神�?話�?中�??��?
               </p>
             </div>
 
-            <!-- 全域讀經計畫管理 (管理員專屬) -->
+            <!-- ?��?讀經�??�管??(管�??��?�? -->
             <div class="glass-card admin-only-plan-card hidden" id="admin-plan-card"
               style="height: auto; background: var(--bg-card); border: 1px solid var(--border-card);">
               <h3 class="card-title"
@@ -715,31 +715,31 @@
                 <span style="display: flex; align-items: center; gap: 0.5rem;">
                   <span class="nlc-icon nlc-icon--md" data-icon="calendar" aria-hidden="true"
                     style="color: var(--primary-color);"></span>
-                  全域計畫管理
+                  ?��?計畫管�?
                 </span>
                 <button class="primary-btn" id="admin-add-plan-btn"
                   style="font-size: 0.8rem; padding: 0.35rem 0.75rem;"><span class="btn-with-icon"><span
-                      class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增</span></span></button>
+                      class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>?��?</span></span></button>
               </h3>
 
-              <!-- 表單與列表 -->
+              <!-- 表單?��?�?-->
               <div id="admin-plan-form-container" class="hidden"
                 style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
                 <h4 id="admin-plan-form-title"
-                  style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">新增讀經計畫
+                  style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">?��?讀經�???
                 </h4>
                 <input type="hidden" id="admin-edit-plan-id">
-                <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱"
+                <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫?�稱"
                   style="padding: 0.4rem;">
                 <div class="form-group" style="display: flex; gap: 1rem; align-items: center; font-size: 0.85rem; color: var(--text-primary);">
-                  <span style="font-weight: 500;">排程類型：</span>
+                  <span style="font-weight: 500;">?��?類�?�?/span>
                   <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
                     <input type="radio" name="admin-plan-time-type" value="fixed" checked style="cursor: pointer; margin: 0;">
-                    固定時間
+                    ?��??��?
                   </label>
                   <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
                     <input type="radio" name="admin-plan-time-type" value="flexible" style="cursor: pointer; margin: 0;">
-                    非固定時間
+                    ?�固定�???
                   </label>
                 </div>
                 <div id="admin-plan-date-inputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
@@ -749,17 +749,17 @@
                     style="padding: 0.4rem;">
                 </div>
                 <div id="admin-plan-duration-container" style="display: none;">
-                  <input type="number" id="admin-plan-duration-days" class="form-control" placeholder="計畫總天數 (例如 90)"
+                  <input type="number" id="admin-plan-duration-days" class="form-control" placeholder="計畫總天??(例�? 90)"
                     style="padding: 0.4rem; width: 100%;" min="1">
                 </div>
                 <div class="form-group">
                   <div style="display: flex; gap: 0.2rem; margin-bottom: 0.4rem; justify-content: space-between;">
                     <button type="button" class="pill-btn" id="admin-select-all-books"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">全選</button>
+                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">?�選</button>
                     <button type="button" class="pill-btn" id="admin-select-old-books"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">舊約</button>
+                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">?��?</button>
                     <button type="button" class="pill-btn" id="admin-select-new-books"
-                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">新約</button>
+                      style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">?��?</button>
                     <button type="button" class="pill-btn" id="admin-clear-books"
                       style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">清除</button>
                   </div>
@@ -774,9 +774,9 @@
                   </div>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                  <button type="button" class="pill-btn" id="admin-cancel-plan-btn">取消</button>
+                  <button type="button" class="pill-btn" id="admin-cancel-plan-btn">?��?</button>
                   <button type="button" class="primary-btn" id="admin-save-plan-btn"
-                    style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">儲存</button>
+                    style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">?��?</button>
                 </div>
               </div>
 
@@ -785,9 +785,9 @@
                 <table class="data-table" style="font-size: 0.78rem;">
                   <thead>
                     <tr>
-                      <th>名稱</th>
-                      <th>時間</th>
-                      <th style="text-align: center; width: 80px;">操作</th>
+                      <th>?�稱</th>
+                      <th>?��?</th>
+                      <th style="text-align: center; width: 80px;">?��?</th>
                     </tr>
                   </thead>
                   <tbody id="admin-plans-table-body"></tbody>
@@ -797,17 +797,17 @@
           </div>
         </div>
 
-        <!-- 子檢視 2: 計畫進度與詳情 (YouVersion 風格) -->
+        <!-- 子檢�?2: 計畫?�度?�詳??(YouVersion 風格) -->
         <div id="plan-detail-subview" class="hidden plan-detail-compact"
           style="display: flex; flex-direction: column; gap: 1rem;">
           <!-- YouVersion Style Header Bar Removed (Integrated into Top App Bar) -->
 
-          <nav id="plan-detail-tab-strip" class="plan-detail-tab-strip hidden" aria-label="計畫分頁" style="display: none;">
+          <nav id="plan-detail-tab-strip" class="plan-detail-tab-strip hidden" aria-label="計畫?��?" style="display: none;">
             <div class="plan-detail-tab-strip__scroller" role="tablist">
-              <button id="plan-primary-tab-progress" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-primary-view="progress">進度</button>
-              <button id="plan-primary-tab-personal" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="personal">個人統計</button>
-              <button id="plan-primary-tab-stats" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="stats">團體統計</button>
-              <button id="plan-primary-tab-ranking" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="ranking">排名</button>
+              <button id="plan-primary-tab-progress" class="plan-detail-tab-btn active" type="button" role="tab" aria-selected="true" data-plan-primary-view="progress">?�度</button>
+              <button id="plan-primary-tab-personal" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="personal">?�人統�?</button>
+              <button id="plan-primary-tab-stats" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="stats">?��?統�?</button>
+              <button id="plan-primary-tab-ranking" class="plan-detail-tab-btn" type="button" role="tab" aria-selected="false" data-plan-primary-view="ranking">?��?</button>
               <div id="tab-indicator" aria-hidden="true"></div>
             </div>
           </nav>
@@ -823,18 +823,18 @@
           <div class="px-4 py-2" style="padding: 0.5rem 1rem; display: none;">
             <div class="flex p-1 bg-slate-100 dark:bg-zinc-900 rounded-xl"
               style="display: flex; padding: 0.25rem; background: var(--bg-input); border-radius: 12px;">
-              <!-- 按鈕 1：今日任務 -->
+              <!-- ?��? 1：�??�任??-->
               <button id="tab-today-task"
                 class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-slate-800 shadow-sm dark:bg-zinc-800 dark:text-white transition-all"
                 style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; text-align: center; background: var(--bg-card); color: var(--text-primary); border: none; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;">
-                <span class="nlc-icon mr-1.5" data-icon="checkOne" style="margin-right: 0.375rem;"></span>今日讀經
+                <span class="nlc-icon mr-1.5" data-icon="checkOne" style="margin-right: 0.375rem;"></span>今日讀�?
               </button>
 
-              <!-- 按鈕 2：小組戰報 -->
+              <!-- ?��? 2：�?組戰??-->
               <button id="tab-group-report"
                 class="flex-1 py-2 text-xs font-medium rounded-lg text-center text-slate-500 dark:text-zinc-400 hover:text-slate-800 transition-all"
                 style="flex: 1; padding: 0.5rem; font-size: 0.78rem; font-weight: 500; border-radius: 8px; text-align: center; background: transparent; color: var(--text-muted); border: none; cursor: pointer; transition: all 0.2s;">
-                <span class="nlc-icon mr-1.5" data-icon="people" style="margin-right: 0.375rem;"></span>讀經統計
+                <span class="nlc-icon mr-1.5" data-icon="people" style="margin-right: 0.375rem;"></span>讀經統�?
               </button>
             </div>
           </div>
@@ -843,17 +843,17 @@
           <div class="status-pills-row plan-detail-tabs hidden" aria-hidden="true" style="display: none;">
             <button class="pill-btn active" id="tab-plan-schedule" style="display: none;"><span
                 class="btn-with-icon"><span class="nlc-icon" data-icon="calendarThirty"
-                  aria-hidden="true"></span><span>每日讀經</span></span></button>
+                  aria-hidden="true"></span><span>每日讀�?/span></span></button>
             <button class="pill-btn" id="tab-plan-stats"><span class="btn-with-icon"><span class="nlc-icon"
-                  data-icon="barChart" aria-hidden="true"></span><span>團體統計</span></span></button>
+                  data-icon="barChart" aria-hidden="true"></span><span>?��?統�?</span></span></button>
             <button class="pill-btn" id="tab-plan-ranking"><span class="btn-with-icon"><span class="nlc-icon"
-                  data-icon="trophy" aria-hidden="true"></span><span>排名</span></span></button>
+                  data-icon="trophy" aria-hidden="true"></span><span>?��?</span></span></button>
             <button class="pill-btn" id="tab-plan-members"><span class="btn-with-icon"><span class="nlc-icon"
-                  data-icon="people" aria-hidden="true"></span><span>組員狀況</span></span></button>
+                  data-icon="people" aria-hidden="true"></span><span>組員?��?/span></span></button>
           </div>
 
 
-          <!-- 子分頁 1：每日讀經進度表 -->
+          <!-- 子�???1：�??��?經進度�?-->
           <div id="subview-plan-schedule">
             <!-- plan-schedule-view-container dynamically renders Card view or Calendar view mutually exclusively -->
             <div id="plan-schedule-view-container" class="w-full">
@@ -864,20 +864,20 @@
             <div class="plan-chapters-card"
               style="background: transparent; border-radius: 0; padding: 0; margin-top: 1rem; overflow: visible; display: flex; flex-direction: column; border: none; width: 100%;">
 
-              <!-- 雙軌時間導航欄 (Dual-Track Time Navigation Bar) -->
-              <!-- 極簡時間導航欄 -->
+              <!-- ?��??��?導航�?(Dual-Track Time Navigation Bar) -->
+              <!-- 極簡?��?導航�?-->
               <div
                 class="px-4 py-2 flex items-center justify-center text-xs"
                 style="display: flex; align-items: center; justify-content: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-card); font-size: 0.75rem; width: 100%; margin-bottom: 0.8rem; border-radius: 8px;">
                 <div class="text-center" style="text-align: center; display: flex; align-items: center; gap: 6px;">
-                  <span id="current-view-day" class="font-bold" style="font-weight: 700; color: var(--text-primary);">第 -- 天</span>
+                  <span id="current-view-day" class="font-bold" style="font-weight: 700; color: var(--text-primary);">�?-- �?/span>
                   <span style="color: var(--text-muted);">|</span>
                   <span id="current-view-date" style="color: var(--text-muted);">----/--/--</span>
                   <!-- Keep original IDs hidden to prevent JS issues -->
                   <button id="go-my-progress-btn" class="hidden" style="display: none;"></button>
                   <button id="go-today-plan-btn" class="hidden" style="display: none;"></button>
                   <span id="plan-day-subtitle" class="hidden" style="display: none;"></span>
-                  <span id="plan-day-status-pill" class="role-badge hidden" style="display: none;">進行中</span>
+                  <span id="plan-day-status-pill" class="role-badge hidden" style="display: none;">?��?�?/span>
                 </div>
               </div>
 
@@ -891,19 +891,19 @@
 
 
 
-            <!-- 計畫內置聖經閱讀器 (預設隱藏) -->
+            <!-- 計畫?�置?��??��???(?�設?��?) -->
             <div id="plan-inline-reader" class="hidden"
               style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
               <!-- Header -->
               <div class="youversion-detail-header"
                 style="border-bottom: 1px solid var(--border-card); padding-bottom: 0.8rem; margin-bottom: 0.5rem;">
-                <button class="circular-action-btn" onclick="window.closePlanInlineReader()" title="返回經文清單">
+                <button class="circular-action-btn" onclick="window.closePlanInlineReader()" title="返�?經�?清單">
                   <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft"
                     aria-hidden="true"></span>
                 </button>
                 <h3 id="plan-inline-reader-title"
                   style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0; text-align: center; flex: 1;">
-                  創世記 1章</h3>
+                  ?��?�?1�?/h3>
                 <div style="width: 36px;"></div> <!-- placeholder to center title -->
               </div>
 
@@ -927,8 +927,8 @@
                     style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     PLAN NAME</div>
                   <div id="plan-inline-footer-progress"
-                    style="font-size: 0.8rem; color: var(--text-primary); font-weight: 500; margin-top: 0.15rem;">第 18 天
-                    • 2 之 1</div>
+                    style="font-size: 0.8rem; color: var(--text-primary); font-weight: 500; margin-top: 0.15rem;">�?18 �?
+                    ??2 �?1</div>
                 </div>
 
                 <button class="circular-action-btn" id="plan-inline-next-btn"
@@ -939,7 +939,7 @@
             </div>
           </div>
 
-          <!-- 子分頁 2：計畫專屬統計與排行 (個人與團體合併) -->
+          <!-- 子�???2：�??��?屬統計�??��? (?�人?��?體�?�? -->
 
           <div id="subview-plan-level" class="hidden"
             style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
@@ -948,56 +948,56 @@
                 <button class="plan-level-back-btn" type="button" id="btn-plan-level-back">
                   <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft"
                     aria-hidden="true"></span>
-                  <span>返回每日讀經</span>
+                  <span>返�?每日讀�?/span>
                 </button>
-                <h3>調整進度設定</h3>
+                <h3>調整?�度設�?</h3>
               </div>
               <div class="plan-level-options" id="plan-level-options">
                 <button class="plan-level-option" type="button" data-level="normal">
-                  <strong>一般</strong>
-                  <span>讀完整計畫 1 遍，每天平均分配章節。</span>
+                  <strong>一??/strong>
+                  <span>讀完整計畫 1 ?��?每天平�??��?章�???/span>
                 </button>
                 <button class="plan-level-option" type="button" data-level="breakthrough">
                   <strong>突破</strong>
-                  <span>讀完整計畫 2 遍，章節量乘以 2 後平均分配到每天。</span>
+                  <span>讀完整計畫 2 ?��?章�??��?�?2 後平?��??�到每天??/span>
                 </button>
                 <button class="plan-level-option" type="button" data-level="super">
-                  <strong>興盛</strong>
-                  <span>讀完整計畫 3 遍，章節量乘以 3 後平均分配到每天。</span>
+                  <strong>?��?</strong>
+                  <span>讀完整計畫 3 ?��?章�??��?�?3 後平?��??�到每天??/span>
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- 調整進度設定確認 Modal（防誤觸） -->
+          <!-- 調整?�度設�?確�? Modal（防誤觸�?-->
           <div id="plan-level-confirm-modal" aria-modal="true" role="dialog" aria-labelledby="plcm-title"
             style="display:none; position:fixed; inset:0; z-index:9999; align-items:center; justify-content:center; padding:1.5rem;">
-            <!-- 半透明背景 -->
+            <!-- ?�透�??�景 -->
             <div id="plan-level-confirm-backdrop"
               style="position:absolute; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:var(--backdrop-blur); -webkit-backdrop-filter:var(--backdrop-blur);"
               onclick="window.closePlanLevelConfirmModal()"></div>
-            <!-- Modal 卡片，使用設計系統 glass-card + shadow-lg -->
+            <!-- Modal ?��?，使?�設計系�?glass-card + shadow-lg -->
             <div class="glass-card" style="position:relative; z-index:1; max-width:320px; width:100%; height:auto !important;
                         padding:1.75rem 1.5rem 1.5rem; box-shadow:var(--shadow-lg);
                         animation:plcm-slide-up 0.2s cubic-bezier(0.4,0,0.2,1) both;">
-              <!-- IconPark 警告圖示 -->
+              <!-- IconPark 警�??�示 -->
               <div style="display:flex; align-items:center; justify-content:center; width:48px; height:48px;
                           border-radius:50%; background:var(--color-warning-subtle); border:1px solid var(--color-warning);
                           margin:0 auto 1.25rem auto; color:var(--color-warning);">
                 <span class="nlc-icon nlc-icon--md" data-icon="attention" aria-hidden="true"></span>
               </div>
-              <h4 id="plcm-title" class="type-subsection-title" style="text-align:center; margin:0 0 0.5rem;">確認切換進度等級？
+              <h4 id="plcm-title" class="type-subsection-title" style="text-align:center; margin:0 0 0.5rem;">確�??��??�度等�?�?
               </h4>
               <p id="plcm-desc" class="type-caption" style="text-align:center; line-height:1.6; margin:0 0 1.5rem;"></p>
               <div style="display:flex; gap:0.75rem;">
                 <button id="plcm-cancel-btn" type="button" class="secondary-btn"
                   onclick="window.closePlanLevelConfirmModal()"
                   style="flex:1; padding:0.65rem 0.75rem; font-size:0.875rem;">
-                  取消
+                  ?��?
                 </button>
                 <button id="plcm-confirm-btn" type="button" class="primary-btn"
                   style="flex:1; padding:0.65rem 0.75rem; font-size:0.875rem;">
-                  確認切換
+                  確�??��?
                 </button>
               </div>
             </div>
@@ -1006,9 +1006,9 @@
             style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
 
             <div class="reading-team-subview-switch hidden" id="stats-team-view-switch">
-              <label for="stats-team-view-select">查看內容</label>
+              <label for="stats-team-view-select">?��??�容</label>
               <select id="stats-team-view-select" class="form-control">
-                <option value="organization">教會團體</option>
+                <option value="organization">?��??��?</option>
               </select>
             </div>
 
@@ -1016,86 +1016,86 @@
             <div id="reading-team-registration-inline" class="reading-team-inline hidden" aria-live="polite"></div>
 
 
-            <!-- 個人統計部分 -->
+            <!-- ?�人統�??��? -->
             <div id="stats-personal-section" style="display: flex; flex-direction: column; gap: 0.8rem; width: 100%;">
 
-              <!-- 第一層：5格不對稱便當盒數據網格 (Bento Grid) -->
+              <!-- 第�?層�?5?��?對稱便當?�數?�網??(Bento Grid) -->
               <div class="profile-personal-stats-grid px-4 pt-4" style="width: 100%;">
 
-                <!-- 卡片 1 - 累積閱讀章數 (核心主卡，橫跨兩欄) -->
+                <!-- ?��? 1 - 累�??��?章數 (?��?主卡，橫跨兩�? -->
                 <div class="bento-card profile-stat-card--primary stat-card--primary">
                   <div class="profile-stat-card__meta">
                     <div class="profile-stat-card__value">
                       <span id="report-stat-total-chapters">0</span>
-                      <span class="profile-stat-card__unit">章</span>
+                      <span class="profile-stat-card__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span
                         class="nlc-icon" data-icon="bookOpen" aria-hidden="true"></span></span>
                   </div>
-                  <span class="profile-stat-card__label">累積閱讀章數</span>
+                  <span class="profile-stat-card__label">累�??��?章數</span>
                 </div>
 
-                <!-- 卡片 2 - 最高連續 -->
+                <!-- ?��? 2 - ?�高�?? -->
                 <div class="bento-card">
                   <div class="profile-stat-card__meta">
                     <div class="profile-stat-card__value">
                       <span id="report-stat-streak">0</span>
-                      <span class="profile-stat-card__unit">天</span>
+                      <span class="profile-stat-card__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><span class="nlc-icon"
                         data-icon="fire" aria-hidden="true"></span></span>
                   </div>
-                  <span class="profile-stat-card__label">最高連續</span>
+                  <span class="profile-stat-card__label">?�高�??</span>
                 </div>
 
-                <!-- 卡片 3 - 累計完成 -->
+                <!-- ?��? 3 - 累�?完�? -->
                 <div class="bento-card">
                   <div class="profile-stat-card__meta">
                     <div class="profile-stat-card__value">
                       <span id="report-stat-completed">0</span>
-                      <span class="profile-stat-card__unit">天</span>
+                      <span class="profile-stat-card__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><span class="nlc-icon"
                         data-icon="calendarCheck" aria-hidden="true"></span></span>
                   </div>
-                  <span class="profile-stat-card__label">累計完成</span>
+                  <span class="profile-stat-card__label">累�?完�?</span>
                   <span id="report-stat-start-date" class="hidden" style="display: none;"></span>
                 </div>
 
-                <!-- 卡片 4 - 進度狀態 -->
+                <!-- ?��? 4 - ?�度?�??-->
                 <div class="bento-card">
                   <div class="profile-stat-card__meta">
                     <div class="profile-stat-card__value" style="font-size: 0.85rem; line-height: 1.2;">
-                      <span id="report-stat-progress-status" class="stat-badge stat-badge--brand">進度一致</span>
+                      <span id="report-stat-progress-status" class="stat-badge stat-badge--brand">?�度一??/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span class="nlc-icon"
                         data-icon="refresh" aria-hidden="true"></span></span>
                   </div>
-                  <span class="profile-stat-card__label">進度狀態</span>
+                  <span class="profile-stat-card__label">?�度?�??/span>
                 </div>
 
-                <!-- 卡片 5 - 補讀天數 -->
+                <!-- ?��? 5 - 補�?天數 -->
                 <div class="bento-card" id="report-stat-makeup-card">
                   <div class="profile-stat-card__meta">
                     <div class="profile-stat-card__value stat-bento__value--danger">
                       <span id="report-stat-makeup">0</span>
-                      <span class="profile-stat-card__unit">天</span>
+                      <span class="profile-stat-card__unit">�?/span>
                     </div>
                     <span
                       class="stat-bento__icon-wrap stat-bento__icon-wrap--danger stat-bento__icon-wrap--danger-only"><span
                         class="nlc-icon" data-icon="hourglass" aria-hidden="true"></span></span>
                   </div>
-                  <span class="profile-stat-card__label">補讀天數</span>
+                  <span class="profile-stat-card__label">補�?天數</span>
                 </div>
 
               </div>
 
 
 
-              <!-- 第二層：微縮 GitHub 風「讀經熱點地圖」卡片 -->
+              <!-- 第�?層�?微縮 GitHub 風「�?經熱點地?�」卡??-->
               <div class="glass-card-upgrade mx-4 my-2">
                 <h3 class="card-title text-slate-800 dark:text-neutral-100"
-                  style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">個人讀經活躍度</h3>
+                  style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">?�人讀經活躍度</h3>
 
                 <div id="bible-heatmap-container"
                   style="overflow-x: auto; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0.25rem 0;">
@@ -1103,31 +1103,31 @@
                 </div>
 
                 <div class="heatmap-legend">
-                  <span>少</span>
+                  <span>�?/span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--0"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--1"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--2"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--3"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--4"></span>
-                  <span>多</span>
+                  <span>�?/span>
                 </div>
               </div>
 
-              <!-- 第三層：一線大廠感「每日讀經章數趨勢圖」卡片 -->
+              <!-- 第�?層�?一線大廠�??��??��?經�??�趨?��??�卡??-->
               <div class="glass-card-upgrade mx-4 my-3">
                 <div
                   style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;">
                   <h3 class="card-title text-slate-800 dark:text-neutral-100"
-                    style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日讀經章數趨勢</h3>
+                    style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日讀經�??�趨??/h3>
 
-                  <!-- 右上角微縮切換鈕 Segmented Control -->
+                  <!-- ?��?角微縮�??��? Segmented Control -->
                   <div class="capsule-segmented-control segment-track">
                     <button type="button" class="segment-toggle-btn" id="trend-range-week"
-                      onclick="window.changePersonalTrendRange('week')">週</button>
+                      onclick="window.changePersonalTrendRange('week')">??/button>
                     <button type="button" class="segment-toggle-btn active" id="trend-range-month"
-                      onclick="window.changePersonalTrendRange('month')">月</button>
+                      onclick="window.changePersonalTrendRange('month')">??/button>
                     <button type="button" class="segment-toggle-btn" id="trend-range-year"
-                      onclick="window.changePersonalTrendRange('year')">年</button>
+                      onclick="window.changePersonalTrendRange('year')">�?/button>
                   </div>
                 </div>
                 <div style="position: relative; height: 180px; width: 100%;">
@@ -1138,37 +1138,37 @@
 
           </div>
 
-          <!-- 子分頁 3：牧區排行 (Ranking) -->
+          <!-- 子�???3：牧?�?��? (Ranking) -->
           <div id="subview-plan-ranking" class="hidden"
             style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
-            <!-- 個人排名資訊 -->
+            <!-- ?�人?��?資�? -->
             <div class="glass-card" style="margin-bottom: 1.2rem;">
               <h3 class="card-title"
                 style="margin-bottom: 1.2rem; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);"><span
                   class="label-with-icon"><span class="nlc-icon" data-icon="trophy"
-                    aria-hidden="true"></span><span>我的讀經排名</span></span></h3>
+                    aria-hidden="true"></span><span>?��?讀經�???/span></span></h3>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <!-- 全教會排行 card -->
+                <!-- ?��??��?�?card -->
                 <div
                   style="background: var(--color-brand-muted); border: 1px solid var(--color-brand-border); border-radius: 12px; padding: 1rem; text-align: center;">
                   <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.4rem;">
-                    全教會個人排行</div>
-                  <div style="font-size: 1.8rem; font-weight: 500; color: var(--primary-color);" id="my-rank-all">第 -- 名
+                    ?��??�個人?��?</div>
+                  <div style="font-size: 1.8rem; font-weight: 500; color: var(--primary-color);" id="my-rank-all">�?-- ??
                   </div>
                   <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;" id="my-rank-all-total">
-                    共 -- 人</div>
+                    ??-- �?/div>
                 </div>
 
-                <!-- 牧區排行 card -->
+                <!-- ?��??��? card -->
                 <div
                   style="background: var(--color-success-subtle); border: 1px solid var(--color-success-border); border-radius: 12px; padding: 1rem; text-align: center;">
                   <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 0.4rem;"
-                    id="my-rank-zone-title">牧區個人排行</div>
+                    id="my-rank-zone-title">?��??�人?��?</div>
                   <div style="font-size: 1.8rem; font-weight: 500; color: var(--color-success-foreground);"
-                    id="my-rank-zone">第 -- 名</div>
+                    id="my-rank-zone">�?-- ??/div>
                   <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem;"
-                    id="my-rank-zone-total">共 -- 人</div>
+                    id="my-rank-zone-total">??-- �?/div>
                 </div>
               </div>
             </div>
@@ -1177,14 +1177,14 @@
               <details class="glass-card reading-team-ranking-card" data-team-ranking-details="3" open>
                 <summary class="reading-team-ranking-header">
                   <span class="reading-team-ranking-copy">
-                    <span class="card-title" role="heading" aria-level="3">3 人團隊排行榜</span>
-                    <span class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</span>
-                    <span class="reading-team-ranking-summary" data-team-ranking-summary="3">團隊排行榜載入中…</span>
+                    <span class="card-title" role="heading" aria-level="3">3 人�??��?行�?</span>
+                    <span class="reading-team-ranking-rule">?��?章數?��?，�?章數以�??��??��??��?�?/span>
+                    <span class="reading-team-ranking-summary" data-team-ranking-summary="3">?��??��?榜�??�中??/span>
                   </span>
                   <span class="reading-team-ranking-toggle" data-team-ranking-toggle="3" aria-hidden="true">
                     <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
-                    <span class="reading-team-ranking-toggle__expanded">收起</span>
-                    <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                    <span class="reading-team-ranking-toggle__expanded">?�起</span>
+                    <span class="reading-team-ranking-toggle__collapsed">展�?</span>
                   </span>
                 </summary>
                 <div id="reading-team-ranking-3" class="bar-race-list" aria-live="polite">
@@ -1198,14 +1198,14 @@
               <details class="glass-card reading-team-ranking-card" data-team-ranking-details="6" open>
                 <summary class="reading-team-ranking-header">
                   <span class="reading-team-ranking-copy">
-                    <span class="card-title" role="heading" aria-level="3">6 人團隊排行榜</span>
-                    <span class="reading-team-ranking-rule">閱讀章數優先，同章數以較早完成時間排序</span>
-                    <span class="reading-team-ranking-summary" data-team-ranking-summary="6">團隊排行榜載入中…</span>
+                    <span class="card-title" role="heading" aria-level="3">6 人�??��?行�?</span>
+                    <span class="reading-team-ranking-rule">?��?章數?��?，�?章數以�??��??��??��?�?/span>
+                    <span class="reading-team-ranking-summary" data-team-ranking-summary="6">?��??��?榜�??�中??/span>
                   </span>
                   <span class="reading-team-ranking-toggle" data-team-ranking-toggle="6" aria-hidden="true">
                     <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
-                    <span class="reading-team-ranking-toggle__expanded">收起</span>
-                    <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                    <span class="reading-team-ranking-toggle__expanded">?�起</span>
+                    <span class="reading-team-ranking-toggle__collapsed">展�?</span>
                   </span>
                 </summary>
                 <div id="reading-team-ranking-6" class="bar-race-list" aria-live="polite">
@@ -1220,15 +1220,15 @@
               <summary class="reading-team-ranking-header pastoral-ranking-header">
                 <span class="reading-team-ranking-copy">
                   <span class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
-                    牧區速度排行榜
-                    <span id="pastoral-ranking-count-badge" class="pastoral-race-count" style="display: none; padding: 0.1rem 0.4rem; font-size: 0.68rem; line-height: 1;">共 0 個牧區</span>
+                    ?��??�度?��?�?
+                    <span id="pastoral-ranking-count-badge" class="pastoral-race-count" style="display: none; padding: 0.1rem 0.4rem; font-size: 0.68rem; line-height: 1;">??0 ?�牧?�</span>
                   </span>
-                  <span class="reading-team-ranking-rule">依閱讀章數與完成時間排序；兩者相同則並列</span>
+                  <span class="reading-team-ranking-rule">依閱讀章數?��??��??��?序�??�者相?��?並�?</span>
                 </span>
                 <span class="reading-team-ranking-toggle" aria-hidden="true">
                   <span class="nlc-icon nlc-icon--sm" data-icon="chevronUp"></span>
-                  <span class="reading-team-ranking-toggle__expanded">收起</span>
-                  <span class="reading-team-ranking-toggle__collapsed">展開</span>
+                  <span class="reading-team-ranking-toggle__expanded">?�起</span>
+                  <span class="reading-team-ranking-toggle__collapsed">展�?</span>
                 </span>
               </summary>
               <div class="pastoral-ranking-content">
@@ -1236,9 +1236,9 @@
               <!-- Table Headers -->
               <div
                 style="display: grid; grid-template-columns: 40px 1fr 100px; gap: 0.5rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.76rem; font-weight: 500; text-align: center;">
-                <div style="color: var(--text-muted);">名次</div>
-                <div style="text-align: left; color: var(--text-muted); padding-left: 0.5rem;">牧區名稱</div>
-                <div style="color: var(--primary-color);">累計章數</div>
+                <div style="color: var(--text-muted);">?�次</div>
+                <div style="text-align: left; color: var(--text-muted); padding-left: 0.5rem;">?��??�稱</div>
+                <div style="color: var(--primary-color);">累�?章數</div>
               </div>
 
               <!-- Pastoral Rank List Container -->
@@ -1270,41 +1270,41 @@
           </div>
 
 
-          <!-- 子分頁 5：組員狀況 (Members Status) -->
+          <!-- 子�???5：�??��?�?(Members Status) -->
           <div id="subview-plan-members" class="hidden flex flex-col w-full min-h-0"
             style="display: flex; flex-direction: column; width: 100%; min-height: 0;">
-            <!-- 頂部控制欄：高度必須由內容撐開，絕不霸佔全螢幕 -->
+            <!-- ?�部?�制欄�?高度必�??�內容�??��?絕�??��??�螢�?-->
             <div class="p-4 bg-white dark:bg-zinc-900/60 border-b border-slate-100 dark:border-zinc-800/50 flex-none"
               style="padding: 1rem; border-bottom: 1px solid var(--border-card); flex: none; display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-card); border-radius: 12px; margin-bottom: 0.8rem;">
               <h2 class="text-base font-bold text-slate-800 dark:text-white mb-2"
-                style="font-size: 1rem; font-weight: 500; color: var(--text-primary); margin: 0 0 0.5rem 0;">組員狀況</h2>
+                style="font-size: 1rem; font-weight: 500; color: var(--text-primary); margin: 0 0 0.5rem 0;">組員?��?/h2>
               <div class="reading-team-subview-switch hidden" id="members-team-view-switch">
-                <label for="members-team-view-select">查看內容</label>
+                <label for="members-team-view-select">?��??�容</label>
                 <select id="members-team-view-select" class="form-control">
-                  <option value="organization">教會小組</option>
+                  <option value="organization">?��?小�?</option>
                 </select>
               </div>
             </div>
 
-            <!-- 下方組員列表容器：利用 flex-1 自動填滿剩餘上方空間，並允許內部獨立滾動 -->
+            <!-- 下方組員?�表容器：利??flex-1 ?��?填滿?��?上方空�?，並?�許?�部?��?滾�? -->
             <div id="reading-team-members-inline" class="reading-team-inline hidden" aria-live="polite"></div>
 
 
 
 
           </div><!-- end subview-plan-members -->
-          <!-- 管理頁共用的組織統計元件容器 -->
+          <!-- 管�??�共?��?組�?統�??�件容器 -->
           <div id="plan-org-stats-subview" class="hidden" style="display: flex; flex-direction: column; width: 100%; min-height: 0;">
-            <!-- 頂部資訊 / 篩選控制列 -->
+            <!-- ?�部資�? / 篩選?�制??-->
             <!-- Header: scope bar and org controls (filter selectors) -->
             <div id="plan-org-stats-header" style="background: var(--bg-card); border-radius: 12px; border-bottom: 1px solid var(--border-card); display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 0.8rem; padding: 0.8rem;">
-              <!-- 全域權限統計篩選器 (組員狀況) -->
+              <!-- ?��?權�?統�?篩選??(組員?��? -->
               <div id="members-organization-controls" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 0.6rem; margin-right: auto;">
                   <span class="label-with-icon"
                     style="font-size: 1.1rem; font-weight: 500; color: var(--primary-color);"><span class="nlc-icon"
                       data-icon="people" aria-hidden="true"></span></span>
-                  <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">查看範圍</h3>
+                  <h3 style="margin: 0; font-size: 1.05rem; font-weight: 500; color: var(--text-primary);">?��?範�?</h3>
                 </div>
                 <select id="members-admin-region-select" class="form-control"
                   style="width: auto; min-width: 140px; padding: 0.35rem 0.7rem; font-weight: 500; border-color: var(--primary-color); border-radius: 8px; background: var(--bg-input); color: var(--text-primary);"></select>
@@ -1320,15 +1320,15 @@
                 <div class="admin-unjoined-plan-card__header" style="cursor: pointer; user-select: none;">
                   <div>
                     <h2 id="admin-unjoined-plan-title" class="admin-management-section__title" style="display: flex; align-items: center; gap: 0.4rem;">
-                      尚未加入計畫
-                      <span id="admin-unjoined-toggle-arrow" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; transform: rotate(0deg); display: inline-block;">▼</span>
+                      尚未?�入計畫
+                      <span id="admin-unjoined-toggle-arrow" style="font-size: 0.75rem; color: var(--text-muted); transition: transform 0.2s ease; transform: rotate(0deg); display: inline-block;">??/span>
                     </h2>
-                    <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.5;">顯示目前管理範圍內，尚未加入所選計畫的人員。</p>
+                    <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.5;">顯示?��?管�?範�??��?尚未?�入?�?��??��?人員??/p>
                   </div>
                   <div class="admin-unjoined-plan-card__actions">
-                    <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 人</span>
+                    <span id="admin-unjoined-plan-count" class="admin-unjoined-plan-count">0 �?/span>
                     <button type="button" class="secondary-btn" id="admin-unjoined-plan-invite-all" disabled>
-                      全部戳一下
+                      ?�部?��?�?
                     </button>
                   </div>
                 </div>
@@ -1337,21 +1337,21 @@
             </div>
             <!-- Content: group stats + member list -->
             <div id="plan-org-stats-content" style="display: flex; flex-direction: column; gap: 1.2rem; flex: 1; min-height: 0; overflow-y: auto;">
-            <!-- 團體統計部分 -->
-            <!-- 團體統計部分 -->
+            <!-- ?��?統�??��? -->
+            <!-- ?��?統�??��? -->
             <div id="stats-group-section" class="hidden"
               style="display: flex; flex-direction: column; gap: 0.8rem; width: 100%;">
 
-              <!-- 第一層：5格不對稱團體便當盒網格 + 融合三色進度條 -->
+              <!-- 第�?層�?5?��?對稱?��?便當?�網??+ ?��?三色?�度�?-->
               <div class="grid grid-cols-2 gap-3 px-4 pt-4" id="group-stats-card-container"
                 style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; width: 100%;">
 
-                <!-- 卡片 1 - 總閱讀章數 (核心主卡，橫跨兩欄) -->
+                <!-- ?��? 1 - 總閱讀章數 (?��?主卡，橫跨兩�? -->
                 <div class="col-span-2 bento-card stat-card--primary" style="grid-column: span 2 / span 2;">
                   <div class="stat-bento__row">
                     <div class="stat-bento__value stat-bento__value--hero">
                       <span id="grp-total-read">0</span>
-                      <span class="stat-bento__unit">章</span>
+                      <span class="stat-bento__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand stat-bento__icon-wrap--hero"><span
                         class="nlc-icon" data-icon="peoples" aria-hidden="true"></span></span>
@@ -1359,80 +1359,80 @@
                   <span class="stat-bento__label" id="grp-label-total-read">總閱讀章數</span>
                 </div>
 
-                <!-- 卡片 2 - 參與人數 -->
+                <!-- ?��? 2 - ?��?人數 -->
                 <div class="bento-card">
                   <div class="stat-bento__row">
                     <div class="stat-bento__value">
                       <span id="grp-total-members">0</span>
-                      <span class="stat-bento__unit">人</span>
+                      <span class="stat-bento__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--success"><span class="nlc-icon"
                         data-icon="people" aria-hidden="true"></span></span>
                   </div>
-                  <span class="stat-bento__label" id="grp-label-members">參與人數</span>
+                  <span class="stat-bento__label" id="grp-label-members">?��?人數</span>
                 </div>
 
-                <!-- 卡片 3 - 每日活躍 -->
+                <!-- ?��? 3 - 每日活�? -->
                 <div class="bento-card">
                   <div class="stat-bento__row">
                     <div class="stat-bento__value">
                       <span id="grp-active-members">0</span>
-                      <span class="stat-bento__unit">人</span>
+                      <span class="stat-bento__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--warning"><span class="nlc-icon"
                         data-icon="lightning" aria-hidden="true"></span></span>
                   </div>
-                  <span class="stat-bento__label" id="grp-label-active">每日活躍</span>
+                  <span class="stat-bento__label" id="grp-label-active">每日活�?</span>
                 </div>
 
-                <!-- 卡片 4 - 落後人數 -->
+                <!-- ?��? 4 - ?��?人數 -->
                 <div class="bento-card">
                   <div class="stat-bento__row">
                     <div class="stat-bento__value">
                       <span id="grp-behind-count">0</span>
-                      <span class="stat-bento__unit">人</span>
+                      <span class="stat-bento__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--danger"><span class="nlc-icon"
                         data-icon="hourglass" aria-hidden="true"></span></span>
                   </div>
 
-                  <!-- 三色進度條 -->
+                  <!-- 三色?�度�?-->
                   <div class="progress-segment-track">
-                    <div id="grp-today-bar-behind" class="progress-segment--behind" style="width: 0%" title="落後"></div>
+                    <div id="grp-today-bar-behind" class="progress-segment--behind" style="width: 0%" title="?��?"></div>
                     <div id="grp-today-bar-on-schedule" class="progress-segment--on-schedule" style="width: 0%"
-                      title="在進度上"></div>
-                    <div id="grp-today-bar-ahead" class="progress-segment--ahead" style="width: 0%" title="超前"></div>
+                      title="?�進度�?></div>
+                    <div id="grp-today-bar-ahead" class="progress-segment--ahead" style="width: 0%" title="超�?"></div>
                   </div>
 
-                  <span class="stat-bento__label">落後人數</span>
+                  <span class="stat-bento__label">?��?人數</span>
                 </div>
 
-                <!-- 卡片 5 - 複讀人數 -->
+                <!-- ?��? 5 - 複�?人數 -->
                 <div class="bento-card">
                   <div class="stat-bento__row">
                     <div class="stat-bento__value">
                       <span id="grp-reread-count">0</span>
-                      <span class="stat-bento__unit">人</span>
+                      <span class="stat-bento__unit">�?/span>
                     </div>
                     <span class="stat-bento__icon-wrap stat-bento__icon-wrap--brand"><span class="nlc-icon"
                         data-icon="refresh" aria-hidden="true"></span></span>
                   </div>
-                  <span class="stat-bento__label">複讀人數</span>
+                  <span class="stat-bento__label">複�?人數</span>
                 </div>
 
               </div>
 
-              <!-- 隱藏但保留的舊 ID，防止 JS 崩潰 -->
+              <!-- ?��?但�??��???ID，防�?JS 崩潰 -->
               <div id="grp-distribution-card" class="hidden" style="display: none;">
                 <span id="grp-distribution-title"></span>
               </div>
 
 
 
-              <!-- 第三層：收斂版「團隊讀經熱點地圖」卡片 -->
+              <!-- 第�?層�??��??�「�??��?經熱點地?�」卡??-->
               <div class="glass-card-upgrade mx-4 my-2" id="grp-heatmap-card">
                 <h3 class="card-title text-slate-800 dark:text-neutral-100" id="grp-heatmap-title"
-                  style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">團隊讀經活躍度</h3>
+                  style="margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 500; text-align: left;">?��?讀經活躍度</h3>
 
                 <div id="grp-bible-heatmap-container"
                   style="overflow-x: auto; width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0.25rem 0;">
@@ -1440,22 +1440,22 @@
                 </div>
 
                 <div class="heatmap-legend">
-                  <span>少</span>
+                  <span>�?/span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--0"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--1"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--2"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--3"></span>
                   <span class="heatmap-legend__swatch heatmap-legend__swatch--4"></span>
-                  <span>多</span>
+                  <span>�?/span>
                 </div>
               </div>
 
-              <!-- 第四層：每日活躍人數折線面積圖 -->
+              <!-- 第�?層�?每日活�?人數?��??��???-->
               <div class="glass-card-upgrade mx-4 my-2" id="grp-daily-active-chart-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                   <h3 class="card-title text-slate-800 dark:text-neutral-100" id="grp-daily-active-chart-title"
-                    style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日活躍人數（近30天）</h3>
-                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">人</span>
+                    style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; text-align: left;">每日活�?人數（�?30天�?</h3>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">�?/span>
                 </div>
                 <div style="position: relative; height: 180px; width: 100%;">
                   <canvas id="grp-daily-active-chart"></canvas>
@@ -1465,37 +1465,37 @@
             </div>
             <div id="member-list-container" class="flex-1 overflow-y-auto p-4 space-y-3"
               style="flex: 1; overflow-y: auto; padding: 0.5rem 0; display: flex; flex-direction: column; gap: 0.8rem; min-height: 0;">
-              <!-- 參與者總覽 -->
+              <!-- ?��??�總�?-->
               <div class="glass-card" style="margin-bottom: 0.5rem;">
                 <div class="member-list-header-wrapper" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
                   <div style="display: flex; align-items: center; gap: 0.6rem;">
                     <h3 class="card-title" id="members-ranking-title"
                       style="margin-bottom: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary);">
-                      參與者總覽</h3>
+                      ?��??�總�?/h3>
                     <button id="btn-refresh-members-ranking" type="button" class="tab-btn"
                       style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: auto; margin-right: 0.5rem;">
                       <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
-                      <span>更新</span>
+                      <span>?�新</span>
                     </button>
                     <button id="btn-toggle-members-collapse" type="button" class="tab-btn"
                       style="font-size: 0.72rem; padding: 0.2rem 0.5rem; height: auto; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                      <span>收合</span> <span>▲</span>
+                      <span>?��?</span> <span>??/span>
                     </button>
                   </div>
                   <div class="member-search-wrapper">
                     <span class="nlc-icon search-icon-inside" data-icon="search" aria-hidden="true"></span>
-                    <input type="text" id="member-search-input" placeholder="搜尋組員姓名…">
+                    <input type="text" id="member-search-input" placeholder="?��?組員姓�???>
                   </div>
                 </div>
                 <div id="members-list-collapsible-wrapper" style="overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch;">
                   <div style="min-width: 480px; padding-bottom: 0.4rem;">
                     <div id="members-ranking-header"
                       style="display: grid; grid-template-columns: 1fr 80px 80px 70px 90px; gap: 0.4rem; border-bottom: 1px solid var(--border-card); padding-bottom: 0.6rem; margin-bottom: 0.8rem; font-size: 0.74rem; font-weight: 500; text-align: center;">
-                      <div style="text-align: left; color: var(--text-muted);">成員</div>
-                      <div class="text-danger">最高連續</div>
-                      <div class="text-success-fg">累計完成</div>
-                      <div class="text-warning">補讀</div>
-                      <div class="text-brand">進度狀態</div>
+                      <div style="text-align: left; color: var(--text-muted);">?�員</div>
+                      <div class="text-danger">?�高�??</div>
+                      <div class="text-success-fg">累�?完�?</div>
+                      <div class="text-warning">補�?</div>
+                      <div class="text-brand">?�度?�??/div>
                     </div>
                     <div id="ranking-participants-list" style="display: flex; flex-direction: column; gap: 0.8rem;">
                       <!-- Populated dynamically by JS -->
@@ -1543,9 +1543,9 @@
 
               <!-- iOS/Shadcn-style Tab Switcher -->
               <div class="profile-tabs-list">
-                <button type="button" class="profile-tab-trigger active" data-profile-tab="settings">帳號設定</button>
-                <button type="button" class="profile-tab-trigger" data-profile-tab="preferences">偏好設定</button>
-                <button type="button" class="profile-tab-trigger" data-profile-tab="badges">我的徽章</button>
+                <button type="button" class="profile-tab-trigger active" data-profile-tab="settings">帳�?設�?</button>
+                <button type="button" class="profile-tab-trigger" data-profile-tab="preferences">?�好設�?</button>
+                <button type="button" class="profile-tab-trigger" data-profile-tab="badges">?��?徽�?</button>
               </div>
 
               <!-- Tab Content 1: Settings -->
@@ -1553,28 +1553,28 @@
                 <!-- Member Hub identity card & actions (App Style Settings Group) -->
                 <div class="space-y-4" id="profile-settings-container" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
 
-                <!-- 分組一：會員中心連動 -->
+                <!-- ?��?一：�??�中心�?? -->
                 <div class="app-settings-group">
                   <div class="app-settings-group__header" id="profile-member-hub-card">
                     <span class="app-settings-group__header-icon">
                       <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
                     </span>
                     <div class="app-settings-group__header-text">
-                      <h3 id="profile-member-hub-title" class="text-sm font-medium m-0">新生命會員中心</h3>
-                      <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓名、牧區歸屬與教會身份由會員中心統一管理；更新後會自動同步至本 app。</p>
+                      <h3 id="profile-member-hub-title" class="text-sm font-medium m-0">?��??��??�中�?/h3>
+                      <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓�??�牧?�歸屬?��??�身份由?�員中�?統�?管�?；更?��??�自?��?步至??app??/p>
                     </div>
                   </div>
 
                   <div class="app-settings-list">
-                    <!-- 項目 1：管理身份與牧區 -->
+                    <!-- ?�目 1：管?�身份�??��? -->
                     <a class="app-settings-item" id="btn-member-hub-structure" target="_blank" rel="noopener noreferrer">
                       <div class="app-settings-item__leading">
                         <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
                           <span class="nlc-icon nlc-icon--sm" data-icon="signpost" aria-hidden="true"></span>
                         </span>
                         <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title" id="profile-member-hub-primary-label">管理身份與牧區歸屬</span>
-                          <span class="app-settings-item__subtitle">更新姓名、大區、牧區或所屬小組</span>
+                          <span class="app-settings-item__title" id="profile-member-hub-primary-label">管�?身份?�牧?�歸屬</span>
+                          <span class="app-settings-item__subtitle">?�新姓�??�大?�?�牧?�?��?屬�?�?/span>
                         </div>
                       </div>
                       <span class="app-settings-item__chevron">
@@ -1587,21 +1587,21 @@
                   <div class="member-hub-org-placement" id="member-hub-org-placement" aria-live="polite">
                     <div class="member-hub-org-placement__grid">
                       <div class="member-hub-org-placement__item">
-                        <span class="member-hub-org-placement__label">大區</span>
+                        <span class="member-hub-org-placement__label">大�?</span>
                         <strong class="member-hub-org-placement__value" id="member-hub-org-great-region" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                       <div class="member-hub-org-placement__item">
-                        <span class="member-hub-org-placement__label">牧區</span>
+                        <span class="member-hub-org-placement__label">?��?</span>
                         <strong class="member-hub-org-placement__value" id="member-hub-org-pastoral-zone" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                       <div class="member-hub-org-placement__item">
-                        <span class="member-hub-org-placement__label">小組</span>
+                        <span class="member-hub-org-placement__label">小�?</span>
                         <strong class="member-hub-org-placement__value" id="member-hub-org-small-group" aria-busy="true"><span class="skeleton-shimmer" style="display:inline-block;height:1rem;width:4.5rem;border-radius:4px;"></span></strong>
                       </div>
                     </div>
-                    <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未同步</p>
+                    <p class="member-hub-org-placement__sync" id="member-hub-org-sync-status">尚未?�步</p>
                     <p class="member-hub-org-placement__empty hidden" id="member-hub-org-empty">
-                      會員中心尚未提供完整組織歸屬，請至會員中心更新。
+                      ?�員中�?尚未?��?完整組�?歸屬，�??��??�中心更?��?
                     </p>
                   </div>
                   <div class="app-settings-list">
@@ -1612,8 +1612,8 @@
                           <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
                         </span>
                         <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title">重新同步</span>
-                          <span class="app-settings-item__subtitle">重新取得會員中心的大區、牧區與小組</span>
+                          <span class="app-settings-item__title">?�新?�步</span>
+                          <span class="app-settings-item__subtitle">?�新?��??�員中�??�大?�?�牧?�?��?�?/span>
                         </div>
                       </div>
                     </button>
@@ -1628,8 +1628,8 @@
                           <span class="nlc-icon nlc-icon--sm" data-icon="bookOpen" aria-hidden="true"></span>
                         </span>
                         <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title">使用說明</span>
-                          <span class="app-settings-item__subtitle">查看加到主畫面、加入計畫與追蹤進度</span>
+                          <span class="app-settings-item__title">使用說�?</span>
+                          <span class="app-settings-item__subtitle">?��??�到主畫?�、�??��??��?追蹤?�度</span>
                         </div>
                       </div>
                       <span class="app-settings-item__chevron">
@@ -1637,7 +1637,7 @@
                       </span>
                     </button>
                   </div>
-                  <p class="profile-app-version" id="profile-app-version">版本 0.1.1</p>
+                  <p class="profile-app-version" id="profile-app-version">?�本 0.1.1</p>
                 </div>
 
 
@@ -1645,7 +1645,7 @@
                 <div class="profile-settings-logout">
                   <button id="btn-profile-logout" type="button" class="profile-logout-btn">
                     <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
-                    <span>登出帳號</span>
+                    <span>?�出帳�?</span>
                   </button>
                 </div>
               </div>
@@ -1659,14 +1659,14 @@
                       <span class="nlc-icon nlc-icon--sm" data-icon="sun" aria-hidden="true"></span>
                     </span>
                     <div class="app-settings-group__header-text">
-                      <h3 class="text-sm font-medium m-0">畫面主題</h3>
-                      <p class="text-xs text-secondary m-0">選擇適合閱讀環境的顯示色調</p>
+                      <h3 class="text-sm font-medium m-0">?�面主�?</h3>
+                      <p class="text-xs text-secondary m-0">?��??��??��??��??�顯示色�?/p>
                     </div>
                   </div>
-                  <div class="profile-theme-options" role="radiogroup" aria-label="畫面主題">
+                  <div class="profile-theme-options" role="radiogroup" aria-label="?�面主�?">
                     <button type="button" class="profile-theme-option" data-profile-theme="light" role="radio" aria-checked="false">
                       <span class="profile-theme-option__swatch profile-theme-option__swatch--light" aria-hidden="true"></span>
-                      <span>明亮</span>
+                      <span>?�亮</span>
                     </button>
 
                     <button type="button" class="profile-theme-option" data-profile-theme="dark" role="radio" aria-checked="false">
@@ -1676,74 +1676,74 @@
                   </div>
                 </div>
 
-                <!-- 語音朗讀設定卡片 -->
+                <!-- 語音?��?設�??��? -->
                 <div class="app-settings-group profile-preferences-group" style="margin-top: 1rem;">
                   <div class="app-settings-group__header">
                     <span class="app-settings-group__header-icon">
                       <span class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
                     </span>
                     <div class="app-settings-group__header-text">
-                      <h3 class="text-sm font-medium m-0">聖經語音朗讀設定</h3>
-                      <p class="text-xs text-secondary m-0">調整聆聽語速與偏好的發音人聲線</p>
+                      <h3 class="text-sm font-medium m-0">?��?語音?��?設�?</h3>
+                      <p class="text-xs text-secondary m-0">調整?�聽語速�??�好?�發?�人?��?</p>
                     </div>
                   </div>
 
                   <div style="padding: 0.8rem 1rem; display: flex; flex-direction: column; gap: 1.2rem;">
-                    <!-- 語速滑桿 -->
+                    <!-- 語速�?�?-->
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="speech-rate-slider" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">朗讀語速</label>
-                        <span id="speech-rate-val" style="font-size: 0.85rem; font-weight: 600; color: var(--brand-primary, #04A9D2);">1.0x (標準)</span>
+                        <label for="speech-rate-slider" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">?��?語�?/label>
+                        <span id="speech-rate-val" style="font-size: 0.85rem; font-weight: 600; color: var(--brand-primary, #04A9D2);">1.0x (標�?)</span>
                       </div>
                       <input type="range" id="speech-rate-slider" min="0.5" max="2.0" step="0.05" value="1.0"
                         style="width: 100%; accent-color: var(--brand-primary, #04A9D2); cursor: pointer;">
                       <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary);">
-                        <span>0.5x 沉靜慢速</span>
-                        <span>1.0x 標準</span>
-                        <span>2.0x 疾速</span>
+                        <span>0.5x 沉�??��?/span>
+                        <span>1.0x 標�?</span>
+                        <span>2.0x ?��?/span>
                       </div>
                     </div>
 
-                    <!-- 聲線 / 性別切換 -->
+                    <!-- ?��? / ?�別?��? -->
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                      <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
-                      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" role="radiogroup" aria-label="聲線偏好">
+                      <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">?��??�好</label>
+                      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" role="radiogroup" aria-label="?��??�好">
                         <button type="button" class="btn btn--neutral btn--sm speech-gender-btn active" data-speech-gender="auto">
-                          <span>系統預設</span>
+                          <span>系統?�設</span>
                         </button>
                         <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="female">
-                          <span>溫柔女聲</span>
+                          <span>溫�?女聲</span>
                         </button>
                         <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="male">
-                          <span>穩重男聲</span>
+                          <span>穩�??�聲</span>
                         </button>
                       </div>
                     </div>
 
-                    <!-- 具體發音人選單 (由上方性別按鈕過濾) -->
+                    <!-- ?��??�音人選??(?��??�性別?��??�濾) -->
                     <div style="display: flex; flex-direction: column; gap: 0.4rem;">
                       <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">選擇聲線發音人</label>
-                        <span style="font-size: 0.72rem; color: var(--text-secondary);">可自由選擇不同音色</span>
+                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">?��??��??�音�?/label>
+                        <span style="font-size: 0.72rem; color: var(--text-secondary);">?�自?�選?��??�音??/span>
                       </div>
                       <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
-                        <option value="">載入系統語音中...</option>
+                        <option value="">載入系統語音�?..</option>
                       </select>
                     </div>
 
-                    <!-- 操作按鈕列：Shadcn UI 風格「播放試聽語音」按鈕 -->
+                    <!-- ?��??��??��?Shadcn UI 風格?�播?�試?��??�」�???-->
                     <div style="display: flex; gap: 0.5rem; margin-top: 0.6rem;">
                       <button type="button" id="btn-preview-speech" class="shadcn-speech-btn w-full"
                         style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.65rem 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: linear-gradient(135deg, var(--brand-primary, #04A9D2) 0%, #0284c7 100%); color: #ffffff; font-weight: 600; font-size: 0.88rem; letter-spacing: 0.02em; box-shadow: 0 4px 14px rgba(4, 169, 210, 0.35); cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
                         <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
-                        <span id="btn-preview-text">播放試聽語音</span>
+                        <span id="btn-preview-text">?�放試聽語音</span>
                         <span class="nlc-icon nlc-icon--sm" data-icon="sparkles" aria-hidden="true" style="opacity: 0.85; margin-left: 0.1rem;"></span>
                       </button>
                     </div>
 
-                    <!-- 自動即時儲存提示 -->
+                    <!-- ?��??��??��??�示 -->
                     <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0 0; text-align: center;">
-                      ✨ 設定變更將自動即時儲存於您的本地裝置，不佔用雲端資料庫。
+                      ??設�?變更將自?�即?�儲存於?��??�地裝置，�?佔用?�端資�?庫�?
                     </p>
                   </div>
                 </div>
@@ -1757,7 +1757,7 @@
                       <span class="dashboard-panel-card__title-icon" aria-hidden="true">
                         <span class="nlc-icon nlc-icon--sm" data-icon="trophy"></span>
                       </span>
-                      <span class="dashboard-panel-card__title-text">我的榮譽徽章</span>
+                      <span class="dashboard-panel-card__title-text">?��?榮譽徽�?</span>
                     </h3>
                     <span class="stat-badge stat-badge--neutral badge-wall__count" id="badge-wall-summary">0 / 10</span>
                   </div>
@@ -1781,11 +1781,11 @@
 
       <!-- VIEW 6: ADMIN CONSOLE -->
       <section id="admin-view" class="view-pane hidden">
-        <nav id="admin-primary-tabs" class="admin-primary-tabs hidden" role="tablist" aria-label="管理分頁">
+        <nav id="admin-primary-tabs" class="admin-primary-tabs hidden" role="tablist" aria-label="管�??��?">
           <button type="button" class="admin-primary-tab" id="admin-tab-system" role="tab"
-            aria-selected="false" aria-controls="admin-system-panel" data-admin-panel="system">系統管理</button>
+            aria-selected="false" aria-controls="admin-system-panel" data-admin-panel="system">系統管�?</button>
           <button type="button" class="admin-primary-tab active" id="admin-tab-plans" role="tab"
-            aria-selected="true" aria-controls="admin-plans-panel" data-admin-panel="plans">計畫管理</button>
+            aria-selected="true" aria-controls="admin-plans-panel" data-admin-panel="plans">計畫管�?</button>
         </nav>
 
         <div id="admin-system-panel" class="grid-layout hidden" role="tabpanel"
@@ -1797,17 +1797,17 @@
                   <span class="nlc-icon nlc-icon--md" data-icon="setting"></span>
                 </span>
                 <div>
-                  <h3 class="card-title">功能開放設定</h3>
-                  <p>可暫時封存牧區靈修分享牆；既有分享、按讚與留言都會保留。</p>
+                  <h3 class="card-title">?�能?�放設�?</h3>
+                  <p>?�暫?��?存牧?�?�修?�享?��??��??�享?��?讚�??��??��?保�???/p>
                 </div>
               </div>
               <div class="admin-feature-setting-row">
                 <div class="admin-feature-setting-row__label">
-                  <strong>牧區靈修分享牆</strong>
-                  <span id="admin-pastoral-wall-status">讀取設定中…</span>
+                  <strong>?��??�修?�享??/strong>
+                  <span id="admin-pastoral-wall-status">讀?�設定中??/span>
                 </div>
                 <button type="button" class="feature-switch" id="admin-pastoral-wall-toggle"
-                  role="switch" aria-checked="false" aria-label="開放牧區靈修分享牆" disabled>
+                  role="switch" aria-checked="false" aria-label="?�放?��??�修?�享?? disabled>
                   <span class="feature-switch__thumb" aria-hidden="true"></span>
                 </button>
               </div>
@@ -1818,31 +1818,31 @@
             <details class="glass-card admin-user-directory" id="admin-user-directory-disclosure" aria-labelledby="admin-user-directory-title" open>
               <summary class="admin-user-directory__summary">
                 <div>
-                  <p class="admin-registration-statistics__eyebrow">使用者管理</p>
-                  <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
-                  <p>先查看姓名與牧區，點選人員後可展開詳細資料；本區不會修改帳號。</p>
+                  <p class="admin-registration-statistics__eyebrow">使用?�管??/p>
+                  <h3 class="card-title" id="admin-user-directory-title">使用?�基?��???/h3>
+                  <p>?�查?��??��??��?，�??�人?��??��??�詳細�??��??��?不�?修改帳�???/p>
                 </div>
-                <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
+                <span class="admin-user-directory__count" id="admin-user-directory-count">讀?�中??/span>
               </summary>
               <div class="admin-user-directory__body">
               <label class="admin-registration-statistics__filter" for="admin-user-directory-search">
-                <span>搜尋使用者</span>
+                <span>?��?使用??/span>
                 <input type="search" id="admin-user-directory-search" class="form-control"
-                  placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
+                  placeholder="?��?姓�??�信箱、�??��??��?歸屬" autocomplete="off">
               </label>
               <fieldset class="admin-user-directory__filters">
                 <legend>篩選條件</legend>
                 <label>
                   <input type="checkbox" id="admin-user-directory-filter-incomplete">
-                  <span>未填會員資料（沒有牧區或沒有名稱）</span>
+                  <span>?�填?�員資�?（�??�牧?�?��??��?稱�?</span>
                 </label>
                 <label>
                   <input type="checkbox" id="admin-user-directory-filter-stage-one">
-                  <span>未加入第一階段計畫</span>
+                  <span>?��??�第一?�段計畫</span>
                 </label>
               </fieldset>
               <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
-                <div class="admin-user-directory__empty">正在載入使用者資料…</div>
+                <div class="admin-user-directory__empty">�?��載入使用?��??��?/div>
               </div>
               </div>
             </details>
@@ -1851,25 +1851,25 @@
             <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
               <div class="admin-registration-statistics__header">
                 <div>
-                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
-                  <h3 class="card-title" id="admin-managed-scopes-title">管理範圍設定</h3>
-                  <p>角色由會員中心同步；此處只列出具有管理職責的人員，不包含一般會友，並可設定多個大區、牧區或小組。</p>
+                  <p class="admin-registration-statistics__eyebrow">權�?管�?</p>
+                  <h3 class="card-title" id="admin-managed-scopes-title">管�?範�?設�?</h3>
+                  <p>角色?��??�中心�?步�?此�??��??�具?�管?�職責�?人員，�??�含一?��??��?並可設�?多個大?�?�牧?�?��?組�?/p>
                 </div>
               </div>
               <label class="admin-registration-statistics__filter" for="admin-managed-scopes-profile">
-                <span>選擇人員</span>
+                <span>?��?人員</span>
                 <select id="admin-managed-scopes-profile" class="form-control"></select>
               </label>
               <div id="admin-managed-scopes-summary" class="admin-managed-scopes__summary"></div>
               <div id="admin-managed-scopes-options" class="admin-managed-scopes__options"></div>
               <div class="admin-managed-scopes__actions">
-                <button type="button" class="secondary-btn" id="admin-managed-scopes-select-all">全選</button>
-                <button type="button" class="secondary-btn" id="admin-managed-scopes-clear">清除委派範圍</button>
-                <button type="button" class="primary-btn" id="admin-managed-scopes-save">儲存管理範圍</button>
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-select-all">?�選</button>
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-clear">清除委派範�?</button>
+                <button type="button" class="primary-btn" id="admin-managed-scopes-save">?��?管�?範�?</button>
               </div>
               <p class="admin-managed-scopes__help">
-                未設定時會使用此人的會員中心歸屬；系統管理員與教會牧者固定為全教會範圍。
-                儲存時只保留符合目前角色層級的欄位，避免日後換角色時套用過期權限。
+                ?�設定�??�使?�此人�??�員中�?歸屬；系統管?�員?��??�牧?�固定為?��??��??��?
+                ?��??�只保�?符�??��?角色層�??��?位�??��??��??��??��?套用?��?權�???
               </p>
               <p class="admin-feature-setting-feedback hidden" id="admin-managed-scopes-feedback" role="status"></p>
             </section>
@@ -1878,21 +1878,21 @@
             <section class="glass-card admin-registration-statistics" aria-labelledby="admin-registration-statistics-title">
               <div class="admin-registration-statistics__header">
                 <div>
-                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
-                  <h3 class="card-title" id="admin-registration-statistics-title">報名與註冊統計</h3>
-                  <p>比較有效帳號的註冊人數，以及加入所選讀經計畫的報名人數。</p>
+                  <p class="admin-registration-statistics__eyebrow">權�?管�?</p>
+                  <h3 class="card-title" id="admin-registration-statistics-title">?��??�註?�統�?/h3>
+                  <p>比�??��?帳�??�註?�人?��?以�??�入?�?��?經�??��??��?人數??/p>
                 </div>
                 <button type="button" class="secondary-btn" id="admin-registration-statistics-export" disabled>
                   <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true"></span>
-                  匯出文字檔
+                  ?�出?��?�?
                 </button>
               </div>
               <label class="admin-registration-statistics__filter" for="admin-registration-statistics-plan">
-                <span>讀經計畫</span>
+                <span>讀經�???/span>
                 <select id="admin-registration-statistics-plan" class="form-control"></select>
               </label>
               <div id="admin-registration-statistics-content" aria-live="polite">
-                <div class="admin-registration-statistics__empty">讀取統計資料中…</div>
+                <div class="admin-registration-statistics__empty">讀?�統計�??�中??/div>
               </div>
             </section>
           </div>
@@ -1909,7 +1909,7 @@
           </section>
 
           <section class="admin-management-section" aria-labelledby="admin-participants-title">
-            <h2 id="admin-participants-title" class="admin-management-section__title">參與者總覽</h2>
+            <h2 id="admin-participants-title" class="admin-management-section__title">?��??�總�?/h2>
             <div id="admin-plan-participants-slot"></div>
           </section>
 
@@ -1919,11 +1919,11 @@
               <summary id="admin-team-status-toggle" aria-controls="admin-team-status-panel">
                 <span class="card-title" id="admin-team-3-title">
                   <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
-                  3 人團隊報名狀況
+                  3 人�??�報?��?�?
                 </span>
                 <span class="admin-team-status-summary-action">
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">?�起</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展�?</span>
                   <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
                 </span>
               </summary>
@@ -1938,11 +1938,11 @@
               <summary id="admin-team-status-toggle-6" aria-controls="admin-team-status-panel-6">
                 <span class="card-title" id="admin-team-6-title">
                   <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
-                  6 人團隊報名狀況
+                  6 人�??�報?��?�?
                 </span>
                 <span class="admin-team-status-summary-action">
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">?�起</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展�?</span>
                   <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
                 </span>
               </summary>
@@ -1953,7 +1953,7 @@
           </section>
 
           <section class="admin-management-section" aria-labelledby="admin-statistics-title">
-            <h2 id="admin-statistics-title" class="admin-management-section__title">各種統計</h2>
+            <h2 id="admin-statistics-title" class="admin-management-section__title">?�種統�?</h2>
             <div id="admin-plan-statistics-slot"></div>
           </section>
         </div>
@@ -1963,11 +1963,11 @@
 
     <!-- Bottom Footer (Responsive Mobile Tabs + Info) -->
     <footer class="main-footer">
-      <p>© 2026 新生命聖經速讀計畫 — 進度雲端同步，隨時接續讀經</p>
+      <p>© 2026 ?��??��?經速�?計畫 ???�度?�端?�步，隨?�接續�?�?/p>
     </footer>
 
     <!-- Mobile Navigation Bar -->
-    <nav class="mobile-nav-bar" role="tablist" aria-label="主要導覽">
+    <nav class="mobile-nav-bar" role="tablist" aria-label="主�?導覽">
       <button class="mobile-nav-btn active" role="tab" aria-selected="true" aria-current="page"
         data-target="dashboard-view">
         <span class="nlc-icon icon" data-icon="home" aria-hidden="true"></span>
@@ -1981,7 +1981,7 @@
         <span class="nlc-icon icon" data-icon="calendarThirty" aria-hidden="true"></span>
         <span>&#x8A08;&#x756B;</span>
       </button>
-      <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="profile-view" aria-label="個人">
+      <button class="mobile-nav-btn" role="tab" aria-selected="false" data-target="profile-view" aria-label="?�人">
         <span class="nlc-icon icon" data-icon="user" aria-hidden="true"></span>
         <span>&#x500B;&#x4EBA;</span>
       </button>
@@ -1998,14 +1998,14 @@
       <div class="login-logo-wrapper">
         <img src="assets/bible-reading-icon.svg" alt="" width="72" height="72">
       </div>
-      <h2 class="login-title">新生命聖經速讀計畫</h2>
-      <p class="login-subtitle">跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。</p>
+      <h2 class="login-title">?��??��?經速�?計畫</h2>
+      <p class="login-subtitle">跟�??��?妹�?起速�??��?，登?��??�度?�自?��?步�?/p>
 
       <!-- Primary: NLC SSO login -->
       <button class="primary-btn" id="btn-gate-nlc-login"
         style="display: inline-flex; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.82rem 1.8rem; width: 100%; font-size: 0.98rem; font-weight: 500; margin-bottom: 0.8rem;">
         <span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span>
-        使用 NLC 身份登入 (SSO)
+        使用 NLC 身份?�入 (SSO)
       </button>
 
 
@@ -2018,7 +2018,7 @@
         <span style="display: inline-flex; align-items: center; gap: 0.3rem;">
           <span style="width: 6px; height: 6px; background: var(--color-success-foreground); border-radius: 50%;"
             id="gate-status-dot"></span>
-          <span id="gate-status-text">線上模式已啟用</span>
+          <span id="gate-status-text">線�?模�?已�???/span>
         </span>
       </div>
     </div>
@@ -2036,15 +2036,15 @@
       <button type="button" class="overlay-version bible-nav-sheet__badge" id="bible-nav-version-badge">CUNP</button>
     </header>
 
-    <div class="segmented-control bible-nav-sheet__tabs segment-track" role="tablist" aria-label="聖經導覽">
-      <button type="button" class="segmented-tab segment-toggle-btn active" data-tab="book" role="tab">卷</button>
-      <button type="button" class="segmented-tab segment-toggle-btn" data-tab="chapter" role="tab">章</button>
+    <div class="segmented-control bible-nav-sheet__tabs segment-track" role="tablist" aria-label="?��?導覽">
+      <button type="button" class="segmented-tab segment-toggle-btn active" data-tab="book" role="tab">??/button>
+      <button type="button" class="segmented-tab segment-toggle-btn" data-tab="chapter" role="tab">�?/button>
       <button type="button" class="segmented-tab segment-toggle-btn" data-tab="verse" role="tab">節</button>
     </div>
 
     <div class="mode-selector-bar bible-nav-sheet__toolbar">
       <div class="bible-nav-sheet__view-mode">
-        <span class="bible-nav-sheet__toggle-label" id="bible-nav-view-label">檢視</span>
+        <span class="bible-nav-sheet__toggle-label" id="bible-nav-view-label">檢�?</span>
         <div class="view-mode-container bible-nav-sheet__toggle-group segment-track" role="group"
           aria-labelledby="bible-nav-view-label">
           <button type="button" class="view-mode-btn segment-toggle-btn active" id="view-mode-grid" title="網格"
@@ -2157,7 +2157,7 @@
       });
     })();
 
-    // 定義測試/虛擬資料的預設空白回退，防止在生產環境中因為 mock_stats.js 檔案被 gitignore 排除（404）而導致程式崩潰
+    // 定義測試/?�擬資�??��?設空?��??�，防止在?�產?��?中�???mock_stats.js 檔�?�?gitignore ?�除�?04）而�??��?式崩�?
     window.MOCK_USERS_DATA = [];
     window.MockStatsService = null;
     window.MOCK_GREAT_REGIONS = [];
@@ -2165,7 +2165,7 @@
     window.MOCK_SMALL_GROUPS = {};
   </script>
   <script>
-    // Safe stubs — overwritten by mock_stats.js once loaded on localhost
+    // Safe stubs ??overwritten by mock_stats.js once loaded on localhost
     window.getMockCareReminders = function() { return []; };
     window.dismissMockCareReminder = function() {};
   </script>
@@ -2181,10 +2181,10 @@
         <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
         <span class="badge-detail-back-label">&#36820;&#22238;</span>
       </button>
-      <span id="detail-header-title" style="font-weight: 500; font-size: 1rem;">勳章詳情</span>
+      <span id="detail-header-title" style="font-weight: 500; font-size: 1rem;">?��?詳�?</span>
       <button id="badge-page-share-btn"
         style="background: none; border: none; font-size: 1.25rem; cursor: pointer; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: inherit;"
-        title="分享">
+        title="?�享">
         <span class="nlc-icon" data-icon="share"></span>
       </button>
     </header>
@@ -2210,13 +2210,13 @@
       </div>
 
       <div class="badge-detail-trigger" id="detail-trigger-card">
-        <span class="badge-detail-trigger__label">如何取得</span>
+        <span class="badge-detail-trigger__label">如�??��?</span>
         <p class="badge-detail-trigger__text" id="detail-trigger-text"></p>
       </div>
 
       <!-- 3. Lower Part: Milestones Timeline -->
       <div style="margin: 1rem 1rem 0 1rem; padding: 0.5rem;">
-        <h3 style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1rem;">里程碑</h3>
+        <h3 style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1rem;">?��?�?/h3>
         <div id="detail-timeline-container" style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
           <!-- Dynamically populated timeline or progress bar -->
         </div>
@@ -2230,25 +2230,25 @@
     <div class="version-picker-backdrop" id="version-picker-backdrop"></div>
     <div class="version-picker-card">
       <div class="version-picker-header">
-        <h3 class="version-picker-title">選擇聖經譯本</h3>
-        <button type="button" class="version-picker-close" id="version-picker-close" aria-label="關閉選單">✕</button>
+        <h3 class="version-picker-title">?��??��?譯本</h3>
+        <button type="button" class="version-picker-close" id="version-picker-close" aria-label="?��??�單">??/button>
       </div>
       <div class="version-picker-body">
-        <div class="version-section-label">中文譯本</div>
+        <div class="version-section-label">中�?譯本</div>
         <button type="button" class="version-option-btn" data-version="CUNP">
-          <span class="v-name">CUNP (新標點和合本)</span>
+          <span class="v-name">CUNP (?��?點�??�本)</span>
           <span class="v-check nlc-icon" data-icon="check"></span>
         </button>
         <button type="button" class="version-option-btn" data-version="RCUVTS">
-          <span class="v-name">RCUV (和合本修訂版)</span>
+          <span class="v-name">RCUV (?��??�修訂�?)</span>
           <span class="v-check nlc-icon" data-icon="check"></span>
         </button>
         <button type="button" class="version-option-btn" data-version="CUV">
-          <span class="v-name">CUV (官話和合本)</span>
+          <span class="v-name">CUV (官話?��???</span>
           <span class="v-check nlc-icon" data-icon="check"></span>
         </button>
 
-        <div class="version-section-label" style="margin-top: 1.25rem;">英文譯本 (English)</div>
+        <div class="version-section-label" style="margin-top: 1.25rem;">?��?譯本 (English)</div>
         <button type="button" class="version-option-btn" data-version="ESV">
           <span class="v-name">ESV (English Standard Version)</span>
           <span class="v-check nlc-icon" data-icon="check"></span>
@@ -2265,7 +2265,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260805_fix_pwa_cache_management"></script>
+  <script type="module" src="js/app.js?v=20260805_fix_ios_android_bridge_redirect"></script>
 </body>
 
 </html>

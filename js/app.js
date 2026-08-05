@@ -11,7 +11,7 @@ import './design/design-system-helpers.js?v=20260805_fix_pwa_cache_management';
 import './design/icon-registry.js?v=20260729_team_stats_poke';
 import './design/icons.js';
 import './state.js?v=20260730_performance_refactor';
-import './auth.js?v=20260805_fix_pwa_cache_management';
+import './auth.js?v=20260805_fix_ios_android_bridge_redirect';
 import './auth-launch.mjs';
 import './db.js?v=20260805_fix_auth_dup_callback_android_sync';
 import './utils.js?v=20260801_full_plan_reset';
@@ -110,7 +110,7 @@ function updateCareReminderBadge(reminders = []) {
   if (bellButton) {
     bellButton.setAttribute(
       "aria-label",
-      count > 0 ? `通知，${count} 則未讀` : "通知"
+      count > 0 ? `?�知�?{count} ?�未讀` : "?�知"
     );
   }
 
@@ -152,13 +152,13 @@ async function renderNotificationsList() {
   const container = document.getElementById("notification-list-container");
   if (!container) return;
 
-  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
+  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入�?..</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
   const { data: notifications, error } = await db.fetchAllNotifications();
 
   if (error || !notifications || notifications.length === 0) {
-    container.innerHTML = `<div class="notification-popover__empty">目前沒有通知</div>`;
+    container.innerHTML = `<div class="notification-popover__empty">?��?沒�??�知</div>`;
     return;
   }
 
@@ -166,11 +166,11 @@ async function renderNotificationsList() {
 
   const roleNames = {
     member: "組員",
-    group_leader: "小組長",
-    zone_leader: "區長",
-    great_zone_leader: "大區長",
-    senior_pastor: "教會牧者",
-    admin: "系統管理員"
+    group_leader: "小�???,
+    zone_leader: "?�??,
+    great_zone_leader: "大�???,
+    senior_pastor: "?��??��?,
+    admin: "系統管�???
   };
 
   notifications.forEach(item => {
@@ -178,12 +178,12 @@ async function renderNotificationsList() {
     div.className = `notification-item ${item.status === 'unread' ? 'notification-item--unread' : ''}`;
 
     const sender = item.sender || {};
-    const senderName = String(sender.name || "").trim() || "—";
+    const senderName = String(sender.name || "").trim() || "??;
     const senderRoleRaw = getUserRoleCode(sender);
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
-      ? "隊友"
-      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "領袖");
+      ? "?��?"
+      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "?��?");
 
     const dateStr = item.sent_on || "";
 
@@ -192,7 +192,7 @@ async function renderNotificationsList() {
         <span class="notification-item__sender">來自${senderRole} ${safeEscapeHTML(senderName)}</span>
         <span class="notification-item__time">${safeEscapeHTML(dateStr)}</span>
       </div>
-      <p class="notification-item__body">${safeEscapeHTML(item.message || "加油！一起穩定讀經。")}</p>
+      <p class="notification-item__body">${safeEscapeHTML(item.message || "?�油！�?起穩定�?經�?)}</p>
     `;
 
     div.onclick = async (e) => {
@@ -256,7 +256,7 @@ function initNotificationSystem() {
         updateCareReminderBadge([]);
         await renderNotificationsList();
       } else {
-        alert("全部已讀失敗: " + (error.message || error));
+        alert("?�部已�?失�?: " + (error.message || error));
       }
     };
   }
@@ -278,7 +278,7 @@ async function loadModule(name, path) {
   if (moduleCache[name]) {
     return moduleCache[name];
   }
-  console.log(`📡 [ESM] Lazy-loading module: ${name} from ${path}`);
+  console.log(`?�� [ESM] Lazy-loading module: ${name} from ${path}`);
   try {
     const mod = await import(path);
     moduleCache[name] = mod;
@@ -366,17 +366,17 @@ async function refreshCurrentAppView() {
   await refreshCareReminderBadge({ force: true });
 
   if (typeof showToast === "function") {
-    showToast("已更新");
+    showToast("已更??);
   }
 }
 
-// ─── Tab Switching: isSwitching guard prevents concurrent race conditions ───
+// ?�?�?� Tab Switching: isSwitching guard prevents concurrent race conditions ?�?�?�
 let isSwitching = false;
 
 appRouter.switchTab = async function (tabId, options = {}) {
-  // ── State Lock: block double-tap / rapid navigation ──
+  // ?�?� State Lock: block double-tap / rapid navigation ?�?�
   if (isSwitching) {
-    console.warn(`[Router] switchTab('${tabId}') blocked — previous transition still in progress.`);
+    console.warn(`[Router] switchTab('${tabId}') blocked ??previous transition still in progress.`);
     return;
   }
   isSwitching = true;
@@ -388,22 +388,22 @@ appRouter.switchTab = async function (tabId, options = {}) {
   }
 
   try {
-    // ── Pre-flight: reader-state cleanup ──
+    // ?�?� Pre-flight: reader-state cleanup ?�?�
     if (tabId !== "reader-view" || !options.fromPlan) {
       if (state.readerState) state.readerState.fromPlan = false;
     }
 
-    // ── Pre-flight: stop TTS audio ──
+    // ?�?� Pre-flight: stop TTS audio ?�?�
     if (tabId !== "reader-view" && typeof window.speechSynthesis !== "undefined") {
       window.speechSynthesis.cancel();
       const audioBtn = document.getElementById("reader-audio-btn");
       if (audioBtn) audioBtn.classList.remove("active");
     }
 
-    // ── 1. Update currentTab immediately (sync) ──
+    // ?�?� 1. Update currentTab immediately (sync) ?�?�
     this.currentTab = tabId;
 
-    // ── 2. Update nav button states (sync) ──
+    // ?�?� 2. Update nav button states (sync) ?�?�
     document.querySelectorAll(".tab-btn, .mobile-nav-btn").forEach(btn => {
       const target = btn.getAttribute("data-target");
       if (!target) return;
@@ -416,7 +416,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     });
 
-    // ── 3. Show/hide view panes (sync) ──
+    // ?�?� 3. Show/hide view panes (sync) ?�?�
     document.querySelectorAll(".view-pane").forEach(pane => {
       if (pane.id === tabId) {
         pane.classList.remove("hidden");
@@ -427,7 +427,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     });
 
-    // ── 4. Pre-render state mutations (sync, before any await) ──
+    // ?�?� 4. Pre-render state mutations (sync, before any await) ?�?�
     if (tabId === "plan-view" && !options.keepPlanDetail) {
       // Only reset if no active plan: preserve plan detail when re-tapping the plan nav tab
       if (!state.activePlan) {
@@ -440,7 +440,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       window.currentPlanViewState = "DETAIL";
     }
 
-    // ── 5. Load module + render (fully awaited) ──
+    // ?�?� 5. Load module + render (fully awaited) ?�?�
     if (typeof window.syncActivePlanContext === 'function') {
       window.syncActivePlanContext();
     }
@@ -530,7 +530,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     }
 
-    // ── 6. updateNavigationChrome — THE SINGLE, FINAL CALL ──
+    // ?�?� 6. updateNavigationChrome ??THE SINGLE, FINAL CALL ?�?�
     // All async rendering is complete. State is now fully settled.
     this.updateNavigationChrome();
     refreshCareReminderBadge();
@@ -540,7 +540,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
     }
 
   } finally {
-    // ── 7. Always release the lock, even on error ──
+    // ?�?� 7. Always release the lock, even on error ?�?�
     this.isTabTransitioning = false;
     isSwitching = false;
   }
@@ -676,13 +676,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.documentElement.dataset.syncState = detail.status || "idle";
     document.documentElement.dataset.pendingSyncCount = String(detail.pending || 0);
     if (detail.status === "queued" && typeof showToast === "function") {
-      showToast("已離線儲存，恢復網路後會自動同步");
+      showToast("已離線儲存�??�復網路後�??��??�步");
     } else if (detail.status === "complete" && detail.pending === 0 && typeof showToast === "function") {
-      showToast("離線讀經進度已同步");
+      showToast("?��?讀經進度已�?�?);
     }
   });
 
-  // ── Background pre-warm: silently load plan module script only ──
+  // ?�?� Background pre-warm: silently load plan module script only ?�?�
   loadModule('plan', './modules/plan.js?v=' + buildVersion).then(() => {
     ensurePlanFeatureModulesLoaded().catch(() => {});
   }).catch(() => {});
@@ -692,12 +692,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       refreshCareReminderBadge();
       clearBadge().catch(err => console.error("Failed to clear badge on visible:", err));
 
-      // 💡 行動裝置前景切換健康保護：防止 iOS/Android 背景記憶體回收導致的空白或死機
+      // ?�� 行�?裝置?�景?��??�康保護：防�?iOS/Android ?�景記憶體�??��??��?空白?�死�?
       try {
         const isProfileLost = !state.currentUser || !state.currentUser.name;
         const isPlanLost = !state.activePlan && Array.isArray(state.activePlans) && state.activePlans.length > 0;
         if ((isProfileLost || isPlanLost) && typeof db !== "undefined" && typeof db.loadUserData === "function") {
-          console.log("⚡ [HealthCheck] Foreground wake detected memory eviction, restoring state...");
+          console.log("??[HealthCheck] Foreground wake detected memory eviction, restoring state...");
           db.loadUserData().catch(err => console.warn("Failed to restore state on foreground wake:", err));
         }
       } catch (e) {
@@ -706,33 +706,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // ── Android 返回鍵相容防線：首頁雙擊退出保護與 Tab 返回攔截 ──
+  // ?�?� Android 返�??�相容防線�?首�??��??�?��?護�? Tab 返�??�截 ?�?�
   (function() {
     let lastBackPress = 0;
-    const doublePressInterval = 2000; // 2 秒
+    const doublePressInterval = 2000; // 2 �?
 
-    // 初始化/切換首頁時 push 虛擬 Root 紀錄，用以攔截返回鍵
+    // ?��????��?首�???push ?�擬 Root 紀?��??�以?�截返�???
     function pushRootState() {
       if (!window.history.state || !window.history.state.isAppRoot) {
         window.history.pushState({ isAppRoot: true }, "");
       }
     }
 
-    // 監聽 popstate
+    // ??�� popstate
     window.addEventListener("popstate", (event) => {
-      // 1. 檢查當前是否有 Vanilla Modal 開啟
+      // 1. 檢查?��??�否??Vanilla Modal ?��?
       const versionPicker = document.getElementById("bible-version-picker-modal");
       const isPickerOpen = versionPicker && !versionPicker.classList.contains("hidden");
 
       const badgeDetail = document.getElementById("badge-detail-page");
       const isBadgeOpen = badgeDetail && !badgeDetail.classList.contains("hidden");
 
-      // 判斷是否退回到了底層 (沒有 root state 了)
+      // ?�斷?�否?�?�到了�?�?(沒�? root state �?
       const hasRootState = event.state && event.state.isAppRoot;
       const hasModalState = event.state && event.state.modalId;
 
       if (!hasRootState && !hasModalState) {
-        // 如果有任何原生彈窗開啟，攔截返回鍵並優先關閉它們
+        // 如�??�任何�??��?窗�??��??�截返�??�並?��??��?它�?
         if (isPickerOpen) {
           const closeBtn = document.getElementById("version-picker-close");
           if (closeBtn) closeBtn.click();
@@ -750,23 +750,23 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
-        // 沒有彈窗開啟時，執行首頁或 Tab 導航邏輯
+        // 沒�?彈�??��??��??��?首�???Tab 導航?�輯
         const currentTab = window.appRouter ? window.appRouter.currentTab : "dashboard-view";
 
         if (currentTab === "dashboard-view") {
-          // 在首頁：實施雙擊退出保護
+          // ?��??��?實施?��??�?��?�?
           const now = Date.now();
           if (now - lastBackPress < doublePressInterval) {
             window.close();
           } else {
             lastBackPress = now;
             if (typeof showToast === "function") {
-              showToast("再按一次返回鍵退出應用", doublePressInterval);
+              showToast("?��?一次�??�鍵?�?��???, doublePressInterval);
             }
             pushRootState();
           }
         } else {
-          // 不在首頁：自動導回首頁，提升操作體驗
+          // 不在首�?：自?��??��??��??��??��?體�?
           if (window.appRouter && typeof window.appRouter.switchTab === "function") {
             window.appRouter.switchTab("dashboard-view").then(() => {
               pushRootState();
@@ -780,10 +780,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // 啟動時與路由切換時，確保 Root State 存在
+    // ?��??��?路由?��??��?確�? Root State 存在
     pushRootState();
 
-    // 攔截 switchTab 以在切換 Tab 時重新確認/鎖定 history 狀態
+    // ?�截 switchTab 以在?��? Tab ?��??�確�??��? history ?�??
     if (window.appRouter) {
       const originalSwitchTab = window.appRouter.switchTab;
       window.appRouter.switchTab = async function(tabId, options) {

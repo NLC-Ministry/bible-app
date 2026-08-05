@@ -3359,6 +3359,30 @@ body:not(.dark-theme) .settings-row-btn:hover {
   transform: translateY(1px);
 }
 
+.auth-environment-dialog__manual {
+  margin-top: 0.9rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle, rgba(0,0,0,0.04));
+}
+
+.auth-environment-dialog__steps {
+  margin: 0.35rem 0 0;
+  padding-left: 1.4rem;
+  font-size: 0.87rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+.auth-environment-dialog__steps li + li {
+  margin-top: 0.1rem;
+}
+
+.auth-environment-dialog__steps strong {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
 /* Dark mode overrides for login gate */
 .dark-theme .login-gate {
   background: var(--bg-app);

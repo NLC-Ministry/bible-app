@@ -342,41 +342,70 @@ const auth = {
 
   _startSystemBrowserTransition(continuation, authEnvironment) {
     const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
+    const platform = authEnvironment && authEnvironment.platform;
+    const container = authEnvironment && authEnvironment.container;
 
-    if (this._isIntentOpenRecommended(authEnvironment)) {
-      // Strategy 1: Try window.open with _blank first — some Android in-app browsers
-      // honour this and open in the system browser without needing an intent:// URL.
+    if (platform === "ios") {
+      // iOS strategy: LINE and other in-app browsers on iOS cannot be escaped with
+      // intent:// (that's Android-only). The most reliable method is the x-safari-
+      // URL scheme, which iOS interprets as "open this URL in Safari".
+      // Some browsers also support googlechrome:// or firefox://.
+      //
+      // Attempt order:
+      // 1. x-safari-https:// → opens in Safari (works in LINE, Instagram, FB, etc.)
+      // 2. googlechrome:// → opens in Chrome for iOS (if installed)
+      // 3. Fallback: direct navigation (may stay in in-app browser, but worth trying)
+
+      const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
+      const chromeUrl = bridgeUrl.replace(/^https:\/\//, "googlechromes://");
+
+      // Try x-safari first
+      window.location.href = safariUrl;
+
+      // After 1.2s, if still on page, try Chrome
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.location.href = chromeUrl;
+        }
+      }, 1200);
+
+      // After 2.5s, try plain navigation as last resort
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.location.href = bridgeUrl;
+        }
+      }, 2500);
+
+    } else if (this._isIntentOpenRecommended(authEnvironment)) {
+      // Android strategy: multi-method fallback chain
+      // 1. window.open with _blank — some Android in-app browsers honour this
+      // 2. intent:// with system action=VIEW — lets Android pick default browser
+      // 3. intent:// with specific browser packages (Chrome, Samsung, Firefox)
+
       const opened = window.open(bridgeUrl, "_blank");
-
-      // Strategy 2: If window.open was blocked or did nothing (returned null or same window),
-      // fall through to intent:// URL after a short delay.
-      // We detect a failed open by checking if the page is still visible after 300ms.
-      const intentUrl = this._externalBrowserIntentUrl(bridgeUrl);
       const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
       let fallbackIdx = 0;
 
       const tryNextIntent = () => {
         if (fallbackIdx < fallbacks.length) {
           window.location.href = fallbacks[fallbackIdx++];
-          // If still here after 400ms, try the next fallback
           setTimeout(() => {
             if (!document.hidden) tryNextIntent();
-          }, 400);
+          }, 500);
         }
       };
 
       if (!opened || opened === window) {
-        // window.open failed immediately — try intent chain right away
+        // window.open failed — try intent chain immediately
         tryNextIntent();
       } else {
-        // window.open may have succeeded. As backup, also fire the primary intent URL
-        // after 300ms in case the opened tab closed/redirected back.
+        // window.open may have worked; fire intent as backup after short delay
         setTimeout(() => {
           if (!document.hidden) tryNextIntent();
-        }, 300);
+        }, 400);
       }
     } else {
-      // Non-Android: just navigate directly
+      // Unknown platform: direct navigation
       window.location.href = bridgeUrl;
     }
   },
@@ -388,11 +417,39 @@ const auth = {
     const existing = document.getElementById("auth-environment-dialog");
     if (existing) existing.remove();
 
-    const isAndroid = authEnvironment && authEnvironment.platform === "android";
-    const primaryLabel = "開啟瀏覽器繼續";
-    const hint = isAndroid
-      ? "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。"
-      : "如果未自動開啟，請點選右上角選單，選擇「使用瀏覽器開啟」。";
+    const platform = authEnvironment && authEnvironment.platform;
+    const container = authEnvironment && authEnvironment.container;
+    const isAndroid = platform === "android";
+    const isIos = platform === "ios";
+    const isLine = container === "line";
+
+    // Platform-specific manual instructions shown when auto-redirect fails
+    let manualSteps;
+    if (isLine && isIos) {
+      manualSteps = `
+        <ol class="auth-environment-dialog__steps">
+          <li>點右下角 <strong>「⋯」</strong> 選單</li>
+          <li>選擇 <strong>「以瀏覽器開啟」</strong></li>
+        </ol>`;
+    } else if (isLine && isAndroid) {
+      manualSteps = `
+        <ol class="auth-environment-dialog__steps">
+          <li>點右上角 <strong>「⋯」</strong> 選單</li>
+          <li>選擇 <strong>「以其他瀏覽器開啟」</strong></li>
+        </ol>`;
+    } else if (isIos) {
+      manualSteps = `
+        <ol class="auth-environment-dialog__steps">
+          <li>點右下角 <strong>「⋯」</strong> 選單</li>
+          <li>選擇 <strong>「在 Safari 中開啟」</strong></li>
+        </ol>`;
+    } else {
+      manualSteps = `
+        <ol class="auth-environment-dialog__steps">
+          <li>點右上角 <strong>「⋯」</strong> 選單</li>
+          <li>選擇 <strong>「使用瀏覽器開啟」</strong></li>
+        </ol>`;
+    }
 
     const dialog = document.createElement("div");
     dialog.className = "auth-environment-dialog";
@@ -407,10 +464,12 @@ const auth = {
         </div>
         <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
         <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
-        <p class="auth-environment-dialog__note">LINE、Instagram、Facebook 等 App 內建瀏覽器有時無法完成社群登入、簡訊或 Email 驗證。</p>
-        <button type="button" class="auth-environment-dialog__primary">${primaryLabel}</button>
-        <p class="auth-environment-dialog__hint">${hint}</p>
+        <button type="button" class="auth-environment-dialog__primary">開啟瀏覽器繼續</button>
         <p class="auth-environment-dialog__status" aria-live="polite"></p>
+        <div class="auth-environment-dialog__manual">
+          <p class="auth-environment-dialog__hint">若未自動開啟，請手動操作：</p>
+          ${manualSteps}
+        </div>
       </div>
     `;
 
@@ -433,12 +492,12 @@ const auth = {
     if (typeof hydrateIcons === "function") hydrateIcons(dialog);
     continueButton.focus();
 
-    // On Android, auto-trigger the browser transition immediately after the dialog
-    // is shown — the user shouldn't need to tap a second time. If the intent URL
-    // works, they'll leave the page. If it fails, the button stays visible so they
-    // can tap it manually as a fallback.
-    if (isAndroid) {
-      setTimeout(doTransition, 100);
+    // Auto-trigger browser transition on both iOS and Android.
+    // If the automatic method works, the user leaves the page immediately.
+    // If it fails (which is common in some LINE versions), the dialog stays
+    // visible with clear manual instructions.
+    if (isIos || isAndroid) {
+      setTimeout(doTransition, 150);
     }
   },
 
