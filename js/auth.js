@@ -413,90 +413,95 @@ const auth = {
 
   showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
     const safeContinuation = this._normalizeAuthContinuationInput(continuation);
-    this._setFlowItem(this.keys.continuation, serializeAuthContinuation(safeContinuation));
-
-    const existing = document.getElementById("auth-environment-dialog");
-    if (existing) existing.remove();
-
-    const platform = authEnvironment && authEnvironment.platform;
-    const container = authEnvironment && authEnvironment.container;
-    const isAndroid = platform === "android";
-    const isIos = platform === "ios";
-    const isLine = container === "line";
-
     const serializedContinuation = serializeAuthContinuation(safeContinuation);
-    const bridgeUrl = this._buildBridgeUrl(serializedContinuation, authEnvironment);
+    this._setFlowItem(this.keys.continuation, serializedContinuation);
 
-    let manualSteps;
-    if (isLine && isIos) {
-      manualSteps = `
-        <ol class="auth-environment-dialog__steps">
-          <li>點右下角 <strong>「⋯」</strong> 選單</li>
-          <li>選擇 <strong>「以瀏覽器開啟」</strong></li>
-        </ol>`;
-    } else if (isLine && isAndroid) {
-      manualSteps = `
-        <ol class="auth-environment-dialog__steps">
-          <li>點右上角 <strong>「⋯」</strong> 選單</li>
-          <li>選擇 <strong>「以其他瀏覽器開啟」</strong></li>
-        </ol>`;
-    } else if (isIos) {
-      manualSteps = `
-        <ol class="auth-environment-dialog__steps">
-          <li>點右下角 <strong>「⋯」</strong> 選單</li>
-          <li>選擇 <strong>「在 Safari 中開啟」</strong></li>
-        </ol>`;
-    } else {
-      manualSteps = `
-        <ol class="auth-environment-dialog__steps">
-          <li>點右上角 <strong>「⋯」</strong> 選單</li>
-          <li>選擇 <strong>「使用瀏覽器開啟」</strong></li>
-        </ol>`;
-    }
+    // Immediately trigger external browser transition — no modal popup shown
+    this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
 
-    const dialog = document.createElement("div");
-    dialog.className = "auth-environment-dialog";
-    dialog.id = "auth-environment-dialog";
-    dialog.setAttribute("role", "dialog");
-    dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-labelledby", "auth-environment-dialog-title");
-    dialog.innerHTML = `
-      <div class="auth-environment-dialog__panel">
-        <div class="auth-environment-dialog__icon" aria-hidden="true">
-          <span class="nlc-icon nlc-icon--sm" data-icon="lock"></span>
+    // Delayed fallback: Only render the modal dialog if after 1200ms the user is still
+    // on the page (meaning auto-redirect was blocked by the in-app browser).
+    setTimeout(() => {
+      if (document.hidden) return;
+
+      const existing = document.getElementById("auth-environment-dialog");
+      if (existing) return;
+
+      const platform = authEnvironment && authEnvironment.platform;
+      const container = authEnvironment && authEnvironment.container;
+      const isAndroid = platform === "android";
+      const isIos = platform === "ios";
+      const isLine = container === "line";
+
+      const bridgeUrl = this._buildBridgeUrl(serializedContinuation, authEnvironment);
+
+      let manualSteps;
+      if (isLine && isIos) {
+        manualSteps = `
+          <ol class="auth-environment-dialog__steps">
+            <li>點右下角 <strong>「⋯」</strong> 選單</li>
+            <li>選擇 <strong>「以瀏覽器開啟」</strong></li>
+          </ol>`;
+      } else if (isLine && isAndroid) {
+        manualSteps = `
+          <ol class="auth-environment-dialog__steps">
+            <li>點右上角 <strong>「⋯」</strong> 選單</li>
+            <li>選擇 <strong>「以其他瀏覽器開啟」</strong></li>
+          </ol>`;
+      } else if (isIos) {
+        manualSteps = `
+          <ol class="auth-environment-dialog__steps">
+            <li>點右下角 <strong>「⋯」</strong> 選單</li>
+            <li>選擇 <strong>「在 Safari 中開啟」</strong></li>
+          </ol>`;
+      } else {
+        manualSteps = `
+          <ol class="auth-environment-dialog__steps">
+            <li>點右上角 <strong>「⋯」</strong> 選單</li>
+            <li>選擇 <strong>「使用瀏覽器開啟」</strong></li>
+          </ol>`;
+      }
+
+      const dialog = document.createElement("div");
+      dialog.className = "auth-environment-dialog";
+      dialog.id = "auth-environment-dialog";
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("aria-labelledby", "auth-environment-dialog-title");
+      dialog.innerHTML = `
+        <div class="auth-environment-dialog__panel">
+          <div class="auth-environment-dialog__icon" aria-hidden="true">
+            <span class="nlc-icon nlc-icon--sm" data-icon="lock"></span>
+          </div>
+          <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
+          <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
+          <a href="${bridgeUrl}" target="_blank" rel="noopener" class="auth-environment-dialog__primary" style="text-decoration:none; text-align:center;">開啟瀏覽器繼續</a>
+          <p class="auth-environment-dialog__status" aria-live="polite"></p>
+          <div class="auth-environment-dialog__manual">
+            <p class="auth-environment-dialog__hint">若未自動開啟，請手動操作：</p>
+            ${manualSteps}
+          </div>
         </div>
-        <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
-        <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
-        <a href="${bridgeUrl}" target="_blank" rel="noopener" class="auth-environment-dialog__primary" style="text-decoration:none; text-align:center;">開啟瀏覽器繼續</a>
-        <p class="auth-environment-dialog__status" aria-live="polite"></p>
-        <div class="auth-environment-dialog__manual">
-          <p class="auth-environment-dialog__hint">若未自動開啟，請手動操作：</p>
-          ${manualSteps}
-        </div>
-      </div>
-    `;
+      `;
 
-    const statusEl = dialog.querySelector(".auth-environment-dialog__status");
-    const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
+      const statusEl = dialog.querySelector(".auth-environment-dialog__status");
+      const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
 
-    const doTransition = (e) => {
-      if (statusEl) statusEl.textContent = "正在開啟瀏覽器...";
-      this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
-    };
+      const doTransition = () => {
+        if (statusEl) statusEl.textContent = "正在開啟瀏覽器...";
+        this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
+      };
 
-    continueButton.addEventListener("click", doTransition);
+      continueButton.addEventListener("click", doTransition);
 
-    dialog.addEventListener("click", event => {
-      if (event.target === dialog) dialog.remove();
-    });
+      dialog.addEventListener("click", event => {
+        if (event.target === dialog) dialog.remove();
+      });
 
-    document.body.appendChild(dialog);
-    if (typeof hydrateIcons === "function") hydrateIcons(dialog);
-    continueButton.focus();
-
-    if (isIos || isAndroid) {
-      setTimeout(() => doTransition(), 150);
-    }
+      document.body.appendChild(dialog);
+      if (typeof hydrateIcons === "function") hydrateIcons(dialog);
+      continueButton.focus();
+    }, 1200);
   },
 
 
