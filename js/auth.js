@@ -482,7 +482,15 @@ const auth = {
     try {
       if (window.caches) {
         const keys = await caches.keys();
-        await Promise.all(keys.filter(key => key.startsWith("newlife-bible-") || key.startsWith("church-bible-")).map(key => caches.delete(key)));
+        await Promise.all(keys.filter(key =>
+          // Only clear runtime caches (API responses) and legacy church-bible prefix.
+          // Static app shell caches (newlife-bible-static-*) are intentionally preserved:
+          // SW version management (cleanup on activate) handles static cache invalidation
+          // when a new build is deployed. Clearing static cache here forces a full
+          // re-download of all JS/CSS/icons on every login, which harms offline experience.
+          key.startsWith("newlife-bible-runtime-") ||
+          key.startsWith("church-bible-")
+        ).map(key => caches.delete(key)));
       }
     } catch (err) {
       console.warn("Could not clear app caches", err);
