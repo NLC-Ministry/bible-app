@@ -912,8 +912,8 @@ function initSpeechPreferencesControls() {
     if (speaking) {
       if (btnText) btnText.textContent = "暫停試聽";
       if (btnIcon) btnIcon.setAttribute("data-icon", "pause");
-      btnPreviewSpeech.style.background = "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)";
-      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(239, 68, 68, 0.35)";
+      btnPreviewSpeech.style.background = "linear-gradient(135deg, var(--status-danger, #e11d48) 0%, var(--status-danger-dark, #be123c) 100%)";
+      btnPreviewSpeech.style.boxShadow = "0 4px 14px rgba(225, 29, 72, 0.35)";
     } else {
       if (btnText) btnText.textContent = "播放試聽語音";
       if (btnIcon) btnIcon.setAttribute("data-icon", "volume2");

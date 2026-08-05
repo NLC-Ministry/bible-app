@@ -553,7 +553,7 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
   const brand = (window.NLC_DESIGN && window.NLC_DESIGN.brand) || "#04A9D2";
   const brandActive = (window.NLC_DESIGN && window.NLC_DESIGN.brandActive) || "#0396BA";
   const brandHover = (window.NLC_DESIGN && window.NLC_DESIGN.brandHover) || "#5BB8D4";
-  const success = (window.NLC_DESIGN && window.NLC_DESIGN.success) || "#10b981";
+  const success = (window.NLC_DESIGN && window.NLC_DESIGN.success) || "var(--status-success, #04A9D2)";
   const successFg = (window.NLC_DESIGN && window.NLC_DESIGN.successForeground) || "#047857";
   const palette = {
     1: { myPath: brand, grpPath: "#8ED4EA", myFill: "rgba(4,169,210,0.15)", grpFill: "rgba(4,169,210,0.08)", myStroke: brand, grpStroke: brandHover, myText: brandActive, grpText: brandHover },
@@ -613,8 +613,8 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
     const r = isBookStart ? 22 : 13;
 
     let fillStyle = "#ffffff";
-    let strokeStyle = "#94a3b8";
-    let textColor = "#64748b";
+    let strokeStyle = "var(--border-card)";
+    let textColor = "var(--text-secondary, #475569)";
     let isBold = false;
     let strokeW = isBookStart ? 2.5 : 1.5;
 
