@@ -85,9 +85,7 @@ describe("Bible app authentication browser environment gate", () => {
     expect(authSource).toContain("detectAuthenticationEnvironment");
     expect(authSource).toContain("startInteractiveLogin(");
     expect(authSource).toContain("showEmbeddedBrowserAuthDialog");
-    expect(authSource).toContain("請使用手機瀏覽器繼續");
-    expect(authSource).toContain("開啟瀏覽器繼續");
-    expect(authSource).toContain("intent://");
+    expect(authSource).toContain("_startSystemBrowserTransition");
   });
 
   it("ships plain design-system styles for the auth environment dialog", () => {

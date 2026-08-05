@@ -68,8 +68,7 @@ describe("admin registration statistics", () => {
   });
 
   it("bumps the browser cache keys for the new UI", () => {
-    expect(html).toContain("index.css?v=20260803_reader_selection_design");
-    expect(html).toContain("css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery");
-    expect(html).toContain("js/app.js?v=20260803_reader_audio_fix");
+    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
+    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
   });
 });

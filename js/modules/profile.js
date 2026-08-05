@@ -859,6 +859,7 @@ function initSpeechPreferencesControls() {
     const modal = document.getElementById("tts-guide-modal");
     if (modal) {
       modal.classList.remove("hidden");
+      modal.style.display = "flex";
     }
   };
 
@@ -866,6 +867,7 @@ function initSpeechPreferencesControls() {
     const modal = document.getElementById("tts-guide-modal");
     if (modal) {
       modal.classList.add("hidden");
+      modal.style.display = "none";
     }
   };
 

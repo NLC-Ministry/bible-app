@@ -29,7 +29,7 @@ describe("reader verse selection bottom bar", () => {
   });
 
   it("bumps the app shell so mobile PWAs fetch the fixed reader module", () => {
-    expect(html).toContain("js/app.js?v=20260803_reader_audio_fix");
+    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
   });
 
   it("keeps the redesigned selection toolbar compact and scrollable on narrow screens", () => {

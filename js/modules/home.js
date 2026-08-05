@@ -865,7 +865,7 @@ async function renderChurchAnnouncements() {
           <div class="announcement-item__title-group">
             <div class="announcement-item__tags">
               <span class="announcement-badge ${categoryInfo.badgeClass}">
-                <span class="nlc-icon nlc-icon--xs" data-icon="${categoryInfo.iconName}" aria-hidden="true"></span>
+                <span class="nlc-icon nlc-icon--sm" data-icon="${categoryInfo.iconName}" aria-hidden="true"></span>
                 <span>${categoryInfo.categoryName}</span>
               </span>
             </div>

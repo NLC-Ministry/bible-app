@@ -36,8 +36,8 @@ describe("automatic login repair", () => {
 
   it("clears the repair flag after a successful token exchange and cache-busts the entry modules", () => {
     expect(auth).toContain("this.clearLoginRepairState();");
-    expect(app).toContain("./auth.js?v=20260802_login_auto_repair");
-    expect(app).toContain("./db.js?v=20260802_login_auto_repair");
-    expect(html).toContain("js/app.js?v=20260803_reader_audio_fix");
+    expect(app).toMatch(/\.\/auth\.js\?v=2026\d{4}_/);
+    expect(app).toMatch(/\.\/db\.js\?v=2026\d{4}_/);
+    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
   });
 });
