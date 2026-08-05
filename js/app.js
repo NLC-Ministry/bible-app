@@ -4,24 +4,23 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260805_fix_tts_guide_modal_overlay';
-import './data/church_campaign.js?v=20260805_fix_tts_guide_modal_overlay';
+import './copy/zh-Hant.js?v=20260805_completely_remove_pull_to_refresh';
+import './data/church_campaign.js?v=20260805_completely_remove_pull_to_refresh';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_fix_tts_guide_modal_overlay';
-import './design/icon-registry.js?v=20260805_fix_tts_guide_modal_overlay';
+import './design/design-system-helpers.js?v=20260805_completely_remove_pull_to_refresh';
+import './design/icon-registry.js?v=20260805_completely_remove_pull_to_refresh';
 import './design/icons.js';
-import './state.js?v=20260805_fix_tts_guide_modal_overlay';
-import './auth.js?v=20260805_fix_tts_guide_modal_overlay';
+import './state.js?v=20260805_completely_remove_pull_to_refresh';
+import './auth.js?v=20260805_completely_remove_pull_to_refresh';
 import './auth-launch.mjs';
-import './db.js?v=20260805_fix_tts_guide_modal_overlay';
-import './utils.js?v=20260805_fix_tts_guide_modal_overlay';
-import './gamification.js?v=20260805_fix_tts_guide_modal_overlay';
+import './db.js?v=20260805_completely_remove_pull_to_refresh';
+import './utils.js?v=20260805_completely_remove_pull_to_refresh';
+import './gamification.js?v=20260805_completely_remove_pull_to_refresh';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_fix_tts_guide_modal_overlay';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_completely_remove_pull_to_refresh';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
-import { installPullToRefresh } from './pull-to-refresh.mjs';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
 
 cleanupProductionStorage(window.localStorage);
@@ -32,7 +31,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_fix_tts_guide_modal_overlay';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_completely_remove_pull_to_refresh';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
@@ -558,12 +557,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     return permission;
   };
 
-  try {
-    installPullToRefresh({ window, document });
-    window.registerPullToRefresh(refreshCurrentAppView);
-  } catch (err) {
-    console.error("Failed to initialize pull-to-refresh:", err);
-  }
+  // Expose global manual refresh function (Pull-to-Refresh JS is completely removed)
+  window.refreshCurrentAppView = refreshCurrentAppView;
+
+  // Auto-refresh data when user switches back to the app window/tab
+  window.addEventListener("focus", () => {
+    if (typeof window.refreshCurrentAppView === "function") {
+      window.refreshCurrentAppView();
+    }
+  });
 
   // Initialize Theme
   try {
