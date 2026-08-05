@@ -365,32 +365,11 @@ const auth = {
 
   _startSystemBrowserTransition(continuation, authEnvironment) {
     const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
-    const platform = authEnvironment && authEnvironment.platform;
 
-    if (platform === "ios") {
-      // On iOS, ONLY Safari supports PWA Standalone App mode and "Add to Home Screen".
-      // Chrome for iOS cannot run PWAs. Using x-safari-https:// guarantees opening Safari
-      // directly even if the user set Chrome as their default iOS browser.
-      const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
-      window.location.href = safariUrl;
-
-      setTimeout(() => {
-        if (!document.hidden) {
-          window.location.href = bridgeUrl;
-        }
-      }, 1200);
-    } else {
-      // Android / Other: Standard HTTPS navigation with openExternalBrowser=1
-      window.location.href = bridgeUrl;
-
-      setTimeout(() => {
-        if (document.hidden) return;
-        if (this._isIntentOpenRecommended(authEnvironment)) {
-          const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
-          if (fallbacks[0]) window.location.href = fallbacks[0];
-        }
-      }, 1500);
-    }
+    // Standard HTTPS navigation with openExternalBrowser=1.
+    // Standard https:// URLs do NOT trigger iOS "此網站正在嘗試開啟外部應用程式" system dialogs.
+    // LINE on both iOS and Android natively catches openExternalBrowser=1 and opens Safari/Chrome.
+    window.location.href = bridgeUrl;
   },
 
   showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
@@ -398,92 +377,15 @@ const auth = {
     const serializedContinuation = serializeAuthContinuation(safeContinuation);
     this._setFlowItem(this.keys.continuation, serializedContinuation);
 
-    // Immediately trigger external browser transition — no modal popup shown
+    // Update status on the login page button itself — keep user on clean login page
+    const gateBtn = document.getElementById("btn-gate-nlc-login");
+    if (gateBtn) {
+      gateBtn.disabled = true;
+      gateBtn.textContent = "正在開啟瀏覽器...";
+    }
+
+    // Immediately perform clean HTTPS redirect without any modal popups or custom scheme dialogs
     this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
-
-    // Delayed fallback: Only render the modal dialog if after 1200ms the user is still
-    // on the page (meaning auto-redirect was blocked by the in-app browser).
-    setTimeout(() => {
-      if (document.hidden) return;
-
-      const existing = document.getElementById("auth-environment-dialog");
-      if (existing) return;
-
-      const platform = authEnvironment && authEnvironment.platform;
-      const container = authEnvironment && authEnvironment.container;
-      const isAndroid = platform === "android";
-      const isIos = platform === "ios";
-      const isLine = container === "line";
-
-      const bridgeUrl = this._buildBridgeUrl(serializedContinuation, authEnvironment);
-
-      let manualSteps;
-      if (isLine && isIos) {
-        manualSteps = `
-          <ol class="auth-environment-dialog__steps">
-            <li>點右下角 <strong>「⋯」</strong> 選單</li>
-            <li>選擇 <strong>「以瀏覽器開啟」</strong></li>
-          </ol>`;
-      } else if (isLine && isAndroid) {
-        manualSteps = `
-          <ol class="auth-environment-dialog__steps">
-            <li>點右上角 <strong>「⋯」</strong> 選單</li>
-            <li>選擇 <strong>「以其他瀏覽器開啟」</strong></li>
-          </ol>`;
-      } else if (isIos) {
-        manualSteps = `
-          <ol class="auth-environment-dialog__steps">
-            <li>點右下角 <strong>「⋯」</strong> 選單</li>
-            <li>選擇 <strong>「在 Safari 中開啟」</strong></li>
-          </ol>`;
-      } else {
-        manualSteps = `
-          <ol class="auth-environment-dialog__steps">
-            <li>點右上角 <strong>「⋯」</strong> 選單</li>
-            <li>選擇 <strong>「使用瀏覽器開啟」</strong></li>
-          </ol>`;
-      }
-
-      const dialog = document.createElement("div");
-      dialog.className = "auth-environment-dialog";
-      dialog.id = "auth-environment-dialog";
-      dialog.setAttribute("role", "dialog");
-      dialog.setAttribute("aria-modal", "true");
-      dialog.setAttribute("aria-labelledby", "auth-environment-dialog-title");
-      dialog.innerHTML = `
-        <div class="auth-environment-dialog__panel">
-          <div class="auth-environment-dialog__icon" aria-hidden="true">
-            <span class="nlc-icon nlc-icon--sm" data-icon="lock"></span>
-          </div>
-          <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
-          <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
-          <a href="${bridgeUrl}" target="_blank" rel="noopener" class="auth-environment-dialog__primary" style="text-decoration:none; text-align:center;">開啟瀏覽器繼續</a>
-          <p class="auth-environment-dialog__status" aria-live="polite"></p>
-          <div class="auth-environment-dialog__manual">
-            <p class="auth-environment-dialog__hint">若未自動開啟，請手動操作：</p>
-            ${manualSteps}
-          </div>
-        </div>
-      `;
-
-      const statusEl = dialog.querySelector(".auth-environment-dialog__status");
-      const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
-
-      const doTransition = () => {
-        if (statusEl) statusEl.textContent = "正在開啟瀏覽器...";
-        this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
-      };
-
-      continueButton.addEventListener("click", doTransition);
-
-      dialog.addEventListener("click", event => {
-        if (event.target === dialog) dialog.remove();
-      });
-
-      document.body.appendChild(dialog);
-      if (typeof hydrateIcons === "function") hydrateIcons(dialog);
-      continueButton.focus();
-    }, 1200);
   },
 
 
