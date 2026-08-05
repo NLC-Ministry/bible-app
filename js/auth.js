@@ -365,26 +365,32 @@ const auth = {
 
   _startSystemBrowserTransition(continuation, authEnvironment) {
     const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
-
-    // Primary direct method: Standard HTTPS navigation with openExternalBrowser=1.
-    // LINE (both iOS and Android) natively catches openExternalBrowser=1 on HTTPS URLs
-    // and opens Safari/Chrome directly WITHOUT triggering OS custom scheme popups ("允許/拒絕").
-    window.location.href = bridgeUrl;
-
-    // Secondary fallback: Only try custom URL schemes (x-safari-https:// or intent://)
-    // if after 1500ms the page is still visible (meaning LINE/browser didn't redirect).
     const platform = authEnvironment && authEnvironment.platform;
-    setTimeout(() => {
-      if (document.hidden) return;
 
-      if (platform === "ios") {
-        const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
-        window.location.href = safariUrl;
-      } else if (this._isIntentOpenRecommended(authEnvironment)) {
-        const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
-        if (fallbacks[0]) window.location.href = fallbacks[0];
-      }
-    }, 1500);
+    if (platform === "ios") {
+      // On iOS, ONLY Safari supports PWA Standalone App mode and "Add to Home Screen".
+      // Chrome for iOS cannot run PWAs. Using x-safari-https:// guarantees opening Safari
+      // directly even if the user set Chrome as their default iOS browser.
+      const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
+      window.location.href = safariUrl;
+
+      setTimeout(() => {
+        if (!document.hidden) {
+          window.location.href = bridgeUrl;
+        }
+      }, 1200);
+    } else {
+      // Android / Other: Standard HTTPS navigation with openExternalBrowser=1
+      window.location.href = bridgeUrl;
+
+      setTimeout(() => {
+        if (document.hidden) return;
+        if (this._isIntentOpenRecommended(authEnvironment)) {
+          const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
+          if (fallbacks[0]) window.location.href = fallbacks[0];
+        }
+      }, 1500);
+    }
   },
 
   showEmbeddedBrowserAuthDialog(authEnvironment, continuation) {
