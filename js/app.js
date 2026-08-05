@@ -4,21 +4,21 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260805_fix_ios_android_bridge_redirect';
-import './data/church_campaign.js?v=20260805_fix_ios_android_bridge_redirect';
+import './copy/zh-Hant.js?v=20260805_fix_line_bridge_open_external';
+import './data/church_campaign.js?v=20260805_fix_line_bridge_open_external';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_fix_ios_android_bridge_redirect';
-import './design/icon-registry.js?v=20260805_fix_ios_android_bridge_redirect';
+import './design/design-system-helpers.js?v=20260805_fix_line_bridge_open_external';
+import './design/icon-registry.js?v=20260805_fix_line_bridge_open_external';
 import './design/icons.js';
-import './state.js?v=20260805_fix_ios_android_bridge_redirect';
-import './auth.js?v=20260805_fix_ios_android_bridge_redirect';
+import './state.js?v=20260805_fix_line_bridge_open_external';
+import './auth.js?v=20260805_fix_line_bridge_open_external';
 import './auth-launch.mjs';
-import './db.js?v=20260805_fix_ios_android_bridge_redirect';
-import './utils.js?v=20260805_fix_ios_android_bridge_redirect';
-import './gamification.js?v=20260805_fix_ios_android_bridge_redirect';
+import './db.js?v=20260805_fix_line_bridge_open_external';
+import './utils.js?v=20260805_fix_line_bridge_open_external';
+import './gamification.js?v=20260805_fix_line_bridge_open_external';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_fix_ios_android_bridge_redirect';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_fix_line_bridge_open_external';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { installPullToRefresh } from './pull-to-refresh.mjs';
@@ -32,7 +32,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_fix_ios_android_bridge_redirect';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_fix_line_bridge_open_external';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
@@ -108,12 +108,10 @@ function updateCareReminderBadge(reminders = []) {
   }
   const bellButton = document.getElementById("btn-notification-bell");
   if (bellButton) {
-    bellButton.setAttribute(
-      "aria-label",
-      count > 0 ? `?�知�?{count} ?�未讀` : "?�知"
+    bellButton.setAttribute("aria-label",
+      count > 0 ? `通知 (${count} 則未讀)` : "通知"
     );
   }
-
 }
 
 async function refreshCareReminderBadge(options = {}) {
@@ -152,13 +150,13 @@ async function renderNotificationsList() {
   const container = document.getElementById("notification-list-container");
   if (!container) return;
 
-  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入�?..</div>`;
+  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
   const { data: notifications, error } = await db.fetchAllNotifications();
 
   if (error || !notifications || notifications.length === 0) {
-    container.innerHTML = `<div class="notification-popover__empty">?��?沒�??�知</div>`;
+    container.innerHTML = `<div class="notification-popover__empty">目前沒有通知</div>`;
     return;
   }
 
@@ -166,11 +164,11 @@ async function renderNotificationsList() {
 
   const roleNames = {
     member: "組員",
-    group_leader: "小�???,
-    zone_leader: "?�??,
-    great_zone_leader: "大�???,
-    senior_pastor: "?��??��?,
-    admin: "系統管�???
+    group_leader: "小組長",
+    zone_leader: "區長",
+    great_zone_leader: "大區長",
+    senior_pastor: "主任牧師",
+    admin: "系統管理員"
   };
 
   notifications.forEach(item => {
@@ -178,12 +176,12 @@ async function renderNotificationsList() {
     div.className = `notification-item ${item.status === 'unread' ? 'notification-item--unread' : ''}`;
 
     const sender = item.sender || {};
-    const senderName = String(sender.name || "").trim() || "??;
+    const senderName = String(sender.name || "").trim() || "成員";
     const senderRoleRaw = getUserRoleCode(sender);
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
-      ? "?��?"
-      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "?��?");
+      ? "小隊"
+      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "成員");
 
     const dateStr = item.sent_on || "";
 
@@ -192,7 +190,7 @@ async function renderNotificationsList() {
         <span class="notification-item__sender">來自${senderRole} ${safeEscapeHTML(senderName)}</span>
         <span class="notification-item__time">${safeEscapeHTML(dateStr)}</span>
       </div>
-      <p class="notification-item__body">${safeEscapeHTML(item.message || "?�油！�?起穩定�?經�?)}</p>
+      <p class="notification-item__body">${safeEscapeHTML(item.message || "加油！一起穩定讀經！")}</p>
     `;
 
     div.onclick = async (e) => {
@@ -255,8 +253,10 @@ function initNotificationSystem() {
       if (!error) {
         updateCareReminderBadge([]);
         await renderNotificationsList();
-      } else {
-        alert("?�部已�?失�?: " + (error.message || error));
+      }
+      if (error) {
+        alert("全部標記已讀失敗: " + (error.message || error));
+        return;
       }
     };
   }
@@ -278,7 +278,7 @@ async function loadModule(name, path) {
   if (moduleCache[name]) {
     return moduleCache[name];
   }
-  console.log(`?�� [ESM] Lazy-loading module: ${name} from ${path}`);
+  console.log(`⚡ [ESM] Lazy-loading module: ${name} from ${path}`);
   try {
     const mod = await import(path);
     moduleCache[name] = mod;
@@ -366,7 +366,7 @@ async function refreshCurrentAppView() {
   await refreshCareReminderBadge({ force: true });
 
   if (typeof showToast === "function") {
-    showToast("已更??);
+    showToast("已更新");
   }
 }
 
@@ -676,13 +676,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.documentElement.dataset.syncState = detail.status || "idle";
     document.documentElement.dataset.pendingSyncCount = String(detail.pending || 0);
     if (detail.status === "queued" && typeof showToast === "function") {
-      showToast("已離線儲存�??�復網路後�??��??�步");
+      showToast("已離線儲存，恢復網路後自動同步");
     } else if (detail.status === "complete" && detail.pending === 0 && typeof showToast === "function") {
-      showToast("?��?讀經進度已�?�?);
+      showToast("離線讀經進度已同步");
     }
   });
 
-  // ?�?� Background pre-warm: silently load plan module script only ?�?�
+  // ★ Background pre-warm: silently load plan module script only ★
   loadModule('plan', './modules/plan.js?v=' + buildVersion).then(() => {
     ensurePlanFeatureModulesLoaded().catch(() => {});
   }).catch(() => {});
@@ -692,12 +692,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       refreshCareReminderBadge();
       clearBadge().catch(err => console.error("Failed to clear badge on visible:", err));
 
-      // ?�� 行�?裝置?�景?��??�康保護：防�?iOS/Android ?�景記憶體�??��??��?空白?�死�?
+      // 行動裝置背景喚醒健康保護：防止 iOS/Android 背景記憶體回收導致空白或死鎖
       try {
         const isProfileLost = !state.currentUser || !state.currentUser.name;
         const isPlanLost = !state.activePlan && Array.isArray(state.activePlans) && state.activePlans.length > 0;
         if ((isProfileLost || isPlanLost) && typeof db !== "undefined" && typeof db.loadUserData === "function") {
-          console.log("??[HealthCheck] Foreground wake detected memory eviction, restoring state...");
+          console.log("⚡ [HealthCheck] Foreground wake detected memory eviction, restoring state...");
           db.loadUserData().catch(err => console.warn("Failed to restore state on foreground wake:", err));
         }
       } catch (e) {
@@ -732,7 +732,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const hasModalState = event.state && event.state.modalId;
 
       if (!hasRootState && !hasModalState) {
-        // 如�??�任何�??��?窗�??��??�截返�??�並?��??��?它�?
+        // 如果有任何彈出視窗則攔截返回並關閉它們
         if (isPickerOpen) {
           const closeBtn = document.getElementById("version-picker-close");
           if (closeBtn) closeBtn.click();
@@ -750,23 +750,23 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
-        // 沒�?彈�??��??��??��?首�???Tab 導航?�輯
+        // 沒有彈出視窗，處理首頁/Tab 導航邏輯
         const currentTab = window.appRouter ? window.appRouter.currentTab : "dashboard-view";
 
         if (currentTab === "dashboard-view") {
-          // ?��??��?實施?��??�?��?�?
+          // 首頁實施雙擊離開
           const now = Date.now();
           if (now - lastBackPress < doublePressInterval) {
             window.close();
           } else {
             lastBackPress = now;
             if (typeof showToast === "function") {
-              showToast("?��?一次�??�鍵?�?��???, doublePressInterval);
+              showToast("再按一次返回鍵離開應用", doublePressInterval);
             }
             pushRootState();
           }
         } else {
-          // 不在首�?：自?��??��??��??��??��?體�?
+          // 不在首頁：自動返回首頁提供原生體驗
           if (window.appRouter && typeof window.appRouter.switchTab === "function") {
             window.appRouter.switchTab("dashboard-view").then(() => {
               pushRootState();
@@ -780,10 +780,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // ?��??��?路由?��??��?確�? Root State 存在
+    // 初始化路由時，確保 Root State 存在
     pushRootState();
 
-    // ?�截 switchTab 以在?��? Tab ?��??�確�??��? history ?�??
+    // 攔截 switchTab 以在切換 Tab 時確保更新 history 狀態
     if (window.appRouter) {
       const originalSwitchTab = window.appRouter.switchTab;
       window.appRouter.switchTab = async function(tabId, options) {

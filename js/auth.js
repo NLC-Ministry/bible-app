@@ -306,15 +306,42 @@ const auth = {
     }
   },
 
+  _addBrowserLaunchTransportParams(targetUrl) {
+    try {
+      const url = new URL(targetUrl, window.location.origin);
+      url.searchParams.set("openExternalBrowser", "1");
+      return url.toString();
+    } catch {
+      return targetUrl;
+    }
+  },
+
+  _buildBridgeUrl(continuation, authEnvironment) {
+    const base = new URL(window.location.href);
+    const cleanUrl = new URL(base.pathname + base.hash, base.origin);
+    for (const [name, value] of base.searchParams.entries()) {
+      if (["code", "state", "error", "error_description", "openExternalBrowser", "auth_bridge_attempted", "auth_continuation", "version"].includes(name)) {
+        continue;
+      }
+      cleanUrl.searchParams.append(name, value);
+    }
+
+    cleanUrl.searchParams.set("auth_bridge_attempted", "1");
+    cleanUrl.searchParams.set("auth_continuation", continuation || "");
+    cleanUrl.searchParams.set("version", String(typeof AUTH_POLICY_VERSION !== "undefined" ? AUTH_POLICY_VERSION : "1"));
+
+    return this._addBrowserLaunchTransportParams(cleanUrl.toString());
+  },
+
+  _isIntentOpenRecommended(authEnvironment) {
+    return !!(authEnvironment && authEnvironment.platform === "android" && authEnvironment.decision === "bridge");
+  },
+
   // Build an Android Intent URL that opens the target URL in the device's default browser.
-  // Unlike specifying package=com.android.chrome (which fails if Chrome is not installed
-  // or not the default), using action=VIEW with a browser category lets Android pick
-  // whatever the user has set as their default browser.
   _externalBrowserIntentUrl(targetUrl) {
     const url = new URL(targetUrl);
     const scheme = url.protocol.replace(":", "");
     const fallback = encodeURIComponent(targetUrl);
-    // Primary: use Android system intent (no package lock — system picks default browser)
     return `intent://${url.host}${url.pathname}${url.search}${url.hash}` +
       `#Intent;scheme=${scheme};action=android.intent.action.VIEW;` +
       `category=android.intent.category.BROWSABLE;` +
@@ -329,13 +356,9 @@ const auth = {
     const fallback = encodeURIComponent(targetUrl);
     const base = `#Intent;scheme=${scheme};S.browser_fallback_url=${fallback};`;
     return [
-      // 1. System default browser (no package restriction)
       `intent://${path}${base}action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`,
-      // 2. Chrome
       `intent://${path}${base}package=com.android.chrome;end`,
-      // 3. Samsung Internet
       `intent://${path}${base}package=com.sec.android.app.sbrowser;end`,
-      // 4. Firefox
       `intent://${path}${base}package=org.mozilla.firefox;end`,
     ];
   },
@@ -343,33 +366,19 @@ const auth = {
   _startSystemBrowserTransition(continuation, authEnvironment) {
     const bridgeUrl = this._buildBridgeUrl(continuation || "", authEnvironment);
     const platform = authEnvironment && authEnvironment.platform;
-    const container = authEnvironment && authEnvironment.container;
 
     if (platform === "ios") {
-      // iOS strategy: LINE and other in-app browsers on iOS cannot be escaped with
-      // intent:// (that's Android-only). The most reliable method is the x-safari-
-      // URL scheme, which iOS interprets as "open this URL in Safari".
-      // Some browsers also support googlechrome:// or firefox://.
-      //
-      // Attempt order:
-      // 1. x-safari-https:// → opens in Safari (works in LINE, Instagram, FB, etc.)
-      // 2. googlechrome:// → opens in Chrome for iOS (if installed)
-      // 3. Fallback: direct navigation (may stay in in-app browser, but worth trying)
-
       const safariUrl = bridgeUrl.replace(/^https:\/\//, "x-safari-https://");
       const chromeUrl = bridgeUrl.replace(/^https:\/\//, "googlechromes://");
 
-      // Try x-safari first
       window.location.href = safariUrl;
 
-      // After 1.2s, if still on page, try Chrome
       setTimeout(() => {
         if (!document.hidden) {
           window.location.href = chromeUrl;
         }
       }, 1200);
 
-      // After 2.5s, try plain navigation as last resort
       setTimeout(() => {
         if (!document.hidden) {
           window.location.href = bridgeUrl;
@@ -377,11 +386,6 @@ const auth = {
       }, 2500);
 
     } else if (this._isIntentOpenRecommended(authEnvironment)) {
-      // Android strategy: multi-method fallback chain
-      // 1. window.open with _blank — some Android in-app browsers honour this
-      // 2. intent:// with system action=VIEW — lets Android pick default browser
-      // 3. intent:// with specific browser packages (Chrome, Samsung, Firefox)
-
       const opened = window.open(bridgeUrl, "_blank");
       const fallbacks = this._externalBrowserIntentFallbacks(bridgeUrl);
       let fallbackIdx = 0;
@@ -396,16 +400,13 @@ const auth = {
       };
 
       if (!opened || opened === window) {
-        // window.open failed — try intent chain immediately
         tryNextIntent();
       } else {
-        // window.open may have worked; fire intent as backup after short delay
         setTimeout(() => {
           if (!document.hidden) tryNextIntent();
         }, 400);
       }
     } else {
-      // Unknown platform: direct navigation
       window.location.href = bridgeUrl;
     }
   },
@@ -423,7 +424,9 @@ const auth = {
     const isIos = platform === "ios";
     const isLine = container === "line";
 
-    // Platform-specific manual instructions shown when auto-redirect fails
+    const serializedContinuation = serializeAuthContinuation(safeContinuation);
+    const bridgeUrl = this._buildBridgeUrl(serializedContinuation, authEnvironment);
+
     let manualSteps;
     if (isLine && isIos) {
       manualSteps = `
@@ -464,7 +467,7 @@ const auth = {
         </div>
         <h2 class="auth-environment-dialog__title" id="auth-environment-dialog-title">請使用手機瀏覽器繼續</h2>
         <p class="auth-environment-dialog__body">為了保護您的帳戶，新生命聖經速讀計畫會在裝置瀏覽器完成登入與聯絡驗證。</p>
-        <button type="button" class="auth-environment-dialog__primary">開啟瀏覽器繼續</button>
+        <a href="${bridgeUrl}" target="_blank" rel="noopener" class="auth-environment-dialog__primary" style="text-decoration:none; text-align:center;">開啟瀏覽器繼續</a>
         <p class="auth-environment-dialog__status" aria-live="polite"></p>
         <div class="auth-environment-dialog__manual">
           <p class="auth-environment-dialog__hint">若未自動開啟，請手動操作：</p>
@@ -476,8 +479,7 @@ const auth = {
     const statusEl = dialog.querySelector(".auth-environment-dialog__status");
     const continueButton = dialog.querySelector(".auth-environment-dialog__primary");
 
-    const doTransition = () => {
-      const serializedContinuation = this._getFlowItem(this.keys.continuation) || serializeAuthContinuation(safeContinuation);
+    const doTransition = (e) => {
       if (statusEl) statusEl.textContent = "正在開啟瀏覽器...";
       this._startSystemBrowserTransition(serializedContinuation, authEnvironment);
     };
@@ -492,14 +494,11 @@ const auth = {
     if (typeof hydrateIcons === "function") hydrateIcons(dialog);
     continueButton.focus();
 
-    // Auto-trigger browser transition on both iOS and Android.
-    // If the automatic method works, the user leaves the page immediately.
-    // If it fails (which is common in some LINE versions), the dialog stays
-    // visible with clear manual instructions.
     if (isIos || isAndroid) {
-      setTimeout(doTransition, 150);
+      setTimeout(() => doTransition(), 150);
     }
   },
+
 
   _failCallback(message, detail) {
     if (detail) console.error(message, detail);
