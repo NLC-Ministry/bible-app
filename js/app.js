@@ -4,21 +4,21 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260726_org_setup_onboarding';
-import './data/church_campaign.js?v=20260728_badge_img_refactor';
+import './copy/zh-Hant.js?v=20260805_fix_ios_android_bridge_redirect';
+import './data/church_campaign.js?v=20260805_fix_ios_android_bridge_redirect';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260805_fix_pwa_cache_management';
-import './design/icon-registry.js?v=20260729_team_stats_poke';
+import './design/design-system-helpers.js?v=20260805_fix_ios_android_bridge_redirect';
+import './design/icon-registry.js?v=20260805_fix_ios_android_bridge_redirect';
 import './design/icons.js';
-import './state.js?v=20260730_performance_refactor';
+import './state.js?v=20260805_fix_ios_android_bridge_redirect';
 import './auth.js?v=20260805_fix_ios_android_bridge_redirect';
 import './auth-launch.mjs';
-import './db.js?v=20260805_fix_auth_dup_callback_android_sync';
-import './utils.js?v=20260801_full_plan_reset';
-import './gamification.js?v=20260728_badge_img_refactor';
+import './db.js?v=20260805_fix_ios_android_bridge_redirect';
+import './utils.js?v=20260805_fix_ios_android_bridge_redirect';
+import './gamification.js?v=20260805_fix_ios_android_bridge_redirect';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260728_badge_img_refactor';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260805_fix_ios_android_bridge_redirect';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { installPullToRefresh } from './pull-to-refresh.mjs';
@@ -32,7 +32,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260729_release_010';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260805_fix_ios_android_bridge_redirect';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
@@ -110,7 +110,7 @@ function updateCareReminderBadge(reminders = []) {
   if (bellButton) {
     bellButton.setAttribute(
       "aria-label",
-      count > 0 ? `?šçŸ¥ï¼?{count} ?‡æœªè®€` : "?šçŸ¥"
+      count > 0 ? `?ï¿½çŸ¥ï¿½?{count} ?ï¿½æœªè®€` : "?ï¿½çŸ¥"
     );
   }
 
@@ -152,13 +152,13 @@ async function renderNotificationsList() {
   const container = document.getElementById("notification-list-container");
   if (!container) return;
 
-  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> è¼‰å…¥ä¸?..</div>`;
+  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> è¼‰å…¥ï¿½?..</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
   const { data: notifications, error } = await db.fetchAllNotifications();
 
   if (error || !notifications || notifications.length === 0) {
-    container.innerHTML = `<div class="notification-popover__empty">?®å?æ²’æ??šçŸ¥</div>`;
+    container.innerHTML = `<div class="notification-popover__empty">?ï¿½ï¿½?æ²’ï¿½??ï¿½çŸ¥</div>`;
     return;
   }
 
@@ -166,11 +166,11 @@ async function renderNotificationsList() {
 
   const roleNames = {
     member: "çµ„å“¡",
-    group_leader: "å°ç???,
-    zone_leader: "?€??,
-    great_zone_leader: "å¤§å???,
-    senior_pastor: "?™æ??§è€?,
-    admin: "ç³»çµ±ç®¡ç???
+    group_leader: "å°ï¿½???,
+    zone_leader: "?ï¿½??,
+    great_zone_leader: "å¤§ï¿½???,
+    senior_pastor: "?ï¿½ï¿½??ï¿½ï¿½?,
+    admin: "ç³»çµ±ç®¡ï¿½???
   };
 
   notifications.forEach(item => {
@@ -182,8 +182,8 @@ async function renderNotificationsList() {
     const senderRoleRaw = getUserRoleCode(sender);
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
-      ? "?Šå?"
-      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "?˜è?");
+      ? "?ï¿½ï¿½?"
+      : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "?ï¿½ï¿½?");
 
     const dateStr = item.sent_on || "";
 
@@ -192,7 +192,7 @@ async function renderNotificationsList() {
         <span class="notification-item__sender">ä¾†è‡ª${senderRole} ${safeEscapeHTML(senderName)}</span>
         <span class="notification-item__time">${safeEscapeHTML(dateStr)}</span>
       </div>
-      <p class="notification-item__body">${safeEscapeHTML(item.message || "? æ²¹ï¼ä?èµ·ç©©å®šè?ç¶“ã€?)}</p>
+      <p class="notification-item__body">${safeEscapeHTML(item.message || "?ï¿½æ²¹ï¼ï¿½?èµ·ç©©å®šï¿½?ç¶“ï¿½?)}</p>
     `;
 
     div.onclick = async (e) => {
@@ -256,7 +256,7 @@ function initNotificationSystem() {
         updateCareReminderBadge([]);
         await renderNotificationsList();
       } else {
-        alert("?¨éƒ¨å·²è?å¤±æ?: " + (error.message || error));
+        alert("?ï¿½éƒ¨å·²ï¿½?å¤±ï¿½?: " + (error.message || error));
       }
     };
   }
@@ -278,7 +278,7 @@ async function loadModule(name, path) {
   if (moduleCache[name]) {
     return moduleCache[name];
   }
-  console.log(`?“¡ [ESM] Lazy-loading module: ${name} from ${path}`);
+  console.log(`?ï¿½ï¿½ [ESM] Lazy-loading module: ${name} from ${path}`);
   try {
     const mod = await import(path);
     moduleCache[name] = mod;
@@ -370,11 +370,11 @@ async function refreshCurrentAppView() {
   }
 }
 
-// ?€?€?€ Tab Switching: isSwitching guard prevents concurrent race conditions ?€?€?€
+// ?ï¿½?ï¿½?ï¿½ Tab Switching: isSwitching guard prevents concurrent race conditions ?ï¿½?ï¿½?ï¿½
 let isSwitching = false;
 
 appRouter.switchTab = async function (tabId, options = {}) {
-  // ?€?€ State Lock: block double-tap / rapid navigation ?€?€
+  // ?ï¿½?ï¿½ State Lock: block double-tap / rapid navigation ?ï¿½?ï¿½
   if (isSwitching) {
     console.warn(`[Router] switchTab('${tabId}') blocked ??previous transition still in progress.`);
     return;
@@ -388,22 +388,22 @@ appRouter.switchTab = async function (tabId, options = {}) {
   }
 
   try {
-    // ?€?€ Pre-flight: reader-state cleanup ?€?€
+    // ?ï¿½?ï¿½ Pre-flight: reader-state cleanup ?ï¿½?ï¿½
     if (tabId !== "reader-view" || !options.fromPlan) {
       if (state.readerState) state.readerState.fromPlan = false;
     }
 
-    // ?€?€ Pre-flight: stop TTS audio ?€?€
+    // ?ï¿½?ï¿½ Pre-flight: stop TTS audio ?ï¿½?ï¿½
     if (tabId !== "reader-view" && typeof window.speechSynthesis !== "undefined") {
       window.speechSynthesis.cancel();
       const audioBtn = document.getElementById("reader-audio-btn");
       if (audioBtn) audioBtn.classList.remove("active");
     }
 
-    // ?€?€ 1. Update currentTab immediately (sync) ?€?€
+    // ?ï¿½?ï¿½ 1. Update currentTab immediately (sync) ?ï¿½?ï¿½
     this.currentTab = tabId;
 
-    // ?€?€ 2. Update nav button states (sync) ?€?€
+    // ?ï¿½?ï¿½ 2. Update nav button states (sync) ?ï¿½?ï¿½
     document.querySelectorAll(".tab-btn, .mobile-nav-btn").forEach(btn => {
       const target = btn.getAttribute("data-target");
       if (!target) return;
@@ -416,7 +416,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     });
 
-    // ?€?€ 3. Show/hide view panes (sync) ?€?€
+    // ?ï¿½?ï¿½ 3. Show/hide view panes (sync) ?ï¿½?ï¿½
     document.querySelectorAll(".view-pane").forEach(pane => {
       if (pane.id === tabId) {
         pane.classList.remove("hidden");
@@ -427,7 +427,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     });
 
-    // ?€?€ 4. Pre-render state mutations (sync, before any await) ?€?€
+    // ?ï¿½?ï¿½ 4. Pre-render state mutations (sync, before any await) ?ï¿½?ï¿½
     if (tabId === "plan-view" && !options.keepPlanDetail) {
       // Only reset if no active plan: preserve plan detail when re-tapping the plan nav tab
       if (!state.activePlan) {
@@ -440,7 +440,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       window.currentPlanViewState = "DETAIL";
     }
 
-    // ?€?€ 5. Load module + render (fully awaited) ?€?€
+    // ?ï¿½?ï¿½ 5. Load module + render (fully awaited) ?ï¿½?ï¿½
     if (typeof window.syncActivePlanContext === 'function') {
       window.syncActivePlanContext();
     }
@@ -530,7 +530,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
     }
 
-    // ?€?€ 6. updateNavigationChrome ??THE SINGLE, FINAL CALL ?€?€
+    // ?ï¿½?ï¿½ 6. updateNavigationChrome ??THE SINGLE, FINAL CALL ?ï¿½?ï¿½
     // All async rendering is complete. State is now fully settled.
     this.updateNavigationChrome();
     refreshCareReminderBadge();
@@ -540,7 +540,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
     }
 
   } finally {
-    // ?€?€ 7. Always release the lock, even on error ?€?€
+    // ?ï¿½?ï¿½ 7. Always release the lock, even on error ?ï¿½?ï¿½
     this.isTabTransitioning = false;
     isSwitching = false;
   }
@@ -676,13 +676,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.documentElement.dataset.syncState = detail.status || "idle";
     document.documentElement.dataset.pendingSyncCount = String(detail.pending || 0);
     if (detail.status === "queued" && typeof showToast === "function") {
-      showToast("å·²é›¢ç·šå„²å­˜ï??¢å¾©ç¶²è·¯å¾Œæ??ªå??Œæ­¥");
+      showToast("å·²é›¢ç·šå„²å­˜ï¿½??ï¿½å¾©ç¶²è·¯å¾Œï¿½??ï¿½ï¿½??ï¿½æ­¥");
     } else if (detail.status === "complete" && detail.pending === 0 && typeof showToast === "function") {
-      showToast("?¢ç?è®€ç¶“é€²åº¦å·²å?æ­?);
+      showToast("?ï¿½ï¿½?è®€ç¶“é€²åº¦å·²ï¿½?ï¿½?);
     }
   });
 
-  // ?€?€ Background pre-warm: silently load plan module script only ?€?€
+  // ?ï¿½?ï¿½ Background pre-warm: silently load plan module script only ?ï¿½?ï¿½
   loadModule('plan', './modules/plan.js?v=' + buildVersion).then(() => {
     ensurePlanFeatureModulesLoaded().catch(() => {});
   }).catch(() => {});
@@ -692,7 +692,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       refreshCareReminderBadge();
       clearBadge().catch(err => console.error("Failed to clear badge on visible:", err));
 
-      // ?’¡ è¡Œå?è£ç½®?æ™¯?‡æ??¥åº·ä¿è­·ï¼šé˜²æ­?iOS/Android ?Œæ™¯è¨˜æ†¶é«”å??¶å??´ç?ç©ºç™½?–æ­»æ©?
+      // ?ï¿½ï¿½ è¡Œï¿½?è£ç½®?ï¿½æ™¯?ï¿½ï¿½??ï¿½åº·ä¿è­·ï¼šé˜²ï¿½?iOS/Android ?ï¿½æ™¯è¨˜æ†¶é«”ï¿½??ï¿½ï¿½??ï¿½ï¿½?ç©ºç™½?ï¿½æ­»ï¿½?
       try {
         const isProfileLost = !state.currentUser || !state.currentUser.name;
         const isPlanLost = !state.activePlan && Array.isArray(state.activePlans) && state.activePlans.length > 0;
@@ -706,33 +706,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // ?€?€ Android è¿”å??µç›¸å®¹é˜²ç·šï?é¦–é??™æ??€?ºä?è­·è? Tab è¿”å??”æˆª ?€?€
+  // ?ï¿½?ï¿½ Android è¿”ï¿½??ï¿½ç›¸å®¹é˜²ç·šï¿½?é¦–ï¿½??ï¿½ï¿½??ï¿½?ï¿½ï¿½?è­·ï¿½? Tab è¿”ï¿½??ï¿½æˆª ?ï¿½?ï¿½
   (function() {
     let lastBackPress = 0;
-    const doublePressInterval = 2000; // 2 ç§?
+    const doublePressInterval = 2000; // 2 ï¿½?
 
-    // ?å????‡æ?é¦–é???push ?›æ“¬ Root ç´€?„ï??¨ä»¥?”æˆªè¿”å???
+    // ?ï¿½ï¿½????ï¿½ï¿½?é¦–ï¿½???push ?ï¿½æ“¬ Root ç´€?ï¿½ï¿½??ï¿½ä»¥?ï¿½æˆªè¿”ï¿½???
     function pushRootState() {
       if (!window.history.state || !window.history.state.isAppRoot) {
         window.history.pushState({ isAppRoot: true }, "");
       }
     }
 
-    // ??½ popstate
+    // ??ï¿½ï¿½ popstate
     window.addEventListener("popstate", (event) => {
-      // 1. æª¢æŸ¥?¶å??¯å¦??Vanilla Modal ?‹å?
+      // 1. æª¢æŸ¥?ï¿½ï¿½??ï¿½å¦??Vanilla Modal ?ï¿½ï¿½?
       const versionPicker = document.getElementById("bible-version-picker-modal");
       const isPickerOpen = versionPicker && !versionPicker.classList.contains("hidden");
 
       const badgeDetail = document.getElementById("badge-detail-page");
       const isBadgeOpen = badgeDetail && !badgeDetail.classList.contains("hidden");
 
-      // ?¤æ–·?¯å¦?€?åˆ°äº†å?å±?(æ²’æ? root state äº?
+      // ?ï¿½æ–·?ï¿½å¦?ï¿½?ï¿½åˆ°äº†ï¿½?ï¿½?(æ²’ï¿½? root state ï¿½?
       const hasRootState = event.state && event.state.isAppRoot;
       const hasModalState = event.state && event.state.modalId;
 
       if (!hasRootState && !hasModalState) {
-        // å¦‚æ??‰ä»»ä½•å??Ÿå?çª—é??Ÿï??”æˆªè¿”å??µä¸¦?ªå??œé?å®ƒå€?
+        // å¦‚ï¿½??ï¿½ä»»ä½•ï¿½??ï¿½ï¿½?çª—ï¿½??ï¿½ï¿½??ï¿½æˆªè¿”ï¿½??ï¿½ä¸¦?ï¿½ï¿½??ï¿½ï¿½?å®ƒï¿½?
         if (isPickerOpen) {
           const closeBtn = document.getElementById("version-picker-close");
           if (closeBtn) closeBtn.click();
@@ -750,23 +750,23 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
-        // æ²’æ?å½ˆç??‹å??‚ï??·è?é¦–é???Tab å°èˆª?è¼¯
+        // æ²’ï¿½?å½ˆï¿½??ï¿½ï¿½??ï¿½ï¿½??ï¿½ï¿½?é¦–ï¿½???Tab å°èˆª?ï¿½è¼¯
         const currentTab = window.appRouter ? window.appRouter.currentTab : "dashboard-view";
 
         if (currentTab === "dashboard-view") {
-          // ?¨é??ï?å¯¦æ–½?™æ??€?ºä?è­?
+          // ?ï¿½ï¿½??ï¿½ï¿½?å¯¦æ–½?ï¿½ï¿½??ï¿½?ï¿½ï¿½?ï¿½?
           const now = Date.now();
           if (now - lastBackPress < doublePressInterval) {
             window.close();
           } else {
             lastBackPress = now;
             if (typeof showToast === "function") {
-              showToast("?æ?ä¸€æ¬¡è??éµ?€?ºæ???, doublePressInterval);
+              showToast("?ï¿½ï¿½?ä¸€æ¬¡ï¿½??ï¿½éµ?ï¿½?ï¿½ï¿½???, doublePressInterval);
             }
             pushRootState();
           }
         } else {
-          // ä¸åœ¨é¦–é?ï¼šè‡ª?•å??é??ï??å??ä?é«”é?
+          // ä¸åœ¨é¦–ï¿½?ï¼šè‡ª?ï¿½ï¿½??ï¿½ï¿½??ï¿½ï¿½??ï¿½ï¿½??ï¿½ï¿½?é«”ï¿½?
           if (window.appRouter && typeof window.appRouter.switchTab === "function") {
             window.appRouter.switchTab("dashboard-view").then(() => {
               pushRootState();
@@ -780,10 +780,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     });
 
-    // ?Ÿå??‚è?è·¯ç”±?‡æ??‚ï?ç¢ºä? Root State å­˜åœ¨
+    // ?ï¿½ï¿½??ï¿½ï¿½?è·¯ç”±?ï¿½ï¿½??ï¿½ï¿½?ç¢ºï¿½? Root State å­˜åœ¨
     pushRootState();
 
-    // ?”æˆª switchTab ä»¥åœ¨?‡æ? Tab ?‚é??°ç¢ºèª??–å? history ?€??
+    // ?ï¿½æˆª switchTab ä»¥åœ¨?ï¿½ï¿½? Tab ?ï¿½ï¿½??ï¿½ç¢ºï¿½??ï¿½ï¿½? history ?ï¿½??
     if (window.appRouter) {
       const originalSwitchTab = window.appRouter.switchTab;
       window.appRouter.switchTab = async function(tabId, options) {
