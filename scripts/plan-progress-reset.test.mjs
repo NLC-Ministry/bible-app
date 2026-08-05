@@ -71,4 +71,36 @@ describe("plan progress reset", () => {
     expect(resetFlow).toContain("resetPlanProgressState(plan)");
     expect(resetFlow).toContain("window._cachedAllUsersList = null");
   });
+
+  it("prunes associated stage badges from localStorage on plan reset", () => {
+    const campaignPlan = {
+      id: "plan-stage-1",
+      stageNo: 1,
+      planKind: "church_campaign_stage"
+    };
+
+    const store = new Map();
+    const mockStorage = {
+      getItem: (key) => store.get(key) || null,
+      setItem: (key, val) => store.set(key, String(val)),
+      removeItem: (key) => store.delete(key)
+    };
+
+    vi.stubGlobal("localStorage", mockStorage);
+
+    localStorage.setItem("unlocked_badges", JSON.stringify(["church_stage_award_1", "read_first_chapter"]));
+    localStorage.setItem("church_stage_completed_rounds_1", "1");
+    localStorage.setItem("church_stage_award_1_unlocked", "true");
+    localStorage.setItem("notified_church_stage_award_1", "true");
+
+    resetPlanProgressState(campaignPlan);
+
+    const remainingUnlocked = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
+    expect(remainingUnlocked).toEqual(["read_first_chapter"]);
+    expect(localStorage.getItem("church_stage_completed_rounds_1")).toBeNull();
+    expect(localStorage.getItem("church_stage_award_1_unlocked")).toBeNull();
+    expect(localStorage.getItem("notified_church_stage_award_1")).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
 });

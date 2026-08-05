@@ -29,6 +29,55 @@ export function removePlanReadingLogs(logs, plan) {
   );
 }
 
+export function cleanPlanAssociatedBadges(plan) {
+  if (!plan) return;
+  const storage = (typeof localStorage !== "undefined" && localStorage) || (typeof window !== "undefined" && window.localStorage) || null;
+  if (!storage) return;
+
+  const targetBadgeIds = new Set();
+
+  // 1. Church Campaign Stage Badges
+  const presetMatch = String(plan.presetKey || plan.id || "").match(/(?:stage_?|award_?|campaign-stage-?)(\d+)/i);
+  const stageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || (presetMatch && presetMatch[1]) || 0);
+  if (stageNo > 0) {
+    targetBadgeIds.add(`church_stage_award_${stageNo}`);
+    storage.removeItem(`church_stage_completed_rounds_${stageNo}`);
+  }
+
+  // 2. Plan-specific completion badges (if any)
+  if (plan.id) {
+    targetBadgeIds.add(`plan_complete_${plan.id}`);
+  }
+  if (plan.presetKey) {
+    targetBadgeIds.add(`plan_complete_${plan.presetKey}`);
+  }
+
+  // 3. Remove target badges from unlocked_badges array
+  try {
+    const unlockedBadges = JSON.parse(storage.getItem("unlocked_badges") || "[]");
+    if (Array.isArray(unlockedBadges)) {
+      const filteredBadges = unlockedBadges.filter(id => !targetBadgeIds.has(id));
+      storage.setItem("unlocked_badges", JSON.stringify(filteredBadges));
+    }
+  } catch (e) {
+    console.warn("Failed to parse unlocked_badges in cleanPlanAssociatedBadges:", e);
+  }
+
+  // 4. Remove notification, unlock flags, and star unlock dates
+  targetBadgeIds.forEach(badgeId => {
+    storage.removeItem(`notified_${badgeId}`);
+    storage.removeItem(`${badgeId}_unlocked`);
+    for (let star = 1; star <= 5; star++) {
+      storage.removeItem(`date_unlocked_${badgeId}_lvl_${star}`);
+    }
+  });
+
+  // 5. Trigger UI surface refresh
+  if (typeof window !== "undefined" && typeof window.refreshBadgeSurfaces === "function") {
+    window.refreshBadgeSurfaces();
+  }
+}
+
 export function resetPlanProgressState(plan) {
   if (!plan) return plan;
   plan.level = "normal";
@@ -51,5 +100,8 @@ export function resetPlanProgressState(plan) {
       });
     });
   });
+
+  cleanPlanAssociatedBadges(plan);
+
   return plan;
 }

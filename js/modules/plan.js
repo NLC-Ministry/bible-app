@@ -9,6 +9,7 @@ import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import {
+  cleanPlanAssociatedBadges,
   removePlanReadingLogs,
   resetPlanProgressState
 } from "./plan-progress-reset.mjs";
@@ -927,36 +928,8 @@ function initPlanControls() {
           localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans || []));
         }
 
-        // 3b. Reset corresponding badge if this is a church campaign stage plan
-        if (plan.planKind === "church_campaign_stage") {
-          const stageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
-          if (stageNo > 0) {
-            const badgeId = `church_stage_award_${stageNo}`;
-            const maxStars = 5;
-
-            // Clear completed rounds counter
-            localStorage.removeItem(`church_stage_completed_rounds_${stageNo}`);
-
-            // Remove badge from unlocked_badges array
-            const unlockedBadges = JSON.parse(localStorage.getItem("unlocked_badges") || "[]");
-            const filteredBadges = unlockedBadges.filter(id => id !== badgeId);
-            localStorage.setItem("unlocked_badges", JSON.stringify(filteredBadges));
-
-            // Clear notification and unlock flags
-            localStorage.removeItem(`notified_${badgeId}`);
-            localStorage.removeItem(`${badgeId}_unlocked`);
-
-            // Clear all star unlock dates (up to maxStars)
-            for (let star = 1; star <= maxStars; star++) {
-              localStorage.removeItem(`date_unlocked_${badgeId}_lvl_${star}`);
-            }
-
-            // Refresh badge display surfaces
-            if (typeof window.refreshBadgeSurfaces === "function") {
-              window.refreshBadgeSurfaces();
-            }
-          }
-        }
+        // 3b. Reset corresponding badges associated with this plan
+        cleanPlanAssociatedBadges(plan);
 
         // 4. Update UI
         if (typeof calculatePlanProgress === "function") {
