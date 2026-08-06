@@ -982,9 +982,12 @@ function initSpeechPreferencesControls() {
   }
 }
 
+export { initSpeechPreferencesControls };
+
 window.renderProfileView = renderProfileView;
 window.paintProfileIdentityChrome = paintProfileIdentityChrome;
 window.applyProfileIdentitySkeletons = applyProfileIdentitySkeletons;
 window.updateHeaderAvatar = updateHeaderAvatar;
 window.updateAdminNavVisibility = updateAdminNavVisibility;
 window.initProfileControls = init;
+window.initSpeechPreferencesControls = initSpeechPreferencesControls;

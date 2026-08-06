@@ -1698,76 +1698,23 @@
                   </div>
                 </div>
 
-                <!-- 語音朗讀設定卡片 -->
+                <!-- 閱讀與朗讀設定捷徑卡片 -->
                 <div class="app-settings-group profile-preferences-group" style="margin-top: 1rem;">
                   <div class="app-settings-group__header">
                     <span class="app-settings-group__header-icon">
                       <span class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
                     </span>
                     <div class="app-settings-group__header-text">
-                      <h3 class="text-sm font-medium m-0">聖經語音朗讀設定</h3>
-                      <p class="text-xs text-secondary m-0">調整聆聽語速與偏好的發音人聲線</p>
+                      <h3 class="text-sm font-medium m-0">聖經閱讀與朗讀設定</h3>
+                      <p class="text-xs text-secondary m-0">已整合至聖經閱讀器，點擊下方亦可直接開啓調整</p>
                     </div>
                   </div>
 
-                  <div style="padding: 0.8rem 1rem; display: flex; flex-direction: column; gap: 1.2rem;">
-                    <!-- 語速滑桿 -->
-                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                      <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="speech-rate-slider" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">朗讀語速</label>
-                        <span id="speech-rate-val" style="font-size: 0.85rem; font-weight: 600; color: var(--brand-primary, #04A9D2);">1.0x (標準)</span>
-                      </div>
-                      <input type="range" id="speech-rate-slider" min="0.5" max="2.0" step="0.05" value="1.0"
-                        style="width: 100%; accent-color: var(--brand-primary, #04A9D2); cursor: pointer;">
-                      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary);">
-                        <span>0.5x 沉靜慢速</span>
-                        <span>1.0x 標準</span>
-                        <span>2.0x 疾速</span>
-                      </div>
-                    </div>
-
-                    <!-- 聲線 / 性別切換 -->
-                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                      <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
-                      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" role="radiogroup" aria-label="聲線偏好">
-                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn active" data-speech-gender="auto">
-                          <span>系統預設</span>
-                        </button>
-                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="female">
-                          <span>溫柔女聲</span>
-                        </button>
-                        <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="male">
-                          <span>穩重男聲</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- 具體發音人選單 (由上方性別按鈕過濾) -->
-                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                      <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">選擇聲線發音人</label>
-                        <button type="button" id="btn-show-tts-guide" onclick="window.openTtsGuideModal?.()" style="font-size: 0.75rem; color: var(--brand-primary, #04A9D2); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-weight: 500;">
-                          💡 語音包安裝指引
-                        </button>
-                      </div>
-                      <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 1rem;">
-                        <option value="">載入系統語音中...</option>
-                      </select>
-                    </div>
-
-                    <!-- 操作按鈕列：Shadcn UI 風格「播放試聽語音」按鈕 -->
-                    <div style="display: flex; gap: 0.5rem; margin-top: 0.6rem;">
-                      <button type="button" id="btn-preview-speech" class="shadcn-speech-btn w-full">
-                        <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
-                        <span id="btn-preview-text">播放試聽語音</span>
-                        <span class="nlc-icon nlc-icon--sm" data-icon="sparkles" aria-hidden="true" style="opacity: 0.85; margin-left: 0.1rem;"></span>
-                      </button>
-                    </div>
-
-                    <!-- 自動即時儲存提示 -->
-                    <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0 0; text-align: center;">
-                      ✨ 設定變更將自動即時儲存於您的本地裝置，不佔用雲端資料庫。
-                    </p>
+                  <div style="padding: 0.8rem 1rem;">
+                    <button type="button" class="btn btn--neutral btn--sm w-full flex items-center justify-center gap-2" style="padding: 0.6rem 1rem; font-weight: 500;" onclick="if(typeof window.openTypographySheet==='function'){window.openTypographySheet();}else{const b=document.getElementById('typography-settings-backdrop');if(b){b.classList.remove('hidden');b.style.display='block';}}">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="settings" aria-hidden="true"></span>
+                      <span>開啟閱讀與朗讀設定彈窗</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2101,32 +2048,101 @@
     <div class="overlay-scroll-content" id="global-search-results"></div>
   </div>
 
-  <!-- Typography Settings Sheet (Bottom Sheet) -->
+  <!-- Typography & Speech Settings Sheet (Bottom Sheet) -->
   <div class="bottom-sheet-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
     <div class="bottom-sheet-container" id="typography-settings-sheet" role="dialog" aria-modal="true"
-      aria-label="&#x6587;&#x5B57;&#x8A2D;&#x5B9A;">
+      aria-label="閱讀與朗讀設定">
       <div class="bottom-sheet-drag-handle"></div>
       <div class="bottom-sheet-header">
-        <h3>&#x6587;&#x5B57;&#x8A2D;&#x5B9A;</h3>
+        <h3>閱讀與朗讀設定</h3>
         <button type="button" id="typography-sheet-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
-          aria-label="&#x95DC;&#x9589;"><span class="nlc-icon" data-icon="closeLg"></span></button>
+          aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
       </div>
-      <div class="bottom-sheet-body">
-        <div class="sheet-section">
-          <div class="sheet-section-title">&#x6587;&#x5B57;&#x5927;&#x5C0F;</div>
+      <div class="bottom-sheet-body" style="padding-bottom: 1.5rem;">
+        <!-- 視覺設定：文字大小 -->
+        <div class="sheet-section" style="margin-bottom: 1.25rem;">
+          <div class="sheet-section-title">文字大小</div>
           <div class="sheet-options-row typography-size-row">
             <button type="button" class="sheet-option-btn font-size-option" data-size="16">
-              <span class="size-label">&#x5C0F;</span>
+              <span class="size-label">小</span>
               <span class="size-num">16px</span>
             </button>
             <button type="button" class="sheet-option-btn font-size-option" data-size="18">
-              <span class="size-label">&#x4E00;&#x822C;</span>
+              <span class="size-label">一般</span>
               <span class="size-num">18px</span>
             </button>
             <button type="button" class="sheet-option-btn font-size-option" data-size="20">
-              <span class="size-label">&#x5927;</span>
+              <span class="size-label">大</span>
               <span class="size-num">20px</span>
             </button>
+          </div>
+        </div>
+
+        <!-- 聽覺設定：聖經語音朗讀設定 -->
+        <div class="sheet-section" style="border-top: 1px solid var(--border-card); padding-top: 1.25rem;">
+          <div class="sheet-section-title" style="display: flex; items-center; gap: 0.4rem; margin-bottom: 0.75rem;">
+            <span class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true" style="color: var(--brand-primary, #04A9D2);"></span>
+            <span>聖經語音朗讀設定</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 1.2rem;">
+            <!-- 語速滑桿 -->
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="speech-rate-slider" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">朗讀語速</label>
+                <span id="speech-rate-val" style="font-size: 0.85rem; font-weight: 600; color: var(--brand-primary, #04A9D2);">1.0x (標準)</span>
+              </div>
+              <input type="range" id="speech-rate-slider" min="0.5" max="2.0" step="0.05" value="1.0"
+                style="width: 100%; accent-color: var(--brand-primary, #04A9D2); cursor: pointer;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary);">
+                <span>0.5x 沉靜慢速</span>
+                <span>1.0x 標準</span>
+                <span>2.0x 疾速</span>
+              </div>
+            </div>
+
+            <!-- 聲線 / 性別切換 -->
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;" role="radiogroup" aria-label="聲線偏好">
+                <button type="button" class="btn btn--neutral btn--sm speech-gender-btn active" data-speech-gender="auto">
+                  <span>系統預設</span>
+                </button>
+                <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="female">
+                  <span>溫柔女聲</span>
+                </button>
+                <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="male">
+                  <span>穩重男聲</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 具體發音人選單 -->
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label for="speech-voice-select" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary);">選擇聲線發音人</label>
+                <button type="button" id="btn-show-tts-guide" onclick="window.openTtsGuideModal?.()" style="font-size: 0.75rem; color: var(--brand-primary, #04A9D2); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-weight: 500;">
+                  💡 語音包安裝指引
+                </button>
+              </div>
+              <select id="speech-voice-select" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 1rem;">
+                <option value="">載入系統語音中...</option>
+              </select>
+            </div>
+
+            <!-- 操作按鈕列：試聽按鈕 -->
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.4rem;">
+              <button type="button" id="btn-preview-speech" class="shadcn-speech-btn w-full">
+                <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
+                <span id="btn-preview-text">播放試聽語音</span>
+                <span class="nlc-icon nlc-icon--sm" data-icon="sparkles" aria-hidden="true" style="opacity: 0.85; margin-left: 0.1rem;"></span>
+              </button>
+            </div>
+
+            <!-- 自動即時儲存提示 -->
+            <p style="font-size: 0.72rem; color: var(--text-secondary); margin: 0.2rem 0 0 0; text-align: center;">
+              ✨ 設定變更將自動即時儲存於您的本地裝置，閱讀聖經時即刻生效。
+            </p>
           </div>
         </div>
       </div>

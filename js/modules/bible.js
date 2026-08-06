@@ -368,6 +368,9 @@ export function initReaderControls() {
       e.stopPropagation();
       openReaderLayer(settingsBackdrop);
       updateSheetActiveStates();
+      if (typeof window.initSpeechPreferencesControls === "function") {
+        window.initSpeechPreferencesControls();
+      }
     });
   }
 

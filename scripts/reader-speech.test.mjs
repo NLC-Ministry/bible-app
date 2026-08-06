@@ -62,4 +62,14 @@ describe("reader speech controls", () => {
     expect(profile).toContain("window.openTtsGuideModal = function");
     expect(profile).toContain("window.closeTtsGuideModal = function");
   });
+
+  it("integrates TTS speech settings into the reader typography settings sheet", () => {
+    const html = readFileSync("index.html", "utf8");
+    expect(html).toContain('id="typography-settings-sheet"');
+    expect(html).toContain('閱讀與朗讀設定');
+    expect(html).toContain('id="speech-rate-slider"');
+    expect(html).toContain('id="speech-voice-select"');
+    expect(html).toContain('id="btn-preview-speech"');
+    expect(html).toContain('id="btn-show-tts-guide"');
+  });
 });
