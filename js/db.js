@@ -2544,7 +2544,7 @@ const db = {
 
   async _getAdminMemberTeamPlacementsFallback(plan, planId) {
     try {
-      const client = this._client();
+      const client = state.supabase;
       if (!client) throw new Error("Supabase client not initialized");
 
       const { data: profiles, error: profilesError } = await client
