@@ -7692,7 +7692,7 @@ input:checked + .slider:before {
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   box-shadow: var(--shadow-up-lg);
-  padding: 0 0.85rem 1.4rem;
+  padding: 0 0.85rem calc(1.4rem + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   animation: slideUpSheet 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -8123,13 +8123,7 @@ body.reader-modal-open .main-content {
   transform: translateY(0) !important;
 }
 
-.bottom-sheet-container {
-  height: min(34vh, 330px);
-  min-height: 236px;
-  max-height: 36vh;
-  background: var(--bg-card);
-  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-}
+/* (merged into primary .bottom-sheet-container rule above) */
 
 .sheet-options-row.typography-size-row {
   display: grid;
