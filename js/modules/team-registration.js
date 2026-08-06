@@ -476,7 +476,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
             <p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p>
             <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
               <h3 id="reading-team-dialog-title" style="margin: 0; font-size: 1.15rem; font-weight: 700;">${escapeHTML(team.name)}</h3>
-              ${canEditTeamName ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand, #04A9D2); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
+              ${canEditTeamName ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
             </div>
           </div>
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
@@ -679,7 +679,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         <div>
           <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">${escapeHTML(team.name || "我的團隊")}</h3>
-            ${canEditTeamNameInline ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team-inline title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand, #04A9D2); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
+            ${canEditTeamNameInline ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team-inline title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
           </div>
           <p style="margin-top: 0.2rem;">${Number(team.division)} 人團隊・一起查看彼此的讀經進度</p>
         </div>

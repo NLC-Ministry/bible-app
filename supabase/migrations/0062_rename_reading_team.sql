@@ -1,4 +1,4 @@
--- Migration 0038: Support renaming reading teams securely for captains and admins
+-- Migration 0062: Support renaming reading teams securely for captains and admins
 
 CREATE OR REPLACE FUNCTION public.rename_reading_team(
   p_team_id UUID,

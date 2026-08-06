@@ -478,7 +478,7 @@ window.addEventListener("planDataChanged", (e) => {
 });
 
 function canUseAdvancedGroupStats() {
-  const allowedRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader"];
+  const allowedRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"];
   const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
 
   return allowedRoles.includes(currentRole);

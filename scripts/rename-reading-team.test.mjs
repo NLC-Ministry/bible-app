@@ -6,7 +6,7 @@ const root = process.cwd();
 
 describe("rename reading team feature", () => {
   it("provides a secure database migration with permission and uniqueness checks", () => {
-    const migrationPath = join(root, "supabase", "migrations", "0038_rename_reading_team.sql");
+    const migrationPath = join(root, "supabase", "migrations", "0062_rename_reading_team.sql");
     expect(existsSync(migrationPath)).toBe(true);
 
     const sql = readFileSync(migrationPath, "utf8");
