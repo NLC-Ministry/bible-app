@@ -2753,6 +2753,13 @@ const db = {
     return this._callReadingTeamRpc("disband_reading_team", { p_team_id: teamId });
   },
 
+  async renameReadingTeam(teamId, newName) {
+    return this._callReadingTeamRpc("rename_reading_team", {
+      p_team_id: teamId,
+      p_name: String(newName || "").trim()
+    });
+  },
+
   async sendReadingTeamReminder({ teamId, recipientId, globalPlanId, reason, message }) {
     const result = await this._callReadingTeamRpc("send_reading_team_reminder", {
       p_team_id: teamId,

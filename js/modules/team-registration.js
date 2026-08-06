@@ -468,7 +468,13 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
       const nextAvailableDivision = availableDivisions[0] || null;
       panel.innerHTML = `
         <header class="reading-team-dialog__header">
-          <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-dialog-title">${escapeHTML(team.name)}</h3></div>
+          <div>
+            <p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <h3 id="reading-team-dialog-title">${escapeHTML(team.name)}</h3>
+              ${isCaptain || (state.currentUser && state.currentUser.role === "admin") ? `<button type="button" class="icon-button icon-button--subtle" data-rename-team title="修改團隊名稱" aria-label="修改團隊名稱" style="padding: 0.15rem 0.3rem; margin-top: 0.1rem;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>` : ""}
+            </div>
+          </div>
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
         ${allContexts.length > 1 ? `<div class="reading-team-registration-tabs" role="tablist" aria-label="切換我的團隊">${allContexts.map(item => `<button type="button" role="tab" data-team-view-division="${Number(item.team.division)}" aria-selected="${item === context}">${Number(item.team.division)} 人團隊</button>`).join("")}</div>` : ""}
@@ -498,6 +504,45 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
           const selected = allContexts.find(item => Number(item.team.division) === Number(button.dataset.teamViewDivision));
           if (selected) renderTeam(selected, allContexts);
         };
+      });
+      panel.querySelector("[data-rename-team]")?.addEventListener("click", async () => {
+        let newName = null;
+        if (typeof window.showPromptDialog === "function") {
+          newName = await window.showPromptDialog({
+            title: "修改團隊名稱",
+            message: "請輸入新的團隊名稱（1~40 字元）：",
+            defaultValue: team.name,
+            placeholder: "請輸入團隊名稱",
+            confirmText: "儲存修改",
+            cancelText: "取消"
+          });
+        } else {
+          newName = window.prompt("請輸入新的團隊名稱：", team.name);
+        }
+
+        if (newName === null) return;
+        const trimmed = String(newName).trim();
+        if (!trimmed) {
+          showToast("團隊名稱不可為空白。");
+          return;
+        }
+        if (trimmed === team.name) return;
+
+        const result = await db.renameReadingTeam(team.id, trimmed);
+        if (!result.success) {
+          const error = panel.querySelector("[data-team-error]");
+          if (error) {
+            error.textContent = result.message || "修改團隊名稱失敗。";
+            error.hidden = false;
+          } else {
+            showToast(result.message || "修改團隊名稱失敗。", "error");
+          }
+          return;
+        }
+        if (typeof showToast === "function") {
+          showToast(`團隊名稱已成功修改為：「${trimmed}」`, "success");
+        }
+        await refresh();
       });
       panel.querySelector("[data-add-other-team]")?.addEventListener("click", () => {
         returnDivision = Number(team.division);

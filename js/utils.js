@@ -121,6 +121,87 @@ function showConfirmDialog({ title, message, confirmText = "確認", cancelText 
 }
 window.showConfirmDialog = showConfirmDialog;
 
+function showPromptDialog({ title, message = "", defaultValue = "", placeholder = "請輸入...", confirmText = "確認", cancelText = "取消" } = {}) {
+  return new Promise((resolve) => {
+    let overlay = document.getElementById("app-custom-prompt-overlay");
+    if (overlay) overlay.remove();
+
+    overlay = document.createElement("div");
+    overlay.id = "app-custom-prompt-overlay";
+    overlay.className = "custom-confirm-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:var(--z-critical,900);padding:20px;opacity:0;transition:opacity 0.2s ease;";
+
+    const safeEscape = (str) => typeof escapeHTML === "function" ? escapeHTML(str) : String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
+    overlay.innerHTML = `
+      <div class="custom-confirm-card" role="dialog" aria-modal="true">
+        <div class="custom-confirm-content">
+          <h3 class="custom-confirm-title">${safeEscape(title)}</h3>
+          ${message ? `<p class="custom-confirm-desc">${safeEscape(message)}</p>` : ""}
+          <div style="margin-top: 0.75rem;">
+            <input type="text" class="custom-prompt-input" value="${safeEscape(defaultValue)}" placeholder="${safeEscape(placeholder)}"
+              style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border-card);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:0.875rem;" />
+          </div>
+        </div>
+        <div class="custom-confirm-actions" style="margin-top: 1.25rem;">
+          <button type="button" class="custom-confirm-btn-cancel secondary-btn">${safeEscape(cancelText)}</button>
+          <button type="button" class="custom-confirm-btn-confirm primary-btn">${safeEscape(confirmText)}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.offsetWidth;
+    overlay.style.opacity = "1";
+    overlay.classList.add("active");
+
+    const input = overlay.querySelector(".custom-prompt-input");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+
+    const cleanup = (value) => {
+      overlay.style.opacity = "0";
+      overlay.classList.remove("active");
+      setTimeout(() => {
+        overlay.remove();
+        resolve(value);
+      }, 200);
+    };
+
+    const submit = () => {
+      const val = input ? input.value : "";
+      cleanup(val);
+    };
+
+    overlay.querySelector(".custom-confirm-btn-cancel").onclick = () => cleanup(null);
+    overlay.querySelector(".custom-confirm-btn-confirm").onclick = submit;
+
+    if (input) {
+      input.onkeydown = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      };
+    }
+
+    overlay.onclick = (e) => {
+      if (e.target === overlay) cleanup(null);
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        cleanup(null);
+        document.removeEventListener("keydown", handleKeyDown);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+  });
+}
+window.showPromptDialog = showPromptDialog;
+
 // ── User Avatar (shadcn-inspired: image + initials fallback) ──
 
 /** Known invented placeholders — never treat as a real display name. */
