@@ -80,8 +80,12 @@ export function closeTtsGuideModal() {
 }
 
 export function initSpeechPreferencesControls() {
-  if (typeof window.initSpeechPreferencesControls === "function") {
+  if (typeof window.__initSpeechPreferencesControlsImpl === "function") {
+    return window.__initSpeechPreferencesControlsImpl();
+  }
+  if (typeof window.initSpeechPreferencesControls === "function" && window.initSpeechPreferencesControls !== initSpeechPreferencesControls) {
     return window.initSpeechPreferencesControls();
   }
 }
+
 

@@ -669,13 +669,15 @@ export function init() {
 }
 
 function initSpeechPreferencesControls() {
-  if (typeof window.initSpeechPreferencesControls === "function") {
+  if (typeof window.__initSpeechPreferencesControlsImpl === "function") {
+    return window.__initSpeechPreferencesControlsImpl();
+  }
+  if (typeof window.initSpeechPreferencesControls === "function" && window.initSpeechPreferencesControls !== initSpeechPreferencesControls) {
     return window.initSpeechPreferencesControls();
   }
 }
 
 export { initSpeechPreferencesControls };
-
 
 window.renderProfileView = renderProfileView;
 window.paintProfileIdentityChrome = paintProfileIdentityChrome;
@@ -683,4 +685,4 @@ window.applyProfileIdentitySkeletons = applyProfileIdentitySkeletons;
 window.updateHeaderAvatar = updateHeaderAvatar;
 window.updateAdminNavVisibility = updateAdminNavVisibility;
 window.initProfileControls = init;
-window.initSpeechPreferencesControls = initSpeechPreferencesControls;
+

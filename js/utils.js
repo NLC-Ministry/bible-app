@@ -2615,6 +2615,7 @@ export function initSpeechPreferencesControls() {
   }
 }
 
+window.__initSpeechPreferencesControlsImpl = initSpeechPreferencesControls;
 window.initSpeechPreferencesControls = initSpeechPreferencesControls;
 
 if (typeof document !== "undefined") {
@@ -2624,6 +2625,7 @@ if (typeof document !== "undefined") {
     initSpeechPreferencesControls();
   }
 }
+
 
 
 
