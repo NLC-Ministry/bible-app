@@ -5130,7 +5130,10 @@ function renderGroupGrowthTrend(overrideFilter) {
     state.statsCharts = {};
   }
 
-  const isDark = state.theme === 'dark' || document.body.classList.contains('dark-theme');
+  const isDark = state.theme === 'dark' ||
+    document.body.classList.contains('dark-theme') ||
+    document.body.classList.contains('dark') ||
+    document.documentElement.getAttribute('data-theme') === 'dark';
   const fontColor = isDark ? 'rgba(180,180,180,0.85)' : 'rgba(60,60,60,0.75)';
   const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
   const brandColor = '#04A9D2';
@@ -5415,8 +5418,11 @@ function renderPersonalTrendChart() {
   }
 
   // Render Chart.js
-  const isDark = document.body.classList.contains('dark-theme');
-  const fontColor = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(71, 85, 105, 0.5)';
+  const isDark = state.theme === 'dark' ||
+    document.body.classList.contains('dark-theme') ||
+    document.body.classList.contains('dark') ||
+    document.documentElement.getAttribute('data-theme') === 'dark';
+  const fontColor = isDark ? 'rgba(248, 250, 252, 0.85)' : 'rgba(15, 23, 42, 0.75)';
 
   if (window._personalTrendChart) window._personalTrendChart.destroy();
 

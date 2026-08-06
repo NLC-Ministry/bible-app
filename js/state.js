@@ -504,8 +504,14 @@ const loader = {
 
 // Theme Management
 function setBodyThemeClass(themeName) {
-  document.body.classList.remove("light-theme", "warm-theme", "dark-theme");
+  document.body.classList.remove("light-theme", "warm-theme", "dark-theme", "dark");
   document.body.classList.add(themeName + "-theme");
+  if (themeName === "dark") {
+    document.body.classList.add("dark");
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
 }
 
 function applyAppTheme(themeName) {

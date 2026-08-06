@@ -13177,3 +13177,34 @@ select,
   pointer-events: none !important;
   visibility: hidden !important;
 }
+
+/* Universal High-Contrast Dark Theme Headings Safeguard */
+[data-theme="dark"] .card-title,
+[data-theme="dark"] #grp-heatmap-title,
+[data-theme="dark"] #grp-daily-active-chart-title,
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+body.dark-theme .card-title,
+body.dark-theme #grp-heatmap-title,
+body.dark-theme #grp-daily-active-chart-title,
+body.dark-theme h1,
+body.dark-theme h2,
+body.dark-theme h3,
+body.dark-theme h4,
+body.dark .card-title,
+body.dark #grp-heatmap-title,
+body.dark #grp-daily-active-chart-title,
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4 {
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] .glass-card-upgrade,
+body.dark-theme .glass-card-upgrade,
+body.dark .glass-card-upgrade {
+  color: #F8FAFC !important;
+}
