@@ -7697,6 +7697,7 @@ input:checked + .slider:before {
   flex-direction: column;
   animation: slideUpSheet 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 85vh;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -7723,6 +7724,7 @@ input:checked + .slider:before {
   justify-content: space-between;
   margin-bottom: 0.8rem;
   flex-shrink: 0;
+  padding-top: 0;
 }
 .bottom-sheet-header h3 {
   margin: 0;
@@ -7737,10 +7739,13 @@ input:checked + .slider:before {
 .bottom-sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  overflow-y: auto;
+  gap: 0.6rem;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   flex: 1;
   min-height: 0;
+  padding-right: 2px;
 }
 
 .sheet-section {
