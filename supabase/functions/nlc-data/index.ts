@@ -60,7 +60,7 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
 const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics"
 ]);
-const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -126,7 +126,7 @@ async function fetchProfileData(supabaseAdmin: any, profileId: string) {
 
   const { data: basicProfile, error: basicError } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
     .eq("id", profileId)
     .single();
   if (basicError) throw basicError;
@@ -551,7 +551,8 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ data: responseData });
   } catch (err) {
-    console.error("nlc-data failed:", err);
-    return jsonResponse({ error: "nlc_data_failed", message: err instanceof Error ? err.message : String(err) }, 500);
+    const errorDetails = err instanceof Error ? err.message : (typeof err === "object" && err !== null ? ((err as any).message || JSON.stringify(err)) : String(err));
+    console.error("nlc-data failed:", errorDetails, err);
+    return jsonResponse({ error: "nlc_data_failed", message: errorDetails }, 500);
   }
 });
