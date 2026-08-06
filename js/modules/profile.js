@@ -7,13 +7,22 @@ import { showModal, hideModal } from "./modal-manager.mjs";
 window.openTtsGuideModal = function () {
   const modal = document.getElementById("tts-guide-modal");
   if (!modal) return false;
-  return showModal(modal, { display: "flex" });
+  if (typeof document !== "undefined" && document.body && modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove("hidden");
+  modal.style.cssText = "display: flex !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; z-index: 999999 !important;";
+  modal.setAttribute("aria-hidden", "false");
+  return true;
 };
 
 window.closeTtsGuideModal = function () {
   const modal = document.getElementById("tts-guide-modal");
   if (!modal) return false;
-  return hideModal(modal);
+  modal.classList.add("hidden");
+  modal.style.cssText = "display: none !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;";
+  modal.setAttribute("aria-hidden", "true");
+  return true;
 };
 
 export function openTtsGuideModal() {

@@ -2327,11 +2327,11 @@ window.toTaiwanISOString = toTaiwanISOString;
 export function openTtsGuideModal() {
   const modal = document.getElementById("tts-guide-modal");
   if (!modal) return false;
+  if (typeof document !== "undefined" && document.body && modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
   modal.classList.remove("hidden");
-  modal.style.display = "flex";
-  modal.style.opacity = "1";
-  modal.style.pointerEvents = "auto";
-  modal.style.visibility = "visible";
+  modal.style.cssText = "display: flex !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; z-index: 999999 !important;";
   modal.setAttribute("aria-hidden", "false");
   return true;
 }
@@ -2340,10 +2340,7 @@ export function closeTtsGuideModal() {
   const modal = document.getElementById("tts-guide-modal");
   if (!modal) return false;
   modal.classList.add("hidden");
-  modal.style.display = "none";
-  modal.style.opacity = "0";
-  modal.style.pointerEvents = "none";
-  modal.style.visibility = "hidden";
+  modal.style.cssText = "display: none !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;";
   modal.setAttribute("aria-hidden", "true");
   return true;
 }
@@ -2353,14 +2350,16 @@ window.closeTtsGuideModal = closeTtsGuideModal;
 
 if (typeof document !== "undefined") {
   document.addEventListener("click", function (e) {
-    const btn = e.target && e.target.closest ? e.target.closest("#btn-show-tts-guide, [data-action='open-tts-guide']") : null;
+    const btn = e.target && e.target.closest ? e.target.closest("#btn-show-tts-guide, [data-action='open-tts-guide'], [data-open-tts-guide]") : null;
     if (btn) {
       e.preventDefault();
+      e.stopPropagation();
       openTtsGuideModal();
     }
-    const closeBtn = e.target && e.target.closest ? e.target.closest("#btn-close-tts-guide, #btn-confirm-tts-guide, [data-action='close-tts-guide']") : null;
+    const closeBtn = e.target && e.target.closest ? e.target.closest("#btn-close-tts-guide, #btn-confirm-tts-guide, [data-action='close-tts-guide'], [data-close-tts-guide]") : null;
     if (closeBtn) {
       e.preventDefault();
+      e.stopPropagation();
       closeTtsGuideModal();
     }
   });

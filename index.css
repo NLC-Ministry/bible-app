@@ -13155,14 +13155,14 @@ select,
 .tts-guide-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 999999 !important;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .tts-guide-modal-overlay:not(.hidden) {
