@@ -69,10 +69,9 @@ describe("Profile identity skeleton lifecycle", () => {
     expect(utilsJs).not.toMatch(/clearBootInlineSkeletons\(\)\s*\{[^}]*restoreInlineSkeleton\("#profile-summary-name"\)/s);
   });
 
-  it("shows skeletons during profile-tab force sync", () => {
-    expect(appJs).toContain("profileIdentityLoading = true");
-    expect(appJs).toContain("applyProfileIdentitySkeletons");
-    expect(appJs).toContain("profileIdentityLoading = false");
+  it("renders profile view directly without auto-syncing on tab switch", () => {
+    expect(appJs).toContain('tabId === "profile-view"');
+    expect(appJs).not.toContain("await db.syncNlcSessionWithSupabase(true)");
   });
 
   it("exposes approved empty name copy after sync", () => {

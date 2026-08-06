@@ -486,21 +486,6 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
     } else if (tabId === "profile-view") {
       const mod = await loadModule('profile', './modules/profile.js?v=' + buildVersion);
-      // syncNlcSessionWithSupabase is optional; render profile regardless of outcome
-      if (typeof auth !== "undefined" && auth.isLoggedIn() &&
-          typeof db !== "undefined" && typeof db.syncNlcSessionWithSupabase === "function") {
-        state.profileIdentityLoading = true;
-        if (typeof window.applyProfileIdentitySkeletons === "function") {
-          window.applyProfileIdentitySkeletons();
-        }
-        try {
-          await db.syncNlcSessionWithSupabase(true);
-        } catch (err) {
-          console.warn("Profile tab sync failed (non-fatal):", err);
-        } finally {
-          state.profileIdentityLoading = false;
-        }
-      }
       if (typeof window.syncActivePlanContext === 'function') {
         window.syncActivePlanContext();
       }
