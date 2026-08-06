@@ -1,14 +1,26 @@
-import { isLocalhostGoogleLoginAllowed, showToast, openTtsGuideModal, closeTtsGuideModal } from "./utils.js";
+import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 
 // Unconditional Global TTS Voice Package Guide Modal Handlers
 window.openTtsGuideModal = function () {
-  return openTtsGuideModal();
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  return showModal(modal, { display: "flex" });
 };
 
 window.closeTtsGuideModal = function () {
-  return closeTtsGuideModal();
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  return hideModal(modal);
 };
+
+export function openTtsGuideModal() {
+  return window.openTtsGuideModal();
+}
+
+export function closeTtsGuideModal() {
+  return window.closeTtsGuideModal();
+}
 
 function getMemberHubUrls() {
   if (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function") {
