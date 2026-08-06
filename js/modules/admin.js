@@ -825,8 +825,7 @@ function getManagementPlans() {
       }
     }
     const status = getManagementPlanStatus(plan);
-    const isStageOneBootstrap = getManagementPlanStageNo(plan) === 1;
-    if ((status === 'ongoing' || status === 'completed' || isStageOneBootstrap)
+    if ((status === 'ongoing' || status === 'completed')
       && !(typeof isPlanHidden === 'function' && isPlanHidden(plan) && !canManageHiddenPlans())) {
       result.push({ ...plan, managementStatus: status });
     }
@@ -895,12 +894,12 @@ export async function renderAdminPlanManagement() {
         plans.forEach(plan => select.options.add(new Option(plan.name || '未命名計畫', String(plan.globalPlanId || plan.id || plan.presetKey || plan.name))));
         const activeKeys = state.activePlan ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String) : [];
         const matchingOption = Array.from(select.options).find(option => activeKeys.includes(option.value));
-        const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1);
-        const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0];
+        const ongoingPlan = plans.find(plan => plan.managementStatus === 'ongoing');
+        const defaultPlan = (matchingOption ? plans.find(p => String(p.globalPlanId || p.id || p.presetKey || p.name) === matchingOption.value) : null) || ongoingPlan || plans[0];
         const defaultPlanKey = String(defaultPlan.globalPlanId || defaultPlan.id || defaultPlan.presetKey || defaultPlan.name);
         select.value = !managementPlanSelectionInitialized
           ? defaultPlanKey
-          : (matchingOption ? matchingOption.value : select.options[0].value);
+          : (matchingOption ? matchingOption.value : defaultPlanKey);
         managementPlanSelectionInitialized = true;
         select.onchange = () => selectManagementPlan(select.value);
         await selectManagementPlan(select.value);
