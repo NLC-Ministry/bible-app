@@ -78,3 +78,10 @@ export function closeTtsGuideModal() {
   modal.setAttribute("aria-hidden", "true");
   return true;
 }
+
+export function initSpeechPreferencesControls() {
+  if (typeof window.initSpeechPreferencesControls === "function") {
+    return window.initSpeechPreferencesControls();
+  }
+}
+
