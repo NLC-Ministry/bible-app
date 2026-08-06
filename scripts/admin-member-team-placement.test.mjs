@@ -29,9 +29,11 @@ describe("admin member team placement lookup tests", () => {
     expect(html).toContain('id="admin-user-directory-filter-unjoined-team"');
   });
 
-  it("verifies admin.js exports renderAdminTeamPlacementLookup function", () => {
-    const adminJs = readFileSync("js/modules/admin.js", "utf8");
-    expect(adminJs).toContain("export async function renderAdminTeamPlacementLookup");
-    expect(adminJs).toContain("window.renderAdminTeamPlacementLookup = renderAdminTeamPlacementLookup");
+  it("verifies db.js provides _getAdminMemberTeamPlacementsFallback for robust fallback data fetching", () => {
+    const dbJs = readFileSync("js/db.js", "utf8");
+    expect(dbJs).toContain("_getAdminMemberTeamPlacementsFallback(plan, planId)");
+    expect(dbJs).toContain('.from("profiles")');
+    expect(dbJs).toContain('.from("reading_team_members")');
+    expect(dbJs).toContain('.from("reading_teams")');
   });
 });

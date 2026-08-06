@@ -2542,18 +2542,99 @@ const db = {
     return this._getUnjoinedPlanMembersFallback(plan, planId);
   },
 
+  async _getAdminMemberTeamPlacementsFallback(plan, planId) {
+    try {
+      const client = this._client();
+      if (!client) throw new Error("Supabase client not initialized");
+
+      const { data: profiles, error: profilesError } = await client
+        .from("profiles")
+        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, is_demo")
+        .eq("is_active", true)
+        .eq("is_demo", false);
+
+      if (profilesError) throw profilesError;
+
+      let memberships = [];
+      if (planId) {
+        const { data: teamMembers, error: tmError } = await client
+          .from("reading_team_members")
+          .select("id, user_id, team_id, member_role, division, global_plan_id")
+          .eq("global_plan_id", planId);
+        if (!tmError && teamMembers) memberships = teamMembers;
+      }
+
+      const teamIds = Array.from(new Set(memberships.map(m => m.team_id).filter(Boolean)));
+      let teams = [];
+      if (teamIds.length > 0) {
+        const { data: teamRows, error: teamsError } = await client
+          .from("reading_teams")
+          .select("id, name")
+          .in("id", teamIds);
+        if (!teamsError && teamRows) teams = teamRows;
+      }
+
+      const teamMap = new Map(teams.map(t => [String(t.id), t]));
+      const memberCountMap = new Map();
+      memberships.forEach(m => {
+        const tid = String(m.team_id);
+        memberCountMap.set(tid, (memberCountMap.get(tid) || 0) + 1);
+      });
+      const membershipMap = new Map(memberships.map(m => [String(m.user_id), m]));
+
+      const currentUser = state.currentUser || {};
+      const overlap = (left, right) => {
+        const leftValues = String(left || "").split(",").map(value => value.trim()).filter(Boolean);
+        const rightValues = String(right || "").split(",").map(value => value.trim()).filter(Boolean);
+        return leftValues.some(value => rightValues.includes(value));
+      };
+      const withinScope = candidate => hasWholeChurchPlanScope(currentUser)
+        || (getUserRoleCode(currentUser) === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
+        || (getUserRoleCode(currentUser) === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone))
+        || (getUserRoleCode(currentUser) === "group_leader" && overlap(candidate.small_group, currentUser.managed_groups || currentUser.small_group));
+
+      const data = (profiles || [])
+        .filter(withinScope)
+        .map(candidate => {
+          const membership = membershipMap.get(String(candidate.id));
+          const team = membership ? teamMap.get(String(membership.team_id)) : null;
+          return {
+            profileId: candidate.id,
+            name: candidate.name || "",
+            email: candidate.email || "",
+            greatRegion: candidate.great_region || "",
+            pastoralZone: candidate.pastoral_zone || "",
+            smallGroup: candidate.small_group || "",
+            isJoined: Boolean(membership && team),
+            teamId: team ? team.id : null,
+            teamName: team ? team.name : null,
+            division: membership ? membership.division : null,
+            memberRole: membership ? membership.member_role : null,
+            memberCount: membership ? (memberCountMap.get(String(membership.team_id)) || 1) : 0
+          };
+        })
+        .sort((left, right) => [left.greatRegion, left.pastoralZone, left.smallGroup, left.name].join("|")
+          .localeCompare([right.greatRegion, right.pastoralZone, right.smallGroup, right.name].join("|"), "zh-Hant"));
+
+      return { success: true, data };
+    } catch (error) {
+      console.error("_getAdminMemberTeamPlacementsFallback error:", error);
+      return { success: false, data: [] };
+    }
+  },
+
   async getAdminMemberTeamPlacements(plan) {
     const planId = this._resolveManagementGlobalPlanId(plan);
     if (planId) {
       const result = await this._callReadingTeamRpc("get_admin_member_team_placements", {
         p_global_plan_id: planId
       });
-      if (result.success) {
-        return { success: true, data: result.data || [] };
+      if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+        return { success: true, data: result.data };
       }
-      console.warn("get_admin_member_team_placements unavailable", result.error || result.message);
+      console.warn("get_admin_member_team_placements unavailable or empty; using table query fallback", result.error || result.message);
     }
-    return { success: false, data: [] };
+    return this._getAdminMemberTeamPlacementsFallback(plan, planId);
   },
 
   async sendPlanJoinInvitation(plan, recipientId) {
