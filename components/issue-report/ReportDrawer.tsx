@@ -282,10 +282,10 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, def
               <div className="flex flex-col gap-3">
                 {myReports.map((report) => {
                   const statusMap: Record<string, { label: string; bg: string; text: string }> = {
-                    pending: { label: "處理中", bg: "rgba(234, 179, 8, 0.15)", text: "#b45309" },
-                    processing: { label: "處理中", bg: "rgba(59, 130, 246, 0.15)", text: "#1d4ed8" },
-                    resolved: { label: "已解決", bg: "rgba(34, 197, 94, 0.15)", text: "#15803d" },
-                    ignored: { label: "已存檔", bg: "rgba(148, 163, 184, 0.15)", text: "#475569" }
+                    pending: { label: "待處理", bg: "rgba(234, 179, 8, 0.25)", text: "#fde047" },
+                    processing: { label: "處理中", bg: "rgba(59, 130, 246, 0.25)", text: "#93c5fd" },
+                    resolved: { label: "已解決", bg: "rgba(34, 197, 94, 0.25)", text: "#86efac" },
+                    ignored: { label: "已存檔", bg: "rgba(148, 163, 184, 0.25)", text: "#cbd5e1" }
                   };
                   const st = statusMap[report.status] || statusMap.pending;
                   const replyText = report.metadata?.reply;

@@ -446,3 +446,44 @@
     width: 100%;
   }
 }
+
+/* Dark theme explicit contrast overrides for Plan Registration Statistics */
+[data-theme="dark"] .admin-registration-statistics__summary h4,
+[data-theme="dark"] .admin-registration-statistics__table-section h4,
+body.dark-theme .admin-registration-statistics__summary h4,
+body.dark-theme .admin-registration-statistics__table-section h4 {
+  color: #F8FAFC !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+}
+
+[data-theme="dark"] .admin-registration-statistics__summary-item span,
+body.dark-theme .admin-registration-statistics__summary-item span {
+  color: #CBD5E1 !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="dark"] .admin-registration-statistics__summary-item strong,
+body.dark-theme .admin-registration-statistics__summary-item strong {
+  color: #F8FAFC !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .admin-registration-statistics th,
+body.dark-theme .admin-registration-statistics th {
+  background: #1E293B !important;
+  color: #F1F5F9 !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #334155 !important;
+}
+
+[data-theme="dark"] .admin-registration-statistics td,
+body.dark-theme .admin-registration-statistics td {
+  color: #F8FAFC !important;
+}
+
+[data-theme="dark"] .admin-registration-statistics__summary-item,
+body.dark-theme .admin-registration-statistics__summary-item {
+  background: #0F172A !important;
+  border-color: #334155 !important;
+}
