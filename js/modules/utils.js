@@ -48,3 +48,33 @@ export function showToast(message, duration = 3000) {
     console.log(`[Toast Fallback] ${message}`);
   }
 }
+
+export function openTtsGuideModal() {
+  if (typeof window.openTtsGuideModal === "function") {
+    return window.openTtsGuideModal();
+  }
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  modal.style.opacity = "1";
+  modal.style.pointerEvents = "auto";
+  modal.style.visibility = "visible";
+  modal.setAttribute("aria-hidden", "false");
+  return true;
+}
+
+export function closeTtsGuideModal() {
+  if (typeof window.closeTtsGuideModal === "function") {
+    return window.closeTtsGuideModal();
+  }
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  modal.classList.add("hidden");
+  modal.style.display = "none";
+  modal.style.opacity = "0";
+  modal.style.pointerEvents = "none";
+  modal.style.visibility = "hidden";
+  modal.setAttribute("aria-hidden", "true");
+  return true;
+}
