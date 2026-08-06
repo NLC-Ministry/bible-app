@@ -1,4 +1,5 @@
-import { initSpeechPreferencesControls, isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
+import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
+
 
 import { showModal, hideModal } from "./modal-manager.mjs";
 
@@ -667,10 +668,14 @@ export function init() {
   }
 }
 
-// initSpeechPreferencesControls is imported from utils.js and re-exported below
-
+function initSpeechPreferencesControls() {
+  if (typeof window.initSpeechPreferencesControls === "function") {
+    return window.initSpeechPreferencesControls();
+  }
+}
 
 export { initSpeechPreferencesControls };
+
 
 window.renderProfileView = renderProfileView;
 window.paintProfileIdentityChrome = paintProfileIdentityChrome;
