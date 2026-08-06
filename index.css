@@ -13155,7 +13155,7 @@ select,
 .tts-guide-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 999999 !important;
+  z-index: 100000 !important;
   display: flex;
   align-items: center;
   justify-content: center;

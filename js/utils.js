@@ -2331,7 +2331,7 @@ export function openTtsGuideModal() {
     document.body.appendChild(modal);
   }
   modal.classList.remove("hidden");
-  modal.style.cssText = "display: flex !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; z-index: 999999 !important;";
+  modal.style.cssText = "display: flex !important; opacity: 1 !important; pointer-events: auto !important; visibility: visible !important; z-index: 100000 !important;";
   modal.setAttribute("aria-hidden", "false");
   return true;
 }
