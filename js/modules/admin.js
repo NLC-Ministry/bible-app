@@ -473,8 +473,8 @@ function exportAdminRegistrationStatistics() {
   URL.revokeObjectURL(url);
 }
 
-function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
-  const canvasEl = document.getElementById("admin-registration-daily-chapters-chart");
+function renderDailyChaptersReadTrendChart(canvasId, globalPlanId) {
+  const canvasEl = document.getElementById(canvasId);
   if (!canvasEl) return;
 
   const today = new Date();
@@ -483,8 +483,8 @@ function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
   const DAYS = 30;
 
   const logsByDate = {};
-  const selectedPlan = (state.globalPlans || []).find(p => String(p.id) === String(globalPlanId));
-  const planPresetKey = selectedPlan?.presetKey || selectedPlan?.preset_key;
+  const selectedPlan = (state.globalPlans || []).find(p => String(p.id) === String(globalPlanId) || String(p.presetKey) === String(globalPlanId));
+  const planPresetKey = selectedPlan?.presetKey || selectedPlan?.preset_key || globalPlanId;
 
   const logs = state.isSupabaseMode && state.allLogsCache
     ? state.allLogsCache
@@ -514,8 +514,9 @@ function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
     data.push(logsByDate[dStr] || 0);
   }
 
-  if (window._adminDailyChaptersChart) {
-    window._adminDailyChaptersChart.destroy();
+  if (!window._dailyChaptersCharts) window._dailyChaptersCharts = {};
+  if (window._dailyChaptersCharts[canvasId]) {
+    window._dailyChaptersCharts[canvasId].destroy();
   }
 
   const isDark = state.theme === 'dark' ||
@@ -530,7 +531,7 @@ function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
 
   const ctx = canvasEl.getContext('2d');
   if (typeof Chart !== 'undefined') {
-    window._adminDailyChaptersChart = new Chart(ctx, {
+    window._dailyChaptersCharts[canvasId] = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
@@ -630,7 +631,7 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
       </div>
     </section>`;
   exportButton.disabled = false;
-  renderAdminRegistrationDailyChaptersChart(globalPlanId);
+  renderDailyChaptersReadTrendChart("admin-registration-daily-chapters-chart", globalPlanId);
 }
 
 export async function renderAdminRegistrationStatistics() {
@@ -840,6 +841,7 @@ async function selectManagementPlan(planKey) {
     try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
     try { await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
     try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
+    try { renderDailyChaptersReadTrendChart("admin-plan-daily-chapters-chart", planKey); } catch (e) { console.warn("[Admin] renderDailyChaptersReadTrendChart error caught:", e); }
   } catch (err) {
     console.error("[AdminManagement] Error in selectManagementPlan:", err);
   }

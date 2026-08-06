@@ -1966,6 +1966,18 @@
           <section class="admin-management-section" aria-labelledby="admin-statistics-title">
             <h2 id="admin-statistics-title" class="admin-management-section__title">各種統計</h2>
             <div id="admin-plan-statistics-slot"></div>
+            <div class="glass-card-upgrade mx-0 my-3 p-4 rounded-xl border border-slate-800 bg-slate-900/90 shadow-xl" id="admin-plan-daily-chapters-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <h3 class="card-title text-md font-bold text-slate-100 flex items-center gap-2" style="margin-bottom:0; font-size: 0.95rem; font-weight: 500;">
+                  <span class="nlc-icon nlc-icon--sm text-cyan-400" data-icon="trendTwo" aria-hidden="true"></span>
+                  <span>每天閱讀章數趨勢（近30天）</span>
+                </h3>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">總章數</span>
+              </div>
+              <div style="position: relative; height: 220px; width: 100%;">
+                <canvas id="admin-plan-daily-chapters-chart"></canvas>
+              </div>
+            </div>
           </section>
         </div>
       </section>
