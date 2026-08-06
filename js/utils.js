@@ -2242,4 +2242,47 @@ window.getTaiwanTodayISO = getTaiwanTodayISO;
 window.formatTaiwanDateTime = formatTaiwanDateTime;
 window.toTaiwanISOString = toTaiwanISOString;
 
+// Unconditional Global TTS Voice Package Guide Modal Handlers
+export function openTtsGuideModal() {
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+  modal.style.opacity = "1";
+  modal.style.pointerEvents = "auto";
+  modal.style.visibility = "visible";
+  modal.setAttribute("aria-hidden", "false");
+  return true;
+}
+
+export function closeTtsGuideModal() {
+  const modal = document.getElementById("tts-guide-modal");
+  if (!modal) return false;
+  modal.classList.add("hidden");
+  modal.style.display = "none";
+  modal.style.opacity = "0";
+  modal.style.pointerEvents = "none";
+  modal.style.visibility = "hidden";
+  modal.setAttribute("aria-hidden", "true");
+  return true;
+}
+
+window.openTtsGuideModal = openTtsGuideModal;
+window.closeTtsGuideModal = closeTtsGuideModal;
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest ? e.target.closest("#btn-show-tts-guide, [data-action='open-tts-guide']") : null;
+    if (btn) {
+      e.preventDefault();
+      openTtsGuideModal();
+    }
+    const closeBtn = e.target && e.target.closest ? e.target.closest("#btn-close-tts-guide, #btn-confirm-tts-guide, [data-action='close-tts-guide']") : null;
+    if (closeBtn) {
+      e.preventDefault();
+      closeTtsGuideModal();
+    }
+  });
+}
+
 

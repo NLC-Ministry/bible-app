@@ -1,13 +1,13 @@
-import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
+import { isLocalhostGoogleLoginAllowed, showToast, openTtsGuideModal, closeTtsGuideModal } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 
 // Unconditional Global TTS Voice Package Guide Modal Handlers
 window.openTtsGuideModal = function () {
-  return showModal("tts-guide-modal");
+  return openTtsGuideModal();
 };
 
 window.closeTtsGuideModal = function () {
-  return hideModal("tts-guide-modal");
+  return closeTtsGuideModal();
 };
 
 function getMemberHubUrls() {
