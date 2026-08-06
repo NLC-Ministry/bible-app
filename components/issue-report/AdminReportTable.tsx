@@ -432,7 +432,7 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                     value={replyStatus}
                     onChange={(e) => setReplyStatus(e.target.value)}
                     disabled={isSavingReply}
-                    className="flex h-9 w-full rounded-lg border border-slate-700 bg-slate-950 text-slate-100 px-3 py-1.5 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50 font-bold"
+                    className="flex h-11 w-full rounded-lg border border-slate-700 bg-slate-950 text-slate-100 px-3 py-2 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50 font-bold"
                   >
                     <option value="pending" className="bg-slate-900 text-amber-300 font-bold">待處理 (Pending)</option>
                     <option value="processing" className="bg-slate-900 text-sky-300 font-bold">處理中 (Processing)</option>
@@ -458,7 +458,7 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                     disabled={isSavingReply}
                     rows={4}
                     placeholder="請輸入回覆使用者的訊息..."
-                    className="flex w-full rounded-lg border border-slate-700 bg-slate-950 text-slate-100 px-3 py-2 text-xs shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full rounded-lg border border-slate-700 bg-slate-950 text-slate-100 px-3 py-2 text-base font-normal shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
               </div>

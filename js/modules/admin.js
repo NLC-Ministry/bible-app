@@ -723,9 +723,15 @@ function isSystemAdministrator() {
   return role === 'admin';
 }
 
+let currentActiveAdminPanel = null;
+
 function setAdminPrimaryPanel(panelName) {
   const isAdmin = isSystemAdministrator();
   const requested = panelName === 'system' && isAdmin ? 'system' : 'plans';
+  currentActiveAdminPanel = requested;
+  try {
+    sessionStorage.setItem('selected_admin_panel', requested);
+  } catch (_e) {}
   const tabs = document.getElementById('admin-primary-tabs');
   const systemPanel = document.getElementById('admin-system-panel');
   const plansPanel = document.getElementById('admin-plans-panel');
@@ -870,7 +876,11 @@ export async function renderAdminPlanManagement() {
       }
       return;
     }
-    setAdminPrimaryPanel('plans');
+    let savedPanel = 'plans';
+    try {
+      savedPanel = sessionStorage.getItem('selected_admin_panel') || currentActiveAdminPanel || 'plans';
+    } catch (_e) {}
+    setAdminPrimaryPanel(savedPanel);
     mountPlanManagementSections();
 
     const select = document.getElementById('admin-management-plan-select');
