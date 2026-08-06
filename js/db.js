@@ -2542,6 +2542,20 @@ const db = {
     return this._getUnjoinedPlanMembersFallback(plan, planId);
   },
 
+  async getAdminMemberTeamPlacements(plan) {
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (planId) {
+      const result = await this._callReadingTeamRpc("get_admin_member_team_placements", {
+        p_global_plan_id: planId
+      });
+      if (result.success) {
+        return { success: true, data: result.data || [] };
+      }
+      console.warn("get_admin_member_team_placements unavailable", result.error || result.message);
+    }
+    return { success: false, data: [] };
+  },
+
   async sendPlanJoinInvitation(plan, recipientId) {
     const planId = this._resolveManagementGlobalPlanId(plan);
     if (planId) {

@@ -93,6 +93,7 @@ function renderAdminUserDirectoryList(query = "") {
   if (!list || !count) return;
   const incompleteOnly = document.getElementById("admin-user-directory-filter-incomplete")?.checked === true;
   const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
+  const unjoinedTeamOnly = document.getElementById("admin-user-directory-filter-unjoined-team")?.checked === true;
   const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
   const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者"]);
@@ -104,14 +105,15 @@ function renderAdminUserDirectoryList(query = "") {
     const eligibleForStageOneInvitation = profile.is_active === true
       && String(profile.id || "") !== currentProfileId;
     if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
+    if (unjoinedTeamOnly && profile.is_joined_team === true) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
-    return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group]
+    return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group, profile.team_name]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase("zh-Hant")
       .includes(normalizedQuery);
   });
-  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly
+  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
   if (filteredProfiles.length === 0) {
@@ -136,6 +138,9 @@ function renderAdminUserDirectoryList(query = "") {
       ? "全教會"
       : (defaultScopes.join("、") || "僅本人");
     const statusClass = profile.is_active === false ? "disabled" : "active";
+    const teamText = profile.team_name
+      ? `${profile.member_role === "leader" ? "👑 [隊長] " : ""}${escapeHTML(profile.team_name)}`
+      : "未加入團隊 (個人速讀中)";
 
     return `
       <details class="admin-user-directory__card">
@@ -154,6 +159,7 @@ function renderAdminUserDirectoryList(query = "") {
             <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
             <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
             <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
+            <div><dt>團隊組隊狀態</dt><dd>${teamText}</dd></div>
             <div><dt>第一階段計畫</dt><dd>${profile.joined_stage_one === true ? "已加入" : "未加入"}</dd></div>
             <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
           </dl>
@@ -169,6 +175,7 @@ export async function renderAdminUserDirectory() {
   const count = document.getElementById("admin-user-directory-count");
   const incompleteFilter = document.getElementById("admin-user-directory-filter-incomplete");
   const stageOneFilter = document.getElementById("admin-user-directory-filter-stage-one");
+  const unjoinedTeamFilter = document.getElementById("admin-user-directory-filter-unjoined-team");
   if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter) return;
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   column.classList.toggle("hidden", !isAdmin);
@@ -176,6 +183,7 @@ export async function renderAdminUserDirectory() {
   search.disabled = true;
   incompleteFilter.disabled = true;
   stageOneFilter.disabled = true;
+  if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = true;
   count.textContent = "讀取中…";
   list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
   const result = await db.fetchAdminUserProfiles();
@@ -188,9 +196,11 @@ export async function renderAdminUserDirectory() {
   search.disabled = false;
   incompleteFilter.disabled = false;
   stageOneFilter.disabled = false;
+  if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = false;
   search.oninput = () => renderAdminUserDirectoryList(search.value);
   incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);
+  if (unjoinedTeamFilter) unjoinedTeamFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   renderAdminUserDirectoryList(search.value);
 }
 
@@ -840,6 +850,7 @@ async function selectManagementPlan(planKey) {
       try { await window.renderPlanMembersView(); } catch (e) { console.warn("[Admin] renderPlanMembersView error caught:", e); }
     }
     try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
+    try { await renderAdminTeamPlacementLookup(plan); } catch (e) { console.warn("[Admin] renderAdminTeamPlacementLookup error caught:", e); }
     try { await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
     try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
     try { renderDailyChaptersReadTrendChart("admin-plan-daily-chapters-chart", planKey); } catch (e) { console.warn("[Admin] renderDailyChaptersReadTrendChart error caught:", e); }
@@ -1319,7 +1330,113 @@ export function initAdminTeamRegistration() {
   }
 }
 
+let adminTeamPlacementsData = [];
+let adminTeamPlacementFilterTab = "all";
+
+export async function renderAdminTeamPlacementLookup(selectedPlan) {
+  const contentEl = document.getElementById("admin-team-placements-content");
+  const searchInput = document.getElementById("admin-team-placement-search");
+  const filterTabBtns = document.querySelectorAll("[data-team-filter]");
+  if (!contentEl) return;
+
+  if (filterTabBtns.length > 0) {
+    filterTabBtns.forEach(btn => {
+      if (!btn.dataset.placementBound) {
+        btn.dataset.placementBound = "true";
+        btn.addEventListener("click", () => {
+          adminTeamPlacementFilterTab = btn.dataset.teamFilter || "all";
+          filterTabBtns.forEach(b => b.classList.toggle("active", b === btn));
+          renderAdminTeamPlacementList();
+        });
+      }
+    });
+  }
+
+  if (searchInput && !searchInput.dataset.placementBound) {
+    searchInput.dataset.placementBound = "true";
+    searchInput.addEventListener("input", () => {
+      renderAdminTeamPlacementList();
+    });
+  }
+
+  contentEl.innerHTML = '<div class="admin-user-directory__empty">正在載入團隊組隊狀態…</div>';
+
+  const res = await db.getAdminMemberTeamPlacements(selectedPlan);
+  if (!res.success) {
+    contentEl.innerHTML = '<div class="admin-user-directory__empty">無法取得成員組隊狀態。</div>';
+    return;
+  }
+
+  adminTeamPlacementsData = res.data || [];
+  renderAdminTeamPlacementList();
+}
+
+function renderAdminTeamPlacementList() {
+  const contentEl = document.getElementById("admin-team-placements-content");
+  const searchInput = document.getElementById("admin-team-placement-search");
+  if (!contentEl) return;
+
+  const query = (searchInput?.value || "").trim().toLocaleLowerCase("zh-Hant");
+
+  const filtered = adminTeamPlacementsData.filter(item => {
+    if (adminTeamPlacementFilterTab === "joined" && !item.isJoined) return false;
+    if (adminTeamPlacementFilterTab === "unjoined" && item.isJoined) return false;
+
+    if (!query) return true;
+    const text = [
+      item.name,
+      item.email,
+      item.pastoralZone,
+      item.smallGroup,
+      item.teamName
+    ].filter(Boolean).join(" ").toLocaleLowerCase("zh-Hant");
+    return text.includes(query);
+  });
+
+  if (filtered.length === 0) {
+    contentEl.innerHTML = '<div class="admin-user-directory__empty">沒有符合條件的組隊資料。</div>';
+    return;
+  }
+
+  const html = `
+    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+      共顯示 ${filtered.length} / ${adminTeamPlacementsData.length} 位成員
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+      ${filtered.map(item => {
+        const name = escapeHTML(item.name || "未命名");
+        const zone = escapeHTML([item.pastoralZone, item.smallGroup].filter(Boolean).join("・") || "未設定歸屬");
+        const isJoined = item.isJoined === true;
+        const statusBadge = isJoined
+          ? `<span class="admin-user-directory__status admin-user-directory__status--active">🟢 已組隊</span>`
+          : `<span class="admin-user-directory__status admin-user-directory__status--inactive">🟡 未組隊 (個人速讀)</span>`;
+        const roleLabel = item.memberRole === "leader" ? "👑 隊長" : (item.memberRole ? "成員" : "-");
+        const teamName = isJoined ? escapeHTML(item.teamName || "未命名隊伍") : "無 (個人速讀中)";
+        const divisionText = item.division ? `${item.division}人隊` : "";
+
+        return `
+          <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 10px; padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.35rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <strong>${name} <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-secondary);">(${zone})</span></strong>
+              ${statusBadge}
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-primary); display: flex; gap: 1.2rem; flex-wrap: wrap;">
+              <span><strong>所屬隊伍:</strong> ${teamName} ${divisionText ? `(${divisionText})` : ''}</span>
+              ${isJoined ? `<span><strong>隊內角色:</strong> ${roleLabel}</span>` : ''}
+              ${isJoined && item.memberCount ? `<span><strong>目前隊內人數:</strong> ${item.memberCount}人</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  contentEl.innerHTML = html;
+  if (typeof hydrateIcons === "function") hydrateIcons(contentEl);
+}
+
 window.renderAdminUnjoinedPlanMembers = renderAdminUnjoinedPlanMembers;
+window.renderAdminTeamPlacementLookup = renderAdminTeamPlacementLookup;
 window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
 window.refreshAdminTeamRegistrationFilters = refreshAdminTeamRegistrationFilters;
 window.initAdminTeamRegistration = initAdminTeamRegistration;

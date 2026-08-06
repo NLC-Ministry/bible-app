@@ -1792,6 +1792,10 @@
                   <input type="checkbox" id="admin-user-directory-filter-stage-one">
                   <span>未加入第一階段計畫</span>
                 </label>
+                <label>
+                  <input type="checkbox" id="admin-user-directory-filter-unjoined-team">
+                  <span>未加入團隊（個人速讀中）</span>
+                </label>
               </fieldset>
               <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入使用者資料…</div>
@@ -1863,6 +1867,35 @@
           <section class="admin-management-section" aria-labelledby="admin-participants-title">
             <h2 id="admin-participants-title" class="admin-management-section__title">參與者總覽</h2>
             <div id="admin-plan-participants-slot"></div>
+          </section>
+
+          <section class="admin-management-section" id="admin-team-placements-card-wrap" aria-labelledby="admin-team-placements-title">
+            <details class="glass-card admin-team-status-disclosure" id="admin-team-placements-disclosure" open>
+              <summary id="admin-team-placements-toggle" aria-controls="admin-team-placements-panel">
+                <span class="card-title" id="admin-team-placements-title">
+                  <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                  成員組隊與團隊狀態查詢
+                </span>
+                <span class="admin-team-status-summary-action">
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                </span>
+              </summary>
+              <div id="admin-team-placements-panel" style="padding-top: 0.75rem;">
+                <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                  <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區、小組或隊伍名稱..." autocomplete="off">
+                  <div class="admin-team-placement-tabs" role="tablist" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="speech-gender-btn active" data-team-filter="all">全部成員</button>
+                    <button type="button" class="speech-gender-btn" data-team-filter="joined">🟢 已組隊成員</button>
+                    <button type="button" class="speech-gender-btn" data-team-filter="unjoined">🟡 未組隊 (個人速讀)</button>
+                  </div>
+                </div>
+                <div id="admin-team-placements-content" aria-live="polite">
+                  <div class="admin-user-directory__empty">讀取團隊組隊狀態中…</div>
+                </div>
+              </div>
+            </details>
           </section>
 
           <section class="admin-management-section" id="admin-team-status-card-wrap"
