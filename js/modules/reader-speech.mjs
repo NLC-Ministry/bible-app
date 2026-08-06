@@ -78,3 +78,10 @@ export function getReaderSpeechRate(targetLang = "zh-TW", customRate = null) {
   const lang = String(targetLang || "").toLowerCase();
   return lang.startsWith("en") ? 0.88 : 0.82;
 }
+
+if (typeof window !== "undefined") {
+  window.selectPreferredVoice = selectPreferredVoice;
+  window.selectPreferredChineseVoice = selectPreferredChineseVoice;
+  window.getReaderSpeechRate = getReaderSpeechRate;
+}
+

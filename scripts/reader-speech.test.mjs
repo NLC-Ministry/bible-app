@@ -65,11 +65,24 @@ describe("reader speech controls", () => {
 
   it("integrates TTS speech settings into the reader typography settings sheet", () => {
     const html = readFileSync("index.html", "utf8");
+    const utils = readFileSync("js/utils.js", "utf8");
     expect(html).toContain('id="typography-settings-sheet"');
     expect(html).toContain('閱讀與朗讀設定');
     expect(html).toContain('id="speech-rate-slider"');
     expect(html).toContain('id="speech-voice-select"');
     expect(html).toContain('id="btn-preview-speech"');
     expect(html).toContain('id="btn-show-tts-guide"');
+    expect(utils).toContain('export function initSpeechPreferencesControls()');
+    expect(utils).toContain('window.initSpeechPreferencesControls = initSpeechPreferencesControls');
+  });
+
+  it("places preview button on dedicated row and applies design system button styles", () => {
+    const html = readFileSync("index.html", "utf8");
+    expect(html).toContain('class="speech-preview-btn"');
+    expect(html).toContain('class="speech-gender-btn active"');
+    expect(css).toContain('.speech-gender-btn.active');
+    expect(css).toContain('.speech-preview-btn');
+    expect(css).toContain('.speech-voice-select');
   });
 });
+

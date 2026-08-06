@@ -2080,31 +2080,29 @@
             </div>
           </div>
 
-          <!-- 聲線偏好（橫排 3 按鈕，更緊湊） -->
-          <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+          <!-- 聲線偏好（橫排 3 按鈕） -->
+          <div style="display: flex; flex-direction: column; gap: 0.35rem;">
             <label style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;" role="radiogroup" aria-label="聲線偏好">
-              <button type="button" class="btn btn--neutral btn--sm speech-gender-btn active" data-speech-gender="auto"
-                style="font-size: 0.75rem; padding: 0.35rem 0.25rem; min-height: 36px;">系統預設</button>
-              <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="female"
-                style="font-size: 0.75rem; padding: 0.35rem 0.25rem; min-height: 36px;">溫柔女聲</button>
-              <button type="button" class="btn btn--neutral btn--sm speech-gender-btn" data-speech-gender="male"
-                style="font-size: 0.75rem; padding: 0.35rem 0.25rem; min-height: 36px;">穩重男聲</button>
+              <button type="button" class="speech-gender-btn active" data-speech-gender="auto">系統預設</button>
+              <button type="button" class="speech-gender-btn" data-speech-gender="female">溫柔女聲</button>
+              <button type="button" class="speech-gender-btn" data-speech-gender="male">穩重男聲</button>
             </div>
           </div>
 
-          <!-- 發音人選單 + 試聽按鈕（同一行） -->
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <select id="speech-voice-select"
-              style="flex: 1; padding: 0.45rem 0.5rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 1rem; min-width: 0;">
+          <!-- 發音人選單 (單獨一行) -->
+          <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+            <label for="speech-voice-select" style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">朗讀發音人</label>
+            <select id="speech-voice-select" class="speech-voice-select">
               <option value="">載入語音中...</option>
             </select>
-            <button type="button" id="btn-preview-speech"
-              style="flex-shrink: 0; display: flex; align-items: center; gap: 0.3rem; padding: 0.45rem 0.75rem; border-radius: 8px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem; cursor: pointer; white-space: nowrap;">
-              <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
-              <span id="btn-preview-text">試聽</span>
-            </button>
           </div>
+
+          <!-- 試聽按鈕（獨立下一排，不會被擠住） -->
+          <button type="button" id="btn-preview-speech" class="speech-preview-btn">
+            <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
+            <span id="btn-preview-text">播放試聽語音</span>
+          </button>
 
           <!-- 語音包安裝指引 + 自動儲存提示（合一行） -->
           <div style="display: flex; align-items: center; justify-content: space-between;">

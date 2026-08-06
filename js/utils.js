@@ -2303,4 +2303,327 @@ export function openTypographySheet() {
 
 window.openTypographySheet = openTypographySheet;
 
+let previewSessionId = 0;
+
+export function initSpeechPreferencesControls() {
+  const rateSlider = document.getElementById("speech-rate-slider");
+  const rateLabel = document.getElementById("speech-rate-val");
+  const voiceSelect = document.getElementById("speech-voice-select");
+  const btnPreviewSpeech = document.getElementById("btn-preview-speech");
+  const genderBtns = document.querySelectorAll("[data-speech-gender]");
+
+  if (!rateSlider && !voiceSelect && !btnPreviewSpeech) return;
+
+  if (typeof state !== "undefined") {
+    state.speechSettings = state.speechSettings || {
+      rate: 1.0,
+      gender: "auto",
+      voiceURI: ""
+    };
+  }
+
+  const getSpeechSetting = (key, fallback) => {
+    return (typeof state !== "undefined" && state.speechSettings && state.speechSettings[key] !== undefined)
+      ? state.speechSettings[key]
+      : fallback;
+  };
+
+  const setSpeechSetting = (key, value) => {
+    if (typeof state !== "undefined") {
+      state.speechSettings = state.speechSettings || { rate: 1.0, gender: "auto", voiceURI: "" };
+      state.speechSettings[key] = value;
+    }
+    saveSpeechSettings();
+  };
+
+  function saveSpeechSettings() {
+    try {
+      if (typeof state !== "undefined" && state.speechSettings) {
+        localStorage.setItem("nlc_speech_settings", JSON.stringify(state.speechSettings));
+      }
+    } catch (_e) {}
+  }
+
+  function updateRateLabel(val) {
+    if (!rateLabel) return;
+    const num = parseFloat(val);
+    let desc = "標準";
+    if (num < 0.85) desc = "沉靜慢速";
+    else if (num > 1.35) desc = "疾速";
+    else if (num > 1.1) desc = "流暢快速";
+    rateLabel.textContent = `${num.toFixed(2)}x (${desc})`;
+  }
+
+  // 1. Rate Slider
+  if (rateSlider && rateLabel) {
+    rateSlider.value = getSpeechSetting("rate", 1.0);
+    updateRateLabel(rateSlider.value);
+    if (!rateSlider.dataset.bound) {
+      rateSlider.dataset.bound = "true";
+      rateSlider.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        setSpeechSetting("rate", val);
+        updateRateLabel(val);
+      });
+    }
+  }
+
+  // 2. Gender Preference Toggle
+  function updateGenderBtnsUI() {
+    const currentGender = getSpeechSetting("gender", "auto");
+    genderBtns.forEach(btn => {
+      const isSelected = (btn.dataset.speechGender === currentGender);
+      btn.classList.toggle("active", isSelected);
+      btn.setAttribute("aria-checked", isSelected ? "true" : "false");
+    });
+  }
+
+  updateGenderBtnsUI();
+
+  if (genderBtns && genderBtns.length > 0) {
+    genderBtns.forEach(btn => {
+      if (!btn.dataset.bound) {
+        btn.dataset.bound = "true";
+        btn.addEventListener("click", () => {
+          setSpeechSetting("gender", btn.dataset.speechGender || "auto");
+          updateGenderBtnsUI();
+          populateVoices(false);
+        });
+      }
+    });
+  }
+
+  // 3. Populate Voices
+  function populateVoices(autoPreviewAfterPopulate = false) {
+    if (!voiceSelect || typeof window.speechSynthesis === "undefined") return;
+    const voices = window.speechSynthesis.getVoices() || [];
+    
+    // Strict Chinese Language Filter: zh / Chinese, no English
+    const chineseVoices = voices.filter(v => {
+      const lang = String(v.lang || "").toLowerCase();
+      const name = String(v.name || "").toLowerCase();
+      if (lang.startsWith("en") || /english|uk english|us english|united states|united kingdom/.test(name)) {
+        return false;
+      }
+      return lang.startsWith("zh") || lang.includes("hant") || lang.includes("cmn") || name.includes("國語") || name.includes("中文") || name.includes("taiwan");
+    });
+
+    const currentGender = getSpeechSetting("gender", "auto");
+    const currentURI = getSpeechSetting("voiceURI", "");
+
+    const isFemaleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return /female|hsiaochen|hsiao-chen|mei-jia|meijia|ting-ting|tingting|sin-ji|sinji|yating|hanhan|szuchin|xiaoxiao|xiaoyi/.test(name);
+    };
+
+    const isMaleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return /yunjhe|yun-jhe|yun-lin|yunlin|yunfeng|yunhao|kangkang|male/.test(name);
+    };
+
+    const isGoogleVoice = (v) => {
+      const name = String(v.name || "").toLowerCase();
+      return name.includes("google") && (name.includes("國語") || name.includes("taiwan") || name.includes("zh-tw"));
+    };
+
+    let filteredVoices = [];
+    if (currentGender === "female") {
+      filteredVoices = chineseVoices.filter(v => isFemaleVoice(v));
+      if (filteredVoices.length === 0) filteredVoices = chineseVoices;
+    } else if (currentGender === "male") {
+      filteredVoices = chineseVoices.filter(v => isMaleVoice(v));
+    } else {
+      filteredVoices = chineseVoices.filter(v => isGoogleVoice(v) || v.default);
+      if (filteredVoices.length === 0) {
+        filteredVoices = chineseVoices.slice(0, 1);
+      }
+    }
+
+    const formatTaiwanVoiceName = (v) => {
+      const name = String(v.name || "");
+      const lower = name.toLowerCase();
+      if (lower.includes("mei-jia") || lower.includes("meijia")) return "美佳 (台灣女聲)";
+      if (lower.includes("hsiaochen") || lower.includes("hsiao-chen")) return "曉臻 (台灣女聲)";
+      if (lower.includes("ting-ting") || lower.includes("tingting")) return "婷婷 (台灣女聲)";
+      if (lower.includes("sin-ji") || lower.includes("sinji")) return "心怡 (台灣女聲)";
+      if (lower.includes("yating")) return "雅婷 (台灣女聲)";
+      if (lower.includes("hanhan")) return "涵涵 (台灣女聲)";
+      if (lower.includes("yunjhe") || lower.includes("yun-jhe")) return "允哲 (台灣男聲)";
+      if (lower.includes("yun-lin") || lower.includes("yunlin")) return "雲林 (台灣男聲)";
+      if (lower.includes("google")) return "Google 國語 (台灣)";
+      
+      let tag = " (台灣)";
+      if (isFemaleVoice(v)) tag = " (台灣女聲)";
+      else if (isMaleVoice(v)) tag = " (台灣男聲)";
+      return `${name}${tag}`;
+    };
+
+    voiceSelect.innerHTML = "";
+    if (filteredVoices.length === 0) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = currentGender === "female" ? "系統無可用中文女聲" : (currentGender === "male" ? "系統無可用中文男聲" : "Google 國語 (台灣)");
+      voiceSelect.appendChild(opt);
+      return;
+    }
+
+    let selectedIndex = 0;
+
+    filteredVoices.forEach((v, idx) => {
+      const opt = document.createElement("option");
+      opt.value = v.voiceURI || v.name;
+      opt.textContent = formatTaiwanVoiceName(v);
+
+      if (currentGender === "auto" && isGoogleVoice(v)) {
+        opt.selected = true;
+        selectedIndex = idx;
+      } else if (currentGender !== "auto" && currentURI && (v.voiceURI === currentURI || v.name === currentURI)) {
+        opt.selected = true;
+        selectedIndex = idx;
+      }
+      voiceSelect.appendChild(opt);
+    });
+
+    if (filteredVoices[selectedIndex]) {
+      voiceSelect.selectedIndex = selectedIndex;
+      voiceSelect.value = filteredVoices[selectedIndex].voiceURI || filteredVoices[selectedIndex].name;
+      setSpeechSetting("voiceURI", voiceSelect.value);
+    }
+
+    if (autoPreviewAfterPopulate) {
+      playPreviewSpeech();
+    }
+  }
+
+  if (typeof window.speechSynthesis !== "undefined") {
+    populateVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = () => populateVoices();
+    }
+  }
+
+  if (voiceSelect && !voiceSelect.dataset.bound) {
+    voiceSelect.dataset.bound = "true";
+    voiceSelect.addEventListener("change", (e) => {
+      setSpeechSetting("voiceURI", e.target.value);
+      playPreviewSpeech();
+    });
+  }
+
+  // 4. Preview Button Toggle
+  let isPreviewSpeaking = false;
+
+  if (btnPreviewSpeech && !btnPreviewSpeech.dataset.bound) {
+    btnPreviewSpeech.dataset.bound = "true";
+    btnPreviewSpeech.addEventListener("click", () => {
+      if (isPreviewSpeaking || (window.speechSynthesis && window.speechSynthesis.speaking)) {
+        stopPreviewSpeech();
+      } else {
+        playPreviewSpeech();
+      }
+    });
+  }
+
+  function stopPreviewSpeech() {
+    previewSessionId++;
+    if (typeof window.speechSynthesis !== "undefined") {
+      try { window.speechSynthesis.cancel(); } catch (_e) {}
+    }
+    isPreviewSpeaking = false;
+    updatePreviewBtnUI(false);
+  }
+
+  function updatePreviewBtnUI(speaking) {
+    if (!btnPreviewSpeech) return;
+    const btnText = document.getElementById("btn-preview-text");
+    const btnIcon = document.getElementById("btn-preview-icon");
+
+    if (speaking) {
+      if (btnText) btnText.textContent = "暫停試聽";
+      if (btnIcon) btnIcon.setAttribute("data-icon", "pause");
+      btnPreviewSpeech.classList.add("shadcn-speech-btn--playing");
+    } else {
+      if (btnText) btnText.textContent = "播放試聽語音";
+      if (btnIcon) btnIcon.setAttribute("data-icon", "volume2");
+      btnPreviewSpeech.classList.remove("shadcn-speech-btn--playing");
+    }
+    if (typeof window.hydrateIcons === "function") {
+      window.hydrateIcons();
+    }
+  }
+
+  function playPreviewSpeech() {
+    if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
+      if (typeof showToast === "function") showToast("您的瀏覽器不支援語音播放", "warning");
+      return;
+    }
+
+    stopPreviewSpeech();
+    const currentSession = ++previewSessionId;
+
+    const text = "神愛世人，甚至將祂的獨生子賜給他們，叫一切信祂的不致滅亡，反得永生。";
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    const voices = window.speechSynthesis.getVoices() || [];
+    const selectedURI = getSpeechSetting("voiceURI", "");
+    const gender = getSpeechSetting("gender", "auto");
+
+    let targetVoice = null;
+    if (selectedURI) {
+      targetVoice = voices.find(v => v.voiceURI === selectedURI || v.name === selectedURI);
+    }
+    if (!targetVoice && typeof window.selectPreferredChineseVoice === "function") {
+      targetVoice = window.selectPreferredChineseVoice(voices, { preferredGender: gender });
+    }
+    if (targetVoice) {
+      utterance.voice = targetVoice;
+      utterance.lang = targetVoice.lang || "zh-TW";
+    } else {
+      utterance.lang = "zh-TW";
+    }
+
+    utterance.rate = getSpeechSetting("rate", 1.0);
+
+    if (gender === "female") {
+      utterance.pitch = 1.15;
+    } else if (gender === "male") {
+      utterance.pitch = 0.85;
+    } else {
+      utterance.pitch = 1.0;
+    }
+
+    utterance.onstart = () => {
+      if (currentSession !== previewSessionId) return;
+      isPreviewSpeaking = true;
+      updatePreviewBtnUI(true);
+    };
+
+    utterance.onend = () => {
+      if (currentSession !== previewSessionId) return;
+      isPreviewSpeaking = false;
+      updatePreviewBtnUI(false);
+    };
+
+    utterance.onerror = () => {
+      if (currentSession !== previewSessionId) return;
+      isPreviewSpeaking = false;
+      updatePreviewBtnUI(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+    if (typeof showToast === "function") showToast(`正在試聽：${targetVoice ? targetVoice.name : "Google 國語 (台灣)"}`, "info");
+  }
+}
+
+window.initSpeechPreferencesControls = initSpeechPreferencesControls;
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => initSpeechPreferencesControls());
+  } else {
+    initSpeechPreferencesControls();
+  }
+}
+
+
 

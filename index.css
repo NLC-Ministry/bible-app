@@ -13209,3 +13209,88 @@ body.dark-theme .glass-card-upgrade,
 body.dark .glass-card-upgrade {
   color: #F8FAFC !important;
 }
+
+/* ─── TTS Speech Settings Modal Design System Styles ─── */
+.speech-gender-btn {
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.4rem 0.25rem;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border-card);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.speech-gender-btn:hover {
+  border-color: color-mix(in srgb, var(--color-brand, #04A9D2) 40%, var(--border-card));
+  color: var(--text-primary);
+}
+
+.speech-gender-btn.active,
+.speech-gender-btn[aria-checked="true"] {
+  border-color: var(--color-brand, #04A9D2) !important;
+  background: var(--color-brand, #04A9D2) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(4, 169, 210, 0.3) !important;
+}
+
+.speech-voice-select {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-card);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  min-height: 38px;
+  cursor: pointer;
+  transition: border-color 0.18s ease;
+}
+
+.speech-voice-select:focus,
+.speech-voice-select:hover {
+  border-color: var(--color-brand, #04A9D2);
+}
+
+.speech-preview-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1.5px solid var(--color-brand, #04A9D2);
+  background: color-mix(in srgb, var(--color-brand, #04A9D2) 8%, transparent);
+  color: var(--color-brand, #04A9D2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  min-height: 38px;
+}
+
+.speech-preview-btn:hover {
+  background: color-mix(in srgb, var(--color-brand, #04A9D2) 18%, transparent);
+  box-shadow: 0 2px 8px rgba(4, 169, 210, 0.2);
+}
+
+.speech-preview-btn:active {
+  transform: scale(0.98);
+}
+
+.speech-preview-btn.shadcn-speech-btn--playing {
+  background: var(--color-brand, #04A9D2) !important;
+  color: #ffffff !important;
+  border-color: var(--color-brand, #04A9D2) !important;
+  box-shadow: 0 3px 10px rgba(4, 169, 210, 0.35) !important;
+}
+
