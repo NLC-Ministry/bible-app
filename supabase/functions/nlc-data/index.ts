@@ -552,6 +552,12 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ data: responseData });
   } catch (err) {
     const errorDetails = err instanceof Error ? err.message : (typeof err === "object" && err !== null ? ((err as any).message || JSON.stringify(err)) : String(err));
+    if (errorDetails === "invalid_logto_token") {
+      return jsonResponse({ error: "invalid_logto_token", message: "Logto token is invalid or expired" }, 401);
+    }
+    if (errorDetails === "profile_identity_not_found") {
+      return jsonResponse({ error: "profile_identity_not_found", message: "User profile identity not found" }, 404);
+    }
     console.error("nlc-data failed:", errorDetails, err);
     return jsonResponse({ error: "nlc_data_failed", message: errorDetails }, 500);
   }

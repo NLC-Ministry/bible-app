@@ -459,14 +459,20 @@ const db = {
       };
 
       let { response, payload } = await send(false);
-      const tokenRejected = response.status === 401 || payload?.message?.includes("invalid_token") || payload?.message?.includes("Invalid token") || payload?.error === "invalid_token";
+      const tokenRejected = response.status === 401
+        || payload?.error === "invalid_logto_token"
+        || payload?.error === "invalid_token"
+        || payload?.message === "invalid_logto_token"
+        || payload?.message === "invalid_token"
+        || payload?.message?.includes("invalid_token")
+        || payload?.message?.includes("Invalid token");
       if (tokenRejected) {
         ({ response, payload } = await send(true));
       }
 
       // ── 503 / Edge Runtime 暫時中斷：指数退避重試（最多 3 次）──
       const mayRetry = !request.action || request.action === "select";
-      const isServiceDegraded = mayRetry && (
+      const isServiceDegraded = mayRetry && !tokenRejected && (
         response.status === 503 ||
         payload?.code === "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED" ||
         (response.status >= 500 && response.status < 600)
