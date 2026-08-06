@@ -704,7 +704,7 @@ export function init() {
   }
 }
 
-const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
+const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {

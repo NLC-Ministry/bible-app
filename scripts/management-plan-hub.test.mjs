@@ -27,7 +27,7 @@ describe("management plan hub", () => {
     expect(admin).toContain("panelName === 'system' && isAdmin");
   });
 
-  it("keeps plan management available above the small-group level", () => {
+  it("keeps plan management available for management roles down to group_leader", () => {
     const adminRoles = admin.match(/const MANAGEMENT_ROLES = \[(.*?)\];/)?.[1] || "";
     const utilsRoles = utils.match(/const managementRoles = \[(.*?)\];/)?.[1] || "";
     const profileRoles = profile.match(/const managementRoles = \[(.*?)\];/)?.[1] || "";
@@ -36,9 +36,9 @@ describe("management plan hub", () => {
       expect(roles).toContain("senior_pastor");
       expect(roles).toContain("great_zone_leader");
       expect(roles).toContain("zone_leader");
-      expect(roles).not.toContain("group_leader");
+      expect(roles).toContain("group_leader");
     }
-    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(getProfileRoleCode(profile));');
+    expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
   });
 
   it("defaults to stage one and lists only current or completed plans with current plans first", () => {
