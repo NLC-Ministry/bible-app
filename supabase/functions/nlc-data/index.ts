@@ -112,6 +112,27 @@ function parseJwt(token: string) {
 const PROFILE_CACHE = new Map<string, { profile: any; timestamp: number }>();
 const PROFILE_CACHE_TTL_MS = 15000; // 15 seconds warm Edge Function memory cache
 
+async function fetchProfileData(supabaseAdmin: any, profileId: string) {
+  try {
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select(PROFILE_SELECT)
+      .eq("id", profileId)
+      .single();
+    if (!profileError && profile) return profile;
+  } catch (err) {
+    console.warn("PROFILE_SELECT join failed; falling back to direct profiles query:", err);
+  }
+
+  const { data: basicProfile, error: basicError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+    .eq("id", profileId)
+    .single();
+  if (basicError) throw basicError;
+  return basicProfile;
+}
+
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
   const cached = PROFILE_CACHE.get(accessToken);
   const now = Date.now();
@@ -131,12 +152,8 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
     try {
       const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(accessToken);
       if (user && !authErr) {
-        const { data: profile, error: profileError } = await supabaseAdmin
-          .from("profiles")
-          .select(PROFILE_SELECT)
-          .eq("id", user.id)
-          .single();
-        if (!profileError && profile) {
+        const profile = await fetchProfileData(supabaseAdmin, user.id);
+        if (profile) {
           PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
           return profile;
         }
@@ -172,12 +189,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
   if (identityError) throw identityError;
   if (!identity?.profile_id) throw new Error("profile_identity_not_found");
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from("profiles")
-    .select(PROFILE_SELECT)
-    .eq("id", identity.profile_id)
-    .single();
-  if (profileError) throw profileError;
+  const profile = await fetchProfileData(supabaseAdmin, identity.profile_id);
   PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
   return profile;
 }
