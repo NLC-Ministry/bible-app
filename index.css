@@ -7696,7 +7696,7 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   animation: slideUpSheet 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  max-height: 70vh;
+  max-height: 85vh;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -7739,6 +7739,8 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 0.85rem;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .sheet-section {
