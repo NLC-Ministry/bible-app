@@ -140,7 +140,7 @@ function showPromptDialog({ title, message = "", defaultValue = "", placeholder 
           ${message ? `<p class="custom-confirm-desc">${safeEscape(message)}</p>` : ""}
           <div style="margin-top: 0.75rem;">
             <input type="text" class="custom-prompt-input" value="${safeEscape(defaultValue)}" placeholder="${safeEscape(placeholder)}"
-              style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border-card);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:0.875rem;" />
+              style="width:100%;padding:0.5rem 0.75rem;border:1px solid var(--border-card);border-radius:8px;background:var(--bg-input);color:var(--text-primary);font-size:1rem;" />
           </div>
         </div>
         <div class="custom-confirm-actions" style="margin-top: 1.25rem;">

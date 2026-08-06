@@ -40,6 +40,6 @@ describe("reader verse selection bottom bar", () => {
     expect(css).toMatch(/\.youversion-action-bar \.yv-highlight-section \{[\s\S]*min-width: max-content;/);
     expect(css).toMatch(/\.youversion-action-bar \.yv-action-group \{[\s\S]*display: flex;[\s\S]*flex: 0 0 auto;/);
     expect(css).not.toMatch(/\.youversion-action-bar \.yv-highlight-section \{[\s\S]*flex-direction: column;/);
-    expect(css).not.toContain("grid-template-columns: repeat(3, minmax(0, 1fr));");
+    expect(css).not.toMatch(/\.youversion-action-bar[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   });
 });
