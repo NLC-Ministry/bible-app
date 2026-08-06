@@ -6355,15 +6355,12 @@ async function renderGroupParticipantsRankingTable() {
             l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey
           );
           makeup = calculateCatchUpDays(myUserLogs);
-          diff = completedDaysCount - expectedDaysCount;
         } else {
           completed = u.chapters_read || 0;
           const otherUserLogs = (state.allLogsCache || []).filter(l => l.user_id === u.id);
           makeup = calculateCatchUpDays(otherUserLogs);
-          const completedDays = Math.round(((u.plan_progress || 0) / 100) * state.activePlan.days.length);
-          const completedDaysCapped = Math.min(completedDays, state.activePlan.days.length);
-          diff = completedDaysCapped - expectedDaysCount;
         }
+        diff = completed - expectedDaysCount;
       }
 
       const memberRound = Number(isMe ? state.activePlan.currentRound : u.current_round) || 1;
@@ -6376,7 +6373,7 @@ async function renderGroupParticipantsRankingTable() {
         statusStr = "第一遍完成";
         statusColor = "var(--color-success-foreground)";
       } else if (hasAnyPlanRead && memberRound > 1) {
-        statusStr = `第${memberRound}遍完成${memberProgress}%`;
+        statusStr = memberProgress > 0 ? `第${memberRound}遍完成${memberProgress}%` : `第${memberRound}遍進行中`;
         statusColor = memberProgress >= 100 ? "var(--color-success-foreground)" : "var(--color-brand)";
       } else if (hasAnyPlanRead && diff > 0) {
         statusStr = `超前 ${diff}天`;

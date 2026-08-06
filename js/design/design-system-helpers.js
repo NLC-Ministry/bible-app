@@ -47,7 +47,7 @@ function getPlanProgressStatusFromDesignSystem(plan) {
   if (currentRound > 1) {
     const roundProgress = Math.max(0, Math.min(100, Math.round(Number(plan.progress) || 0)));
     return {
-      label: "超前第" + currentRound + "遍完成" + roundProgress + "%",
+      label: roundProgress > 0 ? "超前第" + currentRound + "遍完成" + roundProgress + "%" : "第" + currentRound + "遍進行中",
       badgeClass: "stat-badge--success",
       diff: 0,
     };
