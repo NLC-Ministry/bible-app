@@ -459,7 +459,7 @@ body.dark-theme .admin-registration-statistics__table-section h4 {
 
 [data-theme="dark"] .admin-registration-statistics__summary-item span,
 body.dark-theme .admin-registration-statistics__summary-item span {
-  color: #CBD5E1 !important;
+  color: rgba(203, 213, 225, 0.95) !important;
   font-weight: 600 !important;
 }
 

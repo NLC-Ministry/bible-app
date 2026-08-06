@@ -130,7 +130,12 @@ function renderAdminUserDirectoryList(query = "") {
     const syncLabel = syncStatus === "success"
       ? "已同步"
       : (syncStatus === "degraded" || syncStatus === "failed" ? "同步異常" : "尚未同步");
-    const statusClass = profile.is_active === false ? "inactive" : "active";
+    const config = getManagedScopeConfig(profile);
+    const defaultScopes = getProfileDefaultManagedScopes(profile, config);
+    const managedScopeText = config.role === "admin" || config.role === "senior_pastor"
+      ? "全教會"
+      : (defaultScopes.join("、") || "僅本人");
+
     return `
       <details class="admin-user-directory__card">
         <summary class="admin-user-directory__card-summary">
@@ -144,6 +149,7 @@ function renderAdminUserDirectoryList(query = "") {
             <div><dt>帳號狀態</dt><dd><span class="admin-user-directory__status admin-user-directory__status--${statusClass}">${profile.is_active === false ? "已停用" : "啟用中"}</span></dd></div>
             <div><dt>電子信箱</dt><dd>${escapeHTML(email)}</dd></div>
             <div><dt>角色</dt><dd>${escapeHTML(roleLabel)}</dd></div>
+            <div><dt>權限管理範圍</dt><dd>${escapeHTML(managedScopeText)}</dd></div>
             <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
             <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
             <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
@@ -207,6 +213,22 @@ function getManagedScopeConfig(profile) {
   return { role, field: null, payloadField: null, label: "", options: [] };
 }
 
+function getProfileDefaultManagedScopes(profile, config) {
+  const explicitScopes = config.field ? splitManagedScope(profile[config.field]) : [];
+  if (explicitScopes.length > 0) return explicitScopes;
+
+  if (config.role === "great_zone_leader" && profile.great_region) {
+    return [String(profile.great_region).trim()];
+  }
+  if (config.role === "zone_leader" && profile.pastoral_zone) {
+    return [String(profile.pastoral_zone).trim()];
+  }
+  if (config.role === "group_leader" && profile.small_group) {
+    return [String(profile.small_group).trim()];
+  }
+  return [];
+}
+
 function renderManagedScopeProfile(profile) {
   const summary = document.getElementById("admin-managed-scopes-summary");
   const optionsRoot = document.getElementById("admin-managed-scopes-options");
@@ -227,10 +249,10 @@ function renderManagedScopeProfile(profile) {
   const roleLabel = profile.role_definition?.label || config.role;
   const placement = [profile.great_region, profile.pastoral_zone, profile.small_group].filter(Boolean).join(" / ") || "尚未設定";
   const email = String(profile.email || "").trim() || "未提供電子信箱";
-  const explicitScopes = config.field ? splitManagedScope(profile[config.field]) : [];
+  const defaultScopes = getProfileDefaultManagedScopes(profile, config);
   const effectiveScope = config.role === "admin" || config.role === "senior_pastor"
     ? "全教會"
-    : (explicitScopes.join("、") || placement || "僅本人");
+    : (defaultScopes.join("、") || "僅本人");
   summary.innerHTML = `
     <span>姓名<strong>${escapeHTML(profile.name || "尚未取得姓名")}</strong></span>
     <span>電子信箱<strong>${escapeHTML(email)}</strong></span>
@@ -240,7 +262,7 @@ function renderManagedScopeProfile(profile) {
 
   const optionNames = Array.from(new Set([
     ...config.options.map(option => String(option?.name || option?.id || "").trim()),
-    ...explicitScopes
+    ...defaultScopes
   ].filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-Hant"));
 
   if (!config.field) {
@@ -251,7 +273,7 @@ function renderManagedScopeProfile(profile) {
   } else if (optionNames.length === 0) {
     optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">目前沒有可選擇的${config.label}資料。</div>`;
   } else {
-    const selected = new Set(explicitScopes);
+    const selected = new Set(defaultScopes);
     optionsRoot.innerHTML = optionNames.map(name => `
       <label class="admin-managed-scopes__option">
         <input type="checkbox" value="${escapeHTML(name)}" ${selected.has(name) ? "checked" : ""}>
@@ -539,7 +561,7 @@ function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
             borderColor: brandColor,
             borderWidth: 1.5,
             titleColor: isDark ? '#F8FAFC' : '#0F172A',
-            bodyColor: isDark ? '#E2E8F0' : '#334155',
+            bodyColor: isDark ? "rgba(226, 232, 240, 0.9)" : "rgba(51, 65, 85, 0.9)",
             padding: 10,
             cornerRadius: 8,
           }
@@ -598,9 +620,7 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
     <section class="admin-registration-statistics__chart-section border border-slate-800 bg-slate-900/90 rounded-xl p-5 shadow-xl mt-4">
       <div class="flex items-center justify-between mb-3">
         <h4 class="text-md font-bold text-slate-100 flex items-center gap-2">
-          <svg class="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-          </svg>
+          ${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "sm", className: "nlc-icon text-cyan-400" }) : ""}
           <span id="admin-registration-statistics-chart-title">每天閱讀章數趨勢（近30天）</span>
         </h4>
         <span class="text-xs text-slate-400 font-medium">總章數</span>

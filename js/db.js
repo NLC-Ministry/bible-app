@@ -623,9 +623,10 @@ const db = {
     state.currentUser.great_region = profile.great_region || "";
     state.currentUser.pastoral_zone = profile.pastoral_zone || "";
     state.currentUser.small_group = profile.small_group || "";
-    state.currentUser.managed_regions = profile.managed_regions || "";
-    state.currentUser.managed_zones = profile.managed_zones || "";
-    state.currentUser.managed_groups = profile.managed_groups || "";
+    const roleCode = profile.role_definition?.code || (typeof getRoleDefinition === "function" ? getRoleDefinition(profile.role_id)?.code : "") || "";
+    state.currentUser.managed_regions = profile.managed_regions || (roleCode === "great_zone_leader" ? (profile.great_region || "") : "");
+    state.currentUser.managed_zones = profile.managed_zones || (roleCode === "zone_leader" ? (profile.pastoral_zone || "") : "");
+    state.currentUser.managed_groups = profile.managed_groups || (roleCode === "group_leader" ? (profile.small_group || "") : "");
     state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
     state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
     if (profile.email) state.currentUser.email = profile.email;
@@ -1654,7 +1655,37 @@ const db = {
         .eq("is_demo", false)
         .eq("is_active", true)
         .order("name", { ascending: true });
-      return { data: data || [], error };
+
+      if (error) return { data: [], error };
+
+      const profiles = data || [];
+      const pendingBackfills = [];
+
+      profiles.forEach(profile => {
+        const role = getUserRoleCode(profile) || "member";
+        if (role === "great_zone_leader" && !profile.managed_regions && profile.great_region) {
+          profile.managed_regions = profile.great_region.trim();
+          pendingBackfills.push(
+            this.updateManagedScopes(profile.id, { managedRegions: [profile.great_region.trim()] })
+          );
+        } else if (role === "zone_leader" && !profile.managed_zones && profile.pastoral_zone) {
+          profile.managed_zones = profile.pastoral_zone.trim();
+          pendingBackfills.push(
+            this.updateManagedScopes(profile.id, { managedZones: [profile.pastoral_zone.trim()] })
+          );
+        } else if (role === "group_leader" && !profile.managed_groups && profile.small_group) {
+          profile.managed_groups = profile.small_group.trim();
+          pendingBackfills.push(
+            this.updateManagedScopes(profile.id, { managedGroups: [profile.small_group.trim()] })
+          );
+        }
+      });
+
+      if (pendingBackfills.length > 0) {
+        Promise.allSettled(pendingBackfills).catch(() => {});
+      }
+
+      return { data: profiles, error: null };
     } catch (error) {
       return { data: [], error };
     }
@@ -2466,9 +2497,10 @@ const db = {
         const rightValues = String(right || "").split(",").map(value => value.trim()).filter(Boolean);
         return leftValues.some(value => rightValues.includes(value));
       };
-      const withinScope = candidate => getUserRoleCode(currentUser) === "admin"
+      const withinScope = candidate => hasWholeChurchPlanScope(currentUser)
         || (getUserRoleCode(currentUser) === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
-        || (getUserRoleCode(currentUser) === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone));
+        || (getUserRoleCode(currentUser) === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone))
+        || (getUserRoleCode(currentUser) === "group_leader" && overlap(candidate.small_group, currentUser.managed_groups || currentUser.small_group));
       const members = (profiles || [])
         .filter(candidate => String(candidate.id) !== String(currentUser.id || state.currentProfileId || ""))
         .filter(withinScope)
