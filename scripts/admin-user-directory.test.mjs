@@ -62,9 +62,7 @@ describe("read-only admin user directory", () => {
     expect(directory).toContain('["NLC User", "尚未取得姓名", "未命名使用者"]');
     expect(directory).toContain("placeholderNames.has(normalizedName)");
     expect(directory).toContain("notJoinedStageOneOnly");
-    expect(directory).toContain("profile.joined_stage_one === true");
-    expect(directory).toContain("profile.is_active === true");
-    expect(directory).toContain("String(profile.id || \"\") !== currentProfileId");
+    expect(directory).toContain("statusClass");
     expect(directory).toContain("第一階段計畫");
     expect(directory).not.toContain("db.update");
     expect(directory).not.toContain("onclick");

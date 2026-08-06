@@ -135,6 +135,7 @@ function renderAdminUserDirectoryList(query = "") {
     const managedScopeText = config.role === "admin" || config.role === "senior_pastor"
       ? "全教會"
       : (defaultScopes.join("、") || "僅本人");
+    const statusClass = profile.is_active === false ? "disabled" : "active";
 
     return `
       <details class="admin-user-directory__card">
