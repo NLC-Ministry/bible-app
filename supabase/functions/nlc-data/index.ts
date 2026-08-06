@@ -205,7 +205,7 @@ function hasWholeChurchPlanScope(profile: any) {
 }
 
 function canManagePlans(profile: any) {
-  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));
+  return ["admin", "senior_pastor", "great_zone_leader", "zone_leader"].includes(getProfileRoleCode(profile));
 }
 
 function normalizeRows(payload: any) {

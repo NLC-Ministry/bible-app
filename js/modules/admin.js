@@ -704,7 +704,7 @@ export function init() {
   }
 }
 
-const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {
@@ -850,6 +850,15 @@ async function selectManagementPlan(planKey) {
 
 export async function renderAdminPlanManagement() {
   try {
+    const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
+    if (!MANAGEMENT_ROLES.includes(role)) {
+      setAdminPrimaryPanel('plans');
+      const plansPanel = document.getElementById('admin-plans-panel');
+      if (plansPanel) {
+        plansPanel.innerHTML = '<div class="admin-unjoined-plan-empty" style="padding: 2rem; text-align: center;">您目前沒有計畫管理權限。</div>';
+      }
+      return;
+    }
     setAdminPrimaryPanel('plans');
     mountPlanManagementSections();
 
