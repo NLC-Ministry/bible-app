@@ -1,7 +1,6 @@
-// components/issue-report/AdminReportTable.tsx
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare } from "lucide-react";
+import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare, Filter } from "lucide-react";
 
 interface IssueReport {
   id: string;
@@ -33,12 +32,22 @@ const STATUS_MAP = {
   ignored: { label: "已忽略", className: "bg-gray-900 text-gray-400 border border-border/50" }
 };
 
+export type StatusFilter = "all" | "pending" | "processing" | "resolved" | "ignored";
+
+export const STATUS_FILTER_OPTIONS: { id: StatusFilter; label: string }[] = [
+  { id: "all", label: "全部" },
+  { id: "pending", label: "待處理" },
+  { id: "processing", label: "處理中" },
+  { id: "resolved", label: "已解決" },
+  { id: "ignored", label: "已忽略" }
+];
+
 interface AdminReportTableProps {
   reports: IssueReport[];
   isLoading: boolean;
   error: string | null;
   onRefresh: () => void;
-  onExport: () => void;
+  onExport: (exportData?: IssueReport[]) => void;
   onDelete: (id: string) => Promise<void>;
   onUpdate: (id: string, status: string, reply: string) => Promise<void>;
 }
@@ -52,6 +61,8 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
   onDelete,
   onUpdate
 }) => {
+  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+
   const [deleteTargetId, setDeleteTargetId] = React.useState<string | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
@@ -59,6 +70,30 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
   const [replyStatus, setReplyStatus] = React.useState<string>("pending");
   const [replyText, setReplyText] = React.useState<string>("");
   const [isSavingReply, setIsSavingReply] = React.useState(false);
+
+  const statusCounts = React.useMemo(() => {
+    const counts: Record<StatusFilter, number> = {
+      all: reports.length,
+      pending: 0,
+      processing: 0,
+      resolved: 0,
+      ignored: 0
+    };
+    reports.forEach(r => {
+      const st = (r.status || "pending") as StatusFilter;
+      if (st in counts && st !== "all") {
+        counts[st]++;
+      } else if (st !== "all") {
+        counts.pending++;
+      }
+    });
+    return counts;
+  }, [reports]);
+
+  const filteredReports = React.useMemo(() => {
+    if (statusFilter === "all") return reports;
+    return reports.filter(r => (r.status || "pending") === statusFilter);
+  }, [reports, statusFilter]);
 
   const handleReplyOpen = (report: IssueReport) => {
     setReplyTargetId(report.id);
@@ -121,8 +156,8 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={onExport}
-            disabled={reports.length === 0 || isLoading}
+            onClick={() => onExport(filteredReports)}
+            disabled={filteredReports.length === 0 || isLoading}
             className="flex items-center gap-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
             type="button"
           >
@@ -130,6 +165,47 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
             匯出 Excel/CSV
           </motion.button>
         </div>
+      </div>
+
+      {/* Status Filter Bar */}
+      <div 
+        className="flex flex-wrap items-center gap-2 border-b border-border/50 pb-4"
+        data-testid="status-filter-bar"
+      >
+        <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1.5">
+          <Filter className="h-3.5 w-3.5" />
+          處理狀態：
+        </span>
+        {STATUS_FILTER_OPTIONS.map((option) => {
+          const count = statusCounts[option.id];
+          const isActive = statusFilter === option.id;
+          return (
+            <motion.button
+              key={option.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              data-testid={`filter-status-${option.id}`}
+              onClick={() => setStatusFilter(option.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/30"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/40"
+              }`}
+            >
+              <span>{option.label}</span>
+              <span
+                className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                  isActive
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-background/80 text-muted-foreground border border-border/30"
+                }`}
+              >
+                {count}
+              </span>
+            </motion.button>
+          );
+        })}
       </div>
 
       {/* Error State */}
@@ -163,6 +239,11 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
           <div className="flex flex-col items-center justify-center p-12 text-sm text-muted-foreground">
             無任何回報資料
           </div>
+        ) : filteredReports.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-12 text-sm text-muted-foreground">
+            <Filter className="h-8 w-8 text-muted-foreground/40 mb-2" />
+            無符合「{STATUS_FILTER_OPTIONS.find(o => o.id === statusFilter)?.label}」狀態的回報資料
+          </div>
         ) : (
           <table className="min-w-full divide-y divide-border/50 text-left text-xs">
             <thead className="uppercase tracking-wider font-semibold bg-muted text-muted-foreground">
@@ -178,7 +259,7 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50 text-foreground">
-              {reports.map((report) => (
+              {filteredReports.map((report) => (
                 <tr key={report.id} className="hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-3.5 whitespace-nowrap text-muted-foreground">
                     {new Date(report.created_at).toLocaleString("zh-TW")}

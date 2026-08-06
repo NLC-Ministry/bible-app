@@ -133,9 +133,10 @@ export const AdminReportView: React.FC = () => {
     return null;
   }
 
-  const handleExportCSV = () => {
-    if (reports.length === 0) return;
-    const csvContent = convertToCSV(reports);
+  const handleExportCSV = (exportData?: IssueReport[]) => {
+    const target = exportData || reports;
+    if (target.length === 0) return;
+    const csvContent = convertToCSV(target);
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

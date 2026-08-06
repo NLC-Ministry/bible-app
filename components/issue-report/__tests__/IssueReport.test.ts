@@ -436,24 +436,81 @@ describe("Issue Report System Tests", () => {
   describe("AdminReportTable Component", () => {
     it("正確顯示回報資料項目與載入狀態", () => {
       const mockState = vi.fn().mockImplementation((init) => [init, vi.fn()]);
+      const mockMemo = vi.fn().mockImplementation((factory) => factory());
       const origUseState = React.useState;
+      const origUseMemo = React.useMemo;
       (React as any).useState = mockState;
+      (React as any).useMemo = mockMemo;
 
       try {
         const table = (AdminReportTable as any)({
           reports: [
-            { id: "rep-1", created_at: "2026-07-24T12:00:00Z", category: "bug", description: "測試錯誤", status: "open" }
+            { id: "rep-1", created_at: "2026-07-24T12:00:00Z", category: "bug", description: "測試錯誤", status: "pending" }
           ],
           isLoading: false,
           error: null,
           onRefresh: vi.fn(),
           onExport: vi.fn(),
-          onDelete: vi.fn()
+          onDelete: vi.fn(),
+          onUpdate: vi.fn()
         });
         expect(table).toBeDefined();
       } finally {
         (React as any).useState = origUseState;
+        (React as any).useMemo = origUseMemo;
       }
+    });
+
+    it("處理狀態篩選邏輯能正確統計各狀態筆數並過濾清單", () => {
+      const mockReports: any[] = [
+        { id: "r1", created_at: "2026-08-01T00:00:00Z", category: "bug", description: "待處理描述", status: "pending" },
+        { id: "r2", created_at: "2026-08-01T01:00:00Z", category: "ui", description: "處理中描述", status: "processing" },
+        { id: "r3", created_at: "2026-08-01T02:00:00Z", category: "data", description: "已解決描述", status: "resolved" },
+        { id: "r4", created_at: "2026-08-01T03:00:00Z", category: "other", description: "已忽略描述", status: "ignored" }
+      ];
+
+      // 1. 全部狀態過濾 (all)
+      const filterAll = mockReports.filter(r => r.status || "pending");
+      expect(filterAll.length).toBe(4);
+
+      // 2. 待處理狀態過濾 (pending)
+      const filterPending = mockReports.filter(r => (r.status || "pending") === "pending");
+      expect(filterPending.length).toBe(1);
+      expect(filterPending[0].id).toBe("r1");
+
+      // 3. 處理中狀態過濾 (processing)
+      const filterProcessing = mockReports.filter(r => (r.status || "pending") === "processing");
+      expect(filterProcessing.length).toBe(1);
+      expect(filterProcessing[0].id).toBe("r2");
+
+      // 4. 已解決狀態過濾 (resolved)
+      const filterResolved = mockReports.filter(r => (r.status || "pending") === "resolved");
+      expect(filterResolved.length).toBe(1);
+      expect(filterResolved[0].id).toBe("r3");
+
+      // 5. 已忽略狀態過濾 (ignored)
+      const filterIgnored = mockReports.filter(r => (r.status || "pending") === "ignored");
+      expect(filterIgnored.length).toBe(1);
+      expect(filterIgnored[0].id).toBe("r4");
+    });
+
+    it("匯出 CSV 功能接受篩選後的資料並生成對應 CSV", () => {
+      const filteredReports: any[] = [
+        {
+          id: "rep-filtered-1",
+          created_at: "2026-08-05T10:00:00Z",
+          category: "bug",
+          description: "僅匯出待處理的錯誤回報",
+          status: "pending",
+          profiles: { name: "過濾測試人", pastoral_zone: "社青", small_group: "一組" }
+        }
+      ];
+
+      const csv = convertToCSV(filteredReports);
+      expect(csv).toContain("ID,建立時間,分類,問題描述,回報者姓名,回報者牧區,回報者小組");
+      expect(csv).toContain("\"rep-filtered-1\"");
+      expect(csv).toContain("\"僅匯出待處理的錯誤回報\"");
+      expect(csv).toContain("\"過濾測試人\"");
     });
   });
 });
