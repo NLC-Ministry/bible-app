@@ -2625,15 +2625,16 @@ const db = {
 
   async getAdminMemberTeamPlacements(plan) {
     const planId = this._resolveManagementGlobalPlanId(plan);
-    if (planId) {
-      const result = await this._callReadingTeamRpc("get_admin_member_team_placements", {
-        p_global_plan_id: planId
-      });
-      if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-        return { success: true, data: result.data };
-      }
-      console.warn("get_admin_member_team_placements unavailable or empty; using table query fallback", result.error || result.message);
+    if (!planId) {
+      return this._getAdminMemberTeamPlacementsFallback(plan, null);
     }
+    const result = await this._callReadingTeamRpc("get_admin_member_team_placements", {
+      p_global_plan_id: planId
+    });
+    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+      return { success: true, data: result.data };
+    }
+    console.warn("get_admin_member_team_placements unavailable or empty; using table query fallback", result.error || result.message);
     return this._getAdminMemberTeamPlacementsFallback(plan, planId);
   },
 
