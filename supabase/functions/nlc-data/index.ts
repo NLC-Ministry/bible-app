@@ -399,9 +399,9 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;
-      const rpcArgs = functionName === "publish_global_plan_rules"
+      const rpcArgs = (functionName === "publish_global_plan_rules"
         || TEAM_RPC_FUNCTIONS.has(functionName)
-        || ADMIN_RPC_FUNCTIONS.has(functionName)
+        || functionName === "get_admin_registration_statistics")
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
