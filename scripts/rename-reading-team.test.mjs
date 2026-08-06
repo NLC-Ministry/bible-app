@@ -38,6 +38,8 @@ describe("rename reading team feature", () => {
     const utils = readFileSync(join(root, "js", "utils.js"), "utf8");
 
     expect(teamReg).toContain("data-rename-team");
+    expect(teamReg).toContain("data-rename-team-inline");
+    expect(teamReg).toContain("team.captain_id");
     expect(teamReg).toContain('title="修改團隊名稱"');
     expect(teamReg).toContain("showPromptDialog");
     expect(teamReg).toContain("db.renameReadingTeam(team.id, trimmed)");
