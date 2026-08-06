@@ -451,6 +451,126 @@ function exportAdminRegistrationStatistics() {
   URL.revokeObjectURL(url);
 }
 
+function renderAdminRegistrationDailyChaptersChart(globalPlanId) {
+  const canvasEl = document.getElementById("admin-registration-daily-chapters-chart");
+  if (!canvasEl) return;
+
+  const today = new Date();
+  const labels = [];
+  const data = [];
+  const DAYS = 30;
+
+  const logsByDate = {};
+  const selectedPlan = (state.globalPlans || []).find(p => String(p.id) === String(globalPlanId));
+  const planPresetKey = selectedPlan?.presetKey || selectedPlan?.preset_key;
+
+  const logs = state.isSupabaseMode && state.allLogsCache
+    ? state.allLogsCache
+    : (state.readingLogs || []);
+
+  logs.forEach(log => {
+    if (!log.read_at) return;
+    if (globalPlanId) {
+      const matchesPlan = (log.global_plan_id && String(log.global_plan_id) === String(globalPlanId)) ||
+        (log.plan_id && String(log.plan_id) === String(globalPlanId)) ||
+        (planPresetKey && log.presetKey && log.presetKey === planPresetKey) ||
+        (planPresetKey && log.preset_key && log.preset_key === planPresetKey);
+      if (!matchesPlan && (log.global_plan_id || log.plan_id || log.presetKey || log.preset_key)) {
+        return;
+      }
+    }
+    const dStr = log.read_at.substring(0, 10);
+    logsByDate[dStr] = (logsByDate[dStr] || 0) + 1;
+  });
+
+  for (let i = DAYS - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate(d) : d.toISOString().substring(0, 10);
+    const mmdd = dStr.substring(5).replace('-', '/');
+    labels.push(i % 5 === 0 || i === 0 ? mmdd : '');
+    data.push(logsByDate[dStr] || 0);
+  }
+
+  if (window._adminDailyChaptersChart) {
+    window._adminDailyChaptersChart.destroy();
+  }
+
+  const isDark = state.theme === 'dark' ||
+    document.body.classList.contains('dark-theme') ||
+    document.body.classList.contains('dark') ||
+    document.documentElement.getAttribute('data-theme') === 'dark';
+
+  const fontColor = isDark ? 'rgba(248, 250, 252, 0.85)' : 'rgba(15, 23, 42, 0.75)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+  const brandColor = '#04A9D2';
+  const brandFill = isDark ? 'rgba(4, 169, 210, 0.22)' : 'rgba(4, 169, 210, 0.12)';
+
+  const ctx = canvasEl.getContext('2d');
+  if (typeof Chart !== 'undefined') {
+    window._adminDailyChaptersChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '每日閱讀章數',
+          data,
+          borderColor: brandColor,
+          backgroundColor: brandFill,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: brandColor,
+          pointHoverRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `閱讀章數: ${ctx.parsed.y} 章`
+            },
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            borderColor: brandColor,
+            borderWidth: 1.5,
+            titleColor: isDark ? '#F8FAFC' : '#0F172A',
+            bodyColor: isDark ? '#E2E8F0' : '#334155',
+            padding: 10,
+            cornerRadius: 8,
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: fontColor,
+              font: { size: 10, weight: 'bold' },
+              maxRotation: 0,
+            },
+            grid: { display: false },
+            border: { display: false },
+          },
+          y: {
+            ticks: {
+              color: fontColor,
+              font: { size: 10, weight: 'bold' },
+              stepSize: 1,
+              precision: 0,
+            },
+            grid: { color: gridColor },
+            border: { display: false },
+            beginAtZero: true,
+          }
+        }
+      }
+    });
+  }
+}
+
 async function loadAdminRegistrationStatistics(globalPlanId) {
   const content = document.getElementById("admin-registration-statistics-content");
   const exportButton = document.getElementById("admin-registration-statistics-export");
@@ -474,8 +594,23 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
     <div class="admin-registration-statistics__tables">
       ${renderAdminRegistrationStatisticsTable("大區統計", "大區", result.context.greatRegions)}
       ${renderAdminRegistrationStatisticsTable("牧區統計", "牧區", result.context.pastoralZones)}
-    </div>`;
+    </div>
+    <section class="admin-registration-statistics__chart-section border border-slate-800 bg-slate-900/90 rounded-xl p-5 shadow-xl mt-4">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-md font-bold text-slate-100 flex items-center gap-2">
+          <svg class="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+          <span id="admin-registration-statistics-chart-title">每天閱讀章數趨勢（近30天）</span>
+        </h4>
+        <span class="text-xs text-slate-400 font-medium">總章數</span>
+      </div>
+      <div style="position: relative; height: 220px; width: 100%;">
+        <canvas id="admin-registration-daily-chapters-chart"></canvas>
+      </div>
+    </section>`;
   exportButton.disabled = false;
+  renderAdminRegistrationDailyChaptersChart(globalPlanId);
 }
 
 export async function renderAdminRegistrationStatistics() {
