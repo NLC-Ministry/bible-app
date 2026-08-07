@@ -2432,7 +2432,7 @@ const db = {
 
   async getAdminRegistrationStatistics(globalPlanId) {
     if (!isUuid(globalPlanId)) {
-      return { success: false, message: "請先選擇要統計的讀經計畫。" };
+      return { success: true, context: { planId: globalPlanId || "", planName: "", summary: {}, pastoralZones: [], greatRegions: [] } };
     }
     const result = await this._callReadingTeamRpc("get_admin_registration_statistics", {
       p_global_plan_id: String(globalPlanId)

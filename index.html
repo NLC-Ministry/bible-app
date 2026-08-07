@@ -1774,7 +1774,13 @@
                   <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
                   <p>先查看姓名與牧區，點選人員後可展開詳細資料；本區不會修改帳號。</p>
                 </div>
-                <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                  <button type="button" id="admin-user-directory-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem;" title="依當前篩選結果匯出 CSV 名單">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                    <span>匯出會員名單</span>
+                  </button>
+                  <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
+                </div>
               </summary>
               <div class="admin-user-directory__body">
               <label class="admin-registration-statistics__filter" for="admin-user-directory-search">

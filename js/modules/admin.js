@@ -87,6 +87,46 @@ function formatAdminUserSyncTime(value) {
   }).format(date);
 }
 
+let adminUserDirectoryFilteredProfiles = [];
+
+export function convertUserDirectoryToCSV(profiles) {
+  if (!profiles || profiles.length === 0) return "";
+  const headers = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "組隊狀態", "帳號狀態"];
+  const rows = profiles.map(p => [
+    p.great_region || "未設定",
+    p.pastoral_zone || "未設定牧區",
+    p.small_group || "未設定",
+    p.name || "尚未取得姓名",
+    p.email || "",
+    p.role_definition?.label || p.role_definition?.code || "一般會友",
+    p.team_name ? `${p.member_role === "leader" ? "[隊長] " : ""}${p.team_name}` : "未加入團隊 (個人速讀中)",
+    p.is_active === false ? "已停用" : "啟用中"
+  ]);
+
+  return [
+    headers.join(","),
+    ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+  ].join("\n");
+}
+
+export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProfiles) {
+  const target = Array.isArray(profiles) && profiles.length > 0 ? profiles : adminUserDirectoryProfiles;
+  if (!target || target.length === 0) {
+    if (typeof showToast === "function") showToast("沒有符合條件的使用者可供匯出。");
+    return;
+  }
+  const csvContent = convertUserDirectoryToCSV(target);
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const today = new Date().toISOString().slice(0, 10);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `member_directory_${today}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
@@ -113,6 +153,7 @@ function renderAdminUserDirectoryList(query = "") {
       .toLocaleLowerCase("zh-Hant")
       .includes(normalizedQuery);
   });
+  adminUserDirectoryFilteredProfiles = filteredProfiles;
   count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
@@ -197,6 +238,12 @@ export async function renderAdminUserDirectory() {
   incompleteFilter.disabled = false;
   stageOneFilter.disabled = false;
   if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = false;
+  const exportBtn = document.getElementById("admin-user-directory-export-btn");
+  if (exportBtn) {
+    exportBtn.onclick = () => exportUserDirectoryCSV();
+  }
+  window.exportUserDirectoryCSV = exportUserDirectoryCSV;
+  window.convertUserDirectoryToCSV = convertUserDirectoryToCSV;
   search.oninput = () => renderAdminUserDirectoryList(search.value);
   incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);

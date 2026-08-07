@@ -509,10 +509,14 @@ appRouter.switchTab = async function (tabId, options = {}) {
         await loadIssueReportUi({ includeAdmin: true });
       }
 
-      if (mod && typeof mod.renderAdminPlanManagement === 'function') {
-        await mod.renderAdminPlanManagement();
-      } else if (typeof window.renderAdminPlanManagement === 'function') {
-        await window.renderAdminPlanManagement();
+      const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+      const userRole = getUserRoleCode(state.currentUser) || 'member';
+      if (MANAGEMENT_ROLES.includes(userRole)) {
+        if (mod && typeof mod.renderAdminPlanManagement === 'function') {
+          await mod.renderAdminPlanManagement();
+        } else if (typeof window.renderAdminPlanManagement === 'function') {
+          await window.renderAdminPlanManagement();
+        }
       }
     }
 
