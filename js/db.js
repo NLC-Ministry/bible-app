@@ -1663,7 +1663,7 @@ const db = {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: [], error: new Error("managed_scope_requires_supabase") };
     }
-    if (getUserRoleCode(state.currentUser) !== "admin") {
+    if (!hasWholeChurchPlanScope(state.currentUser)) {
       return { data: [], error: new Error("managed_scope_admin_required") };
     }
     try {
@@ -1724,7 +1724,7 @@ const db = {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: null, error: new Error("managed_scope_requires_supabase") };
     }
-    if (getUserRoleCode(state.currentUser) !== "admin") {
+    if (!hasWholeChurchPlanScope(state.currentUser)) {
       return { data: null, error: new Error("managed_scope_admin_required") };
     }
     const normalize = values => Array.from(new Set(

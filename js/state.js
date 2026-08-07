@@ -113,9 +113,20 @@ const state = {
 function getUserRoleCode(user = state.currentUser) {
   if (typeof user === "string") return user;
   if (!user) return "member";
+  const HARDCODED_ROLES = {
+    "10000000-0000-4000-8000-000000000001": "member",
+    "10000000-0000-4000-8000-000000000002": "group_leader",
+    "10000000-0000-4000-8000-000000000003": "zone_leader",
+    "10000000-0000-4000-8000-000000000004": "great_zone_leader",
+    "10000000-0000-4000-8000-000000000005": "senior_pastor",
+    "10000000-0000-4000-8000-000000000006": "admin"
+  };
+  const roleId = String(user.role_id || "").toLowerCase();
   return user.role_definition?.code
+    || (roleId ? HARDCODED_ROLES[roleId] : null)
     || getRoleDefinition(user.role_id)?.code
     || user.role_code
+    || user.role
     || "member";
 }
 
