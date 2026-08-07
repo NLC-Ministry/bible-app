@@ -118,13 +118,13 @@ function parseJwt(token: string) {
 const PROFILE_CACHE = new Map<string, { profile: any; timestamp: number }>();
 const PROFILE_CACHE_TTL_MS = 15000; // 15 seconds warm Edge Function memory cache
 
-async function fetchProfileData(supabaseAdmin: any, profileId: string) {
+async function fetchProfileData(supabaseAdmin: any, userId: string) {
   try {
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select(PROFILE_SELECT)
-      .eq("id", profileId)
-      .single();
+      .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+      .maybeSingle();
     if (!profileError && profile) return profile;
   } catch (err) {
     console.warn("PROFILE_SELECT join failed; falling back to direct profiles query:", err);
@@ -133,8 +133,8 @@ async function fetchProfileData(supabaseAdmin: any, profileId: string) {
   const { data: basicProfile, error: basicError } = await supabaseAdmin
     .from("profiles")
     .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
-    .eq("id", profileId)
-    .single();
+    .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+    .maybeSingle();
   if (basicError) throw basicError;
   return basicProfile;
 }
@@ -220,8 +220,9 @@ const ROLE_CODE_MAP: Record<string, string> = {
 };
 
 function getProfileRoleCode(profile: any) {
+  const roleId = String(profile?.role_id || "").toLowerCase();
   return profile?.role_definition?.code
-    || (profile?.role_id ? ROLE_CODE_MAP[String(profile.role_id)] : null)
+    || (roleId ? ROLE_CODE_MAP[roleId] : null)
     || profile?.role
     || "member";
 }
@@ -415,8 +416,7 @@ Deno.serve(async (req: Request) => {
       const rpcName = functionName;
       const rpcArgs = (functionName === "publish_global_plan_rules"
         || (TEAM_RPC_FUNCTIONS.has(functionName) && functionName !== "get_admin_member_team_placements")
-        || functionName === "get_admin_registration_statistics"
-        || functionName === "set_profile_managed_scopes")
+        || functionName === "get_admin_registration_statistics")
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
@@ -512,7 +512,7 @@ Deno.serve(async (req: Request) => {
     );
     const canRead = action === "select" && (READ_TABLES.has(table) || canReportOwnSelect);
     const canOwnWrite = (["insert", "update", "delete", "upsert"].includes(action) && OWN_WRITE_TABLES.has(table)) || canReportInsert;
-    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && isAdmin(profile);
+    const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && (isAdmin(profile) || canManagePlans(profile));
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
 
 
