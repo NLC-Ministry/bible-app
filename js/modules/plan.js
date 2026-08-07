@@ -5959,21 +5959,45 @@ async function renderGroupParticipantsRankingTable() {
     return catchUpDaysVal;
   };
 
-  // Calculate completedDaysCount (讀完一遍後直接顯示總天數，避免進入二三遍計算落後/超前不準確)
-  const isCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
-  const completedDaysCount = isCompletedOnce
-    ? state.activePlan.days.length
-    : state.activePlan.days.filter(d => {
-      if (!d.chapters || d.chapters.length === 0) return false;
-      return d.chapters.every(ch => ch.isRead);
-    }).length;
+  // Everyone's days-completed is derived the same way, from their exact
+  // chapter total, by walking the shared schedule and counting whole days
+  // fully covered — never from a percent-of-total estimate. Two people who
+  // have both read exactly the same number of chapters against the same
+  // schedule always get the exact same days-completed figure this way; a
+  // progress% × totalDays estimate would round twice (plan_progress is
+  // already a server-rounded whole percent) and could put two identical
+  // 16-chapter readers on opposite sides of a day boundary — one reading as
+  // "今日未完成", the other as "在進度上" — for no real difference between
+  // them. This assumes chapters are read in schedule order, same as every
+  // other progress figure in this app.
+  const countExactDaysCoveredByChapters = (days, chaptersRead) => {
+    let cumulative = 0;
+    let daysCovered = 0;
+    for (const day of days) {
+      const dayChapterCount = day.chapters ? day.chapters.length : 0;
+      if (dayChapterCount === 0) continue;
+      if (cumulative + dayChapterCount > chaptersRead) break;
+      cumulative += dayChapterCount;
+      daysCovered++;
+    }
+    return daysCovered;
+  };
 
   const planStart = new Date(state.activePlan.startDate + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffTime = today.getTime() - planStart.getTime();
   const diffDays = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
-  const expectedDaysCount = Math.min(state.activePlan.days.length, diffDays);
+  const elapsedPlanDaysCount = Math.min(state.activePlan.days.length, diffDays);
+  // Rest days (no chapters scheduled) don't increment daysCovered above, so
+  // the expected side must exclude them too — otherwise every rest day
+  // silently counts as a calendar day you were supposed to read, and a
+  // member perfectly on schedule reads as behind by however many rest days
+  // have passed.
+  const expectedDaysCount = state.activePlan.days
+    .slice(0, elapsedPlanDaysCount)
+    .filter(day => day.chapters && day.chapters.length > 0)
+    .length;
 
   const userZone = state.currentUser.pastoral_zone || "";
   const userRole = getUserRoleCode(state.currentUser) || "member";
@@ -6150,18 +6174,25 @@ async function renderGroupParticipantsRankingTable() {
       let diff = 0;
 
       if (hasAnyPlanRead) {
+        let memberIsCompletedOnce;
         if (isMe) {
           completed = myPlanReadCount;
           const myUserLogs = (state.readingLogs || []).filter(l =>
             l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey
           );
           makeup = calculateCatchUpDays(myUserLogs);
+          memberIsCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
         } else {
           completed = u.chapters_read || 0;
           const otherUserLogs = (state.allLogsCache || []).filter(l => l.user_id === u.id);
           makeup = calculateCatchUpDays(otherUserLogs);
+          memberIsCompletedOnce = (u.current_round || 1) > 1;
         }
-        diff = completed - expectedDaysCount;
+        // 讀完一遍後直接視為天數全滿，避免進入二三遍後被誤判落後。
+        const completedDays = memberIsCompletedOnce
+          ? state.activePlan.days.length
+          : countExactDaysCoveredByChapters(state.activePlan.days, completed);
+        diff = completedDays - expectedDaysCount;
       }
 
       const memberRound = Number(isMe ? state.activePlan.currentRound : u.current_round) || 1;
