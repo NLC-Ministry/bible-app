@@ -2477,26 +2477,39 @@ const db = {
       const { data: teams, error: teamsErr } = await client
         .from("reading_teams")
         .select("id, global_plan_id, name, division, status, created_at");
-      if (teamsErr) return { success: true, context: { summary: {}, plans: [] } };
+      if (teamsErr || !Array.isArray(teams)) return { success: true, context: { summary: {}, plans: [] } };
 
-      const teamIds = (teams || []).map(t => t.id).filter(Boolean);
+      const teamIds = teams.map(t => t.id).filter(Boolean);
       let members = [];
       if (teamIds.length > 0) {
         const { data: mRows, error: mErr } = await client
           .from("reading_team_members")
-          .select("id, team_id, user_id, member_role, profile:profiles(name, pastoral_zone)");
-        if (!mErr && mRows) members = mRows;
+          .select("id, team_id, user_id, member_role");
+        if (!mErr && Array.isArray(mRows)) members = mRows;
+      }
+
+      const userIds = Array.from(new Set(members.map(m => m.user_id).filter(Boolean)));
+      let profilesMap = new Map();
+      if (userIds.length > 0) {
+        const { data: pRows } = await client
+          .from("profiles")
+          .select("id, name, pastoral_zone")
+          .in("id", userIds);
+        if (Array.isArray(pRows)) {
+          profilesMap = new Map(pRows.map(p => [String(p.id), p]));
+        }
       }
 
       const teamMembersMap = new Map();
       members.forEach(m => {
         const tid = String(m.team_id);
         if (!teamMembersMap.has(tid)) teamMembersMap.set(tid, []);
+        const p = profilesMap.get(String(m.user_id));
         teamMembersMap.get(tid).push({
           userId: m.user_id,
           role: m.member_role,
-          name: m.profile?.name || "",
-          pastoralZone: m.profile?.pastoral_zone || ""
+          name: p?.name || "",
+          pastoralZone: p?.pastoral_zone || ""
         });
       });
 
@@ -2504,7 +2517,7 @@ const db = {
       const planMap = new Map(globalPlans.map(gp => [String(gp.id), gp]));
 
       const plansGrouped = new Map();
-      (teams || []).forEach(t => {
+      teams.forEach(t => {
         const pid = String(t.global_plan_id || "global");
         if (!plansGrouped.has(pid)) {
           const gp = planMap.get(pid);
@@ -2533,7 +2546,7 @@ const db = {
         context: {
           summary: {
             planCount: plansList.length,
-            teamCount: (teams || []).length,
+            teamCount: teams.length,
             memberCount: members.length
           },
           plans: plansList
