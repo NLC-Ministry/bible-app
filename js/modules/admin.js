@@ -183,6 +183,23 @@ export async function exportOrgStructureCSV() {
   document.body.removeChild(link);
 }
 
+/** Non-"empty" reasons getProfileNameFlags() can return — a name that's suspicious but present. */
+function getNameReviewFlags(profile) {
+  if (typeof getProfileNameFlags !== "function") return [];
+  return getProfileNameFlags(profile.name).filter(flag => flag !== "empty");
+}
+
+function profileNameNeedsReview(profile) {
+  return getNameReviewFlags(profile).length > 0 && profile.name_review_approved !== true;
+}
+
+const NAME_FLAG_LABELS = {
+  placeholder: "系統預設暱稱",
+  digits: "含數字",
+  emoji: "含表情符號",
+  gibberish_english: "疑似亂打的英文"
+};
+
 function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
@@ -190,9 +207,11 @@ function renderAdminUserDirectoryList(query = "") {
   const incompleteOnly = document.getElementById("admin-user-directory-filter-incomplete")?.checked === true;
   const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
   const unjoinedTeamOnly = document.getElementById("admin-user-directory-filter-unjoined-team")?.checked === true;
+  const nameReviewOnly = document.getElementById("admin-user-directory-filter-name-review")?.checked === true;
   const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
-  const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者", "教會肢體"]);
+  const placeholderNames = (typeof window !== "undefined" && window.INVENTED_DISPLAY_NAMES)
+    || new Set(["NLC User", "尚未取得姓名", "未命名使用者", "教會肢體"]);
   const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
     const normalizedName = String(profile.name || "").trim();
     const missingRequiredProfile = !normalizedName || placeholderNames.has(normalizedName)
@@ -202,6 +221,7 @@ function renderAdminUserDirectoryList(query = "") {
       && String(profile.id || "") !== currentProfileId;
     if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
     if (unjoinedTeamOnly && profile.is_joined_team === true) return false;
+    if (nameReviewOnly && !profileNameNeedsReview(profile)) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
     return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group, profile.team_name]
       .filter(Boolean)
@@ -210,7 +230,7 @@ function renderAdminUserDirectoryList(query = "") {
       .includes(normalizedQuery);
   });
   adminUserDirectoryFilteredProfiles = filteredProfiles;
-  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly
+  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly || nameReviewOnly
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
   if (filteredProfiles.length === 0) {
@@ -238,6 +258,10 @@ function renderAdminUserDirectoryList(query = "") {
     const teamText = profile.team_name
       ? `${profile.member_role === "leader" ? "👑 [隊長] " : ""}${escapeHTML(profile.team_name)}`
       : "未加入團隊 (個人速讀中)";
+    const nameReviewFlags = getNameReviewFlags(profile);
+    const needsNameReview = nameReviewFlags.length > 0 && profile.name_review_approved !== true;
+    const nameReviewReasons = nameReviewFlags.map(flag => NAME_FLAG_LABELS[flag] || flag).join("、");
+    const profileIdAttr = escapeHTML(String(profile.id || ""));
 
     return `
       <details class="admin-user-directory__card">
@@ -246,6 +270,7 @@ function renderAdminUserDirectoryList(query = "") {
             <strong>${escapeHTML(name)}</strong>
             <span>${escapeHTML(pastoralZone)}</span>
           </span>
+          ${needsNameReview ? '<span class="admin-user-directory__status admin-user-directory__status--disabled">姓名待審核</span>' : ""}
         </summary>
         <div class="admin-user-directory__detail-panel">
           <dl class="admin-user-directory__details">
@@ -260,9 +285,57 @@ function renderAdminUserDirectoryList(query = "") {
             <div><dt>第一階段計畫</dt><dd>${profile.joined_stage_one === true ? "已加入" : "未加入"}</dd></div>
             <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
           </dl>
+          ${needsNameReview ? `
+          <div class="admin-user-directory__name-review">
+            <p class="admin-user-directory__name-review-reason">此姓名待審核（${escapeHTML(nameReviewReasons)}），審核通過前該使用者無法進入讀經計畫。</p>
+            <div class="admin-user-directory__name-review-actions">
+              <input type="text" class="form-control admin-user-directory__name-review-input" value="${escapeHTML(name)}" maxlength="40">
+              <button type="button" class="secondary-btn admin-user-directory__name-review-save" data-profile-id="${profileIdAttr}">修改並核准</button>
+              <button type="button" class="primary-btn admin-user-directory__name-review-approve" data-profile-id="${profileIdAttr}">核准現有姓名</button>
+            </div>
+          </div>` : ""}
         </div>
       </details>`;
   }).join("");
+}
+
+function bindAdminUserDirectoryNameReviewActions(list) {
+  if (!list || list.dataset.nameReviewBound === "true") return;
+  list.dataset.nameReviewBound = "true";
+  list.addEventListener("click", async event => {
+    const approveBtn = event.target.closest(".admin-user-directory__name-review-approve");
+    const saveBtn = event.target.closest(".admin-user-directory__name-review-save");
+    const btn = approveBtn || saveBtn;
+    if (!btn) return;
+    const profileId = btn.dataset.profileId;
+    if (!profileId) return;
+
+    btn.disabled = true;
+    try {
+      const result = saveBtn
+        ? await db.adminOverwriteProfileName(
+            profileId,
+            btn.closest(".admin-user-directory__name-review")?.querySelector(".admin-user-directory__name-review-input")?.value
+          )
+        : await db.approveProfileName(profileId);
+
+      if (result.error) {
+        if (typeof showToast === "function") showToast(result.error.message || "操作失敗，請稍後再試。");
+        btn.disabled = false;
+        return;
+      }
+      const target = adminUserDirectoryProfiles.find(candidate => String(candidate.id) === String(profileId));
+      if (target && result.data) {
+        target.name = result.data.name ?? target.name;
+        target.name_review_approved = result.data.name_review_approved ?? true;
+      }
+      if (typeof showToast === "function") showToast("已更新姓名審核狀態。");
+      renderAdminUserDirectoryList(document.getElementById("admin-user-directory-search")?.value || "");
+    } catch (err) {
+      if (typeof showToast === "function") showToast(err?.message || "操作失敗，請稍後再試。");
+      btn.disabled = false;
+    }
+  });
 }
 
 export async function renderAdminUserDirectory() {
@@ -273,6 +346,7 @@ export async function renderAdminUserDirectory() {
   const incompleteFilter = document.getElementById("admin-user-directory-filter-incomplete");
   const stageOneFilter = document.getElementById("admin-user-directory-filter-stage-one");
   const unjoinedTeamFilter = document.getElementById("admin-user-directory-filter-unjoined-team");
+  const nameReviewFilter = document.getElementById("admin-user-directory-filter-name-review");
   if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter) return;
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   column.classList.toggle("hidden", !isAdmin);
@@ -281,6 +355,7 @@ export async function renderAdminUserDirectory() {
   incompleteFilter.disabled = true;
   stageOneFilter.disabled = true;
   if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = true;
+  if (nameReviewFilter) nameReviewFilter.disabled = true;
   count.textContent = "讀取中…";
   list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
   const result = await db.fetchAdminUserProfiles();
@@ -294,6 +369,8 @@ export async function renderAdminUserDirectory() {
   incompleteFilter.disabled = false;
   stageOneFilter.disabled = false;
   if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = false;
+  if (nameReviewFilter) nameReviewFilter.disabled = false;
+  bindAdminUserDirectoryNameReviewActions(list);
   const exportBtn = document.getElementById("admin-user-directory-export-btn");
   if (exportBtn) {
     exportBtn.onclick = () => exportUserDirectoryCSV();
@@ -310,6 +387,7 @@ export async function renderAdminUserDirectory() {
   incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   if (unjoinedTeamFilter) unjoinedTeamFilter.onchange = () => renderAdminUserDirectoryList(search.value);
+  if (nameReviewFilter) nameReviewFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   renderAdminUserDirectoryList(search.value);
 }
 

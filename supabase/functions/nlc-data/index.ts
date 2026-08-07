@@ -65,7 +65,7 @@ const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics",
   "set_profile_managed_scopes"
 ]);
-const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -132,7 +132,7 @@ async function fetchProfileData(supabaseAdmin: any, userId: string) {
 
   const { data: basicProfile, error: basicError } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
     .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
     .maybeSingle();
   if (basicError) throw basicError;
@@ -484,10 +484,16 @@ Deno.serve(async (req: Request) => {
     }
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
-      const updatePayload = {
-        name: payload.name ?? profile.name ?? "",
+      const nextName = payload.name ?? profile.name ?? "";
+      const nameChanged = String(nextName) !== String(profile.name ?? "");
+      const updatePayload: Record<string, unknown> = {
+        name: nextName,
         updated_at: new Date().toISOString()
       };
+      // save_profile is the only path a non-admin can use to change their own
+      // name. A fresh self-edit must go back through admin review rather than
+      // silently keeping a stale approval from a previously flagged name.
+      if (nameChanged) updatePayload.name_review_approved = false;
 
       const { data: savedProfile, error: saveError } = await supabaseAdmin
          .from("profiles")

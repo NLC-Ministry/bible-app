@@ -57,8 +57,8 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260807_remove_dead_plan_level_settings_ui" onerror="window.showAppStyleRecovery(this)">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260807_plan_entry_eligibility_gate_and_name_review" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260807_plan_entry_eligibility_gate_and_name_review" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
   <!-- Supabase JS Client library -->
@@ -589,6 +589,17 @@
 
       <!-- VIEW 3: READING PLANS -->
       <section id="plan-view" class="view-pane hidden">
+        <!-- 資料未完成時封鎖讀經計畫，直到姓名/牧區資料完整 -->
+        <div id="plan-eligibility-gate" class="plan-eligibility-gate hidden">
+          <div class="plan-eligibility-gate__card glass-card">
+            <span class="nlc-icon nlc-icon--hero plan-eligibility-gate__icon" data-icon="user" aria-hidden="true"></span>
+            <h3 id="plan-eligibility-gate-title" class="type-section-title"></h3>
+            <p id="plan-eligibility-gate-desc" class="type-body plan-eligibility-gate__desc"></p>
+
+            <a id="plan-eligibility-gate-hub-link" href="https://member.newlife.org.tw/onboarding" target="_blank"
+              rel="noopener" class="primary-btn plan-eligibility-gate__hub-link">前往會員中心完成身份設定</a>
+          </div>
+        </div>
         <!-- 子檢視 1: 計畫列表 (預設顯示) -->
         <div id="plan-list-subview" class="grid-layout">
           <!-- Top YouVersion Style Header -->
@@ -1731,6 +1742,10 @@
                   <input type="checkbox" id="admin-user-directory-filter-unjoined-team">
                   <span>未加入團隊（個人速讀中）</span>
                 </label>
+                <label>
+                  <input type="checkbox" id="admin-user-directory-filter-name-review">
+                  <span>姓名待審核（含數字、emoji 或亂打的英文）</span>
+                </label>
               </fieldset>
               <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入使用者資料…</div>
@@ -2285,7 +2300,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260807_remove_dead_plan_level_settings_ui"></script>
+  <script type="module" src="js/app.js?v=20260807_plan_entry_eligibility_gate_and_name_review"></script>
 </body>
 
 </html>

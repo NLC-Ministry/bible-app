@@ -209,8 +209,80 @@ const INVENTED_DISPLAY_NAMES = new Set([
   "新使用者",
   "NLC User",
   "系統管理員",
-  "訪客"
+  "訪客",
+  "尚未取得姓名",
+  "未命名使用者",
+  "教會肢體"
 ]);
+
+/** Emoji / pictograph ranges commonly seen in joke or spam profile names. */
+const PROFILE_NAME_EMOJI_PATTERN = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️]/u;
+const PROFILE_NAME_DIGIT_PATTERN = /[0-9]/;
+
+/**
+ * Heuristic only: a run of Latin letters with no vowel, a long consonant
+ * run, or a tripled letter reads as keyboard-mash rather than a real word.
+ * False positives are expected (e.g. genuine short romanized names) — this
+ * is a first-pass filter for the admin review queue, not a hard reject.
+ * @param {string} token
+ */
+function looksLikeGibberishEnglish(token) {
+  if (!/^[a-zA-Z]+$/.test(token) || token.length < 2) return false;
+  const lower = token.toLowerCase();
+  if (!/[aeiouy]/.test(lower)) return true;
+  if (/([a-z])\1{2,}/.test(lower)) return true;
+  if (/[bcdfghjklmnpqrstvwxz]{5,}/.test(lower)) return true;
+  return false;
+}
+
+/**
+ * Returns the list of reasons a profile name looks incomplete or
+ * suspicious, or [] if it looks like a normal display name.
+ * @param {string|null|undefined} name
+ * @returns {string[]} subset of "empty" | "placeholder" | "digits" | "emoji" | "gibberish_english"
+ */
+function getProfileNameFlags(name) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return ["empty"];
+  const flags = [];
+  if (INVENTED_DISPLAY_NAMES.has(trimmed)) flags.push("placeholder");
+  if (PROFILE_NAME_DIGIT_PATTERN.test(trimmed)) flags.push("digits");
+  if (PROFILE_NAME_EMOJI_PATTERN.test(trimmed)) flags.push("emoji");
+  const latinTokens = trimmed.match(/[a-zA-Z]+/g) || [];
+  if (latinTokens.some(looksLikeGibberishEnglish)) flags.push("gibberish_english");
+  return flags;
+}
+
+/**
+ * @param {string|null|undefined} name
+ * @returns {boolean} true when the name has none of the suspicious flags above
+ */
+function isProfileNameValid(name) {
+  return getProfileNameFlags(name).length === 0;
+}
+window.INVENTED_DISPLAY_NAMES = INVENTED_DISPLAY_NAMES;
+window.getProfileNameFlags = getProfileNameFlags;
+window.isProfileNameValid = isProfileNameValid;
+
+/**
+ * Whether a profile is complete enough to enter reading plans: a pastoral
+ * zone placement (Hub-owned, never self-service — see migration 0028) and a
+ * name that isn't empty/placeholder/suspicious (or has been admin-approved
+ * despite tripping the heuristic).
+ * @param {object|null} [user]
+ * @returns {{reason: "missing_zone"|"missing_name"|"invalid_name", flags?: string[]}|null}
+ */
+function getPlanEligibilityBlock(user) {
+  const u = user || (typeof state !== "undefined" ? state.currentUser : null) || {};
+  if (!u || u.is_demo) return null;
+  if (!String(u.pastoral_zone || "").trim()) return { reason: "missing_zone" };
+  const flags = getProfileNameFlags(u.name);
+  if (flags.length > 0 && !u.name_review_approved) {
+    return { reason: flags.includes("empty") ? "missing_name" : "invalid_name", flags };
+  }
+  return null;
+}
+window.getPlanEligibilityBlock = getPlanEligibilityBlock;
 
 /**
  * Resolve a displayable person name. Returns null when missing or invented.

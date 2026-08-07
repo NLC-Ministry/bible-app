@@ -9966,6 +9966,45 @@ body.dark-theme .plan-calendar .plan-day-cell.active, body.dark-theme .plan-cale
 body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-theme .plan-calendar .plan-day-cell.today.active .day-number { color: #fee2e2; }
 
 
+/* Plan entry eligibility gate: blocks plan-view until name/pastoral zone are complete. */
+#plan-view.plan-view--gated > *:not(#plan-eligibility-gate) {
+  display: none !important;
+}
+
+.plan-eligibility-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - 180px);
+  padding: 1.5rem;
+}
+
+.plan-eligibility-gate__card {
+  width: 100%;
+  max-width: 380px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.plan-eligibility-gate__icon {
+  color: var(--color-brand);
+  margin-bottom: 0.5rem;
+}
+
+.plan-eligibility-gate__desc {
+  color: var(--text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.plan-eligibility-gate__hub-link {
+  width: 100%;
+  text-decoration: none;
+}
+
 /* Calendar-only today reading: no inner list/calendar switcher. */
 #plan-view-mode-toggle {
   display: none !important;

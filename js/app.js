@@ -4,22 +4,22 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260807_remove_dead_plan_level_settings_ui';
-import './data/church_campaign.js?v=20260807_remove_dead_plan_level_settings_ui';
+import './copy/zh-Hant.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
+import './data/church_campaign.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260807_remove_dead_plan_level_settings_ui';
-import './design/icon-registry.js?v=20260807_remove_dead_plan_level_settings_ui';
+import './design/design-system-helpers.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
+import './design/icon-registry.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 import './design/icons.js';
-import './state.js?v=20260807_remove_dead_plan_level_settings_ui';
-import './auth.js?v=20260807_remove_dead_plan_level_settings_ui';
+import './state.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
+import './auth.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 import './auth-launch.mjs';
-import './db.js?v=20260807_remove_dead_plan_level_settings_ui';
-import './utils.js?v=20260807_remove_dead_plan_level_settings_ui';
-import './gamification.js?v=20260807_remove_dead_plan_level_settings_ui';
+import './db.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
+import './utils.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
+import './gamification.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260807_remove_dead_plan_level_settings_ui';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -33,7 +33,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260807_remove_dead_plan_level_settings_ui';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260807_plan_entry_eligibility_gate_and_name_review';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
@@ -371,6 +371,81 @@ async function refreshCurrentAppView() {
   }
 }
 
+// ─── Plan entry eligibility gate: blocks plan-view until profile is complete ───
+// Read-only screen — this app never lets a member edit their own name or
+// pastoral zone. Every remediation path points to the church Member Hub;
+// the only in-app write path for a flagged name is the admin review console
+// (js/modules/admin.js renderAdminUserDirectoryList).
+let planEligibilityHubReturnBound = false;
+
+function getPlanEligibilityGateCopy(block) {
+  if (block.reason === "missing_zone") {
+    return {
+      title: "請先完成牧區資料設定",
+      desc: "讀經計畫需要先在會員中心完成牧區歸屬，才能開始使用。完成後回到這裡即可自動繼續。"
+    };
+  }
+  if (block.reason === "missing_name") {
+    return {
+      title: "請先登錄您的中文全名",
+      desc: "讀經計畫需要顯示您的中文全名，請至會員中心完成身份設定後，回到這裡即可自動繼續。"
+    };
+  }
+  return {
+    title: "姓名待確認",
+    desc: "您目前登錄的姓名看起來不完整，請至會員中心確認或更新姓名資料；系統管理員審核通過後即可繼續使用。"
+  };
+}
+
+function bindPlanEligibilityHubReturnSync() {
+  if (planEligibilityHubReturnBound || typeof document === "undefined") return;
+  planEligibilityHubReturnBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+    if (!window.appRouter || window.appRouter.currentTab !== "plan-view") return;
+    db.syncNlcSessionWithSupabase(true).then(() => {
+      if (window.appRouter && window.appRouter.currentTab === "plan-view") {
+        window.appRouter.switchTab("plan-view", { keepPlanDetail: true });
+      }
+    }).catch(err => console.warn("[PlanEligibilityGate] Profile sync after Hub return failed:", err));
+  });
+}
+
+function renderPlanEligibilityGate(block) {
+  const planView = document.getElementById("plan-view");
+  const gate = document.getElementById("plan-eligibility-gate");
+  if (!planView || !gate) return;
+  planView.classList.add("plan-view--gated");
+  gate.classList.remove("hidden");
+
+  const copy = getPlanEligibilityGateCopy(block);
+  const titleEl = document.getElementById("plan-eligibility-gate-title");
+  const descEl = document.getElementById("plan-eligibility-gate-desc");
+  const hubLink = document.getElementById("plan-eligibility-gate-hub-link");
+
+  if (titleEl) titleEl.textContent = copy.title;
+  if (descEl) descEl.textContent = copy.desc;
+  if (hubLink) {
+    hubLink.href = (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function")
+      ? auth.getMemberHubUrl("onboarding")
+      : "https://member.newlife.org.tw/onboarding";
+  }
+
+  if (typeof hydrateIcons === "function") hydrateIcons(gate);
+  bindPlanEligibilityHubReturnSync();
+}
+
+function hidePlanEligibilityGate() {
+  const planView = document.getElementById("plan-view");
+  const gate = document.getElementById("plan-eligibility-gate");
+  if (planView) planView.classList.remove("plan-view--gated");
+  if (gate) gate.classList.add("hidden");
+}
+
+window.renderPlanEligibilityGate = renderPlanEligibilityGate;
+window.hidePlanEligibilityGate = hidePlanEligibilityGate;
+
 // ─── Tab Switching: isSwitching guard prevents concurrent race conditions ───
 let isSwitching = false;
 
@@ -463,18 +538,26 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "plan-view") {
-      const mod = await loadModule('plan', './modules/plan.js?v=' + buildVersion);
-      await ensurePlanFeatureModulesLoaded();
-      if (mod && typeof mod.renderPlanView === 'function') {
-        await mod.renderPlanView();
-      } else if (typeof window.renderPlanView === 'function') {
-        await window.renderPlanView();
-      }
-      if (options.onboardingPlanDestination === "discover") {
-        if (mod && typeof mod.showDiscoverPlans === "function") {
-          await mod.showDiscoverPlans();
-        } else if (typeof window.showDiscoverPlans === "function") {
-          await window.showDiscoverPlans();
+      const eligibilityBlock = typeof getPlanEligibilityBlock === "function"
+        ? getPlanEligibilityBlock(state.currentUser)
+        : null;
+      if (eligibilityBlock) {
+        renderPlanEligibilityGate(eligibilityBlock);
+      } else {
+        hidePlanEligibilityGate();
+        const mod = await loadModule('plan', './modules/plan.js?v=' + buildVersion);
+        await ensurePlanFeatureModulesLoaded();
+        if (mod && typeof mod.renderPlanView === 'function') {
+          await mod.renderPlanView();
+        } else if (typeof window.renderPlanView === 'function') {
+          await window.renderPlanView();
+        }
+        if (options.onboardingPlanDestination === "discover") {
+          if (mod && typeof mod.showDiscoverPlans === "function") {
+            await mod.showDiscoverPlans();
+          } else if (typeof window.showDiscoverPlans === "function") {
+            await window.showDiscoverPlans();
+          }
         }
       }
 

@@ -1625,14 +1625,14 @@ const db = {
 
       const { data: pData, error: pError } = await state.supabase
         .from("profiles")
-        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions(id, code, label)")
+        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, name_review_approved, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions(id, code, label)")
         .eq("is_demo", false)
         .order("name", { ascending: true });
 
       if (pError) {
         const { data: fallbackProfiles, error: fbErr } = await state.supabase
           .from("profiles")
-          .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id")
+          .select("id, name, email, great_region, pastoral_zone, small_group, is_active, name_review_approved, member_context_synced_at, member_context_sync_status, role_id")
           .eq("is_demo", false)
           .order("name", { ascending: true });
         if (fbErr) return { data: [], error: fbErr };
@@ -1794,6 +1794,42 @@ const db = {
       state.currentUser.managed_groups = updatePayload.managed_groups || "";
     }
     return { data: resultData, error: null };
+  },
+
+  /** Admin approves a name the getProfileNameFlags() heuristic flags, without changing it. */
+  async approveProfileName(profileId) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { data: null, error: new Error("profile_name_review_requires_supabase") };
+    }
+    if (getUserRoleCode(state.currentUser) !== "admin") {
+      return { data: null, error: new Error("profile_name_review_admin_required") };
+    }
+    const { data, error } = await state.supabase
+      .from("profiles")
+      .update({ name_review_approved: true })
+      .eq("id", profileId)
+      .select("id, name, name_review_approved")
+      .maybeSingle();
+    return { data, error };
+  },
+
+  /** Admin directly corrects a flagged name and approves the replacement. */
+  async adminOverwriteProfileName(profileId, name) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { data: null, error: new Error("profile_name_review_requires_supabase") };
+    }
+    if (getUserRoleCode(state.currentUser) !== "admin") {
+      return { data: null, error: new Error("profile_name_review_admin_required") };
+    }
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return { data: null, error: new Error("profile_name_required") };
+    const { data, error } = await state.supabase
+      .from("profiles")
+      .update({ name: trimmed, name_review_approved: true })
+      .eq("id", profileId)
+      .select("id, name, name_review_approved")
+      .maybeSingle();
+    return { data, error };
   },
 
   async fetchRoleDefinitions() {

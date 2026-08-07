@@ -1,0 +1,174 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+const utils = read("js/utils.js");
+const app = read("js/app.js");
+const html = read("index.html");
+const css = read("index.css");
+const adminCss = read("css/admin-registration-statistics.css");
+const admin = read("js/modules/admin.js");
+const db = read("js/db.js");
+const nlcData = read("supabase/functions/nlc-data/index.ts");
+const migration = read("supabase/migrations/0069_name_review_approval.sql");
+
+describe("profile name heuristic (js/utils.js)", () => {
+  it("merges the placeholder-name lists and exports them for reuse", () => {
+    expect(utils).toContain("尚未取得姓名");
+    expect(utils).toContain("未命名使用者");
+    expect(utils).toContain("教會肢體");
+    expect(utils).toContain("window.INVENTED_DISPLAY_NAMES = INVENTED_DISPLAY_NAMES");
+  });
+
+  it("flags digits, emoji, and gibberish English, and exports isProfileNameValid", () => {
+    expect(utils).toContain("function getProfileNameFlags(name)");
+    expect(utils).toContain("PROFILE_NAME_DIGIT_PATTERN.test(trimmed)) flags.push(\"digits\")");
+    expect(utils).toContain("PROFILE_NAME_EMOJI_PATTERN.test(trimmed)) flags.push(\"emoji\")");
+    expect(utils).toContain("looksLikeGibberishEnglish");
+    expect(utils).toContain("function isProfileNameValid(name)");
+    expect(utils).toContain("window.getProfileNameFlags = getProfileNameFlags");
+    expect(utils).toContain("window.isProfileNameValid = isProfileNameValid");
+  });
+
+  it("evaluates gibberish heuristic correctly for representative tokens", () => {
+    const fn = new Function(`
+      ${utils.match(/function looksLikeGibberishEnglish[\s\S]*?\n}/)[0]}
+      return looksLikeGibberishEnglish;
+    `)();
+    expect(fn("bxfgh")).toBe(true); // no vowel
+    expect(fn("aaaaa")).toBe(true); // tripled letter
+    expect(fn("asdfgh")).toBe(true); // 5+ consonant run (asdfgh has no vowel anyway, still flagged)
+    expect(fn("David")).toBe(false);
+    expect(fn("Grace")).toBe(false);
+    expect(fn("a")).toBe(false); // too short to judge
+  });
+
+  it("defines getPlanEligibilityBlock gating on pastoral_zone and name validity", () => {
+    expect(utils).toContain("function getPlanEligibilityBlock(user)");
+    expect(utils).toContain('if (!String(u.pastoral_zone || "").trim()) return { reason: "missing_zone" }');
+    expect(utils).toContain("!u.name_review_approved");
+    expect(utils).toContain("window.getPlanEligibilityBlock = getPlanEligibilityBlock");
+    // Demo accounts must not be locked out of a feature they use for local/dev testing.
+    expect(utils).toMatch(/if \(!u \|\| u\.is_demo\) return null;/);
+  });
+});
+
+describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => {
+  it("checks eligibility before loading the plan module on plan-view entry", () => {
+    const planBranch = app.match(/\} else if \(tabId === "plan-view"\) \{[\s\S]*?\n {4}\} else if \(tabId === "stats-view"\)/);
+    expect(planBranch, "plan-view switchTab branch").toBeTruthy();
+    expect(planBranch[0]).toContain("getPlanEligibilityBlock(state.currentUser)");
+    expect(planBranch[0]).toContain("renderPlanEligibilityGate(eligibilityBlock)");
+    expect(planBranch[0]).toContain("hidePlanEligibilityGate()");
+    // The gate must short-circuit before the (large) plan module is fetched.
+    const gatedIndex = planBranch[0].indexOf("if (eligibilityBlock)");
+    const loadIndex = planBranch[0].indexOf("loadModule('plan'");
+    expect(gatedIndex).toBeGreaterThan(-1);
+    expect(loadIndex).toBeGreaterThan(gatedIndex);
+  });
+
+  it("re-syncs from Member Hub on return and never offers a local edit form", () => {
+    expect(app).toContain("function bindPlanEligibilityHubReturnSync");
+    expect(app).toContain("db.syncNlcSessionWithSupabase(true)");
+    expect(app).toContain("window.renderPlanEligibilityGate = renderPlanEligibilityGate");
+    expect(app).toContain("window.hidePlanEligibilityGate = hidePlanEligibilityGate");
+    // Regression guard: the gate is read-only. Members fix their own data
+    // exclusively through the Member Hub, never through an in-app form —
+    // js/db.js syncProfileStatsToSupabase() must not be reachable from here.
+    expect(app).not.toContain("bindPlanEligibilityNameForm");
+    expect(app).not.toContain("plan-eligibility-gate-name-save");
+    expect(app).not.toContain("db.syncProfileStatsToSupabase()");
+  });
+
+  it("provides copy for all three block reasons and always points to the Member Hub link", () => {
+    expect(app).toContain('block.reason === "missing_zone"');
+    expect(app).toContain('block.reason === "missing_name"');
+    expect(app).toContain("auth.getMemberHubUrl(\"onboarding\")");
+    // Unlike the old design, the hub link is unconditional — no per-reason toggle.
+    expect(app).not.toContain("showHubLink");
+    expect(app).not.toContain("showNameForm");
+  });
+
+  it("renders read-only gate markup inside #plan-view with only a Member Hub link, no editable fields", () => {
+    expect(html).toContain('<section id="plan-view" class="view-pane hidden">');
+    expect(html).toContain('id="plan-eligibility-gate"');
+    expect(html).toContain('id="plan-eligibility-gate-hub-link"');
+    expect(html).not.toContain('id="plan-eligibility-gate-name-input"');
+    expect(html).not.toContain('id="plan-eligibility-gate-name-save"');
+    expect(html).not.toContain('id="plan-eligibility-gate-name-form"');
+  });
+
+  it("hides every other plan-view child while gated, using theme tokens only", () => {
+    const rule = css.match(/#plan-view\.plan-view--gated > \*:not\(#plan-eligibility-gate\) \{[^}]+\}/);
+    expect(rule, "#plan-view.plan-view--gated rule").toBeTruthy();
+    expect(rule[0]).toContain("display: none !important");
+    const gateBlock = css.match(/\.plan-eligibility-gate__desc \{[^}]+\}/);
+    expect(gateBlock[0]).toMatch(/var\(--text-secondary\)/);
+  });
+});
+
+describe("admin name-review console (js/modules/admin.js + index.html)", () => {
+  it("adds a name-review filter checkbox next to the existing incomplete-profile filters", () => {
+    expect(html).toContain('id="admin-user-directory-filter-name-review"');
+  });
+
+  it("computes review status from the shared heuristic, excluding merely-empty names", () => {
+    expect(admin).toContain("function getNameReviewFlags(profile)");
+    expect(admin).toContain('getProfileNameFlags(profile.name).filter(flag => flag !== "empty")');
+    expect(admin).toContain("function profileNameNeedsReview(profile)");
+    expect(admin).toContain("profile.name_review_approved !== true");
+  });
+
+  it("reuses the merged placeholder set instead of a third hardcoded list", () => {
+    expect(admin).toContain("window.INVENTED_DISPLAY_NAMES");
+  });
+
+  it("wires an approve action and an edit-and-approve action per flagged card", () => {
+    expect(admin).toContain("admin-user-directory__name-review-approve");
+    expect(admin).toContain("admin-user-directory__name-review-save");
+    expect(admin).toContain("db.approveProfileName(profileId)");
+    expect(admin).toContain("db.adminOverwriteProfileName(");
+    expect(admin).toContain("function bindAdminUserDirectoryNameReviewActions(list)");
+    expect(admin).toContain("bindAdminUserDirectoryNameReviewActions(list)");
+  });
+
+  it("styles the disabled/needs-review status badge (regression: --disabled had no matching CSS rule)", () => {
+    expect(adminCss).toContain(".admin-user-directory__status--disabled");
+  });
+});
+
+describe("admin write path for name review (js/db.js)", () => {
+  it("requires the admin role for both approve and overwrite actions", () => {
+    const approveFn = db.match(/async approveProfileName\(profileId\) \{[\s\S]*?\n {2}\},/);
+    const overwriteFn = db.match(/async adminOverwriteProfileName\(profileId, name\) \{[\s\S]*?\n {2}\},/);
+    expect(approveFn, "approveProfileName").toBeTruthy();
+    expect(overwriteFn, "adminOverwriteProfileName").toBeTruthy();
+    expect(approveFn[0]).toContain('getUserRoleCode(state.currentUser) !== "admin"');
+    expect(overwriteFn[0]).toContain('getUserRoleCode(state.currentUser) !== "admin"');
+    expect(approveFn[0]).toContain("name_review_approved: true");
+    expect(overwriteFn[0]).toContain("name_review_approved: true");
+  });
+});
+
+describe("name_review_approved column (migration 0069 + nlc-data)", () => {
+  it("adds the column as NOT NULL DEFAULT false, consistent with the other profile flags", () => {
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS name_review_approved BOOLEAN NOT NULL DEFAULT false");
+  });
+
+  it("exposes the column through PROFILE_SELECT so the client can read it", () => {
+    const selects = [...nlcData.matchAll(/select\("([^"]*name_review_approved[^"]*)"\)/g)];
+    expect(nlcData).toContain("name_review_approved");
+    expect(nlcData.match(/PROFILE_SELECT = "[^"]*name_review_approved/)).toBeTruthy();
+  });
+
+  it("resets the approval on self-service name changes so a stale approval cannot survive an edit", () => {
+    const start = nlcData.indexOf('if (action === "save_profile")');
+    const end = nlcData.indexOf('if (action === "insert"', start);
+    expect(start, "save_profile branch start").toBeGreaterThan(-1);
+    expect(end, "save_profile branch end").toBeGreaterThan(start);
+    const saveProfileBranch = nlcData.slice(start, end);
+    expect(saveProfileBranch).toContain("nameChanged");
+    expect(saveProfileBranch).toContain("updatePayload.name_review_approved = false");
+  });
+});
