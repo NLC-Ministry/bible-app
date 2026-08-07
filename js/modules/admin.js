@@ -127,6 +127,62 @@ export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProf
   document.body.removeChild(link);
 }
 
+export function convertOrgStructureToCSV(orgStructure = state.orgStructure) {
+  if (!orgStructure) return "";
+  const headers = ["大區", "牧區", "小組"];
+  const rows = [];
+
+  const regions = orgStructure.regions || [];
+  const zonesMap = orgStructure.zones || {};
+  const groupsMap = orgStructure.groups || {};
+
+  regions.forEach(region => {
+    const zones = zonesMap[region] || [];
+    if (zones.length === 0) {
+      rows.push([region, "無下屬牧區", "無下屬小組"]);
+    } else {
+      zones.forEach(zone => {
+        const groups = groupsMap[zone] || [];
+        if (groups.length === 0) {
+          rows.push([region, zone, "無下屬小組"]);
+        } else {
+          groups.forEach(group => {
+            rows.push([region, zone, group]);
+          });
+        }
+      });
+    }
+  });
+
+  if (rows.length === 0) return "";
+  return [
+    headers.join(","),
+    ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+  ].join("\n");
+}
+
+export async function exportOrgStructureCSV() {
+  if (!state.orgStructure || !Array.isArray(state.orgStructure.regions) || state.orgStructure.regions.length === 0) {
+    if (typeof db.loadOrgStructure === "function") {
+      await db.loadOrgStructure();
+    }
+  }
+  const csvContent = convertOrgStructureToCSV(state.orgStructure);
+  if (!csvContent) {
+    if (typeof showToast === "function") showToast("目前沒有可供匯出的組織架構資料。");
+    return;
+  }
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const today = new Date().toISOString().slice(0, 10);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `church_org_structure_${today}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
@@ -242,8 +298,14 @@ export async function renderAdminUserDirectory() {
   if (exportBtn) {
     exportBtn.onclick = () => exportUserDirectoryCSV();
   }
+  const orgExportBtn = document.getElementById("admin-export-org-structure-btn");
+  if (orgExportBtn) {
+    orgExportBtn.onclick = () => exportOrgStructureCSV();
+  }
   window.exportUserDirectoryCSV = exportUserDirectoryCSV;
   window.convertUserDirectoryToCSV = convertUserDirectoryToCSV;
+  window.exportOrgStructureCSV = exportOrgStructureCSV;
+  window.convertOrgStructureToCSV = convertOrgStructureToCSV;
   search.oninput = () => renderAdminUserDirectoryList(search.value);
   incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);

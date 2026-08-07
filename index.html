@@ -1811,12 +1811,16 @@
           </div>
           <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
             <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
-              <div class="admin-registration-statistics__header">
+              <div class="admin-registration-statistics__header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">權限管理</p>
                   <h3 class="card-title" id="admin-managed-scopes-title">管理範圍設定</h3>
                   <p>角色由會員中心同步；此處只列出具有管理職責的人員，不包含一般會友，並可設定多個大區、牧區或小組。</p>
                 </div>
+                <button type="button" id="admin-export-org-structure-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem; flex-shrink:0;" title="匯出大區/牧區/小組組織架構 CSV">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                  <span>匯出組織架構 CSV</span>
+                </button>
               </div>
               <label class="admin-registration-statistics__filter" for="admin-managed-scopes-profile">
                 <span>選擇人員</span>
