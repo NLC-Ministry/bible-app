@@ -1736,9 +1736,9 @@ const db = {
     const normZones = normalize(scopes.managedZones);
     const normGroups = normalize(scopes.managedGroups);
     const updatePayload = {
-      managed_regions: normRegions.join(",") || null,
-      managed_zones: normZones.join(",") || null,
-      managed_groups: normGroups.join(",") || null
+      managed_regions: normRegions.join(","),
+      managed_zones: normZones.join(","),
+      managed_groups: normGroups.join(",")
     };
 
     try {
