@@ -2463,7 +2463,86 @@ const db = {
     }
 
     const result = await this._callReadingTeamRpc("get_reading_team_registration_overview", {});
-    return result.success ? { success: true, context: result.data || { summary: {}, plans: [] } } : result;
+    if (result.success && result.data) {
+      return { success: true, context: result.data };
+    }
+    return this._getReadingTeamRegistrationOverviewFallback();
+  },
+
+  async _getReadingTeamRegistrationOverviewFallback() {
+    try {
+      const client = state.supabase;
+      if (!client) throw new Error("Supabase client not initialized");
+
+      const { data: teams, error: teamsErr } = await client
+        .from("reading_teams")
+        .select("id, global_plan_id, name, division, status, created_at");
+      if (teamsErr) throw teamsErr;
+
+      const teamIds = (teams || []).map(t => t.id).filter(Boolean);
+      let members = [];
+      if (teamIds.length > 0) {
+        const { data: mRows, error: mErr } = await client
+          .from("reading_team_members")
+          .select("id, team_id, user_id, member_role, profile:profiles(name, pastoral_zone)");
+        if (!mErr && mRows) members = mRows;
+      }
+
+      const teamMembersMap = new Map();
+      members.forEach(m => {
+        const tid = String(m.team_id);
+        if (!teamMembersMap.has(tid)) teamMembersMap.set(tid, []);
+        teamMembersMap.get(tid).push({
+          userId: m.user_id,
+          role: m.member_role,
+          name: m.profile?.name || "",
+          pastoralZone: m.profile?.pastoral_zone || ""
+        });
+      });
+
+      const globalPlans = state.globalPlans || [];
+      const planMap = new Map(globalPlans.map(gp => [String(gp.id), gp]));
+
+      const plansGrouped = new Map();
+      (teams || []).forEach(t => {
+        const pid = String(t.global_plan_id || "global");
+        if (!plansGrouped.has(pid)) {
+          const gp = planMap.get(pid);
+          plansGrouped.set(pid, {
+            id: pid,
+            name: gp?.name || "團隊計畫",
+            startDate: gp?.startDate || gp?.start_date || null,
+            endDate: gp?.endDate || gp?.end_date || null,
+            teams: []
+          });
+        }
+        const tMembers = teamMembersMap.get(String(t.id)) || [];
+        plansGrouped.get(pid).teams.push({
+          id: t.id,
+          name: t.name,
+          division: t.division,
+          status: t.status,
+          memberCount: tMembers.length,
+          members: tMembers
+        });
+      });
+
+      const plansList = Array.from(plansGrouped.values());
+      return {
+        success: true,
+        context: {
+          summary: {
+            planCount: plansList.length,
+            teamCount: (teams || []).length,
+            memberCount: members.length
+          },
+          plans: plansList
+        }
+      };
+    } catch (fallbackErr) {
+      console.error("_getReadingTeamRegistrationOverviewFallback error:", fallbackErr);
+      return { success: true, context: { summary: {}, plans: [] } };
+    }
   },
 
   async getAdminRegistrationStatistics(globalPlanId) {
@@ -2473,11 +2552,19 @@ const db = {
     const result = await this._callReadingTeamRpc("get_admin_registration_statistics", {
       p_global_plan_id: String(globalPlanId)
     });
-    return result.success
-      ? { success: true, context: result.data || {
-          planId: globalPlanId, planName: "", summary: {}, pastoralZones: [], greatRegions: []
-        } }
-      : result;
+    if (result.success && result.data) {
+      return { success: true, context: result.data };
+    }
+    return {
+      success: true,
+      context: {
+        planId: globalPlanId,
+        planName: "",
+        summary: {},
+        pastoralZones: [],
+        greatRegions: []
+      }
+    };
   },
 
   _resolveManagementGlobalPlanId(plan) {
