@@ -1,5 +1,5 @@
-// components/issue-report/__tests__/IssueReport.test.ts
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// @ts-ignore
 import { readFileSync } from "fs";
 import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
@@ -315,7 +315,7 @@ describe("Issue Report System Tests", () => {
       const csv = convertToCSV(mockReports);
 
       // Headers exist
-      expect(csv).toContain("ID,建立時間,分類,問題描述,回報者姓名,回報者牧區,回報者小組");
+      expect(csv).toContain("ID,建立時間,分類,處理狀況,官方回覆,回覆時間,問題描述,頁面網址,回報者姓名,回報者牧區,回報者小組");
       // Data converted correctly
       expect(csv).toContain("\"rep-1\"");
       expect(csv).toContain("\"Bug 錯誤\"");
@@ -507,8 +507,9 @@ describe("Issue Report System Tests", () => {
       ];
 
       const csv = convertToCSV(filteredReports);
-      expect(csv).toContain("ID,建立時間,分類,問題描述,回報者姓名,回報者牧區,回報者小組");
+      expect(csv).toContain("ID,建立時間,分類,處理狀況,官方回覆,回覆時間,問題描述,頁面網址,回報者姓名,回報者牧區,回報者小組");
       expect(csv).toContain("\"rep-filtered-1\"");
+      expect(csv).toContain("\"待處理\"");
       expect(csv).toContain("\"僅匯出待處理的錯誤回報\"");
       expect(csv).toContain("\"過濾測試人\"");
     });

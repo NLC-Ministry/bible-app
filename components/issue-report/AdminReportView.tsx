@@ -18,21 +18,33 @@ interface IssueReport {
   } | null;
 }
 
-const CATEGORY_MAP = {
+const CATEGORY_MAP: Record<string, string> = {
   bug: "Bug 錯誤",
   ui: "UI 建議",
   data: "資料問題",
   other: "其他"
 };
 
+const STATUS_MAP: Record<string, string> = {
+  pending: "待處理",
+  processing: "處理中",
+  resolved: "已解決",
+  ignored: "已忽略",
+  closed: "已關閉"
+};
+
 export function convertToCSV(data: IssueReport[]): string {
   if (!data || data.length === 0) return "";
-  const headers = ["ID", "建立時間", "分類", "問題描述", "回報者姓名", "回報者牧區", "回報者小組"];
+  const headers = ["ID", "建立時間", "分類", "處理狀況", "官方回覆", "回覆時間", "問題描述", "頁面網址", "回報者姓名", "回報者牧區", "回報者小組"];
   const rows = data.map(item => [
     item.id,
     item.created_at,
     CATEGORY_MAP[item.category] || item.category,
-    item.description.replace(/"/g, '""'),
+    STATUS_MAP[item.status] || item.status || "待處理",
+    item.metadata?.reply ? String(item.metadata.reply).replace(/"/g, '""') : "",
+    item.metadata?.replied_at || "",
+    (item.description || "").replace(/"/g, '""'),
+    item.url || "",
     item.profiles?.name || "訪客/離線",
     item.profiles?.pastoral_zone || "",
     item.profiles?.small_group || ""
