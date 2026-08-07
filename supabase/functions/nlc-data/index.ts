@@ -220,6 +220,23 @@ const ROLE_CODE_MAP: Record<string, string> = {
 };
 
 function getProfileRoleCode(profile: any) {
+  const leadershipLabel = String(profile?.member_context_leadership_display_label || "").trim();
+  if (leadershipLabel === "組織架構管理員" || leadershipLabel.includes("系統管理員") || leadershipLabel.includes("組織架構管理員")) {
+    return "admin";
+  }
+  if (leadershipLabel === "教會牧者" || leadershipLabel.includes("主任牧師") || leadershipLabel.includes("教會牧者")) {
+    return "senior_pastor";
+  }
+  if (leadershipLabel === "大區長" || leadershipLabel.includes("大區同工")) {
+    return "great_zone_leader";
+  }
+  if (leadershipLabel === "區長" || leadershipLabel.includes("牧區長") || leadershipLabel.includes("區同工")) {
+    return "zone_leader";
+  }
+  if (leadershipLabel === "小組長" || leadershipLabel.includes("副小組長") || leadershipLabel.includes("小組同工")) {
+    return "group_leader";
+  }
+
   const roleId = String(profile?.role_id || "").toLowerCase();
   return profile?.role_definition?.code
     || (roleId ? ROLE_CODE_MAP[roleId] : null)

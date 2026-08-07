@@ -312,11 +312,9 @@ async function resolveSyncedRoleId(
       ].map(normalizePermissionSignal);
       const keyMatched = signals.keys.some((value: string) => keys.includes(value));
       const labelMatched = signals.labels.some((value: string) => labels.includes(value));
-      const adminPrimaryRoleMatched = definition.code === "admin"
-        && Boolean(signals.primaryRole)
-        && labels.includes(signals.primaryRole);
-      // Leadership display text alone must never grant administrative authority.
-      return keyMatched || adminPrimaryRoleMatched || (definition.code !== "admin" && labelMatched);
+      const adminLabelMatched = definition.code === "admin"
+        && signals.labels.some((l: string) => ["組織架構管理員", "系統管理員", "平台管理員", "admin"].includes(l));
+      return keyMatched || adminLabelMatched || labelMatched;
     })
     .sort((left: any, right: any) =>
       Number(left.sort_order ?? 100) - Number(right.sort_order ?? 100)
