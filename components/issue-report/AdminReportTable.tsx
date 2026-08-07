@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare, Filter } from "lucide-react";
+import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare, Filter, Copy, Check } from "lucide-react";
 
 interface IssueReport {
   id: string;
@@ -63,6 +63,23 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
   const [replyStatus, setReplyStatus] = React.useState<string>("pending");
   const [replyText, setReplyText] = React.useState<string>("");
   const [isSavingReply, setIsSavingReply] = React.useState(false);
+
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const handleCopyText = (id: string, text: string) => {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const statusCounts = React.useMemo(() => {
     const counts: Record<StatusFilter, number> = {
@@ -306,15 +323,43 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                       <option value="ignored" className="bg-slate-900 text-slate-300 font-bold">已忽略 (Ignored)</option>
                     </select>
                   </td>
-                  <td className="px-6 py-3.5 break-words leading-relaxed text-sm text-slate-100">
-                    <div className="font-normal text-slate-100">{report.description}</div>
+                  <td className="px-6 py-3.5 break-words leading-relaxed text-sm text-slate-100 select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-normal text-slate-100 select-text cursor-text flex-1" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
+                        {report.description}
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleCopyText(report.id, report.description)}
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold border transition-all cursor-pointer ${
+                          copiedId === report.id
+                            ? "bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-sm"
+                            : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700"
+                        }`}
+                        title={copiedId === report.id ? "已複製內文！" : "複製問題描述"}
+                        type="button"
+                      >
+                        {copiedId === report.id ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-400" />
+                            <span>已複製</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3 w-3 text-cyan-400" />
+                            <span>複製</span>
+                          </>
+                        )}
+                      </motion.button>
+                    </div>
                     {report.metadata?.reply && (
-                      <div className="mt-2 rounded-lg bg-slate-900/90 border border-cyan-500/40 p-3 text-xs shadow-md">
+                      <div className="mt-2 rounded-lg bg-slate-900/90 border border-cyan-500/40 p-3 text-xs shadow-md select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
                         <div className="font-bold text-cyan-400 mb-1 flex items-center gap-1.5">
                           <MessageSquare className="h-3.5 w-3.5" />
                           管理員回覆：
                         </div>
-                        <div className="text-slate-100 font-medium leading-relaxed break-words">{report.metadata.reply}</div>
+                        <div className="text-slate-100 font-medium leading-relaxed break-words select-text cursor-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>{report.metadata.reply}</div>
                         {report.metadata.replied_at && (
                           <div className="mt-1.5 text-[10px] text-slate-400 text-right font-mono">
                             {new Date(report.metadata.replied_at).toLocaleString("zh-TW")}
@@ -323,21 +368,35 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap">
+                  <td className="px-4 py-3.5 whitespace-nowrap select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
                     {report.profiles ? (
-                      <span className="font-bold text-sm text-slate-100">{report.profiles.name || "未填姓名"}</span>
+                      <span className="font-bold text-sm text-slate-100 select-text cursor-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>{report.profiles.name || "未填姓名"}</span>
                     ) : (
                       <span className="text-slate-400">訪客 / 離線回報</span>
                     )}
                   </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-300 font-medium">
+                  <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-300 font-medium select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
                     {report.profiles ? (report.profiles.pastoral_zone || "無牧區") : "-"}
                   </td>
-                  <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-300 font-medium">
+                  <td className="px-4 py-3.5 whitespace-nowrap text-xs text-slate-300 font-medium select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
                     {report.profiles ? (report.profiles.small_group || "無小組") : "-"}
                   </td>
                   <td className="px-4 py-3.5 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-1.5">
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleCopyText(report.id, report.description)}
+                        className={`inline-flex rounded-lg p-2 border transition-colors focus:outline-none shadow-sm cursor-pointer ${
+                          copiedId === report.id
+                            ? "text-emerald-300 bg-emerald-950 border-emerald-500/60"
+                            : "text-slate-300 bg-slate-900 hover:bg-slate-800 hover:text-white border-slate-700"
+                        }`}
+                        title={copiedId === report.id ? "已複製內文！" : "複製內文"}
+                        type="button"
+                      >
+                        {copiedId === report.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4 text-cyan-400" />}
+                      </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
