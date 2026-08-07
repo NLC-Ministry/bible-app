@@ -4033,7 +4033,12 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
     return;
   }
   if (!state.activePlan) return;
-  const day = state.activePlan.days.find(d => d.dayNum === dayNum);
+  state.selectedPlanDay = dayNum;
+  if (typeof appRouter !== 'undefined' && typeof appRouter.switchTab === 'function') {
+    appRouter.switchTab('plan-view', { keepPlanDetail: true });
+  }
+
+  const day = (state.activePlan.days || []).find(d => d.dayNum === dayNum);
   const targetRound = Number(round || state.activePlan.currentRound || 1);
   const chaptersForRound = (day && day.chapters || []).filter(ch =>
     Number(ch.round || targetRound) === targetRound

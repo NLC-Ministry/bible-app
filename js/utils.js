@@ -2011,11 +2011,18 @@ function calculateAllPlansProgress() {
       }
     }
 
+    if (!plan.days || !Array.isArray(plan.days) || plan.days.length === 0) {
+      rebuildPlanScheduleForLevel(plan, plan.level || "normal");
+    }
+    if (!plan.days || !Array.isArray(plan.days)) return;
+
     const targetRounds = getPlanLevelRounds(plan.level || "normal");
-    const hasMatchingRoundSchedule = plan.days && plan.days.some(day => day.chapters && day.chapters.some(ch => (ch.round || 1) === targetRounds));
+    const hasMatchingRoundSchedule = plan.days.some(day => day && day.chapters && day.chapters.some(ch => (ch.round || 1) === targetRounds));
     if (!hasMatchingRoundSchedule && targetRounds > 1) {
       rebuildPlanScheduleForLevel(plan, plan.level || "normal");
     }
+    if (!plan.days || !Array.isArray(plan.days)) return;
+
     // 💡 效能關鍵升級：建立 logSet 雜湊比對表 (O(1))，代替巨量迴圈重複比對
     const logSet = new Set();
     if (Array.isArray(state.readingLogs)) {
@@ -2034,6 +2041,7 @@ function calculateAllPlansProgress() {
 
     let completed = 0;
     plan.days.forEach(day => {
+      if (!day || !Array.isArray(day.chapters)) return;
       day.chapters.forEach(ch => {
         const pId = plan.id || "";
         const pGlobalId = plan.globalPlanId || plan.global_plan_id || "";

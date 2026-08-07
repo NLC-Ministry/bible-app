@@ -280,8 +280,12 @@ const HEAVENLY_FATHER_CARDS = [
 ];
 
 export function updateDashboardView() {
-  if (typeof calculatePlanProgress === "function") {
-    calculatePlanProgress();
+  try {
+    if (typeof calculatePlanProgress === "function") {
+      calculatePlanProgress();
+    }
+  } catch (e) {
+    console.warn("[Home] calculatePlanProgress error:", e);
   }
   const greetingEl = document.getElementById("user-greeting");
   if (greetingEl) {
@@ -2035,8 +2039,12 @@ window.openActivePlanFromDashboard = function (event) {
 
 window.startReadingCurrentChapter = function () {
   console.log('📖 [Debug] 已點選章節，進入全滿版沉浸閱讀模式');
-  if (typeof calculatePlanProgress === "function") {
-    calculatePlanProgress();
+  try {
+    if (typeof calculatePlanProgress === "function") {
+      calculatePlanProgress();
+    }
+  } catch (e) {
+    console.warn("[Home] calculatePlanProgress error in startReadingCurrentChapter:", e);
   }
 
   if (state.activePlan && typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
