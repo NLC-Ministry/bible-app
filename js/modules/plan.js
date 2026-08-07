@@ -4047,6 +4047,8 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
   }
   if (!state.activePlan) return;
   state.selectedPlanDay = dayNum;
+  state.inlineReader.active = true;
+
   if (typeof appRouter !== 'undefined' && typeof appRouter.switchTab === 'function') {
     appRouter.switchTab('plan-view', { keepPlanDetail: true });
   }

@@ -2090,11 +2090,6 @@ window.startReadingCurrentChapter = function () {
     }
   }
 
-  if (targetBook && typeof window.openPlanInlineReader === "function" && targetDayNum) {
-    window.openPlanInlineReader(targetBook, targetChapter, targetDayNum, targetRound);
-    return;
-  }
-
   if (targetBook && typeof BIBLE_BOOKS !== 'undefined') {
     const bookObj = BIBLE_BOOKS.find(b => b.name === targetBook);
     if (bookObj) {
