@@ -2021,10 +2021,14 @@ function calculateAllPlansProgress() {
     if (Array.isArray(state.readingLogs)) {
       for (let i = 0; i < state.readingLogs.length; i++) {
         const l = state.readingLogs[i];
-        const logKey = `${l.plan_id || l.presetKey || l.preset_key || ""}_${l.round || 1}_${l.book}_${l.chapter}`;
-        logSet.add(logKey);
-        // 保留相容 key (不指定 plan_id 的全域打卡)
-        logSet.add(`*_${l.round || 1}_${l.book}_${l.chapter}`);
+        const r = l.round || 1;
+        const b = l.book;
+        const c = l.chapter;
+        if (l.plan_id) logSet.add(`${l.plan_id}_${r}_${b}_${c}`);
+        if (l.global_plan_id) logSet.add(`${l.global_plan_id}_${r}_${b}_${c}`);
+        if (l.presetKey) logSet.add(`${l.presetKey}_${r}_${b}_${c}`);
+        if (l.preset_key) logSet.add(`${l.preset_key}_${r}_${b}_${c}`);
+        logSet.add(`*_${r}_${b}_${c}`);
       }
     }
 
@@ -2032,10 +2036,12 @@ function calculateAllPlansProgress() {
     plan.days.forEach(day => {
       day.chapters.forEach(ch => {
         const pId = plan.id || "";
-        const pKey = plan.presetKey || "";
+        const pGlobalId = plan.globalPlanId || plan.global_plan_id || "";
+        const pKey = plan.presetKey || plan.preset_key || "";
 
         const checkRoundLog = (rTarget) => {
           return (pId && logSet.has(`${pId}_${rTarget}_${ch.book}_${ch.chapter}`)) ||
+                 (pGlobalId && logSet.has(`${pGlobalId}_${rTarget}_${ch.book}_${ch.chapter}`)) ||
                  (pKey && logSet.has(`${pKey}_${rTarget}_${ch.book}_${ch.chapter}`)) ||
                  logSet.has(`*_${rTarget}_${ch.book}_${ch.chapter}`);
         };

@@ -280,6 +280,9 @@ const HEAVENLY_FATHER_CARDS = [
 ];
 
 export function updateDashboardView() {
+  if (typeof calculatePlanProgress === "function") {
+    calculatePlanProgress();
+  }
   const greetingEl = document.getElementById("user-greeting");
   if (greetingEl) {
     greetingEl.textContent = state.currentUser.name || "弟兄姊妹";
@@ -1454,7 +1457,6 @@ async function updateAnnouncementsList() {
   if (publishBtn) {
     publishBtn.classList.toggle("hidden", !isAdmin);
   }
-
   const announcements = await db.fetchAnnouncements();
   listContainer.innerHTML = "";
 
@@ -2033,6 +2035,10 @@ window.openActivePlanFromDashboard = function (event) {
 
 window.startReadingCurrentChapter = function () {
   console.log('📖 [Debug] 已點選章節，進入全滿版沉浸閱讀模式');
+  if (typeof calculatePlanProgress === "function") {
+    calculatePlanProgress();
+  }
+
   if (state.activePlan && typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
     showToast("此計畫已過期，無法再進入進度閱讀。");
     return;
@@ -2074,6 +2080,11 @@ window.startReadingCurrentChapter = function () {
       targetDayNum = day.dayNum;
       break;
     }
+  }
+
+  if (targetBook && typeof window.openPlanInlineReader === "function" && targetDayNum) {
+    window.openPlanInlineReader(targetBook, targetChapter, targetDayNum, targetRound);
+    return;
   }
 
   if (targetBook && typeof BIBLE_BOOKS !== 'undefined') {
