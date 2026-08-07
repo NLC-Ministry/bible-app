@@ -4040,18 +4040,14 @@ function initInlineReaderBottomDwell() {
   }
 }
 
-window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null) {
+window.openPlanInlineReader = async function (bookName, chapter, dayNum, round = null) {
   if (state.activePlan && isPlanExpired(state.activePlan)) {
     showToast("此計畫已過期，無法再進入進度閱讀。");
     return;
   }
   if (!state.activePlan) return;
-  state.selectedPlanDay = dayNum;
-  state.inlineReader.active = true;
 
-  if (typeof appRouter !== 'undefined' && typeof appRouter.switchTab === 'function') {
-    appRouter.switchTab('plan-view', { keepPlanDetail: true });
-  }
+  state.selectedPlanDay = dayNum;
 
   const day = (state.activePlan.days || []).find(d => d.dayNum === dayNum);
   const targetRound = Number(round || state.activePlan.currentRound || 1);
@@ -4060,11 +4056,8 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
   );
   if (chaptersForRound.length === 0) return;
 
+  // Set state before switchTab so renderPlanScheduleTracker sees inlineReader.active = true
   state.inlineReader.active = true;
-  document.body.classList.add("plan-inline-reader-open");
-  console.info("[AutoRead] Opened inline plan reader", {
-    planId: state.activePlan?.id || null, book: bookName, chapter: Number(chapter), round: targetRound
-  });
   state.inlineReader.dayNum = dayNum;
   state.inlineReader.chaptersList = chaptersForRound;
   state.inlineReader.currentIndex = chaptersForRound.findIndex(ch =>
@@ -4073,6 +4066,17 @@ window.openPlanInlineReader = function (bookName, chapter, dayNum, round = null)
     (round == null || Number(ch.round || 1) === Number(round))
   );
   if (state.inlineReader.currentIndex === -1) state.inlineReader.currentIndex = 0;
+
+  // Switch to plan-view and AWAIT renderPlanView() to finish before touching DOM
+  if (typeof appRouter !== 'undefined' && typeof appRouter.switchTab === 'function') {
+    await appRouter.switchTab('plan-view', { keepPlanDetail: true });
+  }
+
+  // Now that renderPlanView() is fully settled, apply inline reader DOM state
+  document.body.classList.add("plan-inline-reader-open");
+  console.info("[AutoRead] Opened inline plan reader", {
+    planId: state.activePlan?.id || null, book: bookName, chapter: Number(chapter), round: targetRound
+  });
 
   // Hide checklist interface elements
   const carousel = document.getElementById("plan-date-carousel");
