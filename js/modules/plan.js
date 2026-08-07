@@ -2855,23 +2855,36 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   const container = document.getElementById("plan-tasks-list");
   if (!container || !state.activePlan) return;
 
+  if (!state.inlineReader?.active) {
+    container.classList.remove("hidden");
+    const carousel = document.getElementById("plan-date-carousel");
+    const planDayHeader = document.getElementById("plan-day-subtitle") ? document.getElementById("plan-day-subtitle").parentElement : null;
+    const readBtn = document.getElementById("plan-start-reading-container");
+    const inlineReader = document.getElementById("plan-inline-reader");
+    if (carousel) carousel.classList.remove("hidden");
+    if (planDayHeader) planDayHeader.classList.remove("hidden");
+    if (readBtn) readBtn.classList.remove("hidden");
+    if (inlineReader) inlineReader.classList.add("hidden");
+    document.body.classList.remove("plan-inline-reader-open");
+  }
+
   renderPlanProgressUpgradeOverlay(state.activePlan);
 
   const currentRequestId = ++lastTrackerRequestId;
 
   container.innerHTML = "";
 
-  // Set default selected day if not set
-  if (!state.selectedPlanDay) {
+  // Set default selected day if not set or invalid for current plan
+  let selectedDay = Array.isArray(state.activePlan.days)
+    ? state.activePlan.days.find(d => d && d.dayNum === state.selectedPlanDay)
+    : null;
+
+  if (!selectedDay && Array.isArray(state.activePlan.days) && state.activePlan.days.length > 0) {
     const nextReadingDay = getNextReadingPlanDay(state.activePlan);
-    state.selectedPlanDay = nextReadingDay ? nextReadingDay.dayNum : 1;
+    state.selectedPlanDay = nextReadingDay ? nextReadingDay.dayNum : state.activePlan.days[0].dayNum;
+    selectedDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay) || state.activePlan.days[0];
   }
 
-  // 🛡️ 嚴禁在此處呼叫 renderPlanScheduleView() 或 renderHorizontalDateStrip()：
-  // 此函式職責單一：只負責刷新底部章節任務清單（plan-tasks-list）。
-  // 日曆重繪由外層呼叫方統一管理，禁止在任務渲染函式內循環觸發日曆重繪。
-
-  const selectedDay = state.activePlan.days.find(d => d.dayNum === state.selectedPlanDay);
   if (!selectedDay) {
     container.innerHTML = "";
     return;
