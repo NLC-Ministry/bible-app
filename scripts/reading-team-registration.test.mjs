@@ -361,9 +361,24 @@ describe("NLC and browser integration", () => {
     expect(edge).toContain('"get_reading_team_statistics"');
     expect(edge).toContain("p_actor_id: profile.id");
 
+    // reading_teams / reading_team_members ARE in the generic read allowlist
+    // — js/db.js's admin fallback paths (_getReadingTeamRegistrationOverviewFallback,
+    // _getAdminMemberTeamPlacementsFallback) rely on selecting them directly
+    // when their RPC counterpart is unavailable. nlc-data runs on the
+    // service-role key and bypasses the reading_teams_own_team_read /
+    // reading_team_members_own_team_read RLS policies (migration 0019), so
+    // applyForcedScope must reproduce that same boundary for non-management
+    // callers instead of leaving the table wide open.
     const readAllowlist = edge.match(/const READ_TABLES = new Set\([\s\S]*?\);/)?.[0] || "";
-    expect(readAllowlist).not.toContain("reading_teams");
-    expect(readAllowlist).not.toContain("reading_team_members");
+    expect(readAllowlist).toContain("reading_teams");
+    expect(readAllowlist).toContain("reading_team_members");
+
+    const scopeStart = edge.indexOf('table === "reading_teams" || table === "reading_team_members"');
+    expect(scopeStart, "reading_teams/reading_team_members scope in applyForcedScope").toBeGreaterThan(-1);
+    const scopeBlock = edge.slice(scopeStart, edge.indexOf("\n  }", scopeStart));
+    expect(scopeBlock).toContain('!canManagePlans(profile)');
+    expect(scopeBlock).toContain('.eq("user_id", profile.id)');
+    expect(scopeBlock).toContain('query.in(idColumn, teamIds.length ? teamIds : ["00000000-0000-0000-0000-000000000000"])');
   });
 
   it("lets only the captain remove individual members or dissolve the team", () => {

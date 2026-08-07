@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
 describe("read-only admin user directory", () => {
-  it("renders a separate read-only user management section", () => {
+  it("renders a user management section with only non-destructive static controls", () => {
     const html = read("index.html");
     const start = html.indexOf('id="admin-user-directory-col"');
     const end = html.indexOf('id="admin-managed-scopes-col"');
@@ -21,7 +21,12 @@ describe("read-only admin user directory", () => {
     expect(section).toContain("未填會員資料（沒有牧區或沒有名稱）");
     expect(section).toContain('id="admin-user-directory-filter-stage-one"');
     expect(section).toContain("未加入第一階段計畫");
-    expect(section).not.toContain("<button");
+    expect(section).toContain('id="admin-user-directory-filter-name-review"');
+    // The only static button here is the CSV export (a read, not a write);
+    // any write action (approve/edit a flagged name) is added later per-row
+    // by renderAdminUserDirectoryList, not baked into this static template.
+    const staticButtons = [...section.matchAll(/<button[^>]*id="([^"]+)"/g)].map(match => match[1]);
+    expect(staticButtons).toEqual(["admin-user-directory-export-btn"]);
   });
 
   it("loads every real profile through an admin-only read query", () => {
@@ -45,7 +50,7 @@ describe("read-only admin user directory", () => {
     expect(method).toContain("joined_stage_one:");
   });
 
-  it("escapes profile data and exposes no write operation", () => {
+  it("escapes profile data, and gates its one write action to admin-only name review", () => {
     const admin = read("js/modules/admin.js");
     const start = admin.indexOf("function renderAdminUserDirectoryList");
     const end = admin.indexOf("let managedScopeProfiles");
@@ -59,12 +64,33 @@ describe("read-only admin user directory", () => {
     expect(directory).toContain('class="admin-user-directory__card-summary"');
     expect(directory).toContain("escapeHTML(pastoralZone)");
     expect(directory).toContain("missingRequiredProfile");
-    expect(directory).toContain('["NLC User", "尚未取得姓名", "未命名使用者"]');
+    // Placeholder names are now the single shared list from js/utils.js
+    // (INVENTED_DISPLAY_NAMES), not a third hardcoded duplicate here.
+    expect(directory).toContain("window.INVENTED_DISPLAY_NAMES");
     expect(directory).toContain("placeholderNames.has(normalizedName)");
     expect(directory).toContain("notJoinedStageOneOnly");
     expect(directory).toContain("statusClass");
     expect(directory).toContain("第一階段計畫");
+    // The directory's browsing/filtering surface stays free of inline
+    // handlers or ad hoc writes — the one legitimate write path (approving
+    // or correcting a flagged name) is wired separately in
+    // bindAdminUserDirectoryNameReviewActions via addEventListener, not here.
     expect(directory).not.toContain("db.update");
-    expect(directory).not.toContain("onclick");
+    // HTML inline-attribute handlers, not JS property assignment (the outer
+    // renderAdminUserDirectory() legitimately sets exportBtn.onclick = ...).
+    expect(directory).not.toContain('onclick="');
+    expect(directory).toContain("needsNameReview");
+  });
+
+  it("wires the flagged-name write action outside the render function, admin-gated, with no inline handlers", () => {
+    const admin = read("js/modules/admin.js");
+    const db = read("js/db.js");
+
+    expect(admin).toContain("function bindAdminUserDirectoryNameReviewActions(list)");
+    expect(admin).not.toMatch(/onclick\s*=\s*"[^"]*db\.(approveProfileName|adminOverwriteProfileName)/);
+    expect(admin).toContain('list.addEventListener("click"');
+    expect(admin).toContain("db.approveProfileName(profileId)");
+    expect(admin).toContain("db.adminOverwriteProfileName(");
+    expect(db).toContain('getUserRoleCode(state.currentUser) !== "admin"');
   });
 });

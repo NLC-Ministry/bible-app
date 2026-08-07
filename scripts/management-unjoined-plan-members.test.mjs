@@ -35,10 +35,12 @@ describe("management plan unjoined members", () => {
     expect(admin).toContain("目前篩選範圍內沒有尚未加入所選計畫的人員。");
   });
 
-  it("defaults plan management to stage one so its count matches the system directory", () => {
+  it("defaults plan management to whichever plan is currently ongoing", () => {
+    // See scripts/admin-ongoing-plan-selection.test.mjs: the stage-one-first
+    // default was intentionally replaced with an ongoing-first default.
     const admin = read("js/modules/admin.js");
-    expect(admin).toContain("const stageOnePlan = plans.find(plan => getManagementPlanStageNo(plan) === 1)");
-    expect(admin).toContain("const defaultPlan = stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0]");
+    expect(admin).toContain("const ongoingPlan = plans.find(plan => plan.managementStatus === 'ongoing')");
+    expect(admin).toContain("const defaultPlan = (matchingOption ? plans.find(p => String(p.globalPlanId || p.id || p.presetKey || p.name) === matchingOption.value) : null) || ongoingPlan || plans[0]");
   });
 
   it("bulk-reminds only visible people who have not been reminded today", () => {

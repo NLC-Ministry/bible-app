@@ -41,11 +41,16 @@ describe("management plan hub", () => {
     expect(edge).toContain('return ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
   });
 
-  it("defaults to stage one and lists only current or completed plans with current plans first", () => {
-    expect(admin).toContain("getManagementPlanStageNo(plan) === 1");
-    expect(admin).toContain("stageOnePlan || plans.find(plan => plan.managementStatus === 'ongoing') || plans[0]");
+  it("defaults to whichever plan is currently ongoing and lists only current or completed plans with current plans first", () => {
+    // Superseded the earlier "always default to stage one" design (see
+    // scripts/admin-ongoing-plan-selection.test.mjs) once the campaign moved
+    // past stage one — defaulting to the plan actually running now is more
+    // useful for admins than always landing on a stage that may have ended.
+    expect(admin).toContain("const ongoingPlan = plans.find(plan => plan.managementStatus === 'ongoing')");
+    expect(admin).not.toContain("const stageOnePlan =");
+    expect(admin).not.toContain("const isStageOneBootstrap =");
     expect(admin).toContain("!managementPlanSelectionInitialized");
-    expect(admin).toContain("status === 'ongoing' || status === 'completed' || isStageOneBootstrap");
+    expect(admin).toContain("status === 'ongoing' || status === 'completed'");
     expect(admin).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");
     expect(admin).toContain("sourcePlan.planKind === 'church_campaign'");
   });

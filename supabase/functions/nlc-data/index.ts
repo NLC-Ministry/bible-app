@@ -362,6 +362,23 @@ async function applyForcedScope(query: any, table: string, action: string, profi
     return { query: query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]) };
   }
   if (table === "user_identities") return { query: query.eq("profile_id", profile.id) };
+  // reading_teams / reading_team_members have no org-scope columns by design
+  // (migration 0019) and rely on RLS ("see a team only after joining it, or
+  // as admin") — but nlc-data runs on the service-role key, which bypasses
+  // RLS entirely. Reproduce the same boundary here: a plain member may only
+  // read teams they belong to; management roles keep full read access for
+  // the admin team-registration overview / member-placement fallbacks in
+  // js/db.js, which intentionally scan every team.
+  if ((table === "reading_teams" || table === "reading_team_members") && action === "select" && !canManagePlans(profile)) {
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from("reading_team_members")
+      .select("team_id")
+      .eq("user_id", profile.id);
+    if (membershipError) throw membershipError;
+    const teamIds = (memberships || []).map((row: any) => row.team_id).filter(Boolean);
+    const idColumn = table === "reading_teams" ? "id" : "team_id";
+    return { query: query.in(idColumn, teamIds.length ? teamIds : ["00000000-0000-0000-0000-000000000000"]) };
+  }
   if (table === "global_plans" && action === "select" && !canManagePlans(profile)) return { query: query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage") };
   if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
   if (table === "care_reminders" && action === "select") return { query: query.eq("recipient_id", profile.id) };
