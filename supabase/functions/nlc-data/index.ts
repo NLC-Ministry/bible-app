@@ -403,7 +403,8 @@ Deno.serve(async (req: Request) => {
       const rpcName = functionName;
       const rpcArgs = (functionName === "publish_global_plan_rules"
         || (TEAM_RPC_FUNCTIONS.has(functionName) && functionName !== "get_admin_member_team_placements")
-        || functionName === "get_admin_registration_statistics")
+        || functionName === "get_admin_registration_statistics"
+        || functionName === "set_profile_managed_scopes")
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);

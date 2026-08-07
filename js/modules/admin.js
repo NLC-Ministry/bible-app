@@ -136,7 +136,7 @@ function renderAdminUserDirectoryList(query = "") {
   const unjoinedTeamOnly = document.getElementById("admin-user-directory-filter-unjoined-team")?.checked === true;
   const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
-  const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者"]);
+  const placeholderNames = new Set(["NLC User", "尚未取得姓名", "未命名使用者", "教會肢體"]);
   const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
     const normalizedName = String(profile.name || "").trim();
     const missingRequiredProfile = !normalizedName || placeholderNames.has(normalizedName)

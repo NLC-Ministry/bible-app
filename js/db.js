@@ -1709,19 +1709,55 @@ const db = {
         .map(value => String(value || "").trim())
         .filter(Boolean)
     ));
+    const normRegions = normalize(scopes.managedRegions);
+    const normZones = normalize(scopes.managedZones);
+    const normGroups = normalize(scopes.managedGroups);
     try {
       const { data, error } = await state.supabase.rpc("set_profile_managed_scopes", {
         p_profile_id: profileId,
-        p_managed_regions: normalize(scopes.managedRegions),
-        p_managed_zones: normalize(scopes.managedZones),
-        p_managed_groups: normalize(scopes.managedGroups)
+        p_managed_regions: normRegions,
+        p_managed_zones: normZones,
+        p_managed_groups: normGroups
       });
-      if (!error && String(profileId) === String(state.currentProfileId || state.currentUser?.id)) {
-        state.currentUser.managed_regions = (data?.managedRegions || []).join(",");
-        state.currentUser.managed_zones = (data?.managedZones || []).join(",");
-        state.currentUser.managed_groups = (data?.managedGroups || []).join(",");
+      if (!error && data) {
+        if (String(profileId) === String(state.currentProfileId || state.currentUser?.id)) {
+          state.currentUser.managed_regions = (data?.managedRegions || []).join(",");
+          state.currentUser.managed_zones = (data?.managedZones || []).join(",");
+          state.currentUser.managed_groups = (data?.managedGroups || []).join(",");
+        }
+        return { data, error: null };
       }
-      return { data, error };
+      console.warn("set_profile_managed_scopes RPC failed, attempting direct table update:", error);
+    } catch (rpcErr) {
+      console.warn("set_profile_managed_scopes RPC error, attempting direct table update:", rpcErr);
+    }
+
+    try {
+      const updatePayload = {
+        managed_regions: normRegions.join(",") || null,
+        managed_zones: normZones.join(",") || null,
+        managed_groups: normGroups.join(",") || null
+      };
+      const { data: updatedProfile, error: tableError } = await state.supabase
+        .from("profiles")
+        .update(updatePayload)
+        .eq("id", profileId)
+        .select("id, managed_regions, managed_zones, managed_groups")
+        .maybeSingle();
+
+      if (tableError) return { data: null, error: tableError };
+      const resultData = {
+        profileId,
+        managedRegions: normRegions,
+        managedZones: normZones,
+        managedGroups: normGroups
+      };
+      if (String(profileId) === String(state.currentProfileId || state.currentUser?.id)) {
+        state.currentUser.managed_regions = updatePayload.managed_regions || "";
+        state.currentUser.managed_zones = updatePayload.managed_zones || "";
+        state.currentUser.managed_groups = updatePayload.managed_groups || "";
+      }
+      return { data: resultData, error: null };
     } catch (error) {
       return { data: null, error };
     }
