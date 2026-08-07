@@ -2472,12 +2472,12 @@ const db = {
   async _getReadingTeamRegistrationOverviewFallback() {
     try {
       const client = state.supabase;
-      if (!client) throw new Error("Supabase client not initialized");
+      if (!client) return { success: true, context: { summary: {}, plans: [] } };
 
       const { data: teams, error: teamsErr } = await client
         .from("reading_teams")
         .select("id, global_plan_id, name, division, status, created_at");
-      if (teamsErr) throw teamsErr;
+      if (teamsErr) return { success: true, context: { summary: {}, plans: [] } };
 
       const teamIds = (teams || []).map(t => t.id).filter(Boolean);
       let members = [];
@@ -2539,8 +2539,7 @@ const db = {
           plans: plansList
         }
       };
-    } catch (fallbackErr) {
-      console.error("_getReadingTeamRegistrationOverviewFallback error:", fallbackErr);
+    } catch (_fallbackErr) {
       return { success: true, context: { summary: {}, plans: [] } };
     }
   },

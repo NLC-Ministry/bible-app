@@ -28,7 +28,9 @@ const READ_TABLES = new Set([
   "care_reminders",
   "app_feature_settings",
   "role_definitions",
-  "highlights"
+  "highlights",
+  "reading_teams",
+  "reading_team_members"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "highlights"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
@@ -208,8 +210,18 @@ async function isFeatureEnabled(supabaseAdmin: any, key: string) {
   if (error) return false;
   return data?.enabled === true;
 }
+const ROLE_CODE_MAP: Record<string, string> = {
+  "10000000-0000-4000-8000-000000000001": "member",
+  "10000000-0000-4000-8000-000000000002": "group_leader",
+  "10000000-0000-4000-8000-000000000003": "zone_leader",
+  "10000000-0000-4000-8000-000000000004": "great_zone_leader",
+  "10000000-0000-4000-8000-000000000005": "senior_pastor",
+  "10000000-0000-4000-8000-000000000006": "admin"
+};
+
 function getProfileRoleCode(profile: any) {
   return profile?.role_definition?.code
+    || (profile?.role_id ? ROLE_CODE_MAP[String(profile.role_id)] : null)
     || profile?.role
     || "member";
 }
