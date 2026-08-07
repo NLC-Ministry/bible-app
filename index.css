@@ -1276,8 +1276,7 @@ button .nlc-icon,
   transform: translateX(-1px);
 }
 
-.overlay-back-btn .nav-back-chevron,
-.plan-level-back-btn .nav-back-chevron {
+.overlay-back-btn .nav-back-chevron {
   transform: translateX(-1px);
   margin-inline-end: -0.05rem;
 }
@@ -6347,94 +6346,6 @@ body.dark-theme .pastoral-race-progress {
 }
 
 
-/* Plan level editor */
-.plan-level-editor-card {
-  padding: 1rem;
-  border-radius: 18px;
-}
-.plan-level-editor-header {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1rem;
-}
-.plan-level-editor-header h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: var(--type-weight-strong);
-  color: var(--text-primary);
-}
-.plan-level-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border: 1px solid var(--border-card);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  min-height: 38px;
-  padding: 0 0.85rem 0 0.65rem;
-  font-size: 0.82rem;
-  font-weight: var(--type-weight-strong);
-  cursor: pointer;
-}
-.plan-level-back-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
-}
-.plan-level-options {
-  display: grid;
-  gap: 0.75rem;
-}
-.plan-level-option {
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
-  width: 100%;
-  min-height: 82px;
-  padding: 1rem;
-  text-align: left;
-  border: 1px solid var(--border-card);
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.42);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.plan-level-option strong {
-  font-size: 1rem;
-  font-weight: var(--type-weight-strong);
-}
-.plan-level-option span {
-  color: var(--text-muted);
-  font-size: 0.84rem;
-  line-height: 1.55;
-}
-.plan-level-option.active {
-  border-color: rgba(129, 140, 248, 0.88);
-  background: var(--color-brand-subtle);
-  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.2);
-}
-.plan-level-option.active strong {
-  color: #a5b4fc;
-}
-@media (max-width: 640px) {
-  .plan-level-editor-card {
-    padding: 0.85rem;
-  }
-  .plan-level-editor-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.65rem;
-  }
-  .plan-level-back-btn {
-    min-height: 36px;
-  }
-  .plan-level-option {
-    min-height: 76px;
-    padding: 0.85rem;
-  }
-}
-
 /* ==========================================================================
    Reader Top Navbar (Screenshot Mockup Design)
    ========================================================================== */
@@ -8240,7 +8151,7 @@ body.reader-page .reader-ref-chip {
 .search-header,
 .segmented-control,
 .mode-selector-bar {
-  background: rgba(15, 23, 42, 0.72) !important;
+  background: var(--bg-card) !important;
   border-color: var(--border-card) !important;
   backdrop-filter: var(--backdrop-blur);
   -webkit-backdrop-filter: var(--backdrop-blur);
@@ -8315,13 +8226,13 @@ body.reader-page .reader-ref-chip {
 }
 
 .search-input-field {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: color-mix(in srgb, var(--text-primary) 6%, var(--bg-input)) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-card) !important;
 }
 
 .search-input-field:focus {
-  background: rgba(255, 255, 255, 0.11) !important;
+  background: color-mix(in srgb, var(--text-primary) 9%, var(--bg-input)) !important;
   border-color: var(--color-brand-border) !important;
 }
 
@@ -8579,7 +8490,7 @@ body.reader-modal-open #reader-view .floating-nav-btn {
   align-items: center !important;
   justify-content: center !important;
   color: var(--text-primary) !important;
-  background: rgba(15, 23, 42, 0.42) !important;
+  background: color-mix(in srgb, var(--bg-card) 72%, transparent) !important;
   border: 1px solid rgba(148, 163, 184, 0.22) !important;
   box-shadow: var(--shadow-md) !important;
   backdrop-filter: blur(12px) saturate(1.15) !important;
@@ -10053,27 +9964,6 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 .plan-calendar .plan-day-cell.active .day-number, .plan-calendar .plan-day-cell.today.active .day-number { color: #991b1b; font-weight: var(--type-weight-strong); }
 body.dark-theme .plan-calendar .plan-day-cell.active, body.dark-theme .plan-calendar .plan-day-cell.today.active { background: color-mix(in srgb, #ef4444 34%, var(--surface-card)); color: #fee2e2; border-color: #f87171; }
 body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-theme .plan-calendar .plan-day-cell.today.active .day-number { color: #fee2e2; }
-
-
-/* Full-page plan settings, using the app top bar/back navigation instead of a modal box. */
-#subview-plan-level.is-full-page-settings {
-  min-height: calc(100dvh - 132px);
-  width: 100%;
-  padding: 0.75rem 0.25rem 1.5rem;
-}
-
-#subview-plan-level.is-full-page-settings .plan-level-editor-card {
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0.75rem 0.25rem;
-}
-
-#subview-plan-level.is-full-page-settings .plan-level-editor-header {
-  display: none;
-}
 
 
 /* Calendar-only today reading: no inner list/calendar switcher. */

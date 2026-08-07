@@ -111,3 +111,128 @@ describe("color audit", () => {
     expect(css).toMatch(/\.mobile-nav-btn\.active \.nlc-icon[\s\S]*?--color-icon-brand/);
   });
 });
+
+// ── Theme-contrast regressions ──────────────────────────────────────────
+// A recurring bug class in this app: a component pairs a hardcoded literal
+// color/background (hex, rgb()/rgba(), or a named color) with the OTHER
+// side of the pairing left as a theme token (var(--text-*) / var(--bg-*)).
+// The pairing can look fine in whichever theme it was designed against and
+// become low/zero contrast in the other two. See supabase-free fixes for
+// #global-search-overlay, #reader-view .floating-nav-btn, and
+// .plan-inline-footer (all previously hardcoded rgba(15, 23, 42, ...) dark
+// navy chrome behind var(--text-primary) text).
+describe("theme contrast regressions", () => {
+  const css = readFileSync(join(root, "index.css"), "utf8");
+  const html = readFileSync(join(root, "index.html"), "utf8");
+
+  it("keeps the fixed dark-navy chrome literal out of the search overlay", () => {
+    // rgba(15, 23, 42, 0.72) caused the #global-search-overlay bug and had
+    // no other legitimate use in the file at the time of the fix.
+    expect(css).not.toContain("background: rgba(15, 23, 42, 0.72)");
+  });
+
+  it("keeps the search overlay chrome and input on theme surface tokens", () => {
+    expect(css).toMatch(/\.bible-native-overlay-header,\s*\n\.search-header,\s*\n\.segmented-control,\s*\n\.mode-selector-bar\s*\{\s*\n\s*background:\s*var\(--bg-card\)/);
+    expect(css).toMatch(/\.search-input-field\s*\{\s*\n\s*background:\s*color-mix\(in srgb, var\(--text-primary\)/);
+  });
+
+  it("keeps the reader floating nav buttons on a theme-derived background", () => {
+    // Anchored on a leading newline so this only matches the standalone
+    // `#reader-view .floating-nav-btn { ... }` rule, not the substring
+    // inside `body.reader-modal-open #reader-view .floating-nav-btn { ... }`.
+    const floatingNavBlock = css.match(/\n#reader-view \.floating-nav-btn \{([^}]+)\}/);
+    expect(floatingNavBlock, "#reader-view .floating-nav-btn rule").toBeTruthy();
+    expect(floatingNavBlock[1]).toMatch(/background:\s*color-mix\(in srgb, var\(--bg-card\)/);
+    expect(floatingNavBlock[1]).not.toMatch(/background:\s*rgba\(/);
+  });
+
+  it("keeps the plan inline reader footer on a theme surface token", () => {
+    expect(html).not.toContain("background: rgba(15, 23, 42, 0.95)");
+    expect(html).toContain('class="plan-inline-footer"');
+    const footerMatch = html.match(/<div class="plan-inline-footer"\s*\n\s*style="([^"]*)"/);
+    expect(footerMatch, ".plan-inline-footer style attribute").toBeTruthy();
+    expect(footerMatch[1]).toContain("background: var(--bg-card)");
+  });
+
+  // Forward-looking heuristic: the three bugs this guards against all had
+  // the same shape — a literal background paired with `color: var(--text-primary
+  // | --text-secondary)` (or the mirror: a literal text color sat on
+  // `background: var(--bg-app|--bg-card|--bg-input)`). Those two text tokens
+  // flip between near-black and near-white across themes, and those three bg
+  // tokens flip between near-white and near-black to match — pairing either
+  // with a literal on the *other* property is what breaks contrast in two
+  // out of three themes. `--text-muted`/`--text-secondary`-as-a-*background*
+  // (e.g. a solid rank-badge fill) is intentionally NOT flagged: those tokens
+  // are engineered as usable mid-tone fills in every theme, not black/white
+  // extremes, so pairing them with a fixed white/black glyph is normal and
+  // safe (see `.rank-number`). Token-definition blocks (:root and the
+  // theme-class blocks) are exempt since that's where the literals belong.
+  const THEME_SELECTOR_RE = /^(:root|body\.(light|dark|warm)-theme)$/;
+  const COLOR_PROP_RE = /(^|[;{])\s*(color|background|background-color)\s*:\s*([^;{}]+?)\s*(?=;|$)/gi;
+  const LITERAL_VALUE_RE = /^(#[0-9a-f]{3,8}|rgba?\([^)]+\)|white|black|navy|gray|grey)\b/i;
+  const TEXT_FLIP_TOKEN_RE = /var\(--text-(primary|secondary)\)/i;
+  const BG_FLIP_TOKEN_RE = /var\(--bg-(app|card|input)\)/i;
+
+  function isRiskyPair(declarations) {
+    const color = declarations.color;
+    const background = declarations.background;
+    const literalBg = background && LITERAL_VALUE_RE.test(background);
+    const literalColor = color && LITERAL_VALUE_RE.test(color);
+    const flipTextColor = color && TEXT_FLIP_TOKEN_RE.test(color);
+    const flipBgToken = background && BG_FLIP_TOKEN_RE.test(background);
+    return (literalBg && flipTextColor) || (literalColor && flipBgToken);
+  }
+
+  function extractRuleBlocks(source) {
+    const blocks = [];
+    let i = 0;
+    while (i < source.length) {
+      const openBrace = source.indexOf("{", i);
+      if (openBrace === -1) break;
+      // Selector text is everything since the last '}' (or start) up to '{'.
+      const selectorStart = source.lastIndexOf("}", openBrace - 1) + 1;
+      const selector = source.slice(selectorStart, openBrace).trim();
+      const closeBrace = source.indexOf("}", openBrace);
+      if (closeBrace === -1) break;
+      const body = source.slice(openBrace + 1, closeBrace);
+      // Skip at-rule wrappers (@media/@keyframes/@font-face preludes) — only
+      // keep blocks whose body looks like plain declarations, not nested rules.
+      if (!selector.startsWith("@") && !body.includes("{")) {
+        blocks.push({ selector, body });
+      }
+      i = closeBrace + 1;
+    }
+    return blocks;
+  }
+
+  function readDeclarations(body) {
+    const declarations = {};
+    let match;
+    COLOR_PROP_RE.lastIndex = 0;
+    while ((match = COLOR_PROP_RE.exec(body))) {
+      const prop = match[2].toLowerCase() === "background-color" ? "background" : match[2].toLowerCase();
+      declarations[prop] = match[3].trim();
+    }
+    return declarations;
+  }
+
+  it("does not pair a hardcoded literal background with var(--text-primary|secondary), or a literal text color with var(--bg-app|card|input), in the same CSS rule", () => {
+    const hits = [];
+    for (const { selector, body } of extractRuleBlocks(css)) {
+      if (THEME_SELECTOR_RE.test(selector)) continue;
+      if (isRiskyPair(readDeclarations(body))) hits.push(selector);
+    }
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+
+  it("does not pair a hardcoded literal background with var(--text-primary|secondary), or a literal text color with var(--bg-app|card|input), in the same inline style attribute", () => {
+    const hits = [];
+    const STYLE_ATTR_RE = /style\s*=\s*"([^"]*)"/gi;
+    let match;
+    while ((match = STYLE_ATTR_RE.exec(html))) {
+      const style = match[1];
+      if (isRiskyPair(readDeclarations(style))) hits.push(style.slice(0, 120));
+    }
+    expect(hits, hits.join("\n---\n")).toEqual([]);
+  });
+});

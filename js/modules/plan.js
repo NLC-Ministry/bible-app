@@ -179,15 +179,13 @@ function ensurePlanPageShell() {
   const page0 = document.getElementById("plan-page-0");
   const page1 = document.getElementById("plan-page-1");
   const schedule = document.getElementById("subview-plan-schedule");
-  const level = document.getElementById("subview-plan-level");
   const stats = document.getElementById("subview-plan-stats");
   const ranking = document.getElementById("subview-plan-ranking");
   const members = document.getElementById("subview-plan-members");
   if (page0 && schedule && schedule.parentElement !== page0) page0.appendChild(schedule);
-  if (page0 && level && level.parentElement !== page0) page0.appendChild(level);
   [stats, ranking].filter(Boolean).forEach(node => { if (page1 && node.parentElement !== page1) page1.appendChild(node); });
   if (stats && members && members.parentElement !== stats) stats.insertBefore(members, stats.firstChild);
-  return { shell, detail, strip, windowEl, wrapper, page0, page1, schedule, level, stats, ranking, members };
+  return { shell, detail, strip, windowEl, wrapper, page0, page1, schedule, stats, ranking, members };
 }
 
 const PLAN_PRIMARY_VIEW = Object.freeze({
@@ -392,7 +390,6 @@ window.PlanPageController = {
     if (target === PLAN_PAGE.READING) {
       updatePlanPrimaryTabs(PLAN_PRIMARY_VIEW.PROGRESS);
       forceHidden(shell.schedule, false);
-      forceHidden(shell.level, true);
       state.inlineReader.active = false;
       document.body.classList.remove("plan-inline-reader-open");
       inlineReaderBottomDwellController?.cancel();
@@ -417,52 +414,6 @@ window.PlanPageController = {
     }
     if (!options.skipChrome && typeof appRouter !== "undefined" && typeof appRouter.updateNavigationChrome === "function") appRouter.updateNavigationChrome();
   },
-  async openSettingsPage() {
-    if (!state.activePlan) return;
-    const shell = this.ensureShell();
-    if (!shell) return;
-
-    this.currentIndex = PLAN_PAGE.READING;
-    state.planDetailOpen = true;
-    state.planActiveSubTab = "settings";
-    window.currentPlanViewState = PLAN_ROUTE.DETAIL;
-
-    forceHidden(shell.strip, true);
-    forceHidden(shell.windowEl, true);
-    forceHidden(shell.schedule, true);
-    forceHidden(shell.stats, true);
-    forceHidden(shell.ranking, true);
-    forceHidden(shell.members, true);
-
-    const level = document.getElementById("subview-plan-level");
-    if (level && level.parentElement !== shell.detail) shell.detail.appendChild(level);
-    if (level) level.classList.add("is-full-page-settings");
-    forceHidden(level, false);
-    renderPlanLevelEditor();
-
-    if (typeof appRouter !== "undefined" && typeof appRouter.updateNavigationChrome === "function") {
-      appRouter.updateNavigationChrome();
-    }
-  },
-
-  async closeSettingsPage() {
-    const shell = this.ensureShell();
-    const level = document.getElementById("subview-plan-level");
-    if (level) level.classList.remove("is-full-page-settings");
-    if (shell?.page0 && level && level.parentElement !== shell.page0) shell.page0.appendChild(level);
-    forceHidden(level, true);
-    forceHidden(shell?.strip, false);
-    forceHidden(shell?.windowEl, false);
-    await this.switchPage(PLAN_PAGE.READING);
-  },
-
-  async openSettingsModal() {
-    await this.openSettingsPage();
-  },
-
-  closeSettingsModal() {
-    this.closeSettingsPage();
-  }
 };
 
 function ensurePlanViewModeToggle() {
@@ -3228,14 +3179,6 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
       // ── Re-sync dashboard after rollback via event bus ──
       window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
     });
-};
-
-function renderPlanLevelEditor() {
-  // Manual progress adjustments have been disabled.
-}
-
-window.showPlanLevelModal = async function () {
-  // Disabled.
 };
 
 function readChapterDirect(bookName, chapter) {
@@ -8134,11 +8077,6 @@ async function showDiscoverPlans() {
 }
 
 function planGoBack() {
-
-  if (state.planActiveSubTab === "settings" && window.PlanPageController) {
-    window.PlanPageController.closeSettingsPage();
-    return;
-  }
   if (getCurrentPlanRoute() !== PLAN_ROUTE.LIST) setPlanState(PLAN_ROUTE.LIST);
 }
 

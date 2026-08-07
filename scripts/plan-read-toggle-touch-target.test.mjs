@@ -38,7 +38,9 @@ describe("plan chapter read toggle touch target", () => {
   });
 
   it("bumps the stylesheet cache key", () => {
-    expect(html).toContain("index.css?v=20260803_reader_selection_design");
+    // Version-agnostic: this must not hardcode a specific bump's suffix,
+    // otherwise every unrelated future index.css cache-bust breaks it.
+    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
   });
 });
 

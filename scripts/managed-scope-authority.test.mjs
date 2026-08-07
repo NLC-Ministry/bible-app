@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
 const migration = read("supabase/migrations/0054_managed_scope_authority.sql");
+const nullWriteFix = read("supabase/migrations/0068_fix_managed_scope_null_write.sql");
 const sessionEdge = read("supabase/functions/nlc-session/index.ts");
 const dataEdge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -76,5 +77,26 @@ describe("managed scope authority", () => {
   it("cache-busts the changed application and scope-editor stylesheet", () => {
     expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
     expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
+  });
+
+  it("never writes NULL into the NOT NULL managed_* columns", () => {
+    // Regression guard: a partial scope backfill (e.g. only managedRegions
+    // supplied) used to fall back to `|| null` for the other two columns,
+    // which violates their `NOT NULL DEFAULT ''` constraint (migration 0011)
+    // and made every backfill call fail with a 400 from nlc-data.
+    expect(db).not.toContain('managed_regions: normRegions.join(",") || null');
+    expect(db).not.toContain('managed_zones: normZones.join(",") || null');
+    expect(db).not.toContain('managed_groups: normGroups.join(",") || null');
+    expect(db).toContain("managed_regions: normRegions.join(\",\")");
+    expect(db).toContain("managed_zones: normZones.join(\",\")");
+    expect(db).toContain("managed_groups: normGroups.join(\",\")");
+
+    // The RPC fallback must use the same '' sentinel, not NULLIF(...).
+    expect(nullWriteFix).not.toContain("NULLIF(ARRAY_TO_STRING(normalized_regions");
+    expect(nullWriteFix).not.toContain("NULLIF(ARRAY_TO_STRING(normalized_zones");
+    expect(nullWriteFix).not.toContain("NULLIF(ARRAY_TO_STRING(normalized_groups");
+    expect(nullWriteFix).toContain("managed_regions = ARRAY_TO_STRING(normalized_regions, ',')");
+    expect(nullWriteFix).toContain("managed_zones = ARRAY_TO_STRING(normalized_zones, ',')");
+    expect(nullWriteFix).toContain("managed_groups = ARRAY_TO_STRING(normalized_groups, ',')");
   });
 });

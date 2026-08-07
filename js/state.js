@@ -356,7 +356,6 @@ const appRouter = {
     const topBarGroupTrigger = document.getElementById("top-bar-group-trigger");
     const topBarPlanName = document.getElementById("top-bar-plan-name");
     const topBarSubMode = document.getElementById("top-bar-sub-mode");
-    const planSettingsIcon = document.getElementById("plan-settings-icon");
 
     const isPlanDetail = this.currentTab === "plan-view" && state.activePlan && state.planDetailOpen;
 
@@ -376,16 +375,12 @@ const appRouter = {
         topBarGroupTrigger.classList.add("hidden");
       }
       if (topBarPlanName && state.activePlan) {
-        topBarPlanName.textContent = state.planActiveSubTab === "settings" ? "調整進度設定" : state.activePlan.name;
+        topBarPlanName.textContent = state.activePlan.name;
 
         topBarPlanName.style.display = "block";
         topBarPlanName.classList.remove("hidden");
       }
       if (topBarSubMode) topBarSubMode.innerHTML = "";
-      if (planSettingsIcon) {
-        planSettingsIcon.style.display = "none";
-        planSettingsIcon.classList.add("hidden");
-      }
     } else {
       // Show brand mark and normal back button
       if (brandLogo) brandLogo.style.display = "";
@@ -407,10 +402,6 @@ const appRouter = {
       if (topBarPlanName) {
         topBarPlanName.style.display = "none";
         topBarPlanName.classList.add("hidden");
-      }
-      if (planSettingsIcon) {
-        planSettingsIcon.style.display = "none";
-        planSettingsIcon.classList.add("hidden");
       }
     }
 
@@ -464,23 +455,6 @@ const appRouter = {
     if (this.currentTab === "plan-view") {
       if (state.inlineReader && state.inlineReader.active && typeof window.closePlanInlineReader === "function") {
         window.closePlanInlineReader();
-        this.updateNavigationChrome();
-        return;
-      }
-
-      const levelSubview = document.getElementById("subview-plan-level");
-      if (levelSubview && !levelSubview.classList.contains("hidden")) {
-        const scheduleSubview = document.getElementById("subview-plan-schedule");
-        if (levelSubview) {
-          levelSubview.classList.add("hidden");
-          levelSubview.hidden = true;
-        }
-        if (scheduleSubview) {
-          scheduleSubview.classList.remove("hidden");
-          scheduleSubview.hidden = false;
-          scheduleSubview.style.display = "";
-        }
-        if (typeof renderPlanScheduleTracker === "function") renderPlanScheduleTracker();
         this.updateNavigationChrome();
         return;
       }

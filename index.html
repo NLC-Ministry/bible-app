@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260803_reader_selection_design" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260807_remove_dead_plan_level_settings_ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -925,7 +925,7 @@
 
               <!-- Bottom Floating Nav Bar -->
               <div class="plan-inline-footer"
-                style="display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-card); padding: 0.75rem 1.2rem; border-radius: 30px; margin-top: 1.5rem; position: sticky; bottom: 15px; box-shadow: var(--shadow-md); z-index: 100;">
+                style="display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border-card); padding: 0.75rem 1.2rem; border-radius: 30px; margin-top: 1.5rem; position: sticky; bottom: 15px; box-shadow: var(--shadow-md); z-index: 100;">
                 <button class="circular-action-btn" id="plan-inline-prev-btn"
                   style="background: rgba(255,255,255,0.06); border: none;" onclick="window.navigateInlineChapter(-1)">
                   <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft"
@@ -951,67 +951,6 @@
 
           <!-- 子分頁 2：計畫專屬統計與排行 (個人與團體合併) -->
 
-          <div id="subview-plan-level" class="hidden"
-            style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
-            <div class="glass-card plan-level-editor-card">
-              <div class="plan-level-editor-header">
-                <button class="plan-level-back-btn" type="button" id="btn-plan-level-back">
-                  <span class="nlc-icon nlc-icon--sm nav-back-chevron" data-icon="chevronLeft"
-                    aria-hidden="true"></span>
-                  <span>返回每日讀經</span>
-                </button>
-                <h3>調整進度設定</h3>
-              </div>
-              <div class="plan-level-options" id="plan-level-options">
-                <button class="plan-level-option" type="button" data-level="normal">
-                  <strong>一般</strong>
-                  <span>讀完整計畫 1 遍，每天平均分配章節。</span>
-                </button>
-                <button class="plan-level-option" type="button" data-level="breakthrough">
-                  <strong>突破</strong>
-                  <span>讀完整計畫 2 遍，章節量乘以 2 後平均分配到每天。</span>
-                </button>
-                <button class="plan-level-option" type="button" data-level="super">
-                  <strong>興盛</strong>
-                  <span>讀完整計畫 3 遍，章節量乘以 3 後平均分配到每天。</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 調整進度設定確認 Modal（防誤觸） -->
-          <div id="plan-level-confirm-modal" aria-modal="true" role="dialog" aria-labelledby="plcm-title"
-            style="display:none; position:fixed; inset:0; z-index:9999; align-items:center; justify-content:center; padding:1.5rem;">
-            <!-- 半透明背景 -->
-            <div id="plan-level-confirm-backdrop"
-              style="position:absolute; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:var(--backdrop-blur); -webkit-backdrop-filter:var(--backdrop-blur);"
-              onclick="window.closePlanLevelConfirmModal()"></div>
-            <!-- Modal 卡片，使用設計系統 glass-card + shadow-lg -->
-            <div class="glass-card" style="position:relative; z-index:1; max-width:320px; width:100%; height:auto !important;
-                        padding:1.75rem 1.5rem 1.5rem; box-shadow:var(--shadow-lg);
-                        animation:plcm-slide-up 0.2s cubic-bezier(0.4,0,0.2,1) both;">
-              <!-- IconPark 警告圖示 -->
-              <div style="display:flex; align-items:center; justify-content:center; width:48px; height:48px;
-                          border-radius:50%; background:var(--color-warning-subtle); border:1px solid var(--color-warning);
-                          margin:0 auto 1.25rem auto; color:var(--color-warning);">
-                <span class="nlc-icon nlc-icon--md" data-icon="attention" aria-hidden="true"></span>
-              </div>
-              <h4 id="plcm-title" class="type-subsection-title" style="text-align:center; margin:0 0 0.5rem;">確認切換進度等級？
-              </h4>
-              <p id="plcm-desc" class="type-caption" style="text-align:center; line-height:1.6; margin:0 0 1.5rem;"></p>
-              <div style="display:flex; gap:0.75rem;">
-                <button id="plcm-cancel-btn" type="button" class="secondary-btn"
-                  onclick="window.closePlanLevelConfirmModal()"
-                  style="flex:1; padding:0.65rem 0.75rem; font-size:0.875rem;">
-                  取消
-                </button>
-                <button id="plcm-confirm-btn" type="button" class="primary-btn"
-                  style="flex:1; padding:0.65rem 0.75rem; font-size:0.875rem;">
-                  確認切換
-                </button>
-              </div>
-            </div>
-          </div>
           <div id="subview-plan-stats" class="hidden"
             style="display: flex; flex-direction: column; gap: 1.2rem; width: 100%;">
 
@@ -2346,7 +2285,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260807_fix_managed_scope_null_write"></script>
+  <script type="module" src="js/app.js?v=20260807_remove_dead_plan_level_settings_ui"></script>
 </body>
 
 </html>
