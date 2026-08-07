@@ -4784,7 +4784,6 @@ async function renderPlanHistoryView() {
 
   // 6. Render 7-day growth trend line chart
   renderGroupGrowthTrend();
-  renderGroupChaptersTrend();
 
   // 7. Render team heatmap
   renderGroupTeamHeatmap();
@@ -5205,172 +5204,7 @@ function renderGroupGrowthTrend(overrideFilter) {
   });
 }
 
-function renderGroupChaptersTrend(overrideFilter) {
-  const scopedUsers = window._grpScopedUsers || [];
-  const chartCard = document.getElementById('grp-daily-chapters-chart-card');
-  const titleEl = document.getElementById('grp-daily-chapters-chart-title');
-  const canvasEl = document.getElementById('grp-daily-chapters-chart');
 
-  if (!canvasEl) return;
-
-  if (scopedUsers.length === 0) {
-    if (chartCard) chartCard.style.display = 'none';
-    return;
-  }
-  if (chartCard) chartCard.style.display = '';
-
-  if (titleEl) {
-    const rankingZoneSelector = document.getElementById('ranking-zone-selector');
-    const selectedFilter = overrideFilter !== undefined
-      ? overrideFilter
-      : (window._statsTabScope !== null
-        ? window._statsTabScope
-        : (rankingZoneSelector ? rankingZoneSelector.value : null));
-    let scopeLabel = '全教會';
-    if (selectedFilter) {
-      if (selectedFilter === 'all') scopeLabel = '全教會';
-      else if (selectedFilter === 'all_great_region') scopeLabel = state.currentUser.great_region || '大區';
-      else if (selectedFilter === 'all_zones') scopeLabel = state.currentUser.pastoral_zone || '牧區';
-      else if (selectedFilter === 'all_groups') scopeLabel = state.currentUser.small_group || '小組';
-      else if (selectedFilter.startsWith('region:')) scopeLabel = selectedFilter.replace('region:', '');
-      else if (selectedFilter.startsWith('zone:')) scopeLabel = selectedFilter.replace('zone:', '');
-      else if (selectedFilter.startsWith('group:')) scopeLabel = selectedFilter.replace('group:', '');
-    } else {
-      const userRole = getUserRoleCode(state.currentUser) || 'member';
-      if (hasWholeChurchPlanScope(userRole)) scopeLabel = '全教會';
-      else if (userRole === 'great_zone_leader') scopeLabel = state.currentUser.great_region || '大區';
-      else if (userRole === 'zone_leader') scopeLabel = state.currentUser.pastoral_zone || '牧區';
-      else scopeLabel = state.currentUser.small_group || '小組';
-    }
-    titleEl.textContent = `${scopeLabel} 每天閱讀章數（近30天）`;
-  }
-
-  const today = new Date();
-  const labels = [];
-  const data = [];
-  const DAYS = 30;
-
-  const userIds = new Set(scopedUsers.map(u => u.id).filter(Boolean));
-  const userNames = new Set(scopedUsers.map(u => u.name).filter(Boolean));
-  const scopedPlanIds = new Set(scopedUsers.map(u => u.plan_id).filter(Boolean));
-  const currentPlanId = state.activePlan && state.activePlan.id;
-  const currentPresetKey = state.activePlan && state.activePlan.presetKey;
-
-  const chaptersByDate = {};
-
-  if (state.isSupabaseMode && state.allLogsCache) {
-    state.allLogsCache.forEach(log => {
-      if (!log.read_at) return;
-      if (!userIds.has(log.user_id)) return;
-      if (scopedPlanIds.size > 0) {
-        if (!scopedPlanIds.has(log.plan_id)) return;
-      } else if (!logMatchesPlan(log, currentPlanId, currentPresetKey)) {
-        return;
-      }
-      const dStr = log.read_at.substring(0, 10);
-      chaptersByDate[dStr] = (chaptersByDate[dStr] || 0) + 1;
-    });
-  } else {
-    (state.readingLogs || []).forEach(log => {
-      if (!log.read_at) return;
-      const nameMatch = log.name ? userNames.has(log.name) : true;
-      if (!nameMatch) return;
-      if (!logMatchesPlan(log, currentPlanId, currentPresetKey)) return;
-      const dStr = log.read_at.substring(0, 10);
-      chaptersByDate[dStr] = (chaptersByDate[dStr] || 0) + 1;
-    });
-  }
-
-  for (let i = DAYS - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const dStr = typeof toTaiwanISODate === "function" ? toTaiwanISODate(d) : d.toISOString().substring(0, 10);
-    const mmdd = dStr.substring(5).replace('-', '/');
-    labels.push(i % 5 === 0 || i === 0 ? mmdd : '');
-    data.push(chaptersByDate[dStr] || 0);
-  }
-
-  if (state.statsCharts) {
-    if (state.statsCharts.dailyChapters) {
-      state.statsCharts.dailyChapters.destroy();
-    }
-  } else {
-    state.statsCharts = {};
-  }
-
-  const isDark = state.theme === 'dark' ||
-    document.body.classList.contains('dark-theme') ||
-    document.body.classList.contains('dark') ||
-    document.documentElement.getAttribute('data-theme') === 'dark';
-  const fontColor = isDark ? 'rgba(180,180,180,0.85)' : 'rgba(60,60,60,0.75)';
-  const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const brandColor = '#04A9D2';
-  const brandFill = isDark
-    ? 'rgba(4,169,210,0.18)'
-    : 'rgba(4,169,210,0.10)';
-
-  const ctx = canvasEl.getContext('2d');
-  state.statsCharts.dailyChapters = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: '閱讀章數',
-        data,
-        borderColor: brandColor,
-        backgroundColor: brandFill,
-        borderWidth: 2,
-        fill: true,
-        tension: 0.42,
-        pointRadius: 2.5,
-        pointBackgroundColor: brandColor,
-        pointHoverRadius: 5,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.parsed.y} 章`
-          },
-          backgroundColor: isDark ? 'rgba(30,30,35,0.92)' : 'rgba(255,255,255,0.95)',
-          borderColor: brandColor,
-          borderWidth: 1,
-          titleColor: isDark ? '#fff' : '#111',
-          bodyColor: isDark ? 'rgba(200,200,200,0.9)' : 'rgba(60,60,60,0.85)',
-          padding: 10,
-          cornerRadius: 8,
-        }
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: fontColor,
-            font: { size: 10 },
-            maxRotation: 0,
-          },
-          grid: { display: false },
-          border: { display: false },
-        },
-        y: {
-          ticks: {
-            color: fontColor,
-            font: { size: 10 },
-            stepSize: 1,
-            precision: 0,
-          },
-          grid: { color: gridColor },
-          border: { display: false },
-          beginAtZero: true,
-        }
-      }
-    }
-  });
-}
 
 function renderGroupTeamHeatmap(overrideFilter) {
   const scopedUsers = window._grpScopedUsers || [];
@@ -6738,7 +6572,6 @@ async function renderPlanMembersView() {
     // scopedUsers calculation and scopeLabel, bypassing _statsTabScope.
     await renderGroupMiniStats(currentOrgFilter);
     renderGroupGrowthTrend(currentOrgFilter);
-    renderGroupChaptersTrend(currentOrgFilter);
     renderGroupTeamHeatmap(currentOrgFilter);
 
     const distCard = document.getElementById("grp-distribution-card");
