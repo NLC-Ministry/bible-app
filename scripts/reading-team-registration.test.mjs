@@ -664,4 +664,26 @@ describe("NLC and browser integration", () => {
     const block = db.slice(start, end);
     expect(block).toContain('typeof id === "string" && id.length > 0');
   });
+
+  it("self-heals a stale 'ready' status instead of trusting it as the source of truth (migration 0072)", () => {
+    // Regular members have no self-service way to leave a team at all
+    // (only the captain can, and that dissolves the team) — so under
+    // normal app usage reading_teams.status can never legitimately go
+    // stale relative to the real reading_team_members row count. It can
+    // only desync if a membership row is removed some other way (e.g. a
+    // manual delete via the Supabase dashboard), after which the team was
+    // stuck reporting "full" (reading_team_full) to every future
+    // invite-code join no matter how many members it actually had.
+    const fixMigration = read("supabase/migrations/0072_self_heal_stale_reading_team_status.sql");
+    expect(fixMigration).toContain("CREATE OR REPLACE FUNCTION public.join_reading_team_by_code(");
+    const healStart = fixMigration.indexOf("IF selected_team.status = 'ready' AND current_count < selected_team.division THEN");
+    expect(healStart, "self-heal branch").toBeGreaterThan(-1);
+    const fullCheckIndex = fixMigration.indexOf("RAISE EXCEPTION 'reading_team_full';");
+    expect(fullCheckIndex).toBeGreaterThan(healStart); // self-heal must run before the blocking check
+    expect(fixMigration).toContain("UPDATE public.reading_teams SET status = 'forming' WHERE id = selected_team.id;");
+    // One-time repair for any team already stuck as of this migration.
+    expect(fixMigration).toContain("SET status = 'forming'");
+    expect(fixMigration).toContain("WHERE team.status = 'ready'");
+    expect(fixMigration).toContain(") < team.division;");
+  });
 });
