@@ -92,4 +92,26 @@ describe("verse notes (per-verse reading annotations)", () => {
     expect(html).toContain('id="verse-note-editor-root"');
     expect(css).toMatch(/\.verse-note-editor-overlay \{\s*\n\s*z-index: var\(--z-modal\);/);
   });
+
+  it("mounts the note editor root outside any .view-pane, alongside the other proven full-page overlays", () => {
+    // .view-pane's fadeIn animation leaves `transform: translateY(0)` on the
+    // element via its `forwards` fill mode even once the animation is done —
+    // any non-none transform on an ancestor creates a new containing block
+    // for position:fixed descendants. A fixed overlay nested inside
+    // #reader-view (which has class="view-pane") ends up positioned/clipped
+    // relative to #reader-view's own box instead of the real viewport,
+    // leaving the app's outer chrome uncovered instead of the editor.
+    // #bible-nav-overlay is a known-working full-page overlay that lives
+    // outside every .view-pane; the note editor root must sit near it.
+    const rootIndex = html.indexOf('id="verse-note-editor-root"');
+    const readerBottomBarIndex = html.indexOf('id="reader-bottom-action-bar"');
+    const bibleNavOverlayIndex = html.indexOf('id="bible-nav-overlay"');
+    expect(rootIndex).toBeGreaterThan(-1);
+    expect(readerBottomBarIndex).toBeGreaterThan(-1);
+    expect(bibleNavOverlayIndex).toBeGreaterThan(-1);
+    // No longer inside #reader-view's own body (where reader-bottom-action-bar still lives).
+    expect(rootIndex).toBeGreaterThan(readerBottomBarIndex);
+    // Sits right next to the other top-level overlay, not just "somewhere later".
+    expect(Math.abs(bibleNavOverlayIndex - rootIndex)).toBeLessThan(400);
+  });
 });

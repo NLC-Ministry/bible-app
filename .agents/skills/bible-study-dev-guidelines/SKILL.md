@@ -24,6 +24,10 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 * **平滑滾動取代視窗大跳**：
   - 避免直接呼叫會造成整頁大跳的原生 `scrollIntoView()`。
   - 滾動至目標天數或經文時，優先以 `requestAnimationFrame` 配合容器內區域平滑置中。
+* **新的全螢幕 `position: fixed` 疊層，絕對不要放在 `.view-pane` 內部**：
+  - `.view-pane` 有 `animation: fadeIn 0.4s ease-out forwards;`，`forwards` fill mode 讓動畫結束後元素仍保留最後一個 keyframe 的 `transform: translateY(0)`——即使視覺上看起來等於沒有位移，**任何非 `none` 的 `transform` 值都會讓該元素變成子孫 `position: fixed` 元素的新 containing block**。
+  - 後果：巢狀在 `#reader-view`（帶有 `class="view-pane"`）底下的 `position: fixed` 疊層，會被錯誤地定位/裁切在 `#reader-view` 自己的框內，而不是真正的視窗——導致疊層的頂部被外層 App chrome（例如 reader 自己的頂部導覽列）蓋住或看起來「關閉鍵消失」。這個 bug 這個 session 實際發生過一次（逐節筆記全螢幕編輯框）。
+  - **正確做法**：比照 `#bible-nav-overlay`（目錄／版本選擇）、搜尋面板等既有全螢幕疊層的做法，把新疊層的掛載節點放在 `.view-pane` 之外、`<body>` 的頂層（例如緊鄰 `#bible-nav-overlay` 旁邊），不要塞進任何 tab/view 的內部結構。
 
 ---
 

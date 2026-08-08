@@ -575,9 +575,6 @@
           <!-- Selection Bottom Bar React Mount Root -->
           <div id="selection-bottom-bar-root"></div>
 
-          <!-- Verse Note Editor Mount Root (full-screen note/annotation editor) -->
-          <div id="verse-note-editor-root"></div>
-
           <!-- Sticky Bottom Action Bar (Context-Aware Read Tracking) -->
           <div class="reader-bottom-action-bar hidden" id="reader-bottom-action-bar">
             <div class="progress-indicator" id="reader-progress-indicator">本日進度 2/3</div>
@@ -2003,6 +2000,18 @@
     </div>
   </div>
 
+  <!-- Verse Note Editor Mount Root (full-screen note/annotation editor).
+       Deliberately placed outside any .view-pane: .view-pane's fadeIn
+       animation leaves a `transform: translateY(0)` on the element via its
+       `forwards` fill mode even after the animation ends, which creates a
+       new containing block for position:fixed descendants — so a fixed
+       overlay nested inside #reader-view ends up positioned/clipped
+       relative to #reader-view's own box instead of the real viewport,
+       leaving the app's outer chrome uncovered. Every other full-page
+       overlay in this app (e.g. #bible-nav-overlay below) avoids this by
+       living at the top level, same as this one. -->
+  <div id="verse-note-editor-root"></div>
+
   <!-- Bible Navigation Shell (Full-Page Overlay) -->
   <div class="full-page-overlay bible-nav-sheet hidden" id="bible-nav-overlay" aria-hidden="true">
     <header class="overlay-header bible-native-overlay-header bible-nav-sheet__header">
@@ -2340,7 +2349,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260808_verse-notes-editor-fix"></script>
+  <script type="module" src="js/app.js?v=20260808_verse-notes-fix-overlay-mount"></script>
 </body>
 
 </html>
