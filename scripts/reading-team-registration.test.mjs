@@ -686,4 +686,30 @@ describe("NLC and browser integration", () => {
     expect(fixMigration).toContain("WHERE team.status = 'ready'");
     expect(fixMigration).toContain(") < team.division;");
   });
+
+  it("includes great_region/small_group on every team member, not just pastoral_zone (migration 0074)", () => {
+    // Regression: js/modules/admin.js's teamMatchesManagementOrgFilter()
+    // reads member.greatRegion/member.smallGroup when the shared 查看範圍
+    // filter is set to 大區 or 小組. get_reading_team_registration_overview
+    // only ever selected pastoral_zone per member, so those two fields were
+    // always undefined and every team silently failed the filter (matched
+    // zero teams) whenever an admin filtered by region or group — only
+    // filtering by 牧區 could ever show results. Both the RPC and its
+    // client-side fallback (_getReadingTeamRegistrationOverviewFallback)
+    // must expose all three fields.
+    const fixMigration = read("supabase/migrations/0074_team_overview_members_full_scope.sql");
+    expect(fixMigration).toContain("p.great_region,\n      p.pastoral_zone,\n      p.small_group");
+    expect(fixMigration).toContain("'greatRegion', md.great_region,");
+    expect(fixMigration).toContain("'pastoralZone', md.pastoral_zone,");
+    expect(fixMigration).toContain("'smallGroup', md.small_group");
+
+    expect(db).toContain('.select("id, name, great_region, pastoral_zone, small_group")');
+    const fallbackMemberBlock = db.slice(
+      db.indexOf("const teamMembersMap = new Map();"),
+      db.indexOf("const globalPlans = state.globalPlans || [];")
+    );
+    expect(fallbackMemberBlock).toContain("greatRegion: p?.great_region || \"\"");
+    expect(fallbackMemberBlock).toContain("pastoralZone: p?.pastoral_zone || \"\"");
+    expect(fallbackMemberBlock).toContain("smallGroup: p?.small_group || \"\"");
+  });
 });

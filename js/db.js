@@ -2581,7 +2581,7 @@ const db = {
       if (userIds.length > 0) {
         const { data: pRows } = await client
           .from("profiles")
-          .select("id, name, pastoral_zone")
+          .select("id, name, great_region, pastoral_zone, small_group")
           .in("id", userIds);
         if (Array.isArray(pRows)) {
           profilesMap = new Map(pRows.map(p => [String(p.id), p]));
@@ -2597,7 +2597,9 @@ const db = {
           userId: m.user_id,
           role: m.member_role,
           name: p?.name || "",
-          pastoralZone: p?.pastoral_zone || ""
+          greatRegion: p?.great_region || "",
+          pastoralZone: p?.pastoral_zone || "",
+          smallGroup: p?.small_group || ""
         });
       });
 

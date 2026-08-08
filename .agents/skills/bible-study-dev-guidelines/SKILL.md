@@ -75,3 +75,33 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 * **防止無效 PostgREST 查詢與 Edge Function 500 崩潰**：
   - 嚴禁請求已被刪除的舊欄位或非實體 Column（如 `role_code` 為 SQL 函數，非 `profiles` 表實體欄位）。
   - 所有 Edge Function 內部對 Supabase 的查詢必須配置強固的 Try-Catch / Fallback 容錯備援，確保縱使外鍵關聯遇到異常，亦能降級處理，絕不讓 Edge Function 拋出未捕獲例外導致 HTTP 500 伺服器崩潰。
+* **⚠️ 陷阱：有些 migration 是用「動態文字替換」修補之前的 function，不是乾淨重寫**：
+  - `0047`/`0048`/`0063` 對 `get_unjoined_plan_members`、`send_plan_join_invitation`、`get_reading_team_registration_overview` 等 function 用的是 `pg_get_functiondef(...)` 撈出**目前資料庫裡實際部署的版本**，`REPLACE()` 特定文字片段，再 `EXECUTE` 回去——不是重新 `CREATE OR REPLACE FUNCTION` 貼上完整新版本。
+  - **後果**：像 `0045_plan_join_encouragement.sql` 這種原始 migration 檔案裡的 `actor_profile.role`，讀檔案看起來像是還在用已刪除的舊欄位，但實際上 `0048` 已經把「線上運行的版本」動態改成 `actor_profile.role_code`。**只看單一 migration 檔案的原始碼，不能判斷這個 function 現在的真實內容**——要嘛把所有動態補丁 migration 依序在腦中套用一次，要嘛直接去 Supabase Dashboard 查詢 `pg_get_functiondef` 的當前結果，不要憑 `grep` 單一檔案就下結論。
+  - 之後新寫一支 function 若要仿照舊 function 的邏輯，**直接寫全新的 `CREATE OR REPLACE FUNCTION`**（像 `0070`/`0073`/`0074` 那樣用當前正確的 `role_code(role_id)` + `values_overlap()` pattern），不要照抄舊 migration 檔案裡的原始文字。
+* **`reading_team_members` 沒有 `id` 欄位**：主鍵是 `(team_id, user_id)` 組合鍵（`0019`）。這個 bug 在同一個 session 裡至少踩到兩次、分散在不同的 function（`get_admin_member_team_placements` 的 `membership.id`、`db.js` 裡兩個獨立的 fallback 查詢）。改動任何碰這張表的程式碼前，先 `grep "reading_team_members" -A5` 確認 select/reference 的欄位都是真的存在的（`team_id`, `global_plan_id`, `user_id`, `member_role`, `division`, `joined_at`），不要選 `id`。
+* **`managed_regions` / `managed_zones` / `managed_groups` 是 `NOT NULL DEFAULT ''`，不是可為 NULL**：
+  - 這三個委任範圍欄位（`0011`）永遠是空字串、不會是 SQL NULL。用 `COALESCE(managed_x, 個人欄位, '')` **抓不到「已設定但是空字串」的情況**，一定要用 `COALESCE(NULLIF(managed_x, ''), 個人欄位, '')`。
+  - 這個 bug 這個 session 至少在 3 支不同的 function 裡各自重複出現過（`get_admin_member_team_placements`、`get_reading_team_registration_overview`、`js/db.js` 的 `updateManagedScopes`），每次都是「委任範圍空字串被誤判成『無限制』，導致權限過度開放」或「寫入 NULL 觸發 NOT NULL constraint 直接 400」兩種後果之一。
+* **`nlc-data` 用 service-role key 執行，正式環境（NLC Logto SSO）完全繞過 RLS**：
+  - Migration 裡定義的 RLS policy（例如 `reading_teams_own_team_read`）只保護「直接用 Supabase client 連線」的情境（Google/email 開發登入）；正式環境走 `nlc-data` Edge Function 用 service-role key 查詢，RLS 對它完全不生效。
+  - **任何透過 `action: "select"` 泛用查詢暴露出去的表，都必須自己在 `applyForcedScope()` 裡手動加範圍限制**，不能假設資料庫層的 RLS 會擋。忘記加的話，一般會友理論上可以查到全教會的資料（例如曾經發生過的 `reading_teams`/`reading_team_members` 無範圍限制事件）。
+
+---
+
+## 🧪 7. 測試、部署與工作流程避坑 (Testing, Deployment & Workflow)
+
+* **`scripts/*.test.mjs` 是「原始碼文字斷言」風格，不是真的單元/整合測試**：
+  - 這些測試多半是把檔案當字串讀進來，斷言某段 regex/子字串存在或不存在，有時會用 `new Function(...)` 把抽取出來的函式片段組出來直接執行驗證邏輯。
+  - **後果：測試通過不代表行為正確，只代表「程式碼文字長得像測試預期的樣子」**。如果測試是照著一支有 bug 的程式寫的，它反而會把那個 bug「鎖死」，之後任何修正都會被舊測試打成 fail。
+  - **實際發生過的誤判案例**：`scripts/management-plan-hub.test.mjs` / `scripts/management-unjoined-plan-members.test.mjs` 斷言 `getManagementPlans()`/`selectManagementPlan()` 要優先選 `stageOnePlan`；但 `admin.js` 現在的行為是優先選 `ongoingPlan`（正確、刻意的新設計）。一開始誤判成「這是不小心的 regression」，還花時間把 `admin.js` 改回舊行為，後來才發現有一支**更新的**測試檔 `scripts/admin-ongoing-plan-selection.test.mjs` 明確記載「移除 hardcoded stageOnePlan、改用 ongoing plan 優先」才是刻意設計。最後用 `git diff` 確認把 `admin.js` 完整還原（diff 為零）並改掉那兩支舊測試才是對的。
+  - **規則**：發現某支測試 fail、看起來像「這改動造成了 regression」時，先搜尋同一個函式/功能是否有**其他、更新的**測試檔案已經記載了刻意的新行為，不要只看到 fail 就假設現在的程式碼是錯的。
+* **CSS cache-bust：`npm run bump` 不會碰 `index.html` 裡的 `index.css?v=` 或 `css/*.css?v=`**：
+  - `scripts/bump-version.mjs` 只更新 `js/app.js` 內部 static import 的 `?v=...` 版本字串，以及 `index.html` 裡 `js/app.js?v=` 那一行。
+  - **改到 `index.css` 或 `css/` 底下任何檔案時，必須手動去 `index.html` 把對應的 `?v=` 字串加一版**，不要以為跑了 `npm run bump` 就全部處理好了。
+* **Supabase migration 檔案不會自動部署**：
+  - 這個 repo 的 git commit/push 只影響前端程式碼；`supabase/migrations/*.sql` 必須由使用者另外手動執行 `supabase db push` 或貼到 Supabase Dashboard 的 SQL Editor 才會真正生效。
+  - **每次新增/修改 migration 檔案後，一定要明確提醒使用者「這支 migration 還沒部署，要記得手動跑」**，不要預設寫了檔案 = 資料庫已經改好了。這個 session 曾經一次累積到 5 支 migration（`0070`–`0074`）等待部署，容易忘記追蹤。
+* **使用者回報 bug 時，優先要求或引用瀏覽器 Network 分頁的實際 request/response payload，不要憑錯誤訊息猜**：
+  - 這個 session 好幾次 400/42703/42883/P0001 錯誤，都是因為先憑經驗猜錯方向，直到使用者貼出實際的 payload/response 內容才找到真正原因（例如 `reading_team_members` 沒有 `id` 欄位、`values_overlap` 函式不存在、`get_admin_member_team_placements` 的 `p_actor_id` 沒有被注入）。
+  - 精確的錯誤文字（尤其是 Postgres error code 與欄位/函式名稱）比猜測快非常多，遇到 400 系列錯誤時應主動請使用者提供完整 payload/response 而不是只憑 stack trace 頂端那一行猜。
