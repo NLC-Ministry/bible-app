@@ -120,9 +120,10 @@ describe("reading team leaderboards", () => {
     expect(plan).toContain("async function renderReadingTeamLeaderboards");
     expect(plan).toContain('escapeHTML(team.name || "未命名隊伍")');
     expect(plan).toContain("memberCount}/${section.division}");
-    expect(plan).toContain("chaptersRead} 章");
     expect(plan).toContain("const progressPercent = Math.min(100");
-    expect(plan).toContain('class="bar-race-percent">${progressPercent}%');
+    expect(plan).toContain('class="bar-race-percent">${chaptersRead} 章');
+    expect(plan).not.toContain('class="bar-race-percent">${progressPercent}%');
+    expect(plan).not.toContain('class="bar-race-chapters"');
     expect(plan).toContain('role="progressbar"');
     expect(plan).toContain('aria-valuenow="${progressPercent}"');
     expect(css).toContain(".reading-team-ranking-list .bar-race-bar-shell");

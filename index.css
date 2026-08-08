@@ -5394,24 +5394,16 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 
 .reading-team-ranking-list .bar-race-details {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 0.4rem;
   min-width: 0;
 }
 
-.reading-team-ranking-list .bar-race-chapters,
 .reading-team-ranking-list .bar-race-members {
   color: var(--text-muted);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
-}
-
-.reading-team-ranking-list .bar-race-chapters {
-  flex-shrink: 0;
-}
-
-.reading-team-ranking-list .bar-race-members {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

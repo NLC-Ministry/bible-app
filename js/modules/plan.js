@@ -5670,13 +5670,12 @@ async function renderReadingTeamLeaderboards() {
         <div class="bar-race-main">
           <div class="bar-race-meta">
             <span class="bar-race-name">${escapeHTML(team.name || "未命名隊伍")}${team.isMine ? '<span class="bar-race-mine-badge">我的團隊</span>' : ""}</span>
-            <span class="bar-race-percent">${progressPercent}%</span>
+            <span class="bar-race-percent">${chaptersRead} 章</span>
           </div>
           <div class="bar-race-bar-shell" role="progressbar" aria-label="${escapeHTML(team.name || "未命名隊伍")}閱讀進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPercent}">
             <div class="bar-race-bar"></div>
           </div>
           <div class="bar-race-details">
-            <span class="bar-race-chapters">${chaptersRead} 章</span>
             <span class="bar-race-members">${memberCount}/${section.division} 人</span>
           </div>
         </div>
