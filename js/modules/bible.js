@@ -695,6 +695,8 @@ export function updatePillLabels() {
     if (span) span.textContent = label;
     const inlineVersion = document.getElementById("reader-version-inline");
     if (inlineVersion) inlineVersion.textContent = label;
+    const navBadge = document.getElementById("bible-nav-version-badge");
+    if (navBadge) navBadge.textContent = label;
   }
 }
 
@@ -1331,6 +1333,8 @@ window.selectBibleVersion = function(newVersion) {
     if (span) span.textContent = label;
     const inlineVersion = document.getElementById("reader-version-inline");
     if (inlineVersion) inlineVersion.textContent = label;
+    const navBadge = document.getElementById("bible-nav-version-badge");
+    if (navBadge) navBadge.textContent = label;
   }
 
   const versionLabels = {
@@ -1681,6 +1685,21 @@ window.openBibleNavOverlay = function() {
         window.switchNavTab('book');
       } else {
         closeReaderLayer(overlay);
+      }
+    });
+  }
+
+  // .reader-version-btn (the top navbar's own version pill) is hidden on
+  // narrow phones (@media max-width:420px) for space — this badge inside the
+  // directory overlay is the mobile replacement entry point into the version
+  // picker, so it must open the same modal rather than sit dead/unbound.
+  const versionBadge = document.getElementById("bible-nav-version-badge");
+  if (versionBadge && !versionBadge.dataset.bound) {
+    versionBadge.dataset.bound = "true";
+    versionBadge.addEventListener("click", () => {
+      closeReaderLayer(overlay);
+      if (typeof window.openBibleVersionPicker === "function") {
+        window.openBibleVersionPicker();
       }
     });
   }

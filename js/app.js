@@ -4,22 +4,22 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260808_verse-notes-fix-overlay-mount';
-import './data/church_campaign.js?v=20260808_verse-notes-fix-overlay-mount';
+import './copy/zh-Hant.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
+import './data/church_campaign.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260808_verse-notes-fix-overlay-mount';
-import './design/icon-registry.js?v=20260808_verse-notes-fix-overlay-mount';
+import './design/design-system-helpers.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
+import './design/icon-registry.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 import './design/icons.js';
-import './state.js?v=20260808_verse-notes-fix-overlay-mount';
-import './auth.js?v=20260808_verse-notes-fix-overlay-mount';
+import './state.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
+import './auth.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 import './auth-launch.mjs';
-import './db.js?v=20260808_verse-notes-fix-overlay-mount';
-import './utils.js?v=20260808_verse-notes-fix-overlay-mount';
-import './gamification.js?v=20260808_verse-notes-fix-overlay-mount';
+import './db.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
+import './utils.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
+import './gamification.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260808_verse-notes-fix-overlay-mount';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -33,7 +33,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260808_verse-notes-fix-overlay-mount';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260808_fix-psalms-verse-count-and-mobile-version-picker';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;

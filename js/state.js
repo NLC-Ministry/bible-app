@@ -568,6 +568,8 @@ function loadLocalSettings() {
     const label = state.readerState.version === "CUNP" ? "CUNP-神" : (state.readerState.version === "RCUVTS" ? "RCUV-神" : "CUV-神");
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
+    const navBadge = document.getElementById("bible-nav-version-badge");
+    if (navBadge) navBadge.textContent = label;
   }
   
   const savedReader = localStorage.getItem("reader_state");
