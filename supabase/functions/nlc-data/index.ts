@@ -30,11 +30,12 @@ const READ_TABLES = new Set([
   "role_definitions",
   "highlights",
   "reading_teams",
-  "reading_team_members"
+  "reading_team_members",
+  "verse_notes"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "highlights"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
-const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders", "highlights"]);
+const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders", "highlights", "verse_notes"]);
 const TEAM_RPC_FUNCTIONS = new Set([
   "get_my_reading_team",
   "get_reading_team_registration_overview",
@@ -299,7 +300,7 @@ function forceUserPayload(table: string, payload: any, profileId: string, action
   }
   // issue_reports is included so a member's report is always attributed to the
   // authenticated caller (server-authoritative user_id), never a client-supplied one.
-  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "issue_reports", "highlights"];
+  const writeProtected = ["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "issue_reports", "highlights", "verse_notes"];
   if (writeProtected.includes(table)) {
     const rows = normalizeRows(payload).map(row => {
       const copy = { ...row };
@@ -405,6 +406,10 @@ async function applyForcedScope(query: any, table: string, action: string, profi
   if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
   if (table === "care_reminders" && action === "select") return { query: query.eq("recipient_id", profile.id) };
   if (table === "care_reminders" && action === "update") return { query: query.eq("recipient_id", profile.id) };
+  // verse_notes are private reflections, never shared with pastors/admins the
+  // way reading_logs/devotional_notes are — always restrict to the caller's
+  // own rows regardless of role, on every action (not just select).
+  if (table === "verse_notes") return { query: query.eq("user_id", profile.id) };
   return { query };
 }
 

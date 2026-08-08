@@ -13068,6 +13068,116 @@ select,
   color: inherit;
 }
 
+.youversion-action-bar .yv-tile.is-active {
+  background: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+}
+
+/* ─── Verse note badge (top-right marker on an annotated verse) ─── */
+.bible-verse {
+  position: relative;
+}
+
+.verse-note-badge {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.35rem;
+  width: 1rem;
+  height: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand);
+  pointer-events: none;
+}
+
+.verse-note-badge .nlc-icon,
+.verse-note-badge svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+/* ─── Verse Note Editor (full-screen annotation editor) ─── */
+.verse-note-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--bg-card);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.verse-note-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.verse-note-editor-title-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.verse-note-editor-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.verse-note-editor-title-group h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verse-note-editor-save {
+  flex: 0 0 auto;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.85rem;
+}
+
+.verse-note-editor-textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 1.25rem 1.25rem 1rem;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  background: transparent;
+  font-family: inherit;
+}
+
+.verse-note-editor-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.verse-note-editor-footer {
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--border-card);
+}
+
+.verse-note-editor-delete {
+  font-size: 0.85rem;
+}
+
+body.verse-note-editor-open {
+  overflow: hidden;
+}
+
 @media (max-width: 360px) {
   .youversion-action-bar {
     width: calc(100vw - 1rem);

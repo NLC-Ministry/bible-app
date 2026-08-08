@@ -2361,6 +2361,86 @@ const db = {
     }
   },
 
+  async getVerseNotesForChapter(bookName, chapter) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const user = await this.getCurrentDbUser();
+      if (!user) return {};
+      const { data, error } = await state.supabase
+        .from("verse_notes")
+        .select("verse, content")
+        .eq("user_id", user.id)
+        .eq("book", bookName)
+        .eq("chapter", chapter);
+      if (error) {
+        console.warn("[db] getVerseNotesForChapter failed:", error);
+        return {};
+      }
+      const notes = {};
+      (data || []).forEach(row => { notes[row.verse] = row.content; });
+      return notes;
+    }
+    const notesStr = localStorage.getItem("verse_notes") || "{}";
+    let allNotes = {};
+    try { allNotes = JSON.parse(notesStr) || {}; } catch (e) { allNotes = {}; }
+    const notes = {};
+    Object.keys(allNotes).forEach(key => {
+      const [book, ch, verse] = key.split("_");
+      if (book === bookName && Number(ch) === Number(chapter)) notes[verse] = allNotes[key].content;
+    });
+    return notes;
+  },
+
+  async saveVerseNote(bookName, chapter, verse, content) {
+    const trimmed = String(content || "").trim();
+    if (!trimmed) {
+      await this.deleteVerseNote(bookName, chapter, verse);
+      return "";
+    }
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const user = await this.getCurrentDbUser();
+      if (!user) return "";
+      const { error } = await state.supabase
+        .from("verse_notes")
+        .upsert({
+          user_id: user.id,
+          book: bookName,
+          chapter: Number(chapter),
+          verse: Number(verse),
+          content: trimmed
+        }, { onConflict: "user_id,book,chapter,verse" });
+      if (error) throw error;
+      return trimmed;
+    }
+    const notesStr = localStorage.getItem("verse_notes") || "{}";
+    let allNotes = {};
+    try { allNotes = JSON.parse(notesStr) || {}; } catch (e) { allNotes = {}; }
+    const key = `${bookName}_${chapter}_${verse}`;
+    allNotes[key] = { content: trimmed, updatedAt: new Date().toISOString() };
+    localStorage.setItem("verse_notes", JSON.stringify(allNotes));
+    return trimmed;
+  },
+
+  async deleteVerseNote(bookName, chapter, verse) {
+    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      const user = await this.getCurrentDbUser();
+      if (!user) return;
+      const { error } = await state.supabase
+        .from("verse_notes")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("book", bookName)
+        .eq("chapter", Number(chapter))
+        .eq("verse", Number(verse));
+      if (error) throw error;
+      return;
+    }
+    const notesStr = localStorage.getItem("verse_notes") || "{}";
+    let allNotes = {};
+    try { allNotes = JSON.parse(notesStr) || {}; } catch (e) { allNotes = {}; }
+    delete allNotes[`${bookName}_${chapter}_${verse}`];
+    localStorage.setItem("verse_notes", JSON.stringify(allNotes));
+  },
+
   async toggleDevotionalLike(noteId) {
     if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
       const user = await this.getCurrentDbUser();

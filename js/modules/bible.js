@@ -825,7 +825,8 @@ export async function renderReaderText() {
   if (heading) heading.textContent = `${book.name} ${chapter}章`;
   updatePillLabels();
   renderReaderPicker();
-  
+  loadVerseNotesForChapter(book.name, chapter);
+
   const scrollSurface = document.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
   if (scrollSurface) {
     scrollSurface.scrollTop = 0;
@@ -935,6 +936,23 @@ function setReaderStartSelection(verseElement) {
   console.info("[ReaderAudio] Start verse selected", { verse: state.readerState.selectedVerseNum });
   return true;
 }
+function setVerseNoteBadge(verseDiv, hasNote) {
+  if (!verseDiv) return;
+  let badge = verseDiv.querySelector(".verse-note-badge");
+  if (hasNote) {
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "verse-note-badge";
+      badge.setAttribute("data-icon", "pencil");
+      badge.setAttribute("aria-hidden", "true");
+      verseDiv.appendChild(badge);
+      if (typeof hydrateIcons === "function") hydrateIcons(badge);
+    }
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
 function renderVersesList(container, verses, bookName, chapter) {
   container.innerHTML = "";
   const chapterId = `${state.readerState?.bookId || "GEN"}_${chapter}`;
@@ -955,6 +973,7 @@ function renderVersesList(container, verses, bookName, chapter) {
     }
 
     verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
+    setVerseNoteBadge(verseDiv, Boolean(state.verseNotes[highlightKey]));
 
     const toggleSelection = e => {
       e.stopPropagation();
@@ -969,7 +988,10 @@ function renderVersesList(container, verses, bookName, chapter) {
         selectedText: formattedText,
         verseDiv,
         highlightKey,
-        chapterId
+        chapterId,
+        bookName,
+        chapter,
+        verse: v.verse
       });
     };
     verseDiv.addEventListener("click", toggleSelection);
@@ -990,11 +1012,31 @@ function renderVersesList(container, verses, bookName, chapter) {
   container.appendChild(sentinel);
 }
 
+let verseNotesLoadToken = 0;
+
+async function loadVerseNotesForChapter(bookName, chapter) {
+  const requestToken = ++verseNotesLoadToken;
+  const notes = await db.getVerseNotesForChapter(bookName, chapter);
+  if (requestToken !== verseNotesLoadToken) return; // a newer chapter load superseded this request
+
+  state.verseNotes = {};
+  Object.keys(notes).forEach(verse => {
+    state.verseNotes[`${bookName}_${chapter}_${verse}`] = notes[verse];
+  });
+
+  const container = document.getElementById("bible-content");
+  if (!container) return;
+  container.querySelectorAll(".bible-verse[data-verse]").forEach(verseDiv => {
+    const key = `${bookName}_${chapter}_${verseDiv.dataset.verse}`;
+    setVerseNoteBadge(verseDiv, Boolean(state.verseNotes[key]));
+  });
+}
+
 /**
  * Integrated Reader Selection Bottom Bar Launcher
  */
 function openIntegratedSelectionBottomBar(options) {
-  const { selectedText, verseDiv, highlightKey, chapterId } = options;
+  const { selectedText, verseDiv, highlightKey, chapterId, bookName, chapter, verse } = options;
   const rootElement = document.getElementById("selection-bottom-bar-root");
   if (!rootElement) return;
   closeSelectionBottomBar({ clearSelection: false });
@@ -1006,6 +1048,7 @@ function openIntegratedSelectionBottomBar(options) {
 
   const selectedVerseNumber = Number(verseDiv?.dataset.verse || 1);
   const activeHighlightColor = state.highlights?.[highlightKey] || "";
+  const hasExistingNote = Boolean(state.verseNotes?.[highlightKey]);
 
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
@@ -1035,6 +1078,10 @@ function openIntegratedSelectionBottomBar(options) {
           <button type="button" class="yv-tile" data-action="share">
             <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
             <span class="yv-tile-label">分享</span>
+          </button>
+          <button type="button" class="yv-tile${hasExistingNote ? " is-active" : ""}" data-action="note">
+            <span class="nlc-icon" data-icon="pencil" aria-hidden="true"></span>
+            <span class="yv-tile-label">${hasExistingNote ? "編輯筆記" : "寫筆記"}</span>
           </button>
         </div>
       </div>
@@ -1127,6 +1174,20 @@ function openIntegratedSelectionBottomBar(options) {
     closeBar();
   });
 
+  barDiv.querySelector('[data-action="note"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const noteVerse = verse || selectedVerseNumber;
+    closeBar({ clearSelection: false });
+    openVerseNoteEditor({
+      bookName,
+      chapter,
+      verse: noteVerse,
+      verseDiv,
+      highlightKey,
+      referenceLabel: `${bookName || ""} ${chapter || ""}:${noteVerse}`
+    });
+  });
+
   barDiv.querySelector('[data-action="close"]')?.addEventListener("click", (e) => {
     e.stopPropagation();
     closeBar();
@@ -1136,6 +1197,101 @@ function openIntegratedSelectionBottomBar(options) {
     document.addEventListener("click", onDocClick);
     selectionBottomBarBindTimer = null;
   }, 100);
+}
+
+/**
+ * 逐節筆記全螢幕編輯框
+ */
+function closeVerseNoteEditor() {
+  const rootElement = document.getElementById("verse-note-editor-root");
+  if (rootElement) rootElement.innerHTML = "";
+  document.body.classList.remove("verse-note-editor-open");
+}
+
+function openVerseNoteEditor(options) {
+  const { bookName, chapter, verse, verseDiv, highlightKey, referenceLabel } = options;
+  const rootElement = document.getElementById("verse-note-editor-root");
+  if (!rootElement || !bookName || !chapter || !verse) return;
+
+  const existingContent = state.verseNotes?.[highlightKey] || "";
+
+  rootElement.innerHTML = `
+    <div id="verse-note-editor-overlay" class="verse-note-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="verse-note-editor-title">
+      <header class="verse-note-editor-header">
+        <button type="button" class="icon-button icon-button--subtle" id="verse-note-editor-close" aria-label="關閉">
+          <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
+        </button>
+        <div class="verse-note-editor-title-group">
+          <span class="verse-note-editor-eyebrow">經文筆記</span>
+          <h3 id="verse-note-editor-title">${escapeHTML(referenceLabel || "")}</h3>
+        </div>
+        <button type="button" class="primary-btn verse-note-editor-save" id="verse-note-editor-save">儲存</button>
+      </header>
+      <textarea id="verse-note-editor-textarea" class="verse-note-editor-textarea" placeholder="寫下你的註解、心得或禱告…" autofocus>${escapeHTML(existingContent)}</textarea>
+      <footer class="verse-note-editor-footer">
+        <button type="button" class="reading-team-danger-link verse-note-editor-delete" id="verse-note-editor-delete"${existingContent ? "" : " hidden"}>刪除筆記</button>
+      </footer>
+    </div>
+  `;
+
+  document.body.classList.add("verse-note-editor-open");
+  const overlay = document.getElementById("verse-note-editor-overlay");
+  if (!overlay) return;
+  if (typeof hydrateIcons === "function") hydrateIcons(overlay);
+
+  const textarea = document.getElementById("verse-note-editor-textarea");
+  const deleteBtn = document.getElementById("verse-note-editor-delete");
+  if (textarea) {
+    const len = textarea.value.length;
+    textarea.focus();
+    textarea.setSelectionRange(len, len);
+  }
+
+  const applyBadgeState = hasNote => {
+    if (verseDiv) setVerseNoteBadge(verseDiv, hasNote);
+  };
+
+  document.getElementById("verse-note-editor-close")?.addEventListener("click", closeVerseNoteEditor);
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) closeVerseNoteEditor();
+  });
+
+  document.getElementById("verse-note-editor-save")?.addEventListener("click", async () => {
+    const saveBtn = document.getElementById("verse-note-editor-save");
+    const content = textarea ? textarea.value : "";
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const saved = await db.saveVerseNote(bookName, chapter, verse, content);
+      if (saved) {
+        state.verseNotes[highlightKey] = saved;
+      } else {
+        delete state.verseNotes[highlightKey];
+      }
+      applyBadgeState(Boolean(saved));
+      showToast(saved ? "筆記已儲存" : "筆記已清空");
+      closeVerseNoteEditor();
+    } catch (error) {
+      console.error("Failed to save verse note:", error);
+      showToast("筆記儲存失敗，請稍後再試。");
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  });
+
+  deleteBtn?.addEventListener("click", async () => {
+    deleteBtn.disabled = true;
+    try {
+      await db.deleteVerseNote(bookName, chapter, verse);
+      delete state.verseNotes[highlightKey];
+      applyBadgeState(false);
+      showToast("筆記已刪除");
+      closeVerseNoteEditor();
+    } catch (error) {
+      console.error("Failed to delete verse note:", error);
+      showToast("刪除失敗，請稍後再試。");
+      deleteBtn.disabled = false;
+    }
+  });
 }
 
 window.openBibleVersionPicker = function() {

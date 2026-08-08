@@ -102,6 +102,7 @@ const state = {
     }
   })(),
   highlights: {}, // Mapping of "Book_Chapter_Verse" to color hex
+  verseNotes: {}, // Mapping of "Book_Chapter_Verse" to note content, for the currently loaded chapter only
   statsCharts: {
     rank: null,
     progress: null,
