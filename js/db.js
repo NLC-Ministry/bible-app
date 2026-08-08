@@ -1635,8 +1635,21 @@ const db = {
           .select("id, name, email, great_region, pastoral_zone, small_group, is_active, name_review_approved, member_context_synced_at, member_context_sync_status, role_id")
           .eq("is_demo", false)
           .order("name", { ascending: true });
-        if (fbErr) return { data: [], error: fbErr };
-        profiles = fallbackProfiles || [];
+        if (fbErr) {
+          // Both attempts included name_review_approved (migration 0069).
+          // If that column hasn't been deployed to this database yet, both
+          // fail identically — degrade once more without it rather than
+          // breaking the whole admin directory over one optional field.
+          const { data: legacyProfiles, error: legacyErr } = await state.supabase
+            .from("profiles")
+            .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id")
+            .eq("is_demo", false)
+            .order("name", { ascending: true });
+          if (legacyErr) return { data: [], error: legacyErr };
+          profiles = (legacyProfiles || []).map(profile => ({ ...profile, name_review_approved: false }));
+        } else {
+          profiles = fallbackProfiles || [];
+        }
       } else {
         profiles = pData || [];
       }
@@ -2553,7 +2566,7 @@ const db = {
       if (teamIds.length > 0) {
         const { data: mRows, error: mErr } = await client
           .from("reading_team_members")
-          .select("id, team_id, user_id, member_role");
+          .select("team_id, user_id, member_role");
         if (!mErr && Array.isArray(mRows)) members = mRows;
       }
 
@@ -2763,7 +2776,7 @@ const db = {
       if (planId) {
         const { data: teamMembers, error: tmError } = await client
           .from("reading_team_members")
-          .select("id, user_id, team_id, member_role, division, global_plan_id")
+          .select("user_id, team_id, member_role, division, global_plan_id")
           .eq("global_plan_id", planId);
         if (!tmError && teamMembers) memberships = teamMembers;
       }

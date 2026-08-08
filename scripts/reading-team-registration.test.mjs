@@ -615,4 +615,19 @@ describe("NLC and browser integration", () => {
     expect(formFlow).toContain("團隊");
     expect(formFlow).not.toContain('const minePill = Array.from(document.querySelectorAll("#plan-list-status-pills .pill-btn"))');
   });
+
+  it("never selects a non-existent id column from reading_team_members (its primary key is team_id + user_id)", () => {
+    // Regression: reading_team_members has no `id` column (migration 0019:
+    // PRIMARY KEY (team_id, user_id)) — selecting it fails with Postgres
+    // 42703 ("column reading_team_members.id does not exist") and 400s the
+    // whole nlc-data request. Both admin RPC-fallback queries in db.js must
+    // never re-add it; neither actually reads `.id` off the returned rows.
+    const teamMembersSelects = [...db.matchAll(/\.from\("reading_team_members"\)\s*\n\s*\.select\("([^"]+)"\)/g)]
+      .map(match => match[1]);
+    expect(teamMembersSelects.length).toBeGreaterThan(0);
+    for (const select of teamMembersSelects) {
+      const columns = select.split(",").map(col => col.trim());
+      expect(columns).not.toContain("id");
+    }
+  });
 });

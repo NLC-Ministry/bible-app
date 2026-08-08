@@ -66,6 +66,10 @@ const ADMIN_RPC_FUNCTIONS = new Set([
   "set_profile_managed_scopes"
 ]);
 const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+// Same as PROFILE_SELECT minus name_review_approved (migration 0069) — used
+// as a retry target wherever a query against PROFILE_SELECT fails, so a
+// database that hasn't been migrated yet degrades instead of hard-failing.
+const PROFILE_SELECT_LEGACY = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -130,13 +134,29 @@ async function fetchProfileData(supabaseAdmin: any, userId: string) {
     console.warn("PROFILE_SELECT join failed; falling back to direct profiles query:", err);
   }
 
-  const { data: basicProfile, error: basicError } = await supabaseAdmin
+  try {
+    const { data: basicProfile, error: basicError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+      .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+      .maybeSingle();
+    if (!basicError) return basicProfile;
+  } catch (err) {
+    console.warn("Fallback profile query with name_review_approved failed; retrying without it (migration 0069 not yet applied?):", err);
+  }
+
+  // Profile resolution runs on every request — never let one optional
+  // column (added by migration 0069, which may not be deployed to this
+  // database yet) take down auth for the whole app. Callers that actually
+  // need name_review_approved already degrade to `false` when it's absent
+  // (see fetchAdminUserProfiles).
+  const { data: legacyProfile, error: legacyError } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+    .select(PROFILE_SELECT_LEGACY)
     .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
     .maybeSingle();
-  if (basicError) throw basicError;
-  return basicProfile;
+  if (legacyError) throw legacyError;
+  return legacyProfile ? { ...legacyProfile, name_review_approved: false } : legacyProfile;
 }
 
 async function resolveProfile(supabaseAdmin: any, accessToken: string) {
@@ -512,12 +532,28 @@ Deno.serve(async (req: Request) => {
       // silently keeping a stale approval from a previously flagged name.
       if (nameChanged) updatePayload.name_review_approved = false;
 
-      const { data: savedProfile, error: saveError } = await supabaseAdmin
+      let savedProfile: any = null;
+      let saveError: any = null;
+      ({ data: savedProfile, error: saveError } = await supabaseAdmin
          .from("profiles")
          .update(updatePayload)
          .eq("id", profile.id)
          .select(PROFILE_SELECT)
-         .single();
+         .single());
+
+      if (saveError && nameChanged) {
+        // The name_review_approved column (migration 0069) may not be
+        // deployed to this database yet — retry without it rather than
+        // blocking every member from saving their own name.
+        console.warn("save_profile with name_review_approved failed; retrying without it (migration 0069 not yet applied?):", saveError);
+        delete updatePayload.name_review_approved;
+        ({ data: savedProfile, error: saveError } = await supabaseAdmin
+           .from("profiles")
+           .update(updatePayload)
+           .eq("id", profile.id)
+           .select(PROFILE_SELECT_LEGACY)
+           .single());
+      }
 
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);
       if (!savedProfile) return jsonResponse({ error: "profile_write_not_verified" }, 500);
