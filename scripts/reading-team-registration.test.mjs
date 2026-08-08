@@ -630,4 +630,38 @@ describe("NLC and browser integration", () => {
       expect(columns).not.toContain("id");
     }
   });
+
+  it("defines the values_overlap() SQL helper get_reading_team_registration_overview depends on", () => {
+    // Regression: migration 0066 calls public.values_overlap(text, text)
+    // but never created it — every call to get_reading_team_registration_overview
+    // failed with 42883 ("function public.values_overlap(text, text) does
+    // not exist"). Migration 0070 adds it and fixes two related bugs found
+    // while doing so: `managed_regions || great_region` (string
+    // concatenation, not the COALESCE(NULLIF(...), ...) fallback pattern
+    // used everywhere else) glues two comma-lists together with no
+    // separator, and the group_leader branch compared a team member's
+    // pastoral_zone against the actor's managed_groups/small_group instead
+    // of the member's own small_group.
+    const fixMigration = read("supabase/migrations/0070_fix_values_overlap_and_team_overview_scope.sql");
+    expect(fixMigration).toContain("CREATE OR REPLACE FUNCTION public.values_overlap(left_values TEXT, right_values TEXT)");
+    expect(fixMigration).toContain("RETURNS BOOLEAN");
+    expect(fixMigration).toContain("GRANT EXECUTE ON FUNCTION public.values_overlap(TEXT, TEXT) TO authenticated, service_role;");
+    expect(fixMigration).not.toContain("managed_regions || actor_profile.great_region");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, '')");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_zones, ''), actor_profile.pastoral_zone, '')");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, '')");
+    expect(fixMigration).toContain("public.values_overlap(md.small_group, COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, ''))");
+    expect(fixMigration).toContain("p.small_group");
+  });
+
+  it("filters reading_team_members.user_id to real strings before the profiles .in() lookup", () => {
+    // A malformed entry reaching .in("id", userIds) can make PostgREST
+    // reject the whole request with a bare "Bad Request" (no Postgres error
+    // code), not just skip that one row — filter defensively, not just for
+    // truthiness.
+    const start = db.indexOf("const userIds = Array.from(new Set(");
+    const end = db.indexOf("));", start) + 3;
+    const block = db.slice(start, end);
+    expect(block).toContain('typeof id === "string" && id.length > 0');
+  });
 });

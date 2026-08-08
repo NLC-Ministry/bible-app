@@ -2570,7 +2570,13 @@ const db = {
         if (!mErr && Array.isArray(mRows)) members = mRows;
       }
 
-      const userIds = Array.from(new Set(members.map(m => m.user_id).filter(Boolean)));
+      // Filter to non-empty strings, not just truthy: a malformed/non-UUID
+      // entry sent through .in() can make PostgREST reject the whole
+      // request with a bare "Bad Request" (no Postgres error code) instead
+      // of skipping just that row.
+      const userIds = Array.from(new Set(
+        members.map(m => m.user_id).filter(id => typeof id === "string" && id.length > 0)
+      ));
       let profilesMap = new Map();
       if (userIds.length > 0) {
         const { data: pRows } = await client

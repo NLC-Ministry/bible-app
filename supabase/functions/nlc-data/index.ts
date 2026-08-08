@@ -468,8 +468,14 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
       const rpcName = functionName;
+      // get_admin_member_team_placements(p_global_plan_id, p_actor_id) calls
+      // resolve_reading_team_actor(p_actor_id) just like every other
+      // TEAM_RPC_FUNCTIONS entry (migration 0064) — it must get p_actor_id
+      // injected too, or resolve_reading_team_actor falls back to
+      // current_profile_id() (NULL under the service-role key nlc-data
+      // runs on) and raises "profile_required".
       const rpcArgs = (functionName === "publish_global_plan_rules"
-        || (TEAM_RPC_FUNCTIONS.has(functionName) && functionName !== "get_admin_member_team_placements")
+        || TEAM_RPC_FUNCTIONS.has(functionName)
         || functionName === "get_admin_registration_statistics")
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});
