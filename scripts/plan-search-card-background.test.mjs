@@ -37,7 +37,14 @@ describe("daily verse card mode", () => {
   });
 
   it("still changes the background for later draw-card actions", () => {
-    expect(home).toMatch(/drawBtn\.addEventListener[\s\S]*fetchRandomVerse\(\)/);
+    // Regression: the click handler used to call fetchRandomVerse() with no
+    // argument, so `event` inside fetchRandomVerse was always undefined —
+    // `shouldGenerate = !!event || savedDate !== todayStr` could then only
+    // ever be true via the date check, never via a manual click, so
+    // "換一句"/"抽一張" silently just reloaded today's already-cached pick
+    // instead of drawing a new one. The event must be forwarded so a manual
+    // click always draws a fresh verse/card regardless of the once-a-day rule.
+    expect(home).toMatch(/drawBtn\.addEventListener[\s\S]*fetchRandomVerse\(e\)/);
     expect(home).toContain("if (!preservedImageUrl)");
     expect(home).toContain('localStorage.setItem("verse_card_bg", nextImageUrl)');
   });

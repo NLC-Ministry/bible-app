@@ -1927,7 +1927,7 @@ function renderDailyVerse(options = {}) {
     drawBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      fetchRandomVerse();
+      fetchRandomVerse(e);
     });
     drawBtn._hasDrawListener = true;
   }

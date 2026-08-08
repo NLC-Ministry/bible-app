@@ -4542,6 +4542,9 @@ function populateMembersSelector() {
       el.dataset.directListenerBound = "true";
       el.addEventListener("change", async () => {
         await renderPlanMembersView();
+        if (typeof window.refreshAdminTeamRegistrationFilters === "function") {
+          await window.refreshAdminTeamRegistrationFilters();
+        }
       });
     }
   });

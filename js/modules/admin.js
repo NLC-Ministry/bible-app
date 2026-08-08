@@ -807,9 +807,12 @@ function setAdminPrimaryPanel(panelName) {
 }
 
 function mountPlanManagementSections() {
+  const orgFilterSlot = document.getElementById('admin-plan-org-filter-slot');
+  const joinStatusPanel = document.getElementById('admin-plan-subtab-join-status');
   const participantSlot = document.getElementById('admin-plan-participants-slot');
   const statisticsSlot = document.getElementById('admin-plan-statistics-slot');
-  const orgHeader = document.getElementById('plan-org-stats-header');
+  const orgControls = document.getElementById('members-organization-controls');
+  const unjoinedSection = document.getElementById('admin-unjoined-plan-section');
   const memberList = document.getElementById('member-list-container');
   const statsSection = document.getElementById('stats-group-section');
 
@@ -823,10 +826,20 @@ function mountPlanManagementSections() {
     statisticsSlot.style.display = 'block';
   }
 
-  if (participantSlot && orgHeader) {
-    if (orgHeader.parentElement !== participantSlot) participantSlot.appendChild(orgHeader);
-    orgHeader.classList.remove('hidden');
-    orgHeader.style.display = 'block';
+  // The region/zone/group filters are shared across all four plan-management
+  // tabs, so they move into the filter slot above the tab bar rather than
+  // into any one tab's panel.
+  if (orgFilterSlot && orgControls) {
+    if (orgControls.parentElement !== orgFilterSlot) orgFilterSlot.appendChild(orgControls);
+    orgControls.classList.remove('hidden');
+    orgControls.style.display = 'flex';
+  }
+
+  // 尚未加入計畫 sits in the 加入計畫狀況 tab, below the (native) 已加入計畫 card.
+  if (joinStatusPanel && unjoinedSection) {
+    if (unjoinedSection.parentElement !== joinStatusPanel) joinStatusPanel.appendChild(unjoinedSection);
+    unjoinedSection.classList.remove('hidden');
+    unjoinedSection.style.display = 'block';
   }
 
   if (participantSlot && memberList) {
@@ -840,6 +853,43 @@ function mountPlanManagementSections() {
     statsSection.classList.remove('hidden');
     statsSection.style.display = 'flex';
   }
+}
+
+const ADMIN_PLAN_SUBTABS = ['join-status', 'members', 'teams', 'statistics'];
+let activeAdminPlanSubtab = ADMIN_PLAN_SUBTABS[0];
+
+function setAdminPlanSubtab(subtab) {
+  const requested = ADMIN_PLAN_SUBTABS.includes(subtab) ? subtab : ADMIN_PLAN_SUBTABS[0];
+  activeAdminPlanSubtab = requested;
+  try {
+    sessionStorage.setItem('selected_admin_plan_subtab', requested);
+  } catch (_e) {}
+
+  document.querySelectorAll('#admin-plan-subtabs [data-plan-subtab]').forEach(button => {
+    const active = button.dataset.planSubtab === requested;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  ADMIN_PLAN_SUBTABS.forEach(name => {
+    const panel = document.getElementById(`admin-plan-subtab-${name}`);
+    if (!panel) return;
+    panel.classList.toggle('hidden', name !== requested);
+    panel.style.display = name === requested ? 'flex' : 'none';
+  });
+}
+
+function initAdminPlanSubtabs() {
+  const nav = document.getElementById('admin-plan-subtabs');
+  if (!nav || nav.dataset.listenerBound) return;
+  nav.dataset.listenerBound = 'true';
+  nav.querySelectorAll('[data-plan-subtab]').forEach(button => {
+    button.addEventListener('click', () => setAdminPlanSubtab(button.dataset.planSubtab));
+  });
+  let savedSubtab = ADMIN_PLAN_SUBTABS[0];
+  try {
+    savedSubtab = sessionStorage.getItem('selected_admin_plan_subtab') || ADMIN_PLAN_SUBTABS[0];
+  } catch (_e) {}
+  setAdminPlanSubtab(savedSubtab);
 }
 
 function getManagementPlanStageNo(plan) {
@@ -933,6 +983,7 @@ export async function renderAdminPlanManagement() {
     } catch (_e) {}
     setAdminPrimaryPanel(savedPanel);
     mountPlanManagementSections();
+    initAdminPlanSubtabs();
 
     const select = document.getElementById('admin-management-plan-select');
     const plans = getManagementPlans();
@@ -1174,7 +1225,97 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
     };
   });
 }
+let cachedJoinedPlanKey = "";
+let cachedJoinedPlanMembers = [];
+let joinedPlanRequestId = 0;
+
+function formatAdminJoinedPlanDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+async function renderAdminJoinedPlanMembers(forceRefresh = false) {
+  const container = document.getElementById("admin-joined-plan-members");
+  const count = document.getElementById("admin-joined-plan-count");
+  if (!container || !count) return;
+
+  const currentUser = state.currentUser || {};
+  const plan = state.activePlan;
+  if (!MANAGEMENT_ROLES.includes(getUserRoleCode(currentUser)) || !plan) {
+    count.textContent = "0 人";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
+    return;
+  }
+
+  const cacheKey = [
+    currentUser.id || currentUser.name || "anonymous",
+    getUserRoleCode(currentUser) || "member",
+    currentUser.managed_regions || currentUser.great_region || "",
+    currentUser.managed_zones || currentUser.pastoral_zone || "",
+    plan.globalPlanId || plan.id || "",
+    plan.presetKey || plan.preset_key || ""
+  ].join("|");
+
+  if (forceRefresh || cachedJoinedPlanKey !== cacheKey) {
+    const requestId = ++joinedPlanRequestId;
+    cachedJoinedPlanKey = cacheKey;
+    cachedJoinedPlanMembers = [];
+    count.textContent = "讀取中";
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">讀取已加入計畫的人員中...</div>';
+
+    const result = await db.getJoinedPlanMembers(plan);
+    if (requestId !== joinedPlanRequestId) return;
+    if (!result || !result.success) {
+      console.warn("Unable to load joined plan members", result && (result.error || result.message));
+      count.textContent = "0 人";
+      container.innerHTML = `
+        <div class="admin-unjoined-plan-empty" role="status">
+          <div>目前沒有可顯示的已加入人員。</div>
+          <button type="button" class="secondary-btn" id="admin-joined-plan-retry" style="margin-top:0.75rem;">重新整理</button>
+        </div>`;
+      const retryButton = document.getElementById("admin-joined-plan-retry");
+      if (retryButton) retryButton.onclick = () => renderAdminJoinedPlanMembers(true);
+      return;
+    }
+    cachedJoinedPlanMembers = Array.isArray(result.context && result.context.members)
+      ? result.context.members
+      : [];
+  }
+
+  const visibleMembers = cachedJoinedPlanMembers.filter(member => memberMatchesManagementOrgFilter(member));
+  count.textContent = `${visibleMembers.length} 人`;
+  if (visibleMembers.length === 0) {
+    container.innerHTML = '<div class="admin-unjoined-plan-empty">目前篩選範圍內沒有已加入所選計畫的人員。</div>';
+    return;
+  }
+
+  container.innerHTML = visibleMembers.map(member => {
+    const memberName = escapeHTML(member.name || "未命名使用者");
+    const scope = [
+      member.greatRegion || member.great_region,
+      member.pastoralZone || member.pastoral_zone,
+      member.smallGroup || member.small_group
+    ].filter(Boolean).map(value => escapeHTML(String(value))).join("・") || "尚未設定牧養資料";
+    const joinedDate = formatAdminJoinedPlanDate(member.joinedAt);
+    const round = Number(member.currentRound) || 1;
+    return `
+      <div class="admin-unjoined-plan-member">
+        <div class="admin-unjoined-plan-member__identity">
+          <div class="admin-unjoined-plan-member__name">${memberName}</div>
+          <div class="admin-unjoined-plan-member__scope">${scope}</div>
+        </div>
+        <div class="admin-joined-plan-member__meta">
+          ${joinedDate ? `<span>${escapeHTML(joinedDate)} 加入</span>` : ""}
+          ${round > 1 ? `<span>第 ${round} 遍</span>` : ""}
+        </div>
+      </div>`;
+  }).join("");
+}
+
 async function refreshAdminTeamRegistrationFilters() {
+  await renderAdminJoinedPlanMembers(false);
   await renderAdminUnjoinedPlanMembers(false);
   await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
   await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
@@ -1497,6 +1638,7 @@ function renderAdminTeamPlacementList() {
 }
 
 window.renderAdminUnjoinedPlanMembers = renderAdminUnjoinedPlanMembers;
+window.renderAdminJoinedPlanMembers = renderAdminJoinedPlanMembers;
 window.renderAdminTeamPlacementLookup = renderAdminTeamPlacementLookup;
 window.renderAdminTeamRegistrationStatus = renderAdminTeamRegistrationStatus;
 window.refreshAdminTeamRegistrationFilters = refreshAdminTeamRegistrationFilters;

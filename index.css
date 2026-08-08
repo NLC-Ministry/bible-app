@@ -12350,6 +12350,42 @@ select,
   gap: 1.25rem;
 }
 
+.admin-plan-subtabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  background: var(--bg-input);
+}
+
+.admin-plan-subtab {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-plan-subtab.active {
+  background: var(--bg-card);
+  color: var(--color-brand);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-plan-subtab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 .admin-plan-filter-card {
   display: flex;
   align-items: center;
@@ -12456,6 +12492,17 @@ select,
   color: var(--text-muted);
   font-size: 0.74rem;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-joined-plan-member__meta {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 

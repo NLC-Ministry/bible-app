@@ -2765,6 +2765,85 @@ const db = {
     return this._getUnjoinedPlanMembersFallback(plan, planId);
   },
 
+  async _getJoinedPlanMembersFallback(plan, planId = null) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { success: true, context: { planId, planName: plan && plan.name || "", members: [] } };
+    }
+    try {
+      const { data: profiles, error: profilesError } = await state.supabase
+        .from("profiles")
+        .select("id, name, great_region, pastoral_zone, small_group, is_active, is_demo")
+        .eq("is_active", true)
+        .eq("is_demo", false);
+      if (profilesError) throw profilesError;
+
+      const aliases = [planId, plan && plan.presetKey, plan && plan.preset_key, plan && plan.name]
+        .filter(Boolean).map(String);
+      let plansQuery = state.supabase
+        .from("reading_plans")
+        .select("user_id, global_plan_id, preset_key, name, created_at, current_round");
+      if (aliases.length > 0) {
+        const conditions = aliases.flatMap(alias => {
+          const quoted = quotePostgrestValue(alias);
+          const values = [`preset_key.eq.${quoted}`, `name.eq.${quoted}`];
+          if (isUuid(alias)) values.push(`global_plan_id.eq.${quoted}`);
+          return values;
+        });
+        plansQuery = plansQuery.or(conditions.join(","));
+      }
+      const { data: joinedPlans, error: plansError } = await plansQuery;
+      if (plansError) throw plansError;
+
+      const currentUser = state.currentUser || {};
+      const joinedByUserId = new Map((joinedPlans || []).map(item => [String(item.user_id || ""), item]));
+      const overlap = (left, right) => {
+        const leftValues = String(left || "").split(",").map(value => value.trim()).filter(Boolean);
+        const rightValues = String(right || "").split(",").map(value => value.trim()).filter(Boolean);
+        return leftValues.some(value => rightValues.includes(value));
+      };
+      const withinScope = candidate => hasWholeChurchPlanScope(currentUser)
+        || (getUserRoleCode(currentUser) === "great_zone_leader" && overlap(candidate.great_region, currentUser.managed_regions || currentUser.great_region))
+        || (getUserRoleCode(currentUser) === "zone_leader" && overlap(candidate.pastoral_zone, currentUser.managed_zones || currentUser.pastoral_zone))
+        || (getUserRoleCode(currentUser) === "group_leader" && overlap(candidate.small_group, currentUser.managed_groups || currentUser.small_group));
+      const members = (profiles || [])
+        .filter(candidate => String(candidate.id) !== String(currentUser.id || state.currentProfileId || ""))
+        .filter(withinScope)
+        .filter(candidate => joinedByUserId.has(String(candidate.id)))
+        .map(candidate => {
+          const joined = joinedByUserId.get(String(candidate.id));
+          return {
+            id: candidate.id,
+            name: candidate.name,
+            greatRegion: candidate.great_region || "",
+            pastoralZone: candidate.pastoral_zone || "",
+            smallGroup: candidate.small_group || "",
+            joinedAt: joined && joined.created_at || null,
+            currentRound: joined && joined.current_round || 1
+          };
+        })
+        .sort((left, right) => [left.greatRegion, left.pastoralZone, left.smallGroup, left.name].join("|")
+          .localeCompare([right.greatRegion, right.pastoralZone, right.smallGroup, right.name].join("|"), "zh-Hant"));
+      return { success: true, context: { planId, planName: plan && plan.name || "", members, fallback: true } };
+    } catch (error) {
+      return { success: false, error, message: this._readingTeamErrorMessage(error) };
+    }
+  },
+
+  async getJoinedPlanMembers(plan) {
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (planId) {
+      const result = await this._callReadingTeamRpc("get_joined_plan_members", {
+        p_global_plan_id: planId,
+        p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+      });
+      if (result.success) {
+        return { success: true, context: result.data || { planId, planName: plan && plan.name || "", members: [] } };
+      }
+      console.warn("get_joined_plan_members unavailable; using scoped compatibility query", result.error || result.message);
+    }
+    return this._getJoinedPlanMembersFallback(plan, planId);
+  },
+
   async _getAdminMemberTeamPlacementsFallback(plan, planId) {
     try {
       const client = state.supabase;

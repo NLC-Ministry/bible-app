@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260807_plan_entry_eligibility_gate_and_name_review" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260808_add_plan_management_four_subtabs" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260807_plan_entry_eligibility_gate_and_name_review" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -1818,83 +1818,125 @@
             <select id="admin-management-plan-select" class="form-control"></select>
           </section>
 
-          <section class="admin-management-section" aria-labelledby="admin-participants-title">
-            <h2 id="admin-participants-title" class="admin-management-section__title">參與者總覽</h2>
-            <div id="admin-plan-participants-slot"></div>
+          <section class="glass-card admin-plan-filter-card" aria-labelledby="admin-plan-org-filter-title">
+            <label id="admin-plan-org-filter-title">查看範圍</label>
+            <div id="admin-plan-org-filter-slot"></div>
           </section>
 
-          <section class="admin-management-section" id="admin-team-placements-card-wrap" aria-labelledby="admin-team-placements-title">
-            <details class="glass-card admin-team-status-disclosure" id="admin-team-placements-disclosure" open>
-              <summary id="admin-team-placements-toggle" aria-controls="admin-team-placements-panel">
-                <span class="card-title" id="admin-team-placements-title">
-                  <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
-                  成員組隊與團隊狀態查詢
-                </span>
-                <span class="admin-team-status-summary-action">
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
-                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
-                </span>
-              </summary>
-              <div id="admin-team-placements-panel" style="padding-top: 0.75rem;">
-                <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                  <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區、小組或隊伍名稱..." autocomplete="off">
-                  <div class="admin-team-placement-tabs" role="tablist" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button type="button" class="speech-gender-btn active" data-team-filter="all">全部成員</button>
-                    <button type="button" class="speech-gender-btn" data-team-filter="joined">🟢 已組隊成員</button>
-                    <button type="button" class="speech-gender-btn" data-team-filter="unjoined">🟡 未組隊 (個人速讀)</button>
+          <nav id="admin-plan-subtabs" class="admin-plan-subtabs" role="tablist" aria-label="計畫管理分頁">
+            <button type="button" class="admin-plan-subtab active" role="tab" aria-selected="true"
+              aria-controls="admin-plan-subtab-join-status" data-plan-subtab="join-status">加入計畫狀況</button>
+            <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+              aria-controls="admin-plan-subtab-members" data-plan-subtab="members">組員總覽</button>
+            <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+              aria-controls="admin-plan-subtab-teams" data-plan-subtab="teams">組隊狀況</button>
+            <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+              aria-controls="admin-plan-subtab-statistics" data-plan-subtab="statistics">計畫統計</button>
+          </nav>
+
+          <div id="admin-plan-subtab-join-status" class="admin-plan-subtab-panel" role="tabpanel">
+            <section class="admin-management-section">
+              <section id="admin-joined-plan-section" class="admin-unjoined-plan-card" aria-labelledby="admin-joined-plan-title">
+                <div class="admin-unjoined-plan-card__header">
+                  <div>
+                    <h2 id="admin-joined-plan-title" class="admin-management-section__title">已加入計畫</h2>
+                    <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.5;">顯示目前管理範圍內，已加入所選計畫的人員。</p>
+                  </div>
+                  <div class="admin-unjoined-plan-card__actions">
+                    <span id="admin-joined-plan-count" class="admin-unjoined-plan-count">0 人</span>
                   </div>
                 </div>
-                <div id="admin-team-placements-content" aria-live="polite">
-                  <div class="admin-user-directory__empty">讀取團隊組隊狀態中…</div>
+                <div id="admin-joined-plan-members" class="admin-unjoined-plan-members" aria-live="polite"></div>
+              </section>
+            </section>
+            <!-- #admin-unjoined-plan-section (尚未加入計畫) is moved in here by mountPlanManagementSections() -->
+          </div>
+
+          <div id="admin-plan-subtab-members" class="admin-plan-subtab-panel hidden" role="tabpanel"
+            aria-labelledby="admin-participants-title">
+            <section class="admin-management-section" aria-labelledby="admin-participants-title">
+              <h2 id="admin-participants-title" class="admin-management-section__title">參與者總覽</h2>
+              <div id="admin-plan-participants-slot"></div>
+            </section>
+          </div>
+
+          <div id="admin-plan-subtab-teams" class="admin-plan-subtab-panel hidden" role="tabpanel">
+            <section class="admin-management-section" id="admin-team-placements-card-wrap" aria-labelledby="admin-team-placements-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-placements-disclosure" open>
+                <summary id="admin-team-placements-toggle" aria-controls="admin-team-placements-panel">
+                  <span class="card-title" id="admin-team-placements-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    尚未加入團隊
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-placements-panel" style="padding-top: 0.75rem;">
+                  <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區、小組或隊伍名稱..." autocomplete="off">
+                    <div class="admin-team-placement-tabs" role="tablist" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                      <button type="button" class="speech-gender-btn active" data-team-filter="all">全部成員</button>
+                      <button type="button" class="speech-gender-btn" data-team-filter="joined">🟢 已組隊成員</button>
+                      <button type="button" class="speech-gender-btn" data-team-filter="unjoined">🟡 未組隊 (個人速讀)</button>
+                    </div>
+                  </div>
+                  <div id="admin-team-placements-content" aria-live="polite">
+                    <div class="admin-user-directory__empty">讀取團隊組隊狀態中…</div>
+                  </div>
                 </div>
-              </div>
-            </details>
-          </section>
+              </details>
+            </section>
 
-          <section class="admin-management-section" id="admin-team-status-card-wrap"
-            aria-labelledby="admin-team-3-title">
-            <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure" open>
-              <summary id="admin-team-status-toggle" aria-controls="admin-team-status-panel">
-                <span class="card-title" id="admin-team-3-title">
-                  <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
-                  3 人團隊報名狀況
-                </span>
-                <span class="admin-team-status-summary-action">
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
-                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
-                </span>
-              </summary>
-              <div id="admin-team-status-panel">
-                <div id="admin-team-status-content"></div>
-              </div>
-            </details>
-          </section>
+            <section class="admin-management-section" id="admin-team-status-card-wrap"
+              aria-labelledby="admin-team-3-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure" open>
+                <summary id="admin-team-status-toggle" aria-controls="admin-team-status-panel">
+                  <span class="card-title" id="admin-team-3-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    3 人團隊報名狀況
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-status-panel">
+                  <div id="admin-team-status-content"></div>
+                </div>
+              </details>
+            </section>
 
-          <section class="admin-management-section" aria-labelledby="admin-team-6-title">
-            <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure-6" open>
-              <summary id="admin-team-status-toggle-6" aria-controls="admin-team-status-panel-6">
-                <span class="card-title" id="admin-team-6-title">
-                  <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
-                  6 人團隊報名狀況
-                </span>
-                <span class="admin-team-status-summary-action">
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
-                  <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
-                  <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
-                </span>
-              </summary>
-              <div id="admin-team-status-panel-6">
-                <div id="admin-team-status-content-6"></div>
-              </div>
-            </details>
-          </section>
+            <section class="admin-management-section" aria-labelledby="admin-team-6-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure-6" open>
+                <summary id="admin-team-status-toggle-6" aria-controls="admin-team-status-panel-6">
+                  <span class="card-title" id="admin-team-6-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    6 人團隊報名狀況
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-status-panel-6">
+                  <div id="admin-team-status-content-6"></div>
+                </div>
+              </details>
+            </section>
+          </div>
 
-          <section class="admin-management-section" aria-labelledby="admin-statistics-title">
-            <h2 id="admin-statistics-title" class="admin-management-section__title">各種統計</h2>
-            <div id="admin-plan-statistics-slot"></div>
-          </section>
+          <div id="admin-plan-subtab-statistics" class="admin-plan-subtab-panel hidden" role="tabpanel"
+            aria-labelledby="admin-statistics-title">
+            <section class="admin-management-section" aria-labelledby="admin-statistics-title">
+              <h2 id="admin-statistics-title" class="admin-management-section__title">各種統計</h2>
+              <div id="admin-plan-statistics-slot"></div>
+            </section>
+          </div>
         </div>
       </section>
 
@@ -2300,7 +2342,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260808_fix_team_placement_actor_id_and_values_overlap"></script>
+  <script type="module" src="js/app.js?v=20260808_add_plan_management_four_subtabs"></script>
 </body>
 
 </html>

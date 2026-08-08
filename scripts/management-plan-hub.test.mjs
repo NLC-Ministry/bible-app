@@ -75,6 +75,20 @@ describe("management plan hub", () => {
     expect(plan).toContain("state.currentUser.managed_groups || state.currentUser.small_group");
     expect(plan).toContain('return "all_zones"');
     expect(plan).toContain('return "all_groups"');
+    // Regression: window.refreshAdminTeamRegistrationFilters() (re-renders
+    // the 3人/6人 team panels) used to be wired only to #members-zone-selector,
+    // a legacy `class="hidden" style="display:none"` element (index.html)
+    // the user can never actually interact with. The three real, visible
+    // dropdowns (#members-admin-region/zone/group-select) only called
+    // renderPlanMembersView() — so changing the filter updated the
+    // participant list but silently left the 3人/6人 team panels showing
+    // stale data. Both listeners must call it.
+    const directListenerBlock = plan.slice(
+      plan.indexOf("[regionSelect, zoneSelect, groupSelect].forEach(el => {"),
+      plan.indexOf("const membersZoneSelector")
+    );
+    expect(directListenerBlock).toContain("await renderPlanMembersView();");
+    expect(directListenerBlock).toContain("window.refreshAdminTeamRegistrationFilters");
     expect(plan).toContain("window.refreshAdminTeamRegistrationFilters");
     expect(admin).toContain("teamMatchesManagementOrgFilter");
     expect(admin).toContain("members.some(member =>");
