@@ -1317,6 +1317,7 @@ async function renderAdminJoinedPlanMembers(forceRefresh = false) {
 async function refreshAdminTeamRegistrationFilters() {
   await renderAdminJoinedPlanMembers(false);
   await renderAdminUnjoinedPlanMembers(false);
+  renderAdminTeamPlacementList();
   await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
   await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
 }
@@ -1533,26 +1534,11 @@ export function initAdminTeamRegistration() {
 }
 
 let adminTeamPlacementsData = [];
-let adminTeamPlacementFilterTab = "all";
 
 export async function renderAdminTeamPlacementLookup(selectedPlan) {
   const contentEl = document.getElementById("admin-team-placements-content");
   const searchInput = document.getElementById("admin-team-placement-search");
-  const filterTabBtns = document.querySelectorAll("[data-team-filter]");
   if (!contentEl) return;
-
-  if (filterTabBtns.length > 0) {
-    filterTabBtns.forEach(btn => {
-      if (!btn.dataset.placementBound) {
-        btn.dataset.placementBound = "true";
-        btn.addEventListener("click", () => {
-          adminTeamPlacementFilterTab = btn.dataset.teamFilter || "all";
-          filterTabBtns.forEach(b => b.classList.toggle("active", b === btn));
-          renderAdminTeamPlacementList();
-        });
-      }
-    });
-  }
 
   if (searchInput && !searchInput.dataset.placementBound) {
     searchInput.dataset.placementBound = "true";
@@ -1561,7 +1547,7 @@ export async function renderAdminTeamPlacementLookup(selectedPlan) {
     });
   }
 
-  contentEl.innerHTML = '<div class="admin-user-directory__empty">正在載入團隊組隊狀態…</div>';
+  contentEl.innerHTML = '<div class="admin-user-directory__empty">正在載入尚未加入團隊的人員…</div>';
 
   const res = await db.getAdminMemberTeamPlacements(selectedPlan);
   if (!res.success) {
@@ -1579,54 +1565,34 @@ function renderAdminTeamPlacementList() {
   if (!contentEl) return;
 
   const query = (searchInput?.value || "").trim().toLocaleLowerCase("zh-Hant");
+  const unjoinedMembers = adminTeamPlacementsData.filter(item => item.isJoined !== true);
 
-  const filtered = adminTeamPlacementsData.filter(item => {
-    if (adminTeamPlacementFilterTab === "joined" && !item.isJoined) return false;
-    if (adminTeamPlacementFilterTab === "unjoined" && item.isJoined) return false;
-
-    if (!query) return true;
-    const text = [
-      item.name,
-      item.email,
-      item.pastoralZone,
-      item.smallGroup,
-      item.teamName
-    ].filter(Boolean).join(" ").toLocaleLowerCase("zh-Hant");
-    return text.includes(query);
-  });
+  const filtered = unjoinedMembers
+    .filter(item => memberMatchesManagementOrgFilter(item))
+    .filter(item => {
+      if (!query) return true;
+      const text = [item.name, item.email, item.pastoralZone, item.smallGroup]
+        .filter(Boolean).join(" ").toLocaleLowerCase("zh-Hant");
+      return text.includes(query);
+    });
 
   if (filtered.length === 0) {
-    contentEl.innerHTML = '<div class="admin-user-directory__empty">沒有符合條件的組隊資料。</div>';
+    contentEl.innerHTML = '<div class="admin-user-directory__empty">目前篩選範圍內沒有尚未加入團隊的人員。</div>';
     return;
   }
 
   const html = `
     <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-      共顯示 ${filtered.length} / ${adminTeamPlacementsData.length} 位成員
+      共顯示 ${filtered.length} / ${unjoinedMembers.length} 位尚未加入團隊的人員
     </div>
     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
       ${filtered.map(item => {
         const name = escapeHTML(item.name || "未命名");
         const zone = escapeHTML([item.pastoralZone, item.smallGroup].filter(Boolean).join("・") || "未設定歸屬");
-        const isJoined = item.isJoined === true;
-        const statusBadge = isJoined
-          ? `<span class="admin-user-directory__status admin-user-directory__status--active">🟢 已組隊</span>`
-          : `<span class="admin-user-directory__status admin-user-directory__status--inactive">🟡 未組隊 (個人速讀)</span>`;
-        const roleLabel = item.memberRole === "leader" ? "👑 隊長" : (item.memberRole ? "成員" : "-");
-        const teamName = isJoined ? escapeHTML(item.teamName || "未命名隊伍") : "無 (個人速讀中)";
-        const divisionText = item.division ? `${item.division}人隊` : "";
-
         return `
-          <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 10px; padding: 0.75rem 1rem; display: flex; flex-direction: column; gap: 0.35rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <strong>${name} <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-secondary);">(${zone})</span></strong>
-              ${statusBadge}
-            </div>
-            <div style="font-size: 0.82rem; color: var(--text-primary); display: flex; gap: 1.2rem; flex-wrap: wrap;">
-              <span><strong>所屬隊伍:</strong> ${teamName} ${divisionText ? `(${divisionText})` : ''}</span>
-              ${isJoined ? `<span><strong>隊內角色:</strong> ${roleLabel}</span>` : ''}
-              ${isJoined && item.memberCount ? `<span><strong>目前隊內人數:</strong> ${item.memberCount}人</span>` : ''}
-            </div>
+          <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 10px; padding: 0.75rem 1rem;">
+            <strong>${name}</strong>
+            <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-secondary);">(${zone})</span>
           </div>
         `;
       }).join("")}

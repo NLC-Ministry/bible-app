@@ -20,13 +20,36 @@ describe("admin member team placement lookup tests", () => {
     expect(dbJs).toContain('"get_admin_member_team_placements"');
   });
 
-  it("verifies index.html renders team placement search & filter tabs", () => {
+  it("verifies index.html renders the 尚未加入團隊 search box with no joined/all filter tabs", () => {
+    // Regression: this section used to show all members with a
+    // 全部成員/已組隊成員/未組隊 tab switcher. It was simplified to show only
+    // people who haven't joined a team — no tabs needed since there's only
+    // one category left to show.
     const html = readFileSync("index.html", "utf8");
     expect(html).toContain('id="admin-team-placements-card-wrap"');
+    expect(html).toContain("尚未加入團隊");
     expect(html).toContain('id="admin-team-placement-search"');
-    expect(html).toContain('data-team-filter="joined"');
-    expect(html).toContain('data-team-filter="unjoined"');
+    expect(html).not.toContain('data-team-filter="all"');
+    expect(html).not.toContain('data-team-filter="joined"');
+    expect(html).not.toContain('data-team-filter="unjoined"');
+    expect(html).not.toContain("admin-team-placement-tabs");
     expect(html).toContain('id="admin-user-directory-filter-unjoined-team"');
+  });
+
+  it("filters the 尚未加入團隊 list to unjoined members and respects the shared org filter", () => {
+    const admin = readFileSync("js/modules/admin.js", "utf8");
+    expect(admin).not.toContain("adminTeamPlacementFilterTab");
+    const listFn = admin.slice(
+      admin.indexOf("function renderAdminTeamPlacementList()"),
+      admin.indexOf("window.renderAdminUnjoinedPlanMembers")
+    );
+    expect(listFn).toContain("adminTeamPlacementsData.filter(item => item.isJoined !== true)");
+    expect(listFn).toContain("memberMatchesManagementOrgFilter(item)");
+    const refreshFn = admin.slice(
+      admin.indexOf("async function refreshAdminTeamRegistrationFilters()"),
+      admin.indexOf("export async function renderAdminTeamRegistrationStatus")
+    );
+    expect(refreshFn).toContain("renderAdminTeamPlacementList();");
   });
 
   it("verifies db.js provides _getAdminMemberTeamPlacementsFallback for robust fallback data fetching", () => {

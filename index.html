@@ -1875,16 +1875,11 @@
                   </span>
                 </summary>
                 <div id="admin-team-placements-panel" style="padding-top: 0.75rem;">
-                  <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區、小組或隊伍名稱..." autocomplete="off">
-                    <div class="admin-team-placement-tabs" role="tablist" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                      <button type="button" class="speech-gender-btn active" data-team-filter="all">全部成員</button>
-                      <button type="button" class="speech-gender-btn" data-team-filter="joined">🟢 已組隊成員</button>
-                      <button type="button" class="speech-gender-btn" data-team-filter="unjoined">🟡 未組隊 (個人速讀)</button>
-                    </div>
+                  <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem;">
+                    <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區或小組..." autocomplete="off">
                   </div>
                   <div id="admin-team-placements-content" aria-live="polite">
-                    <div class="admin-user-directory__empty">讀取團隊組隊狀態中…</div>
+                    <div class="admin-user-directory__empty">讀取尚未加入團隊的人員中…</div>
                   </div>
                 </div>
               </details>
@@ -2342,7 +2337,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260808_add_plan_management_four_subtabs"></script>
+  <script type="module" src="js/app.js?v=20260808_simplify_unjoined_team_list_to_org_filter"></script>
 </body>
 
 </html>
