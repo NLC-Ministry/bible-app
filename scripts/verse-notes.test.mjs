@@ -55,6 +55,21 @@ describe("verse notes (per-verse reading annotations)", () => {
     expect(bible).toContain("db.deleteVerseNote(bookName, chapter, verse)");
   });
 
+  it("shows the selected verse text in the editor and reuses the app's proven overlay shell for a discoverable close button", () => {
+    // Reuses .full-page-overlay / .overlay-header / .overlay-back-btn — the
+    // same battle-tested shell as the bible-nav and search overlays — instead
+    // of a bespoke icon-only close button, which was too easy to miss/lose
+    // (e.g. under the on-screen keyboard) on real mobile devices.
+    expect(bible).toContain('class="full-page-overlay verse-note-editor-overlay"');
+    expect(bible).toContain('class="overlay-back-btn" id="verse-note-editor-close"');
+    expect(bible).toContain("verseText: verseText || \"\"");
+    expect(bible).toContain('class="verse-note-editor-verse-text">${escapeHTML(verseText || "")}');
+    expect(bible).toContain("const verseText = v.text;");
+    expect(bible).not.toContain("autofocus");
+    expect(css).toContain(".verse-note-editor-quote {");
+    expect(css).toContain(".verse-note-editor-verse-text {");
+  });
+
   it("marks an annotated verse with a badge in its top-right corner", () => {
     expect(bible).toContain("function setVerseNoteBadge(verseDiv, hasNote)");
     expect(bible).toContain('badge.className = "verse-note-badge"');
@@ -73,10 +88,8 @@ describe("verse notes (per-verse reading annotations)", () => {
     expect(bible).toContain("loadVerseNotesForChapter(book.name, chapter);");
   });
 
-  it("mounts the editor overlay root in index.html and styles it as a full-screen modal above the reader", () => {
+  it("mounts the editor overlay root in index.html and layers it above the reader chrome", () => {
     expect(html).toContain('id="verse-note-editor-root"');
-    expect(css).toContain(".verse-note-editor-overlay {");
-    expect(css).toContain("position: fixed;");
-    expect(css).toContain("z-index: var(--z-modal);");
+    expect(css).toMatch(/\.verse-note-editor-overlay \{\s*\n\s*z-index: var\(--z-modal\);/);
   });
 });

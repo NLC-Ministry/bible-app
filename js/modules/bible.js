@@ -986,6 +986,7 @@ function renderVersesList(container, verses, bookName, chapter) {
       const formattedText = `【${bookName} ${chapter}:${v.verse}】${verseText}`;
       openIntegratedSelectionBottomBar({
         selectedText: formattedText,
+        verseText,
         verseDiv,
         highlightKey,
         chapterId,
@@ -1036,7 +1037,7 @@ async function loadVerseNotesForChapter(bookName, chapter) {
  * Integrated Reader Selection Bottom Bar Launcher
  */
 function openIntegratedSelectionBottomBar(options) {
-  const { selectedText, verseDiv, highlightKey, chapterId, bookName, chapter, verse } = options;
+  const { selectedText, verseText, verseDiv, highlightKey, chapterId, bookName, chapter, verse } = options;
   const rootElement = document.getElementById("selection-bottom-bar-root");
   if (!rootElement) return;
   closeSelectionBottomBar({ clearSelection: false });
@@ -1184,6 +1185,7 @@ function openIntegratedSelectionBottomBar(options) {
       verse: noteVerse,
       verseDiv,
       highlightKey,
+      verseText: verseText || "",
       referenceLabel: `${bookName || ""} ${chapter || ""}:${noteVerse}`
     });
   });
@@ -1209,25 +1211,27 @@ function closeVerseNoteEditor() {
 }
 
 function openVerseNoteEditor(options) {
-  const { bookName, chapter, verse, verseDiv, highlightKey, referenceLabel } = options;
+  const { bookName, chapter, verse, verseDiv, highlightKey, referenceLabel, verseText } = options;
   const rootElement = document.getElementById("verse-note-editor-root");
   if (!rootElement || !bookName || !chapter || !verse) return;
 
   const existingContent = state.verseNotes?.[highlightKey] || "";
 
   rootElement.innerHTML = `
-    <div id="verse-note-editor-overlay" class="verse-note-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="verse-note-editor-title">
-      <header class="verse-note-editor-header">
-        <button type="button" class="icon-button icon-button--subtle" id="verse-note-editor-close" aria-label="關閉">
-          <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
+    <div id="verse-note-editor-overlay" class="full-page-overlay verse-note-editor-overlay" role="dialog" aria-modal="true" aria-labelledby="verse-note-editor-title">
+      <header class="overlay-header bible-native-overlay-header">
+        <button type="button" class="overlay-back-btn" id="verse-note-editor-close" aria-label="返回">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span>返回</span>
         </button>
-        <div class="verse-note-editor-title-group">
-          <span class="verse-note-editor-eyebrow">經文筆記</span>
-          <h3 id="verse-note-editor-title">${escapeHTML(referenceLabel || "")}</h3>
-        </div>
-        <button type="button" class="primary-btn verse-note-editor-save" id="verse-note-editor-save">儲存</button>
+        <div class="overlay-title" id="verse-note-editor-title">經文筆記</div>
+        <button type="button" class="verse-note-editor-save" id="verse-note-editor-save">儲存</button>
       </header>
-      <textarea id="verse-note-editor-textarea" class="verse-note-editor-textarea" placeholder="寫下你的註解、心得或禱告…" autofocus>${escapeHTML(existingContent)}</textarea>
+      <div class="verse-note-editor-quote">
+        <span class="verse-note-editor-reference">${escapeHTML(referenceLabel || "")}</span>
+        <p class="verse-note-editor-verse-text">${escapeHTML(verseText || "")}</p>
+      </div>
+      <textarea id="verse-note-editor-textarea" class="verse-note-editor-textarea" placeholder="寫下你的註解、心得或禱告…">${escapeHTML(existingContent)}</textarea>
       <footer class="verse-note-editor-footer">
         <button type="button" class="reading-team-danger-link verse-note-editor-delete" id="verse-note-editor-delete"${existingContent ? "" : " hidden"}>刪除筆記</button>
       </footer>
@@ -1241,20 +1245,12 @@ function openVerseNoteEditor(options) {
 
   const textarea = document.getElementById("verse-note-editor-textarea");
   const deleteBtn = document.getElementById("verse-note-editor-delete");
-  if (textarea) {
-    const len = textarea.value.length;
-    textarea.focus();
-    textarea.setSelectionRange(len, len);
-  }
 
   const applyBadgeState = hasNote => {
     if (verseDiv) setVerseNoteBadge(verseDiv, hasNote);
   };
 
   document.getElementById("verse-note-editor-close")?.addEventListener("click", closeVerseNoteEditor);
-  overlay.addEventListener("click", e => {
-    if (e.target === overlay) closeVerseNoteEditor();
-  });
 
   document.getElementById("verse-note-editor-save")?.addEventListener("click", async () => {
     const saveBtn = document.getElementById("verse-note-editor-save");

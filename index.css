@@ -13098,60 +13098,57 @@ select,
   height: 0.72rem;
 }
 
-/* ─── Verse Note Editor (full-screen annotation editor) ─── */
+/* ─── Verse Note Editor (full-screen annotation editor) ───
+   Built on the app's existing .full-page-overlay / .overlay-header /
+   .overlay-back-btn shell (same one used by the bible-nav and search
+   overlays) instead of a bespoke fixed-position layout, so it inherits
+   the already mobile-safe-area-tested positioning and a clearly labelled
+   icon+text back button rather than a small icon-only close button. */
 .verse-note-editor-overlay {
-  position: fixed;
-  inset: 0;
   z-index: var(--z-modal);
-  background: var(--bg-card);
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.verse-note-editor-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-card);
-}
-
-.verse-note-editor-title-group {
-  flex: 1;
-  min-width: 0;
-}
-
-.verse-note-editor-eyebrow {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.verse-note-editor-title-group h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: var(--type-weight-strong);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .verse-note-editor-save {
   flex: 0 0 auto;
-  padding: 0.45rem 1.1rem;
-  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--color-brand);
+  font-size: 0.95rem;
+  font-weight: var(--type-weight-strong);
+  cursor: pointer;
+  padding: 0.5rem 0.4rem;
+  min-height: 44px;
+}
+
+.verse-note-editor-quote {
+  flex-shrink: 0;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--border-card);
+  background: var(--color-brand-subtle);
+}
+
+.verse-note-editor-reference {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--color-brand);
+  margin-bottom: 0.3rem;
+}
+
+.verse-note-editor-verse-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text-primary);
 }
 
 .verse-note-editor-textarea {
+  flex: 1;
   width: 100%;
-  height: 100%;
   border: none;
   outline: none;
   resize: none;
-  padding: 1.25rem 1.25rem 1rem;
+  padding: 1.25rem;
   font-size: 1rem;
   line-height: 1.8;
   color: var(--text-primary);
@@ -13164,7 +13161,8 @@ select,
 }
 
 .verse-note-editor-footer {
-  padding: 0.75rem 1.25rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
   display: flex;
   justify-content: center;
   border-top: 1px solid var(--border-card);
