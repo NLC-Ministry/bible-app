@@ -56,4 +56,26 @@ describe("admin member team placement lookup tests", () => {
     expect(migration).toContain("p_actor_id UUID DEFAULT NULL");
     expect(migration).toContain("actor_id := public.resolve_reading_team_actor(p_actor_id);");
   });
+
+  it("fixes the membership.id crash and the empty-managed-scope permission leak (migration 0071)", () => {
+    // 1. reading_team_members has no `id` column (composite PK team_id +
+    //    user_id, migration 0019) — `membership.id IS NOT NULL` failed with
+    //    42703. Fixed with membership.user_id, an equivalent
+    //    "did the LEFT JOIN match" check on a column that exists.
+    // 2. managed_regions/zones/groups are NOT NULL DEFAULT '' (migration
+    //    0011), never actually SQL NULL, so plain COALESCE(managed_x, x, '')
+    //    never fell back to the personal region/zone/group field. The
+    //    resulting empty array then hit this function's own
+    //    `CARDINALITY(...) = 0 OR ...` fallback, which treats "no explicit
+    //    scope" as "show everyone" — so any leader never explicitly given a
+    //    managed_* value saw the whole church here instead of just their
+    //    own scope.
+    const fixMigration = readFileSync("supabase/migrations/0071_fix_get_admin_member_team_placements.sql", "utf8");
+    expect(fixMigration).toContain("'isJoined', (membership.user_id IS NOT NULL),");
+    expect(fixMigration).not.toContain("membership.id");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, '')");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_zones, ''), actor_profile.pastoral_zone, '')");
+    expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, '')");
+    expect(fixMigration).toContain("GRANT EXECUTE ON FUNCTION public.get_admin_member_team_placements(UUID, UUID) TO authenticated, service_role;");
+  });
 });
