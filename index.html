@@ -1706,6 +1706,21 @@
               <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
             </div>
           </div>
+
+          <div class="card-col span-12">
+            <nav id="admin-system-subtabs" class="admin-plan-subtabs" role="tablist" aria-label="系統管理分頁">
+              <button type="button" class="admin-plan-subtab active" role="tab" aria-selected="true"
+                aria-controls="admin-system-subtab-users" data-system-subtab="users">使用者基本資料</button>
+              <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+                aria-controls="admin-system-subtab-permissions" data-system-subtab="permissions">權限管理</button>
+              <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+                aria-controls="admin-system-subtab-registrations" data-system-subtab="registrations">報名註冊統計</button>
+              <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+                aria-controls="admin-system-subtab-reports" data-system-subtab="reports">回報管理</button>
+            </nav>
+          </div>
+
+          <div id="admin-system-subtab-users" class="admin-plan-subtab-panel">
           <div class="card-col span-12 hidden" id="admin-user-directory-col">
             <details class="glass-card admin-user-directory" id="admin-user-directory-disclosure" aria-labelledby="admin-user-directory-title" open>
               <summary class="admin-user-directory__summary">
@@ -1753,6 +1768,9 @@
               </div>
             </details>
           </div>
+          </div>
+
+          <div id="admin-system-subtab-permissions" class="admin-plan-subtab-panel hidden">
           <div class="card-col span-12 hidden" id="admin-org-permissions-col">
             <details class="glass-card admin-org-permissions" id="admin-org-permissions-disclosure" aria-labelledby="admin-org-permissions-title" open>
               <summary class="admin-org-permissions__summary">
@@ -1799,11 +1817,14 @@
               <p class="admin-feature-setting-feedback hidden" id="admin-managed-scopes-feedback" role="status"></p>
             </section>
           </div>
+          </div>
+
+          <div id="admin-system-subtab-registrations" class="admin-plan-subtab-panel hidden">
           <div class="card-col span-12 hidden" id="admin-registration-statistics-col">
             <section class="glass-card admin-registration-statistics" aria-labelledby="admin-registration-statistics-title">
               <div class="admin-registration-statistics__header">
                 <div>
-                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
+                  <p class="admin-registration-statistics__eyebrow">報名註冊統計</p>
                   <h3 class="card-title" id="admin-registration-statistics-title">報名與註冊統計</h3>
                   <p>比較有效帳號的註冊人數，以及加入所選讀經計畫的報名人數。</p>
                 </div>
@@ -1821,8 +1842,12 @@
               </div>
             </section>
           </div>
+          </div>
+
+          <div id="admin-system-subtab-reports" class="admin-plan-subtab-panel hidden">
           <div class="card-col span-12" id="admin-reports-root">
             <!-- Rendered dynamically by React -->
+          </div>
           </div>
         </div>
 
@@ -2331,7 +2356,7 @@
         <button type="button" id="btn-close-tts-guide" onclick="window.closeTtsGuideModal?.()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.2rem 0.5rem; line-height: 1;">&times;</button>
       </div>
       <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.5;">
-        若您的手機清單中缺少台灣國語發音人，請依據您的手機系統進行免費開啟：
+        若您的手機清單中缺少台灣國語發音人，請依據您的手機系統進行免費開啟。以下選單名稱以較新版本為準，如果您的系統版本較舊，選項文字可能略有不同：
       </p>
 
       <div style="margin-bottom: 1.2rem; background: var(--bg-input); padding: 0.9rem 1rem; border-radius: 12px; border: 1px solid var(--border-card);">
@@ -2339,10 +2364,10 @@
           🍏 iPhone (iOS) 開啟步驟：
         </h4>
         <ol style="font-size: 0.82rem; color: var(--text-primary); padding-left: 1.2rem; margin: 0; line-height: 1.65;">
-          <li>開啟 <strong>「設定」</strong> ➔ 選擇 <strong>「輔助功能」</strong></li>
-          <li>點選 <strong>「語音內容」</strong> ➔ <strong>「語音」</strong></li>
+          <li>開啟 <strong>「設定」</strong> ➔ 選擇 <strong>「輔助使用」</strong>（較舊版本顯示為「輔助功能」）</li>
+          <li>點選 <strong>「朗讀內容」</strong> ➔ <strong>「聲音」</strong>（較舊版本顯示為「語音內容」➔「語音」）</li>
           <li>選擇 <strong>「中文」</strong> ➔ 點擊 <strong>「中文（台灣）」</strong></li>
-          <li>免費下載 <strong>「美佳」</strong> 或 <strong>「雅婷」</strong>（建議下載高品質版本）</li>
+          <li>免費下載 <strong>「婷婷」</strong>（建議選擇「加強版」或「高級」畫質；若清單中也看得到「美佳」或「雅婷」同樣可以下載）</li>
         </ol>
       </div>
 
@@ -2364,7 +2389,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260809_admin-org-permissions-overview"></script>
+  <script type="module" src="js/app.js?v=20260809_admin-system-management-subtabs"></script>
 </body>
 
 </html>

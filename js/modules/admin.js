@@ -868,10 +868,48 @@ export async function renderAdminRegistrationStatistics() {
   if (typeof hydrateIcons === "function") hydrateIcons(column);
 }
 
+const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports'];
+let activeAdminSystemSubtab = ADMIN_SYSTEM_SUBTABS[0];
+
+function setAdminSystemSubtab(subtab) {
+  const requested = ADMIN_SYSTEM_SUBTABS.includes(subtab) ? subtab : ADMIN_SYSTEM_SUBTABS[0];
+  activeAdminSystemSubtab = requested;
+  try {
+    sessionStorage.setItem('selected_admin_system_subtab', requested);
+  } catch (_e) {}
+
+  document.querySelectorAll('#admin-system-subtabs [data-system-subtab]').forEach(button => {
+    const active = button.dataset.systemSubtab === requested;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  ADMIN_SYSTEM_SUBTABS.forEach(name => {
+    const panel = document.getElementById(`admin-system-subtab-${name}`);
+    if (!panel) return;
+    panel.classList.toggle('hidden', name !== requested);
+    panel.style.display = name === requested ? 'flex' : 'none';
+  });
+}
+
+function initAdminSystemSubtabs() {
+  const nav = document.getElementById('admin-system-subtabs');
+  if (!nav || nav.dataset.listenerBound) return;
+  nav.dataset.listenerBound = 'true';
+  nav.querySelectorAll('[data-system-subtab]').forEach(button => {
+    button.addEventListener('click', () => setAdminSystemSubtab(button.dataset.systemSubtab));
+  });
+  let savedSubtab = ADMIN_SYSTEM_SUBTABS[0];
+  try {
+    savedSubtab = sessionStorage.getItem('selected_admin_system_subtab') || ADMIN_SYSTEM_SUBTABS[0];
+  } catch (_e) {}
+  setAdminSystemSubtab(savedSubtab);
+}
+
 export function init() {
   void renderAdminFeatureSettings();
   void renderAdminUserDirectory();
   void renderAdminOrgPermissionsOverview();
+  initAdminSystemSubtabs();
   void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
