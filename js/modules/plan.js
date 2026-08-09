@@ -4171,6 +4171,23 @@ window.navigateInlineChapter = function (direction) {
 // ==================== PERSONAL STATS & HEATMAP & ACHIEVEMENTS ====================
 // ==================== PERSONAL STATS & HEATMAP & ACHIEVEMENTS ====================
 // ==================== CASCADING SELECTORS HELPER ====================
+// A user's org placement (great_region/pastoral_zone/small_group, and the
+// managed_* delegation columns derived from it) is synced from a DIFFERENT
+// Member Hub field than their leadership role. A leadership *assignment*
+// ("this person leads 大安小組") can exist even when their own personal
+// placement is blank/unset — so before concluding a leader has no org data
+// at all, also check member_context_leadership_assignments, which records
+// exactly which unit(s) each of their leadership roles applies to.
+function getLeadershipAssignmentNodeNames(user, levelName) {
+  const assignments = Array.isArray(user && user.member_context_leadership_assignments)
+    ? user.member_context_leadership_assignments
+    : [];
+  const matches = assignments.filter(a => a && a.levelName === levelName && a.nodeName);
+  if (matches.length === 0) return "";
+  const primary = matches.find(a => a.isPrimary);
+  return String((primary || matches[0]).nodeName || "").trim();
+}
+
 function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   const regionSelect = document.getElementById(regionId);
   const zoneSelect = document.getElementById(zoneId);
@@ -4227,7 +4244,8 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   let regions = state.orgStructure.regions || [];
   let myRegions = [];
   if (isGreatZoneLeader) {
-    const userGreatRegion = (state.currentUser.managed_regions || state.currentUser.great_region || "");
+    const userGreatRegion = (state.currentUser.managed_regions || state.currentUser.great_region
+      || getLeadershipAssignmentNodeNames(state.currentUser, "大區") || "");
     myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
     regions = regions.filter(r => myRegions.includes(r));
   }
@@ -4266,10 +4284,17 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
       }
     }
   } else if (isGreatZoneLeader) {
-    regionSelect.options.add(new Option(`全部大區 (${myRegions.join(",")})`, ""));
-    myRegions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
-    if (isInitializing) {
-      if (myRegions.length === 1) {
+    if (myRegions.length === 0) {
+      // managed_regions and great_region are both blank — this leader has no
+      // org placement to scope by. Say so explicitly instead of silently
+      // showing an unlabeled "全部大區 ()" option that resolves to "show
+      // everything", which just looks like broken/missing data on screen.
+      regionSelect.options.add(new Option("⚠️ 尚未設定大區歸屬，請聯絡系統管理員", "unassigned"));
+      regionSelect.disabled = true;
+    } else {
+      regionSelect.options.add(new Option(`全部大區 (${myRegions.join(",")})`, ""));
+      myRegions.forEach(r => regionSelect.options.add(new Option(`大區：${r}`, `region:${r}`)));
+      if (isInitializing && myRegions.length === 1) {
         regionSelect.value = "region:" + myRegions[0];
       }
     }
@@ -4280,11 +4305,14 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
   }
 
   // Update Master Select Value
+  // "unassigned" is a sentinel option shown when a leader has no org
+  // placement set at all — treat it the same as no selection rather than
+  // building a nonsense "group:unassigned" filter value.
   function updateMasterValue(isInitialCall = false) {
     let finalVal = "all";
-    const selectedGroup = groupSelect.value;
-    const selectedZone = zoneSelect.value;
-    const selectedRegion = regionSelect.value;
+    const selectedGroup = groupSelect.value === "unassigned" ? "" : groupSelect.value;
+    const selectedZone = zoneSelect.value === "unassigned" ? "" : zoneSelect.value;
+    const selectedRegion = regionSelect.value === "unassigned" ? "" : regionSelect.value;
 
     if (isGroupLeader) {
       finalVal = selectedGroup ? `group:${selectedGroup}` : "all_groups";
@@ -4357,13 +4385,19 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         }
       }
     } else if (isZoneLeader) {
-      const userZone = (state.currentUser.managed_zones || state.currentUser.pastoral_zone || "");
+      const userZone = (state.currentUser.managed_zones || state.currentUser.pastoral_zone
+        || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "");
       const myZones = userZone.split(",").map(s => s.trim()).filter(Boolean);
       if (myZones.length > 1) {
         zoneSelect.options.add(new Option(`全部牧區 (${myZones.join(",")})`, ""));
         myZones.forEach(z => zoneSelect.options.add(new Option(`牧區：${z}`, z)));
+      } else if (myZones.length === 1) {
+        zoneSelect.options.add(new Option(`牧區：${myZones[0]}`, myZones[0]));
+        zoneSelect.disabled = true;
       } else {
-        zoneSelect.options.add(new Option(`牧區：${userZone}`, userZone));
+        // managed_zones and pastoral_zone are both blank — same "no org
+        // placement" gap as the great_zone_leader case above.
+        zoneSelect.options.add(new Option("⚠️ 尚未設定牧區歸屬，請聯絡系統管理員", "unassigned"));
         zoneSelect.disabled = true;
       }
     } else {
@@ -4419,13 +4453,22 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
         }
       }
     } else if (isGroupLeader) {
-      const userGroup = (state.currentUser.managed_groups || state.currentUser.small_group || "");
+      const userGroup = (state.currentUser.managed_groups || state.currentUser.small_group
+        || getLeadershipAssignmentNodeNames(state.currentUser, "小組") || "");
       const myGroups = userGroup.split(",").map(s => s.trim()).filter(Boolean);
       if (myGroups.length > 1) {
         groupSelect.options.add(new Option(`全部小組 (${myGroups.join(",")})`, ""));
         myGroups.forEach(g => groupSelect.options.add(new Option(`小組：${g}`, g)));
+      } else if (myGroups.length === 1) {
+        groupSelect.options.add(new Option(`小組：${myGroups[0]}`, myGroups[0]));
+        groupSelect.disabled = true;
       } else {
-        groupSelect.options.add(new Option(`小組：${userGroup}`, userGroup));
+        // managed_groups and small_group are both blank — this is the
+        // scenario reported as "篩選器沒得選的小組長無法更新資料": the
+        // dropdown used to silently show a blank "小組：" label with an
+        // empty value, so the leader had nothing they could click and no
+        // indication of why. Now it says plainly what's missing.
+        groupSelect.options.add(new Option("⚠️ 尚未設定小組歸屬，請聯絡系統管理員", "unassigned"));
         groupSelect.disabled = true;
       }
     } else {
@@ -4516,9 +4559,9 @@ function getActiveOrgFilter() {
   if (!regionSelect || !zoneSelect || !groupSelect) return "all";
 
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
-  const selectedGroup = groupSelect.value;
-  const selectedZone = zoneSelect.value;
-  const selectedRegion = regionSelect.value;
+  const selectedGroup = groupSelect.value === "unassigned" ? "" : groupSelect.value;
+  const selectedZone = zoneSelect.value === "unassigned" ? "" : zoneSelect.value;
+  const selectedRegion = regionSelect.value === "unassigned" ? "" : regionSelect.value;
   if (selectedGroup) return `group:${selectedGroup}`;
   if (selectedZone) return `zone:${selectedZone}`;
   if (selectedRegion) return selectedRegion;
@@ -4796,15 +4839,18 @@ async function renderGroupMiniStats(overrideFilter) {
     } else if (effectiveFilter === "me") {
       scopedUsers = allUsers.filter(u => u.name === state.currentUser.name);
     } else if (effectiveFilter === "all_groups") {
-      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
+      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group
+        || getLeadershipAssignmentNodeNames(state.currentUser, "小組") || "";
       const myGroups = userGroupStr.split(",").map(value => value.trim()).filter(Boolean);
       scopedUsers = allUsers.filter(u => myGroups.includes(u.small_group));
     } else if (effectiveFilter === "all_great_region") {
-      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
+      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region
+        || getLeadershipAssignmentNodeNames(state.currentUser, "大區") || "";
       const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsers = allUsers.filter(u => myRegions.includes(u.great_region));
     } else if (effectiveFilter === "all_zones") {
-      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
+      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone
+        || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "";
       const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsers = allUsers.filter(u => myZones.includes(u.pastoral_zone));
     } else if (effectiveFilter.startsWith("region:")) {
@@ -6001,7 +6047,8 @@ async function renderGroupParticipantsRankingTable() {
     .filter(day => day.chapters && day.chapters.length > 0)
     .length;
 
-  const userZone = state.currentUser.pastoral_zone || "";
+  const userZone = state.currentUser.managed_zones || state.currentUser.pastoral_zone
+    || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "";
   const userRole = getUserRoleCode(state.currentUser) || "member";
   const isAdmin = hasWholeChurchPlanScope(userRole);
   const isGreatZoneLeader = userRole === "great_zone_leader";
@@ -6034,15 +6081,18 @@ async function renderGroupParticipantsRankingTable() {
     if (isAdmin) {
       scopedUsersList = allUsers;
     } else if (isGreatZoneLeader) {
-      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
+      const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region
+        || getLeadershipAssignmentNodeNames(state.currentUser, "大區") || "";
       const myRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myRegions.includes(u.great_region));
     } else if (isZoneLeader) {
-      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
+      const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone
+        || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "";
       const myZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myZones.includes(u.pastoral_zone));
     } else if (isGroupLeader) {
-      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
+      const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group
+        || getLeadershipAssignmentNodeNames(state.currentUser, "小組") || "";
       const myGroups = userGroupStr.split(",").map(s => s.trim()).filter(Boolean);
       scopedUsersList = allUsers.filter(u => myGroups.includes(u.small_group));
     } else {
@@ -6116,17 +6166,20 @@ async function renderGroupParticipantsRankingTable() {
           groupMembers = allUsers;
           if (rankingTitle) rankingTitle.textContent = "參與者總覽 (全教會排行)";
         } else if (selectedFilter === "all_great_region") {
-          const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region || "";
+          const userGreatRegion = state.currentUser.managed_regions || state.currentUser.great_region
+            || getLeadershipAssignmentNodeNames(state.currentUser, "大區") || "";
           const userRegions = userGreatRegion.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userRegions.includes(u.great_region));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userGreatRegion}排行)`;
         } else if (selectedFilter === "all_zones") {
-          const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone || "";
+          const userZoneStr = state.currentUser.managed_zones || state.currentUser.pastoral_zone
+            || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "";
           const userZones = userZoneStr.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userZones.includes(u.pastoral_zone));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userZoneStr}排行)`;
         } else if (selectedFilter === "all_groups") {
-          const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group || "";
+          const userGroupStr = state.currentUser.managed_groups || state.currentUser.small_group
+            || getLeadershipAssignmentNodeNames(state.currentUser, "小組") || "";
           const userGroups = userGroupStr.split(",").map(s => s.trim()).filter(Boolean);
           groupMembers = allUsers.filter(u => userGroups.includes(u.small_group));
           if (rankingTitle) rankingTitle.textContent = `參與者總覽 (${userGroupStr}排行)`;

@@ -1186,6 +1186,25 @@ export async function renderAdminPlanManagement() {
     document.querySelectorAll('[data-admin-panel]').forEach(button => {
       button.onclick = () => setAdminPrimaryPanel(button.dataset.adminPanel);
     });
+
+    const refreshBtn = document.getElementById('admin-plan-refresh-btn');
+    if (refreshBtn && !refreshBtn.dataset.bound) {
+      refreshBtn.dataset.bound = 'true';
+      refreshBtn.addEventListener('click', async () => {
+        refreshBtn.disabled = true;
+        try {
+          const currentSelect = document.getElementById('admin-management-plan-select');
+          if (currentSelect && currentSelect.value) {
+            await selectManagementPlan(currentSelect.value);
+          }
+          if (typeof renderAdminOrgPermissionsOverview === 'function') void renderAdminOrgPermissionsOverview();
+          if (typeof showToast === 'function') showToast('資料已更新');
+        } finally {
+          refreshBtn.disabled = false;
+        }
+      });
+    }
+
     if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));
   } catch (err) {
     console.error("[AdminManagement] Error rendering admin plan management:", err);
@@ -1205,9 +1224,15 @@ let bulkPlanInviteInProgress = false;
 
 function getSelectedManagementOrgFilter() {
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
-  const region = document.getElementById("members-admin-region-select")?.value || "";
-  const zone = document.getElementById("members-admin-zone-select")?.value || "";
-  const group = document.getElementById("members-admin-group-select")?.value || "";
+  // "unassigned" is the sentinel shown when a leader has no org placement at
+  // all (see setupCascadingSelectors in plan.js) — treat it as no selection.
+  const readScope = id => {
+    const value = document.getElementById(id)?.value || "";
+    return value === "unassigned" ? "" : value;
+  };
+  const region = readScope("members-admin-region-select");
+  const zone = readScope("members-admin-zone-select");
+  const group = readScope("members-admin-group-select");
   if (group) return { type: "group", value: group };
   if (zone) return { type: "zone", value: zone };
   if (region) return { type: "region", value: region.replace(/^region:/, "") };
