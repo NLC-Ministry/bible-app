@@ -67,6 +67,24 @@ describe("system management: category sub-tabs", () => {
     expect(card).not.toContain('<p class="admin-registration-statistics__eyebrow">權限管理</p>');
   });
 
+  it("gives every subtab panel its own grid-column span, since admin-system-panel uses CSS Grid (unlike admin-plans-panel)", () => {
+    // #admin-system-panel has class="grid-layout" (display:grid, 12 columns) —
+    // a direct child with no grid-column span auto-places into a single 1/12
+    // column, which is exactly what happened here: the whole panel content
+    // rendered squeezed into a narrow column with wrapping text. #admin-plans-panel
+    // (計畫管理) uses a different, non-grid layout, so its subtab panels never
+    // needed this — copying its .admin-plan-subtab-panel class alone was not
+    // enough inside the grid-based system panel.
+    const subtabs = ["users", "permissions", "registrations", "reports"];
+    for (const key of subtabs) {
+      const divTag = html.match(new RegExp(`<div id="admin-system-subtab-${key}" class="([^"]*)"`));
+      expect(divTag).toBeTruthy();
+      expect(divTag[1]).toContain("card-col");
+      expect(divTag[1]).toContain("span-12");
+      expect(divTag[1]).toContain("admin-plan-subtab-panel");
+    }
+  });
+
   it("wires tab-switching in admin.js, mirroring the 計畫管理 4-tab pattern", () => {
     expect(admin).toContain("const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports'];");
     expect(admin).toContain("function setAdminSystemSubtab(subtab)");
