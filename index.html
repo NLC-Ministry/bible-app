@@ -58,7 +58,7 @@
     };
   </script>
   <link rel="stylesheet" href="index.css?v=20260808_verse-notes-editor-fix" onerror="window.showAppStyleRecovery(this)">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260807_plan_entry_eligibility_gate_and_name_review" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260809_admin-org-permissions-overview" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
   <!-- Supabase JS Client library -->
@@ -1753,6 +1753,21 @@
               </div>
             </details>
           </div>
+          <div class="card-col span-12 hidden" id="admin-org-permissions-col">
+            <details class="glass-card admin-org-permissions" id="admin-org-permissions-disclosure" aria-labelledby="admin-org-permissions-title" open>
+              <summary class="admin-org-permissions__summary">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
+                  <h3 class="card-title" id="admin-org-permissions-title">組織架構權限總覽</h3>
+                  <p>依大區／牧區／小組列出目前負責的人員；點選姓名可直接跳到下方「管理範圍設定」編輯。</p>
+                </div>
+                <span class="admin-org-permissions__count" id="admin-org-permissions-count">讀取中…</span>
+              </summary>
+              <div id="admin-org-permissions-tree" class="admin-org-permissions__tree" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入組織架構…</div>
+              </div>
+            </details>
+          </div>
           <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
             <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
               <div class="admin-registration-statistics__header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
@@ -2349,7 +2364,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260809_badge-sync-with-live-plan"></script>
+  <script type="module" src="js/app.js?v=20260809_admin-org-permissions-overview"></script>
 </body>
 
 </html>

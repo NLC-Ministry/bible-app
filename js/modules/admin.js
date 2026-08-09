@@ -555,8 +555,143 @@ export async function renderAdminManagedScopes() {
     renderManagedScopeProfile(profile);
     setManagedScopeFeedback("管理範圍已儲存。");
     if (typeof showToast === "function") showToast("管理範圍已儲存");
+    void renderAdminOrgPermissionsOverview();
   };
   renderManagedScopeProfile(managedScopeProfiles[0] || null);
+}
+
+let orgPermissionsProfiles = [];
+
+function jumpToManagedScopeEditor(profileId) {
+  const column = document.getElementById("admin-managed-scopes-col");
+  const select = document.getElementById("admin-managed-scopes-profile");
+  if (!column || !select) return;
+  const profile = orgPermissionsProfiles.find(candidate => String(candidate.id) === String(profileId));
+  if (!profile) return;
+  select.value = String(profileId);
+  setManagedScopeFeedback("");
+  renderManagedScopeProfile(profile);
+  column.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+window.jumpToManagedScopeEditor = jumpToManagedScopeEditor;
+
+function renderLeaderChips(leaders) {
+  if (!leaders || leaders.length === 0) {
+    return '<span class="admin-org-permissions__unassigned">尚未指派</span>';
+  }
+  return leaders.map(profile => {
+    const name = escapeHTML(String(profile.name || "").trim() || "尚未取得姓名");
+    const id = escapeHTML(String(profile.id || ""));
+    return `<button type="button" class="admin-org-permissions__leader-chip" data-jump-profile-id="${id}">${name}</button>`;
+  }).join("");
+}
+
+export async function renderAdminOrgPermissionsOverview() {
+  const column = document.getElementById("admin-org-permissions-col");
+  const tree = document.getElementById("admin-org-permissions-tree");
+  const count = document.getElementById("admin-org-permissions-count");
+  if (!column || !tree || !count) return;
+
+  const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
+  column.classList.toggle("hidden", !isAdmin);
+  if (!isAdmin) return;
+
+  count.textContent = "讀取中…";
+  tree.innerHTML = '<div class="admin-user-directory__empty">正在載入組織架構…</div>';
+
+  if (!Array.isArray(state.orgStructure.regions) || state.orgStructure.regions.length === 0) {
+    await db.loadOrgStructure();
+  }
+  const result = await db.fetchManagedScopeProfiles();
+  if (result.error) {
+    tree.innerHTML = '<div class="admin-user-directory__empty">無法載入權限總覽。</div>';
+    count.textContent = "";
+    return;
+  }
+  orgPermissionsProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
+
+  const wholeChurchLeaders = [];
+  const regionLeaders = new Map();
+  const zoneLeaders = new Map();
+  const groupLeaders = new Map();
+
+  orgPermissionsProfiles.forEach(profile => {
+    const role = getUserRoleCode(profile);
+    if (role === "admin" || role === "senior_pastor") {
+      wholeChurchLeaders.push(profile);
+      return;
+    }
+    const config = getManagedScopeConfig(profile);
+    const scopes = getProfileDefaultManagedScopes(profile, config);
+    const bucket = role === "great_zone_leader" ? regionLeaders
+      : role === "zone_leader" ? zoneLeaders
+      : role === "group_leader" ? groupLeaders
+      : null;
+    if (!bucket) return;
+    scopes.forEach(scopeName => {
+      if (!bucket.has(scopeName)) bucket.set(scopeName, []);
+      bucket.get(scopeName).push(profile);
+    });
+  });
+
+  const regions = state.orgStructure.regions || [];
+  const zonesMap = state.orgStructure.zones || {};
+  const groupsMap = state.orgStructure.groups || {};
+
+  const unassignedCount = regions.filter(r => !regionLeaders.has(r)).length
+    + Object.values(zonesMap).flat().filter(z => !zoneLeaders.has(z)).length
+    + Object.values(groupsMap).flat().filter(g => !groupLeaders.has(g)).length;
+  count.textContent = unassignedCount > 0 ? `${unassignedCount} 個單位尚未指派` : "全部已指派";
+
+  const wholeChurchHtml = `
+    <div class="admin-org-permissions__whole-church">
+      <span>系統管理員／教會牧者（全教會範圍）</span>
+      <div class="admin-org-permissions__leaders">${renderLeaderChips(wholeChurchLeaders)}</div>
+    </div>`;
+
+  const regionsHtml = regions.length === 0
+    ? '<div class="admin-user-directory__empty">目前沒有任何大區資料。</div>'
+    : regions.map(region => {
+      const zones = zonesMap[region] || [];
+      const zonesHtml = zones.map(zone => {
+        const groups = groupsMap[zone] || [];
+        const groupsHtml = groups.length === 0 ? "" : `
+          <ul class="admin-org-permissions__groups">
+            ${groups.map(group => `
+              <li class="admin-org-permissions__group-row">
+                <span class="admin-org-permissions__unit-name">${escapeHTML(group)}</span>
+                <div class="admin-org-permissions__leaders">${renderLeaderChips(groupLeaders.get(group))}</div>
+              </li>`).join("")}
+          </ul>`;
+        return `
+          <details class="admin-org-permissions__zone">
+            <summary>
+              <span class="admin-org-permissions__unit-name">${escapeHTML(zone)}</span>
+              <div class="admin-org-permissions__leaders">${renderLeaderChips(zoneLeaders.get(zone))}</div>
+            </summary>
+            ${groupsHtml}
+          </details>`;
+      }).join("");
+      return `
+        <details class="admin-org-permissions__region" open>
+          <summary>
+            <span class="admin-org-permissions__unit-name">${escapeHTML(region)}</span>
+            <div class="admin-org-permissions__leaders">${renderLeaderChips(regionLeaders.get(region))}</div>
+          </summary>
+          ${zonesHtml || '<div class="admin-user-directory__empty">此大區目前沒有牧區資料。</div>'}
+        </details>`;
+    }).join("");
+
+  tree.innerHTML = wholeChurchHtml + regionsHtml;
+
+  if (!tree.dataset.jumpBound) {
+    tree.dataset.jumpBound = "true";
+    tree.addEventListener("click", event => {
+      const chip = event.target.closest("[data-jump-profile-id]");
+      if (!chip) return;
+      jumpToManagedScopeEditor(chip.dataset.jumpProfileId);
+    });
+  }
 }
 
 let adminRegistrationStatistics = null;
@@ -736,6 +871,7 @@ export async function renderAdminRegistrationStatistics() {
 export function init() {
   void renderAdminFeatureSettings();
   void renderAdminUserDirectory();
+  void renderAdminOrgPermissionsOverview();
   void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
