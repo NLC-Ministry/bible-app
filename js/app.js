@@ -331,7 +331,17 @@ async function ensureAdminFeatureModulesLoaded() {
   await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
 }
 
+// Focus-triggered refreshes fire on every app re-foreground (switching apps,
+// unlocking the screen, dismissing the keyboard) — throttle so a quick
+// switch-away-and-back doesn't refetch everything and re-render the tab again.
+const REFRESH_CURRENT_APP_VIEW_MIN_INTERVAL_MS = 60000;
+let lastRefreshCurrentAppViewAt = 0;
+
 async function refreshCurrentAppView() {
+  const now = Date.now();
+  if (now - lastRefreshCurrentAppViewAt < REFRESH_CURRENT_APP_VIEW_MIN_INTERVAL_MS) return;
+  lastRefreshCurrentAppViewAt = now;
+
   if ("serviceWorker" in navigator) {
     try {
       const registration = await navigator.serviceWorker.getRegistration("/");
@@ -365,10 +375,6 @@ async function refreshCurrentAppView() {
     restoreTabScroll: false
   });
   await refreshCareReminderBadge({ force: true });
-
-  if (typeof showToast === "function") {
-    showToast("已更新");
-  }
 }
 
 // ─── Plan entry eligibility gate: blocks plan-view until profile is complete ───
@@ -785,6 +791,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast("已離線儲存，恢復網路後會自動同步");
     } else if (detail.status === "complete" && detail.pending === 0 && typeof showToast === "function") {
       showToast("離線讀經進度已同步");
+    }
+  });
+
+  // The only place a genuine app-shell update is reported: fires once the new
+  // service worker has actually taken control (see ServiceWorkerRegistrar.js).
+  // Routine focus-triggered data refreshes must never claim "已更新" themselves.
+  window.addEventListener("pwa:update-ready", () => {
+    if (typeof showToast === "function") {
+      showToast("已更新至最新版本");
     }
   });
 
