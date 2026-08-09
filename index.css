@@ -2667,6 +2667,9 @@ body:not(.dark-theme) .settings-row-btn:hover {
   border-radius: var(--radius-sm);
   display: inline-block;
   width: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .bible-verse:hover {
@@ -12604,6 +12607,20 @@ select,
 
 #reader-view .bible-verse.reader-start-selected:focus-visible {
   outline-width: 3px !important;
+}
+
+/* Long-press multi-verse range selection (copy/share) — must stay visually
+   distinct from .reader-start-selected (outline) and .speaking-highlight
+   (blue bg + left border) so the three states never look ambiguous */
+#reader-view .bible-verse.multi-selected {
+  background-color: color-mix(in srgb, var(--color-brand) 14%, transparent) !important;
+  outline: 1px solid color-mix(in srgb, var(--color-brand) 45%, transparent);
+  outline-offset: -1px;
+  border-radius: var(--radius-sm, 8px);
+}
+
+.youversion-action-bar--multi .yv-section-label {
+  font-weight: var(--type-weight-medium, 500);
 }
 
 /* Sticky Bottom Context Action Bar for Verse Selection, Highlighter, Copy & Share */

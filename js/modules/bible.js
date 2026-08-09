@@ -86,6 +86,8 @@ let readerEndVisible = false;
 let readerAutoReadNoticeKey = "";
 let selectionBottomBarCleanup = null;
 let selectionBottomBarBindTimer = null;
+let multiSelectState = null; // { anchor, end, bookName, chapter, chapterId, verses } | null
+const MULTI_SELECT_LONG_PRESS_MS = 480;
 
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
@@ -811,6 +813,7 @@ export async function renderReaderText() {
   }
   state.readerState.selectedVerseNum = null;
   closeSelectionBottomBar();
+  closeMultiSelectionBar();
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
   if (readerBottomDwellController) readerBottomDwellController.reset();
@@ -955,8 +958,174 @@ function setVerseNoteBadge(verseDiv, hasNote) {
   }
 }
 
+/**
+ * 長按多節選取（連續範圍，僅限同一章）
+ */
+function clearMultiSelection() {
+  const container = document.getElementById("bible-content");
+  if (container) {
+    container.querySelectorAll(".bible-verse.multi-selected").forEach(el => {
+      el.classList.remove("multi-selected");
+    });
+  }
+  multiSelectState = null;
+}
+
+function closeMultiSelectionBar() {
+  if (selectionBottomBarBindTimer) {
+    clearTimeout(selectionBottomBarBindTimer);
+    selectionBottomBarBindTimer = null;
+  }
+  if (typeof selectionBottomBarCleanup === "function") {
+    selectionBottomBarCleanup();
+    selectionBottomBarCleanup = null;
+  }
+  if (!multiSelectState) return;
+  const rootElement = document.getElementById("selection-bottom-bar-root");
+  if (rootElement) rootElement.innerHTML = "";
+  clearMultiSelection();
+}
+
+function renderMultiSelectionHighlight() {
+  const container = document.getElementById("bible-content");
+  if (!container || !multiSelectState) return;
+  const low = Math.min(multiSelectState.anchor, multiSelectState.end);
+  const high = Math.max(multiSelectState.anchor, multiSelectState.end);
+  container.querySelectorAll(".bible-verse[data-verse]").forEach(el => {
+    const num = Number(el.dataset.verse);
+    el.classList.toggle("multi-selected", num >= low && num <= high);
+  });
+}
+
+function getMultiSelectedVerses() {
+  if (!multiSelectState) return [];
+  const low = Math.min(multiSelectState.anchor, multiSelectState.end);
+  const high = Math.max(multiSelectState.anchor, multiSelectState.end);
+  return multiSelectState.verses
+    .filter(v => v.verse >= low && v.verse <= high)
+    .sort((a, b) => a.verse - b.verse);
+}
+
+function formatMultiVerseCopyText(bookName, chapter, versesInRange) {
+  if (versesInRange.length <= 1) {
+    const v = versesInRange[0];
+    return v ? `【${bookName} ${chapter}:${v.verse}】${v.text}` : "";
+  }
+  const first = versesInRange[0].verse;
+  const last = versesInRange[versesInRange.length - 1].verse;
+  const body = versesInRange.map(v => `${v.verse} ${v.text}`).join("\n");
+  return `【${bookName} ${chapter}:${first}-${last}】\n${body}`;
+}
+
+function openMultiSelectBottomBar() {
+  const rootElement = document.getElementById("selection-bottom-bar-root");
+  if (!rootElement || !multiSelectState) return;
+  if (selectionBottomBarBindTimer) {
+    clearTimeout(selectionBottomBarBindTimer);
+    selectionBottomBarBindTimer = null;
+  }
+  if (typeof selectionBottomBarCleanup === "function") {
+    selectionBottomBarCleanup();
+    selectionBottomBarCleanup = null;
+  }
+
+  const { bookName, chapter } = multiSelectState;
+  const low = Math.min(multiSelectState.anchor, multiSelectState.end);
+  const high = Math.max(multiSelectState.anchor, multiSelectState.end);
+  const versesInRange = getMultiSelectedVerses();
+  const rangeLabel = low === high ? `${bookName} ${chapter}:${low}` : `${bookName} ${chapter}:${low}-${high}`;
+  const selectedText = formatMultiVerseCopyText(bookName, chapter, versesInRange);
+
+  rootElement.innerHTML = `
+    <div id="pwa-selection-bottom-bar" class="youversion-action-bar active youversion-action-bar--multi">
+      <div class="yv-content-row">
+        <div class="yv-highlight-section">
+          <span class="yv-section-label">已選取 ${escapeHTML(rangeLabel)}（共 ${versesInRange.length} 節）</span>
+        </div>
+        <div class="yv-action-group">
+          <button type="button" class="yv-tile" data-action="ms-copy">
+            <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
+            <span class="yv-tile-label">複製</span>
+          </button>
+          <button type="button" class="yv-tile" data-action="ms-share">
+            <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
+            <span class="yv-tile-label">分享</span>
+          </button>
+          <button type="button" class="yv-tile" data-action="ms-cancel">
+            <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
+            <span class="yv-tile-label">取消</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const barDiv = document.getElementById("pwa-selection-bottom-bar");
+  if (!barDiv) return;
+  if (typeof hydrateIcons === "function") hydrateIcons(barDiv);
+
+  const cleanupListeners = () => {
+    document.removeEventListener("click", onDocClick);
+  };
+  selectionBottomBarCleanup = cleanupListeners;
+
+  const onDocClick = e => {
+    if (barDiv.contains(e.target) || (e.target && e.target.closest && e.target.closest(".bible-verse"))) return;
+    closeMultiSelectionBar();
+  };
+
+  barDiv.querySelector('[data-action="ms-copy"]')?.addEventListener("click", e => {
+    e.stopPropagation();
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(selectedText).then(() => {
+        showToast("經文已複製到剪貼簿！");
+      });
+    } else {
+      showToast(selectedText);
+    }
+    closeMultiSelectionBar();
+  });
+
+  barDiv.querySelector('[data-action="ms-share"]')?.addEventListener("click", e => {
+    e.stopPropagation();
+    if (navigator.share) {
+      navigator.share({ title: "經文分享", text: selectedText, url: window.location.href }).catch(() => {});
+    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(selectedText).then(() => {
+        showToast("經文已複製，可直接貼上分享！");
+      });
+    }
+    closeMultiSelectionBar();
+  });
+
+  barDiv.querySelector('[data-action="ms-cancel"]')?.addEventListener("click", e => {
+    e.stopPropagation();
+    closeMultiSelectionBar();
+  });
+
+  selectionBottomBarBindTimer = setTimeout(() => {
+    document.addEventListener("click", onDocClick);
+    selectionBottomBarBindTimer = null;
+  }, 100);
+}
+
+function startMultiSelection(verseNum, bookName, chapter, chapterId, verses) {
+  closeSelectionBottomBar({ clearSelection: true });
+  multiSelectState = { anchor: verseNum, end: verseNum, bookName, chapter, chapterId, verses };
+  renderMultiSelectionHighlight();
+  openMultiSelectBottomBar();
+}
+
+function extendMultiSelection(verseNum) {
+  if (!multiSelectState) return;
+  multiSelectState.end = verseNum;
+  renderMultiSelectionHighlight();
+  openMultiSelectBottomBar();
+}
+
 function renderVersesList(container, verses, bookName, chapter) {
   container.innerHTML = "";
+  clearMultiSelection();
   const chapterId = `${state.readerState?.bookId || "GEN"}_${chapter}`;
   verses.forEach(v => {
     const verseDiv = document.createElement("div");
@@ -977,8 +1146,51 @@ function renderVersesList(container, verses, bookName, chapter) {
     verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
     setVerseNoteBadge(verseDiv, Boolean(state.verseNotes[highlightKey]));
 
+    let longPressTimer = null;
+    let longPressFired = false;
+
+    const clearLongPressTimer = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const startLongPressTimer = () => {
+      clearLongPressTimer();
+      longPressFired = false;
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        longPressFired = true;
+        if (multiSelectState) {
+          extendMultiSelection(v.verse);
+        } else {
+          startMultiSelection(v.verse, bookName, chapter, chapterId, verses);
+        }
+      }, MULTI_SELECT_LONG_PRESS_MS);
+    };
+
+    verseDiv.addEventListener("touchstart", startLongPressTimer, { passive: true });
+    verseDiv.addEventListener("touchend", clearLongPressTimer);
+    verseDiv.addEventListener("touchmove", clearLongPressTimer, { passive: true });
+    verseDiv.addEventListener("touchcancel", clearLongPressTimer);
+    verseDiv.addEventListener("mousedown", startLongPressTimer);
+    verseDiv.addEventListener("mouseup", clearLongPressTimer);
+    verseDiv.addEventListener("mouseleave", clearLongPressTimer);
+    verseDiv.addEventListener("contextmenu", e => {
+      if (longPressFired) e.preventDefault();
+    });
+
     const toggleSelection = e => {
       e.stopPropagation();
+      if (longPressFired) {
+        longPressFired = false;
+        return;
+      }
+      if (multiSelectState) {
+        extendMultiSelection(v.verse);
+        return;
+      }
       const isSelected = setReaderStartSelection(verseDiv);
       if (!isSelected) {
         closeSelectionBottomBar({ clearSelection: false });
