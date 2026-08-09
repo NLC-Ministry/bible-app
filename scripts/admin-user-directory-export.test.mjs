@@ -7,7 +7,25 @@ describe("Admin User Directory CSV Export Tests", () => {
   it("verifies index.html contains export button", () => {
     const html = readFileSync("index.html", "utf8");
     expect(html).toContain('id="admin-user-directory-export-btn"');
-    expect(html).toContain("匯出會員名單");
+    expect(html).toContain('title="依當前篩選結果匯出 CSV 名單"');
+    expect(html).toContain("<span>匯出</span>");
+  });
+
+  it("keeps the export button and count badge from wrapping into a squeezed vertical column", () => {
+    // Regression: on narrower layouts the button text ("匯出會員名單") wrapped
+    // one character per line because the button had no white-space:nowrap /
+    // flex-shrink:0, and its flex sibling (the title block) had no min-width:0
+    // to let it shrink first instead of squeezing the button.
+    const html = readFileSync("index.html", "utf8");
+    const btnStart = html.indexOf('id="admin-user-directory-export-btn"');
+    const btnTagEnd = html.indexOf(">", btnStart);
+    const btnOpenTag = html.slice(btnStart, btnTagEnd);
+    expect(btnOpenTag).toContain("white-space:nowrap");
+    expect(btnOpenTag).toContain("flex-shrink:0");
+
+    const summaryStart = html.indexOf('class="admin-user-directory__summary"');
+    const summarySection = html.slice(summaryStart, btnStart);
+    expect(summarySection).toContain('style="min-width:0;"');
   });
 
   it("converts user directory array into CSV with required columns (大區, 牧區, 小組, 姓名)", () => {

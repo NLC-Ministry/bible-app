@@ -1724,17 +1724,17 @@
           <div class="card-col span-12 hidden" id="admin-user-directory-col">
             <details class="glass-card admin-user-directory" id="admin-user-directory-disclosure" aria-labelledby="admin-user-directory-title" open>
               <summary class="admin-user-directory__summary">
-                <div>
+                <div style="min-width:0;">
                   <p class="admin-registration-statistics__eyebrow">使用者管理</p>
                   <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
                   <p>先查看姓名與牧區，點選人員後可展開詳細資料；本區不會修改帳號。</p>
                 </div>
-                <div style="display:flex; align-items:center; gap:0.75rem;">
-                  <button type="button" id="admin-user-directory-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem;" title="依當前篩選結果匯出 CSV 名單">
+                <div style="display:flex; align-items:center; gap:0.75rem; flex-shrink:0;">
+                  <button type="button" id="admin-user-directory-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap; flex-shrink:0;" title="依當前篩選結果匯出 CSV 名單">
                     <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
-                    <span>匯出會員名單</span>
+                    <span>匯出</span>
                   </button>
-                  <span class="admin-user-directory__count" id="admin-user-directory-count">讀取中…</span>
+                  <span class="admin-user-directory__count" id="admin-user-directory-count" style="white-space:nowrap;">讀取中…</span>
                 </div>
               </summary>
               <div class="admin-user-directory__body">
@@ -2381,6 +2381,16 @@
           <li>點擊右側 <strong>「設定 ⚙️」</strong> ➔ <strong>「安裝語音資料」</strong></li>
           <li>選擇 <strong>「中文（台灣）」</strong> 並點擊下載</li>
         </ol>
+      </div>
+
+      <div style="margin-bottom: 1.2rem; padding: 0.9rem 1rem; border-radius: 12px; border: 1px solid var(--color-warning); background: color-mix(in srgb, var(--color-warning) 12%, transparent);">
+        <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--color-warning); margin: 0 0 0.4rem 0;">請注意</h4>
+        <p style="font-size: 0.8rem; color: var(--text-primary); margin: 0 0 0.4rem; line-height: 1.6;">
+          Siri 語音是蘋果系統內部專用的語音，任何網頁版 App（包含本 App）都無法呼叫使用，下載了也不會出現在本 App 的語音選項中；「加強版／高級」語音下載後有時也需要完全關閉瀏覽器再重新開啟本頁面才會被偵測到。
+        </p>
+        <p style="font-size: 0.8rem; color: var(--text-primary); margin: 0; line-height: 1.6;">
+          下載完成後，請到讀經頁面右上角「⋯」➔「文字設定」裡的「語音」設定，實際看清單上出現哪些語音、並點「試聽」確認效果，那份清單才是本 App 真正能使用的語音。
+        </p>
       </div>
 
       <button type="button" id="btn-confirm-tts-guide" onclick="window.closeTtsGuideModal?.()" class="btn btn--primary w-full" style="padding: 0.7rem; border-radius: 12px; font-weight: 600; font-size: 0.88rem; background: var(--color-brand); border: none; color: #ffffff; cursor: pointer; width: 100%;">
