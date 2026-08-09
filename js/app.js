@@ -370,10 +370,16 @@ async function refreshCurrentAppView() {
   }
 
   const currentTab = appRouter.currentTab || "dashboard-view";
-  await appRouter.switchTab(currentTab, {
-    keepPlanDetail: true,
-    restoreTabScroll: false
-  });
+  // Scripture text never changes once loaded — re-running switchTab here would
+  // tear down and rebuild the verse list (renderReaderText resets scrollTop to 0)
+  // for no reason. Skip it so refocusing the app doesn't yank the reader back
+  // to the top or interrupt an in-progress long-press selection.
+  if (currentTab !== "reader-view") {
+    await appRouter.switchTab(currentTab, {
+      keepPlanDetail: true,
+      restoreTabScroll: false
+    });
+  }
   await refreshCareReminderBadge({ force: true });
 }
 

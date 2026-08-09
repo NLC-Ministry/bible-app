@@ -8529,18 +8529,24 @@ body.reader-nav-hidden #reader-view .floating-nav-btn {
   pointer-events: none !important;
 }
 
-/* Keep support and bottom chrome out of the scripture surface. */
+/* Keep support chrome out of the scripture surface. The mobile nav bar is
+   deliberately NOT in this always-hidden list — it uses the scroll-based
+   show/hide rules below instead, so it stays visible until the user actually
+   starts scrolling to read (easy to switch tabs right after entering). */
 body.reader-page .issue-report-fab,
-body.reader-page .mobile-nav-bar,
 #reader-view .reader-bottom-action-bar {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-/* Mobile nav bar follows the same scroll-hide logic as floating nav buttons.
-   Default in reader-view: hidden (translated down).
-   When body.reader-nav-awake: slides back into view on tap. */
+/* Mobile nav bar: visible by default so it's easy to switch tabs right after
+   entering the reader. Deliberately its OWN one-way class (not the floating
+   buttons' reader-nav-hidden/reader-nav-awake) — once scrolling starts it
+   stays hidden for the rest of that chapter view, with no idle-timeout or
+   tap reveal, so it can't flicker in in the middle of reading or slide in
+   over an in-progress verse long-press/selection. It resets to visible the
+   next time the reader renders (new chapter / re-entering the tab). */
 body.reader-page .mobile-nav-bar {
   transform: translateY(0);
   opacity: 1;
@@ -8549,8 +8555,8 @@ body.reader-page .mobile-nav-bar {
               opacity   0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-body.reader-nav-hidden.reader-page .mobile-nav-bar,
-.app-layout.reader-mode body.reader-nav-hidden .mobile-nav-bar {
+body.reader-navbar-hidden.reader-page .mobile-nav-bar,
+.app-layout.reader-mode body.reader-navbar-hidden .mobile-nav-bar {
   transform: translateY(110%);
   opacity: 0;
   pointer-events: none;

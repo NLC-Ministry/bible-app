@@ -53,6 +53,11 @@ function initSmartFloatingReaderNav() {
     clearTimeout(idleTimer);
     setNavVisible(false, false);
     idleTimer = setTimeout(() => wakeFloatingNav(1400), 500);
+    // One-way: unlike the floating prev/next buttons above, the mobile tab
+    // bar must not flicker back in on every scroll pause while reading —
+    // it only comes back the next time the reader renders (see the reset
+    // in renderReaderText()).
+    document.body.classList.add("reader-navbar-hidden");
   };
 
   const bindFloatingButton = (button, direction) => {
@@ -73,12 +78,15 @@ function initSmartFloatingReaderNav() {
     scrollSurface.addEventListener("scroll", hideFloatingNavDuringScroll, { passive: true });
   }
 
-  readerView.addEventListener("pointerdown", (event) => {
-    const interactiveTarget = event.target.closest("button, a, input, select, textarea, [role='button'], .full-page-overlay, .bottom-sheet-backdrop");
-    if (!interactiveTarget) wakeFloatingNav();
-  }, { passive: true });
-
+  // Deliberately no tap-to-reveal listener here: a tap/long-press on scripture
+  // text is the verse-selection gesture (single tap and long-press range
+  // select). Waking the nav chrome on every such tap made it slide in over
+  // the selection UI mid-gesture. Scrolling is the only thing that hides it
+  // (hideFloatingNavDuringScroll above); the floating prev/next buttons
+  // reappear on their own once scrolling pauses, but the mobile tab bar
+  // (reader-navbar-hidden) stays out of the way until the next render.
   setNavVisible(true, false);
+  document.body.classList.remove("reader-navbar-hidden");
 }
 let readerBottomDwellController = null;
 let readerEndObserver = null;
@@ -811,6 +819,7 @@ export async function renderReaderText() {
   if (isSpeaking) {
     stopReaderAudio(true);
   }
+  document.body.classList.remove("reader-navbar-hidden");
   state.readerState.selectedVerseNum = null;
   closeSelectionBottomBar();
   closeMultiSelectionBar();
