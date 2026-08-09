@@ -446,6 +446,30 @@ function hidePlanEligibilityGate() {
 window.renderPlanEligibilityGate = renderPlanEligibilityGate;
 window.hidePlanEligibilityGate = hidePlanEligibilityGate;
 
+// Paints the reader top bar (book/chapter/version pills) straight from already-loaded
+// global state, so it's correct the instant #reader-view fades in — it must not wait on
+// the lazy-loaded bible.js module, or the label flashes stale->correct once that module
+// (and its own updatePillLabels() call) finally resolves.
+function paintReaderTopBarFromState() {
+  const books = window.BIBLE_BOOKS;
+  if (!Array.isArray(books) || !state.readerState) return;
+  const book = books.find(b => Number(b.id) === Number(state.readerState.bookId));
+  if (!book) return;
+
+  const refLabel = document.getElementById("reader-nav-ref-label");
+  if (refLabel) refLabel.textContent = `${book.name} ${state.readerState.chapter}`;
+
+  const version = state.readerState.version || "CUNP";
+  const versionLabel = version === "CUNP" ? "CUNP" : (version === "RCUVTS" ? "RCUV" : "CUV");
+  const versionBtn = document.getElementById("reader-nav-version-btn");
+  const versionSpan = versionBtn ? versionBtn.querySelector("span") : null;
+  if (versionSpan) versionSpan.textContent = versionLabel;
+  const inlineVersion = document.getElementById("reader-version-inline");
+  if (inlineVersion) inlineVersion.textContent = versionLabel;
+  const navBadge = document.getElementById("bible-nav-version-badge");
+  if (navBadge) navBadge.textContent = versionLabel;
+}
+
 // ─── Tab Switching: isSwitching guard prevents concurrent race conditions ───
 let isSwitching = false;
 
@@ -502,6 +526,12 @@ appRouter.switchTab = async function (tabId, options = {}) {
         pane.classList.remove("active");
       }
     });
+
+    // ── 3b. Paint reader top bar immediately so it's never stale while the
+    // lazy bible.js module loads (avoids the fadeIn-then-label-swap flash) ──
+    if (tabId === "reader-view") {
+      paintReaderTopBarFromState();
+    }
 
     // ── 4. Pre-render state mutations (sync, before any await) ──
     if (tabId === "plan-view" && !options.keepPlanDetail) {
