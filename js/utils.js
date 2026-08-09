@@ -601,16 +601,31 @@ function buildHeatmapGrid(containerId, logsByDate, teamSize = 1, label = "章", 
 
 function getCampaignStageCompletedRounds(stageNo) {
   const target = Number(stageNo || 0);
-  let completedRounds = Number(localStorage.getItem(`church_stage_completed_rounds_${target}`) || 0);
+  const storageKey = `church_stage_completed_rounds_${target}`;
+
+  let liveCompletedRounds = null;
   (state.activePlans || []).forEach(plan => {
     if (!plan) return;
     const planStageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (plan.planKind !== "church_campaign_stage" || planStageNo !== target) return;
     const currentRound = Math.max(1, Number(plan.currentRound || 1));
     const completed = Number(plan.progress || 0) >= 100 ? currentRound : currentRound - 1;
-    completedRounds = Math.max(completedRounds, completed);
+    liveCompletedRounds = Math.max(liveCompletedRounds ?? 0, completed);
   });
-  return completedRounds;
+
+  // A currently active plan for this stage is the source of truth — never
+  // let a stale localStorage value (e.g. left over from earlier testing, or
+  // from before a self/admin progress reset) keep a badge lit past what the
+  // live plan actually shows. Self-heal the cache to match while we're here.
+  if (liveCompletedRounds !== null) {
+    localStorage.setItem(storageKey, String(liveCompletedRounds));
+    return liveCompletedRounds;
+  }
+
+  // No active plan for this stage right now (e.g. it has rotated out of
+  // state.activePlans) — fall back to the last known value so a genuinely
+  // earned badge doesn't un-light just because the plan isn't loaded.
+  return Number(localStorage.getItem(storageKey) || 0);
 }
 
 function getCampaignStageCurrentRound(stageNo) {
