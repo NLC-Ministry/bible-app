@@ -40,8 +40,20 @@ describe("issue-report-sheet-sync (new report -> Google Sheet)", () => {
 
   it("only acts on INSERT into issue_reports, and requires the shared secret header", () => {
     expect(edge).toContain('payload?.table !== "issue_reports" || payload?.type !== "INSERT"');
-    expect(edge).toContain('req.headers.get("x-webhook-secret") !== webhookSecret');
+    expect(edge).toContain('req.headers.get("x-webhook-secret")');
+    expect(edge).toContain('receivedSecret !== webhookSecret');
     expect(edge).toContain('Deno.env.get("ISSUE_REPORT_WEBHOOK_SECRET")');
+  });
+
+  it("the mismatch debug log never prints the actual secret values, only lengths/prefixes", () => {
+    const debugBlock = edge.slice(edge.indexOf('console.warn("issue-report-sheet-sync: secret mismatch"'), edge.indexOf("return jsonResponse({ error: \"unauthorized\" }, 401);"));
+    expect(debugBlock).toContain("receivedLength");
+    expect(debugBlock).toContain("receivedPrefix");
+    expect(debugBlock).toContain("expectedLength");
+    expect(debugBlock).toContain("expectedPrefix");
+    expect(debugBlock).not.toContain("receivedSecret,");
+    expect(debugBlock).not.toContain("webhookSecret,");
+    expect(debugBlock).not.toMatch(/receivedSecret\s*\}/);
   });
 
   it("authenticates to the Apps Script sheet endpoint with its own separate secret", () => {
