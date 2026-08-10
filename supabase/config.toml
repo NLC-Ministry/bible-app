@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.nlc-data]
 verify_jwt = false
+
+[functions.issue-report-sheet-sync]
+verify_jwt = false

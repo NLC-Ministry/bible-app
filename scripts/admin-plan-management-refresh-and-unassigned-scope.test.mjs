@@ -38,7 +38,11 @@ describe("計劃管理: explicit refresh button", () => {
     const end = admin.indexOf("\n}", start) + 2;
     const fnBlock = admin.slice(start, end);
     expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
-    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6')");
+    // Both division calls read the same cached db.getReadingTeamRegistrationOverview()
+    // response (keyed by admin user, not division) — only the first call should
+    // force a refetch; the second must reuse it instead of hitting the network
+    // twice for identical data.
+    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
     // Regression for: 已加入計畫 (renderAdminJoinedPlanMembers) was only ever
     // called from the org-filter change handler (refreshAdminTeamRegistrationFilters),
     // never from here — so neither the initial plan load nor 更新 rendered it

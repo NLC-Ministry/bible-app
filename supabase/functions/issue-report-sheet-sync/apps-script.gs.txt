@@ -1,0 +1,64 @@
+// Paste this into the target Google Sheet's Extensions -> Apps Script editor,
+// then deploy it as a Web App (see supabase/functions/README.md for the full
+// setup checklist). Not deployed by this repo — Google Apps Script has no
+// relationship to the Supabase CLI, this file is just a version-controlled
+// copy of what to paste.
+//
+// Target sheet tab: the one at gid=2084089275 in
+// https://docs.google.com/spreadsheets/d/1iqHhlrzQ4nuS0BBtciEll5mBUsUFMhwiB4mhSO8sWx4/edit
+// Looked up by gid (not by name) so this keeps working even if someone renames the tab.
+
+var SHEET_GID = 2084089275;
+
+// Replace with the same random string you put in Supabase's
+// ISSUE_REPORT_SHEET_WEBHOOK_SECRET function secret. Pick your own — this is
+// not a Google credential, just a shared password between the Edge Function
+// and this script so random internet traffic can't write into your sheet.
+var SHARED_SECRET = "REPLACE_WITH_YOUR_OWN_RANDOM_SECRET";
+
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+
+    if (payload.secret !== SHARED_SECRET) {
+      return jsonOutput({ error: "unauthorized" });
+    }
+
+    var sheet = findSheetByGid(SHEET_GID);
+    if (!sheet) {
+      return jsonOutput({ error: "sheet_not_found" });
+    }
+
+    ensureHeaderRow(sheet);
+
+    sheet.appendRow([
+      payload.created_at || "",
+      payload.category || "",
+      payload.status || "",
+      payload.description || ""
+    ]);
+
+    return jsonOutput({ ok: true });
+  } catch (err) {
+    return jsonOutput({ error: String(err) });
+  }
+}
+
+function findSheetByGid(gid) {
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === gid) return sheets[i];
+  }
+  return null;
+}
+
+function ensureHeaderRow(sheet) {
+  var firstCell = sheet.getRange(1, 1).getValue();
+  if (firstCell) return; // header already present
+  sheet.getRange(1, 1, 1, 4).setValues([["建立時間", "分類", "處理狀況", "問題描述"]]);
+}
+
+function jsonOutput(body) {
+  return ContentService.createTextOutput(JSON.stringify(body))
+    .setMimeType(ContentService.MimeType.JSON);
+}

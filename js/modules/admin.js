@@ -1139,8 +1139,12 @@ async function selectManagementPlan(planKey, forceRefresh = false) {
     try { await renderAdminJoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminJoinedPlanMembers error caught:", e); }
     try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
     try { await renderAdminTeamPlacementLookup(plan); } catch (e) { console.warn("[Admin] renderAdminTeamPlacementLookup error caught:", e); }
+    // Both divisions read the same underlying db.getReadingTeamRegistrationOverview()
+    // response (cachedTeamsData, keyed by admin user — not by division), so only
+    // the first call needs to force a refetch; the second reuses what the first
+    // just fetched instead of hitting the network twice for identical data.
     try { await renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
-    try { await renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
+    try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
   } catch (err) {
     console.error("[AdminManagement] Error in selectManagementPlan:", err);
   }
