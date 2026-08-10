@@ -960,7 +960,10 @@ function setVerseNoteBadge(verseDiv, hasNote) {
       badge.setAttribute("data-icon", "pencil");
       badge.setAttribute("aria-hidden", "true");
       verseDiv.appendChild(badge);
-      if (typeof hydrateIcons === "function") hydrateIcons(badge);
+      // hydrateIcons scans the given root's DESCENDANTS for [data-icon] — it
+      // never processes the root element itself, so this must be the badge's
+      // container, not the badge (which IS the [data-icon] element).
+      if (typeof hydrateIcons === "function") hydrateIcons(verseDiv);
     }
   } else if (badge) {
     badge.remove();

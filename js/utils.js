@@ -2602,25 +2602,23 @@ export function initSpeechPreferencesControls() {
       return /yunjhe|yun-jhe|yun-lin|yunlin|yunfeng|yunhao|kangkang|male/.test(name);
     };
 
-    const isGoogleVoice = (v) => {
-      const name = String(v.name || "").toLowerCase();
-      return name.includes("google") && (name.includes("國語") || name.includes("taiwan") || name.includes("zh-tw"));
-    };
-
-    let filteredVoices = [];
+    // Show every installed Chinese-family voice (Mandarin AND Cantonese) so
+    // users who installed extra voice packs actually see them in the list —
+    // this used to be narrowed down to only a Google-branded or OS-"default"
+    // voice (falling back to just chineseVoices[0] otherwise), which is why
+    // the picker could show a single Cantonese option even with a Taiwan
+    // Mandarin pack installed: the other voices were filtered out of the
+    // list entirely, not merely deprioritized.
+    let filteredVoices = chineseVoices;
     if (currentGender === "female") {
-      filteredVoices = chineseVoices.filter(v => isFemaleVoice(v));
-      if (filteredVoices.length === 0) filteredVoices = chineseVoices;
+      const onlyFemale = chineseVoices.filter(v => isFemaleVoice(v));
+      if (onlyFemale.length > 0) filteredVoices = onlyFemale;
     } else if (currentGender === "male") {
-      filteredVoices = chineseVoices.filter(v => isMaleVoice(v));
-    } else {
-      filteredVoices = chineseVoices.filter(v => isGoogleVoice(v) || v.default);
-      if (filteredVoices.length === 0) {
-        filteredVoices = chineseVoices.slice(0, 1);
-      }
+      const onlyMale = chineseVoices.filter(v => isMaleVoice(v));
+      if (onlyMale.length > 0) filteredVoices = onlyMale;
     }
 
-    const formatTaiwanVoiceName = (v) => {
+    const formatVoiceLabel = (v) => {
       const name = String(v.name || "");
       const lower = name.toLowerCase();
       if (lower.includes("mei-jia") || lower.includes("meijia")) return "美佳 (台灣女聲)";
@@ -2631,45 +2629,53 @@ export function initSpeechPreferencesControls() {
       if (lower.includes("hanhan")) return "涵涵 (台灣女聲)";
       if (lower.includes("yunjhe") || lower.includes("yun-jhe")) return "允哲 (台灣男聲)";
       if (lower.includes("yun-lin") || lower.includes("yunlin")) return "雲林 (台灣男聲)";
-      if (lower.includes("google")) return "Google 國語 (台灣)";
-      
-      let tag = " (台灣)";
-      if (isFemaleVoice(v)) tag = " (台灣女聲)";
-      else if (isMaleVoice(v)) tag = " (台灣男聲)";
-      return `${name}${tag}`;
+      if (lower.includes("google") && (lower.includes("國語") || lower.includes("taiwan") || lower.includes("zh-tw"))) return "Google 國語 (台灣)";
+
+      // Region tag comes from the voice's own lang — must not hardcode
+      // "(台灣)" onto every voice, or a Cantonese/Hong Kong voice ends up
+      // mislabeled as Taiwanese (e.g. "粵語 香港(台灣)").
+      const lang = String(v.lang || "").toLowerCase();
+      let region = "";
+      if (lang === "zh-hk" || lang === "yue-hk" || /cantonese|hong ?kong/i.test(name)) region = "香港";
+      else if (lang === "zh-tw" || lang.includes("hant") || /taiwan/i.test(name)) region = "台灣";
+      else if (lang === "zh-cn" || lang === "zh-hans" || lang === "zh-sg") region = "中國";
+      const genderTag = isFemaleVoice(v) ? "女聲" : (isMaleVoice(v) ? "男聲" : "");
+      const tag = [region, genderTag].filter(Boolean).join("");
+      return tag ? `${name} (${tag})` : name;
     };
 
     voiceSelect.innerHTML = "";
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = currentGender === "female" ? "系統無可用中文女聲" : (currentGender === "male" ? "系統無可用中文男聲" : "Google 國語 (台灣)");
+      opt.textContent = currentGender === "female" ? "系統無可用中文女聲" : (currentGender === "male" ? "系統無可用中文男聲" : "找不到可用的中文語音，請確認手機已安裝中文語音包");
       voiceSelect.appendChild(opt);
       return;
     }
 
-    let selectedIndex = 0;
+    // An explicit past choice wins if it's still installed; otherwise defer
+    // to the app's shared voice-quality scoring (selectPreferredChineseVoice
+    // — Mandarin/Taiwan preferred, Natural/Neural boosted, Cantonese treated
+    // as a last resort) instead of picking whatever the OS happened to list
+    // first or flag as "default".
+    let preselected = currentURI
+      ? filteredVoices.find(v => v.voiceURI === currentURI || v.name === currentURI)
+      : null;
+    if (!preselected && typeof window.selectPreferredChineseVoice === "function") {
+      preselected = window.selectPreferredChineseVoice(filteredVoices, { preferredGender: currentGender });
+    }
+    if (!preselected) preselected = filteredVoices[0];
 
-    filteredVoices.forEach((v, idx) => {
+    filteredVoices.forEach((v) => {
       const opt = document.createElement("option");
       opt.value = v.voiceURI || v.name;
-      opt.textContent = formatTaiwanVoiceName(v);
-
-      if (currentGender === "auto" && isGoogleVoice(v)) {
-        opt.selected = true;
-        selectedIndex = idx;
-      } else if (currentGender !== "auto" && currentURI && (v.voiceURI === currentURI || v.name === currentURI)) {
-        opt.selected = true;
-        selectedIndex = idx;
-      }
+      opt.textContent = formatVoiceLabel(v);
+      opt.selected = v === preselected;
       voiceSelect.appendChild(opt);
     });
 
-    if (filteredVoices[selectedIndex]) {
-      voiceSelect.selectedIndex = selectedIndex;
-      voiceSelect.value = filteredVoices[selectedIndex].voiceURI || filteredVoices[selectedIndex].name;
-      setSpeechSetting("voiceURI", voiceSelect.value);
-    }
+    voiceSelect.value = preselected.voiceURI || preselected.name;
+    setSpeechSetting("voiceURI", voiceSelect.value);
 
     if (autoPreviewAfterPopulate) {
       playPreviewSpeech();

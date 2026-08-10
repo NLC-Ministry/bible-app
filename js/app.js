@@ -14,7 +14,7 @@ import './state.js?v=20260809_leadership-assignment-org-fallback';
 import './auth.js?v=20260809_leadership-assignment-org-fallback';
 import './auth-launch.mjs';
 import './db.js?v=20260809_leadership-assignment-org-fallback';
-import './utils.js?v=20260809_leadership-assignment-org-fallback';
+import './utils.js?v=20260810_tts-voice-picker-fix';
 import './gamification.js?v=20260809_leadership-assignment-org-fallback';
 import { initModalManager } from './modules/modal-manager.mjs';
 
