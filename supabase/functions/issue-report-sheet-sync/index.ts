@@ -46,16 +46,6 @@ Deno.serve(async (req: Request) => {
   // the webhook itself instead.
   const receivedSecret = req.headers.get("x-webhook-secret");
   if (receivedSecret !== webhookSecret) {
-    // TEMPORARY debug logging — lengths/prefixes only, never the actual
-    // secret values, to spot whitespace/mismatch issues during setup.
-    // Remove once ISSUE_REPORT_WEBHOOK_SECRET setup is confirmed working.
-    console.warn("issue-report-sheet-sync: secret mismatch", {
-      receivedPresent: receivedSecret !== null,
-      receivedLength: receivedSecret?.length ?? 0,
-      receivedPrefix: receivedSecret?.slice(0, 4) ?? "",
-      expectedLength: webhookSecret.length,
-      expectedPrefix: webhookSecret.slice(0, 4)
-    });
     return jsonResponse({ error: "unauthorized" }, 401);
   }
 

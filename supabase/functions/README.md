@@ -79,9 +79,20 @@ live inside one) — see step 5 below.
 3. Deploy → New deployment → type "Web app". Execute as "Me", access "Anyone".
    Copy the deployment URL — that's `ISSUE_REPORT_SHEET_WEBHOOK_URL`.
 4. Set all three secrets above via `supabase secrets set` (or the Dashboard),
-   then `supabase functions deploy issue-report-sheet-sync` — this repo does
-   not auto-deploy Edge Functions, see the migrations note above for why that
-   matters here too.
+   then deploy with JWT verification explicitly disabled:
+   ```bash
+   supabase functions deploy issue-report-sheet-sync --no-verify-jwt
+   ```
+   `--no-verify-jwt` is required here even though `config.toml` already sets
+   `verify_jwt = false` for this function — deploying without the flag left
+   the platform gateway enforcing JWT verification anyway, rejecting every
+   pg_net request before it ever reached this function's code
+   (`sb-error-code: UNAUTHORIZED_NO_AUTH_HEADER`, a 401 from Supabase itself,
+   not from the shared-secret check inside `index.ts`). If it ever happens
+   again, also check Edge Functions → issue-report-sheet-sync → Settings in
+   the Dashboard for an "Enforce JWT Verification" toggle that can override
+   `config.toml`. This repo does not auto-deploy Edge Functions either way,
+   see the migrations note above for why that matters here too.
 5. Run the pending migration (`supabase db push`, or paste
    `0077_issue_report_sheet_sync_trigger.sql` into the SQL Editor — migrations
    aren't auto-deployed either). Then, in the SQL Editor, run once (replacing
