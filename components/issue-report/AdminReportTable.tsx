@@ -324,34 +324,8 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                     </select>
                   </td>
                   <td className="px-6 py-3.5 break-words leading-relaxed text-sm text-slate-100 select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="font-normal text-slate-100 select-text cursor-text flex-1" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
-                        {report.description}
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleCopyText(report.id, report.description)}
-                        className={`inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold border transition-all cursor-pointer ${
-                          copiedId === report.id
-                            ? "bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-sm"
-                            : "bg-slate-900/90 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700"
-                        }`}
-                        title={copiedId === report.id ? "已複製內文！" : "複製問題描述"}
-                        type="button"
-                      >
-                        {copiedId === report.id ? (
-                          <>
-                            <Check className="h-3 w-3 text-emerald-400" />
-                            <span>已複製</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3 w-3 text-cyan-400" />
-                            <span>複製</span>
-                          </>
-                        )}
-                      </motion.button>
+                    <div className="font-normal text-slate-100 select-text cursor-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
+                      {report.description}
                     </div>
                     {report.metadata?.reply && (
                       <div className="mt-2 rounded-lg bg-slate-900/90 border border-cyan-500/40 p-3 text-xs shadow-md select-text" style={{ userSelect: "text", WebkitUserSelect: "text" }}>
