@@ -449,7 +449,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (!["save_profile", "rpc", "send_care_reminder"].includes(action) && (!table || typeof table !== "string")) {
+    if (!["save_profile", "rpc", "send_care_reminder", "mark_issue_report_reply_seen"].includes(action) && (!table || typeof table !== "string")) {
       return jsonResponse({ error: "missing_table" }, 400);
     }
 
@@ -532,6 +532,42 @@ Deno.serve(async (req: Request) => {
       if (error) return jsonResponse({ error: error.message, details: error, code: error.code }, 400);
       return jsonResponse({ data: null });
     }
+
+    // ── mark_issue_report_reply_seen: the reporting member clears their own
+    // unread-reply badge. Deliberately its own isolated action rather than a
+    // generic issue_reports UPDATE grant — the server computes the new
+    // metadata itself (existing metadata + reply_seen_at only) instead of
+    // trusting whatever metadata the client sends, so a member can never use
+    // this path to alter status/category/description or forge/edit the
+    // admin's reply text on their own report.
+    if (action === "mark_issue_report_reply_seen") {
+      const reportId = String(body.report_id || "");
+      if (!reportId) return jsonResponse({ error: "missing_report_id" }, 400);
+      const { data: report, error: fetchError } = await supabaseAdmin
+        .from("issue_reports")
+        .select("id, user_id, metadata")
+        .eq("id", reportId)
+        .maybeSingle();
+      if (fetchError) return jsonResponse({ error: fetchError.message }, 400);
+      if (!report || report.user_id !== profile.id) return jsonResponse({ error: "forbidden" }, 403);
+
+      const existingMetadata = (report.metadata && typeof report.metadata === "object") ? report.metadata : {};
+      if (!existingMetadata.reply || existingMetadata.reply_seen_at) {
+        // Nothing to mark (no reply yet, or already seen) — succeed idempotently.
+        return jsonResponse({ data: report });
+      }
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from("issue_reports")
+        .update({ metadata: { ...existingMetadata, reply_seen_at: new Date().toISOString() } })
+        .eq("id", reportId)
+        .eq("user_id", profile.id)
+        .select("id, metadata")
+        .single();
+      if (updateError) return jsonResponse({ error: updateError.message }, 400);
+      return jsonResponse({ data: updated });
+    }
+
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
       const nextName = payload.name ?? profile.name ?? "";

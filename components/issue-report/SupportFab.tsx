@@ -6,6 +6,7 @@ import { MessageSquare } from "lucide-react";
 interface SupportFabProps {
   onClick: () => void;
   isOpen: boolean;
+  unreadReplyCount?: number;
 }
 
 function isLoginGateVisibleNow(): boolean {
@@ -14,7 +15,7 @@ function isLoginGateVisibleNow(): boolean {
   return Boolean(loginGate && !loginGate.classList.contains("hidden"));
 }
 
-export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
+export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen, unreadReplyCount = 0 }) => {
   const [currentPath, setCurrentPath] = React.useState(
     typeof window !== "undefined" ? window.location.pathname : ""
   );
@@ -108,10 +109,30 @@ export const SupportFab: React.FC<SupportFabProps> = ({ onClick, isOpen }) => {
           whileTap={{ scale: 0.95 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
           className="issue-report-fab fixed z-sheet flex h-14 w-14 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground shadow-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-          aria-label="打開問題回報與建議表單"
+          aria-label={unreadReplyCount > 0 ? `打開問題回報與建議表單，有 ${unreadReplyCount} 則未讀回覆` : "打開問題回報與建議表單"}
           type="button"
         >
           <MessageSquare className="h-[var(--icon-size-lg)] w-[var(--icon-size-lg)]" strokeWidth={2} />
+          {unreadReplyCount > 0 && (
+            <span
+              className="issue-report-fab-badge absolute flex items-center justify-center rounded-full font-semibold"
+              style={{
+                top: "-0.25rem",
+                right: "-0.25rem",
+                minWidth: "1.25rem",
+                height: "1.25rem",
+                padding: "0 0.3rem",
+                fontSize: "0.7rem",
+                lineHeight: 1,
+                backgroundColor: "var(--color-danger, #ef4444)",
+                color: "#fff",
+                border: "2px solid var(--bg-page, #fff)"
+              }}
+              aria-hidden="true"
+            >
+              {unreadReplyCount > 9 ? "9+" : unreadReplyCount}
+            </span>
+          )}
         </motion.button>
       )}
     </AnimatePresence>

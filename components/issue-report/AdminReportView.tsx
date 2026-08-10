@@ -204,7 +204,10 @@ export const AdminReportView: React.FC = () => {
               ...existingMetadata,
               reply,
               replied_at: new Date().toISOString(),
-              replied_by: currentUser?.id || ""
+              replied_by: currentUser?.id || "",
+              // Reset so the reporter's unread-reply badge lights up again —
+              // matters for edits/re-replies, not just the first reply.
+              reply_seen_at: null
             }
           },
           filters: [
@@ -227,7 +230,8 @@ export const AdminReportView: React.FC = () => {
               ...existingMetadata,
               reply,
               replied_at: new Date().toISOString(),
-              replied_by: currentUser?.id || ""
+              replied_by: currentUser?.id || "",
+              reply_seen_at: null
             }
           };
         }

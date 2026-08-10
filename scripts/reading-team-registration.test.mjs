@@ -401,7 +401,7 @@ describe("NLC and browser integration", () => {
     expect(teamCss).toContain(".reading-team-member__actions");
   });
   it("delivers team reminders without requiring a table parameter", () => {
-    expect(edge).toContain('["save_profile", "rpc", "send_care_reminder"]');
+    expect(edge).toContain('["save_profile", "rpc", "send_care_reminder", "mark_issue_report_reply_seen"]');
     expect(edge).toContain('const pastoralRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"]');
     expect(edge).toContain("pastoral_reminder_scope_required");
     expect(edge).toContain("const withinScope = hasWholeChurchPlanScope(profile)");

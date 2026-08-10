@@ -4,7 +4,7 @@ import { Loader2, CheckCircle, AlertCircle, X } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ReportPipeline, FetchMyReportsPipeline } from "./IssueReportBlocks.ts";
+import { ReportPipeline, FetchMyReportsPipeline, MarkReplySeenPipeline } from "./IssueReportBlocks.ts";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -36,14 +36,44 @@ interface ReportDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   defaultTab?: "form" | "my-reports";
+  onReportsViewed?: () => void;
 }
 
-export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, defaultTab = "form" }) => {
+export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, defaultTab = "form", onReportsViewed }) => {
   const [activeTab, setActiveTab] = React.useState<"form" | "my-reports">(defaultTab);
   const [isLoading, setIsLoading] = React.useState(false);
   const [message, setMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null);
   const [myReports, setMyReports] = React.useState<any[]>([]);
   const [isFetchingReports, setIsFetchingReports] = React.useState(false);
+
+  // Shared loader for both the prefetch-on-open and the explicit tab switch.
+  // markSeen is only true when the caller is actually looking at the replies
+  // (viewing the my-reports tab), never on a background prefetch — clearing
+  // the badge should mean the user saw it, not just that data was fetched.
+  // Plain function, not useCallback: nothing here depends on referential
+  // stability across renders, and the effect below intentionally excludes it
+  // from its dependency array (see the eslint-disable there).
+  const loadMyReports = async (markSeen: boolean) => {
+    setIsFetchingReports(true);
+    const result = await FetchMyReportsPipeline.execute();
+    setIsFetchingReports(false);
+    if (!result.success || !Array.isArray(result.data)) return;
+
+    setMyReports(result.data);
+    if (!markSeen) return;
+
+    const unseen = result.data.filter(r => r?.metadata?.reply && !r?.metadata?.reply_seen_at);
+    if (unseen.length === 0) return;
+
+    await Promise.all(unseen.map(r => MarkReplySeenPipeline.execute(r.id)));
+    const seenAt = new Date().toISOString();
+    setMyReports(prev => prev.map(r =>
+      unseen.some(u => u.id === r.id)
+        ? { ...r, metadata: { ...r.metadata, reply_seen_at: seenAt } }
+        : r
+    ));
+    onReportsViewed?.();
+  };
 
   const {
     register,
@@ -63,19 +93,12 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, def
     if (isOpen) {
       setActiveTab(defaultTab);
       let isMounted = true;
-      setIsFetchingReports(true);
-      FetchMyReportsPipeline.execute().then(result => {
-        if (isMounted) {
-          setIsFetchingReports(false);
-          if (result.success && Array.isArray(result.data)) {
-            setMyReports(result.data);
-          }
-        }
-      }).catch(() => {
+      loadMyReports(defaultTab === "my-reports").catch(() => {
         if (isMounted) setIsFetchingReports(false);
       });
       return () => { isMounted = false; };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultTab]);
 
   const watchDescription = watch("description", "") || "";
@@ -164,13 +187,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({ isOpen, onClose, def
               style={{ background: "transparent", boxShadow: "none" }}
               onClick={() => {
                 setActiveTab("my-reports");
-                setIsFetchingReports(true);
-                FetchMyReportsPipeline.execute().then(res => {
-                  setIsFetchingReports(false);
-                  if (res.success && Array.isArray(res.data)) {
-                    setMyReports(res.data);
-                  }
-                }).catch(() => setIsFetchingReports(false));
+                loadMyReports(true);
               }}
             >
               💬 我的歷史與回覆

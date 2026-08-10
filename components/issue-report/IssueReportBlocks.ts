@@ -284,6 +284,85 @@ export class FetchMyReportsPipeline {
 }
 
 /**
+ * How many of a member's own reports have an admin reply they haven't
+ * viewed yet — drives the numbered badge on the floating report button.
+ */
+export function countUnseenReplies(reports: any[]): number {
+  if (!Array.isArray(reports)) return 0;
+  return reports.filter(r => r?.metadata?.reply && !r?.metadata?.reply_seen_at).length;
+}
+
+/**
+ * MarkReplySeenPipeline: clears the unread-reply badge for one report.
+ * Deliberately does NOT send arbitrary metadata — the server
+ * (mark_issue_report_reply_seen in nlc-data) recomputes the merged metadata
+ * itself from the current row, so this call can only ever touch
+ * reply_seen_at, never the reply text/status/etc. on the caller's own report.
+ */
+export class MarkReplySeenPipeline {
+  static async execute(reportId: string): Promise<{ success: boolean; error?: string }> {
+    if (!reportId) return { success: false, error: "missing_report_id" };
+    try {
+      const state = (window as any).state;
+      const currentUser = state?.currentUser;
+      if (!currentUser?.id) return { success: false, error: "not_logged_in" };
+
+      const supabase = state?.supabase;
+      const cfg = state?.supabaseConfig || {};
+      const supabaseUrl = cfg.url || "";
+      const supabaseAnonKey = cfg.anonKey || "";
+
+      let accessToken = "";
+      if (supabase && typeof supabase.auth?.getSession === "function") {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) accessToken = session.access_token;
+      }
+      if (!accessToken && (window as any).auth && typeof (window as any).auth.getValidAccessToken === "function") {
+        accessToken = await (window as any).auth.getValidAccessToken();
+      }
+
+      if (accessToken && supabaseUrl) {
+        const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
+        const response = await fetch(functionUrl, {
+          method: "POST",
+          headers: {
+            "apikey": supabaseAnonKey,
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ action: "mark_issue_report_reply_seen", report_id: reportId })
+        });
+        return { success: response.ok };
+      }
+
+      // Dev-mode (real Supabase client) fallback: same read-then-merge
+      // pattern the server uses, so this path also never overwrites any
+      // metadata key besides reply_seen_at.
+      if (supabase && typeof supabase.from === "function") {
+        const { data: existing } = await supabase
+          .from("issue_reports")
+          .select("metadata")
+          .eq("id", reportId)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+        const existingMetadata = existing?.metadata || {};
+        const { error } = await supabase
+          .from("issue_reports")
+          .update({ metadata: { ...existingMetadata, reply_seen_at: new Date().toISOString() } })
+          .eq("id", reportId)
+          .eq("user_id", currentUser.id);
+        return { success: !error };
+      }
+
+      return { success: false, error: "no_client" };
+    } catch (err: any) {
+      console.error("[IssueReport] Mark reply seen error:", err);
+      return { success: false, error: err.message || "標記已讀失敗" };
+    }
+  }
+}
+
+/**
  * Initialize offline sync trigger when network goes online
  */
 export function initOfflineReportSync() {
