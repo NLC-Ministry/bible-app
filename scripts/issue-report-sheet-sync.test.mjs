@@ -7,6 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const edge = readFileSync(join(root, "supabase", "functions", "issue-report-sheet-sync", "index.ts"), "utf8");
 const readme = readFileSync(join(root, "supabase", "functions", "README.md"), "utf8");
 const config = readFileSync(join(root, "supabase", "config.toml"), "utf8");
+const migration = readFileSync(join(root, "supabase", "migrations", "0077_issue_report_sheet_sync_trigger.sql"), "utf8");
 
 // The edge function is Deno-only (top-level Deno.serve / Deno.env), so —
 // matching the repo convention (scripts/issue-report-submission.test.mjs,
@@ -59,6 +60,38 @@ describe("issue-report-sheet-sync (new report -> Google Sheet)", () => {
     expect(readme).toContain("ISSUE_REPORT_WEBHOOK_SECRET");
     expect(readme).toContain("ISSUE_REPORT_SHEET_WEBHOOK_URL");
     expect(readme).toContain("ISSUE_REPORT_SHEET_WEBHOOK_SECRET");
-    expect(readme).toContain("Database → Webhooks");
+    expect(readme).toContain("vault.create_secret");
+    expect(readme).toContain("0077_issue_report_sheet_sync_trigger.sql");
+  });
+});
+
+// The Dashboard's Database Webhooks UI wasn't reachable on this project
+// (Triggers only offers Postgres functions, /database/hooks 404s), so the
+// AFTER INSERT -> HTTP call is done directly in Postgres via pg_net instead.
+describe("issue-report-sheet-sync trigger (pg_net, migration 0077)", () => {
+  it("never embeds the real secret in the migration — reads it from Vault at runtime", () => {
+    expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pg_net");
+    expect(migration).toContain("FROM vault.decrypted_secrets");
+    expect(migration).toContain("WHERE name = 'issue_report_webhook_secret'");
+    expect(migration).not.toMatch(/x-webhook-secret',\s*'[^']+'\)/);
+  });
+
+  it("skips the sync instead of blocking the insert when the secret isn't configured yet", () => {
+    expect(migration).toContain("IF webhook_secret IS NULL THEN");
+    expect(migration).toContain("RETURN NEW;");
+  });
+
+  it("posts the same payload shape (type/table/record) the Edge Function already parses", () => {
+    expect(migration).toContain("'type', 'INSERT'");
+    expect(migration).toContain("'table', 'issue_reports'");
+    expect(migration).toContain("'record', row_to_json(NEW)");
+    expect(edge).toContain('payload?.table !== "issue_reports" || payload?.type !== "INSERT"');
+  });
+
+  it("fires AFTER INSERT only, once per row", () => {
+    expect(migration).toContain("AFTER INSERT ON public.issue_reports");
+    expect(migration).toContain("FOR EACH ROW");
+    expect(migration).not.toContain("BEFORE INSERT");
+    expect(migration).not.toContain("ON UPDATE");
   });
 });
