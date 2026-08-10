@@ -39,6 +39,12 @@ describe("計劃管理: explicit refresh button", () => {
     const fnBlock = admin.slice(start, end);
     expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
     expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6')");
+    // Regression for: 已加入計畫 (renderAdminJoinedPlanMembers) was only ever
+    // called from the org-filter change handler (refreshAdminTeamRegistrationFilters),
+    // never from here — so neither the initial plan load nor 更新 rendered it
+    // at all; it stayed stuck showing 0 人 until a region/zone/group dropdown
+    // was toggled.
+    expect(fnBlock).toContain("renderAdminJoinedPlanMembers(true)");
   });
 });
 

@@ -1131,6 +1131,12 @@ async function selectManagementPlan(planKey, forceRefresh = false) {
     if (typeof window.renderPlanMembersView === 'function') {
       try { await window.renderPlanMembersView(); } catch (e) { console.warn("[Admin] renderPlanMembersView error caught:", e); }
     }
+    // renderAdminJoinedPlanMembers (the 已加入計畫 list on the 加入計畫狀況
+    // subtab) used to only ever be called from the org-filter change handler
+    // (refreshAdminTeamRegistrationFilters) — selectManagementPlan() never
+    // called it at all, so the 更新 button (and the initial plan load) left
+    // it permanently un-rendered until a region/zone/group dropdown changed.
+    try { await renderAdminJoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminJoinedPlanMembers error caught:", e); }
     try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
     try { await renderAdminTeamPlacementLookup(plan); } catch (e) { console.warn("[Admin] renderAdminTeamPlacementLookup error caught:", e); }
     try { await renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
