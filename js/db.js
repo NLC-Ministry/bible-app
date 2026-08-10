@@ -1660,11 +1660,47 @@ const db = {
         .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`);
 
       const joinedProfileIds = new Set((enrollmentsResult || []).map(plan => String(plan.user_id)));
+
+      // 團隊組隊狀態：先前這裡完全沒有查詢過，profile.is_joined_team／team_name
+      // 一直是 undefined，導致後台「未加入團隊」篩選勾選框形同虛設（永遠不會排除
+      // 任何人），使用者卡片上的組隊狀態也永遠顯示「未加入團隊」。
+      const { data: teamMembershipsResult } = await state.supabase
+        .from("reading_team_members")
+        .select("user_id, team_id, member_role");
+
+      const teamIds = Array.from(new Set((teamMembershipsResult || []).map(m => m.team_id).filter(Boolean)));
+      let teamNameById = new Map();
+      if (teamIds.length > 0) {
+        const { data: teamsResult } = await state.supabase
+          .from("reading_teams")
+          .select("id, name")
+          .in("id", teamIds);
+        teamNameById = new Map((teamsResult || []).map(t => [String(t.id), t.name]));
+      }
+      // A member can belong to more than one team across different plans;
+      // the directory card only has room for one, so — matching the same
+      // "last membership wins" simplification already used elsewhere for
+      // this kind of display (see _getAdminMemberTeamPlacementsFallback) —
+      // later rows overwrite earlier ones here.
+      const teamMembershipByUser = new Map();
+      (teamMembershipsResult || []).forEach(m => {
+        teamMembershipByUser.set(String(m.user_id), {
+          team_name: teamNameById.get(String(m.team_id)) || "",
+          member_role: m.member_role || null
+        });
+      });
+
       return {
-        data: profiles.map(profile => ({
-          ...profile,
-          joined_stage_one: joinedProfileIds.has(String(profile.id))
-        })),
+        data: profiles.map(profile => {
+          const membership = teamMembershipByUser.get(String(profile.id));
+          return {
+            ...profile,
+            joined_stage_one: joinedProfileIds.has(String(profile.id)),
+            is_joined_team: teamMembershipByUser.has(String(profile.id)),
+            team_name: membership?.team_name || null,
+            member_role: membership?.member_role || null
+          };
+        }),
         error: null
       };
     } catch (error) {

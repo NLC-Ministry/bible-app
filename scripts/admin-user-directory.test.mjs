@@ -50,6 +50,30 @@ describe("read-only admin user directory", () => {
     expect(method).toContain("joined_stage_one:");
   });
 
+  it("computes is_joined_team / team_name from reading_team_members — regression for the always-false 未加入團隊 filter", () => {
+    // Previously fetchAdminUserProfiles() never queried team membership at
+    // all, so profile.is_joined_team was always undefined. The 未加入團隊
+    // checkbox checks `profile.is_joined_team === true`, which was therefore
+    // always false and never excluded anyone — the filter silently did
+    // nothing, and every user's card showed "未加入團隊" regardless of
+    // their real team status.
+    const db = read("js/db.js");
+    const start = db.indexOf("async fetchAdminUserProfiles()");
+    const end = db.indexOf("async fetchManagedScopeProfiles()");
+    const method = db.slice(start, end);
+
+    expect(method).toContain('.from("reading_team_members")');
+    expect(method).toContain('.select("user_id, team_id, member_role")');
+    expect(method).toContain('.from("reading_teams")');
+    expect(method).toContain("is_joined_team: teamMembershipByUser.has(String(profile.id))");
+    expect(method).toContain("team_name:");
+    expect(method).toContain("member_role:");
+    // Still read-only, same guarantee as the rest of this method.
+    expect(method).not.toContain(".update(");
+    expect(method).not.toContain(".delete(");
+    expect(method).not.toContain(".upsert(");
+  });
+
   it("escapes profile data, and gates its one write action to admin-only name review", () => {
     const admin = read("js/modules/admin.js");
     const start = admin.indexOf("function renderAdminUserDirectoryList");
