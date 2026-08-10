@@ -1119,7 +1119,7 @@ function getManagementPlans() {
   });
 }
 
-async function selectManagementPlan(planKey) {
+async function selectManagementPlan(planKey, forceRefresh = false) {
   try {
     const plans = getManagementPlans();
     const plan = plans.find(item => [item.globalPlanId, item.id, item.presetKey, item.name].filter(Boolean).map(String).includes(String(planKey))) || plans[0] || null;
@@ -1133,8 +1133,8 @@ async function selectManagementPlan(planKey) {
     }
     try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
     try { await renderAdminTeamPlacementLookup(plan); } catch (e) { console.warn("[Admin] renderAdminTeamPlacementLookup error caught:", e); }
-    try { await renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
-    try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
+    try { await renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
+    try { await renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
   } catch (err) {
     console.error("[AdminManagement] Error in selectManagementPlan:", err);
   }
@@ -1193,9 +1193,18 @@ export async function renderAdminPlanManagement() {
       refreshBtn.addEventListener('click', async () => {
         refreshBtn.disabled = true;
         try {
+          // Clicking "更新" must force a genuine reload, not just re-run the
+          // same render against whatever's cached. window._cachedAllUsersList
+          // is keyed by plan only (not by the org filter), so without
+          // clearing it here selectManagementPlan() silently reuses the
+          // stale list — the button only *looked* like it worked before if
+          // the org filter also happened to change and show a different
+          // slice of that same stale data.
+          window._cachedAllUsersList = null;
+          window._cachedAllUsersListKey = null;
           const currentSelect = document.getElementById('admin-management-plan-select');
           if (currentSelect && currentSelect.value) {
-            await selectManagementPlan(currentSelect.value);
+            await selectManagementPlan(currentSelect.value, true);
           }
           if (typeof renderAdminOrgPermissionsOverview === 'function') void renderAdminOrgPermissionsOverview();
           if (typeof showToast === 'function') showToast('資料已更新');

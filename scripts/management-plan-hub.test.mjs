@@ -62,8 +62,8 @@ describe("management plan hub", () => {
   });
 
   it("renders both team divisions and reuses the existing participant and statistics views", () => {
-    expect(admin).toContain("renderAdminTeamRegistrationStatus(false, 3, 'admin-team-status-content')");
-    expect(admin).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
+    expect(admin).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
+    expect(admin).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6')");
     expect(admin).toContain("participantSlot.appendChild(memberList)");
     expect(admin).toContain("statisticsSlot.appendChild(statsSection)");
     expect(app).toContain("renderAdminPlanManagement");

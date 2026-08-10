@@ -16,13 +16,29 @@ describe("計劃管理: explicit refresh button", () => {
     expect(filterArea).toContain(">更新<");
   });
 
-  it("wires the button to reload the currently selected plan's data", () => {
+  it("wires the button to force a genuine reload of the currently selected plan's data", () => {
     expect(admin).toContain("getElementById('admin-plan-refresh-btn')");
     const btnStart = admin.indexOf("const refreshBtn = document.getElementById('admin-plan-refresh-btn');");
     const btnEnd = admin.indexOf("if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));", btnStart);
     const btnBlock = admin.slice(btnStart, btnEnd);
-    expect(btnBlock).toContain("await selectManagementPlan(currentSelect.value);");
+    // Regression for: clicking 更新 looked like it did nothing unless the org
+    // filter was also toggled. window._cachedAllUsersList is keyed by plan
+    // only, so selectManagementPlan() silently reused the stale list — the
+    // button must clear that cache and force a real refetch, not just re-run
+    // the same render against whatever's cached.
+    expect(btnBlock).toContain("window._cachedAllUsersList = null;");
+    expect(btnBlock).toContain("window._cachedAllUsersListKey = null;");
+    expect(btnBlock).toContain("await selectManagementPlan(currentSelect.value, true);");
     expect(btnBlock).toContain("renderAdminOrgPermissionsOverview()");
+  });
+
+  it("selectManagementPlan threads forceRefresh into the team registration status reload", () => {
+    const start = admin.indexOf("async function selectManagementPlan(planKey, forceRefresh = false) {");
+    expect(start).toBeGreaterThan(-1);
+    const end = admin.indexOf("\n}", start) + 2;
+    const fnBlock = admin.slice(start, end);
+    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
+    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 6, 'admin-team-status-content-6')");
   });
 });
 
