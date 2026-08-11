@@ -21,8 +21,8 @@ describe("admin org structure permissions overview (系統管理 → 組織架�
   it("builds a reverse index of leaders per region/zone/group from the same profiles used by the person-centric editor", () => {
     expect(admin).toContain("export async function renderAdminOrgPermissionsOverview()");
     expect(admin).toContain("await db.fetchManagedScopeProfiles()");
-    // admin/senior_pastor are whole-church, never bucketed under a single region/zone/group.
-    expect(admin).toMatch(/role === "admin" \|\| role === "senior_pastor"[\s\S]{0,80}wholeChurchLeaders\.push/);
+    // admin/senior_pastor/pastor are whole-church, never bucketed under a single region/zone/group.
+    expect(admin).toMatch(/wholeChurchLeadersByRole\.has\(role\)[\s\S]{0,80}wholeChurchLeadersByRole\.get\(role\)\.push/);
     expect(admin).toContain('role === "great_zone_leader" ? regionLeaders');
     expect(admin).toContain('role === "zone_leader" ? zoneLeaders');
     expect(admin).toContain('role === "group_leader" ? groupLeaders');
@@ -31,6 +31,14 @@ describe("admin org structure permissions overview (系統管理 → 組織架�
     // possibly-divergent copy of that logic.
     expect(admin).toContain("getManagedScopeConfig(profile)");
     expect(admin).toContain("getProfileDefaultManagedScopes(profile, config)");
+  });
+
+  it("shows 系統管理員/教會牧者/牧者 as three separate whole-church rows, not one combined bucket", () => {
+    expect(admin).toContain('const WHOLE_CHURCH_ROLE_ORDER = ["admin", "senior_pastor", "pastor"];');
+    expect(admin).toContain('const WHOLE_CHURCH_ROLE_LABELS = { admin: "系統管理員", senior_pastor: "教會牧者", pastor: "牧者" };');
+    expect(admin).toContain("WHOLE_CHURCH_ROLE_ORDER.map(role =>");
+    expect(admin).toContain("（全教會範圍）");
+    expect(admin).not.toContain("系統管理員／教會牧者（全教會範圍）");
   });
 
   it("renders the org tree from state.orgStructure (regions -> zones -> groups), not a separate query", () => {

@@ -660,15 +660,17 @@ export async function renderAdminOrgPermissionsOverview() {
   }
   orgPermissionsProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
 
-  const wholeChurchLeaders = [];
+  const WHOLE_CHURCH_ROLE_ORDER = ["admin", "senior_pastor", "pastor"];
+  const WHOLE_CHURCH_ROLE_LABELS = { admin: "系統管理員", senior_pastor: "教會牧者", pastor: "牧者" };
+  const wholeChurchLeadersByRole = new Map(WHOLE_CHURCH_ROLE_ORDER.map(role => [role, []]));
   const regionLeaders = new Map();
   const zoneLeaders = new Map();
   const groupLeaders = new Map();
 
   orgPermissionsProfiles.forEach(profile => {
     const role = getUserRoleCode(profile);
-    if (role === "admin" || role === "senior_pastor" || role === "pastor") {
-      wholeChurchLeaders.push(profile);
+    if (wholeChurchLeadersByRole.has(role)) {
+      wholeChurchLeadersByRole.get(role).push(profile);
       return;
     }
     const config = getManagedScopeConfig(profile);
@@ -693,11 +695,11 @@ export async function renderAdminOrgPermissionsOverview() {
     + Object.values(groupsMap).flat().filter(g => !groupLeaders.has(g)).length;
   count.textContent = unassignedCount > 0 ? `${unassignedCount} 個單位尚未指派` : "全部已指派";
 
-  const wholeChurchHtml = `
+  const wholeChurchHtml = WHOLE_CHURCH_ROLE_ORDER.map(role => `
     <div class="admin-org-permissions__whole-church">
-      <span>系統管理員／教會牧者（全教會範圍）</span>
-      <div class="admin-org-permissions__leaders">${renderLeaderChips(wholeChurchLeaders)}</div>
-    </div>`;
+      <span>${escapeHTML(WHOLE_CHURCH_ROLE_LABELS[role])}（全教會範圍）</span>
+      <div class="admin-org-permissions__leaders">${renderLeaderChips(wholeChurchLeadersByRole.get(role))}</div>
+    </div>`).join("");
 
   const regionsHtml = regions.length === 0
     ? '<div class="admin-user-directory__empty">目前沒有任何大區資料。</div>'
