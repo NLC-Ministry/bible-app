@@ -2253,7 +2253,7 @@ function isCampaignStageLocked(plan) {
 function canManageHiddenPlans() {
   const role = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
 
-  return ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'].includes(role);
+  return ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'].includes(role);
 }
 
 function getVisiblePlans(plans) {
@@ -2266,7 +2266,7 @@ function getVisiblePlans(plans) {
 // Defined here (in utils.js, which loads early) so db.init() and other
 // early callers don't have to wait for profile.js to lazy-load.
 function updateAdminNavVisibility() {
-  const managementRoles = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+  const managementRoles = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
   const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
 
   const canManagePlans = managementRoles.includes(currentRole);

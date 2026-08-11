@@ -429,7 +429,7 @@ window.addEventListener("planDataChanged", (e) => {
 });
 
 function canUseAdvancedGroupStats() {
-  const allowedRoles = ["admin", "senior_pastor", "great_zone_leader", "zone_leader", "group_leader"];
+  const allowedRoles = ["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"];
   const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
 
   return allowedRoles.includes(currentRole);
@@ -6370,7 +6370,7 @@ window.displayParticipantsList = function (limit = 100) {
 
   // Determine if current user is a leader who can send care reminders
   const _careRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
-  const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "senior_pastor", "admin"].includes(_careRole);
+  const _canSendCare = ["group_leader", "zone_leader", "great_zone_leader", "senior_pastor", "pastor", "admin"].includes(_careRole);
 
   // 對齊 header 欄位動態調整（含名次欄）
   const headerEl = document.getElementById("members-ranking-header") || listContainer.previousElementSibling;

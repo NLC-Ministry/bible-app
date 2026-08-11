@@ -251,7 +251,7 @@ function renderAdminUserDirectoryList(query = "") {
       : (syncStatus === "degraded" || syncStatus === "failed" ? "同步異常" : "尚未同步");
     const config = getManagedScopeConfig(profile);
     const defaultScopes = getProfileDefaultManagedScopes(profile, config);
-    const managedScopeText = config.role === "admin" || config.role === "senior_pastor"
+    const managedScopeText = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
       ? "全教會"
       : (defaultScopes.join("、") || "僅本人");
     const statusClass = profile.is_active === false ? "disabled" : "active";
@@ -448,7 +448,7 @@ function renderManagedScopeProfile(profile) {
   const placement = [profile.great_region, profile.pastoral_zone, profile.small_group].filter(Boolean).join(" / ") || "尚未設定";
   const email = String(profile.email || "").trim() || "未提供電子信箱";
   const defaultScopes = getProfileDefaultManagedScopes(profile, config);
-  const effectiveScope = config.role === "admin" || config.role === "senior_pastor"
+  const effectiveScope = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
     ? "全教會"
     : (defaultScopes.join("、") || "僅本人");
   summary.innerHTML = `
@@ -464,7 +464,7 @@ function renderManagedScopeProfile(profile) {
   ].filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-Hant"));
 
   if (!config.field) {
-    const message = config.role === "admin" || config.role === "senior_pastor"
+    const message = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
       ? "此角色固定擁有全教會範圍，不需要另外設定 managed_*。"
       : "此角色只有本人範圍，不使用 managed_*。";
     optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">${message}</div>`;
@@ -617,7 +617,7 @@ export async function renderAdminOrgPermissionsOverview() {
 
   orgPermissionsProfiles.forEach(profile => {
     const role = getUserRoleCode(profile);
-    if (role === "admin" || role === "senior_pastor") {
+    if (role === "admin" || role === "senior_pastor" || role === "pastor") {
       wholeChurchLeaders.push(profile);
       return;
     }
@@ -941,7 +941,7 @@ export function init() {
   }
 }
 
-const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {

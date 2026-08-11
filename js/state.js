@@ -137,7 +137,8 @@ function getUserRoleCode(user = state.currentUser) {
     "10000000-0000-4000-8000-000000000003": "zone_leader",
     "10000000-0000-4000-8000-000000000004": "great_zone_leader",
     "10000000-0000-4000-8000-000000000005": "senior_pastor",
-    "10000000-0000-4000-8000-000000000006": "admin"
+    "10000000-0000-4000-8000-000000000006": "admin",
+    "10000000-0000-4000-8000-000000000007": "pastor"
   };
   const roleId = String(user.role_id || "").toLowerCase();
   return user.role_definition?.code
@@ -150,7 +151,7 @@ function getUserRoleCode(user = state.currentUser) {
 
 function hasWholeChurchPlanScope(userOrRole = state.currentUser) {
   const role = getUserRoleCode(userOrRole);
-  return role === "admin" || role === "senior_pastor";
+  return role === "admin" || role === "senior_pastor" || role === "pastor";
 }
 
 function getRoleDefinition(roleOrId) {

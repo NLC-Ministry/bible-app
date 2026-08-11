@@ -1888,6 +1888,7 @@ const db = {
       { id: "10000000-0000-4000-8000-000000000003", code: "zone_leader", label: "牧區長", sort_order: 40, is_assignable: false },
       { id: "10000000-0000-4000-8000-000000000004", code: "great_zone_leader", label: "大區長", sort_order: 30, is_assignable: false },
       { id: "10000000-0000-4000-8000-000000000005", code: "senior_pastor", label: "教會牧者", sort_order: 20, is_assignable: false },
+      { id: "10000000-0000-4000-8000-000000000007", code: "pastor", label: "牧者", sort_order: 25, is_assignable: false },
       { id: "10000000-0000-4000-8000-000000000006", code: "admin", label: "系統管理員", sort_order: 10, is_assignable: false }
     ];
     if (!state.isSupabaseMode || !state.supabase) {

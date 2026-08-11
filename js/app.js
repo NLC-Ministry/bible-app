@@ -171,6 +171,7 @@ async function renderNotificationsList() {
     zone_leader: "區長",
     great_zone_leader: "大區長",
     senior_pastor: "教會牧者",
+    pastor: "牧者",
     admin: "系統管理員"
   };
 
@@ -634,7 +635,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
         await loadIssueReportUi({ includeAdmin: true });
       }
 
-      const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+      const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
       const userRole = getUserRoleCode(state.currentUser) || 'member';
       if (MANAGEMENT_ROLES.includes(userRole)) {
         if (mod && typeof mod.renderAdminPlanManagement === 'function') {
