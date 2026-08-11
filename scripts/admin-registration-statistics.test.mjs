@@ -77,6 +77,33 @@ describe("admin registration statistics", () => {
     expect(admin).toContain("sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label)");
   });
 
+  it("pins the exact pastoral-zone roster order the user provided 2026-08-11 (松山1 before 松山2, plus 花蓮/桃園/桃1/未設定牧區 at the tail)", () => {
+    // Locked to the literal array text (not just prefix substrings elsewhere
+    // in this file) so any future edit that reorders/drops an entry here
+    // fails loudly instead of silently drifting from the roster again.
+    const start = admin.indexOf("const CHURCH_PASTORAL_ZONE_ORDER = [");
+    const end = admin.indexOf("];", start);
+    const zoneOrderSource = admin.slice(start, end);
+    const zones = [...zoneOrderSource.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    expect(zones).toEqual([
+      "大安1", "大安2", "大安3", "大安4", "大安6", "大安7", "大安8", "大安9", "大安10", "大安11", "大安12",
+      "中正1", "中正2", "中正3", "中正4", "中正5",
+      "中山1", "中山2", "中山3", "中山5",
+      "信義2", "信義3",
+      "士林",
+      "松山1", "松山2",
+      "南港", "內湖", "文山",
+      "新烏1", "新烏2", "新烏3", "新烏4",
+      "中永和", "三重",
+      "青少年教會",
+      "慶典1", "慶典2",
+      "創藝",
+      "新莊1", "新莊2", "新莊3",
+      "花蓮", "桃園", "桃1",
+      "未設定牧區"
+    ]);
+  });
+
   it("applies the same fixed 大區/牧區 order to every other CSV export (users, org structure, team registration)", () => {
     expect(admin).toContain("function sortProfilesByChurchOrgOrder(profiles)");
     expect(admin).toContain("const rows = sortProfilesByChurchOrgOrder(profiles).map(p => [");
@@ -168,5 +195,19 @@ describe("報名與註冊統計 → Google 試算表同步", () => {
     expect(readme).toContain("sync_registration_stats_sheet");
     expect(readme).toContain("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
     expect(readme).toContain("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
+  });
+
+  it("writes the plan name into the merged H7:I7 cell under the 讀經計畫 label at H6", () => {
+    const appsScript = readFileSync("supabase/functions/nlc-data/registration-stats-apps-script.gs.txt", "utf8");
+    // Merged cells take their value on the top-left anchor cell only — never
+    // a multi-column setValues() across the merge.
+    expect(appsScript).toContain('sheet.getRange(6, 8).setValue("讀經計畫");');
+    expect(appsScript).toContain("sheet.getRange(7, 8).setValue(payload.planName || \"\");");
+
+    // The client and server must both actually carry planName through to the
+    // Apps Script payload, not just the Apps Script side expecting it.
+    expect(admin).toContain("planName: String(context && context.planName || \"\")");
+    expect(db).toContain("plan_name: String(planName || \"\")");
+    expect(edge).toContain('planName: String(p.plan_name ?? "").slice(0, 60)');
   });
 });
