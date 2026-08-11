@@ -46,6 +46,16 @@
   --color-brand-border: color-mix(in srgb, #04A9D2 24%, transparent);
   --color-brand-ring: color-mix(in srgb, #04A9D2 15%, transparent);
 
+  /* Deliberately declared ONLY here, never overridden per theme: --color-brand
+     and --color-danger are themselves the same hex in light/dark/warm, so the
+     text that sits on their solid fill (primary/destructive Button/Badge)
+     must also stay fixed — var(--text-primary) flips to near-white in dark
+     theme and mid-brown in warm theme, which is correct for text on the
+     theme's OWN background but breaks contrast against a fill that doesn't
+     move with it. Measured 6.95:1 on --color-brand, 5.31:1 on --color-danger,
+     in every theme. */
+  --color-solid-fill-foreground: #0F0F0F;
+
   --color-white: #FAFAFA;
   --color-black: #0F0F0F;
   --color-success: #66F78F;
@@ -75,7 +85,9 @@
   --shadow-hover: var(--shadow-sm);
   --text-primary: #0F0F0F;
   --text-secondary: rgba(15, 15, 15, 0.65);
-  --text-muted: rgba(15, 15, 15, 0.45);
+  /* Was 0.45 — measured ~3.06:1 on --bg-app, fails AA body-text (4.5:1).
+     0.6 measures ~4.96-5.02:1. */
+  --text-muted: rgba(15, 15, 15, 0.6);
 
   /* Legacy aliases */
   --primary-color: var(--color-brand);
@@ -179,7 +191,8 @@ body.dark-theme {
   --shadow-hover: var(--shadow-sm);
   --text-primary: #FAFAFA;
   --text-secondary: rgba(250, 250, 250, 0.7);
-  --text-muted: rgba(250, 250, 250, 0.45);
+  /* Was 0.45 — measured ~4.33-4.39:1, just under AA. 0.6 measures ~6.7-7:1. */
+  --text-muted: rgba(250, 250, 250, 0.6);
 
   --color-brand: #04A9D2;
   --color-brand-hover: #26B8DC;
@@ -6643,7 +6656,9 @@ body.warm-theme {
   --shadow-hover: var(--shadow-sm);
   --text-primary: #5C4731;
   --text-secondary: #70583F;
-  --text-muted: #9C8A77;
+  /* Was #9C8A77 — measured 2.82:1 on --bg-app, failed even the 3:1 floor.
+     #6B5B48 measures 5.55:1. */
+  --text-muted: #6B5B48;
 
   --color-brand: #04A9D2;
   --color-brand-hover: #0396BA;
@@ -10520,7 +10535,15 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 
 .congrats-upgrade-btn {
   width: 100%;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  /* The second gradient stop used to reference a hover token that was never
+     declared anywhere in this file. An unresolvable var() with no fallback
+     makes the WHOLE `background` shorthand invalid, so the browser dropped
+     it entirely — the button rendered fully transparent. That's invisible
+     in light theme (white #fff text sitting on the white
+     .congrats-modal-box background behind it) but happened to still read
+     fine in dark theme (dark modal background behind it), which is why
+     this only got reported for light mode. */
+  background: linear-gradient(135deg, var(--primary-color), var(--color-brand-hover));
   border: none;
   border-radius: 12px;
   padding: 0.85rem;
@@ -10591,7 +10614,10 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   margin-top: 0.5rem;
   padding: 0.5rem 1.5rem;
   font-size: 0.88rem;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  /* Same fix as .congrats-upgrade-btn above — the removed second gradient
+     stop was never a defined token, which invalidated this whole
+     `background` shorthand and made the button transparent. */
+  background: linear-gradient(135deg, var(--primary-color), var(--color-brand-hover));
   border: none;
   border-radius: 8px;
   color: #fff;

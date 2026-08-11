@@ -160,7 +160,52 @@ function findLegacyNavBackSizeSelectors(css) {
   return /nav-back-chevron\[data-icon-size="[^"]*px/i.test(css) ? ["index.css"] : [];
 }
 
+/**
+ * Every data-icon="x" / renderIcon("x", ...) key actually used in the app
+ * must exist in js/design/icon-manifest.json — otherwise hydrateIcons()
+ * silently renders an empty <span class="nlc-icon--missing"> instead of
+ * the intended glyph (see js/design/icons.js renderIcon()). This is exactly
+ * how the "匯出" button's download icon and the reader's multi-select copy
+ * icon went missing: both were added to markup without a manifest entry,
+ * and nothing failed loudly — the icon was just silently absent, in every
+ * theme, forever.
+ */
+function findUndeclaredIconKeys() {
+  const manifest = JSON.parse(readFileSync(join(root, "js/design/icon-manifest.json"), "utf8"));
+  const manifestKeys = new Set(Object.keys(manifest));
+  const used = new Map();
+  const dataIconRe = /data-icon(?:Key)?\s*[:=]\s*["'`]([a-zA-Z0-9_]+)["'`]/g;
+  const renderIconRe = /renderIcon\(\s*["'`]([a-zA-Z0-9_]+)["'`]/g;
+
+  for (const abs of walk(root)) {
+    const rel = relative(root, abs).replace(/\\/g, "/");
+    if (EXCLUDE.has(rel)) continue;
+    if (!/\.(html|js|mjs)$/.test(abs)) continue;
+    const content = readFileSync(abs, "utf8");
+    for (const re of [dataIconRe, renderIconRe]) {
+      let match;
+      re.lastIndex = 0;
+      while ((match = re.exec(content))) {
+        const key = match[1];
+        if (!used.has(key)) used.set(key, new Set());
+        used.get(key).add(rel);
+      }
+    }
+  }
+
+  const missing = [];
+  for (const [key, files] of used) {
+    if (!manifestKeys.has(key)) missing.push(`"${key}" used in ${[...files].join(", ")}`);
+  }
+  return missing.sort();
+}
+
 describe("icon audit", () => {
+  it("every data-icon / renderIcon key used in the app is declared in icon-manifest.json", () => {
+    const hits = findUndeclaredIconKeys();
+    expect(hits, hits.join("\n")).toEqual([]);
+  });
+
   it("has no Bootstrap Icons class usage in source", () => {
     const hits = findMatches(BI_CLASS);
     expect(hits, hits.join(", ")).toEqual([]);

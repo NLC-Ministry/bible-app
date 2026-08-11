@@ -1,4 +1,11 @@
 {
+  "copy": "Copy",
+  "download": "Download",
+  "loader": "Loader2",
+  "send": "Send",
+  "trendingUp": "TrendingUp",
+  "users": "Users",
+  "volume2": "Volume2",
   "fire": "Flame",
   "fireFill": "Flame",
   "bookOpen": "BookOpen",

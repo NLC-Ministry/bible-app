@@ -69,6 +69,12 @@ const PAIRS = [
   ["card", "card-foreground", "bg-card / text-card-foreground (Card body text)"],
   ["secondary", "secondary-foreground", "bg-secondary / text-secondary-foreground (Button/Badge secondary)"],
   ["accent", "accent-foreground", "bg-accent / text-accent-foreground (hover surfaces)"],
+  ["muted", "muted-foreground", "bg-muted / text-muted-foreground (CardDescription, captions)"],
+  // Fixed: primary-foreground/destructive-foreground now both resolve to
+  // var(--text-primary) instead of white/--color-danger-foreground — see
+  // the index.html tailwind.config comments at each mapping for the numbers.
+  ["primary", "primary-foreground", "bg-primary / text-primary-foreground (default Button/Badge)"],
+  ["destructive", "destructive-foreground", "bg-destructive / text-destructive-foreground (destructive Button/Badge)"],
 ];
 
 function resolvePair(theme, surfaceKey, textKey) {
@@ -94,23 +100,6 @@ describe("color contrast audit — Tailwind/shadcn surface+foreground pairs (WCA
     });
   }
 
-  // ── Known, tracked failures — pending a brand-color decision, not yet fixed ──
-  // bg-primary/text-primary-foreground and bg-destructive/text-destructive-foreground
-  // both fail AA today. Root cause: index.html's tailwind.config points
-  // primary-foreground/destructive-foreground at colors that were designed
-  // for a "subtle tint background + saturated foreground text" pairing
-  // (see the *-subtle / *-foreground tokens below), not for sitting on top
-  // of the solid brand/danger fill. Fixing it means either darkening the
-  // fill or switching the foreground to a dark color — a visible,
-  // site-wide brand decision, not something to pick unilaterally here.
-  // These are `it.todo` (not skipped, not silently passing) so the gap
-  // stays visible in every test run until it's actually resolved.
-  it.todo("bg-primary / text-primary-foreground reaches 4.5:1 — currently ~2.76:1 in light/dark/warm theme, blocked on brand-color decision");
-  it.todo("bg-destructive / text-destructive-foreground reaches 4.5:1 — currently ~1.47:1 (light/warm) / ~1.45:1 (dark), blocked on brand-color decision");
-  // Same root token (--text-muted) as the core-app-tokens finding below —
-  // muted-foreground fails 4.5:1 everywhere it's actually measured
-  // (light 3.07:1, dark 4.33:1, warm 3.08:1).
-  it.todo("bg-muted / text-muted-foreground reaches 4.5:1 — currently 3.07:1 (light) / 4.33:1 (dark) / 3.08:1 (warm)");
 });
 
 describe("color contrast audit — the *-subtle + *-foreground pattern used by AccessibleCard's status badges", () => {
@@ -143,35 +132,28 @@ describe("color contrast audit — the *-subtle + *-foreground pattern used by A
 });
 
 describe("color contrast audit — core app text tokens (index.css, outside the Tailwind bridge)", () => {
-  // --text-secondary is used directly as `color: var(--text-secondary)` all
-  // over index.html/index.css (`.type-lead`, etc.), independent of the
-  // shadcn components. Same math, same backdrops (--bg-app / --bg-card),
-  // checked directly against the token rather than through the Tailwind
-  // names. (--text-muted is deliberately NOT asserted here — see the
-  // tracked finding below; it doesn't even clear the relaxed 3:1 floor in
-  // every theme, so there is no true threshold to enforce yet.)
+  // --text-secondary and --text-muted are used directly as
+  // `color: var(...)` all over index.html/index.css (`.type-lead`,
+  // `.type-caption`, `.type-body-muted`, etc.), independent of the shadcn
+  // components. Same math, same backdrops (--bg-app / --bg-card), checked
+  // directly against the tokens rather than through the Tailwind names.
+  const TEXT_TOKENS = ["--text-secondary", "--text-muted"];
   const SURFACES = ["--bg-app", "--bg-card"];
 
   for (const theme of Object.keys(THEMES)) {
     describe(`${theme} theme`, () => {
       for (const surfaceVar of SURFACES) {
-        it(`var(--text-secondary) on var(${surfaceVar}) >= 4.5:1`, () => {
-          const vars = THEMES[theme];
-          const pageBg = resolveColor(vars["--bg-app"], vars, { r: 255, g: 255, b: 255 });
-          const surfaceRgb = resolveColor(`var(${surfaceVar})`, vars, pageBg);
-          const textRgb = resolveColor("var(--text-secondary)", vars, surfaceRgb);
-          const ratio = contrastRatio(surfaceRgb, textRgb);
-          expect(ratio, `var(--text-secondary) on var(${surfaceVar}) in ${theme} theme measured ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
-        });
+        for (const textVar of TEXT_TOKENS) {
+          it(`var(${textVar}) on var(${surfaceVar}) >= 4.5:1`, () => {
+            const vars = THEMES[theme];
+            const pageBg = resolveColor(vars["--bg-app"], vars, { r: 255, g: 255, b: 255 });
+            const surfaceRgb = resolveColor(`var(${surfaceVar})`, vars, pageBg);
+            const textRgb = resolveColor(`var(${textVar})`, vars, surfaceRgb);
+            const ratio = contrastRatio(surfaceRgb, textRgb);
+            expect(ratio, `var(${textVar}) on var(${surfaceVar}) in ${theme} theme measured ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+          });
+        }
       }
     });
   }
-
-  // Tracked, not yet fixed: --text-muted is used as real body/caption text
-  // (.type-caption, .type-body-muted in index.css) where WCAG requires
-  // 4.5:1. Measured directly: light 3.06:1 (--bg-app) / 3.19:1 (--bg-card),
-  // dark ~4.3:1, warm 2.82:1 (--bg-app) — warm doesn't even clear the
-  // relaxed 3:1 large-text/UI floor. Same underlying token as the
-  // bg-muted/text-muted-foreground finding above.
-  it.todo("--text-muted reaches 4.5:1 for body-text use (.type-caption/.type-body-muted) in every theme");
 });

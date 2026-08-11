@@ -8,7 +8,7 @@ import './copy/zh-Hant.js?v=20260809_leadership-assignment-org-fallback';
 import './data/church_campaign.js?v=20260809_leadership-assignment-org-fallback';
 import './design/design-tokens.js';
 import './design/design-system-helpers.js?v=20260809_leadership-assignment-org-fallback';
-import './design/icon-registry.js?v=20260809_leadership-assignment-org-fallback';
+import './design/icon-registry.js?v=20260811_missing-icons-fix';
 import './design/icons.js';
 import './state.js?v=20260809_leadership-assignment-org-fallback';
 import './auth.js?v=20260809_leadership-assignment-org-fallback';

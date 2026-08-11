@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260810_reader-navbar-one-way-hide" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260811_contrast-and-icon-fixes" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260809_admin-org-permissions-overview" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -88,7 +88,11 @@
         extend: {
           colors: {
             primary: "var(--color-brand)",
-            "primary-foreground": "#FFFFFF",
+            /* Was #FFFFFF — measured 2.76:1 against --color-brand, fails AA.
+               --color-solid-fill-foreground is fixed (not theme-flipping,
+               see index.css) because --color-brand itself doesn't change
+               across light/dark/warm — measures 6.95:1 in every theme. */
+            "primary-foreground": "var(--color-solid-fill-foreground)",
             background: "var(--bg-app)",
             foreground: "var(--text-primary)",
             card: "var(--bg-card)",
@@ -101,7 +105,13 @@
             secondary: "color-mix(in srgb, var(--text-primary) 8%, var(--bg-card))",
             "secondary-foreground": "var(--text-primary)",
             destructive: "var(--color-danger)",
-            "destructive-foreground": "var(--color-danger-foreground)",
+            /* Was var(--color-danger-foreground) — that token is designed for
+               the *-subtle tint-background pattern (~4.45:1 there), not for
+               sitting on the solid --color-danger fill, where it only measured
+               1.47:1. --color-solid-fill-foreground is fixed (--color-danger
+               doesn't change across themes either) — measures 5.31:1 in
+               every theme. */
+            "destructive-foreground": "var(--color-solid-fill-foreground)",
             border: "var(--border-default)",
             input: "var(--border-card)",
             ring: "var(--color-brand-ring)",
@@ -2403,7 +2413,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260810_admin-directory-team-status-fix"></script>
+  <script type="module" src="js/app.js?v=20260811_contrast-and-icon-fixes"></script>
 </body>
 
 </html>

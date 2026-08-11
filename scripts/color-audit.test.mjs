@@ -110,6 +110,19 @@ describe("color audit", () => {
     expect(css).toMatch(/\.mobile-nav-btn \.nlc-icon[\s\S]*?--color-icon-muted/);
     expect(css).toMatch(/\.mobile-nav-btn\.active \.nlc-icon[\s\S]*?--color-icon-brand/);
   });
+
+  it("never references --primary-hover, a token that has never been declared anywhere", () => {
+    // Regression: .congrats-upgrade-btn's background was
+    // linear-gradient(135deg, var(--primary-color), var(--primary-hover)).
+    // --primary-hover was never defined in :root or any theme block — an
+    // unresolvable var() with no fallback invalidates the WHOLE `background`
+    // shorthand, so the button rendered fully transparent. That read as
+    // invisible white button text in light theme (the modal behind it is
+    // white) and happened to still look fine in dark theme (dark modal
+    // behind it), which is why it only got reported for light mode.
+    const css = readFileSync(join(root, "index.css"), "utf8");
+    expect(css).not.toContain("--primary-hover");
+  });
 });
 
 // ── Theme-contrast regressions ──────────────────────────────────────────
