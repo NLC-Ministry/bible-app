@@ -51,6 +51,7 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "remove_reading_team_member",
   "disband_reading_team",
   "rename_reading_team",
+  "transfer_reading_team_captain",
   "send_reading_team_reminder",
   "get_unjoined_plan_members",
   "get_joined_plan_members",

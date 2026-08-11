@@ -140,6 +140,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     const { read, progress } = getMemberProgress(member, totalChapters);
     const canRemind = Boolean(member.userId && !member.isMe);
     const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
+    const canTransferCaptain = Boolean(options.canTransferCaptain && member.userId && !member.isMe && member.role !== "captain");
 
     let isBehind = false;
     if (plan && Number(member.currentRound || 1) === 1) {
@@ -150,6 +151,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     const memberLabel = String(member.name || "").trim() || "—";
     const memberActions = [
       canRemind ? `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(memberLabel)}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>` : "",
+      canTransferCaptain ? `<button type="button" class="reading-team-transfer-captain-btn icon-button" data-team-transfer-captain-user="${escapeHTML(member.userId)}" aria-label="將隊長轉移給 ${escapeHTML(memberLabel)}" title="設為隊長"><span class="nlc-icon nlc-icon--sm" data-icon="crown" aria-hidden="true"></span></button>` : "",
       canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(memberLabel)} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
     ].join("");
     return `<article class="reading-team-member${member.isMe ? " reading-team-member--me" : ""}${isBehind ? " reading-team-member--behind" : ""}">
@@ -221,6 +223,45 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         }
         showToast(`已將 ${memberName} 移出團隊`);
         if (typeof onRemoved === "function") await onRemoved();
+      });
+    });
+  }
+
+  function bindTeamCaptainTransferButtons(container, team, members, onTransferred) {
+    if (!container || !team) return;
+    container.querySelectorAll("[data-team-transfer-captain-user]").forEach(button => {
+      button.addEventListener("click", async event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const member = members.find(item => String(item.userId) === String(button.dataset.teamTransferCaptainUser));
+        if (!member) return;
+        const memberName = String(member.name || "").trim() || "這位隊員";
+        const confirmed = await window.showConfirmDialog({
+          title: "轉移隊長？",
+          message: `確定要將隊長轉移給「${memberName}」嗎？轉移後你會成為一般隊員，只有新隊長能管理名單與再次轉移隊長。`,
+          confirmText: "確認轉移",
+          cancelText: "取消"
+        });
+        if (!confirmed) return;
+
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        let result;
+        try {
+          result = await db.transferReadingTeamCaptain(team.id, member.userId);
+        } catch (error) {
+          result = { success: false, error, message: error && error.message };
+        } finally {
+          button.disabled = false;
+          button.removeAttribute("aria-busy");
+        }
+
+        if (!result || !result.success) {
+          showToast("轉移隊長失敗：" + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"), "error");
+          return;
+        }
+        showToast(`已將隊長轉移給 ${memberName}`, "success");
+        if (typeof onTransferred === "function") await onTransferred();
       });
     });
   }
@@ -314,8 +355,10 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         </div>
         ${rows.map(({ member, metrics }) => {
           const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
+          const canTransferCaptain = Boolean(options.canTransferCaptain && member.userId && !member.isMe && member.role !== "captain");
           const actions = [
             member.isMe ? "" : `<button type="button" class="reading-team-remind-btn icon-button" data-team-remind-user="${escapeHTML(member.userId)}" aria-label="戳一下 ${escapeHTML(member.name || "隊員")}提醒讀經" title="戳一下提醒讀經"><span class="nlc-icon nlc-icon--sm" data-icon="poke" aria-hidden="true"></span><span class="reading-team-remind-btn__label">戳一下</span></button>`,
+            canTransferCaptain ? `<button type="button" class="reading-team-transfer-captain-btn icon-button" data-team-transfer-captain-user="${escapeHTML(member.userId)}" aria-label="將隊長轉移給 ${escapeHTML(member.name || "隊員")}" title="設為隊長"><span class="nlc-icon nlc-icon--sm" data-icon="crown" aria-hidden="true"></span></button>` : "",
             canRemove ? `<button type="button" class="reading-team-remove-btn icon-button" data-team-remove-user="${escapeHTML(member.userId)}" aria-label="將 ${escapeHTML(member.name || "隊員")} 移出團隊" title="移出團隊"><span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span></button>` : ""
           ].join("");
           return `<article class="reading-team-roster__row${member.isMe ? " reading-team-roster__row--me" : ""}${metrics.statusClass === "reading-team-status--behind" ? " reading-team-roster__row--behind" : ""}">
@@ -489,7 +532,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         ${!isReady ? `<div class="reading-team-invite"><div><span>隊伍邀請碼</span><strong>${escapeHTML(team.inviteCode)}</strong></div><button type="button" class="secondary-btn" data-copy-team-code><span class="nlc-icon nlc-icon--sm" data-icon="share" aria-hidden="true"></span>複製邀請碼</button></div>` : `<div class="reading-team-ready"><span class="nlc-icon nlc-icon--sm" data-icon="checkCircle" aria-hidden="true"></span><span>名單已滿員並鎖定，團隊統計會固定以 ${Number(team.capacity)} 人計算。</span></div>`}
         <section class="reading-team-members" aria-labelledby="reading-team-members-title">
           <div class="reading-team-section-title"><h4 id="reading-team-members-title">隊員狀況</h4><span>只有同隊成員可查看</span></div>
-          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCaptain })).join("")}</div>
+          <div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCaptain, canTransferCaptain: isCaptain })).join("")}</div>
         </section>
         <footer class="reading-team-dialog__footer">
           ${isCaptain
@@ -503,6 +546,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
       panel.querySelector("[data-team-close-footer]").onclick = close;
       bindTeamReminderButtons(panel, team, members, totalChapters);
       bindTeamMemberRemovalButtons(panel, team, members, refresh);
+      bindTeamCaptainTransferButtons(panel, team, members, refresh);
       panel.querySelectorAll("[data-team-view-division]").forEach(button => {
         button.onclick = () => {
           const selected = allContexts.find(item => Number(item.team.division) === Number(button.dataset.teamViewDivision));
@@ -701,7 +745,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
       </div>
       ${mode === "stats" ? renderTeamStatGrid(members, totalChapters, plan) : ""}
       <section class="reading-team-members" aria-label="團隊成員">
-        ${mode === "members" ? renderTeamMemberRoster(members, plan, { canRemoveMembers: isCurrentUserCaptain }) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCurrentUserCaptain })).join("")}</div>`}
+        ${mode === "members" ? renderTeamMemberRoster(members, plan, { canRemoveMembers: isCurrentUserCaptain, canTransferCaptain: isCurrentUserCaptain }) : `<div class="reading-team-member-list">${members.map(member => renderMember(member, totalChapters, plan, { canRemoveMembers: isCurrentUserCaptain, canTransferCaptain: isCurrentUserCaptain })).join("")}</div>`}
       </section>`;
 
     // Only the captain may manage the roster or dissolve the whole team.
@@ -783,6 +827,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
 
     bindTeamReminderButtons(container, team, members, totalChapters);
     bindTeamMemberRemovalButtons(container, team, members, () => refreshInlineReadingTeam(container, plan, team, mode));
+    bindTeamCaptainTransferButtons(container, team, members, () => refreshInlineReadingTeam(container, plan, team, mode));
     setTimeout(() => {
       const renderFn = typeof window.renderPilgrimageTrail === "function" ? window.renderPilgrimageTrail : (typeof renderPilgrimageTrail === "function" ? renderPilgrimageTrail : null);
       if (renderFn) {

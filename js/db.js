@@ -2570,6 +2570,10 @@ const db = {
       target_stage_not_open: "下一階段尚未開放報名。",
       previous_stage_not_found: "找不到上一階段的團隊資料。",
       team_captain_required: "只有隊長可以解散團隊。",
+      team_captain_transfer_required: "只有目前隊長可以轉移隊長。",
+      team_captain_transfer_same_member: "你目前已經是隊長。",
+      team_captain_transfer_member_required: "新隊長必須是這支團隊的現有隊員。",
+      team_captain_membership_missing: "目前的隊長資料不完整，請重新整理後再試。",
       team_member_remove_captain_required: "只有隊長可以將隊員移出團隊。",
       team_captain_remove_self_not_allowed: "隊長不能將自己移出團隊；若要退出，請解散團隊。",
       reading_team_not_found: "找不到這個團隊。",
@@ -3279,6 +3283,13 @@ const db = {
     return this._callReadingTeamRpc("rename_reading_team", {
       p_team_id: teamId,
       p_name: String(newName || "").trim()
+    });
+  },
+
+  async transferReadingTeamCaptain(teamId, newCaptainId) {
+    return this._callReadingTeamRpc("transfer_reading_team_captain", {
+      p_team_id: teamId,
+      p_new_captain_id: newCaptainId
     });
   },
 
