@@ -20,6 +20,19 @@ describe("rename reading team feature", () => {
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.rename_reading_team");
   });
 
+  it("uses UUID role authority instead of the profiles.role column removed by migration 0048", () => {
+    const fixPath = join(root, "supabase", "migrations", "0082_fix_rename_reading_team_role_uuid.sql");
+    expect(existsSync(fixPath)).toBe(true);
+
+    const sql = readFileSync(fixPath, "utf8");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.rename_reading_team(");
+    expect(sql).toContain("actor_profile public.profiles%ROWTYPE");
+    expect(sql).toContain("actor_role := public.role_code(actor_profile.role_id)");
+    expect(sql).not.toMatch(/SELECT\s+role\s+INTO\s+actor_role/i);
+    expect(sql).toContain("SET name = clean_name");
+    expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.rename_reading_team");
+  });
+
   it("whitelists rename_reading_team in the nlc-data Edge Function", () => {
     const edgeFunction = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
     expect(edgeFunction).toContain('"rename_reading_team"');
