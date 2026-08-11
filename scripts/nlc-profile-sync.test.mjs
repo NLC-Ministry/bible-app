@@ -135,7 +135,7 @@ describe("orgFromMemberContext", () => {
 describe("resolveSyncedRoleId", () => {
   const definitions = [
     { id: "admin-id", code: "admin", label: "系統管理員", hub_permission_keys: ["system_admin"], hub_permission_labels: ["管理員"] },
-    { id: "pastor-id", code: "senior_pastor", label: "教會牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
+    { id: "pastor-id", code: "pastor", label: "牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
   ];
 
   it("maps Hub keys and labels to immutable UUIDs", () => {

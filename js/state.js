@@ -118,8 +118,8 @@ function getUserRoleCode(user = state.currentUser) {
   if (leadershipLabel === "組織架構管理員" || leadershipLabel.includes("系統管理員") || leadershipLabel.includes("組織架構管理員")) {
     return "admin";
   }
-  if (leadershipLabel === "教會牧者" || leadershipLabel.includes("主任牧師") || leadershipLabel.includes("教會牧者")) {
-    return "senior_pastor";
+  if (leadershipLabel === "教會牧者" || leadershipLabel.includes("主任牧師") || leadershipLabel.includes("教會牧者") || leadershipLabel.includes("牧者")) {
+    return "pastor";
   }
   if (leadershipLabel === "大區長" || leadershipLabel.includes("大區同工")) {
     return "great_zone_leader";
@@ -136,9 +136,8 @@ function getUserRoleCode(user = state.currentUser) {
     "10000000-0000-4000-8000-000000000002": "group_leader",
     "10000000-0000-4000-8000-000000000003": "zone_leader",
     "10000000-0000-4000-8000-000000000004": "great_zone_leader",
-    "10000000-0000-4000-8000-000000000005": "senior_pastor",
-    "10000000-0000-4000-8000-000000000006": "admin",
-    "10000000-0000-4000-8000-000000000007": "pastor"
+    "10000000-0000-4000-8000-000000000005": "pastor",
+    "10000000-0000-4000-8000-000000000006": "admin"
   };
   const roleId = String(user.role_id || "").toLowerCase();
   return user.role_definition?.code
@@ -151,7 +150,7 @@ function getUserRoleCode(user = state.currentUser) {
 
 function hasWholeChurchPlanScope(userOrRole = state.currentUser) {
   const role = getUserRoleCode(userOrRole);
-  return role === "admin" || role === "senior_pastor" || role === "pastor";
+  return role === "admin" || role === "pastor";
 }
 
 function getRoleDefinition(roleOrId) {

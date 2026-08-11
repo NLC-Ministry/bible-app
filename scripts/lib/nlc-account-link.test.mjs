@@ -5,7 +5,7 @@ const ADMIN_ROLE_ID = "10000000-0000-4000-8000-000000000006";
 const PASTOR_ROLE_ID = "10000000-0000-4000-8000-000000000005";
 const definitions = [
   { id: ADMIN_ROLE_ID, code: "admin", label: "系統管理員", hub_permission_keys: ["system_admin"], hub_permission_labels: ["管理員"] },
-  { id: PASTOR_ROLE_ID, code: "senior_pastor", label: "教會牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
+  { id: PASTOR_ROLE_ID, code: "pastor", label: "牧者", hub_permission_keys: ["church_pastor"], hub_permission_labels: ["主任牧師"] }
 ];
 
 describe("resolveSyncedRoleId — Member Hub authority and account-link strength", () => {

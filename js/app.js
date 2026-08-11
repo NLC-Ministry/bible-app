@@ -170,7 +170,6 @@ async function renderNotificationsList() {
     group_leader: "小組長",
     zone_leader: "區長",
     great_zone_leader: "大區長",
-    senior_pastor: "教會牧者",
     pastor: "牧者",
     admin: "系統管理員"
   };
@@ -629,13 +628,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
       const isSystemAdmin = getUserRoleCode(state.currentUser) === 'admin';
 
-
-      if (isSystemAdmin) {
-        await ensureAdminFeatureModulesLoaded();
-        await loadIssueReportUi({ includeAdmin: true });
-      }
-
-      const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+      const MANAGEMENT_ROLES = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
       const userRole = getUserRoleCode(state.currentUser) || 'member';
       if (MANAGEMENT_ROLES.includes(userRole)) {
         if (mod && typeof mod.renderAdminPlanManagement === 'function') {
@@ -643,6 +636,18 @@ appRouter.switchTab = async function (tabId, options = {}) {
         } else if (typeof window.renderAdminPlanManagement === 'function') {
           await window.renderAdminPlanManagement();
         }
+      }
+      if (isSystemAdmin) {
+        // Campaign editing and the React issue-report manager are secondary
+        // system-management surfaces. Loading them (the report bundle is
+        // comparatively large) must not delay the visible plan-management
+        // panel; hydrate them in the background after its first render.
+        void Promise.all([
+          ensureAdminFeatureModulesLoaded(),
+          loadIssueReportUi({ includeAdmin: true })
+        ]).catch(err => {
+          console.warn('[Admin] Secondary management modules failed to load:', err);
+        });
       }
     }
 

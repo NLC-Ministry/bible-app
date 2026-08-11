@@ -49,7 +49,24 @@ describe("admin member team placement lookup tests", () => {
       admin.indexOf("async function refreshAdminTeamRegistrationFilters()"),
       admin.indexOf("export async function renderAdminTeamRegistrationStatus")
     );
-    expect(refreshFn).toContain("renderAdminTeamPlacementList();");
+    expect(refreshFn).toContain("loadActiveAdminPlanSubtab(false)");
+    const lazyLoader = admin.slice(
+      admin.indexOf("async function loadActiveAdminPlanSubtab(forceRefresh = false)"),
+      admin.indexOf("export async function renderAdminPlanManagement()")
+    );
+    expect(lazyLoader).toContain("activeAdminPlanSubtab === 'teams'");
+    expect(lazyLoader).toContain("renderAdminTeamPlacementLookup(state.activePlan, forceRefresh)");
+  });
+
+  it("reuses the team placement payload when reopening the same plan and scope", () => {
+    const admin = readFileSync("js/modules/admin.js", "utf8");
+    const lookupFn = admin.slice(
+      admin.indexOf("export async function renderAdminTeamPlacementLookup"),
+      admin.indexOf("function renderAdminTeamPlacementList()")
+    );
+    expect(lookupFn).toContain("adminTeamPlacementsDataKey === dataKey");
+    expect(lookupFn).toContain("if (!forceRefresh");
+    expect(lookupFn).toContain("adminTeamPlacementsDataKey = dataKey");
   });
 
   it("verifies db.js provides _getAdminMemberTeamPlacementsFallback for robust fallback data fetching", () => {

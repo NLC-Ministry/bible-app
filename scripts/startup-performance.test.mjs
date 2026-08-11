@@ -38,6 +38,20 @@ describe("startup performance contract", () => {
     expect(app).toContain("ensureAdminFeatureModulesLoaded");
   });
 
+  it("renders plan management before loading secondary admin bundles", () => {
+    const adminBranch = app.slice(
+      app.indexOf('} else if (tabId === "admin-view")'),
+      app.indexOf("// ── 6. updateNavigationChrome", app.indexOf('} else if (tabId === "admin-view")'))
+    );
+    const planRender = adminBranch.indexOf("await mod.renderAdminPlanManagement()");
+    const secondaryLoad = adminBranch.indexOf("void Promise.all([");
+
+    expect(planRender).toBeGreaterThan(-1);
+    expect(secondaryLoad).toBeGreaterThan(planRender);
+    expect(adminBranch).not.toContain("await loadIssueReportUi({ includeAdmin: true })");
+    expect(adminBranch).not.toContain("await ensureAdminFeatureModulesLoaded()");
+  });
+
   it("does not block first dashboard render on care reminder fetches", () => {
     const forcedReminder = app.lastIndexOf("refreshCareReminderBadge({ force: true })");
     const firstDashboard = app.indexOf("await appRouter.switchTab('dashboard-view')");

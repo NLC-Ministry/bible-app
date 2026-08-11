@@ -32,23 +32,19 @@ describe("計劃管理: explicit refresh button", () => {
     expect(btnBlock).toContain("renderAdminOrgPermissionsOverview()");
   });
 
-  it("selectManagementPlan threads forceRefresh into the team registration status reload", () => {
+  it("selectManagementPlan threads forceRefresh into the visible-subtab loader", () => {
     const start = admin.indexOf("async function selectManagementPlan(planKey, forceRefresh = false) {");
     expect(start).toBeGreaterThan(-1);
     const end = admin.indexOf("\n}", start) + 2;
     const fnBlock = admin.slice(start, end);
-    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
-    // Both division calls read the same cached db.getReadingTeamRegistrationOverview()
-    // response (keyed by admin user, not division) — only the first call should
-    // force a refetch; the second must reuse it instead of hitting the network
-    // twice for identical data.
-    expect(fnBlock).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
-    // Regression for: 已加入計畫 (renderAdminJoinedPlanMembers) was only ever
-    // called from the org-filter change handler (refreshAdminTeamRegistrationFilters),
-    // never from here — so neither the initial plan load nor 更新 rendered it
-    // at all; it stayed stuck showing 0 人 until a region/zone/group dropdown
-    // was toggled.
-    expect(fnBlock).toContain("renderAdminJoinedPlanMembers(true)");
+    expect(fnBlock).toContain("await loadActiveAdminPlanSubtab(forceRefresh)");
+
+    const loaderStart = admin.indexOf("async function loadActiveAdminPlanSubtab(forceRefresh = false)");
+    const loaderEnd = admin.indexOf("\nexport async function renderAdminPlanManagement()", loaderStart);
+    const loaderBlock = admin.slice(loaderStart, loaderEnd);
+    expect(loaderBlock).toContain("renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content')");
+    expect(loaderBlock).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
+    expect(loaderBlock).toContain("renderAdminJoinedPlanMembers(forceRefresh)");
   });
 });
 

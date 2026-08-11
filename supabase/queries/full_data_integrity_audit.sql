@@ -85,7 +85,7 @@ issues AS (
   FROM (
     VALUES
       ('member'), ('group_leader'), ('zone_leader'),
-      ('great_zone_leader'), ('senior_pastor'), ('admin')
+      ('great_zone_leader'), ('pastor'), ('admin')
   ) AS expected(code)
   WHERE NOT EXISTS (
     SELECT 1 FROM public.role_definitions AS definition WHERE definition.code = expected.code
@@ -396,7 +396,7 @@ issues AS (
           AND (profile.managed_regions <> '' OR profile.managed_groups <> ''))
      OR (profile.role_code = 'group_leader'
           AND (profile.managed_regions <> '' OR profile.managed_zones <> ''))
-     OR (profile.role_code IN ('member', 'senior_pastor', 'admin')
+     OR (profile.role_code IN ('member', 'pastor', 'admin')
           AND (profile.managed_regions <> '' OR profile.managed_zones <> '' OR profile.managed_groups <> ''))
 
   -- -----------------------------------------------------------------------

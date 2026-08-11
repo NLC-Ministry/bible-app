@@ -238,9 +238,8 @@ const ROLE_CODE_MAP: Record<string, string> = {
   "10000000-0000-4000-8000-000000000002": "group_leader",
   "10000000-0000-4000-8000-000000000003": "zone_leader",
   "10000000-0000-4000-8000-000000000004": "great_zone_leader",
-  "10000000-0000-4000-8000-000000000005": "senior_pastor",
-  "10000000-0000-4000-8000-000000000006": "admin",
-  "10000000-0000-4000-8000-000000000007": "pastor"
+  "10000000-0000-4000-8000-000000000005": "pastor",
+  "10000000-0000-4000-8000-000000000006": "admin"
 };
 
 function getProfileRoleCode(profile: any) {
@@ -248,8 +247,8 @@ function getProfileRoleCode(profile: any) {
   if (leadershipLabel === "組織架構管理員" || leadershipLabel.includes("系統管理員") || leadershipLabel.includes("組織架構管理員")) {
     return "admin";
   }
-  if (leadershipLabel === "教會牧者" || leadershipLabel.includes("主任牧師") || leadershipLabel.includes("教會牧者")) {
-    return "senior_pastor";
+  if (leadershipLabel === "教會牧者" || leadershipLabel.includes("主任牧師") || leadershipLabel.includes("教會牧者") || leadershipLabel.includes("牧者")) {
+    return "pastor";
   }
   if (leadershipLabel === "大區長" || leadershipLabel.includes("大區同工")) {
     return "great_zone_leader";
@@ -273,11 +272,11 @@ function isAdmin(profile: any) {
 }
 
 function hasWholeChurchPlanScope(profile: any) {
-  return ["admin", "senior_pastor", "pastor"].includes(getProfileRoleCode(profile));
+  return ["admin", "pastor"].includes(getProfileRoleCode(profile));
 }
 
 function canManagePlans(profile: any) {
-  return ["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));
+  return ["admin", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));
 }
 
 function normalizeRows(payload: any) {
@@ -500,7 +499,7 @@ Deno.serve(async (req: Request) => {
       if (!validReasons.includes(p.reason)) return jsonResponse({ error: "invalid_reason" }, 400);
       const msg = String(p.message || "").trim();
       if (!msg || msg.length > 300) return jsonResponse({ error: "invalid_message" }, 400);
-      const pastoralRoles = ["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"];
+      const pastoralRoles = ["admin", "pastor", "great_zone_leader", "zone_leader", "group_leader"];
       if (!pastoralRoles.includes(getProfileRoleCode(profile)) || profile.id === p.recipient_id) {
         return jsonResponse({ error: "pastoral_reminder_scope_required" }, 403);
       }

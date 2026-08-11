@@ -80,11 +80,32 @@ describe("plan management: 4-tab restructure", () => {
   });
 
   it("wires tab-switching to show exactly one panel and persist the selection", () => {
-    expect(admin).toContain("function setAdminPlanSubtab(subtab)");
+    expect(admin).toContain("function setAdminPlanSubtab(subtab, loadData = true)");
     expect(admin).toContain("function initAdminPlanSubtabs()");
     expect(admin).toContain("sessionStorage.setItem('selected_admin_plan_subtab', requested)");
     expect(admin).toContain("panel.classList.toggle('hidden', name !== requested)");
+    expect(admin).toContain("void loadActiveAdminPlanSubtab(false)");
     expect(admin).toContain("initAdminPlanSubtabs();");
+  });
+
+  it("lazy-loads only the visible subtab and parallelizes the two first-screen member lists", () => {
+    const start = admin.indexOf("async function loadActiveAdminPlanSubtab(forceRefresh = false)");
+    const end = admin.indexOf("\nexport async function renderAdminPlanManagement()", start);
+    const loader = admin.slice(start, end);
+
+    expect(loader).toContain("activeAdminPlanSubtab === 'join-status'");
+    expect(loader).toContain("Promise.allSettled([");
+    expect(loader).toContain("renderAdminJoinedPlanMembers(forceRefresh)");
+    expect(loader).toContain("renderAdminUnjoinedPlanMembers(forceRefresh)");
+    expect(loader).toContain("activeAdminPlanSubtab === 'members' || activeAdminPlanSubtab === 'statistics'");
+    expect(loader).toContain("activeAdminPlanSubtab === 'teams'");
+
+    const selectStart = admin.indexOf("async function selectManagementPlan(planKey, forceRefresh = false)");
+    const selectEnd = admin.indexOf("\nasync function loadActiveAdminPlanSubtab", selectStart);
+    const selectFn = admin.slice(selectStart, selectEnd);
+    expect(selectFn).toContain("await loadActiveAdminPlanSubtab(forceRefresh)");
+    expect(selectFn).not.toContain("renderAdminTeamPlacementLookup(plan)");
+    expect(selectFn).not.toContain("renderPlanMembersView()");
   });
 
   it("moves the shared org filter controls above the tabs, not into one tab's panel", () => {
@@ -101,12 +122,12 @@ describe("plan management: 4-tab restructure", () => {
     expect(mountFn).not.toContain("plan-org-stats-header");
   });
 
-  it("refreshes the joined-members list alongside the other org-filtered panels", () => {
+  it("refreshes only the currently visible org-filtered panel", () => {
     const fnStart = admin.indexOf("async function refreshAdminTeamRegistrationFilters()");
     const fnEnd = admin.indexOf("}", fnStart);
     const fn = admin.slice(fnStart, fnEnd);
-    expect(fn).toContain("renderAdminJoinedPlanMembers(false)");
-    expect(fn).toContain("renderAdminUnjoinedPlanMembers(false)");
+    expect(fn).toContain("loadActiveAdminPlanSubtab(false)");
+    expect(fn).not.toContain("renderAdminTeamRegistrationStatus");
   });
 });
 

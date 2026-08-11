@@ -45,10 +45,12 @@ describe("Member Hub UUID role authority", () => {
     expect(plan).not.toContain("isSimulatedAdmin");
   });
 
-  it("gives church pastors whole-church plan scope but not permission management", () => {
-    expect(state).toContain('role === "admin" || role === "senior_pastor"');
-    expect(dataEdge).toContain('["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"]');
+  it("gives the pastor role whole-church plan scope but not permission management", () => {
+    expect(state).toContain('role === "admin" || role === "pastor"');
+    expect(dataEdge).toContain('["admin", "pastor", "great_zone_leader", "zone_leader", "group_leader"]');
     expect(admin).toContain("return role === 'admin'");
     expect(authority).toContain("is_assignable = FALSE");
+    expect(state).not.toContain("senior_pastor");
+    expect(dataEdge).not.toContain("senior_pastor");
   });
 });

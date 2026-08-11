@@ -21,7 +21,7 @@ describe("admin team registration overview", () => {
   it("restricts the overview to plan managers across both auth paths", () => {
     expect(migration).toContain("'great_zone_leader', 'zone_leader'");
     expect(migration).not.toContain("actor_profile.role = 'group_leader'");
-    expect(edge).toContain('return ["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
+    expect(edge).toContain('return ["admin", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
     expect(migration).toContain("team_statistics_management_scope_required");
     expect(edge).toContain('PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)');
   });

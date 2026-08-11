@@ -33,12 +33,12 @@ describe("management plan hub", () => {
     const profileRoles = profile.match(/const managementRoles = \[(.*?)\];/)?.[1] || "";
     for (const roles of [adminRoles, utilsRoles, profileRoles]) {
       expect(roles).toContain("admin");
-      expect(roles).toContain("senior_pastor");
+      expect(roles).toContain("pastor");
       expect(roles).toContain("great_zone_leader");
       expect(roles).toContain("zone_leader");
       expect(roles).toContain("group_leader");
     }
-    expect(edge).toContain('return ["admin", "senior_pastor", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
+    expect(edge).toContain('return ["admin", "pastor", "great_zone_leader", "zone_leader", "group_leader"].includes(getProfileRoleCode(profile));');
   });
 
   it("defaults to whichever plan is currently ongoing and lists only current or completed plans with current plans first", () => {

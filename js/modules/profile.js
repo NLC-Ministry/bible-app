@@ -183,7 +183,6 @@ function paintProfileIdentityChrome() {
     group_leader: "小組長",
     zone_leader: "區長 (牧區負責人)",
     great_zone_leader: "大區長",
-    senior_pastor: "教會牧者",
     pastor: "牧者",
     admin: "系統管理員"
   };
@@ -504,7 +503,7 @@ async function renderCareReminders() {
 
 
 export function updateAdminNavVisibility() {
-  const managementRoles = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+  const managementRoles = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
   const currentRole = (state.currentUser && getUserRoleCode(state.currentUser)) || 'member';
 
   const canManagePlans = managementRoles.includes(currentRole);

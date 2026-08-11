@@ -301,7 +301,7 @@ function renderAdminUserDirectoryList(query = "") {
       : (syncStatus === "degraded" || syncStatus === "failed" ? "同步異常" : "尚未同步");
     const config = getManagedScopeConfig(profile);
     const defaultScopes = getProfileDefaultManagedScopes(profile, config);
-    const managedScopeText = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
+    const managedScopeText = config.role === "admin" || config.role === "pastor"
       ? "全教會"
       : (defaultScopes.join("、") || "僅本人");
     const statusClass = profile.is_active === false ? "disabled" : "active";
@@ -498,7 +498,7 @@ function renderManagedScopeProfile(profile) {
   const placement = [profile.great_region, profile.pastoral_zone, profile.small_group].filter(Boolean).join(" / ") || "尚未設定";
   const email = String(profile.email || "").trim() || "未提供電子信箱";
   const defaultScopes = getProfileDefaultManagedScopes(profile, config);
-  const effectiveScope = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
+  const effectiveScope = config.role === "admin" || config.role === "pastor"
     ? "全教會"
     : (defaultScopes.join("、") || "僅本人");
   summary.innerHTML = `
@@ -514,7 +514,7 @@ function renderManagedScopeProfile(profile) {
   ].filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-Hant"));
 
   if (!config.field) {
-    const message = config.role === "admin" || config.role === "senior_pastor" || config.role === "pastor"
+    const message = config.role === "admin" || config.role === "pastor"
       ? "此角色固定擁有全教會範圍，不需要另外設定 managed_*。"
       : "此角色只有本人範圍，不使用 managed_*。";
     optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">${message}</div>`;
@@ -660,8 +660,8 @@ export async function renderAdminOrgPermissionsOverview() {
   }
   orgPermissionsProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
 
-  const WHOLE_CHURCH_ROLE_ORDER = ["admin", "senior_pastor", "pastor"];
-  const WHOLE_CHURCH_ROLE_LABELS = { admin: "系統管理員", senior_pastor: "教會牧者", pastor: "牧者" };
+  const WHOLE_CHURCH_ROLE_ORDER = ["admin", "pastor"];
+  const WHOLE_CHURCH_ROLE_LABELS = { admin: "系統管理員", pastor: "牧者" };
   const wholeChurchLeadersByRole = new Map(WHOLE_CHURCH_ROLE_ORDER.map(role => [role, []]));
   const regionLeaders = new Map();
   const zoneLeaders = new Map();
@@ -995,7 +995,7 @@ export function init() {
   }
 }
 
-const MANAGEMENT_ROLES = ['admin', 'senior_pastor', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
+const MANAGEMENT_ROLES = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
 let managementPlanSelectionInitialized = false;
 
 function isSystemAdministrator() {
@@ -1086,7 +1086,7 @@ function mountPlanManagementSections() {
 const ADMIN_PLAN_SUBTABS = ['join-status', 'members', 'teams', 'statistics'];
 let activeAdminPlanSubtab = ADMIN_PLAN_SUBTABS[0];
 
-function setAdminPlanSubtab(subtab) {
+function setAdminPlanSubtab(subtab, loadData = true) {
   const requested = ADMIN_PLAN_SUBTABS.includes(subtab) ? subtab : ADMIN_PLAN_SUBTABS[0];
   activeAdminPlanSubtab = requested;
   try {
@@ -1104,6 +1104,9 @@ function setAdminPlanSubtab(subtab) {
     panel.classList.toggle('hidden', name !== requested);
     panel.style.display = name === requested ? 'flex' : 'none';
   });
+  if (loadData && state.activePlan) {
+    void loadActiveAdminPlanSubtab(false);
+  }
 }
 
 function initAdminPlanSubtabs() {
@@ -1117,7 +1120,10 @@ function initAdminPlanSubtabs() {
   try {
     savedSubtab = sessionStorage.getItem('selected_admin_plan_subtab') || ADMIN_PLAN_SUBTABS[0];
   } catch (_e) {}
-  setAdminPlanSubtab(savedSubtab);
+  // The selected plan is resolved immediately afterwards by
+  // renderAdminPlanManagement(). Avoid starting a stale/duplicate request
+  // against whatever plan happened to be active before opening Admin.
+  setAdminPlanSubtab(savedSubtab, false);
 }
 
 function getManagementPlanStageNo(plan) {
@@ -1182,25 +1188,49 @@ async function selectManagementPlan(planKey, forceRefresh = false) {
     if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
     localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
     window.currentPlanViewState = 'ORG_STATS';
-    if (typeof window.renderPlanMembersView === 'function') {
-      try { await window.renderPlanMembersView(); } catch (e) { console.warn("[Admin] renderPlanMembersView error caught:", e); }
-    }
-    // renderAdminJoinedPlanMembers (the 已加入計畫 list on the 加入計畫狀況
-    // subtab) used to only ever be called from the org-filter change handler
-    // (refreshAdminTeamRegistrationFilters) — selectManagementPlan() never
-    // called it at all, so the 更新 button (and the initial plan load) left
-    // it permanently un-rendered until a region/zone/group dropdown changed.
-    try { await renderAdminJoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminJoinedPlanMembers error caught:", e); }
-    try { await renderAdminUnjoinedPlanMembers(true); } catch (e) { console.warn("[Admin] renderAdminUnjoinedPlanMembers error caught:", e); }
-    try { await renderAdminTeamPlacementLookup(plan); } catch (e) { console.warn("[Admin] renderAdminTeamPlacementLookup error caught:", e); }
-    // Both divisions read the same underlying db.getReadingTeamRegistrationOverview()
-    // response (cachedTeamsData, keyed by admin user — not by division), so only
-    // the first call needs to force a refetch; the second reuses what the first
-    // just fetched instead of hitting the network twice for identical data.
-    try { await renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (3) error caught:", e); }
-    try { await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6'); } catch (e) { console.warn("[Admin] renderAdminTeamRegistrationStatus (6) error caught:", e); }
+    await loadActiveAdminPlanSubtab(forceRefresh);
   } catch (err) {
     console.error("[AdminManagement] Error in selectManagementPlan:", err);
+  }
+}
+
+async function loadActiveAdminPlanSubtab(forceRefresh = false) {
+  const warnRejected = (label, result) => {
+    if (result.status === 'rejected') console.warn(`[Admin] ${label} error caught:`, result.reason);
+  };
+
+  if (activeAdminPlanSubtab === 'join-status') {
+    // These two independent RPCs are the only data needed for the first
+    // visible subtab. Run them together instead of adding both network
+    // latencies to the critical path.
+    const results = await Promise.allSettled([
+      renderAdminJoinedPlanMembers(forceRefresh),
+      renderAdminUnjoinedPlanMembers(forceRefresh)
+    ]);
+    warnRejected('renderAdminJoinedPlanMembers', results[0]);
+    warnRejected('renderAdminUnjoinedPlanMembers', results[1]);
+    return;
+  }
+
+  if (activeAdminPlanSubtab === 'members' || activeAdminPlanSubtab === 'statistics') {
+    if (typeof window.renderPlanMembersView === 'function') {
+      try { await window.renderPlanMembersView(); } catch (e) { console.warn('[Admin] renderPlanMembersView error caught:', e); }
+    }
+    return;
+  }
+
+  if (activeAdminPlanSubtab === 'teams') {
+    const results = await Promise.allSettled([
+      renderAdminTeamPlacementLookup(state.activePlan, forceRefresh),
+      (async () => {
+        // Both divisions use the same overview payload. The first call may
+        // refresh it; the second renders from the cache populated above.
+        await renderAdminTeamRegistrationStatus(forceRefresh, 3, 'admin-team-status-content');
+        await renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6');
+      })()
+    ]);
+    warnRejected('renderAdminTeamPlacementLookup', results[0]);
+    warnRejected('renderAdminTeamRegistrationStatus', results[1]);
   }
 }
 
@@ -1668,11 +1698,10 @@ async function renderAdminJoinedPlanMembers(forceRefresh = false) {
 }
 
 async function refreshAdminTeamRegistrationFilters() {
-  await renderAdminJoinedPlanMembers(false);
-  await renderAdminUnjoinedPlanMembers(false);
-  renderAdminTeamPlacementList();
-  await renderAdminTeamRegistrationStatus(false, 3, "admin-team-status-content");
-  await renderAdminTeamRegistrationStatus(false, 6, "admin-team-status-content-6");
+  // Re-render only what the user can currently see. Other subtabs render
+  // from their cached raw data when opened, so org-filter changes no longer
+  // trigger hidden network/DOM work.
+  await loadActiveAdminPlanSubtab(false);
 }
 
 export async function renderAdminTeamRegistrationStatus(forceRefresh = false, division = 3, contentId = division === 6 ? "admin-team-status-content-6" : "admin-team-status-content") {
@@ -1882,8 +1911,9 @@ export function initAdminTeamRegistration() {
 }
 
 let adminTeamPlacementsData = [];
+let adminTeamPlacementsDataKey = "";
 
-export async function renderAdminTeamPlacementLookup(selectedPlan) {
+export async function renderAdminTeamPlacementLookup(selectedPlan, forceRefresh = false) {
   const contentEl = document.getElementById("admin-team-placements-content");
   const searchInput = document.getElementById("admin-team-placement-search");
   if (!contentEl) return;
@@ -1895,6 +1925,19 @@ export async function renderAdminTeamPlacementLookup(selectedPlan) {
     });
   }
 
+  const currentUser = state.currentUser || {};
+  const dataKey = [
+    currentUser.id || currentUser.name || 'anonymous',
+    currentUser.managed_regions || currentUser.great_region || '',
+    currentUser.managed_zones || currentUser.pastoral_zone || '',
+    currentUser.managed_groups || currentUser.small_group || '',
+    selectedPlan && (selectedPlan.globalPlanId || selectedPlan.id || selectedPlan.presetKey || selectedPlan.name) || ''
+  ].join('|');
+  if (!forceRefresh && adminTeamPlacementsDataKey === dataKey) {
+    renderAdminTeamPlacementList();
+    return;
+  }
+
   contentEl.innerHTML = '<div class="admin-user-directory__empty">正在載入尚未加入團隊的人員…</div>';
 
   const res = await db.getAdminMemberTeamPlacements(selectedPlan);
@@ -1904,6 +1947,7 @@ export async function renderAdminTeamPlacementLookup(selectedPlan) {
   }
 
   adminTeamPlacementsData = res.data || [];
+  adminTeamPlacementsDataKey = dataKey;
   renderAdminTeamPlacementList();
 }
 
