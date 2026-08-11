@@ -118,4 +118,32 @@ describe("admin member team placement lookup tests", () => {
     expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, '')");
     expect(fixMigration).toContain("GRANT EXECUTE ON FUNCTION public.get_admin_member_team_placements(UUID, UUID) TO authenticated, service_role;");
   });
+
+  it("closes the empty-scope leak fully (migration 0081) — 0071 only narrowed the window (fell back to the personal region/zone/group field first), it never removed the CARDINALITY(...) = 0 bypass itself", () => {
+    // Reproduction: a great_zone_leader/zone_leader/group_leader whose OWN
+    // great_region/pastoral_zone/small_group is blank — most commonly right
+    // after first login, before Member Hub's org-placement sync has landed —
+    // still resolves to an empty managed_x_arr even with 0071's COALESCE
+    // fallback in place (nothing to fall back TO). The old `CARDINALITY(arr)
+    // = 0 OR candidate.field = ANY(arr)` then matched every row, leaking
+    // every active member instead of none. 0081 removes the CARDINALITY
+    // bypass so an empty array naturally matches nothing (fail closed),
+    // consistent with every other scoped RPC in this schema (see
+    // public.values_overlap, which already returns FALSE for an empty scope).
+    const fix = readFileSync("supabase/migrations/0081_fix_team_placements_empty_scope_leak.sql", "utf8");
+    expect(fix).toContain("CREATE OR REPLACE FUNCTION public.get_admin_member_team_placements(");
+    expect(fix).not.toContain("CARDINALITY(managed_regions_arr) = 0");
+    expect(fix).not.toContain("CARDINALITY(managed_zones_arr) = 0");
+    expect(fix).not.toContain("CARDINALITY(managed_groups_arr) = 0");
+    expect(fix).toContain("OR (actor_role = 'great_zone_leader' AND candidate.great_region = ANY(managed_regions_arr))");
+    expect(fix).toContain("OR (actor_role = 'zone_leader' AND candidate.pastoral_zone = ANY(managed_zones_arr))");
+    expect(fix).toContain("OR (actor_role = 'group_leader' AND candidate.small_group = ANY(managed_groups_arr))");
+    // The COALESCE(NULLIF(...), personal_field, '') fallback from 0071 must
+    // survive this rewrite — it's still correct and still narrows the window,
+    // just no longer the only line of defense.
+    expect(fix).toContain("COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, '')");
+    expect(fix).toContain("COALESCE(NULLIF(actor_profile.managed_zones, ''), actor_profile.pastoral_zone, '')");
+    expect(fix).toContain("COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, '')");
+    expect(fix).toContain("GRANT EXECUTE ON FUNCTION public.get_admin_member_team_placements(UUID, UUID) TO authenticated, service_role;");
+  });
 });
