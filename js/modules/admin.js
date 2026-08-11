@@ -1236,6 +1236,82 @@ window.renderAdminPlanManagement = renderAdminPlanManagement;
 let activeTeamDivision = 3;
 let cachedTeamsData = null;
 let cachedTeamsDataKey = "";
+let lastRenderedTeamPlans = { 3: [], 6: [] };
+
+function formatTeamPlanDate(value) {
+  if (!value) return "";
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(date);
+}
+
+export function convertTeamRegistrationStatusToCSV(plans, division) {
+  if (!Array.isArray(plans) || plans.length === 0) return "";
+  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+  const memberHeaders = [];
+  for (let i = 2; i <= Number(division); i++) memberHeaders.push(`隊員${i}`);
+  const lines = [];
+
+  plans.forEach((item, index) => {
+    const teams = Array.isArray(item.teams) ? item.teams : [];
+    const planName = item.plan?.name || item.name || "（無名稱）";
+    const planStart = formatTeamPlanDate(item.plan?.startDate || item.startDate);
+    const planEnd = formatTeamPlanDate(item.plan?.endDate || item.endDate);
+    const planPeriod = planStart && planEnd ? `${planStart}－${planEnd}` : "";
+    const signupCount = teams.filter(team => team.status === "forming").length;
+    const readyCount = teams.filter(team => team.status === "ready").length;
+    const totalMembers = teams.reduce((acc, team) => acc + (team.memberCount || 0), 0);
+
+    if (index > 0) lines.push("");
+    lines.push([esc("計畫"), esc(planName)].join(","));
+    if (planPeriod) lines.push([esc("計畫期間"), esc(planPeriod)].join(","));
+    lines.push([esc("招募中"), esc(`${signupCount} 隊`)].join(","));
+    lines.push([esc("已成隊"), esc(`${readyCount} 隊`)].join(","));
+    lines.push([esc("總報名人數"), esc(`${totalMembers} 人`)].join(","));
+    lines.push("");
+    lines.push([esc("隊長所屬牧區"), esc("隊名"), esc("狀態"), esc("人數"), esc("隊長"), ...memberHeaders.map(esc)].join(","));
+
+    teams.forEach(team => {
+      const members = Array.isArray(team.members) ? team.members : [];
+      const captain = members.find(member => member.role === "captain") || {};
+      const captainZone = team.captainPastoralZone || captain.pastoralZone || "未設定";
+      const otherMembers = members.filter(member => member.role !== "captain");
+      const teamStatus = team.status === "ready" ? "已成隊" : "招募中";
+      const memberCount = Number(team.memberCount || members.length || 0);
+      const row = [captainZone, team.name || "（無名稱）", teamStatus, `${memberCount}/${division} 人`, captain.name || "-"];
+      for (let i = 0; i < Number(division) - 1; i++) {
+        const member = otherMembers[i];
+        row.push(member && member.name ? `${member.name}${member.pastoralZone ? `（${member.pastoralZone}）` : ""}` : "-");
+      }
+      lines.push(row.map(esc).join(","));
+    });
+  });
+
+  return lines.join("\n");
+}
+
+export function exportTeamRegistrationStatusCSV(division) {
+  const plans = lastRenderedTeamPlans[Number(division)] || [];
+  const hasAnyTeam = plans.some(item => Array.isArray(item.teams) && item.teams.length > 0);
+  if (!hasAnyTeam) {
+    if (typeof showToast === "function") showToast("目前沒有可供匯出的團隊報名資料。");
+    return;
+  }
+  const csvContent = convertTeamRegistrationStatusToCSV(plans, division);
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const today = new Date().toISOString().slice(0, 10);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `team_registration_${division}person_${today}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+window.convertTeamRegistrationStatusToCSV = convertTeamRegistrationStatusToCSV;
+window.exportTeamRegistrationStatusCSV = exportTeamRegistrationStatusCSV;
 let cachedUnjoinedPlanKey = "";
 let cachedUnjoinedPlanMembers = [];
 let unjoinedPlanRequestId = 0;
@@ -1603,6 +1679,10 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
     };
   });
 
+  lastRenderedTeamPlans[Number(division)] = processedPlans;
+  const exportBtn = document.getElementById(Number(division) === 6 ? "admin-team-status-export-btn-6" : "admin-team-status-export-btn");
+  if (exportBtn) exportBtn.onclick = () => exportTeamRegistrationStatusCSV(division);
+
   if (processedPlans.length === 0) {
     contentEl.innerHTML = `
       <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
@@ -1612,20 +1692,11 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
     return;
   }
 
-  const formatPlanDate = value => {
-    if (!value) return "";
-    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return "";
-    return new Intl.DateTimeFormat("zh-TW", {
-      year: "numeric", month: "2-digit", day: "2-digit"
-    }).format(date);
-  };
-
   let html = "";
   processedPlans.forEach(item => {
     const planName = escapeHTML(item.plan.name || "（無名稱）");
-    const planStart = formatPlanDate(item.plan.startDate);
-    const planEnd = formatPlanDate(item.plan.endDate);
+    const planStart = formatTeamPlanDate(item.plan.startDate);
+    const planEnd = formatTeamPlanDate(item.plan.endDate);
     const planPeriod = planStart && planEnd ? `${planStart}－${planEnd}` : "";
     const signupCount = item.teams.filter(team => team.status === "forming").length;
     const readyCount = item.teams.filter(t => t.status === "ready").length;

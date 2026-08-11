@@ -485,34 +485,15 @@ $reading_team_statistics$;
 REVOKE ALL ON FUNCTION public.get_reading_team_statistics(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_reading_team_statistics(UUID, UUID) TO authenticated, service_role;
 
--- ── publish_global_plan_rules / sync_church_organization ──
--- Bodies are long-lived and untouched since migrations 0016/0031 (only their
--- role lookup was rewritten in place by migration 0048's DO block). Patch the
--- literal role-check text on the live definition instead of retyping the
--- whole function, following the same technique migrations 0048/0063 used.
-DO $$
-DECLARE
-  target_signature REGPROCEDURE;
-  original_definition TEXT;
-  updated_definition TEXT;
-BEGIN
-  FOREACH target_signature IN ARRAY ARRAY[
-    'public.publish_global_plan_rules(uuid,integer,jsonb,uuid)'::REGPROCEDURE,
-    'public.sync_church_organization(text[],jsonb,jsonb)'::REGPROCEDURE
-  ] LOOP
-    SELECT pg_get_functiondef(target_signature::OID) INTO original_definition;
-    updated_definition := REPLACE(
-      original_definition,
-      $repl$NOT IN ('admin', 'senior_pastor')$repl$,
-      $repl$NOT IN ('admin', 'senior_pastor', 'pastor')$repl$
-    );
-    IF updated_definition = original_definition THEN
-      RAISE EXCEPTION 'pastor role patch failed for %', target_signature;
-    END IF;
-    EXECUTE updated_definition;
-  END LOOP;
-END;
-$$;
+-- ── publish_global_plan_rules / sync_church_organization: intentionally NOT patched ──
+-- Migration 0047 already stripped senior_pastor out of both functions' role
+-- guard ("Old migrations treated senior_pastor as an administrator for these
+-- mutation RPCs. The restored church-pastor role must not inherit those
+-- writes."), rewriting `NOT IN ('admin', 'senior_pastor')` to `<> 'admin'`.
+-- Both are now admin-only at the SQL layer (consistent with nlc-data's TS
+-- layer, which already gates publish_global_plan_rules on isAdmin()).
+-- Since senior_pastor itself has no access here, pastor must not either —
+-- mirroring senior_pastor's *current* permissions means doing nothing here.
 
 -- ── RLS (dev/localhost real-Supabase-client path only; current defs: 0054) ──
 DROP POLICY IF EXISTS profiles_select_by_scope ON public.profiles;
