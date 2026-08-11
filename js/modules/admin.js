@@ -89,10 +89,60 @@ function formatAdminUserSyncTime(value) {
 
 let adminUserDirectoryFilteredProfiles = [];
 
+// Fixed display order for church org units, used by every CSV export that
+// includes 大區 or 牧區 data — matches the order leadership actually uses on
+// printed rosters, not alphabetical/insertion order. Anything outside these
+// lists is still exported, just sorted after the known names (never
+// silently dropped) and alphabetized among itself for determinism.
+const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝"];
+const CHURCH_PASTORAL_ZONE_ORDER = [
+  "大安1", "大安2", "大安3", "大安4", "大安6", "大安7", "大安8", "大安9", "大安10", "大安11", "大安12",
+  "中正1", "中正2", "中正3", "中正4", "中正5",
+  "中山1", "中山2", "中山3", "中山5",
+  "信義2", "信義3",
+  "士林",
+  "松山2", "松山1",
+  "南港", "內湖", "文山",
+  "新烏1", "新烏2", "新烏3", "新烏4",
+  "中永和", "三重",
+  "青少年教會",
+  "慶典1", "慶典2",
+  "創藝",
+  "新莊1", "新莊2", "新莊3"
+];
+
+function compareByChurchOrgOrder(orderList) {
+  const orderIndex = new Map(orderList.map((name, i) => [name, i]));
+  return (aLabel, bLabel) => {
+    const a = String(aLabel || "").trim();
+    const b = String(bLabel || "").trim();
+    const aIndex = orderIndex.has(a) ? orderIndex.get(a) : Infinity;
+    const bIndex = orderIndex.has(b) ? orderIndex.get(b) : Infinity;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return a.localeCompare(b, "zh-Hant");
+  };
+}
+const compareGreatRegions = compareByChurchOrgOrder(CHURCH_GREAT_REGION_ORDER);
+const comparePastoralZones = compareByChurchOrgOrder(CHURCH_PASTORAL_ZONE_ORDER);
+
+function sortByChurchOrgOrder(items, orderComparator, extractLabel) {
+  return [...items].sort((a, b) => orderComparator(extractLabel(a), extractLabel(b)));
+}
+
+function sortProfilesByChurchOrgOrder(profiles) {
+  return [...profiles].sort((a, b) => {
+    const regionCompare = compareGreatRegions(a.great_region, b.great_region);
+    if (regionCompare !== 0) return regionCompare;
+    const zoneCompare = comparePastoralZones(a.pastoral_zone, b.pastoral_zone);
+    if (zoneCompare !== 0) return zoneCompare;
+    return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
+  });
+}
+
 export function convertUserDirectoryToCSV(profiles) {
   if (!profiles || profiles.length === 0) return "";
   const headers = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "組隊狀態", "帳號狀態"];
-  const rows = profiles.map(p => [
+  const rows = sortProfilesByChurchOrgOrder(profiles).map(p => [
     p.great_region || "未設定",
     p.pastoral_zone || "未設定牧區",
     p.small_group || "未設定",
@@ -132,12 +182,12 @@ export function convertOrgStructureToCSV(orgStructure = state.orgStructure) {
   const headers = ["大區", "牧區", "小組"];
   const rows = [];
 
-  const regions = orgStructure.regions || [];
+  const regions = sortByChurchOrgOrder(orgStructure.regions || [], compareGreatRegions, region => region);
   const zonesMap = orgStructure.zones || {};
   const groupsMap = orgStructure.groups || {};
 
   regions.forEach(region => {
-    const zones = zonesMap[region] || [];
+    const zones = sortByChurchOrgOrder(zonesMap[region] || [], comparePastoralZones, zone => zone);
     if (zones.length === 0) {
       rows.push([region, "無下屬牧區", "無下屬小組"]);
     } else {
@@ -763,43 +813,45 @@ function renderAdminRegistrationStatisticsSummary(context) {
     </section>`;
 }
 
-export function formatAdminRegistrationStatisticsText(context) {
+export function convertAdminRegistrationStatisticsToCSV(context) {
   const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
   const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
   const summary = getAdminRegistrationStatisticsSummary(context);
+  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
   const formatRows = rows => rows.map(row => [
-    sanitizeRegistrationStatisticsText(row.label),
-    Number(row.signupCount || 0),
-    Number(row.registeredCount || 0)
-  ].join("/"));
+    esc(sanitizeRegistrationStatisticsText(row.label)),
+    esc(Number(row.signupCount || 0)),
+    esc(Number(row.registeredCount || 0))
+  ].join(","));
+
   return [
-    "統計項目 / 人數",
-    `無牧區資料未加入計畫/${Number(summary.withoutPastoralZoneNotJoined || 0)}`,
-    `無牧區資料已加入計畫/${Number(summary.withoutPastoralZoneJoined || 0)}`,
-    `有牧區資料未加入計畫/${Number(summary.withPastoralZoneNotJoined || 0)}`,
-    `有牧區資料已加入計畫/${Number(summary.withPastoralZoneJoined || 0)}`,
-    `總參加人數/${Number(summary.totalJoined || 0)}`,
-    `總註冊人數/${Number(summary.totalRegistered || 0)}`,
+    [esc("統計項目"), esc("人數")].join(","),
+    [esc("無牧區資料未加入計畫"), esc(Number(summary.withoutPastoralZoneNotJoined || 0))].join(","),
+    [esc("無牧區資料已加入計畫"), esc(Number(summary.withoutPastoralZoneJoined || 0))].join(","),
+    [esc("有牧區資料未加入計畫"), esc(Number(summary.withPastoralZoneNotJoined || 0))].join(","),
+    [esc("有牧區資料已加入計畫"), esc(Number(summary.withPastoralZoneJoined || 0))].join(","),
+    [esc("總參加人數"), esc(Number(summary.totalJoined || 0))].join(","),
+    [esc("總註冊人數"), esc(Number(summary.totalRegistered || 0))].join(","),
     "",
-    "大區 / 報名人數 / 註冊人數",
-    ...formatRows(greatRegions),
+    [esc("大區"), esc("報名人數"), esc("註冊人數")].join(","),
+    ...formatRows(sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label)),
     "",
-    "牧區 / 報名人數 / 註冊人數",
-    ...formatRows(pastoralZones)
-  ].join("\r\n");
+    [esc("牧區"), esc("報名人數"), esc("註冊人數")].join(","),
+    ...formatRows(sortByChurchOrgOrder(pastoralZones, comparePastoralZones, row => row.label))
+  ].join("\n");
 }
 
 function exportAdminRegistrationStatistics() {
   if (!adminRegistrationStatistics) return;
-  const text = formatAdminRegistrationStatisticsText(adminRegistrationStatistics);
-  const blob = new Blob(["\uFEFF", text], { type: "text/plain;charset=utf-8" });
+  const csvContent = convertAdminRegistrationStatisticsToCSV(adminRegistrationStatistics);
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   const planName = String(adminRegistrationStatistics.planName || "讀經計畫")
     .replace(/[\\/:*?"<>|]/g, "-");
   anchor.href = url;
   const todayTW = typeof toTaiwanISODate === "function" ? toTaiwanISODate() : new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-  anchor.download = `報名與註冊統計-${planName}-${todayTW}.txt`;
+  anchor.download = `報名與註冊統計-${planName}-${todayTW}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -1273,7 +1325,12 @@ export function convertTeamRegistrationStatusToCSV(plans, division) {
     lines.push("");
     lines.push([esc("隊長所屬牧區"), esc("隊名"), esc("狀態"), esc("人數"), esc("隊長"), ...memberHeaders.map(esc)].join(","));
 
-    teams.forEach(team => {
+    const sortedTeams = sortByChurchOrgOrder(teams, comparePastoralZones, team => {
+      const members = Array.isArray(team.members) ? team.members : [];
+      const captain = members.find(member => member.role === "captain") || {};
+      return team.captainPastoralZone || captain.pastoralZone || "";
+    });
+    sortedTeams.forEach(team => {
       const members = Array.isArray(team.members) ? team.members : [];
       const captain = members.find(member => member.role === "captain") || {};
       const captainZone = team.captainPastoralZone || captain.pastoralZone || "未設定";

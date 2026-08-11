@@ -58,13 +58,30 @@ describe("admin registration statistics", () => {
     expect(admin).not.toContain('typeof isUuid !== "function"');
   });
 
-  it("exports UTF-8 text in the requested slash-delimited format", () => {
-    expect(admin).toContain('"大區 / 報名人數 / 註冊人數"');
-    expect(admin).toContain('"牧區 / 報名人數 / 註冊人數"');
-    expect(admin).toContain('].join("/")');
-    expect(admin).toContain('new Blob(["\\uFEFF", text]');
-    expect(admin).toContain('type: "text/plain;charset=utf-8"');
-    expect(admin).toContain("報名與註冊統計-${planName}-");
+  it("exports UTF-8 CSV instead of a plain-text slash-delimited file", () => {
+    expect(admin).toContain("export function convertAdminRegistrationStatisticsToCSV(context)");
+    expect(admin).toContain('new Blob(["\\uFEFF" + csvContent]');
+    expect(admin).toContain('type: "text/csv;charset=utf-8;"');
+    expect(admin).toContain("報名與註冊統計-${planName}-${todayTW}.csv");
+    expect(html).toContain("匯出 CSV");
+    expect(html).not.toContain("匯出文字檔");
+  });
+
+  it("orders great regions and pastoral zones by the fixed roster order, not insertion order", () => {
+    expect(admin).toContain('const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝"];');
+    expect(admin).toContain('"大安1", "大安2", "大安3", "大安4", "大安6", "大安7", "大安8", "大安9", "大安10", "大安11", "大安12",');
+    expect(admin).toContain("function compareByChurchOrgOrder(orderList)");
+    // Rows outside the fixed list must still be exported, not silently dropped — sorted after via Infinity.
+    expect(admin).toContain('const aIndex = orderIndex.has(a) ? orderIndex.get(a) : Infinity;');
+    expect(admin).toContain("sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label)");
+  });
+
+  it("applies the same fixed 大區/牧區 order to every other CSV export (users, org structure, team registration)", () => {
+    expect(admin).toContain("function sortProfilesByChurchOrgOrder(profiles)");
+    expect(admin).toContain("const rows = sortProfilesByChurchOrgOrder(profiles).map(p => [");
+    expect(admin).toContain('const regions = sortByChurchOrgOrder(orgStructure.regions || [], compareGreatRegions, region => region);');
+    expect(admin).toContain('const zones = sortByChurchOrgOrder(zonesMap[region] || [], comparePastoralZones, zone => zone);');
+    expect(admin).toContain("const sortedTeams = sortByChurchOrgOrder(teams, comparePastoralZones, team => {");
   });
 
   it("bumps the browser cache keys for the new UI", () => {
