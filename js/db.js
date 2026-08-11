@@ -4370,6 +4370,48 @@ const db = {
       }
     }
     return { error: new Error("目前為離線模式，無法傳送關心提醒") };
+  },
+
+  // 📊 syncRegistrationStatisticsToSheet – 將報名與註冊統計覆寫到 Google 試算表
+  // 透過 nlc-data 的 sync_registration_stats_sheet action（server 端驗證 admin 身分後轉發到 Apps Script Web App）
+  async syncRegistrationStatisticsToSheet({ planName, greatRegions, pastoralZones, summary } = {}) {
+    if (state.currentUser && state.currentUser.is_demo) {
+      return { success: false, message: "示範模式無法同步至 Google 試算表。" };
+    }
+    if (typeof auth === "undefined" || !auth.isLoggedIn()) {
+      return { success: false, message: "請先登入後再試。" };
+    }
+    try {
+      const cfg = state.supabaseConfig || {};
+      const accessToken = await auth.getValidAccessToken();
+      const response = await fetch(
+        cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
+        {
+          method: "POST",
+          headers: {
+            apikey: cfg.anonKey,
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            action: "sync_registration_stats_sheet",
+            payload: {
+              plan_name: String(planName || ""),
+              great_regions: Array.isArray(greatRegions) ? greatRegions : [],
+              pastoral_zones: Array.isArray(pastoralZones) ? pastoralZones : [],
+              summary: summary || {}
+            }
+          })
+        }
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return { success: false, message: result.error || "更新到 Google 試算表失敗" };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, message: e.message || "更新到 Google 試算表失敗" };
+    }
   }
 };
 

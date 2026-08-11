@@ -69,7 +69,7 @@ describe("admin registration statistics", () => {
   });
 
   it("orders great regions and pastoral zones by the fixed roster order, not insertion order", () => {
-    expect(admin).toContain('const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝"];');
+    expect(admin).toContain('const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝", "花蓮", "桃園"];');
     expect(admin).toContain('"大安1", "大安2", "大安3", "大安4", "大安6", "大安7", "大安8", "大安9", "大安10", "大安11", "大安12",');
     expect(admin).toContain("function compareByChurchOrgOrder(orderList)");
     // Rows outside the fixed list must still be exported, not silently dropped — sorted after via Infinity.
@@ -109,5 +109,64 @@ describe("admin registration statistics", () => {
   it("bumps the browser cache keys for the new UI", () => {
     expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
     expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
+  });
+});
+
+describe("報名與註冊統計 → Google 試算表同步", () => {
+  it("adds an admin-only action to nlc-data that forwards to the Apps Script webhook with a shared secret, never the caller's token", () => {
+    expect(edge).toContain('"sync_registration_stats_sheet"');
+    expect(edge).toContain('if (action === "sync_registration_stats_sheet")');
+    expect(edge).toContain("if (!isAdmin(profile)) return jsonResponse({ error: \"forbidden\" }, 403);");
+    expect(edge).toContain('Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL")');
+    expect(edge).toContain('Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET")');
+    expect(edge).toContain("secret: sheetSecret");
+    // The forwarded payload must be server-sanitized (numbers coerced, strings
+    // length-capped), not the raw client body passed straight through.
+    expect(edge).toContain("Number(row?.signupCount) || 0");
+    expect(edge).toContain('String(row?.leaderName ?? "").slice(0, 60)');
+  });
+
+  it("client builds the exact row shape the Apps Script expects (大區 block, 牧區 block with leader names, fixed summary block)", () => {
+    expect(admin).toContain("export async function buildAdminRegistrationStatisticsSheetPayload(context)");
+    expect(admin).toContain("async function buildPastoralZoneLeaderNameMap()");
+    expect(admin).toContain('await db.fetchManagedScopeProfiles()');
+    expect(admin).toContain('getUserRoleCode(profile) !== "zone_leader"');
+    expect(admin).toContain("leaderName: leaderNameByZone.get(sanitizeRegistrationStatisticsText(row.label)) || \"\"");
+    // Great regions and pastoral zones must both go through the same fixed
+    // church-org order used by every other export, not raw RPC order.
+    expect(admin).toContain("sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label).map(toRow)");
+    expect(admin).toContain("sortByChurchOrgOrder(pastoralZones, comparePastoralZones, row => row.label).map(row => ({");
+  });
+
+  it("db.js calls nlc-data directly with the Logto token, matching the sendCareReminder pattern (not the NlcDataClient shim)", () => {
+    expect(db).toContain("async syncRegistrationStatisticsToSheet({ planName, greatRegions, pastoralZones, summary } = {})");
+    expect(db).toContain('action: "sync_registration_stats_sheet"');
+    expect(db).toContain("auth.getValidAccessToken()");
+    expect(db).toContain("/functions/v1/nlc-data");
+  });
+
+  it("wires a disabled-until-loaded button next to the CSV export button", () => {
+    expect(html).toContain('id="admin-registration-statistics-sheet-sync"');
+    expect(html).toContain("更新到 Google 試算表");
+    expect(admin).toContain("sheetSyncButton.onclick = syncAdminRegistrationStatisticsToSheet");
+    expect(admin).toContain('if (sheetSyncButton) sheetSyncButton.disabled = true;');
+    expect(admin).toContain('if (sheetSyncButton) sheetSyncButton.disabled = false;');
+  });
+
+  it("ships the Apps Script reference file and README setup instructions, following the issue-report-sheet-sync precedent", () => {
+    const appsScript = readFileSync("supabase/functions/nlc-data/registration-stats-apps-script.gs.txt", "utf8");
+    expect(appsScript).toContain("var SHEET_GID = 9828844;");
+    expect(appsScript).toContain('function doPost(e)');
+    expect(appsScript).toContain('payload.secret !== SHARED_SECRET');
+    expect(appsScript).toContain('["區域", "區長", "報名人數", "註冊人數", "3人團隊人數", "6人團隊人數"]');
+    expect(appsScript).toContain('rows.push(["大區"');
+    expect(appsScript).toContain('rows.push(["牧區"');
+    expect(appsScript).toContain("sheet.getRange(2, 8, 1, 6)");
+    expect(appsScript).toContain("sheet.getRange(3, 8, 1, 6)");
+
+    const readme = readFileSync("supabase/functions/README.md", "utf8");
+    expect(readme).toContain("sync_registration_stats_sheet");
+    expect(readme).toContain("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
+    expect(readme).toContain("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
   });
 });

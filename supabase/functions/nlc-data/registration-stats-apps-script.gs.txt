@@ -1,0 +1,102 @@
+// Paste this into the target Google Sheet's Extensions -> Apps Script editor,
+// then deploy it as a Web App (see supabase/functions/README.md, "報名與註冊
+// 統計 -> Google 試算表同步" section, for the full setup checklist). Not
+// deployed by this repo — Google Apps Script has no relationship to the
+// Supabase CLI, this file is just a version-controlled copy of what to paste.
+//
+// Target sheet tab: gid=9828844 ("最新速讀狀況") in
+// https://docs.google.com/spreadsheets/d/1YNjAp6hhgTmjuL17SBhxyvUsbcddfynuMGPoI6irOpY/edit
+// Looked up by gid (not by name) so this keeps working even if someone renames the tab.
+//
+// Unlike issue-report-sheet-sync (which appends one row per new report), this
+// is a full snapshot overwrite every time an admin clicks "更新到 Google 試算表" —
+// it always rewrites the whole 區域/區長/報名人數/註冊人數/3人團隊人數/6人團隊人數
+// table (大區 block, then 牧區 block) plus the summary numbers in H2:M3, so a
+// shorter list than last time doesn't leave stale rows behind.
+
+var SHEET_GID = 9828844;
+
+// Replace with the same random string you put in Supabase's
+// REGISTRATION_STATS_SHEET_WEBHOOK_SECRET function secret. Pick your own —
+// this is not a Google credential, just a shared password between nlc-data
+// and this script so random internet traffic can't write into your sheet.
+var SHARED_SECRET = "REPLACE_WITH_YOUR_OWN_RANDOM_SECRET";
+
+// Rows below this are cleared before every write, so a shorter region/zone
+// list than last time doesn't leave old rows behind. Comfortably above the
+// current ~50 pastoral zones + 10 great regions + section labels + gap row.
+var MAX_CLEARED_ROWS = 300;
+
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+
+    if (payload.secret !== SHARED_SECRET) {
+      return jsonOutput({ error: "unauthorized" });
+    }
+
+    var sheet = findSheetByGid(SHEET_GID);
+    if (!sheet) {
+      return jsonOutput({ error: "sheet_not_found" });
+    }
+
+    var greatRegions = payload.greatRegions || [];
+    var pastoralZones = payload.pastoralZones || [];
+    var summary = payload.summary || {};
+
+    sheet.getRange(1, 1, MAX_CLEARED_ROWS, 13).clearContent();
+
+    sheet.getRange(1, 1, 1, 6).setValues([
+      ["區域", "區長", "報名人數", "註冊人數", "3人團隊人數", "6人團隊人數"]
+    ]);
+
+    var rows = [];
+    rows.push(["大區", "", "", "", "", ""]);
+    greatRegions.forEach(function (r) {
+      rows.push([r.label || "", "", r.signupCount || 0, r.registeredCount || 0, r.team3Count || 0, r.team6Count || 0]);
+    });
+    rows.push(["", "", "", "", "", ""]); // blank separator row between 大區 and 牧區
+    rows.push(["牧區", "", "", "", "", ""]);
+    pastoralZones.forEach(function (r) {
+      rows.push([r.label || "", r.leaderName || "", r.signupCount || 0, r.registeredCount || 0, r.team3Count || 0, r.team6Count || 0]);
+    });
+
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, 6).setValues(rows);
+    }
+
+    // Summary block sits at H2:M3, aligned next to the "大區" label row and
+    // the first region row — a fixed 2-row block, independent of how many
+    // region/zone rows exist above.
+    sheet.getRange(2, 8, 1, 6).setValues([[
+      "未有牧區資料未加入計畫", "未有牧區資料已加入計畫",
+      "有牧區資料未加入計畫", "有牧區資料有加入計畫",
+      "總參加人數", "總註冊人數"
+    ]]);
+    sheet.getRange(3, 8, 1, 6).setValues([[
+      summary.withoutPastoralZoneNotJoined || 0,
+      summary.withoutPastoralZoneJoined || 0,
+      summary.withPastoralZoneNotJoined || 0,
+      summary.withPastoralZoneJoined || 0,
+      summary.totalJoined || 0,
+      summary.totalRegistered || 0
+    ]]);
+
+    return jsonOutput({ ok: true, greatRegionCount: greatRegions.length, pastoralZoneCount: pastoralZones.length });
+  } catch (err) {
+    return jsonOutput({ error: String(err) });
+  }
+}
+
+function findSheetByGid(gid) {
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === gid) return sheets[i];
+  }
+  return null;
+}
+
+function jsonOutput(body) {
+  return ContentService.createTextOutput(JSON.stringify(body))
+    .setMimeType(ContentService.MimeType.JSON);
+}

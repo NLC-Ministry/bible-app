@@ -1838,10 +1838,16 @@
                   <h3 class="card-title" id="admin-registration-statistics-title">報名與註冊統計</h3>
                   <p>比較有效帳號的註冊人數，以及加入所選讀經計畫的報名人數。</p>
                 </div>
-                <button type="button" class="secondary-btn" id="admin-registration-statistics-export" disabled>
-                  <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true"></span>
-                  匯出 CSV
-                </button>
+                <div style="display:flex; flex-wrap:wrap; gap:0.5rem; flex-shrink:0;">
+                  <button type="button" class="secondary-btn" id="admin-registration-statistics-sheet-sync" disabled title="依目前顯示的資料，覆寫到「速讀報名統計」Google 試算表的「最新速讀狀況」分頁">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+                    更新到 Google 試算表
+                  </button>
+                  <button type="button" class="secondary-btn" id="admin-registration-statistics-export" disabled>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true"></span>
+                    匯出 CSV
+                  </button>
+                </div>
               </div>
               <label class="admin-registration-statistics__filter" for="admin-registration-statistics-plan">
                 <span>讀經計畫</span>
@@ -2425,7 +2431,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260811_registration-team-counts"></script>
+  <script type="module" src="js/app.js?v=20260811_registration-sheet-sync"></script>
 </body>
 
 </html>

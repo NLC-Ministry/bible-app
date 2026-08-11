@@ -105,3 +105,45 @@ live inside one) — see step 5 below.
      'x-webhook-secret sent to issue-report-sheet-sync'
    );
    ```
+
+## 報名與註冊統計 → Google 試算表同步 (`nlc-data`'s `sync_registration_stats_sheet` action)
+
+Unlike `issue-report-sheet-sync`, this is **not** a separate Edge Function or
+a DB trigger — it's a new `action` inside `nlc-data` itself, called directly
+by an authenticated admin clicking "更新到 Google 試算表" in 系統管理 →
+報名與註冊統計. The client (`js/modules/admin.js`) builds the exact row shape
+(including the pastoral-zone leader names, looked up from the same source as
+組織架構權限總覽); `nlc-data` re-validates `isAdmin(profile)`, sanitizes the
+shape, and forwards it — with a shared secret, not the caller's token — to a
+Google Apps Script Web App bound to the church's shared "速讀報名統計" sheet.
+It **overwrites** the sheet's whole table every time (not an append), so a
+shorter region/zone list than last time doesn't leave stale rows.
+
+Required Supabase Edge Function secrets on `nlc-data` (in addition to the
+defaults above and its own existing `NLC_*` secrets):
+
+```bash
+REGISTRATION_STATS_SHEET_WEBHOOK_URL=<Apps Script Web App /exec URL>    # from step 2 below
+REGISTRATION_STATS_SHEET_WEBHOOK_SECRET=<random string you choose>      # checked by the Apps Script doPost, see registration-stats-apps-script.gs.txt
+```
+
+### One-time setup
+
+1. Pick a random secret string for `REGISTRATION_STATS_SHEET_WEBHOOK_SECRET`.
+2. Open the target Google Sheet ("速讀報名統計") → Extensions → Apps Script.
+   Paste the contents of `registration-stats-apps-script.gs.txt` (same folder
+   as this README), replace `SHARED_SECRET` with the value from step 1. Then
+   Deploy → New deployment → type "Web app", execute as "Me", access "Anyone".
+   Copy the deployment URL — that's `REGISTRATION_STATS_SHEET_WEBHOOK_URL`.
+3. Set both secrets above via `supabase secrets set` (or the Dashboard) and
+   redeploy `nlc-data`:
+   ```bash
+   supabase functions deploy nlc-data --no-verify-jwt
+   ```
+   (`nlc-data` already needs `--no-verify-jwt` for the Logto-token reasons
+   described at the top of this README — this isn't new for this feature,
+   just a reminder it's still required after adding the two secrets above.)
+4. No new migration and no Vault secret needed — this path never touches
+   Postgres directly for delivery; it only calls the existing
+   `get_admin_registration_statistics` RPC indirectly (via the admin panel
+   already loading its data), then forwards what's already on screen.

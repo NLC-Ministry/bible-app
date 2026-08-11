@@ -94,7 +94,7 @@ let adminUserDirectoryFilteredProfiles = [];
 // printed rosters, not alphabetical/insertion order. Anything outside these
 // lists is still exported, just sorted after the known names (never
 // silently dropped) and alphabetized among itself for determinism.
-const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝"];
+const CHURCH_GREAT_REGION_ORDER = ["東區", "西區", "南區", "北區", "青少年", "慶典", "創藝", "花蓮", "桃園"];
 const CHURCH_PASTORAL_ZONE_ORDER = [
   "大安1", "大安2", "大安3", "大安4", "大安6", "大安7", "大安8", "大安9", "大安10", "大安11", "大安12",
   "中正1", "中正2", "中正3", "中正4", "中正5",
@@ -866,12 +866,86 @@ function exportAdminRegistrationStatistics() {
   URL.revokeObjectURL(url);
 }
 
+/** Zone leaders come from the org-permissions data source (managed_zones/pastoral_zone), not the registration-stats RPC — it has no leader field. */
+async function buildPastoralZoneLeaderNameMap() {
+  const map = new Map();
+  const result = await db.fetchManagedScopeProfiles();
+  if (result.error) return map;
+  (result.data || []).forEach(profile => {
+    if (getUserRoleCode(profile) !== "zone_leader") return;
+    const config = getManagedScopeConfig(profile);
+    const scopes = getProfileDefaultManagedScopes(profile, config);
+    const name = String(profile.name || "").trim();
+    if (!name) return;
+    scopes.forEach(zoneName => {
+      const existing = map.get(zoneName);
+      map.set(zoneName, existing ? `${existing}、${name}` : name);
+    });
+  });
+  return map;
+}
+
+export async function buildAdminRegistrationStatisticsSheetPayload(context) {
+  const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
+  const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
+  const summary = getAdminRegistrationStatisticsSummary(context);
+  const leaderNameByZone = await buildPastoralZoneLeaderNameMap();
+
+  const toRow = row => ({
+    label: sanitizeRegistrationStatisticsText(row.label),
+    signupCount: Number(row.signupCount || 0),
+    registeredCount: Number(row.registeredCount || 0),
+    team3Count: Number(row.team3Count || 0),
+    team6Count: Number(row.team6Count || 0)
+  });
+
+  return {
+    planName: String(context && context.planName || ""),
+    greatRegions: sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label).map(toRow),
+    pastoralZones: sortByChurchOrgOrder(pastoralZones, comparePastoralZones, row => row.label).map(row => ({
+      ...toRow(row),
+      leaderName: leaderNameByZone.get(sanitizeRegistrationStatisticsText(row.label)) || ""
+    })),
+    summary: {
+      withoutPastoralZoneNotJoined: Number(summary.withoutPastoralZoneNotJoined || 0),
+      withoutPastoralZoneJoined: Number(summary.withoutPastoralZoneJoined || 0),
+      withPastoralZoneNotJoined: Number(summary.withPastoralZoneNotJoined || 0),
+      withPastoralZoneJoined: Number(summary.withPastoralZoneJoined || 0),
+      totalJoined: Number(summary.totalJoined || 0),
+      totalRegistered: Number(summary.totalRegistered || 0)
+    }
+  };
+}
+
+async function syncAdminRegistrationStatisticsToSheet() {
+  if (!adminRegistrationStatistics) return;
+  const button = document.getElementById("admin-registration-statistics-sheet-sync");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "更新中…";
+  }
+  try {
+    const payload = await buildAdminRegistrationStatisticsSheetPayload(adminRegistrationStatistics);
+    const result = await db.syncRegistrationStatisticsToSheet(payload);
+    if (typeof showToast === "function") {
+      showToast(result && result.success ? "已更新到 Google 試算表。" : (result && result.message) || "更新到 Google 試算表失敗，請稍後再試。");
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "更新到 Google 試算表";
+    }
+  }
+}
+
 async function loadAdminRegistrationStatistics(globalPlanId) {
   const content = document.getElementById("admin-registration-statistics-content");
   const exportButton = document.getElementById("admin-registration-statistics-export");
+  const sheetSyncButton = document.getElementById("admin-registration-statistics-sheet-sync");
   if (!content || !exportButton) return;
   adminRegistrationStatistics = null;
   exportButton.disabled = true;
+  if (sheetSyncButton) sheetSyncButton.disabled = true;
   content.innerHTML = '<div class="admin-registration-statistics__empty">讀取統計資料中…</div>';
 
   const result = await db.getAdminRegistrationStatistics(globalPlanId);
@@ -891,6 +965,7 @@ async function loadAdminRegistrationStatistics(globalPlanId) {
       ${renderAdminRegistrationStatisticsTable("牧區統計", "牧區", result.context.pastoralZones)}
     </div>`;
   exportButton.disabled = false;
+  if (sheetSyncButton) sheetSyncButton.disabled = false;
 }
 
 export async function renderAdminRegistrationStatistics() {
@@ -924,6 +999,8 @@ export async function renderAdminRegistrationStatistics() {
   }
   planSelect.onchange = () => loadAdminRegistrationStatistics(planSelect.value);
   exportButton.onclick = exportAdminRegistrationStatistics;
+  const sheetSyncButton = document.getElementById("admin-registration-statistics-sheet-sync");
+  if (sheetSyncButton) sheetSyncButton.onclick = syncAdminRegistrationStatisticsToSheet;
   await loadAdminRegistrationStatistics(planSelect.value);
   if (typeof hydrateIcons === "function") hydrateIcons(column);
 }

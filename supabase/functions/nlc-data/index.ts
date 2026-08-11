@@ -449,7 +449,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (!["save_profile", "rpc", "send_care_reminder", "mark_issue_report_reply_seen"].includes(action) && (!table || typeof table !== "string")) {
+    if (!["save_profile", "rpc", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet"].includes(action) && (!table || typeof table !== "string")) {
       return jsonResponse({ error: "missing_table" }, 400);
     }
 
@@ -619,6 +619,68 @@ Deno.serve(async (req: Request) => {
       }
 
       return jsonResponse({ data: savedProfile, profile: savedProfile, project_url: supabaseUrl, profile_id: profile.id });
+    }
+
+    // ── sync_registration_stats_sheet: admin-only, forwards a formatted
+    // snapshot of 報名與註冊統計 to a Google Apps Script Web App bound to the
+    // church's shared "速讀報名統計" spreadsheet. The client builds the rows
+    // (it already has the zone-leader-name lookup used by the org-permissions
+    // panel); this function only re-validates shape/admin access and adds the
+    // shared secret before forwarding — the Apps Script side never sees a
+    // Supabase/Logto token, just this one shared secret.
+    if (action === "sync_registration_stats_sheet") {
+      if (!isAdmin(profile)) return jsonResponse({ error: "forbidden" }, 403);
+
+      const sheetUrl = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
+      const sheetSecret = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
+      if (!sheetUrl || !sheetSecret) {
+        return jsonResponse({ error: "server_not_configured" }, 500);
+      }
+
+      const p = body.payload && typeof body.payload === "object" ? body.payload : {};
+      const sanitizeCounts = (row: any) => ({
+        label: String(row?.label ?? "").slice(0, 40),
+        signupCount: Number(row?.signupCount) || 0,
+        registeredCount: Number(row?.registeredCount) || 0,
+        team3Count: Number(row?.team3Count) || 0,
+        team6Count: Number(row?.team6Count) || 0
+      });
+      const greatRegions = Array.isArray(p.great_regions) ? p.great_regions.map(sanitizeCounts) : [];
+      const pastoralZones = Array.isArray(p.pastoral_zones)
+        ? p.pastoral_zones.map((row: any) => ({ ...sanitizeCounts(row), leaderName: String(row?.leaderName ?? "").slice(0, 60) }))
+        : [];
+      const s = p.summary && typeof p.summary === "object" ? p.summary : {};
+
+      try {
+        const sheetResponse = await fetch(sheetUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            secret: sheetSecret,
+            planName: String(p.plan_name ?? "").slice(0, 60),
+            greatRegions,
+            pastoralZones,
+            summary: {
+              withoutPastoralZoneNotJoined: Number(s.withoutPastoralZoneNotJoined) || 0,
+              withoutPastoralZoneJoined: Number(s.withoutPastoralZoneJoined) || 0,
+              withPastoralZoneNotJoined: Number(s.withPastoralZoneNotJoined) || 0,
+              withPastoralZoneJoined: Number(s.withPastoralZoneJoined) || 0,
+              totalJoined: Number(s.totalJoined) || 0,
+              totalRegistered: Number(s.totalRegistered) || 0
+            }
+          })
+        });
+        if (!sheetResponse.ok) {
+          const text = await sheetResponse.text().catch(() => "");
+          console.error("sync_registration_stats_sheet: sheet webhook rejected the payload", sheetResponse.status, text);
+          return jsonResponse({ error: "sheet_webhook_failed" }, 502);
+        }
+      } catch (err) {
+        console.error("sync_registration_stats_sheet: failed to reach sheet webhook", err);
+        return jsonResponse({ error: "sheet_webhook_unreachable" }, 502);
+      }
+
+      return jsonResponse({ data: { ok: true } });
     }
 
     // Any authenticated member may file an issue report (insert only). Reads and
