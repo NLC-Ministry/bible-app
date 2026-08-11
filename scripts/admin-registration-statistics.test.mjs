@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const migration = readFileSync("supabase/migrations/0052_admin_registration_statistics.sql", "utf8");
 const summaryMigration = readFileSync("supabase/migrations/0055_admin_registration_summary.sql", "utf8");
+const teamCountsMigration = readFileSync("supabase/migrations/0080_admin_registration_team_counts.sql", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
@@ -82,6 +83,27 @@ describe("admin registration statistics", () => {
     expect(admin).toContain('const regions = sortByChurchOrgOrder(orgStructure.regions || [], compareGreatRegions, region => region);');
     expect(admin).toContain('const zones = sortByChurchOrgOrder(zonesMap[region] || [], comparePastoralZones, zone => zone);');
     expect(admin).toContain("const sortedTeams = sortByChurchOrgOrder(teams, comparePastoralZones, team => {");
+  });
+
+  it("adds 3-person and 6-person reading-team join counts per great region and pastoral zone", () => {
+    expect(teamCountsMigration).toContain("CREATE OR REPLACE FUNCTION public.get_admin_registration_statistics(");
+    expect(teamCountsMigration).toContain("JOIN public.reading_teams AS rt ON rt.id = tm.team_id");
+    expect(teamCountsMigration).toContain("tm.global_plan_id = p_global_plan_id");
+    expect(teamCountsMigration).toContain("team3.division = 3");
+    expect(teamCountsMigration).toContain("team6.division = 6");
+    expect(teamCountsMigration).toContain("'team3Count', team3_count");
+    expect(teamCountsMigration).toContain("'team6Count', team6_count");
+    // Both rollups (pastoral zone AND great region) must expose the new counts,
+    // not just one of them.
+    expect(teamCountsMigration.match(/'team3Count', team3_count/g)?.length).toBe(2);
+    expect(teamCountsMigration.match(/'team6Count', team6_count/g)?.length).toBe(2);
+
+    expect(admin).toContain('<th>3 人團隊人數</th>');
+    expect(admin).toContain('<th>6 人團隊人數</th>');
+    expect(admin).toContain("Number(row.team3Count || 0)");
+    expect(admin).toContain("Number(row.team6Count || 0)");
+    expect(admin).toContain('esc(Number(row.team3Count || 0))');
+    expect(admin).toContain('esc(Number(row.team6Count || 0))');
   });
 
   it("bumps the browser cache keys for the new UI", () => {

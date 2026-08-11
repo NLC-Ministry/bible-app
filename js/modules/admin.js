@@ -761,8 +761,10 @@ function renderAdminRegistrationStatisticsTable(title, label, rows) {
           <td>${escapeHTML(row.label || "未設定")}</td>
           <td>${Number(row.signupCount || 0)}</td>
           <td>${Number(row.registeredCount || 0)}</td>
+          <td>${Number(row.team3Count || 0)}</td>
+          <td>${Number(row.team6Count || 0)}</td>
         </tr>`).join("")
-    : `<tr><td colspan="3" class="admin-registration-statistics__empty">目前沒有資料</td></tr>`;
+    : `<tr><td colspan="5" class="admin-registration-statistics__empty">目前沒有資料</td></tr>`;
   return `
     <section class="admin-registration-statistics__table-section">
       <h4>${title}</h4>
@@ -773,6 +775,8 @@ function renderAdminRegistrationStatisticsTable(title, label, rows) {
               <th>${label}</th>
               <th>報名人數</th>
               <th>註冊人數</th>
+              <th>3 人團隊人數</th>
+              <th>6 人團隊人數</th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -823,7 +827,9 @@ export function convertAdminRegistrationStatisticsToCSV(context) {
   const formatRows = rows => rows.map(row => [
     esc(sanitizeRegistrationStatisticsText(row.label)),
     esc(Number(row.signupCount || 0)),
-    esc(Number(row.registeredCount || 0))
+    esc(Number(row.registeredCount || 0)),
+    esc(Number(row.team3Count || 0)),
+    esc(Number(row.team6Count || 0))
   ].join(","));
 
   return [
@@ -835,10 +841,10 @@ export function convertAdminRegistrationStatisticsToCSV(context) {
     [esc("總參加人數"), esc(Number(summary.totalJoined || 0))].join(","),
     [esc("總註冊人數"), esc(Number(summary.totalRegistered || 0))].join(","),
     "",
-    [esc("大區"), esc("報名人數"), esc("註冊人數")].join(","),
+    [esc("大區"), esc("報名人數"), esc("註冊人數"), esc("3 人團隊人數"), esc("6 人團隊人數")].join(","),
     ...formatRows(sortByChurchOrgOrder(greatRegions, compareGreatRegions, row => row.label)),
     "",
-    [esc("牧區"), esc("報名人數"), esc("註冊人數")].join(","),
+    [esc("牧區"), esc("報名人數"), esc("註冊人數"), esc("3 人團隊人數"), esc("6 人團隊人數")].join(","),
     ...formatRows(sortByChurchOrgOrder(pastoralZones, comparePastoralZones, row => row.label))
   ].join("\n");
 }
