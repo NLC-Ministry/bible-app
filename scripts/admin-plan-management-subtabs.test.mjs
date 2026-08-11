@@ -122,6 +122,28 @@ describe("plan management: 4-tab restructure", () => {
     expect(mountFn).not.toContain("plan-org-stats-header");
   });
 
+  it("populates the shared org filter selects on every subtab load, not only when 組員總覽/計畫統計 happens to run renderPlanMembersView()", () => {
+    // Regression: members-organization-controls (大區/牧區/小組 selects) is
+    // shared across all four subtabs, but only got populated as a side
+    // effect of renderPlanMembersView(), which only runs for the
+    // 'members'/'statistics' subtabs. Since the default subtab on a fresh
+    // session is 'join-status', the selects stayed empty (no <option>s at
+    // all — not just unselected) until the admin manually switched tabs.
+    const start = admin.indexOf("async function loadActiveAdminPlanSubtab(forceRefresh = false)");
+    const end = admin.indexOf("\nexport async function renderAdminPlanManagement()", start);
+    const loader = admin.slice(start, end);
+    const populateCallIndex = loader.indexOf("window.populateMembersSelector()");
+    const joinStatusIndex = loader.indexOf("activeAdminPlanSubtab === 'join-status'");
+    expect(populateCallIndex).toBeGreaterThan(-1);
+    expect(joinStatusIndex).toBeGreaterThan(-1);
+    // Must run before the per-subtab dispatch, not nested inside only one branch.
+    expect(populateCallIndex).toBeLessThan(joinStatusIndex);
+    expect(loader).toContain("typeof window.populateMembersSelector === 'function'");
+
+    const plan = read("js/modules/plan.js");
+    expect(plan).toContain("window.populateMembersSelector = populateMembersSelector;");
+  });
+
   it("refreshes only the currently visible org-filtered panel", () => {
     const fnStart = admin.indexOf("async function refreshAdminTeamRegistrationFilters()");
     const fnEnd = admin.indexOf("}", fnStart);

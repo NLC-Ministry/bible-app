@@ -8197,6 +8197,9 @@ if (typeof renderPlanRankingView === 'function') {
 if (typeof renderPlanMembersView === 'function') {
   window.renderPlanMembersView = renderPlanMembersView;
 }
+if (typeof populateMembersSelector === 'function') {
+  window.populateMembersSelector = populateMembersSelector;
+}
 if (typeof renderPlanStatsView === 'function') {
   window.renderPlanStatsView = renderPlanStatsView;
 }

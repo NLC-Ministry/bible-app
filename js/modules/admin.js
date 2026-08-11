@@ -1284,6 +1284,20 @@ async function loadActiveAdminPlanSubtab(forceRefresh = false) {
     if (result.status === 'rejected') console.warn(`[Admin] ${label} error caught:`, result.reason);
   };
 
+  // The 大區/牧區/小組 org filter bar (members-organization-controls) is
+  // shared across all four subtabs (mountPlanManagementSections() moves it
+  // above the tab bar, outside any one tab's panel), but it only used to get
+  // populated as a side effect of renderPlanMembersView() — which only runs
+  // for the 'members'/'statistics' subtabs. On a fresh session the default
+  // subtab is 'join-status', so the filter selects stayed empty (no
+  // <option>s at all) until the user manually switched tabs. Populate them
+  // here unconditionally instead — it's a cheap, synchronous DOM operation
+  // (reads already-loaded state.orgStructure/state.currentUser, no network
+  // call) and is idempotent (its change-listener bindings are dataset-guarded).
+  if (typeof window.populateMembersSelector === 'function') {
+    try { window.populateMembersSelector(); } catch (e) { console.warn('[Admin] populateMembersSelector error caught:', e); }
+  }
+
   if (activeAdminPlanSubtab === 'join-status') {
     // These two independent RPCs are the only data needed for the first
     // visible subtab. Run them together instead of adding both network
