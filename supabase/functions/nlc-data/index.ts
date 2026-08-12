@@ -69,6 +69,15 @@ const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics",
   "set_profile_managed_scopes"
 ]);
+const QUIZ_RPC_FUNCTIONS = new Set([
+  "get_daily_quiz_dashboard",
+  "review_daily_quiz",
+  "update_daily_quiz_questions",
+  "publish_daily_quiz",
+  "submit_daily_quiz",
+  "get_quiz_notifications",
+  "mark_quiz_notifications_read"
+]);
 const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 // Same as PROFILE_SELECT minus name_review_approved (migration 0069) — used
 // as a retry target wherever a query against PROFILE_SELECT fails, so a
@@ -80,7 +89,8 @@ const RPC_FUNCTIONS = new Set([
   "publish_global_plan_rules",
   "get_user_rankings",
   ...TEAM_RPC_FUNCTIONS,
-  ...ADMIN_RPC_FUNCTIONS
+  ...ADMIN_RPC_FUNCTIONS,
+  ...QUIZ_RPC_FUNCTIONS
 ]);
 
 function jsonResponse(body: unknown, status = 200) {
@@ -484,6 +494,7 @@ Deno.serve(async (req: Request) => {
       // runs on) and raises "profile_required".
       const rpcArgs = (functionName === "publish_global_plan_rules"
         || TEAM_RPC_FUNCTIONS.has(functionName)
+        || QUIZ_RPC_FUNCTIONS.has(functionName)
         || functionName === "get_admin_registration_statistics")
         ? { ...(body.args || {}), p_actor_id: profile.id }
         : (body.args || {});

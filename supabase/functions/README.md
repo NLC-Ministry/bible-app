@@ -31,6 +31,44 @@ SUPABASE_ANON_KEY
 
 Both functions must have `verify_jwt = false` because the incoming bearer token is a Logto token, not a Supabase token.
 
+## 每日小測驗生成 (`generate-daily-quizzes`)
+
+This scheduled function resolves the current church-campaign chapters in
+`Asia/Taipei`, fetches the scripture once, then generates variants A/B/C with
+exactly one OpenAI Responses API request per variant. Database reservation is
+atomic and each `(plan, date, variant)` permits only one automatic attempt, so
+cron retries cannot exceed three automatic AI requests in one day.
+
+Required Edge Function secrets:
+
+```bash
+OPENAI_API_KEY=<server-only OpenAI API key>
+OPENAI_QUIZ_MODEL=gpt-5-mini
+QUIZ_GENERATION_CRON_SECRET=<random shared secret>
+```
+
+Deploy without Supabase JWT verification because pg_cron authenticates with
+the custom `x-cron-secret` header:
+
+```bash
+supabase functions deploy generate-daily-quizzes --no-verify-jwt
+```
+
+Migration `0085_schedule_daily_church_quizzes.sql` runs it daily at 00:05
+Taipei time. Store the same cron secret in Vault once:
+
+```sql
+select vault.create_secret(
+  'REPLACE_WITH_QUIZ_GENERATION_CRON_SECRET',
+  'quiz_generation_cron_secret',
+  'x-cron-secret sent to generate-daily-quizzes'
+);
+```
+
+Generated questions remain `pending` until a pastor or administrator approves
+them. Editing a question resets approval; a version already used by a published
+quiz is immutable so members never see the content change while answering.
+
 ## issue-report-sheet-sync
 
 Mirrors every new `public.issue_reports` row to an engineering-team Google

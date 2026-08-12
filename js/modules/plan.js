@@ -2805,6 +2805,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 
   const container = document.getElementById("plan-tasks-list");
   if (!container || !state.activePlan) return;
+  hideDailyQuizSection();
 
   if (!state.inlineReader?.active) {
     container.classList.remove("hidden");
@@ -2838,6 +2839,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 
   if (!selectedDay) {
     container.innerHTML = "";
+    hideDailyQuizSection();
     return;
   }
   const currentRound = Number(state.activePlan.currentRound || 1);
@@ -2954,6 +2956,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
         ${(window.APP_COPY && window.APP_COPY.plan.restDayBanner) || "今天是補讀或靈修休息日，好好親近神吧"}
       </div>
     `;
+    hideDailyQuizSection();
     return;
   }
 
@@ -3006,6 +3009,180 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     openButton.addEventListener("click", openChapter);
     container.appendChild(taskItem);
   });
+  void renderDailyQuizSection(state.activePlan, selectedDay, currentRequestId);
+}
+
+let dailyQuizRenderRequestId = 0;
+
+function quizEscape(value) {
+  return typeof escapeHTML === "function"
+    ? escapeHTML(String(value ?? ""))
+    : String(value ?? "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+    })[character]);
+}
+
+function hideDailyQuizSection() {
+  const section = document.getElementById("daily-quiz-section");
+  const content = document.getElementById("daily-quiz-content");
+  if (section) section.classList.add("hidden");
+  if (content) content.innerHTML = "";
+}
+
+function quizPublisherLabel(role) {
+  return ({
+    admin: "系統管理員",
+    pastor: "牧者",
+    great_zone_leader: "大區長",
+    zone_leader: "區長",
+    group_leader: "小組長"
+  })[role] || "管理者";
+}
+
+function renderCompletedDailyQuiz(content, quiz) {
+  const attempt = quiz.attempt;
+  content.innerHTML = `
+    <div class="daily-quiz-heading">
+      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">完成作答</h3></div>
+      <span class="daily-quiz-score">${Number(attempt.score || 0)}／${Number(attempt.total || 5)}</span>
+    </div>
+    <div class="daily-quiz-review-list">
+      ${(quiz.questions || []).map((question, index) => {
+        const chosen = Number((attempt.answers || [])[index]);
+        const correct = Number(question.correctIndex);
+        return `<article class="daily-quiz-review-item">
+          <p><strong>${index + 1}. ${quizEscape(question.question)}</strong></p>
+          <p class="${chosen === correct ? "daily-quiz-answer-correct" : "daily-quiz-answer-wrong"}">
+            你的答案：${quizEscape((question.options || [])[chosen] || "未作答")}
+          </p>
+          ${chosen === correct ? "" : `<p class="daily-quiz-answer-correct">正確答案：${quizEscape((question.options || [])[correct] || "")}</p>`}
+          <p class="daily-quiz-explanation">${quizEscape(question.explanation)} · ${quizEscape(question.verseRef)}</p>
+        </article>`;
+      }).join("")}
+    </div>`;
+}
+
+function bindDailyQuizSubmission(content, quiz, plan, quizDate) {
+  const form = content.querySelector("#daily-quiz-form");
+  if (!form) return;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const answers = (quiz.questions || []).map((_question, index) => {
+      const selected = form.querySelector(`input[name="daily-quiz-${index}"]:checked`);
+      return selected ? Number(selected.value) : null;
+    });
+    if (answers.some(answer => answer === null)) {
+      if (typeof showToast === "function") showToast("請完成全部五題後再送出");
+      return;
+    }
+    const button = form.querySelector("button[type='submit']");
+    if (button) button.disabled = true;
+    const result = await db.submitDailyQuiz(quiz.publicationId, answers);
+    if (!result.success) {
+      if (button) button.disabled = false;
+      if (typeof showToast === "function") showToast(result.message || "小測驗送出失敗");
+      return;
+    }
+    if (typeof showToast === "function") showToast(`作答完成：${result.data.score}／${result.data.total}`);
+    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId);
+  });
+}
+
+function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
+  if (quiz.attempt) {
+    renderCompletedDailyQuiz(content, quiz);
+    return;
+  }
+  content.innerHTML = `
+    <div class="daily-quiz-heading">
+      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">5 題選擇題</h3></div>
+      <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發布</span>
+    </div>
+    <form id="daily-quiz-form" class="daily-quiz-form">
+      ${(quiz.questions || []).map((question, questionIndex) => `
+        <fieldset class="daily-quiz-question">
+          <legend>${questionIndex + 1}. ${quizEscape(question.question)}</legend>
+          <span class="daily-quiz-verse-ref">${quizEscape(question.verseRef)}</span>
+          <div class="daily-quiz-options">
+            ${(question.options || []).map((option, optionIndex) => `
+              <label><input type="radio" name="daily-quiz-${questionIndex}" value="${optionIndex}"><span>${quizEscape(option)}</span></label>
+            `).join("")}
+          </div>
+        </fieldset>
+      `).join("")}
+      <button type="submit" class="primary-btn daily-quiz-submit">送出答案</button>
+    </form>`;
+  bindDailyQuizSubmission(content, quiz, plan, quizDate);
+}
+
+function renderPublisherDailyQuiz(content, context, plan, quizDate) {
+  const groups = Array.isArray(context.managedGroups) ? context.managedGroups : [];
+  const publishedGroups = groups.filter(group => group.publication);
+  const remainingCount = Math.max(0, groups.length - publishedGroups.length);
+  const approvedCount = Array.isArray(context.approvedVariants) ? context.approvedVariants.length : 0;
+  const lockedPublisher = groups.length === 1 && groups[0]?.publication
+    ? quizPublisherLabel(groups[0].publication.publisherRole)
+    : "";
+  const disabled = approvedCount === 0 || remainingCount === 0;
+  const buttonLabel = approvedCount === 0
+    ? "等待牧者審核"
+    : remainingCount === 0
+      ? `已由${lockedPublisher || "管理者"}發布`
+      : "發布小測驗";
+  content.innerHTML = `
+    <div class="daily-quiz-heading">
+      <div><p class="daily-quiz-eyebrow">小測驗</p><h3 id="daily-quiz-title">今日發布</h3></div>
+      <span class="daily-quiz-status">已發布 ${publishedGroups.length}／${groups.length} 個小組</span>
+    </div>
+    <p class="daily-quiz-publisher-copy">按下後會自動發送給你負責範圍內尚未收到測驗的小組員。</p>
+    <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" ${disabled ? "disabled" : ""}>${buttonLabel}</button>`;
+  const button = content.querySelector("#daily-quiz-publish-btn");
+  if (!button || disabled) return;
+  button.addEventListener("click", async () => {
+    if (!window.confirm(`確定發布給 ${remainingCount} 個尚未收到測驗的小組嗎？`)) return;
+    button.disabled = true;
+    const result = await db.publishDailyQuiz(plan, quizDate, [], true);
+    if (!result.success) {
+      button.disabled = false;
+      if (typeof showToast === "function") showToast(result.message || "小測驗發布失敗");
+      return;
+    }
+    if (typeof showToast === "function") showToast(`已發布給 ${result.data.publishedCount} 個小組`);
+    if (typeof window.refreshCareReminderBadge === "function") void window.refreshCareReminderBadge({ force: true });
+    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId);
+  });
+}
+
+async function renderDailyQuizSection(plan, selectedDay, trackerRequestId) {
+  const section = document.getElementById("daily-quiz-section");
+  const content = document.getElementById("daily-quiz-content");
+  if (!section || !content || !plan || !selectedDay) return;
+  const quizDate = String(selectedDay.isoDate || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(quizDate)
+    || typeof db === "undefined"
+    || typeof db._quizPlanId !== "function"
+    || !db._quizPlanId(plan)) {
+    hideDailyQuizSection();
+    return;
+  }
+
+  const requestId = ++dailyQuizRenderRequestId;
+  const result = await db.getDailyQuizDashboard(plan, quizDate);
+  if (requestId !== dailyQuizRenderRequestId || trackerRequestId !== lastTrackerRequestId) return;
+  if (!result.success) {
+    hideDailyQuizSection();
+    return;
+  }
+  const context = result.context || {};
+  if (!context.myQuiz && !context.canPublish) {
+    hideDailyQuizSection();
+    return;
+  }
+
+  section.classList.remove("hidden");
+  if (context.myQuiz) renderAssignedDailyQuiz(content, context.myQuiz, plan, quizDate);
+  else renderPublisherDailyQuiz(content, context, plan, quizDate);
+  if (typeof hydrateIcons === "function") hydrateIcons(section);
 }
 
 function getChapterCheckboxState(ch, currentRound) {

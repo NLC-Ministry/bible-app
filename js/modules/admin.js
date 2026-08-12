@@ -1168,7 +1168,7 @@ function mountPlanManagementSections() {
   }
 }
 
-const ADMIN_PLAN_SUBTABS = ['join-status', 'members', 'teams', 'statistics'];
+const ADMIN_PLAN_SUBTABS = ['join-status', 'members', 'teams', 'statistics', 'quizzes'];
 let activeAdminPlanSubtab = ADMIN_PLAN_SUBTABS[0];
 
 function setAdminPlanSubtab(subtab, loadData = true) {
@@ -1279,6 +1279,211 @@ async function selectManagementPlan(planKey, forceRefresh = false) {
   }
 }
 
+function adminQuizDateToday() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function adminQuizEscape(value) {
+  return typeof escapeHTML === 'function' ? escapeHTML(String(value ?? '')) : String(value ?? '');
+}
+
+function adminQuizPublisherLabel(role) {
+  return ({
+    admin: '系統管理員', pastor: '牧者', great_zone_leader: '大區長',
+    zone_leader: '區長', group_leader: '小組長'
+  })[role] || '管理者';
+}
+
+function renderAdminQuizQuestionEditor(quiz) {
+  const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
+  if (questions.length !== 5) return '<p class="admin-daily-quiz-empty">題目尚未生成完成。</p>';
+  return `<div class="admin-daily-quiz-editor">
+    ${questions.map((question, questionIndex) => `
+      <fieldset class="admin-daily-quiz-question" data-question-index="${questionIndex}">
+        <legend>第 ${questionIndex + 1} 題</legend>
+        <label>題目<textarea class="form-control" data-field="question" rows="2">${adminQuizEscape(question.question)}</textarea></label>
+        <div class="admin-daily-quiz-options">
+          ${(question.options || []).map((option, optionIndex) => `
+            <label>選項 ${optionIndex + 1}<input class="form-control" data-option-index="${optionIndex}" value="${adminQuizEscape(option)}"></label>
+          `).join('')}
+        </div>
+        <div class="admin-daily-quiz-answer-row">
+          <label>正確答案<select class="form-control" data-field="correctIndex">
+            ${[0, 1, 2, 3].map(index => `<option value="${index}" ${Number(question.correctIndex) === index ? 'selected' : ''}>選項 ${index + 1}</option>`).join('')}
+          </select></label>
+          <label>經文出處<input class="form-control" data-field="verseRef" value="${adminQuizEscape(question.verseRef)}"></label>
+        </div>
+        <label>解說<textarea class="form-control" data-field="explanation" rows="2">${adminQuizEscape(question.explanation)}</textarea></label>
+      </fieldset>
+    `).join('')}
+    <button type="button" class="secondary-btn" data-quiz-action="save" data-quiz-id="${adminQuizEscape(quiz.id)}">儲存修改並重新送審</button>
+  </div>`;
+}
+
+function renderAdminQuizReviewCards(context) {
+  if (!context.canReview) return '';
+  const quizzes = Array.isArray(context.reviewQuizzes) ? context.reviewQuizzes : [];
+  const variants = ['A', 'B', 'C'];
+  return `<section class="glass-card admin-daily-quiz-block">
+    <div class="admin-daily-quiz-heading">
+      <div><p class="admin-registration-statistics__eyebrow">牧者審核</p><h2 id="admin-quizzes-title">今日共用題庫</h2></div>
+      <span class="admin-daily-quiz-request-count">AI 請求 ${Number(context.automaticRequestCount || 0)}／3</span>
+    </div>
+    <div class="admin-daily-quiz-versions">
+      ${variants.map(variant => {
+        const quiz = quizzes.find(item => item.variant === variant);
+        if (!quiz) return `<article class="admin-daily-quiz-version"><div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div></article>`;
+        const ready = quiz.generationStatus === 'ready';
+        const approved = quiz.reviewStatus === 'approved';
+        return `<article class="admin-daily-quiz-version" data-quiz-card="${adminQuizEscape(quiz.id)}">
+          <div class="admin-daily-quiz-version-title">
+            <strong>版本 ${variant}</strong>
+            <span class="role-badge ${approved ? 'approved' : ''}">${approved ? '已審核' : ready ? '待審核' : quiz.generationStatus === 'failed' ? '生成失敗' : '生成中'}</span>
+          </div>
+          ${quiz.generationError ? `<p class="admin-daily-quiz-error">${adminQuizEscape(quiz.generationError)}</p>` : ''}
+          ${ready ? `<div class="admin-daily-quiz-version-actions">
+            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">檢視／修改</button>
+            <button type="button" class="primary-btn" data-quiz-action="review" data-quiz-id="${adminQuizEscape(quiz.id)}" data-approved="${approved ? 'false' : 'true'}">${approved ? '取消審核' : '審核通過'}</button>
+          </div>
+          <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}">${renderAdminQuizQuestionEditor(quiz)}</div>` : ''}
+        </article>`;
+      }).join('')}
+    </div>
+    <p class="admin-daily-quiz-note">手動修改任何題目、答案或解說後，該版本會自動回到待審核狀態。</p>
+  </section>`;
+}
+
+function renderAdminQuizGroupRows(context) {
+  const groups = Array.isArray(context.managedGroups) ? context.managedGroups : [];
+  if (!groups.length) return '<p class="admin-daily-quiz-empty">目前沒有可管理的小組。</p>';
+  return `<div class="admin-daily-quiz-groups">
+    ${groups.map(group => {
+      const publication = group.publication;
+      const members = Array.isArray(group.members) ? group.members : [];
+      const completed = Number(group.completedCount || 0);
+      return `<details class="admin-daily-quiz-group" ${publication ? '' : ''}>
+        <summary>
+          <span><strong>${adminQuizEscape(group.name)}</strong><small>${adminQuizEscape(group.greatRegion)}／${adminQuizEscape(group.pastoralZone)}</small></span>
+          <span class="admin-daily-quiz-group-status">${publication
+            ? `已由${adminQuizPublisherLabel(publication.publisherRole)}發布 · ${completed}／${Number(group.memberCount || 0)} 完成`
+            : '尚未發布'}</span>
+          ${publication
+            ? '<button type="button" class="secondary-btn" disabled>已發布</button>'
+            : `<button type="button" class="secondary-btn" data-quiz-action="publish-group" data-group-id="${adminQuizEscape(group.id)}" ${context.approvedVariants?.length ? '' : 'disabled'}>個別發布</button>`}
+        </summary>
+        ${publication ? `<div class="admin-daily-quiz-results">
+          <div class="admin-daily-quiz-metrics"><span>已發布 <strong>${Number(group.memberCount || 0)} 人</strong></span><span>已完成 <strong>${completed} 人</strong></span><span>平均 <strong>${group.averageScore == null ? '—' : `${Number(group.averageScore).toFixed(1)}／5`}</strong></span></div>
+          <div class="admin-daily-quiz-member-list">
+            ${members.map(member => `<div><span>${adminQuizEscape(member.name)}</span><span>${member.completed ? `已完成 · ${Number(member.score || 0)}／${Number(member.total || 5)}` : '尚未作答'}</span></div>`).join('')}
+          </div>
+        </div>` : '<p class="admin-daily-quiz-empty">發布後才會顯示組員作答狀況。</p>'}
+      </details>`;
+    }).join('')}
+  </div>`;
+}
+
+function collectAdminQuizQuestions(root, quizId, originalQuestions) {
+  const editor = Array.from(root.querySelectorAll('[data-editor-for]'))
+    .find(element => element.dataset.editorFor === String(quizId));
+  if (!editor) return null;
+  return Array.from(editor.querySelectorAll('[data-question-index]')).map((field, index) => ({
+    id: String(originalQuestions?.[index]?.id || `q${index + 1}`),
+    question: field.querySelector('[data-field="question"]')?.value.trim() || '',
+    options: [0, 1, 2, 3].map(optionIndex => field.querySelector(`[data-option-index="${optionIndex}"]`)?.value.trim() || ''),
+    correctIndex: Number(field.querySelector('[data-field="correctIndex"]')?.value || 0),
+    explanation: field.querySelector('[data-field="explanation"]')?.value.trim() || '',
+    verseRef: field.querySelector('[data-field="verseRef"]')?.value.trim() || ''
+  }));
+}
+
+async function bindAdminDailyQuizActions(root, context, quizDate) {
+  root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
+    root.dataset.quizDate = event.target.value;
+    void renderAdminDailyQuizManagement(true, event.target.value);
+  });
+  root.querySelectorAll('[data-quiz-action]').forEach(button => {
+    button.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = button.dataset.quizAction;
+      const quizId = button.dataset.quizId;
+      if (action === 'toggle-edit') {
+        Array.from(root.querySelectorAll('[data-editor-for]'))
+          .find(element => element.dataset.editorFor === String(quizId))
+          ?.classList.toggle('hidden');
+        return;
+      }
+      if (action === 'review') {
+        button.disabled = true;
+        const result = await db.reviewDailyQuiz(quizId, button.dataset.approved === 'true');
+        if (!result.success && typeof showToast === 'function') showToast(result.message || '審核失敗');
+        await renderAdminDailyQuizManagement(true, quizDate);
+        return;
+      }
+      if (action === 'save') {
+        const quiz = (context.reviewQuizzes || []).find(item => String(item.id) === String(quizId));
+        const questions = collectAdminQuizQuestions(root, quizId, quiz?.questions || []);
+        button.disabled = true;
+        const result = await db.updateDailyQuizQuestions(quizId, questions);
+        if (typeof showToast === 'function') showToast(result.success ? '題目已更新，請重新審核' : result.message || '儲存失敗');
+        await renderAdminDailyQuizManagement(true, quizDate);
+        return;
+      }
+      if (action === 'publish-group' || action === 'publish-all') {
+        const groupIds = action === 'publish-group' ? [button.dataset.groupId] : [];
+        const targetCount = action === 'publish-group'
+          ? 1
+          : (context.managedGroups || []).filter(group => !group.publication).length;
+        if (!window.confirm(`確定發布給 ${targetCount} 個小組嗎？`)) return;
+        button.disabled = true;
+        const result = await db.publishDailyQuiz(state.activePlan, quizDate, groupIds, action === 'publish-all');
+        if (typeof showToast === 'function') showToast(result.success ? `已發布給 ${result.data.publishedCount} 個小組` : result.message || '發布失敗');
+        if (typeof window.refreshCareReminderBadge === 'function') void window.refreshCareReminderBadge({ force: true });
+        await renderAdminDailyQuizManagement(true, quizDate);
+      }
+    });
+  });
+}
+
+async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '') {
+  const root = document.getElementById('admin-daily-quiz-root');
+  if (!root || !state.activePlan) return;
+  const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate || ''))
+    ? String(requestedDate)
+    : (root.dataset.quizDate || adminQuizDateToday());
+  root.dataset.quizDate = quizDate;
+  root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
+  const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+  if (!result.success) {
+    root.innerHTML = `<div class="admin-user-directory__empty">${adminQuizEscape(result.message || '小測驗資料載入失敗')}</div>`;
+    return;
+  }
+  const context = result.context || {};
+  const groups = Array.isArray(context.managedGroups) ? context.managedGroups : [];
+  const remaining = groups.filter(group => !group.publication).length;
+  const approvedCount = Array.isArray(context.approvedVariants) ? context.approvedVariants.length : 0;
+  root.innerHTML = `
+    <div class="admin-daily-quiz-toolbar">
+      <label for="admin-daily-quiz-date">測驗日期<input id="admin-daily-quiz-date" class="form-control" type="date" value="${adminQuizEscape(quizDate)}"></label>
+      <span>${approvedCount} 版已審核</span>
+    </div>
+    ${renderAdminQuizReviewCards(context)}
+    <section class="glass-card admin-daily-quiz-block">
+      <div class="admin-daily-quiz-heading">
+        <div><p class="admin-registration-statistics__eyebrow">組織發布</p><h2>小組發布與作答狀況</h2></div>
+        <button type="button" class="primary-btn" data-quiz-action="publish-all" ${approvedCount && remaining ? '' : 'disabled'}>發布給全部尚未發布的小組</button>
+      </div>
+      <p class="admin-daily-quiz-note">已發布 ${groups.length - remaining}／${groups.length} 個小組；每個小組每天只會收到一次。</p>
+      ${renderAdminQuizGroupRows(context)}
+    </section>`;
+  await bindAdminDailyQuizActions(root, context, quizDate);
+  if (typeof hydrateIcons === 'function') hydrateIcons(root);
+}
+
 async function loadActiveAdminPlanSubtab(forceRefresh = false) {
   const warnRejected = (label, result) => {
     if (result.status === 'rejected') console.warn(`[Admin] ${label} error caught:`, result.reason);
@@ -1315,6 +1520,11 @@ async function loadActiveAdminPlanSubtab(forceRefresh = false) {
     if (typeof window.renderPlanMembersView === 'function') {
       try { await window.renderPlanMembersView(); } catch (e) { console.warn('[Admin] renderPlanMembersView error caught:', e); }
     }
+    return;
+  }
+
+  if (activeAdminPlanSubtab === 'quizzes') {
+    await renderAdminDailyQuizManagement(forceRefresh);
     return;
   }
 

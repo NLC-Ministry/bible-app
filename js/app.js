@@ -4,22 +4,22 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260809_leadership-assignment-org-fallback';
-import './data/church_campaign.js?v=20260809_leadership-assignment-org-fallback';
+import './copy/zh-Hant.js?v=20260811_daily_church_quiz';
+import './data/church_campaign.js?v=20260811_daily_church_quiz';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260809_leadership-assignment-org-fallback';
-import './design/icon-registry.js?v=20260811_missing-icons-fix';
+import './design/design-system-helpers.js?v=20260811_daily_church_quiz';
+import './design/icon-registry.js?v=20260811_daily_church_quiz';
 import './design/icons.js';
-import './state.js?v=20260809_leadership-assignment-org-fallback';
-import './auth.js?v=20260809_leadership-assignment-org-fallback';
+import './state.js?v=20260811_daily_church_quiz';
+import './auth.js?v=20260811_daily_church_quiz';
 import './auth-launch.mjs';
-import './db.js?v=20260810_admin-directory-team-status-fix';
-import './utils.js?v=20260810_tts-voice-picker-fix';
-import './gamification.js?v=20260809_leadership-assignment-org-fallback';
+import './db.js?v=20260811_daily_church_quiz';
+import './utils.js?v=20260811_daily_church_quiz';
+import './gamification.js?v=20260811_daily_church_quiz';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260809_leadership-assignment-org-fallback';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260811_daily_church_quiz';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -33,7 +33,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260809_leadership-assignment-org-fallback';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260811_daily_church_quiz';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
@@ -129,8 +129,15 @@ async function refreshCareReminderBadge(options = {}) {
   careReminderBadgeLastRefresh = now;
 
   try {
-    const { data, error } = await db.fetchCareReminders();
-    if (!error) updateCareReminderBadge(data || []);
+    const [careResult, quizResult] = await Promise.all([
+      db.fetchCareReminders(),
+      typeof db.fetchQuizNotifications === "function"
+        ? db.fetchQuizNotifications()
+        : Promise.resolve({ data: [], error: null })
+    ]);
+    if (!careResult.error || !quizResult.error) {
+      updateCareReminderBadge([...(careResult.data || []), ...(quizResult.data || [])]);
+    }
   } catch (error) {
     console.warn("Care reminder badge refresh failed:", error);
   }
@@ -156,7 +163,17 @@ async function renderNotificationsList() {
   container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
-  const { data: notifications, error } = await db.fetchAllNotifications();
+  const [careResult, quizResult] = await Promise.all([
+    db.fetchAllNotifications(),
+    typeof db.fetchQuizNotifications === "function"
+      ? db.fetchQuizNotifications()
+      : Promise.resolve({ data: [], error: null })
+  ]);
+  const notifications = [...(careResult.data || []), ...(quizResult.data || [])]
+    .sort((left, right) => String(right.createdAt || right.created_at || right.sent_on || "")
+      .localeCompare(String(left.createdAt || left.created_at || left.sent_on || "")))
+    .slice(0, 20);
+  const error = careResult.error && quizResult.error ? careResult.error : null;
 
   if (error || !notifications || notifications.length === 0) {
     container.innerHTML = `<div class="notification-popover__empty">目前沒有通知</div>`;
@@ -181,16 +198,18 @@ async function renderNotificationsList() {
     const sender = item.sender || {};
     const senderName = String(sender.name || "").trim() || "—";
     const senderRoleRaw = getUserRoleCode(sender);
+    const isQuizNotification = item.type === "quiz";
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
       ? "隊友"
       : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "領袖");
 
+    const displaySenderRole = isQuizNotification ? "小測驗發布者" : senderRole;
     const dateStr = item.sent_on || "";
 
     div.innerHTML = `
       <div class="notification-item__header">
-        <span class="notification-item__sender">來自${senderRole} ${safeEscapeHTML(senderName)}</span>
+        <span class="notification-item__sender">來自${displaySenderRole} ${safeEscapeHTML(senderName)}</span>
         <span class="notification-item__time">${safeEscapeHTML(dateStr)}</span>
       </div>
       <p class="notification-item__body">${safeEscapeHTML(item.message || "加油！一起穩定讀經。")}</p>
@@ -200,8 +219,29 @@ async function renderNotificationsList() {
       e.stopPropagation();
       if (item.status === 'unread') {
         div.classList.remove("notification-item--unread");
-        await db.acknowledgeCareReminder(item.id);
+        if (isQuizNotification && typeof db.acknowledgeQuizNotification === "function") {
+          await db.acknowledgeQuizNotification(item.id);
+        } else {
+          await db.acknowledgeCareReminder(item.id);
+        }
         await refreshCareReminderBadge({ force: true });
+      }
+      if (isQuizNotification) {
+        const planKey = String(item.globalPlanId || "");
+        const quizPlan = [...(state.activePlans || []), ...(state.globalPlans || [])]
+          .find(plan => [plan.globalPlanId, plan.id].filter(Boolean).map(String).includes(planKey));
+        if (quizPlan) {
+          state.activePlan = quizPlan;
+          state.planDetailOpen = true;
+          state.planActiveSubTab = "today";
+          window.currentPlanViewState = "DETAIL";
+          const day = Array.isArray(quizPlan.days)
+            ? quizPlan.days.find(entry => String(entry.isoDate || "") === String(item.quizDate || ""))
+            : null;
+          if (day) state.selectedPlanDay = day.dayNum;
+          document.getElementById("notification-popover")?.classList.add("hidden");
+          await appRouter.switchTab("plan-view", { keepPlanDetail: true });
+        }
       }
     };
 
@@ -251,7 +291,13 @@ function initNotificationSystem() {
     readAllBtn.onclick = async (e) => {
       e.stopPropagation();
       readAllBtn.disabled = true;
-      const { error } = await db.acknowledgeAllCareReminders();
+      const [careAck, quizAck] = await Promise.all([
+        db.acknowledgeAllCareReminders(),
+        typeof db.acknowledgeQuizNotification === "function"
+          ? db.acknowledgeQuizNotification(null)
+          : Promise.resolve({ error: null })
+      ]);
+      const error = careAck.error || quizAck.error;
       readAllBtn.disabled = false;
       if (!error) {
         updateCareReminderBadge([]);
