@@ -141,8 +141,8 @@ describe("release onboarding helper dialog", () => {
     expect(dialog.textContent).toContain("加到主畫面");
     expect(dialog.textContent).toContain("和教會朋友一起加入計畫");
     expect(dialog.textContent).toContain("追蹤你的讀經進度");
-    expect(dialog.textContent).toContain("稍後再看");
-    expect(dialog.textContent).toContain("不再顯示這個提示");
+    expect(dialog.textContent).toContain("我知道了");
+    expect(dialog.textContent).not.toContain("稍後再看");
     expect(dialog.textContent).not.toContain("0.1.0");
     expect(dialog.textContent).not.toContain("版本");
     expect(dialog.querySelector("[data-onboarding-prev]")).toBeNull();
@@ -240,14 +240,34 @@ describe("release onboarding helper dialog", () => {
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
   });
 
-  it("does not dismiss automatic onboarding when manual recall is completed", () => {
+  it("does not change device memory when manually recalled from settings", () => {
     document.body.innerHTML = "";
     const storage = createMemoryStorage();
     openOnboardingHelper({ manual: true, storage, config: { onboardingVersion: "0.1.0" } });
 
-    document.querySelector("[data-onboarding-later]").click();
+    document.querySelector("[data-onboarding-dismiss]").click();
 
     expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBeNull();
+  });
+
+  it("remembers an automatic guide on this device when closed with the close button", () => {
+    document.body.innerHTML = "";
+    const storage = createMemoryStorage();
+    openOnboardingHelper({ storage, config: { onboardingVersion: "0.1.0" } });
+
+    document.querySelector("[data-onboarding-close]").click();
+
+    expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
+  });
+
+  it("remembers an automatic guide on this device when the backdrop is clicked", () => {
+    document.body.innerHTML = "";
+    const storage = createMemoryStorage();
+    openOnboardingHelper({ storage, config: { onboardingVersion: "0.1.0" } });
+
+    document.querySelector("[data-onboarding-backdrop]").click();
+
+    expect(storage.getItem(ONBOARDING_STORAGE_KEY)).toBe("0.1.0");
   });
 });
 

@@ -77,6 +77,7 @@ let lastTrigger = null;
 let deferredInstallPrompt = null;
 let installPromptState = "unavailable";
 let installPromptInFlight = null;
+let activeOnboardingCloseContext = null;
 
 function handleDialogKeydown(event) {
   if (event.key === "Escape") {
@@ -406,29 +407,35 @@ function dialogTemplate(installGuideOptions = {}) {
         ${renderActionRows(installGuideOptions)}
       </div>
       <div class="release-onboarding-dialog__footer">
-        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-later>稍後再看</button>
-        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-dismiss>不再顯示這個提示</button>
+        <button type="button" class="release-onboarding-dialog__footer-btn" data-onboarding-dismiss>我知道了</button>
       </div>
     </section>
   `;
 }
 
-export function closeOnboardingHelper({ remember = false, storage = globalThis.localStorage, config = globalThis.APP_CONFIG || {} } = {}) {
-  if (remember) markOnboardingSeen({ storage, config });
+export function closeOnboardingHelper({ remember, storage, config } = {}) {
+  const activeContext = activeOnboardingCloseContext;
+  const effectiveStorage = storage ?? activeContext?.storage ?? globalThis.localStorage;
+  const effectiveConfig = config ?? activeContext?.config ?? globalThis.APP_CONFIG ?? {};
+  const shouldRemember = remember === undefined ? Boolean(activeContext && !activeContext.manual) : remember;
+  if (shouldRemember) markOnboardingSeen({ storage: effectiveStorage, config: effectiveConfig });
   document.removeEventListener("keydown", handleDialogKeydown);
   document.getElementById("release-onboarding-root")?.remove();
+  activeOnboardingCloseContext = null;
   if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
 }
 
 export function openOnboardingHelper({
   startStep = "install",
   trigger = null,
+  manual = false,
   storage = globalThis.localStorage,
   config = globalThis.APP_CONFIG || {},
   installGuideOptions = {}
 } = {}) {
   document.getElementById("release-onboarding-root")?.remove();
   lastTrigger = trigger;
+  activeOnboardingCloseContext = { manual, storage, config };
   const effectiveInstallGuideOptions = { ...installGuideOptions };
 
   const root = document.createElement("div");
@@ -441,15 +448,15 @@ export function openOnboardingHelper({
   const backdrop = root.querySelector("[data-onboarding-backdrop]");
   const dialog = root.querySelector("#release-onboarding-dialog");
 
-  backdrop?.addEventListener("click", () => closeOnboardingHelper({ storage, config }));
+  const closeAndRememberIfAutomatic = () => closeOnboardingHelper();
+  backdrop?.addEventListener("click", closeAndRememberIfAutomatic);
   root.addEventListener("click", (event) => {
     if (event.target === root || event.target === backdrop) {
-      closeOnboardingHelper({ storage, config });
+      closeAndRememberIfAutomatic();
     }
   });
-  root.querySelector("[data-onboarding-close]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
-  root.querySelector("[data-onboarding-later]").addEventListener("click", () => closeOnboardingHelper({ storage, config }));
-  root.querySelector("[data-onboarding-dismiss]").addEventListener("click", () => closeOnboardingHelper({ remember: true, storage, config }));
+  root.querySelector("[data-onboarding-close]").addEventListener("click", closeAndRememberIfAutomatic);
+  root.querySelector("[data-onboarding-dismiss]").addEventListener("click", closeAndRememberIfAutomatic);
   root.querySelectorAll("[data-onboarding-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const actionPromise = runPrimaryAction(button.dataset.onboardingAction, {
