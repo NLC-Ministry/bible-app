@@ -1311,6 +1311,7 @@ function mountPlanManagementSections() {
 
 const ADMIN_PLAN_SUBTABS = ['join-status', 'members', 'teams', 'statistics', 'quizzes'];
 let activeAdminPlanSubtab = ADMIN_PLAN_SUBTABS[0];
+const adminDailyQuizDashboardCache = new Map();
 
 function setAdminPlanSubtab(subtab, loadData = true) {
   const requested = ADMIN_PLAN_SUBTABS.includes(subtab) ? subtab : ADMIN_PLAN_SUBTABS[0];
@@ -1428,6 +1429,11 @@ function adminQuizDateToday() {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+function adminDailyQuizDashboardCacheKey(plan, quizDate) {
+  const planKey = plan?.globalPlanId || plan?.id || plan?.presetKey || plan?.name || 'unknown-plan';
+  return `${String(planKey)}:${String(quizDate)}`;
+}
+
 function adminQuizEscape(value) {
   return typeof escapeHTML === 'function' ? escapeHTML(String(value ?? '')) : String(value ?? '');
 }
@@ -1542,7 +1548,7 @@ function renderAdminQuizReviewCards(context) {
     <div class="admin-daily-quiz-versions">
       ${variants.map(variant => {
         const quiz = quizzes.find(item => item.variant === variant);
-        if (!quiz) return `<article class="admin-daily-quiz-version">
+        if (!quiz) return `<article class="admin-daily-quiz-version" data-quiz-version="${variant}">
           <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div>
           <div class="admin-daily-quiz-version-actions">
             <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
@@ -1552,7 +1558,7 @@ function renderAdminQuizReviewCards(context) {
         </article>`;
         const ready = quiz.generationStatus === 'ready';
         const approved = quiz.reviewStatus === 'approved';
-        return `<article class="admin-daily-quiz-version" data-quiz-card="${adminQuizEscape(quiz.id)}">
+        return `<article class="admin-daily-quiz-version" data-quiz-card="${adminQuizEscape(quiz.id)}" data-quiz-version="${variant}">
           <div class="admin-daily-quiz-version-title">
             <strong>版本 ${variant}</strong>
             <span class="role-badge ${approved ? 'approved' : ''}">${approved ? '已審核' : ready ? '待審核' : quiz.generationStatus === 'failed' ? '生成失敗' : '生成中'}</span>
@@ -1666,7 +1672,7 @@ async function waitForAdminQuizRegeneration(quizDate, variant, previousQuiz = nu
 async function bindAdminDailyQuizActions(root, context, quizDate) {
   root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
     root.dataset.quizDate = event.target.value;
-    void renderAdminDailyQuizManagement(true, event.target.value);
+    void renderAdminDailyQuizManagement(false, event.target.value);
   });
   root.querySelectorAll('[data-quiz-action]').forEach(button => {
     button.addEventListener('click', async event => {
@@ -1675,9 +1681,7 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
       const action = button.dataset.quizAction;
       const quizId = button.dataset.quizId;
       if (action === 'refresh-status') {
-        button.disabled = true;
-        button.textContent = '載入中…';
-        await renderAdminDailyQuizManagement(true, quizDate);
+        await refreshAdminQuizVariantStatus(root, button, quizDate);
         return;
       }
       if (action === 'toggle-edit') {
@@ -1776,17 +1780,67 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
   });
 }
 
-async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '') {
+async function refreshAdminQuizVariantStatus(root, button, quizDate) {
+  const card = button.closest('[data-quiz-version]');
+  if (!card) return;
+  const statusBadge = card.querySelector('.role-badge');
+  const originalStatus = statusBadge?.textContent || '';
+  const controls = Array.from(card.querySelectorAll('button'));
+  const originalControlStates = controls.map(control => ({
+    control,
+    disabled: control.disabled,
+    text: control.textContent
+  }));
+  card.classList.remove('admin-daily-quiz-version--status-error');
+  card.classList.add('admin-daily-quiz-version--status-loading');
+  card.setAttribute('aria-busy', 'true');
+  if (statusBadge) statusBadge.textContent = '載入中';
+  controls.forEach(control => { control.disabled = true; });
+  button.textContent = '載入中…';
+
+  const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+  if (result.success) {
+    await renderAdminDailyQuizManagement(true, quizDate, result);
+    return;
+  }
+
+  card.classList.remove('admin-daily-quiz-version--status-loading');
+  card.classList.add('admin-daily-quiz-version--status-error');
+  card.removeAttribute('aria-busy');
+  if (statusBadge) statusBadge.textContent = '狀態載入失敗';
+  originalControlStates.forEach(({ control, disabled, text }) => {
+    control.disabled = disabled;
+    control.textContent = text;
+  });
+  if (typeof showToast === 'function') showToast(result.message || `版本 ${card.dataset.quizVersion || ''} 狀態載入失敗`);
+  console.warn(`[Quiz] Variant ${card.dataset.quizVersion || 'unknown'} refresh failed; previous status was ${originalStatus}`);
+}
+
+async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '', prefetchedResult = null) {
   const root = document.getElementById('admin-daily-quiz-root');
   if (!root || !state.activePlan) return;
-  root.querySelectorAll('[data-editor-for]').forEach(editor => editor._escapeController?.abort());
-  document.body.classList.remove('admin-quiz-editor-open');
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate || ''))
     ? String(requestedDate)
     : (root.dataset.quizDate || adminQuizDateToday());
+  const cacheKey = adminDailyQuizDashboardCacheKey(state.activePlan, quizDate);
+
+  // Returning to the quiz tab for the same plan/date should reveal the DOM
+  // that is already on screen. Do not re-render it and do not issue another
+  // dashboard request. New data is fetched only by an explicit refresh,
+  // regeneration action, date/plan change without a cache entry, or first load.
+  if (!forceRefresh && !prefetchedResult && root.dataset.quizDashboardKey === cacheKey) return;
+
+  root.querySelectorAll('[data-editor-for]').forEach(editor => editor._escapeController?.abort());
+  document.body.classList.remove('admin-quiz-editor-open');
   root.dataset.quizDate = quizDate;
-  root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
-  const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+  let result = prefetchedResult;
+  if (!result && !forceRefresh) result = adminDailyQuizDashboardCache.get(cacheKey) || null;
+  if (!result) {
+    root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
+    result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+  }
+  adminDailyQuizDashboardCache.set(cacheKey, result);
+  root.dataset.quizDashboardKey = cacheKey;
   if (!result.success) {
     const message = result.message || '目前無法載入小測驗資料，請稍後再試。';
     const timedOut = message.includes('逾時');
@@ -1819,12 +1873,11 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
         </div>
       </section>`;
     root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
-      void renderAdminDailyQuizManagement(true, event.target.value);
+      void renderAdminDailyQuizManagement(false, event.target.value);
     });
     root.querySelectorAll('[data-quiz-load-retry]').forEach(button => {
       button.addEventListener('click', () => {
-        root.querySelectorAll('[data-quiz-load-retry]').forEach(retryButton => { retryButton.disabled = true; });
-        void renderAdminDailyQuizManagement(true, quizDate);
+        void refreshAdminQuizVariantStatus(root, button, quizDate);
       });
     });
     if (typeof hydrateIcons === 'function') hydrateIcons(root);

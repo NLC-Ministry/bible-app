@@ -6349,6 +6349,19 @@ body.dark-theme .pastoral-race-progress {
   background: var(--bg-surface);
 }
 
+.admin-daily-quiz-version--status-loading {
+  border-color: color-mix(in srgb, var(--color-brand) 45%, var(--border-card));
+  background: color-mix(in srgb, var(--color-brand) 5%, var(--bg-surface));
+}
+
+.admin-daily-quiz-version--status-loading .role-badge {
+  color: var(--color-brand);
+}
+
+.admin-daily-quiz-version--status-error {
+  border-color: color-mix(in srgb, var(--danger-color, #b91c1c) 35%, var(--border-card));
+}
+
 .admin-daily-quiz-editor-wrap {
   position: fixed;
   inset: 0;

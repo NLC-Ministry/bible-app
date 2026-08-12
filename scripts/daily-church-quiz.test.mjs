@@ -127,6 +127,16 @@ describe("daily church quiz", () => {
     expect(admin).toContain('已保留原有題目與審核狀態');
     expect(admin).toContain('data-quiz-action="refresh-status"');
     expect(admin).toContain("if (action === 'refresh-status')");
+    expect(admin).toContain('refreshAdminQuizVariantStatus(root, button, quizDate)');
+    expect(admin).toContain("card.classList.add('admin-daily-quiz-version--status-loading')");
+    expect(admin).toContain('renderAdminDailyQuizManagement(true, quizDate, result)');
+    expect(admin).toContain("prefetchedResult = null");
+    expect(admin).toContain('const adminDailyQuizDashboardCache = new Map()');
+    expect(admin).toContain('root.dataset.quizDashboardKey === cacheKey');
+    expect(admin).toContain('adminDailyQuizDashboardCache.get(cacheKey)');
+    expect(admin).toContain('adminDailyQuizDashboardCache.set(cacheKey, result)');
+    expect(admin).toContain('renderAdminDailyQuizManagement(false, event.target.value)');
+    expect(css).toContain('.admin-daily-quiz-version--status-loading {');
     expect(admin).toContain('載入後才可審核');
     expect(admin).toContain('載入後才可編輯');
     expect(admin).toContain('編輯題目');
