@@ -121,6 +121,15 @@ function validateQuestions(value: any) {
   return questions;
 }
 
+function normalizeGeminiModel(value: unknown) {
+  let model = String(value || "").trim();
+  model = model.replace(/^GEMINI_QUIZ_MODEL\s*=\s*/i, "").trim();
+  if ((model.startsWith('"') && model.endsWith('"')) || (model.startsWith("'") && model.endsWith("'"))) {
+    model = model.slice(1, -1).trim();
+  }
+  return model.replace(/^models\//i, "").trim();
+}
+
 async function generateVariant(apiKey: string, model: string, variant: string, scripture: string, refs: ChapterRef[]) {
   if (!/^[a-zA-Z0-9._-]+$/.test(model)) throw new Error("invalid_gemini_model");
   const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : variant === "B" ? "人物、對話、動機與因果關係" : "核心信息、上下文理解與可由經文直接支持的應用";
@@ -179,7 +188,7 @@ Deno.serve(async req => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
-  const model = Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-3.1-flash-lite";
+  const model = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-3.1-flash-lite");
   if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
     console.error("daily_quiz_server_not_configured", JSON.stringify({ invocationId, supabaseUrl: Boolean(supabaseUrl), serviceRoleKey: Boolean(serviceRoleKey), geminiApiKey: Boolean(geminiApiKey) }));
     return respond({ error: "server_not_configured", invocationId }, 500);

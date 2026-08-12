@@ -49,6 +49,10 @@ GEMINI_QUIZ_MODEL=gemini-3.1-flash-lite
 QUIZ_GENERATION_CRON_SECRET=<random shared secret>
 ```
 
+Enter only the model ID as the `GEMINI_QUIZ_MODEL` value. Do not include
+quotes, a `models/` prefix, or `GEMINI_QUIZ_MODEL=` in the value. The function
+also normalizes these common formatting mistakes before calling Gemini.
+
 Deploy without Supabase JWT verification because pg_cron authenticates with
 the custom `x-cron-secret` header:
 
@@ -96,6 +100,10 @@ functions:
 supabase functions deploy nlc-data --no-verify-jwt
 supabase functions deploy generate-daily-quizzes --no-verify-jwt
 ```
+
+Apply `0087_optimize_daily_quiz_dashboard.sql` as well. It replaces the
+per-group member lookup loops with one set-based membership pass and only
+builds member answer details for groups that already have a publication.
 
 Only pastors and administrators can request a retry. Duplicate clicks are
 deduplicated by an atomic database status transition. A ready but unapproved

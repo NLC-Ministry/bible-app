@@ -5,7 +5,8 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8"
 const schema = read("supabase/migrations/0084_daily_church_quizzes.sql");
 const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
 const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");
-const quizSql = `${schema}\n${regeneration}`;
+const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz_dashboard.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -29,6 +30,9 @@ describe("daily church quiz", () => {
     expect(generator).toContain('Deno.env.get("GEMINI_API_KEY")');
     expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_MODEL")');
     expect(generator).toContain('|| "gemini-3.1-flash-lite"');
+    expect(generator).toContain('function normalizeGeminiModel');
+    expect(generator).toContain('replace(/^models\\//i, "")');
+    expect(generator).toContain('replace(/^GEMINI_QUIZ_MODEL\\s*=\\s*/i, "")');
     expect(generator).not.toContain('|| "gemini-2.5-flash');
   });
 
@@ -106,6 +110,14 @@ describe("daily church quiz", () => {
     expect(cron).toContain("'5 16 * * *'");
     expect(cron).toContain("quiz_generation_cron_secret");
     expect(cron).toContain("generate-daily-quizzes");
+  });
+
+  it("loads the organization dashboard without per-group member subqueries", () => {
+    expect(dashboardOptimization).toContain("CREATE OR REPLACE FUNCTION public.get_daily_quiz_dashboard");
+    expect(dashboardOptimization).toContain("member_matches AS MATERIALIZED");
+    expect(dashboardOptimization).toContain("published_members AS");
+    expect(dashboardOptimization).toContain("idx_quiz_publications_plan_date_group");
+    expect(dashboardOptimization).not.toContain("SELECT COUNT(*) FROM public.profiles member WHERE public.profile_belongs_to_quiz_group");
   });
 
   it("logs each invocation and Gemini variant without exposing secrets", () => {
