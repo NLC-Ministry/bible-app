@@ -6,7 +6,8 @@ const schema = read("supabase/migrations/0084_daily_church_quizzes.sql");
 const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
 const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");
 const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz_dashboard.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}`;
+const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -110,6 +111,19 @@ describe("daily church quiz", () => {
     expect(cron).toContain("'5 16 * * *'");
     expect(cron).toContain("quiz_generation_cron_secret");
     expect(cron).toContain("generate-daily-quizzes");
+  });
+
+  it("can disable all quiz entry points without deleting existing data", () => {
+    expect(featureFlag).toMatch(/'daily_quiz',\s*FALSE/);
+    expect(featureFlag).toContain("IF NOT public.is_feature_enabled('daily_quiz')");
+    expect(featureFlag).not.toMatch(/DELETE FROM public\.(daily_quizzes|quiz_)/i);
+    expect(generator).toContain('eq("key", "daily_quiz")');
+    expect(generator).toContain('status: "feature_disabled", requests: 0');
+    expect(edge).toContain('error: "daily_quiz_feature_disabled"');
+    expect(db).toContain('["pastoral_sharing_wall", "daily_quiz"]');
+    expect(html).toContain('id="admin-daily-quiz-feature-toggle"');
+    expect(admin).toContain('updateFeatureSetting("daily_quiz", nextEnabled)');
+    expect(plan).toContain('isDailyQuizFeatureEnabled()');
   });
 
   it("loads the organization dashboard without per-group member subqueries", () => {

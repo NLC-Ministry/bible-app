@@ -486,6 +486,16 @@ Deno.serve(async (req: Request) => {
       if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
+      if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
+        const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
+          .from("app_feature_settings")
+          .select("enabled")
+          .eq("key", "daily_quiz")
+          .maybeSingle();
+        if (quizFeatureError || quizFeature?.enabled !== true) {
+          return jsonResponse({ error: "daily_quiz_feature_disabled" }, 403);
+        }
+      }
       const rpcName = functionName;
       // get_admin_member_team_placements(p_global_plan_id, p_actor_id) calls
       // resolve_reading_team_actor(p_actor_id) just like every other
@@ -617,11 +627,11 @@ Deno.serve(async (req: Request) => {
       let savedProfile: any = null;
       let saveError: any = null;
       ({ data: savedProfile, error: saveError } = await supabaseAdmin
-         .from("profiles")
-         .update(updatePayload)
-         .eq("id", profile.id)
-         .select(PROFILE_SELECT)
-         .single());
+        .from("profiles")
+        .update(updatePayload)
+        .eq("id", profile.id)
+        .select(PROFILE_SELECT)
+        .single());
 
       if (saveError && nameChanged) {
         // The name_review_approved column (migration 0069) may not be
@@ -630,11 +640,11 @@ Deno.serve(async (req: Request) => {
         console.warn("save_profile with name_review_approved failed; retrying without it (migration 0069 not yet applied?):", saveError);
         delete updatePayload.name_review_approved;
         ({ data: savedProfile, error: saveError } = await supabaseAdmin
-           .from("profiles")
-           .update(updatePayload)
-           .eq("id", profile.id)
-           .select(PROFILE_SELECT_LEGACY)
-           .single());
+          .from("profiles")
+          .update(updatePayload)
+          .eq("id", profile.id)
+          .select(PROFILE_SELECT_LEGACY)
+          .single());
       }
 
       if (saveError) return jsonResponse({ error: saveError.message, details: saveError }, 400);

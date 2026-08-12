@@ -204,6 +204,12 @@ Deno.serve(async req => {
   console.info("daily_quiz_generation_started", JSON.stringify({ invocationId, source: String(body?.source || "unknown"), quizDate, requestedVariants, model }));
   if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate, invocationId }, 400);
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: quizFeature, error: quizFeatureError } = await supabase.from("app_feature_settings")
+    .select("enabled").eq("key", "daily_quiz").maybeSingle();
+  if (quizFeatureError || quizFeature?.enabled !== true) {
+    console.info("daily_quiz_feature_disabled", JSON.stringify({ invocationId, settingFound: Boolean(quizFeature), settingError: quizFeatureError?.message || null }));
+    return respond({ status: "feature_disabled", requests: 0, invocationId });
+  }
   const { data: plans, error: planError } = await supabase.from("global_plans")
     .select("id, name, start_date, end_date, rules")
     .eq("plan_kind", "church_campaign_stage").eq("is_hidden", false)

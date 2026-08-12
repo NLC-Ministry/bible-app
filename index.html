@@ -1704,7 +1704,7 @@
                 </span>
                 <div>
                   <h3 class="card-title">功能開放設定</h3>
-                  <p>可暫時封存牧區靈修分享牆；既有分享、按讚與留言都會保留。</p>
+                  <p>可暫時關閉尚未開放的功能；既有資料都會保留。</p>
                 </div>
               </div>
               <div class="admin-feature-setting-row">
@@ -1718,6 +1718,17 @@
                 </button>
               </div>
               <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>每日小測驗</strong>
+                  <span id="admin-daily-quiz-feature-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-daily-quiz-feature-toggle"
+                  role="switch" aria-checked="false" aria-label="開放每日小測驗" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-daily-quiz-feature-feedback" role="status"></p>
             </div>
           </div>
 
@@ -1915,7 +1926,7 @@
               aria-controls="admin-plan-subtab-teams" data-plan-subtab="teams">組隊狀況</button>
             <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
               aria-controls="admin-plan-subtab-statistics" data-plan-subtab="statistics">計畫統計</button>
-            <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
+            <button type="button" class="admin-plan-subtab hidden" role="tab" aria-selected="false"
               aria-controls="admin-plan-subtab-quizzes" data-plan-subtab="quizzes">小測驗</button>
           </nav>
 

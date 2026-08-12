@@ -105,6 +105,12 @@ Apply `0087_optimize_daily_quiz_dashboard.sql` as well. It replaces the
 per-group member lookup loops with one set-based membership pass and only
 builds member answer details for groups that already have a publication.
 
+Apply `0088_daily_quiz_feature_flag.sql` to add the administrator-controlled
+master switch. It defaults to off, preserves all quiz data, hides client entry
+points, rejects quiz RPC calls in `nlc-data`, and makes the 00:05 scheduler and
+generator return without sending any Gemini request while disabled. Redeploy
+both `nlc-data` and `generate-daily-quizzes` after applying it.
+
 Only pastors and administrators can request a retry. Duplicate clicks are
 deduplicated by an atomic database status transition. A ready but unapproved
 variant asks for confirmation before replacement; once approved, the database

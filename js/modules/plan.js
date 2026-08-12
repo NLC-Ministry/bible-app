@@ -3013,6 +3013,23 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
 }
 
 let dailyQuizRenderRequestId = 0;
+let dailyQuizFeatureRequest = null;
+
+async function isDailyQuizFeatureEnabled() {
+  if (typeof window.dailyQuizFeatureEnabled === "boolean") return window.dailyQuizFeatureEnabled;
+  if (!dailyQuizFeatureRequest) {
+    dailyQuizFeatureRequest = db.getFeatureSetting("daily_quiz", false).then(result => {
+      window.dailyQuizFeatureEnabled = !result.error && result.enabled === true;
+      return window.dailyQuizFeatureEnabled;
+    }).catch(() => false).finally(() => { dailyQuizFeatureRequest = null; });
+  }
+  return dailyQuizFeatureRequest;
+}
+
+window.addEventListener("daily-quiz-feature-changed", event => {
+  window.dailyQuizFeatureEnabled = event.detail?.enabled === true;
+  if (!window.dailyQuizFeatureEnabled) hideDailyQuizSection();
+});
 
 function quizEscape(value) {
   return typeof escapeHTML === "function"
@@ -3157,6 +3174,10 @@ async function renderDailyQuizSection(plan, selectedDay, trackerRequestId) {
   const section = document.getElementById("daily-quiz-section");
   const content = document.getElementById("daily-quiz-content");
   if (!section || !content || !plan || !selectedDay) return;
+  if (!await isDailyQuizFeatureEnabled()) {
+    hideDailyQuizSection();
+    return;
+  }
   const quizDate = String(selectedDay.isoDate || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(quizDate)
     || typeof db === "undefined"

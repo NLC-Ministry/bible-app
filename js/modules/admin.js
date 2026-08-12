@@ -26,29 +26,73 @@ function updatePastoralWallControl(enabled, options = {}) {
   status.textContent = enabled ? "已開啟：所有堂會成員皆可在首頁看見「牧區分享牆」，進行靈修分享與互動。" : "已關閉：首頁將隱藏「牧區分享牆」，僅保留個人靈修進度紀錄與團隊功能。";
 }
 
+function updateDailyQuizFeatureControl(enabled, options = {}) {
+  const toggle = document.getElementById("admin-daily-quiz-feature-toggle");
+  const status = document.getElementById("admin-daily-quiz-feature-status");
+  if (!toggle || !status) return;
+  toggle.setAttribute("aria-checked", enabled ? "true" : "false");
+  toggle.setAttribute("aria-label", enabled ? "每日小測驗功能已開啟" : "每日小測驗功能已關閉");
+  toggle.disabled = options.disabled === true;
+  status.textContent = enabled
+    ? "已開啟：顯示小測驗入口，並允許每日生成、審核、發布與作答。"
+    : "已關閉：隱藏所有小測驗入口並暫停生成；既有題目與作答資料保留。";
+}
+
+function applyAdminDailyQuizFeatureVisibility(enabled) {
+  const tab = document.querySelector('#admin-plan-subtabs [data-plan-subtab="quizzes"]');
+  const panel = document.getElementById("admin-plan-subtab-quizzes");
+  tab?.classList.toggle("hidden", !enabled);
+  if (tab) tab.style.display = enabled ? "" : "none";
+  if (!enabled && activeAdminPlanSubtab === "quizzes") setAdminPlanSubtab("join-status");
+  if (!enabled && panel) panel.classList.add("hidden");
+}
+
 export async function renderAdminFeatureSettings() {
   const card = document.querySelector(".admin-feature-settings-card")?.closest(".card-col");
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
   const feedback = document.getElementById("admin-pastoral-wall-feedback");
-  if (!card || !toggle || !feedback) return;
+  const quizToggle = document.getElementById("admin-daily-quiz-feature-toggle");
+  const quizFeedback = document.getElementById("admin-daily-quiz-feature-feedback");
+  if (!card || !toggle || !feedback || !quizToggle || !quizFeedback) return;
 
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   card.classList.toggle("hidden", !isAdmin);
-  if (!isAdmin) return;
+  if (!isAdmin) {
+    const quizResult = await db.getFeatureSetting("daily_quiz", false);
+    const quizEnabled = !quizResult.error && quizResult.enabled === true;
+    window.dailyQuizFeatureEnabled = quizEnabled;
+    applyAdminDailyQuizFeatureVisibility(quizEnabled);
+    return;
+  }
 
   feedback.classList.add("hidden");
   feedback.textContent = "";
   updatePastoralWallControl(false, { disabled: true });
+  quizFeedback.classList.add("hidden");
+  quizFeedback.textContent = "";
+  updateDailyQuizFeatureControl(false, { disabled: true });
 
-  const result = await db.getFeatureSetting("pastoral_sharing_wall", false);
+  const [result, quizResult] = await Promise.all([
+    db.getFeatureSetting("pastoral_sharing_wall", false),
+    db.getFeatureSetting("daily_quiz", false)
+  ]);
   if (result.error) {
     updatePastoralWallControl(false, { disabled: true });
     feedback.textContent = "無法載入設定：從伺服器獲取牧區分享牆設定失敗。";
     feedback.classList.remove("hidden");
-    return;
+  } else {
+    updatePastoralWallControl(result.enabled === true);
   }
-
-  updatePastoralWallControl(result.enabled === true);
+  if (quizResult.error) {
+    updateDailyQuizFeatureControl(false, { disabled: true });
+    quizFeedback.textContent = "無法載入設定：從伺服器獲取每日小測驗設定失敗。";
+    quizFeedback.classList.remove("hidden");
+  } else {
+    const quizEnabled = quizResult.enabled === true;
+    window.dailyQuizFeatureEnabled = quizEnabled;
+    updateDailyQuizFeatureControl(quizEnabled);
+    applyAdminDailyQuizFeatureVisibility(quizEnabled);
+  }
 
   if (!toggle.dataset.featureSettingBound) {
     toggle.dataset.featureSettingBound = "true";
@@ -73,6 +117,28 @@ export async function renderAdminFeatureSettings() {
       window.dispatchEvent(new CustomEvent("pastoral-sharing-wall-changed", {
         detail: { enabled: nextEnabled }
       }));
+    });
+  }
+
+  if (!quizToggle.dataset.featureSettingBound) {
+    quizToggle.dataset.featureSettingBound = "true";
+    quizToggle.addEventListener("click", async () => {
+      const currentEnabled = quizToggle.getAttribute("aria-checked") === "true";
+      const nextEnabled = !currentEnabled;
+      updateDailyQuizFeatureControl(currentEnabled, { disabled: true });
+      quizFeedback.classList.add("hidden");
+      const saveResult = await db.updateFeatureSetting("daily_quiz", nextEnabled);
+      if (saveResult.error) {
+        updateDailyQuizFeatureControl(currentEnabled);
+        quizFeedback.textContent = "更新設定失敗：無法將設定儲存至伺服器。";
+        quizFeedback.classList.remove("hidden");
+        return;
+      }
+      window.dailyQuizFeatureEnabled = nextEnabled;
+      updateDailyQuizFeatureControl(nextEnabled);
+      applyAdminDailyQuizFeatureVisibility(nextEnabled);
+      window.dispatchEvent(new CustomEvent("daily-quiz-feature-changed", { detail: { enabled: nextEnabled } }));
+      if (typeof showToast === "function") showToast(nextEnabled ? "每日小測驗功能已開啟！" : "每日小測驗功能已關閉。資料仍完整保留。");
     });
   }
 

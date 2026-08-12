@@ -2635,6 +2635,7 @@ const db = {
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
       quiz_publication_not_found: "找不到這份小測驗發布紀錄。",
       quiz_not_available: "這份小測驗目前無法作答。",
+      daily_quiz_feature_disabled: "每日小測驗功能目前已關閉。",
       quiz_five_answers_required: "請完成全部五題後再送出。",
       invalid_quiz_answer: "作答資料格式不正確，請重新選擇答案。",
       invalid_quiz_question: "每題都需要題目、四個選項、答案、解說與經文出處。",
@@ -4215,7 +4216,7 @@ const db = {
   },
 
   async getFeatureSetting(key, fallback = false) {
-    const allowedKeys = new Set(["pastoral_sharing_wall"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz"]);
     if (!allowedKeys.has(key)) {
       return { enabled: Boolean(fallback), error: new Error("unknown_feature_setting") };
     }
@@ -4242,7 +4243,7 @@ const db = {
   },
 
   async updateFeatureSetting(key, enabled) {
-    const allowedKeys = new Set(["pastoral_sharing_wall"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
     if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
