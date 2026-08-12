@@ -6,6 +6,11 @@ import {
 } from "./admin-bulk-plan-invite.mjs";
 import { buildAdminRegistrationStatisticsPlans } from "./admin-registration-plan-options.mjs";
 import { resolveAdminRegistrationSummary } from "./admin-registration-summary.mjs";
+import {
+  ADMIN_ORG_UNASSIGNED,
+  buildAdminUserDirectoryOrgOptions,
+  matchesAdminUserDirectoryOrgFilters
+} from "./admin-user-directory-filter.mjs";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
@@ -162,7 +167,7 @@ export function convertUserDirectoryToCSV(profiles) {
 }
 
 export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProfiles) {
-  const target = Array.isArray(profiles) && profiles.length > 0 ? profiles : adminUserDirectoryProfiles;
+  const target = Array.isArray(profiles) ? profiles : adminUserDirectoryProfiles;
   if (!target || target.length === 0) {
     if (typeof showToast === "function") showToast("沒有符合條件的使用者可供匯出。");
     return;
@@ -252,6 +257,129 @@ const NAME_FLAG_LABELS = {
   gibberish_english: "疑似亂打的英文"
 };
 
+let adminUserDirectoryOrgFilterState = { regions: [], zones: [], groups: [] };
+
+const ADMIN_USER_DIRECTORY_ORG_PICKERS = {
+  regions: {
+    pickerId: "admin-user-directory-filter-region",
+    optionsId: "admin-user-directory-filter-region-options",
+    summaryId: "admin-user-directory-filter-region-summary",
+    allLabel: "全部大區",
+    countLabel: "個大區",
+    comparator: compareGreatRegions
+  },
+  zones: {
+    pickerId: "admin-user-directory-filter-zone",
+    optionsId: "admin-user-directory-filter-zone-options",
+    summaryId: "admin-user-directory-filter-zone-summary",
+    allLabel: "全部牧區",
+    countLabel: "個牧區",
+    comparator: comparePastoralZones
+  },
+  groups: {
+    pickerId: "admin-user-directory-filter-group",
+    optionsId: "admin-user-directory-filter-group-options",
+    summaryId: "admin-user-directory-filter-group-summary",
+    allLabel: "全部小組",
+    countLabel: "個小組"
+  }
+};
+
+function getAdminUserDirectoryOrgFilters() {
+  return {
+    regions: [...adminUserDirectoryOrgFilterState.regions],
+    zones: [...adminUserDirectoryOrgFilterState.zones],
+    groups: [...adminUserDirectoryOrgFilterState.groups]
+  };
+}
+
+function sortAdminUserDirectoryOrgValues(values, comparator) {
+  return [...values].sort((a, b) => {
+    if (a === ADMIN_ORG_UNASSIGNED) return 1;
+    if (b === ADMIN_ORG_UNASSIGNED) return -1;
+    return comparator ? comparator(a, b) : a.localeCompare(b, "zh-Hant");
+  });
+}
+
+function renderAdminUserDirectoryOrgPicker(stateKey, values) {
+  const config = ADMIN_USER_DIRECTORY_ORG_PICKERS[stateKey];
+  const optionsContainer = document.getElementById(config.optionsId);
+  const summary = document.getElementById(config.summaryId);
+  if (!optionsContainer || !summary) return;
+
+  const sortedValues = sortAdminUserDirectoryOrgValues(values, config.comparator);
+  const selectedValues = adminUserDirectoryOrgFilterState[stateKey];
+  optionsContainer.replaceChildren();
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.className = "admin-user-directory__org-clear";
+  clearButton.dataset.orgFilterClear = stateKey;
+  clearButton.textContent = config.allLabel;
+  optionsContainer.appendChild(clearButton);
+
+  sortedValues.forEach(value => {
+    const label = document.createElement("label");
+    label.className = "admin-user-directory__org-option";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = value;
+    checkbox.dataset.orgFilterKey = stateKey;
+    checkbox.checked = selectedValues.includes(value);
+    const text = document.createElement("span");
+    text.textContent = value === ADMIN_ORG_UNASSIGNED ? "未設定" : value;
+    label.append(checkbox, text);
+    optionsContainer.appendChild(label);
+  });
+
+  if (selectedValues.length === 0) {
+    summary.textContent = config.allLabel;
+  } else if (selectedValues.length === 1) {
+    summary.textContent = selectedValues[0] === ADMIN_ORG_UNASSIGNED ? "未設定" : selectedValues[0];
+  } else {
+    summary.textContent = `${selectedValues.length} ${config.countLabel}`;
+  }
+}
+
+function refreshAdminUserDirectoryOrgFilterOptions() {
+  let options = buildAdminUserDirectoryOrgOptions(adminUserDirectoryProfiles, adminUserDirectoryOrgFilterState);
+  adminUserDirectoryOrgFilterState.regions = adminUserDirectoryOrgFilterState.regions
+    .filter(value => options.regions.includes(value));
+  options = buildAdminUserDirectoryOrgOptions(adminUserDirectoryProfiles, adminUserDirectoryOrgFilterState);
+  adminUserDirectoryOrgFilterState.zones = adminUserDirectoryOrgFilterState.zones
+    .filter(value => options.zones.includes(value));
+  options = buildAdminUserDirectoryOrgOptions(adminUserDirectoryProfiles, adminUserDirectoryOrgFilterState);
+  adminUserDirectoryOrgFilterState.groups = adminUserDirectoryOrgFilterState.groups
+    .filter(value => options.groups.includes(value));
+
+  renderAdminUserDirectoryOrgPicker("regions", options.regions);
+  renderAdminUserDirectoryOrgPicker("zones", options.zones);
+  renderAdminUserDirectoryOrgPicker("groups", options.groups);
+}
+
+function bindAdminUserDirectoryOrgFilterActions(root, search) {
+  if (!root || root.dataset.orgFilterBound === "true") return;
+  root.dataset.orgFilterBound = "true";
+  root.addEventListener("change", event => {
+    const checkbox = event.target.closest("input[data-org-filter-key]");
+    if (!checkbox) return;
+    const stateKey = checkbox.dataset.orgFilterKey;
+    const selected = new Set(adminUserDirectoryOrgFilterState[stateKey]);
+    if (checkbox.checked) selected.add(checkbox.value);
+    else selected.delete(checkbox.value);
+    adminUserDirectoryOrgFilterState[stateKey] = [...selected];
+    refreshAdminUserDirectoryOrgFilterOptions();
+    renderAdminUserDirectoryList(search.value);
+  });
+  root.addEventListener("click", event => {
+    const clearButton = event.target.closest("[data-org-filter-clear]");
+    if (!clearButton) return;
+    adminUserDirectoryOrgFilterState[clearButton.dataset.orgFilterClear] = [];
+    refreshAdminUserDirectoryOrgFilterOptions();
+    renderAdminUserDirectoryList(search.value);
+  });
+}
+
 function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
@@ -260,6 +388,7 @@ function renderAdminUserDirectoryList(query = "") {
   const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
   const unjoinedTeamOnly = document.getElementById("admin-user-directory-filter-unjoined-team")?.checked === true;
   const nameReviewOnly = document.getElementById("admin-user-directory-filter-name-review")?.checked === true;
+  const orgFilters = getAdminUserDirectoryOrgFilters();
   const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
   const placeholderNames = (typeof window !== "undefined" && window.INVENTED_DISPLAY_NAMES)
@@ -274,6 +403,7 @@ function renderAdminUserDirectoryList(query = "") {
     if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
     if (unjoinedTeamOnly && profile.is_joined_team === true) return false;
     if (nameReviewOnly && !profileNameNeedsReview(profile)) return false;
+    if (!matchesAdminUserDirectoryOrgFilters(profile, orgFilters)) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
     return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group, profile.team_name]
       .filter(Boolean)
@@ -282,7 +412,8 @@ function renderAdminUserDirectoryList(query = "") {
       .includes(normalizedQuery);
   });
   adminUserDirectoryFilteredProfiles = filteredProfiles;
-  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly || nameReviewOnly
+  const hasOrgFilter = Object.values(orgFilters).some(values => values.length > 0);
+  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly || nameReviewOnly || hasOrgFilter
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
   if (filteredProfiles.length === 0) {
@@ -399,7 +530,9 @@ export async function renderAdminUserDirectory() {
   const stageOneFilter = document.getElementById("admin-user-directory-filter-stage-one");
   const unjoinedTeamFilter = document.getElementById("admin-user-directory-filter-unjoined-team");
   const nameReviewFilter = document.getElementById("admin-user-directory-filter-name-review");
-  if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter) return;
+  const orgFiltersRoot = document.querySelector(".admin-user-directory__org-filters");
+  if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter
+    || !orgFiltersRoot) return;
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   column.classList.toggle("hidden", !isAdmin);
   if (!isAdmin) return;
@@ -408,6 +541,7 @@ export async function renderAdminUserDirectory() {
   stageOneFilter.disabled = true;
   if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = true;
   if (nameReviewFilter) nameReviewFilter.disabled = true;
+  orgFiltersRoot.setAttribute("aria-disabled", "true");
   count.textContent = "讀取中…";
   list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
   const result = await db.fetchAdminUserProfiles();
@@ -422,6 +556,9 @@ export async function renderAdminUserDirectory() {
   stageOneFilter.disabled = false;
   if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = false;
   if (nameReviewFilter) nameReviewFilter.disabled = false;
+  orgFiltersRoot.setAttribute("aria-disabled", "false");
+  refreshAdminUserDirectoryOrgFilterOptions();
+  bindAdminUserDirectoryOrgFilterActions(orgFiltersRoot, search);
   bindAdminUserDirectoryNameReviewActions(list);
   const exportBtn = document.getElementById("admin-user-directory-export-btn");
   if (exportBtn) {

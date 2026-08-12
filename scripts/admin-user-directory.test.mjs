@@ -17,6 +17,13 @@ describe("read-only admin user directory", () => {
     expect(section).toContain('id="admin-user-directory-disclosure"');
     expect(section).toContain('<details class="glass-card admin-user-directory"');
     expect(section).toContain('id="admin-user-directory-search"');
+    expect(section).toContain('id="admin-user-directory-filter-region"');
+    expect(section).toContain('id="admin-user-directory-filter-zone"');
+    expect(section).toContain('id="admin-user-directory-filter-group"');
+    expect(section).toContain("組織架構篩選");
+    expect(section).toContain('id="admin-user-directory-filter-region-options"');
+    expect(section).toContain('id="admin-user-directory-filter-zone-options"');
+    expect(section).toContain('id="admin-user-directory-filter-group-options"');
     expect(section).toContain('id="admin-user-directory-filter-incomplete"');
     expect(section).toContain("未填會員資料（沒有牧區或沒有名稱）");
     expect(section).toContain('id="admin-user-directory-filter-stage-one"');
@@ -27,6 +34,24 @@ describe("read-only admin user directory", () => {
     // by renderAdminUserDirectoryList, not baked into this static template.
     const staticButtons = [...section.matchAll(/<button[^>]*id="([^"]+)"/g)].map(match => match[1]);
     expect(staticButtons).toEqual(["admin-user-directory-export-btn"]);
+  });
+
+  it("wires cascading organization filters into the same filtered directory and CSV result", () => {
+    const admin = read("js/modules/admin.js");
+    const directory = admin.slice(
+      admin.indexOf("function getAdminUserDirectoryOrgFilters"),
+      admin.indexOf("let managedScopeProfiles")
+    );
+
+    expect(directory).toContain("buildAdminUserDirectoryOrgOptions");
+    expect(directory).toContain("matchesAdminUserDirectoryOrgFilters(profile, orgFilters)");
+    expect(directory).toContain("refreshAdminUserDirectoryOrgFilterOptions()");
+    expect(directory).toContain("bindAdminUserDirectoryOrgFilterActions");
+    expect(directory).toContain('input[data-org-filter-key]');
+    expect(directory).toContain("new Set(adminUserDirectoryOrgFilterState[stateKey])");
+    expect(directory).toContain("dataset.orgFilterClear");
+    expect(directory).toContain("adminUserDirectoryFilteredProfiles = filteredProfiles");
+    expect(admin).toContain("const target = Array.isArray(profiles) ? profiles : adminUserDirectoryProfiles");
   });
 
   it("loads every real profile through an admin-only read query", () => {

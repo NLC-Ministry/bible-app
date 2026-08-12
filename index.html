@@ -58,7 +58,7 @@
     };
   </script>
   <link rel="stylesheet" href="index.css?v=20260811_daily_church_quiz" onerror="window.showAppStyleRecovery(this)">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260809_admin-org-permissions-overview" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_admin-user-directory-org-filter" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
   <!-- Supabase JS Client library -->
@@ -1757,6 +1757,30 @@
                 <input type="search" id="admin-user-directory-search" class="form-control"
                   placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
               </label>
+              <fieldset class="admin-user-directory__org-filters">
+                <legend>組織架構篩選</legend>
+                <div class="admin-user-directory__org-filter">
+                  <span>大區</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-region">
+                    <summary class="form-control"><span id="admin-user-directory-filter-region-summary">全部大區</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-region-options"></div>
+                  </details>
+                </div>
+                <div class="admin-user-directory__org-filter">
+                  <span>牧區</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-zone">
+                    <summary class="form-control"><span id="admin-user-directory-filter-zone-summary">全部牧區</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-zone-options"></div>
+                  </details>
+                </div>
+                <div class="admin-user-directory__org-filter">
+                  <span>小組</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-group">
+                    <summary class="form-control"><span id="admin-user-directory-filter-group-summary">全部小組</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-group-options"></div>
+                  </details>
+                </div>
+              </fieldset>
               <fieldset class="admin-user-directory__filters">
                 <legend>篩選條件</legend>
                 <label>
@@ -2445,7 +2469,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260811_daily_church_quiz"></script>
+  <script type="module" src="js/app.js?v=20260812_admin_user_directory_org_filter"></script>
 </body>
 
 </html>
