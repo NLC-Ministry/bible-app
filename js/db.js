@@ -2613,6 +2613,13 @@ const db = {
 
   _quizErrorMessage(error) {
     const raw = String(error && (error.message || error.error || error.details) || error || "");
+    const normalized = raw.toLowerCase();
+    if (normalized.includes("statement timeout")
+      || normalized.includes("canceling statement")
+      || normalized.includes("query timeout")
+      || normalized.includes("57014")) {
+      return "小測驗載入逾時，請稍後再試。";
+    }
     const messages = {
       quiz_review_required: "只有牧者或系統管理員可以審核與修改小測驗。",
       quiz_regeneration_permission_required: "只有牧者或系統管理員可以重新生成小測驗。",
@@ -2634,7 +2641,7 @@ const db = {
       quiz_already_published: "這一版已經發布，為避免改變組員正在作答的內容，不能再修改或取消審核。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
-    return key ? messages[key] : (raw || "小測驗操作失敗，請稍後再試。");
+    return key ? messages[key] : "目前無法載入小測驗資料，請稍後再試。";
   },
 
   async _callQuizRpc(functionName, args = {}) {
@@ -2643,9 +2650,13 @@ const db = {
     }
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
-      if (error) return { success: false, error, message: this._quizErrorMessage(error) };
+      if (error) {
+        console.warn(`[Quiz] ${functionName} failed:`, error);
+        return { success: false, error, message: this._quizErrorMessage(error) };
+      }
       return { success: true, data };
     } catch (error) {
+      console.warn(`[Quiz] ${functionName} failed:`, error);
       return { success: false, error, message: this._quizErrorMessage(error) };
     }
   },

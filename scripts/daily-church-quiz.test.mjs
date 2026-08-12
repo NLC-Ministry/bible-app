@@ -12,6 +12,7 @@ const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
 const admin = read("js/modules/admin.js");
 const html = read("index.html");
+const css = read("index.css");
 
 describe("daily church quiz", () => {
   it("runs the automatic A/B/C set once and supports deduplicated manual retries", () => {
@@ -114,5 +115,44 @@ describe("daily church quiz", () => {
     expect(generator).toContain("daily_quiz_generation_finished");
     expect(generator).not.toContain('apiKey }));');
     expect(generator).not.toContain('cronSecret }));');
+  });
+
+  it("shows a safe retryable error state instead of raw database errors", () => {
+    expect(db).toContain('normalized.includes("canceling statement")');
+    expect(db).toContain('return "小測驗載入逾時，請稍後再試。"');
+    expect(admin).toContain('class="admin-daily-quiz-load-error"');
+    expect(admin).toContain('data-quiz-load-retry');
+    expect(admin).toContain("['A', 'B', 'C'].map(variant");
+    expect(admin).toContain('狀態載入失敗');
+    expect(admin).toContain('已保留原有題目與審核狀態');
+    expect(admin).toContain('data-quiz-action="refresh-status"');
+    expect(admin).toContain("if (action === 'refresh-status')");
+    expect(admin).toContain('載入後才可審核');
+    expect(admin).toContain('載入後才可編輯');
+    expect(admin).toContain('編輯題目');
+    expect(admin).toContain('data-quiz-action="toggle-edit"');
+    expect(admin).toContain('class="admin-daily-quiz-editor-shell"');
+    expect(admin).toContain('role="dialog" aria-modal="true"');
+    expect(admin).toContain('data-quiz-editor-close');
+    expect(admin).toContain("document.body.classList.toggle('admin-quiz-editor-open', opening)");
+    expect(css).toContain('height: 100dvh;');
+    expect(css).toContain('body.admin-quiz-editor-open');
+    expect(admin).toContain('data-quiz-carousel');
+    expect(admin).toContain('data-quiz-slide-track');
+    expect(admin).toContain('data-quiz-slide="previous"');
+    expect(admin).toContain('data-quiz-slide="next"');
+    expect(admin).toContain('bindAdminQuizCarousels(root)');
+    expect(css).toContain('scroll-snap-type: x mandatory;');
+    expect(css).toContain('.admin-daily-quiz-question-slide {');
+    expect(admin).toContain("editorWrap.dataset.dirty = 'true'");
+    expect(admin).toContain("editor.dataset.dirty === 'true'");
+    expect(admin).toContain('目前有尚未儲存的題目修改');
+    expect(admin).toContain("editor.querySelector('[data-quiz-editor-close]')?.click()");
+    expect(admin).toContain("button.textContent = '儲存中…'");
+    expect(admin).toContain('data-quiz-action="review"');
+    expect(admin).toContain('審核通過');
+    expect(css).toContain('.admin-daily-quiz-load-error {');
+    expect(css).toContain('.admin-daily-quiz-version--load-failed {');
+    expect(html).toContain('index.css?v=20260812_quiz_load_error_state');
   });
 });

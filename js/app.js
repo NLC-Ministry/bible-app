@@ -31,7 +31,7 @@ let buildVersion = "__BUILD_VERSION__";
 if (!/^\d{14}$/.test(buildVersion)) {
   buildVersion = "dev_" + Date.now();
 }
-buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1";
+buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1_quiz_load_error_v1";
 const moduleCache = {};
 const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260812_export_taiwan_time';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";

@@ -1442,9 +1442,16 @@ function adminQuizPublisherLabel(role) {
 function renderAdminQuizQuestionEditor(quiz, locked = false) {
   const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
   if (questions.length !== 5) return '<p class="admin-daily-quiz-empty">題目尚未生成完成。</p>';
-  return `<div class="admin-daily-quiz-editor">
+  return `<div class="admin-daily-quiz-editor" data-quiz-carousel>
+    <div class="admin-daily-quiz-carousel-status">
+      <strong data-quiz-slide-label>第 1 題／共 5 題</strong>
+      <div class="admin-daily-quiz-carousel-dots" aria-label="題目進度">
+        ${questions.map((_, index) => `<button type="button" data-quiz-slide-dot="${index}" class="${index === 0 ? 'active' : ''}" aria-label="前往第 ${index + 1} 題" ${index === 0 ? 'aria-current="step"' : ''}></button>`).join('')}
+      </div>
+    </div>
+    <div class="admin-daily-quiz-carousel-track" data-quiz-slide-track>
     ${questions.map((question, questionIndex) => `
-      <fieldset class="admin-daily-quiz-question" data-question-index="${questionIndex}">
+      <fieldset class="admin-daily-quiz-question admin-daily-quiz-question-slide" data-question-index="${questionIndex}">
         <legend>第 ${questionIndex + 1} 題</legend>
         <label>題目<textarea class="form-control" data-field="question" rows="2" ${locked ? 'readonly' : ''}>${adminQuizEscape(question.question)}</textarea></label>
         <div class="admin-daily-quiz-options">
@@ -1461,8 +1468,66 @@ function renderAdminQuizQuestionEditor(quiz, locked = false) {
         <label>解說<textarea class="form-control" data-field="explanation" rows="2" ${locked ? 'readonly' : ''}>${adminQuizEscape(question.explanation)}</textarea></label>
       </fieldset>
     `).join('')}
-    ${locked ? '<p class="admin-daily-quiz-note">此版本已審核鎖定，僅供檢視。</p>' : `<button type="button" class="secondary-btn" data-quiz-action="save" data-quiz-id="${adminQuizEscape(quiz.id)}">儲存修改並重新送審</button>`}
+    </div>
+    ${locked ? '<p class="admin-daily-quiz-note">此版本已審核鎖定，僅供滑動檢視。</p>' : ''}
+    <div class="admin-daily-quiz-carousel-actions">
+      <button type="button" class="secondary-btn" data-quiz-slide="previous" disabled>上一題</button>
+      <button type="button" class="primary-btn" data-quiz-slide="next">下一題</button>
+      ${locked ? '' : `<button type="button" class="primary-btn" data-quiz-action="save" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-slide-save hidden>儲存五題並重新送審</button>`}
+    </div>
   </div>`;
+}
+
+function bindAdminQuizCarousels(root) {
+  root.querySelectorAll('[data-quiz-carousel]').forEach(carousel => {
+    if (carousel.dataset.carouselBound === 'true') return;
+    carousel.dataset.carouselBound = 'true';
+    const track = carousel.querySelector('[data-quiz-slide-track]');
+    const slides = Array.from(carousel.querySelectorAll('[data-question-index]'));
+    const label = carousel.querySelector('[data-quiz-slide-label]');
+    const dots = Array.from(carousel.querySelectorAll('[data-quiz-slide-dot]'));
+    const previous = carousel.querySelector('[data-quiz-slide="previous"]');
+    const next = carousel.querySelector('[data-quiz-slide="next"]');
+    const save = carousel.querySelector('[data-quiz-slide-save]');
+    if (!track || slides.length === 0) return;
+    let activeIndex = 0;
+    let scrollFrame = 0;
+
+    const update = (index, shouldScroll = false) => {
+      activeIndex = Math.max(0, Math.min(slides.length - 1, Number(index) || 0));
+      if (label) label.textContent = `第 ${activeIndex + 1} 題／共 ${slides.length} 題`;
+      dots.forEach((dot, dotIndex) => {
+        dot.classList.toggle('active', dotIndex === activeIndex);
+        if (dotIndex === activeIndex) dot.setAttribute('aria-current', 'step');
+        else dot.removeAttribute('aria-current');
+      });
+      if (previous) previous.disabled = activeIndex === 0;
+      if (next) next.hidden = activeIndex === slides.length - 1;
+      if (save) save.hidden = activeIndex !== slides.length - 1;
+      if (shouldScroll) track.scrollTo({ left: slides[activeIndex].offsetLeft, behavior: 'smooth' });
+    };
+
+    previous?.addEventListener('click', () => update(activeIndex - 1, true));
+    next?.addEventListener('click', () => update(activeIndex + 1, true));
+    dots.forEach((dot, index) => dot.addEventListener('click', () => update(index, true)));
+    track.addEventListener('scroll', () => {
+      cancelAnimationFrame(scrollFrame);
+      scrollFrame = requestAnimationFrame(() => {
+        const closestIndex = slides.reduce((best, slide, index) => (
+          Math.abs(slide.offsetLeft - track.scrollLeft) < Math.abs(slides[best].offsetLeft - track.scrollLeft) ? index : best
+        ), 0);
+        update(closestIndex, false);
+      });
+    }, { passive: true });
+    const editorWrap = carousel.closest('[data-editor-for]');
+    const markDirty = event => {
+      if (editorWrap && event.target.matches('input, textarea, select')) editorWrap.dataset.dirty = 'true';
+    };
+    carousel.addEventListener('input', markDirty);
+    carousel.addEventListener('change', markDirty);
+    carousel._updateQuizSlide = update;
+    update(0, false);
+  });
 }
 
 function renderAdminQuizReviewCards(context) {
@@ -1479,7 +1544,11 @@ function renderAdminQuizReviewCards(context) {
         const quiz = quizzes.find(item => item.variant === variant);
         if (!quiz) return `<article class="admin-daily-quiz-version">
           <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div>
-          <div class="admin-daily-quiz-version-actions"><button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-variant="${variant}">生成題目</button></div>
+          <div class="admin-daily-quiz-version-actions">
+            <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
+            <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
+            <button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-variant="${variant}">生成題目</button>
+          </div>
         </article>`;
         const ready = quiz.generationStatus === 'ready';
         const approved = quiz.reviewStatus === 'approved';
@@ -1490,16 +1559,34 @@ function renderAdminQuizReviewCards(context) {
           </div>
           ${quiz.generationError ? `<p class="admin-daily-quiz-error">${adminQuizEscape(quiz.generationError)}</p>` : ''}
           ${ready ? `<div class="admin-daily-quiz-version-actions">
-            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">${approved ? '檢視題目' : '檢視／修改'}</button>
+            <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
+            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">${approved ? '檢視題目' : '編輯題目'}</button>
             ${approved
               ? '<button type="button" class="secondary-btn" disabled>已審核鎖定</button>'
               : `<button type="button" class="secondary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">更換題目</button>
                  <button type="button" class="primary-btn" data-quiz-action="review" data-quiz-id="${adminQuizEscape(quiz.id)}" data-approved="true">審核通過</button>`}
           </div>
-          <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}">${renderAdminQuizQuestionEditor(quiz, approved)}</div>`
+          <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}" role="dialog" aria-modal="true" aria-labelledby="admin-quiz-editor-title-${variant}">
+            <div class="admin-daily-quiz-editor-shell">
+              <header class="admin-daily-quiz-editor-header">
+                <div><p class="admin-registration-statistics__eyebrow">${approved ? '審核後檢視' : '題目編輯'}</p><h2 id="admin-quiz-editor-title-${variant}">版本 ${variant}・五題選擇題</h2></div>
+                <button type="button" class="icon-button icon-button--subtle" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-editor-close aria-label="關閉版本 ${variant} 編輯畫面"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button>
+              </header>
+              <div class="admin-daily-quiz-editor-scroll">${renderAdminQuizQuestionEditor(quiz, approved)}</div>
+            </div>
+          </div>`
           : quiz.generationStatus === 'failed'
-            ? `<div class="admin-daily-quiz-version-actions"><button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">重新生成題目</button></div>`
-            : ''}
+            ? `<div class="admin-daily-quiz-version-actions">
+                <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
+                <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
+                <button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">重新生成題目</button>
+                <button type="button" class="primary-btn" disabled>生成完成後審核</button>
+              </div>`
+            : `<div class="admin-daily-quiz-version-actions">
+                <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
+                <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
+                <button type="button" class="primary-btn" disabled>生成完成後審核</button>
+              </div>`}
         </article>`;
       }).join('')}
     </div>
@@ -1587,10 +1674,43 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
       event.stopPropagation();
       const action = button.dataset.quizAction;
       const quizId = button.dataset.quizId;
+      if (action === 'refresh-status') {
+        button.disabled = true;
+        button.textContent = '載入中…';
+        await renderAdminDailyQuizManagement(true, quizDate);
+        return;
+      }
       if (action === 'toggle-edit') {
-        Array.from(root.querySelectorAll('[data-editor-for]'))
-          .find(element => element.dataset.editorFor === String(quizId))
-          ?.classList.toggle('hidden');
+        const editor = Array.from(root.querySelectorAll('[data-editor-for]'))
+          .find(element => element.dataset.editorFor === String(quizId));
+        if (!editor) return;
+        const opening = editor.classList.contains('hidden');
+        if (!opening && editor.dataset.dirty === 'true') {
+          const shouldSave = window.confirm('目前有尚未儲存的題目修改。按「確定」會先儲存再關閉；按「取消」則繼續編輯。');
+          if (!shouldSave) return;
+          const saveButton = editor.querySelector('[data-quiz-action="save"]');
+          if (saveButton) {
+            saveButton.click();
+            return;
+          }
+        }
+        editor.classList.toggle('hidden', !opening);
+        document.body.classList.toggle('admin-quiz-editor-open', opening);
+        if (opening) {
+          editor.querySelector('[data-quiz-carousel]')?._updateQuizSlide?.(0, false);
+          const editorTrack = editor.querySelector('[data-quiz-slide-track]');
+          if (editorTrack) editorTrack.scrollLeft = 0;
+          editor._escapeController?.abort();
+          editor._escapeController = new AbortController();
+          document.addEventListener('keydown', keyEvent => {
+            if (keyEvent.key !== 'Escape') return;
+            editor.querySelector('[data-quiz-editor-close]')?.click();
+          }, { signal: editor._escapeController.signal });
+          requestAnimationFrame(() => editor.querySelector('[data-quiz-editor-close]')?.focus());
+        } else {
+          document.body.classList.remove('admin-quiz-editor-open');
+          editor._escapeController?.abort();
+        }
         return;
       }
       if (action === 'regenerate') {
@@ -1626,9 +1746,18 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         const quiz = (context.reviewQuizzes || []).find(item => String(item.id) === String(quizId));
         const questions = collectAdminQuizQuestions(root, quizId, quiz?.questions || []);
         button.disabled = true;
+        const originalLabel = button.textContent;
+        button.textContent = '儲存中…';
         const result = await db.updateDailyQuizQuestions(quizId, questions);
         if (typeof showToast === 'function') showToast(result.success ? '題目已更新，請重新審核' : result.message || '儲存失敗');
-        await renderAdminDailyQuizManagement(true, quizDate);
+        if (result.success) {
+          const editor = button.closest('[data-editor-for]');
+          if (editor) editor.dataset.dirty = 'false';
+          await renderAdminDailyQuizManagement(true, quizDate);
+        } else {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
         return;
       }
       if (action === 'publish-group' || action === 'publish-all') {
@@ -1650,6 +1779,8 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
 async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '') {
   const root = document.getElementById('admin-daily-quiz-root');
   if (!root || !state.activePlan) return;
+  root.querySelectorAll('[data-editor-for]').forEach(editor => editor._escapeController?.abort());
+  document.body.classList.remove('admin-quiz-editor-open');
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate || ''))
     ? String(requestedDate)
     : (root.dataset.quizDate || adminQuizDateToday());
@@ -1657,7 +1788,46 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
   root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
   const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
   if (!result.success) {
-    root.innerHTML = `<div class="admin-user-directory__empty">${adminQuizEscape(result.message || '小測驗資料載入失敗')}</div>`;
+    const message = result.message || '目前無法載入小測驗資料，請稍後再試。';
+    const timedOut = message.includes('逾時');
+    root.innerHTML = `
+      <div class="admin-daily-quiz-toolbar">
+        <label for="admin-daily-quiz-date">測驗日期<input id="admin-daily-quiz-date" class="form-control" type="date" value="${adminQuizEscape(quizDate)}"></label>
+        <span>版本狀態載入未完成</span>
+      </div>
+      <section class="glass-card admin-daily-quiz-block" aria-labelledby="admin-quiz-load-error-title">
+        <div class="admin-daily-quiz-heading">
+          <div><p class="admin-registration-statistics__eyebrow">題目審核</p><h2 id="admin-quiz-load-error-title">每日三版題目</h2></div>
+        </div>
+        <div class="admin-daily-quiz-load-error" role="alert">
+          <span class="admin-daily-quiz-load-error__icon" aria-hidden="true"><span class="nlc-icon" data-icon="refresh"></span></span>
+          <div class="admin-daily-quiz-load-error__content">
+            <h3>${timedOut ? '版本狀態載入逾時' : '暫時無法取得版本狀態'}</h3>
+            <p>${adminQuizEscape(message)} 已保留原有題目與審核狀態。</p>
+          </div>
+        </div>
+        <div class="admin-daily-quiz-versions">
+          ${['A', 'B', 'C'].map(variant => `<article class="admin-daily-quiz-version admin-daily-quiz-version--load-failed" data-quiz-version="${variant}">
+            <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">狀態載入失敗</span></div>
+            <p class="admin-daily-quiz-empty">暫時無法確認生成與審核狀態。</p>
+            <div class="admin-daily-quiz-version-actions">
+              <button type="button" class="secondary-btn" data-quiz-load-retry data-quiz-variant="${variant}">重新載入狀態</button>
+              <button type="button" class="secondary-btn" disabled>載入後才可編輯</button>
+              <button type="button" class="primary-btn" disabled>載入後才可審核</button>
+            </div>
+          </article>`).join('')}
+        </div>
+      </section>`;
+    root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
+      void renderAdminDailyQuizManagement(true, event.target.value);
+    });
+    root.querySelectorAll('[data-quiz-load-retry]').forEach(button => {
+      button.addEventListener('click', () => {
+        root.querySelectorAll('[data-quiz-load-retry]').forEach(retryButton => { retryButton.disabled = true; });
+        void renderAdminDailyQuizManagement(true, quizDate);
+      });
+    });
+    if (typeof hydrateIcons === 'function') hydrateIcons(root);
     return;
   }
   const context = result.context || {};
@@ -1679,6 +1849,7 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
       ${renderAdminQuizGroupRows(context)}
     </section>`;
   await bindAdminDailyQuizActions(root, context, quizDate);
+  bindAdminQuizCarousels(root);
   if (typeof hydrateIcons === 'function') hydrateIcons(root);
 }
 
