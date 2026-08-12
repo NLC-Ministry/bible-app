@@ -5,6 +5,8 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8"
 
 const utils = read("js/utils.js");
 const app = read("js/app.js");
+const homeModule = read("js/modules/home.js");
+const planModule = read("js/modules/plan.js");
 const html = read("index.html");
 const css = read("index.css");
 const adminCss = read("css/admin-registration-statistics.css");
@@ -68,6 +70,22 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
     expect(loadIndex).toBeGreaterThan(gatedIndex);
   });
 
+  it("blocks dashboard reading shortcuts and every direct plan reader entry", () => {
+    expect(homeModule).toMatch(/openActivePlanFromDashboard[\s\S]*guardPlanEligibility\(\)/);
+    expect(homeModule).toMatch(/startReadingCurrentChapter[\s\S]*guardPlanEligibility\(\)/);
+    expect(planModule).toMatch(/openPlanChapterInReader[\s\S]*guardPlanEligibility\(\)/);
+    expect(planModule).toMatch(/openPlanInlineReader[\s\S]*guardPlanEligibility\(\)/);
+  });
+
+  it("returns blocked members to the plan root before showing the explanation", () => {
+    expect(app).toContain("function resetPlanNavigationForEligibilityGate()");
+    expect(app).toContain('window.currentPlanViewState = "LIST"');
+    expect(app).toContain("state.planDetailOpen = false");
+    expect(app).toContain("if (state.inlineReader) state.inlineReader.active = false");
+    expect(app).toContain("resetPlanNavigationForEligibilityGate();");
+    expect(app).toContain("appRouter.updateNavigationChrome();");
+  });
+
   it("re-syncs from Member Hub on return and never offers a local edit form", () => {
     expect(app).toContain("function bindPlanEligibilityHubReturnSync");
     expect(app).toContain("db.syncNlcSessionWithSupabase(true)");
@@ -88,6 +106,8 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
     // Unlike the old design, the hub link is unconditional — no per-reason toggle.
     expect(app).not.toContain("showHubLink");
     expect(app).not.toContain("showNameForm");
+    expect(app).toContain("完成會員資料後即可進入計畫");
+    expect(app).toContain("這不是系統故障");
   });
 
   it("renders read-only gate markup inside #plan-view with only a Member Hub link, no editable fields", () => {

@@ -3990,6 +3990,7 @@ async function renderAdminPlanManagement() {
 
 
 window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = null) {
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (state.activePlan && isPlanExpired(state.activePlan)) {
     showToast("此計畫已過期，無法再進入進度閱讀。");
     return;
@@ -4182,6 +4183,7 @@ function initInlineReaderBottomDwell() {
 }
 
 window.openPlanInlineReader = async function (bookName, chapter, dayNum, round = null) {
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (state.activePlan && isPlanExpired(state.activePlan)) {
     showToast("此計畫已過期，無法再進入進度閱讀。");
     return;
@@ -8269,6 +8271,7 @@ async function enterPlanListState() {
 }
 
 async function enterPlanDetailState() {
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (!state.activePlan) {
     await enterPlanListState();
     return;
@@ -8298,6 +8301,7 @@ async function fetchGroupRankings(planId) {
 }
 
 async function enterGroupProgressState() {
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (!state.activePlan) {
     await enterPlanListState();
     return;

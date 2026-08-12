@@ -2491,7 +2491,6 @@ export function initSpeechPreferencesControls() {
   const rateLabel = document.getElementById("speech-rate-val");
   const voiceSelect = document.getElementById("speech-voice-select");
   const btnPreviewSpeech = document.getElementById("btn-preview-speech");
-  const genderBtns = document.querySelectorAll("[data-speech-gender]");
 
   if (!rateSlider && !voiceSelect && !btnPreviewSpeech) return;
 
@@ -2549,32 +2548,7 @@ export function initSpeechPreferencesControls() {
     }
   }
 
-  // 2. Gender Preference Toggle
-  function updateGenderBtnsUI() {
-    const currentGender = getSpeechSetting("gender", "auto");
-    genderBtns.forEach(btn => {
-      const isSelected = (btn.dataset.speechGender === currentGender);
-      btn.classList.toggle("active", isSelected);
-      btn.setAttribute("aria-checked", isSelected ? "true" : "false");
-    });
-  }
-
-  updateGenderBtnsUI();
-
-  if (genderBtns && genderBtns.length > 0) {
-    genderBtns.forEach(btn => {
-      if (!btn.dataset.bound) {
-        btn.dataset.bound = "true";
-        btn.addEventListener("click", () => {
-          setSpeechSetting("gender", btn.dataset.speechGender || "auto");
-          updateGenderBtnsUI();
-          populateVoices(false);
-        });
-      }
-    });
-  }
-
-  // 3. Populate Voices
+  // 2. Populate Voices
   function populateVoices(autoPreviewAfterPopulate = false) {
     if (!voiceSelect || typeof window.speechSynthesis === "undefined") return;
     const voices = window.speechSynthesis.getVoices() || [];
@@ -2589,7 +2563,6 @@ export function initSpeechPreferencesControls() {
       return lang.startsWith("zh") || lang.includes("hant") || lang.includes("cmn") || name.includes("國語") || name.includes("中文") || name.includes("taiwan");
     });
 
-    const currentGender = getSpeechSetting("gender", "auto");
     const currentURI = getSpeechSetting("voiceURI", "");
 
     const isFemaleVoice = (v) => {
@@ -2609,14 +2582,7 @@ export function initSpeechPreferencesControls() {
     // the picker could show a single Cantonese option even with a Taiwan
     // Mandarin pack installed: the other voices were filtered out of the
     // list entirely, not merely deprioritized.
-    let filteredVoices = chineseVoices;
-    if (currentGender === "female") {
-      const onlyFemale = chineseVoices.filter(v => isFemaleVoice(v));
-      if (onlyFemale.length > 0) filteredVoices = onlyFemale;
-    } else if (currentGender === "male") {
-      const onlyMale = chineseVoices.filter(v => isMaleVoice(v));
-      if (onlyMale.length > 0) filteredVoices = onlyMale;
-    }
+    const filteredVoices = chineseVoices;
 
     const formatVoiceLabel = (v) => {
       const name = String(v.name || "");
@@ -2648,7 +2614,7 @@ export function initSpeechPreferencesControls() {
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = currentGender === "female" ? "系統無可用中文女聲" : (currentGender === "male" ? "系統無可用中文男聲" : "找不到可用的中文語音，請確認手機已安裝中文語音包");
+      opt.textContent = "找不到可用的中文語音，請確認手機已安裝中文語音包";
       voiceSelect.appendChild(opt);
       return;
     }
@@ -2662,7 +2628,7 @@ export function initSpeechPreferencesControls() {
       ? filteredVoices.find(v => v.voiceURI === currentURI || v.name === currentURI)
       : null;
     if (!preselected && typeof window.selectPreferredChineseVoice === "function") {
-      preselected = window.selectPreferredChineseVoice(filteredVoices, { preferredGender: currentGender });
+      preselected = window.selectPreferredChineseVoice(filteredVoices);
     }
     if (!preselected) preselected = filteredVoices[0];
 
@@ -2697,7 +2663,7 @@ export function initSpeechPreferencesControls() {
     });
   }
 
-  // 4. Preview Button Toggle
+  // 3. Preview Button Toggle
   let isPreviewSpeaking = false;
 
   if (btnPreviewSpeech && !btnPreviewSpeech.dataset.bound) {
@@ -2734,8 +2700,9 @@ export function initSpeechPreferencesControls() {
     }
     btnPreviewSpeech.setAttribute("aria-label", accessibleLabel);
     btnPreviewSpeech.setAttribute("title", accessibleLabel);
+    if (btnIcon) btnIcon.replaceChildren();
     if (typeof window.hydrateIcons === "function") {
-      window.hydrateIcons();
+      window.hydrateIcons(btnPreviewSpeech);
     }
   }
 
@@ -2753,14 +2720,13 @@ export function initSpeechPreferencesControls() {
 
     const voices = window.speechSynthesis.getVoices() || [];
     const selectedURI = getSpeechSetting("voiceURI", "");
-    const gender = getSpeechSetting("gender", "auto");
 
     let targetVoice = null;
     if (selectedURI) {
       targetVoice = voices.find(v => v.voiceURI === selectedURI || v.name === selectedURI);
     }
     if (!targetVoice && typeof window.selectPreferredChineseVoice === "function") {
-      targetVoice = window.selectPreferredChineseVoice(voices, { preferredGender: gender });
+      targetVoice = window.selectPreferredChineseVoice(voices);
     }
     if (targetVoice) {
       utterance.voice = targetVoice;
@@ -2771,13 +2737,7 @@ export function initSpeechPreferencesControls() {
 
     utterance.rate = getSpeechSetting("rate", 1.0);
 
-    if (gender === "female") {
-      utterance.pitch = 1.15;
-    } else if (gender === "male") {
-      utterance.pitch = 0.85;
-    } else {
-      utterance.pitch = 1.0;
-    }
+    utterance.pitch = 1.0;
 
     utterance.onstart = () => {
       if (currentSession !== previewSessionId) return;

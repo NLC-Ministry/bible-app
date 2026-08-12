@@ -2026,6 +2026,7 @@ function renderDailyVerse(options = {}) {
 
 window.openActivePlanFromDashboard = function (event) {
   console.log('📅 [Debug] 已點選讀經計畫，正在跳轉至計畫頁');
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (!state.activePlan) return;
   if (typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
     showToast("此計畫已過期，無法再進入進度閱讀。");
@@ -2039,6 +2040,7 @@ window.openActivePlanFromDashboard = function (event) {
 
 window.startReadingCurrentChapter = function () {
   console.log('📖 [Debug] 已點選章節，進入全滿版沉浸閱讀模式');
+  if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   try {
     if (typeof calculatePlanProgress === "function") {
       calculatePlanProgress();

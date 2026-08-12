@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice } from "../js/modules/reader-speech.mjs";
 
 const bible = readFileSync("js/modules/bible.js", "utf8");
+const app = readFileSync("js/app.js", "utf8");
 const css = readFileSync("index.css", "utf8");
 const html = readFileSync("index.html", "utf8");
 
@@ -28,14 +29,24 @@ describe("reader speech controls", () => {
     expect(getReaderSpeechRate("en-US")).toBe(0.88);
   });
 
-  it("uses a dedicated one-click selection and a stop-first audio toggle", () => {
+  it("uses a dedicated one-click selection and a resumable audio toggle", () => {
     expect(bible).toContain("setReaderStartSelection(verseDiv)");
     expect(bible).toContain('classList.contains("reader-start-selected")');
     expect(bible).toContain('setAttribute("aria-pressed", "true")');
     expect(bible).toContain("state.readerState.selectedVerseNum = null");
     expect(bible).toContain("startVerseNum ?? state.readerState?.selectedVerseNum ?? null");
-    expect(bible).toContain("isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending");
+    expect(bible).toContain("let isReaderAudioPaused = false");
+    expect(bible).toContain("function pauseReaderAudio()");
+    expect(bible).toContain("function resumeReaderAudio()");
+    expect(bible).toContain("window.speechSynthesis.pause()");
+    expect(bible).toContain("window.speechSynthesis.resume()");
+    expect(bible).toContain("state.readerState.selectedVerseNum = currentItem.verseNum");
+    expect(bible).toContain("if (isReaderAudioPaused)");
+    expect(bible).toContain("if (isSpeaking)");
     expect(bible).toContain("resetReaderAudioState()");
+    expect(bible).toContain("window.clearReaderAudioOnPageExit = function");
+    expect(app).toContain('previousTab === "reader-view"');
+    expect(app).toContain("window.clearReaderAudioOnPageExit()");
     expect(bible).toContain("warmReaderVoice(targetLang).then");
     expect(bible).not.toContain("lastFocusedVerseNum) {");
     expect(css).toContain("朗讀起點");
@@ -97,12 +108,22 @@ describe("reader speech controls", () => {
     expect(html).toContain('aria-label="播放試聽語音"');
     expect(html).not.toContain('id="btn-preview-text"');
     expect(html).not.toContain('即時自動儲存');
-    expect(html).toContain('<span>語音安裝包</span>');
-    expect(html).toContain('class="speech-gender-btn active"');
-    expect(css).toContain('.speech-gender-btn.active');
+    expect(html).toContain('<span>語音設定指南</span>');
+    expect(html).not.toContain('data-speech-gender');
+    expect(html).not.toContain('聲線偏好');
+    expect(css).not.toContain('.speech-gender-btn');
     expect(css).toContain('.speech-preview-btn');
     expect(css).toContain('.speech-voice-select');
     expect(css).toContain('.tts-guide-button');
+    expect(css).toMatch(/\.bottom-sheet-container \{[\s\S]*width: min\(34rem, 92vw\);[\s\S]*margin-inline: auto;/);
     expect(css).toMatch(/\.font-size-option\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
+  });
+
+  it("replaces the hydrated preview icon with pause while audio is playing", () => {
+    const utils = readFileSync("js/utils.js", "utf8");
+    expect(utils).toContain('btnIcon.setAttribute("data-icon", "pause")');
+    expect(utils).toContain("btnIcon.replaceChildren()");
+    expect(utils).toContain("window.hydrateIcons(btnPreviewSpeech)");
+    expect(utils).not.toContain('getSpeechSetting("gender"');
   });
 });

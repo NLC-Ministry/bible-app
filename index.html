@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260812_reader_settings_ui" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260812_reader_voice_simplified" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -2240,16 +2240,6 @@
             </div>
           </div>
 
-          <!-- 聲線偏好（橫排 3 按鈕） -->
-          <div style="display: flex; flex-direction: column; gap: 0.35rem;">
-            <label style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">聲線偏好</label>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;" role="radiogroup" aria-label="聲線偏好">
-              <button type="button" class="speech-gender-btn active" data-speech-gender="auto">系統預設</button>
-              <button type="button" class="speech-gender-btn" data-speech-gender="female">溫柔女聲</button>
-              <button type="button" class="speech-gender-btn" data-speech-gender="male">穩重男聲</button>
-            </div>
-          </div>
-
           <!-- 發音人與試聽控制 -->
           <div class="speech-voice-control">
             <label for="speech-voice-select" style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">朗讀發音人</label>
@@ -2267,7 +2257,7 @@
           <button type="button" id="btn-show-tts-guide" class="tts-guide-button"
             onclick="window.openTtsGuideModal?.()">
             <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
-            <span>語音安裝包</span>
+            <span>語音設定指南</span>
           </button>
         </div>
       </div>
@@ -2480,7 +2470,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260812_reader_settings_ui"></script>
+  <script type="module" src="js/app.js?v=20260812_reader_audio_resume"></script>
 </body>
 
 </html>

@@ -8063,7 +8063,8 @@ input:checked + .slider:before {
 }
 
 .bottom-sheet-container {
-  width: 100%;
+  width: min(34rem, 92vw);
+  margin-inline: auto;
   background: var(--bg-card);
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
@@ -13801,37 +13802,6 @@ body.dark .glass-card-upgrade {
 }
 
 /* ─── TTS Speech Settings Modal Design System Styles ─── */
-.speech-gender-btn {
-  font-size: 0.78rem;
-  font-weight: 500;
-  padding: 0.4rem 0.25rem;
-  min-height: 38px;
-  border-radius: 8px;
-  border: 1px solid var(--border-card);
-  background: var(--bg-input);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.18s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-}
-
-.speech-gender-btn:hover {
-  border-color: color-mix(in srgb, var(--color-brand, #04A9D2) 40%, var(--border-card));
-  color: var(--text-primary);
-}
-
-.speech-gender-btn.active,
-.speech-gender-btn[aria-checked="true"] {
-  border-color: var(--color-brand, #04A9D2) !important;
-  background: var(--color-brand, #04A9D2) !important;
-  color: #ffffff !important;
-  font-weight: 600 !important;
-  box-shadow: 0 2px 8px rgba(4, 169, 210, 0.3) !important;
-}
-
 .speech-voice-select {
   width: auto;
   flex: 1 1 auto;

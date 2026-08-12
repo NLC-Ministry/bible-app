@@ -439,20 +439,31 @@ let planEligibilityHubReturnBound = false;
 function getPlanEligibilityGateCopy(block) {
   if (block.reason === "missing_zone") {
     return {
-      title: "請先完成牧區資料設定",
-      desc: "讀經計畫需要先在會員中心完成牧區歸屬，才能開始使用。完成後回到這裡即可自動繼續。"
+      title: "完成會員資料後即可進入計畫",
+      desc: "您的會員資料尚未完成牧區歸屬。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
     };
   }
   if (block.reason === "missing_name") {
     return {
-      title: "請先登錄您的中文全名",
-      desc: "讀經計畫需要顯示您的中文全名，請至會員中心完成身份設定後，回到這裡即可自動繼續。"
+      title: "完成會員資料後即可進入計畫",
+      desc: "您的會員資料尚未填寫完整姓名。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
     };
   }
   return {
-    title: "姓名待確認",
-    desc: "您目前登錄的姓名看起來不完整，請至會員中心確認或更新姓名資料；系統管理員審核通過後即可繼續使用。"
+    title: "完成會員資料確認後即可進入計畫",
+    desc: "您目前登錄的姓名需要確認。這不是系統故障；請至會員中心確認或更新姓名，待系統管理員審核通過後即可進入讀經計畫。"
   };
+}
+
+function resetPlanNavigationForEligibilityGate() {
+  window.currentPlanViewState = "LIST";
+  state.planDetailOpen = false;
+  state.planActiveSubTab = "today";
+  if (state.inlineReader) state.inlineReader.active = false;
+  if (state.readerState) {
+    state.readerState.fromPlan = false;
+    state.readerState.returnTab = null;
+  }
 }
 
 function bindPlanEligibilityHubReturnSync() {
@@ -494,6 +505,22 @@ function renderPlanEligibilityGate(block) {
   bindPlanEligibilityHubReturnSync();
 }
 
+function guardPlanEligibility() {
+  const block = typeof getPlanEligibilityBlock === "function"
+    ? getPlanEligibilityBlock(state.currentUser)
+    : null;
+  if (!block) return false;
+
+  resetPlanNavigationForEligibilityGate();
+  if (appRouter.currentTab === "plan-view") {
+    renderPlanEligibilityGate(block);
+    appRouter.updateNavigationChrome();
+  } else {
+    void appRouter.switchTab("plan-view");
+  }
+  return true;
+}
+
 function hidePlanEligibilityGate() {
   const planView = document.getElementById("plan-view");
   const gate = document.getElementById("plan-eligibility-gate");
@@ -503,6 +530,7 @@ function hidePlanEligibilityGate() {
 
 window.renderPlanEligibilityGate = renderPlanEligibilityGate;
 window.hidePlanEligibilityGate = hidePlanEligibilityGate;
+window.guardPlanEligibility = guardPlanEligibility;
 
 // Paints the reader top bar (book/chapter/version pills) straight from already-loaded
 // global state, so it's correct the instant #reader-view fades in — it must not wait on
@@ -553,7 +581,11 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
     // ── Pre-flight: stop TTS audio ──
     if (tabId !== "reader-view" && typeof window.speechSynthesis !== "undefined") {
-      window.speechSynthesis.cancel();
+      if (previousTab === "reader-view" && typeof window.clearReaderAudioOnPageExit === "function") {
+        window.clearReaderAudioOnPageExit();
+      } else {
+        window.speechSynthesis.cancel();
+      }
       const audioBtn = document.getElementById("reader-audio-btn");
       if (audioBtn) audioBtn.classList.remove("active");
     }
@@ -630,6 +662,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
         ? getPlanEligibilityBlock(state.currentUser)
         : null;
       if (eligibilityBlock) {
+        resetPlanNavigationForEligibilityGate();
         renderPlanEligibilityGate(eligibilityBlock);
       } else {
         hidePlanEligibilityGate();

@@ -1627,6 +1627,7 @@ function setupVersionPickerEvents() {
 }
 
 let isSpeaking = false;
+let isReaderAudioPaused = false;
 let speechUtterance = null;
 let currentSpeakingVerseIndex = -1;
 let verseListForSpeaking = [];
@@ -1673,10 +1674,19 @@ function resetReaderAudioAfterManualChapterChange(showTimeline) {
 function updateReaderAudioButton(speaking) {
   const btn = document.getElementById("reader-audio-btn");
   if (!btn) return;
+  const paused = isReaderAudioPaused;
+  const label = speaking ? "暫停朗讀" : paused ? "繼續朗讀" : "朗讀經文";
   btn.classList.toggle("active", speaking);
+  btn.classList.toggle("paused", paused);
   btn.setAttribute("aria-pressed", speaking ? "true" : "false");
-  btn.setAttribute("aria-label", speaking ? "停止朗讀" : "朗讀經文");
-  btn.title = speaking ? "停止朗讀" : "朗讀經文";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+  const icon = btn.querySelector("[data-icon]");
+  if (icon) {
+    icon.setAttribute("data-icon", speaking ? "pause" : "volumeNotice");
+    icon.replaceChildren();
+    if (typeof hydrateIcons === "function") hydrateIcons(btn);
+  }
 }
 
 function clearSpeakingHighlight() {
@@ -1695,6 +1705,7 @@ function stopReaderAudio(quiet = false, options = {}) {
     try { window.speechSynthesis.cancel(); } catch (_e) {}
   }
   isSpeaking = false;
+  isReaderAudioPaused = false;
   currentSpeakingVerseIndex = -1;
   verseListForSpeaking = [];
   speechUtterance = null;
@@ -1712,12 +1723,61 @@ function stopReaderAudio(quiet = false, options = {}) {
 
 function resetReaderAudioState() {
   isSpeaking = false;
+  isReaderAudioPaused = false;
   currentSpeakingVerseIndex = -1;
   verseListForSpeaking = [];
   speechUtterance = null;
   clearSpeakingHighlight();
   hideReaderAudioTimeline();
   updateReaderAudioButton(false);
+}
+
+window.clearReaderAudioOnPageExit = function () {
+  stopReaderAudio(true);
+  clearReaderStartSelection();
+};
+
+function pauseReaderAudio() {
+  if (!isSpeaking || typeof window.speechSynthesis === "undefined") return false;
+  try {
+    window.speechSynthesis.pause();
+  } catch (_e) {
+    return false;
+  }
+
+  isSpeaking = false;
+  isReaderAudioPaused = true;
+  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
+  if (currentItem) {
+    clearReaderStartSelection();
+    const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
+    verseEl?.classList.add("reader-start-selected", "speaking-highlight");
+    verseEl?.setAttribute("aria-pressed", "true");
+    state.readerState.selectedVerseNum = currentItem.verseNum;
+    updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "paused", currentItem.verseNum);
+  }
+  updateReaderAudioButton(false);
+  if (typeof showToast === "function") showToast("朗讀已暫停，再按一次即可繼續");
+  return true;
+}
+
+function resumeReaderAudio() {
+  if (!isReaderAudioPaused || typeof window.speechSynthesis === "undefined") return false;
+  isReaderAudioPaused = false;
+  isSpeaking = true;
+  clearReaderStartSelection();
+  try {
+    window.speechSynthesis.resume();
+  } catch (_e) {
+    isSpeaking = false;
+    isReaderAudioPaused = true;
+    updateReaderAudioButton(false);
+    return false;
+  }
+  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
+  updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "speaking", currentItem?.verseNum);
+  updateReaderAudioButton(true);
+  return true;
 }
 
 function getInstalledReaderVoice(targetLang = "zh-TW") {
@@ -1798,7 +1858,7 @@ function speakNextVerseInQueue(sessionId) {
       if (matched) voiceToUse = matched;
     }
     if (!voiceToUse && typeof selectPreferredVoice === "function") {
-      voiceToUse = selectPreferredVoice(voices, fallbackLang, settings);
+      voiceToUse = selectPreferredVoice(voices, fallbackLang);
     }
 
     speechUtterance.lang = voiceToUse?.lang || fallbackLang;
@@ -1806,10 +1866,7 @@ function speakNextVerseInQueue(sessionId) {
 
     speechUtterance.rate = getReaderSpeechRate(speechUtterance.lang || fallbackLang, settings.rate);
 
-    let pitch = 1.0;
-    if (settings.gender === "female") pitch = 1.15;
-    else if (settings.gender === "male") pitch = 0.85;
-    speechUtterance.pitch = pitch;
+    speechUtterance.pitch = 1.0;
   }
   speechUtterance.volume = 1;
   speechUtterance.onend = () => {
@@ -1854,16 +1911,17 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
     if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
     return;
   }
-  if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-    if (isSpeaking) {
-      stopReaderAudio(false, { preservePosition: true });
-      return;
-    }
-    stopReaderAudio(true);
+  if (isReaderAudioPaused) {
+    if (resumeReaderAudio()) return;
+    stopReaderAudio(true, { preservePosition: true });
   }
-
-  if (typeof window.speechSynthesis !== "undefined" && window.speechSynthesis.paused) {
-    try { window.speechSynthesis.resume(); } catch (_e) {}
+  if (isSpeaking) {
+    if (pauseReaderAudio()) return;
+    stopReaderAudio(false, { preservePosition: true });
+    return;
+  }
+  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+    stopReaderAudio(true);
   }
 
   resetReaderAudioState();
