@@ -90,12 +90,19 @@ describe("reader speech controls", () => {
     expect(utils).toContain('window.initSpeechPreferencesControls = initSpeechPreferencesControls');
   });
 
-  it("places preview button on dedicated row and applies design system button styles", () => {
+  it("keeps the icon-only preview beside the voice picker and uses system styles", () => {
     const html = readFileSync("index.html", "utf8");
     expect(html).toContain('class="speech-preview-btn"');
+    expect(html).toContain('class="speech-voice-row"');
+    expect(html).toContain('aria-label="播放試聽語音"');
+    expect(html).not.toContain('id="btn-preview-text"');
+    expect(html).not.toContain('即時自動儲存');
+    expect(html).toContain('<span>語音安裝包</span>');
     expect(html).toContain('class="speech-gender-btn active"');
     expect(css).toContain('.speech-gender-btn.active');
     expect(css).toContain('.speech-preview-btn');
     expect(css).toContain('.speech-voice-select');
+    expect(css).toContain('.tts-guide-button');
+    expect(css).toMatch(/\.font-size-option\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
   });
 });

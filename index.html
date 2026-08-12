@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260812_home_announcement_scroll" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260812_reader_settings_ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -2250,28 +2250,25 @@
             </div>
           </div>
 
-          <!-- 發音人選單 (單獨一行) -->
-          <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+          <!-- 發音人與試聽控制 -->
+          <div class="speech-voice-control">
             <label for="speech-voice-select" style="font-size: 0.8rem; font-weight: 500; color: var(--text-primary);">朗讀發音人</label>
-            <select id="speech-voice-select" class="speech-voice-select">
-              <option value="">載入語音中...</option>
-            </select>
+            <div class="speech-voice-row">
+              <select id="speech-voice-select" class="speech-voice-select">
+                <option value="">載入語音中...</option>
+              </select>
+              <button type="button" id="btn-preview-speech" class="speech-preview-btn"
+                aria-label="播放試聽語音" title="播放試聽語音">
+                <span id="btn-preview-icon" class="nlc-icon" data-icon="volume2" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
 
-          <!-- 試聽按鈕（獨立下一排，不會被擠住） -->
-          <button type="button" id="btn-preview-speech" class="speech-preview-btn">
-            <span id="btn-preview-icon" class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true"></span>
-            <span id="btn-preview-text">播放試聽語音</span>
+          <button type="button" id="btn-show-tts-guide" class="tts-guide-button"
+            onclick="window.openTtsGuideModal?.()">
+            <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+            <span>語音安裝包</span>
           </button>
-
-          <!-- 語音包安裝指引 + 自動儲存提示（合一行） -->
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <button type="button" id="btn-show-tts-guide" onclick="window.openTtsGuideModal?.()"
-              style="font-size: 0.72rem; color: var(--brand-primary, #04A9D2); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-weight: 500;">
-              💡 語音包安裝指引
-            </button>
-            <span style="font-size: 0.65rem; color: var(--text-secondary);">✨ 即時自動儲存</span>
-          </div>
         </div>
       </div>
     </div>
@@ -2483,7 +2480,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260812_reader_toolbar"></script>
+  <script type="module" src="js/app.js?v=20260812_reader_settings_ui"></script>
 </body>
 
 </html>

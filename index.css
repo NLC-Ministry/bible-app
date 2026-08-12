@@ -8110,6 +8110,16 @@ input:checked + .slider:before {
 }
 .bottom-sheet-close-x {
   color: var(--text-muted);
+  inline-size: 48px;
+  block-size: 48px;
+  min-inline-size: 48px;
+  min-block-size: 48px;
+}
+
+.bottom-sheet-close-x .nlc-icon,
+.bottom-sheet-close-x svg {
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 .bottom-sheet-body {
@@ -8162,9 +8172,9 @@ input:checked + .slider:before {
   transform: scale(0.95) !important;
 }
 .sheet-option-btn.active {
-  border-color: var(--color-danger);
-  background: color-mix(in srgb, var(--color-danger) 5%, transparent);
-  color: var(--color-danger);
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
 }
 .sheet-option-btn .size-num {
   font-size: 0.62rem;
@@ -8173,7 +8183,7 @@ input:checked + .slider:before {
   font-weight: var(--type-weight-strong);
 }
 .sheet-option-btn.active .size-num {
-  color: var(--color-danger);
+  color: var(--color-brand);
 }
 
 .sheet-divider {
@@ -8517,9 +8527,9 @@ body.reader-modal-open .main-content {
 }
 
 .font-size-option.active {
-  border-color: var(--reader-accent);
-  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-  color: var(--reader-accent);
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
 }
 
 @media (max-width: 420px) {
@@ -13823,7 +13833,9 @@ body.dark .glass-card-upgrade {
 }
 
 .speech-voice-select {
-  width: 100%;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
   border: 1px solid var(--border-card);
@@ -13841,21 +13853,70 @@ body.dark .glass-card-upgrade {
 }
 
 .speech-preview-btn {
-  width: 100%;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.55rem 1rem;
+  padding: 0;
   border-radius: 8px;
   border: 1.5px solid var(--color-brand, #04A9D2);
   background: color-mix(in srgb, var(--color-brand, #04A9D2) 8%, transparent);
   color: var(--color-brand, #04A9D2);
-  font-size: 0.85rem;
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.18s ease;
-  min-height: 38px;
+}
+
+.speech-preview-btn .nlc-icon,
+.speech-preview-btn svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.speech-voice-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.speech-voice-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.tts-guide-button {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.65rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, var(--border-card));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-brand) 9%, var(--bg-card));
+  color: var(--color-brand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.08s ease;
+}
+
+.tts-guide-button:hover,
+.tts-guide-button:focus-visible {
+  background: color-mix(in srgb, var(--color-brand) 16%, var(--bg-card));
+  border-color: var(--color-brand);
+}
+
+.tts-guide-button:active {
+  transform: scale(0.98);
 }
 
 .speech-preview-btn:hover {

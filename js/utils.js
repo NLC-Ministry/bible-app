@@ -2722,18 +2722,18 @@ export function initSpeechPreferencesControls() {
 
   function updatePreviewBtnUI(speaking) {
     if (!btnPreviewSpeech) return;
-    const btnText = document.getElementById("btn-preview-text");
     const btnIcon = document.getElementById("btn-preview-icon");
+    const accessibleLabel = speaking ? "暫停試聽" : "播放試聽語音";
 
     if (speaking) {
-      if (btnText) btnText.textContent = "暫停試聽";
       if (btnIcon) btnIcon.setAttribute("data-icon", "pause");
       btnPreviewSpeech.classList.add("shadcn-speech-btn--playing");
     } else {
-      if (btnText) btnText.textContent = "播放試聽語音";
       if (btnIcon) btnIcon.setAttribute("data-icon", "volume2");
       btnPreviewSpeech.classList.remove("shadcn-speech-btn--playing");
     }
+    btnPreviewSpeech.setAttribute("aria-label", accessibleLabel);
+    btnPreviewSpeech.setAttribute("title", accessibleLabel);
     if (typeof window.hydrateIcons === "function") {
       window.hydrateIcons();
     }

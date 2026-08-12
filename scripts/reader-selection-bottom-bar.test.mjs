@@ -33,13 +33,16 @@ describe("reader verse selection bottom bar", () => {
   });
 
   it("keeps the redesigned selection toolbar compact and scrollable on narrow screens", () => {
+    const highlightSectionRule = css.match(/\.youversion-action-bar \.yv-highlight-section \{([\s\S]*?)\}/)?.[1] || "";
+    const actionGroupRule = css.match(/\.youversion-action-bar \.yv-action-group \{([\s\S]*?)\}/)?.[1] || "";
     expect(bible).toContain('data-icon="share"');
     expect(bible).toContain("hydrateIcons(barDiv)");
     expect(css).toMatch(/\.youversion-action-bar \.yv-content-row \{[\s\S]*flex-direction: row;[\s\S]*overflow-x: auto;[\s\S]*scrollbar-width: none;/);
     expect(css).toMatch(/\.youversion-action-bar \.yv-content-row::-webkit-scrollbar \{[\s\S]*display: none;/);
-    expect(css).toMatch(/\.youversion-action-bar \.yv-highlight-section \{[\s\S]*min-width: max-content;/);
-    expect(css).toMatch(/\.youversion-action-bar \.yv-action-group \{[\s\S]*display: flex;[\s\S]*flex: 0 0 auto;/);
-    expect(css).not.toMatch(/\.youversion-action-bar \.yv-highlight-section \{[\s\S]*flex-direction: column;/);
+    expect(highlightSectionRule).toContain("min-width: max-content;");
+    expect(actionGroupRule).toContain("display: flex;");
+    expect(actionGroupRule).toContain("flex: 0 0 auto;");
+    expect(highlightSectionRule).not.toContain("flex-direction: column;");
     expect(css).not.toMatch(/\.youversion-action-bar[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   });
 
