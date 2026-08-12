@@ -32,8 +32,9 @@ describe("daily church quiz", () => {
   it("uses Taipei church progress and a strict five-question schema", () => {
     expect(generator).toContain('timeZone: "Asia/Taipei"');
     expect(generator).toContain("resolveDailyChapters(plan.rules, quizDate)");
-    expect(generator).toContain('mimeType: "APPLICATION_JSON"');
-    expect(generator).toContain("responseFormat");
+    expect(generator).toContain('responseMimeType: "application/json"');
+    expect(generator).toContain("responseJsonSchema");
+    expect(generator).not.toContain("responseFormat: { text:");
     expect(generator).toContain("minItems: 5, maxItems: 5");
     expect(generator).toContain("minItems: 4, maxItems: 4");
     expect(generator).toContain("validateQuestions(JSON.parse(extractGeminiText(payload)))");
@@ -102,5 +103,14 @@ describe("daily church quiz", () => {
     expect(cron).toContain("'5 16 * * *'");
     expect(cron).toContain("quiz_generation_cron_secret");
     expect(cron).toContain("generate-daily-quizzes");
+  });
+
+  it("logs each invocation and Gemini variant without exposing secrets", () => {
+    expect(generator).toContain("daily_quiz_invocation_received");
+    expect(generator).toContain("daily_quiz_gemini_request_started");
+    expect(generator).toContain("daily_quiz_variant_failed");
+    expect(generator).toContain("daily_quiz_generation_finished");
+    expect(generator).not.toContain('apiKey }));');
+    expect(generator).not.toContain('cronSecret }));');
   });
 });

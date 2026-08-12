@@ -56,6 +56,23 @@ the custom `x-cron-secret` header:
 supabase functions deploy generate-daily-quizzes --no-verify-jwt
 ```
 
+`--no-verify-jwt` is mandatory. If the function has no invocation log at all,
+the Supabase gateway is usually rejecting the `pg_net` request before the
+function starts. Redeploy with the command above and confirm **Enforce JWT
+Verification** is disabled in Edge Functions → `generate-daily-quizzes` →
+Settings. The function itself still validates `x-cron-secret`.
+
+To inspect the asynchronous `pg_net` response after pressing manual update,
+run this in the SQL Editor. A gateway problem appears here as HTTP 401 even
+when the Edge Function log is empty:
+
+```sql
+select id, status_code, content, error_msg, created
+from net._http_response
+order by created desc
+limit 20;
+```
+
 Migration `0085_schedule_daily_church_quizzes.sql` runs it daily at 00:05
 Taipei time. Store the same cron secret in Vault once:
 

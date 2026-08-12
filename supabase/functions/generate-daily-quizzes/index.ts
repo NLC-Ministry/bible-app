@@ -138,9 +138,8 @@ async function generateVariant(apiKey: string, model: string, variant: string, s
       }],
       generationConfig: {
         maxOutputTokens: 3000,
-        responseFormat: { text: {
-          mimeType: "APPLICATION_JSON",
-          schema: {
+        responseMimeType: "application/json",
+        responseJsonSchema: {
           type: "object", additionalProperties: false, required: ["questions"],
           properties: { questions: {
             type: "array", minItems: 5, maxItems: 5,
@@ -155,8 +154,7 @@ async function generateVariant(apiKey: string, model: string, variant: string, s
               }
             }
           } }
-          }
-        } }
+        }
       }
     })
   });
@@ -166,15 +164,26 @@ async function generateVariant(apiKey: string, model: string, variant: string, s
 }
 
 Deno.serve(async req => {
-  if (req.method !== "POST") return respond({ error: "method_not_allowed" }, 405);
+  const invocationId = crypto.randomUUID();
+  console.info("daily_quiz_invocation_received", JSON.stringify({ invocationId, method: req.method, hasCronSecret: Boolean(req.headers.get("x-cron-secret")) }));
+  if (req.method !== "POST") {
+    console.warn("daily_quiz_method_rejected", JSON.stringify({ invocationId, method: req.method }));
+    return respond({ error: "method_not_allowed", invocationId }, 405);
+  }
   const cronSecret = Deno.env.get("QUIZ_GENERATION_CRON_SECRET") || "";
-  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) return respond({ error: "unauthorized" }, 401);
+  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
+    console.warn("daily_quiz_auth_rejected", JSON.stringify({ invocationId, secretConfigured: Boolean(cronSecret) }));
+    return respond({ error: "unauthorized", invocationId }, 401);
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
   const model = Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-2.5-flash";
-  if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) return respond({ error: "server_not_configured" }, 500);
+  if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
+    console.error("daily_quiz_server_not_configured", JSON.stringify({ invocationId, supabaseUrl: Boolean(supabaseUrl), serviceRoleKey: Boolean(serviceRoleKey), geminiApiKey: Boolean(geminiApiKey) }));
+    return respond({ error: "server_not_configured", invocationId }, 500);
+  }
 
   const body = await req.json().catch(() => ({}));
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.quizDate || "")) ? String(body.quizDate) : taipeiDate();
@@ -183,54 +192,81 @@ Deno.serve(async req => {
       .map((value: unknown) => String(value || "").trim().toUpperCase())
       .filter((value: string) => ["A", "B", "C"].includes(value))
   ));
-  if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate }, 400);
+  console.info("daily_quiz_generation_started", JSON.stringify({ invocationId, source: String(body?.source || "unknown"), quizDate, requestedVariants, model }));
+  if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate, invocationId }, 400);
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: plans, error: planError } = await supabase.from("global_plans")
     .select("id, name, start_date, end_date, rules")
     .eq("plan_kind", "church_campaign_stage").eq("is_hidden", false)
     .lte("start_date", quizDate).gte("end_date", quizDate)
     .order("start_date", { ascending: false }).limit(1);
-  if (planError) return respond({ error: planError.message }, 500);
+  if (planError) {
+    console.error("daily_quiz_plan_lookup_failed", JSON.stringify({ invocationId, error: planError.message }));
+    return respond({ error: planError.message, invocationId }, 500);
+  }
   const plan = plans?.[0];
-  if (!plan) return respond({ date: quizDate, status: "no_active_church_plan", requests: 0 });
+  if (!plan) {
+    console.warn("daily_quiz_no_active_plan", JSON.stringify({ invocationId, quizDate }));
+    return respond({ date: quizDate, status: "no_active_church_plan", requests: 0, invocationId });
+  }
   if (body?.planId && String(body.planId) !== String(plan.id)) {
-    return respond({ error: "quiz_plan_mismatch", date: quizDate }, 409);
+    console.warn("daily_quiz_plan_mismatch", JSON.stringify({ invocationId, requestedPlanId: String(body.planId), activePlanId: String(plan.id) }));
+    return respond({ error: "quiz_plan_mismatch", date: quizDate, invocationId }, 409);
   }
 
   let chapterRefs: ChapterRef[];
   try { chapterRefs = resolveDailyChapters(plan.rules, quizDate); }
-  catch (error) { return respond({ error: String((error as Error)?.message || error), date: quizDate }, 500); }
+  catch (error) {
+    const message = String((error as Error)?.message || error);
+    console.error("daily_quiz_chapter_resolution_failed", JSON.stringify({ invocationId, error: message }));
+    return respond({ error: message, date: quizDate, invocationId }, 500);
+  }
   if (chapterRefs.length === 0) return respond({ date: quizDate, planId: plan.id, status: "no_reading_chapters", requests: 0 });
 
   let scripture: string;
   try { scripture = (await Promise.all(chapterRefs.map(fetchChapterText))).join("\n\n"); }
-  catch (error) { return respond({ error: String((error as Error)?.message || error), date: quizDate }, 502); }
+  catch (error) {
+    const message = String((error as Error)?.message || error);
+    console.error("daily_quiz_scripture_fetch_failed", JSON.stringify({ invocationId, error: message }));
+    return respond({ error: message, date: quizDate, invocationId }, 502);
+  }
 
   const results: any[] = [];
   let requests = 0;
   for (const variant of requestedVariants) {
+    console.info("daily_quiz_variant_reserving", JSON.stringify({ invocationId, variant }));
     let { data: reservation, error: reservationError } = await supabase.rpc("reserve_daily_quiz_generation", {
       p_global_plan_id: plan.id, p_quiz_date: quizDate, p_variant: variant, p_chapter_refs: chapterRefs
     });
-    if (reservationError) { results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue; }
+    if (reservationError) {
+      console.error("daily_quiz_reservation_failed", JSON.stringify({ invocationId, variant, error: reservationError.message }));
+      results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue;
+    }
     if (!reservation?.reserved && body?.retryExisting === true) {
       ({ data: reservation, error: reservationError } = await supabase.rpc("reserve_daily_quiz_regeneration", {
         p_global_plan_id: plan.id, p_quiz_date: quizDate, p_variant: variant, p_chapter_refs: chapterRefs
       }));
-      if (reservationError) { results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue; }
+      if (reservationError) {
+        console.error("daily_quiz_regeneration_reservation_failed", JSON.stringify({ invocationId, variant, error: reservationError.message }));
+        results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue;
+      }
     }
     if (!reservation?.reserved) { results.push({ variant, status: "already_attempted" }); continue; }
     requests += 1;
     try {
+      console.info("daily_quiz_gemini_request_started", JSON.stringify({ invocationId, variant, model, chapterCount: chapterRefs.length }));
       const questions = await generateVariant(geminiApiKey, model, variant, scripture, chapterRefs);
       const { error: completionError } = await supabase.rpc("complete_daily_quiz_generation", { p_quiz_id: reservation.quizId, p_questions: questions, p_model: model });
       if (completionError) throw completionError;
       results.push({ variant, status: "ready", questionCount: questions.length });
+      console.info("daily_quiz_variant_ready", JSON.stringify({ invocationId, variant, questionCount: questions.length }));
     } catch (error) {
       const message = String((error as Error)?.message || error);
       await supabase.rpc("fail_daily_quiz_generation", { p_quiz_id: reservation.quizId, p_error: message });
       results.push({ variant, status: "failed", error: message });
+      console.error("daily_quiz_variant_failed", JSON.stringify({ invocationId, variant, error: message }));
     }
   }
-  return respond({ date: quizDate, planId: plan.id, chapterRefs, requests, results });
+  console.info("daily_quiz_generation_finished", JSON.stringify({ invocationId, quizDate, requests, results: results.map(result => ({ variant: result.variant, status: result.status })) }));
+  return respond({ date: quizDate, planId: plan.id, chapterRefs, requests, results, invocationId });
 });
