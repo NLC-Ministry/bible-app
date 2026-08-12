@@ -42,6 +42,8 @@ describe("database defense migration", () => {
 
   it("keeps Member Hub-owned org placement canonical in save_profile", () => {
     expect(edge).toContain('if (action === "save_profile")');
+    expect(edge).toContain('.eq("provider", "logto")');
+    expect(edge).toContain('canonical_source: "member_hub"');
     expect(edge).toContain("const nextName = payload.name ?? profile.name ?? \"\"");
     expect(edge).not.toContain("payload.great_region");
     expect(edge).not.toContain("payload.pastoral_zone");

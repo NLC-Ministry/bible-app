@@ -7,8 +7,8 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
-const PROFILE_LOOKUP_SELECT = "id, name, email, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, member_context_synced_at";
-const PROFILE_RESPONSE_SELECT = "id, name, email, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_LOOKUP_SELECT = "id, name, email, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, name_review_approved, member_context_synced_at";
+const PROFILE_RESPONSE_SELECT = "id, name, email, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 
 function parseJwt(token: string) {
   try {
@@ -25,6 +25,17 @@ function parseJwt(token: string) {
   } catch {
     return null;
   }
+}
+
+function normalizeMemberName(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value.normalize("NFKC").replace(/\s+/gu, " ").trim();
+  if (!normalized || Array.from(normalized).length > 40) return null;
+  if (/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2060\uFEFF\uFFFD]/u.test(normalized)) return null;
+  // Common UTF-8 decoded-as-Latin-1 signatures. Preserve the existing name
+  // rather than projecting visibly corrupted text into every app surface.
+  if (/(?:\u00C3[\u0080-\u00BF]|\u00C2[\u0080-\u00BF]|\u00E2[\u0080-\u00BF]{1,2}|\u00F0\u0178|\u00EF\u00BF\u00BD)/u.test(normalized)) return null;
+  return normalized;
 }
 
 const LEVEL_DEPTH = {
@@ -100,7 +111,7 @@ function orgFromMemberContext(organization: any) {
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
-const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+const HUB_OWNED_PROFILE_FIELDS = ["name", "great_region", "pastoral_zone", "small_group"];
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function buildLockedFields(sourceValues: Record<string, string | null>, options: { hubLinked?: boolean } = {}) {
@@ -109,7 +120,7 @@ function buildLockedFields(sourceValues: Record<string, string | null>, options:
     .map(([field]) => field);
 
   if (options.hubLinked) {
-    for (const field of HUB_OWNED_ORG_FIELDS) {
+    for (const field of HUB_OWNED_PROFILE_FIELDS) {
       if (!locked.includes(field)) locked.push(field);
     }
   }
@@ -483,24 +494,26 @@ Deno.serve(async (req: Request) => {
     };
 
     let userinfo: any = null;
+    let freshUserinfo: any = null;
     if (idToken && typeof idToken === "string") {
       userinfo = parseJwt(idToken);
     }
 
-    if (!userinfo || !userinfo.sub) {
-      console.log("UserInfo from token missing sub; fetching full profile from OIDC UserInfo endpoint.");
-      try {
-        const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
-        const userinfoEndpoint = discovery.userinfo_endpoint;
-        if (userinfoEndpoint) {
-          const fullUserinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
-          if (fullUserinfo && fullUserinfo.sub) {
-            userinfo = { ...userinfo, ...fullUserinfo };
-          }
+    // ID-token claims may remain stale after a profile edit. Always retrieve
+    // current UserInfo during a real Edge session sync; the browser caches the
+    // resulting projection, so this does not run on every page navigation.
+    try {
+      const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+      const userinfoEndpoint = discovery.userinfo_endpoint;
+      if (userinfoEndpoint) {
+        const fullUserinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
+        if (fullUserinfo && fullUserinfo.sub) {
+          freshUserinfo = fullUserinfo;
+          userinfo = { ...userinfo, ...fullUserinfo };
         }
-      } catch (err) {
-        console.warn("Failed to fetch full userinfo from OIDC endpoint:", err);
       }
+    } catch (err) {
+      console.warn("Failed to fetch fresh userinfo from OIDC endpoint:", err);
     }
 
     if (!userinfo || !userinfo.sub) {
@@ -676,9 +689,17 @@ Deno.serve(async (req: Request) => {
     });
     console.info("nlc-session org projection", JSON.stringify(orgProjectionAudit));
 
+    const canonicalName = [
+      memberProfile.displayName,
+      freshUserinfo?.name,
+      freshUserinfo?.preferred_username,
+      memberIdentity.username,
+      ...(!existingProfile ? [userinfo.name, userinfo.preferred_username] : [])
+    ].map(normalizeMemberName).find(Boolean) || null;
+
     const sourceValues: Record<string, string | null> = {
       email: lookupEmail,
-      name: memberProfile.displayName || userinfo.name || userinfo.preferred_username || memberIdentity.username || null,
+      name: canonicalName,
       great_region: projectedOrg.great_region || null,
       pastoral_zone: projectedOrg.pastoral_zone || null,
       small_group: projectedOrg.small_group || null,
@@ -696,9 +717,15 @@ Deno.serve(async (req: Request) => {
 
     const nowIso = new Date().toISOString();
     const memberContextSyncStatus = memberContext ? "success" : "degraded";
+    const nextProfileName = firstValue(sourceValues.name, existingProfile?.name, lookupEmail ? lookupEmail.split("@")[0] : null, "教會肢體");
+    const canonicalNameChanged = Boolean(
+      existingProfile
+      && sourceValues.name
+      && String(nextProfileName).trim() !== String(existingProfile.name || "").trim()
+    );
     const profilePayload: Record<string, any> = {
       id: profileId,
-      name: firstValue(sourceValues.name, existingProfile?.name, lookupEmail ? lookupEmail.split("@")[0] : null, "教會肢體"),
+      name: nextProfileName,
       email: firstValue(sourceValues.email, existingProfile?.email, null) || null,
       great_region: projectedOrg.great_region,
       pastoral_zone: projectedOrg.pastoral_zone,
@@ -718,6 +745,10 @@ Deno.serve(async (req: Request) => {
       } : {}),
       updated_at: nowIso
     };
+
+    if (canonicalNameChanged) {
+      profilePayload.name_review_approved = false;
+    }
 
     if (memberId) {
       profilePayload.nlc_member_id = memberId;

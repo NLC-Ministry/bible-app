@@ -173,6 +173,16 @@ describe("buildLockedFields", () => {
       "small_group"
     ]);
   });
+
+  it("keeps the name locked when a Hub response temporarily omits it", () => {
+    expect(buildLockedFields({
+      name: null,
+      email: "a@b.c",
+      great_region: null,
+      pastoral_zone: null,
+      small_group: null
+    }, { hubLinked: true })).toContain("name");
+  });
 });
 
 describe("projectOrgFieldsFromHub", () => {

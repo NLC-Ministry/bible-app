@@ -583,6 +583,26 @@ Deno.serve(async (req: Request) => {
 
     if (action === "save_profile") {
       const payload = body.payload && typeof body.payload === "object" ? body.payload : {};
+      const { data: hubIdentity, error: hubIdentityError } = await supabaseAdmin
+        .from("user_identities")
+        .select("profile_id")
+        .eq("profile_id", profile.id)
+        .eq("provider", "logto")
+        .maybeSingle();
+      if (hubIdentityError) return jsonResponse({ error: hubIdentityError.message }, 400);
+
+      // Logto-linked names are owned by Member Hub. Ignore cached names sent by
+      // old browser tabs. nlc-session is the only writer of the canonical name.
+      if (hubIdentity) {
+        return jsonResponse({
+          data: profile,
+          profile,
+          project_url: supabaseUrl,
+          profile_id: profile.id,
+          canonical_source: "member_hub"
+        });
+      }
+
       const nextName = payload.name ?? profile.name ?? "";
       const nameChanged = String(nextName) !== String(profile.name ?? "");
       const updatePayload: Record<string, unknown> = {

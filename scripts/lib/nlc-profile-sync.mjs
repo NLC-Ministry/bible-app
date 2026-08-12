@@ -152,7 +152,7 @@ export function resolveSyncedRoleId(memberContext, definitions, existingRoleId, 
     )[0];
   return matched?.id || MEMBER_ROLE_ID;
 }
-const HUB_OWNED_ORG_FIELDS = ["great_region", "pastoral_zone", "small_group"];
+const HUB_OWNED_PROFILE_FIELDS = ["name", "great_region", "pastoral_zone", "small_group"];
 
 export function buildLockedFields(sourceValues, options = {}) {
   const locked = Object.entries(sourceValues)
@@ -160,7 +160,7 @@ export function buildLockedFields(sourceValues, options = {}) {
     .map(([field]) => field);
 
   if (options.hubLinked) {
-    for (const field of HUB_OWNED_ORG_FIELDS) {
+    for (const field of HUB_OWNED_PROFILE_FIELDS) {
       if (!locked.includes(field)) locked.push(field);
     }
   }

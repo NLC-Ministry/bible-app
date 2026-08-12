@@ -1463,12 +1463,8 @@ const db = {
     this.calculateStreak();
     this.saveLocalUserStats();
 
-    if (state.isSupabaseMode && state.supabase) {
-      // 💡 效能與體驗優化：將個人資料統計同步改為非同步背景執行，不要阻塞使用者的勾選動作
-      this.syncProfileStatsToSupabase().catch(err => {
-        console.warn("Failed to sync profile stats in background:", err);
-      });
-    }
+    // Reading progress is stored in reading_logs. Never write profile identity
+    // fields here; stale tabs must not overwrite newer Member Hub names.
     if (typeof checkAchievements !== 'undefined') {
       await checkAchievements();
     }
@@ -1482,6 +1478,10 @@ const db = {
 
     const editedName = state.currentUser.name || "";
     const lockedFields = new Set(state.profileLockedFields || []);
+
+    if (lockedFields.has("name")) {
+      return { aborted: true, reason: "member_hub_managed_name" };
+    }
 
     const user = await this.getCurrentDbUser();
     if (!user) {
