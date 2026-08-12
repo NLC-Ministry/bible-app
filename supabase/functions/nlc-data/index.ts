@@ -71,6 +71,7 @@ const ADMIN_RPC_FUNCTIONS = new Set([
 ]);
 const QUIZ_RPC_FUNCTIONS = new Set([
   "get_daily_quiz_dashboard",
+  "request_daily_quiz_regeneration",
   "review_daily_quiz",
   "update_daily_quiz_questions",
   "publish_daily_quiz",

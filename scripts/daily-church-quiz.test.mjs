@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const schema = read("supabase/migrations/0084_daily_church_quizzes.sql");
 const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
+const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");
+const quizSql = `${schema}\n${regeneration}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -12,22 +14,25 @@ const admin = read("js/modules/admin.js");
 const html = read("index.html");
 
 describe("daily church quiz", () => {
-  it("hard-limits automatic AI requests to one per A/B/C variant", () => {
-    expect(schema).toContain("automatic_generation_attempts BETWEEN 0 AND 1");
+  it("runs the automatic A/B/C set once and supports deduplicated manual retries", () => {
     expect(schema).toContain("UNIQUE (global_plan_id, quiz_date, variant)");
-    expect(generator).toContain('for (const variant of ["A", "B", "C"])');
+    expect(generator).toContain("for (const variant of requestedVariants)");
     expect(generator).toContain("if (!reservation?.reserved)");
+    expect(generator).toContain('body?.retryExisting === true');
+    expect(generator).toContain('reserve_daily_quiz_regeneration');
+    expect(regeneration).toContain("DROP CONSTRAINT IF EXISTS daily_quizzes_automatic_generation_attempts_check");
+    expect(regeneration).toContain("CHECK (automatic_generation_attempts >= 0)");
+    expect(regeneration).toContain("generation_status IN ('failed', 'ready')");
     expect(generator).toContain("https://generativelanguage.googleapis.com/v1beta/models/");
     expect(generator).toContain('"x-goog-api-key": apiKey');
     expect(generator).toContain('Deno.env.get("GEMINI_API_KEY")');
     expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_MODEL")');
-    expect(generator).not.toMatch(/gemini[\s\S]{0,120}retry/i);
   });
 
   it("uses Taipei church progress and a strict five-question schema", () => {
     expect(generator).toContain('timeZone: "Asia/Taipei"');
     expect(generator).toContain("resolveDailyChapters(plan.rules, quizDate)");
-    expect(generator).toContain('mimeType: "application/json"');
+    expect(generator).toContain('mimeType: "APPLICATION_JSON"');
     expect(generator).toContain("responseFormat");
     expect(generator).toContain("minItems: 5, maxItems: 5");
     expect(generator).toContain("minItems: 4, maxItems: 4");
@@ -39,6 +44,9 @@ describe("daily church quiz", () => {
     expect(schema).toContain("quiz_approval_required");
     expect(schema).toContain("quiz_already_published");
     expect(schema).toContain("review_status = 'approved'");
+    expect(regeneration).toContain("quiz_approval_locked");
+    expect(regeneration).toContain("OLD.review_status = 'approved'");
+    expect(regeneration).toContain("quiz_already_approved");
   });
 
   it("publishes through organization groups with one assignment per day", () => {
@@ -57,16 +65,17 @@ describe("daily church quiz", () => {
 
   it("connects all quiz RPCs through nlc-data and db.js", () => {
     for (const rpc of [
-      "get_daily_quiz_dashboard", "review_daily_quiz", "update_daily_quiz_questions",
+      "get_daily_quiz_dashboard", "request_daily_quiz_regeneration", "review_daily_quiz", "update_daily_quiz_questions",
       "publish_daily_quiz", "submit_daily_quiz", "get_quiz_notifications",
       "mark_quiz_notifications_read"
     ]) {
       expect(edge).toContain(`"${rpc}"`);
-      expect(schema).toContain(`public.${rpc}`);
+      expect(quizSql).toContain(`public.${rpc}`);
     }
     expect(db).toContain("async getDailyQuizDashboard(plan, quizDate)");
     expect(db).toContain("async publishDailyQuiz(plan, quizDate, groupIds = [], publishAll = false)");
     expect(db).toContain("async submitDailyQuiz(publicationId, answers)");
+    expect(db).toContain("async regenerateDailyQuiz(plan, quizDate, variants = [])");
   });
 
   it("places the member entrance below chapter progress only after assignment", () => {
@@ -82,6 +91,9 @@ describe("daily church quiz", () => {
     expect(admin).toContain("renderAdminQuizReviewCards");
     expect(admin).toContain('data-quiz-action="publish-group"');
     expect(admin).toContain('data-quiz-action="publish-all"');
+    expect(admin).toContain('data-quiz-action="regenerate"');
+    expect(admin).toContain("更換後會清除目前題目並重新生成");
+    expect(admin).toContain("已審核鎖定");
     expect(admin).toContain("group.members");
     expect(admin).toContain("averageScore");
   });

@@ -2615,6 +2615,12 @@ const db = {
     const raw = String(error && (error.message || error.error || error.details) || error || "");
     const messages = {
       quiz_review_required: "只有牧者或系統管理員可以審核與修改小測驗。",
+      quiz_regeneration_permission_required: "只有牧者或系統管理員可以重新生成小測驗。",
+      quiz_regeneration_variants_required: "請選擇需要重新生成的題目版本。",
+      quiz_generation_secret_missing: "小測驗生成服務尚未完成排程密鑰設定。",
+      quiz_plan_date_not_found: "找不到這個日期對應的教會進度。",
+      quiz_approval_locked: "題目審核通過後已鎖定，不能取消審核、修改或更換。",
+      quiz_already_approved: "題目已審核通過，不能再更換。",
       quiz_not_ready: "這一版題目尚未生成完成。",
       quiz_approval_required: "至少需要一版已審核題目才能發布。",
       quiz_publish_scope_required: "只能發布到你所負責組織範圍內的小組。",
@@ -2660,6 +2666,18 @@ const db = {
     return this._callQuizRpc("review_daily_quiz", {
       p_quiz_id: quizId,
       p_approved: approved === true
+    });
+  },
+
+  async regenerateDailyQuiz(plan, quizDate, variants = []) {
+    const planId = this._quizPlanId(plan);
+    if (!planId || !/^\d{4}-\d{2}-\d{2}$/.test(String(quizDate || ""))) {
+      return { success: false, message: "找不到小測驗對應的計畫日期。" };
+    }
+    return this._callQuizRpc("request_daily_quiz_regeneration", {
+      p_global_plan_id: planId,
+      p_quiz_date: quizDate,
+      p_variants: Array.isArray(variants) ? variants : []
     });
   },
 

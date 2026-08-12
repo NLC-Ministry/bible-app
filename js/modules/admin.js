@@ -1439,29 +1439,29 @@ function adminQuizPublisherLabel(role) {
   })[role] || '管理者';
 }
 
-function renderAdminQuizQuestionEditor(quiz) {
+function renderAdminQuizQuestionEditor(quiz, locked = false) {
   const questions = Array.isArray(quiz.questions) ? quiz.questions : [];
   if (questions.length !== 5) return '<p class="admin-daily-quiz-empty">題目尚未生成完成。</p>';
   return `<div class="admin-daily-quiz-editor">
     ${questions.map((question, questionIndex) => `
       <fieldset class="admin-daily-quiz-question" data-question-index="${questionIndex}">
         <legend>第 ${questionIndex + 1} 題</legend>
-        <label>題目<textarea class="form-control" data-field="question" rows="2">${adminQuizEscape(question.question)}</textarea></label>
+        <label>題目<textarea class="form-control" data-field="question" rows="2" ${locked ? 'readonly' : ''}>${adminQuizEscape(question.question)}</textarea></label>
         <div class="admin-daily-quiz-options">
           ${(question.options || []).map((option, optionIndex) => `
-            <label>選項 ${optionIndex + 1}<input class="form-control" data-option-index="${optionIndex}" value="${adminQuizEscape(option)}"></label>
+            <label>選項 ${optionIndex + 1}<input class="form-control" data-option-index="${optionIndex}" value="${adminQuizEscape(option)}" ${locked ? 'readonly' : ''}></label>
           `).join('')}
         </div>
         <div class="admin-daily-quiz-answer-row">
-          <label>正確答案<select class="form-control" data-field="correctIndex">
+          <label>正確答案<select class="form-control" data-field="correctIndex" ${locked ? 'disabled' : ''}>
             ${[0, 1, 2, 3].map(index => `<option value="${index}" ${Number(question.correctIndex) === index ? 'selected' : ''}>選項 ${index + 1}</option>`).join('')}
           </select></label>
-          <label>經文出處<input class="form-control" data-field="verseRef" value="${adminQuizEscape(question.verseRef)}"></label>
+          <label>經文出處<input class="form-control" data-field="verseRef" value="${adminQuizEscape(question.verseRef)}" ${locked ? 'readonly' : ''}></label>
         </div>
-        <label>解說<textarea class="form-control" data-field="explanation" rows="2">${adminQuizEscape(question.explanation)}</textarea></label>
+        <label>解說<textarea class="form-control" data-field="explanation" rows="2" ${locked ? 'readonly' : ''}>${adminQuizEscape(question.explanation)}</textarea></label>
       </fieldset>
     `).join('')}
-    <button type="button" class="secondary-btn" data-quiz-action="save" data-quiz-id="${adminQuizEscape(quiz.id)}">儲存修改並重新送審</button>
+    ${locked ? '<p class="admin-daily-quiz-note">此版本已審核鎖定，僅供檢視。</p>' : `<button type="button" class="secondary-btn" data-quiz-action="save" data-quiz-id="${adminQuizEscape(quiz.id)}">儲存修改並重新送審</button>`}
   </div>`;
 }
 
@@ -1472,12 +1472,15 @@ function renderAdminQuizReviewCards(context) {
   return `<section class="glass-card admin-daily-quiz-block">
     <div class="admin-daily-quiz-heading">
       <div><p class="admin-registration-statistics__eyebrow">牧者審核</p><h2 id="admin-quizzes-title">今日共用題庫</h2></div>
-      <span class="admin-daily-quiz-request-count">AI 請求 ${Number(context.automaticRequestCount || 0)}／3</span>
+      <span class="admin-daily-quiz-request-count">AI 生成請求共 ${Number(context.automaticRequestCount || 0)} 次</span>
     </div>
     <div class="admin-daily-quiz-versions">
       ${variants.map(variant => {
         const quiz = quizzes.find(item => item.variant === variant);
-        if (!quiz) return `<article class="admin-daily-quiz-version"><div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div></article>`;
+        if (!quiz) return `<article class="admin-daily-quiz-version">
+          <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div>
+          <div class="admin-daily-quiz-version-actions"><button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-variant="${variant}">生成題目</button></div>
+        </article>`;
         const ready = quiz.generationStatus === 'ready';
         const approved = quiz.reviewStatus === 'approved';
         return `<article class="admin-daily-quiz-version" data-quiz-card="${adminQuizEscape(quiz.id)}">
@@ -1487,14 +1490,20 @@ function renderAdminQuizReviewCards(context) {
           </div>
           ${quiz.generationError ? `<p class="admin-daily-quiz-error">${adminQuizEscape(quiz.generationError)}</p>` : ''}
           ${ready ? `<div class="admin-daily-quiz-version-actions">
-            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">檢視／修改</button>
-            <button type="button" class="primary-btn" data-quiz-action="review" data-quiz-id="${adminQuizEscape(quiz.id)}" data-approved="${approved ? 'false' : 'true'}">${approved ? '取消審核' : '審核通過'}</button>
+            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">${approved ? '檢視題目' : '檢視／修改'}</button>
+            ${approved
+              ? '<button type="button" class="secondary-btn" disabled>已審核鎖定</button>'
+              : `<button type="button" class="secondary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">更換題目</button>
+                 <button type="button" class="primary-btn" data-quiz-action="review" data-quiz-id="${adminQuizEscape(quiz.id)}" data-approved="true">審核通過</button>`}
           </div>
-          <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}">${renderAdminQuizQuestionEditor(quiz)}</div>` : ''}
+          <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}">${renderAdminQuizQuestionEditor(quiz, approved)}</div>`
+          : quiz.generationStatus === 'failed'
+            ? `<div class="admin-daily-quiz-version-actions"><button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">重新生成題目</button></div>`
+            : ''}
         </article>`;
       }).join('')}
     </div>
-    <p class="admin-daily-quiz-note">手動修改任何題目、答案或解說後，該版本會自動回到待審核狀態。</p>
+    <p class="admin-daily-quiz-note">生成失敗可手動重試；生成成功但尚未審核時，確認後可以更換。審核通過後題目永久鎖定。</p>
   </section>`;
 }
 
@@ -1541,6 +1550,32 @@ function collectAdminQuizQuestions(root, quizId, originalQuestions) {
   }));
 }
 
+async function waitForAdminQuizRegeneration(quizDate, variant, previousQuiz = null) {
+  let sawGenerating = false;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+    if (!result.success) continue;
+    const quiz = (result.context?.reviewQuizzes || []).find(item => item.variant === variant);
+    if (quiz?.generationStatus === 'generating') {
+      sawGenerating = true;
+      continue;
+    }
+    const newlyReady = quiz?.generationStatus === 'ready'
+      && (!previousQuiz || previousQuiz.generationStatus !== 'ready' || quiz.generatedAt !== previousQuiz.generatedAt);
+    const newlyFailed = quiz?.generationStatus === 'failed'
+      && (sawGenerating || !previousQuiz || quiz.generationError !== previousQuiz.generationError);
+    if (newlyReady || newlyFailed) {
+      if (typeof showToast === 'function') {
+        showToast(newlyReady ? `版本 ${variant} 題目已生成，請審核內容` : `版本 ${variant} 生成失敗，請查看錯誤訊息`);
+      }
+      await renderAdminDailyQuizManagement(true, quizDate);
+      return;
+    }
+  }
+  await renderAdminDailyQuizManagement(true, quizDate);
+}
+
 async function bindAdminDailyQuizActions(root, context, quizDate) {
   root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
     root.dataset.quizDate = event.target.value;
@@ -1556,6 +1591,28 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         Array.from(root.querySelectorAll('[data-editor-for]'))
           .find(element => element.dataset.editorFor === String(quizId))
           ?.classList.toggle('hidden');
+        return;
+      }
+      if (action === 'regenerate') {
+        const variant = String(button.dataset.quizVariant || '').toUpperCase();
+        const previousQuiz = (context.reviewQuizzes || []).find(item => item.variant === variant) || null;
+        const replacing = previousQuiz?.generationStatus === 'ready';
+        const prompt = replacing
+          ? `版本 ${variant} 已生成。更換後會清除目前題目並重新生成，且仍需重新審核。確定更換嗎？`
+          : `確定要${previousQuiz ? '重新' : ''}生成版本 ${variant} 的題目嗎？`;
+        if (!window.confirm(prompt)) return;
+        button.disabled = true;
+        const originalLabel = button.textContent;
+        button.textContent = '已送出，生成中…';
+        const result = await db.regenerateDailyQuiz(state.activePlan, quizDate, [variant]);
+        if (!result.success) {
+          button.disabled = false;
+          button.textContent = originalLabel;
+          if (typeof showToast === 'function') showToast(result.message || '題目生成請求失敗');
+          return;
+        }
+        if (typeof showToast === 'function') showToast(`版本 ${variant} 已送出生成，請稍候`);
+        void waitForAdminQuizRegeneration(quizDate, variant, previousQuiz);
         return;
       }
       if (action === 'review') {

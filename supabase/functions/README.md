@@ -36,8 +36,10 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 This scheduled function resolves the current church-campaign chapters in
 `Asia/Taipei`, fetches the scripture once, then generates variants A/B/C with
 exactly one Gemini API request per variant. Database reservation is
-atomic and each `(plan, date, variant)` permits only one automatic attempt, so
-cron retries cannot exceed three automatic AI requests in one day.
+atomic, so repeated scheduler invocations and duplicate button clicks cannot
+produce duplicate Gemini requests. A pastor or administrator may manually
+retry failed variants or replace generated-but-unapproved variants without a
+fixed request cap. Approved or published variants are immutable.
 
 Required Edge Function secrets:
 
@@ -68,6 +70,20 @@ select vault.create_secret(
 Generated questions remain `pending` until a pastor or administrator approves
 them. Editing a question resets approval; a version already used by a published
 quiz is immutable so members never see the content change while answering.
+
+Manual retry/replacement requires migration
+`0086_manual_daily_quiz_regeneration.sql` and redeploying both quiz-related
+functions:
+
+```bash
+supabase functions deploy nlc-data --no-verify-jwt
+supabase functions deploy generate-daily-quizzes --no-verify-jwt
+```
+
+Only pastors and administrators can request a retry. Duplicate clicks are
+deduplicated by an atomic database status transition. A ready but unapproved
+variant asks for confirmation before replacement; once approved, the database
+trigger permanently blocks replacement, editing, and approval cancellation.
 
 ## issue-report-sheet-sync
 

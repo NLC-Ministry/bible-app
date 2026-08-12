@@ -139,7 +139,7 @@ async function generateVariant(apiKey: string, model: string, variant: string, s
       generationConfig: {
         maxOutputTokens: 3000,
         responseFormat: { text: {
-          mimeType: "application/json",
+          mimeType: "APPLICATION_JSON",
           schema: {
           type: "object", additionalProperties: false, required: ["questions"],
           properties: { questions: {
@@ -178,6 +178,12 @@ Deno.serve(async req => {
 
   const body = await req.json().catch(() => ({}));
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.quizDate || "")) ? String(body.quizDate) : taipeiDate();
+  const requestedVariants = Array.from(new Set(
+    (Array.isArray(body?.variants) ? body.variants : ["A", "B", "C"])
+      .map((value: unknown) => String(value || "").trim().toUpperCase())
+      .filter((value: string) => ["A", "B", "C"].includes(value))
+  ));
+  if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate }, 400);
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: plans, error: planError } = await supabase.from("global_plans")
     .select("id, name, start_date, end_date, rules")
@@ -187,6 +193,9 @@ Deno.serve(async req => {
   if (planError) return respond({ error: planError.message }, 500);
   const plan = plans?.[0];
   if (!plan) return respond({ date: quizDate, status: "no_active_church_plan", requests: 0 });
+  if (body?.planId && String(body.planId) !== String(plan.id)) {
+    return respond({ error: "quiz_plan_mismatch", date: quizDate }, 409);
+  }
 
   let chapterRefs: ChapterRef[];
   try { chapterRefs = resolveDailyChapters(plan.rules, quizDate); }
@@ -199,11 +208,17 @@ Deno.serve(async req => {
 
   const results: any[] = [];
   let requests = 0;
-  for (const variant of ["A", "B", "C"]) {
-    const { data: reservation, error: reservationError } = await supabase.rpc("reserve_daily_quiz_generation", {
+  for (const variant of requestedVariants) {
+    let { data: reservation, error: reservationError } = await supabase.rpc("reserve_daily_quiz_generation", {
       p_global_plan_id: plan.id, p_quiz_date: quizDate, p_variant: variant, p_chapter_refs: chapterRefs
     });
     if (reservationError) { results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue; }
+    if (!reservation?.reserved && body?.retryExisting === true) {
+      ({ data: reservation, error: reservationError } = await supabase.rpc("reserve_daily_quiz_regeneration", {
+        p_global_plan_id: plan.id, p_quiz_date: quizDate, p_variant: variant, p_chapter_refs: chapterRefs
+      }));
+      if (reservationError) { results.push({ variant, status: "reservation_failed", error: reservationError.message }); continue; }
+    }
     if (!reservation?.reserved) { results.push({ variant, status: "already_attempted" }); continue; }
     requests += 1;
     try {
