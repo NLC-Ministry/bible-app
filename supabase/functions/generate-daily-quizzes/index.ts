@@ -97,13 +97,15 @@ async function fetchChapterText(ref: ChapterRef) {
   throw new Error(`scripture_fetch_failed:${ref.book}:${ref.chapter}:${errors.join("|")}`);
 }
 
-function extractResponseText(payload: any) {
-  for (const output of Array.isArray(payload?.output) ? payload.output : []) {
-    for (const content of Array.isArray(output?.content) ? output.content : []) {
-      if (content?.type === "output_text" && typeof content.text === "string") return content.text;
-    }
-  }
-  throw new Error("openai_output_text_missing");
+function extractGeminiText(payload: any) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  const text = (Array.isArray(parts) ? parts : [])
+    .map((part: any) => typeof part?.text === "string" ? part.text : "")
+    .join("")
+    .trim();
+  if (text) return text;
+  const reason = payload?.promptFeedback?.blockReason || payload?.candidates?.[0]?.finishReason || "output_text_missing";
+  throw new Error(`gemini_${String(reason).toLowerCase()}`);
 }
 
 function validateQuestions(value: any) {
@@ -120,22 +122,25 @@ function validateQuestions(value: any) {
 }
 
 async function generateVariant(apiKey: string, model: string, variant: string, scripture: string, refs: ChapterRef[]) {
+  if (!/^[a-zA-Z0-9._-]+$/.test(model)) throw new Error("invalid_gemini_model");
   const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : variant === "B" ? "人物、對話、動機與因果關係" : "核心信息、上下文理解與可由經文直接支持的應用";
   const referenceLabel = refs.map(ref => `${ref.book}${ref.chapter}章`).join("、");
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model,
-      store: false,
-      max_output_tokens: 3000,
-      input: [
-        { role: "system", content: [{ type: "input_text", text: "你是教會聖經小測驗編輯。只能根據提供的當日經文出題，不得補充經文外的傳統、推測或神學立場。使用繁體中文。每題只有一個正確答案，錯誤選項必須合理但可由經文明確排除。" }] },
-        { role: "user", content: [{ type: "input_text", text: `請為 ${referenceLabel} 產生版本 ${variant} 的 5 題四選一小測驗。此版本著重：${angle}。每題附正確答案、簡短解說與精確經節出處。\n\n當日經文：\n${scripture}` }] }
-      ],
-      text: { format: {
-        type: "json_schema", name: "daily_bible_quiz", strict: true,
-        schema: {
+      systemInstruction: {
+        parts: [{ text: "你是教會聖經小測驗編輯。只能根據提供的當日經文出題，不得補充經文外的傳統、推測或神學立場。使用繁體中文。每題只有一個正確答案，錯誤選項必須合理但可由經文明確排除。" }]
+      },
+      contents: [{
+        role: "user",
+        parts: [{ text: `請為 ${referenceLabel} 產生版本 ${variant} 的 5 題四選一小測驗。此版本著重：${angle}。每題附正確答案、簡短解說與精確經節出處。\n\n當日經文：\n${scripture}` }]
+      }],
+      generationConfig: {
+        maxOutputTokens: 3000,
+        responseFormat: { text: {
+          mimeType: "application/json",
+          schema: {
           type: "object", additionalProperties: false, required: ["questions"],
           properties: { questions: {
             type: "array", minItems: 5, maxItems: 5,
@@ -150,13 +155,14 @@ async function generateVariant(apiKey: string, model: string, variant: string, s
               }
             }
           } }
-        }
-      } }
+          }
+        } }
+      }
     })
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`openai_${response.status}:${payload?.error?.message || "request_failed"}`);
-  return validateQuestions(JSON.parse(extractResponseText(payload)));
+  if (!response.ok) throw new Error(`gemini_${response.status}:${payload?.error?.message || "request_failed"}`);
+  return validateQuestions(JSON.parse(extractGeminiText(payload)));
 }
 
 Deno.serve(async req => {
@@ -166,9 +172,9 @@ Deno.serve(async req => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const openaiApiKey = Deno.env.get("OPENAI_API_KEY") || "";
-  const model = Deno.env.get("OPENAI_QUIZ_MODEL") || "gpt-5-mini";
-  if (!supabaseUrl || !serviceRoleKey || !openaiApiKey) return respond({ error: "server_not_configured" }, 500);
+  const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
+  const model = Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-2.5-flash";
+  if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) return respond({ error: "server_not_configured" }, 500);
 
   const body = await req.json().catch(() => ({}));
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.quizDate || "")) ? String(body.quizDate) : taipeiDate();
@@ -201,7 +207,7 @@ Deno.serve(async req => {
     if (!reservation?.reserved) { results.push({ variant, status: "already_attempted" }); continue; }
     requests += 1;
     try {
-      const questions = await generateVariant(openaiApiKey, model, variant, scripture, chapterRefs);
+      const questions = await generateVariant(geminiApiKey, model, variant, scripture, chapterRefs);
       const { error: completionError } = await supabase.rpc("complete_daily_quiz_generation", { p_quiz_id: reservation.quizId, p_questions: questions, p_model: model });
       if (completionError) throw completionError;
       results.push({ variant, status: "ready", questionCount: questions.length });

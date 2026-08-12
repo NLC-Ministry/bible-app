@@ -35,15 +35,15 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 
 This scheduled function resolves the current church-campaign chapters in
 `Asia/Taipei`, fetches the scripture once, then generates variants A/B/C with
-exactly one OpenAI Responses API request per variant. Database reservation is
+exactly one Gemini API request per variant. Database reservation is
 atomic and each `(plan, date, variant)` permits only one automatic attempt, so
 cron retries cannot exceed three automatic AI requests in one day.
 
 Required Edge Function secrets:
 
 ```bash
-OPENAI_API_KEY=<server-only OpenAI API key>
-OPENAI_QUIZ_MODEL=gpt-5-mini
+GEMINI_API_KEY=<server-only Gemini API key>
+GEMINI_QUIZ_MODEL=gemini-2.5-flash
 QUIZ_GENERATION_CRON_SECRET=<random shared secret>
 ```
 

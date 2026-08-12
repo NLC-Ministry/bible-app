@@ -17,17 +17,21 @@ describe("daily church quiz", () => {
     expect(schema).toContain("UNIQUE (global_plan_id, quiz_date, variant)");
     expect(generator).toContain('for (const variant of ["A", "B", "C"])');
     expect(generator).toContain("if (!reservation?.reserved)");
-    expect(generator).toContain('fetch("https://api.openai.com/v1/responses"');
-    expect(generator).not.toMatch(/openai[\s\S]{0,120}retry/i);
+    expect(generator).toContain("https://generativelanguage.googleapis.com/v1beta/models/");
+    expect(generator).toContain('"x-goog-api-key": apiKey');
+    expect(generator).toContain('Deno.env.get("GEMINI_API_KEY")');
+    expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_MODEL")');
+    expect(generator).not.toMatch(/gemini[\s\S]{0,120}retry/i);
   });
 
   it("uses Taipei church progress and a strict five-question schema", () => {
     expect(generator).toContain('timeZone: "Asia/Taipei"');
     expect(generator).toContain("resolveDailyChapters(plan.rules, quizDate)");
-    expect(generator).toContain('type: "json_schema"');
+    expect(generator).toContain('mimeType: "application/json"');
+    expect(generator).toContain("responseFormat");
     expect(generator).toContain("minItems: 5, maxItems: 5");
     expect(generator).toContain("minItems: 4, maxItems: 4");
-    expect(generator).toContain("store: false");
+    expect(generator).toContain("validateQuestions(JSON.parse(extractGeminiText(payload)))");
   });
 
   it("requires pastoral review and makes published versions immutable", () => {
