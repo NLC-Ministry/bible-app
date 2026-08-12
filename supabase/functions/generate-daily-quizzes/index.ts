@@ -179,7 +179,7 @@ Deno.serve(async req => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
-  const model = Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-2.5-flash";
+  const model = Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-2.5-flash-lite";
   if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
     console.error("daily_quiz_server_not_configured", JSON.stringify({ invocationId, supabaseUrl: Boolean(supabaseUrl), serviceRoleKey: Boolean(serviceRoleKey), geminiApiKey: Boolean(geminiApiKey) }));
     return respond({ error: "server_not_configured", invocationId }, 500);
