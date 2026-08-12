@@ -11,11 +11,12 @@ describe("read-only admin user directory", () => {
     const section = html.slice(start, end);
 
     expect(start).toBeGreaterThan(-1);
-    expect(section).toContain("使用者管理");
-    expect(section).toContain("使用者基本資料");
-    expect(section).toContain("本區不會修改帳號");
-    expect(section).toContain('id="admin-user-directory-disclosure"');
-    expect(section).toContain('<details class="glass-card admin-user-directory"');
+    expect(section).toContain('<section class="glass-card admin-user-directory"');
+    expect(section).toContain('aria-label="使用者基本資料"');
+    expect(section).not.toContain("使用者管理");
+    expect(section).not.toContain('<h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>');
+    expect(section).not.toContain("本區不會修改帳號");
+    expect(section).toContain('class="admin-user-directory__toolbar"');
     expect(section).toContain('id="admin-user-directory-search"');
     expect(section).toContain('id="admin-user-directory-filter-region"');
     expect(section).toContain('id="admin-user-directory-filter-zone"');

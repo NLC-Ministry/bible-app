@@ -23,9 +23,10 @@ describe("Admin User Directory CSV Export Tests", () => {
     expect(btnOpenTag).toContain("white-space:nowrap");
     expect(btnOpenTag).toContain("flex-shrink:0");
 
-    const summaryStart = html.indexOf('class="admin-user-directory__summary"');
-    const summarySection = html.slice(summaryStart, btnStart);
-    expect(summarySection).toContain('style="min-width:0;"');
+    const toolbarStart = html.indexOf('class="admin-user-directory__toolbar"');
+    const toolbarSection = html.slice(toolbarStart, btnStart);
+    expect(toolbarStart).toBeGreaterThan(-1);
+    expect(toolbarSection).toContain('class="admin-registration-statistics__filter admin-user-directory__search"');
   });
 
   it("converts user directory array into CSV with required columns (大區, 牧區, 小組, 姓名)", () => {

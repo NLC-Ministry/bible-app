@@ -58,7 +58,7 @@
     };
   </script>
   <link rel="stylesheet" href="index.css?v=20260811_daily_church_quiz" onerror="window.showAppStyleRecovery(this)">
-  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_admin-user-directory-org-filter" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
   <!-- Supabase JS Client library -->
@@ -1736,27 +1736,22 @@
 
           <div id="admin-system-subtab-users" class="card-col span-12 admin-plan-subtab-panel">
           <div class="card-col span-12 hidden" id="admin-user-directory-col">
-            <details class="glass-card admin-user-directory" id="admin-user-directory-disclosure" aria-labelledby="admin-user-directory-title" open>
-              <summary class="admin-user-directory__summary">
-                <div style="min-width:0;">
-                  <p class="admin-registration-statistics__eyebrow">使用者管理</p>
-                  <h3 class="card-title" id="admin-user-directory-title">使用者基本資料</h3>
-                  <p>先查看姓名與牧區，點選人員後可展開詳細資料；本區不會修改帳號。</p>
-                </div>
-                <div style="display:flex; align-items:center; gap:0.75rem; flex-shrink:0;">
+            <section class="glass-card admin-user-directory" id="admin-user-directory" aria-label="使用者基本資料">
+              <div class="admin-user-directory__body">
+                <div class="admin-user-directory__toolbar">
+                  <label class="admin-registration-statistics__filter admin-user-directory__search" for="admin-user-directory-search">
+                    <span>搜尋使用者</span>
+                    <input type="search" id="admin-user-directory-search" class="form-control"
+                      placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
+                  </label>
+                  <div class="admin-user-directory__actions">
                   <button type="button" id="admin-user-directory-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap; flex-shrink:0;" title="依當前篩選結果匯出 CSV 名單">
                     <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
                     <span>匯出</span>
                   </button>
                   <span class="admin-user-directory__count" id="admin-user-directory-count" style="white-space:nowrap;">讀取中…</span>
+                  </div>
                 </div>
-              </summary>
-              <div class="admin-user-directory__body">
-              <label class="admin-registration-statistics__filter" for="admin-user-directory-search">
-                <span>搜尋使用者</span>
-                <input type="search" id="admin-user-directory-search" class="form-control"
-                  placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
-              </label>
               <fieldset class="admin-user-directory__org-filters">
                 <legend>組織架構篩選</legend>
                 <div class="admin-user-directory__org-filter">
@@ -1804,7 +1799,7 @@
                 <div class="admin-user-directory__empty">正在載入使用者資料…</div>
               </div>
               </div>
-            </details>
+            </section>
           </div>
           </div>
 
