@@ -27,8 +27,8 @@ describe("daily church quiz", () => {
     expect(generator).toContain('"x-goog-api-key": apiKey');
     expect(generator).toContain('Deno.env.get("GEMINI_API_KEY")');
     expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_MODEL")');
-    expect(generator).toContain('|| "gemini-2.5-flash-lite"');
-    expect(generator).not.toContain('|| "gemini-2.5-flash"');
+    expect(generator).toContain('|| "gemini-3.1-flash-lite"');
+    expect(generator).not.toContain('|| "gemini-2.5-flash');
   });
 
   it("uses Taipei church progress and a strict five-question schema", () => {

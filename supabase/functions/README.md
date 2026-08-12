@@ -45,7 +45,7 @@ Required Edge Function secrets:
 
 ```bash
 GEMINI_API_KEY=<server-only Gemini API key>
-GEMINI_QUIZ_MODEL=gemini-2.5-flash-lite
+GEMINI_QUIZ_MODEL=gemini-3.1-flash-lite
 QUIZ_GENERATION_CRON_SECRET=<random shared secret>
 ```
 
