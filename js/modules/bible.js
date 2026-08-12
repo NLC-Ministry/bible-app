@@ -728,10 +728,13 @@ export function updateReaderFontSize() {
   });
 }
 
-export function navigateToChapter(direction) {
+export async function navigateToChapter(direction, options = {}) {
+  const autoContinue = options.autoContinue === true;
+  const hadAudioPosition = isSpeaking || !document.getElementById("reader-audio-timeline")?.classList.contains("hidden");
+  if (!autoContinue) stopReaderAudio(true);
   const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
 
-  if (direction > 0 && state.readerState && state.readerState.fromPlan && state.activePlan) {
+  if (direction > 0 && !autoContinue && state.readerState && state.readerState.fromPlan && state.activePlan) {
     const plan = state.activePlan;
     const planDay = state.readerState.planDayNum || 1;
     const selectedDay = plan.days.find(d => d.dayNum === planDay);
@@ -743,7 +746,7 @@ export function navigateToChapter(direction) {
 
     if (isLastChapterOfDay) {
       if (isTodayScheduleCompleted()) {
-        return;
+        return false;
       } else {
         const nextChInfo = getNextPlanChapterInfo(plan, planDay, currentChIndex, dayChapters);
         if (nextChInfo) {
@@ -752,8 +755,9 @@ export function navigateToChapter(direction) {
             state.readerState.bookId = nextBook.id;
             state.readerState.chapter = Number(nextChInfo.chapter);
             state.readerState.planDayNum = nextChInfo.dayNum;
-            renderReaderText();
-            return;
+            await renderReaderText({ preserveAudio: autoContinue });
+            if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
+            return true;
           }
         }
       }
@@ -763,8 +767,9 @@ export function navigateToChapter(direction) {
       if (nextBook) {
         state.readerState.bookId = nextBook.id;
         state.readerState.chapter = Number(nextCh.chapter);
-        renderReaderText();
-        return;
+        await renderReaderText({ preserveAudio: autoContinue });
+        if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
+        return true;
       }
     }
   }
@@ -783,7 +788,9 @@ export function navigateToChapter(direction) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      renderReaderText();
+      await renderReaderText({ preserveAudio: autoContinue });
+      if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
+      return true;
     }
   } else if (newChapter > currentBook.chapters) {
     const nextBookId = state.readerState.bookId + 1;
@@ -796,18 +803,23 @@ export function navigateToChapter(direction) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      renderReaderText();
+      await renderReaderText({ preserveAudio: autoContinue });
+      if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
+      return true;
     }
   } else {
     state.readerState.chapter = newChapter;
     const chapterSelect = document.getElementById("reader-chapter-select");
     if (chapterSelect) chapterSelect.value = newChapter;
     saveReaderPreferences();
-    renderReaderText();
+    await renderReaderText({ preserveAudio: autoContinue });
+    if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
+    return true;
   }
+  return false;
 }
 
-export async function renderReaderText() {
+export async function renderReaderText(options = {}) {
   const container = document.getElementById("bible-content");
   if (!container) return;
 
@@ -816,7 +828,7 @@ export async function renderReaderText() {
 
   console.log('🔍 [畫面渲染檢查] 目前 verses 資料狀態：', verses, '是否加載中：', isLoading);
 
-  if (isSpeaking) {
+  if (isSpeaking && options.preserveAudio !== true) {
     stopReaderAudio(true);
   }
   document.body.classList.remove("reader-navbar-hidden");
@@ -1280,8 +1292,26 @@ function openIntegratedSelectionBottomBar(options) {
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
       <div class="yv-content-row">
-        <div class="yv-highlight-section">
-          <span class="yv-section-label">螢光標註</span>
+        <div class="yv-action-group">
+          <button type="button" class="yv-tile" data-action="copy">
+            <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
+            <span class="yv-tile-label">複製</span>
+          </button>
+          <button type="button" class="yv-tile${activeHighlightColor ? " is-active" : ""}" data-action="toggle-highlight" aria-expanded="false" aria-controls="yv-highlight-palette">
+            <span class="nlc-icon" data-icon="pencil" aria-hidden="true"></span>
+            <span class="yv-tile-label">螢光筆</span>
+          </button>
+          <button type="button" class="yv-tile${hasExistingNote ? " is-active" : ""}" data-action="note">
+            <span class="nlc-icon" data-icon="journalText" aria-hidden="true"></span>
+            <span class="yv-tile-label">筆記</span>
+          </button>
+          <button type="button" class="yv-tile" data-action="share">
+            <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
+            <span class="yv-tile-label">分享</span>
+          </button>
+        </div>
+        <div id="yv-highlight-palette" class="yv-highlight-section hidden" data-highlight-palette>
+          <span class="yv-section-label">選擇顏色</span>
           <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
             <button type="button" class="yv-dot yv-dot-yellow${activeHighlightColor === "#fef08a" ? " is-active" : ""}" data-color="#fef08a" title="柔黃標註" aria-label="柔黃標註" aria-pressed="${activeHighlightColor === "#fef08a"}"></button>
             <button type="button" class="yv-dot yv-dot-cyan${activeHighlightColor === "#a5f3fc" ? " is-active" : ""}" data-color="#a5f3fc" title="柔藍標註" aria-label="柔藍標註" aria-pressed="${activeHighlightColor === "#a5f3fc"}"></button>
@@ -1292,24 +1322,6 @@ function openIntegratedSelectionBottomBar(options) {
               <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
             </button>
           </div>
-        </div>
-        <div class="yv-action-group">
-          <button type="button" class="yv-tile" data-action="play">
-            <span class="nlc-icon" data-icon="chevronRight" aria-hidden="true"></span>
-            <span class="yv-tile-label">朗讀</span>
-          </button>
-          <button type="button" class="yv-tile" data-action="copy">
-            <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
-            <span class="yv-tile-label">複製</span>
-          </button>
-          <button type="button" class="yv-tile" data-action="share">
-            <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
-            <span class="yv-tile-label">分享</span>
-          </button>
-          <button type="button" class="yv-tile${hasExistingNote ? " is-active" : ""}" data-action="note">
-            <span class="nlc-icon" data-icon="pencil" aria-hidden="true"></span>
-            <span class="yv-tile-label">${hasExistingNote ? "編輯筆記" : "寫筆記"}</span>
-          </button>
         </div>
       </div>
     </div>
@@ -1334,15 +1346,27 @@ function openIntegratedSelectionBottomBar(options) {
     closeBar();
   };
 
+  const highlightPalette = barDiv.querySelector("[data-highlight-palette]");
+  const highlightToggle = barDiv.querySelector('[data-action="toggle-highlight"]');
+  highlightToggle?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const shouldOpen = highlightPalette?.classList.contains("hidden");
+    highlightPalette?.classList.toggle("hidden", !shouldOpen);
+    highlightToggle.setAttribute("aria-expanded", String(Boolean(shouldOpen)));
+    highlightToggle.classList.toggle("is-active", Boolean(shouldOpen) || Boolean(state.highlights?.[highlightKey]));
+  });
+
   barDiv.querySelectorAll("[data-color]").forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
       const color = btn.getAttribute("data-color");
       if (verseDiv) {
+        verseDiv.style.removeProperty("background-color");
         verseDiv.setAttribute("data-highlight", color);
       }
       state.highlights[highlightKey] = color;
       localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+      highlightToggle?.classList.add("is-active");
 
       // 更新 bar 內各顏色圓點的 active 狀態，不關閉 bar
       barDiv.querySelectorAll("[data-color]").forEach(b => {
@@ -1353,22 +1377,15 @@ function openIntegratedSelectionBottomBar(options) {
     };
   });
 
-  barDiv.querySelector('[data-action="play"]')?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const verseNum = Number(verseDiv?.dataset.verse || 1);
-    closeBar();
-    if (typeof window.toggleReaderAudio === "function") {
-      window.toggleReaderAudio(verseNum);
-    }
-  });
-
   barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (verseDiv) {
+      verseDiv.style.removeProperty("background-color");
       verseDiv.removeAttribute("data-highlight");
     }
     delete state.highlights[highlightKey];
     localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+    highlightToggle?.classList.add("is-active");
 
     // 重置所有色點 active 狀態，不關閉 bar
     barDiv.querySelectorAll("[data-color]").forEach(b => {
@@ -1616,6 +1633,43 @@ let verseListForSpeaking = [];
 let currentAudioSessionId = 0;
 let preferredReaderVoice = null;
 let pendingReaderVoicePromise = null;
+
+function updateReaderAudioTimeline(verseIndex, totalVerses, status = "speaking", verseNum = null) {
+  const timeline = document.getElementById("reader-audio-timeline");
+  const label = document.getElementById("reader-audio-progress-label");
+  const track = document.getElementById("reader-audio-progress-track");
+  const fill = document.getElementById("reader-audio-progress-fill");
+  if (!timeline || !label || !track || !fill || totalVerses <= 0) return;
+  const safeIndex = Math.min(Math.max(Number(verseIndex) || 0, 0), totalVerses - 1);
+  const currentVerse = verseNum ?? verseListForSpeaking[safeIndex]?.verseNum ?? safeIndex + 1;
+  const prefix = status === "paused" ? "已暫停・" : status === "completed" ? "已完成・" : "朗讀中・";
+  label.textContent = `${prefix}第 ${currentVerse} 節／共 ${totalVerses} 節`;
+  track.setAttribute("aria-valuemax", String(totalVerses));
+  track.setAttribute("aria-valuenow", String(safeIndex + 1));
+  fill.style.width = `${((safeIndex + 1) / totalVerses) * 100}%`;
+  timeline.classList.remove("hidden");
+}
+
+function hideReaderAudioTimeline() {
+  document.getElementById("reader-audio-timeline")?.classList.add("hidden");
+}
+
+function setReaderAudioStartMarker(verseNum = 1) {
+  clearSpeakingHighlight();
+  clearReaderStartSelection();
+  const verseEl = document.getElementById(`reader-verse-${verseNum}`);
+  if (!verseEl) return;
+  verseEl.classList.add("reader-start-selected");
+  verseEl.setAttribute("aria-pressed", "true");
+  state.readerState.selectedVerseNum = Number(verseNum) || 1;
+}
+
+function resetReaderAudioAfterManualChapterChange(showTimeline) {
+  setReaderAudioStartMarker(1);
+  if (!showTimeline) return;
+  const totalVerses = document.querySelectorAll("#bible-content .bible-verse").length;
+  if (totalVerses > 0) updateReaderAudioTimeline(0, totalVerses, "paused", 1);
+}
 function updateReaderAudioButton(speaking) {
   const btn = document.getElementById("reader-audio-btn");
   if (!btn) return;
@@ -1631,8 +1685,11 @@ function clearSpeakingHighlight() {
   });
 }
 
-function stopReaderAudio(quiet = false) {
+function stopReaderAudio(quiet = false, options = {}) {
   const wasActive = isSpeaking || Boolean(window.speechSynthesis?.speaking) || Boolean(window.speechSynthesis?.pending);
+  const lastVerseIndex = currentSpeakingVerseIndex;
+  const lastVerseTotal = verseListForSpeaking.length;
+  const lastVerse = verseListForSpeaking[lastVerseIndex]?.verseNum || lastVerseIndex + 1;
   currentAudioSessionId++;
   if (typeof window.speechSynthesis !== "undefined") {
     try { window.speechSynthesis.cancel(); } catch (_e) {}
@@ -1642,6 +1699,13 @@ function stopReaderAudio(quiet = false) {
   verseListForSpeaking = [];
   speechUtterance = null;
   clearSpeakingHighlight();
+  if (options.preservePosition && lastVerseIndex >= 0 && lastVerseTotal > 0) {
+    const verseEl = document.getElementById(`reader-verse-${lastVerse}`);
+    verseEl?.classList.add("speaking-highlight");
+    updateReaderAudioTimeline(lastVerseIndex, lastVerseTotal, options.status || "paused", lastVerse);
+  } else {
+    hideReaderAudioTimeline();
+  }
   updateReaderAudioButton(false);
   if (!quiet && wasActive && typeof showToast === "function") showToast("已停止朗讀");
 }
@@ -1652,6 +1716,7 @@ function resetReaderAudioState() {
   verseListForSpeaking = [];
   speechUtterance = null;
   clearSpeakingHighlight();
+  hideReaderAudioTimeline();
   updateReaderAudioButton(false);
 }
 
@@ -1690,7 +1755,7 @@ function warmReaderVoice(targetLang = "zh-TW") {
 function speakNextVerseInQueue(sessionId) {
   if (sessionId !== currentAudioSessionId || !isSpeaking) return;
   if (currentSpeakingVerseIndex < 0 || currentSpeakingVerseIndex >= verseListForSpeaking.length) {
-    stopReaderAudio(true);
+    void continueReaderAudioToNextChapter(sessionId);
     return;
   }
   const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
@@ -1700,6 +1765,7 @@ function speakNextVerseInQueue(sessionId) {
   }
 
   clearSpeakingHighlight();
+  updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "speaking");
   const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
   if (verseEl) {
     verseEl.classList.add("speaking-highlight");
@@ -1760,6 +1826,29 @@ function speakNextVerseInQueue(sessionId) {
   window.speechSynthesis.speak(speechUtterance);
 }
 
+async function continueReaderAudioToNextChapter(sessionId) {
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  const moved = await navigateToChapter(1, { autoContinue: true });
+  if (!moved || sessionId !== currentAudioSessionId || !isSpeaking) {
+    if (verseListForSpeaking.length > 0) {
+      updateReaderAudioTimeline(verseListForSpeaking.length - 1, verseListForSpeaking.length, "completed");
+    }
+    stopReaderAudio(true, { preservePosition: true, status: "completed" });
+    return;
+  }
+  const container = document.getElementById("bible-content");
+  verseListForSpeaking = Array.from(container?.querySelectorAll(".bible-verse") || []).map(el => ({
+    verseNum: Number(el.dataset.verse || 0),
+    text: el.querySelector(".verse-text")?.textContent.trim() || ""
+  })).filter(item => item.text.length > 0);
+  if (verseListForSpeaking.length === 0) {
+    stopReaderAudio(true);
+    return;
+  }
+  currentSpeakingVerseIndex = 0;
+  speakNextVerseInQueue(sessionId);
+}
+
 window.toggleReaderAudio = async function(startVerseNum = null) {
   if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
     if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
@@ -1767,7 +1856,7 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
   }
   if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     if (isSpeaking) {
-      stopReaderAudio();
+      stopReaderAudio(false, { preservePosition: true });
       return;
     }
     stopReaderAudio(true);

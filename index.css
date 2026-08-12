@@ -3553,24 +3553,14 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-  max-height: 17.5rem;
-  overflow-y: auto;
-  padding-right: 0.125rem;
+  max-height: none;
+  overflow: visible;
 }
 
 .announcements-list__skeleton {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-}
-
-.announcements-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.announcements-list::-webkit-scrollbar-thumb {
-  background: var(--border-card);
-  border-radius: 999px;
 }
 
 .announcement-item {
@@ -6211,6 +6201,49 @@ body.dark-theme .pastoral-race-progress {
   gap: 0.38rem !important;
   max-height: min(34vh, 300px) !important;
   padding-right: 0.1rem !important;
+}
+
+#reader-view .reader-audio-timeline {
+  position: sticky;
+  top: var(--reader-toolbar-height, 56px);
+  z-index: 34;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+#reader-view .reader-audio-timeline.hidden {
+  display: none;
+}
+
+.reader-audio-timeline__label {
+  min-width: 6.5rem;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reader-audio-timeline__track {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.reader-audio-timeline__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--color-brand);
+  transition: width 220ms ease;
 }
 
 /* Daily church quiz */

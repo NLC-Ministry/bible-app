@@ -553,6 +553,14 @@
           </button>
         </div>
 
+        <div class="reader-audio-timeline hidden" id="reader-audio-timeline" aria-live="polite">
+          <span class="reader-audio-timeline__label" id="reader-audio-progress-label">第 1 節／共 1 節</span>
+          <div class="reader-audio-timeline__track" role="progressbar" aria-label="朗讀進度"
+            aria-valuemin="1" aria-valuemax="1" aria-valuenow="1" id="reader-audio-progress-track">
+            <span class="reader-audio-timeline__fill" id="reader-audio-progress-fill"></span>
+          </div>
+        </div>
+
         <!-- Legacy in-reader search panel kept hidden for compatibility -->
         <div class="reader-search-panel hidden" id="reader-search-panel">
           <span class="nlc-icon" data-icon="search"></span>
@@ -2475,7 +2483,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260812_quiz_manual_retry"></script>
+  <script type="module" src="js/app.js?v=20260812_reader_toolbar"></script>
 </body>
 
 </html>

@@ -4,6 +4,7 @@ import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoi
 
 const bible = readFileSync("js/modules/bible.js", "utf8");
 const css = readFileSync("index.css", "utf8");
+const html = readFileSync("index.html", "utf8");
 
 describe("reader speech controls", () => {
   it("starts at the selected verse and defaults to the first verse", () => {
@@ -38,6 +39,19 @@ describe("reader speech controls", () => {
     expect(bible).toContain("warmReaderVoice(targetLang).then");
     expect(bible).not.toContain("lastFocusedVerseNum) {");
     expect(css).toContain("朗讀起點");
+  });
+
+  it("shows verse progress, follows playback, and distinguishes automatic from manual chapter navigation", () => {
+    expect(html).toContain('id="reader-audio-timeline"');
+    expect(html).toContain('id="reader-audio-progress-track"');
+    expect(html).toContain('id="reader-audio-progress-fill"');
+    expect(css).toContain(".reader-audio-timeline__track");
+    expect(bible).toContain("updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length");
+    expect(bible).toContain("continueReaderAudioToNextChapter(sessionId)");
+    expect(bible).toContain("navigateToChapter(1, { autoContinue: true })");
+    expect(bible).toContain("if (!autoContinue) stopReaderAudio(true)");
+    expect(bible).toContain("resetReaderAudioAfterManualChapterChange(hadAudioPosition)");
+    expect(bible).toContain('scrollIntoView?.({ behavior: "smooth", block: "center" })');
   });
 
   it("does not cancel speech between verses", () => {
@@ -85,4 +99,3 @@ describe("reader speech controls", () => {
     expect(css).toContain('.speech-voice-select');
   });
 });
-

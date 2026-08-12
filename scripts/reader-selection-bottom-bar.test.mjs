@@ -42,4 +42,25 @@ describe("reader verse selection bottom bar", () => {
     expect(css).not.toMatch(/\.youversion-action-bar \.yv-highlight-section \{[\s\S]*flex-direction: column;/);
     expect(css).not.toMatch(/\.youversion-action-bar[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   });
+
+  it("shows the four primary actions in order and reveals highlight tools on demand", () => {
+    const start = bible.indexOf("function openIntegratedSelectionBottomBar(options)");
+    const end = bible.indexOf("function openVerseNoteEditor", start);
+    const toolbar = bible.slice(start, end);
+    const copyIndex = toolbar.indexOf('data-action="copy"');
+    const highlightIndex = toolbar.indexOf('data-action="toggle-highlight"');
+    const noteIndex = toolbar.indexOf('data-action="note"');
+    const shareIndex = toolbar.indexOf('data-action="share"');
+
+    expect(copyIndex).toBeGreaterThan(-1);
+    expect(highlightIndex).toBeGreaterThan(copyIndex);
+    expect(noteIndex).toBeGreaterThan(highlightIndex);
+    expect(shareIndex).toBeGreaterThan(noteIndex);
+    expect(toolbar).toContain('class="yv-highlight-section hidden" data-highlight-palette');
+    expect(toolbar).toContain('aria-expanded="false"');
+    expect(toolbar).toContain('highlightPalette?.classList.toggle("hidden", !shouldOpen)');
+    expect(toolbar).toContain('data-action="clear"');
+    expect(toolbar).not.toContain('data-action="play"');
+    expect(toolbar).not.toContain('<span class="yv-tile-label">朗讀</span>');
+  });
 });
