@@ -60,9 +60,11 @@ describe("admin registration statistics", () => {
   });
 
   it("exports UTF-8 CSV instead of a plain-text slash-delimited file", () => {
-    expect(admin).toContain("export function convertAdminRegistrationStatisticsToCSV(context)");
+    expect(admin).toContain("export function convertAdminRegistrationStatisticsToCSV(context, exportedAt = new Date())");
     expect(admin).toContain('new Blob(["\\uFEFF" + csvContent]');
     expect(admin).toContain('type: "text/csv;charset=utf-8;"');
+    expect(admin).toContain("prependTaiwanExportTime");
+    expect(admin).toContain("const todayTW = formatTaiwanDate()");
     expect(admin).toContain("報名與註冊統計-${planName}-${todayTW}.csv");
     expect(html).toContain("匯出 CSV");
     expect(html).not.toContain("匯出文字檔");

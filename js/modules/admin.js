@@ -11,6 +11,10 @@ import {
   buildAdminUserDirectoryOrgOptions,
   matchesAdminUserDirectoryOrgFilters
 } from "./admin-user-directory-filter.mjs";
+import {
+  formatTaiwanDate,
+  prependTaiwanExportTime
+} from "./export-time.mjs";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");
@@ -146,7 +150,7 @@ function sortProfilesByChurchOrgOrder(profiles) {
   });
 }
 
-export function convertUserDirectoryToCSV(profiles) {
+export function convertUserDirectoryToCSV(profiles, exportedAt = new Date()) {
   if (!profiles || profiles.length === 0) return "";
   const headers = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "組隊狀態", "帳號狀態"];
   const rows = sortProfilesByChurchOrgOrder(profiles).map(p => [
@@ -160,10 +164,10 @@ export function convertUserDirectoryToCSV(profiles) {
     p.is_active === false ? "已停用" : "啟用中"
   ]);
 
-  return [
+  return prependTaiwanExportTime([
     headers.join(","),
     ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
-  ].join("\n");
+  ].join("\n"), exportedAt);
 }
 
 export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProfiles) {
@@ -176,7 +180,7 @@ export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProf
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatTaiwanDate();
   link.setAttribute("href", url);
   link.setAttribute("download", `member_directory_${today}.csv`);
   document.body.appendChild(link);
@@ -184,7 +188,7 @@ export function exportUserDirectoryCSV(profiles = adminUserDirectoryFilteredProf
   document.body.removeChild(link);
 }
 
-export function convertOrgStructureToCSV(orgStructure = state.orgStructure) {
+export function convertOrgStructureToCSV(orgStructure = state.orgStructure, exportedAt = new Date()) {
   if (!orgStructure) return "";
   const headers = ["大區", "牧區", "小組"];
   const rows = [];
@@ -212,10 +216,10 @@ export function convertOrgStructureToCSV(orgStructure = state.orgStructure) {
   });
 
   if (rows.length === 0) return "";
-  return [
+  return prependTaiwanExportTime([
     headers.join(","),
     ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
-  ].join("\n");
+  ].join("\n"), exportedAt);
 }
 
 export async function exportOrgStructureCSV() {
@@ -232,7 +236,7 @@ export async function exportOrgStructureCSV() {
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatTaiwanDate();
   link.setAttribute("href", url);
   link.setAttribute("download", `church_org_structure_${today}.csv`);
   document.body.appendChild(link);
@@ -958,7 +962,7 @@ function renderAdminRegistrationStatisticsSummary(context) {
     </section>`;
 }
 
-export function convertAdminRegistrationStatisticsToCSV(context) {
+export function convertAdminRegistrationStatisticsToCSV(context, exportedAt = new Date()) {
   const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
   const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
   const summary = getAdminRegistrationStatisticsSummary(context);
@@ -971,7 +975,7 @@ export function convertAdminRegistrationStatisticsToCSV(context) {
     esc(Number(row.team6Count || 0))
   ].join(","));
 
-  return [
+  return prependTaiwanExportTime([
     [esc("統計項目"), esc("人數")].join(","),
     [esc("無牧區資料未加入計畫"), esc(Number(summary.withoutPastoralZoneNotJoined || 0))].join(","),
     [esc("無牧區資料已加入計畫"), esc(Number(summary.withoutPastoralZoneJoined || 0))].join(","),
@@ -985,7 +989,7 @@ export function convertAdminRegistrationStatisticsToCSV(context) {
     "",
     [esc("牧區"), esc("報名人數"), esc("註冊人數"), esc("3 人團隊人數"), esc("6 人團隊人數")].join(","),
     ...formatRows(sortByChurchOrgOrder(pastoralZones, comparePastoralZones, row => row.label))
-  ].join("\n");
+  ].join("\n"), exportedAt);
 }
 
 function exportAdminRegistrationStatistics() {
@@ -997,7 +1001,7 @@ function exportAdminRegistrationStatistics() {
   const planName = String(adminRegistrationStatistics.planName || "讀經計畫")
     .replace(/[\\/:*?"<>|]/g, "-");
   anchor.href = url;
-  const todayTW = typeof toTaiwanISODate === "function" ? toTaiwanISODate() : new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+  const todayTW = formatTaiwanDate();
   anchor.download = `報名與註冊統計-${planName}-${todayTW}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
@@ -1770,14 +1774,10 @@ let lastRenderedTeamPlans = { 3: [], 6: [] };
 
 function formatTeamPlanDate(value) {
   if (!value) return "";
-  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("zh-TW", {
-    year: "numeric", month: "2-digit", day: "2-digit"
-  }).format(date);
+  return formatTaiwanDate(value).replace(/-/g, "/");
 }
 
-export function convertTeamRegistrationStatusToCSV(plans, division) {
+export function convertTeamRegistrationStatusToCSV(plans, division, exportedAt = new Date()) {
   if (!Array.isArray(plans) || plans.length === 0) return "";
   const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
   const memberHeaders = [];
@@ -1824,7 +1824,7 @@ export function convertTeamRegistrationStatusToCSV(plans, division) {
     });
   });
 
-  return lines.join("\n");
+  return prependTaiwanExportTime(lines.join("\n"), exportedAt);
 }
 
 export function exportTeamRegistrationStatusCSV(division) {
@@ -1838,7 +1838,7 @@ export function exportTeamRegistrationStatusCSV(division) {
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatTaiwanDate();
   link.setAttribute("href", url);
   link.setAttribute("download", `team_registration_${division}person_${today}.csv`);
   document.body.appendChild(link);
