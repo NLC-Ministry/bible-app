@@ -125,7 +125,7 @@ describe("reader speech controls", () => {
     expect(css).toContain('.reader-settings-apply-btn');
     expect(css).toMatch(/\.reader-settings-dialog-backdrop \{[\s\S]*align-items: center;[\s\S]*justify-content: center;/);
     expect(css).toMatch(/\.reader-settings-dialog \{[\s\S]*width: min\(34rem, 90vw\);[\s\S]*max-height: min\(82dvh, 44rem\);[\s\S]*border-radius: 20px;/);
-    expect(css).toMatch(/\.font-size-option\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
+    expect(css).toMatch(/\.reader-font-size-tick\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
   });
 
   it("confirms and persists reader settings from the explicit apply button", () => {

@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260813_readable_font_floor" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260813_reader_font_slider" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -2208,21 +2208,20 @@
       </div>
       <div class="bottom-sheet-body" style="padding-bottom: 1.5rem;">
         <!-- 視覺設定：文字大小 -->
-        <div class="sheet-section" style="margin-bottom: 1.25rem;">
-          <div class="sheet-section-title">文字大小</div>
-          <div class="sheet-options-row typography-size-row">
-            <button type="button" class="sheet-option-btn font-size-option" data-size="16">
-              <span class="size-label">小</span>
-              <span class="size-num">16px</span>
-            </button>
-            <button type="button" class="sheet-option-btn font-size-option" data-size="18">
-              <span class="size-label">一般</span>
-              <span class="size-num">18px</span>
-            </button>
-            <button type="button" class="sheet-option-btn font-size-option" data-size="20">
-              <span class="size-label">大</span>
-              <span class="size-num">20px</span>
-            </button>
+        <div class="sheet-section reader-font-size-control" style="margin-bottom: 1.25rem;">
+          <div class="reader-font-size-header">
+            <label class="sheet-section-title" for="reader-font-size-slider">文字大小</label>
+            <output id="reader-font-size-value" for="reader-font-size-slider">20px</output>
+          </div>
+          <input type="range" id="reader-font-size-slider" class="reader-font-size-slider"
+            min="16" max="24" step="2" value="20" aria-label="閱讀文字大小"
+            aria-valuemin="16" aria-valuemax="24" aria-valuenow="20" aria-valuetext="20px">
+          <div class="reader-font-size-ticks" aria-label="可選文字大小">
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="16">16</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="18">18</button>
+            <button type="button" class="reader-font-size-tick active" data-reader-font-size="20" aria-pressed="true">20</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="22">22</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="24">24</button>
           </div>
         </div>
 
@@ -2481,7 +2480,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260813_readable_font_floor"></script>
+  <script type="module" src="js/app.js?v=20260813_reader_font_slider"></script>
 </body>
 
 </html>

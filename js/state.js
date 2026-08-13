@@ -90,7 +90,7 @@ const state = {
   readerState: {
     bookId: 1, // Genesis
     chapter: 1,
-    fontSize: 18,
+    fontSize: 20,
     selectedVerseNum: null
   },
   speechSettings: (() => {
@@ -557,7 +557,12 @@ function initTheme() {
 // Local Settings & State Loading
 function loadLocalSettings() {
   // Load local reader preferences
-  state.readerState.fontSize = parseInt(localStorage.getItem("reader_font_size")) || 18;
+  const readerFontSizes = [16, 18, 20, 22, 24];
+  const savedReaderFontSize = Number.parseInt(localStorage.getItem("reader_font_size"), 10);
+  state.readerState.fontSize = Number.isFinite(savedReaderFontSize)
+    ? readerFontSizes.reduce((closest, size) =>
+      Math.abs(size - savedReaderFontSize) < Math.abs(closest - savedReaderFontSize) ? size : closest, 20)
+    : 20;
   const sizeLabel = document.getElementById("font-size-label");
   if (sizeLabel) sizeLabel.textContent = state.readerState.fontSize + "px";
   

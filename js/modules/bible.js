@@ -434,10 +434,21 @@ export function initReaderControls() {
     });
   }
 
-  document.querySelectorAll(".font-size-option").forEach(btn => {
+  const readerFontSizeSlider = document.getElementById("reader-font-size-slider");
+  if (readerFontSizeSlider && readerFontSizeSlider.dataset.bound !== "true") {
+    readerFontSizeSlider.dataset.bound = "true";
+    readerFontSizeSlider.addEventListener("input", () => {
+      state.readerState.fontSize = normalizeReaderFontSize(readerFontSizeSlider.value);
+      updateReaderFontSize();
+      updateSheetActiveStates();
+    });
+  }
+
+  document.querySelectorAll(".reader-font-size-tick").forEach(btn => {
+    if (btn.dataset.bound === "true") return;
+    btn.dataset.bound = "true";
     btn.addEventListener("click", () => {
-      const size = parseInt(btn.dataset.size);
-      state.readerState.fontSize = size;
+      state.readerState.fontSize = normalizeReaderFontSize(btn.dataset.readerFontSize);
       updateReaderFontSize();
       updateSheetActiveStates();
     });
@@ -454,8 +465,19 @@ export function initReaderControls() {
   });
 
   function updateSheetActiveStates() {
-    document.querySelectorAll(".font-size-option").forEach(btn => {
-      btn.classList.toggle("active", parseInt(btn.dataset.size) === state.readerState.fontSize);
+    const fontSize = normalizeReaderFontSize(state.readerState.fontSize);
+    const slider = document.getElementById("reader-font-size-slider");
+    const output = document.getElementById("reader-font-size-value");
+    if (slider) {
+      slider.value = String(fontSize);
+      slider.setAttribute("aria-valuenow", String(fontSize));
+      slider.setAttribute("aria-valuetext", `${fontSize}px`);
+    }
+    if (output) output.textContent = `${fontSize}px`;
+    document.querySelectorAll(".reader-font-size-tick").forEach(btn => {
+      const isActive = Number(btn.dataset.readerFontSize) === fontSize;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-pressed", String(isActive));
     });
     document.querySelectorAll(".theme-option").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.theme === state.theme);
@@ -506,19 +528,19 @@ export function initReaderControls() {
   const incFont = document.getElementById("reader-font-increase");
   const decFont = document.getElementById("reader-font-decrease");
   if (incFont) incFont.addEventListener("click", () => {
-    if (state.readerState.fontSize < 36) { state.readerState.fontSize += 2; updateReaderFontSize(); }
+    if (state.readerState.fontSize < 24) { state.readerState.fontSize += 2; updateReaderFontSize(); }
   });
   if (decFont) decFont.addEventListener("click", () => {
-    if (state.readerState.fontSize > 12) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
+    if (state.readerState.fontSize > 16) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
   });
 
   const legacyInc = document.getElementById("increase-font");
   const legacyDec = document.getElementById("decrease-font");
   if (legacyInc) legacyInc.addEventListener("click", () => {
-    if (state.readerState.fontSize < 36) { state.readerState.fontSize += 2; updateReaderFontSize(); }
+    if (state.readerState.fontSize < 24) { state.readerState.fontSize += 2; updateReaderFontSize(); }
   });
   if (legacyDec) legacyDec.addEventListener("click", () => {
-    if (state.readerState.fontSize > 12) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
+    if (state.readerState.fontSize > 16) { state.readerState.fontSize -= 2; updateReaderFontSize(); }
   });
 
   const prevChapterBtn = document.getElementById("prev-chapter-btn");
@@ -746,8 +768,17 @@ export function updatePillLabels() {
   }
 }
 
+const READER_FONT_SIZES = [16, 18, 20, 22, 24];
+
+function normalizeReaderFontSize(value) {
+  const requestedSize = Number(value);
+  if (!Number.isFinite(requestedSize)) return 20;
+  return READER_FONT_SIZES.reduce((closest, size) =>
+    Math.abs(size - requestedSize) < Math.abs(closest - requestedSize) ? size : closest, 20);
+}
+
 export function updateReaderFontSize() {
-  const size = Number(state.readerState.fontSize || 18);
+  const size = normalizeReaderFontSize(state.readerState.fontSize);
   state.readerState.fontSize = size;
   document.documentElement.style.setProperty("--reader-font-size", size + "px");
   const bibleContent = document.getElementById("bible-content");
@@ -755,8 +786,20 @@ export function updateReaderFontSize() {
 
   localStorage.setItem("reader_font_size", size);
 
-  document.querySelectorAll("#reader-settings-dropdown .font-btn, .font-size-option").forEach(b => {
-    b.classList.toggle("active", parseInt(b.dataset.size) === state.readerState.fontSize);
+  const slider = document.getElementById("reader-font-size-slider");
+  const output = document.getElementById("reader-font-size-value");
+  if (slider) {
+    slider.value = String(size);
+    slider.setAttribute("aria-valuenow", String(size));
+    slider.setAttribute("aria-valuetext", `${size}px`);
+  }
+  if (output) output.textContent = `${size}px`;
+
+  document.querySelectorAll("#reader-settings-dropdown .font-btn, .reader-font-size-tick").forEach(b => {
+    const buttonSize = Number(b.dataset.readerFontSize ?? b.dataset.size);
+    const isActive = buttonSize === state.readerState.fontSize;
+    b.classList.toggle("active", isActive);
+    if (b.classList.contains("reader-font-size-tick")) b.setAttribute("aria-pressed", String(isActive));
   });
 
   document.querySelectorAll("#reader-settings-dropdown .theme-btn").forEach(b => {

@@ -8255,7 +8255,7 @@ input:checked + .slider:before {
 
 /* Native Bible Reader Module */
 :root {
-  --reader-font-size: 18px;
+  --reader-font-size: 20px;
   --reader-accent: #ef5b55;
   --reader-layer-bg: #fbfbfc;
   --reader-layer-card: #ffffff;
@@ -8340,7 +8340,7 @@ body.reader-modal-open .main-content {
 }
 
 .bible-text-container {
-  font-size: var(--reader-font-size, 18px) !important;
+  font-size: var(--reader-font-size, 20px) !important;
   line-height: 1.82;
   transition: font-size 0.16s ease;
 }
@@ -8576,11 +8576,6 @@ body.reader-modal-open .main-content {
 
 /* (merged into primary .bottom-sheet-container rule above) */
 
-.sheet-options-row.typography-size-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .sheet-option-btn {
   min-height: 72px;
   border-radius: 14px;
@@ -8591,10 +8586,63 @@ body.reader-modal-open .main-content {
   transform: scale(0.95);
 }
 
-.font-size-option.active {
-  border-color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+.reader-font-size-control {
+  gap: 0.65rem;
+}
+
+.reader-font-size-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+#reader-font-size-value {
+  min-width: 3.5rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
   color: var(--color-brand);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.reader-font-size-slider {
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.reader-font-size-ticks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.reader-font-size-tick {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reader-font-size-tick.active {
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  color: var(--color-brand);
+}
+
+.reader-font-size-tick:focus-visible,
+.reader-font-size-slider:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  outline-offset: 2px;
 }
 
 @media (max-width: 420px) {
