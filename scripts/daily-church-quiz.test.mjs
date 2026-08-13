@@ -189,6 +189,6 @@ describe("daily church quiz", () => {
     expect(admin).toContain('審核通過');
     expect(css).toContain('.admin-daily-quiz-load-error {');
     expect(css).toContain('.admin-daily-quiz-version--load-failed {');
-    expect(html).toMatch(/index\.css\?v=20260812_[a-z0-9_]+/);
+    expect(html).toMatch(/index\.css\?v=2026\d{4}_[a-z0-9_]+/);
   });
 });

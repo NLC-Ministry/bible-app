@@ -8117,6 +8117,33 @@ input:checked + .slider:before {
   min-block-size: 48px;
 }
 
+/* Reader settings is a centered dialog, not a draggable bottom sheet. */
+.reader-settings-dialog-backdrop {
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(1rem, env(safe-area-inset-top, 0px))
+    max(1rem, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.reader-settings-dialog {
+  width: min(34rem, 90vw);
+  max-height: min(82dvh, 44rem);
+  margin: 0;
+  padding: 1rem 1rem 1.25rem;
+  border: 1px solid var(--border-card);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  animation: readerSettingsDialogIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes readerSettingsDialogIn {
+  from { opacity: 0; transform: translateY(0.75rem) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .bottom-sheet-close-x .nlc-icon,
 .bottom-sheet-close-x svg {
   width: 1.75rem;
@@ -8508,6 +8535,10 @@ body.reader-modal-open .main-content {
 }
 .bottom-sheet-backdrop:not(.hidden) .bottom-sheet-container {
   transform: translateY(0) !important;
+}
+
+.bottom-sheet-backdrop:not(.hidden) .reader-settings-dialog {
+  transform: translateY(0) scale(1) !important;
 }
 
 /* (merged into primary .bottom-sheet-container rule above) */
@@ -13261,25 +13292,17 @@ select,
   border-radius: 8px !important;
 }
 
-/* Light/Default Mode Morandi Verse Highlights */
-#reader-view .bible-verse[data-highlight="#fef08a"],
-.bible-verse[data-highlight="#fef08a"] { background-color: rgba(254, 240, 138, 0.65) !important; border-radius: 4px; }
-#reader-view .bible-verse[data-highlight="#a5f3fc"],
-.bible-verse[data-highlight="#a5f3fc"] { background-color: rgba(165, 243, 252, 0.65) !important; border-radius: 4px; }
-#reader-view .bible-verse[data-highlight="#bbf7d0"],
-.bible-verse[data-highlight="#bbf7d0"] { background-color: rgba(187, 247, 208, 0.65) !important; border-radius: 4px; }
-#reader-view .bible-verse[data-highlight="#fed7aa"],
-.bible-verse[data-highlight="#fed7aa"] { background-color: rgba(254, 215, 170, 0.65) !important; border-radius: 4px; }
+/* Preset and user-defined verse highlights share the same theme-aware rendering. */
+#reader-view .bible-verse[data-highlight],
+.bible-verse[data-highlight] {
+  background-color: color-mix(in srgb, var(--verse-highlight-color, #fef08a) 65%, transparent) !important;
+  border-radius: 4px;
+}
 
-/* Dark Mode Morandi Verse Highlights */
-[data-theme="dark"] #reader-view .bible-verse[data-highlight="#fef08a"],
-[data-theme="dark"] .bible-verse[data-highlight="#fef08a"] { background-color: rgba(254, 240, 138, 0.22) !important; border-radius: 4px; }
-[data-theme="dark"] #reader-view .bible-verse[data-highlight="#a5f3fc"],
-[data-theme="dark"] .bible-verse[data-highlight="#a5f3fc"] { background-color: rgba(165, 243, 252, 0.22) !important; border-radius: 4px; }
-[data-theme="dark"] #reader-view .bible-verse[data-highlight="#bbf7d0"],
-[data-theme="dark"] .bible-verse[data-highlight="#bbf7d0"] { background-color: rgba(187, 247, 208, 0.22) !important; border-radius: 4px; }
-[data-theme="dark"] #reader-view .bible-verse[data-highlight="#fed7aa"],
-[data-theme="dark"] .bible-verse[data-highlight="#fed7aa"] { background-color: rgba(254, 215, 170, 0.22) !important; border-radius: 4px; }
+[data-theme="dark"] #reader-view .bible-verse[data-highlight],
+[data-theme="dark"] .bible-verse[data-highlight] {
+  background-color: color-mix(in srgb, var(--verse-highlight-color, #fef08a) 22%, transparent) !important;
+}
 
 /* Bible Version Picker Modal Design System */
 .version-picker-modal {
@@ -13495,6 +13518,48 @@ select,
   gap: 0.5rem;
 }
 
+.youversion-action-bar .yv-highlight-popover {
+  position: absolute;
+  bottom: calc(100% + 0.625rem);
+  left: clamp(8.75rem, var(--yv-highlight-anchor-x, 50%), calc(100% - 8.75rem));
+  z-index: 1;
+  width: min(20rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 0.875rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+  animation: yvHighlightPopoverIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.youversion-action-bar .yv-highlight-popover::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.375rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-right: 1px solid var(--border-card);
+  border-bottom: 1px solid var(--border-card);
+  background: var(--bg-card);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+@keyframes yvHighlightPopoverIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(0.375rem) scale(0.97); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .youversion-action-bar .yv-highlight-popover {
+    animation: none;
+  }
+}
+
 .youversion-action-bar .yv-color-capsule {
   display: flex;
   align-items: center;
@@ -13502,6 +13567,9 @@ select,
   gap: 0.5rem;
   min-width: 0;
   padding: 0.25rem 0;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .youversion-action-bar .yv-dot {
@@ -13534,6 +13602,29 @@ select,
 .youversion-action-bar .yv-dot-cyan { background-color: var(--hl-blue, #a5f3fc); }
 .youversion-action-bar .yv-dot-green { background-color: var(--hl-green, #bbf7d0); }
 .youversion-action-bar .yv-dot-dual { background-color: var(--hl-orange, #fed7aa); }
+.youversion-action-bar .yv-dot-pink { background-color: #fecdd3; }
+.youversion-action-bar .yv-dot-purple { background-color: #ddd6fe; }
+.youversion-action-bar .yv-custom-color {
+  position: relative;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  background: conic-gradient(#ef4444, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #ef4444);
+  box-shadow: inset 0 0 0 3px var(--bg-card);
+}
+
+.youversion-action-bar .yv-custom-color input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
 .youversion-action-bar .yv-section-divider {
   width: 1px;
   height: 1.5rem;
@@ -13542,9 +13633,9 @@ select,
 }
 .youversion-action-bar .yv-dot-clear:hover,
 .youversion-action-bar .yv-dot-clear:focus-visible {
-  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-  color: var(--color-danger);
-  border-color: color-mix(in srgb, var(--color-danger) 32%, var(--border-card));
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
+  border-color: color-mix(in srgb, var(--color-brand) 32%, var(--border-card));
 }
 
 .youversion-action-bar .yv-action-group {

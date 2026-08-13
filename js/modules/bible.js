@@ -1163,7 +1163,7 @@ function renderVersesList(container, verses, bookName, chapter) {
 
     const highlightKey = `${bookName}_${chapter}_${v.verse}`;
     if (state.highlights[highlightKey]) {
-      verseDiv.style.backgroundColor = state.highlights[highlightKey];
+      verseDiv.style.setProperty("--verse-highlight-color", state.highlights[highlightKey]);
       verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
     }
 
@@ -1310,18 +1310,24 @@ function openIntegratedSelectionBottomBar(options) {
             <span class="yv-tile-label">分享</span>
           </button>
         </div>
-        <div id="yv-highlight-palette" class="yv-highlight-section hidden" data-highlight-palette>
-          <span class="yv-section-label">選擇顏色</span>
-          <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
-            <button type="button" class="yv-dot yv-dot-yellow${activeHighlightColor === "#fef08a" ? " is-active" : ""}" data-color="#fef08a" title="柔黃標註" aria-label="柔黃標註" aria-pressed="${activeHighlightColor === "#fef08a"}"></button>
-            <button type="button" class="yv-dot yv-dot-cyan${activeHighlightColor === "#a5f3fc" ? " is-active" : ""}" data-color="#a5f3fc" title="柔藍標註" aria-label="柔藍標註" aria-pressed="${activeHighlightColor === "#a5f3fc"}"></button>
-            <button type="button" class="yv-dot yv-dot-green${activeHighlightColor === "#bbf7d0" ? " is-active" : ""}" data-color="#bbf7d0" title="柔綠標註" aria-label="柔綠標註" aria-pressed="${activeHighlightColor === "#bbf7d0"}"></button>
-            <button type="button" class="yv-dot yv-dot-dual${activeHighlightColor === "#fed7aa" ? " is-active" : ""}" data-color="#fed7aa" title="柔橘標註" aria-label="柔橘標註" aria-pressed="${activeHighlightColor === "#fed7aa"}"></button>
-            <span class="yv-section-divider" aria-hidden="true"></span>
-            <button type="button" class="yv-dot-clear" data-action="clear" title="清除標註" aria-label="清除標註">
-              <span class="nlc-icon" data-icon="eraser" aria-hidden="true"></span>
-            </button>
-          </div>
+      </div>
+      <div id="yv-highlight-palette" class="yv-highlight-section yv-highlight-popover hidden" data-highlight-palette role="dialog" aria-label="螢光筆色盤">
+        <span class="yv-section-label">選擇顏色</span>
+        <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
+          <button type="button" class="yv-dot-clear" data-action="clear" title="取消螢光標註" aria-label="取消螢光標註">
+            <span class="nlc-icon" data-icon="noColor" aria-hidden="true"></span>
+          </button>
+          <span class="yv-section-divider" aria-hidden="true"></span>
+          <button type="button" class="yv-dot yv-dot-yellow${activeHighlightColor === "#fef08a" ? " is-active" : ""}" data-color="#fef08a" title="柔黃標註" aria-label="柔黃標註" aria-pressed="${activeHighlightColor === "#fef08a"}"></button>
+          <button type="button" class="yv-dot yv-dot-cyan${activeHighlightColor === "#a5f3fc" ? " is-active" : ""}" data-color="#a5f3fc" title="柔藍標註" aria-label="柔藍標註" aria-pressed="${activeHighlightColor === "#a5f3fc"}"></button>
+          <button type="button" class="yv-dot yv-dot-green${activeHighlightColor === "#bbf7d0" ? " is-active" : ""}" data-color="#bbf7d0" title="柔綠標註" aria-label="柔綠標註" aria-pressed="${activeHighlightColor === "#bbf7d0"}"></button>
+          <button type="button" class="yv-dot yv-dot-dual${activeHighlightColor === "#fed7aa" ? " is-active" : ""}" data-color="#fed7aa" title="柔橘標註" aria-label="柔橘標註" aria-pressed="${activeHighlightColor === "#fed7aa"}"></button>
+          <button type="button" class="yv-dot yv-dot-pink${activeHighlightColor === "#fecdd3" ? " is-active" : ""}" data-color="#fecdd3" title="柔粉標註" aria-label="柔粉標註" aria-pressed="${activeHighlightColor === "#fecdd3"}"></button>
+          <button type="button" class="yv-dot yv-dot-purple${activeHighlightColor === "#ddd6fe" ? " is-active" : ""}" data-color="#ddd6fe" title="柔紫標註" aria-label="柔紫標註" aria-pressed="${activeHighlightColor === "#ddd6fe"}"></button>
+          <label class="yv-custom-color" title="自訂顏色">
+            <input type="color" data-custom-highlight-color value="${/^#[0-9a-f]{6}$/i.test(activeHighlightColor) ? activeHighlightColor : "#fef08a"}" aria-label="自訂螢光筆顏色">
+            <span aria-hidden="true"></span>
+          </label>
         </div>
       </div>
     </div>
@@ -1333,6 +1339,7 @@ function openIntegratedSelectionBottomBar(options) {
 
   const cleanupListeners = () => {
     document.removeEventListener("click", onDocClick);
+    window.removeEventListener("resize", positionHighlightPalette);
   };
 
   selectionBottomBarCleanup = cleanupListeners;
@@ -1341,46 +1348,76 @@ function openIntegratedSelectionBottomBar(options) {
     closeSelectionBottomBar(options);
   };
 
+  const highlightPalette = barDiv.querySelector("[data-highlight-palette]");
+  const highlightToggle = barDiv.querySelector('[data-action="toggle-highlight"]');
+
+  const positionHighlightPalette = () => {
+    if (!highlightToggle || !highlightPalette || highlightPalette.classList.contains("hidden")) return;
+    const barRect = barDiv.getBoundingClientRect();
+    const toggleRect = highlightToggle.getBoundingClientRect();
+    const anchorX = toggleRect.left - barRect.left + (toggleRect.width / 2);
+    highlightPalette.style.setProperty("--yv-highlight-anchor-x", `${anchorX}px`);
+  };
+
+  const setHighlightPaletteOpen = (open) => {
+    highlightPalette?.classList.toggle("hidden", !open);
+    highlightToggle?.setAttribute("aria-expanded", String(open));
+    highlightToggle?.classList.toggle("is-active", open || Boolean(state.highlights?.[highlightKey]));
+    if (open) requestAnimationFrame(positionHighlightPalette);
+  };
+
   const onDocClick = (e) => {
     if (barDiv.contains(e.target) || (e.target && e.target.closest && e.target.closest(".bible-verse"))) return;
+    if (highlightPalette && !highlightPalette.classList.contains("hidden")) {
+      setHighlightPaletteOpen(false);
+      return;
+    }
     closeBar();
   };
 
-  const highlightPalette = barDiv.querySelector("[data-highlight-palette]");
-  const highlightToggle = barDiv.querySelector('[data-action="toggle-highlight"]');
   highlightToggle?.addEventListener("click", (e) => {
     e.stopPropagation();
     const shouldOpen = highlightPalette?.classList.contains("hidden");
-    highlightPalette?.classList.toggle("hidden", !shouldOpen);
-    highlightToggle.setAttribute("aria-expanded", String(Boolean(shouldOpen)));
-    highlightToggle.classList.toggle("is-active", Boolean(shouldOpen) || Boolean(state.highlights?.[highlightKey]));
+    setHighlightPaletteOpen(Boolean(shouldOpen));
   });
+  window.addEventListener("resize", positionHighlightPalette, { passive: true });
+
+  const applyHighlightColor = (color) => {
+    if (!/^#[0-9a-f]{6}$/i.test(String(color || ""))) return;
+    const normalizedColor = color.toLowerCase();
+    if (verseDiv) {
+      verseDiv.style.removeProperty("background-color");
+      verseDiv.style.setProperty("--verse-highlight-color", normalizedColor);
+      verseDiv.setAttribute("data-highlight", normalizedColor);
+    }
+    state.highlights[highlightKey] = normalizedColor;
+    localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+    highlightToggle?.classList.add("is-active");
+
+    barDiv.querySelectorAll("[data-color]").forEach(b => {
+      const isActive = b.getAttribute("data-color") === normalizedColor;
+      b.classList.toggle("is-active", isActive);
+      b.setAttribute("aria-pressed", String(isActive));
+    });
+  };
 
   barDiv.querySelectorAll("[data-color]").forEach(btn => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const color = btn.getAttribute("data-color");
-      if (verseDiv) {
-        verseDiv.style.removeProperty("background-color");
-        verseDiv.setAttribute("data-highlight", color);
-      }
-      state.highlights[highlightKey] = color;
-      localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-      highlightToggle?.classList.add("is-active");
-
-      // 更新 bar 內各顏色圓點的 active 狀態，不關閉 bar
-      barDiv.querySelectorAll("[data-color]").forEach(b => {
-        const isActive = b.getAttribute("data-color") === color;
-        b.classList.toggle("is-active", isActive);
-        b.setAttribute("aria-pressed", String(isActive));
-      });
+      applyHighlightColor(btn.getAttribute("data-color"));
     };
+  });
+
+  barDiv.querySelector("[data-custom-highlight-color]")?.addEventListener("input", (e) => {
+    e.stopPropagation();
+    applyHighlightColor(e.target.value);
   });
 
   barDiv.querySelector('[data-action="clear"]')?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (verseDiv) {
       verseDiv.style.removeProperty("background-color");
+      verseDiv.style.removeProperty("--verse-highlight-color");
       verseDiv.removeAttribute("data-highlight");
     }
     delete state.highlights[highlightKey];

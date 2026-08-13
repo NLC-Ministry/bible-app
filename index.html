@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260812_reader_voice_simplified" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260813_highlight_palette_popover" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -2190,11 +2190,10 @@
     <div class="overlay-scroll-content" id="global-search-results"></div>
   </div>
 
-  <!-- Typography & Speech Settings Sheet (Bottom Sheet) -->
-  <div class="bottom-sheet-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
-    <div class="bottom-sheet-container" id="typography-settings-sheet" role="dialog" aria-modal="true"
+  <!-- Typography & Speech Settings Dialog -->
+  <div class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container reader-settings-dialog" id="typography-settings-sheet" role="dialog" aria-modal="true"
       aria-label="閱讀與朗讀設定">
-      <div class="bottom-sheet-drag-handle"></div>
       <div class="bottom-sheet-header">
         <h3>閱讀與朗讀設定</h3>
         <button type="button" id="typography-sheet-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
@@ -2470,7 +2469,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260812_reader_audio_resume"></script>
+  <script type="module" src="js/app.js?v=20260813_highlight_no_color"></script>
 </body>
 
 </html>

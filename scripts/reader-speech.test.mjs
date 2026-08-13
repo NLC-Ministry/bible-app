@@ -92,6 +92,9 @@ describe("reader speech controls", () => {
     const html = readFileSync("index.html", "utf8");
     const utils = readFileSync("js/utils.js", "utf8");
     expect(html).toContain('id="typography-settings-sheet"');
+    expect(html).toContain('class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden"');
+    expect(html).toContain('class="bottom-sheet-container reader-settings-dialog"');
+    expect(html).not.toContain('<div class="bottom-sheet-drag-handle"></div>');
     expect(html).toContain('閱讀與朗讀設定');
     expect(html).toContain('id="speech-rate-slider"');
     expect(html).toContain('id="speech-voice-select"');
@@ -115,8 +118,16 @@ describe("reader speech controls", () => {
     expect(css).toContain('.speech-preview-btn');
     expect(css).toContain('.speech-voice-select');
     expect(css).toContain('.tts-guide-button');
-    expect(css).toMatch(/\.bottom-sheet-container \{[\s\S]*width: min\(34rem, 92vw\);[\s\S]*margin-inline: auto;/);
+    expect(css).toMatch(/\.reader-settings-dialog-backdrop \{[\s\S]*align-items: center;[\s\S]*justify-content: center;/);
+    expect(css).toMatch(/\.reader-settings-dialog \{[\s\S]*width: min\(34rem, 90vw\);[\s\S]*max-height: min\(82dvh, 44rem\);[\s\S]*border-radius: 20px;/);
     expect(css).toMatch(/\.font-size-option\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
+  });
+
+  it("does not force the centered settings backdrop back to block layout", () => {
+    const utils = readFileSync("js/utils.js", "utf8");
+    const openSheet = utils.slice(utils.indexOf("export function openTypographySheet"), utils.indexOf("let previewSessionId"));
+    expect(openSheet).toContain('backdrop.style.removeProperty("display")');
+    expect(openSheet).not.toContain('backdrop.style.display = "block"');
   });
 
   it("replaces the hydrated preview icon with pause while audio is playing", () => {

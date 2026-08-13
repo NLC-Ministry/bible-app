@@ -2470,11 +2470,12 @@ export function openTypographySheet() {
   const backdrop = document.getElementById("typography-settings-backdrop");
   if (!backdrop) return false;
   backdrop.classList.remove("hidden");
-  backdrop.style.display = "block";
-  backdrop.style.opacity = "1";
+  backdrop.style.removeProperty("display");
+  backdrop.style.removeProperty("opacity");
   backdrop.style.pointerEvents = "auto";
   backdrop.style.visibility = "visible";
   backdrop.setAttribute("aria-hidden", "false");
+  document.body.classList.add("reader-modal-open");
 
   if (typeof window.initSpeechPreferencesControls === "function") {
     window.initSpeechPreferencesControls();
