@@ -22,7 +22,7 @@
   background: var(--bg-card);
   color: var(--text-muted);
   box-shadow: var(--shadow-sm);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.2;
   transition: opacity 160ms ease, transform 160ms ease;
@@ -266,10 +266,10 @@ body.dark-theme {
   letter-spacing: -0.02em;
 }
 .stat-bento__value--hero { font-size: 2.25rem; }
-.stat-bento__value--status { font-size: 0.85rem; line-height: 1.2; }
+.stat-bento__value--status { font-size: 0.875rem; line-height: 1.2; }
 .stat-bento__value--danger { color: var(--color-danger); }
 .stat-bento__unit {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   margin-left: 0.15rem;
@@ -277,7 +277,7 @@ body.dark-theme {
 .stat-bento__value--danger .stat-bento__unit { color: var(--color-danger); }
 .stat-bento__label {
   margin-top: 0.35rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -313,7 +313,7 @@ body.dark-theme {
 .stat-value--success { color: var(--color-success-foreground); }
 .stat-value--muted { color: var(--text-secondary); }
 .stat-value__unit {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
 }
@@ -350,7 +350,7 @@ body.dark-theme {
 /* Status badges (shadcn Badge pattern) */
 .stat-badge {
   display: inline-block;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.2;
   padding: 0.2rem 0.55rem;
@@ -453,7 +453,7 @@ body.dark-theme {
 }
 .dashboard-stat-strip__icon { flex-shrink: 0; }
 .dashboard-stat-strip__label {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-top: 0.2rem;
   white-space: nowrap;
@@ -481,7 +481,7 @@ body.dark-theme {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  font-size: 10px;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-top: 0.5rem;
 }
@@ -555,7 +555,7 @@ body.dark-theme {
 
 .member-hub-profile-card__desc {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -600,7 +600,7 @@ body.dark-theme {
   display: block;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
 }
 
 .member-hub-org-placement__value {
@@ -615,7 +615,7 @@ body.dark-theme {
 .member-hub-org-placement__empty {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -634,7 +634,7 @@ body.dark-theme {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-card);
   background: color-mix(in srgb, var(--text-primary) 2%, var(--bg-input));
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.45;
   color: var(--text-secondary);
 }
@@ -650,7 +650,7 @@ body.dark-theme {
 
 .member-hub-form-notice__link {
   align-self: flex-start;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 .profile-summary-org-link {
@@ -694,7 +694,7 @@ body.dark-theme {
   grid-column: 1 / -1;
   text-align: center;
   padding: 2rem 1rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   border: 1px dashed color-mix(in srgb, var(--text-muted) 35%, var(--border-card));
   border-radius: var(--radius-sm);
@@ -895,7 +895,7 @@ body.dark-theme {
   z-index: 3;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.65rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   background: color-mix(in srgb, var(--text-primary) 72%, transparent);
   color: var(--bg-card);
@@ -1038,7 +1038,7 @@ body.dark-theme .honor-badge-hex--unlocked::after {
 }
 
 .honor-badge-item__title {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.35;
   font-weight: var(--type-weight-strong);
   max-width: 100%;
@@ -1159,7 +1159,7 @@ body.dark-theme .honor-badge-hex--unlocked::after {
 
 .badge-strip__link {
   padding: 0.25rem 0.625rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 .badge-strip {
@@ -1210,7 +1210,7 @@ body.dark-theme .honor-badge-hex--unlocked::after {
 .badge-detail-trigger__label {
   display: block;
   margin-bottom: 0.35rem;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1508,7 +1508,7 @@ body {
   border-radius: 999px;
   background: var(--color-danger);
   color: #ffffff;
-  font-size: 0.625rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1538,7 +1538,7 @@ body {
   gap: 0.4rem;
   padding: 0.35rem 0.75rem;
   border-radius: 50px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1887,7 +1887,7 @@ vercel-live-feedback,
 }
 
 .streak-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   font-weight: var(--type-weight-strong);
   text-transform: uppercase;
@@ -2242,7 +2242,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   padding: 0.4rem 0.8rem;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
   transition: var(--transition-smooth);
@@ -2321,7 +2321,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   border: 1px solid var(--border-card);
   border-radius: 20px;
   padding: 0.3rem 0.75rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-primary);
   cursor: pointer;
@@ -2368,7 +2368,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .reader-current-reference #reader-pill-chapter-label {
   flex-shrink: 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 .reader-pill-sep {
@@ -2382,7 +2382,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   border: 1px solid var(--border-card);
   border-radius: 8px;
   padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
   cursor: pointer;
@@ -2396,7 +2396,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .reader-pill-fontsize {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   min-width: 30px;
@@ -2436,7 +2436,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .reader-select-compact {
   padding: 0.4rem 0.5rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .reader-nav-arrows {
@@ -2447,7 +2447,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .reader-nav-arrows .secondary-btn {
   flex: 1;
   padding: 0.5rem 0.6rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -2517,7 +2517,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .reader-nav-buttons .flex-btn {
   padding: 0.6rem 0.5rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -2529,7 +2529,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .settings-subtitle {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   text-transform: uppercase;
   color: var(--text-muted);
@@ -2639,7 +2639,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .checkbox-btn.checked .checkbox-box::after {
   content: "✓";
   color: white;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -2733,7 +2733,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   transition: var(--transition-smooth);
 }
 
@@ -2821,7 +2821,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .version-section-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2958,7 +2958,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .day-badge {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   padding: 0.25rem 0.6rem;
   background-color: var(--border-card);
   border-radius: 50px;
@@ -3016,7 +3016,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .stats-mini-card .label {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -3062,7 +3062,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .data-table th {
   padding: 0.75rem 1rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   border-bottom: 2px solid var(--border-card);
@@ -3107,7 +3107,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -3154,7 +3154,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   text-align: center;
   padding: 2.5rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   border-top: 1px solid var(--border-card);
   margin-top: auto;
 }
@@ -3202,7 +3202,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   .app-back-btn {
     min-height: 38px;
     padding: 0 0.7rem;
-    font-size: 0.82rem;
+    font-size: 0.875rem;
   }
 
   .status-badge {
@@ -3405,13 +3405,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .auth-environment-dialog__hint {
   margin-top: 0.85rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
 }
 
 .auth-environment-dialog__status {
   margin-top: 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--color-brand);
 }
 
@@ -3452,7 +3452,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .auth-environment-dialog__steps {
   margin: 0.35rem 0 0;
   padding-left: 1.4rem;
-  font-size: 0.87rem;
+  font-size: 0.875rem;
   line-height: 1.8;
   color: var(--text-secondary);
 }
@@ -3540,7 +3540,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .dashboard-panel-card__action {
   padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   flex-shrink: 0;
 }
 
@@ -3648,7 +3648,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   gap: 0.25rem;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.3;
@@ -3701,7 +3701,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .announcement-item__time {
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   white-space: nowrap;
@@ -3709,7 +3709,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .announcement-item__body {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.55;
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -3735,7 +3735,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .announcements-empty__text {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -3778,12 +3778,12 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .announcement-form-panel__cancel,
 .announcement-form-panel__submit {
   padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 /* Devotional panel */
 .devotional-card .privacy-badge {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   gap: 0.25rem;
 }
 
@@ -3814,7 +3814,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   align-items: center;
   gap: 0.35rem;
   padding: 0.25rem 0.55rem;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--color-success-foreground);
   background: var(--bg-card);
@@ -3844,13 +3844,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .devotional-word-count {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
 }
 
 .devotional-save-btn {
   padding: 0.5rem 1rem;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 
 @media (max-width: 640px) {
@@ -3921,12 +3921,12 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .member-progress-item .member-meta {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
 }
 
 .progress-badge {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   padding: 0.25rem 0.6rem;
   border-radius: 20px;
@@ -3995,7 +3995,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   align-items: center;
   justify-content: center;
   font-weight: var(--type-weight-strong);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 .fame-rank.gold {
   background: #F59E0B;
@@ -4022,7 +4022,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .fame-value {
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 /* Winding Pilgrimage Trail Styling */
@@ -4136,7 +4136,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   background: var(--color-brand-subtle);
   color: var(--primary-color);
   border: 1px solid var(--color-brand-border);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   white-space: nowrap;
 }
@@ -4225,7 +4225,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 .nlc-avatar--sm {
   width: 2rem;
   height: 2rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .nlc-avatar--lg {
@@ -4338,7 +4338,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .dropdown-user-email {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4355,7 +4355,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: flex;
   align-items: center;
   padding: 0.7rem 1.1rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   width: 100%;
   text-align: left;
@@ -4366,7 +4366,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 
 .dropdown-item.role-item {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   gap: 0.4rem;
 }
 
@@ -4374,7 +4374,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
   display: inline-block;
   padding: 0.15rem 0.55rem;
   border-radius: 99px;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   background: var(--color-brand-subtle);
   color: var(--primary-color);
@@ -4502,7 +4502,7 @@ button.logout-btn:hover {
 .pill-btn {
   padding: 0.45rem 1.1rem;
   border-radius: 20px;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   border: 1px solid var(--border-card);
   background: var(--bg-card);
@@ -4588,7 +4588,7 @@ button.logout-btn:hover {
 
 .capsule-segmented-control .segment-toggle-btn {
   flex: 0 0 auto;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   padding: 0.25rem 0.55rem;
   border-radius: 9999px;
   min-height: 1.75rem;
@@ -4597,7 +4597,7 @@ button.logout-btn:hover {
 .stats-inner-tab {
   padding: 0.5rem;
   border-radius: calc(var(--radius-md) - 2px);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   white-space: nowrap;
   text-align: center;
 }
@@ -4615,7 +4615,7 @@ button.logout-btn:hover {
   flex-wrap: wrap;
 }
 .stats-admin-scope-bar label {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: #d97706;
   white-space: nowrap;
@@ -4751,7 +4751,7 @@ button.logout-btn:hover {
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 .plan-cover-card .cover-subtitle {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   opacity: 0.9;
   z-index: 2;
@@ -4803,7 +4803,7 @@ button.logout-btn:hover {
   position: absolute;
   top: 4px;
   right: 6px;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--color-success-foreground);
 }
@@ -4830,7 +4830,7 @@ button.logout-btn:hover {
   position: absolute;
   top: 4px;
   left: 6px;
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.15);
@@ -4861,7 +4861,7 @@ button.logout-btn:hover {
   color: var(--text-primary);
 }
 .date-card .date-lbl {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-top: 0.1rem;
 }
@@ -4986,7 +4986,7 @@ button.logout-btn:hover {
 
 /* 第n遍提示標籤 */
 .task-round-label {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   padding: 0.18rem 0.55rem;
   border-radius: 20px;
@@ -5028,7 +5028,7 @@ button.logout-btn:hover {
 }
 .options-dropdown-item {
   padding: 0.75rem 1rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-primary);
   text-align: left;
@@ -5074,7 +5074,7 @@ button.logout-btn:hover {
   padding: 0.75rem;
 }
 .calendar-month-title {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
   margin-bottom: 0.55rem;
@@ -5091,7 +5091,7 @@ button.logout-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.66rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -5105,7 +5105,7 @@ button.logout-btn:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   background: rgba(148, 163, 184, 0.12);
@@ -5177,7 +5177,7 @@ button.logout-btn:hover {
 .reading-team-ranking-rule,
 .reading-team-ranking-summary {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   margin: 0;
 }
 
@@ -5196,7 +5196,7 @@ button.logout-btn:hover {
   cursor: pointer;
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   gap: 0.3rem;
   min-height: 34px;
   padding: 0.35rem 0.6rem;
@@ -5259,7 +5259,7 @@ button.logout-btn:hover {
   border-radius: 999px;
   color: var(--color-icon-achievement);
   display: inline-flex;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: 500;
   margin-left: 0.4rem;
   padding: 0.1rem 0.4rem;
@@ -5281,7 +5281,7 @@ button.logout-btn:hover {
 }
 .bar-race-subtitle {
   margin-top: 0.15rem;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -5291,7 +5291,7 @@ button.logout-btn:hover {
   color: var(--text-secondary);
   border-radius: 8px;
   padding: 0.38rem 0.7rem;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
 }
@@ -5331,7 +5331,7 @@ button.logout-btn:hover {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.28rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 .bar-race-name {
@@ -5367,7 +5367,7 @@ button.logout-btn:hover {
   right: 0.65rem;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-primary);
 }
@@ -5380,7 +5380,7 @@ button.logout-btn:hover {
 .reading-team-ranking-list .bar-race-percent {
   color: var(--text-primary);
   flex-shrink: 0;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   font-weight: var(--type-weight-strong);
 }
@@ -5408,7 +5408,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 
 .reading-team-ranking-list .bar-race-members {
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   min-width: 0;
   overflow: hidden;
@@ -5443,7 +5443,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 
 .pastoral-race-subtitle {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   margin-top: 0.2rem;
 }
 
@@ -5459,7 +5459,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   border: 1px solid var(--color-brand-border);
   border-radius: 999px;
   color: var(--color-brand);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   padding: 0.25rem 0.55rem;
   white-space: nowrap;
 }
@@ -5473,7 +5473,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   gap: 0.3rem;
   padding: 0.38rem 0.6rem;
 }
@@ -5496,7 +5496,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 
 .pastoral-race-empty {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   padding: 1rem 0.5rem;
   text-align: center;
 }
@@ -5508,7 +5508,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   border-radius: 10px;
   color: var(--text-muted);
   display: flex;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   gap: 0.45rem;
   padding: 0.65rem 0.75rem;
 }
@@ -5562,7 +5562,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   border-radius: 10px;
   color: var(--text-secondary);
   display: flex;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   font-weight: var(--type-weight-strong);
   justify-content: center;
@@ -5602,7 +5602,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 
 .pastoral-race-name {
   color: var(--text-primary);
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5615,7 +5615,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
   border-radius: 999px;
   color: var(--text-primary);
   flex-shrink: 0;
-  font-size: 0.66rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   padding: 0.12rem 0.42rem;
 }
@@ -5623,7 +5623,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 .pastoral-race-members {
   color: var(--text-muted);
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 0.875rem;
 }
 
 .pastoral-race-score {
@@ -5643,7 +5643,7 @@ body.dark-theme .reading-team-ranking-list .bar-race-bar-shell {
 .pastoral-race-score span,
 .pastoral-race-progress-meta {
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
 }
 
 .pastoral-race-progress-meta {
@@ -5720,7 +5720,7 @@ body.dark-theme .pastoral-race-progress {
   justify-content: space-between;
   gap: 1rem;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 .stacked-percent-bar {
@@ -5741,7 +5741,7 @@ body.dark-theme .pastoral-race-progress {
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   white-space: nowrap;
 }
@@ -5761,7 +5761,7 @@ body.dark-theme .pastoral-race-progress {
   background: var(--bg-input);
   border: 1px solid var(--border-card);
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 .stacked-dot {
@@ -5815,7 +5815,7 @@ body.dark-theme .pastoral-race-progress {
   border-color: var(--color-brand-border);
 }
 .distribution-metric-card span {
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -5829,7 +5829,7 @@ body.dark-theme .pastoral-race-progress {
   color: var(--primary-color);
 }
 .distribution-metric-card small {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -5838,7 +5838,7 @@ body.dark-theme .pastoral-race-progress {
   grid-template-columns: repeat(3, 1fr);
   align-items: center;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   margin-bottom: -0.35rem;
 }
@@ -6004,7 +6004,7 @@ body.dark-theme .pastoral-race-progress {
   border: 1px solid var(--color-brand-border);
   background: var(--color-brand-subtle);
   color: var(--primary-color);
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   white-space: nowrap;
   cursor: pointer;
@@ -6052,7 +6052,7 @@ body.dark-theme .pastoral-race-progress {
 .reader-picker-tab {
   min-height: 36px;
   border-radius: 9px;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 .reader-picker-tab.active,
@@ -6075,7 +6075,7 @@ body.dark-theme .pastoral-race-progress {
   gap: 0.45rem;
 }
 .reader-picker-title {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
 }
@@ -6091,7 +6091,7 @@ body.dark-theme .pastoral-race-progress {
   min-height: 38px;
   border-radius: 10px;
   padding: 0.45rem 0.55rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   text-align: center;
 }
@@ -6107,7 +6107,7 @@ body.dark-theme .pastoral-race-progress {
   aspect-ratio: 1;
   min-height: 38px;
   border-radius: 10px;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 @media (max-width: 560px) {
@@ -6138,7 +6138,7 @@ body.dark-theme .pastoral-race-progress {
 .plan-detail-compact .plan-back-button {
   min-height: 34px;
   padding: 0.34rem 0.65rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 .plan-detail-compact .circular-action-btn {
   width: 44px;
@@ -6159,7 +6159,7 @@ body.dark-theme .pastoral-race-progress {
   font-size: clamp(1rem, 3vw, 1.25rem);
 }
 .plan-detail-compact .plan-cover-card .cover-subtitle {
-  font-size: 0.74rem;
+  font-size: 0.875rem;
 }
 .plan-detail-tabs {
   margin-bottom: 0.35rem !important;
@@ -6168,7 +6168,7 @@ body.dark-theme .pastoral-race-progress {
 }
 .plan-detail-tabs .pill-btn {
   padding: 0.35rem 0.65rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 .plan-detail-compact .date-carousel {
   gap: 0.45rem;
@@ -6184,7 +6184,7 @@ body.dark-theme .pastoral-race-progress {
   font-size: 1.02rem;
 }
 .plan-detail-compact .date-card .date-lbl {
-  font-size: 0.62rem;
+  font-size: 0.875rem;
 }
 .plan-day-heading {
   margin-bottom: 0.8rem !important;
@@ -6223,7 +6223,7 @@ body.dark-theme .pastoral-race-progress {
 .reader-audio-timeline__label {
   min-width: 6.5rem;
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -6280,7 +6280,7 @@ body.dark-theme .pastoral-race-progress {
 .admin-daily-quiz-note {
   margin: 0 0 0.3rem;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .daily-quiz-status,
@@ -6290,7 +6290,7 @@ body.dark-theme .pastoral-race-progress {
   border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -6321,7 +6321,7 @@ body.dark-theme .pastoral-race-progress {
 .daily-quiz-verse-ref,
 .daily-quiz-explanation {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .daily-quiz-options {
@@ -6535,7 +6535,7 @@ body.admin-quiz-editor-open {
   display: grid;
   gap: 0.3rem;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .admin-daily-quiz-answer-row {
@@ -6567,7 +6567,7 @@ body.admin-quiz-editor-open {
 .admin-daily-quiz-group-status,
 .admin-daily-quiz-empty {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .admin-daily-quiz-results {
@@ -6588,12 +6588,12 @@ body.admin-quiz-editor-open {
   padding: 0.5rem 0;
   border-top: 1px solid var(--border-card);
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .admin-daily-quiz-error {
   color: var(--danger-color, #b91c1c);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   word-break: break-word;
 }
 
@@ -6634,7 +6634,7 @@ body.admin-quiz-editor-open {
 .admin-daily-quiz-load-error__content p {
   margin: 0.3rem 0 0;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   line-height: 1.55;
 }
 
@@ -6714,7 +6714,7 @@ body.admin-quiz-editor-open {
   .plan-detail-tabs .pill-btn {
     flex: 0 0 auto;
     padding: 0.32rem 0.58rem;
-    font-size: 0.74rem;
+    font-size: 0.875rem;
   }
   .plan-detail-compact .date-card {
     flex-basis: 52px;
@@ -6744,7 +6744,7 @@ body.admin-quiz-editor-open {
     font-size: 0.95rem;
   }
   .plan-detail-compact .date-card .date-lbl {
-    font-size: 0.58rem;
+    font-size: 0.875rem;
   }
   .plan-tasks-list {
     max-height: calc(100dvh - 410px) !important;
@@ -6799,7 +6799,7 @@ body.admin-quiz-editor-open {
   gap: 0.4rem;
   margin-top: 0.35rem;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 
@@ -6845,7 +6845,7 @@ body.admin-quiz-editor-open {
   border: 1px solid transparent;
   color: var(--text-primary);
   padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   border-radius: 99px;
   cursor: pointer;
@@ -6909,7 +6909,7 @@ body.admin-quiz-editor-open {
 }
 
 .setting-title {
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -6924,7 +6924,7 @@ body.admin-quiz-editor-open {
 .setting-btn {
   flex: 1;
   padding: 0.35rem 0.25rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-primary);
   background: rgba(128, 128, 128, 0.08);
@@ -7035,7 +7035,7 @@ body.dark-theme #detail-shield.badge-shield--locked {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   flex-shrink: 0;
 }
@@ -7087,7 +7087,7 @@ body.dark-theme #detail-shield.badge-shield--locked {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 .plan-progress-wrapper--spaced {
@@ -7168,7 +7168,7 @@ body.warm-theme .avatar-dropdown {
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   padding: 0.2rem;
   outline: none;
   border-bottom: 1px solid var(--border-card);
@@ -7399,7 +7399,7 @@ select,
   align-items: center;
   justify-content: center;
   gap: 0.18rem;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.1;
   cursor: pointer;
@@ -7546,7 +7546,7 @@ button:focus-visible,
 
   .header-container .tab-btn:not(#admin-edit-region-btn):not(#admin-edit-zone-btn):not(#admin-edit-group-btn) {
     padding: 0.45rem 0.85rem;
-    font-size: 0.82rem;
+    font-size: 0.875rem;
   }
 
   .main-content {
@@ -7566,7 +7566,7 @@ button:focus-visible,
 
 @media (max-width: 420px) {
   .mobile-nav-btn {
-    font-size: 0.62rem;
+    font-size: 0.875rem;
   }
 
   .mobile-nav-btn .icon {
@@ -7654,7 +7654,7 @@ button:focus-visible,
 }
 
 .overlay-version {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
   background: rgba(128, 128, 128, 0.08);
@@ -7712,7 +7712,7 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   font-weight: 750;
   color: var(--text-secondary);
 }
@@ -7721,7 +7721,7 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.84rem;
+  font-size: 0.875rem;
   font-weight: 750;
   color: var(--text-secondary);
 }
@@ -7806,7 +7806,7 @@ input:checked + .slider:before {
 .bible-nav-section-title {
   padding: 0.55rem 0.85rem;
   background: rgba(128, 128, 128, 0.04);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -7853,7 +7853,7 @@ input:checked + .slider:before {
   margin-bottom: 0.05rem;
 }
 .grid-item-book .full-title {
-  font-size: 0.62rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-align: center;
@@ -7892,7 +7892,7 @@ input:checked + .slider:before {
   background: color-mix(in srgb, var(--color-danger) 3%, transparent);
 }
 .list-item-book .abbrev-badge {
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   background: rgba(128, 128, 128, 0.08);
   padding: 0.12rem 0.35rem;
   border-radius: 4px;
@@ -7977,7 +7977,7 @@ input:checked + .slider:before {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.875rem;
   width: 20px;
   height: 20px;
   display: flex;
@@ -8001,7 +8001,7 @@ input:checked + .slider:before {
 
 .search-results-info {
   padding: 0.5rem 0.85rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   background: var(--bg-app);
@@ -8019,7 +8019,7 @@ input:checked + .slider:before {
   background: rgba(128, 128, 128, 0.05);
 }
 .search-result-ref {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--color-danger);
   margin-bottom: 0.2rem;
@@ -8202,7 +8202,7 @@ input:checked + .slider:before {
 }
 
 .sheet-section-title {
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -8221,7 +8221,7 @@ input:checked + .slider:before {
   color: var(--text-primary);
   border-radius: 10px;
   font-weight: var(--type-weight-strong);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -8238,7 +8238,7 @@ input:checked + .slider:before {
   color: var(--color-brand);
 }
 .sheet-option-btn .size-num {
-  font-size: 0.62rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-top: 0.05rem;
   font-weight: var(--type-weight-strong);
@@ -8318,7 +8318,7 @@ body.reader-modal-open .main-content {
 .reader-version-inline {
   margin-top: 0.15rem;
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   letter-spacing: 0;
 }
@@ -8326,7 +8326,7 @@ body.reader-modal-open .main-content {
 .reader-version-btn {
   min-height: 44px;
   padding: 0 0.7rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   background: rgba(128, 128, 128, 0.1);
 }
 
@@ -8484,7 +8484,7 @@ body.reader-modal-open .main-content {
 
 .grid-item-book .full-title {
   color: #374151;
-  font-size: 0.72rem;
+  font-size: 0.875rem;
 }
 
 .grid-item-book.active,
@@ -9214,7 +9214,7 @@ body.light-theme .book-brand-box {
   color: var(--text-primary);
 }
 .book-english-sub {
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   opacity: 0.8;
   text-transform: uppercase;
@@ -9378,7 +9378,7 @@ body.reader-page .main-content,
 }
 
 .reader-bottom-action-bar .progress-indicator {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
@@ -9494,7 +9494,7 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
   background: var(--color-brand-muted);
   border: none;
   color: var(--primary-color);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   padding: 4px 10px;
   border-radius: 12px;
@@ -9520,7 +9520,7 @@ body.dark-theme .reader-bottom-action-bar.scenario-a .capsule-action-btn {
 }
 
 .plan-calendar .calendar-weekdays div {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -9764,7 +9764,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   padding: 6px 14px;
   border-radius: 20px;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
   box-shadow: var(--shadow-sm) !important;
@@ -9865,7 +9865,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   box-shadow: none;
 }
 #bible-heatmap-container .calendar-month-title {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   margin-bottom: 0.4rem;
 }
@@ -9878,7 +9878,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   height: 18px;
   max-width: 18px;
   border-radius: 9999px;
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   border: none;
   justify-self: center;
 }
@@ -9899,7 +9899,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   color: var(--text-on-brand, #fff);
 }
 #bible-heatmap-container .calendar-weekday {
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   height: 14px;
 }
 
@@ -9925,7 +9925,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   box-shadow: none;
 }
 #grp-bible-heatmap-container .calendar-month-title {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   margin-bottom: 0.4rem;
 }
@@ -9938,7 +9938,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   height: 18px;
   max-width: 18px;
   border-radius: 9999px;
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   border: none;
   justify-self: center;
 }
@@ -9959,7 +9959,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   color: var(--text-on-brand, #fff);
 }
 #grp-bible-heatmap-container .calendar-weekday {
-  font-size: 0.6rem;
+  font-size: 0.875rem;
   height: 14px;
 }
 
@@ -10050,14 +10050,14 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   position: absolute;
   left: 0.65rem;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   pointer-events: none;
 }
 
 .member-search-wrapper input {
   width: 100%;
   padding: 0.4rem 0.8rem 0.4rem 2rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   border-radius: 8px;
   border: 1px solid var(--border-card);
   background: var(--bg-input);
@@ -10112,7 +10112,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 #bible-nav-overlay .bible-nav-sheet__badge {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1;
   padding: 0.25rem 0.625rem;
@@ -10168,7 +10168,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 #bible-nav-overlay .bible-nav-sheet__toggle-label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-secondary);
   line-height: 1;
@@ -10221,7 +10221,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
   background: transparent !important;
   border: none !important;
   min-height: auto;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-muted) !important;
   text-transform: none;
@@ -10265,7 +10265,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 #bible-nav-overlay .bible-nav-grid .grid-item-book .full-title {
-  font-size: 0.625rem;
+  font-size: 0.875rem;
   color: var(--text-muted) !important;
 }
 
@@ -10387,7 +10387,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 
 .profile-stat-card__unit {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-secondary);
   margin-left: 0.15rem;
@@ -10396,7 +10396,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 .profile-stat-card__label {
   display: block;
   margin-top: 0.65rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: 650;
   color: var(--text-secondary);
 }
@@ -10501,7 +10501,7 @@ body.dark-theme .plan-calendar .plan-day-cell .day-status-dot.dot-grey {
 }
 .plan-detail-tabs { display: none !important; }
 @media (max-width: 380px) {
-  .plan-detail-tab-btn { font-size: 0.8rem; padding-inline: 0.05rem; }
+  .plan-detail-tab-btn { font-size: 0.875rem; padding-inline: 0.05rem; }
 }
 .plan-view-window { width: 100%; overflow: hidden; }
 #plan-view-wrapper { display: flex; width: 100%; transform: translateX(0%); transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
@@ -11114,7 +11114,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 
 .congrats-desc-secondary {
   margin: 0 0 1.5rem 0;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   font-weight: 500;
 }
@@ -11200,7 +11200,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 
 .plan-persistent-upgrade-entry__copy span {
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -11248,7 +11248,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 .plan-upgrade-gate__eyebrow {
   margin: 0 0 0.45rem;
   color: var(--color-brand);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -11256,7 +11256,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   min-height: 1.4rem;
   margin: -0.65rem 0 1rem;
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
 }
 
 .plan-upgrade-gate__status.is-error {
@@ -11304,7 +11304,7 @@ body.plan-inline-reader-open .mobile-nav-bar {
 .campaign-rule-section-heading p {
   margin: 0.25rem 0 0;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -11348,7 +11348,7 @@ body.plan-inline-reader-open .mobile-nav-bar {
 .campaign-segment-columns {
   padding: 0 0.2rem 0.4rem;
   color: var(--text-secondary);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -11432,7 +11432,7 @@ body.plan-inline-reader-open .mobile-nav-bar {
 .admin-feature-settings-card__copy p {
   margin-top: 0.3rem;
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -11474,7 +11474,7 @@ body.plan-inline-reader-open .mobile-nav-bar {
 .admin-feature-setting-row__label span,
 .admin-feature-setting-feedback {
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   line-height: 1.4;
 }
 
@@ -11649,7 +11649,7 @@ body.dark-theme .custom-confirm-overlay {
 
 .app-settings-group__header-text p {
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   margin: 0;
 }
 
@@ -11743,7 +11743,7 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .app-settings-item__subtitle {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.2;
@@ -11794,7 +11794,7 @@ body.dark-theme .custom-confirm-overlay {
   border-radius: var(--radius-sm);
   background: transparent;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.25;
   color: var(--color-danger-muted);
@@ -11890,7 +11890,7 @@ body.dark-theme .custom-confirm-overlay {
   background: var(--bg-input);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
@@ -11949,7 +11949,7 @@ body.dark-theme .custom-confirm-overlay {
   border: 1px solid color-mix(in srgb, var(--border-card) 88%, transparent) !important;
   border-radius: 8px !important;
   color: var(--color-black);
-  font-size: 0.82rem !important;
+  font-size: 0.875rem !important;
   font-weight: 600 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
@@ -11977,7 +11977,7 @@ body.dark-theme .custom-confirm-overlay {
 
 .plan-card__eyebrow {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.25;
 }
@@ -11999,7 +11999,7 @@ body.dark-theme .custom-confirm-overlay {
   gap: 0.35rem;
   min-width: 0;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   line-height: 1.35;
 }
 
@@ -12018,7 +12018,7 @@ body.dark-theme .custom-confirm-overlay {
   overflow: hidden;
   margin: 0.05rem 0 0;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -12037,7 +12037,7 @@ body.dark-theme .custom-confirm-overlay {
   gap: 0.35rem;
   min-width: 0;
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -12096,7 +12096,7 @@ body.dark-theme .custom-confirm-overlay {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   line-height: 1.2;
   cursor: pointer;
@@ -12226,7 +12226,7 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .plan-team-invite-shortcut__copy span {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -12248,7 +12248,7 @@ body.dark-theme .custom-confirm-overlay {
 
 .plan-card-action-btn {
   padding: 0.5rem 0.85rem;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.2;
 }
 
@@ -12315,14 +12315,14 @@ body.dark-theme .custom-confirm-overlay {
 
 .plan-card-participation-item__title {
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.3;
 }
 
 .plan-card-participation-item__description {
   color: var(--text-secondary);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -12343,7 +12343,7 @@ body.dark-theme .custom-confirm-overlay {
   color: var(--text-primary);
   cursor: pointer;
   display: inline-flex;
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   font-weight: 500;
   justify-content: center;
   min-height: 2rem;
@@ -12371,7 +12371,7 @@ body.dark-theme .custom-confirm-overlay {
 .plan-card-participation-item__hint {
   color: var(--text-secondary);
   display: block;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   padding: 0.375rem 0;
 }
 
@@ -12410,7 +12410,7 @@ body.dark-theme .custom-confirm-overlay {
   border: 2px solid var(--bg-header, #12121e);
   border-radius: 999px;
   color: #ffffff;
-  font-size: 0.68rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   font-weight: var(--type-weight-strong);
   line-height: 1;
@@ -12471,7 +12471,7 @@ body.dark-theme .custom-confirm-overlay {
   background: transparent;
   border: none;
   color: var(--color-brand);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   cursor: pointer;
   padding: 0.2rem 0.5rem;
@@ -12494,7 +12494,7 @@ body.dark-theme .custom-confirm-overlay {
   padding: 2.2rem 1rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 /* Individual Notification Item */
@@ -12536,7 +12536,7 @@ body.dark-theme .custom-confirm-overlay {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.76rem;
+  font-size: 0.875rem;
   color: var(--text-muted);
   margin-bottom: 0.25rem;
 }
@@ -12547,11 +12547,11 @@ body.dark-theme .custom-confirm-overlay {
 }
 
 .notification-item__time {
-  font-size: 0.72rem;
+  font-size: 0.875rem;
 }
 
 .notification-item__body {
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   color: var(--text-primary, #f4f4f5);
   margin: 0;
@@ -12609,7 +12609,7 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-dialog__eyebrow {
   margin: 0 0 0.5rem;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .release-onboarding-dialog__title {
@@ -12665,7 +12665,7 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-action__content p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -12680,7 +12680,7 @@ body.dark-theme .custom-confirm-overlay {
   background: var(--bg-card);
   color: var(--primary-color);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -12707,7 +12707,7 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-install-guide strong {
   display: block;
   margin-bottom: 0.35rem;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
 }
 
 .release-onboarding-install-guide__heading {
@@ -12727,7 +12727,7 @@ body.dark-theme .custom-confirm-overlay {
   border-radius: 999px;
   background: var(--color-brand-subtle);
   color: var(--color-brand);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
 }
 
@@ -12741,7 +12741,7 @@ body.dark-theme .custom-confirm-overlay {
 .release-onboarding-install-guide__status {
   margin: 0.55rem 0 0;
   color: var(--text-secondary);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.45;
 }
 
@@ -12796,7 +12796,7 @@ body.dark-theme .custom-confirm-overlay {
   gap: 0.35rem 0.6rem;
   margin-top: 0.75rem;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.875rem;
 }
 
 .release-onboarding-install-guide__links {
@@ -12808,7 +12808,7 @@ body.dark-theme .custom-confirm-overlay {
 
 .release-onboarding-install-guide__links a {
   color: var(--color-brand);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   text-decoration: none;
 }
@@ -12925,7 +12925,7 @@ select,
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -12980,7 +12980,7 @@ select,
 .admin-unjoined-plan-card__header p {
   margin: 0.35rem 0 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -13008,7 +13008,7 @@ select,
   background: var(--color-brand-muted);
   color: var(--primary-color);
   padding: 0.3rem 0.65rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -13047,7 +13047,7 @@ select,
   overflow: hidden;
   margin-top: 0.2rem;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -13059,7 +13059,7 @@ select,
   align-items: flex-end;
   gap: 0.15rem;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -13077,7 +13077,7 @@ select,
   grid-column: 1 / -1;
   padding: 1.25rem;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   text-align: center;
 }
 
@@ -13130,7 +13130,7 @@ select,
   gap: 0.35rem;
   flex-shrink: 0;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.875rem;
 }
 
 .admin-team-status-disclosure > div {
@@ -13185,6 +13185,29 @@ select,
   font-weight: var(--type-weight-medium, 500);
 }
 
+.youversion-action-bar .yv-multi-cancel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.youversion-action-bar .yv-multi-cancel-button:hover,
+.youversion-action-bar .yv-multi-cancel-button:focus-visible {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  border-color: color-mix(in srgb, var(--text-primary) 20%, var(--border-card));
+  color: var(--text-primary);
+}
+
 /* Sticky Bottom Context Action Bar for Verse Selection, Highlighter, Copy & Share */
 .context-toolbar {
   position: fixed;
@@ -13228,7 +13251,7 @@ select,
 }
 
 .context-toolbar .palette-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-muted, #94a3b8);
 }
@@ -13290,7 +13313,7 @@ select,
   border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
   background: var(--bg-surface, rgba(255, 255, 255, 0.05));
   color: var(--text-primary, #f8fafc);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -13335,7 +13358,7 @@ select,
 .profile-settings-section-label {
   padding: 0 0.25rem;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   letter-spacing: 0.02em;
 }
@@ -13414,7 +13437,7 @@ select,
 }
 
 .version-section-label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -13504,7 +13527,7 @@ select,
 
 .youversion-action-bar .yv-selection-label,
 .youversion-action-bar .yv-section-label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25;
   color: var(--text-secondary);
@@ -13557,20 +13580,6 @@ select,
   flex: 0 0 auto;
   min-width: max-content;
   gap: 0.5rem;
-}
-
-.youversion-action-bar .yv-popover-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-}
-
-.youversion-action-bar .yv-popover-close {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 50%;
 }
 
 .youversion-action-bar .yv-highlight-popover {
@@ -13724,7 +13733,7 @@ select,
 }
 
 .youversion-action-bar .yv-tile-label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: inherit;
 }
@@ -13790,7 +13799,7 @@ select,
 
 .verse-note-editor-reference {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: var(--type-weight-strong);
   color: var(--color-brand);
   margin-bottom: 0.3rem;
@@ -13830,7 +13839,7 @@ select,
 }
 
 .verse-note-editor-delete {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 body.verse-note-editor-open {
@@ -13957,7 +13966,7 @@ body.dark .glass-card-upgrade {
   border: 1px solid var(--border-card);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   min-height: 38px;
   cursor: pointer;
   transition: border-color 0.18s ease;

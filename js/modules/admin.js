@@ -2519,7 +2519,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
 
   if (!cachedTeamsData || forceRefresh) {
     contentEl.innerHTML = `
-      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
         讀取團隊報名資料中...
       </div>
     `;
@@ -2566,7 +2566,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
 
   if (processedPlans.length === 0) {
     contentEl.innerHTML = `
-      <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+      <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
         目前尚無任何計畫的團隊報名資料。
       </div>
     `;
@@ -2589,8 +2589,8 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
           <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true" style="color: var(--primary-color);"></span>
           計畫：${planName}
         </h4>
-        ${planPeriod ? `<p style="margin: 0 0 0.65rem; color: var(--text-muted); font-size: 0.75rem;">計畫期間：${planPeriod}</p>` : ""}
-        <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+        ${planPeriod ? `<p style="margin: 0 0 0.65rem; color: var(--text-muted); font-size: 0.875rem;">計畫期間：${planPeriod}</p>` : ""}
+        <div style="display: flex; gap: 1rem; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
           <span>招募中：<strong style="color: var(--primary-color);">${signupCount}</strong> 隊</span>
           <span>已成隊：<strong style="color: var(--color-success-foreground);">${readyCount}</strong> 隊</span>
           <span>總報名人數：<strong>${totalMembers}</strong> 人</span>
@@ -2599,7 +2599,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
 
     if (item.teams.length === 0) {
       html += `
-        <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; background: var(--bg-input); border-radius: 8px; border: 1px dashed var(--border-card);">
+        <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.875rem; background: var(--bg-input); border-radius: 8px; border: 1px dashed var(--border-card);">
           此計畫目前無 ${division} 人團隊的報名資料。
         </div>
       </div>
@@ -2607,7 +2607,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
     } else {
       html += `
         <div class="admin-team-table-scroll" style="overflow: auto; max-height: min(60vh, 32rem); background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-card);">
-          <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.8rem; min-width: 600px;">
+          <table class="w-full" style="border-collapse: collapse; text-align: left; font-size: 0.875rem; min-width: 600px;">
             <thead style="position: sticky; top: 0; z-index: 2; background: var(--bg-input);">
               <tr style="border-bottom: 1px solid var(--border-card); background: rgba(255,255,255,0.02);">
                 ${Number(division) === 3 ? `
@@ -2767,7 +2767,7 @@ function renderAdminTeamPlacementList() {
   }
 
   const html = `
-    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+    <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
       共顯示 ${filtered.length} / ${unjoinedMembers.length} 位尚未加入團隊的人員
     </div>
     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -2777,7 +2777,7 @@ function renderAdminTeamPlacementList() {
         return `
           <div style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: 10px; padding: 0.75rem 1rem;">
             <strong>${name}</strong>
-            <span style="font-size: 0.78rem; font-weight: normal; color: var(--text-secondary);">(${zone})</span>
+            <span style="font-size: 0.875rem; font-weight: normal; color: var(--text-secondary);">(${zone})</span>
           </div>
         `;
       }).join("")}

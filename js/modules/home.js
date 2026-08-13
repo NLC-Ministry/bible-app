@@ -1266,7 +1266,7 @@ function renderProgressListFiltered(searchText) {
   );
 
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 1rem;">無相符成員</div>';
+    listEl.innerHTML = '<div style="font-size: 0.875rem; color: var(--text-muted); text-align: center; padding: 1rem;">無相符成員</div>';
     return;
   }
 
@@ -1296,7 +1296,7 @@ function renderProgressListFiltered(searchText) {
     if (m.today_devotional) {
       const quoteDiv = document.createElement("div");
       quoteDiv.className = "member-quote";
-      quoteDiv.style.cssText = "margin-top: 0.4rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-brand); background: var(--color-brand-muted); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; font-style: italic;";
+      quoteDiv.style.cssText = "margin-top: 0.4rem; padding: 0.5rem 0.75rem; border-left: 3px solid var(--color-brand); background: var(--color-brand-muted); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5; font-style: italic;";
       quoteDiv.textContent = `「${m.today_devotional}」`;
       nameInfo.appendChild(quoteDiv);
     }
@@ -2300,17 +2300,17 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
               <img src="${commAvatarUrl}" alt="${escapeHTML(commName)}" class="w-5.5 h-5.5 rounded-full border border-white/10" style="width: 22px; height: 22px; background-color: var(--color-brand-subtle);" />
               <div class="flex flex-col">
                 <div class="flex items-center space-x-1.5">
-                  <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.78rem;">${escapeHTML(commName)}</span>
-                  ${isOp ? `<span class="privacy-badge stat-badge stat-badge--success text-[8px]" style="padding: 1px 4px; font-size: 8px; line-height: 1; border-radius: 9999px;">OP</span>` : ""}
+                  <span style="font-weight: var(--type-weight-strong); color: var(--text-primary); font-size: 0.875rem;">${escapeHTML(commName)}</span>
+                  ${isOp ? `<span class="privacy-badge stat-badge stat-badge--success text-[8px]" style="padding: 1px 4px; font-size: 0.875rem; line-height: 1; border-radius: 9999px;">OP</span>` : ""}
                 </div>
               </div>
             </div>
-            <span style="color: var(--text-muted); font-size: 0.68rem;">${new Date(c.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span style="color: var(--text-muted); font-size: 0.875rem;">${new Date(c.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary); font-size: 0.78rem; line-height: 1.4; white-space: pre-wrap; padding-left: 2px;">${escapeHTML(c.content)}</p>
+          <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary); font-size: 0.875rem; line-height: 1.4; white-space: pre-wrap; padding-left: 2px;">${escapeHTML(c.content)}</p>
           
           <div class="flex items-center space-x-3 text-[10px]" style="padding-left: 2px;">
-            <button type="button" class="flex items-center space-x-1 hover:text-brand transition-colors bg-transparent border-0 cursor-pointer p-0 text-slate-400 dark:text-zinc-500" style="font-size: 0.72rem; font-weight: 500;" onclick="window.showReplyInputBox('${c.id}')">
+            <button type="button" class="flex items-center space-x-1 hover:text-brand transition-colors bg-transparent border-0 cursor-pointer p-0 text-slate-400 dark:text-zinc-500" style="font-size: 0.875rem; font-weight: 500;" onclick="window.showReplyInputBox('${c.id}')">
               <span class="nlc-icon nlc-icon--inline" data-icon="inbox" style="opacity: 0.8; margin-right: 2px;"></span>
               <span>回覆</span>
             </button>
@@ -2320,8 +2320,8 @@ function renderCommentsTree(commentNodes, noteOwnerId, profileMap, depth = 0) {
           <div id="reply-input-box-${c.id}" class="hidden mt-3 pt-3 border-t border-dashed border-slate-200/10">
             <div class="flex items-center space-x-2">
               <input type="text" id="reply-input-${c.id}" placeholder="回覆 ${escapeHTML(commName)}..." class="form-control" style="padding: 0.35rem 1rem; border-radius: 9999px; flex: 1;">
-              <button type="button" class="primary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalReply('${c.note_id}', '${c.id}')">發送</button>
-              <button type="button" class="secondary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.72rem; border-radius: 9999px !important; white-space: nowrap;" onclick="window.hideReplyInputBox('${c.id}')">取消</button>
+              <button type="button" class="primary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.875rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalReply('${c.note_id}', '${c.id}')">發送</button>
+              <button type="button" class="secondary-btn" style="padding: 0.35rem 0.85rem; font-size: 0.875rem; border-radius: 9999px !important; white-space: nowrap;" onclick="window.hideReplyInputBox('${c.id}')">取消</button>
             </div>
           </div>
         </div>
@@ -2459,7 +2459,7 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
                 <span class="nlc-icon nlc-icon--sm" data-icon="threeDots" style="width: 16px; height: 16px;"></span>
               </button>
               <div id="devotional-options-${note.id}" class="hidden" style="position: absolute; right: 0; top: 28px; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); width: 100px; box-shadow: var(--shadow-lg); z-index: 99; display: flex; flex-direction: column; overflow: hidden; padding: 4px 0;">
-                <button type="button" class="options-dropdown-item danger-item" onclick="event.stopPropagation(); window.deleteDevotionalNote('${note.id}')" style="padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: var(--type-weight-strong); border: 0; background: transparent; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 0.35rem; color: var(--color-danger); width: 100%;">
+                <button type="button" class="options-dropdown-item danger-item" onclick="event.stopPropagation(); window.deleteDevotionalNote('${note.id}')" style="padding: 0.5rem 0.75rem; font-size: 0.875rem; font-weight: var(--type-weight-strong); border: 0; background: transparent; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 0.35rem; color: var(--color-danger); width: 100%;">
                   <span class="nlc-icon nlc-icon--sm" data-icon="trash" style="width: 12px; height: 12px;"></span>
                   <span>刪除</span>
                 </button>
@@ -2493,7 +2493,7 @@ function renderVerseWallCards(notes, profileMap, likes, comments, isHistory = fa
 
         <div id="comment-input-container-${note.id}" class="flex items-center space-x-2 mt-2 pt-2" style="border-top: 1px dashed var(--border-card);">
           <input type="text" id="comment-input-${note.id}" placeholder="寫下你的回覆..." class="form-control" style="padding: 0.4rem 1.1rem; border-radius: 9999px; flex: 1;">
-          <button type="button" class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.75rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
+          <button type="button" class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.875rem; border-radius: 9999px !important; white-space: nowrap; font-weight: 600;" onclick="window.submitDevotionalComment('${note.id}')">發送</button>
         </div>
       </div>
     `;

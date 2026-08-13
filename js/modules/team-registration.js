@@ -445,23 +445,23 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         <form id="reading-team-create-form" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
           <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
             <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
-            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">設定團隊名稱即可建立，你會成為隊長。</p></div>
+            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">設定團隊名稱即可建立，你會成為隊長。</p></div>
           </div>
           <div>
-            <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數組別</span>
+            <span class="reading-team-field-label" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數組別</span>
             <div style="font-size: 0.95rem; font-weight: 600; color: var(--color-brand); margin-bottom: 1.1rem; padding: 0.2rem 0; display: flex; align-items: center; gap: 0.35rem;">
               <span class="nlc-icon nlc-icon--sm" data-icon="people" aria-hidden="true"></span>
               <span><span data-division-form-label>${preferredDivision}</span> 人組團隊</span>
             </div>
           </div>
           <div>
-            <label for="reading-team-name" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
+            <label for="reading-team-name" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
             <input id="reading-team-name" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊" style="width: 100%;">
           </div>
           <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
-          <span class="reading-team-form-hint" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.4rem;">建立成功後，你將獲得團隊邀請碼，可分享給其他夥伴加入。</span>
+          <span class="reading-team-form-hint" style="font-size: 0.875rem; color: var(--text-muted); display: block; margin-top: 0.4rem;">建立成功後，你將獲得團隊邀請碼，可分享給其他夥伴加入。</span>
         </form>
-        <p class="reading-team-registration-privacy" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
+        <p class="reading-team-registration-privacy" style="font-size: 0.875rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
         <p class="reading-team-form-error" data-team-error role="alert" hidden></p>`;
       const error = panel.querySelector("[data-team-error]");
       const showError = message => { error.textContent = message; error.hidden = false; };
@@ -519,7 +519,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
             <p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p>
             <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
               <h3 id="reading-team-dialog-title" style="margin: 0; font-size: 1.15rem; font-weight: 700;">${escapeHTML(team.name)}</h3>
-              ${canEditTeamName ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
+              ${canEditTeamName ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.875rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
             </div>
           </div>
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
@@ -723,7 +723,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         <div>
           <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">${escapeHTML(team.name || "我的團隊")}</h3>
-            ${canEditTeamNameInline ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team-inline title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
+            ${canEditTeamNameInline ? `<button type="button" class="btn btn--subtle btn--xs" data-rename-team-inline title="修改團隊名稱" aria-label="修改團隊名稱" style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; font-size: 0.875rem; font-weight: 500; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-input); color: var(--color-brand); cursor: pointer;"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span><span>修改名稱</span></button>` : ""}
           </div>
           <p style="margin-top: 0.2rem;">${Number(team.division)} 人團隊・一起查看彼此的讀經進度</p>
         </div>
@@ -735,7 +735,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
           <h3 class="card-title" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; color: var(--text-primary);">
             團隊賽道地圖 (${Number(team.division)}人組)
           </h3>
-          <div id="team-pilgrimage-legend" class="text-[10px] space-x-2 text-slate-400 dark:text-zinc-500" style="display: flex; align-items: center; gap: 8px; font-size: 10px;"></div>
+          <div id="team-pilgrimage-legend" class="text-[10px] space-x-2 text-slate-400 dark:text-zinc-500" style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem;"></div>
         </div>
         <div class="trail-scroll-wrapper" style="overflow: auto; max-height: 380px; background: var(--bg-input); border-radius: 12px; border: 1px solid var(--border-card); padding: 0.5rem; position: relative;">
           <div id="team-pilgrimage-trail-board" style="position: relative; transform-origin: top left; transition: transform 0.2s ease; display: inline-block;">
@@ -753,7 +753,7 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
     if (isCurrentUserCaptain) {
       container.innerHTML += `
         <div class="reading-team-inline-actions" style="margin-top: 1.2rem; display: flex; justify-content: flex-end; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 0.8rem;">
-          <button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.75rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>
+          <button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>
         </div>`;
 
       const disbandBtn = container.querySelector("[data-disband-team-inline]");
@@ -882,23 +882,23 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
         <form id="reading-team-create-form-inline" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
           <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
             <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
-            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">選擇人數並命名，你會成為隊長。</p></div>
+            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">選擇人數並命名，你會成為隊長。</p></div>
           </div>
           <div>
-            <span class="reading-team-field-label" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數</span>
+            <span class="reading-team-field-label" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數</span>
             <div class="reading-team-division-switch" role="radiogroup" aria-label="選擇團隊組別" style="display: flex; gap: 8px;">
-              ${availableDivisions.map(division => `<button type="button" class="secondary-btn" data-division="${division}" aria-checked="${preferredDivision === division}" style="flex: 1; padding: 0.5rem 0.8rem; font-size: 0.85rem;">${division} 人團隊</button>`).join("")}
+              ${availableDivisions.map(division => `<button type="button" class="secondary-btn" data-division="${division}" aria-checked="${preferredDivision === division}" style="flex: 1; padding: 0.5rem 0.8rem; font-size: 0.875rem;">${division} 人團隊</button>`).join("")}
             </div>
           </div>
           <div>
-            <label for="reading-team-name-inline" style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
+            <label for="reading-team-name-inline" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
             <input id="reading-team-name-inline" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊" style="width: 100%;">
           </div>
           <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
         </form>
 
-        <p class="reading-team-registration-privacy" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
-        <p class="reading-team-form-error" data-team-error role="alert" hidden style="color: var(--color-danger); font-size: 0.8rem; margin-top: 0.8rem; text-align: center;"></p>
+        <p class="reading-team-registration-privacy" style="font-size: 0.875rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
+        <p class="reading-team-form-error" data-team-error role="alert" hidden style="color: var(--color-danger); font-size: 0.875rem; margin-top: 0.8rem; text-align: center;"></p>
       </div>`;
 
     const error = container.querySelector("[data-team-error]");

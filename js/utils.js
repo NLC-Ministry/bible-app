@@ -1070,14 +1070,14 @@ window.openBadgeDetailPage = function(badge, isUnlocked, isDark) {
         localStorage.setItem(`date_unlocked_${badge.id}_lvl_${lvl}`, dateStr);
       }
       contentBox.innerHTML = `
-        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">${milestoneTitle}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px;">${milestoneTitle}</div>
         <div class="badge-milestone-done">完成於 ${dateStr}</div>
       `;
     } else {
       const diff = lvl - currentVal;
       const pct = Math.min(100, Math.floor((currentVal / lvl) * 100));
       contentBox.innerHTML = `
-        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">${milestoneTitle}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">${milestoneTitle}</div>
         <div class="badge-milestone-remaining">還差 ${diff} ${conf.unit}</div>
         <div class="badge-milestone-track">
           <div class="badge-milestone-fill" style="width: ${pct}%;"></div>

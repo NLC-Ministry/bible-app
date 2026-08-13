@@ -160,7 +160,7 @@ async function renderNotificationsList() {
   const container = document.getElementById("notification-list-container");
   if (!container) return;
 
-  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
+  container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.875rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
   const [careResult, quizResult] = await Promise.all([

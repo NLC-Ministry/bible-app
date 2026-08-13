@@ -48,25 +48,25 @@ function openCampaignRuleEditor(plan) {
     <form id="campaign-rule-form" class="glass-card" style="width:min(1180px,100%);max-height:92vh;overflow:auto;padding:1.25rem;background:var(--bg-card);border:1px solid var(--border-card);">
       <div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem;">
         <div><h3 style="margin:0;color:var(--text-primary);">\u7de8\u8f2f\u6559\u6703\u8b80\u7d93\u8a08\u756b\u898f\u5247</h3>
-        <p style="margin:.3rem 0 0;font-size:.78rem;color:var(--text-muted);">\u76ee\u524d\u7248\u672c v${Number(plan.ruleVersion || 1)}\uff1b\u767c\u5e03\u6703\u4fdd\u7559\u820a\u7248\u672c\u8207\u65e2\u6709\u6253\u5361\u3002</p></div>
+        <p style="margin:.3rem 0 0;font-size:0.875rem;color:var(--text-muted);">\u76ee\u524d\u7248\u672c v${Number(plan.ruleVersion || 1)}\uff1b\u767c\u5e03\u6703\u4fdd\u7559\u820a\u7248\u672c\u8207\u65e2\u6709\u6253\u5361\u3002</p></div>
         <button type="button" data-close class="secondary-btn">\u95dc\u9589</button>
       </div>
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:.6rem;margin-bottom:1rem;">
-        <label style="grid-column:1/-1;font-size:.76rem;color:var(--text-secondary);">\u8a08\u756b\u540d\u7a31<input id="campaign-name" class="form-control" value="${escapeHTML(definition.name)}"></label>
-        <label style="grid-column:1/-1;font-size:.76rem;color:var(--text-secondary);">\u8a08\u756b\u8aaa\u660e<textarea id="campaign-description" class="form-control" rows="2">${escapeHTML(definition.description || "")}</textarea></label>
-        <label style="font-size:.76rem;color:var(--text-secondary);">\u958b\u59cb\u65e5\u671f<input id="campaign-start" type="date" class="form-control" value="${definition.startDate}"></label>
-        <label style="font-size:.76rem;color:var(--text-secondary);">\u7d50\u675f\u65e5\u671f<input id="campaign-end" type="date" class="form-control" value="${definition.endDate}"></label>
-        <label style="font-size:.76rem;color:var(--text-secondary);">\u8b8a\u66f4\u7bc4\u570d<select id="campaign-change-mode" class="form-control"><option value="future_only">\u53ea\u8abf\u6574\u4eca\u5929\u4ee5\u5f8c</option><option value="all">\u91cd\u65b0\u5957\u7528\u5168\u90e8\u65e5\u671f</option></select></label>
+        <label style="grid-column:1/-1;font-size:0.875rem;color:var(--text-secondary);">\u8a08\u756b\u540d\u7a31<input id="campaign-name" class="form-control" value="${escapeHTML(definition.name)}"></label>
+        <label style="grid-column:1/-1;font-size:0.875rem;color:var(--text-secondary);">\u8a08\u756b\u8aaa\u660e<textarea id="campaign-description" class="form-control" rows="2">${escapeHTML(definition.description || "")}</textarea></label>
+        <label style="font-size:0.875rem;color:var(--text-secondary);">\u958b\u59cb\u65e5\u671f<input id="campaign-start" type="date" class="form-control" value="${definition.startDate}"></label>
+        <label style="font-size:0.875rem;color:var(--text-secondary);">\u7d50\u675f\u65e5\u671f<input id="campaign-end" type="date" class="form-control" value="${definition.endDate}"></label>
+        <label style="font-size:0.875rem;color:var(--text-secondary);">\u8b8a\u66f4\u7bc4\u570d<select id="campaign-change-mode" class="form-control"><option value="future_only">\u53ea\u8abf\u6574\u4eca\u5929\u4ee5\u5f8c</option><option value="all">\u91cd\u65b0\u5957\u7528\u5168\u90e8\u65e5\u671f</option></select></label>
       </div>
       <fieldset style="border:1px solid var(--border-card);border-radius:12px;padding:.8rem;margin:0 0 1rem;">
-        <legend style="font-size:.86rem;color:var(--text-primary);">\u53c3\u8cfd\u8207\u5206\u968a</legend>
+        <legend style="font-size:0.875rem;color:var(--text-primary);">\u53c3\u8cfd\u8207\u5206\u968a</legend>
         <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem;">
           <label>\u5c0f\u5bb6\u6700\u5c11<input id="small-home-min" type="number" min="2" max="4" class="form-control" value="${definition.rules.teamRules.smallHome.min}"></label>
           <label>\u5c0f\u5bb6\u6700\u591a<input id="small-home-max" type="number" min="2" max="4" class="form-control" value="${definition.rules.teamRules.smallHome.max}"></label>
           <label>\u5c0f\u7d44\u8cc7\u683c\u4eba\u6578<input id="small-group-min" type="number" min="6" class="form-control" value="${definition.rules.teamRules.smallGroup.min}"></label>
           <label style="padding-top:1.4rem;"><input id="campaign-mid-join" type="checkbox" ${definition.rules.allowMidJoin ? "checked" : ""}> \u5141\u8a31\u4e2d\u9014\u52a0\u5165</label>
         </div>
-        <p style="font-size:.72rem;color:var(--text-muted);margin:.5rem 0 0;">\u5c0f\u7d44\u4f9d\u6703\u54e1\u57fa\u672c\u8cc7\u6599\u81ea\u52d5\u5206\u968a\uff0c\u9054\u8a2d\u5b9a\u4eba\u6578\u5373\u7b26\u5408\u8cc7\u683c\uff0c\u4e0d\u8a2d\u4e0a\u9650\u3002</p>
+        <p style="font-size:0.875rem;color:var(--text-muted);margin:.5rem 0 0;">\u5c0f\u7d44\u4f9d\u6703\u54e1\u57fa\u672c\u8cc7\u6599\u81ea\u52d5\u5206\u968a\uff0c\u9054\u8a2d\u5b9a\u4eba\u6578\u5373\u7b26\u5408\u8cc7\u683c\uff0c\u4e0d\u8a2d\u4e0a\u9650\u3002</p>
       </fieldset>
       <div class="campaign-rule-section-heading">
         <div>
@@ -96,7 +96,7 @@ function openCampaignRuleEditor(plan) {
           ${definition.segments.map((segment, index) => renderSegmentRow(segment, index)).join("")}
         </div>
       </div>
-      <div id="campaign-editor-result" role="alert" style="display:none;margin-top:.8rem;padding:.7rem;border-radius:10px;font-size:.78rem;"></div>
+      <div id="campaign-editor-result" role="alert" style="display:none;margin-top:.8rem;padding:.7rem;border-radius:10px;font-size:0.875rem;"></div>
       <div style="position:sticky;bottom:-1.25rem;display:flex;justify-content:flex-end;gap:.6rem;margin:1rem -1.25rem -1.25rem;padding:.8rem 1.25rem;background:var(--bg-card);border-top:1px solid var(--border-card);">
         <button type="button" data-close class="secondary-btn">\u53d6\u6d88</button><button type="submit" class="primary-btn">\u9a57\u8b49\u4e26\u767c\u5e03\u65b0\u7248\u672c</button>
       </div>

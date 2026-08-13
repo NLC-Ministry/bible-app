@@ -1117,6 +1117,9 @@ function openMultiSelectBottomBar() {
           <span class="yv-section-label">已選取 ${escapeHTML(rangeLabel)}（共 ${versesInRange.length} 節）</span>
         </div>
         <div class="yv-action-group">
+          <button type="button" class="yv-multi-cancel-button" data-action="ms-cancel" aria-label="取消多節選取" title="取消多節選取">
+            <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
+          </button>
           <button type="button" class="yv-tile" data-action="ms-copy">
             <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
             <span class="yv-tile-label">複製</span>
@@ -1124,10 +1127,6 @@ function openMultiSelectBottomBar() {
           <button type="button" class="yv-tile" data-action="ms-share">
             <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
             <span class="yv-tile-label">分享</span>
-          </button>
-          <button type="button" class="yv-tile" data-action="ms-cancel">
-            <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
-            <span class="yv-tile-label">關閉</span>
           </button>
         </div>
       </div>
@@ -1341,12 +1340,6 @@ function openIntegratedSelectionBottomBar(options) {
 
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
-      <div class="yv-bar-header">
-        <span class="yv-selection-label">經文工具</span>
-        <button type="button" class="yv-close-button" data-action="close" aria-label="關閉經文工具" title="關閉經文工具">
-          <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
-        </button>
-      </div>
       <div class="yv-content-row">
         <div class="yv-action-group">
           <button type="button" class="yv-tile" data-action="copy">
@@ -1368,12 +1361,7 @@ function openIntegratedSelectionBottomBar(options) {
         </div>
       </div>
       <div id="yv-highlight-palette" class="yv-highlight-section yv-highlight-popover hidden" data-highlight-palette role="dialog" aria-label="螢光筆色盤">
-        <div class="yv-popover-header">
-          <span class="yv-section-label">選擇顏色</span>
-          <button type="button" class="yv-close-button yv-popover-close" data-action="close-highlight-palette" aria-label="關閉螢光筆色盤" title="關閉螢光筆色盤">
-            <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
-          </button>
-        </div>
+        <span class="yv-section-label">選擇顏色</span>
         <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
           <button type="button" class="yv-dot-clear" data-action="clear" title="取消螢光標註" aria-label="取消螢光標註">
             <span class="nlc-icon" data-icon="noColor" aria-hidden="true"></span>
@@ -1400,7 +1388,6 @@ function openIntegratedSelectionBottomBar(options) {
 
   const cleanupListeners = () => {
     document.removeEventListener("click", onDocClick);
-    document.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("resize", positionHighlightPalette);
   };
 
@@ -1437,28 +1424,12 @@ function openIntegratedSelectionBottomBar(options) {
     closeBar();
   };
 
-  const onKeyDown = (e) => {
-    if (e.key !== "Escape") return;
-    if (highlightPalette && !highlightPalette.classList.contains("hidden")) {
-      setHighlightPaletteOpen(false);
-      highlightToggle?.focus();
-      return;
-    }
-    closeBar();
-  };
-
   highlightToggle?.addEventListener("click", (e) => {
     e.stopPropagation();
     const shouldOpen = highlightPalette?.classList.contains("hidden");
     setHighlightPaletteOpen(Boolean(shouldOpen));
   });
-  barDiv.querySelector('[data-action="close-highlight-palette"]')?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setHighlightPaletteOpen(false);
-    highlightToggle?.focus();
-  });
   window.addEventListener("resize", positionHighlightPalette, { passive: true });
-  document.addEventListener("keydown", onKeyDown);
 
   const applyHighlightColor = (color) => {
     if (!/^#[0-9a-f]{6}$/i.test(String(color || ""))) return;
@@ -1546,11 +1517,6 @@ function openIntegratedSelectionBottomBar(options) {
       verseText: verseText || "",
       referenceLabel: `${bookName || ""} ${chapter || ""}:${noteVerse}`
     });
-  });
-
-  barDiv.querySelector('[data-action="close"]')?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    closeBar();
   });
 
   selectionBottomBarBindTimer = setTimeout(() => {
@@ -2723,7 +2689,7 @@ function showPlanNavigationPrompt(options = {}) {
         ">超前閱讀第 ${readAheadDayNum} 天進度</button>
 
         <button id="plan-nav-cancel-btn" type="button" style="
-          padding: 0.6rem; border-radius: var(--radius-md, 12px); font-size: 0.85rem; font-weight: 500;
+          padding: 0.6rem; border-radius: var(--radius-md, 12px); font-size: 0.875rem; font-weight: 500;
           border: none; background: transparent; color: var(--text-muted); cursor: pointer;
         ">取消</button>
       </div>

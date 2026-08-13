@@ -1584,7 +1584,7 @@ function renderJoinedPlansList() {
       container.innerHTML = `
         <div class="empty-state" style="text-align:center;padding:3rem 1rem;width:100%;">
           <p style="color:var(--text-secondary);margin:0 0 .5rem;font-weight:500;">找不到符合「${escapeHTML(planSearchQuery)}」的計畫</p>
-          <p style="font-size:.82rem;color:var(--text-muted);margin:0;">請嘗試其他計畫名稱、階段或獎項。</p>
+          <p style="font-size:0.875rem;color:var(--text-muted);margin:0;">請嘗試其他計畫名稱、階段或獎項。</p>
         </div>
       `;
       return;
@@ -1602,7 +1602,7 @@ function renderJoinedPlansList() {
         container.innerHTML = `
           <div class="empty-state" style="text-align: center; padding: 3rem 0; width: 100%;">
             <p style="color: var(--text-secondary); margin-bottom: 1rem; font-weight: 500;">目前沒有已結束的計畫</p>
-            <p style="font-size: 0.82rem; color: var(--text-muted);">前往「探索計畫」加入新挑戰吧！</p>
+            <p style="font-size: 0.875rem; color: var(--text-muted);">前往「探索計畫」加入新挑戰吧！</p>
           </div>
         `;
       }
@@ -1787,7 +1787,7 @@ function openJoinModeDialog(plan) {
           <span class="nlc-icon nlc-icon--md" data-icon="people" style="color:var(--color-brand);" aria-hidden="true"></span>
           <h3 id="join-mode-title" style="margin:0;font-size:1.05rem;font-weight:600;color:var(--text-primary);">要與夥伴一起讀嗎？</h3>
         </div>
-        <p style="margin:0 0 1.2rem;font-size:.83rem;color:var(--text-muted);line-height:1.5;">
+        <p style="margin:0 0 1.2rem;font-size:0.875rem;color:var(--text-muted);line-height:1.5;">
           計畫已加入！你可以額外選擇報名讀經小組團隊，與夥伴彼此鼓勵；若暫不組隊，請點擊下方的「先自己開始」。
         </p>
 
@@ -1803,7 +1803,7 @@ function openJoinModeDialog(plan) {
             </span>
             <span style="display:flex;flex-direction:column;gap:.18rem;">
               <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 3 人團隊</strong>
-              <span style="font-size:.77rem;color:var(--text-muted);">固定三人組隊，共同挑戰進度</span>
+              <span style="font-size:0.875rem;color:var(--text-muted);">固定三人組隊，共同挑戰進度</span>
             </span>
             <span style="margin-left:auto;flex-shrink:0;display:inline-flex;color:var(--text-muted);">
               <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
@@ -1821,7 +1821,7 @@ function openJoinModeDialog(plan) {
             </span>
             <span style="display:flex;flex-direction:column;gap:.18rem;">
               <strong style="font-size:.92rem;font-weight:600;color:var(--text-primary);">報名 6 人團隊</strong>
-              <span style="font-size:.77rem;color:var(--text-muted);">固定六人組隊，挑戰更高榮譽</span>
+              <span style="font-size:0.875rem;color:var(--text-muted);">固定六人組隊，挑戰更高榮譽</span>
             </span>
             <span style="margin-left:auto;flex-shrink:0;display:inline-flex;color:var(--text-muted);">
               <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
@@ -1831,7 +1831,7 @@ function openJoinModeDialog(plan) {
 
         <div style="display:flex;justify-content:flex-start;">
           <button type="button" id="join-mode-cancel" class="secondary-btn"
-            style="font-size:.83rem;padding:.45rem 1rem;cursor:pointer;">先自己開始</button>
+            style="font-size:0.875rem;padding:.45rem 1rem;cursor:pointer;">先自己開始</button>
         </div>
       </div>
     `;
@@ -2031,10 +2031,10 @@ function openPlanDetailsDialog(plan, options = {}) {
   const segmentHtml = segments.map(segment => `
     <section style="padding:.9rem;border:1px solid var(--border-card);border-radius:12px;background:var(--bg-secondary);">
       <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;">
-        <strong style="font-size:.84rem;font-weight:500;color:var(--text-primary);">${escapeHTML(segment.label)}</strong>
-        <span style="font-size:.7rem;color:var(--text-muted);white-space:nowrap;">${escapeHTML(segment.startDate)} ～ ${escapeHTML(segment.endDate)}</span>
+        <strong style="font-size:0.875rem;font-weight:500;color:var(--text-primary);">${escapeHTML(segment.label)}</strong>
+        <span style="font-size:0.875rem;color:var(--text-muted);white-space:nowrap;">${escapeHTML(segment.startDate)} ～ ${escapeHTML(segment.endDate)}</span>
       </div>
-      <div style="margin-top:.5rem;font-size:.8rem;line-height:1.65;color:var(--text-secondary);">${(segment.readings || []).map(formatCampaignReadingRange).map(escapeHTML).join("、")}</div>
+      <div style="margin-top:.5rem;font-size:0.875rem;line-height:1.65;color:var(--text-secondary);">${(segment.readings || []).map(formatCampaignReadingRange).map(escapeHTML).join("、")}</div>
     </section>
   `).join("");
 
@@ -2053,9 +2053,9 @@ function openPlanDetailsDialog(plan, options = {}) {
       </button>
 
       <h3 id="plan-details-title" style="margin:0 0 1rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);padding-right:2rem;">${escapeHTML(plan.name || "讀經計畫")}</h3>
-      ${isCampaignStage ? `<div style="display:flex;align-items:center;gap:.75rem;padding:.9rem;margin-bottom:1rem;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-card);"><div style="width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--primary-color);color:white;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span></div><div><div style="font-size:.72rem;color:var(--text-muted);">${awardEarned ? "已完成並獲得" : "完成本階段可獲得"}</div><strong style="font-size:1rem;color:var(--text-primary);">${escapeHTML(awardName)}</strong></div></div>` : ""}
-      ${plan.description ? `<p style="margin:0 0 1rem;font-size:.84rem;line-height:1.6;color:var(--text-secondary);">${escapeHTML(plan.description)}</p>` : ""}
-      <dl style="display:grid;grid-template-columns:auto 1fr;gap:.65rem .9rem;margin:0;font-size:.82rem;">
+      ${isCampaignStage ? `<div style="display:flex;align-items:center;gap:.75rem;padding:.9rem;margin-bottom:1rem;border-radius:14px;background:var(--bg-secondary);border:1px solid var(--border-card);"><div style="width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--primary-color);color:white;"><span class="nlc-icon" data-icon="award" aria-hidden="true"></span></div><div><div style="font-size:0.875rem;color:var(--text-muted);">${awardEarned ? "已完成並獲得" : "完成本階段可獲得"}</div><strong style="font-size:1rem;color:var(--text-primary);">${escapeHTML(awardName)}</strong></div></div>` : ""}
+      ${plan.description ? `<p style="margin:0 0 1rem;font-size:0.875rem;line-height:1.6;color:var(--text-secondary);">${escapeHTML(plan.description)}</p>` : ""}
+      <dl style="display:grid;grid-template-columns:auto 1fr;gap:.65rem .9rem;margin:0;font-size:0.875rem;">
         <dt style="color:var(--text-muted);">計畫類型</dt><dd style="margin:0;color:var(--text-primary);">${isCampaignStage ? "教會分階段計畫" : (isFlexible ? "非固定日期" : "固定日期")}</dd>
         <dt style="color:var(--text-muted);">日期／安排</dt><dd style="margin:0;color:var(--text-primary);">${escapeHTML(scheduleText)}</dd>
         ${isCampaignStage ? `<dt style="color:var(--text-muted);">階段／輪次</dt><dd style="margin:0;color:var(--text-primary);">第 ${Number(definition.stageNo)} 階段・第 ${Number(definition.roundNo)} 輪</dd>${definition.examDate ? `<dt style="color:var(--text-muted);">考試日期</dt><dd style="margin:0;color:var(--text-primary);">${escapeHTML(definition.examDate)}</dd>` : ""}` : ""}
@@ -2139,26 +2139,26 @@ function openFlexibleScheduleDialog(plan, options = {}) {
       <div class="glass-card" role="dialog" aria-modal="true" aria-labelledby="flexible-schedule-title"
         style="width:min(420px,100%);height:auto!important;padding:1.5rem;background:var(--bg-card);border:1px solid var(--border-card);box-shadow:var(--shadow-lg);">
         <h3 id="flexible-schedule-title" style="margin:0 0 .35rem;font-size:1.15rem;font-weight:500;color:var(--text-primary);">\u8a2d\u5b9a\u6bcf\u9031\u8b80\u7d93\u5b89\u6392</h3>
-        <p style="margin:0 0 1.25rem;font-size:.82rem;line-height:1.55;color:var(--text-secondary);">
+        <p style="margin:0 0 1.25rem;font-size:0.875rem;line-height:1.55;color:var(--text-secondary);">
           ${escapeHTML(scheduleIntro)}
         </p>
-        <label for="flexible-reading-days" style="display:block;margin-bottom:.45rem;font-size:.85rem;font-weight:500;color:var(--text-primary);">\u4e00\u9031\u60f3\u8b80\u7d93\u5e7e\u5929</label>
+        <label for="flexible-reading-days" style="display:block;margin-bottom:.45rem;font-size:0.875rem;font-weight:500;color:var(--text-primary);">\u4e00\u9031\u60f3\u8b80\u7d93\u5e7e\u5929</label>
         <select id="flexible-reading-days" class="form-control" style="width:100%;margin-bottom:1.1rem;">
           ${[1, 2, 3, 4, 5, 6, 7].map(days => `<option value="${days}" ${days === initialReadingDays ? "selected" : ""}>\u6bcf\u9031 ${days} \u5929</option>`).join("")}
         </select>
         <fieldset style="border:0;padding:0;margin:0;">
-          <legend style="margin-bottom:.55rem;font-size:.85rem;font-weight:500;color:var(--text-primary);">\u56fa\u5b9a\u4f11\u606f\u661f\u671f</legend>
+          <legend style="margin-bottom:.55rem;font-size:0.875rem;font-weight:500;color:var(--text-primary);">\u56fa\u5b9a\u4f11\u606f\u661f\u671f</legend>
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;">
             ${weekdayLabels.map((label, day) => `
-              <label style="display:flex;align-items:center;gap:.35rem;padding:.55rem .45rem;border:1px solid var(--border-card);border-radius:10px;cursor:pointer;font-size:.78rem;color:var(--text-primary);">
+              <label style="display:flex;align-items:center;gap:.35rem;padding:.55rem .45rem;border:1px solid var(--border-card);border-radius:10px;cursor:pointer;font-size:0.875rem;color:var(--text-primary);">
                 <input class="schedule-weekday-checkbox" type="checkbox" value="${day}" ${initialRestDays.includes(day) ? "checked" : ""}>
                 <span>${label}</span>
               </label>
             `).join("")}
           </div>
         </fieldset>
-        <p id="flexible-schedule-summary" style="margin:.85rem 0 0;font-size:.78rem;color:var(--text-muted);"></p>
-        <p id="flexible-schedule-error" role="alert" style="display:none;margin:.55rem 0 0;font-size:.78rem;color:var(--color-danger);"></p>
+        <p id="flexible-schedule-summary" style="margin:.85rem 0 0;font-size:0.875rem;color:var(--text-muted);"></p>
+        <p id="flexible-schedule-error" role="alert" style="display:none;margin:.55rem 0 0;font-size:0.875rem;color:var(--color-danger);"></p>
         <div style="display:flex;justify-content:flex-end;gap:.65rem;margin-top:1.25rem;">
           <button type="button" id="flexible-schedule-cancel" class="secondary-btn">\u53d6\u6d88</button>
           <button type="button" id="flexible-schedule-confirm" class="primary-btn">${isEditing ? "儲存安排" : (isUpcomingFixed ? "預先加入" : "加入計畫")}</button>
@@ -3619,7 +3619,7 @@ function initAdminPlanManagement() {
         display: flex;
         align-items: center;
         gap: 0.25rem;
-        font-size: 0.72rem;
+        font-size: 0.875rem;
         cursor: pointer;
         padding: 0.2rem 0.3rem;
         border-radius: 4px;
@@ -3843,21 +3843,21 @@ async function renderAdminPlanManagement() {
       let timeColHtml = "";
       if (isFixed) {
         timeColHtml = `
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
+          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
+          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
         `;
       } else {
         const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
         timeColHtml = `
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> 彈性時間</span>
-          <span style="font-size: 0.72rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">共 ${duration} 天</span>
+          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> 彈性時間</span>
+          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">共 ${duration} 天</span>
         `;
       }
 
       tr.innerHTML = `
         <td>
-          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.82rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span class="text-warning" style="font-size:0.68rem; font-weight: 500;">已隱藏</span>' : ''}</strong>
-          <span title="${escapeHTML(bookListText)}" style="font-size: 0.7rem; color: var(--text-muted); cursor: help; text-decoration: underline dashed; text-underline-offset: 2px;">
+          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.875rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span class="text-warning" style="font-size:0.875rem; font-weight: 500;">已隱藏</span>' : ''}</strong>
+          <span title="${escapeHTML(bookListText)}" style="font-size: 0.875rem; color: var(--text-muted); cursor: help; text-decoration: underline dashed; text-underline-offset: 2px;">
             共 ${bookCount} 卷書卷
           </span>
         </td>
@@ -3866,11 +3866,11 @@ async function renderAdminPlanManagement() {
         </td>
         <td style="text-align: center; vertical-align: middle;">
           <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
-            ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.68rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
-            ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.68rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
-            <button class="primary-btn admin-campaign-rules-btn" style="font-size:0.68rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
-            <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>
-            <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.68rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">刪除</button>
+            ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.875rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
+            ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
+            <button class="primary-btn admin-campaign-rules-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
+            <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>
+            <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">刪除</button>
           </div>
         </td>
       `;
@@ -4307,7 +4307,7 @@ async function renderInlineScriptureText() {
           const verseDiv = document.createElement("div");
           verseDiv.className = "bible-verse";
           verseDiv.style.marginBottom = "0.8rem";
-          verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.85rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
+          verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.875rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
           container.appendChild(verseDiv);
         });
         const sentinel = document.createElement("div");
@@ -6600,7 +6600,7 @@ window.displayParticipantsList = function (limit = 100) {
     if (!firstChild || firstChild.id !== "members-ranking-rank-col") {
       const rankHeader = document.createElement("div");
       rankHeader.id = "members-ranking-rank-col";
-      rankHeader.style.cssText = "color: var(--text-muted); font-size: 0.78rem; text-align: center;";
+      rankHeader.style.cssText = "color: var(--text-muted); font-size: 0.875rem; text-align: center;";
       rankHeader.textContent = "名次";
       headerEl.insertBefore(rankHeader, firstChild);
     }
@@ -6631,9 +6631,9 @@ window.displayParticipantsList = function (limit = 100) {
       const prevRank = prevRanks[m.id];
       if (prevRank !== undefined) {
         if (Number(rankNum) < Number(prevRank)) {
-          trendHtml = `<span style="color: var(--color-success-foreground); font-size: 0.65rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新上升 ${prevRank - rankNum} 名">▲</span>`;
+          trendHtml = `<span style="color: var(--color-success-foreground); font-size: 0.875rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新上升 ${prevRank - rankNum} 名">▲</span>`;
         } else if (Number(rankNum) > Number(prevRank)) {
-          trendHtml = `<span style="color: var(--color-danger); font-size: 0.65rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新下降 ${rankNum - prevRank} 名">▼</span>`;
+          trendHtml = `<span style="color: var(--color-danger); font-size: 0.875rem; margin-left: 2px; display: inline-flex; align-items: center; justify-content: center;" title="相較上次更新下降 ${rankNum - prevRank} 名">▼</span>`;
         }
       }
     }
@@ -6641,7 +6641,7 @@ window.displayParticipantsList = function (limit = 100) {
     // 名次徽章樣式：Top 3 上色，其餘灰色
     const rankColor = rankNum === 1 ? '#f59e0b' : rankNum === 2 ? 'var(--text-secondary)' : rankNum === 3 ? '#cd7f32' : 'var(--text-muted)';
     itemRow.innerHTML = `
-      <div style="font-size: 0.78rem; font-weight: 700; color: ${rankColor}; text-align: center; display: flex; align-items: center; justify-content: center; gap: 2px;">
+      <div style="font-size: 0.875rem; font-weight: 700; color: ${rankColor}; text-align: center; display: flex; align-items: center; justify-content: center; gap: 2px;">
         #${rankNum}${trendHtml}
       </div>
       <div style="text-align: left; word-break: break-word; white-space: normal; line-height: 1.25; color: ${m.isMe ? 'var(--primary-color)' : 'var(--text-primary)'}">
@@ -6650,7 +6650,7 @@ window.displayParticipantsList = function (limit = 100) {
       <div class="text-danger">${m.streak}</div>
       <div class="text-success-fg">${m.completed}</div>
       <div class="text-warning">${m.makeup}</div>
-      <div style="color: ${m.statusColor}; font-size: 0.8rem;">${m.statusStr}</div>
+      <div style="color: ${m.statusColor}; font-size: 0.875rem;">${m.statusStr}</div>
     `;
 
     // 💌 關心戳一下按鈕（僅限領袖，自己的列不顯示）
@@ -6708,7 +6708,7 @@ window.displayParticipantsList = function (limit = 100) {
     loadMoreBtn.className = "secondary-btn";
     loadMoreBtn.style.cssText = `
       padding: 0.4rem 1.2rem;
-      font-size: 0.8rem;
+      font-size: 0.875rem;
       font-weight: 500;
       border-radius: 20px;
       background: var(--bg-input);
@@ -7107,13 +7107,13 @@ window.showPlanStatsModal = function () {
   const makeCardHtml = (title, dataText, desc, iconColor, bgGlow = '') => {
     return `
       <div class="stat-grid-card" style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 0.9rem; display: flex; flex-direction: column; justify-content: space-between; height: 120px; box-shadow: var(--shadow-sm); transition: all 0.2s; ${bgGlow}">
-        <div style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
+        <div style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); display: flex; align-items: center; gap: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
           ${title}
         </div>
         <div style="font-size: 1.45rem; font-weight: 500; color: ${iconColor}; margin: 0.3rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">
           ${dataText}
         </div>
-        <div style="font-size: 0.65rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">
+        <div style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">
           ${desc}
         </div>
       </div>
@@ -7169,7 +7169,7 @@ window.showPlanStatsModal = function () {
   closeBtn.className = "primary-btn";
   closeBtn.style.cssText = `
     padding: 0.5rem 1.5rem;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 500;
     border-radius: 20px;
     width: 100%;
@@ -7499,7 +7499,7 @@ function renderRosterTable(users) {
       <td><span style="font-weight: 500; color: var(--primary-color);">${user.chapters_read}</span> 章</td>
       <td>
         <div style="display:flex; align-items:center; gap:0.5rem;">
-          <span style="font-size:0.8rem; font-weight: 500;">${user.plan_progress}%</span>
+          <span style="font-size:0.875rem; font-weight: 500;">${user.plan_progress}%</span>
           <div style="flex:1; width:50px; height:6px; background: var(--color-progress-track); border-radius:5px; overflow:hidden;">
             <div style="width:${user.plan_progress}%; height:100%; background: var(--color-success);"></div>
           </div>
@@ -8113,7 +8113,7 @@ function renderProfileReadingStats(container) {
           ${typeof renderIcon === "function" ? renderIcon("inbox", { size: "hero", className: "nlc-icon" }) : ""}
         </div>
         <p style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">${(window.APP_COPY && window.APP_COPY.stats.noPlan) || "尚未加入讀經計畫"}</p>
-        <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
+        <p style="font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.5rem;">
           請至「計畫」分頁挑選計畫並加入，即可在此查看進度統計。
         </p>
         
@@ -8123,7 +8123,7 @@ function renderProfileReadingStats(container) {
               ${typeof renderIcon === "function" ? renderIcon("fire", { size: "sm", className: "nlc-icon" }) : ""}
             </div>
             <div>
-              <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
+              <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
             </div>
           </div>
           <div class="stat-value stat-value--hero stat-value--danger">
@@ -8146,23 +8146,23 @@ function renderProfileReadingStats(container) {
   end.setHours(0, 0, 0, 0);
 
   if (today < start) {
-    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">尚未開始 (預計 ${stats.startDateStr})</span>`;
+    todayProgressText = `<span style="font-size: 0.875rem; font-weight: 500; color: var(--text-muted);">尚未開始 (預計 ${stats.startDateStr})</span>`;
   } else if (today > end) {
-    todayProgressText = `<span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);">已結束 (共 ${stats.totalDays} 天)</span>`;
+    todayProgressText = `<span style="font-size: 0.875rem; font-weight: 500; color: var(--text-muted);">已結束 (共 ${stats.totalDays} 天)</span>`;
   } else {
-    todayProgressText = `<span style="font-size: 1.25rem; font-weight: 500; color: var(--primary-color);">${stats.elapsedDays}</span> <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary);">/ ${stats.totalDays} 天</span>`;
+    todayProgressText = `<span style="font-size: 1.25rem; font-weight: 500; color: var(--primary-color);">${stats.elapsedDays}</span> <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">/ ${stats.totalDays} 天</span>`;
   }
 
   const lagDisplay = stats.lagDays > 0
-    ? `${stats.lagDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    ? `${stats.lagDays} <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">天</span>`
     : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   const leadDisplay = stats.leadDays > 0
-    ? `${stats.leadDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    ? `${stats.leadDays} <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">天</span>`
     : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   const makeupDisplay = stats.makeupDays > 0
-    ? `${stats.makeupDays} <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-secondary);">天</span>`
+    ? `${stats.makeupDays} <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-secondary);">天</span>`
     : `<span style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">0 天</span>`;
 
   const lagIconClass = stats.lagDays > 0 ? "stat-icon-wrapper--danger" : "stat-icon-wrapper--neutral";
@@ -8182,8 +8182,8 @@ function renderProfileReadingStats(container) {
             ${typeof renderIcon === "function" ? renderIcon("calendar", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">今日進度</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">目前讀經進度天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">今日進度</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.1rem;">目前讀經進度天數</div>
           </div>
         </div>
         <div class="stat-value stat-value--brand">
@@ -8198,8 +8198,8 @@ function renderProfileReadingStats(container) {
             ${typeof renderIcon === "function" ? renderIcon("fire", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">每日穩定靈修天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">連續讀經</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.1rem;">每日穩定靈修天數</div>
           </div>
         </div>
         <div class="stat-value stat-value--danger">
@@ -8214,8 +8214,8 @@ function renderProfileReadingStats(container) {
             \\\${typeof renderIcon === "function" ? renderIcon("exclamationCircle", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">落後進度</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">落後預計進度天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">落後進度</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.1rem;">落後預計進度天數</div>
           </div>
         </div>
         <div class="stat-value \\\${lagValueClass}">
@@ -8230,8 +8230,8 @@ function renderProfileReadingStats(container) {
             \\\${typeof renderIcon === "function" ? renderIcon("trendTwo", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">超前進度</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">超前進度</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.1rem;">超前預計進度天數</div>
           </div>
         </div>
         <div class="stat-value \\\${leadValueClass}">
@@ -8246,8 +8246,8 @@ function renderProfileReadingStats(container) {
             \\\${typeof renderIcon === "function" ? renderIcon("refresh", { size: "sm", className: "nlc-icon" }) : ""}
           </div>
           <div>
-            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">補讀天數</div>
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;">事後補讀完畢天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">補讀天數</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.1rem;">事後補讀完畢天數</div>
           </div>
         </div>
         <div class="stat-value \\\${makeupValueClass}">
@@ -8484,12 +8484,12 @@ window.openCareReminderDialog = function(member) {
         <h3 style="margin:0; font-size:1rem; font-weight:700; color:var(--text-primary);">關心提醒 ・ ${escapeHTML(member.name)}</h3>
       </div>
 
-      <p style="margin:0 0 1rem; font-size:0.82rem; color:var(--text-muted);">
+      <p style="margin:0 0 1rem; font-size:0.875rem; color:var(--text-muted);">
         進度：<strong style="color:${member.statusColor}">${member.statusStr}</strong>
         &nbsp;・&nbsp;完成：${member.completed} 天
       </p>
 
-      <label style="display:block; font-size:0.82rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">
+      <label style="display:block; font-size:0.875rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">
         關心原因
       </label>
       <div id="care-reason-btns" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
@@ -8498,7 +8498,7 @@ window.openCareReminderDialog = function(member) {
             data-reason="${key}"
             class="care-reason-btn${key === defaultReason ? ' active' : ''}"
             style="
-              padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight:500;
+              padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.875rem; font-weight:500;
               border: 1.5px solid ${key === defaultReason ? 'var(--color-warning-text, rgb(217,119,6))' : 'var(--border-card)'};
               background: ${key === defaultReason ? 'var(--color-warning-muted,rgba(251,191,36,0.15))' : 'var(--bg-input)'};
               color: ${key === defaultReason ? 'var(--color-warning-text, rgb(217,119,6))' : 'var(--text-secondary)'};
@@ -8509,7 +8509,7 @@ window.openCareReminderDialog = function(member) {
         `).join("")}
       </div>
 
-      <label for="care-msg-input" style="display:block; font-size:0.82rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">
+      <label for="care-msg-input" style="display:block; font-size:0.875rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">
         訊息內容
       </label>
       <textarea id="care-msg-input"
@@ -8530,11 +8530,11 @@ window.openCareReminderDialog = function(member) {
           margin-bottom: 0.25rem;
         "
       >${defaultMessages[defaultReason]}</textarea>
-      <div id="care-char-count" style="text-align:right; font-size:0.75rem; color:var(--text-muted); margin-bottom:1rem;">
+      <div id="care-char-count" style="text-align:right; font-size:0.875rem; color:var(--text-muted); margin-bottom:1rem;">
         ${defaultMessages[defaultReason].length} / 300
       </div>
 
-      <div id="care-dialog-error" style="display:none; color:var(--color-danger); font-size:0.82rem; margin-bottom:0.75rem; padding:0.5rem 0.75rem; background:var(--color-danger-muted,rgba(239,68,68,0.1)); border-radius:8px;"></div>
+      <div id="care-dialog-error" style="display:none; color:var(--color-danger); font-size:0.875rem; margin-bottom:0.75rem; padding:0.5rem 0.75rem; background:var(--color-danger-muted,rgba(239,68,68,0.1)); border-radius:8px;"></div>
 
       <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
         <button id="care-cancel-btn" type="button" style="
