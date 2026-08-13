@@ -22,6 +22,17 @@ export function formatTaiwanDateTime(value = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
+/**
+ * CSV cannot declare an Excel column width. A bare date-time is auto-coerced
+ * to an Excel date serial and narrow columns render it as "########". The
+ * explicit timezone suffix keeps the exported value as readable text in
+ * Excel, Numbers, Google Sheets, and plain-text CSV viewers.
+ */
+export function formatTaiwanExportDateTime(value = new Date()) {
+  const dateTime = formatTaiwanDateTime(value);
+  return dateTime ? `${dateTime}（台灣時間 UTC+8）` : "";
+}
+
 export function formatTaiwanDate(value = new Date()) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
     return value.trim();
@@ -36,7 +47,7 @@ function escapeCsvValue(value) {
 
 export function prependTaiwanExportTime(csvContent, exportedAt = new Date()) {
   if (!csvContent) return "";
-  const exportTime = formatTaiwanDateTime(exportedAt);
+  const exportTime = formatTaiwanExportDateTime(exportedAt);
   return [
     [escapeCsvValue("匯出時間（台灣時間）"), escapeCsvValue(exportTime)].join(","),
     csvContent

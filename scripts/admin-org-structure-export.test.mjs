@@ -24,7 +24,7 @@ describe("Admin Org Structure CSV Export Tests", () => {
     };
 
     const csv = convertOrgStructureToCSV(mockOrgStructure, new Date("2026-08-12T04:34:56Z"));
-    expect(csv.split("\n")[0]).toBe('"匯出時間（台灣時間）","2026-08-12 12:34:56"');
+    expect(csv.split("\n")[0]).toBe('"匯出時間（台灣時間）","2026-08-12 12:34:56（台灣時間 UTC+8）"');
     expect(csv).toContain("大區,牧區,小組");
     expect(csv).toContain('"第一大區","西區牧區","約書亞小組"');
     expect(csv).toContain('"第一大區","西區牧區","彼得小組"');
