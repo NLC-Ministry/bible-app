@@ -82,3 +82,24 @@ describe("English Bible chapter selector labels", () => {
     expect(read("js/app.js")).toContain('version === "RCUVTS" ? "RCUV" : version');
   });
 });
+
+describe("Bible translation switching integrity", () => {
+  it("includes the selected translation in every chapter cache key", () => {
+    expect(bibleData).toContain('function getBibleChapterCacheKey(bookEngName, chapter, translation)');
+    expect(bibleData).toContain('`${String(translation || "CUNP").toUpperCase()}_${bookEngName}_${chapter}`');
+    expect(bible).toContain('window.getBibleChapterCacheKey(book.eng, chapter, requestedVersion)');
+  });
+
+  it("requests only the selected translation instead of silently substituting another one", () => {
+    expect(bibleData).toContain('fetchFromBolls(bookEngName, chapter, preferredVersion, bollsBookId)');
+    expect(bibleData).not.toContain('[preferredVersion, "ESV", "NIV", "NLT", "CUNP", "CUV"]');
+    expect(bibleData).not.toContain('[preferredVersion, "CUNP", "CUV", "CUVS"');
+    expect(bibleData).toContain('throw new Error(`${preferredVersion} 譯本載入失敗');
+  });
+
+  it("ignores an older response after the user has selected another version", () => {
+    expect(bible).toContain('let readerRenderRequestId = 0;');
+    expect(bible).toContain('const renderRequestId = ++readerRenderRequestId;');
+    expect(bible).toMatch(/requestIsStale[\s\S]{0,350}state\.readerState\?\.version[\s\S]{0,250}if \(requestIsStale\) return/);
+  });
+});

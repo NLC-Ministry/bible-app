@@ -91,6 +91,7 @@ function initSmartFloatingReaderNav() {
 let readerBottomDwellController = null;
 let readerEndObserver = null;
 let readerEndVisible = false;
+let readerRenderRequestId = 0;
 let readerAutoReadNoticeKey = "";
 let selectionBottomBarCleanup = null;
 let selectionBottomBarBindTimer = null;
@@ -262,7 +263,8 @@ export function initReaderControls() {
   setupVersionPickerEvents();
 
   const navVersionBtn = document.getElementById("reader-nav-version-btn");
-  if (navVersionBtn) {
+  if (navVersionBtn && navVersionBtn.dataset.versionPickerBound !== "true") {
+    navVersionBtn.dataset.versionPickerBound = "true";
     navVersionBtn.addEventListener("click", () => {
       if (typeof window.toggleBibleVersion === "function") {
         window.toggleBibleVersion();
@@ -842,6 +844,9 @@ export async function renderReaderText(options = {}) {
   const container = document.getElementById("bible-content");
   if (!container) return;
 
+  const renderRequestId = ++readerRenderRequestId;
+  const requestedVersion = String(state.readerState?.version || "CUNP").toUpperCase();
+
   let verses = null;
   let isLoading = true;
 
@@ -885,7 +890,9 @@ export async function renderReaderText(options = {}) {
     bar.classList.add("hidden");
   }
 
-  const cacheKey = `${book.eng}_${chapter}`;
+  const cacheKey = window.getBibleChapterCacheKey
+    ? window.getBibleChapterCacheKey(book.eng, chapter, requestedVersion)
+    : `${requestedVersion}_${book.eng}_${chapter}`;
   const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
   if (cachedData && cachedData.verses && cachedData.verses.length > 0) {
     verses = cachedData.verses;
@@ -905,7 +912,12 @@ export async function renderReaderText(options = {}) {
 
   try {
     isLoading = true;
-    const data = await fetchBibleChapter(book.eng, chapter);
+    const data = await fetchBibleChapter(book.eng, chapter, requestedVersion);
+    const requestIsStale = renderRequestId !== readerRenderRequestId
+      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion
+      || Number(state.readerState?.bookId) !== bookId
+      || Number(state.readerState?.chapter) !== chapter;
+    if (requestIsStale) return;
     verses = data ? data.verses : null;
     isLoading = false;
 
@@ -918,6 +930,8 @@ export async function renderReaderText(options = {}) {
     renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
   } catch (error) {
+    if (renderRequestId !== readerRenderRequestId
+      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return;
     console.error("Failed to load complete Bible chapter:", error);
     isLoading = false;
     
@@ -2488,13 +2502,16 @@ function triggerPredictivePrefetch() {
     }
   }
 
-  const cacheKey = `${nextBookEng}_${nextChapter}`;
+  const requestedVersion = String(state.readerState?.version || "CUNP").toUpperCase();
+  const cacheKey = window.getBibleChapterCacheKey
+    ? window.getBibleChapterCacheKey(nextBookEng, nextChapter, requestedVersion)
+    : `${requestedVersion}_${nextBookEng}_${nextChapter}`;
   if (window._bibleChapterCache && window._bibleChapterCache[cacheKey]) {
     return;
   }
 
   console.log(`📡 [背景預載啟動] 正在預載下一章: ${nextBookEng} ${nextChapter}章`);
-  fetchBibleChapter(nextBookEng, nextChapter)
+  fetchBibleChapter(nextBookEng, nextChapter, requestedVersion)
     .then(data => {
       if (window._bibleChapterCache) {
         window._bibleChapterCache[cacheKey] = data;

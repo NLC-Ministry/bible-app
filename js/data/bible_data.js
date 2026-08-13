@@ -186,42 +186,52 @@ const BIBLE_FALLBACK = {
  * @param {number} chapter - The chapter number.
  * @returns {Promise<{reference: string, verses: Array<{verse: number, text: string}>}>}
  */
-async function fetchBibleChapter(bookEngName, chapter) {
+function getBibleChapterCacheKey(bookEngName, chapter, translation) {
+  return `${String(translation || "CUNP").toUpperCase()}_${bookEngName}_${chapter}`;
+}
+
+async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) {
   // Anti-Bug Guard: validate parameters before sending network requests
   if (!bookEngName || !chapter || isNaN(chapter) || Number(chapter) <= 0) {
     console.warn('⚠️ [API 防護攔截] 偵測到無效參數，拒絕發送錯誤網址');
     throw new Error('⚠️ [API 防護攔截] 偵測到無效參數，拒絕發送錯誤網址');
   }
 
-  // Local Predictive cache lookup
+  const preferredVersion = String(
+    requestedVersion || (typeof state !== "undefined" && state.readerState && state.readerState.version) || "CUNP"
+  ).toUpperCase();
+
+  // Translation is part of the cache identity. Without it, switching from
+  // CUNP to NIV can incorrectly reuse the CUNP chapter cached moments ago.
   if (!window._bibleChapterCache) {
     window._bibleChapterCache = {};
   }
-  const cacheKey = `${bookEngName}_${chapter}`;
+  const cacheKey = getBibleChapterCacheKey(bookEngName, chapter, preferredVersion);
   if (window._bibleChapterCache[cacheKey]) {
     console.log(`📦 [Cache Hits] 讀取預載快取成功: ${cacheKey}`);
     return window._bibleChapterCache[cacheKey];
   }
   // Bolls.life requires the numeric book ID (1-66)
   const bollsBookId = getBollsBookId(bookEngName);
-  const preferredVersion = (typeof state !== "undefined" && state.readerState && state.readerState.version) || "CUNP";
   const isEnglishVersion = ["ESV", "NIV", "NLT"].includes(preferredVersion);
-  const bollsTranslations = isEnglishVersion
-    ? Array.from(new Set([preferredVersion, "ESV", "NIV", "NLT", "CUNP", "CUV"]))
-    : Array.from(new Set([preferredVersion, "CUNP", "CUV", "CUVS", "CUVT", "CUNPS", "RCUVSS", "RCUVTS", "ESV", "NIV", "NLT"]));
   const sources = [];
 
   if (bollsBookId) {
-    bollsTranslations.forEach(translation => {
-      sources.push(() => fetchFromBolls(bookEngName, chapter, translation, bollsBookId));
-    });
+    sources.push(() => fetchFromBolls(bookEngName, chapter, preferredVersion, bollsBookId));
   }
-  sources.push(() => fetchFromBibleApi(bookEngName, chapter, "cuv"));
+  // bible-api is only an exact-version fallback where that version is known
+  // by the same identifier. Never silently substitute a different translation.
+  if (["CUV", "ESV", "NIV", "NLT"].includes(preferredVersion)) {
+    sources.push(() => fetchFromBibleApi(bookEngName, chapter, preferredVersion.toLowerCase()));
+  }
 
   const errors = [];
   for (const source of sources) {
     try {
-      return await source();
+      const result = await source();
+      const versionedResult = { ...result, translation: preferredVersion };
+      window._bibleChapterCache[cacheKey] = versionedResult;
+      return versionedResult;
     } catch (error) {
       errors.push(error.message || String(error));
     }
@@ -229,8 +239,14 @@ async function fetchBibleChapter(bookEngName, chapter) {
 
   const fallbackKey = `${bookEngName}_${chapter}`;
   const fallback = BIBLE_FALLBACK[fallbackKey];
-  if (fallback && fallback.verses && fallback.verses.length > 0) {
-    return fallback;
+  if (!isEnglishVersion && fallback && fallback.verses && fallback.verses.length > 0) {
+    const versionedFallback = { ...fallback, translation: preferredVersion };
+    window._bibleChapterCache[cacheKey] = versionedFallback;
+    return versionedFallback;
+  }
+
+  if (isEnglishVersion) {
+    throw new Error(`${preferredVersion} 譯本載入失敗：${errors.join("；") || "沒有可用的經文來源"}`);
   }
 
   // Robust offline fallback using BIBLE_VERSE_COUNTS
@@ -251,10 +267,12 @@ async function fetchBibleChapter(bookEngName, chapter) {
 
   return {
     reference: `${bookEngName} ${chapter}章`,
-    verses: placeholderVerses
+    verses: placeholderVerses,
+    translation: preferredVersion
   };
 }
 
 window.BIBLE_BOOKS = BIBLE_BOOKS;
 window.fetchBibleChapter = fetchBibleChapter;
+window.getBibleChapterCacheKey = getBibleChapterCacheKey;
 
