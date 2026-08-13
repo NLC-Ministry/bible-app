@@ -565,7 +565,7 @@ function loadLocalSettings() {
   state.readerState.version = localStorage.getItem("reader_bible_version") || "CUNP";
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
-    const label = state.readerState.version === "CUNP" ? "CUNP-神" : (state.readerState.version === "RCUVTS" ? "RCUV-神" : "CUV-神");
+    const label = state.readerState.version === "RCUVTS" ? "RCUV" : state.readerState.version;
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
     const navBadge = document.getElementById("bible-nav-version-badge");

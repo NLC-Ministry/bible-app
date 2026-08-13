@@ -96,6 +96,23 @@ let selectionBottomBarCleanup = null;
 let selectionBottomBarBindTimer = null;
 let multiSelectState = null; // { anchor, end, bookName, chapter, chapterId, verses } | null
 const MULTI_SELECT_LONG_PRESS_MS = 480;
+const ENGLISH_BIBLE_VERSIONS = new Set(["ESV", "NIV", "NLT"]);
+
+function usesEnglishReaderLabels(version = state.readerState?.version) {
+  return ENGLISH_BIBLE_VERSIONS.has(String(version || "").toUpperCase());
+}
+
+function getReaderBookLabel(book) {
+  if (!book) return "";
+  return usesEnglishReaderLabels() ? book.eng : book.name;
+}
+
+function getReaderBookAbbreviation(book) {
+  if (!book) return "";
+  if (!usesEnglishReaderLabels()) return book.abbrev;
+  const match = String(book.eng || "").match(/^(\d\s+)?([A-Za-z]+)/);
+  return match ? `${match[1] || ""}${match[2].slice(0, 4)}`.trim() : book.eng;
+}
 
 function getCurrentPlanReaderTask() {
   const plan = window.findPlanByContextId?.(state.readerState?.planContextId) || state.activePlan;
@@ -595,7 +612,7 @@ function renderReaderBookGrid() {
     btn.type = "button";
     btn.className = "reader-book-choice";
     btn.classList.toggle("active", Number(book.id) === Number(state.readerState.bookId));
-    btn.textContent = book.name;
+    btn.textContent = getReaderBookLabel(book);
     btn.addEventListener("click", () => {
       state.readerState.bookId = book.id;
       state.readerState.chapter = 1;
@@ -644,7 +661,7 @@ export function populateBookSelector(filter) {
     if (filter === "all" || book.section === filter) {
       const option = document.createElement("option");
       option.value = book.id;
-      option.textContent = book.name + " (" + book.abbrev + ")";
+      option.textContent = getReaderBookLabel(book) + " (" + getReaderBookAbbreviation(book) + ")";
       if (book.id === state.readerState.bookId) {
         option.selected = true;
       }
@@ -675,7 +692,7 @@ export function populateChapterSelector() {
   for (let i = 1; i <= book.chapters; i++) {
     const option = document.createElement("option");
     option.value = i;
-    option.textContent = i + " 章";
+    option.textContent = usesEnglishReaderLabels() ? `Chapter ${i}` : `${i} 章`;
     if (i === state.readerState.chapter) {
       option.selected = true;
     }
@@ -694,7 +711,9 @@ export function updatePillLabels() {
   const book = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
   const refLabel = document.getElementById("reader-nav-ref-label");
   if (refLabel && book) {
-    refLabel.textContent = `${book.name} ${state.readerState.chapter}`;
+    refLabel.textContent = usesEnglishReaderLabels()
+      ? `${book.eng} ${state.readerState.chapter}`
+      : `${book.name} ${state.readerState.chapter}`;
   }
 
   const versionBtn = document.getElementById("reader-nav-version-btn");
@@ -848,7 +867,9 @@ export async function renderReaderText(options = {}) {
   const book = BIBLE_BOOKS.find(b => b.id === bookId) || BIBLE_BOOKS[0];
   const chapter = Number(state.readerState && state.readerState.chapter) || 1;
 
-  if (heading) heading.textContent = `${book.name} ${chapter}章`;
+  if (heading) heading.textContent = usesEnglishReaderLabels()
+    ? `${book.eng} Chapter ${chapter}`
+    : `${book.name} ${chapter}章`;
   updatePillLabels();
   renderReaderPicker();
   loadVerseNotesForChapter(book.name, chapter);
@@ -1604,6 +1625,11 @@ window.selectBibleVersion = function(newVersion) {
   state.readerState.version = newVersion;
   localStorage.setItem("reader_bible_version", newVersion);
 
+  populateBookSelector(document.getElementById("reader-testament-select")?.value || "all");
+  populateChapterSelector();
+  renderReaderPicker();
+  updatePillLabels();
+
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
     const label = newVersion === "RCUVTS" ? "RCUV" : newVersion;
@@ -2044,6 +2070,8 @@ window.openBibleNavOverlay = function() {
   navOverlayState.selectedBookId = state.readerState.bookId;
   navOverlayState.selectedChapter = state.readerState.chapter;
   navOverlayState.selectedVerse = 1;
+
+  updateBibleNavLocale();
   
   openReaderLayer(overlay);
   
@@ -2132,13 +2160,44 @@ function updateNavOverlayHeader() {
   if (!titleEl) return;
   
   const book = BIBLE_BOOKS.find(b => b.id === navOverlayState.selectedBookId);
+  const english = usesEnglishReaderLabels();
+  const bookLabel = getReaderBookLabel(book);
   if (navOverlayState.activeTab === 'book') {
-    titleEl.textContent = "選擇書卷";
+    titleEl.textContent = english ? "Select Book" : "選擇書卷";
   } else if (navOverlayState.activeTab === 'chapter') {
-    titleEl.textContent = book ? book.name : "選擇章節";
+    titleEl.textContent = book ? bookLabel : (english ? "Select Chapter" : "選擇章節");
   } else if (navOverlayState.activeTab === 'verse') {
-    titleEl.textContent = book ? `${book.name} ${navOverlayState.selectedChapter}章` : "選擇節";
+    titleEl.textContent = book
+      ? (english ? `${bookLabel} Chapter ${navOverlayState.selectedChapter}` : `${bookLabel} ${navOverlayState.selectedChapter}章`)
+      : (english ? "Select Verse" : "選擇節");
   }
+}
+
+function updateBibleNavLocale() {
+  const overlay = document.getElementById("bible-nav-overlay");
+  if (!overlay) return;
+  const english = usesEnglishReaderLabels();
+  const backText = document.querySelector("#bible-nav-back-btn span:last-child");
+  if (backText) backText.textContent = english ? "Back" : "返回";
+  const tabLabels = english
+    ? { book: "Book", chapter: "Chapter", verse: "Verse" }
+    : { book: "卷", chapter: "章", verse: "節" };
+  overlay.querySelectorAll(".segmented-tab").forEach(tab => {
+    tab.textContent = tabLabels[tab.dataset.tab] || tab.textContent;
+  });
+  const viewLabel = document.getElementById("bible-nav-view-label");
+  if (viewLabel) viewLabel.textContent = english ? "View" : "檢視";
+  const gridBtn = document.getElementById("view-mode-grid");
+  const listBtn = document.getElementById("view-mode-list");
+  if (gridBtn) {
+    gridBtn.title = english ? "Grid" : "網格";
+    gridBtn.setAttribute("aria-label", gridBtn.title);
+  }
+  if (listBtn) {
+    listBtn.title = english ? "List" : "清單";
+    listBtn.setAttribute("aria-label", listBtn.title);
+  }
+  updateNavOverlayHeader();
 }
 
 function renderBibleNavContent() {
@@ -2154,7 +2213,7 @@ function renderBibleNavContent() {
     if (navOverlayState.viewMode === 'grid') {
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
-      oldSection.textContent = "舊約聖經";
+      oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
       container.appendChild(oldSection);
       
       const oldGrid = document.createElement("div");
@@ -2162,7 +2221,7 @@ function renderBibleNavContent() {
       
       const newSection = document.createElement("div");
       newSection.className = "bible-nav-section-title";
-      newSection.textContent = "新約聖經";
+      newSection.textContent = usesEnglishReaderLabels() ? "New Testament" : "新約聖經";
       
       const newGrid = document.createElement("div");
       newGrid.className = "bible-nav-grid";
@@ -2172,8 +2231,8 @@ function renderBibleNavContent() {
         item.className = "grid-item-book";
         item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
         item.innerHTML = `
-          <span class="abbrev-title">${b.abbrev}</span>
-          <span class="full-title">${b.name}</span>
+          <span class="abbrev-title">${escapeHTML(getReaderBookAbbreviation(b))}</span>
+          <span class="full-title">${escapeHTML(getReaderBookLabel(b))}</span>
         `;
         item.addEventListener("click", () => selectNavBook(b.id));
         
@@ -2190,7 +2249,7 @@ function renderBibleNavContent() {
     } else {
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
-      oldSection.textContent = "舊約聖經";
+      oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
       container.appendChild(oldSection);
       
       const oldList = document.createElement("div");
@@ -2198,7 +2257,7 @@ function renderBibleNavContent() {
       
       const newSection = document.createElement("div");
       newSection.className = "bible-nav-section-title";
-      newSection.textContent = "新約聖經";
+      newSection.textContent = usesEnglishReaderLabels() ? "New Testament" : "新約聖經";
       
       const newList = document.createElement("div");
       newList.className = "bible-nav-list";
@@ -2208,10 +2267,10 @@ function renderBibleNavContent() {
         item.className = "book-list-item-asym";
         item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
         item.innerHTML = `
-          <div class="book-brand-box">${escapeHTML(b.abbrev)}</div>
+          <div class="book-brand-box">${escapeHTML(getReaderBookAbbreviation(b))}</div>
           <div class="book-names-box">
-            <span class="book-full-title">${escapeHTML(b.name)}</span>
-            <span class="book-english-sub">${escapeHTML(b.eng)}</span>
+            <span class="book-full-title">${escapeHTML(getReaderBookLabel(b))}</span>
+            ${usesEnglishReaderLabels() ? "" : `<span class="book-english-sub">${escapeHTML(b.eng)}</span>`}
           </div>
         `;
         item.addEventListener("click", () => selectNavBook(b.id));

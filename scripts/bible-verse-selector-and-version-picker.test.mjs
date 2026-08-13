@@ -61,3 +61,24 @@ describe("mobile Bible version picker access", () => {
     expect(state).toContain('document.getElementById("bible-nav-version-badge")');
   });
 });
+
+describe("English Bible chapter selector labels", () => {
+  it("uses English book, chapter, verse, testament, and navigation labels for English translations", () => {
+    expect(bible).toContain('const ENGLISH_BIBLE_VERSIONS = new Set(["ESV", "NIV", "NLT"])');
+    expect(bible).toContain('english ? "Select Book" : "選擇書卷"');
+    expect(bible).toMatch(/english\s*\?\s*\{ book: "Book", chapter: "Chapter", verse: "Verse" \}/);
+    expect(bible).toContain('usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經"');
+    expect(bible).toContain('usesEnglishReaderLabels() ? `Chapter ${i}` : `${i} 章`');
+    expect(bible).toContain('getReaderBookLabel(b)');
+  });
+
+  it("refreshes selector labels immediately when the translation changes", () => {
+    expect(bible).toMatch(/state\.readerState\.version = newVersion;[\s\S]{0,350}populateBookSelector/);
+    expect(bible).toMatch(/populateBookSelector[\s\S]{0,180}populateChapterSelector\(\);[\s\S]{0,80}renderReaderPicker\(\)/);
+  });
+
+  it("does not mislabel English translations as CUV during initial paint", () => {
+    expect(state).toContain('state.readerState.version === "RCUVTS" ? "RCUV" : state.readerState.version');
+    expect(read("js/app.js")).toContain('version === "RCUVTS" ? "RCUV" : version');
+  });
+});

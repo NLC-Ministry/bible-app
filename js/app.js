@@ -543,10 +543,11 @@ function paintReaderTopBarFromState() {
   if (!book) return;
 
   const refLabel = document.getElementById("reader-nav-ref-label");
-  if (refLabel) refLabel.textContent = `${book.name} ${state.readerState.chapter}`;
+  const isEnglishVersion = ["ESV", "NIV", "NLT"].includes(String(state.readerState.version || "").toUpperCase());
+  if (refLabel) refLabel.textContent = `${isEnglishVersion ? book.eng : book.name} ${state.readerState.chapter}`;
 
   const version = state.readerState.version || "CUNP";
-  const versionLabel = version === "CUNP" ? "CUNP" : (version === "RCUVTS" ? "RCUV" : "CUV");
+  const versionLabel = version === "RCUVTS" ? "RCUV" : version;
   const versionBtn = document.getElementById("reader-nav-version-btn");
   const versionSpan = versionBtn ? versionBtn.querySelector("span") : null;
   if (versionSpan) versionSpan.textContent = versionLabel;
