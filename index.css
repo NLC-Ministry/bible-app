@@ -13332,6 +13332,14 @@ select,
   border-radius: 4px;
 }
 
+.profile-settings-section-label {
+  padding: 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-strong);
+  letter-spacing: 0.02em;
+}
+
 [data-theme="dark"] #reader-view .bible-verse[data-highlight],
 [data-theme="dark"] .bible-verse[data-highlight] {
   background-color: color-mix(in srgb, var(--verse-highlight-color, #fef08a) 22%, transparent) !important;
