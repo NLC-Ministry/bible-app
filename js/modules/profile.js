@@ -3,6 +3,53 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 
 import { showModal, hideModal } from "./modal-manager.mjs";
 
+export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
+
+async function copyAppShareUrl() {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    await navigator.clipboard.writeText(APP_SHARE_URL);
+    return true;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = APP_SHARE_URL;
+  textarea.setAttribute("readonly", "");
+  textarea.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = typeof document.execCommand === "function" && document.execCommand("copy");
+  textarea.remove();
+  return Boolean(copied);
+}
+
+export async function shareApp() {
+  const shareData = {
+    title: "新生命聖經速讀",
+    text: "一起使用新生命聖經速讀 APP，開始每日讀經計畫。",
+    url: APP_SHARE_URL
+  };
+
+  if (typeof navigator.share === "function") {
+    try {
+      await navigator.share(shareData);
+      return { shared: true, copied: false };
+    } catch (error) {
+      if (error?.name === "AbortError") return { shared: false, copied: false, cancelled: true };
+    }
+  }
+
+  try {
+    const copied = await copyAppShareUrl();
+    if (copied) {
+      showToast("APP 連結已複製，可以貼給朋友了");
+      return { shared: false, copied: true };
+    }
+  } catch (_error) {}
+
+  showToast(`APP 連結：${APP_SHARE_URL}`, 6000);
+  return { shared: false, copied: false };
+}
+
 // Unconditional Global TTS Voice Package Guide Modal Handlers
 window.openTtsGuideModal = function () {
   const modal = document.getElementById("tts-guide-modal");
@@ -673,6 +720,15 @@ export function init() {
     btnProfileLogout.addEventListener("click", async (e) => {
       e.preventDefault();
       await handleLogoutAndClearCache();
+    });
+  }
+
+  const btnShareApp = document.getElementById("btn-share-app");
+  if (btnShareApp && btnShareApp.dataset.bound !== "true") {
+    btnShareApp.dataset.bound = "true";
+    btnShareApp.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await shareApp();
     });
   }
 }
