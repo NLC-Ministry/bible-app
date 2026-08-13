@@ -6382,23 +6382,13 @@ body.dark-theme .pastoral-race-progress {
   background: var(--bg-surface);
 }
 
-.admin-daily-quiz-version--status-loading {
-  border-color: color-mix(in srgb, var(--color-brand) 45%, var(--border-card));
-  background: color-mix(in srgb, var(--color-brand) 5%, var(--bg-surface));
-}
-
-.admin-daily-quiz-version--status-loading .role-badge {
-  color: var(--color-brand);
-}
-
-.admin-daily-quiz-version--status-error {
-  border-color: color-mix(in srgb, var(--danger-color, #b91c1c) 35%, var(--border-card));
-}
-
 .admin-daily-quiz-editor-wrap {
   position: fixed;
   inset: 0;
   z-index: 1200;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg-app, #0f0f0f);
 }
 
@@ -6407,14 +6397,15 @@ body.admin-quiz-editor-open {
 }
 
 .admin-daily-quiz-editor-shell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
-  height: 100dvh;
+  min-height: 100dvh;
   background: var(--bg-app, #0f0f0f);
 }
 
 .admin-daily-quiz-editor-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6432,10 +6423,8 @@ body.admin-quiz-editor-open {
 }
 
 .admin-daily-quiz-editor-scroll {
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 1rem max(1rem, calc((100vw - 72rem) / 2));
-  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-bottom: max(6rem, calc(2rem + env(safe-area-inset-bottom)));
 }
 
 .admin-daily-quiz-editor,
@@ -6449,6 +6438,13 @@ body.admin-quiz-editor-open {
   width: 100%;
   max-width: 72rem;
   margin: 0 auto;
+}
+
+.admin-daily-quiz-editor .admin-daily-quiz-question {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .admin-daily-quiz-carousel-status {

@@ -1617,7 +1617,6 @@ function renderAdminQuizReviewCards(context) {
         if (!quiz) return `<article class="admin-daily-quiz-version" data-quiz-version="${variant}">
           <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">尚未生成</span></div>
           <div class="admin-daily-quiz-version-actions">
-            <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
             <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
             <button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-variant="${variant}">生成題目</button>
           </div>
@@ -1631,7 +1630,6 @@ function renderAdminQuizReviewCards(context) {
           </div>
           ${quiz.generationError ? `<p class="admin-daily-quiz-error">${adminQuizEscape(quiz.generationError)}</p>` : ''}
           ${ready ? `<div class="admin-daily-quiz-version-actions">
-            <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
             <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">${approved ? '檢視題目' : '編輯題目'}</button>
             ${approved
               ? '<button type="button" class="secondary-btn" disabled>已審核鎖定</button>'
@@ -1649,13 +1647,11 @@ function renderAdminQuizReviewCards(context) {
           </div>`
           : quiz.generationStatus === 'failed'
             ? `<div class="admin-daily-quiz-version-actions">
-                <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
                 <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
                 <button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">重新生成題目</button>
                 <button type="button" class="primary-btn" disabled>生成完成後審核</button>
               </div>`
             : `<div class="admin-daily-quiz-version-actions">
-                <button type="button" class="secondary-btn" data-quiz-action="refresh-status" data-quiz-variant="${variant}">重新載入狀態</button>
                 <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
                 <button type="button" class="primary-btn" disabled>生成完成後審核</button>
               </div>`}
@@ -1746,10 +1742,6 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
       event.stopPropagation();
       const action = button.dataset.quizAction;
       const quizId = button.dataset.quizId;
-      if (action === 'refresh-status') {
-        await refreshAdminQuizVariantStatus(root, button, quizDate);
-        return;
-      }
       if (action === 'toggle-edit') {
         const editor = Array.from(root.querySelectorAll('[data-editor-for]'))
           .find(element => element.dataset.editorFor === String(quizId));
@@ -1846,42 +1838,6 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
   });
 }
 
-async function refreshAdminQuizVariantStatus(root, button, quizDate) {
-  const card = button.closest('[data-quiz-version]');
-  if (!card) return;
-  const statusBadge = card.querySelector('.role-badge');
-  const originalStatus = statusBadge?.textContent || '';
-  const controls = Array.from(card.querySelectorAll('button'));
-  const originalControlStates = controls.map(control => ({
-    control,
-    disabled: control.disabled,
-    text: control.textContent
-  }));
-  card.classList.remove('admin-daily-quiz-version--status-error');
-  card.classList.add('admin-daily-quiz-version--status-loading');
-  card.setAttribute('aria-busy', 'true');
-  if (statusBadge) statusBadge.textContent = '載入中';
-  controls.forEach(control => { control.disabled = true; });
-  button.textContent = '載入中…';
-
-  const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
-  if (result.success) {
-    await renderAdminDailyQuizManagement(true, quizDate, result);
-    return;
-  }
-
-  card.classList.remove('admin-daily-quiz-version--status-loading');
-  card.classList.add('admin-daily-quiz-version--status-error');
-  card.removeAttribute('aria-busy');
-  if (statusBadge) statusBadge.textContent = '狀態載入失敗';
-  originalControlStates.forEach(({ control, disabled, text }) => {
-    control.disabled = disabled;
-    control.textContent = text;
-  });
-  if (typeof showToast === 'function') showToast(result.message || `版本 ${card.dataset.quizVersion || ''} 狀態載入失敗`);
-  console.warn(`[Quiz] Variant ${card.dataset.quizVersion || 'unknown'} refresh failed; previous status was ${originalStatus}`);
-}
-
 async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '', prefetchedResult = null) {
   const root = document.getElementById('admin-daily-quiz-root');
   if (!root || !state.activePlan) return;
@@ -1931,7 +1887,7 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
             <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">狀態載入失敗</span></div>
             <p class="admin-daily-quiz-empty">暫時無法確認生成與審核狀態。</p>
             <div class="admin-daily-quiz-version-actions">
-              <button type="button" class="secondary-btn" data-quiz-load-retry data-quiz-variant="${variant}">重新載入狀態</button>
+              <button type="button" class="secondary-btn" data-quiz-load-retry data-quiz-variant="${variant}">重試載入</button>
               <button type="button" class="secondary-btn" disabled>載入後才可編輯</button>
               <button type="button" class="primary-btn" disabled>載入後才可審核</button>
             </div>
@@ -1943,7 +1899,9 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
     });
     root.querySelectorAll('[data-quiz-load-retry]').forEach(button => {
       button.addEventListener('click', () => {
-        void refreshAdminQuizVariantStatus(root, button, quizDate);
+        button.disabled = true;
+        button.textContent = '載入中…';
+        void renderAdminDailyQuizManagement(true, quizDate);
       });
     });
     if (typeof hydrateIcons === 'function') hydrateIcons(root);
