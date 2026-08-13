@@ -6023,11 +6023,18 @@ async function renderPlanRankingView() {
       name: zone.name || "",
       total_chapters: Number(zone.chaptersRead || 0),
       members: Number(zone.memberCount || 0),
+      average_chapters: Math.round(Number(
+        zone.averageChapters ?? (
+          Number(zone.memberCount || 0) > 0
+            ? Number(zone.chaptersRead || 0) / Number(zone.memberCount || 0)
+            : 0
+        )
+      ) * 100) / 100,
       completed_at: zone.lastReadAt || null,
       is_mine: zone.isMine === true
     })).sort((a, b) => {
-      const chapterDiff = b.total_chapters - a.total_chapters;
-      if (chapterDiff !== 0) return chapterDiff;
+      const averageDiff = b.average_chapters - a.average_chapters;
+      if (averageDiff !== 0) return averageDiff;
       const timeDiff = completionTime(a) - completionTime(b);
       if (timeDiff !== 0) return timeDiff;
       return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
@@ -6048,7 +6055,7 @@ async function renderPlanRankingView() {
     return;
   }
 
-  const maxChapters = Math.max(...pastoralStats.map(item => item.total_chapters), 1);
+  const maxAverageChapters = Math.max(...pastoralStats.map(item => item.average_chapters), 1);
   const pastoralCompletionTime = item => {
     const timestamp = item && item.completed_at ? new Date(item.completed_at).getTime() : Infinity;
     return Number.isFinite(timestamp) ? timestamp : Infinity;
@@ -6070,14 +6077,22 @@ async function renderPlanRankingView() {
       hour12: false
     }).format(date)}`;
   };
+  const formatAverageChapters = value => new Intl.NumberFormat("zh-TW", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(Number(value || 0));
   const renderRace = () => {
     container.className = "pastoral-race-list";
     container.innerHTML = `
       <div class="pastoral-race-toolbar">
         <div>
           <div class="pastoral-race-title">即時閱讀表現</div>
-          <div class="pastoral-race-subtitle">以目前最高累計章數為 100%</div>
+          <div class="pastoral-race-subtitle">以目前最高平均每人閱讀章數為 100%</div>
         </div>
+      </div>
+      <div class="pastoral-race-average-notice" role="note" aria-label="平均數計算說明">
+        <strong>提醒：此排行榜顯示平均數</strong>
+        <span>平均每人閱讀章數＝牧區總閱讀章數 ÷ 牧區有效人數；尚未閱讀的有效成員也會計入人數。</span>
       </div>
       <div class="pastoral-race-track">
         ${pastoralStats.length === 0 ? '<div class="pastoral-race-empty">目前沒有已設定牧區的排行資料</div>' : ""}
@@ -6089,11 +6104,11 @@ async function renderPlanRankingView() {
     pastoralStats.forEach((item, index) => {
       const previousItem = index > 0 ? pastoralStats[index - 1] : null;
       const sharesRank = previousItem
-        && item.total_chapters === previousItem.total_chapters
+        && item.average_chapters === previousItem.average_chapters
         && pastoralCompletionTime(item) === pastoralCompletionTime(previousItem);
       if (index > 0 && !sharesRank) calculatedRank = index + 1;
       const rank = calculatedRank;
-      const pct = Math.min(100, Math.round((item.total_chapters / maxChapters) * 100));
+      const pct = Math.min(100, Math.round((item.average_chapters / maxAverageChapters) * 100));
       const placementClass = rank <= 3 ? " pastoral-race-row--podium" : "";
       const ownershipClass = item.is_mine ? " pastoral-race-row--mine" : "";
       const row = document.createElement("div");
@@ -6107,15 +6122,15 @@ async function renderPlanRankingView() {
             <div class="pastoral-race-identity">
               <span class="pastoral-race-name">${escapeHTML(item.name)}</span>
               ${item.is_mine ? '<span class="pastoral-race-mine-badge">我的牧區</span>' : ""}
-              <span class="pastoral-race-members">${item.members} 人參與</span>
+              <span class="pastoral-race-members">總計 ${item.total_chapters} 章 · ${item.members} 人</span>
             </div>
-            <div class="pastoral-race-score"><strong>${item.total_chapters}</strong><span>章</span></div>
+            <div class="pastoral-race-score"><strong>${formatAverageChapters(item.average_chapters)}</strong><span>章／人</span></div>
           </div>
           <div class="pastoral-race-progress-meta">
             <span>相對閱讀速度</span>
             <strong>${pct}%</strong>
           </div>
-          <div class="pastoral-race-progress" role="progressbar" aria-label="${escapeHTML(item.name)}相對閱讀速度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-valuetext="${item.total_chapters} 章，相對進度 ${pct}%">
+          <div class="pastoral-race-progress" role="progressbar" aria-label="${escapeHTML(item.name)}平均每人閱讀章數" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-valuetext="平均每人 ${formatAverageChapters(item.average_chapters)} 章，相對進度 ${pct}%">
             <div class="pastoral-race-progress-fill"></div>
           </div>
         </div>

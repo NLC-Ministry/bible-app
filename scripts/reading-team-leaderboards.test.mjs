@@ -5,6 +5,7 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8"
 const migration = read("supabase/migrations/0038_reading_team_leaderboards.sql");
 const focusMigration = read("supabase/migrations/0039_focus_reading_team_leaderboards_on_my_team.sql");
 const pastoralMigration = read("supabase/migrations/0049_public_pastoral_zone_leaderboard.sql");
+const pastoralAverageMigration = read("supabase/migrations/0089_pastoral_zone_rank_by_average_chapters.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
@@ -60,16 +61,21 @@ describe("reading team leaderboards", () => {
     expect(html).toContain("牧區速度排行榜");
     expect(html).toContain('<details class="glass-card reading-team-ranking-card pastoral-ranking-card" data-pastoral-ranking-details open>');
     expect(html).toContain('class="reading-team-ranking-header pastoral-ranking-header"');
-    expect(html).toContain("依閱讀章數與完成時間排序；兩者相同則並列");
+    expect(html).toContain("依平均每人閱讀章數排序；平均與完成時間相同則並列");
     expect(plan).toContain('container.className = "pastoral-race-list"');
-    expect(plan).toContain("以目前最高累計章數為 100%");
+    expect(plan).toContain("以目前最高平均每人閱讀章數為 100%");
+    expect(plan).toContain('class="pastoral-race-average-notice" role="note"');
+    expect(plan).toContain("提醒：此排行榜顯示平均數");
+    expect(plan).toContain("尚未閱讀的有效成員也會計入人數");
+    expect(css).toContain(".pastoral-race-average-notice");
     expect(plan).toContain("共 ${pastoralStats.length} 個牧區");
     expect(plan).toContain("const pct = Math.min(100");
-    expect(plan).toContain("const chapterDiff = b.total_chapters - a.total_chapters");
+    expect(plan).toContain("const averageDiff = b.average_chapters - a.average_chapters");
+    expect(plan).toContain("zone.averageChapters ??");
     expect(plan).toContain("db.getPastoralZoneLeaderboard(state.activePlan)");
     expect(plan).toContain("unassignedPastoralCount = Number(context.unassignedCount || 0)");
     expect(plan).toContain("const timeDiff = completionTime(a) - completionTime(b)");
-    expect(plan).toContain("item.total_chapters === previousItem.total_chapters");
+    expect(plan).toContain("item.average_chapters === previousItem.average_chapters");
     expect(plan).toContain("pastoralCompletionTime(item) === pastoralCompletionTime(previousItem)");
     expect(plan).not.toContain("人尚未設定牧區，不列入排名");
     expect(css).toContain(".pastoral-race-unassigned");
@@ -80,6 +86,8 @@ describe("reading team leaderboards", () => {
     expect(db).toContain("candidateReadAt < existingReadAt");
     expect(plan).toContain('class="pastoral-race-progress" role="progressbar"');
     expect(plan).toContain('aria-valuenow="${pct}"');
+    expect(plan).toContain("章／人");
+    expect(plan).toContain("總計 ${item.total_chapters} 章 · ${item.members} 人");
     expect(plan).not.toContain('data-pastoral-race-replay');
     expect(plan).toContain('const ownershipClass = item.is_mine ? " pastoral-race-row--mine" : ""');
     expect(plan).toContain("我的牧區");
@@ -100,6 +108,15 @@ describe("reading team leaderboards", () => {
     expect(pastoralMigration).not.toContain("profile.name");
     expect(edge).toContain('"get_pastoral_zone_leaderboard"');
     expect(db).toContain('_callReadingTeamRpc("get_pastoral_zone_leaderboard"');
+  });
+
+  it("ranks pastoral zones fairly by average chapters across every active member", () => {
+    expect(pastoralAverageMigration).toContain("COUNT(*)::INTEGER AS member_count");
+    expect(pastoralAverageMigration).toContain("COALESCE(SUM(chapters_read), 0)::NUMERIC / NULLIF(COUNT(*), 0)");
+    expect(pastoralAverageMigration).toContain("'averageChapters', zone.average_chapters");
+    expect(pastoralAverageMigration).toContain("ORDER BY zone.average_chapters DESC");
+    expect(pastoralAverageMigration).toContain("COALESCE(profile.is_active, TRUE) = TRUE");
+    expect(pastoralAverageMigration).not.toContain("reading_log.round =");
   });
 
   it("requires an authenticated profile without exposing member identities", () => {

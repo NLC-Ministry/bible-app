@@ -80,6 +80,8 @@ describe("English Bible chapter selector labels", () => {
   it("does not mislabel English translations as CUV during initial paint", () => {
     expect(state).toContain('state.readerState.version === "RCUVTS" ? "RCUV" : state.readerState.version');
     expect(read("js/app.js")).toContain('version === "RCUVTS" ? "RCUV" : version');
+    expect(bible).toContain('const label = version === "RCUVTS" ? "RCUV" : version');
+    expect(bible).not.toContain('version === "CUNP" ? "CUNP" : (version === "RCUVTS" ? "RCUV" : "CUV")');
   });
 });
 

@@ -762,7 +762,7 @@ export function updatePillLabels() {
   const versionBtn = document.getElementById("reader-nav-version-btn");
   if (versionBtn) {
     const version = state.readerState.version || "CUNP";
-    const label = version === "CUNP" ? "CUNP" : (version === "RCUVTS" ? "RCUV" : "CUV");
+    const label = version === "RCUVTS" ? "RCUV" : version;
     const span = versionBtn.querySelector("span");
     if (span) span.textContent = label;
     const inlineVersion = document.getElementById("reader-version-inline");

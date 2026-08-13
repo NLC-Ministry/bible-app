@@ -139,7 +139,7 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
 
   return (
     <div 
-      className="flex w-full flex-col gap-6 p-6 rounded-xl border border-slate-800 bg-slate-950 text-slate-100 shadow-2xl backdrop-blur-md transition-all duration-300"
+      className="admin-report-view flex w-full flex-col gap-6 p-6 rounded-xl border border-slate-800 bg-slate-950 text-slate-100 shadow-2xl backdrop-blur-md transition-all duration-300"
     >
       {/* Header and Actions */}
       <div 

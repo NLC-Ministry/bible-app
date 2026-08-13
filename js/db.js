@@ -3323,8 +3323,8 @@ const db = {
         success: true,
         context: {
           zones: [
-            { name: ownZone || "第一牧區", memberCount: 12, chaptersRead: 126, lastReadAt: null, isMine: true },
-            { name: "第二牧區", memberCount: 10, chaptersRead: 98, lastReadAt: null, isMine: false }
+            { name: ownZone || "第一牧區", memberCount: 12, chaptersRead: 126, averageChapters: 10.5, lastReadAt: null, isMine: true },
+            { name: "第二牧區", memberCount: 10, chaptersRead: 98, averageChapters: 9.8, lastReadAt: null, isMine: false }
           ],
           unassignedCount: 0
         }
