@@ -78,4 +78,20 @@ describe("reader verse selection bottom bar", () => {
     expect(toolbar).not.toContain('data-action="play"');
     expect(toolbar).not.toContain('<span class="yv-tile-label">朗讀</span>');
   });
+
+  it("provides visible close controls for both the toolbar and highlight palette", () => {
+    const start = bible.indexOf("function openIntegratedSelectionBottomBar(options)");
+    const end = bible.indexOf("function openVerseNoteEditor", start);
+    const toolbar = bible.slice(start, end);
+    expect(toolbar).toContain('data-action="close" aria-label="關閉經文工具"');
+    expect(toolbar).toContain('data-action="close-highlight-palette" aria-label="關閉螢光筆色盤"');
+    expect(toolbar).toContain("setHighlightPaletteOpen(false)");
+    expect(toolbar).toContain('document.addEventListener("keydown", onKeyDown)');
+    expect(toolbar).toContain('if (e.key !== "Escape") return;');
+    expect(css).toMatch(/\.youversion-action-bar \.yv-popover-header \{[\s\S]*justify-content: space-between;/);
+  });
+
+  it("labels the multi-selection dismissal as close instead of relying on blank-area dismissal", () => {
+    expect(bible).toContain('<span class="yv-tile-label">關閉</span>');
+  });
 });

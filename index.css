@@ -8139,6 +8139,39 @@ input:checked + .slider:before {
   animation: readerSettingsDialogIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.reader-settings-footer {
+  flex: 0 0 auto;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border-card);
+}
+
+.reader-settings-apply-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-brand);
+  border-radius: 0.875rem;
+  background: var(--color-brand);
+  color: var(--color-brand-foreground, #fff);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.reader-settings-apply-btn:hover,
+.reader-settings-apply-btn:focus-visible {
+  filter: brightness(1.06);
+}
+
+.reader-settings-apply-btn:active {
+  transform: scale(0.98);
+}
+
 @keyframes readerSettingsDialogIn {
   from { opacity: 0; transform: translateY(0.75rem) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -13516,6 +13549,20 @@ select,
   flex: 0 0 auto;
   min-width: max-content;
   gap: 0.5rem;
+}
+
+.youversion-action-bar .yv-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.youversion-action-bar .yv-popover-close {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
 }
 
 .youversion-action-bar .yv-highlight-popover {

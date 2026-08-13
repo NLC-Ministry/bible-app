@@ -100,6 +100,9 @@ describe("reader speech controls", () => {
     expect(html).toContain('id="speech-voice-select"');
     expect(html).toContain('id="btn-preview-speech"');
     expect(html).toContain('id="btn-show-tts-guide"');
+    expect(html).toContain('id="typography-sheet-apply-btn"');
+    expect(html).toContain('class="reader-settings-apply-btn"');
+    expect(html).toContain('套用設定');
     expect(utils).toContain('export function initSpeechPreferencesControls()');
     expect(utils).toContain('window.initSpeechPreferencesControls = initSpeechPreferencesControls');
   });
@@ -118,9 +121,19 @@ describe("reader speech controls", () => {
     expect(css).toContain('.speech-preview-btn');
     expect(css).toContain('.speech-voice-select');
     expect(css).toContain('.tts-guide-button');
+    expect(css).toContain('.reader-settings-footer');
+    expect(css).toContain('.reader-settings-apply-btn');
     expect(css).toMatch(/\.reader-settings-dialog-backdrop \{[\s\S]*align-items: center;[\s\S]*justify-content: center;/);
     expect(css).toMatch(/\.reader-settings-dialog \{[\s\S]*width: min\(34rem, 90vw\);[\s\S]*max-height: min\(82dvh, 44rem\);[\s\S]*border-radius: 20px;/);
     expect(css).toMatch(/\.font-size-option\.active \{[\s\S]*background: color-mix\(in srgb, var\(--color-brand\)/);
+  });
+
+  it("confirms and persists reader settings from the explicit apply button", () => {
+    const bible = readFileSync("js/modules/bible.js", "utf8");
+    expect(bible).toContain('document.getElementById("typography-sheet-apply-btn")');
+    expect(bible).toContain('localStorage.setItem("nlc_speech_settings", JSON.stringify(state.speechSettings))');
+    expect(bible).toContain('showToast("閱讀與朗讀設定已套用")');
+    expect(bible).toMatch(/settingsApplyBtn\.addEventListener\("click"[\s\S]*closeReaderLayer\(settingsBackdrop\)/);
   });
 
   it("does not force the centered settings backdrop back to block layout", () => {

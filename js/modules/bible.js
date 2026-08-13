@@ -390,6 +390,7 @@ export function initReaderControls() {
   const settingsTrigger = document.getElementById("reader-settings-trigger-btn");
   const settingsBackdrop = document.getElementById("typography-settings-backdrop");
   const settingsCloseBtn = document.getElementById("typography-sheet-close-btn");
+  const settingsApplyBtn = document.getElementById("typography-sheet-apply-btn");
 
   if (settingsTrigger && settingsBackdrop) {
     settingsTrigger.addEventListener("click", (e) => {
@@ -407,6 +408,20 @@ export function initReaderControls() {
     settingsCloseBtn.addEventListener("click", () => {
       console.log("🔒 [Debug] 關閉文字設定按鈕被點擊");
       closeReaderLayer(settingsBackdrop);
+    });
+  }
+
+  if (settingsApplyBtn && settingsBackdrop && settingsApplyBtn.dataset.bound !== "true") {
+    settingsApplyBtn.dataset.bound = "true";
+    settingsApplyBtn.addEventListener("click", () => {
+      updateReaderFontSize();
+      try {
+        if (state.speechSettings) {
+          localStorage.setItem("nlc_speech_settings", JSON.stringify(state.speechSettings));
+        }
+      } catch (_error) {}
+      closeReaderLayer(settingsBackdrop);
+      showToast("閱讀與朗讀設定已套用");
     });
   }
 
@@ -1112,7 +1127,7 @@ function openMultiSelectBottomBar() {
           </button>
           <button type="button" class="yv-tile" data-action="ms-cancel">
             <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
-            <span class="yv-tile-label">取消</span>
+            <span class="yv-tile-label">關閉</span>
           </button>
         </div>
       </div>
@@ -1326,6 +1341,12 @@ function openIntegratedSelectionBottomBar(options) {
 
   rootElement.innerHTML = `
     <div id="pwa-selection-bottom-bar" class="youversion-action-bar active">
+      <div class="yv-bar-header">
+        <span class="yv-selection-label">經文工具</span>
+        <button type="button" class="yv-close-button" data-action="close" aria-label="關閉經文工具" title="關閉經文工具">
+          <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </div>
       <div class="yv-content-row">
         <div class="yv-action-group">
           <button type="button" class="yv-tile" data-action="copy">
@@ -1347,7 +1368,12 @@ function openIntegratedSelectionBottomBar(options) {
         </div>
       </div>
       <div id="yv-highlight-palette" class="yv-highlight-section yv-highlight-popover hidden" data-highlight-palette role="dialog" aria-label="螢光筆色盤">
-        <span class="yv-section-label">選擇顏色</span>
+        <div class="yv-popover-header">
+          <span class="yv-section-label">選擇顏色</span>
+          <button type="button" class="yv-close-button yv-popover-close" data-action="close-highlight-palette" aria-label="關閉螢光筆色盤" title="關閉螢光筆色盤">
+            <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
+          </button>
+        </div>
         <div class="yv-color-capsule" role="group" aria-label="選擇螢光標註顏色">
           <button type="button" class="yv-dot-clear" data-action="clear" title="取消螢光標註" aria-label="取消螢光標註">
             <span class="nlc-icon" data-icon="noColor" aria-hidden="true"></span>
@@ -1374,6 +1400,7 @@ function openIntegratedSelectionBottomBar(options) {
 
   const cleanupListeners = () => {
     document.removeEventListener("click", onDocClick);
+    document.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("resize", positionHighlightPalette);
   };
 
@@ -1410,12 +1437,28 @@ function openIntegratedSelectionBottomBar(options) {
     closeBar();
   };
 
+  const onKeyDown = (e) => {
+    if (e.key !== "Escape") return;
+    if (highlightPalette && !highlightPalette.classList.contains("hidden")) {
+      setHighlightPaletteOpen(false);
+      highlightToggle?.focus();
+      return;
+    }
+    closeBar();
+  };
+
   highlightToggle?.addEventListener("click", (e) => {
     e.stopPropagation();
     const shouldOpen = highlightPalette?.classList.contains("hidden");
     setHighlightPaletteOpen(Boolean(shouldOpen));
   });
+  barDiv.querySelector('[data-action="close-highlight-palette"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setHighlightPaletteOpen(false);
+    highlightToggle?.focus();
+  });
   window.addEventListener("resize", positionHighlightPalette, { passive: true });
+  document.addEventListener("keydown", onKeyDown);
 
   const applyHighlightColor = (color) => {
     if (!/^#[0-9a-f]{6}$/i.test(String(color || ""))) return;
