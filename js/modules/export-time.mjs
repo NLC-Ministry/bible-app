@@ -25,12 +25,13 @@ export function formatTaiwanDateTime(value = new Date()) {
 /**
  * CSV cannot declare an Excel column width. A bare date-time is auto-coerced
  * to an Excel date serial and narrow columns render it as "########". The
- * explicit timezone suffix keeps the exported value as readable text in
- * Excel, Numbers, Google Sheets, and plain-text CSV viewers.
+ * invisible zero-width prefix keeps the exported value as readable text in
+ * Excel without changing what the user sees in the cell.
  */
 export function formatTaiwanExportDateTime(value = new Date()) {
   const dateTime = formatTaiwanDateTime(value);
-  return dateTime ? `${dateTime}（台灣時間 UTC+8）` : "";
+  const minutePrecision = dateTime.slice(0, 16);
+  return minutePrecision ? `\u200B${minutePrecision}` : "";
 }
 
 export function formatTaiwanDate(value = new Date()) {

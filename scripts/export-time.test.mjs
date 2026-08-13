@@ -12,12 +12,12 @@ import {
 } from "../js/modules/admin.js";
 
 const exportedAt = new Date("2026-08-11T16:05:06Z");
-const expectedFirstRow = '"匯出時間（台灣時間）","2026-08-12 00:05:06（台灣時間 UTC+8）"';
+const expectedFirstRow = '"匯出時間（台灣時間）","​2026-08-12 00:05"';
 
 describe("Taiwan time in exported files", () => {
   it("formats timestamps and filename dates in Asia/Taipei across the UTC date boundary", () => {
     expect(formatTaiwanDateTime(exportedAt)).toBe("2026-08-12 00:05:06");
-    expect(formatTaiwanExportDateTime(exportedAt)).toBe("2026-08-12 00:05:06（台灣時間 UTC+8）");
+    expect(formatTaiwanExportDateTime(exportedAt)).toBe("\u200B2026-08-12 00:05");
     expect(formatTaiwanDate(exportedAt)).toBe("2026-08-12");
     expect(formatTaiwanDate("2026-08-12")).toBe("2026-08-12");
   });

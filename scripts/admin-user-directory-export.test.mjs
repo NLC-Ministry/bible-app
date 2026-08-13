@@ -55,8 +55,8 @@ describe("Admin User Directory CSV Export Tests", () => {
     ];
 
     const csv = convertUserDirectoryToCSV(mockProfiles, new Date("2026-08-12T04:34:56Z"));
-    expect(csv.split("\n")[0]).toBe('"匯出時間（台灣時間）","2026-08-12 12:34:56（台灣時間 UTC+8）"');
-    expect(csv.split("\n")[0]).not.toMatch(/,"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"$/);
+    expect(csv.split("\n")[0]).toBe('"匯出時間（台灣時間）","​2026-08-12 12:34"');
+    expect(csv.split("\n")[0]).not.toMatch(/,"\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?"$/);
     expect(csv).toContain("大區,牧區,小組,姓名,電子信箱,角色,組隊狀態,帳號狀態");
     expect(csv).toContain('"第一大區","西區牧區","約書亞小組","張三","zhang@example.com","小組長","[隊長] 光照團隊","啟用中"');
     expect(csv).toContain('"第二大區","北區牧區","彼得小組","李四","li@example.com","一般會友","未加入團隊 (個人速讀中)","已停用"');
