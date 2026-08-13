@@ -6294,6 +6294,36 @@ body.dark-theme .pastoral-race-progress {
   white-space: nowrap;
 }
 
+.daily-quiz-approved-variants {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.daily-quiz-variant-badge {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, var(--border-card));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  color: var(--color-brand);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.daily-quiz-publisher-notice {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
 .daily-quiz-form,
 .daily-quiz-review-list {
   display: grid;
@@ -8338,6 +8368,19 @@ body.reader-modal-open .main-content {
 .bible-text-container {
   font-size: var(--reader-font-size, 20px) !important;
   line-height: 1.82;
+  transition: font-size 0.16s ease;
+}
+
+#reader-view .bible-text-container,
+#reader-view .verse-text,
+#reader-view .verse-num {
+  font-size: var(--reader-font-size, 20px) !important;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#reader-view .verse-text,
+#reader-view .verse-num {
   transition: font-size 0.16s ease;
 }
 

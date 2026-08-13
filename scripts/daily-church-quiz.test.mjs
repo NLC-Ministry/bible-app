@@ -95,6 +95,17 @@ describe("daily church quiz", () => {
     expect(plan).toContain("renderPublisherDailyQuiz");
   });
 
+  it("shows approved version numbers only to publishers after review", () => {
+    expect(plan).toContain('const approvedVariants = (Array.isArray(context.approvedVariants)');
+    expect(plan).toContain('class="daily-quiz-approved-variants"');
+    expect(plan).toContain('class="daily-quiz-variant-badge"');
+    expect(plan).toContain('版本 ${quizEscape(String(item.variant).toUpperCase())}');
+    expect(plan).toContain('今日題目尚未完成審核，審核通過後會顯示可發布版本。');
+    expect(plan).toContain('? "等待牧者審核"');
+    expect(css).toContain('.daily-quiz-approved-variants {');
+    expect(css).toContain('.daily-quiz-variant-badge {');
+  });
+
   it("adds review, publishing and scoped member results to plan management", () => {
     expect(html).toContain('data-plan-subtab="quizzes"');
     expect(admin).toContain("renderAdminQuizReviewCards");

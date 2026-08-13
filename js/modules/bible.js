@@ -2,6 +2,7 @@
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
+import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -414,6 +415,8 @@ export function initReaderControls() {
   if (settingsApplyBtn && settingsBackdrop && settingsApplyBtn.dataset.bound !== "true") {
     settingsApplyBtn.dataset.bound = "true";
     settingsApplyBtn.addEventListener("click", () => {
+      const slider = document.getElementById("reader-font-size-slider");
+      if (slider) state.readerState.fontSize = normalizeReaderFontSize(slider.value);
       updateReaderFontSize();
       try {
         if (state.speechSettings) {
@@ -438,9 +441,7 @@ export function initReaderControls() {
   if (readerFontSizeSlider && readerFontSizeSlider.dataset.bound !== "true") {
     readerFontSizeSlider.dataset.bound = "true";
     readerFontSizeSlider.addEventListener("input", () => {
-      state.readerState.fontSize = normalizeReaderFontSize(readerFontSizeSlider.value);
-      updateReaderFontSize();
-      updateSheetActiveStates();
+      updateFontSizeDraftDisplay(readerFontSizeSlider.value);
     });
   }
 
@@ -448,9 +449,7 @@ export function initReaderControls() {
     if (btn.dataset.bound === "true") return;
     btn.dataset.bound = "true";
     btn.addEventListener("click", () => {
-      state.readerState.fontSize = normalizeReaderFontSize(btn.dataset.readerFontSize);
-      updateReaderFontSize();
-      updateSheetActiveStates();
+      updateFontSizeDraftDisplay(btn.dataset.readerFontSize);
     });
   });
 
@@ -466,6 +465,14 @@ export function initReaderControls() {
 
   function updateSheetActiveStates() {
     const fontSize = normalizeReaderFontSize(state.readerState.fontSize);
+    updateFontSizeDraftDisplay(fontSize);
+    document.querySelectorAll(".theme-option").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.theme === state.theme);
+    });
+  }
+
+  function updateFontSizeDraftDisplay(value) {
+    const fontSize = normalizeReaderFontSize(value);
     const slider = document.getElementById("reader-font-size-slider");
     const output = document.getElementById("reader-font-size-value");
     if (slider) {
@@ -478,9 +485,6 @@ export function initReaderControls() {
       const isActive = Number(btn.dataset.readerFontSize) === fontSize;
       btn.classList.toggle("active", isActive);
       btn.setAttribute("aria-pressed", String(isActive));
-    });
-    document.querySelectorAll(".theme-option").forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.theme === state.theme);
     });
   }
 
@@ -781,8 +785,15 @@ export function updateReaderFontSize() {
   const size = normalizeReaderFontSize(state.readerState.fontSize);
   state.readerState.fontSize = size;
   document.documentElement.style.setProperty("--reader-font-size", size + "px");
+  const readerView = document.getElementById("reader-view");
+  if (readerView) readerView.style.setProperty("--reader-font-size", size + "px");
   const bibleContent = document.getElementById("bible-content");
-  if (bibleContent) bibleContent.style.fontSize = size + "px";
+  if (bibleContent) {
+    bibleContent.style.setProperty("font-size", size + "px", "important");
+    bibleContent.querySelectorAll(".verse-text, .verse-num").forEach(element => {
+      element.style.setProperty("font-size", size + "px", "important");
+    });
+  }
 
   localStorage.setItem("reader_font_size", size);
 
@@ -2473,10 +2484,7 @@ window.setBibleSearchCorpus = function(corpus) {
 function searchLocalBibleCorpus(query) {
   const corpus = window.__BIBLE_SEARCH_CORPUS;
   if (!Array.isArray(corpus) || !query) return null;
-  const needle = query.toLowerCase();
-  return corpus
-    .filter(item => String(item.text || "").toLowerCase().includes(needle))
-    .slice(0, 120)
+  return rankBibleSearchResults(corpus, query, { includeFuzzy: true, limit: 120 })
     .map(item => ({
       bookName: item.bookName || item.book || "",
       bookEng: item.bookEng || "",
@@ -2490,21 +2498,34 @@ window.searchBibleText = async function(query, translation = "CUNP") {
   const localResults = searchLocalBibleCorpus(query);
   if (localResults) return localResults;
 
+  window.__BIBLE_SEARCH_REQUEST_CACHE = window.__BIBLE_SEARCH_REQUEST_CACHE || new Map();
+  const cacheKey = `${String(translation).toUpperCase()}:${String(query).trim().toLocaleLowerCase()}`;
+  if (window.__BIBLE_SEARCH_REQUEST_CACHE.has(cacheKey)) {
+    return window.__BIBLE_SEARCH_REQUEST_CACHE.get(cacheKey);
+  }
+
   const url = `https://bolls.life/search/${encodeURIComponent(translation)}/?search=${encodeURIComponent(query)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Search request failed");
-  const data = await res.json();
-  
-  return data.map(item => {
-    const book = BIBLE_BOOKS.find(b => b.id === item.book);
-    return {
-      bookName: book ? book.name : String(item.book),
-      bookEng: book ? book.eng : "",
-      chapter: item.chapter,
-      verse: item.verse,
-      text: item.text
-    };
+  const request = fetch(url).then(async res => {
+    if (!res.ok) throw new Error("Search request failed");
+    const data = await res.json();
+    const mapped = data.map(item => {
+      const book = BIBLE_BOOKS.find(b => b.id === item.book);
+      return {
+        book: item.book,
+        bookName: book ? book.name : String(item.book),
+        bookEng: book ? book.eng : "",
+        chapter: item.chapter,
+        verse: item.verse,
+        text: item.text
+      };
+    });
+    return rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: 120 });
+  }).catch(error => {
+    window.__BIBLE_SEARCH_REQUEST_CACHE.delete(cacheKey);
+    throw error;
   });
+  window.__BIBLE_SEARCH_REQUEST_CACHE.set(cacheKey, request);
+  return request;
 };
 
 export function updateReaderBottomActionBar() {

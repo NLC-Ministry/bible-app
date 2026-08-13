@@ -25,9 +25,34 @@ describe("reader font size slider", () => {
   });
 
   it("previews slider changes and synchronizes its visible value", () => {
-    expect(bible).toMatch(/readerFontSizeSlider\.addEventListener\("input"[\s\S]*updateReaderFontSize\(\)/);
+    expect(bible).toContain('updateFontSizeDraftDisplay(readerFontSizeSlider.value)');
+    expect(bible).toContain('function updateFontSizeDraftDisplay(value)');
     expect(bible).toContain('document.getElementById("reader-font-size-value")');
     expect(bible).toContain('slider.setAttribute("aria-valuetext", `${size}px`)');
     expect(css).toContain(".reader-font-size-tick.active");
+  });
+
+  it("applies the selected size directly on Android reader text nodes", () => {
+    expect(bible).toContain('readerView.style.setProperty("--reader-font-size", size + "px")');
+    expect(bible).toContain('bibleContent.style.setProperty("font-size", size + "px", "important")');
+    expect(bible).toContain('querySelectorAll(".verse-text, .verse-num")');
+    expect(bible).toContain('element.style.setProperty("font-size", size + "px", "important")');
+    expect(css).toMatch(/#reader-view \.verse-text,[\s\S]*#reader-view \.verse-num \{[\s\S]*font-size: var\(--reader-font-size, 20px\) !important;/);
+    expect(css).toContain("-webkit-text-size-adjust: 100%");
+  });
+
+  it("commits and saves the font size only from the explicit apply button", () => {
+    const applyBlock = bible.slice(
+      bible.indexOf('settingsApplyBtn.addEventListener("click"'),
+      bible.indexOf('if (settingsBackdrop)')
+    );
+    const sliderBlock = bible.slice(
+      bible.indexOf('const readerFontSizeSlider = document.getElementById'),
+      bible.indexOf('document.querySelectorAll(".theme-option")')
+    );
+    expect(applyBlock).toContain('state.readerState.fontSize = normalizeReaderFontSize(slider.value)');
+    expect(applyBlock).toContain('updateReaderFontSize()');
+    expect(sliderBlock).not.toContain('state.readerState.fontSize =');
+    expect(sliderBlock).not.toContain('updateReaderFontSize()');
   });
 });

@@ -3136,7 +3136,10 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
   const groups = Array.isArray(context.managedGroups) ? context.managedGroups : [];
   const publishedGroups = groups.filter(group => group.publication);
   const remainingCount = Math.max(0, groups.length - publishedGroups.length);
-  const approvedCount = Array.isArray(context.approvedVariants) ? context.approvedVariants.length : 0;
+  const approvedVariants = (Array.isArray(context.approvedVariants) ? context.approvedVariants : [])
+    .filter(item => ["A", "B", "C"].includes(String(item?.variant || "").toUpperCase()))
+    .sort((left, right) => String(left.variant).localeCompare(String(right.variant)));
+  const approvedCount = approvedVariants.length;
   const lockedPublisher = groups.length === 1 && groups[0]?.publication
     ? quizPublisherLabel(groups[0].publication.publisherRole)
     : "";
@@ -3151,6 +3154,12 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
       <div><p class="daily-quiz-eyebrow">小測驗</p><h3 id="daily-quiz-title">今日發布</h3></div>
       <span class="daily-quiz-status">已發布 ${publishedGroups.length}／${groups.length} 個小組</span>
     </div>
+    ${approvedCount > 0
+      ? `<div class="daily-quiz-approved-variants" aria-label="已審核可發布版本">
+          <span>已審核可發布</span>
+          ${approvedVariants.map(item => `<strong class="daily-quiz-variant-badge">版本 ${quizEscape(String(item.variant).toUpperCase())}</strong>`).join("")}
+        </div>`
+      : '<p class="daily-quiz-publisher-notice">今日題目尚未完成審核，審核通過後會顯示可發布版本。</p>'}
     <p class="daily-quiz-publisher-copy">按下後會自動發送給你負責範圍內尚未收到測驗的小組員。</p>
     <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" ${disabled ? "disabled" : ""}>${buttonLabel}</button>`;
   const button = content.querySelector("#daily-quiz-publish-btn");
