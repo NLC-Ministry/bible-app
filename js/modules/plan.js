@@ -4412,7 +4412,16 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
     state.currentUser.managed_zones || state.currentUser.pastoral_zone || "",
     state.currentUser.managed_groups || state.currentUser.small_group || ""
   ].join("|") : "anonymous";
-  if (regionSelect.options.length > 1 && regionSelect.dataset.populatedFor === userKey) return;
+  // Skip rebuilding once already populated for this exact user/role. The
+  // check used to also require regionSelect.options.length > 1, but
+  // zone_leader/group_leader roles always render exactly one disabled
+  // region option by design (js/modules/plan.js populateGroups/populateZones
+  // "else" branches), so that length check never became true for them.
+  // Every subsequent re-render (e.g. after the group/zone/region "change"
+  // handler calls renderPlanMembersView -> populateMembersSelector) then
+  // wiped and rebuilt the selects from scratch, snapping the value back to
+  // the default and making the filter look unresponsive.
+  if (regionSelect.dataset.populatedFor === userKey) return;
 
   regionSelect.dataset.populated = "true";
   regionSelect.dataset.populatedFor = userKey;
