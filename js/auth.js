@@ -257,7 +257,14 @@ const auth = {
       member_context_synced_at: "",
       member_context_sync_attempted_at: "",
       member_context_sync_status: "",
-      member_context_sync_error: ""
+      member_context_sync_error: "",
+      member_context_contract_version: "",
+      member_context_membership_lifecycle_state: "",
+      member_context_placement_state: "",
+      member_context_placement_workflow_state: "",
+      member_context_has_required_placement: "",
+      member_context_required_action: "",
+      member_context_required_action_url: ""
     };
     state.readingLogs = [];
     state.activePlans = [];

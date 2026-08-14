@@ -1,4 +1,4 @@
-﻿-- Migration: Fix highlights RLS — restrict all operations to own rows only
+-- Migration: Fix highlights RLS — restrict all operations to own rows only
 -- Run this in Supabase SQL Editor
 
 -- Drop overly-permissive policies
