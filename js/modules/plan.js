@@ -4660,12 +4660,29 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
 
   if (!regionSelect || !zoneSelect || !groupSelect || !masterSelect) return;
 
+  if (regionSelect.dataset.orgStructureRefreshBound !== "true") {
+    regionSelect.dataset.orgStructureRefreshBound = "true";
+    window.addEventListener("org-structure-updated", () => {
+      if (!regionSelect.isConnected) return;
+      delete regionSelect.dataset.populatedFor;
+      setupCascadingSelectors(regionId, zoneId, groupId, masterId);
+    });
+  }
+
+  const previousSelection = {
+    region: regionSelect.value,
+    zone: zoneSelect.value,
+    group: groupSelect.value
+  };
+  const preservePreviousSelection = Boolean(regionSelect.dataset.populatedFor);
+
   const userKey = state.currentUser ? [
     state.currentUser.id || state.currentUser.name,
     getUserRoleCode(state.currentUser),
     state.currentUser.managed_regions || state.currentUser.great_region || "",
     state.currentUser.managed_zones || state.currentUser.pastoral_zone || "",
-    state.currentUser.managed_groups || state.currentUser.small_group || ""
+    state.currentUser.managed_groups || state.currentUser.small_group || "",
+    Number(state.orgStructure?.revision || 0)
   ].join("|") : "anonymous";
   // Skip rebuilding once already populated for this exact user/role. The
   // check used to also require regionSelect.options.length > 1, but
@@ -4775,6 +4792,10 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
     const userReg = (state.currentUser.managed_regions || state.currentUser.great_region || "");
     regionSelect.options.add(new Option(userReg ? `大區：${userReg}` : "大區", ""));
     regionSelect.disabled = true;
+  }
+  if (preservePreviousSelection
+    && Array.from(regionSelect.options).some(option => option.value === previousSelection.region)) {
+    regionSelect.value = previousSelection.region;
   }
 
   // Update Master Select Value
@@ -4956,7 +4977,15 @@ function setupCascadingSelectors(regionId, zoneId, groupId, masterId) {
 
   // Initialize
   populateZones();
+  if (preservePreviousSelection
+    && Array.from(zoneSelect.options).some(option => option.value === previousSelection.zone)) {
+    zoneSelect.value = previousSelection.zone;
+  }
   populateGroups();
+  if (preservePreviousSelection
+    && Array.from(groupSelect.options).some(option => option.value === previousSelection.group)) {
+    groupSelect.value = previousSelection.group;
+  }
 
   // Set initial master select value mapping without triggering render loop
   updateMasterValue(true);

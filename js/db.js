@@ -84,6 +84,18 @@ async function fetchAllRows(buildQuery, pageSize = 200) {
   return { data: rows, error: null };
 }
 
+function createEmptyOrgStructure(revision = 0) {
+  return {
+    regions: [],
+    zones: {},
+    groups: {},
+    rawRegions: [],
+    rawZones: [],
+    rawGroups: [],
+    revision
+  };
+}
+
 /**
  * A plan can be referenced by a global UUID, its current stage key, or its
  * display name. Keep those aliases together so statistics stay plan-specific.
@@ -249,6 +261,10 @@ function setLocalPlanDowngradeLock(plan, lockedUntil) {
 const db = {
   _mergedUsersCache: {},
   _mergedUsersPromise: {},
+  _orgStructurePromise: null,
+  _orgStructurePromiseKey: "",
+  _orgStructureSnapshotKey: "",
+  _orgStructureRequestId: 0,
 
   // Initialize Supabase Connection
   async init() {
@@ -675,6 +691,7 @@ const db = {
     state.currentUser.member_context_leadership_assignments = Array.isArray(profile.member_context_leadership_assignments)
       ? profile.member_context_leadership_assignments
       : [];
+    state.currentUser.name_review_approved = profile.name_review_approved === true;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;
@@ -879,7 +896,7 @@ const db = {
         // 避開多個 sequential 網路請求產生的累積延遲與 cold start 問題！
         const [globalPlansResult, profileResult, logsResult, plansResult] = await Promise.all([
           state.supabase.from("global_plans").select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at").order("start_date", { ascending: true }),
-          state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
+          state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
           window.readingLogRepository
             ? window.readingLogRepository.fetch({
               cacheKey: `reading_logs:${user.id}`,
@@ -920,6 +937,7 @@ const db = {
             state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = !!profile.is_demo;
+            state.currentUser.name_review_approved = profile.name_review_approved === true;
 
           } else {
             // First-time login: create profile without local org placement (Hub-owned).
@@ -932,6 +950,7 @@ const db = {
             state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = false;
+            state.currentUser.name_review_approved = false;
 
 
             try {
@@ -1208,122 +1227,201 @@ const db = {
   },
 
   // Load Church Organization Structure (from Supabase or Local Mock)
-  ensureCurrentUserOrgStructure() {
+  ensureCurrentUserOrgStructure(orgStructure = state.orgStructure) {
     const user = state.currentUser || {};
     const region = user.great_region || "";
     const zone = user.pastoral_zone || "";
     const group = user.small_group || "";
 
-    if (!state.orgStructure.regions) state.orgStructure.regions = [];
-    if (!state.orgStructure.zones) state.orgStructure.zones = {};
-    if (!state.orgStructure.groups) state.orgStructure.groups = {};
+    if (!orgStructure.regions) orgStructure.regions = [];
+    if (!orgStructure.zones) orgStructure.zones = {};
+    if (!orgStructure.groups) orgStructure.groups = {};
 
-    if (region && !state.orgStructure.regions.includes(region)) {
-      state.orgStructure.regions.push(region);
+    if (region && !orgStructure.regions.includes(region)) {
+      orgStructure.regions.push(region);
     }
     if (region && zone) {
-      if (!state.orgStructure.zones[region]) state.orgStructure.zones[region] = [];
-      if (!state.orgStructure.zones[region].includes(zone)) state.orgStructure.zones[region].push(zone);
+      if (!orgStructure.zones[region]) orgStructure.zones[region] = [];
+      if (!orgStructure.zones[region].includes(zone)) orgStructure.zones[region].push(zone);
     }
     if (zone && group) {
-      if (!state.orgStructure.groups[zone]) state.orgStructure.groups[zone] = [];
-      if (!state.orgStructure.groups[zone].includes(group)) state.orgStructure.groups[zone].push(group);
+      if (!orgStructure.groups[zone]) orgStructure.groups[zone] = [];
+      if (!orgStructure.groups[zone].includes(group)) orgStructure.groups[zone].push(group);
     }
   },
 
+  getOrgStructureOwnerKey() {
+    const user = state.currentUser || {};
+    const role = (typeof getUserRoleCode === "function" && getUserRoleCode(user))
+      || user.role_definition?.code
+      || user.role
+      || "member";
+    return [
+      state.isSupabaseMode ? "supabase" : "local",
+      user.id || state.currentProfileId || user.email || "anonymous",
+      role,
+      user.managed_regions || "",
+      user.managed_zones || "",
+      user.managed_groups || "",
+      user.great_region || "",
+      user.pastoral_zone || "",
+      user.small_group || ""
+    ].map(value => String(value)).join("|");
+  },
+
+  notifyOrgStructureChanged(status, detail = {}) {
+    if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+    window.dispatchEvent(new CustomEvent("org-structure-updated", {
+      detail: {
+        status,
+        revision: Number(state.orgStructure?.revision || 0),
+        ...detail
+      }
+    }));
+  },
+
+  resetOrgStructure({ notify = true } = {}) {
+    const revision = Number(state.orgStructure?.revision || 0) + 1;
+    this._orgStructureRequestId += 1;
+    this._orgStructurePromise = null;
+    this._orgStructurePromiseKey = "";
+    this._orgStructureSnapshotKey = "";
+    state.orgStructure = createEmptyOrgStructure(revision);
+    if (notify) this.notifyOrgStructureChanged("reset");
+  },
+
   async loadOrgStructure() {
-    state.orgStructure = {
-      regions: [],
-      zones: {},
-      groups: {},
-      rawRegions: [],
-      rawZones: [],
-      rawGroups: []
-    };
+    const ownerKey = this.getOrgStructureOwnerKey();
+    if (this._orgStructurePromise && this._orgStructurePromiseKey === ownerKey) {
+      return this._orgStructurePromise;
+    }
 
-    if (state.isSupabaseMode && state.supabase) {
-      try {
-        // 從 profiles 表取得所有不重複的使用者大區、牧區、小組資料以重構組織架構
-        const { data: users, error } = await fetchAllRows(() => state.supabase
-          .from("profiles")
-          .select("great_region, pastoral_zone, small_group"));
+    // A snapshot is safe to keep during a background refresh only when it
+    // belongs to this exact user, role and managed scope. Account/permission
+    // changes still fail closed so another user's broader filters never leak.
+    if (this._orgStructureSnapshotKey !== ownerKey) {
+      this.resetOrgStructure();
+    }
 
-        if (error) throw error;
+    const requestId = ++this._orgStructureRequestId;
+    const loadPromise = (async () => {
+      if (state.isSupabaseMode && state.supabase) {
+        try {
+          // profiles remain the source of truth after the legacy organization
+          // system was removed. Build a complete candidate off-screen and only
+          // publish it after every page has loaded successfully.
+          let usersResult = null;
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              usersResult = await fetchAllRows(() => state.supabase
+                .from("profiles")
+                .select("great_region, pastoral_zone, small_group"));
+            } catch (error) {
+              usersResult = { data: [], error };
+            }
+            if (!usersResult.error) break;
+            if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 400));
+          }
+          const { data: users, error } = usersResult || { data: [], error: new Error("org_structure_load_failed") };
 
-        const regionsSet = new Set();
-        const zonesMap = new Map(); // region -> Set of zones
-        const groupsMap = new Map(); // zone -> Set of groups
+          if (error) throw error;
 
-        (users || []).forEach(u => {
-          const region = (u.great_region || "").trim();
-          const zone = (u.pastoral_zone || "").trim();
-          const group = (u.small_group || "").trim();
+          const regionsSet = new Set();
+          const zonesMap = new Map(); // region -> Set of zones
+          const groupsMap = new Map(); // zone -> Set of groups
 
-          if (region) {
-            regionsSet.add(region);
-            if (zone) {
-              if (!zonesMap.has(region)) zonesMap.set(region, new Set());
-              zonesMap.get(region).add(zone);
+          (users || []).forEach(u => {
+            const region = (u.great_region || "").trim();
+            const zone = (u.pastoral_zone || "").trim();
+            const group = (u.small_group || "").trim();
 
-              if (group) {
-                if (!groupsMap.has(zone)) groupsMap.set(zone, new Set());
-                groupsMap.get(zone).add(group);
+            if (region) {
+              regionsSet.add(region);
+              if (zone) {
+                if (!zonesMap.has(region)) zonesMap.set(region, new Set());
+                zonesMap.get(region).add(zone);
+
+                if (group) {
+                  if (!groupsMap.has(zone)) groupsMap.set(zone, new Set());
+                  groupsMap.get(zone).add(group);
+                }
               }
             }
+          });
+
+          const nextOrgStructure = createEmptyOrgStructure(Number(state.orgStructure?.revision || 0) + 1);
+          nextOrgStructure.regions = Array.from(regionsSet).sort();
+          nextOrgStructure.regions.forEach(region => {
+            nextOrgStructure.zones[region] = zonesMap.has(region)
+              ? Array.from(zonesMap.get(region)).sort()
+              : [];
+          });
+          zonesMap.forEach(zoneSet => {
+            zoneSet.forEach(zone => {
+              nextOrgStructure.groups[zone] = groupsMap.has(zone)
+                ? Array.from(groupsMap.get(zone)).sort()
+                : [];
+            });
+          });
+
+          // Compatibility shapes used by existing permission and selector UI.
+          nextOrgStructure.rawRegions = nextOrgStructure.regions.map(region => ({ id: region, name: region }));
+          zonesMap.forEach((zoneSet, region) => {
+            zoneSet.forEach(zone => {
+              nextOrgStructure.rawZones.push({ id: zone, name: zone, great_region_id: region });
+            });
+          });
+          groupsMap.forEach((groupSet, zone) => {
+            groupSet.forEach(group => {
+              nextOrgStructure.rawGroups.push({ id: group, name: group, pastoral_zone_id: zone });
+            });
+          });
+          this.ensureCurrentUserOrgStructure(nextOrgStructure);
+
+          // Ignore a response from an account/scope that stopped being current
+          // while the request was in flight.
+          if (requestId !== this._orgStructureRequestId || ownerKey !== this.getOrgStructureOwnerKey()) {
+            return false;
           }
-        });
+          state.orgStructure = nextOrgStructure;
+          this._orgStructureSnapshotKey = ownerKey;
+          this.notifyOrgStructureChanged("ready");
+          return true;
+        } catch (err) {
+          console.error("Failed to load dynamic org structure from Supabase:", err);
+          if (requestId !== this._orgStructureRequestId || ownerKey !== this.getOrgStructureOwnerKey()) {
+            return false;
+          }
 
-        const regions = Array.from(regionsSet).sort();
-        state.orgStructure.regions = regions;
+          const preserved = this._orgStructureSnapshotKey === ownerKey;
+          if (!preserved) {
+            const fallback = createEmptyOrgStructure(Number(state.orgStructure?.revision || 0) + 1);
+            this.ensureCurrentUserOrgStructure(fallback);
+            state.orgStructure = fallback;
+          }
+          this.notifyOrgStructureChanged("error", { preserved });
+          return false;
+        }
+      }
 
-        state.orgStructure.zones = {};
-        regions.forEach(r => {
-          const regionZones = zonesMap.has(r) ? Array.from(zonesMap.get(r)).sort() : [];
-          state.orgStructure.zones[r] = regionZones;
-        });
+      this.loadMockOrgStructure();
+      state.orgStructure.revision = Number(state.orgStructure?.revision || 0) + 1;
+      this.ensureCurrentUserOrgStructure();
+      this._orgStructureSnapshotKey = ownerKey;
+      this.notifyOrgStructureChanged("ready");
+      return true;
+    })();
 
-        state.orgStructure.groups = {};
-        zonesMap.forEach((zoneSet, r) => {
-          zoneSet.forEach(z => {
-            const zoneGroups = groupsMap.has(z) ? Array.from(groupsMap.get(z)).sort() : [];
-            state.orgStructure.groups[z] = zoneGroups;
-          });
-        });
-
-        // 生成相容的 rawRegions/rawZones/rawGroups
-        state.orgStructure.rawRegions = regions.map(r => ({ id: r, name: r }));
-
-        const rawZones = [];
-        zonesMap.forEach((zoneSet, r) => {
-          zoneSet.forEach(z => {
-            rawZones.push({ id: z, name: z, great_region_id: r });
-          });
-        });
-        state.orgStructure.rawZones = rawZones;
-
-        const rawGroups = [];
-        groupsMap.forEach((groupSet, z) => {
-          groupSet.forEach(g => {
-            rawGroups.push({ id: g, name: g, pastoral_zone_id: z });
-          });
-        });
-        state.orgStructure.rawGroups = rawGroups;
-
-        this.ensureCurrentUserOrgStructure();
-        return;
-      } catch (err) {
-        console.error("Failed to load dynamic org structure from Supabase:", err);
-        state.orgStructure.regions = [];
-        state.orgStructure.rawRegions = [];
-        state.orgStructure.rawZones = [];
-        state.orgStructure.rawGroups = [];
-        state.orgStructure.zones = {};
-        state.orgStructure.groups = {};
-        this.ensureCurrentUserOrgStructure();
-        return;
+    this._orgStructurePromise = loadPromise;
+    this._orgStructurePromiseKey = ownerKey;
+    try {
+      return await loadPromise;
+    } finally {
+      if (this._orgStructurePromise === loadPromise) {
+        this._orgStructurePromise = null;
+        this._orgStructurePromiseKey = "";
       }
     }
-    this.loadMockOrgStructure();
   },
 
   async syncChurchOrganization(regions, zones, groups) {
