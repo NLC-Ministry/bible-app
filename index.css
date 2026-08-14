@@ -6312,26 +6312,6 @@ body.dark-theme .pastoral-race-progress {
   white-space: nowrap;
 }
 
-.daily-quiz-approved-variants {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin: 0.75rem 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.daily-quiz-variant-badge {
-  padding: 0.35rem 0.7rem;
-  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, var(--border-card));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
-  color: var(--color-brand);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
 .daily-quiz-publisher-notice {
   margin: 0.75rem 0;
   padding: 0.75rem;
@@ -6596,10 +6576,62 @@ body.admin-quiz-editor-open {
 
 .admin-daily-quiz-group summary {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1fr);
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
+}
+
+.admin-daily-quiz-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.admin-daily-quiz-scope-row select {
+  min-width: 140px;
+}
+
+.admin-quiz-publish-step {
+  margin-top: 1rem;
+}
+
+.admin-quiz-publish-step-label {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.admin-quiz-version-choice {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.admin-quiz-version-btn.active {
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  color: var(--color-brand);
+}
+
+.admin-quiz-custom-editor-slot {
+  margin-top: 0.75rem;
+}
+
+.admin-quiz-custom-question legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#admin-quiz-publish-btn,
+.daily-quiz-publish {
+  margin-top: 1rem;
+  width: 100%;
+  justify-content: center;
 }
 
 .admin-daily-quiz-group summary small {

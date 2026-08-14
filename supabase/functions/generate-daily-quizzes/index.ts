@@ -132,7 +132,7 @@ function normalizeGeminiModel(value: unknown) {
 
 async function generateVariant(apiKey: string, model: string, variant: string, scripture: string, refs: ChapterRef[]) {
   if (!/^[a-zA-Z0-9._-]+$/.test(model)) throw new Error("invalid_gemini_model");
-  const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : variant === "B" ? "人物、對話、動機與因果關係" : "核心信息、上下文理解與可由經文直接支持的應用";
+  const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : "人物、對話、動機與因果關係";
   const referenceLabel = refs.map(ref => `${ref.book}${ref.chapter}章`).join("、");
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
@@ -197,9 +197,9 @@ Deno.serve(async req => {
   const body = await req.json().catch(() => ({}));
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.quizDate || "")) ? String(body.quizDate) : taipeiDate();
   const requestedVariants = Array.from(new Set(
-    (Array.isArray(body?.variants) ? body.variants : ["A", "B", "C"])
+    (Array.isArray(body?.variants) ? body.variants : ["A", "B"])
       .map((value: unknown) => String(value || "").trim().toUpperCase())
-      .filter((value: string) => ["A", "B", "C"].includes(value))
+      .filter((value: string) => ["A", "B"].includes(value))
   ));
   console.info("daily_quiz_generation_started", JSON.stringify({ invocationId, source: String(body?.source || "unknown"), quizDate, requestedVariants, model }));
   if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate, invocationId }, 400);

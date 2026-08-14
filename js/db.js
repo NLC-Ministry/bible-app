@@ -2636,9 +2636,10 @@ const db = {
       quiz_publication_not_found: "找不到這份小測驗發布紀錄。",
       quiz_not_available: "這份小測驗目前無法作答。",
       daily_quiz_feature_disabled: "每日小測驗功能目前已關閉。",
-      quiz_five_answers_required: "請完成全部五題後再送出。",
+      quiz_answers_required: "請完成全部題目後再送出。",
       invalid_quiz_answer: "作答資料格式不正確，請重新選擇答案。",
       invalid_quiz_question: "每題都需要題目、四個選項、答案、解說與經文出處。",
+      invalid_quiz_question_count: "自訂題目需要 2 至 10 題。",
       quiz_already_published: "這一版已經發布，為避免改變組員正在作答的內容，不能再修改或取消審核。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
@@ -2700,14 +2701,18 @@ const db = {
     });
   },
 
-  async publishDailyQuiz(plan, quizDate, groupIds = [], publishAll = false) {
+  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("publish_daily_quiz", {
       p_global_plan_id: planId,
       p_quiz_date: quizDate,
-      p_small_group_ids: Array.isArray(groupIds) && groupIds.length ? groupIds : null,
-      p_publish_all: publishAll === true
+      p_scope_type: scope.scopeType || "all",
+      p_scope_name: scope.scopeName || null,
+      p_variant: selection.variant || null,
+      p_custom_questions: Array.isArray(selection.customQuestions) && selection.customQuestions.length
+        ? selection.customQuestions
+        : null
     });
   },
 

@@ -3089,7 +3089,7 @@ function bindDailyQuizSubmission(content, quiz, plan, quizDate) {
       return selected ? Number(selected.value) : null;
     });
     if (answers.some(answer => answer === null)) {
-      if (typeof showToast === "function") showToast("請完成全部五題後再送出");
+      if (typeof showToast === "function") showToast(`請完成全部 ${answers.length} 題後再送出`);
       return;
     }
     const button = form.querySelector("button[type='submit']");
@@ -3112,7 +3112,7 @@ function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
   }
   content.innerHTML = `
     <div class="daily-quiz-heading">
-      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">5 題選擇題</h3></div>
+      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">${(quiz.questions || []).length} 題選擇題</h3></div>
       <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發布</span>
     </div>
     <form id="daily-quiz-form" class="daily-quiz-form">
@@ -3132,44 +3132,206 @@ function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
   bindDailyQuizSubmission(content, quiz, plan, quizDate);
 }
 
+function renderQuizScopeSelectorHtml(prefix) {
+  return `<div class="admin-daily-quiz-scope-row" id="${prefix}-scope-row">
+    <select id="${prefix}-region-select" class="form-control"></select>
+    <select id="${prefix}-zone-select" class="form-control"></select>
+    <select id="${prefix}-group-select" class="form-control"></select>
+    <select id="${prefix}-master-select" class="hidden" style="display:none;"></select>
+  </div>`;
+}
+
+function getQuizScope(prefix) {
+  const readScope = id => {
+    const value = document.getElementById(id)?.value || "";
+    return value === "unassigned" ? "" : value;
+  };
+  const region = readScope(`${prefix}-region-select`);
+  const zone = readScope(`${prefix}-zone-select`);
+  const group = readScope(`${prefix}-group-select`);
+  if (group) return { scopeType: "group", scopeName: group };
+  if (zone) return { scopeType: "zone", scopeName: zone };
+  if (region) return { scopeType: "region", scopeName: region.replace(/^region:/, "") };
+  return { scopeType: "all", scopeName: null };
+}
+
+function renderQuizCustomQuestionBlock(index, question = {}) {
+  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-index="${index}">
+    <legend>第 ${index + 1} 題 <button type="button" class="icon-button icon-button--subtle" data-quiz-custom-remove aria-label="刪除第 ${index + 1} 題"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button></legend>
+    <label>題目<textarea class="form-control" data-field="question" rows="2">${quizEscape(question.question || "")}</textarea></label>
+    <div class="admin-daily-quiz-options">
+      ${[0, 1, 2, 3].map(optionIndex => `<label>選項 ${optionIndex + 1}<input class="form-control" data-option-index="${optionIndex}" value="${quizEscape((question.options || [])[optionIndex] || "")}"></label>`).join("")}
+    </div>
+    <div class="admin-daily-quiz-answer-row">
+      <label>正確答案<select class="form-control" data-field="correctIndex">
+        ${[0, 1, 2, 3].map(optionIndex => `<option value="${optionIndex}" ${Number(question.correctIndex) === optionIndex ? "selected" : ""}>選項 ${optionIndex + 1}</option>`).join("")}
+      </select></label>
+      <label>經文出處<input class="form-control" data-field="verseRef" value="${quizEscape(question.verseRef || "")}"></label>
+    </div>
+    <label>解說<textarea class="form-control" data-field="explanation" rows="2">${quizEscape(question.explanation || "")}</textarea></label>
+  </fieldset>`;
+}
+
+function renderQuizCustomEditorHtml() {
+  return `<div class="admin-daily-quiz-editor admin-quiz-custom-editor" data-quiz-custom-editor>
+    <div class="admin-quiz-custom-questions" data-quiz-custom-questions>
+      ${[0, 1].map(index => renderQuizCustomQuestionBlock(index)).join("")}
+    </div>
+    <div class="admin-daily-quiz-carousel-actions">
+      <button type="button" class="secondary-btn" data-quiz-custom-add>新增題目</button>
+    </div>
+    <p class="admin-daily-quiz-note">自訂題目 2～10 題，發佈者自行負責內容，不需牧者審核，也不會出現在牧者共用審核清單。</p>
+  </div>`;
+}
+
+function bindQuizCustomEditor(container, onChange) {
+  const list = container.querySelector("[data-quiz-custom-questions]");
+  const addBtn = container.querySelector("[data-quiz-custom-add]");
+  if (!list || !addBtn || container.dataset.customBound === "true") return;
+  container.dataset.customBound = "true";
+  const renumber = () => {
+    Array.from(list.children).forEach((block, index) => {
+      block.dataset.questionIndex = String(index);
+      const legend = block.querySelector("legend");
+      if (legend && legend.firstChild) legend.firstChild.textContent = `第 ${index + 1} 題 `;
+      const removeBtn = block.querySelector("[data-quiz-custom-remove]");
+      if (removeBtn) removeBtn.disabled = list.children.length <= 2;
+    });
+    addBtn.disabled = list.children.length >= 10;
+  };
+  addBtn.addEventListener("click", () => {
+    if (list.children.length >= 10) return;
+    list.insertAdjacentHTML("beforeend", renderQuizCustomQuestionBlock(list.children.length));
+    renumber();
+    if (typeof hydrateIcons === "function") hydrateIcons(list.lastElementChild);
+    if (typeof onChange === "function") onChange();
+  });
+  list.addEventListener("click", event => {
+    const removeBtn = event.target.closest("[data-quiz-custom-remove]");
+    if (!removeBtn || list.children.length <= 2) return;
+    removeBtn.closest("[data-question-index]")?.remove();
+    renumber();
+    if (typeof onChange === "function") onChange();
+  });
+  list.addEventListener("input", () => { if (typeof onChange === "function") onChange(); });
+  renumber();
+}
+
+function collectQuizCustomQuestions(container) {
+  const list = container.querySelector("[data-quiz-custom-questions]");
+  if (!list) return [];
+  return Array.from(list.querySelectorAll("[data-question-index]")).map((field, index) => ({
+    id: `c${index + 1}`,
+    question: field.querySelector('[data-field="question"]')?.value.trim() || "",
+    options: [0, 1, 2, 3].map(optionIndex => field.querySelector(`[data-option-index="${optionIndex}"]`)?.value.trim() || ""),
+    correctIndex: Number(field.querySelector('[data-field="correctIndex"]')?.value || 0),
+    explanation: field.querySelector('[data-field="explanation"]')?.value.trim() || "",
+    verseRef: field.querySelector('[data-field="verseRef"]')?.value.trim() || ""
+  }));
+}
+
+function quizCustomQuestionsAreValid(questions) {
+  if (!Array.isArray(questions) || questions.length < 2 || questions.length > 10) return false;
+  return questions.every(question =>
+    question.question && question.verseRef && question.explanation
+    && Array.isArray(question.options) && question.options.length === 4 && question.options.every(option => option)
+  );
+}
+
 function renderPublisherDailyQuiz(content, context, plan, quizDate) {
   const groups = Array.isArray(context.managedGroups) ? context.managedGroups : [];
   const publishedGroups = groups.filter(group => group.publication);
-  const remainingCount = Math.max(0, groups.length - publishedGroups.length);
   const approvedVariants = (Array.isArray(context.approvedVariants) ? context.approvedVariants : [])
-    .filter(item => ["A", "B", "C"].includes(String(item?.variant || "").toUpperCase()))
-    .sort((left, right) => String(left.variant).localeCompare(String(right.variant)));
-  const approvedCount = approvedVariants.length;
-  const lockedPublisher = groups.length === 1 && groups[0]?.publication
-    ? quizPublisherLabel(groups[0].publication.publisherRole)
-    : "";
-  const disabled = approvedCount === 0 || remainingCount === 0;
-  const buttonLabel = approvedCount === 0
-    ? "等待牧者審核"
-    : remainingCount === 0
-      ? `已由${lockedPublisher || "管理者"}發布`
-      : "發布小測驗";
+    .filter(item => ["A", "B"].includes(String(item?.variant || "").toUpperCase()));
+  const hasApproved = variant => approvedVariants.some(item => item.variant === variant);
   content.innerHTML = `
     <div class="daily-quiz-heading">
       <div><p class="daily-quiz-eyebrow">小測驗</p><h3 id="daily-quiz-title">今日發布</h3></div>
       <span class="daily-quiz-status">已發布 ${publishedGroups.length}／${groups.length} 個小組</span>
     </div>
-    ${approvedCount > 0
-      ? `<div class="daily-quiz-approved-variants" aria-label="已審核可發布版本">
-          <span>已審核可發布</span>
-          ${approvedVariants.map(item => `<strong class="daily-quiz-variant-badge">版本 ${quizEscape(String(item.variant).toUpperCase())}</strong>`).join("")}
-        </div>`
-      : '<p class="daily-quiz-publisher-notice">今日題目尚未完成審核，審核通過後會顯示可發布版本。</p>'}
-    <p class="daily-quiz-publisher-copy">按下後會自動發送給你負責範圍內尚未收到測驗的小組員。</p>
-    <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" ${disabled ? "disabled" : ""}>${buttonLabel}</button>`;
-  const button = content.querySelector("#daily-quiz-publish-btn");
-  if (!button || disabled) return;
-  button.addEventListener("click", async () => {
-    if (!window.confirm(`確定發布給 ${remainingCount} 個尚未收到測驗的小組嗎？`)) return;
-    button.disabled = true;
-    const result = await db.publishDailyQuiz(plan, quizDate, [], true);
+    ${approvedVariants.length === 0
+      ? '<p class="daily-quiz-publisher-notice">今日 AI 題目尚未完成審核，審核通過後會顯示可發布版本；你也可以直接用自訂題目發布。</p>'
+      : ""}
+    <div class="admin-quiz-publish-step">
+      <p class="admin-quiz-publish-step-label">1. 發布範圍</p>
+      ${renderQuizScopeSelectorHtml("plan-quiz-publish")}
+    </div>
+    <div class="admin-quiz-publish-step">
+      <p class="admin-quiz-publish-step-label">2. 題目版本</p>
+      <div class="admin-quiz-version-choice" role="radiogroup" aria-label="題目版本">
+        <button type="button" class="secondary-btn admin-quiz-version-btn" data-quiz-version-choice="A" ${hasApproved("A") ? "" : "disabled"}>版本 A</button>
+        <button type="button" class="secondary-btn admin-quiz-version-btn" data-quiz-version-choice="B" ${hasApproved("B") ? "" : "disabled"}>版本 B</button>
+        <button type="button" class="secondary-btn admin-quiz-version-btn" data-quiz-version-choice="C">自訂題目</button>
+      </div>
+      <div class="admin-quiz-custom-editor-slot hidden" data-quiz-custom-slot></div>
+    </div>
+    <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" disabled>發布小測驗</button>`;
+
+  setupCascadingSelectors("plan-quiz-publish-region-select", "plan-quiz-publish-zone-select", "plan-quiz-publish-group-select", "plan-quiz-publish-master-select");
+
+  let selectedVersion = null;
+  const versionButtons = Array.from(content.querySelectorAll("[data-quiz-version-choice]"));
+  const customSlot = content.querySelector("[data-quiz-custom-slot]");
+  const publishBtn = content.querySelector("#daily-quiz-publish-btn");
+
+  const refresh = () => {
+    if (!publishBtn) return;
+    let ready = false;
+    if (selectedVersion === "A" || selectedVersion === "B") {
+      ready = hasApproved(selectedVersion);
+    } else if (selectedVersion === "C") {
+      ready = customSlot ? quizCustomQuestionsAreValid(collectQuizCustomQuestions(customSlot)) : false;
+    }
+    publishBtn.disabled = !ready;
+  };
+
+  ["region", "zone", "group"].forEach(part => {
+    content.querySelector(`#plan-quiz-publish-${part}-select`)?.addEventListener("change", refresh);
+  });
+
+  versionButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      selectedVersion = button.dataset.quizVersionChoice;
+      versionButtons.forEach(other => other.classList.toggle("active", other === button));
+      if (selectedVersion === "C") {
+        if (!customSlot.dataset.rendered) {
+          customSlot.innerHTML = renderQuizCustomEditorHtml();
+          customSlot.dataset.rendered = "true";
+          bindQuizCustomEditor(customSlot, refresh);
+          if (typeof hydrateIcons === "function") hydrateIcons(customSlot);
+        }
+        customSlot.classList.remove("hidden");
+      } else {
+        customSlot.classList.add("hidden");
+      }
+      refresh();
+    });
+  });
+
+  publishBtn?.addEventListener("click", async () => {
+    if (!selectedVersion) return;
+    const scope = getQuizScope("plan-quiz-publish");
+    const scopeLabel = scope.scopeType === "all" ? "你負責的全部小組" : scope.scopeName;
+    let selection;
+    if (selectedVersion === "C") {
+      const questions = collectQuizCustomQuestions(customSlot);
+      if (!quizCustomQuestionsAreValid(questions)) {
+        if (typeof showToast === "function") showToast("自訂題目需要 2 至 10 題，且每題都要填寫完整。");
+        return;
+      }
+      selection = { customQuestions: questions };
+    } else {
+      selection = { variant: selectedVersion };
+    }
+    if (!window.confirm(`確定發布${selectedVersion === "C" ? "自訂題目" : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
+    publishBtn.disabled = true;
+    const originalLabel = publishBtn.textContent;
+    publishBtn.textContent = "發佈中…";
+    const result = await db.publishDailyQuiz(plan, quizDate, scope, selection);
     if (!result.success) {
-      button.disabled = false;
+      publishBtn.disabled = false;
+      publishBtn.textContent = originalLabel;
       if (typeof showToast === "function") showToast(result.message || "小測驗發布失敗");
       return;
     }
@@ -8434,6 +8596,9 @@ if (typeof renderPlanMembersView === 'function') {
 }
 if (typeof populateMembersSelector === 'function') {
   window.populateMembersSelector = populateMembersSelector;
+}
+if (typeof setupCascadingSelectors === 'function') {
+  window.setupCascadingSelectors = setupCascadingSelectors;
 }
 if (typeof renderPlanStatsView === 'function') {
   window.renderPlanStatsView = renderPlanStatsView;
