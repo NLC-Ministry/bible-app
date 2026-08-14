@@ -95,8 +95,17 @@ describe("daily church quiz", () => {
     expect(html).toContain('id="daily-quiz-section"');
     expect(html.indexOf('id="daily-quiz-section"')).toBeGreaterThan(html.indexOf('id="plan-tasks-list"'));
     expect(plan).toContain("if (!context.myQuiz && !context.canPublish)");
+    expect(plan).toContain("renderDailyQuizEntry");
+    expect(plan).toContain('id="daily-quiz-entry-button"');
+    expect(plan).toContain("getDailyQuizReadingProgress");
+    expect(plan).toContain("if (!progress.isComplete)");
+    expect(plan).toContain("請先閱讀完今天的速讀進度，再進入小測驗");
+    expect(plan).toContain("quizDate !== getDailyQuizTaiwanToday()");
+    expect(plan).toContain("if (options.open === true)");
     expect(plan).toContain("renderAssignedDailyQuiz");
     expect(plan).toContain("renderPublisherDailyQuiz");
+    expect(css).toContain(".daily-quiz-entry-button {");
+    expect(css).toContain("font-size: 14px;");
   });
 
   it("shows approved version numbers only to publishers after review", () => {

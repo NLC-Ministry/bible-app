@@ -3056,6 +3056,78 @@ function quizPublisherLabel(role) {
   })[role] || "管理者";
 }
 
+function getDailyQuizTaiwanToday() {
+  if (typeof window.getTaiwanTodayISO === "function") return window.getTaiwanTodayISO();
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date()).reduce((result, part) => {
+    result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function getDailyQuizReadingProgress(plan, quizDate) {
+  const round = Number(plan?.currentRound || 1);
+  const day = Array.isArray(plan?.days)
+    ? plan.days.find(item => String(item?.isoDate || "") === String(quizDate || ""))
+    : null;
+  const chapters = Array.isArray(day?.chapters)
+    ? day.chapters.filter(chapter => Number(chapter?.round || round) === round)
+    : [];
+  const completed = chapters.filter(chapter => Boolean(chapter?.[`isReadR${round}`] || chapter?.isRead)).length;
+  return {
+    total: chapters.length,
+    completed,
+    remaining: Math.max(0, chapters.length - completed),
+    isComplete: chapters.length > 0 && completed === chapters.length
+  };
+}
+
+function openDailyQuizContent(content, context, plan, quizDate) {
+  if (context.myQuiz) renderAssignedDailyQuiz(content, context.myQuiz, plan, quizDate);
+  else renderPublisherDailyQuiz(content, context, plan, quizDate);
+  if (typeof hydrateIcons === "function") hydrateIcons(content);
+}
+
+function renderDailyQuizEntry(content, context, plan, quizDate) {
+  const assignedQuiz = context.myQuiz || null;
+  const isCompleted = Boolean(assignedQuiz?.attempt);
+  const buttonLabel = assignedQuiz
+    ? (isCompleted ? "查看測驗結果" : "進入小測驗")
+    : "發布小測驗";
+  const description = assignedQuiz
+    ? (isCompleted ? "今天的小測驗已完成，可查看答案與解說" : "完成今天的速讀進度後即可作答")
+    : "查看已審核版本並發布給所屬小組";
+
+  content.innerHTML = `
+    <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description">
+      <span class="daily-quiz-entry-icon" aria-hidden="true"><span class="nlc-icon" data-icon="checkOne"></span></span>
+      <span class="daily-quiz-entry-copy">
+        <strong>小測驗</strong>
+        <small id="daily-quiz-entry-description">${description}</small>
+      </span>
+      <span class="daily-quiz-entry-action">${buttonLabel}<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
+    </button>`;
+
+  content.querySelector("#daily-quiz-entry-button")?.addEventListener("click", () => {
+    if (assignedQuiz && !isCompleted) {
+      const progress = getDailyQuizReadingProgress(plan, quizDate);
+      if (!progress.isComplete) {
+        const message = progress.total > 0
+          ? `請先閱讀完今天的速讀進度，再進入小測驗（尚有 ${progress.remaining} 章）。`
+          : "請先完成今天的速讀進度，再進入小測驗。";
+        if (typeof showToast === "function") showToast(message);
+        return;
+      }
+    }
+    openDailyQuizContent(content, context, plan, quizDate);
+  });
+}
+
 function renderCompletedDailyQuiz(content, quiz) {
   const attempt = quiz.attempt;
   content.innerHTML = `
@@ -3101,7 +3173,7 @@ function bindDailyQuizSubmission(content, quiz, plan, quizDate) {
       return;
     }
     if (typeof showToast === "function") showToast(`作答完成：${result.data.score}／${result.data.total}`);
-    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId);
+    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId, { open: true });
   });
 }
 
@@ -3337,11 +3409,11 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
     }
     if (typeof showToast === "function") showToast(`已發布給 ${result.data.publishedCount} 個小組`);
     if (typeof window.refreshCareReminderBadge === "function") void window.refreshCareReminderBadge({ force: true });
-    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId);
+    void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId, { open: true });
   });
 }
 
-async function renderDailyQuizSection(plan, selectedDay, trackerRequestId) {
+async function renderDailyQuizSection(plan, selectedDay, trackerRequestId, options = {}) {
   const section = document.getElementById("daily-quiz-section");
   const content = document.getElementById("daily-quiz-content");
   if (!section || !content || !plan || !selectedDay) return;
@@ -3351,6 +3423,7 @@ async function renderDailyQuizSection(plan, selectedDay, trackerRequestId) {
   }
   const quizDate = String(selectedDay.isoDate || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(quizDate)
+    || quizDate !== getDailyQuizTaiwanToday()
     || typeof db === "undefined"
     || typeof db._quizPlanId !== "function"
     || !db._quizPlanId(plan)) {
@@ -3372,8 +3445,18 @@ async function renderDailyQuizSection(plan, selectedDay, trackerRequestId) {
   }
 
   section.classList.remove("hidden");
-  if (context.myQuiz) renderAssignedDailyQuiz(content, context.myQuiz, plan, quizDate);
-  else renderPublisherDailyQuiz(content, context, plan, quizDate);
+  if (options.open === true) {
+    if (context.myQuiz && !context.myQuiz.attempt) {
+      const progress = getDailyQuizReadingProgress(plan, quizDate);
+      if (!progress.isComplete) {
+        renderDailyQuizEntry(content, context, plan, quizDate);
+        return;
+      }
+    }
+    openDailyQuizContent(content, context, plan, quizDate);
+  } else {
+    renderDailyQuizEntry(content, context, plan, quizDate);
+  }
   if (typeof hydrateIcons === "function") hydrateIcons(section);
 }
 

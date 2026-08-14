@@ -6273,6 +6273,83 @@ body.dark-theme .pastoral-race-progress {
   background: var(--bg-card);
 }
 
+.daily-quiz-entry-button {
+  width: 100%;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 28%, var(--border-card));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-brand) 7%, var(--bg-card));
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.daily-quiz-entry-button:hover,
+.daily-quiz-entry-button:focus-visible {
+  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--bg-card));
+}
+
+.daily-quiz-entry-button:active {
+  transform: scale(0.99);
+}
+
+.daily-quiz-entry-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-brand) 16%, var(--bg-card));
+  color: var(--color-brand);
+}
+
+.daily-quiz-entry-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.daily-quiz-entry-copy strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.daily-quiz-entry-copy small {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.daily-quiz-entry-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--color-brand);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .daily-quiz-entry-button {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .daily-quiz-entry-action {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 .daily-quiz-heading,
 .admin-daily-quiz-heading,
 .admin-daily-quiz-toolbar,
