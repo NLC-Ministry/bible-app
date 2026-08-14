@@ -182,6 +182,12 @@ describe("name_review_approved column (migration 0069 + nlc-data)", () => {
     expect(nlcData.match(/PROFILE_SELECT = "[^"]*name_review_approved/)).toBeTruthy();
   });
 
+  it("loads and applies the approval flag to every current-user profile path", () => {
+    expect(db).toMatch(/from\("profiles"\)\.select\("[^"]*name_review_approved[^"]*"\)/);
+    expect(db).toContain("state.currentUser.name_review_approved = profile.name_review_approved === true");
+    expect(db).toContain("state.currentUser.name_review_approved = false");
+  });
+
   it("resets the approval on self-service name changes so a stale approval cannot survive an edit", () => {
     const start = nlcData.indexOf('if (action === "save_profile")');
     const end = nlcData.indexOf('if (action === "insert"', start);

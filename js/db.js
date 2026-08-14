@@ -684,6 +684,7 @@ const db = {
     state.currentUser.member_context_leadership_assignments = Array.isArray(profile.member_context_leadership_assignments)
       ? profile.member_context_leadership_assignments
       : [];
+    state.currentUser.name_review_approved = profile.name_review_approved === true;
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
     state.currentUser.is_demo = false;
@@ -888,7 +889,7 @@ const db = {
         // 避開多個 sequential 網路請求產生的累積延遲與 cold start 問題！
         const [globalPlansResult, profileResult, logsResult, plansResult] = await Promise.all([
           state.supabase.from("global_plans").select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at").order("start_date", { ascending: true }),
-          state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
+          state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
           window.readingLogRepository
             ? window.readingLogRepository.fetch({
               cacheKey: `reading_logs:${user.id}`,
@@ -929,6 +930,7 @@ const db = {
             state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = !!profile.is_demo;
+            state.currentUser.name_review_approved = profile.name_review_approved === true;
 
           } else {
             // First-time login: create profile without local org placement (Hub-owned).
@@ -941,6 +943,7 @@ const db = {
             state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
             state.currentUser.is_demo = false;
+            state.currentUser.name_review_approved = false;
 
 
             try {
