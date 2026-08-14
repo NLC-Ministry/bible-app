@@ -5144,6 +5144,21 @@ function getActiveOrgFilter() {
 }
 
 // ==================== MEMBERS SELECTOR POPULATOR ====================
+// Drives the collapsed 查看範圍 trigger's preview text (admin-plan-filter-card--org
+// in index.html) so an admin can see the current scope without expanding it.
+// Harmless no-op when that trigger isn't on screen (e.g. the 組員狀況/計畫統計
+// subviews reuse the same three selects without this collapsed wrapper).
+function updateAdminPlanFilterSummary() {
+  const summaryText = document.getElementById("admin-plan-filter-summary-text");
+  if (!summaryText) return;
+  const parts = ["members-admin-region-select", "members-admin-zone-select", "members-admin-group-select"]
+    .map(id => document.getElementById(id))
+    .filter(select => select && !select.disabled && select.value && select.value !== "unassigned")
+    .map(select => select.options[select.selectedIndex]?.text || "")
+    .filter(Boolean);
+  summaryText.textContent = parts.length ? `查看範圍：${parts.join(" · ")}` : "查看範圍：全部";
+}
+
 function populateMembersSelector() {
   setupCascadingSelectors("members-admin-region-select", "members-admin-zone-select", "members-admin-group-select", "members-zone-selector");
 
@@ -5156,6 +5171,7 @@ function populateMembersSelector() {
     if (el && !el.dataset.directListenerBound) {
       el.dataset.directListenerBound = "true";
       el.addEventListener("change", async () => {
+        updateAdminPlanFilterSummary();
         await renderPlanMembersView();
         if (typeof window.refreshAdminTeamRegistrationFilters === "function") {
           await window.refreshAdminTeamRegistrationFilters();
@@ -5174,6 +5190,8 @@ function populateMembersSelector() {
       }
     });
   }
+
+  updateAdminPlanFilterSummary();
 }
 
 async function renderPlanStatsView() {
