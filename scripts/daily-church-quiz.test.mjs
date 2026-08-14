@@ -9,7 +9,8 @@ const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz
 const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
 const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sql");
 const publishOptimization = read("supabase/migrations/0091_optimize_quiz_publication.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}`;
+const reservationFix = read("supabase/migrations/0092_fix_daily_quiz_generation_reservation.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -37,6 +38,15 @@ describe("daily church quiz", () => {
     expect(generator).toContain('replace(/^models\\//i, "")');
     expect(generator).toContain('replace(/^GEMINI_QUIZ_MODEL\\s*=\\s*/i, "")');
     expect(generator).not.toContain('|| "gemini-2.5-flash');
+  });
+
+  it("reserves A/B generation through the partial uniqueness index", () => {
+    expect(publishFlow).toContain("CREATE UNIQUE INDEX IF NOT EXISTS daily_quizzes_ai_variant_unique");
+    expect(publishFlow).toContain("WHERE variant IN ('A', 'B')");
+    expect(reservationFix).toContain("CREATE OR REPLACE FUNCTION public.reserve_daily_quiz_generation");
+    expect(reservationFix).toMatch(/ON CONFLICT \(global_plan_id, quiz_date, variant\)\s+WHERE variant IN \('A', 'B'\)\s+DO NOTHING/);
+    expect(reservationFix).toContain("IF p_variant NOT IN ('A', 'B')");
+    expect(reservationFix).toContain("TO service_role");
   });
 
   it("uses Taipei church progress and a strict five-question schema", () => {
