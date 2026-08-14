@@ -7,7 +7,8 @@ const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
 const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");
 const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz_dashboard.sql");
 const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}`;
+const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -82,7 +83,9 @@ describe("daily church quiz", () => {
       expect(quizSql).toContain(`public.${rpc}`);
     }
     expect(db).toContain("async getDailyQuizDashboard(plan, quizDate)");
-    expect(db).toContain("async publishDailyQuiz(plan, quizDate, groupIds = [], publishAll = false)");
+    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {})");
+    expect(db).toContain('p_scope_type: scope.scopeType || "all"');
+    expect(db).toContain("p_variant: selection.variant || null");
     expect(db).toContain("async submitDailyQuiz(publicationId, answers)");
     expect(db).toContain("async regenerateDailyQuiz(plan, quizDate, variants = [])");
   });
@@ -97,20 +100,18 @@ describe("daily church quiz", () => {
 
   it("shows approved version numbers only to publishers after review", () => {
     expect(plan).toContain('const approvedVariants = (Array.isArray(context.approvedVariants)');
-    expect(plan).toContain('class="daily-quiz-approved-variants"');
-    expect(plan).toContain('class="daily-quiz-variant-badge"');
-    expect(plan).toContain('版本 ${quizEscape(String(item.variant).toUpperCase())}');
-    expect(plan).toContain('今日題目尚未完成審核，審核通過後會顯示可發布版本。');
-    expect(plan).toContain('? "等待牧者審核"');
-    expect(css).toContain('.daily-quiz-approved-variants {');
-    expect(css).toContain('.daily-quiz-variant-badge {');
+    expect(plan).toContain('data-quiz-version-choice="A"');
+    expect(plan).toContain('data-quiz-version-choice="B"');
+    expect(plan).toContain('data-quiz-version-choice="C"');
+    expect(plan).toContain('今日 AI 題目尚未完成審核');
   });
 
   it("adds review, publishing and scoped member results to plan management", () => {
     expect(html).toContain('data-plan-subtab="quizzes"');
     expect(admin).toContain("renderAdminQuizReviewCards");
-    expect(admin).toContain('data-quiz-action="publish-group"');
-    expect(admin).toContain('data-quiz-action="publish-all"');
+    expect(admin).toContain("renderAdminQuizPublishPanel");
+    expect(admin).toContain('id="admin-quiz-publish-btn"');
+    expect(admin).toContain('data-quiz-version-choice="C"');
     expect(admin).toContain('data-quiz-action="regenerate"');
     expect(admin).toContain("更換後會清除目前題目並重新生成");
     expect(admin).toContain("已審核鎖定");
@@ -157,9 +158,11 @@ describe("daily church quiz", () => {
   it("shows a safe retryable error state instead of raw database errors", () => {
     expect(db).toContain('normalized.includes("canceling statement")');
     expect(db).toContain('return "小測驗載入逾時，請稍後再試。"');
+    expect(db).toContain('normalized.includes("pgrst202")');
+    expect(db).toContain('return "小測驗資料庫版本尚未更新，請通知管理員完成系統更新。"');
     expect(admin).toContain('class="admin-daily-quiz-load-error"');
     expect(admin).toContain('data-quiz-load-retry');
-    expect(admin).toContain("['A', 'B', 'C'].map(variant");
+    expect(admin).toContain("['A', 'B'].map(variant");
     expect(admin).toContain('狀態載入失敗');
     expect(admin).toContain('已保留原有題目與審核狀態');
     expect(admin).not.toContain('data-quiz-action="refresh-status"');
@@ -202,5 +205,13 @@ describe("daily church quiz", () => {
     expect(css).toContain('.admin-daily-quiz-load-error {');
     expect(css).toContain('.admin-daily-quiz-version--load-failed {');
     expect(html).toMatch(/index\.css\?v=2026\d{4}_[a-z0-9_]+/);
+  });
+
+  it("deploys the redesigned publish RPC under a unique, safely repeatable migration", () => {
+    expect(publishFlow).toContain("DROP FUNCTION IF EXISTS public.publish_daily_quiz(UUID, DATE, UUID[], BOOLEAN, UUID)");
+    expect(publishFlow).toContain("CREATE OR REPLACE FUNCTION public.publish_daily_quiz(");
+    expect(publishFlow).toContain("p_scope_type TEXT");
+    expect(publishFlow).toContain("p_variant TEXT DEFAULT NULL");
+    expect(publishFlow).toContain("p_custom_questions JSONB DEFAULT NULL");
   });
 });

@@ -110,7 +110,7 @@ $update_daily_quiz_questions$;
 -- needs DROP + CREATE rather than CREATE OR REPLACE.
 DROP FUNCTION IF EXISTS public.publish_daily_quiz(UUID, DATE, UUID[], BOOLEAN, UUID);
 
-CREATE FUNCTION public.publish_daily_quiz(
+CREATE OR REPLACE FUNCTION public.publish_daily_quiz(
   p_global_plan_id UUID,
   p_quiz_date DATE,
   p_scope_type TEXT,                     -- 'group' | 'zone' | 'region' | 'all'

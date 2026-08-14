@@ -2642,6 +2642,11 @@ const db = {
       || normalized.includes("57014")) {
       return "小測驗載入逾時，請稍後再試。";
     }
+    if (normalized.includes("pgrst202")
+      || normalized.includes("could not find the function")
+      || normalized.includes("schema cache")) {
+      return "小測驗資料庫版本尚未更新，請通知管理員完成系統更新。";
+    }
     const messages = {
       quiz_review_required: "只有牧者或系統管理員可以審核與修改小測驗。",
       quiz_regeneration_permission_required: "只有牧者或系統管理員可以重新生成小測驗。",
