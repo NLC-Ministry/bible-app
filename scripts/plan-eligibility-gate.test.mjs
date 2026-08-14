@@ -46,9 +46,11 @@ describe("profile name heuristic (js/utils.js)", () => {
     expect(fn("a")).toBe(false); // too short to judge
   });
 
-  it("defines getPlanEligibilityBlock gating on pastoral_zone and name validity", () => {
+  it("defines getPlanEligibilityBlock using canonical Hub prerequisites and Bible name validity", () => {
     expect(utils).toContain("function getPlanEligibilityBlock(user)");
-    expect(utils).toContain('if (!String(u.pastoral_zone || "").trim()) return { reason: "missing_zone" }');
+    expect(utils).toContain("isCanonicalMemberJourneyProjection(u)");
+    expect(utils).toContain("getCanonicalMemberPrerequisiteBlock(u)");
+    expect(utils).toContain('!String(u.pastoral_zone || "").trim()');
     expect(utils).toContain("!u.name_review_approved");
     expect(utils).toContain("window.getPlanEligibilityBlock = getPlanEligibilityBlock");
     // Demo accounts must not be locked out of a feature they use for local/dev testing.
@@ -89,6 +91,8 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
   it("re-syncs from Member Hub on return and never offers a local edit form", () => {
     expect(app).toContain("function bindPlanEligibilityHubReturnSync");
     expect(app).toContain("db.syncNlcSessionWithSupabase(true)");
+    expect(app).toContain('member/continue?satellite=bible-app');
+    expect(app).not.toContain('getMemberHubUrl("onboarding")');
     expect(app).toContain("window.renderPlanEligibilityGate = renderPlanEligibilityGate");
     expect(app).toContain("window.hidePlanEligibilityGate = hidePlanEligibilityGate");
     // Regression guard: the gate is read-only. Members fix their own data
@@ -102,7 +106,7 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
   it("provides copy for all three block reasons and always points to the Member Hub link", () => {
     expect(app).toContain('block.reason === "missing_zone"');
     expect(app).toContain('block.reason === "missing_name"');
-    expect(app).toContain("auth.getMemberHubUrl(\"onboarding\")");
+    expect(app).toContain('auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")');
     // Unlike the old design, the hub link is unconditional — no per-reason toggle.
     expect(app).not.toContain("showHubLink");
     expect(app).not.toContain("showNameForm");

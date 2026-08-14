@@ -7,8 +7,8 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
-const PROFILE_LOOKUP_SELECT = "id, name, email, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, name_review_approved, member_context_synced_at";
-const PROFILE_RESPONSE_SELECT = "id, name, email, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_LOOKUP_SELECT = "id, name, email, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, name_review_approved, member_context_synced_at, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url";
+const PROFILE_RESPONSE_SELECT = "id, name, email, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, name_review_approved, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 
 function parseJwt(token: string) {
   try {
@@ -256,6 +256,25 @@ function sanitizeLeadershipIdentity(memberContext: any) {
     displayLabel: leadership?.displayLabel ? String(leadership.displayLabel) : null,
     primaryAssignmentId: leadership?.primaryAssignmentId ? String(leadership.primaryAssignmentId) : null,
     assignments,
+  };
+}
+
+function projectCanonicalMemberJourney(memberContext: any) {
+  const rawVersion = Number(memberContext?.contextContractVersion);
+  const text = (value: unknown) => typeof value === "string" ? value.slice(0, 120) : null;
+  const rawUrl = typeof memberContext?.requiredActionUrl === "string"
+    ? memberContext.requiredActionUrl.slice(0, 2048)
+    : null;
+  return {
+    contractVersion: Number.isInteger(rawVersion) && rawVersion > 0 ? rawVersion : null,
+    membershipLifecycleState: text(memberContext?.membershipLifecycleState),
+    placementState: text(memberContext?.placementState),
+    placementWorkflowState: text(memberContext?.placementWorkflowState),
+    hasRequiredPlacement: typeof memberContext?.hasRequiredPlacement === "boolean"
+      ? memberContext.hasRequiredPlacement
+      : null,
+    requiredAction: text(memberContext?.requiredAction),
+    requiredActionUrl: rawUrl,
   };
 }
 
@@ -547,6 +566,7 @@ Deno.serve(async (req: Request) => {
     const memberIdentity = memberContext?.identity || {};
     const organization = memberContext?.organization || {};
     const leadershipIdentity = sanitizeLeadershipIdentity(memberContext);
+    const canonicalJourney = projectCanonicalMemberJourney(memberContext);
     const memberId = memberIdentity.memberId || null;
     const membershipStatus = memberProfile.membershipStatus || null;
 
@@ -739,6 +759,13 @@ Deno.serve(async (req: Request) => {
       member_context_sync_status: memberContextSyncStatus,
       member_context_sync_error: memberContextError,
       ...(memberContext ? {
+        member_context_contract_version: canonicalJourney.contractVersion,
+        member_context_membership_lifecycle_state: canonicalJourney.membershipLifecycleState,
+        member_context_placement_state: canonicalJourney.placementState,
+        member_context_placement_workflow_state: canonicalJourney.placementWorkflowState,
+        member_context_has_required_placement: canonicalJourney.hasRequiredPlacement,
+        member_context_required_action: canonicalJourney.requiredAction,
+        member_context_required_action_url: canonicalJourney.requiredActionUrl,
         member_context_leadership_display_label: leadershipIdentity.displayLabel,
         member_context_leadership_primary_assignment_id: leadershipIdentity.primaryAssignmentId,
         member_context_leadership_assignments: leadershipIdentity.assignments,
