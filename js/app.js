@@ -437,7 +437,7 @@ async function refreshCurrentAppView() {
 let planEligibilityHubReturnBound = false;
 
 function getPlanEligibilityGateCopy(block) {
-  if (block.reason === "missing_zone") {
+  if (block.reason === "missing_zone" || block.reason === "missing_canonical_placement") {
     return {
       title: "完成會員資料後即可進入計畫",
       desc: "您的會員資料尚未完成牧區歸屬。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
@@ -447,6 +447,30 @@ function getPlanEligibilityGateCopy(block) {
     return {
       title: "完成會員資料後即可進入計畫",
       desc: "您的會員資料尚未填寫完整姓名。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
+    };
+  }
+  if (block.reason === "member_context_unavailable") {
+    return {
+      title: "登入已完成，正在重新確認會員資料",
+      desc: "會員中心目前暫時無法同步會籍與小組歸屬。請稍後按下方按鈕重試；不需要重新註冊帳號。支援代碼：MEMBER_CONTEXT_UNAVAILABLE"
+    };
+  }
+  if (block.reason === "membership_not_approved") {
+    return {
+      title: "請先完成會籍登記流程",
+      desc: "會員中心尚未確認您的正式會籍。前往會員中心後，系統會依目前狀態帶您到正確的登記或等候頁面。"
+    };
+  }
+  if (block.reason === "inactive_membership") {
+    return {
+      title: "目前無法使用會員讀經計畫",
+      desc: "您的會籍目前不是可使用狀態。請前往會員中心查看狀態，或聯繫教會同工協助。"
+    };
+  }
+  if (block.reason === "unknown_member_hub_action" || block.reason === "unknown_member_hub_state") {
+    return {
+      title: "需要在會員中心完成新的確認步驟",
+      desc: "此版本尚未識別會員中心回傳的新狀態。為保護您的會籍資料，請使用下方按鈕由會員中心安全地繼續。"
     };
   }
   return {
@@ -496,9 +520,23 @@ function renderPlanEligibilityGate(block) {
   if (titleEl) titleEl.textContent = copy.title;
   if (descEl) descEl.textContent = copy.desc;
   if (hubLink) {
-    hubLink.href = (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function")
-      ? auth.getMemberHubUrl("onboarding")
-      : "https://member.newlife.org.tw/onboarding";
+    const fallback = (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function")
+      ? auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")
+      : "https://member.newlife.org.tw/member/continue?satellite=bible-app&returnTo=%2F";
+    try {
+      const fallbackUrl = new URL(fallback);
+      const upstreamUrl = block.requiredActionUrl ? new URL(block.requiredActionUrl) : null;
+      const resolverUrl = upstreamUrl
+        && upstreamUrl.origin === fallbackUrl.origin
+        && upstreamUrl.pathname === "/member/continue"
+        ? upstreamUrl
+        : fallbackUrl;
+      resolverUrl.searchParams.set("satellite", "bible-app");
+      resolverUrl.searchParams.set("returnTo", "/");
+      hubLink.href = resolverUrl.toString();
+    } catch {
+      hubLink.href = fallback;
+    }
   }
 
   if (typeof hydrateIcons === "function") hydrateIcons(gate);
@@ -1008,4 +1046,3 @@ document.addEventListener("DOMContentLoaded", async () => {
   })();
 
 });
-
