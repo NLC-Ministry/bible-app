@@ -1877,17 +1877,22 @@ window.clearReaderAudioOnPageExit = function () {
   clearReaderStartSelection();
 };
 
+// Not a true speechSynthesis.pause() — that suspends mid-utterance and, on
+// resume, ignores any verse the user marks in the meantime (speechSynthesis
+// has no way to "resume from a different position"). Instead this fully
+// cancels the utterance and just marks the current verse as the start point,
+// so the next 朗讀 press below always restarts from that verse's beginning —
+// whichever verse ends up marked, including one the user taps while paused.
 function pauseReaderAudio() {
   if (!isSpeaking || typeof window.speechSynthesis === "undefined") return false;
+  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
+  currentAudioSessionId++;
   try {
-    window.speechSynthesis.pause();
-  } catch (_e) {
-    return false;
-  }
+    window.speechSynthesis.cancel();
+  } catch (_e) {}
 
   isSpeaking = false;
   isReaderAudioPaused = true;
-  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
   if (currentItem) {
     clearReaderStartSelection();
     const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
@@ -1897,26 +1902,7 @@ function pauseReaderAudio() {
     updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "paused", currentItem.verseNum);
   }
   updateReaderAudioButton(false);
-  if (typeof showToast === "function") showToast("朗讀已暫停，再按一次即可繼續");
-  return true;
-}
-
-function resumeReaderAudio() {
-  if (!isReaderAudioPaused || typeof window.speechSynthesis === "undefined") return false;
-  isReaderAudioPaused = false;
-  isSpeaking = true;
-  clearReaderStartSelection();
-  try {
-    window.speechSynthesis.resume();
-  } catch (_e) {
-    isSpeaking = false;
-    isReaderAudioPaused = true;
-    updateReaderAudioButton(false);
-    return false;
-  }
-  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
-  updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "speaking", currentItem?.verseNum);
-  updateReaderAudioButton(true);
+  if (typeof showToast === "function") showToast("朗讀已暫停，再按一次會從標記的那一節開頭朗讀");
   return true;
 }
 
@@ -2051,16 +2037,16 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
     if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
     return;
   }
-  if (isReaderAudioPaused) {
-    if (resumeReaderAudio()) return;
-    stopReaderAudio(true, { preservePosition: true });
-  }
   if (isSpeaking) {
     if (pauseReaderAudio()) return;
     stopReaderAudio(false, { preservePosition: true });
     return;
   }
-  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+  // Paused (or genuinely idle): always (re)start fresh from whichever verse
+  // is currently marked — state.readerState.selectedVerseNum below — rather
+  // than resuming mid-utterance. stopReaderAudio() only cancels playback; it
+  // does not clear the verse marker, so a verse tapped while paused sticks.
+  if (isReaderAudioPaused || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     stopReaderAudio(true);
   }
 

@@ -13190,18 +13190,27 @@ select,
 }
 
 .admin-plan-subtabs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  display: flex;
   gap: 0.35rem;
   padding: 0.3rem;
   border: 1px solid var(--border-card);
   border-radius: 12px;
   background: var(--bg-input);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.admin-plan-subtabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-plan-subtab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 2.5rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.75rem;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -13211,6 +13220,10 @@ select,
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.admin-plan-subtab .nlc-icon {
+  font-size: 1rem;
 }
 
 .admin-plan-subtab.active {
@@ -13223,6 +13236,9 @@ select,
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  /* Clears the fixed .issue-report-fab (bottom-right chat bubble), which
+     otherwise sits on top of whatever this panel's last row scrolls to. */
+  padding-bottom: calc(3.5rem + var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px) + 1.5rem);
 }
 
 .admin-plan-filter-card {
@@ -13241,6 +13257,76 @@ select,
 .admin-plan-filter-card select {
   min-width: 0;
   max-width: 32rem;
+}
+
+.admin-plan-filter-card--org {
+  align-items: flex-start;
+}
+
+.admin-plan-filter-disclosure {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-plan-filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-plan-filter-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-plan-filter-summary > span:first-child {
+  color: var(--color-brand);
+  flex-shrink: 0;
+}
+
+#admin-plan-filter-summary-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-plan-filter-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.admin-plan-filter-disclosure[open] .admin-plan-filter-chevron {
+  transform: rotate(90deg);
+}
+
+.admin-plan-filter-disclosure[open] .admin-plan-filter-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#admin-plan-org-filter-slot {
+  padding: 0.7rem 0.1rem 0.1rem;
+}
+
+.admin-plan-refresh-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  font-size: 0.875rem;
 }
 
 .admin-unjoined-plan-card {
@@ -13427,6 +13513,25 @@ select,
   }
 
   .admin-plan-filter-card select {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* The collapsible org-filter trigger truncates its own text via ellipsis,
+     so — unlike the plain "計畫篩選" label+select card above — it stays
+     paired with the refresh button in one row instead of stacking. */
+  .admin-plan-filter-card--org {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  #admin-plan-org-filter-slot .admin-daily-quiz-scope-row,
+  #members-organization-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #members-organization-controls select {
     width: 100%;
     max-width: none;
   }

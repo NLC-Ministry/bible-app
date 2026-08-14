@@ -57,7 +57,7 @@
       window.location.replace("/repair?version=" + Date.now());
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260814_quiz_publish_flow_redesign" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260814_admin_mobile_layout_v1" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260802_pwa_shell_recovery" onerror="window.showAppStyleRecovery(this)">
 
@@ -1750,13 +1750,13 @@
           <div class="card-col span-12">
             <nav id="admin-system-subtabs" class="admin-plan-subtabs" role="tablist" aria-label="系統管理分頁">
               <button type="button" class="admin-plan-subtab active" role="tab" aria-selected="true"
-                aria-controls="admin-system-subtab-users" data-system-subtab="users">使用者基本資料</button>
+                aria-controls="admin-system-subtab-users" data-system-subtab="users"><span class="nlc-icon" data-icon="personBox" aria-hidden="true"></span><span>使用者基本資料</span></button>
               <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-                aria-controls="admin-system-subtab-permissions" data-system-subtab="permissions">權限管理</button>
+                aria-controls="admin-system-subtab-permissions" data-system-subtab="permissions"><span class="nlc-icon" data-icon="shieldCheck" aria-hidden="true"></span><span>權限管理</span></button>
               <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-                aria-controls="admin-system-subtab-registrations" data-system-subtab="registrations">報名註冊統計</button>
+                aria-controls="admin-system-subtab-registrations" data-system-subtab="registrations"><span class="nlc-icon" data-icon="journalText" aria-hidden="true"></span><span>報名註冊統計</span></button>
               <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-                aria-controls="admin-system-subtab-reports" data-system-subtab="reports">回報管理</button>
+                aria-controls="admin-system-subtab-reports" data-system-subtab="reports"><span class="nlc-icon" data-icon="inbox" aria-hidden="true"></span><span>回報管理</span></button>
             </nav>
           </div>
 
@@ -1923,10 +1923,16 @@
             <select id="admin-management-plan-select" class="form-control"></select>
           </section>
 
-          <section class="glass-card admin-plan-filter-card" aria-labelledby="admin-plan-org-filter-title">
-            <label id="admin-plan-org-filter-title">查看範圍</label>
-            <div id="admin-plan-org-filter-slot"></div>
-            <button type="button" id="admin-plan-refresh-btn" class="secondary-btn" style="margin-left:auto; padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap; flex-shrink:0;" title="重新載入計劃管理資料">
+          <section class="glass-card admin-plan-filter-card admin-plan-filter-card--org" aria-label="計畫管理篩選">
+            <details class="admin-plan-filter-disclosure" id="admin-plan-filter-disclosure">
+              <summary class="admin-plan-filter-summary">
+                <span class="nlc-icon" data-icon="people" aria-hidden="true"></span>
+                <span id="admin-plan-filter-summary-text">查看範圍：全部</span>
+                <span class="nlc-icon admin-plan-filter-chevron" data-icon="chevronRight" aria-hidden="true"></span>
+              </summary>
+              <div id="admin-plan-org-filter-slot"></div>
+            </details>
+            <button type="button" id="admin-plan-refresh-btn" class="secondary-btn admin-plan-refresh-btn" title="重新載入計劃管理資料">
               <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
               <span>更新</span>
             </button>
@@ -1934,15 +1940,15 @@
 
           <nav id="admin-plan-subtabs" class="admin-plan-subtabs" role="tablist" aria-label="計畫管理分頁">
             <button type="button" class="admin-plan-subtab active" role="tab" aria-selected="true"
-              aria-controls="admin-plan-subtab-join-status" data-plan-subtab="join-status">加入計畫狀況</button>
+              aria-controls="admin-plan-subtab-join-status" data-plan-subtab="join-status"><span class="nlc-icon" data-icon="calendarCheck" aria-hidden="true"></span><span>加入計畫狀況</span></button>
             <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-              aria-controls="admin-plan-subtab-members" data-plan-subtab="members">組員總覽</button>
+              aria-controls="admin-plan-subtab-members" data-plan-subtab="members"><span class="nlc-icon" data-icon="peoples" aria-hidden="true"></span><span>組員總覽</span></button>
             <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-              aria-controls="admin-plan-subtab-teams" data-plan-subtab="teams">組隊狀況</button>
+              aria-controls="admin-plan-subtab-teams" data-plan-subtab="teams"><span class="nlc-icon" data-icon="trophy" aria-hidden="true"></span><span>組隊狀況</span></button>
             <button type="button" class="admin-plan-subtab" role="tab" aria-selected="false"
-              aria-controls="admin-plan-subtab-statistics" data-plan-subtab="statistics">計畫統計</button>
+              aria-controls="admin-plan-subtab-statistics" data-plan-subtab="statistics"><span class="nlc-icon" data-icon="barChart" aria-hidden="true"></span><span>計畫統計</span></button>
             <button type="button" class="admin-plan-subtab hidden" role="tab" aria-selected="false"
-              aria-controls="admin-plan-subtab-quizzes" data-plan-subtab="quizzes">小測驗</button>
+              aria-controls="admin-plan-subtab-quizzes" data-plan-subtab="quizzes"><span class="nlc-icon" data-icon="checkCircle" aria-hidden="true"></span><span>小測驗</span></button>
           </nav>
 
           <div id="admin-plan-subtab-join-status" class="admin-plan-subtab-panel" role="tabpanel">
@@ -2480,7 +2486,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260814_hide_completed_team_invite"></script>
+  <script type="module" src="js/app.js?v=20260814_reader_audio_resume_fix_v1"></script>
 </body>
 
 </html>
