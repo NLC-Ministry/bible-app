@@ -1,8 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { getPlanParticipationModel } from "../js/modules/plan-participation-helpers.mjs";
+import {
+  getPlanParticipationModel,
+  shouldHidePlanTeamInviteShortcut
+} from "../js/modules/plan-participation-helpers.mjs";
 
 const ctx = (division, { name = "光鹽", memberCount = 1, capacity = division } = {}) => ({
   team: { division, name, memberCount, capacity }
+});
+
+describe("shouldHidePlanTeamInviteShortcut", () => {
+  it("hides only when every current plan has both the 3-person and 6-person teams", () => {
+    expect(shouldHidePlanTeamInviteShortcut([
+      [ctx(3), ctx(6)],
+      [ctx(3), ctx(6)]
+    ])).toBe(true);
+
+    expect(shouldHidePlanTeamInviteShortcut([
+      [ctx(3), ctx(6)],
+      [ctx(3)]
+    ])).toBe(false);
+  });
+
+  it("keeps the shortcut when there are no current team plans or contexts are incomplete", () => {
+    expect(shouldHidePlanTeamInviteShortcut([])).toBe(false);
+    expect(shouldHidePlanTeamInviteShortcut([[]])).toBe(false);
+    expect(shouldHidePlanTeamInviteShortcut([[ctx(6), null, {}]])).toBe(false);
+  });
 });
 
 describe("getPlanParticipationModel", () => {
