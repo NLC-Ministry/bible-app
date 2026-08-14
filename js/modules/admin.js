@@ -34,7 +34,7 @@ function updateDailyQuizFeatureControl(enabled, options = {}) {
   toggle.setAttribute("aria-label", enabled ? "每日小測驗功能已開啟" : "每日小測驗功能已關閉");
   toggle.disabled = options.disabled === true;
   status.textContent = enabled
-    ? "已開啟：顯示小測驗入口，並允許每日生成、審核、發布與作答。"
+    ? "已開啟：顯示小測驗入口，並允許每日生成、審核、發佈與作答。"
     : "已關閉：隱藏所有小測驗入口並暫停生成；既有題目與作答資料保留。";
 }
 
@@ -137,6 +137,15 @@ export async function renderAdminFeatureSettings() {
       window.dailyQuizFeatureEnabled = nextEnabled;
       updateDailyQuizFeatureControl(nextEnabled);
       applyAdminDailyQuizFeatureVisibility(nextEnabled);
+      if (nextEnabled) {
+        adminDailyQuizDashboardCache.clear();
+        const quizRoot = document.getElementById("admin-daily-quiz-root");
+        if (quizRoot) {
+          delete quizRoot.dataset.quizDashboardKey;
+          delete quizRoot.dataset.quizDate;
+          quizRoot.innerHTML = '<div class="admin-user-directory__empty">小測驗已重新開啟，切換至小測驗分頁後會載入原有資料。</div>';
+        }
+      }
       window.dispatchEvent(new CustomEvent("daily-quiz-feature-changed", { detail: { enabled: nextEnabled } }));
       if (typeof showToast === "function") showToast(nextEnabled ? "每日小測驗功能已開啟！" : "每日小測驗功能已關閉。資料仍完整保留。");
     });
@@ -1683,15 +1692,15 @@ function renderAdminQuizScopeResults(context, scope) {
         <summary>
           <span><strong>${adminQuizEscape(group.name)}</strong><small>${adminQuizEscape(group.greatRegion)}／${adminQuizEscape(group.pastoralZone)}</small></span>
           <span class="admin-daily-quiz-group-status">${publication
-            ? `已由${adminQuizPublisherLabel(publication.publisherRole)}發布版本 ${adminQuizEscape(publication.variant)} · ${completed}／${Number(group.memberCount || 0)} 完成`
-            : '尚未發布'}</span>
+            ? `已由${adminQuizPublisherLabel(publication.publisherRole)}發佈版本 ${adminQuizEscape(publication.variant)} · ${completed}／${Number(group.memberCount || 0)} 完成`
+            : '尚未發佈'}</span>
         </summary>
         ${publication ? `<div class="admin-daily-quiz-results">
-          <div class="admin-daily-quiz-metrics"><span>已發布 <strong>${Number(group.memberCount || 0)} 人</strong></span><span>已完成 <strong>${completed} 人</strong></span><span>平均 <strong>${group.averageScore == null ? '—' : Number(group.averageScore).toFixed(1)}</strong></span></div>
+          <div class="admin-daily-quiz-metrics"><span>已發佈 <strong>${Number(group.memberCount || 0)} 人</strong></span><span>已完成 <strong>${completed} 人</strong></span><span>平均 <strong>${group.averageScore == null ? '—' : Number(group.averageScore).toFixed(1)}</strong></span></div>
           <div class="admin-daily-quiz-member-list">
             ${members.map(member => `<div><span>${adminQuizEscape(member.name)}</span><span>${member.completed ? `已完成 · ${Number(member.score || 0)}／${Number(member.total || 0)}` : '尚未作答'}</span></div>`).join('')}
           </div>
-        </div>` : '<p class="admin-daily-quiz-empty">發布後才會顯示組員作答狀況。</p>'}
+        </div>` : '<p class="admin-daily-quiz-empty">發佈後才會顯示組員作答狀況。</p>'}
       </details>`;
     }).join('')}
   </div>`;
@@ -1808,10 +1817,10 @@ function renderAdminQuizPublishPanel(context) {
   const hasApproved = variant => approvedVariants.some(item => item.variant === variant);
   return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
     <div class="admin-daily-quiz-heading">
-      <div><p class="admin-registration-statistics__eyebrow">組織發布</p><h2>發布小測驗</h2></div>
+      <div><p class="admin-registration-statistics__eyebrow">組織發佈</p><h2>發佈小測驗</h2></div>
     </div>
     <div class="admin-quiz-publish-step">
-      <p class="admin-quiz-publish-step-label">1. 發布範圍</p>
+      <p class="admin-quiz-publish-step-label">1. 發佈範圍</p>
       ${renderAdminQuizScopeSelectorHtml('admin-quiz-publish')}
     </div>
     <div class="admin-quiz-publish-step">
@@ -1897,13 +1906,13 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     } else {
       selection = { variant: selectedVersion };
     }
-    if (!window.confirm(`確定發布${selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
+    if (!window.confirm(`確定發佈${selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '發佈中…';
     const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection);
     if (typeof showToast === 'function') {
-      showToast(result.success ? `已發布給 ${result.data.publishedCount} 個小組` : result.message || '發布失敗');
+      showToast(result.success ? `已發佈給 ${result.data.publishedCount} 個小組` : result.message || '發佈失敗');
     }
     if (typeof window.refreshCareReminderBadge === 'function') void window.refreshCareReminderBadge({ force: true });
     if (result.success) {
@@ -2086,7 +2095,7 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
       </div>
       <section class="glass-card admin-daily-quiz-block" aria-labelledby="admin-quiz-load-error-title">
         <div class="admin-daily-quiz-heading">
-          <div><p class="admin-registration-statistics__eyebrow">題目審核</p><h2 id="admin-quiz-load-error-title">每日三版題目</h2></div>
+          <div><p class="admin-registration-statistics__eyebrow">題目審核</p><h2 id="admin-quiz-load-error-title">每日兩版題目</h2></div>
         </div>
         <div class="admin-daily-quiz-load-error" role="alert">
           <span class="admin-daily-quiz-load-error__icon" aria-hidden="true"><span class="nlc-icon" data-icon="refresh"></span></span>

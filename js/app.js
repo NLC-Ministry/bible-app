@@ -31,7 +31,7 @@ let buildVersion = "__BUILD_VERSION__";
 if (!/^\d{14}$/.test(buildVersion)) {
   buildVersion = "dev_" + Date.now();
 }
-buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1_quiz_load_error_v1_group_filter_reset_fix_v1_quiz_publish_flow_redesign_v1_row_cap_pagination_fix_v1_quiz_entry_reading_gate_v1";
+buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1_quiz_load_error_v1_group_filter_reset_fix_v1_quiz_publish_flow_redesign_v1_row_cap_pagination_fix_v1_quiz_entry_reading_gate_v1_quiz_feature_reopen_restore_v1";
 const moduleCache = {};
 const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260812_export_taiwan_time';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
@@ -204,7 +204,7 @@ async function renderNotificationsList() {
       ? "隊友"
       : (getRoleDefinition(senderRoleRaw)?.label || roleNames[senderRoleRaw] || "領袖");
 
-    const displaySenderRole = isQuizNotification ? "小測驗發布者" : senderRole;
+    const displaySenderRole = isQuizNotification ? "小測驗發佈者" : senderRole;
     const dateStr = item.sent_on || "";
 
     div.innerHTML = `

@@ -2656,18 +2656,18 @@ const db = {
       quiz_approval_locked: "題目審核通過後已鎖定，不能取消審核、修改或更換。",
       quiz_already_approved: "題目已審核通過，不能再更換。",
       quiz_not_ready: "這一版題目尚未生成完成。",
-      quiz_approval_required: "至少需要一版已審核題目才能發布。",
-      quiz_publish_scope_required: "只能發布到你所負責組織範圍內的小組。",
-      quiz_publish_groups_required: "目前沒有可以發布的小組。",
+      quiz_approval_required: "至少需要一版已審核題目才能發佈。",
+      quiz_publish_scope_required: "只能發佈到你所負責組織範圍內的小組。",
+      quiz_publish_groups_required: "目前沒有可以發佈的小組。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
-      quiz_publication_not_found: "找不到這份小測驗發布紀錄。",
+      quiz_publication_not_found: "找不到這份小測驗發佈紀錄。",
       quiz_not_available: "這份小測驗目前無法作答。",
       daily_quiz_feature_disabled: "每日小測驗功能目前已關閉。",
       quiz_answers_required: "請完成全部題目後再送出。",
       invalid_quiz_answer: "作答資料格式不正確，請重新選擇答案。",
       invalid_quiz_question: "每題都需要題目、四個選項、答案、解說與經文出處。",
       invalid_quiz_question_count: "自訂題目需要 2 至 10 題。",
-      quiz_already_published: "這一版已經發布，為避免改變組員正在作答的內容，不能再修改或取消審核。"
+      quiz_already_published: "這一版已經發佈，為避免改變組員正在作答的內容，不能再修改或取消審核。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : "目前無法載入小測驗資料，請稍後再試。";

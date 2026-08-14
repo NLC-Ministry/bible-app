@@ -3028,7 +3028,16 @@ async function isDailyQuizFeatureEnabled() {
 
 window.addEventListener("daily-quiz-feature-changed", event => {
   window.dailyQuizFeatureEnabled = event.detail?.enabled === true;
-  if (!window.dailyQuizFeatureEnabled) hideDailyQuizSection();
+  if (!window.dailyQuizFeatureEnabled) {
+    hideDailyQuizSection();
+    return;
+  }
+  const selectedDay = Array.isArray(state.activePlan?.days)
+    ? state.activePlan.days.find(day => day?.dayNum === state.selectedPlanDay)
+    : null;
+  if (state.activePlan && selectedDay) {
+    void renderDailyQuizSection(state.activePlan, selectedDay, lastTrackerRequestId);
+  }
 });
 
 function quizEscape(value) {
@@ -3040,6 +3049,7 @@ function quizEscape(value) {
 }
 
 function hideDailyQuizSection() {
+  dailyQuizRenderRequestId += 1;
   const section = document.getElementById("daily-quiz-section");
   const content = document.getElementById("daily-quiz-content");
   if (section) section.classList.add("hidden");
@@ -3098,10 +3108,10 @@ function renderDailyQuizEntry(content, context, plan, quizDate) {
   const isCompleted = Boolean(assignedQuiz?.attempt);
   const buttonLabel = assignedQuiz
     ? (isCompleted ? "查看測驗結果" : "進入小測驗")
-    : "發布小測驗";
+    : "發佈小測驗";
   const description = assignedQuiz
     ? (isCompleted ? "今天的小測驗已完成，可查看答案與解說" : "完成今天的速讀進度後即可作答")
-    : "查看已審核版本並發布給所屬小組";
+    : "查看已審核版本並發佈給所屬小組";
 
   content.innerHTML = `
     <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description">
@@ -3185,7 +3195,7 @@ function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
   content.innerHTML = `
     <div class="daily-quiz-heading">
       <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">${(quiz.questions || []).length} 題選擇題</h3></div>
-      <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發布</span>
+      <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發佈</span>
     </div>
     <form id="daily-quiz-form" class="daily-quiz-form">
       ${(quiz.questions || []).map((question, questionIndex) => `
@@ -3318,14 +3328,14 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
   const hasApproved = variant => approvedVariants.some(item => item.variant === variant);
   content.innerHTML = `
     <div class="daily-quiz-heading">
-      <div><p class="daily-quiz-eyebrow">小測驗</p><h3 id="daily-quiz-title">今日發布</h3></div>
-      <span class="daily-quiz-status">已發布 ${publishedGroups.length}／${groups.length} 個小組</span>
+      <div><p class="daily-quiz-eyebrow">小測驗</p><h3 id="daily-quiz-title">今日發佈</h3></div>
+      <span class="daily-quiz-status">已發佈 ${publishedGroups.length}／${groups.length} 個小組</span>
     </div>
     ${approvedVariants.length === 0
-      ? '<p class="daily-quiz-publisher-notice">今日 AI 題目尚未完成審核，審核通過後會顯示可發布版本；你也可以直接用自訂題目發布。</p>'
+      ? '<p class="daily-quiz-publisher-notice">今日 AI 題目尚未完成審核，審核通過後會顯示可發佈版本；你也可以直接用自訂題目發佈。</p>'
       : ""}
     <div class="admin-quiz-publish-step">
-      <p class="admin-quiz-publish-step-label">1. 發布範圍</p>
+      <p class="admin-quiz-publish-step-label">1. 發佈範圍</p>
       ${renderQuizScopeSelectorHtml("plan-quiz-publish")}
     </div>
     <div class="admin-quiz-publish-step">
@@ -3337,7 +3347,7 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
       </div>
       <div class="admin-quiz-custom-editor-slot hidden" data-quiz-custom-slot></div>
     </div>
-    <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" disabled>發布小測驗</button>`;
+    <button type="button" id="daily-quiz-publish-btn" class="primary-btn daily-quiz-publish" disabled>發佈小測驗</button>`;
 
   setupCascadingSelectors("plan-quiz-publish-region-select", "plan-quiz-publish-zone-select", "plan-quiz-publish-group-select", "plan-quiz-publish-master-select");
 
@@ -3396,7 +3406,7 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
     } else {
       selection = { variant: selectedVersion };
     }
-    if (!window.confirm(`確定發布${selectedVersion === "C" ? "自訂題目" : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
+    if (!window.confirm(`確定發佈${selectedVersion === "C" ? "自訂題目" : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
     publishBtn.disabled = true;
     const originalLabel = publishBtn.textContent;
     publishBtn.textContent = "發佈中…";
@@ -3404,10 +3414,10 @@ function renderPublisherDailyQuiz(content, context, plan, quizDate) {
     if (!result.success) {
       publishBtn.disabled = false;
       publishBtn.textContent = originalLabel;
-      if (typeof showToast === "function") showToast(result.message || "小測驗發布失敗");
+      if (typeof showToast === "function") showToast(result.message || "小測驗發佈失敗");
       return;
     }
-    if (typeof showToast === "function") showToast(`已發布給 ${result.data.publishedCount} 個小組`);
+    if (typeof showToast === "function") showToast(`已發佈給 ${result.data.publishedCount} 個小組`);
     if (typeof window.refreshCareReminderBadge === "function") void window.refreshCareReminderBadge({ force: true });
     void renderDailyQuizSection(plan, { isoDate: quizDate }, lastTrackerRequestId, { open: true });
   });

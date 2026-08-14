@@ -146,6 +146,21 @@ describe("daily church quiz", () => {
     expect(html).toContain('id="admin-daily-quiz-feature-toggle"');
     expect(admin).toContain('updateFeatureSetting("daily_quiz", nextEnabled)');
     expect(plan).toContain('isDailyQuizFeatureEnabled()');
+    expect(admin).toContain("adminDailyQuizDashboardCache.clear()");
+    expect(admin).toContain("delete quizRoot.dataset.quizDashboardKey");
+    expect(admin).toContain("切換至小測驗分頁後會載入原有資料");
+    expect(plan).toContain('window.addEventListener("daily-quiz-feature-changed"');
+    expect(plan).toContain("void renderDailyQuizSection(state.activePlan, selectedDay, lastTrackerRequestId)");
+    expect(plan).toContain("dailyQuizRenderRequestId += 1");
+  });
+
+  it("uses two-version and 發佈 wording consistently in the quiz UI", () => {
+    expect(admin).toContain("每日兩版題目");
+    expect(admin).not.toContain("每日三版題目");
+    expect(admin).toContain("<h2>發佈小測驗</h2>");
+    expect(admin).not.toContain("發布小測驗");
+    expect(plan).toContain("發佈小測驗");
+    expect(plan).not.toContain("發布小測驗");
   });
 
   it("loads the organization dashboard without per-group member subqueries", () => {
