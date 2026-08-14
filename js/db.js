@@ -2680,12 +2680,30 @@ const db = {
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
       if (error) {
-        console.warn(`[Quiz] ${functionName} failed:`, error);
+        const errorDetails = error && typeof error === "object"
+          ? {
+              message: error.message || null,
+              code: error.code || null,
+              details: error.details || null,
+              hint: error.hint || null,
+              status: error.status || null
+            }
+          : { message: String(error || "unknown_error") };
+        console.warn(`[Quiz] ${functionName} failed: ${JSON.stringify(errorDetails)}`);
         return { success: false, error, message: this._quizErrorMessage(error) };
       }
       return { success: true, data };
     } catch (error) {
-      console.warn(`[Quiz] ${functionName} failed:`, error);
+      const errorDetails = error && typeof error === "object"
+        ? {
+            message: error.message || null,
+            code: error.code || null,
+            details: error.details || null,
+            hint: error.hint || null,
+            status: error.status || null
+          }
+        : { message: String(error || "unknown_error") };
+      console.warn(`[Quiz] ${functionName} failed: ${JSON.stringify(errorDetails)}`);
       return { success: false, error, message: this._quizErrorMessage(error) };
     }
   },

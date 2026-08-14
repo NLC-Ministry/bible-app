@@ -8,7 +8,8 @@ const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regenerati
 const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz_dashboard.sql");
 const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
 const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}`;
+const publishOptimization = read("supabase/migrations/0091_optimize_quiz_publication.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -213,5 +214,15 @@ describe("daily church quiz", () => {
     expect(publishFlow).toContain("p_scope_type TEXT");
     expect(publishFlow).toContain("p_variant TEXT DEFAULT NULL");
     expect(publishFlow).toContain("p_custom_questions JSONB DEFAULT NULL");
+  });
+
+  it("publishes groups and notifications with set-based statements", () => {
+    expect(publishOptimization).toContain("FROM UNNEST(target_group_ids)");
+    expect(publishOptimization).toContain("GET DIAGNOSTICS published_count = ROW_COUNT");
+    expect(publishOptimization).toContain("INSERT INTO public.quiz_notifications");
+    expect(publishOptimization).toContain("profile.small_group_id = publication.small_group_id");
+    expect(publishOptimization).not.toContain("FOREACH target_group_id");
+    expect(publishOptimization).toContain("NOTIFY pgrst, 'reload schema'");
+    expect(db).toContain("JSON.stringify(errorDetails)");
   });
 });
