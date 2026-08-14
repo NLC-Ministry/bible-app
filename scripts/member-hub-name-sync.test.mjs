@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 
-const db = fs.readFileSync("js/db.js", "utf8");
-const session = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
-const data = fs.readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
+// Normalize CRLF to LF: this file is checked out with Windows line endings,
+// and loadNormalizeMemberName() below extracts a function body by searching
+// for a literal "\n}\n" boundary — a "\r\n}\r\n" sequence never matches that,
+// so the search silently fails (indexOf returns -1) and the extracted slice
+// comes out empty, blowing up new Function() with a syntax error.
+const db = fs.readFileSync("js/db.js", "utf8").replace(/\r\n/g, "\n");
+const session = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8").replace(/\r\n/g, "\n");
+const data = fs.readFileSync("supabase/functions/nlc-data/index.ts", "utf8").replace(/\r\n/g, "\n");
 
 function loadNormalizeMemberName() {
   const start = session.indexOf("function normalizeMemberName(");

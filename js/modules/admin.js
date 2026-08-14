@@ -1223,7 +1223,7 @@ export async function renderAdminRegistrationStatistics() {
   if (typeof hydrateIcons === "function") hydrateIcons(column);
 }
 
-const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports'];
+const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports', 'settings'];
 let activeAdminSystemSubtab = ADMIN_SYSTEM_SUBTABS[0];
 
 function setAdminSystemSubtab(subtab) {
@@ -1269,31 +1269,33 @@ export function init() {
   void renderAdminRegistrationStatistics();
   initAdminTeamRegistration();
 
-  // Bind unjoined plan members section collapse toggle
-  const unjoinedHeader = document.querySelector(".admin-unjoined-plan-card__header");
-  if (unjoinedHeader && !unjoinedHeader.dataset.listenerBound) {
-    unjoinedHeader.dataset.listenerBound = "true";
-    unjoinedHeader.addEventListener("click", (event) => {
+  // Bind collapse toggles for every 加入計畫狀況 card (已加入計畫 and 尚未加入計畫
+  // both use the same .admin-unjoined-plan-card markup) — each header toggles
+  // only its own card, resolved via closest()/scoped querySelector rather than
+  // hardcoded ids, so this works uniformly no matter how many such cards exist.
+  document.querySelectorAll(".admin-unjoined-plan-card__header").forEach(header => {
+    if (header.dataset.listenerBound) return;
+    header.dataset.listenerBound = "true";
+    header.addEventListener("click", (event) => {
       if (event.target.closest?.("button")) return;
-      const section = document.getElementById("admin-unjoined-plan-section") || unjoinedHeader.closest(".admin-unjoined-plan-card");
-      const arrow = document.getElementById("admin-unjoined-toggle-arrow");
-      const membersList = document.getElementById("admin-unjoined-plan-members");
-      const desc = unjoinedHeader?.querySelector(".admin-unjoined-plan-desc");
+      const section = header.closest(".admin-unjoined-plan-card");
+      if (!section) return;
+      const arrow = header.querySelector(".admin-unjoined-toggle-arrow");
+      const membersList = section.querySelector(".admin-unjoined-plan-members");
+      const desc = header.querySelector(".admin-unjoined-plan-desc");
 
-      if (section && membersList) {
-        const isCollapsed = section.classList.toggle("collapsed");
-        if (isCollapsed) {
-          membersList.style.display = "none";
-          if (desc) desc.style.display = "none";
-          if (arrow) arrow.style.transform = "rotate(-90deg)";
-        } else {
-          membersList.style.display = "";
-          if (desc) desc.style.display = "";
-          if (arrow) arrow.style.transform = "rotate(0deg)";
-        }
+      const isCollapsed = section.classList.toggle("collapsed");
+      if (isCollapsed) {
+        if (membersList) membersList.style.display = "none";
+        if (desc) desc.style.display = "none";
+        if (arrow) arrow.style.transform = "rotate(-90deg)";
+      } else {
+        if (membersList) membersList.style.display = "";
+        if (desc) desc.style.display = "";
+        if (arrow) arrow.style.transform = "rotate(0deg)";
       }
     });
-  }
+  });
 }
 
 const MANAGEMENT_ROLES = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];

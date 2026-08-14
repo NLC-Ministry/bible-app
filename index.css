@@ -13200,6 +13200,17 @@ select,
   scrollbar-width: none;
 }
 
+/* Below this width the tab labels (icon + Chinese text × 4-5 tabs) reliably
+   overflow, so fading the trailing edge is a safe static hint that there's
+   more to swipe to. Skipped above it so a fully-visible tab set on wider
+   screens doesn't show a fade that isn't actually hiding anything. */
+@media (max-width: 900px) {
+  .admin-plan-subtabs {
+    -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 2rem), transparent 100%);
+    mask-image: linear-gradient(to right, black 0%, black calc(100% - 2rem), transparent 100%);
+  }
+}
+
 .admin-plan-subtabs::-webkit-scrollbar {
   display: none;
 }
