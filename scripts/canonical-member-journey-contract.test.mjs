@@ -5,7 +5,7 @@ import {
   isCanonicalMemberJourneyProjection,
 } from '../js/member-journey.mjs';
 
-const migrationPath = 'supabase/migrations/0092_canonical_member_journey_projection.sql';
+const migrationPath = 'supabase/migrations/0093_canonical_member_journey_projection.sql';
 const projectionFields = [
   'member_context_contract_version',
   'member_context_membership_lifecycle_state',
