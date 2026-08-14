@@ -698,7 +698,10 @@ describe("NLC and browser integration", () => {
     // client-side fallback (_getReadingTeamRegistrationOverviewFallback)
     // must expose all three fields.
     const fixMigration = read("supabase/migrations/0074_team_overview_members_full_scope.sql");
-    expect(fixMigration).toContain("p.great_region,\n      p.pastoral_zone,\n      p.small_group");
+    // This migration file is checked out with CRLF line endings, so a plain
+    // toContain() on a \n-joined multi-line literal never matches even
+    // though the content is present — match line-ending-agnostically instead.
+    expect(fixMigration).toMatch(/p\.great_region,\s*p\.pastoral_zone,\s*p\.small_group/);
     expect(fixMigration).toContain("'greatRegion', md.great_region,");
     expect(fixMigration).toContain("'pastoralZone', md.pastoral_zone,");
     expect(fixMigration).toContain("'smallGroup', md.small_group");

@@ -42,7 +42,11 @@ describe("plan management: 4-tab restructure", () => {
     expect(panel).toContain('id="admin-joined-plan-section"');
     expect(panel).toContain('id="admin-joined-plan-count"');
     expect(panel).toContain('id="admin-joined-plan-members"');
-    expect(panel).toContain(">已加入計畫<");
+    expect(panel).toContain("已加入計畫");
+    // Collapsible like 尚未加入計畫 below (id="admin-unjoined-toggle-arrow"),
+    // via the same shared .admin-unjoined-toggle-arrow class the click
+    // handler in admin.js queries generically per-card.
+    expect(panel).toContain('id="admin-joined-toggle-arrow" class="admin-unjoined-toggle-arrow"');
     // 尚未加入計畫 is not native HTML here — mountPlanManagementSections()
     // moves the existing #admin-unjoined-plan-section into this panel at
     // runtime, appending after the native 已加入計畫 card.

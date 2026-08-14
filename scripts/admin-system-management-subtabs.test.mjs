@@ -7,7 +7,11 @@ const html = read("index.html");
 const admin = read("js/modules/admin.js");
 
 describe("system management: category sub-tabs", () => {
-  it("puts a shared 功能開放設定 card above a 4-button tab bar, inside admin-system-panel", () => {
+  it("puts the tab bar above a 5-button set, inside admin-system-panel, so navigation is visible before any single tab's content", () => {
+    // Regression for: 功能開放設定 used to sit above the tab bar as an
+    // always-visible block, pushing the tabs below the fold and making users
+    // miss that later tabs existed at all. It's now its own tab instead of a
+    // standing header card, and the tab bar itself leads the panel.
     const panelStart = html.indexOf('id="admin-system-panel"');
     const panelEnd = html.indexOf('id="admin-plans-panel"', panelStart);
     const panel = html.slice(panelStart, panelEnd);
@@ -19,7 +23,8 @@ describe("system management: category sub-tabs", () => {
       ["users", "使用者基本資料"],
       ["permissions", "權限管理"],
       ["registrations", "報名註冊統計"],
-      ["reports", "回報管理"]
+      ["reports", "回報管理"],
+      ["settings", "功能開放設定"]
     ];
     for (const [key, label] of subtabs) {
       expect(panel).toContain(`data-system-subtab="${key}"`);
@@ -27,10 +32,8 @@ describe("system management: category sub-tabs", () => {
       expect(panel).toContain(label);
     }
 
-    // 功能開放設定 and the tab bar must precede every subtab panel.
-    const featureSettingsIndex = panel.indexOf("功能開放設定");
+    // The tab bar must precede every subtab panel, including 功能開放設定's.
     const tabsIndex = panel.indexOf('id="admin-system-subtabs"');
-    expect(tabsIndex).toBeGreaterThan(featureSettingsIndex);
     for (const [key] of subtabs) {
       expect(panel.indexOf(`id="admin-system-subtab-${key}"`)).toBeGreaterThan(tabsIndex);
     }
@@ -45,11 +48,13 @@ describe("system management: category sub-tabs", () => {
     const permissionsStart = panel.indexOf('id="admin-system-subtab-permissions"');
     const registrationsStart = panel.indexOf('id="admin-system-subtab-registrations"');
     const reportsStart = panel.indexOf('id="admin-system-subtab-reports"');
+    const settingsStart = panel.indexOf('id="admin-system-subtab-settings"');
 
     const usersSection = panel.slice(usersStart, permissionsStart);
     const permissionsSection = panel.slice(permissionsStart, registrationsStart);
     const registrationsSection = panel.slice(registrationsStart, reportsStart);
-    const reportsSection = panel.slice(reportsStart);
+    const reportsSection = panel.slice(reportsStart, settingsStart);
+    const settingsSection = panel.slice(settingsStart);
 
     expect(usersSection).toContain('id="admin-user-directory-col"');
     // 組織架構權限總覽 + 管理範圍設定 both live under 權限管理.
@@ -57,6 +62,9 @@ describe("system management: category sub-tabs", () => {
     expect(permissionsSection).toContain('id="admin-managed-scopes-col"');
     expect(registrationsSection).toContain('id="admin-registration-statistics-col"');
     expect(reportsSection).toContain('id="admin-reports-root"');
+    expect(settingsSection).toContain('class="glass-card admin-feature-settings-card"');
+    expect(settingsSection).toContain('id="admin-pastoral-wall-toggle"');
+    expect(settingsSection).toContain('id="admin-daily-quiz-feature-toggle"');
   });
 
   it("fixes the 報名與註冊統計 card's mislabeled 權限管理 eyebrow", () => {
@@ -75,7 +83,7 @@ describe("system management: category sub-tabs", () => {
     // (計畫管理) uses a different, non-grid layout, so its subtab panels never
     // needed this — copying its .admin-plan-subtab-panel class alone was not
     // enough inside the grid-based system panel.
-    const subtabs = ["users", "permissions", "registrations", "reports"];
+    const subtabs = ["users", "permissions", "registrations", "reports", "settings"];
     for (const key of subtabs) {
       const divTag = html.match(new RegExp(`<div id="admin-system-subtab-${key}" class="([^"]*)"`));
       expect(divTag).toBeTruthy();
@@ -85,8 +93,8 @@ describe("system management: category sub-tabs", () => {
     }
   });
 
-  it("wires tab-switching in admin.js, mirroring the 計畫管理 4-tab pattern", () => {
-    expect(admin).toContain("const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports'];");
+  it("wires tab-switching in admin.js, mirroring the 計畫管理 tab pattern", () => {
+    expect(admin).toContain("const ADMIN_SYSTEM_SUBTABS = ['users', 'permissions', 'registrations', 'reports', 'settings'];");
     expect(admin).toContain("function setAdminSystemSubtab(subtab)");
     expect(admin).toContain("function initAdminSystemSubtabs()");
     expect(admin).toContain("'selected_admin_system_subtab'");
