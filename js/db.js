@@ -62,6 +62,28 @@ function quotePostgrestValue(value) {
   return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+// Supabase/PostgREST caps rows per request (the project's configured
+// db.max_rows, commonly 1000; the nlc-data Edge Function additionally hard-
+// clamps any .range() span to 200 — see supabase/functions/nlc-data/index.ts).
+// Any "fetch every row" query — e.g. the admin member directory — that
+// doesn't paginate silently truncates once real data passes that cap, so
+// counts/lists quietly stop growing instead of erroring. buildQuery must be
+// a factory that returns a *fresh* query builder each call (chainable
+// builders here are single-use), since .range() is appended per page.
+async function fetchAllRows(buildQuery, pageSize = 200) {
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) return { data: rows, error };
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: rows, error: null };
+}
+
 /**
  * A plan can be referenced by a global UUID, its current stage key, or its
  * display name. Keep those aliases together so statistics stay plan-specific.
@@ -1215,9 +1237,9 @@ const db = {
     if (state.isSupabaseMode && state.supabase) {
       try {
         // 從 profiles 表取得所有不重複的使用者大區、牧區、小組資料以重構組織架構
-        const { data: users, error } = await state.supabase
+        const { data: users, error } = await fetchAllRows(() => state.supabase
           .from("profiles")
-          .select("great_region, pastoral_zone, small_group");
+          .select("great_region, pastoral_zone, small_group"));
 
         if (error) throw error;
 
@@ -1623,28 +1645,28 @@ const db = {
       const firstStagePresetKey = "church_stage_01";
       let profiles = [];
 
-      const { data: pData, error: pError } = await state.supabase
+      const { data: pData, error: pError } = await fetchAllRows(() => state.supabase
         .from("profiles")
         .select("id, name, email, great_region, pastoral_zone, small_group, is_active, name_review_approved, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions(id, code, label)")
         .eq("is_demo", false)
-        .order("name", { ascending: true });
+        .order("name", { ascending: true }));
 
       if (pError) {
-        const { data: fallbackProfiles, error: fbErr } = await state.supabase
+        const { data: fallbackProfiles, error: fbErr } = await fetchAllRows(() => state.supabase
           .from("profiles")
           .select("id, name, email, great_region, pastoral_zone, small_group, is_active, name_review_approved, member_context_synced_at, member_context_sync_status, role_id")
           .eq("is_demo", false)
-          .order("name", { ascending: true });
+          .order("name", { ascending: true }));
         if (fbErr) {
           // Both attempts included name_review_approved (migration 0069).
           // If that column hasn't been deployed to this database yet, both
           // fail identically — degrade once more without it rather than
           // breaking the whole admin directory over one optional field.
-          const { data: legacyProfiles, error: legacyErr } = await state.supabase
+          const { data: legacyProfiles, error: legacyErr } = await fetchAllRows(() => state.supabase
             .from("profiles")
             .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id")
             .eq("is_demo", false)
-            .order("name", { ascending: true });
+            .order("name", { ascending: true }));
           if (legacyErr) return { data: [], error: legacyErr };
           profiles = (legacyProfiles || []).map(profile => ({ ...profile, name_review_approved: false }));
         } else {
@@ -1654,27 +1676,27 @@ const db = {
         profiles = pData || [];
       }
 
-      const { data: enrollmentsResult } = await state.supabase
+      const { data: enrollmentsResult } = await fetchAllRows(() => state.supabase
         .from("reading_plans")
         .select("user_id")
-        .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`);
+        .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`));
 
       const joinedProfileIds = new Set((enrollmentsResult || []).map(plan => String(plan.user_id)));
 
       // 團隊組隊狀態：先前這裡完全沒有查詢過，profile.is_joined_team／team_name
       // 一直是 undefined，導致後台「未加入團隊」篩選勾選框形同虛設（永遠不會排除
       // 任何人），使用者卡片上的組隊狀態也永遠顯示「未加入團隊」。
-      const { data: teamMembershipsResult } = await state.supabase
+      const { data: teamMembershipsResult } = await fetchAllRows(() => state.supabase
         .from("reading_team_members")
-        .select("user_id, team_id, member_role");
+        .select("user_id, team_id, member_role"));
 
       const teamIds = Array.from(new Set((teamMembershipsResult || []).map(m => m.team_id).filter(Boolean)));
       let teamNameById = new Map();
       if (teamIds.length > 0) {
-        const { data: teamsResult } = await state.supabase
+        const { data: teamsResult } = await fetchAllRows(() => state.supabase
           .from("reading_teams")
           .select("id, name")
-          .in("id", teamIds);
+          .in("id", teamIds));
         teamNameById = new Map((teamsResult || []).map(t => [String(t.id), t.name]));
       }
       // A member can belong to more than one team across different plans;
@@ -1717,20 +1739,20 @@ const db = {
     }
     try {
       let profiles = [];
-      const { data, error } = await state.supabase
+      const { data, error } = await fetchAllRows(() => state.supabase
         .from("profiles")
         .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id, role_definition:role_definitions(id, code, label, scope_type)")
         .eq("is_demo", false)
         .eq("is_active", true)
-        .order("name", { ascending: true });
+        .order("name", { ascending: true }));
 
       if (error) {
-        const { data: fbData, error: fbError } = await state.supabase
+        const { data: fbData, error: fbError } = await fetchAllRows(() => state.supabase
           .from("profiles")
           .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id")
           .eq("is_demo", false)
           .eq("is_active", true)
-          .order("name", { ascending: true });
+          .order("name", { ascending: true }));
         if (fbError) return { data: [], error: fbError };
         profiles = fbData || [];
       } else {
