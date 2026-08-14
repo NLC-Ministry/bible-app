@@ -264,6 +264,9 @@ const auth = {
     state.activePlan = null;
     state.currentProfileId = null;
     state.profileLockedFields = [];
+    if (typeof db !== "undefined" && typeof db.resetOrgStructure === "function") {
+      db.resetOrgStructure();
+    }
   },
 
   _showMessage(message) {

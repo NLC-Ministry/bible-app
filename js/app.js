@@ -4,22 +4,22 @@
 import '../config.js';
 import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260812_export_taiwan_time';
-import './data/church_campaign.js?v=20260812_export_taiwan_time';
+import './copy/zh-Hant.js?v=20260814_org_filter_reliability';
+import './data/church_campaign.js?v=20260814_org_filter_reliability';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260812_export_taiwan_time';
-import './design/icon-registry.js?v=20260812_export_taiwan_time';
+import './design/design-system-helpers.js?v=20260814_org_filter_reliability';
+import './design/icon-registry.js?v=20260814_org_filter_reliability';
 import './design/icons.js';
-import './state.js?v=20260812_export_taiwan_time';
-import './auth.js?v=20260812_export_taiwan_time';
+import './state.js?v=20260814_org_filter_reliability';
+import './auth.js?v=20260814_org_filter_reliability';
 import './auth-launch.mjs';
-import './db.js?v=20260814_row_cap_pagination_fix';
-import './utils.js?v=20260812_export_taiwan_time';
-import './gamification.js?v=20260812_export_taiwan_time';
+import './db.js?v=20260814_org_filter_reliability';
+import './utils.js?v=20260814_org_filter_reliability';
+import './gamification.js?v=20260814_org_filter_reliability';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260812_export_taiwan_time';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260814_org_filter_reliability';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
@@ -33,7 +33,7 @@ if (!/^\d{14}$/.test(buildVersion)) {
 }
 buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1_quiz_load_error_v1_group_filter_reset_fix_v1_quiz_publish_flow_redesign_v1_row_cap_pagination_fix_v1_quiz_entry_reading_gate_v1_quiz_feature_reopen_restore_v1";
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260812_export_taiwan_time';
+const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260814_org_filter_reliability';
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
 const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
