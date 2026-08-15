@@ -87,6 +87,14 @@ describe("reader speech controls", () => {
     expect(bible).toContain('scrollIntoView?.({ behavior: "smooth", block: "center" })');
   });
 
+  it("waits for a successfully rendered next chapter before continuing audio", () => {
+    expect(bible).toContain("renderReaderText({ preserveAudio: autoContinue, autoContinue })");
+    expect(bible).toContain("if (autoContinue && rendered !== true) return false;");
+    expect(bible).toContain("options.autoRetryAttempted !== true");
+    expect(bible).toContain("autoRetryAttempted: true");
+    expect(bible).toContain("return true;");
+  });
+
   it("does not cancel speech between verses", () => {
     const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
     // stopReaderAudio() and pauseReaderAudio() (a full cancel + verse-marker

@@ -845,7 +845,8 @@ export async function navigateToChapter(direction, options = {}) {
             state.readerState.bookId = nextBook.id;
             state.readerState.chapter = Number(nextChInfo.chapter);
             state.readerState.planDayNum = nextChInfo.dayNum;
-            await renderReaderText({ preserveAudio: autoContinue });
+            const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+            if (autoContinue && rendered !== true) return false;
             if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
             return true;
           }
@@ -857,7 +858,8 @@ export async function navigateToChapter(direction, options = {}) {
       if (nextBook) {
         state.readerState.bookId = nextBook.id;
         state.readerState.chapter = Number(nextCh.chapter);
-        await renderReaderText({ preserveAudio: autoContinue });
+        const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+        if (autoContinue && rendered !== true) return false;
         if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
         return true;
       }
@@ -878,7 +880,8 @@ export async function navigateToChapter(direction, options = {}) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      await renderReaderText({ preserveAudio: autoContinue });
+      const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+      if (autoContinue && rendered !== true) return false;
       if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
       return true;
     }
@@ -893,7 +896,8 @@ export async function navigateToChapter(direction, options = {}) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      await renderReaderText({ preserveAudio: autoContinue });
+      const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+      if (autoContinue && rendered !== true) return false;
       if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
       return true;
     }
@@ -902,7 +906,8 @@ export async function navigateToChapter(direction, options = {}) {
     const chapterSelect = document.getElementById("reader-chapter-select");
     if (chapterSelect) chapterSelect.value = newChapter;
     saveReaderPreferences();
-    await renderReaderText({ preserveAudio: autoContinue });
+    const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+    if (autoContinue && rendered !== true) return false;
     if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
     return true;
   }
@@ -986,7 +991,7 @@ export async function renderReaderText(options = {}) {
       || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion
       || Number(state.readerState?.bookId) !== bookId
       || Number(state.readerState?.chapter) !== chapter;
-    if (requestIsStale) return;
+    if (requestIsStale) return false;
     verses = data ? data.verses : null;
     isLoading = false;
 
@@ -997,20 +1002,33 @@ export async function renderReaderText(options = {}) {
     }
 
     if (data.isPlaceholder) {
+      if (options.autoContinue === true && options.autoRetryAttempted !== true) {
+        await new Promise(resolve => window.setTimeout(resolve, 450));
+        const retryIsStale = renderRequestId !== readerRenderRequestId
+          || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion
+          || Number(state.readerState?.bookId) !== bookId
+          || Number(state.readerState?.chapter) !== chapter;
+        if (retryIsStale) return false;
+        return renderReaderText({
+          preserveAudio: true,
+          autoContinue: true,
+          autoRetryAttempted: true
+        });
+      }
       renderReaderLoadRetryState(container, {
         bookEngName: book.eng,
         chapter,
         version: requestedVersion
       });
       updateReaderFontSize();
-      return;
+      return false;
     }
 
     renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
   } catch (error) {
     if (renderRequestId !== readerRenderRequestId
-      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return;
+      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return false;
     console.error("Failed to load complete Bible chapter:", error);
     isLoading = false;
     renderReaderLoadRetryState(container, {
@@ -1019,13 +1037,14 @@ export async function renderReaderText(options = {}) {
       version: requestedVersion
     });
     updateReaderFontSize();
-    return;
+    return false;
   }
 
   updateReaderFontSize();
   updateReaderBottomActionBar();
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
+  return true;
 }
 
 function renderReaderLoadRetryState(container, { bookEngName, chapter, version }) {

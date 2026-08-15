@@ -214,6 +214,18 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
   if (window._bibleChapterCache[cacheKey]?.isPlaceholder) {
     delete window._bibleChapterCache[cacheKey];
   }
+
+  // Predictive prefetch and audio auto-navigation can request the same next
+  // chapter at nearly the same time. Share one in-flight request so a slower
+  // success cannot race with a second failure that replaces the reader UI.
+  if (!window._bibleChapterInFlight) {
+    window._bibleChapterInFlight = {};
+  }
+  if (window._bibleChapterInFlight[cacheKey]) {
+    return window._bibleChapterInFlight[cacheKey];
+  }
+
+  const requestPromise = (async () => {
   // Bolls.life requires the numeric book ID (1-66)
   const bollsBookId = getBollsBookId(bookEngName);
   const isEnglishVersion = ["ESV", "NIV", "NLT"].includes(preferredVersion);
@@ -275,6 +287,16 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
     isPlaceholder: true,
     loadError: errors.join("；") || "沒有可用的經文來源"
   };
+  })();
+
+  window._bibleChapterInFlight[cacheKey] = requestPromise;
+  try {
+    return await requestPromise;
+  } finally {
+    if (window._bibleChapterInFlight[cacheKey] === requestPromise) {
+      delete window._bibleChapterInFlight[cacheKey];
+    }
+  }
 }
 
 window.BIBLE_BOOKS = BIBLE_BOOKS;
