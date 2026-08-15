@@ -104,4 +104,14 @@ describe("Bible translation switching integrity", () => {
     expect(bible).toContain('const renderRequestId = ++readerRenderRequestId;');
     expect(bible).toMatch(/requestIsStale[\s\S]{0,350}state\.readerState\?\.version[\s\S]{0,250}if \(requestIsStale\) return/);
   });
+
+  it("shows a visible retry action and never caches placeholder chapters", () => {
+    expect(bibleData).toContain("isPlaceholder: true");
+    expect(bibleData).toContain("delete window._bibleChapterCache[cacheKey]");
+    expect(bible).toContain("function renderReaderLoadRetryState");
+    expect(bible).toContain("data-reader-load-retry");
+    expect(bible).toContain("重新讀取");
+    expect(bible).toContain("data && !data.isPlaceholder");
+    expect(css).toContain(".reader-load-retry-state");
+  });
 });

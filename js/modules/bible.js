@@ -963,7 +963,7 @@ export async function renderReaderText(options = {}) {
     ? window.getBibleChapterCacheKey(book.eng, chapter, requestedVersion)
     : `${requestedVersion}_${book.eng}_${chapter}`;
   const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
-  if (cachedData && cachedData.verses && cachedData.verses.length > 0) {
+  if (cachedData && !cachedData.isPlaceholder && cachedData.verses && cachedData.verses.length > 0) {
     verses = cachedData.verses;
     isLoading = false;
   }
@@ -996,6 +996,16 @@ export async function renderReaderText(options = {}) {
       throw new Error("經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！");
     }
 
+    if (data.isPlaceholder) {
+      renderReaderLoadRetryState(container, {
+        bookEngName: book.eng,
+        chapter,
+        version: requestedVersion
+      });
+      updateReaderFontSize();
+      return;
+    }
+
     renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
   } catch (error) {
@@ -1003,22 +1013,51 @@ export async function renderReaderText(options = {}) {
       || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return;
     console.error("Failed to load complete Bible chapter:", error);
     isLoading = false;
-    
-    container.innerHTML = `
-      <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-        <div style="font-size: 2.5rem;">📖</div>
-        <p style="color: var(--text-secondary); font-weight: 500; margin: 0; font-size: 0.95rem; line-height: 1.5; max-width: 280px;">經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！</p>
-        <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 500; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
-          重新點亮畫面（重試）
-        </button>
-      </div>
-    `;
+    renderReaderLoadRetryState(container, {
+      bookEngName: book.eng,
+      chapter,
+      version: requestedVersion
+    });
+    updateReaderFontSize();
+    return;
   }
 
   updateReaderFontSize();
   updateReaderBottomActionBar();
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
+}
+
+function renderReaderLoadRetryState(container, { bookEngName, chapter, version }) {
+  if (!container) return;
+  container.innerHTML = `
+    <div class="reader-load-retry-state" role="alert" aria-live="polite">
+      <span class="reader-load-retry-state__icon" aria-hidden="true">
+        <span class="nlc-icon nlc-icon--md" data-icon="refresh"></span>
+      </span>
+      <strong>經文尚未載入</strong>
+      <p>請確認網路連線後，再重新讀取本章經文。</p>
+      <button type="button" class="primary-btn reader-load-retry-state__button" data-reader-load-retry>
+        <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+        <span>重新讀取</span>
+      </button>
+    </div>
+  `;
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
+
+  container.querySelector("[data-reader-load-retry]")?.addEventListener("click", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    const label = button.querySelector("span:last-child");
+    if (label) label.textContent = "重新讀取中…";
+
+    const cacheKey = window.getBibleChapterCacheKey
+      ? window.getBibleChapterCacheKey(bookEngName, chapter, version)
+      : `${version}_${bookEngName}_${chapter}`;
+    if (window._bibleChapterCache) delete window._bibleChapterCache[cacheKey];
+    await renderReaderText();
+  });
 }
 
 function clearReaderStartSelection() {
@@ -2572,7 +2611,7 @@ function triggerPredictivePrefetch() {
   console.log(`📡 [背景預載啟動] 正在預載下一章: ${nextBookEng} ${nextChapter}章`);
   fetchBibleChapter(nextBookEng, nextChapter, requestedVersion)
     .then(data => {
-      if (window._bibleChapterCache) {
+      if (window._bibleChapterCache && data && !data.isPlaceholder) {
         window._bibleChapterCache[cacheKey] = data;
         console.log(`💾 [背景預載完成] 已快取下一章: ${cacheKey}`);
       }

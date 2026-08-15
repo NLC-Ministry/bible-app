@@ -207,9 +207,12 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
     window._bibleChapterCache = {};
   }
   const cacheKey = getBibleChapterCacheKey(bookEngName, chapter, preferredVersion);
-  if (window._bibleChapterCache[cacheKey]) {
+  if (window._bibleChapterCache[cacheKey] && !window._bibleChapterCache[cacheKey].isPlaceholder) {
     console.log(`📦 [Cache Hits] 讀取預載快取成功: ${cacheKey}`);
     return window._bibleChapterCache[cacheKey];
+  }
+  if (window._bibleChapterCache[cacheKey]?.isPlaceholder) {
+    delete window._bibleChapterCache[cacheKey];
   }
   // Bolls.life requires the numeric book ID (1-66)
   const bollsBookId = getBollsBookId(bookEngName);
@@ -261,14 +264,16 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
   for (let v = 1; v <= totalVerses; v++) {
     placeholderVerses.push({
       verse: v,
-      text: "（經文載入中，請保持網路連線。若持續未載入，請確認連線後點選右上角翻譯版本重新讀取）"
+      text: "（經文暫時未載入）"
     });
   }
 
   return {
     reference: `${bookEngName} ${chapter}章`,
     verses: placeholderVerses,
-    translation: preferredVersion
+    translation: preferredVersion,
+    isPlaceholder: true,
+    loadError: errors.join("；") || "沒有可用的經文來源"
   };
 }
 
