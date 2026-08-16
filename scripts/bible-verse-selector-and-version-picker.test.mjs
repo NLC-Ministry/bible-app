@@ -104,4 +104,11 @@ describe("Bible translation switching integrity", () => {
     expect(bible).toContain('const renderRequestId = ++readerRenderRequestId;');
     expect(bible).toMatch(/requestIsStale[\s\S]{0,350}state\.readerState\?\.version[\s\S]{0,250}if \(requestIsStale\) return/);
   });
+
+  it("does not treat placeholder verses as a successful chapter cache hit", () => {
+    expect(bibleData).toContain("isPlaceholder: true");
+    expect(bibleData).toContain("window._bibleChapterCache[cacheKey]?.isPlaceholder");
+    expect(bible).toContain("!cachedData.isPlaceholder");
+    expect(bible).toContain("if (data.isPlaceholder)");
+  });
 });

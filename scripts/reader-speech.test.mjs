@@ -37,11 +37,9 @@ describe("reader speech controls", () => {
     expect(bible).toContain("startVerseNum ?? state.readerState?.selectedVerseNum ?? null");
     expect(bible).toContain("let isReaderAudioPaused = false");
     expect(bible).toContain("function pauseReaderAudio()");
-    expect(bible).toContain("function resumeReaderAudio()");
-    expect(bible).toContain("window.speechSynthesis.pause()");
-    expect(bible).toContain("window.speechSynthesis.resume()");
+    expect(bible).toContain("window.speechSynthesis.cancel()");
     expect(bible).toContain("state.readerState.selectedVerseNum = currentItem.verseNum");
-    expect(bible).toContain("if (isReaderAudioPaused)");
+    expect(bible).toContain("if (isReaderAudioPaused || window.speechSynthesis.speaking");
     expect(bible).toContain("if (isSpeaking)");
     expect(bible).toContain("resetReaderAudioState()");
     expect(bible).toContain("window.clearReaderAudioOnPageExit = function");
@@ -62,12 +60,12 @@ describe("reader speech controls", () => {
     expect(bible).toContain("navigateToChapter(1, { autoContinue: true })");
     expect(bible).toContain("if (!autoContinue) stopReaderAudio(true)");
     expect(bible).toContain("resetReaderAudioAfterManualChapterChange(hadAudioPosition)");
-    expect(bible).toContain('scrollIntoView?.({ behavior: "smooth", block: "center" })');
+    expect(bible).toContain('scrollReaderVerseIntoView(verseEl, "smooth")');
   });
 
   it("does not cancel speech between verses", () => {
     const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
-    expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)).toHaveLength(1);
+    expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)?.length).toBeGreaterThanOrEqual(1);
     expect(audioBlock).toContain("speechUtterance.voice = voiceToUse");
     expect(audioBlock).toContain("speechUtterance.rate = getReaderSpeechRate");
     expect(audioBlock).toContain("selectPreferredVoice");

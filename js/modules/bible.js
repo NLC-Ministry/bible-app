@@ -818,6 +818,51 @@ export function updateReaderFontSize() {
   });
 }
 
+function setReaderScrollTop(top = 0, behavior = "auto") {
+  const scrollSurface = getReaderScrollSurface();
+  if (!scrollSurface) return false;
+  const safeTop = Math.max(0, Number(top) || 0);
+  if (behavior === "auto") {
+    scrollSurface.scrollTop = safeTop;
+    return true;
+  }
+  try {
+    scrollSurface.scrollTo({ top: safeTop, behavior });
+  } catch (_error) {
+    scrollSurface.scrollTop = safeTop;
+  }
+  return true;
+}
+
+function scrollReaderVerseIntoView(verseElement, behavior = "smooth") {
+  const scrollSurface = getReaderScrollSurface();
+  if (!scrollSurface || !verseElement) return false;
+
+  const surfaceRect = scrollSurface.getBoundingClientRect();
+  const verseRect = verseElement.getBoundingClientRect();
+  const centerOffset = Math.max(0, (scrollSurface.clientHeight - verseRect.height) / 2);
+  const targetTop = scrollSurface.scrollTop + verseRect.top - surfaceRect.top - centerOffset;
+  return setReaderScrollTop(targetTop, behavior);
+}
+
+function nextReaderLayoutFrame() {
+  return new Promise(resolve => {
+    const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+    schedule(() => schedule(resolve));
+  });
+}
+
+async function resetReaderScrollAfterChapterRender(sessionId) {
+  // Wait for the new verses and their final font metrics to affect layout.
+  // Reset twice (before and after the layout frames) to defeat mobile browser
+  // scroll anchoring, which can otherwise keep the old chapter's bottom edge.
+  setReaderScrollTop(0, "auto");
+  await nextReaderLayoutFrame();
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return false;
+  setReaderScrollTop(0, "auto");
+  return true;
+}
+
 export async function navigateToChapter(direction, options = {}) {
   const autoContinue = options.autoContinue === true;
   const hadAudioPosition = isSpeaking || !document.getElementById("reader-audio-timeline")?.classList.contains("hidden");
@@ -845,7 +890,8 @@ export async function navigateToChapter(direction, options = {}) {
             state.readerState.bookId = nextBook.id;
             state.readerState.chapter = Number(nextChInfo.chapter);
             state.readerState.planDayNum = nextChInfo.dayNum;
-            await renderReaderText({ preserveAudio: autoContinue });
+            const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+            if (autoContinue && rendered !== true) return false;
             if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
             return true;
           }
@@ -857,7 +903,8 @@ export async function navigateToChapter(direction, options = {}) {
       if (nextBook) {
         state.readerState.bookId = nextBook.id;
         state.readerState.chapter = Number(nextCh.chapter);
-        await renderReaderText({ preserveAudio: autoContinue });
+        const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+        if (autoContinue && rendered !== true) return false;
         if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
         return true;
       }
@@ -878,7 +925,8 @@ export async function navigateToChapter(direction, options = {}) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      await renderReaderText({ preserveAudio: autoContinue });
+      const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+      if (autoContinue && rendered !== true) return false;
       if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
       return true;
     }
@@ -893,7 +941,8 @@ export async function navigateToChapter(direction, options = {}) {
       populateBookSelector("all");
       populateChapterSelector();
       saveReaderPreferences();
-      await renderReaderText({ preserveAudio: autoContinue });
+      const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+      if (autoContinue && rendered !== true) return false;
       if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
       return true;
     }
@@ -902,7 +951,8 @@ export async function navigateToChapter(direction, options = {}) {
     const chapterSelect = document.getElementById("reader-chapter-select");
     if (chapterSelect) chapterSelect.value = newChapter;
     saveReaderPreferences();
-    await renderReaderText({ preserveAudio: autoContinue });
+    const rendered = await renderReaderText({ preserveAudio: autoContinue, autoContinue });
+    if (autoContinue && rendered !== true) return false;
     if (!autoContinue) resetReaderAudioAfterManualChapterChange(hadAudioPosition);
     return true;
   }
@@ -948,10 +998,7 @@ export async function renderReaderText(options = {}) {
   renderReaderPicker();
   loadVerseNotesForChapter(book.name, chapter);
 
-  const scrollSurface = document.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
-  if (scrollSurface) {
-    scrollSurface.scrollTop = 0;
-  }
+  setReaderScrollTop(0, "auto");
 
   const bar = document.getElementById("reader-bottom-action-bar");
   if (bar) {
@@ -963,7 +1010,7 @@ export async function renderReaderText(options = {}) {
     ? window.getBibleChapterCacheKey(book.eng, chapter, requestedVersion)
     : `${requestedVersion}_${book.eng}_${chapter}`;
   const cachedData = window._bibleChapterCache && window._bibleChapterCache[cacheKey];
-  if (cachedData && cachedData.verses && cachedData.verses.length > 0) {
+  if (cachedData && !cachedData.isPlaceholder && cachedData.verses && cachedData.verses.length > 0) {
     verses = cachedData.verses;
     isLoading = false;
   }
@@ -986,7 +1033,7 @@ export async function renderReaderText(options = {}) {
       || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion
       || Number(state.readerState?.bookId) !== bookId
       || Number(state.readerState?.chapter) !== chapter;
-    if (requestIsStale) return;
+    if (requestIsStale) return false;
     verses = data ? data.verses : null;
     isLoading = false;
 
@@ -996,29 +1043,83 @@ export async function renderReaderText(options = {}) {
       throw new Error("經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！");
     }
 
+    if (data.isPlaceholder) {
+      if (options.autoContinue === true && options.autoRetryAttempted !== true) {
+        await new Promise(resolve => window.setTimeout(resolve, 450));
+        const retryIsStale = renderRequestId !== readerRenderRequestId
+          || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion
+          || Number(state.readerState?.bookId) !== bookId
+          || Number(state.readerState?.chapter) !== chapter;
+        if (retryIsStale) return false;
+        return renderReaderText({
+          preserveAudio: true,
+          autoContinue: true,
+          autoRetryAttempted: true
+        });
+      }
+      renderReaderLoadRetryState(container, {
+        bookEngName: book.eng,
+        chapter,
+        version: requestedVersion
+      });
+      updateReaderFontSize();
+      return false;
+    }
+
     renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
   } catch (error) {
     if (renderRequestId !== readerRenderRequestId
-      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return;
+      || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return false;
     console.error("Failed to load complete Bible chapter:", error);
     isLoading = false;
-    
-    container.innerHTML = `
-      <div class="reader-error-state" style="padding: 3rem 1.5rem; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-        <div style="font-size: 2.5rem;">📖</div>
-        <p style="color: var(--text-secondary); font-weight: 500; margin: 0; font-size: 0.95rem; line-height: 1.5; max-width: 280px;">經文正在稍微休息中，別擔心，我們一起重新點亮畫面試試看！</p>
-        <button type="button" class="primary-btn" onclick="renderReaderText()" style="padding: 0.5rem 1.5rem; border-radius: 20px; font-weight: 500; margin-top: 0.5rem; font-size: 0.88rem; width: auto; min-height: 38px; display: inline-flex; align-items: center; justify-content: center;">
-          重新點亮畫面（重試）
-        </button>
-      </div>
-    `;
+    renderReaderLoadRetryState(container, {
+      bookEngName: book.eng,
+      chapter,
+      version: requestedVersion
+    });
+    updateReaderFontSize();
+    return false;
   }
 
   updateReaderFontSize();
+  setReaderScrollTop(0, "auto");
   updateReaderBottomActionBar();
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
+  return true;
+}
+
+function renderReaderLoadRetryState(container, { bookEngName, chapter, version }) {
+  if (!container) return;
+  container.innerHTML = `
+    <div class="reader-load-retry-state" role="alert" aria-live="polite">
+      <span class="reader-load-retry-state__icon" aria-hidden="true">
+        <span class="nlc-icon nlc-icon--md" data-icon="refresh"></span>
+      </span>
+      <strong>經文尚未載入</strong>
+      <p>請確認網路連線後，再重新讀取本章經文。</p>
+      <button type="button" class="primary-btn reader-load-retry-state__button" data-reader-load-retry>
+        <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+        <span>重新讀取</span>
+      </button>
+    </div>
+  `;
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
+
+  container.querySelector("[data-reader-load-retry]")?.addEventListener("click", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    const label = button.querySelector("span:last-child");
+    if (label) label.textContent = "重新讀取中…";
+
+    const cacheKey = window.getBibleChapterCacheKey
+      ? window.getBibleChapterCacheKey(bookEngName, chapter, version)
+      : `${version}_${bookEngName}_${chapter}`;
+    if (window._bibleChapterCache) delete window._bibleChapterCache[cacheKey];
+    await renderReaderText();
+  });
 }
 
 function clearReaderStartSelection() {
@@ -1877,17 +1978,22 @@ window.clearReaderAudioOnPageExit = function () {
   clearReaderStartSelection();
 };
 
+// Not a true speechSynthesis.pause() — that suspends mid-utterance and, on
+// resume, ignores any verse the user marks in the meantime (speechSynthesis
+// has no way to "resume from a different position"). Instead this fully
+// cancels the utterance and just marks the current verse as the start point,
+// so the next 朗讀 press below always restarts from that verse's beginning —
+// whichever verse ends up marked, including one the user taps while paused.
 function pauseReaderAudio() {
   if (!isSpeaking || typeof window.speechSynthesis === "undefined") return false;
+  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
+  currentAudioSessionId++;
   try {
-    window.speechSynthesis.pause();
-  } catch (_e) {
-    return false;
-  }
+    window.speechSynthesis.cancel();
+  } catch (_e) {}
 
   isSpeaking = false;
   isReaderAudioPaused = true;
-  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
   if (currentItem) {
     clearReaderStartSelection();
     const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
@@ -1897,26 +2003,7 @@ function pauseReaderAudio() {
     updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "paused", currentItem.verseNum);
   }
   updateReaderAudioButton(false);
-  if (typeof showToast === "function") showToast("朗讀已暫停，再按一次即可繼續");
-  return true;
-}
-
-function resumeReaderAudio() {
-  if (!isReaderAudioPaused || typeof window.speechSynthesis === "undefined") return false;
-  isReaderAudioPaused = false;
-  isSpeaking = true;
-  clearReaderStartSelection();
-  try {
-    window.speechSynthesis.resume();
-  } catch (_e) {
-    isSpeaking = false;
-    isReaderAudioPaused = true;
-    updateReaderAudioButton(false);
-    return false;
-  }
-  const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
-  updateReaderAudioTimeline(currentSpeakingVerseIndex, verseListForSpeaking.length, "speaking", currentItem?.verseNum);
-  updateReaderAudioButton(true);
+  if (typeof showToast === "function") showToast("朗讀已暫停，再按一次會從標記的那一節開頭朗讀");
   return true;
 }
 
@@ -1969,7 +2056,7 @@ function speakNextVerseInQueue(sessionId) {
   const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
   if (verseEl) {
     verseEl.classList.add("speaking-highlight");
-    verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    scrollReaderVerseIntoView(verseEl, "smooth");
   }
 
   const currentVersion = state.readerState?.version || "CUNP";
@@ -2033,6 +2120,8 @@ async function continueReaderAudioToNextChapter(sessionId) {
     stopReaderAudio(true, { preservePosition: true, status: "completed" });
     return;
   }
+  const scrollReset = await resetReaderScrollAfterChapterRender(sessionId);
+  if (!scrollReset || sessionId !== currentAudioSessionId || !isSpeaking) return;
   const container = document.getElementById("bible-content");
   verseListForSpeaking = Array.from(container?.querySelectorAll(".bible-verse") || []).map(el => ({
     verseNum: Number(el.dataset.verse || 0),
@@ -2051,16 +2140,16 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
     if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
     return;
   }
-  if (isReaderAudioPaused) {
-    if (resumeReaderAudio()) return;
-    stopReaderAudio(true, { preservePosition: true });
-  }
   if (isSpeaking) {
     if (pauseReaderAudio()) return;
     stopReaderAudio(false, { preservePosition: true });
     return;
   }
-  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+  // Paused (or genuinely idle): always (re)start fresh from whichever verse
+  // is currently marked — state.readerState.selectedVerseNum below — rather
+  // than resuming mid-utterance. stopReaderAudio() only cancels playback; it
+  // does not clear the verse marker, so a verse tapped while paused sticks.
+  if (isReaderAudioPaused || window.speechSynthesis.speaking || window.speechSynthesis.pending) {
     stopReaderAudio(true);
   }
 
@@ -2586,7 +2675,7 @@ function triggerPredictivePrefetch() {
   console.log(`📡 [背景預載啟動] 正在預載下一章: ${nextBookEng} ${nextChapter}章`);
   fetchBibleChapter(nextBookEng, nextChapter, requestedVersion)
     .then(data => {
-      if (window._bibleChapterCache) {
+      if (window._bibleChapterCache && data && !data.isPlaceholder) {
         window._bibleChapterCache[cacheKey] = data;
         console.log(`💾 [背景預載完成] 已快取下一章: ${cacheKey}`);
       }
