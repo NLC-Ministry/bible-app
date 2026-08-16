@@ -84,7 +84,7 @@ describe("reader speech controls", () => {
     expect(bible).toContain("navigateToChapter(1, { autoContinue: true })");
     expect(bible).toContain("if (!autoContinue) stopReaderAudio(true)");
     expect(bible).toContain("resetReaderAudioAfterManualChapterChange(hadAudioPosition)");
-    expect(bible).toContain('scrollIntoView?.({ behavior: "smooth", block: "center" })');
+    expect(bible).toContain('scrollReaderVerseIntoView(verseEl, "smooth")');
   });
 
   it("waits for a successfully rendered next chapter before continuing audio", () => {
@@ -93,6 +93,41 @@ describe("reader speech controls", () => {
     expect(bible).toContain("options.autoRetryAttempted !== true");
     expect(bible).toContain("autoRetryAttempted: true");
     expect(bible).toContain("return true;");
+  });
+
+  it("resets the actual reader scroll surface after the next chapter layout and follows verse one", () => {
+    expect(bible).toContain('document.querySelector("#reader-view .reader-reading-surface")');
+    expect(bible).toContain('scrollSurface.scrollTo({ top: safeTop, behavior })');
+    expect(bible).toContain("async function resetReaderScrollAfterChapterRender(sessionId)");
+    expect(bible).toContain("await nextReaderLayoutFrame()");
+    expect(bible).toContain("if (sessionId !== currentAudioSessionId || !isSpeaking) return false;");
+    expect(bible).toContain("const scrollReset = await resetReaderScrollAfterChapterRender(sessionId);");
+    expect(bible).toContain('setReaderScrollTop(0, "auto")');
+    expect(bible).not.toContain('verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" })');
+  });
+
+  it("calculates verse following against the reader's own scroll surface", () => {
+    const helperStart = bible.indexOf("function getReaderScrollSurface()");
+    const helperEnd = bible.indexOf("function nextReaderLayoutFrame()", helperStart);
+    const helperSource = bible.slice(helperStart, helperEnd);
+    const calls = [];
+    const scrollSurface = {
+      scrollTop: 600,
+      clientHeight: 400,
+      getBoundingClientRect: () => ({ top: 100 }),
+      scrollTo: options => calls.push(options)
+    };
+    const fakeDocument = {
+      querySelector: selector => selector === "#reader-view .reader-reading-surface" ? scrollSurface : null
+    };
+    const verse = { getBoundingClientRect: () => ({ top: 500, height: 40 }) };
+    const scrollReaderVerseIntoView = new Function(
+      "document",
+      `${helperSource}\nreturn scrollReaderVerseIntoView;`
+    )(fakeDocument);
+
+    expect(scrollReaderVerseIntoView(verse, "smooth")).toBe(true);
+    expect(calls).toEqual([{ top: 820, behavior: "smooth" }]);
   });
 
   it("does not cancel speech between verses", () => {

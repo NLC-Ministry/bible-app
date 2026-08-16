@@ -818,6 +818,56 @@ export function updateReaderFontSize() {
   });
 }
 
+function getReaderScrollSurface() {
+  return document.querySelector("#reader-view .reader-reading-surface")
+    || document.querySelector(".main-content");
+}
+
+function setReaderScrollTop(top = 0, behavior = "auto") {
+  const scrollSurface = getReaderScrollSurface();
+  if (!scrollSurface) return false;
+  const safeTop = Math.max(0, Number(top) || 0);
+  if (behavior === "auto") {
+    scrollSurface.scrollTop = safeTop;
+    return true;
+  }
+  try {
+    scrollSurface.scrollTo({ top: safeTop, behavior });
+  } catch (_error) {
+    scrollSurface.scrollTop = safeTop;
+  }
+  return true;
+}
+
+function scrollReaderVerseIntoView(verseElement, behavior = "smooth") {
+  const scrollSurface = getReaderScrollSurface();
+  if (!scrollSurface || !verseElement) return false;
+
+  const surfaceRect = scrollSurface.getBoundingClientRect();
+  const verseRect = verseElement.getBoundingClientRect();
+  const centerOffset = Math.max(0, (scrollSurface.clientHeight - verseRect.height) / 2);
+  const targetTop = scrollSurface.scrollTop + verseRect.top - surfaceRect.top - centerOffset;
+  return setReaderScrollTop(targetTop, behavior);
+}
+
+function nextReaderLayoutFrame() {
+  return new Promise(resolve => {
+    const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+    schedule(() => schedule(resolve));
+  });
+}
+
+async function resetReaderScrollAfterChapterRender(sessionId) {
+  // Wait for the new verses and their final font metrics to affect layout.
+  // Reset twice (before and after the layout frames) to defeat mobile browser
+  // scroll anchoring, which can otherwise keep the old chapter's bottom edge.
+  setReaderScrollTop(0, "auto");
+  await nextReaderLayoutFrame();
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return false;
+  setReaderScrollTop(0, "auto");
+  return true;
+}
+
 export async function navigateToChapter(direction, options = {}) {
   const autoContinue = options.autoContinue === true;
   const hadAudioPosition = isSpeaking || !document.getElementById("reader-audio-timeline")?.classList.contains("hidden");
@@ -953,10 +1003,7 @@ export async function renderReaderText(options = {}) {
   renderReaderPicker();
   loadVerseNotesForChapter(book.name, chapter);
 
-  const scrollSurface = document.querySelector(".reader-reading-surface") || document.querySelector(".main-content");
-  if (scrollSurface) {
-    scrollSurface.scrollTop = 0;
-  }
+  setReaderScrollTop(0, "auto");
 
   const bar = document.getElementById("reader-bottom-action-bar");
   if (bar) {
@@ -1041,6 +1088,7 @@ export async function renderReaderText(options = {}) {
   }
 
   updateReaderFontSize();
+  setReaderScrollTop(0, "auto");
   updateReaderBottomActionBar();
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
@@ -2013,7 +2061,7 @@ function speakNextVerseInQueue(sessionId) {
   const verseEl = document.getElementById(`reader-verse-${currentItem.verseNum}`);
   if (verseEl) {
     verseEl.classList.add("speaking-highlight");
-    verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    scrollReaderVerseIntoView(verseEl, "smooth");
   }
 
   const currentVersion = state.readerState?.version || "CUNP";
@@ -2077,6 +2125,8 @@ async function continueReaderAudioToNextChapter(sessionId) {
     stopReaderAudio(true, { preservePosition: true, status: "completed" });
     return;
   }
+  const scrollReset = await resetReaderScrollAfterChapterRender(sessionId);
+  if (!scrollReset || sessionId !== currentAudioSessionId || !isSpeaking) return;
   const container = document.getElementById("bible-content");
   verseListForSpeaking = Array.from(container?.querySelectorAll(".bible-verse") || []).map(el => ({
     verseNum: Number(el.dataset.verse || 0),
