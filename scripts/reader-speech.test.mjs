@@ -96,7 +96,7 @@ describe("reader speech controls", () => {
   });
 
   it("resets the actual reader scroll surface after the next chapter layout and follows verse one", () => {
-    expect(bible).toContain('document.querySelector("#reader-view .reader-reading-surface")');
+    expect(bible).toContain('document.querySelector(".reader-reading-surface")');
     expect(bible).toContain('scrollSurface.scrollTo({ top: safeTop, behavior })');
     expect(bible).toContain("async function resetReaderScrollAfterChapterRender(sessionId)");
     expect(bible).toContain("await nextReaderLayoutFrame()");
@@ -118,7 +118,7 @@ describe("reader speech controls", () => {
       scrollTo: options => calls.push(options)
     };
     const fakeDocument = {
-      querySelector: selector => selector === "#reader-view .reader-reading-surface" ? scrollSurface : null
+      querySelector: selector => selector === ".reader-reading-surface" ? scrollSurface : null
     };
     const verse = { getBoundingClientRect: () => ({ top: 500, height: 40 }) };
     const scrollReaderVerseIntoView = new Function(
