@@ -9,7 +9,8 @@ import {
   resolveSyncedRoleId,
   buildLockedFields,
   projectOrgFieldsFromHub,
-  buildOrgProjectionAudit
+  buildOrgProjectionAudit,
+  resolveProjectedProfileName
 } from "./lib/nlc-profile-sync.mjs";
 
 const rootDir = path.resolve(import.meta.dirname, "..");
@@ -208,6 +209,33 @@ describe("projectOrgFieldsFromHub", () => {
       pastoral_zone: "大安1",
       small_group: "馬鈴"
     });
+  });
+});
+
+describe("resolveProjectedProfileName", () => {
+  it("keeps a Hub name", () => {
+    expect(resolveProjectedProfileName({
+      hubName: "王大明",
+      existingName: "教會肢體",
+    })).toBe("王大明");
+  });
+
+  it("keeps a real existing name when Hub is empty", () => {
+    expect(resolveProjectedProfileName({
+      hubName: "",
+      existingName: "王大明",
+    })).toBe("王大明");
+  });
+
+  it("does not invent a name from email or 教會肢體", () => {
+    expect(resolveProjectedProfileName({
+      hubName: "",
+      existingName: "教會肢體",
+    })).toBe("");
+    expect(resolveProjectedProfileName({
+      hubName: null,
+      existingName: "",
+    })).toBe("");
   });
 });
 
@@ -412,5 +440,12 @@ describe("nlc-session member context sync timestamp", () => {
     expect(source).toContain("identityMetadata.org_projection_audit = orgProjectionAudit");
     expect(source).toContain('console.info("nlc-session org projection"');
     expect(source).toContain("org_projection_debug: orgProjectionAudit");
+  });
+
+  it("resolves profile names without inventing email prefixes or 教會肢體", () => {
+    const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
+
+    expect(source).toContain("resolveProjectedProfileName");
+    expect(source).not.toContain('lookupEmail ? lookupEmail.split("@")[0]');
   });
 });
