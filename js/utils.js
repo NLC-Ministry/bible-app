@@ -1,7 +1,6 @@
 import { segmentScheduleDaysForRoundCount } from "./data/current-round-progress.mjs";
 import {
-  getCanonicalMemberPrerequisiteBlock,
-  isCanonicalMemberJourneyProjection
+  getUserOnboardingBlock
 } from "./member-journey.mjs";
 
 // ============================================================
@@ -269,28 +268,16 @@ window.getProfileNameFlags = getProfileNameFlags;
 window.isProfileNameValid = isProfileNameValid;
 
 /**
- * Whether a profile is complete enough to enter reading plans: a pastoral
- * zone placement (Hub-owned, never self-service — see migration 0028) and a
- * name that isn't empty/placeholder/suspicious (or has been admin-approved
- * despite tripping the heuristic).
+ * Whether a profile is complete enough to enter reading plans.
+ * Uses the same user-completion predicate as the login card; pending
+ * members without confirmed placement are not blocked here.
  * @param {object|null} [user]
  * @returns {{reason: string, flags?: string[], requiredAction?: string, requiredActionUrl?: string|null}|null}
  */
 function getPlanEligibilityBlock(user) {
   const u = user || (typeof state !== "undefined" ? state.currentUser : null) || {};
   if (!u || u.is_demo) return null;
-  if (isCanonicalMemberJourneyProjection(u)) {
-    const canonicalBlock = getCanonicalMemberPrerequisiteBlock(u);
-    if (canonicalBlock) return canonicalBlock;
-  } else if (!String(u.pastoral_zone || "").trim()) {
-    // Compatibility fallback for profiles not yet synchronized to contract v2.
-    return { reason: "missing_zone" };
-  }
-  const flags = getProfileNameFlags(u.name);
-  if (flags.length > 0 && !u.name_review_approved) {
-    return { reason: flags.includes("empty") ? "missing_name" : "invalid_name", flags };
-  }
-  return null;
+  return getUserOnboardingBlock(u);
 }
 window.getPlanEligibilityBlock = getPlanEligibilityBlock;
 
