@@ -6,7 +6,7 @@
 
 ## Context
 
-GitHub Actions already runs tests and a placeholder build on pull requests and on pushes to `main` (`.github/workflows/ci.yml`). Vercel still deploys independently via its Git integration, so a red CI run does not stop a deployment from starting.
+GitHub Actions already runs tests and a placeholder build on pull requests and on pushes to `main` (`.github/workflows/cicd.yml`). Vercel still deploys independently via its Git integration, so a red CI run does not stop a deployment from starting.
 
 The required pipeline is: **CI must succeed before any Vercel deployment starts.** Failed CI must never start a deploy. After CI is green, GitHub Actions deploys a **preview** for pull requests and **production** for `main`.
 
@@ -64,9 +64,9 @@ Add:
 
 This is the project-level instruction that stops Vercel’s Git integration from building on push/PR. The GitHub app can stay installed. Existing cache headers, rewrites, `buildCommand`, and `outputDirectory` stay unchanged.
 
-**2. CI + deploy workflow (`.github/workflows/ci.yml`)**
+**2. CI + deploy workflow (`.github/workflows/cicd.yml`)**
 
-Keep the current `on:` triggers (`pull_request` and `push` to `main`) and the existing `build-and-test` job (Node 20, `npm ci`, `npm test`, placeholder `npm run build`).
+Keep the current `on:` triggers (`pull_request` and `push` to `main`) and the existing `build-and-test` job (Node 20, `npm ci`, `npm test`, placeholder `npm run build`). The workflow file is `.github/workflows/cicd.yml` and its GitHub Actions display name is `CICD`.
 
 Add a `deploy` job:
 

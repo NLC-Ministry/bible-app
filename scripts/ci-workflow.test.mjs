@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const yaml = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+const yaml = readFileSync(join(root, ".github/workflows/cicd.yml"), "utf8");
 
 describe("CI/CD workflow", () => {
+  it("is named CICD", () => {
+    expect(yaml).toMatch(/^name: CICD$/m);
+  });
+
   it("runs deploy only after build-and-test succeeds", () => {
     expect(yaml).toMatch(/deploy:\s*\n(?:[ \t]+.+\n)*[ \t]+needs:\s*build-and-test/);
   });

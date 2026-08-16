@@ -6,7 +6,7 @@
 
 **Architecture:** Turn off Vercel Git auto-deploy in `vercel.json`. Keep the existing `build-and-test` job. Add a `deploy` job with `needs: build-and-test` that runs `vercel pull` → `vercel build` → `vercel deploy --prebuilt`. Do not ship the CI `dist/` (placeholder env).
 
-**Tech Stack:** GitHub Actions, Vercel CLI `59.1.3`, Node 20, Vitest contract tests against `vercel.json` and `ci.yml`.
+**Tech Stack:** GitHub Actions, Vercel CLI `59.1.3`, Node 20, Vitest contract tests against `vercel.json` and `cicd.yml`.
 
 ## Global Constraints
 
@@ -24,7 +24,7 @@
 - Modify: `scripts/vercel-config.test.mjs` — assert auto-deploy is off.
 - Modify: `vercel.json` — `"git": { "deploymentEnabled": false }`.
 - Create: `scripts/ci-workflow.test.mjs` — contract-test the workflow gate and deploy commands.
-- Modify: `.github/workflows/ci.yml` — add gated `deploy` job.
+- Modify: `.github/workflows/cicd.yml` — add gated `deploy` job.
 
 ---
 
@@ -89,10 +89,10 @@ EOF
 
 **Files:**
 - Create: `scripts/ci-workflow.test.mjs`
-- Modify: `.github/workflows/ci.yml`
+- Modify: `.github/workflows/cicd.yml`
 
 **Interfaces:**
-- Consumes: workflow text at `.github/workflows/ci.yml`.
+- Consumes: workflow text at `.github/workflows/cicd.yml`.
 - Produces: a `deploy` job that `needs: build-and-test`, pins `vercel@59.1.3`, deploys with `--prebuilt`, uses `--prod` only on the production path, authenticates via `VERCEL_TOKEN` env (never `--token`), and skips fork PRs.
 
 - [ ] **Step 1: Write the failing tests**
@@ -106,7 +106,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const yaml = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+const yaml = readFileSync(join(root, ".github/workflows/cicd.yml"), "utf8");
 
 describe("CI/CD workflow", () => {
   it("runs deploy only after build-and-test succeeds", () => {
@@ -140,14 +140,14 @@ describe("CI/CD workflow", () => {
 
 Run: `cd bible-app && npx vitest run scripts/ci-workflow.test.mjs`
 
-Expected: FAIL — current `ci.yml` has no `deploy` job, no pinned CLI, no `--prebuilt`.
+Expected: FAIL — current `cicd.yml` has no `deploy` job, no pinned CLI, no `--prebuilt`.
 
-- [ ] **Step 3: Replace `.github/workflows/ci.yml` with the gated pipeline**
+- [ ] **Step 3: Replace `.github/workflows/cicd.yml` with the gated pipeline**
 
 Write this exact file (keep the existing `build-and-test` steps, including placeholder `SUPABASE_*` and the `dist/` existence checks):
 
 ```yaml
-name: CI
+name: CICD
 
 on:
   pull_request:
@@ -285,7 +285,7 @@ Expected: PASS (existing suite plus the two contract files).
 - [ ] **Step 6: Commit** (skip unless the user asked to commit)
 
 ```bash
-git add scripts/ci-workflow.test.mjs .github/workflows/ci.yml
+git add scripts/ci-workflow.test.mjs .github/workflows/cicd.yml
 git commit -m "$(cat <<'EOF'
 ci: deploy to Vercel only after tests and build succeed
 
