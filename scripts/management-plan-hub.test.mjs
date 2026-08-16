@@ -19,6 +19,16 @@ describe("management plan hub", () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
+  it("places a clearly labelled feature list before plan and organization filters", () => {
+    const planPanel = html.slice(html.indexOf('id="admin-plans-panel"'), html.indexOf('    </main>', html.indexOf('id="admin-plans-panel"')));
+    const featureMenuIndex = planPanel.indexOf('id="admin-plan-feature-menu-title"');
+    const planFilterIndex = planPanel.indexOf('id="admin-plan-filter-title"');
+    const orgFilterIndex = planPanel.indexOf('id="admin-plan-filter-disclosure"');
+    expect(featureMenuIndex).toBeGreaterThan(-1);
+    expect(featureMenuIndex).toBeLessThan(planFilterIndex);
+    expect(featureMenuIndex).toBeLessThan(orgFilterIndex);
+  });
+
   it("gives system administrators system and plan tabs", () => {
     expect(html).toContain('data-admin-panel="system">\u7cfb\u7d71\u7ba1\u7406</button>');
     expect(html).toContain('data-admin-panel="plans">\u8a08\u756b\u7ba1\u7406</button>');

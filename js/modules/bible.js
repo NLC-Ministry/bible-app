@@ -818,6 +818,14 @@ export function updateReaderFontSize() {
   });
 }
 
+function getReaderScrollSurface() {
+  const readerSurface = document.querySelector(".reader-reading-surface");
+  const mainSurface = document.querySelector(".main-content");
+  if (readerSurface && Number(readerSurface.scrollHeight) > Number(readerSurface.clientHeight) + 1) return readerSurface;
+  if (mainSurface && Number(mainSurface.scrollHeight) > Number(mainSurface.clientHeight) + 1) return mainSurface;
+  return readerSurface || mainSurface;
+}
+
 function setReaderScrollTop(top = 0, behavior = "auto") {
   const scrollSurface = getReaderScrollSurface();
   if (!scrollSurface) return false;
@@ -2683,14 +2691,6 @@ function triggerPredictivePrefetch() {
     .catch(err => {
       console.warn(`⚠️ [背景預載失敗] 無法預載下一章: ${cacheKey}`, err);
     });
-}
-
-function getReaderScrollSurface() {
-  const readerSurface = document.querySelector(".reader-reading-surface");
-  const mainSurface = document.querySelector(".main-content");
-  if (readerSurface && Number(readerSurface.scrollHeight) > Number(readerSurface.clientHeight) + 1) return readerSurface;
-  if (mainSurface && Number(mainSurface.scrollHeight) > Number(mainSurface.clientHeight) + 1) return mainSurface;
-  return readerSurface || mainSurface;
 }
 
 function checkReaderBottomDwell(surface = getReaderScrollSurface(), isAtBottom = null) {

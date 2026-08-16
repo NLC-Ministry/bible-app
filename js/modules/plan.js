@@ -5,7 +5,10 @@ import {
   resetPlanTeamInvitePanelState,
   resolveTeamJoinEffectivePlan
 } from "./plan-team-navigation-helpers.mjs";
-import { getPlanParticipationModel } from "./plan-participation-helpers.mjs";
+import {
+  getPlanParticipationModel,
+  shouldHidePlanTeamInviteShortcut
+} from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import {
@@ -27,6 +30,7 @@ let viewMode = 'calendar'; // Today reading always shows calendar + chapter list
 let planSearchQuery = '';
 let teamCarryoverOfferInFlight = false;
 let teamCarryoverCheckedSignature = "";
+let planTeamInviteVisibilityRequestId = 0;
 
 const PLAN_ROUTE = Object.freeze({
   LIST: "LIST",
@@ -624,6 +628,63 @@ function closePlanTeamInvitePanel() {
   resetPlanTeamInvitePanel({ restoreFocus: true });
 }
 
+async function updatePlanTeamInviteShortcutVisibility() {
+  const shortcut = document.getElementById("plan-team-invite-shortcut");
+  if (!shortcut) return;
+
+  const requestId = ++planTeamInviteVisibilityRequestId;
+  const revealShortcut = () => {
+    if (requestId !== planTeamInviteVisibilityRequestId) return;
+    shortcut.classList.remove("hidden");
+    shortcut.hidden = false;
+  };
+
+  const canLoadTeams = state.isSupabaseMode
+    && state.supabase
+    && !(state.currentUser && state.currentUser.is_demo)
+    && typeof window.isReadingTeamPlan === "function"
+    && typeof db !== "undefined"
+    && typeof db.getMyReadingTeam === "function";
+  if (!canLoadTeams) {
+    revealShortcut();
+    return;
+  }
+
+  const eligiblePlans = (state.activePlans || []).filter(plan =>
+    !isPlanExpired(plan)
+    && (canManageHiddenPlans() || !isPlanHidden(plan))
+    && window.isReadingTeamPlan(plan)
+  );
+  if (eligiblePlans.length === 0) {
+    revealShortcut();
+    return;
+  }
+
+  try {
+    const results = await Promise.all(eligiblePlans.map(plan => db.getMyReadingTeam(plan)));
+    if (requestId !== planTeamInviteVisibilityRequestId) return;
+
+    // A failed lookup must never hide a useful action. Only hide after every
+    // current plan positively reports membership in both supported divisions.
+    if (results.some(result => !result || !result.success)) {
+      revealShortcut();
+      return;
+    }
+
+    const contextsByPlan = results.map(result => getJoinedReadingTeamContexts(result.context));
+    const shouldHide = shouldHidePlanTeamInviteShortcut(contextsByPlan, [3, 6]);
+    shortcut.classList.toggle("hidden", shouldHide);
+    shortcut.hidden = shouldHide;
+
+    if (shouldHide && !document.getElementById("join-team-container")?.classList.contains("hidden")) {
+      resetPlanTeamInvitePanel();
+    }
+  } catch (error) {
+    console.warn("Unable to update invite-code shortcut visibility:", error);
+    revealShortcut();
+  }
+}
+
 function initPlanControls() {
   ensurePlanRouteShell();
   renderPresetPlansList();
@@ -698,6 +759,13 @@ function initPlanControls() {
     closeInviteBtn.addEventListener("click", event => {
       event.preventDefault();
       closePlanTeamInvitePanel();
+    });
+  }
+
+  if (!window.__planTeamInviteVisibilityBound) {
+    window.__planTeamInviteVisibilityBound = true;
+    window.addEventListener("readingTeam:updated", () => {
+      void updatePlanTeamInviteShortcutVisibility();
     });
   }
 
@@ -1116,6 +1184,7 @@ async function renderPlanView() {
 
     renderJoinedPlansList();
     renderPresetPlansList();
+    void updatePlanTeamInviteShortcutVisibility();
 
     ensurePlanRouteShell();
 
@@ -1993,6 +2062,7 @@ function setupGlobalJoinTeamForm() {
         input.value = "";
 
         resetPlanTeamInvitePanel();
+        void updatePlanTeamInviteShortcutVisibility();
         if (res.plan) {
           await openJoinedPlanTeam(res.plan);
         } else {
@@ -5074,6 +5144,21 @@ function getActiveOrgFilter() {
 }
 
 // ==================== MEMBERS SELECTOR POPULATOR ====================
+// Drives the collapsed 查看範圍 trigger's preview text (admin-plan-filter-card--org
+// in index.html) so an admin can see the current scope without expanding it.
+// Harmless no-op when that trigger isn't on screen (e.g. the 組員狀況/計畫統計
+// subviews reuse the same three selects without this collapsed wrapper).
+function updateAdminPlanFilterSummary() {
+  const summaryText = document.getElementById("admin-plan-filter-summary-text");
+  if (!summaryText) return;
+  const parts = ["members-admin-region-select", "members-admin-zone-select", "members-admin-group-select"]
+    .map(id => document.getElementById(id))
+    .filter(select => select && !select.disabled && select.value && select.value !== "unassigned")
+    .map(select => select.options[select.selectedIndex]?.text || "")
+    .filter(Boolean);
+  summaryText.textContent = parts.length ? `查看範圍：${parts.join(" · ")}` : "查看範圍：全部";
+}
+
 function populateMembersSelector() {
   setupCascadingSelectors("members-admin-region-select", "members-admin-zone-select", "members-admin-group-select", "members-zone-selector");
 
@@ -5086,6 +5171,7 @@ function populateMembersSelector() {
     if (el && !el.dataset.directListenerBound) {
       el.dataset.directListenerBound = "true";
       el.addEventListener("change", async () => {
+        updateAdminPlanFilterSummary();
         await renderPlanMembersView();
         if (typeof window.refreshAdminTeamRegistrationFilters === "function") {
           await window.refreshAdminTeamRegistrationFilters();
@@ -5104,6 +5190,8 @@ function populateMembersSelector() {
       }
     });
   }
+
+  updateAdminPlanFilterSummary();
 }
 
 async function renderPlanStatsView() {

@@ -69,3 +69,24 @@ export function getPlanParticipationModel(plan, contexts = []) {
     }
   };
 }
+
+export function shouldHidePlanTeamInviteShortcut(teamContextsByPlan = [], requiredDivisions = [3, 6]) {
+  const plans = Array.isArray(teamContextsByPlan) ? teamContextsByPlan : [];
+  const divisions = Array.from(new Set(
+    (Array.isArray(requiredDivisions) ? requiredDivisions : [])
+      .map(Number)
+      .filter(Number.isFinite)
+  ));
+
+  if (plans.length === 0 || divisions.length === 0) return false;
+
+  return plans.every(contexts => {
+    const joinedDivisions = new Set(
+      (Array.isArray(contexts) ? contexts : [])
+        .filter(context => context && context.team)
+        .map(context => Number(context.team.division))
+        .filter(Number.isFinite)
+    );
+    return divisions.every(division => joinedDivisions.has(division));
+  });
+}

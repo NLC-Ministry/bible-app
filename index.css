@@ -6273,6 +6273,54 @@ body.dark-theme .pastoral-race-progress {
   background: var(--bg-card);
 }
 
+.reader-load-retry-state {
+  width: min(100%, 420px);
+  margin: 1.25rem auto;
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.reader-load-retry-state__icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-brand);
+  background: var(--color-brand-subtle);
+  border-radius: 50%;
+}
+
+.reader-load-retry-state strong {
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong);
+}
+
+.reader-load-retry-state p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.reader-load-retry-state__button {
+  min-height: 44px;
+  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
 .daily-quiz-entry-button {
   width: 100%;
   min-height: 76px;
@@ -8513,54 +8561,6 @@ body.reader-modal-open .main-content {
 
 .bible-verse {
   scroll-margin-top: 76px;
-}
-
-.reader-load-retry-state {
-  width: min(100%, 420px);
-  margin: 1.25rem auto;
-  padding: 1.5rem 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: center;
-  color: var(--text-primary);
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  border-radius: 16px;
-  box-shadow: var(--shadow-sm);
-}
-
-.reader-load-retry-state__icon {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-brand);
-  background: var(--color-brand-subtle);
-  border-radius: 50%;
-}
-
-.reader-load-retry-state strong {
-  font-size: 1rem;
-  font-weight: var(--type-weight-strong);
-}
-
-.reader-load-retry-state p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  line-height: 1.6;
-}
-
-.reader-load-retry-state__button {
-  min-height: 44px;
-  margin-top: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
 }
 
 .full-page-overlay {
@@ -13237,19 +13237,101 @@ select,
   gap: 1.25rem;
 }
 
-.admin-plan-subtabs {
+.admin-plan-feature-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  border-top: 3px solid var(--color-brand);
+}
+
+.admin-plan-feature-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-plan-feature-menu__header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.admin-plan-feature-menu__header p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.admin-plan-feature-menu__hint {
+  flex: 0 0 auto;
+  color: var(--color-brand);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.admin-plan-feature-menu .admin-plan-subtabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  overflow: visible;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.admin-plan-feature-menu .admin-plan-subtab {
+  justify-content: center;
+  min-width: 0;
+  min-height: 3rem;
+  border: 1px solid transparent;
+  white-space: normal;
+  text-align: center;
+}
+
+.admin-plan-feature-menu .admin-plan-subtab:not(.active) {
+  border-color: var(--border-card);
+  background: var(--bg-card);
+}
+
+.admin-plan-feature-menu .admin-plan-subtab.active {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: #fff;
+}
+
+.admin-plan-subtabs {
+  display: flex;
   gap: 0.35rem;
   padding: 0.3rem;
   border: 1px solid var(--border-card);
   border-radius: 12px;
   background: var(--bg-input);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* Below this width the tab labels (icon + Chinese text × 4-5 tabs) reliably
+   overflow, so fading the trailing edge is a safe static hint that there's
+   more to swipe to. Skipped above it so a fully-visible tab set on wider
+   screens doesn't show a fade that isn't actually hiding anything. */
+@media (max-width: 900px) {
+  .admin-plan-subtabs {
+    -webkit-mask-image: linear-gradient(to right, black 0%, black calc(100% - 2rem), transparent 100%);
+    mask-image: linear-gradient(to right, black 0%, black calc(100% - 2rem), transparent 100%);
+  }
+}
+
+.admin-plan-subtabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-plan-subtab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 2.5rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 0.75rem;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -13259,6 +13341,10 @@ select,
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.admin-plan-subtab .nlc-icon {
+  font-size: 1rem;
 }
 
 .admin-plan-subtab.active {
@@ -13271,6 +13357,9 @@ select,
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  /* Clears the fixed .issue-report-fab (bottom-right chat bubble), which
+     otherwise sits on top of whatever this panel's last row scrolls to. */
+  padding-bottom: calc(3.5rem + var(--app-bottom-nav-height, 72px) + var(--app-safe-bottom, 0px) + 1.5rem);
 }
 
 .admin-plan-filter-card {
@@ -13289,6 +13378,76 @@ select,
 .admin-plan-filter-card select {
   min-width: 0;
   max-width: 32rem;
+}
+
+.admin-plan-filter-card--org {
+  align-items: flex-start;
+}
+
+.admin-plan-filter-disclosure {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-plan-filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-plan-filter-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-plan-filter-summary > span:first-child {
+  color: var(--color-brand);
+  flex-shrink: 0;
+}
+
+#admin-plan-filter-summary-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-plan-filter-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.admin-plan-filter-disclosure[open] .admin-plan-filter-chevron {
+  transform: rotate(90deg);
+}
+
+.admin-plan-filter-disclosure[open] .admin-plan-filter-summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#admin-plan-org-filter-slot {
+  padding: 0.7rem 0.1rem 0.1rem;
+}
+
+.admin-plan-refresh-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  font-size: 0.875rem;
 }
 
 .admin-unjoined-plan-card {
@@ -13412,6 +13571,28 @@ select,
 }
 
 @media (max-width: 640px) {
+  .admin-plan-feature-menu {
+    gap: 0.75rem;
+  }
+
+  .admin-plan-feature-menu__hint {
+    display: none;
+  }
+
+  .admin-plan-feature-menu .admin-plan-subtabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .admin-plan-feature-menu .admin-plan-subtab {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.55rem 0.65rem;
+  }
+
   .admin-unjoined-plan-card__header {
     align-items: stretch;
     flex-direction: column;
@@ -13475,6 +13656,25 @@ select,
   }
 
   .admin-plan-filter-card select {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* The collapsible org-filter trigger truncates its own text via ellipsis,
+     so — unlike the plain "計畫篩選" label+select card above — it stays
+     paired with the refresh button in one row instead of stacking. */
+  .admin-plan-filter-card--org {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  #admin-plan-org-filter-slot .admin-daily-quiz-scope-row,
+  #members-organization-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #members-organization-controls select {
     width: 100%;
     max-width: none;
   }

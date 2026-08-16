@@ -663,6 +663,11 @@ import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team
       } else {
         renderEmpty(contexts);
       }
+      window.dispatchEvent(new CustomEvent("readingTeam:updated", {
+        detail: {
+          planId: String(plan && (plan.globalPlanId || plan.id || plan.presetKey) || "")
+        }
+      }));
     };
 
     await refresh();

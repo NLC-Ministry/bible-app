@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -105,10 +106,53 @@ describe("Bible translation switching integrity", () => {
     expect(bible).toMatch(/requestIsStale[\s\S]{0,350}state\.readerState\?\.version[\s\S]{0,250}if \(requestIsStale\) return/);
   });
 
-  it("does not treat placeholder verses as a successful chapter cache hit", () => {
+  it("shows a visible retry action and never caches placeholder chapters", () => {
     expect(bibleData).toContain("isPlaceholder: true");
-    expect(bibleData).toContain("window._bibleChapterCache[cacheKey]?.isPlaceholder");
-    expect(bible).toContain("!cachedData.isPlaceholder");
-    expect(bible).toContain("if (data.isPlaceholder)");
+    expect(bibleData).toContain("delete window._bibleChapterCache[cacheKey]");
+    expect(bible).toContain("function renderReaderLoadRetryState");
+    expect(bible).toContain("data-reader-load-retry");
+    expect(bible).toContain("重新讀取");
+    expect(bible).toContain("data && !data.isPlaceholder");
+    expect(css).toContain(".reader-load-retry-state");
+  });
+
+  it("deduplicates an in-flight prefetch and visible chapter request", () => {
+    expect(bibleData).toContain("window._bibleChapterInFlight[cacheKey]");
+    expect(bibleData).toContain("const requestPromise = (async () => {");
+    expect(bibleData).toContain("return await requestPromise");
+    expect(bibleData).toContain("delete window._bibleChapterInFlight[cacheKey]");
+  });
+
+  it("shares one real network request for concurrent loads of the same chapter", async () => {
+    let releaseFetch;
+    let fetchCount = 0;
+    const pendingResponse = new Promise(resolve => {
+      releaseFetch = () => resolve({
+        ok: true,
+        json: async () => Array.from({ length: 11 }, (_, index) => ({
+          verse: index + 1,
+          text: `測試經文第${index + 1}節`
+        }))
+      });
+    });
+    const context = {
+      window: {},
+      console: { log() {}, warn() {}, error() {} },
+      fetch: () => {
+        fetchCount += 1;
+        return pendingResponse;
+      }
+    };
+    runInNewContext(bibleData, context);
+
+    const first = context.window.fetchBibleChapter("Genesis", 2, "CUNP");
+    const second = context.window.fetchBibleChapter("Genesis", 2, "CUNP");
+    expect(fetchCount).toBe(1);
+
+    releaseFetch();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.verses).toHaveLength(11);
+    expect(secondResult).toBe(firstResult);
+    expect(context.window._bibleChapterInFlight).toEqual({});
   });
 });

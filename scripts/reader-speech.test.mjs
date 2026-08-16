@@ -37,9 +37,7 @@ describe("reader speech controls", () => {
     expect(bible).toContain("startVerseNum ?? state.readerState?.selectedVerseNum ?? null");
     expect(bible).toContain("let isReaderAudioPaused = false");
     expect(bible).toContain("function pauseReaderAudio()");
-    expect(bible).toContain("window.speechSynthesis.cancel()");
     expect(bible).toContain("state.readerState.selectedVerseNum = currentItem.verseNum");
-    expect(bible).toContain("if (isReaderAudioPaused || window.speechSynthesis.speaking");
     expect(bible).toContain("if (isSpeaking)");
     expect(bible).toContain("resetReaderAudioState()");
     expect(bible).toContain("window.clearReaderAudioOnPageExit = function");
@@ -48,6 +46,32 @@ describe("reader speech controls", () => {
     expect(bible).toContain("warmReaderVoice(targetLang).then");
     expect(bible).not.toContain("lastFocusedVerseNum) {");
     expect(css).toContain("朗讀起點");
+  });
+
+  it("pausing cancels playback instead of suspending it, so resuming always restarts from whichever verse is marked", () => {
+    // Regression for: speechSynthesis.pause()/.resume() truly suspends and
+    // resumes mid-utterance, so tapping a different verse while paused had
+    // no effect — playback just picked back up where it left off. Pause now
+    // fully cancels and marks the current verse; the toggle handler's play
+    // branch always restarts fresh from state.readerState.selectedVerseNum,
+    // so a verse tapped while paused is honored on the next press.
+    expect(bible).not.toContain("function resumeReaderAudio()");
+    expect(bible).not.toContain("window.speechSynthesis.resume()");
+    expect(bible).not.toContain("window.speechSynthesis.pause()");
+    const pauseStart = bible.indexOf("function pauseReaderAudio()");
+    const pauseEnd = bible.indexOf("\n}", pauseStart);
+    const pauseFn = bible.slice(pauseStart, pauseEnd);
+    expect(pauseFn).toContain("window.speechSynthesis.cancel()");
+    expect(pauseFn).toContain("isSpeaking = false;");
+    expect(pauseFn).toContain("isReaderAudioPaused = true;");
+    expect(pauseFn).toContain("currentAudioSessionId++;");
+    const toggleStart = bible.indexOf("window.toggleReaderAudio = async function");
+    const toggleEnd = bible.indexOf("\n};", toggleStart);
+    const toggleFn = bible.slice(toggleStart, toggleEnd);
+    expect(toggleFn).not.toContain("resumeReaderAudio()");
+    expect(toggleFn).toContain("if (isReaderAudioPaused || window.speechSynthesis.speaking || window.speechSynthesis.pending)");
+    expect(toggleFn).toContain("stopReaderAudio(true);");
+    expect(toggleFn).toContain("const selectedVerseNum = startVerseNum ?? state.readerState?.selectedVerseNum ?? null;");
   });
 
   it("shows verse progress, follows playback, and distinguishes automatic from manual chapter navigation", () => {
@@ -63,9 +87,56 @@ describe("reader speech controls", () => {
     expect(bible).toContain('scrollReaderVerseIntoView(verseEl, "smooth")');
   });
 
+  it("waits for a successfully rendered next chapter before continuing audio", () => {
+    expect(bible).toContain("renderReaderText({ preserveAudio: autoContinue, autoContinue })");
+    expect(bible).toContain("if (autoContinue && rendered !== true) return false;");
+    expect(bible).toContain("options.autoRetryAttempted !== true");
+    expect(bible).toContain("autoRetryAttempted: true");
+    expect(bible).toContain("return true;");
+  });
+
+  it("resets the actual reader scroll surface after the next chapter layout and follows verse one", () => {
+    expect(bible).toContain('document.querySelector(".reader-reading-surface")');
+    expect(bible).toContain('scrollSurface.scrollTo({ top: safeTop, behavior })');
+    expect(bible).toContain("async function resetReaderScrollAfterChapterRender(sessionId)");
+    expect(bible).toContain("await nextReaderLayoutFrame()");
+    expect(bible).toContain("if (sessionId !== currentAudioSessionId || !isSpeaking) return false;");
+    expect(bible).toContain("const scrollReset = await resetReaderScrollAfterChapterRender(sessionId);");
+    expect(bible).toContain('setReaderScrollTop(0, "auto")');
+    expect(bible).not.toContain('verseEl.scrollIntoView?.({ behavior: "smooth", block: "center" })');
+  });
+
+  it("calculates verse following against the reader's own scroll surface", () => {
+    const helperStart = bible.indexOf("function getReaderScrollSurface()");
+    const helperEnd = bible.indexOf("function nextReaderLayoutFrame()", helperStart);
+    const helperSource = bible.slice(helperStart, helperEnd);
+    const calls = [];
+    const scrollSurface = {
+      scrollTop: 600,
+      clientHeight: 400,
+      getBoundingClientRect: () => ({ top: 100 }),
+      scrollTo: options => calls.push(options)
+    };
+    const fakeDocument = {
+      querySelector: selector => selector === ".reader-reading-surface" ? scrollSurface : null
+    };
+    const verse = { getBoundingClientRect: () => ({ top: 500, height: 40 }) };
+    const scrollReaderVerseIntoView = new Function(
+      "document",
+      `${helperSource}\nreturn scrollReaderVerseIntoView;`
+    )(fakeDocument);
+
+    expect(scrollReaderVerseIntoView(verse, "smooth")).toBe(true);
+    expect(calls).toEqual([{ top: 820, behavior: "smooth" }]);
+  });
+
   it("does not cancel speech between verses", () => {
     const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
-    expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)?.length).toBeGreaterThanOrEqual(1);
+    // stopReaderAudio() and pauseReaderAudio() (a full cancel + verse-marker
+    // remember, not a true suspend — see the other pause/resume test) each
+    // call cancel() once for their own user-initiated reason. Neither is on
+    // the between-verse onend/speakNextVerseInQueue path.
+    expect(audioBlock.match(/speechSynthesis\.cancel\(\)/g)).toHaveLength(2);
     expect(audioBlock).toContain("speechUtterance.voice = voiceToUse");
     expect(audioBlock).toContain("speechUtterance.rate = getReaderSpeechRate");
     expect(audioBlock).toContain("selectPreferredVoice");

@@ -10,7 +10,7 @@ const edge = read("supabase/functions/nlc-data/index.ts");
 const migration = read("supabase/migrations/0073_get_joined_plan_members.sql");
 
 describe("plan management: 4-tab restructure", () => {
-  it("puts a shared plan + org filter header above a 4-button tab bar", () => {
+  it("puts a prominent feature menu above the shared plan + org filters", () => {
     const panelStart = html.indexOf('id="admin-plans-panel"');
     const panelEnd = html.indexOf("</main>", panelStart);
     const panel = html.slice(panelStart, panelEnd);
@@ -25,13 +25,24 @@ describe("plan management: 4-tab restructure", () => {
       expect(panel).toContain(`id="admin-plan-subtab-${subtab}"`);
     }
 
-    // Filter header must precede the tab bar, which must precede every panel.
+    expect(panel).toContain('id="admin-plan-feature-menu-title">功能列表</h2>');
+    expect(panel).toContain('aria-label="計畫管理功能列表"');
+
+    // The feature menu must appear before filters so it cannot be buried by them.
     const filterIndex = panel.indexOf('id="admin-plan-org-filter-slot"');
     const tabsIndex = panel.indexOf('id="admin-plan-subtabs"');
-    expect(tabsIndex).toBeGreaterThan(filterIndex);
+    expect(tabsIndex).toBeLessThan(filterIndex);
     for (const subtab of subtabs) {
       expect(panel.indexOf(`id="admin-plan-subtab-${subtab}"`)).toBeGreaterThan(tabsIndex);
     }
+  });
+
+  it("shows the feature menu as a non-scrolling two-column grid on mobile", () => {
+    const css = read("index.css");
+    expect(css).toContain(".admin-plan-feature-menu .admin-plan-subtabs");
+    expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(css).toContain("overflow: visible;");
+    expect(css).toContain("border-top: 3px solid var(--color-brand);");
   });
 
   it("maps 加入計畫狀況 to 已加入計畫 (new) + 尚未加入計畫", () => {
@@ -42,7 +53,11 @@ describe("plan management: 4-tab restructure", () => {
     expect(panel).toContain('id="admin-joined-plan-section"');
     expect(panel).toContain('id="admin-joined-plan-count"');
     expect(panel).toContain('id="admin-joined-plan-members"');
-    expect(panel).toContain(">已加入計畫<");
+    expect(panel).toContain("已加入計畫");
+    // Collapsible like 尚未加入計畫 below (id="admin-unjoined-toggle-arrow"),
+    // via the same shared .admin-unjoined-toggle-arrow class the click
+    // handler in admin.js queries generically per-card.
+    expect(panel).toContain('id="admin-joined-toggle-arrow" class="admin-unjoined-toggle-arrow"');
     // 尚未加入計畫 is not native HTML here — mountPlanManagementSections()
     // moves the existing #admin-unjoined-plan-section into this panel at
     // runtime, appending after the native 已加入計畫 card.
