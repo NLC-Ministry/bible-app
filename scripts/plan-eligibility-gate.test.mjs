@@ -46,12 +46,16 @@ describe("profile name heuristic (js/utils.js)", () => {
     expect(fn("a")).toBe(false); // too short to judge
   });
 
-  it("defines getPlanEligibilityBlock using canonical Hub prerequisites and Bible name validity", () => {
+  it("defines getPlanEligibilityBlock using the same user-completion predicate as the login card", () => {
     expect(utils).toContain("function getPlanEligibilityBlock(user)");
-    expect(utils).toContain("isCanonicalMemberJourneyProjection(u)");
-    expect(utils).toContain("getCanonicalMemberPrerequisiteBlock(u)");
-    expect(utils).toContain('!String(u.pastoral_zone || "").trim()');
-    expect(utils).toContain("!u.name_review_approved");
+    const fnMatch = utils.match(/function getPlanEligibilityBlock\(user\) \{[\s\S]*?\nwindow\.getPlanEligibilityBlock/);
+    expect(fnMatch, "getPlanEligibilityBlock source").toBeTruthy();
+    const fn = fnMatch[0];
+    expect(fn).toMatch(/getUserOnboardingBlock\(u\)|getCanonicalMemberPrerequisiteBlock\(u\)/);
+    expect(fn).not.toContain('!String(u.pastoral_zone || "").trim()');
+    // Hub-complete (null user-completion block) wins over local name flags.
+    expect(fn).toMatch(/if \(!canonicalBlock\) return null|return getUserOnboardingBlock\(u\);/);
+    expect(fn).not.toContain("getProfileNameFlags");
     expect(utils).toContain("window.getPlanEligibilityBlock = getPlanEligibilityBlock");
     // Demo accounts must not be locked out of a feature they use for local/dev testing.
     expect(utils).toMatch(/if \(!u \|\| u\.is_demo\) return null;/);
@@ -103,15 +107,23 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
     expect(app).not.toContain("db.syncProfileStatsToSupabase()");
   });
 
-  it("provides copy for all three block reasons and always points to the Member Hub link", () => {
-    expect(app).toContain('block.reason === "missing_zone"');
-    expect(app).toContain('block.reason === "missing_name"');
+  it("keeps fail-closed copy and the Member Hub continue link, without coaching 牧區", () => {
+    const copyMatch = app.match(/function getPlanEligibilityGateCopy\(block\) \{[\s\S]*?\nfunction resetPlanNavigationForEligibilityGate/);
+    expect(copyMatch, "getPlanEligibilityGateCopy").toBeTruthy();
+    const src = copyMatch[0];
+    expect(src).toContain('block.reason === "member_context_unavailable"');
+    expect(src).toContain('block.reason === "inactive_membership"');
+    expect(src).toContain('block.reason === "unknown_member_hub_action"');
+    expect(src).toContain('block.reason === "unknown_member_hub_state"');
+    expect(src).toContain('block.reason === "membership_record_inconsistent"');
+    expect(src).not.toContain('block.reason === "missing_zone"');
+    expect(src).not.toContain('block.reason === "missing_name"');
+    expect(src).not.toContain("完成會員資料後即可進入計畫");
+    expect(src).not.toContain("牧區");
     expect(app).toContain('auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")');
     // Unlike the old design, the hub link is unconditional — no per-reason toggle.
     expect(app).not.toContain("showHubLink");
     expect(app).not.toContain("showNameForm");
-    expect(app).toContain("完成會員資料後即可進入計畫");
-    expect(app).toContain("這不是系統故障");
   });
 
   it("renders read-only gate markup inside #plan-view with only a Member Hub link, no editable fields", () => {

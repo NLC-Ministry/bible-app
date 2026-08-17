@@ -1,6 +1,16 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 import { getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
+import {
+  detectAuthenticationEnvironment,
+  shouldGateInteractiveAuth
+} from './auth-environment.js';
+import { getUserOnboardingBlock } from './member-journey.mjs';
+import {
+  applyLoginGateView,
+  getLoginGateCopy,
+  hubContinueHref
+} from './login-onboarding-gate.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -322,6 +332,27 @@ const db = {
           auth.startLoginRepair();
           return;
         }
+        const mode = btnNlcGate.dataset.loginGateMode || "sso";
+        if (mode === "hub-continue") {
+          const href = hubContinueHref(typeof auth !== "undefined" ? auth : null);
+          const embedded = shouldGateInteractiveAuth(detectAuthenticationEnvironment(), {
+            authEnvironmentAcknowledged: false
+          });
+          if (embedded && typeof auth !== "undefined" && typeof auth._addBrowserLaunchTransportParams === "function") {
+            window.location.href = auth._addBrowserLaunchTransportParams(href);
+          } else {
+            window.location.assign(href);
+          }
+          return;
+        }
+        if (mode === "retry-sync") {
+          this.syncNlcSessionWithSupabase(true)
+            .catch((err) => {
+              console.warn("[LoginOnboardingGate] Retry sync failed:", err);
+            })
+            .then(() => this.applyLoginOnboardingGate());
+          return;
+        }
         if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
           authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
         } else if (typeof auth !== "undefined") {
@@ -331,6 +362,7 @@ const db = {
         }
       });
     }
+    this.bindLoginGateHubReturnSync();
 
 
 
@@ -385,15 +417,32 @@ const db = {
             try {
               sessionSync = await this.syncNlcSessionWithSupabase(true);
             } catch (syncErr) {
-              console.warn("⚠️ NLC session sync warning, applying local token profile fallback:", syncErr);
-              if (typeof auth._applyTokenProfileFallback === "function") {
-                auth._applyTokenProfileFallback();
-              }
+              console.warn("⚠️ NLC session sync warning:", syncErr);
             }
-            const userId = state.currentProfileId || (typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null);
-            this.updateAuthUI({ user: { id: userId || "authenticated-user" } });
-            this.refreshRoleDependentUI();
-            return Boolean(userId || (sessionSync && sessionSync.edge_session));
+            const block = getUserOnboardingBlock(state.currentUser);
+            const copy = getLoginGateCopy(block, { hasTokens: true });
+            const loginGate = document.getElementById("login-gate");
+            const appLayout = document.querySelector(".app-layout");
+            const titleEl = loginGate && loginGate.querySelector(".login-title");
+            const subtitleEl = document.getElementById("login-gate-subtitle");
+            const buttonEl = document.getElementById("btn-gate-nlc-login");
+            if (copy.enterApp) {
+              const userId = state.currentProfileId || (typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null);
+              this.updateAuthUI({ user: { id: userId || "authenticated-user" } });
+              this.refreshRoleDependentUI();
+              return Boolean(userId || (sessionSync && sessionSync.edge_session));
+            }
+            applyLoginGateView({
+              block,
+              hasTokens: true,
+              loginGate,
+              appLayout,
+              titleEl,
+              subtitleEl,
+              buttonEl
+            });
+            if (buttonEl) buttonEl.dataset.loginGateMode = copy.mode;
+            return false;
           }
         }
 
@@ -815,6 +864,52 @@ const db = {
     if (appLayout) appLayout.classList.add("hidden");
   },
 
+  applyLoginOnboardingGate() {
+    const hasTokens = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
+    const block = hasTokens ? getUserOnboardingBlock(state.currentUser) : null;
+    const copy = getLoginGateCopy(block, { hasTokens });
+    const loginGate = document.getElementById("login-gate");
+    const appLayout = document.querySelector(".app-layout");
+    const titleEl = loginGate && loginGate.querySelector(".login-title");
+    const subtitleEl = document.getElementById("login-gate-subtitle");
+    const buttonEl = document.getElementById("btn-gate-nlc-login");
+    if (copy.enterApp) {
+      const userId = state.currentProfileId
+        || (typeof auth !== "undefined" && typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null);
+      this.updateAuthUI({ user: { id: userId || "authenticated-user" } });
+      this.refreshRoleDependentUI();
+      return copy;
+    }
+    applyLoginGateView({
+      block,
+      hasTokens,
+      loginGate,
+      appLayout,
+      titleEl,
+      subtitleEl,
+      buttonEl
+    });
+    if (buttonEl) buttonEl.dataset.loginGateMode = copy.mode;
+    return copy;
+  },
+
+  bindLoginGateHubReturnSync() {
+    if (this._loginGateHubReturnBound || typeof document === "undefined") return;
+    this._loginGateHubReturnBound = true;
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      const loginGate = document.getElementById("login-gate");
+      if (!loginGate || loginGate.classList.contains("hidden")) return;
+      if (typeof auth === "undefined" || typeof auth.isLoggedIn !== "function" || !auth.isLoggedIn()) return;
+      this.syncNlcSessionWithSupabase(true).then(() => {
+        this.applyLoginOnboardingGate();
+      }).catch((err) => {
+        console.warn("[LoginOnboardingGate] Profile sync after Hub return failed:", err);
+        this.applyLoginOnboardingGate();
+      });
+    });
+  },
+
   // Handle Supabase Auth UI Switches
   updateAuthUI(session) {
     const loginGate = document.getElementById("login-gate");
@@ -831,8 +926,15 @@ const db = {
     } else {
       // Online mode: Show login gate, hide app container
       if (state.isSupabaseMode) {
-        if (loginGate) loginGate.classList.remove("hidden");
-        if (appLayout) appLayout.classList.add("hidden");
+        applyLoginGateView({
+          block: null,
+          hasTokens: false,
+          loginGate,
+          appLayout,
+          titleEl: loginGate && loginGate.querySelector(".login-title"),
+          subtitleEl: document.getElementById("login-gate-subtitle"),
+          buttonEl: document.getElementById("btn-gate-nlc-login")
+        });
       } else {
         // Demo mode: Ensure login gate is hidden and app is visible
         if (loginGate) loginGate.classList.add("hidden");

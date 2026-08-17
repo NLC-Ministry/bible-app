@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import {
   getCanonicalMemberPrerequisiteBlock,
+  getUserOnboardingBlock,
   isCanonicalMemberJourneyProjection,
 } from '../js/member-journey.mjs';
 
@@ -39,67 +40,104 @@ describe('canonical Member Hub journey projection', () => {
   });
 });
 
-describe('canonical Bible member prerequisite', () => {
+describe('canonical Bible user-onboarding door', () => {
   const now = Date.parse('2026-08-14T12:00:00.000Z');
-  const eligible = {
+  const base = {
     member_context_contract_version: 2,
-    member_context_membership_lifecycle_state: 'approved',
-    member_context_placement_state: 'active',
+    member_context_membership_lifecycle_state: 'none',
+    member_context_placement_state: 'missing',
     member_context_placement_workflow_state: 'none',
-    member_context_has_required_placement: true,
-    member_context_required_action: 'none',
+    member_context_has_required_placement: false,
+    member_context_required_action: 'submit_membership',
     member_context_required_action_url: 'https://member.newlife.org.tw/member/continue',
     member_context_synced_at: '2026-08-14T11:59:00.000Z',
     member_context_sync_status: 'success',
   };
 
-  it('recognizes v2 without requiring a local pastoral-zone inference', () => {
-    expect(isCanonicalMemberJourneyProjection(eligible)).toBe(true);
-    expect(getCanonicalMemberPrerequisiteBlock(eligible, { now })).toBeNull();
+  it('aliases the old prerequisite helper to the user-completion door', () => {
+    expect(getCanonicalMemberPrerequisiteBlock).toBe(getUserOnboardingBlock);
   });
 
-  it('keeps active placement eligible while a placement change is pending', () => {
-    expect(getCanonicalMemberPrerequisiteBlock({
-      ...eligible,
-      member_context_placement_workflow_state: 'change_request_pending',
-    }, { now })).toBeNull();
-  });
-
-  it('blocks missing placement using the upstream recovery URL', () => {
-    expect(getCanonicalMemberPrerequisiteBlock({
-      ...eligible,
-      member_context_placement_state: 'missing',
-      member_context_has_required_placement: false,
-      member_context_required_action: 'request_placement',
-    }, { now })).toMatchObject({
-      reason: 'missing_canonical_placement',
-      requiredAction: 'request_placement',
-      requiredActionUrl: 'https://member.newlife.org.tw/member/continue',
+  it('fails closed when v2 projection is missing', () => {
+    expect(getUserOnboardingBlock({ name: '王大明' }, { now })).toMatchObject({
+      reason: 'member_context_unavailable',
     });
   });
 
-  it('preserves access briefly during degraded refresh but fails closed after 15 minutes', () => {
-    expect(getCanonicalMemberPrerequisiteBlock({
-      ...eligible,
-      member_context_sync_status: 'degraded',
-      member_context_synced_at: '2026-08-14T11:50:00.000Z',
-    }, { now })).toBeNull();
+  it('blocks a visitor who still owes the official form', () => {
+    expect(getUserOnboardingBlock(base, { now })).toMatchObject({
+      reason: 'membership_application_required',
+      requiredAction: 'submit_membership',
+    });
+  });
 
-    expect(getCanonicalMemberPrerequisiteBlock({
-      ...eligible,
-      member_context_sync_status: 'degraded',
+  it('blocks complete_profile even if lifecycle looks pending', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'pending',
+      member_context_required_action: 'complete_profile',
+    }, { now })).toMatchObject({ reason: 'member_profile_required' });
+  });
+
+  it('lets a pending official application in without placement', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'pending',
+      member_context_required_action: 'await_membership_review',
+    }, { now })).toBeNull();
+  });
+
+  it('lets a pastor-created seeker in without an official form', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'pending',
+      member_context_required_action: 'submit_membership',
+    }, { now })).toBeNull();
+  });
+
+  it('lets an official member in without confirmed placement', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'approved',
+      member_context_required_action: 'request_placement',
+    }, { now })).toBeNull();
+  });
+
+  it('lets approved + placed members in', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'approved',
+      member_context_placement_state: 'active',
+      member_context_has_required_placement: true,
+      member_context_required_action: 'none',
+    }, { now })).toBeNull();
+    expect(isCanonicalMemberJourneyProjection({
+      member_context_contract_version: 2,
+    })).toBe(true);
+  });
+
+  it('blocks inactive and unknown actions', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'inactive',
+      member_context_required_action: 'none',
+    }, { now })).toMatchObject({ reason: 'inactive_membership' });
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_required_action: 'verify_phone',
+    }, { now })).toMatchObject({ reason: 'unknown_member_hub_action' });
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_required_action: 'resolve_membership_record',
+    }, { now })).toMatchObject({ reason: 'membership_record_inconsistent' });
+  });
+
+  it('fails closed after the projection is older than 15 minutes', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'approved',
+      member_context_required_action: 'none',
       member_context_synced_at: '2026-08-14T11:40:00.000Z',
     }, { now })).toMatchObject({ reason: 'member_context_unavailable' });
-  });
-
-  it('preserves future action values but fails authorization closed', () => {
-    expect(getCanonicalMemberPrerequisiteBlock({
-      ...eligible,
-      member_context_required_action: 'verify_phone',
-    }, { now })).toMatchObject({
-      reason: 'unknown_member_hub_action',
-      requiredAction: 'verify_phone',
-      requiredActionUrl: 'https://member.newlife.org.tw/member/continue',
-    });
   });
 });

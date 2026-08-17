@@ -214,6 +214,17 @@ function buildOrgProjectionAudit({
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+const INVENTED_PROFILE_NAMES = new Set(["教會肢體", "NLC User", "新使用者", "尚未取得姓名", "未命名使用者"]);
+
+function resolveProjectedProfileName({ hubName, existingName }: { hubName: unknown; existingName: unknown }) {
+  const hub = String(hubName || "").trim();
+  if (hub && !INVENTED_PROFILE_NAMES.has(hub)) return hub;
+  const existing = String(existingName || "").trim();
+  if (existing && !INVENTED_PROFILE_NAMES.has(existing)) return existing;
+  return "";
+}
+
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
 function mergeOrgSources(platformOrg: any, placementOrg: any, contextOrganization: any) {
   const contextOrg = orgFromMemberContext(contextOrganization);
 
@@ -737,7 +748,10 @@ Deno.serve(async (req: Request) => {
 
     const nowIso = new Date().toISOString();
     const memberContextSyncStatus = memberContext ? "success" : "degraded";
-    const nextProfileName = firstValue(sourceValues.name, existingProfile?.name, lookupEmail ? lookupEmail.split("@")[0] : null, "教會肢體");
+    const nextProfileName = resolveProjectedProfileName({
+      hubName: sourceValues.name,
+      existingName: existingProfile?.name,
+    });
     const canonicalNameChanged = Boolean(
       existingProfile
       && sourceValues.name

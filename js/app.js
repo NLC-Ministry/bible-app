@@ -429,36 +429,17 @@ async function refreshCurrentAppView() {
   await refreshCareReminderBadge({ force: true });
 }
 
-// ─── Plan entry eligibility gate: blocks plan-view until profile is complete ───
-// Read-only screen — this app never lets a member edit their own name or
-// pastoral zone. Every remediation path points to the church Member Hub;
-// the only in-app write path for a flagged name is the admin review console
-// (js/modules/admin.js renderAdminUserDirectoryList).
+// ─── Plan entry eligibility gate: fail-closed Hub states only ───
+// Login card already owns 姓名 / 會籍 speech. Plan-view uses the same
+// user-completion predicate and only explains fail-closed reasons.
+// Every remediation path points to the church Member Hub.
 let planEligibilityHubReturnBound = false;
 
 function getPlanEligibilityGateCopy(block) {
-  if (block.reason === "missing_zone" || block.reason === "missing_canonical_placement") {
-    return {
-      title: "完成會員資料後即可進入計畫",
-      desc: "您的會員資料尚未完成牧區歸屬。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
-    };
-  }
-  if (block.reason === "missing_name") {
-    return {
-      title: "完成會員資料後即可進入計畫",
-      desc: "您的會員資料尚未填寫完整姓名。這不是系統故障；請先到會員中心完成資料，回到本系統後即可進入讀經計畫。"
-    };
-  }
   if (block.reason === "member_context_unavailable") {
     return {
       title: "登入已完成，正在重新確認會員資料",
       desc: "會員中心目前暫時無法同步會籍與小組歸屬。請稍後按下方按鈕重試；不需要重新註冊帳號。支援代碼：MEMBER_CONTEXT_UNAVAILABLE"
-    };
-  }
-  if (block.reason === "membership_not_approved") {
-    return {
-      title: "請先完成會籍登記流程",
-      desc: "會員中心尚未確認您的正式會籍。前往會員中心後，系統會依目前狀態帶您到正確的登記或等候頁面。"
     };
   }
   if (block.reason === "inactive_membership") {
@@ -473,9 +454,15 @@ function getPlanEligibilityGateCopy(block) {
       desc: "此版本尚未識別會員中心回傳的新狀態。為保護您的會籍資料，請使用下方按鈕由會員中心安全地繼續。"
     };
   }
+  if (block.reason === "membership_record_inconsistent") {
+    return {
+      title: "需要在會員中心確認會員資料",
+      desc: "會員中心回傳的會籍紀錄需要確認。請使用下方按鈕前往會員中心繼續。"
+    };
+  }
   return {
-    title: "完成會員資料確認後即可進入計畫",
-    desc: "您目前登錄的姓名需要確認。這不是系統故障；請至會員中心確認或更新姓名，待系統管理員審核通過後即可進入讀經計畫。"
+    title: "需要在會員中心繼續",
+    desc: "請由會員中心安全地繼續。不要重複註冊帳號。"
   };
 }
 

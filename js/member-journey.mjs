@@ -12,6 +12,13 @@ const KNOWN_MEMBERSHIP_STATES = new Set(['none', 'pending', 'approved', 'inactiv
 const KNOWN_PLACEMENT_STATES = new Set(['missing', 'active', 'invalid']);
 const DEFAULT_MAX_PROJECTION_AGE_MS = 15 * 60 * 1000;
 
+const USER_COMPLETE_ACTIONS = new Set([
+  'await_membership_review',
+  'request_placement',
+  'await_placement_review',
+  'none',
+]);
+
 export function isCanonicalMemberJourneyProjection(user) {
   return Number(user?.member_context_contract_version) >= 2;
 }
@@ -23,8 +30,11 @@ function recoveryFields(user) {
   };
 }
 
-export function getCanonicalMemberPrerequisiteBlock(user, options = {}) {
-  if (!isCanonicalMemberJourneyProjection(user)) return null;
+export function getUserOnboardingBlock(user, options = {}) {
+  if (!user || user.is_demo) return null;
+  if (!isCanonicalMemberJourneyProjection(user)) {
+    return { reason: 'member_context_unavailable', requiredAction: '', requiredActionUrl: null };
+  }
 
   const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
   const maxAgeMs = Number.isFinite(Number(options.maxAgeMs))
@@ -50,23 +60,21 @@ export function getCanonicalMemberPrerequisiteBlock(user, options = {}) {
   if (membershipState === 'inactive') {
     return { reason: 'inactive_membership', ...recovery };
   }
-  if (membershipState !== 'approved') {
-    return { reason: 'membership_not_approved', ...recovery };
+  if (action === 'resolve_membership_record') {
+    return { reason: 'membership_record_inconsistent', ...recovery };
   }
-
-  const placementState = String(user?.member_context_placement_state || '');
-  if (!KNOWN_PLACEMENT_STATES.has(placementState)) {
-    return { reason: 'unknown_member_hub_state', ...recovery };
+  if (action === 'complete_profile') {
+    return { reason: 'member_profile_required', ...recovery };
   }
-  if (placementState !== 'active' || user?.member_context_has_required_placement !== true) {
-    return { reason: 'missing_canonical_placement', ...recovery };
+  if (action === 'submit_membership' && membershipState !== 'pending' && membershipState !== 'approved') {
+    return { reason: 'membership_application_required', ...recovery };
   }
-
-  if (action !== 'none') {
-    return { reason: 'member_hub_action_required', ...recovery };
+  if (membershipState === 'pending' || membershipState === 'approved' || USER_COMPLETE_ACTIONS.has(action)) {
+    return null;
   }
-
-  return null;
+  return { reason: 'unknown_member_hub_action', ...recovery };
 }
+
+export const getCanonicalMemberPrerequisiteBlock = getUserOnboardingBlock;
 
 export { DEFAULT_MAX_PROJECTION_AGE_MS, KNOWN_REQUIRED_ACTIONS };

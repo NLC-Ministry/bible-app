@@ -154,6 +154,16 @@ export function resolveSyncedRoleId(memberContext, definitions, existingRoleId, 
 }
 const HUB_OWNED_PROFILE_FIELDS = ["name", "great_region", "pastoral_zone", "small_group"];
 
+const INVENTED_PROFILE_NAMES = new Set(["教會肢體", "NLC User", "新使用者", "尚未取得姓名", "未命名使用者"]);
+
+export function resolveProjectedProfileName({ hubName, existingName }) {
+  const hub = String(hubName || "").trim();
+  if (hub && !INVENTED_PROFILE_NAMES.has(hub)) return hub;
+  const existing = String(existingName || "").trim();
+  if (existing && !INVENTED_PROFILE_NAMES.has(existing)) return existing;
+  return "";
+}
+
 export function buildLockedFields(sourceValues, options = {}) {
   const locked = Object.entries(sourceValues)
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
