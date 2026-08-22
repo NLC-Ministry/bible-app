@@ -95,7 +95,10 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
   it("re-syncs from Member Hub on return and never offers a local edit form", () => {
     expect(app).toContain("function bindPlanEligibilityHubReturnSync");
     expect(app).toContain("db.syncNlcSessionWithSupabase(true)");
-    expect(app).toContain('member/continue?satellite=bible-app');
+    expect(app).toContain("launchMemberHubContinue");
+    expect(app).toContain("BIBLE_HUB_CONTINUE_RETURN_TO");
+    expect(app).toContain("consumeBibleHubResume");
+    expect(app).toContain('switchTab(resumePlan ? "plan-view" : "dashboard-view")');
     expect(app).not.toContain('getMemberHubUrl("onboarding")');
     expect(app).toContain("window.renderPlanEligibilityGate = renderPlanEligibilityGate");
     expect(app).toContain("window.hidePlanEligibilityGate = hidePlanEligibilityGate");
@@ -120,16 +123,24 @@ describe("plan-entry blocking gate (js/app.js + index.html + index.css)", () => 
     expect(src).not.toContain('block.reason === "missing_name"');
     expect(src).not.toContain("完成會員資料後即可進入計畫");
     expect(src).not.toContain("牧區");
-    expect(app).toContain('auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")');
+    expect(app).toContain("BIBLE_HUB_CONTINUE_RETURN_TO");
+    expect(app).not.toContain('auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")');
     // Unlike the old design, the hub link is unconditional — no per-reason toggle.
     expect(app).not.toContain("showHubLink");
     expect(app).not.toContain("showNameForm");
   });
 
   it("renders read-only gate markup inside #plan-view with only a Member Hub link, no editable fields", () => {
+    const gateMarkup = html.slice(
+      html.indexOf('id="plan-eligibility-gate"'),
+      html.indexOf('id="plan-eligibility-gate-hub-link"') + 400
+    );
     expect(html).toContain('<section id="plan-view" class="view-pane hidden">');
     expect(html).toContain('id="plan-eligibility-gate"');
     expect(html).toContain('id="plan-eligibility-gate-hub-link"');
+    expect(gateMarkup).toContain("member/continue?satellite=bible-app");
+    expect(gateMarkup).toContain("resume%3Dplan");
+    expect(gateMarkup).not.toContain('target="_blank"');
     expect(html).not.toContain('id="plan-eligibility-gate-name-input"');
     expect(html).not.toContain('id="plan-eligibility-gate-name-save"');
     expect(html).not.toContain('id="plan-eligibility-gate-name-form"');

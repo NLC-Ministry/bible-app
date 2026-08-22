@@ -63,7 +63,7 @@ export function getUserOnboardingBlock(user, options = {}) {
   if (action === 'resolve_membership_record') {
     return { reason: 'membership_record_inconsistent', ...recovery };
   }
-  if (action === 'complete_profile') {
+  if (action === 'complete_profile' && membershipState !== 'pending' && membershipState !== 'approved') {
     return { reason: 'member_profile_required', ...recovery };
   }
   if (action === 'submit_membership' && membershipState !== 'pending' && membershipState !== 'approved') {

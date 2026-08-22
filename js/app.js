@@ -18,6 +18,12 @@ import './utils.js?v=20260816_reader_audio_chapter_scroll';
 import './gamification.js?v=20260816_reader_audio_chapter_scroll';
 import { initModalManager } from './modules/modal-manager.mjs';
 
+import {
+  BIBLE_HUB_CONTINUE_RETURN_TO,
+  consumeBibleHubResume,
+  hubContinueHref,
+  launchMemberHubContinue
+} from './login-onboarding-gate.mjs';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260816_reader_audio_chapter_scroll';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -477,19 +483,37 @@ function resetPlanNavigationForEligibilityGate() {
   }
 }
 
+function resyncPlanEligibilityAfterHubReturn() {
+  if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
+  const gate = document.getElementById("plan-eligibility-gate");
+  const gated = gate && !gate.classList.contains("hidden");
+  const onPlan = window.appRouter && window.appRouter.currentTab === "plan-view";
+  if (!gated && !onPlan) return;
+  db.syncNlcSessionWithSupabase(true).then(() => {
+    if (window.appRouter && (window.appRouter.currentTab === "plan-view" || gated)) {
+      window.appRouter.switchTab("plan-view", { keepPlanDetail: true });
+    }
+  }).catch(err => console.warn("[PlanEligibilityGate] Profile sync after Hub return failed:", err));
+}
+
 function bindPlanEligibilityHubReturnSync() {
   if (planEligibilityHubReturnBound || typeof document === "undefined") return;
   planEligibilityHubReturnBound = true;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    if (typeof db === "undefined" || typeof db.syncNlcSessionWithSupabase !== "function") return;
-    if (!window.appRouter || window.appRouter.currentTab !== "plan-view") return;
-    db.syncNlcSessionWithSupabase(true).then(() => {
-      if (window.appRouter && window.appRouter.currentTab === "plan-view") {
-        window.appRouter.switchTab("plan-view", { keepPlanDetail: true });
-      }
-    }).catch(err => console.warn("[PlanEligibilityGate] Profile sync after Hub return failed:", err));
+    resyncPlanEligibilityAfterHubReturn();
   });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) resyncPlanEligibilityAfterHubReturn();
+  });
+  const hubLink = document.getElementById("plan-eligibility-gate-hub-link");
+  if (hubLink && !hubLink.dataset.hubContinueBound) {
+    hubLink.dataset.hubContinueBound = "1";
+    hubLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      launchMemberHubContinue(typeof auth !== "undefined" ? auth : null);
+    });
+  }
 }
 
 function renderPlanEligibilityGate(block) {
@@ -507,9 +531,7 @@ function renderPlanEligibilityGate(block) {
   if (titleEl) titleEl.textContent = copy.title;
   if (descEl) descEl.textContent = copy.desc;
   if (hubLink) {
-    const fallback = (typeof auth !== "undefined" && typeof auth.getMemberHubUrl === "function")
-      ? auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F")
-      : "https://member.newlife.org.tw/member/continue?satellite=bible-app&returnTo=%2F";
+    const fallback = hubContinueHref(typeof auth !== "undefined" ? auth : null);
     try {
       const fallbackUrl = new URL(fallback);
       const upstreamUrl = block.requiredActionUrl ? new URL(block.requiredActionUrl) : null;
@@ -519,7 +541,7 @@ function renderPlanEligibilityGate(block) {
         ? upstreamUrl
         : fallbackUrl;
       resolverUrl.searchParams.set("satellite", "bible-app");
-      resolverUrl.searchParams.set("returnTo", "/");
+      resolverUrl.searchParams.set("returnTo", BIBLE_HUB_CONTINUE_RETURN_TO);
       hubLink.href = resolverUrl.toString();
     } catch {
       hubLink.href = fallback;
@@ -868,7 +890,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
 
     // Render the initial view only after ALL data is ready
-    await appRouter.switchTab('dashboard-view');
+    const resumePlan = consumeBibleHubResume(window.location.search);
+    if (resumePlan) {
+      const cleaned = new URL(window.location.href);
+      cleaned.searchParams.delete("resume");
+      const nextSearch = cleaned.searchParams.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        cleaned.pathname + (nextSearch ? `?${nextSearch}` : "") + cleaned.hash
+      );
+    }
+    await appRouter.switchTab(resumePlan ? "plan-view" : "dashboard-view");
     refreshCareReminderBadge({ force: true });
     maybeShowReleaseOnboarding({
       auth,

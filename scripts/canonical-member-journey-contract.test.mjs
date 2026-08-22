@@ -71,10 +71,23 @@ describe('canonical Bible user-onboarding door', () => {
     });
   });
 
-  it('blocks complete_profile even if lifecycle looks pending', () => {
+  it('lets pending or approved members in even if Hub still reports complete_profile', () => {
     expect(getUserOnboardingBlock({
       ...base,
       member_context_membership_lifecycle_state: 'pending',
+      member_context_required_action: 'complete_profile',
+    }, { now })).toBeNull();
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'approved',
+      member_context_required_action: 'complete_profile',
+    }, { now })).toBeNull();
+  });
+
+  it('still blocks complete_profile for a visitor with no membership', () => {
+    expect(getUserOnboardingBlock({
+      ...base,
+      member_context_membership_lifecycle_state: 'none',
       member_context_required_action: 'complete_profile',
     }, { now })).toMatchObject({ reason: 'member_profile_required' });
   });
