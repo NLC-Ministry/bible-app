@@ -1,15 +1,11 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 import { getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
-import {
-  detectAuthenticationEnvironment,
-  shouldGateInteractiveAuth
-} from './auth-environment.js';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import {
   applyLoginGateView,
   getLoginGateCopy,
-  hubContinueHref
+  launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
@@ -334,15 +330,7 @@ const db = {
         }
         const mode = btnNlcGate.dataset.loginGateMode || "sso";
         if (mode === "hub-continue") {
-          const href = hubContinueHref(typeof auth !== "undefined" ? auth : null);
-          const embedded = shouldGateInteractiveAuth(detectAuthenticationEnvironment(), {
-            authEnvironmentAcknowledged: false
-          });
-          if (embedded && typeof auth !== "undefined" && typeof auth._addBrowserLaunchTransportParams === "function") {
-            window.location.href = auth._addBrowserLaunchTransportParams(href);
-          } else {
-            window.location.assign(href);
-          }
+          launchMemberHubContinue(typeof auth !== "undefined" ? auth : null);
           return;
         }
         if (mode === "retry-sync") {

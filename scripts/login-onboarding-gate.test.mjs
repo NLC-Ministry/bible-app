@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   applyLoginGateView,
+  consumeBibleHubResume,
   getLoginGateCopy,
   hubContinueHref,
 } from "../js/login-onboarding-gate.mjs";
@@ -118,10 +119,16 @@ describe("login gate view", () => {
   it("builds the Hub continue URL with satellite return", () => {
     expect(hubContinueHref({
       getMemberHubUrl(path) { return `https://member.example/${path}`; },
-    })).toBe("https://member.example/member/continue?satellite=bible-app&returnTo=%2F");
+    })).toBe("https://member.example/member/continue?satellite=bible-app&returnTo=%2F%3Fresume%3Dplan");
     expect(hubContinueHref(null)).toBe(
-      "https://member.newlife.org.tw/member/continue?satellite=bible-app&returnTo=%2F"
+      "https://member.newlife.org.tw/member/continue?satellite=bible-app&returnTo=%2F%3Fresume%3Dplan"
     );
+  });
+
+  it("treats Hub resume=plan as a plan-tab return", () => {
+    expect(consumeBibleHubResume("?resume=plan")).toBe(true);
+    expect(consumeBibleHubResume("resume=plan")).toBe(true);
+    expect(consumeBibleHubResume("?foo=1")).toBe(false);
   });
 });
 
@@ -157,9 +164,7 @@ describe("login gate wiring", () => {
     expect(db).toContain("auth.startLoginRepair()");
     expect(db).toContain('authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" })');
     expect(db).toContain('"hub-continue"');
-    expect(db).toContain("hubContinueHref");
-    expect(db).toContain("_addBrowserLaunchTransportParams");
-    expect(db).toContain("window.location.assign");
+    expect(db).toContain("launchMemberHubContinue");
     expect(db).toContain('"retry-sync"');
     expect(db).toContain("syncNlcSessionWithSupabase(true)");
   });
