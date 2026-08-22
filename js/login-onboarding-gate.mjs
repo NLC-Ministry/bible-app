@@ -1,3 +1,23 @@
+import {
+  detectAuthenticationEnvironment,
+  shouldGateInteractiveAuth
+} from "./auth-environment.js";
+
+export const BIBLE_HUB_CONTINUE_RETURN_TO = "/?resume=plan";
+
+function hubContinueQuery() {
+  return `member/continue?satellite=bible-app&returnTo=${encodeURIComponent(BIBLE_HUB_CONTINUE_RETURN_TO)}`;
+}
+
+export function consumeBibleHubResume(search) {
+  try {
+    const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+    return params.get("resume") === "plan";
+  } catch {
+    return false;
+  }
+}
+
 export function getLoginGateCopy(block, { hasTokens } = {}) {
   if (!hasTokens) {
     return {
@@ -57,10 +77,23 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
 }
 
 export function hubContinueHref(auth) {
+  const path = hubContinueQuery();
   if (auth && typeof auth.getMemberHubUrl === "function") {
-    return auth.getMemberHubUrl("member/continue?satellite=bible-app&returnTo=%2F");
+    return auth.getMemberHubUrl(path);
   }
-  return "https://member.newlife.org.tw/member/continue?satellite=bible-app&returnTo=%2F";
+  return `https://member.newlife.org.tw/${path}`;
+}
+
+export function launchMemberHubContinue(auth) {
+  const href = hubContinueHref(auth);
+  const embedded = shouldGateInteractiveAuth(detectAuthenticationEnvironment(), {
+    authEnvironmentAcknowledged: false
+  });
+  if (embedded && auth && typeof auth._addBrowserLaunchTransportParams === "function") {
+    window.location.href = auth._addBrowserLaunchTransportParams(href);
+    return;
+  }
+  window.location.assign(href);
 }
 
 export function applyLoginGateView({
