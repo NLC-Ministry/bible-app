@@ -116,6 +116,53 @@ deduplicated by an atomic database status transition. A ready but unapproved
 variant asks for confirmation before replacement; once approved, the database
 trigger permanently blocks replacement, editing, and approval cancellation.
 
+## 小測驗排程發佈掃描器 (`daily-quiz-schedule-sweep`)
+
+Lets an admin/pastor/leader set up a future auto-publish (「發佈」分頁的「使用
+排程發佈」) instead of always publishing immediately. `schedule_daily_quiz_publish`
+(migration `0189`) validates the version is already approved/confirmed and
+stores a `pending` row in `quiz_publication_schedules`; this scheduled function
+just sweeps that table every 5 minutes and calls `publish_daily_quiz` for any
+row whose `publish_at` has arrived, marking it `published` or `failed`
+(`failure_reason` holds the error). One failing row never blocks the others —
+each is wrapped in its own `BEGIN … EXCEPTION` block inside
+`run_daily_quiz_schedule_sweep`. It does pure database work (no external API),
+same shape as `issue-report-maintenance`, not `generate-daily-quizzes`.
+
+Required Edge Function secrets:
+
+```bash
+DAILY_QUIZ_SCHEDULE_SWEEP_SECRET=<random shared secret>
+```
+
+Deploy without Supabase JWT verification, same reason as the other cron jobs —
+pg_cron authenticates with the custom `x-cron-secret` header instead:
+
+```bash
+supabase functions deploy daily-quiz-schedule-sweep --no-verify-jwt
+```
+
+Migration `0189_daily_quiz_scheduled_publish.sql` schedules it every 5 minutes
+and adds `quiz_publication_schedules`, the schedule/cancel RPCs, and the
+`answer_close_at` deadline enforced by `daily_quiz_submit_answer` /
+`daily_quiz_finalize_attempt` / `submit_daily_quiz`. Store the same cron
+secret in Vault once:
+
+```sql
+select vault.create_secret(
+  'REPLACE_WITH_DAILY_QUIZ_SCHEDULE_SWEEP_SECRET',
+  'daily_quiz_schedule_sweep_cron_secret',
+  'x-cron-secret sent to daily-quiz-schedule-sweep'
+);
+```
+
+Redeploy `nlc-data` too after applying `0189` — it adds `schedule_daily_quiz_publish`
+and `cancel_daily_quiz_schedule` to the quiz RPC allowlist:
+
+```bash
+supabase functions deploy nlc-data --no-verify-jwt
+```
+
 ## 每日靈修影片自動抓取 (`sync-devotion-video`)
 
 The church publishes that day's devotion video around 07:00 Asia/Taipei. This

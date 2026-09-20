@@ -10,14 +10,17 @@ const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql")
 const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sql");
 const publishOptimization = read("supabase/migrations/0091_optimize_quiz_publication.sql");
 const reservationFix = read("supabase/migrations/0092_fix_daily_quiz_generation_reservation.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}`;
+const scheduledPublish = read("supabase/migrations/0189_daily_quiz_scheduled_publish.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}\n${scheduledPublish}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
+const scheduleSweep = read("supabase/functions/daily-quiz-schedule-sweep/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
 const admin = read("js/modules/admin.js");
 const html = read("index.html");
 const css = read("index.css");
+const configToml = read("supabase/config.toml");
 
 describe("daily church quiz", () => {
   it("runs the automatic A/B/C set once and supports deduplicated manual retries", () => {
@@ -302,5 +305,53 @@ describe("daily church quiz", () => {
     expect(publishOptimization).not.toContain("FOREACH target_group_id");
     expect(publishOptimization).toContain("NOTIFY pgrst, 'reload schema'");
     expect(db).toContain("JSON.stringify(errorDetails)");
+  });
+
+  it("supports scheduled auto-publish gated on already-ready questions, plus an optional answer deadline", () => {
+    // 排程本身：新表 + 就緒檢查（跟 publish_daily_quiz 前半段同一套規則，
+    // 這就是「先審核/確認過才能排程」的實際檢查點）+ 取消 + 每 5 分鐘掃描。
+    expect(scheduledPublish).toContain("CREATE TABLE IF NOT EXISTS public.quiz_publication_schedules");
+    expect(scheduledPublish).toContain("WHERE status = 'pending'");
+    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.schedule_daily_quiz_publish(");
+    expect(scheduledPublish).toContain("PERFORM public.validate_daily_quiz_questions(p_custom_questions, 2, 10);");
+    expect(scheduledPublish).toContain("RAISE EXCEPTION 'quiz_not_ready'");
+    expect(scheduledPublish).toContain("RAISE EXCEPTION 'quiz_schedule_publish_time_required'");
+    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.cancel_daily_quiz_schedule(");
+    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.run_daily_quiz_schedule_sweep()");
+    expect(scheduledPublish).toContain("EXCEPTION WHEN OTHERS THEN");
+    expect(scheduledPublish).toContain("cron.schedule(\n    'daily-quiz-schedule-sweep',\n    '*/5 * * * *',");
+    // 每支新函式都要在同一支 migration 裡 REVOKE ALL FROM PUBLIC（CLAUDE.md 規則）。
+    for (const fn of ["schedule_daily_quiz_publish", "cancel_daily_quiz_schedule", "run_daily_quiz_schedule_sweep", "invoke_daily_quiz_schedule_sweep"]) {
+      expect(scheduledPublish).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn}\\(`));
+    }
+    // run_daily_quiz_schedule_sweep 刻意不進 nlc-data 的 allowlist——只有排程
+    // Edge Function 用 service-role client 直接呼叫，前端拿不到。
+    expect(edge).not.toContain('"run_daily_quiz_schedule_sweep"');
+    expect(edge).toContain('"schedule_daily_quiz_publish"');
+    expect(edge).toContain('"cancel_daily_quiz_schedule"');
+
+    // 作答截止：quiz_publications 新欄位 + 三支送出答案的 RPC 都要擋。
+    expect(scheduledPublish).toContain("ADD COLUMN IF NOT EXISTS answer_close_at TIMESTAMPTZ");
+    expect(scheduledPublish).toContain("p_answer_close_at TIMESTAMPTZ DEFAULT NULL");
+    const answerWindowChecks = scheduledPublish.split("RAISE EXCEPTION 'quiz_answer_window_closed';").length - 1;
+    expect(answerWindowChecks).toBe(3); // daily_quiz_submit_answer / daily_quiz_finalize_attempt / submit_daily_quiz
+    expect(scheduledPublish).toContain("'answerCloseAt', publication_row.answer_close_at");
+    expect(scheduledPublish).toContain("'pendingSchedule', pending_schedule");
+
+    // Edge Function + config.toml：跟其他 cron job 同一套 verify_jwt=false + 共用密鑰模式。
+    expect(scheduleSweep).toContain('Deno.env.get("DAILY_QUIZ_SCHEDULE_SWEEP_SECRET")');
+    expect(scheduleSweep).toContain('req.headers.get("x-cron-secret")');
+    expect(scheduleSweep).toContain('supabase.rpc("run_daily_quiz_schedule_sweep")');
+    expect(configToml).toMatch(/\[functions\.daily-quiz-schedule-sweep\]\s*\nverify_jwt = false/);
+
+    // 前端：db.js 新方法 + admin.js 發佈分頁的排程 UI + 會友端截止顯示。
+    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null)");
+    expect(db).toContain("async cancelDailyQuizSchedule(scheduleId)");
+    expect(admin).toContain("function renderAdminQuizScheduleStatusHtml(schedule)");
+    expect(admin).toContain("data-quiz-schedule-toggle");
+    expect(admin).toContain("db.scheduleDailyQuizPublish(");
+    expect(admin).toContain("db.cancelDailyQuizSchedule(");
+    expect(plan).toContain("assignedQuiz.answerCloseAt");
+    expect(plan).toContain('"作答已截止"');
   });
 });

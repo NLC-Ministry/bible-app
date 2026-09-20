@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.sync-devotion-video]
 verify_jwt = false
+
+[functions.daily-quiz-schedule-sweep]
+verify_jwt = false

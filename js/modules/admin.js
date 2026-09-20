@@ -2555,7 +2555,43 @@ function bindAdminQuizCustomSection(root, context) {
 // 發佈分頁只做「選範圍、選版本、按發佈」——不放任何題目編輯 UI。自訂題目
 // 是否選得了，看的是自訂題目分頁存在 root.dataset.quizCustomConfirmed 上的
 // 「已確認」旗標（bindAdminQuizCustomSection 設的），不是這裡即時算。
+// 台灣固定 UTC+8、沒有夏令時間，時間輸入不用查時區資料庫，直接拼字串就好。
+function adminQuizTaiwanTimeToISOString(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const parsed = new Date(`${dateStr}T${timeStr}:00+08:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function adminQuizFormatTaiwanDateTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('zh-TW', {
+      timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function renderAdminQuizScheduleStatusHtml(schedule) {
+  const scopeLabel = schedule.scopeType === 'all' ? '你負責的全部小組' : (schedule.scopeName || '');
+  const versionLabel = schedule.hasCustomQuestions ? '自訂題目' : `版本 ${schedule.variant}`;
+  return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
+    <div class="admin-daily-quiz-heading">
+      <div><p class="admin-registration-statistics__eyebrow">組織發佈</p><h2>發佈小測驗</h2></div>
+    </div>
+    <div class="admin-quiz-schedule-status">
+      <p>已排程於 <strong>${adminQuizEscape(adminQuizFormatTaiwanDateTime(schedule.publishAt))}</strong> 自動發佈給「${adminQuizEscape(scopeLabel)}」（${adminQuizEscape(versionLabel)}）。</p>
+      <p class="admin-daily-quiz-note">${schedule.answerCloseAt
+        ? `作答將於 ${adminQuizEscape(adminQuizFormatTaiwanDateTime(schedule.answerCloseAt))} 截止。`
+        : '沒有設定作答截止時間。'}</p>
+      <button type="button" class="secondary-btn" data-quiz-schedule-cancel>取消排程</button>
+    </div>
+  </section>`;
+}
+
 function renderAdminQuizPublishPanel(context) {
+  if (context.pendingSchedule) return renderAdminQuizScheduleStatusHtml(context.pendingSchedule);
   const approvedVariants = Array.isArray(context.approvedVariants) ? context.approvedVariants : [];
   const hasApproved = variant => approvedVariants.some(item => item.variant === variant);
   return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
@@ -2579,6 +2615,16 @@ function renderAdminQuizPublishPanel(context) {
       <p class="admin-daily-quiz-note hidden" data-quiz-custom-hint>尚未在「自訂題目」分頁確認題目，請先切到那個分頁完成並確認。</p>
     </div>
     <div class="admin-quiz-publish-step">
+      <label class="admin-quiz-schedule-checkbox">
+        <input type="checkbox" data-quiz-schedule-toggle disabled>
+        使用排程發佈（先選好上面已就緒的版本才能勾選）
+      </label>
+      <div class="admin-quiz-schedule-fields hidden" data-quiz-schedule-fields>
+        <label>自動發佈時間<input type="time" class="form-control" data-quiz-schedule-publish-time></label>
+        <label>作答截止時間（選填）<input type="time" class="form-control" data-quiz-schedule-close-time></label>
+      </div>
+    </div>
+    <div class="admin-quiz-publish-step">
       <button type="button" class="primary-btn" id="admin-quiz-publish-btn" disabled>發佈</button>
     </div>
     <div id="admin-quiz-publish-results" aria-live="polite"></div>
@@ -2586,12 +2632,16 @@ function renderAdminQuizPublishPanel(context) {
 }
 
 function updateAdminQuizPublishState(root, context, selectedVersion) {
+  const panel = root.querySelector('#admin-quiz-publish-panel');
+  if (!panel || panel.querySelector('[data-quiz-schedule-cancel]')) return;
   const scope = getAdminQuizScope('admin-quiz-publish');
   const resultsEl = root.querySelector('#admin-quiz-publish-results');
   if (resultsEl) resultsEl.innerHTML = renderAdminQuizScopeResults(context, scope);
   const publishBtn = root.querySelector('#admin-quiz-publish-btn');
   const customOption = root.querySelector('[data-quiz-custom-option]');
   const customHint = root.querySelector('[data-quiz-custom-hint]');
+  const scheduleToggle = root.querySelector('[data-quiz-schedule-toggle]');
+  const scheduleFields = root.querySelector('[data-quiz-schedule-fields]');
   const customConfirmed = root.dataset.quizCustomConfirmed === 'true';
   if (customOption) customOption.disabled = !customConfirmed;
   if (customHint) customHint.classList.toggle('hidden', customConfirmed);
@@ -2602,17 +2652,43 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
   } else if (selectedVersion === 'C') {
     ready = customConfirmed;
   }
+  if (scheduleToggle) {
+    scheduleToggle.disabled = !ready;
+    if (!ready && scheduleToggle.checked) {
+      scheduleToggle.checked = false;
+      scheduleFields?.classList.add('hidden');
+    }
+  }
+  const useSchedule = Boolean(scheduleToggle?.checked);
   publishBtn.disabled = !ready;
+  publishBtn.textContent = useSchedule ? '設定排程' : '發佈';
 }
 
 function bindAdminQuizPublishPanel(root, context, quizDate) {
   const panel = root.querySelector('#admin-quiz-publish-panel');
   if (!panel) return;
+
+  const cancelBtn = panel.querySelector('[data-quiz-schedule-cancel]');
+  if (cancelBtn) {
+    root._refreshQuizPublishState = () => {};
+    cancelBtn.addEventListener('click', async () => {
+      if (!window.confirm('確定取消這筆排程嗎？取消後可以重新設定一次。')) return;
+      cancelBtn.disabled = true;
+      const result = await db.cancelDailyQuizSchedule(context.pendingSchedule.id);
+      if (typeof showToast === 'function') showToast(result.success ? '已取消排程' : result.message || '取消失敗');
+      if (result.success) await renderAdminDailyQuizManagement(true, quizDate);
+      else cancelBtn.disabled = false;
+    });
+    return;
+  }
+
   if (typeof window.setupCascadingSelectors === 'function') {
     window.setupCascadingSelectors('admin-quiz-publish-region-select', 'admin-quiz-publish-zone-select', 'admin-quiz-publish-group-select', 'admin-quiz-publish-master-select');
   }
   let selectedVersion = null;
   const versionButtons = Array.from(panel.querySelectorAll('[data-quiz-version-choice]'));
+  const scheduleToggle = panel.querySelector('[data-quiz-schedule-toggle]');
+  const scheduleFields = panel.querySelector('[data-quiz-schedule-fields]');
   const refresh = () => updateAdminQuizPublishState(root, context, selectedVersion);
   root._refreshQuizPublishState = refresh;
 
@@ -2627,6 +2703,11 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
       versionButtons.forEach(other => other.classList.toggle('active', other === button));
       refresh();
     });
+  });
+
+  scheduleToggle?.addEventListener('change', () => {
+    scheduleFields?.classList.toggle('hidden', !scheduleToggle.checked);
+    refresh();
   });
 
   panel.querySelector('#admin-quiz-publish-btn')?.addEventListener('click', async event => {
@@ -2649,7 +2730,41 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     } else {
       selection = { variant: selectedVersion };
     }
-    if (!window.confirm(`確定發佈${selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`}給「${scopeLabel}」嗎？`)) return;
+
+    const useSchedule = Boolean(scheduleToggle?.checked);
+    const versionLabel = selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`;
+
+    if (useSchedule) {
+      const publishTime = panel.querySelector('[data-quiz-schedule-publish-time]')?.value || '';
+      const closeTime = panel.querySelector('[data-quiz-schedule-close-time]')?.value || '';
+      const publishAt = adminQuizTaiwanTimeToISOString(quizDate, publishTime);
+      if (!publishAt) {
+        if (typeof showToast === 'function') showToast('請先填寫自動發佈時間。');
+        return;
+      }
+      if (new Date(publishAt).getTime() <= Date.now()) {
+        if (typeof showToast === 'function') showToast('排程時間必須晚於現在。');
+        return;
+      }
+      const answerCloseAt = closeTime ? adminQuizTaiwanTimeToISOString(quizDate, closeTime) : null;
+      if (!window.confirm(`確定排程於 ${adminQuizFormatTaiwanDateTime(publishAt)} 自動發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
+      button.disabled = true;
+      const originalLabel = button.textContent;
+      button.textContent = '設定中…';
+      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt);
+      if (typeof showToast === 'function') {
+        showToast(result.success ? '已設定排程' : result.message || '設定排程失敗');
+      }
+      if (result.success) {
+        await renderAdminDailyQuizManagement(true, quizDate);
+      } else {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+      return;
+    }
+
+    if (!window.confirm(`確定發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '發佈中…';

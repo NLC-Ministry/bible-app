@@ -7028,6 +7028,36 @@ body.admin-quiz-editor-open {
   margin-top: 0.75rem;
 }
 
+.admin-quiz-schedule-status {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-quiz-schedule-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.admin-quiz-schedule-fields {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.admin-quiz-schedule-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
 /* 自訂題目編輯器：題型一~五的作答內容輸入（單選/多選/配對/排序） */
 .admin-quiz-custom-options,
 .admin-quiz-custom-pairs,

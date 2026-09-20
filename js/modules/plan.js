@@ -3502,15 +3502,34 @@ function openDailyQuizContent(content, context, plan, quizDate) {
 // 發佈／編輯／匯入題目已搬去系統管理後台（admin.js 的「小測驗」分頁），
 // 打卡清單這裡只保留會友「進入小測驗/作答」的入口，所以只在有指派給自己
 // 的測驗（context.myQuiz）時才會被呼叫——見 renderDailyQuizSection 的 gate。
+function formatDailyQuizTaiwanClock(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString("zh-TW", {
+      timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hour12: false
+    });
+  } catch {
+    return "";
+  }
+}
+
 function renderDailyQuizEntry(content, context, plan, quizDate) {
   const assignedQuiz = context.myQuiz;
   if (!assignedQuiz) return;
   const isCompleted = Boolean(assignedQuiz.attempt);
-  const buttonLabel = isCompleted ? "查看測驗結果" : "進入小測驗";
-  const description = isCompleted ? "今天的小測驗已完成，可查看答案與解說" : "完成今天的速讀進度後即可作答";
+  // answerCloseAt（migration 0189）是排程發佈才會有的可選作答截止時間；立即
+  // 發佈的測驗沒有這個欄位，isClosed 一律是 false，行為跟以前完全一樣。
+  const isClosed = !isCompleted && Boolean(assignedQuiz.answerCloseAt)
+    && new Date(assignedQuiz.answerCloseAt).getTime() < Date.now();
+  const buttonLabel = isCompleted ? "查看測驗結果" : isClosed ? "作答已截止" : "進入小測驗";
+  const description = isCompleted
+    ? "今天的小測驗已完成，可查看答案與解說"
+    : isClosed
+      ? `作答時間已於 ${formatDailyQuizTaiwanClock(assignedQuiz.answerCloseAt)} 截止`
+      : "完成今天的速讀進度後即可作答";
 
   content.innerHTML = `
-    <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description">
+    <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description" ${isClosed ? "disabled" : ""}>
       <span class="daily-quiz-entry-icon" aria-hidden="true"><span class="nlc-icon" data-icon="checkOne"></span></span>
       <span class="daily-quiz-entry-copy">
         <strong>小測驗</strong>
@@ -3518,6 +3537,8 @@ function renderDailyQuizEntry(content, context, plan, quizDate) {
       </span>
       <span class="daily-quiz-entry-action">${buttonLabel}<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
     </button>`;
+
+  if (isClosed) return;
 
   content.querySelector("#daily-quiz-entry-button")?.addEventListener("click", () => {
     if (!isCompleted) {
@@ -3712,7 +3733,9 @@ async function renderDailyQuizSection(plan, selectedDay, trackerRequestId, optio
   if (options.open === true) {
     if (context.myQuiz && !context.myQuiz.attempt) {
       const progress = getDailyQuizReadingProgress(plan, quizDate);
-      if (!progress.isComplete) {
+      const isClosed = Boolean(context.myQuiz.answerCloseAt)
+        && new Date(context.myQuiz.answerCloseAt).getTime() < Date.now();
+      if (!progress.isComplete || isClosed) {
         renderDailyQuizEntry(content, context, plan, quizDate);
         return;
       }
