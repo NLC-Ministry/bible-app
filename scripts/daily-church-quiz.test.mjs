@@ -11,7 +11,8 @@ const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sq
 const publishOptimization = read("supabase/migrations/0091_optimize_quiz_publication.sql");
 const reservationFix = read("supabase/migrations/0092_fix_daily_quiz_generation_reservation.sql");
 const scheduledPublish = read("supabase/migrations/0189_daily_quiz_scheduled_publish.sql");
-const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}\n${scheduledPublish}`;
+const homeAnnouncement = read("supabase/migrations/0190_daily_quiz_home_announcement.sql");
+const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}\n${scheduledPublish}\n${homeAnnouncement}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const scheduleSweep = read("supabase/functions/daily-quiz-schedule-sweep/index.ts");
 const edge = read("supabase/functions/nlc-data/index.ts");
@@ -97,7 +98,7 @@ describe("daily church quiz", () => {
       expect(quizSql).toContain(`public.${rpc}`);
     }
     expect(db).toContain("async getDailyQuizDashboard(plan, quizDate)");
-    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {})");
+    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false)");
     expect(db).toContain('p_scope_type: scope.scopeType || "all"');
     expect(db).toContain("p_variant: selection.variant || null");
     expect(db).toContain("async submitDailyQuiz(publicationId, answers)");
@@ -345,7 +346,7 @@ describe("daily church quiz", () => {
     expect(configToml).toMatch(/\[functions\.daily-quiz-schedule-sweep\]\s*\nverify_jwt = false/);
 
     // 前端：db.js 新方法 + admin.js 發佈分頁的排程 UI + 會友端截止顯示。
-    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null)");
+    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false)");
     expect(db).toContain("async cancelDailyQuizSchedule(scheduleId)");
     expect(admin).toContain("function renderAdminQuizScheduleStatusHtml(schedule)");
     expect(admin).toContain("data-quiz-schedule-toggle");
@@ -353,5 +354,32 @@ describe("daily church quiz", () => {
     expect(admin).toContain("db.cancelDailyQuizSchedule(");
     expect(plan).toContain("assignedQuiz.answerCloseAt");
     expect(plan).toContain('"作答已截止"');
+  });
+
+  it("can optionally post a home announcement when publishing church-wide, gated at both ends", () => {
+    // 就緒/範圍檢查跟就緒檢查一樣要在建立當下擋，不能等發佈那一刻才發現。
+    expect(homeAnnouncement).toContain("ADD COLUMN IF NOT EXISTS post_announcement BOOLEAN NOT NULL DEFAULT FALSE");
+    expect(homeAnnouncement).toContain("p_post_announcement BOOLEAN DEFAULT FALSE");
+    const churchWideChecks = homeAnnouncement.split("RAISE EXCEPTION 'quiz_announcement_requires_church_wide';").length - 1;
+    expect(churchWideChecks).toBe(2); // publish_daily_quiz 立即發佈 + schedule_daily_quiz_publish 排程各一次
+    expect(homeAnnouncement).toContain("IF p_post_announcement AND p_scope_type <> 'all' THEN");
+    // 復活這支一直沒被呼叫過的舊函式，不是重新造一個公告寫入邏輯。
+    expect(homeAnnouncement).toContain("PERFORM public.schedule_announcement(");
+    expect(homeAnnouncement).toContain("'【提醒】今日小測驗已發布'");
+    expect(homeAnnouncement).toContain("(p_quiz_date + 1)::TIMESTAMP AT TIME ZONE 'Asia/Taipei'");
+    expect(homeAnnouncement).toContain("p_post_announcement := schedule_row.post_announcement");
+    expect(homeAnnouncement).toContain("'postAnnouncement', schedule.post_announcement");
+
+    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false)");
+    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false)");
+    expect(db).toContain("p_post_announcement: Boolean(postAnnouncement)");
+    expect(db).toContain("quiz_announcement_requires_church_wide");
+
+    // 前端也要擋，不能只靠 SQL 端事後報錯——非「全部小組」時 checkbox 本身
+    // 就是 disabled，使用者根本勾不了。
+    expect(admin).toContain("data-quiz-announcement-toggle");
+    expect(admin).toContain("const canAnnounce = scope.scopeType === 'all';");
+    expect(admin).toContain("announcementToggle.disabled = !canAnnounce;");
+    expect(admin).toContain("同時發佈到首頁公告");
   });
 });
