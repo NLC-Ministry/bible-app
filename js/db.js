@@ -3406,6 +3406,9 @@ const db = {
     const messages = {
       profile_required: "目前找不到你的會員資料，請重新登入後再試。",
       profile_identity_not_found: "目前找不到你的會員資料，請重新登入後再試。",
+      plan_audience_restricted: "這個計畫只開放特定大區參加。如果你的牧區／大區資料還沒設定，請先到會員中心補齊，再回來加入。",
+      plan_requires_pastoral_zone: "這個階段開放前，請先到會員中心完成牧區設定，才能加入。",
+      campaign_stage_not_open: "這個計畫階段尚未開放報名，請稍後再試。",
       team_plan_not_found: "這個計畫目前未開放團隊報名。",
       team_statistics_admin_required: "目前無法查看這項團隊資料。",
       team_statistics_management_scope_required: "你目前沒有可查看團隊資料的管理範圍。",
@@ -4797,6 +4800,7 @@ const db = {
     const raw = String(error && (error.message || error.error || error.details) || error || "");
     const messages = {
       plan_audience_restricted: "這個計畫只開放特定大區參加。如果你的牧區／大區資料還沒設定，請先到會員中心補齊，再回來加入。",
+      plan_requires_pastoral_zone: "這個階段開放前，請先到會員中心完成牧區設定，才能加入。",
       campaign_stage_not_open: "這個計畫階段尚未開放報名，請稍後再試。",
       campaign_stage_progress_not_open: "這個計畫階段尚未開放，暫時無法加入或記錄進度。",
       profile_required: "目前找不到你的會員資料，請重新登入後再試。",

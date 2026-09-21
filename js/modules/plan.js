@@ -2516,6 +2516,17 @@ function renderPresetPlansList() {
   };
   const viewerRegionMissing = !String((state.currentUser && state.currentUser.great_region) || "").trim();
 
+  // 2026-10-01 起開始的教會階段計畫，沒設定牧區就先擋加入——跟資料庫端
+  // assert_campaign_stage_open()（migration 0193）用同一個固定分界日期，
+  // 前端只是提早給提示，真正擋人的是資料庫那道 trigger。卡片仍顯示，只是
+  // 把「加入計畫」按鈕換成「前往會員中心設定牧區」。
+  const PASTORAL_ZONE_REQUIRED_FROM = "2026-10-01";
+  const pastoralZoneSetupPlanKeys = new Set();
+  const markPastoralZoneSetup = plan => {
+    [plan.id, plan.globalPlanId, plan.presetKey, plan.name].filter(Boolean).forEach(v => pastoralZoneSetupPlanKeys.add(String(v)));
+  };
+  const viewerPastoralZoneMissing = !String((state.currentUser && state.currentUser.pastoral_zone) || "").trim();
+
   const visiblePlans = sourcePlans.filter(plan => {
     if (!plan) return false;
     const isObsolete = isObsoleteCategoryPlan(plan);
@@ -2560,6 +2571,14 @@ function renderPresetPlansList() {
       }
     }
 
+    // 2026-10-01 起的教會階段計畫：沒設定牧區 → 卡片仍顯示，但停用「加入」。
+    if (window.isCampaignStagePlan(plan)
+      && String(plan.startDate || "") >= PASTORAL_ZONE_REQUIRED_FROM
+      && viewerPastoralZoneMissing
+      && !canManageHiddenPlans()) {
+      markPastoralZoneSetup(plan);
+    }
+
     // 走到這裡代表這張卡會顯示。如果它只是因為「我是管理員 / 有隱藏計畫管理權」
     // 才沒被濾掉（會友端其實看不到），就標記起來。
     if (!showAsLocked && (isFullyHiddenCampaignStage || (isHidden && canManageHiddenPlans()))) {
@@ -2597,7 +2616,14 @@ function renderPresetPlansList() {
     // 延後大區梯次計畫，但使用者還沒設定牧區/大區 → 卡片停用「加入」，提示補資料。
     const needsRegionSetup = [plan.id, plan.globalPlanId, plan.presetKey, plan.name]
       .filter(Boolean).some(v => regionSetupPlanKeys.has(String(v)));
-    const isJoinBlocked = isLockedStage || needsRegionSetup;
+    // 2026-10-01 起的教會階段計畫，使用者還沒設定牧區 → 卡片一樣顯示，但把
+    // 「加入計畫」按鈕換成「前往會員中心設定牧區」，不彈窗、不整頁攔截。
+    const needsPastoralZoneSetup = [plan.id, plan.globalPlanId, plan.presetKey, plan.name]
+      .filter(Boolean).some(v => pastoralZoneSetupPlanKeys.has(String(v)));
+    const isJoinBlocked = isLockedStage || needsRegionSetup || needsPastoralZoneSetup;
+    // 缺牧區是唯一「補資料就能繼續」的擋卡原因：卡片上直接給一顆可操作的按鈕，
+    // 不像鎖定中／缺大區那樣只能點卡片開詳情視窗。
+    const showPastoralZoneCta = needsPastoralZoneSetup && !isLockedStage && !needsRegionSetup;
     const isHiddenFromMembers = isManagerOnly;
     const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
     const scheduleLabel = isCampaignStage
@@ -2644,6 +2670,12 @@ function renderPresetPlansList() {
           value: "\u9019\u500b\u8a08\u756b\u9650\u7279\u5b9a\u5927\u5340\u53c3\u52a0\u3002\u8acb\u5148\u5230\u6703\u54e1\u4e2d\u5fc3\u88dc\u9f4a\u4f60\u7684\u7267\u5340\uff0f\u5927\u5340\u8cc7\u6599\uff0c\u518d\u56de\u4f86\u52a0\u5165\u3002",
           tone: "warning"
         },
+        needsPastoralZoneSetup && {
+          icon: "personBox",
+          label: "\u5831\u540d\u689d\u4ef6",
+          value: "\u9019\u500b\u968e\u6bb5\u9700\u8981\u5148\u8a2d\u5b9a\u7267\u5340\u624d\u80fd\u52a0\u5165\uff0c\u8acb\u5230\u6703\u54e1\u4e2d\u5fc3\u88dc\u9f4a\u8cc7\u6599\u3002",
+          tone: "warning"
+        },
         isManagerOnly && {
           icon: "lock",
           label: "\u986f\u793a\u7bc4\u570d",
@@ -2657,14 +2689,29 @@ function renderPresetPlansList() {
           tone: "warning"
         }
       ]),
-      actions: isJoinBlocked
+      actions: showPastoralZoneCta
+        ? renderPlanCardActions([
+            { kind: "secondary", icon: "signpost", label: "前往會員中心設定牧區", action: "member-hub-pastoral-zone" }
+          ])
+        : isJoinBlocked
         ? ""
         : renderPlanCardActions([
             { kind: "primary", icon: "bookOpen", label: "加入計畫", action: "solo-join" }
           ])
     });
 
+    // 缺牧區這種「補資料就能繼續」的狀況，直接開會員中心，不彈計畫詳情視窗。
+    const goSetPastoralZone = () => {
+      if (typeof auth !== "undefined" && typeof auth.openMemberHub === "function") {
+        auth.openMemberHub("onboarding");
+      }
+    };
+
     const openDetails = () => {
+      if (showPastoralZoneCta) {
+        goSetPastoralZone();
+        return;
+      }
       if (isJoinBlocked) {
         openPlanDetailsDialog(plan);
         return;
@@ -2700,6 +2747,11 @@ function renderPresetPlansList() {
           await joinPlanSoloFromCard(plan, key);
         }
       });
+    });
+    card.querySelector('[data-plan-card-action="member-hub-pastoral-zone"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      goSetPastoralZone();
     });
     container.appendChild(card);
   });
