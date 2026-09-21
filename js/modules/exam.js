@@ -2909,18 +2909,31 @@ class ExamRunner {
     const isPractice = d.attemptKind === "practice" || this.attemptKind === "practice";
 
     // ── PR 值（僅正式卷、已批改、已公布才有；不含任何隊友分數）──
+    // 大數字卡片 + 一句話說明放進可收合的 <details>，取代整段文字說明擠在
+    // 一起的舊版（每個數字都要自己找），呼應 Strava／Duolingo 那類把百分等級
+    // 當成一個個獨立「大數字卡片」呈現的做法。
     const showPr = d.prPublished === true && !isPractice;
-    const prNum = (v) => (v == null ? "—（參加人數太少）" : `<strong>${v}</strong>`);
     const myTeams = Array.isArray(d.teams) ? d.teams : [];
+    const prTileHtml = (label, value, caption) => `
+      <div class="exam-result__pr-tile">
+        <span class="exam-result__pr-tile-label">${label}</span>
+        <span class="exam-result__pr-tile-value${value == null ? " exam-result__pr-tile-value--muted" : ""}">${value == null ? "—" : `PR ${value}`}</span>
+        ${caption ? `<span class="exam-result__pr-tile-caption">${caption}</span>` : ""}
+      </div>`;
     const prBlockHtml = !showPr ? "" : `
-      <div class="exam-result__banner">
-        <strong>PR 值</strong>（百分等級，代表你贏過多少比例的參加者；本測驗只公布分數與 PR，不公布名次）<br>
-        全教會 PR：${prNum(d.prChurch)}${d.prChurch == null ? "" : `（贏過全教會約 ${d.prChurch}% 的參加者）`}
-        ${myTeams.map((t) => {
-          const org = [t.greatRegion, t.pastoralZone].filter(Boolean).map(esc).join("・");
-          return `<br>你的 ${t.division} 人隊「${esc(t.name || "")}」${org ? `（${org}）` : ""}　`
-            + `隊伍平均 <strong>${t.avg ?? "—"}</strong> 分・團隊 PR ${prNum(t.pr)}`;
-        }).join("")}
+      <div class="exam-result__pr">
+        <div class="exam-result__pr-grid">
+          ${prTileHtml("全教會", d.prChurch, d.prChurch == null ? "參加人數太少" : `贏過約 ${d.prChurch}% 的人`)}
+          ${myTeams.map((t) => prTileHtml(
+            `${t.division}人隊・${esc(t.name || "")}`,
+            t.pr,
+            `隊伍平均 ${t.avg ?? "—"} 分`
+          )).join("")}
+        </div>
+        <details class="exam-result__pr-info">
+          <summary>PR 值是什麼？</summary>
+          <p>PR（百分等級）代表你贏過多少比例的參加者，人數太少時顯示「—」。本測驗只公布分數與 PR，不公布名次。</p>
+        </details>
       </div>`;
 
     this.el.innerHTML = `

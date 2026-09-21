@@ -58,9 +58,24 @@ describe("explore list: region-cohort plans and a member with no region (js/modu
   it("a region-setup card shows a hint status row and no join buttons", () => {
     // The status row (Chinese may be stored \u-escaped in this file).
     expect(presetList).toMatch(/needsRegionSetup && \{\s*\n\s*icon: "personBox",/);
-    expect(presetList).toMatch(/actions: isJoinBlocked\s*\n\s*\? ""/);
+    // A missing-pastoral-zone card is the one exception: it gets an actual
+    // CTA button (no dialog/full-screen takeover — see showPastoralZoneCta),
+    // so the ternary now branches on that before falling back to the plain
+    // isJoinBlocked -> "" behaviour region-setup/locked cards still use.
+    expect(presetList).toMatch(/actions: showPastoralZoneCta\s*\n\s*\? renderPlanCardActions/);
+    expect(presetList).toMatch(/:\s*isJoinBlocked\s*\n\s*\? ""/);
+    expect(presetList).toMatch(/if \(showPastoralZoneCta\) \{\s*\n\s*goSetPastoralZone\(\);/);
     expect(presetList).toMatch(/if \(isJoinBlocked\) \{\s*\n\s*openPlanDetailsDialog\(plan\);/);
     // no join action listener wiring beyond what an empty actions string yields
     expect(presetList).toContain('data-plan-card-action="solo-join"'); // still present for non-blocked cards
+  });
+
+  it("a missing-pastoral-zone card gets an actionable CTA to Member Hub, not a dialog", () => {
+    expect(presetList).toContain("PASTORAL_ZONE_REQUIRED_FROM");
+    expect(presetList).toContain("viewerPastoralZoneMissing");
+    expect(presetList).toContain("markPastoralZoneSetup(plan)");
+    expect(presetList).toContain("const needsPastoralZoneSetup");
+    expect(presetList).toContain('data-plan-card-action="member-hub-pastoral-zone"');
+    expect(presetList).toContain('auth.openMemberHub("onboarding")');
   });
 });
