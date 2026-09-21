@@ -18,11 +18,16 @@ describe("NLC OIDC scopes for Member Hub sync", () => {
 
   it("defaults build-config scopes to include member:read.basic and offline_access", () => {
     const source = readFileSync(join(root, "build-config.js"), "utf8");
-    expect(source).toContain('process.env.NLC_SCOPES || "openid profile email offline_access member:read.basic"');
+    expect(source).toContain('process.env.NLC_SCOPES || "openid profile email phone offline_access member:read.basic"');
   });
 
   it("keeps auth.js fallback scopes aligned with Member Hub access + refresh tokens", () => {
     const source = readFileSync(join(root, "js/auth.js"), "utf8");
-    expect(source).toContain('NLC_CONFIG.scopes) || "openid profile email offline_access member:read.basic"');
+    expect(source).toContain('NLC_CONFIG.scopes) || "openid profile email phone offline_access member:read.basic"');
+  });
+
+  it("documents phone in .env.example so the standard OIDC phone_number claim is requested", () => {
+    const example = readFileSync(join(root, ".env.example"), "utf8");
+    expect(example).toMatch(/NLC_SCOPES=.*\bphone\b/);
   });
 });

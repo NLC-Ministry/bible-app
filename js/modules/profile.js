@@ -166,11 +166,6 @@ function applyProfileIdentitySkeletons() {
   if (typeof ComponentSkeletonLoader === "undefined") return;
   ComponentSkeletonLoader.setInlineSkeleton("#profile-summary-name", { width: "6rem", height: "1.2rem" });
   ComponentSkeletonLoader.fill("profile-org", "#profile-summary-org");
-  const roleEl = document.getElementById("profile-summary-role");
-  if (roleEl) {
-    roleEl.setAttribute("aria-busy", "true");
-    ComponentSkeletonLoader.fill("role-badge", roleEl);
-  }
   if (typeof renderUserAvatar === "function") {
     renderUserAvatar(document.getElementById("profile-summary-avatar"), {
       size: "lg",
@@ -186,16 +181,35 @@ function getLeadershipDisplayLabel(user) {
   return "";
 }
 
-function paintProfileIdentityChrome() {
-  const roleNames = {
-    member: "一般組員",
-    group_leader: "小組長",
-    zone_leader: "區長 (牧區負責人)",
-    great_zone_leader: "大區長",
-    pastor: "牧者",
-    admin: "系統管理員"
-  };
+const ROLE_DISPLAY_NAMES = {
+  member: "一般組員",
+  group_leader: "小組長",
+  zone_leader: "區長 (牧區負責人)",
+  great_zone_leader: "大區長",
+  pastor: "牧者",
+  admin: "系統管理員"
+};
 
+// 角色與服事標籤現在只顯示在「個人資訊」子頁（見 renderPersonalInfoSubpage），
+// 不再重複在摘要卡片上；兩處共用同一套判斷邏輯。
+function computeRoleDisplay(user) {
+  const role = String(getUserRoleCode(user) || "").trim();
+  const leadershipLabel = getLeadershipDisplayLabel(user);
+  const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
+  const applicationRoleLabel = roleDefinition?.label || ROLE_DISPLAY_NAMES[role] || "";
+  // Non-admin roles show the Hub-provided serving label in place of the raw
+  // role code when one exists (e.g. 牧區同工 instead of 小組長); admins keep
+  // their application role label here and get the serving label on its own
+  // row instead, since satellite_admin authority is separate from church
+  // leadership identity.
+  const roleLabel = (role === "admin" && applicationRoleLabel)
+    ? applicationRoleLabel
+    : (leadershipLabel || applicationRoleLabel);
+  const showLeadership = role === "admin" && Boolean(leadershipLabel) && leadershipLabel !== applicationRoleLabel;
+  return { role, roleLabel, leadershipLabel, applicationRoleLabel, showLeadership };
+}
+
+function paintProfileIdentityChrome() {
   const user = state.currentUser || {};
   const pending = typeof isMemberContextPending === "function"
     ? isMemberContextPending(user)
@@ -233,44 +247,6 @@ function paintProfileIdentityChrome() {
       const group = user.small_group || "";
       summaryOrg.textContent = [region, zone, group].filter(Boolean).join(" / ") || orgUnset;
     }
-  }
-
-  const role = String(getUserRoleCode(user) || "").trim();
-  const leadershipLabel = getLeadershipDisplayLabel(user);
-  const roleDefinition = typeof getRoleDefinition === "function" ? getRoleDefinition(role) : null;
-  const applicationRoleLabel = roleDefinition?.label || roleNames[role] || "";
-
-  const summaryRole = document.getElementById("profile-summary-role");
-  if (summaryRole) {
-    if (pending && !role && !leadershipLabel) {
-      summaryRole.setAttribute("aria-busy", "true");
-      if (typeof ComponentSkeletonLoader !== "undefined") {
-        ComponentSkeletonLoader.fill("role-badge", summaryRole);
-      }
-    } else if (role === "admin" && applicationRoleLabel) {
-      summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = applicationRoleLabel;
-    } else if (leadershipLabel || applicationRoleLabel) {
-      summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = leadershipLabel || applicationRoleLabel;
-    } else if (pending) {
-      summaryRole.setAttribute("aria-busy", "true");
-      if (typeof ComponentSkeletonLoader !== "undefined") {
-        ComponentSkeletonLoader.fill("role-badge", summaryRole);
-      }
-    } else {
-      summaryRole.removeAttribute("aria-busy");
-      summaryRole.textContent = "";
-    }
-  }
-
-  const summaryLeadership = document.getElementById("profile-summary-leadership");
-  if (summaryLeadership) {
-    const showLeadership = role === "admin"
-      && Boolean(leadershipLabel)
-      && leadershipLabel !== applicationRoleLabel;
-    summaryLeadership.textContent = showLeadership ? `服事：${leadershipLabel}` : "";
-    summaryLeadership.classList.toggle("hidden", !showLeadership);
   }
 
   const dropdownName = document.getElementById("dropdown-user-name");
@@ -645,6 +621,42 @@ let hnActiveTab = "highlights";
 let hnSortMode = "recent";
 let hnNotesCache = null; // db.getAllVerseNotesForUser() 的結果快取，切換排序/籤時不用重打 API
 
+function renderPersonalInfoSubpage() {
+  const user = state.currentUser || {};
+  const unset = "未設定";
+
+  const { roleLabel, leadershipLabel, showLeadership } = computeRoleDisplay(user);
+  const roleEl = document.getElementById("personal-info-role");
+  if (roleEl) roleEl.textContent = roleLabel || unset;
+
+  const leadershipRow = document.getElementById("personal-info-leadership-row");
+  const leadershipEl = document.getElementById("personal-info-leadership");
+  if (leadershipRow) leadershipRow.classList.toggle("hidden", !showLeadership);
+  if (leadershipEl) leadershipEl.textContent = leadershipLabel || unset;
+
+  const setField = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value || "").trim() || unset;
+  };
+  setField("personal-info-great-region", user.great_region);
+  setField("personal-info-pastoral-zone", user.pastoral_zone);
+  setField("personal-info-small-group", user.small_group);
+  setField("personal-info-email", user.email);
+  setField("personal-info-phone", user.phone);
+
+  const memberHubBtn = document.getElementById("btn-personal-info-member-hub");
+  if (memberHubBtn) {
+    memberHubBtn.href = getMemberHubUrls().onboarding;
+    if (!memberHubBtn._hubOnboardingBound) {
+      memberHubBtn._hubOnboardingBound = true;
+      memberHubBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        openMemberHubOnboarding();
+      });
+    }
+  }
+}
+
 function openProfileDetail(key) {
   const page = document.getElementById(`profile-tab-content-${key}`);
   if (!page) return;
@@ -667,6 +679,7 @@ function openProfileDetail(key) {
     void renderHighlightsNotesView();
   }
   if (key === "feature-settings") void renderFeatureSettingsSubpage();
+  if (key === "personal-info") renderPersonalInfoSubpage();
 }
 
 function closeProfileDetail() {

@@ -117,8 +117,12 @@ describe("satellite_admin authority", () => {
   });
 
   it("shows application admin authority separately from church leadership identity", () => {
-    expect(html).toContain('id="profile-summary-leadership"');
+    // Role vs. leadership now render as two separate rows on the "個人資訊"
+    // subpage (see renderPersonalInfoSubpage in js/modules/profile.js)
+    // instead of a single badge + conditional second line on the profile
+    // summary card.
+    expect(html).toContain('id="personal-info-leadership-row"');
     expect(profile).toContain('role === "admin"');
-    expect(profile).toContain("服事：");
+    expect(profile).toContain("showLeadership");
   });
 });

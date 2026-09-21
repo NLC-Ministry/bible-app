@@ -19,6 +19,19 @@ function extractFunction(source, signature) {
   throw new Error(`Could not extract ${signature}`);
 }
 
+function extractConst(source, signature) {
+  const start = source.indexOf(signature);
+  if (start === -1) throw new Error(`Could not find ${signature}`);
+  const braceStart = source.indexOf("{", start);
+  let depth = 0;
+  for (let index = braceStart; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1) + ";";
+  }
+  throw new Error(`Could not extract ${signature}`);
+}
+
 function loadApplyNlcProfile(state) {
   const method = extractFunction(dbSource, "applyNlcProfile(profile, lockedFields = null) {")
     .replace("applyNlcProfile(profile, lockedFields = null)", "function applyNlcProfile(profile, lockedFields = null)");
@@ -29,41 +42,27 @@ function loadApplyNlcProfile(state) {
   );
 }
 
-function loadProfileIdentityChrome({ state, memberHubManaged }) {
+// paintProfileIdentityChrome() no longer touches role/leadership text directly
+// (that moved to the "個人資訊" subpage, see renderPersonalInfoSubpage) — the
+// role-vs-leadership precedence logic itself now lives in computeRoleDisplay(),
+// so these tests exercise that function directly instead of the DOM side effect.
+function computeRole({ user, memberHubManaged }) {
   const getLeadershipDisplayLabel = new Function(
     "isMemberHubManagedProfile",
     `return (${extractFunction(profileSource, "function getLeadershipDisplayLabel(user) {")});`
   )(() => memberHubManaged);
-  return new Function(
-    "state",
-    "getLeadershipDisplayLabel",
-    "renderMemberHubOrgPlacement",
+  const roleDisplayNames = extractConst(profileSource, "const ROLE_DISPLAY_NAMES = {");
+  const computeRoleDisplay = new Function(
     "getUserRoleCode",
     "getRoleDefinition",
-    `return (${extractFunction(profileSource, "function paintProfileIdentityChrome() {")});`
+    "getLeadershipDisplayLabel",
+    `${roleDisplayNames}\nreturn (${extractFunction(profileSource, "function computeRoleDisplay(user) {")});`
   )(
-    state,
-    getLeadershipDisplayLabel,
-    () => {},
-    user => user?.role_definition?.code || "member",
-    role => state.currentUser?.role_definition?.code === role ? state.currentUser.role_definition : null
+    u => u?.role_definition?.code || "member",
+    role => user?.role_definition?.code === role ? user.role_definition : null,
+    getLeadershipDisplayLabel
   );
-}
-
-function renderRole({ user, memberHubManaged }) {
-  const roleElement = {
-    textContent: "",
-    setAttribute() {},
-    removeAttribute() {}
-  };
-  const previousDocument = globalThis.document;
-  globalThis.document = { getElementById: id => id === "profile-summary-role" ? roleElement : null };
-  try {
-    loadProfileIdentityChrome({ state: { currentUser: user, profileIdentityLoading: false }, memberHubManaged })();
-  } finally {
-    globalThis.document = previousDocument;
-  }
-  return roleElement.textContent;
+  return computeRoleDisplay(user);
 }
 
 describe("member context frontend sync metadata", () => {
@@ -136,23 +135,23 @@ describe("member context frontend sync metadata", () => {
   });
 
   it("renders the authoritative Hub display label first", () => {
-    expect(renderRole({
+    expect(computeRole({
       user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "牧區同工" },
       memberHubManaged: true
-    })).toBe("牧區同工");
+    }).roleLabel).toBe("牧區同工");
   });
 
   it("renders 一般組員 for a Hub-managed user without a leadership label", () => {
-    expect(renderRole({
+    expect(computeRole({
       user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "" },
       memberHubManaged: true
-    })).toBe("一般組員");
+    }).roleLabel).toBe("一般組員");
   });
 
   it("renders the linked role definition label for a non-Hub session", () => {
-    expect(renderRole({
+    expect(computeRole({
       user: { role_definition: { code: "group_leader", label: "小組長" }, member_context_leadership_display_label: "" },
       memberHubManaged: false
-    })).toBe("小組長");
+    }).roleLabel).toBe("小組長");
   });
 });

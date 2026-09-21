@@ -1476,10 +1476,6 @@
                         style="display:block;height:10px;width:6.5rem;border-radius:4px;"></span>
                     </span>
                   </p>
-                  <div style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.25rem;">
-                    <span id="profile-summary-role" class="role-badge" aria-busy="true"></span>
-                    <span id="profile-summary-leadership" class="role-badge hidden"></span>
-                  </div>
                 </div>
               </div>
 
@@ -1534,6 +1530,20 @@
                 <div class="app-settings-group" id="profile-content-nav-group">
                   <div class="profile-settings-section-label">我的內容</div>
                   <div class="app-settings-list">
+                    <button type="button" class="app-settings-item w-full text-left" data-profile-open="personal-info">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="user" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">個人資訊</span>
+                          <span class="app-settings-item__subtitle">角色、所屬機構、Email、手機</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+                      </span>
+                    </button>
                     <button type="button" class="app-settings-item w-full text-left" data-profile-open="highlights-notes">
                       <div class="app-settings-item__leading">
                         <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
@@ -2406,6 +2416,94 @@
        position:fixed overlays — nesting them there pins the overlay to the
        top of the (tall, scrolled) profile section instead of the viewport,
        so it renders off-screen and looks blank. See openProfileDetail(). -->
+  <div id="profile-tab-content-personal-info" class="profile-subpage hidden" aria-hidden="true">
+    <header class="profile-subpage__header">
+      <button type="button" class="profile-subpage__back" data-profile-close aria-label="返回">
+        <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+        <span>返回</span>
+      </button>
+      <span class="profile-subpage__title">個人資訊</span>
+      <span class="profile-subpage__header-spacer"></span>
+    </header>
+    <div class="profile-subpage__body">
+      <div class="app-settings-group">
+        <div class="profile-settings-section-label">角色與服事</div>
+        <div class="app-settings-list">
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">角色</span>
+              <span class="app-settings-item__subtitle" id="personal-info-role">-</span>
+            </div>
+          </div>
+          <div class="app-settings-item hidden" id="personal-info-leadership-row">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">服事</span>
+              <span class="app-settings-item__subtitle" id="personal-info-leadership">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-settings-group">
+        <div class="profile-settings-section-label">所屬機構</div>
+        <div class="app-settings-list">
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">大區</span>
+              <span class="app-settings-item__subtitle" id="personal-info-great-region">-</span>
+            </div>
+          </div>
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">牧區</span>
+              <span class="app-settings-item__subtitle" id="personal-info-pastoral-zone">-</span>
+            </div>
+          </div>
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">小組</span>
+              <span class="app-settings-item__subtitle" id="personal-info-small-group">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-settings-group">
+        <div class="profile-settings-section-label">聯絡資訊</div>
+        <div class="app-settings-list">
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">Email</span>
+              <span class="app-settings-item__subtitle" id="personal-info-email">-</span>
+            </div>
+          </div>
+          <div class="app-settings-item">
+            <div class="app-settings-item__meta">
+              <span class="app-settings-item__title">手機號碼</span>
+              <span class="app-settings-item__subtitle" id="personal-info-phone">-</span>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-secondary" style="margin: 0.5rem 0.25rem 0;">以上資料由新生命會員中心／登入帳號統一管理，如需更新請前往會員中心。</p>
+      </div>
+
+      <a class="app-settings-item w-full text-left" id="btn-personal-info-member-hub" target="_blank" rel="noopener noreferrer" style="border-radius: var(--radius-md); border: 1px solid var(--border-card); background: var(--bg-card); box-shadow: var(--shadow-sm); margin-top: 0.75rem;">
+        <div class="app-settings-item__leading">
+          <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
+            <span class="nlc-icon nlc-icon--sm" data-icon="signpost" aria-hidden="true"></span>
+          </span>
+          <div class="app-settings-item__meta">
+            <span class="app-settings-item__title">前往會員中心修改</span>
+            <span class="app-settings-item__subtitle">更新姓名、大區、牧區或所屬小組</span>
+          </div>
+        </div>
+        <span class="app-settings-item__chevron">
+          <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+        </span>
+      </a>
+    </div>
+  </div>
+
   <div id="profile-tab-content-exams" class="profile-subpage hidden" aria-hidden="true">
     <header class="profile-subpage__header">
       <button type="button" class="profile-subpage__back" data-profile-close aria-label="返回">
@@ -2767,7 +2865,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260918_optimistic_boot_shell"></script>
+  <script type="module" src="js/app.js?v=20260921_phone_number_scope_sync"></script>
 </body>
 
 </html>
