@@ -10,7 +10,6 @@ let nlcLogtoIssuer = process.env.NLC_LOGTO_ISSUER || "https://sso.newlife.org.tw
 let nlcMemberHubUrl = process.env.NLC_MEMBER_HUB_URL || "https://member.newlife.org.tw";
 let nlcScopes = process.env.NLC_SCOPES || "openid profile email phone offline_access member:read.basic";
 let nlcPlatformResource = process.env.NLC_PLATFORM_RESOURCE || "https://platform.newlife.org.tw";
-let nlcPlatformApiUrl = process.env.NLC_PLATFORM_API_URL || "https://platform.newlife.org.tw/platform/v1";
 const appVersion = process.env.APP_VERSION || "0.1.1";
 const onboardingVersion = process.env.ONBOARDING_VERSION || appVersion;
 
@@ -31,7 +30,6 @@ if (fs.existsSync(envPath)) {
       else if (key === 'NLC_MEMBER_HUB_URL') nlcMemberHubUrl = val;
       else if (key === 'NLC_SCOPES') nlcScopes = val;
       else if (key === 'NLC_PLATFORM_RESOURCE') nlcPlatformResource = val;
-      else if (key === 'NLC_PLATFORM_API_URL') nlcPlatformApiUrl = val;
     }
   }
 }
@@ -55,8 +53,7 @@ const NLC_CONFIG = {
   issuer: "${nlcLogtoIssuer}",
   memberHubUrl: "${nlcMemberHubUrl}",
   scopes: "${nlcScopes}",
-  platformResource: "${nlcPlatformResource}",
-  platformApiUrl: "${nlcPlatformApiUrl}"
+  platformResource: "${nlcPlatformResource}"
 };
 
 window.APP_CONFIG = APP_CONFIG;
@@ -75,7 +72,6 @@ console.log(`NLC Logto Issuer: ${nlcLogtoIssuer}`);
 console.log(`NLC Member Hub URL: ${nlcMemberHubUrl}`);
 console.log(`NLC Scopes: ${nlcScopes}`);
 console.log(`NLC Platform Resource: ${nlcPlatformResource}`);
-console.log(`NLC Platform API URL: ${nlcPlatformApiUrl}`);
 console.log(`App Version: ${appVersion}`);
 console.log(`Onboarding Version: ${onboardingVersion}`);
 console.log('---');
