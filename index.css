@@ -15863,6 +15863,20 @@ textarea::placeholder {
 .exam-submit-bar { margin-top: 2rem; padding: 1.25rem 0 0.5rem; border-top: 1px solid var(--border-card); }
 
 .exam-result__banner { border: 1px solid var(--color-brand); background: color-mix(in srgb, var(--color-brand) 8%, transparent); border-radius: 12px; padding: 0.85rem 1rem; font-size: 0.9375rem; line-height: 1.7; color: var(--text-primary); }
+
+/* PR 值：一個個獨立的大數字卡片，取代整段擠在一起的說明文字 */
+.exam-result__pr { margin: 0.85rem 0; }
+.exam-result__pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
+.exam-result__pr-tile { border: 1px solid var(--border-card); border-radius: 12px; padding: 0.85rem 0.9rem; background: var(--bg-secondary); display: flex; flex-direction: column; gap: 0.2rem; }
+.exam-result__pr-tile--church { border-color: var(--color-brand); background: color-mix(in srgb, var(--color-brand) 8%, transparent); }
+.exam-result__pr-tile-label { font-size: 0.875rem; color: var(--text-secondary); }
+.exam-result__pr-tile-value { font-size: 1.75rem; font-weight: var(--type-weight-strong); color: var(--text-primary); line-height: 1.2; }
+.exam-result__pr-tile-value--muted { font-size: 1.25rem; color: var(--text-muted); }
+.exam-result__pr-tile-caption { font-size: 0.875rem; color: var(--text-secondary); }
+.exam-result__pr-info { margin-top: 0.6rem; }
+.exam-result__pr-info summary { cursor: pointer; font-size: 0.875rem; color: var(--text-secondary); }
+.exam-result__pr-info p { margin: 0.5rem 0 0; font-size: 0.875rem; line-height: 1.6; color: var(--text-secondary); }
+
 .exam-result__list { margin-top: 0.6rem; display: flex; flex-direction: column; }
 /* 未評分／一般題：不再各自一個框，改用淡分隔線，少一層視覺干擾 */
 .exam-result__row { font-size: 0.9375rem; padding: 0.75rem 0.15rem; color: var(--text-primary); line-height: 1.7; border-bottom: 1px solid var(--border-card); }

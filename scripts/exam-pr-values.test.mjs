@@ -87,7 +87,10 @@ describe("exam.js — PR 顯示", () => {
   it("會友結果頁：PR 區塊只在 d.prPublished 時顯示，且說明不公布名次", () => {
     expect(ui).toContain("const showPr = d.prPublished === true && !isPractice");
     expect(ui).toContain("本測驗只公布分數與 PR，不公布名次");
-    expect(ui).toContain("團隊 PR ${prNum(t.pr)}");
+    // PR 值現在是一張張大數字卡片（prTileHtml），不是擠在一句話裡的文字。
+    expect(ui).toContain("const prTileHtml = (label, value, caption)");
+    expect(ui).toContain('prTileHtml("全教會", d.prChurch,');
+    expect(ui).toContain("`${t.division}人隊・${esc(t.name || \"\")}`");
     expect(ui).toContain("${prBlockHtml}");
   });
 
