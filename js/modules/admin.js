@@ -2585,6 +2585,7 @@ function renderAdminQuizScheduleStatusHtml(schedule) {
       <p class="admin-daily-quiz-note">${schedule.answerCloseAt
         ? `作答將於 ${adminQuizEscape(adminQuizFormatTaiwanDateTime(schedule.answerCloseAt))} 截止。`
         : '沒有設定作答截止時間。'}</p>
+      <p class="admin-daily-quiz-note">${schedule.postAnnouncement ? '發佈時會同時發佈到首頁公告。' : '不會發佈到首頁公告。'}</p>
       <button type="button" class="secondary-btn" data-quiz-schedule-cancel>取消排程</button>
     </div>
   </section>`;
@@ -2615,6 +2616,7 @@ function renderAdminQuizPublishPanel(context) {
       <p class="admin-daily-quiz-note hidden" data-quiz-custom-hint>尚未在「自訂題目」分頁確認題目，請先切到那個分頁完成並確認。</p>
     </div>
     <div class="admin-quiz-publish-step">
+      <p class="admin-quiz-publish-step-label">3. 發佈選項</p>
       <label class="admin-quiz-schedule-checkbox">
         <input type="checkbox" data-quiz-schedule-toggle disabled>
         使用排程發佈（先選好上面已就緒的版本才能勾選）
@@ -2623,6 +2625,11 @@ function renderAdminQuizPublishPanel(context) {
         <label>自動發佈時間<input type="time" class="form-control" data-quiz-schedule-publish-time></label>
         <label>作答截止時間（選填）<input type="time" class="form-control" data-quiz-schedule-close-time></label>
       </div>
+      <label class="admin-quiz-schedule-checkbox">
+        <input type="checkbox" data-quiz-announcement-toggle disabled>
+        同時發佈到首頁公告
+      </label>
+      <p class="admin-daily-quiz-note hidden" data-quiz-announcement-hint>只有「全部小組」範圍才能同時發佈公告，避免沒收到測驗的會友誤會。</p>
     </div>
     <div class="admin-quiz-publish-step">
       <button type="button" class="primary-btn" id="admin-quiz-publish-btn" disabled>發佈</button>
@@ -2642,9 +2649,19 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
   const customHint = root.querySelector('[data-quiz-custom-hint]');
   const scheduleToggle = root.querySelector('[data-quiz-schedule-toggle]');
   const scheduleFields = root.querySelector('[data-quiz-schedule-fields]');
+  const announcementToggle = root.querySelector('[data-quiz-announcement-toggle]');
+  const announcementHint = root.querySelector('[data-quiz-announcement-hint]');
   const customConfirmed = root.dataset.quizCustomConfirmed === 'true';
   if (customOption) customOption.disabled = !customConfirmed;
   if (customHint) customHint.classList.toggle('hidden', customConfirmed);
+  // 首頁公告目前沒有範圍概念，is_published 就是全教會看得到，所以「同時發佈
+  // 到首頁公告」只有發佈範圍＝全部小組時才能勾，避免沒收到測驗的會友誤會。
+  const canAnnounce = scope.scopeType === 'all';
+  if (announcementToggle) {
+    announcementToggle.disabled = !canAnnounce;
+    if (!canAnnounce && announcementToggle.checked) announcementToggle.checked = false;
+  }
+  if (announcementHint) announcementHint.classList.toggle('hidden', canAnnounce);
   if (!publishBtn) return;
   let ready = false;
   if (selectedVersion === 'A' || selectedVersion === 'B') {
@@ -2689,6 +2706,7 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
   const versionButtons = Array.from(panel.querySelectorAll('[data-quiz-version-choice]'));
   const scheduleToggle = panel.querySelector('[data-quiz-schedule-toggle]');
   const scheduleFields = panel.querySelector('[data-quiz-schedule-fields]');
+  const announcementToggle = panel.querySelector('[data-quiz-announcement-toggle]');
   const refresh = () => updateAdminQuizPublishState(root, context, selectedVersion);
   root._refreshQuizPublishState = refresh;
 
@@ -2709,6 +2727,8 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     scheduleFields?.classList.toggle('hidden', !scheduleToggle.checked);
     refresh();
   });
+
+  announcementToggle?.addEventListener('change', refresh);
 
   panel.querySelector('#admin-quiz-publish-btn')?.addEventListener('click', async event => {
     const button = event.currentTarget;
@@ -2732,7 +2752,9 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     }
 
     const useSchedule = Boolean(scheduleToggle?.checked);
+    const postAnnouncement = Boolean(announcementToggle && !announcementToggle.disabled && announcementToggle.checked);
     const versionLabel = selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`;
+    const announcementSuffix = postAnnouncement ? '，並同時發佈到首頁公告' : '';
 
     if (useSchedule) {
       const publishTime = panel.querySelector('[data-quiz-schedule-publish-time]')?.value || '';
@@ -2747,11 +2769,11 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
         return;
       }
       const answerCloseAt = closeTime ? adminQuizTaiwanTimeToISOString(quizDate, closeTime) : null;
-      if (!window.confirm(`確定排程於 ${adminQuizFormatTaiwanDateTime(publishAt)} 自動發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
+      if (!window.confirm(`確定排程於 ${adminQuizFormatTaiwanDateTime(publishAt)} 自動發佈${versionLabel}給「${scopeLabel}」${announcementSuffix}嗎？`)) return;
       button.disabled = true;
       const originalLabel = button.textContent;
       button.textContent = '設定中…';
-      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt);
+      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt, postAnnouncement);
       if (typeof showToast === 'function') {
         showToast(result.success ? '已設定排程' : result.message || '設定排程失敗');
       }
@@ -2764,11 +2786,11 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
       return;
     }
 
-    if (!window.confirm(`確定發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
+    if (!window.confirm(`確定發佈${versionLabel}給「${scopeLabel}」${announcementSuffix}嗎？`)) return;
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '發佈中…';
-    const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection);
+    const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection, postAnnouncement);
     if (typeof showToast === 'function') {
       showToast(result.success ? `已發佈給 ${result.data.publishedCount} 個小組` : result.message || '發佈失敗');
     }

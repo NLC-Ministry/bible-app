@@ -3514,7 +3514,8 @@ const db = {
       quiz_not_found_for_date: "找不到這個日期的小測驗。",
       quiz_schedule_publish_time_required: "排程時間必須晚於現在。",
       quiz_schedule_not_found: "找不到這筆排程，可能已經發佈或取消。",
-      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。"
+      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。",
+      quiz_announcement_requires_church_wide: "同時發佈公告只能用在「全部小組」範圍。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : "目前無法載入小測驗資料，請稍後再試。";
@@ -3583,7 +3584,9 @@ const db = {
     });
   },
 
-  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}) {
+  // postAnnouncement（migration 0190）只有 scope.scopeType === "all" 才有意義
+  // ——SQL 端會擋非全部小組還硬傳 true 的情況（quiz_announcement_requires_church_wide）。
+  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("publish_daily_quiz", {
@@ -3594,15 +3597,16 @@ const db = {
       p_variant: selection.variant || null,
       p_custom_questions: Array.isArray(selection.customQuestions) && selection.customQuestions.length
         ? selection.customQuestions
-        : null
+        : null,
+      p_post_announcement: Boolean(postAnnouncement)
     });
   },
 
   // 排程發佈：跟 publishDailyQuiz 同一組範圍/版本參數，多帶 publishAt（必填，
   // 未來時間）和 answerCloseAt（選填的作答截止時間）。就緒檢查（版本要已審核
   // /自訂題目要驗證過）在 SQL 端的 schedule_daily_quiz_publish 做，跟
-  // publish_daily_quiz 同一套規則。
-  async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null) {
+  // publish_daily_quiz 同一套規則；postAnnouncement 同上，只有全部小組才有效。
+  async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("schedule_daily_quiz_publish", {
@@ -3615,7 +3619,8 @@ const db = {
         ? selection.customQuestions
         : null,
       p_publish_at: publishAt,
-      p_answer_close_at: answerCloseAt || null
+      p_answer_close_at: answerCloseAt || null,
+      p_post_announcement: Boolean(postAnnouncement)
     });
   },
 
