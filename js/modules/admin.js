@@ -2012,13 +2012,16 @@ function bindAdminQuizCarousels(root) {
   });
 }
 
+// AI 生成完成即視為審核通過（migration 0196），這裡不再有「審核」動作——
+// 只是讓管理員看題目、需要的話直接編輯或重新生成，發佈前都還能改
+// （update_daily_quiz_questions 只擋「已發佈」，不擋 review_status）。
 function renderAdminQuizReviewCards(context) {
   if (!context.canReview) return '';
   const quizzes = Array.isArray(context.reviewQuizzes) ? context.reviewQuizzes : [];
   const variants = ['A', 'B'];
   return `<section class="glass-card admin-daily-quiz-block">
     <div class="admin-daily-quiz-heading">
-      <div><p class="admin-registration-statistics__eyebrow">牧者審核</p><h2 id="admin-quizzes-title">今日共用題庫</h2></div>
+      <div><p class="admin-registration-statistics__eyebrow">AI 題庫</p><h2 id="admin-quizzes-title">今日共用題庫</h2></div>
       <span class="admin-daily-quiz-request-count">AI 生成請求共 ${Number(context.automaticRequestCount || 0)} 次</span>
     </div>
     <div class="admin-daily-quiz-versions">
@@ -2032,43 +2035,37 @@ function renderAdminQuizReviewCards(context) {
           </div>
         </article>`;
         const ready = quiz.generationStatus === 'ready';
-        const approved = quiz.reviewStatus === 'approved';
         return `<article class="admin-daily-quiz-version" data-quiz-card="${adminQuizEscape(quiz.id)}" data-quiz-version="${variant}">
           <div class="admin-daily-quiz-version-title">
             <strong>版本 ${variant}</strong>
-            <span class="role-badge ${approved ? 'approved' : ''}">${approved ? '已審核' : ready ? '待審核' : quiz.generationStatus === 'failed' ? '生成失敗' : '生成中'}</span>
+            <span class="role-badge ${ready ? 'approved' : ''}">${ready ? '已生成' : quiz.generationStatus === 'failed' ? '生成失敗' : '生成中'}</span>
           </div>
           ${quiz.generationError ? `<p class="admin-daily-quiz-error">${adminQuizEscape(quiz.generationError)}</p>` : ''}
           ${ready ? `<div class="admin-daily-quiz-version-actions">
-            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">${approved ? '檢視題目' : '編輯題目'}</button>
-            ${approved
-              ? '<button type="button" class="secondary-btn" disabled>已審核鎖定</button>'
-              : `<button type="button" class="secondary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">更換題目</button>
-                 <button type="button" class="primary-btn" data-quiz-action="review" data-quiz-id="${adminQuizEscape(quiz.id)}" data-approved="true">審核通過</button>`}
+            <button type="button" class="secondary-btn" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}">編輯題目</button>
+            <button type="button" class="secondary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">更換題目</button>
           </div>
           <div class="admin-daily-quiz-editor-wrap hidden" data-editor-for="${adminQuizEscape(quiz.id)}" role="dialog" aria-modal="true" aria-labelledby="admin-quiz-editor-title-${variant}">
             <div class="admin-daily-quiz-editor-shell">
               <header class="admin-daily-quiz-editor-header">
-                <div><p class="admin-registration-statistics__eyebrow">${approved ? '審核後檢視' : '題目編輯'}</p><h2 id="admin-quiz-editor-title-${variant}">版本 ${variant}・五題選擇題</h2></div>
+                <div><p class="admin-registration-statistics__eyebrow">題目編輯</p><h2 id="admin-quiz-editor-title-${variant}">版本 ${variant}・五題選擇題</h2></div>
                 <button type="button" class="icon-button icon-button--subtle" data-quiz-action="toggle-edit" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-editor-close aria-label="關閉版本 ${variant} 編輯畫面"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button>
               </header>
-              <div class="admin-daily-quiz-editor-scroll">${renderAdminQuizQuestionEditor(quiz, approved)}</div>
+              <div class="admin-daily-quiz-editor-scroll">${renderAdminQuizQuestionEditor(quiz, false)}</div>
             </div>
           </div>`
           : quiz.generationStatus === 'failed'
             ? `<div class="admin-daily-quiz-version-actions">
                 <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
                 <button type="button" class="primary-btn" data-quiz-action="regenerate" data-quiz-id="${adminQuizEscape(quiz.id)}" data-quiz-variant="${variant}">重新生成題目</button>
-                <button type="button" class="primary-btn" disabled>生成完成後審核</button>
               </div>`
             : `<div class="admin-daily-quiz-version-actions">
                 <button type="button" class="secondary-btn" disabled>生成後才能編輯</button>
-                <button type="button" class="primary-btn" disabled>生成完成後審核</button>
               </div>`}
         </article>`;
       }).join('')}
     </div>
-    <p class="admin-daily-quiz-note">生成失敗可手動重試；生成成功但尚未審核時，確認後可以更換。審核通過後題目永久鎖定。</p>
+    <p class="admin-daily-quiz-note">生成失敗可手動重試；生成完成後可以隨時編輯或更換題目，直到發佈為止。</p>
   </section>`;
 }
 
@@ -2598,7 +2595,6 @@ function renderAdminQuizScheduleStatusHtml(schedule) {
       <p class="admin-daily-quiz-note">${schedule.answerCloseAt
         ? `作答將於 ${adminQuizEscape(adminQuizFormatTaiwanDateTime(schedule.answerCloseAt))} 截止。`
         : '沒有設定作答截止時間。'}</p>
-      <p class="admin-daily-quiz-note">${schedule.postAnnouncement ? '發佈時會同時發佈到首頁公告。' : '不會發佈到首頁公告。'}</p>
       <button type="button" class="secondary-btn" data-quiz-schedule-cancel>取消排程</button>
     </div>
   </section>`;
@@ -2638,11 +2634,6 @@ function renderAdminQuizPublishPanel(context) {
         <label>自動發佈時間<input type="time" class="form-control" data-quiz-schedule-publish-time></label>
         <label>作答截止時間（選填）<input type="time" class="form-control" data-quiz-schedule-close-time></label>
       </div>
-      <label class="admin-quiz-schedule-checkbox">
-        <input type="checkbox" data-quiz-announcement-toggle>
-        同時發佈到首頁公告
-      </label>
-      <p class="admin-daily-quiz-note" data-quiz-announcement-hint>公告只有這次發布範圍內的人看得到，其他人不會看到、也不會誤會自己有這份測驗。</p>
     </div>
     <div class="admin-quiz-publish-step">
       <button type="button" class="primary-btn" id="admin-quiz-publish-btn" disabled>發佈</button>
@@ -2662,8 +2653,6 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
   const customHint = root.querySelector('[data-quiz-custom-hint]');
   const scheduleToggle = root.querySelector('[data-quiz-schedule-toggle]');
   const scheduleFields = root.querySelector('[data-quiz-schedule-fields]');
-  const announcementToggle = root.querySelector('[data-quiz-announcement-toggle]');
-  const announcementHint = root.querySelector('[data-quiz-announcement-hint]');
   const customConfirmed = root.dataset.quizCustomConfirmed === 'true';
   if (customOption) customOption.disabled = !customConfirmed;
   if (customHint) customHint.classList.toggle('hidden', customConfirmed);
@@ -2673,15 +2662,6 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
     const select = root.querySelector(`#admin-quiz-publish-${part}-select`);
     if (select) select.disabled = isAdminOnlyScope;
   });
-  // 公告現在沿用測驗發布當下選的範圍（migration 0195），不再限定「全部小組」
-  // 才能勾——不管發給誰，公告只有收到測驗的那群人看得到，admin 一律看得到全部。
-  if (announcementToggle) announcementToggle.disabled = false;
-  if (announcementHint) {
-    announcementHint.textContent = isAdminOnlyScope
-      ? '公告只有系統管理員看得到。'
-      : '公告只有這次發布範圍內的人看得到，其他人不會看到、也不會誤會自己有這份測驗。';
-    announcementHint.classList.remove('hidden');
-  }
   if (!publishBtn) return;
   let ready = false;
   if (selectedVersion === 'A' || selectedVersion === 'B') {
@@ -2726,7 +2706,6 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
   const versionButtons = Array.from(panel.querySelectorAll('[data-quiz-version-choice]'));
   const scheduleToggle = panel.querySelector('[data-quiz-schedule-toggle]');
   const scheduleFields = panel.querySelector('[data-quiz-schedule-fields]');
-  const announcementToggle = panel.querySelector('[data-quiz-announcement-toggle]');
   const refresh = () => updateAdminQuizPublishState(root, context, selectedVersion);
   root._refreshQuizPublishState = refresh;
 
@@ -2748,8 +2727,6 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     scheduleFields?.classList.toggle('hidden', !scheduleToggle.checked);
     refresh();
   });
-
-  announcementToggle?.addEventListener('change', refresh);
 
   panel.querySelector('#admin-quiz-publish-btn')?.addEventListener('click', async event => {
     const button = event.currentTarget;
@@ -2775,9 +2752,7 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     }
 
     const useSchedule = Boolean(scheduleToggle?.checked);
-    const postAnnouncement = Boolean(announcementToggle && !announcementToggle.disabled && announcementToggle.checked);
     const versionLabel = selectedVersion === 'C' ? '自訂題目' : `版本 ${selectedVersion}`;
-    const announcementSuffix = postAnnouncement ? '，並同時發佈到首頁公告' : '';
 
     if (useSchedule) {
       const publishTime = panel.querySelector('[data-quiz-schedule-publish-time]')?.value || '';
@@ -2792,11 +2767,11 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
         return;
       }
       const answerCloseAt = closeTime ? adminQuizTaiwanTimeToISOString(quizDate, closeTime) : null;
-      if (!window.confirm(`確定排程於 ${adminQuizFormatTaiwanDateTime(publishAt)} 自動發佈${versionLabel}給「${scopeLabel}」${announcementSuffix}嗎？`)) return;
+      if (!window.confirm(`確定排程於 ${adminQuizFormatTaiwanDateTime(publishAt)} 自動發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
       button.disabled = true;
       const originalLabel = button.textContent;
       button.textContent = '設定中…';
-      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt, postAnnouncement);
+      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt);
       if (typeof showToast === 'function') {
         showToast(result.success ? '已設定排程' : result.message || '設定排程失敗');
       }
@@ -2809,11 +2784,11 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
       return;
     }
 
-    if (!window.confirm(`確定發佈${versionLabel}給「${scopeLabel}」${announcementSuffix}嗎？`)) return;
+    if (!window.confirm(`確定發佈${versionLabel}給「${scopeLabel}」嗎？`)) return;
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '發佈中…';
-    const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection, postAnnouncement);
+    const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection);
     if (typeof showToast === 'function') {
       showToast(result.success ? `已發佈給 ${result.data.publishedCount} 個小組` : result.message || '發佈失敗');
     }
@@ -2918,7 +2893,7 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         const previousQuiz = (context.reviewQuizzes || []).find(item => item.variant === variant) || null;
         const replacing = previousQuiz?.generationStatus === 'ready';
         const prompt = replacing
-          ? `版本 ${variant} 已生成。更換後會清除目前題目並重新生成，且仍需重新審核。確定更換嗎？`
+          ? `版本 ${variant} 已生成。更換後會清除目前題目並重新生成。確定更換嗎？`
           : `確定要${previousQuiz ? '重新' : ''}生成版本 ${variant} 的題目嗎？`;
         if (!window.confirm(prompt)) return;
         button.disabled = true;
@@ -2935,13 +2910,6 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         void waitForAdminQuizRegeneration(quizDate, variant, previousQuiz);
         return;
       }
-      if (action === 'review') {
-        button.disabled = true;
-        const result = await db.reviewDailyQuiz(quizId, button.dataset.approved === 'true');
-        if (!result.success && typeof showToast === 'function') showToast(result.message || '審核失敗');
-        await renderAdminDailyQuizManagement(true, quizDate);
-        return;
-      }
       if (action === 'save') {
         const quiz = (context.reviewQuizzes || []).find(item => String(item.id) === String(quizId));
         const questions = collectAdminQuizQuestions(root, quizId, quiz?.questions || []);
@@ -2949,7 +2917,7 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         const originalLabel = button.textContent;
         button.textContent = '儲存中…';
         const result = await db.updateDailyQuizQuestions(quizId, questions);
-        if (typeof showToast === 'function') showToast(result.success ? '題目已更新，請重新審核' : result.message || '儲存失敗');
+        if (typeof showToast === 'function') showToast(result.success ? '題目已更新' : result.message || '儲存失敗');
         if (result.success) {
           const editor = button.closest('[data-editor-for]');
           if (editor) editor.dataset.dirty = 'false';
@@ -2965,20 +2933,6 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
 
 // 後台結果統計：參與率/平均分/平均時間趨勢 + 搜尋/匯出的逐人作答明細。
 // 跟上面單日審核/發布是各自獨立的日期區間，不共用 quizDate。
-
-function quizStatsFormatSeconds(seconds) {
-  const value = Math.round(Number(seconds));
-  if (!Number.isFinite(value) || seconds === null || seconds === undefined) return '--';
-  const minutes = Math.floor(value / 60);
-  const remainder = value % 60;
-  return minutes > 0 ? `${minutes} 分 ${remainder} 秒` : `${remainder} 秒`;
-}
-
-function quizStatsCorrectRate(score, total) {
-  return Number.isFinite(score) && Number.isFinite(total) && total > 0
-    ? Math.round((score / total) * 100)
-    : null;
-}
 
 function adminQuizStatsDefaultRange() {
   const to = adminQuizDateToday();
@@ -3002,27 +2956,23 @@ function renderAdminQuizStatsSectionHtml() {
   </section>`;
 }
 
+// 統計簡化版（migration 0196）：只留參與率跟完整名單（含還沒作答的人），
+// 不再有平均分數／平均作答時間／每題正確率／PR 公布。
 function renderAdminQuizStatsBodyHtml(stats) {
   const trend = Array.isArray(stats.trend) ? stats.trend : [];
   const roster = Array.isArray(stats.roster) ? stats.roster : [];
   return `
     <div class="admin-quiz-stats-table-wrap">
       <table class="admin-quiz-stats-table">
-        <thead><tr><th>日期</th><th>參與率</th><th>作答／合格人數</th><th>平均分</th><th>平均時間</th><th>PR 公布</th></tr></thead>
+        <thead><tr><th>日期</th><th>參與率</th><th>作答／有資格人數</th></tr></thead>
         <tbody>
           ${trend.length ? trend.map(row => `<tr>
             <td>${adminQuizEscape(row.quizDate)}</td>
             <td>${row.participationRate != null ? `${row.participationRate}%` : '--'}</td>
             <td>${row.submitted}／${row.eligible}</td>
-            <td>${row.avgScore ?? '--'}</td>
-            <td>${quizStatsFormatSeconds(row.avgTimeSeconds)}</td>
-            <td>${row.leaderboardPublished
-              ? '<span class="stat-badge stat-badge--success">已公布</span>'
-              : `<button type="button" class="secondary-btn" data-quiz-stats-reveal="${adminQuizEscape(row.quizDate)}">公布 PR</button>`}</td>
-          </tr>`).join('') : '<tr><td colspan="6" class="admin-daily-quiz-empty">這段期間沒有資料。</td></tr>'}
+          </tr>`).join('') : '<tr><td colspan="3" class="admin-daily-quiz-empty">這段期間沒有資料。</td></tr>'}
         </tbody>
       </table>
-      <p class="admin-daily-quiz-note">公布後，會友只會在「我的測驗」看到自己的分數與 PR 值（全教會/牧區/小組/讀經隊），不會出現任何名次或他人分數；前三名一律由你們另外公告。</p>
     </div>
 
     <div class="admin-quiz-stats-roster-toolbar">
@@ -3033,21 +2983,21 @@ function renderAdminQuizStatsBodyHtml(stats) {
     </div>
     <div class="admin-quiz-stats-table-wrap">
       <table class="admin-quiz-stats-table">
-        <thead><tr><th>姓名</th><th>小組</th><th>牧區</th><th>日期</th><th>分數</th><th>正確率</th><th>作答時間</th></tr></thead>
+        <thead><tr><th>姓名</th><th>小組</th><th>牧區</th><th>日期</th><th>狀態</th><th>分數</th></tr></thead>
         <tbody>
           ${roster.length ? roster.map(row => {
-            const correctRate = quizStatsCorrectRate(row.score, row.total);
             const searchText = `${row.name || ''} ${row.smallGroup || ''} ${row.pastoralZone || ''}`.toLowerCase();
             return `<tr data-quiz-stats-row data-search-text="${adminQuizEscape(searchText)}">
               <td>${adminQuizEscape(row.name || '未設定')}</td>
               <td>${adminQuizEscape(row.smallGroup || '未分組')}</td>
               <td>${adminQuizEscape(row.pastoralZone || '未分牧區')}</td>
               <td>${adminQuizEscape(row.quizDate)}</td>
-              <td>${row.score}／${row.total}</td>
-              <td>${correctRate != null ? `${correctRate}%` : '--'}</td>
-              <td>${quizStatsFormatSeconds(row.timeSeconds)}</td>
+              <td>${row.completed
+                ? '<span class="stat-badge stat-badge--success">已作答</span>'
+                : '<span class="stat-badge stat-badge--neutral">尚未作答</span>'}</td>
+              <td>${row.completed ? `${row.score}／${row.total}` : '--'}</td>
             </tr>`;
-          }).join('') : '<tr><td colspan="7" class="admin-daily-quiz-empty">這段期間沒有作答紀錄。</td></tr>'}
+          }).join('') : '<tr><td colspan="6" class="admin-daily-quiz-empty">這段期間沒有可管理的名單。</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -3055,15 +3005,11 @@ function renderAdminQuizStatsBodyHtml(stats) {
 
 export function convertDailyQuizRosterToCSV(roster, exportedAt = new Date()) {
   if (!roster || roster.length === 0) return '';
-  const headers = ['姓名', '小組', '牧區', '大區', '日期', '分數', '總題數', '正確率', '作答時間（秒）'];
-  const rows = roster.map(row => {
-    const correctRate = quizStatsCorrectRate(row.score, row.total);
-    return [
-      row.name || '未設定', row.smallGroup || '未分組', row.pastoralZone || '未分牧區', row.greatRegion || '未分區',
-      row.quizDate || '', row.score, row.total, correctRate == null ? '' : `${correctRate}%`,
-      row.timeSeconds ?? ''
-    ];
-  });
+  const headers = ['姓名', '小組', '牧區', '大區', '日期', '狀態', '分數', '總題數'];
+  const rows = roster.map(row => [
+    row.name || '未設定', row.smallGroup || '未分組', row.pastoralZone || '未分牧區', row.greatRegion || '未分區',
+    row.quizDate || '', row.completed ? '已作答' : '尚未作答', row.completed ? row.score : '', row.completed ? row.total : ''
+  ]);
   return prependTaiwanExportTime([
     headers.join(','),
     ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
@@ -3134,23 +3080,6 @@ function bindAdminQuizStatsPanel(root, plan) {
         : currentRoster;
       exportDailyQuizRosterCSV(filtered);
     });
-    body.querySelectorAll('[data-quiz-stats-reveal]').forEach(button => {
-      button.addEventListener('click', async () => {
-        const quizDate = button.dataset.quizStatsReveal;
-        if (!window.confirm(`確定要公布 ${quizDate} 的小測驗 PR 值嗎？公布後會友就能在「我的測驗」看到自己的 PR，這個動作無法復原。`)) return;
-        button.disabled = true;
-        button.textContent = '公布中…';
-        const revealResult = await db.revealDailyQuizLeaderboard(plan, quizDate);
-        if (!revealResult.success) {
-          button.disabled = false;
-          button.textContent = '公布 PR';
-          if (typeof showToast === 'function') showToast(revealResult.message || 'PR 公布失敗');
-          return;
-        }
-        if (typeof showToast === 'function') showToast(`已公布 ${quizDate} 的 PR`);
-        void runQuery();
-      });
-    });
   };
 
   queryBtn.addEventListener('click', () => { void runQuery(); });
@@ -3162,7 +3091,7 @@ function bindAdminQuizStatsPanel(root, plan) {
 function renderAdminQuizSubtabNavHtml(active) {
   const items = [
     { key: 'custom', label: '自訂題目' },
-    { key: 'review', label: '題目審核' },
+    { key: 'review', label: 'AI 題庫' },
     { key: 'publish', label: '發佈' },
     { key: 'stats', label: '統計' }
   ];

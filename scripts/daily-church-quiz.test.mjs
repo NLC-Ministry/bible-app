@@ -89,16 +89,19 @@ describe("daily church quiz", () => {
   });
 
   it("connects all quiz RPCs through nlc-data and db.js", () => {
+    // review_daily_quiz was dropped in migration 0196 — AI generation now
+    // auto-approves, there's no manual review RPC left to allowlist.
     for (const rpc of [
-      "get_daily_quiz_dashboard", "request_daily_quiz_regeneration", "review_daily_quiz", "update_daily_quiz_questions",
+      "get_daily_quiz_dashboard", "request_daily_quiz_regeneration", "update_daily_quiz_questions",
       "publish_daily_quiz", "submit_daily_quiz", "get_quiz_notifications",
       "mark_quiz_notifications_read"
     ]) {
       expect(edge).toContain(`"${rpc}"`);
       expect(quizSql).toContain(`public.${rpc}`);
     }
+    expect(edge).not.toContain('"review_daily_quiz"');
     expect(db).toContain("async getDailyQuizDashboard(plan, quizDate)");
-    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false)");
+    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {})");
     expect(db).toContain('p_scope_type: scope.scopeType || "all"');
     expect(db).toContain("p_variant: selection.variant || null");
     expect(db).toContain("async submitDailyQuiz(publicationId, answers)");
@@ -179,7 +182,6 @@ describe("daily church quiz", () => {
     expect(admin).toContain('data-quiz-version-choice="C"');
     expect(admin).toContain('data-quiz-action="regenerate"');
     expect(admin).toContain("更換後會清除目前題目並重新生成");
-    expect(admin).toContain("已審核鎖定");
     expect(admin).toContain("group.members");
     expect(admin).toContain("averageScore");
   });
@@ -283,8 +285,9 @@ describe("daily church quiz", () => {
     expect(admin).toContain('目前有尚未儲存的題目修改');
     expect(admin).toContain("editor.querySelector('[data-quiz-editor-close]')?.click()");
     expect(admin).toContain("button.textContent = '儲存中…'");
-    expect(admin).toContain('data-quiz-action="review"');
-    expect(admin).toContain('審核通過');
+    // 人工審核（data-quiz-action="review" / 審核通過按鈕）在 0196 拿掉了——
+    // AI 生成完直接視為審核通過，見 daily-quiz-remove-manual-review.test.mjs。
+    expect(admin).not.toContain('data-quiz-action="review"');
     expect(css).toContain('.admin-daily-quiz-load-error {');
     expect(css).toContain('.admin-daily-quiz-version--load-failed {');
     expect(html).toMatch(/index\.css\?v=2026\d{4}_[a-z0-9_]+/);
@@ -346,7 +349,9 @@ describe("daily church quiz", () => {
     expect(configToml).toMatch(/\[functions\.daily-quiz-schedule-sweep\]\s*\nverify_jwt = false/);
 
     // 前端：db.js 新方法 + admin.js 發佈分頁的排程 UI + 會友端截止顯示。
-    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false)");
+    // postAnnouncement 參數在 0196 拿掉了（公告功能整個移除，見
+    // daily-quiz-remove-manual-review.test.mjs）。
+    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null)");
     expect(db).toContain("async cancelDailyQuizSchedule(scheduleId)");
     expect(admin).toContain("function renderAdminQuizScheduleStatusHtml(schedule)");
     expect(admin).toContain("data-quiz-schedule-toggle");
@@ -356,32 +361,15 @@ describe("daily church quiz", () => {
     expect(plan).toContain('"作答已截止"');
   });
 
-  it("can optionally post a home announcement when publishing church-wide, gated at both ends", () => {
-    // 就緒/範圍檢查跟就緒檢查一樣要在建立當下擋，不能等發佈那一刻才發現。
-    expect(homeAnnouncement).toContain("ADD COLUMN IF NOT EXISTS post_announcement BOOLEAN NOT NULL DEFAULT FALSE");
-    expect(homeAnnouncement).toContain("p_post_announcement BOOLEAN DEFAULT FALSE");
-    const churchWideChecks = homeAnnouncement.split("RAISE EXCEPTION 'quiz_announcement_requires_church_wide';").length - 1;
-    expect(churchWideChecks).toBe(2); // publish_daily_quiz 立即發佈 + schedule_daily_quiz_publish 排程各一次
-    expect(homeAnnouncement).toContain("IF p_post_announcement AND p_scope_type <> 'all' THEN");
-    // 復活這支一直沒被呼叫過的舊函式，不是重新造一個公告寫入邏輯。
-    expect(homeAnnouncement).toContain("PERFORM public.schedule_announcement(");
-    expect(homeAnnouncement).toContain("'【提醒】今日小測驗已發布'");
-    expect(homeAnnouncement).toContain("(p_quiz_date + 1)::TIMESTAMP AT TIME ZONE 'Asia/Taipei'");
-    expect(homeAnnouncement).toContain("p_post_announcement := schedule_row.post_announcement");
-    expect(homeAnnouncement).toContain("'postAnnouncement', schedule.post_announcement");
-
-    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false)");
-    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false)");
-    expect(db).toContain("p_post_announcement: Boolean(postAnnouncement)");
-
-    // 0190 當初「只有全部小組才能發公告」的限制，被 0195 拿掉了——公告改成
-    // 沿用發布範圍本身（見 scripts/daily-quiz-admin-scope-announcement.test.mjs），
-    // 所以 SQL 端不再 RAISE quiz_announcement_requires_church_wide，前端也不
-    // 再靠 scope==='all' 鎖 checkbox。
-    expect(db).not.toContain("quiz_announcement_requires_church_wide");
-    expect(admin).toContain("data-quiz-announcement-toggle");
-    expect(admin).not.toContain("const canAnnounce = scope.scopeType === 'all';");
-    expect(admin).toContain("if (announcementToggle) announcementToggle.disabled = false;");
-    expect(admin).toContain("同時發佈到首頁公告");
+  it("no longer posts a home announcement when publishing (feature removed in 0196)", () => {
+    // 0190 加的「同時發佈到首頁公告」、0195 的範圍綁定，整個在 0196 拿掉了——
+    // 小測驗本身給每個收件人的站內提醒（quiz_notifications）完全不受影響，
+    // 照常發送；被拿掉的只有 church_announcements 首頁公告這條路。
+    expect(homeAnnouncement).toContain("post_announcement BOOLEAN NOT NULL DEFAULT FALSE");
+    expect(db).not.toContain("postAnnouncement");
+    expect(db).not.toContain("p_post_announcement");
+    expect(admin).not.toContain("data-quiz-announcement-toggle");
+    expect(admin).not.toContain("同時發佈到首頁公告");
+    expect(admin).not.toContain("announcementToggle");
   });
 });

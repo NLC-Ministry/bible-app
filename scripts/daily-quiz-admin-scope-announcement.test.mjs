@@ -106,10 +106,9 @@ describe("admin.js — 僅系統管理員 scope UI", () => {
     expect(admin).toContain("if (select) select.disabled = isAdminOnlyScope;");
   });
 
-  it("no longer restricts the announcement checkbox to the 'all' scope", () => {
-    expect(admin).not.toContain("const canAnnounce = scope.scopeType === 'all';");
-    expect(admin).toContain("if (announcementToggle) announcementToggle.disabled = false;");
-  });
+  // The "同時發佈到首頁公告" checkbox this test used to cover was removed
+  // entirely in migration 0196 — see daily-church-quiz.test.mjs's
+  // "no longer posts a home announcement..." test.
 });
 
 describe("db.js — postAnnouncement docs reflect the scope-bound behavior", () => {
