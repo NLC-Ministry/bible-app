@@ -50,12 +50,30 @@ const LEVEL_NAME_HINTS: Record<string, string[]> = {
   small_group: ["小組"]
 };
 
+// Member Hub uses these as its own "not yet placed" placeholder node names
+// (e.g. a real node literally named "未定" in the care-chain/home-path). Left
+// as-is they get treated as a real org unit downstream — synced into
+// great_regions/pastoral_zones/small_groups, shown in admin stats, and
+// counted as "has a region" by every falsy/blank check in the app — instead
+// of being handled as "member has no placement yet", which is what they
+// actually mean. Normalize them to null at the source so every consumer
+// (join-audience gate, registration stats, friendly onboarding prompts)
+// treats an unplaced member consistently.
+/** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+const PLACEHOLDER_ORG_UNIT_NAMES = new Set(["未定"]);
+
+function normalizeOrgUnitName(value: unknown) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed || PLACEHOLDER_ORG_UNIT_NAMES.has(trimmed)) return null;
+  return trimmed;
+}
+
 function pickNameByDepth(segments: any[], depth: number) {
   if (!Array.isArray(segments)) return null;
   const match = segments.find((seg) => seg && seg.levelDepth === depth);
-  if (match?.name) return String(match.name).trim() || null;
+  if (match?.name) return normalizeOrgUnitName(match.name);
   const byIndex = segments[depth];
-  if (byIndex?.name) return String(byIndex.name).trim() || null;
+  if (byIndex?.name) return normalizeOrgUnitName(byIndex.name);
   return null;
 }
 
@@ -65,7 +83,7 @@ function pickNameByLevelName(segments: any[], hints: string[]) {
     const label = String(seg?.levelName || "").trim();
     return hints.some((hint) => label.includes(hint));
   });
-  return match?.name ? String(match.name).trim() || null : null;
+  return match?.name ? normalizeOrgUnitName(match.name) : null;
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
@@ -103,7 +121,7 @@ function orgFromMemberContext(organization: any) {
 
   for (const [field, hints] of Object.entries(LEVEL_NAME_HINTS)) {
     if (hints.some((hint) => levelName.includes(hint))) {
-      result[field as "great_region" | "pastoral_zone" | "small_group"] = nodeName;
+      result[field as "great_region" | "pastoral_zone" | "small_group"] = normalizeOrgUnitName(nodeName);
       break;
     }
   }

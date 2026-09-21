@@ -37,6 +37,19 @@ describe("orgFromCareChain", () => {
       small_group: null
     });
   });
+
+  it("normalizes Member Hub's own \"未定\" placeholder node to null instead of a fake region", () => {
+    const careChain = [
+      { nodeId: "1", name: "未定", levelDepth: 0, levelName: "大區" },
+      { nodeId: "2", name: "未定", levelDepth: 1, levelName: "牧區" },
+      { nodeId: "3", name: "大安小組", levelDepth: 2, levelName: "小組" }
+    ];
+    expect(orgFromCareChain(careChain)).toEqual({
+      great_region: null,
+      pastoral_zone: null,
+      small_group: "大安小組"
+    });
+  });
 });
 
 describe("orgFromHomePath", () => {
@@ -51,6 +64,18 @@ describe("orgFromHomePath", () => {
       great_region: "花蓮",
       pastoral_zone: "資訊事工",
       small_group: "大安小組"
+    });
+  });
+
+  it("normalizes the \"未定\" placeholder to null", () => {
+    const path = [
+      { id: "1", name: "未定", levelName: "大區" },
+      { id: "2", name: "資訊事工", levelName: "牧區" }
+    ];
+    expect(orgFromHomePath(path)).toEqual({
+      great_region: null,
+      pastoral_zone: "資訊事工",
+      small_group: null
     });
   });
 });
@@ -92,6 +117,18 @@ describe("mergeOrgSources", () => {
       { placementNodeName: "北區", placementLevelName: "大區" }
     )).toEqual({
       great_region: "北區",
+      pastoral_zone: null,
+      small_group: null
+    });
+  });
+
+  it("normalizes a \"未定\" canonical placement node to null instead of a fake region", () => {
+    expect(mergeOrgSources(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { great_region: null, pastoral_zone: null, small_group: null },
+      { placementNodeName: "未定", placementLevelName: "大區" }
+    )).toEqual({
+      great_region: null,
       pastoral_zone: null,
       small_group: null
     });
