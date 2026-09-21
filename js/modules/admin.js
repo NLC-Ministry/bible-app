@@ -2074,6 +2074,7 @@ function renderAdminQuizReviewCards(context) {
 
 function adminQuizGroupMatchesScope(group, scope) {
   if (!scope || scope.scopeType === 'all') return true;
+  if (scope.scopeType === 'admin') return false;
   if (scope.scopeType === 'group') return group.name === scope.scopeName;
   if (scope.scopeType === 'zone') return group.pastoralZone === scope.scopeName;
   if (scope.scopeType === 'region') return group.greatRegion === scope.scopeName;
@@ -2081,6 +2082,9 @@ function adminQuizGroupMatchesScope(group, scope) {
 }
 
 function renderAdminQuizScopeResults(context, scope) {
+  if (scope && scope.scopeType === 'admin') {
+    return '<p class="admin-daily-quiz-empty">測試發布：只有系統管理員會收到，不屬於任何小組，不影響任何組員的名單或平均分數。</p>';
+  }
   const groups = (Array.isArray(context.managedGroups) ? context.managedGroups : [])
     .filter(group => adminQuizGroupMatchesScope(group, scope));
   if (!groups.length) return '<p class="admin-daily-quiz-empty">此範圍內目前沒有可管理的小組。</p>';
@@ -2113,10 +2117,17 @@ function renderAdminQuizScopeSelectorHtml(prefix) {
     <select id="${prefix}-zone-select" class="form-control"></select>
     <select id="${prefix}-group-select" class="form-control"></select>
     <select id="${prefix}-master-select" class="hidden" style="display:none;"></select>
-  </div>`;
+  </div>
+  <label class="admin-quiz-schedule-checkbox">
+    <input type="checkbox" id="${prefix}-admin-only-toggle">
+    僅發布給系統管理員（測試用，不會發給任何真的會友）
+  </label>`;
 }
 
 function getAdminQuizScope(prefix) {
+  if (document.getElementById(`${prefix}-admin-only-toggle`)?.checked) {
+    return { scopeType: "admin", scopeName: null };
+  }
   const readScope = id => {
     const value = document.getElementById(id)?.value || "";
     return value === "unassigned" ? "" : value;
@@ -2574,7 +2585,9 @@ function adminQuizFormatTaiwanDateTime(iso) {
 }
 
 function renderAdminQuizScheduleStatusHtml(schedule) {
-  const scopeLabel = schedule.scopeType === 'all' ? '你負責的全部小組' : (schedule.scopeName || '');
+  const scopeLabel = schedule.scopeType === 'all' ? '你負責的全部小組'
+    : schedule.scopeType === 'admin' ? '系統管理員（測試用）'
+    : (schedule.scopeName || '');
   const versionLabel = schedule.hasCustomQuestions ? '自訂題目' : `版本 ${schedule.variant}`;
   return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
     <div class="admin-daily-quiz-heading">
@@ -2626,10 +2639,10 @@ function renderAdminQuizPublishPanel(context) {
         <label>作答截止時間（選填）<input type="time" class="form-control" data-quiz-schedule-close-time></label>
       </div>
       <label class="admin-quiz-schedule-checkbox">
-        <input type="checkbox" data-quiz-announcement-toggle disabled>
+        <input type="checkbox" data-quiz-announcement-toggle>
         同時發佈到首頁公告
       </label>
-      <p class="admin-daily-quiz-note hidden" data-quiz-announcement-hint>只有「全部小組」範圍才能同時發佈公告，避免沒收到測驗的會友誤會。</p>
+      <p class="admin-daily-quiz-note" data-quiz-announcement-hint>公告只有這次發布範圍內的人看得到，其他人不會看到、也不會誤會自己有這份測驗。</p>
     </div>
     <div class="admin-quiz-publish-step">
       <button type="button" class="primary-btn" id="admin-quiz-publish-btn" disabled>發佈</button>
@@ -2654,14 +2667,21 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
   const customConfirmed = root.dataset.quizCustomConfirmed === 'true';
   if (customOption) customOption.disabled = !customConfirmed;
   if (customHint) customHint.classList.toggle('hidden', customConfirmed);
-  // 首頁公告目前沒有範圍概念，is_published 就是全教會看得到，所以「同時發佈
-  // 到首頁公告」只有發佈範圍＝全部小組時才能勾，避免沒收到測驗的會友誤會。
-  const canAnnounce = scope.scopeType === 'all';
-  if (announcementToggle) {
-    announcementToggle.disabled = !canAnnounce;
-    if (!canAnnounce && announcementToggle.checked) announcementToggle.checked = false;
+  // 選「僅系統管理員」時，大區/牧區/小組跟這個範圍無關，整組鎖起來。
+  const isAdminOnlyScope = scope.scopeType === 'admin';
+  ['region', 'zone', 'group'].forEach(part => {
+    const select = root.querySelector(`#admin-quiz-publish-${part}-select`);
+    if (select) select.disabled = isAdminOnlyScope;
+  });
+  // 公告現在沿用測驗發布當下選的範圍（migration 0195），不再限定「全部小組」
+  // 才能勾——不管發給誰，公告只有收到測驗的那群人看得到，admin 一律看得到全部。
+  if (announcementToggle) announcementToggle.disabled = false;
+  if (announcementHint) {
+    announcementHint.textContent = isAdminOnlyScope
+      ? '公告只有系統管理員看得到。'
+      : '公告只有這次發布範圍內的人看得到，其他人不會看到、也不會誤會自己有這份測驗。';
+    announcementHint.classList.remove('hidden');
   }
-  if (announcementHint) announcementHint.classList.toggle('hidden', canAnnounce);
   if (!publishBtn) return;
   let ready = false;
   if (selectedVersion === 'A' || selectedVersion === 'B') {
@@ -2713,6 +2733,7 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
   ['region', 'zone', 'group'].forEach(part => {
     panel.querySelector(`#admin-quiz-publish-${part}-select`)?.addEventListener('change', refresh);
   });
+  panel.querySelector('#admin-quiz-publish-admin-only-toggle')?.addEventListener('change', refresh);
 
   versionButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -2734,7 +2755,9 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     const button = event.currentTarget;
     if (!selectedVersion) return;
     const scope = getAdminQuizScope('admin-quiz-publish');
-    const scopeLabel = scope.scopeType === 'all' ? '你負責的全部小組' : scope.scopeName;
+    const scopeLabel = scope.scopeType === 'all' ? '你負責的全部小組'
+      : scope.scopeType === 'admin' ? '系統管理員（測試用）'
+      : scope.scopeName;
     let selection;
     if (selectedVersion === 'C') {
       if (root.dataset.quizCustomConfirmed !== 'true') {

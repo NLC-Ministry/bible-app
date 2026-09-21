@@ -373,13 +373,15 @@ describe("daily church quiz", () => {
     expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false)");
     expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false)");
     expect(db).toContain("p_post_announcement: Boolean(postAnnouncement)");
-    expect(db).toContain("quiz_announcement_requires_church_wide");
 
-    // 前端也要擋，不能只靠 SQL 端事後報錯——非「全部小組」時 checkbox 本身
-    // 就是 disabled，使用者根本勾不了。
+    // 0190 當初「只有全部小組才能發公告」的限制，被 0195 拿掉了——公告改成
+    // 沿用發布範圍本身（見 scripts/daily-quiz-admin-scope-announcement.test.mjs），
+    // 所以 SQL 端不再 RAISE quiz_announcement_requires_church_wide，前端也不
+    // 再靠 scope==='all' 鎖 checkbox。
+    expect(db).not.toContain("quiz_announcement_requires_church_wide");
     expect(admin).toContain("data-quiz-announcement-toggle");
-    expect(admin).toContain("const canAnnounce = scope.scopeType === 'all';");
-    expect(admin).toContain("announcementToggle.disabled = !canAnnounce;");
+    expect(admin).not.toContain("const canAnnounce = scope.scopeType === 'all';");
+    expect(admin).toContain("if (announcementToggle) announcementToggle.disabled = false;");
     expect(admin).toContain("同時發佈到首頁公告");
   });
 });
