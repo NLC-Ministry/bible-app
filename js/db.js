@@ -1054,6 +1054,7 @@ const db = {
     state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
     state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
     if (profile.email) state.currentUser.email = profile.email;
+    if (profile.phone) state.currentUser.phone = profile.phone;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
     state.currentUser.member_context_synced_at = profile.member_context_synced_at || "";
     state.currentUser.member_context_sync_attempted_at = profile.member_context_sync_attempted_at || "";
