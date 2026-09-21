@@ -3514,12 +3514,9 @@ const db = {
       quiz_attempt_not_found: "找不到這次的作答紀錄，請先作答至少一題。",
       quiz_stats_permission_required: "沒有權限查看這份小測驗結果統計。",
       quiz_stats_date_range_required: "請選擇正確的日期區間。",
-      quiz_reveal_permission_required: "只有牧者或系統管理員可以公布小測驗 PR 值。",
-      quiz_not_found_for_date: "找不到這個日期的小測驗。",
       quiz_schedule_publish_time_required: "排程時間必須晚於現在。",
       quiz_schedule_not_found: "找不到這筆排程，可能已經發佈或取消。",
-      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。",
-      quiz_announcement_requires_church_wide: "同時發佈公告只能用在「全部小組」範圍。"
+      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : "目前無法載入小測驗資料，請稍後再試。";
@@ -3562,13 +3559,6 @@ const db = {
     return result.success ? { success: true, context: result.data || {} } : result;
   },
 
-  async reviewDailyQuiz(quizId, approved = true) {
-    return this._callQuizRpc("review_daily_quiz", {
-      p_quiz_id: quizId,
-      p_approved: approved === true
-    });
-  },
-
   async regenerateDailyQuiz(plan, quizDate, variants = []) {
     const planId = this._quizPlanId(plan);
     if (!planId || !/^\d{4}-\d{2}-\d{2}$/.test(String(quizDate || ""))) {
@@ -3588,9 +3578,7 @@ const db = {
     });
   },
 
-  // postAnnouncement（migration 0190）只有 scope.scopeType === "all" 才有意義
-  // ——SQL 端會擋非全部小組還硬傳 true 的情況（quiz_announcement_requires_church_wide）。
-  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}, postAnnouncement = false) {
+  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("publish_daily_quiz", {
@@ -3601,16 +3589,15 @@ const db = {
       p_variant: selection.variant || null,
       p_custom_questions: Array.isArray(selection.customQuestions) && selection.customQuestions.length
         ? selection.customQuestions
-        : null,
-      p_post_announcement: Boolean(postAnnouncement)
+        : null
     });
   },
 
   // 排程發佈：跟 publishDailyQuiz 同一組範圍/版本參數，多帶 publishAt（必填，
-  // 未來時間）和 answerCloseAt（選填的作答截止時間）。就緒檢查（版本要已審核
+  // 未來時間）和 answerCloseAt（選填的作答截止時間）。就緒檢查（版本要已生成
   // /自訂題目要驗證過）在 SQL 端的 schedule_daily_quiz_publish 做，跟
-  // publish_daily_quiz 同一套規則；postAnnouncement 同上，只有全部小組才有效。
-  async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null, postAnnouncement = false) {
+  // publish_daily_quiz 同一套規則。
+  async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("schedule_daily_quiz_publish", {
@@ -3623,8 +3610,7 @@ const db = {
         ? selection.customQuestions
         : null,
       p_publish_at: publishAt,
-      p_answer_close_at: answerCloseAt || null,
-      p_post_announcement: Boolean(postAnnouncement)
+      p_answer_close_at: answerCloseAt || null
     });
   },
 
@@ -3672,20 +3658,7 @@ const db = {
     return result.success ? { success: true, stats: result.data || {} } : result;
   },
 
-  // admin/pastor 專用：把某一天（該計畫全部版本）的 PR 解鎖給會友查看。
-  // 前三名不透過這裡公告，APP 裡從頭到尾不會出現名單/排名。
-  async revealDailyQuizLeaderboard(plan, quizDate) {
-    const planId = this._quizPlanId(plan);
-    if (!planId || !/^\d{4}-\d{2}-\d{2}$/.test(String(quizDate || ""))) {
-      return { success: false, message: "找不到小測驗對應的計畫日期。" };
-    }
-    return this._callQuizRpc("daily_quiz_reveal_leaderboard", {
-      p_global_plan_id: planId,
-      p_quiz_date: quizDate
-    });
-  },
-
-  // 會友端「我的測驗」小測驗分頁：只回傳呼叫者自己的分數；PR 公布前一律 NULL。
+  // 會友端「我的測驗」小測驗分頁：只回傳呼叫者自己的分數與作答時間（不再有 PR）。
   async getMyDailyQuizResults(plan, fromDate, toDate) {
     const planId = this._quizPlanId(plan);
     if (!planId || !/^\d{4}-\d{2}-\d{2}$/.test(String(fromDate || "")) || !/^\d{4}-\d{2}-\d{2}$/.test(String(toDate || ""))) {

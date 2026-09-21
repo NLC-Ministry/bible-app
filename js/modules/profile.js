@@ -468,23 +468,16 @@ async function renderMyDailyQuizResults() {
   host.innerHTML = results.map(item => {
     const correctRate = Number.isFinite(item.score) && Number.isFinite(item.total) && item.total > 0
       ? Math.round((item.score / item.total) * 100) : null;
-    const prLines = [];
-    if (item.prPublished) {
-      if (item.prChurch != null) prLines.push(`全教會 PR ${item.prChurch}`);
-      if (item.prZone != null) prLines.push(`牧區 PR ${item.prZone}`);
-      if (item.prGroup != null) prLines.push(`小組 PR ${item.prGroup}`);
-      (Array.isArray(item.teams) ? item.teams : []).forEach(team => {
-        if (team?.pr != null) prLines.push(`${escapeHTML(String(team.division))} 人隊 PR ${team.pr}`);
-      });
-    }
+    const timeSeconds = Number.isFinite(item.timeSeconds) ? Math.round(item.timeSeconds) : null;
+    const timeLabel = timeSeconds == null ? ""
+      : timeSeconds >= 60 ? `${Math.floor(timeSeconds / 60)} 分 ${timeSeconds % 60} 秒`
+      : `${timeSeconds} 秒`;
     return `<article class="profile-daily-quiz-result-card">
       <div class="profile-daily-quiz-result-card__head">
         <strong>${escapeHTML(item.quizDate)}</strong>
         <span class="stat-badge stat-badge--brand">${escapeHTML(String(item.score))}／${escapeHTML(String(item.total))}${correctRate != null ? `（${correctRate}%）` : ""}</span>
       </div>
-      ${item.prPublished
-        ? (prLines.length ? `<p class="profile-daily-quiz-result-card__pr">${prLines.map(line => escapeHTML(line)).join("　")}</p>` : "")
-        : '<p class="profile-daily-quiz-result-card__pr profile-daily-quiz-result-card__pr--pending">PR 尚未公布</p>'}
+      ${timeLabel ? `<p class="profile-daily-quiz-result-card__pr">作答時間：${escapeHTML(timeLabel)}</p>` : ""}
     </article>`;
   }).join("");
 }

@@ -101,7 +101,6 @@ const ADMIN_RPC_FUNCTIONS = new Set([
 const QUIZ_RPC_FUNCTIONS = new Set([
   "get_daily_quiz_dashboard",
   "request_daily_quiz_regeneration",
-  "review_daily_quiz",
   "update_daily_quiz_questions",
   "publish_daily_quiz",
   "submit_daily_quiz",
@@ -112,9 +111,9 @@ const QUIZ_RPC_FUNCTIONS = new Set([
   "daily_quiz_submit_answer",
   "daily_quiz_finalize_attempt",
   // 0186：後台結果統計（唯讀）；權限檢查在 SQL 端用 can_manage_quiz_group。
+  // 0196 簡化：只回參與率＋完整名單，PR/排行榜公布整套已移除。
   "daily_quiz_get_stats",
-  // 0188：PR 公布（admin/pastor，SQL 端自己查角色）+ 會友端「我的測驗」查詢。
-  "daily_quiz_reveal_leaderboard",
+  // 0188：會友端「我的測驗」查詢；0196 起不再有 PR，只有自己的分數與作答時間。
   "daily_quiz_get_my_results",
   // 0189：排程發佈（設定/取消），就緒檢查在 SQL 端跟 publish_daily_quiz 同一套。
   // 真正的掃描/發佈 run_daily_quiz_schedule_sweep 不在這裡——只有排程 Edge
