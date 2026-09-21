@@ -54,12 +54,14 @@ describe("Profile identity skeleton lifecycle", () => {
     expect(html).not.toContain('id="member-hub-org-great-region"');
   });
 
-  it("gates the Member Hub sync-status caption on pending state", () => {
+  it("gates the profile header skeletons on pending state", () => {
+    // The "新生命會員中心" card (and its separate 同步中/已同步 caption) was
+    // removed — pending sync now shows only via the name/org skeletons on
+    // the summary card itself, plus the icon-only refresh button.
     expect(profileJs).toContain("isMemberContextPending");
-    expect(profileJs).toContain("member-hub-org-sync-status");
-    expect(profileJs).toContain("同步中");
     expect(profileJs).toContain("applyProfileIdentitySkeletons");
     expect(profileJs).toContain("paintProfileIdentityChrome");
+    expect(profileJs).toContain("btn-profile-summary-refresh");
   });
 
   it("does not restore invented boot HTML when clearing inline skeletons", () => {

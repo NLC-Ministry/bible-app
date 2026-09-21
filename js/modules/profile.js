@@ -106,62 +106,6 @@ function userNeedsOrgSetup() {
     !String(user.small_group || "").trim();
 }
 
-function formatMemberContextSyncedAt(value) {
-  if (!value) return "尚未同步";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "尚未同步";
-  const parts = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).formatToParts(date).reduce(function (acc, part) {
-    acc[part.type] = part.value;
-    return acc;
-  }, {});
-  return `已同步自會員中心：${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
-}
-
-function formatMemberContextAttemptedAt(value) {
-  if (!value) return "尚未同步";
-  return formatMemberContextSyncedAt(value).replace("已同步自會員中心：", "");
-}
-
-function formatMemberContextSyncStatus(user) {
-  const status = user && user.member_context_sync_status;
-  const syncedAt = user && user.member_context_synced_at;
-  const attemptedAt = user && user.member_context_sync_attempted_at;
-  const syncError = user && user.member_context_sync_error;
-
-  if (status === "degraded" || status === "failed" || syncError) {
-    return `會員中心同步暫時失敗，保留既有資料。最近一次同步嘗試：${formatMemberContextAttemptedAt(attemptedAt || syncedAt || "")}`;
-  }
-
-  return formatMemberContextSyncedAt(syncedAt || "");
-}
-
-// 大區/牧區/小組 只顯示在個人頁標頭的 #profile-summary-org，不再重複一個方框。
-// 這裡只維護會員中心群組下方那一行同步狀態小字。
-function renderMemberHubOrgPlacement() {
-  const user = state.currentUser || {};
-  const pending = typeof isMemberContextPending === "function"
-    ? isMemberContextPending(user)
-    : false;
-
-  const syncEl = document.getElementById("member-hub-org-sync-status");
-  if (!syncEl) return;
-  if (pending) {
-    syncEl.textContent = "同步中…";
-  } else if (isMemberHubManagedProfile()) {
-    syncEl.textContent = formatMemberContextSyncStatus(user);
-  } else {
-    syncEl.textContent = "目前登入方式無法同步會員中心";
-  }
-}
-
 function applyProfileIdentitySkeletons() {
   if (typeof ComponentSkeletonLoader === "undefined") return;
   ComponentSkeletonLoader.setInlineSkeleton("#profile-summary-name", { width: "6rem", height: "1.2rem" });
@@ -260,15 +204,13 @@ function paintProfileIdentityChrome() {
     }
   }
 
-  renderMemberHubOrgPlacement();
-
   if (typeof refreshUserAvatars === "function") {
     refreshUserAvatars();
   }
 }
 
-function wireMemberHubOrgRefresh() {
-  const btn = document.getElementById("btn-member-hub-refresh");
+function wireProfileSummaryRefresh() {
+  const btn = document.getElementById("btn-profile-summary-refresh");
   if (!btn || btn.dataset.wired === "true") return;
   btn.dataset.wired = "true";
   btn.addEventListener("click", async function () {
@@ -284,7 +226,6 @@ function wireMemberHubOrgRefresh() {
       if (typeof renderProfileView === "function") {
         await renderProfileView();
       } else {
-        renderMemberHubOrgPlacement();
         renderMemberHubProfileLinks();
       }
       if (typeof showToast === "function") showToast("已重新同步會員中心資料。");
@@ -319,67 +260,20 @@ function renderMemberHubProfileLinks() {
   const copy = (window.APP_COPY && window.APP_COPY.memberHub) || {};
   const urls = getMemberHubUrls();
   const needsOrg = userNeedsOrgSetup();
-  const hubManaged = isMemberHubManagedProfile();
-  const lockedFields = new Set(state.profileLockedFields || []);
-  const hasLockedIdentity = ["name", "great_region", "pastoral_zone", "small_group"]
-    .some(function (field) { return lockedFields.has(field); });
 
-  const structureEl = document.getElementById("btn-member-hub-structure");
   const homeEl = document.getElementById("btn-member-hub-home");
   const avatarHubEl = document.getElementById("btn-avatar-member-hub");
   const identityUrl = urls.onboarding;
-  if (structureEl) structureEl.href = identityUrl;
   if (homeEl) homeEl.href = urls.home;
   if (avatarHubEl) avatarHubEl.href = identityUrl;
 
-  [structureEl, homeEl, avatarHubEl].forEach(function (linkEl) {
+  [homeEl, avatarHubEl].forEach(function (linkEl) {
     if (!linkEl || linkEl._hubSyncBound) return;
     linkEl._hubSyncBound = true;
     linkEl.addEventListener("click", function () {
       scheduleProfileSyncOnReturn();
     });
   });
-
-  if (structureEl && !structureEl._hubOnboardingBound) {
-    structureEl._hubOnboardingBound = true;
-    structureEl.addEventListener("click", function (e) {
-      e.preventDefault();
-      openMemberHubOnboarding();
-    });
-  }
-
-  const card = document.getElementById("profile-member-hub-card");
-  const descEl = document.getElementById("profile-member-hub-desc");
-  const titleEl = document.getElementById("profile-member-hub-title");
-  const primaryLabel = document.getElementById("profile-member-hub-primary-label");
-  if (titleEl) titleEl.textContent = copy.cardTitle || "新生命會員中心";
-  if (descEl) {
-    descEl.textContent = needsOrg
-      ? (copy.cardBodyNeedsOrg || descEl.textContent)
-      : (copy.cardBody || descEl.textContent);
-  }
-  if (primaryLabel) {
-    primaryLabel.textContent = needsOrg
-      ? (copy.completeOnboarding || "完成身份設定")
-      : (copy.manageStructure || "管理身份與牧區歸屬");
-  }
-  if (card) card.classList.toggle("member-hub-profile-card--needs-org", needsOrg);
-
-  const formNotice = document.getElementById("profile-member-hub-form-notice");
-  const formNoticeText = document.getElementById("profile-member-hub-form-notice-text");
-  if (formNotice) formNotice.classList.toggle("hidden", !hubManaged && !hasLockedIdentity);
-  if (formNoticeText) {
-    formNoticeText.textContent = copy.formNotice || formNoticeText.textContent;
-  }
-
-  const formNoticeBtn = document.getElementById("btn-member-hub-form-notice");
-  if (formNoticeBtn && !formNoticeBtn._hubBound) {
-    formNoticeBtn._hubBound = true;
-    formNoticeBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-      openMemberHubOnboarding();
-    });
-  }
 
   const summaryOrg = document.getElementById("profile-summary-org");
   if (summaryOrg && needsOrg) {
@@ -404,7 +298,7 @@ function renderMemberHubProfileLinks() {
   }
 
   if (typeof hydrateIcons === "function") {
-    [card, formNotice, summaryOrg, btnProfile, avatarHubEl].forEach(function (el) {
+    [summaryOrg, btnProfile, avatarHubEl].forEach(function (el) {
       if (el) hydrateIcons(el);
     });
   }
@@ -441,7 +335,7 @@ export async function renderProfileView() {
   }
 
   paintProfileIdentityChrome();
-  wireMemberHubOrgRefresh();
+  wireProfileSummaryRefresh();
   renderMemberHubProfileLinks();
   wireReleaseOnboardingHelp();
 
@@ -453,6 +347,9 @@ export async function renderProfileView() {
   await renderCareReminders();
   if (state.profileDetailOpen === "exams") {
     await renderMyExamPapers();
+  }
+  if (state.profileDetailOpen === "personal-info") {
+    renderPersonalInfoSubpage();
   }
 }
 
