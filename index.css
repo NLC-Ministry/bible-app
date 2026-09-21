@@ -608,11 +608,6 @@ body.dark-theme {
   background: var(--color-brand-subtle);
 }
 
-.member-hub-profile-card--needs-org {
-  border-color: color-mix(in srgb, var(--color-brand) 55%, var(--border-card));
-  background: color-mix(in srgb, var(--color-brand) 8%, var(--bg-card));
-}
-
 .member-hub-profile-card__header {
   display: flex;
   gap: 0.75rem;
@@ -662,16 +657,6 @@ body.dark-theme {
   text-align: center;
   text-decoration: none;
   box-sizing: border-box;
-}
-
-/* Org placement (大區/牧區/小組) lives only in the profile header breadcrumb
-   (#profile-summary-org). This group shows just a one-line sync-status caption
-   so the same data isn't repeated in a tall bordered box. */
-.member-hub-sync-caption {
-  margin: 0.15rem 0 0;
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  line-height: 1.4;
 }
 
 .member-hub-form-notice {
@@ -12835,18 +12820,6 @@ body.dark-theme .custom-confirm-overlay {
 
 .profile-logout-btn .nlc-icon {
   color: currentColor;
-}
-
-/* Onboarding alert state for the Member Hub card when user needs to setup pastoral structure */
-.app-settings-group__header.member-hub-profile-card--needs-org {
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--border-card));
-  border-radius: var(--radius-md);
-  padding: 0.75rem 1rem;
-}
-
-.app-settings-group__header.member-hub-profile-card--needs-org .app-settings-group__header-icon {
-  color: var(--color-warning);
 }
 
 /* ─── Profile full-screen subpages (app-style drill-down: root menu list,

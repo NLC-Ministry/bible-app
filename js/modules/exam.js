@@ -2920,10 +2920,16 @@ class ExamRunner {
         <span class="exam-result__pr-tile-value${value == null ? " exam-result__pr-tile-value--muted" : ""}">${value == null ? "—" : `PR ${value}`}</span>
         ${caption ? `<span class="exam-result__pr-tile-caption">${caption}</span>` : ""}
       </div>`;
+    const zoneCaption = !d.myPastoralZone
+      ? "尚未設定牧區"
+      : d.zoneAvg != null
+      ? `牧區平均 ${d.zoneAvg} 分`
+      : "參加人數太少";
     const prBlockHtml = !showPr ? "" : `
       <div class="exam-result__pr">
         <div class="exam-result__pr-grid">
           ${prTileHtml("全教會", d.prChurch, d.prChurch == null ? "參加人數太少" : `贏過約 ${d.prChurch}% 的人`)}
+          ${prTileHtml(d.myPastoralZone ? `牧區・${esc(d.myPastoralZone)}` : "牧區", d.prZone, zoneCaption)}
           ${myTeams.map((t) => prTileHtml(
             `${t.division}人隊・${esc(t.name || "")}`,
             t.pr,

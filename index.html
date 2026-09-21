@@ -64,7 +64,7 @@
       try { performance.mark("boot:" + name); } catch (e) {}
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260921_pr_tile_redesign" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260921_remove_member_hub_card" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260906_plan_gate_login_only" onerror="window.showAppStyleRecovery(this)">
 
@@ -1477,55 +1477,15 @@
                     </span>
                   </p>
                 </div>
+                <button type="button" class="icon-button icon-button--subtle" id="btn-profile-summary-refresh"
+                  style="margin-left: auto;" aria-label="重新同步會員中心資料" title="重新同步會員中心資料">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+                </button>
               </div>
 
               <!-- Root menu: list-style rows, tapping drills into a full-screen subpage -->
               <div id="profile-root-content">
-                <!-- Member Hub identity card & actions (App Style Settings Group) -->
                 <div class="space-y-4" id="profile-settings-container" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
-
-                <!-- 分組一：會員中心連動 -->
-                <div class="app-settings-group">
-                  <div class="app-settings-group__header" id="profile-member-hub-card">
-                    <span class="app-settings-group__header-icon">
-                      <span class="nlc-icon nlc-icon--sm" data-icon="layers" aria-hidden="true"></span>
-                    </span>
-                    <div class="app-settings-group__header-text">
-                      <h3 id="profile-member-hub-title" class="text-sm font-medium m-0">新生命會員中心</h3>
-                      <p id="profile-member-hub-desc" class="text-xs text-secondary m-0">姓名、牧區與教會身份由會員中心統一管理，更新後自動同步至本 app。</p>
-                      <p class="member-hub-sync-caption" id="member-hub-org-sync-status" aria-live="polite">尚未同步</p>
-                    </div>
-                  </div>
-
-                  <div class="app-settings-list">
-                    <a class="app-settings-item" id="btn-member-hub-structure" target="_blank" rel="noopener noreferrer">
-                      <div class="app-settings-item__leading">
-                        <span class="app-settings-icon-wrap app-settings-icon-wrap--brand">
-                          <span class="nlc-icon nlc-icon--sm" data-icon="signpost" aria-hidden="true"></span>
-                        </span>
-                        <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title" id="profile-member-hub-primary-label">管理身份與牧區歸屬</span>
-                          <span class="app-settings-item__subtitle">更新姓名、大區、牧區或所屬小組</span>
-                        </div>
-                      </div>
-                      <span class="app-settings-item__chevron">
-                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
-                      </span>
-                    </a>
-                    <button type="button" class="app-settings-item w-full text-left" id="btn-member-hub-refresh"
-                      style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; text-decoration: none;">
-                      <div class="app-settings-item__leading">
-                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
-                          <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
-                        </span>
-                        <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title">重新同步</span>
-                          <span class="app-settings-item__subtitle">重新取得會員中心的大區、牧區與小組</span>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
 
                 <div class="app-settings-group" id="profile-content-nav-group">
                   <div class="profile-settings-section-label">我的內容</div>
