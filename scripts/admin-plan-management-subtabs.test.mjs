@@ -8,6 +8,7 @@ const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const migration = read("supabase/migrations/0073_get_joined_plan_members.sql");
+const joinedPlanMembersDedupeFix = read("supabase/migrations/0203_fix_get_joined_plan_members_duplicate_rows.sql");
 
 describe("plan management: unified section architecture", () => {
   it("uses the shared plan context followed by direct unified destinations", () => {
@@ -189,6 +190,15 @@ describe("plan management: 已加入計畫 (get_joined_plan_members)", () => {
     // The fallback must keep candidates who HAVE joined (inverted from the
     // unjoined fallback, which filters out anyone in joinedByUserId).
     expect(db).toContain(".filter(candidate => joinedByUserId.has(String(candidate.id)))");
+  });
+
+  it("0203: get_joined_plan_members picks at most one reading_plans row per candidate, so a member with both a legacy preset_key-only row and a current global_plan_id row isn't double-counted", () => {
+    expect(joinedPlanMembersDedupeFix).toContain("CREATE OR REPLACE FUNCTION public.get_joined_plan_members(");
+    expect(joinedPlanMembersDedupeFix).toContain("JOIN LATERAL (");
+    expect(joinedPlanMembersDedupeFix).toContain("ORDER BY (rp.global_plan_id = target_plan.id) DESC, rp.created_at DESC");
+    expect(joinedPlanMembersDedupeFix).toContain("LIMIT 1");
+    expect(joinedPlanMembersDedupeFix).toContain(") AS joined_plan ON TRUE");
+    expect(joinedPlanMembersDedupeFix).toContain("GRANT EXECUTE ON FUNCTION public.get_joined_plan_members(UUID, TEXT, UUID) TO authenticated, service_role;");
   });
 
   it("renders the joined-members list without an invite action (they already joined)", () => {

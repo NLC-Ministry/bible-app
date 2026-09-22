@@ -11401,6 +11401,185 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   font-variant-numeric: tabular-nums;
 }
 
+/* 首頁「快問快答」卡片（js/modules/lightning-quiz.mjs）。雲柱動畫、題型預告、
+   限時作答、對錯結果都在同一張卡切換內容，不用漸層／品牌色光暈，維持
+   flat-color 的內容優先風格。 */
+.lightning-quiz-card.hidden { display: none; }
+.lightning-quiz-card__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  min-height: 120px;
+  justify-content: center;
+}
+
+/* 雲柱升起動畫：五片扁圓由下往上依序浮現，帶一點透明度淡入，flat 品牌色，
+   不用漸層/發光。每題只播一次（js 端用 localStorage 記錄），播完就換成題型預告。 */
+.lightning-quiz-rise {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.25rem;
+}
+.lightning-quiz-pillar {
+  position: relative;
+  width: 92px;
+  height: 128px;
+}
+.lq-cloud {
+  position: absolute;
+  left: 50%;
+  border-radius: 999px;
+  opacity: 0;
+  transform: translate(-50%, 14px) scale(0.85);
+  animation: lightningQuizCloudRise 0.55s ease-out forwards;
+}
+/* 五片扁圓由下往上、由寬變窄堆疊，密度（透明度）也由下往上遞增，堆出一根
+   「雲柱」的輪廓；用 color-mix 疊出不同透明度的品牌色平面，不是漸層。 */
+.lq-cloud--1 { bottom: 0;    width: 92px; height: 34px; background: color-mix(in srgb, var(--color-brand) 55%, transparent); animation-delay: 0s; }
+.lq-cloud--2 { bottom: 26px; width: 74px; height: 32px; background: color-mix(in srgb, var(--color-brand) 68%, transparent); animation-delay: 0.12s; }
+.lq-cloud--3 { bottom: 50px; width: 60px; height: 30px; background: color-mix(in srgb, var(--color-brand) 80%, transparent); animation-delay: 0.24s; }
+.lq-cloud--4 { bottom: 72px; width: 48px; height: 26px; background: color-mix(in srgb, var(--color-brand) 92%, transparent); animation-delay: 0.36s; }
+.lq-cloud--5 { bottom: 92px; width: 36px; height: 24px; background: var(--color-brand); animation-delay: 0.48s; }
+@keyframes lightningQuizCloudRise {
+  from { opacity: 0; transform: translate(-50%, 14px) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.lightning-quiz-rise__caption {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+  /* 跟最後一片雲同時淡入，整體看起來像雲柱「帶著字」一起升起 */
+  opacity: 0;
+  animation: lightningQuizCloudRise 0.55s ease-out forwards;
+  animation-delay: 0.6s;
+}
+
+.lightning-quiz-teaser,
+.lightning-quiz-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0;
+}
+.lightning-quiz-teaser [data-icon],
+.lightning-quiz-result [data-icon] {
+  color: var(--color-brand);
+  width: 40px;
+  height: 40px;
+}
+.lightning-quiz-teaser__note {
+  margin: 0 0 0.4rem;
+  max-width: 32rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.lightning-quiz-answering {
+  width: 100%;
+  max-width: 32rem;
+  text-align: left;
+}
+.lightning-quiz-answering__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-brand);
+}
+.lightning-quiz-answering__head [data-icon] {
+  width: 20px;
+  height: 20px;
+}
+.lightning-quiz-timer {
+  font-size: 1.5rem;
+  font-weight: var(--type-weight-strong, 600);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.lightning-quiz-answering [data-lq-submit] {
+  margin-top: 0.75rem;
+  width: 100%;
+}
+.lightning-quiz-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  text-align: center;
+}
+.lightning-quiz-note--warn {
+  color: var(--color-danger-foreground);
+}
+
+.lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
+.lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }
+.lightning-quiz-result__time {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+/* 後台「快問快答」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
+.admin-lightning-quiz-schedule-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.admin-lightning-quiz-active-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+.admin-lightning-quiz-active-toggle input { width: auto; }
+
+.admin-lightning-quiz-stats-table-wrap {
+  overflow-x: auto;
+}
+.admin-lightning-quiz-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.admin-lightning-quiz-stats-table th,
+.admin-lightning-quiz-stats-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-card);
+  white-space: nowrap;
+}
+.admin-lightning-quiz-stats-table th {
+  color: var(--text-secondary);
+  font-weight: var(--type-weight-strong, 500);
+}
+
+.admin-lightning-quiz-leaderboard {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-card);
+}
+.admin-lightning-quiz-leaderboard.hidden { display: none; }
+.admin-lightning-quiz-leaderboard-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+.admin-lightning-quiz-leaderboard-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 3. Border Beam Glow Animation */
 .bento-card::before {
   content: "";

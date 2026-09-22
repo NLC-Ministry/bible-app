@@ -298,6 +298,12 @@
             <div class="exam-home-banner" id="exam-home-banner"></div>
           </div>
 
+          <!-- 首頁「快問快答」：單題限時搶答卡片。內容由 js/modules/lightning-quiz.mjs
+               透過 get_todays_lightning_quiz() 決定；沒有題目/不在時段內/功能關閉時整塊隱藏。 -->
+          <div class="glass-card card-col span-12 bento-card lightning-quiz-card hidden" id="lightning-quiz-card">
+            <div id="lightning-quiz-host"></div>
+          </div>
+
           <!-- Main Column: Personal Progress & Announcements -->
           <!-- 進行中的計畫 (Active Plan Summary) -->
           <div class="glass-card card-col span-8 bento-card active-plan-card">
@@ -1836,6 +1842,59 @@
             </section>
           </div>
 
+          <!-- 首頁「快問快答」後台：題目 CRUD ＋ 統計與趨勢分析。內容由
+               js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
+               renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
+          <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
+            <section class="glass-card admin-announcements" aria-labelledby="admin-lightning-quiz-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
+                  <h3 class="card-title" id="admin-lightning-quiz-title">快問快答</h3>
+                  <p>設定每天要升起的一題快問快答（一天最多一題），可自訂當天的顯示時段。</p>
+                </div>
+                <button type="button" class="primary-btn" id="admin-lightning-quiz-create">新增題目</button>
+              </div>
+              <div id="admin-lightning-quiz-editor" class="announcement-form-panel hidden">
+                <h4 class="announcement-form-panel__title" id="admin-lightning-quiz-form-title">新增題目</h4>
+                <p id="admin-lightning-quiz-locked-note" class="admin-daily-quiz-note hidden">這一題已經有人作答，題目內容與日期已鎖定，只能調整時段或下架。</p>
+                <div class="admin-lightning-quiz-schedule-row">
+                  <label>升起日期
+                    <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
+                  </label>
+                  <label>開始時間
+                    <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
+                  </label>
+                  <label>結束時間
+                    <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
+                  </label>
+                </div>
+                <div id="admin-lightning-quiz-question-body"></div>
+                <label class="admin-lightning-quiz-active-toggle">
+                  <input type="checkbox" id="admin-lightning-quiz-is-active" checked> 啟用（取消勾選＝下架，不會顯示在首頁）
+                </label>
+                <div class="announcement-form-panel__actions">
+                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-lightning-quiz-cancel">取消</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-lightning-quiz-save">儲存題目</button>
+                </div>
+              </div>
+              <div id="admin-lightning-quiz-list" class="announcements-list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入題目…</div>
+              </div>
+            </section>
+            <section class="glass-card admin-announcements" aria-labelledby="admin-lightning-quiz-stats-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <h3 class="card-title" id="admin-lightning-quiz-stats-title">統計與趨勢分析</h3>
+                  <p>逐日參與率、參與率成長、答對人數與平均耗時；可展開單題最快答對排行榜。</p>
+                </div>
+              </div>
+              <div id="admin-lightning-quiz-stats-body">
+                <div class="admin-user-directory__empty">正在載入統計…</div>
+              </div>
+            </section>
+          </div>
+
           <div id="admin-section-settings" class="card-col span-12 admin-section-panel hidden">
           <div class="card-col span-12">
             <div class="glass-card admin-feature-settings-card">
@@ -2825,7 +2884,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260922_fix_admin_plan_filter_leak"></script>
+  <script type="module" src="js/app.js?v=20260922_fix_reading_plan_duplicate_join"></script>
 </body>
 
 </html>
