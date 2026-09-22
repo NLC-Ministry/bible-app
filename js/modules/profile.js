@@ -1030,18 +1030,20 @@ export function init() {
   });
   syncPreferenceThemeState();
   window.addEventListener("app:themeChanged", syncPreferenceThemeState);
-  const offlineReadingToggle = document.getElementById("offline-reading-enabled");
-  if (offlineReadingToggle && offlineReadingToggle.dataset.bound !== "true") {
-    offlineReadingToggle.dataset.bound = "true";
-    offlineReadingToggle.checked = localStorage.getItem("offline_reading_enabled") !== "false";
-    offlineReadingToggle.addEventListener("change", () => {
-      localStorage.setItem("offline_reading_enabled", String(offlineReadingToggle.checked));
-      if (offlineReadingToggle.checked) {
+  // 保持登入並允許離線閱讀已不是可關閉的使用者偏好，一律套用（見 db.js
+  // storeOfflineIdentity / tryRestoreOfflineSession）；這裡不再需要對應開關。
+  const quickLaunchBibleToggle = document.getElementById("quick-launch-bible-enabled");
+  if (quickLaunchBibleToggle && quickLaunchBibleToggle.dataset.bound !== "true") {
+    quickLaunchBibleToggle.dataset.bound = "true";
+    quickLaunchBibleToggle.checked = localStorage.getItem("quick_launch_bible_enabled") === "true";
+    quickLaunchBibleToggle.addEventListener("change", () => {
+      if (quickLaunchBibleToggle.checked) {
         window.db?.storeOfflineIdentity?.();
-        window.showToast?.("已允許此裝置離線閱讀");
+        localStorage.setItem("quick_launch_bible_enabled", "true");
+        window.showToast?.("已開啟快速啟動聖經，下次開啟 App 會直接進入讀經");
       } else {
-        localStorage.removeItem("offline_trusted_identity");
-        window.showToast?.("已關閉此裝置的離線登入");
+        localStorage.setItem("quick_launch_bible_enabled", "false");
+        window.showToast?.("已關閉快速啟動聖經");
       }
     });
   }

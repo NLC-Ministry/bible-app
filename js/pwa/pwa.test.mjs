@@ -78,6 +78,32 @@ describe("CacheManager", () => {
     expect(await (await manager.networkFirst(request)).text()).toBe("fresh");
   });
 
+  it("falls back to the cached app shell when a navigate request hits a 5xx (site under maintenance)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("<html>shell</html>", { status: 200 }))
+      .mockResolvedValueOnce(new Response("Service Unavailable", { status: 503 }));
+    const storage = new MemoryCacheStorage(fetchImpl);
+    const manager = new CacheManager({ fetchImpl, cacheStorage: storage });
+    const shellRequest = new Request("https://example.test/");
+
+    // First visit: caches the good shell response.
+    await manager.networkFirst(shellRequest, { fallbackUrl: "/" });
+    // Second visit: backend is erroring (503) — must serve the cached shell,
+    // not the error response, and must not overwrite the good cache entry.
+    const response = await manager.networkFirst(shellRequest, { fallbackUrl: "/" });
+    expect(response.status).toBe(200);
+    expect(await response.clone().text()).toBe("<html>shell</html>");
+  });
+
+  it("does not swap a non-navigate 5xx response for a cached page (no fallbackUrl)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("chapter unavailable", { status: 503 }));
+    const storage = new MemoryCacheStorage(fetchImpl);
+    const manager = new CacheManager({ fetchImpl, cacheStorage: storage });
+    const request = new Request("https://bolls.life/get-text/RCUV/1/1/");
+
+    const response = await manager.networkFirst(request);
+    expect(response.status).toBe(503);
+  });
+
   it("deletes only obsolete caches owned by the app", async () => {
     const fetchImpl = vi.fn();
     const storage = new MemoryCacheStorage(fetchImpl);

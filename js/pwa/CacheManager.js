@@ -42,6 +42,16 @@ export class CacheManager {
     const cache = await this.cacheStorage.open(cacheName);
     try {
       const response = await this.fetchWithTimeout(request, timeoutMs);
+      // A reachable-but-erroring response (5xx: backend down, deploy in
+      // progress, site under maintenance) on a navigate request leaves the
+      // caller in the same spot as a dropped connection — fall back to the
+      // cached app shell instead of showing/caching the error response.
+      // Scoped to fallbackUrl callers (navigate only, see sw.js): a bible
+      // chapter or static-asset fetch's non-ok response is handled by its
+      // own caller and must not be silently swapped for an unrelated page.
+      if (fallbackUrl && response.status >= 500 && response.status < 600) {
+        throw new Error(`networkFirst: upstream responded ${response.status}`);
+      }
       if (this.isCacheable(response)) await cache.put(request, response.clone());
       return response;
     } catch (error) {

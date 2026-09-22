@@ -1,4 +1,4 @@
-import { CacheManager } from "./js/pwa/CacheManager.js?v=20260729-team-rank";
+import { CacheManager } from "./js/pwa/CacheManager.js?v=20260922-maintenance-fallback";
 
 const VERSION = "__BUILD_VERSION__";
 const cacheManager = new CacheManager({

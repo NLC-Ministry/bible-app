@@ -60,7 +60,7 @@ describe("startup performance contract", () => {
 
   it("does not block first dashboard render on care reminder fetches", () => {
     const forcedReminder = app.lastIndexOf("refreshCareReminderBadge({ force: true })");
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : "dashboard-view")');
+    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
 
     expect(forcedReminder).toBeGreaterThan(-1);
     expect(firstTab).toBeGreaterThan(-1);
@@ -68,7 +68,7 @@ describe("startup performance contract", () => {
   });
 
   it("does not block first dashboard render on organization-directory loading", () => {
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : "dashboard-view")');
+    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
     const orgLoad = app.lastIndexOf("db.loadOrgStructure()");
 
     expect(firstTab).toBeGreaterThan(-1);

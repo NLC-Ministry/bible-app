@@ -64,7 +64,7 @@
       try { performance.mark("boot:" + name); } catch (e) {}
     };
   </script>
-  <link rel="stylesheet" href="index.css?v=20260923_exam_info_icon" onerror="window.showAppStyleRecovery(this)">
+  <link rel="stylesheet" href="index.css?v=20260922_quick_launch_bible_css" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css?v=20260812_clean-user-directory-ui" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css?v=20260906_plan_gate_login_only" onerror="window.showAppStyleRecovery(this)">
 
@@ -2493,13 +2493,13 @@
       <span class="profile-subpage__header-spacer"></span>
     </header>
     <div class="profile-subpage__body">
-    <div class="app-settings-group offline-login-settings">
-      <label class="offline-login-option" for="offline-reading-enabled">
+    <div class="app-settings-group quick-launch-bible-settings">
+      <label class="offline-login-option" for="quick-launch-bible-enabled">
         <span class="app-settings-item__meta">
-          <span class="app-settings-item__title">保持登入並允許離線閱讀</span>
-          <span class="app-settings-item__subtitle">此裝置離線時，可使用最近 30 天內驗證過的身分進入受限閱讀模式</span>
+          <span class="app-settings-item__title">快速啟動聖經</span>
+          <span class="app-settings-item__subtitle">開啟 App 直接進入聖經閱讀，不等會員系統登入完成；登入會在背景進行。此裝置離線或會員系統維修時，也會直接使用最近 30 天內驗證過的身分繼續閱讀</span>
         </span>
-        <input type="checkbox" id="offline-reading-enabled" checked>
+        <input type="checkbox" id="quick-launch-bible-enabled">
       </label>
     </div>
     <div class="app-settings-group offline-bible-settings" id="offline-bible-settings">
@@ -2825,7 +2825,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260922_exam_announcement_live_only_removed"></script>
+  <script type="module" src="js/app.js?v=20260922_background_reconcile_fix"></script>
 </body>
 
 </html>
