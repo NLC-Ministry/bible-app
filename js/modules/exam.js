@@ -411,7 +411,7 @@ export async function renderExamPanel(root) {
     else if (examAdminSubview === "stats") { sub.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(sub, paper.id, hasShortSection, paper.title); }
     else if (examAdminSubview === "explain") renderExamExplanationEditor(sub, questions);
     else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">正式版的題目與試卷設定不提供編輯，一律由對應的測試版按「推上正式版」維護。要查看題目請用上方「預覽試卷」；要編輯答案詳解請切到「答案詳解」分頁。</div>';
-    else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, rerender);
+    else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, questions, rerender);
     else renderExamQuestionBank(sub, paper, questions, rerender);
   };
   body.querySelectorAll("[data-exam-sub]").forEach((b) => b.addEventListener("click", () => {
@@ -913,18 +913,27 @@ function examSectionCfg(paper) {
 }
 
 // ── 試卷設定表單（含題型與配分）──
-function renderExamMetaForm(host, paper, rerender) {
+function renderExamMetaForm(host, paper, questions, rerender) {
   const p = paper;
   const rules = ((p.pledge || {}).rules || []).join("\n");
   const cfg = examSectionCfg(p);
+  // 題庫已經寫的題目數量，用來自動帶入下面的「題數」——題目是第一手事實，
+  // 設定值只是跟著同步；已經寫了題目的題型，一律以實際題數為準（admin 若想
+  // 再多寫，寫完之後題數會自動跟著長大，不用回來手動調整這個欄位）。
+  const actualCounts = {};
+  (Array.isArray(questions) ? questions : []).forEach((q) => { actualCounts[q.section] = (actualCounts[q.section] || 0) + 1; });
   const secRows = SECTION_ORDER.map((t) => {
     const on = !!cfg[t];
     const c = cfg[t] || { count: SECTION_TARGET_DEFAULT[t] || 0, pointsPer: t === "shortanswer" ? 10 : 1 };
+    const actual = actualCounts[t] || 0;
+    const count = actual > 0 ? actual : c.count;
+    const hint = actual > 0 ? `<span class="exam-admin__sec-hint">已寫 ${actual} 題，題數已自動帶入</span>` : "";
     return `<div class="exam-admin__sec-row" data-sec-type="${t}">
       <label class="exam-admin__sec-on"><input type="checkbox" data-s="on" ${on ? "checked" : ""}> ${esc(SECTION_TITLE[t])}</label>
-      <label>題數<input type="number" min="0" class="form-control" data-s="count" value="${c.count}"></label>
+      <label>題數<input type="number" min="0" class="form-control" data-s="count" value="${count}"></label>
       <label>每題配分<input type="number" min="0" step="0.5" class="form-control" data-s="pts" value="${c.pointsPer}"></label>
-      <span class="exam-admin__sec-sub" data-s="sub">小計 ${c.count * c.pointsPer}</span>
+      <span class="exam-admin__sec-sub" data-s="sub">小計 ${count * c.pointsPer}</span>
+      ${hint}
     </div>`;
   }).join("");
 
@@ -1094,6 +1103,21 @@ function renderExamQuestionBank(host, paper, questions, rerender) {
       const res = await db.deleteExamQuestion(card.dataset.qid);
       if (!res.success) { toast(res.message || "刪除失敗"); return; }
       rerender();
+    });
+    // 單選/複選才有這顆按鈕。新選項接在最後面，index 照目前選項數往下編，
+    // radio 的 name 沿用同一組既有的，維持互斥；collectQCard 讀選項是照
+    // DOM 順序抓的，插在最後不會打亂前面幾個的 value/勾選狀態。
+    card.querySelector("[data-opt-add]")?.addEventListener("click", () => {
+      const optsList = card.querySelector(".exam-admin__opts");
+      if (!optsList) return;
+      const nextIndex = optsList.querySelectorAll(".exam-admin__opt").length;
+      const radioName = optsList.querySelector('[data-a="opt"]')?.name || `ak-${card.dataset.qid || "new"}`;
+      optsList.insertAdjacentHTML("beforeend", `
+        <div class="exam-admin__opt">
+          <input type="${sec === "multiple" ? "checkbox" : "radio"}" name="${esc(radioName)}" data-a="opt" value="${nextIndex}">
+          <input class="form-control" data-p="opt" value="">
+        </div>`);
+      optsList.lastElementChild.querySelector('[data-p="opt"]')?.focus();
     });
   };
   host.querySelectorAll(".exam-admin__q-card").forEach(wire);
@@ -2920,10 +2944,12 @@ class ExamRunner {
         <span class="exam-result__pr-tile-value${value == null ? " exam-result__pr-tile-value--muted" : ""}">${value == null ? "—" : `PR ${value}`}</span>
         ${caption ? `<span class="exam-result__pr-tile-caption">${caption}</span>` : ""}
       </div>`;
+    // 這個 PR 是「你」在牧區內的排名（母體只有同牧區的人），不是牧區這個
+    // 單位在全教會的排名——文字要講清楚，避免跟「隊伍 PR」（比較隊伍之間）搞混。
     const zoneCaption = !d.myPastoralZone
       ? "尚未設定牧區"
-      : d.zoneAvg != null
-      ? `牧區平均 ${d.zoneAvg} 分`
+      : d.prZone != null
+      ? `贏過牧區內約 ${d.prZone}% 的人`
       : "參加人數太少";
     const prBlockHtml = !showPr ? "" : `
       <div class="exam-result__pr">
