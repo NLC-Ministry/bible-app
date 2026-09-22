@@ -73,7 +73,7 @@ export async function maybeResumeExam() {
 
 // ══════════════════════════════════════════════════════════════ 後台面板（P2：題庫編輯 + 批改）
 const SECTION_TARGET_DEFAULT = { truefalse: 20, single: 20, multiple: 10, matching: 10, ordering: 10, shortanswer: 3 };
-let examAdminSubview = "bank";          // notice | bank | meta | grade | stats
+let examAdminSubview = "bank";          // bank | meta | answers | grade | assign | practice | stats | explain
 let examAdminGradeFilter = "pending";   // pending | graded | all
 let examAdminGradeSearchQuery = "";     // 批改名單的姓名搜尋關鍵字
 let examAdminPaperId = null;            // 目前選中的試卷（null = 最新那份）
@@ -231,7 +231,7 @@ export async function renderExamPanel(root) {
   if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "assign" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";
-  if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = canFillAnswers ? "answers" : "notice";
+  if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = "answers";
   if (examAdminSubview === "answers" && !canFillAnswers) examAdminSubview = "bank";
   const annPub = paper.announcement_published === true;
   const noticeReady = !!((paper.announcement || {}).headline || "").trim() && !!((paper.announcement || {}).body || "").trim();
@@ -350,7 +350,6 @@ export async function renderExamPanel(root) {
       </details>` : ""}
     </div>
     <nav class="exam-admin__subnav">
-      ${hasNotice ? `<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">預告文</button>` : ""}
       ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
       <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>` : ""}
       ${canFillAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
@@ -409,8 +408,7 @@ export async function renderExamPanel(root) {
   const renderSub = async () => {
     const sub = body.querySelector("#exam-admin-sub");
     if (!sub) return;
-    if (examAdminSubview === "notice") renderExamNoticeForm(sub, paper, rerender);
-    else if (examAdminSubview === "answers") renderExamAnswerKeys(sub, paper, questions, rerender);
+    if (examAdminSubview === "answers") renderExamAnswerKeys(sub, paper, questions, rerender);
     else if (examAdminSubview === "grade") { sub.innerHTML = '<div class="admin-user-directory__empty">載入批改清單…</div>'; await sweepExpired(); renderExamGrading(sub, paper.id, resultsPublished || paper.status !== "closed", paper.status, paper.title); }
     else if (examAdminSubview === "assign") { sub.innerHTML = '<div class="admin-user-directory__empty">載入指派清單…</div>'; await sweepExpired(); renderExamAssign(sub, paper.id, resultsPublished); }
     else if (examAdminSubview === "practice") renderExamPracticeRecords(sub, paper.id);
@@ -472,14 +470,14 @@ export async function renderExamPanel(root) {
       return;
     }
     if (act === "ver-live") {
-      if (liveOf) { examAdminPaperId = liveOf.id; examAdminSubview = "notice"; rerender(); return; }
+      if (liveOf) { examAdminPaperId = liveOf.id; examAdminSubview = "stats"; rerender(); return; }
       if (!confirm("尚未建立正式版。要把這份測試版的題目與試卷設定推上正式版、建立一份正式版嗎？")) return;
       b.disabled = true;
       const r = await db.pushExamToLive(examKey);
       b.disabled = false;
       if (!r.success) { toast(r.message || "建立失敗"); return; }
       toast("已建立正式版");
-      if (r.data && r.data.livePaperId) { examAdminPaperId = r.data.livePaperId; examAdminSubview = "notice"; }
+      if (r.data && r.data.livePaperId) { examAdminPaperId = r.data.livePaperId; examAdminSubview = "stats"; }
       rerender();
       return;
     }
@@ -555,46 +553,6 @@ export async function renderExamPanel(root) {
 
   renderSub();
   keepScroll();
-}
-
-// ── 預告文編輯（首頁 8/30 宣示 banner 的內容來源；測試版與正式版共用同一份表單）──
-function renderExamNoticeForm(host, paper, rerender) {
-  const a = paper.announcement || {};
-  const isLive = paper.mode === "live";
-  const locked = paper.status === "closed";
-  const annPub = paper.announcement_published === true;
-  const openTxt = paper.open_at ? toLocalInput(paper.open_at).replace("T", " ") : "（尚未設定）";
-  const closeTxt = paper.close_at ? toLocalInput(paper.close_at).replace("T", " ") : "（尚未設定）";
-  const audience = isLive ? "會友首頁" : "首頁（僅你自己／管理員看得到，用來預覽效果，不會露出給一般會友）";
-  host.innerHTML = `
-    <div class="exam-admin__form">
-      <p class="exam-admin__hint">這裡的內容會顯示在${audience}的「速讀測驗」置頂區塊。${
-        locked ? "測驗已關閉，預告文已鎖定。"
-        : annPub ? `預告文已發佈、正在${isLive ? "首頁顯示" : "首頁預覽"}，仍可在此微調文案並儲存。`
-        : `填好標題與內容後，回上方按「發佈預告文」即可${isLive ? "上線" : "在首頁預覽"}（不影響試卷草稿狀態）。`}</p>
-      <label>標題（必填）
-        <input class="form-control" data-n="headline" maxlength="40" value="${esc(a.headline || "")}" ${locked ? "disabled" : ""}></label>
-      <label>內容（必填）
-        <textarea class="form-control" data-n="body" rows="4" ${locked ? "disabled" : ""} placeholder="例：8/30 00:00 起開放 24 小時，作答限時 75 分鐘。開始前請先詳閱測驗宣示規則。">${esc(a.body || "")}</textarea></label>
-      <label>入口按鈕文字（選填，預設「進入測驗」）
-        <input class="form-control" data-n="ctaLabel" maxlength="12" value="${esc(a.ctaLabel || "")}" ${locked ? "disabled" : ""}></label>
-      <p class="exam-admin__meta">開放時間：${esc(openTxt)} ～ ${esc(closeTxt)}（於「試卷設定」分頁調整）</p>
-      ${locked ? "" : '<button type="button" class="primary-btn" id="exam-notice-save">儲存預告文</button>'}
-    </div>`;
-  if (locked) return;
-  host.querySelector("#exam-notice-save")?.addEventListener("click", async (e) => {
-    const payload = {
-      headline: host.querySelector('[data-n="headline"]').value.trim(),
-      body: host.querySelector('[data-n="body"]').value.trim(),
-      ctaLabel: host.querySelector('[data-n="ctaLabel"]').value.trim()
-    };
-    e.target.disabled = true;
-    const res = await db.saveExamAnnouncement(paper.id, payload);
-    e.target.disabled = false;
-    if (!res.success) { toast(res.message || "儲存失敗"); return; }
-    toast("預告文已儲存");
-    rerender();
-  });
 }
 
 // ── 統計報表（整體 / 大區 / 牧區 / 小組 / 逐題正確率 / 名單）──
@@ -930,6 +888,8 @@ function examSectionCfg(paper) {
 // ── 試卷設定表單（含題型與配分）──
 function renderExamMetaForm(host, paper, questions, rerender) {
   const p = paper;
+  const ann = p.announcement || {};
+  const annLocked = p.status === "closed";
   const rules = ((p.pledge || {}).rules || []).join("\n");
   const cfg = examSectionCfg(p);
   // 題庫已經寫的題目數量，用來自動帶入下面的「題數」——題目是第一手事實，
@@ -987,6 +947,18 @@ function renderExamMetaForm(host, paper, questions, rerender) {
         <p class="exam-admin__sec-total">滿分：<strong data-s="total">${p.total_points}</strong> 分</p>
       </fieldset>
 
+      <fieldset class="exam-admin__sec-cfg">
+        <legend>公告設定</legend>
+        <p class="exam-admin__meta">這裡的內容會出現在首頁的「速讀測驗」置頂區塊。測試版按「發佈預告文」只有你自己（管理員）看得到，用來預覽實際效果；推上正式版後，正式版要另外自己按「發佈預告文」才會公開給全體會友——內容以最後一次「同步到正式版」帶過去的為準，正式版不能自己改文字。</p>
+        <label>標題（必填）
+          <input class="form-control" data-n="headline" maxlength="40" value="${esc(ann.headline || "")}" ${annLocked ? "disabled" : ""}></label>
+        <label>內容（必填）
+          <textarea class="form-control" rows="4" data-n="body" ${annLocked ? "disabled" : ""} placeholder="例：8/30 00:00 起開放 24 小時，作答限時 75 分鐘。開始前請先詳閱測驗宣示規則。">${esc(ann.body || "")}</textarea></label>
+        <label>入口按鈕文字（選填，預設「進入測驗」）
+          <input class="form-control" data-n="ctaLabel" maxlength="12" value="${esc(ann.ctaLabel || "")}" ${annLocked ? "disabled" : ""}></label>
+        ${annLocked ? '<p class="exam-admin__meta">測驗已關閉，公告內容已鎖定。</p>' : '<button type="button" class="secondary-btn" id="exam-notice-save">儲存公告設定</button>'}
+      </fieldset>
+
       <label>宣示：開放說明<input class="form-control" data-f="pledge_open" value="${esc((p.pledge || {}).openText || "")}"></label>
       <label>宣示：規則（每行一條）<textarea class="form-control" rows="6" data-f="pledge_rules">${esc(rules)}</textarea></label>
       <label>宣示：確認句（{name} 會代入姓名）<input class="form-control" data-f="pledge_consent" value="${esc((p.pledge || {}).consentTemplate || "{name} 清楚以上測驗規則，亦會遵守規則來完成本次測驗。")}"></label>
@@ -1031,6 +1003,20 @@ function renderExamMetaForm(host, paper, questions, rerender) {
     e.target.disabled = false;
     if (!res.success) { toast(res.message || "儲存失敗"); return; }
     toast("已儲存");
+    rerender();
+  });
+
+  host.querySelector("#exam-notice-save")?.addEventListener("click", async (e) => {
+    const payload = {
+      headline: host.querySelector('[data-n="headline"]').value.trim(),
+      body: host.querySelector('[data-n="body"]').value.trim(),
+      ctaLabel: host.querySelector('[data-n="ctaLabel"]').value.trim()
+    };
+    e.target.disabled = true;
+    const res = await db.saveExamAnnouncement(p.id, payload);
+    e.target.disabled = false;
+    if (!res.success) { toast(res.message || "儲存失敗"); return; }
+    toast("公告設定已儲存");
     rerender();
   });
 }

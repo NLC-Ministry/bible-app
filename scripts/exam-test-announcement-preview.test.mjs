@@ -55,10 +55,10 @@ describe("0198: 大測驗 admin UI 兩版都顯示「預告文」分頁，文案
     expect(exam).toContain('"預告文已發佈，可以到首頁預覽（僅管理員看得到）"');
   });
 
-  it("renderExamNoticeForm 也依 paper.mode 給出不同受眾說明", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("// ── 統計報表"));
-    expect(fn).toContain('const isLive = paper.mode === "live";');
-    expect(fn).toContain("僅你自己／管理員看得到");
+  it("公告內容編輯表單已併入 renderExamMetaForm（測試版限定），不再有獨立的 renderExamNoticeForm", () => {
+    // 0199 進一步把公告「內容編輯」整個拉回測試版的試卷設定分頁，見
+    // exam-announcement-test-owned.test.mjs，這裡只確認舊的獨立表單函式真的沒了。
+    expect(exam).not.toContain("function renderExamNoticeForm");
   });
 });
 
