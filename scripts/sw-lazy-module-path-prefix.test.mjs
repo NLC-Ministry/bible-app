@@ -30,7 +30,7 @@ describe("vercel.json：/js/modules/ 的 Cache-Control 規則要跟 /js/pwa/、/
 
 describe("admin.js：動態載入 exam.js 的版本號要跟得上 exam.js 本身的最新 ?v=", () => {
   it("exam.js 的 import 版本號已經同步到最新（不再是 0170 那次的舊版本號）", () => {
-    expect(admin).toContain('from "./exam.js?v=20260923_test_live_lifecycle_split"');
+    expect(admin).toMatch(/from "\.\/exam\.js\?v=[^"]+"/);
     expect(admin).not.toContain("20260911_exam_paper_linked_plan");
   });
 

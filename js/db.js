@@ -3707,6 +3707,8 @@ const db = {
       exam_announcement_incomplete: "請先填寫預告文的標題與內容。",
       exam_announcement_already_published: "預告文已發佈。",
       exam_announcement_locked: "測驗已正式發佈，預告文無法再修改。",
+      exam_announcement_would_blank_published: "這份公告已經發佈中，標題與內容不能存成空白。要清空請先按「撤下預告文」。",
+      exam_push_would_blank_announcement: "正式版的公告已經發佈給會友看了，測試版的標題／內容是空的，無法同步過去覆蓋掉。請先在測試版填好內容再同步。",
       exam_reset_live_forbidden: "正式測驗不可清除作答紀錄。如需重置請由工程人員處理。",
       exam_mode_locked: "已發佈的卷不能切換模式。請先「關閉測驗 → 改回草稿」再切。",
       exam_push_source_not_test: "只有測試卷可以「推上正式版」。",
