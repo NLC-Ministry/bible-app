@@ -1363,6 +1363,7 @@ export async function renderAdminRegistrationStatistics() {
 }
 
 let editingAdminAnnouncementId = null;
+let editingAdminLightningQuizId = null;
 
 function parseAdminAnnouncement(announcement = {}) {
   const rawTitle = String(announcement.title || "").trim();
@@ -1535,6 +1536,357 @@ export async function renderAdminAnnouncements() {
   if (typeof hydrateIcons === "function") hydrateIcons(host);
 }
 
+// ── 首頁「快問快答」(lightning quiz, migration 0202) ───────────────────────
+// 完全獨立於 daily_quiz／speed_reading_exam；單題編輯器重用 daily_quiz 自訂
+// 題目編輯器（ADMIN_QUIZ_CUSTOM_TYPE_LABELS / renderAdminQuizCustomQuestionBodyHtml
+// / bindAdminQuizCustomQuestionBlock 等，定義在本檔案後段）的題型一～五輸入
+// UI，因為題型定義、payload/answerKey 形狀完全共用（quiz-question-types.mjs）。
+// 一次只編輯「一題」，所以不重用它的多題清單管理（新增/刪除/編號）那層。
+
+function renderAdminLightningQuizQuestionFieldsetHtml(question) {
+  const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
+  const type = normalized.type || 'single';
+  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-type="${type}">
+    <label>題型<select class="form-control" data-field="type">
+      ${Object.entries(ADMIN_QUIZ_CUSTOM_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('')}
+    </select></label>
+    <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
+    <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
+  </fieldset>`;
+}
+
+// 跟 collectAdminQuizCustomQuestionFromBlock 邏輯相同，但不需要 id/explanation
+// /verseRef（快問快答一次只有一題，不需要跨題 id 前綴，也沒有解說欄位）。
+function collectAdminLightningQuizQuestion(fieldset) {
+  const type = fieldset.querySelector('[data-field="type"]')?.value || 'single';
+  const stem = fieldset.querySelector('[data-field="stem"]')?.value.trim() || '';
+
+  if (type === 'truefalse') {
+    const answerKey = fieldset.querySelector('[data-field="answerKey"]')?.value === 'true';
+    return { type, payload: { stem }, answerKey };
+  }
+  if (type === 'single' || type === 'multiple') {
+    const rows = Array.from(fieldset.querySelectorAll('[data-option-row]'));
+    const options = rows.map(row => row.querySelector('[data-option-text]')?.value.trim() || '');
+    if (type === 'single') {
+      const correctIndex = rows.findIndex(row => row.querySelector('[data-option-correct]')?.checked);
+      return { type, payload: { stem, options }, answerKey: correctIndex };
+    }
+    const answerKey = rows.reduce((acc, row, optionIndex) => {
+      if (row.querySelector('[data-option-correct]')?.checked) acc.push(optionIndex);
+      return acc;
+    }, []);
+    return { type, payload: { stem, options }, answerKey };
+  }
+  if (type === 'matching') {
+    const rows = Array.from(fieldset.querySelectorAll('[data-pair-row]'));
+    const left = rows.map((row, i) => ({ id: `L${i + 1}`, text: row.querySelector('[data-pair-left]')?.value.trim() || '' }));
+    const right = rows.map((row, i) => ({ id: `R${i + 1}`, text: row.querySelector('[data-pair-right]')?.value.trim() || '' }));
+    const answerKey = {};
+    left.forEach((item, i) => { answerKey[item.id] = right[i].id; });
+    return { type, payload: { stem, left, right }, answerKey };
+  }
+  if (type === 'ordering') {
+    const rows = Array.from(fieldset.querySelectorAll('[data-item-row]'));
+    const items = rows.map((row, i) => ({ id: `I${i + 1}`, text: row.querySelector('[data-item-text]')?.value.trim() || '' }));
+    return { type, payload: { stem, items }, answerKey: items.map(item => item.id) };
+  }
+  return { type, payload: { stem }, answerKey: null };
+}
+
+function adminLightningQuizQuestionIsValid(question) {
+  if (!question?.payload?.stem) return false;
+  switch (question.type) {
+    case 'truefalse':
+      return typeof question.answerKey === 'boolean';
+    case 'single': {
+      const options = question.payload.options || [];
+      return options.length >= 2 && options.every(Boolean)
+        && Number.isInteger(question.answerKey) && question.answerKey >= 0 && question.answerKey < options.length;
+    }
+    case 'multiple': {
+      const options = question.payload.options || [];
+      return options.length >= 2 && options.every(Boolean)
+        && Array.isArray(question.answerKey) && question.answerKey.length > 0;
+    }
+    case 'matching': {
+      const left = question.payload.left || [];
+      const right = question.payload.right || [];
+      return left.length >= 2 && left.length === right.length
+        && left.every(item => item.text) && right.every(item => item.text);
+    }
+    case 'ordering': {
+      const items = question.payload.items || [];
+      return items.length >= 2 && items.every(item => item.text);
+    }
+    default:
+      return false;
+  }
+}
+
+function formatAdminLightningQuizDate(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+function closeAdminLightningQuizEditor() {
+  editingAdminLightningQuizId = null;
+  document.getElementById('admin-lightning-quiz-editor')?.classList.add('hidden');
+  const riseDate = document.getElementById('admin-lightning-quiz-rise-date');
+  const timeStart = document.getElementById('admin-lightning-quiz-time-start');
+  const timeEnd = document.getElementById('admin-lightning-quiz-time-end');
+  const isActive = document.getElementById('admin-lightning-quiz-is-active');
+  const body = document.getElementById('admin-lightning-quiz-question-body');
+  const heading = document.getElementById('admin-lightning-quiz-form-title');
+  const save = document.getElementById('admin-lightning-quiz-save');
+  const locked = document.getElementById('admin-lightning-quiz-locked-note');
+  if (riseDate) riseDate.value = '';
+  if (timeStart) timeStart.value = '';
+  if (timeEnd) timeEnd.value = '';
+  if (isActive) isActive.checked = true;
+  if (body) body.innerHTML = '';
+  if (heading) heading.textContent = '新增題目';
+  if (save) save.textContent = '儲存題目';
+  if (locked) locked.classList.add('hidden');
+}
+
+function openAdminLightningQuizEditor(question = null) {
+  editingAdminLightningQuizId = question?.id || null;
+  const editor = document.getElementById('admin-lightning-quiz-editor');
+  const riseDate = document.getElementById('admin-lightning-quiz-rise-date');
+  const timeStart = document.getElementById('admin-lightning-quiz-time-start');
+  const timeEnd = document.getElementById('admin-lightning-quiz-time-end');
+  const isActive = document.getElementById('admin-lightning-quiz-is-active');
+  const body = document.getElementById('admin-lightning-quiz-question-body');
+  const heading = document.getElementById('admin-lightning-quiz-form-title');
+  const save = document.getElementById('admin-lightning-quiz-save');
+  const locked = document.getElementById('admin-lightning-quiz-locked-note');
+  if (!editor || !body) return;
+
+  editor.classList.remove('hidden');
+  editor.dataset.locked = question?.hasAttempts ? 'true' : 'false';
+  if (riseDate) riseDate.value = question?.riseDate || '';
+  if (timeStart) timeStart.value = question?.riseTimeStart?.slice(0, 5) || '';
+  if (timeEnd) timeEnd.value = question?.riseTimeEnd?.slice(0, 5) || '';
+  if (isActive) isActive.checked = question ? question.isActive !== false : true;
+  body.innerHTML = renderAdminLightningQuizQuestionFieldsetHtml(question ? {
+    type: question.questionType,
+    payload: question.payload,
+    answerKey: question.answerKey
+  } : null);
+  bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
+  if (typeof hydrateIcons === 'function') hydrateIcons(body);
+  if (locked) locked.classList.toggle('hidden', !question?.hasAttempts);
+  if (question?.hasAttempts) {
+    // 已有作答紀錄：鎖定題型/題目/正解/日期，只能改時段或下架（跟 SQL 端
+    // admin_upsert_lightning_quiz_question 的鎖定規則一致）。
+    body.querySelectorAll('select, textarea, input').forEach(el => { el.disabled = true; });
+    body.querySelectorAll('[data-option-add],[data-pair-add],[data-item-add],[data-option-remove],[data-pair-remove],[data-item-remove]')
+      .forEach(el => { el.disabled = true; });
+    if (riseDate) riseDate.disabled = true;
+  } else if (riseDate) {
+    riseDate.disabled = false;
+  }
+  if (heading) heading.textContent = editingAdminLightningQuizId ? '編輯題目' : '新增題目';
+  if (save) save.textContent = editingAdminLightningQuizId ? '儲存修改' : '儲存題目';
+  riseDate?.focus();
+}
+
+export async function renderAdminLightningQuizQuestions() {
+  const host = document.getElementById('admin-lightning-quiz-list');
+  const createButton = document.getElementById('admin-lightning-quiz-create');
+  const cancelButton = document.getElementById('admin-lightning-quiz-cancel');
+  const saveButton = document.getElementById('admin-lightning-quiz-save');
+  if (!host || !createButton || !cancelButton || !saveButton) return;
+
+  createButton.onclick = () => openAdminLightningQuizEditor();
+  cancelButton.onclick = closeAdminLightningQuizEditor;
+  saveButton.onclick = async () => {
+    const riseDate = document.getElementById('admin-lightning-quiz-rise-date')?.value || '';
+    const timeStart = document.getElementById('admin-lightning-quiz-time-start')?.value || '';
+    const timeEnd = document.getElementById('admin-lightning-quiz-time-end')?.value || '';
+    const isActive = document.getElementById('admin-lightning-quiz-is-active')?.checked !== false;
+    const fieldset = document.querySelector('#admin-lightning-quiz-question-body fieldset');
+    if (!riseDate || !timeStart || !timeEnd) {
+      showToast('請設定升起日期與開始／結束時間。');
+      return;
+    }
+    if (timeStart >= timeEnd) {
+      showToast('結束時間必須晚於開始時間。');
+      return;
+    }
+    const question = fieldset ? collectAdminLightningQuizQuestion(fieldset) : null;
+    if (!question || !adminLightningQuizQuestionIsValid(question)) {
+      showToast('請完整填寫題目內容（含正確答案）後再儲存。');
+      return;
+    }
+    saveButton.disabled = true;
+    const result = await db.adminUpsertLightningQuizQuestion({
+      id: editingAdminLightningQuizId,
+      riseDate,
+      riseTimeStart: timeStart,
+      riseTimeEnd: timeEnd,
+      questionType: question.type,
+      payload: question.payload,
+      answerKey: question.answerKey,
+      isActive
+    });
+    saveButton.disabled = false;
+    if (!result.success) {
+      showToast(result.message || '儲存失敗，請稍後再試。');
+      return;
+    }
+    showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
+    closeAdminLightningQuizEditor();
+    await renderAdminLightningQuizQuestions();
+  };
+
+  const result = await db.adminListLightningQuizQuestions();
+  if (!result.success) {
+    host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入失敗，請稍後再試。')}</div>`;
+    return;
+  }
+  const questions = Array.isArray(result.data) ? result.data : [];
+  if (!questions.length) {
+    host.innerHTML = '<div class="admin-user-directory__empty">目前尚無題目，請按「新增題目」設定第一題。</div>';
+    return;
+  }
+
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' });
+  host.innerHTML = questions.map(question => {
+    const isPast = question.riseDate < todayStr;
+    const isToday = question.riseDate === todayStr;
+    const statusBadge = !question.isActive
+      ? '<span class="stat-badge stat-badge--neutral">已下架</span>'
+      : isToday ? '<span class="stat-badge stat-badge--success">今天</span>'
+      : isPast ? '<span class="stat-badge stat-badge--neutral">已結束</span>'
+      : '<span class="stat-badge stat-badge--brand">即將升起</span>';
+    const typeLabel = ADMIN_QUIZ_CUSTOM_TYPE_LABELS[question.questionType] || question.questionType;
+    return `
+    <article class="announcement-item" data-admin-lightning-quiz-id="${escapeHTML(String(question.id))}">
+      <div class="announcement-item__header">
+        <div class="announcement-item__header-left">
+          <div class="announcement-item__icon-avatar" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="zap"></span></div>
+          <div class="announcement-item__title-group">
+            <div class="announcement-item__tags">
+              <span class="announcement-badge announcement-badge--default"><span>${escapeHTML(typeLabel)}</span></span>
+              ${statusBadge}
+              ${question.hasAttempts ? '<span class="stat-badge stat-badge--neutral">已有作答（內容鎖定）</span>' : ''}
+            </div>
+            <h4 class="announcement-item__title">${escapeHTML(formatAdminLightningQuizDate(question.riseDate))} ${escapeHTML((question.riseTimeStart || '').slice(0, 5))}–${escapeHTML((question.riseTimeEnd || '').slice(0, 5))}</h4>
+            <p class="announcement-item__body">${escapeHTML(question.payload?.stem || '')}</p>
+          </div>
+        </div>
+        <div class="announcement-item__meta">
+          <button type="button" class="circular-action-btn" data-lightning-quiz-edit title="編輯" aria-label="編輯"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
+          <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-delete title="刪除" aria-label="刪除"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+
+  host.querySelectorAll('[data-admin-lightning-quiz-id]').forEach(card => {
+    const question = questions.find(item => String(item.id) === card.dataset.adminLightningQuizId);
+    card.querySelector('[data-lightning-quiz-edit]')?.addEventListener('click', () => openAdminLightningQuizEditor(question));
+    card.querySelector('[data-lightning-quiz-delete]')?.addEventListener('click', async () => {
+      if (question.hasAttempts) {
+        showToast('這一題已經有人作答，無法刪除，請改用下架（停用）。');
+        return;
+      }
+      const confirmed = await window.showConfirmDialog({
+        title: '確定要刪除這一題快問快答嗎？',
+        message: '此動作無法復原。',
+        confirmText: '確認刪除',
+        cancelText: '取消',
+        isDestructive: true
+      });
+      if (!confirmed) return;
+      const result = await db.adminDeleteLightningQuizQuestion(question.id);
+      if (!result.success) {
+        showToast(result.message || '刪除失敗，請稍後再試。');
+        return;
+      }
+      showToast('題目已刪除。');
+      closeAdminLightningQuizEditor();
+      await renderAdminLightningQuizQuestions();
+    });
+  });
+  if (typeof hydrateIcons === 'function') hydrateIcons(host);
+}
+
+function formatAdminLightningQuizPercent(value) {
+  return `${Math.round((Number(value) || 0) * 100)}%`;
+}
+
+export async function renderAdminLightningQuizStats() {
+  const host = document.getElementById('admin-lightning-quiz-stats-body');
+  if (!host) return;
+
+  const result = await db.adminGetLightningQuizTrend();
+  if (!result.success) {
+    host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入統計失敗，請稍後再試。')}</div>`;
+    return;
+  }
+  const days = Array.isArray(result.data?.days) ? result.data.days : [];
+  if (!days.length) {
+    host.innerHTML = '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>';
+    return;
+  }
+
+  const rows = days.map((day, index) => {
+    // 成長率：跟「上一次有題目的那天」比參與率，而不是硬性比前一個日曆日——
+    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。
+    const prev = days[index - 1];
+    const growth = prev && prev.participationRate > 0
+      ? ((day.participationRate - prev.participationRate) / prev.participationRate) * 100
+      : null;
+    const growthLabel = growth == null ? '—' : `${growth > 0 ? '+' : ''}${growth.toFixed(0)}%`;
+    return `<tr data-lightning-quiz-stats-row="${escapeHTML(String(day.questionId))}">
+      <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}</td>
+      <td>${escapeHTML(String(day.completedCount))} / ${escapeHTML(String(day.totalEligible))}（${escapeHTML(formatAdminLightningQuizPercent(day.participationRate))}）</td>
+      <td>${growthLabel}</td>
+      <td>${escapeHTML(String(day.correctCount))}</td>
+      <td>${day.avgElapsedMs != null ? `${(Number(day.avgElapsedMs) / 1000).toFixed(1)} 秒` : '—'}</td>
+      <td><button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(String(day.questionId))}">查看排行榜</button></td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="admin-lightning-quiz-stats-table-wrap">
+      <table class="admin-lightning-quiz-stats-table">
+        <thead><tr><th>日期</th><th>完成／應答（參與率）</th><th>參與率成長</th><th>答對人數</th><th>平均耗時</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div id="admin-lightning-quiz-leaderboard" class="admin-lightning-quiz-leaderboard hidden"></div>
+  `;
+
+  const leaderboardHost = host.querySelector('#admin-lightning-quiz-leaderboard');
+  host.querySelectorAll('[data-lightning-quiz-leaderboard]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const questionId = button.dataset.lightningQuizLeaderboard;
+      const day = days.find(item => String(item.questionId) === questionId);
+      leaderboardHost.classList.remove('hidden');
+      leaderboardHost.innerHTML = '<div class="admin-user-directory__empty">正在載入排行榜…</div>';
+      leaderboardHost.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const board = await db.adminGetLightningQuizLeaderboard(questionId, 10);
+      if (!board.success) {
+        leaderboardHost.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(board.message || '載入排行榜失敗。')}</div>`;
+        return;
+      }
+      const list = Array.isArray(board.data) ? board.data : [];
+      leaderboardHost.innerHTML = `
+        <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day?.riseDate || ''))}最快答對排行榜</h4>
+        ${list.length ? `<ol class="admin-lightning-quiz-leaderboard-list">
+          ${list.map(entry => `<li><span>${escapeHTML(entry.name || '（未命名）')}</span><span>${(Number(entry.elapsedMs) / 1000).toFixed(1)} 秒</span></li>`).join('')}
+        </ol>` : '<div class="admin-user-directory__empty">這一題目前還沒有人答對。</div>'}
+      `;
+    });
+  });
+}
+
 export function init() {
   void renderAdminFeatureSettings();
   void renderAdminUserDirectory();
@@ -1543,6 +1895,8 @@ export function init() {
   void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   void renderAdminAnnouncements();
+  void renderAdminLightningQuizQuestions();
+  void renderAdminLightningQuizStats();
 
   // Bind collapse toggles for every 加入計畫狀況 card (已加入計畫 and 尚未加入計畫
   // both use the same .admin-unjoined-plan-card markup) — each header toggles
@@ -1647,6 +2001,7 @@ const ADMIN_SECTIONS = [
   { id: 'statistics',    group: '計畫營運',   label: '計畫統計',       icon: 'barChart',      panel: 'plans',  sub: 'statistics' },
   { id: 'quizzes',       group: '測驗',       label: '小測驗',         icon: 'checkCircle',   panel: 'plans',  sub: 'quizzes', flag: 'quiz' },
   { id: 'exam',          group: '測驗',       label: '大測驗',         icon: 'pencil',        panel: 'plans',  sub: 'exam',    flag: 'exam' },
+  { id: 'lightning-quiz', group: '測驗',      label: '快問快答',       icon: 'zap',           panel: 'system', sub: 'lightning-quiz' },
   { id: 'devotions',     group: '內容管理',   label: '每日靈修',       icon: 'bookOpen',      panel: 'plans',  sub: 'devotions', flag: 'devotion' },
   { id: 'group-meeting', group: '內容管理',   label: '小組聚會',       icon: 'peoples',       panel: 'plans',  sub: 'group-meeting', flag: 'groupMeeting' },
   { id: 'settings',      group: '設定',       label: '功能開放設定',   icon: 'setting',       panel: 'system', sub: 'settings' }

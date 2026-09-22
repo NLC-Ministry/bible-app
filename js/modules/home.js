@@ -2,6 +2,7 @@
 import { validateVerseSource } from "./verse-validator.mjs";
 import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
+import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -296,6 +297,7 @@ export function updateDashboardView() {
   void refreshExamHomeBanner();
   void refreshDevotionHomeCard();
   void refreshGroupMeetingHomeCard();
+  void refreshLightningQuizHomeCard();
 
 
 

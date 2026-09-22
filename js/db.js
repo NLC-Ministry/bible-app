@@ -4938,15 +4938,26 @@ const db = {
             insertPayload.global_plan_id = globalPlanId;
           }
 
+          // 兩個條件都要查，不能只查 global_plan_id：這個使用者可能是在
+          // global_plan_id 還沒補上之前就用舊制（只有 preset_key）加入過這個
+          // 計畫。只查 global_plan_id 的話，那筆舊列找不到會被判定成「沒加
+          // 入過」，這裡就會再 INSERT 一筆新的，讓同一個人對同一個計畫留下
+          // 兩筆 reading_plans——讀經紀錄之後究竟掛在哪一筆全看当下 state.
+          // activePlan 指到哪筆，導致同一人進度被攔腰拆成兩半、統計對不起來。
           let existingQuery = state.supabase
             .from("reading_plans")
             .select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, is_fixed, reading_days_per_week, rest_weekdays")
             .eq("user_id", user.id);
-          if (globalPlanId) existingQuery = existingQuery.eq("global_plan_id", globalPlanId);
-          else existingQuery = existingQuery.eq("preset_key", presetKey).eq("name", planName);
+          const existingOrParts = [];
+          if (globalPlanId) existingOrParts.push(`global_plan_id.eq.${quotePostgrestValue(globalPlanId)}`);
+          existingOrParts.push(`and(preset_key.eq.${quotePostgrestValue(presetKey)},name.eq.${quotePostgrestValue(planName)})`);
+          existingQuery = existingQuery.or(existingOrParts.join(","));
 
-          const { data: existingPlan, error: existingError } = await existingQuery.maybeSingle();
+          const { data: existingPlans, error: existingError } = await existingQuery;
           if (existingError) throw existingError;
+          // 兩個條件可能各自命中一筆舊資料（就是上面說的重複列）；優先採用已經
+          // 有 global_plan_id 的那一筆當作正本，避免繼續在錯的那筆上疊加紀錄。
+          const existingPlan = (existingPlans || []).find(p => p.global_plan_id) || (existingPlans || [])[0] || null;
 
           if (existingPlan) {
             const existingIsFixed = existingPlan.is_fixed !== false;
@@ -6415,5 +6426,121 @@ const db = {
 // own comment above for why an unpaginated select silently truncates once
 // a result set passes PostgREST's default row cap.
 db.fetchAllRows = fetchAllRows;
+
+// ── 首頁「快問快答」(lightning quiz, migration 0202) ───────────────────────
+// 完全獨立於 daily_quiz／speed_reading_exam；題型渲染/判分共用
+// js/modules/quiz-question-types.mjs。RPC 名稱與 nlc-data 白名單
+// （LIGHTNING_QUIZ_RPC_FUNCTIONS）一一對應。
+db._lightningQuizErrorMessage = function(error) {
+  const raw = String(error && (error.message || error.error || error.details) || error || "");
+  const normalized = raw.toLowerCase();
+  if (normalized.includes("statement timeout")
+    || normalized.includes("canceling statement")
+    || normalized.includes("query timeout")
+    || normalized.includes("57014")) {
+    return "快問快答載入逾時，請稍後再試。";
+  }
+  if (normalized.includes("pgrst202")
+    || normalized.includes("could not find the function")
+    || normalized.includes("schema cache")) {
+    return "快問快答資料庫版本尚未更新，請通知管理員完成系統更新。";
+  }
+  const messages = {
+    lightning_quiz_feature_disabled: "快問快答功能目前已關閉。",
+    lightning_quiz_not_found: "找不到這一題，請重新整理頁面後再試一次。",
+    lightning_quiz_outside_window: "現在不是這一題的作答時段。",
+    lightning_quiz_already_answered: "這一題已經作答過了。",
+    lightning_quiz_not_started: "請先按下開始作答。",
+    lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
+    lightning_quiz_admin_required: "只有系統管理員或牧者可以管理快問快答。",
+    lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
+    lightning_quiz_locked_has_attempts: "這一題已經有人作答，題目內容與日期已鎖定，只能調整時段或下架。",
+    lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
+    profile_required: "找不到你的會員資料，請重新登入後再試。"
+  };
+  const key = Object.keys(messages).find(code => raw.includes(code));
+  return key ? messages[key] : "快問快答資料處理失敗，請稍後再試。";
+};
+
+db._callLightningQuizRpc = async function(functionName, args = {}) {
+  if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    return { success: false, message: "快問快答功能需要登入正式帳號。" };
+  }
+  try {
+    const { data, error } = await state.supabase.rpc(functionName, args);
+    if (error) {
+      const errorDetails = error && typeof error === "object"
+        ? { message: error.message || null, code: error.code || null, status: error.status || null }
+        : { message: String(error || "unknown_error") };
+      console.warn(`[LightningQuiz] ${functionName} failed: ${JSON.stringify(errorDetails)}`);
+      return { success: false, error, message: this._lightningQuizErrorMessage(error) };
+    }
+    return { success: true, data };
+  } catch (error) {
+    const errorDetails = error && typeof error === "object"
+      ? { message: error.message || null, code: error.code || null, status: error.status || null }
+      : { message: String(error || "unknown_error") };
+    console.warn(`[LightningQuiz] ${functionName} failed: ${JSON.stringify(errorDetails)}`);
+    return { success: false, error, message: this._lightningQuizErrorMessage(error) };
+  }
+};
+
+db.getTodaysLightningQuiz = async function() {
+  return this._callLightningQuizRpc("get_todays_lightning_quiz", {});
+};
+
+db.startLightningQuizAttempt = async function(questionId) {
+  if (!questionId) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("start_lightning_quiz_attempt", { p_question_id: questionId });
+};
+
+db.submitLightningQuizAttempt = async function(questionId, response) {
+  if (!questionId) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("submit_lightning_quiz_attempt", {
+    p_question_id: questionId,
+    p_response: response
+  });
+};
+
+db.adminListLightningQuizQuestions = async function(fromDate, toDate) {
+  return this._callLightningQuizRpc("admin_list_lightning_quiz_questions", {
+    p_from: fromDate || null,
+    p_to: toDate || null
+  });
+};
+
+db.adminUpsertLightningQuizQuestion = async function(question) {
+  const q = question || {};
+  return this._callLightningQuizRpc("admin_upsert_lightning_quiz_question", {
+    p_id: q.id || null,
+    p_rise_date: q.riseDate || null,
+    p_rise_time_start: q.riseTimeStart || null,
+    p_rise_time_end: q.riseTimeEnd || null,
+    p_question_type: q.questionType || null,
+    p_payload: q.payload || null,
+    p_answer_key: q.answerKey || null,
+    p_is_active: q.isActive !== false
+  });
+};
+
+db.adminDeleteLightningQuizQuestion = async function(id) {
+  if (!id) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("admin_delete_lightning_quiz_question", { p_id: id });
+};
+
+db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_trend", {
+    p_from: fromDate || null,
+    p_to: toDate || null
+  });
+};
+
+db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {
+  if (!questionId) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_leaderboard", {
+    p_question_id: questionId,
+    p_limit: limit || 10
+  });
+};
 
 window.db = db;
