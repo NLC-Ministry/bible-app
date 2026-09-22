@@ -120,7 +120,7 @@ describe("說明改成小圖示點擊彈出：不再另外開分頁，需要才�
 
   it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：測試版/正式版關係、公告設定、自動評分、答案詳解、複習、清除作答、公布成績", () => {
     expect(exam).toContain('examInfoIcon("測試版與正式版是兩份獨立的卷。');
-    expect(exam).toContain('<legend>公告設定${examInfoIcon(');
+    expect(exam).toContain('examInfoIcon("這裡的內容會出現在首頁的「速讀測驗」置頂區塊');
     expect(exam).toContain('data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon(');

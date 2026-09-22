@@ -3812,6 +3812,14 @@ const db = {
   async unpublishExamAnnouncement(paperId) {
     return this._callExamRpc("exam_unpublish_announcement", { p_paper_id: paperId });
   },
+  // 預告：開考前的簡短通知，跟公告分開存，沒有獨立的發佈/撤下——內容+開關存了就立刻生效
+  async saveExamPreAnnouncement(paperId, preAnnouncement, enabled) {
+    return this._callExamRpc("exam_save_pre_announcement", {
+      p_paper_id: paperId,
+      p_pre_announcement: preAnnouncement || {},
+      p_enabled: enabled === true
+    });
+  },
   async publishExam(paperId) {
     return this._callExamRpc("exam_publish", { p_paper_id: paperId });
   },
