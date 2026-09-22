@@ -106,6 +106,128 @@ const parseIdText = (arr) => arr.map((r) => {
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
 });
 
+// ── 準備進度檢查：草稿階段「還差什麼才能發佈／同步到正式版」的清單 ──
+// 只列真正會擋住動作的必要項（跟 exam_publish／exam_push_to_live 的伺服器端
+// 驗證對齊，不是自己發明的規則），加上少數僅供參考、不擋動作的建議項。
+function examReadinessChecklist(paper, questions) {
+  const cfg = examSectionCfg(paper);
+  const activeSections = Object.keys(cfg);
+  const bySection = {};
+  (Array.isArray(questions) ? questions : []).forEach((q) => { (bySection[q.section] ||= []).push(q); });
+  const countsMatch = activeSections.length > 0 && activeSections.every((t) => (bySection[t]?.length || 0) === cfg[t].count);
+  const windowValid = !!paper.open_at && !!paper.close_at && new Date(paper.close_at) > new Date(paper.open_at) && new Date(paper.close_at) > new Date();
+  const ann = paper.announcement || {};
+  const annFilled = !!(ann.headline || "").trim() && !!(ann.body || "").trim();
+  const keysComplete = questions.length > 0 && questions.every((q) => q.section === "shortanswer" || (Array.isArray(q.answer_key) ? q.answer_key.length > 0 : q.answer_key != null));
+
+  const items = [
+    { label: "已選擇題型並設定題數", done: activeSections.length > 0, required: true },
+    { label: "各題型題目數與設定相符", done: countsMatch, required: true },
+    { label: "開放時間已設定（結束時間須晚於開始時間，且在未來）", done: windowValid, required: true }
+  ];
+  if (paper.mode === "live") {
+    items.push({ label: "公告內容已填寫完整", done: annFilled, required: true });
+    items.push({ label: "公告已發佈", done: paper.announcement_published === true, required: true });
+  } else {
+    items.push({ label: "公告內容已填寫（選填，方便之後同步到正式版）", done: annFilled, required: false });
+  }
+  items.push({ label: "所有題目已填正解（簡答題除外）", done: keysComplete, required: false });
+
+  const requiredItems = items.filter((i) => i.required);
+  return { items, requiredDone: requiredItems.every((i) => i.done), requiredTotal: requiredItems.length, requiredCompleted: requiredItems.filter((i) => i.done).length };
+}
+
+function examChecklistHtml(checklist) {
+  const pct = checklist.requiredTotal ? Math.round((checklist.requiredCompleted / checklist.requiredTotal) * 100) : 100;
+  return `
+    <div class="exam-admin__checklist">
+      <div class="exam-admin__checklist-progress"><span class="exam-admin__checklist-progress-fill" style="width:${pct}%"></span></div>
+      <ul class="exam-admin__checklist-list">
+        ${checklist.items.map((i) => `<li class="exam-admin__checklist-item${i.done ? " is-done" : ""}${i.required ? "" : " is-optional"}">
+          <span class="exam-admin__checklist-mark">${i.done ? "✓" : i.required ? "○" : "·"}</span>${esc(i.label)}${i.required ? "" : "（選填）"}
+        </li>`).join("")}
+      </ul>
+    </div>`;
+}
+
+// ── 儲存按鈕三態回饋：有改動待存／儲存中／剛存好——不用再猜有沒有按到 ──
+// watchTarget 是這顆按鈕真正管到的欄位，不是整個表單（同一個 host 裡可能還有
+// 別顆按鈕管的其他欄位，混在一起會出現「明明按了別的存檔鈕，這顆卻也跳待存」
+// 的錯誤提示）。可以傳一個 NodeList/陣列（固定欄位逐一綁），也可以傳單一容器
+// 元素（用事件代理監聽 input/change 冒泡——題目卡片這種「＋選項」會動態新增
+// 欄位的場合要用這個，不然新加的欄位不會被監聽到）。onSave 回傳
+// { success, message? }（跟 db 各 save 函式的回傳格式一致）。存成功後
+// 「已儲存 ✓」先留給使用者看 1.8 秒，才呼叫 onDone（通常是 rerender）——不然
+// 畫面立刻重繪，這顆按鈕瞬間被換掉，使用者永遠看不到回饋。
+function wireSaveButton(btn, watchTarget, onSave, onDone) {
+  if (!btn) return;
+  const baseLabel = btn.textContent.trim();
+  let savedTimer = null;
+  const setState = (state) => {
+    btn.classList.remove("is-dirty", "is-saving", "is-saved");
+    if (state === "dirty") { btn.classList.add("is-dirty"); btn.textContent = `${baseLabel}（有改動未儲存）`; btn.disabled = false; }
+    else if (state === "saving") { btn.classList.add("is-saving"); btn.textContent = "儲存中…"; btn.disabled = true; }
+    else if (state === "saved") { btn.classList.add("is-saved"); btn.textContent = "已儲存 ✓"; btn.disabled = false; }
+    else { btn.textContent = baseLabel; btn.disabled = false; }
+  };
+  const markDirty = () => { clearTimeout(savedTimer); setState("dirty"); };
+  if (watchTarget && typeof watchTarget.forEach === "function") {
+    watchTarget.forEach((el) => { el.addEventListener("input", markDirty); el.addEventListener("change", markDirty); });
+  } else if (watchTarget) {
+    watchTarget.addEventListener("input", markDirty);
+    watchTarget.addEventListener("change", markDirty);
+  }
+  btn.addEventListener("click", async () => {
+    clearTimeout(savedTimer);
+    setState("saving");
+    const res = await onSave();
+    if (!res || !res.success) { toast((res && res.message) || "儲存失敗"); setState("dirty"); return; }
+    setState("saved");
+    savedTimer = setTimeout(() => { setState("clean"); onDone?.(); }, 1800);
+  });
+}
+
+// ── 建立新試卷：先問標題，避免建立後畫面上一直是預設的「速讀測驗」──
+function openExamCreateTitleModal(onConfirm) {
+  const overlay = document.createElement("div");
+  overlay.className = "tts-guide-modal-overlay exam-admin-modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.innerHTML = `
+    <div class="exam-admin-modal__panel">
+      <div class="exam-admin-modal__head">
+        <h4>建立新試卷</h4>
+        <button type="button" class="exam-admin-modal__x" id="exam-create-x" aria-label="關閉">&times;</button>
+      </div>
+      <div class="exam-admin-modal__body">
+        <label>標題<input class="form-control" id="exam-create-title" maxlength="60" placeholder="例：2026 第一階段速讀測驗" value="速讀測驗"></label>
+        <p class="exam-admin__meta">之後仍可在「試卷設定」隨時修改。</p>
+      </div>
+      <div class="exam-admin-modal__foot">
+        <button type="button" class="primary-btn" id="exam-create-confirm">建立</button>
+        <button type="button" class="pill-btn" id="exam-create-cancel">取消</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector("#exam-create-title");
+  input.focus();
+  input.select();
+  overlay.querySelector("#exam-create-x").addEventListener("click", close);
+  overlay.querySelector("#exam-create-cancel").addEventListener("click", close);
+  const confirmBtn = overlay.querySelector("#exam-create-confirm");
+  const submit = async () => {
+    const title = input.value.trim();
+    if (!title) { toast("請輸入標題"); input.focus(); return; }
+    confirmBtn.disabled = true;
+    await onConfirm(title);
+    close();
+  };
+  confirmBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+}
+
 export async function renderExamPanel(root) {
   if (!root) return;
 
@@ -170,12 +292,12 @@ export async function renderExamPanel(root) {
   if (paper) examAdminPaperId = paper.id;
 
   const rerender = () => renderExamPanel(root);
-  const createPaper = async () => {
-    const res = await db.upsertExamPaper({ title: "速讀測驗", mode: "test", section_targets: SECTION_TARGET_DEFAULT });
+  const createPaper = () => openExamCreateTitleModal(async (title) => {
+    const res = await db.upsertExamPaper({ title, mode: "test", section_targets: SECTION_TARGET_DEFAULT });
     if (!res.success) { toast(res.message || "建立失敗"); return; }
     examAdminPaperId = res.data?.id || null;
     rerender();
-  };
+  });
   // ── 架構：第 1 層＝「試卷」（用測試版的 id 當識別），第 2 層＝測試版 / 正式版 ──
   // 「試卷」清單：每份測試版一列；以前沒有測試版來源的獨立正式版也各算一份試卷。
   const examList = papers.filter((p) => p.mode === "test" || !p.pushedFromId);
@@ -212,8 +334,11 @@ export async function renderExamPanel(root) {
         <p class="exam-admin__meta">${papers.length ? "請從上方選一份試卷，或" : "目前沒有試卷。"}建立一份後即可開始出題。</p>
         ${papers.length ? "" : '<button type="button" class="primary-btn" id="exam-create-paper">建立新試卷</button>'}
       </div>`;
+    // wirePicker() 已經用 body 範圍的 #exam-create-paper 選取器綁過一次了——這裡
+    // 不管 pickerBar 有沒有渲染都會命中同一顆按鈕（id 相同），不用再綁第二次
+    // （以前重複綁過，點一次會建立兩份試卷；現在 createPaper 只開 modal，重複
+    // 綁頂多彈出兩個一樣的視窗，一樣是要修的 bug，就一併修掉）。
     wirePicker();
-    body.querySelector(".exam-admin__paper #exam-create-paper")?.addEventListener("click", createPaper);
     return;
   }
 
@@ -246,37 +371,28 @@ export async function renderExamPanel(root) {
     ? '　<span class="stat-badge stat-badge--brand">預告文已發佈</span>'
     : '　<span class="stat-badge stat-badge--neutral">預告文未發佈</span>';
 
-  const actions = [
+  // 準備進度：不論目前 status 為何都先算出來——draft 階段拿來擋發佈/同步的
+  // 按鈕要不要出現，其他階段純粹不用（此時題目已鎖定，內容不會再變）。
+  const checklist = examReadinessChecklist(paper, questions);
+
+  const primaryActions = [];
+  const moreActions = [
     `<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`
   ];
   if (!resultsPublished) {
-    actions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>`);
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>`);
   }
   if (isLive && paper.status !== "closed" && !resultsPublished) {
-    actions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>`);
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>`);
   }
-  actions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>`);
-  const hints = [];
-  if (resultsPublished) hints.push("成績已公布並鎖定：不可再修改正解、重新計分、批改或清除作答。");
-  else if (!autoScoreOn) hints.push("自動評分已關閉：關閉測驗後也不會自動計分；答案定稿後再開啟並重新計分。");
-  if (paper.status === "published") hints.push("測驗進行期間只保存答案，不會自動判分、簡答批改或公布正解；時間到會自動關閉。");
-  hints.push(explanationOn
-    ? "「答案詳解」目前對會友開放：每一題編輯處若有填寫答案詳解，成績公布後會友就看得到；簡答題的參考答案／評分要點永遠不會外流。"
-    : "「答案詳解」目前對會友隱藏：開啟後，題目編輯處有填寫答案詳解的題目，會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫；簡答題的參考答案／評分要點不受影響，一律不對外顯示）。");
+  moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>`);
 
-  // ── 預告文（測試版與正式版都有；獨立於 status，不鎖題庫）──
-  // 測試版發佈後只有管理員自己在首頁看得到（可以拿來預覽卡片長怎樣），
-  // 正式版發佈後全體會友都看得到。
+  // 預告文發佈/撤下：狀態本身已經有徽章顯示，按鈕收進「更多」即可，不用額外說明文字
   if (hasNotice) {
-    if (!annPub && paper.status !== "closed") {
-      if (noticeReady) {
-        actions.push('<button type="button" class="primary-btn" data-exam-act="announce">發佈預告文</button>');
-        hints.push(isLive ? "發佈預告文後，全體會友的首頁會出現預告區塊。" : "發佈預告文後，只有你自己（管理員）在首頁會看到這張預告卡片，方便先預覽實際效果，不會出現在會友端。");
-      } else {
-        hints.push("在「預告文」分頁填好標題與內容後，這裡才會出現「發佈預告文」按鈕。");
-      }
+    if (!annPub && paper.status !== "closed" && noticeReady) {
+      moreActions.push('<button type="button" class="secondary-btn" data-exam-act="announce">發佈預告文</button>');
     } else if (annPub) {
-      actions.push('<button type="button" class="secondary-btn" data-exam-act="unannounce">撤下預告文</button>');
+      moreActions.push('<button type="button" class="secondary-btn" data-exam-act="unannounce">撤下預告文</button>');
     }
   }
 
@@ -284,62 +400,57 @@ export async function renderExamPanel(root) {
   // 且正式卷若已有作答紀錄仍不給（避免動到已計分結果），測試卷則不限。
   const canRevert = paper.status === "closed" && (paper.mode === "test" || attemptCount === 0);
 
-  // ── 測驗本身（status）── 正式版要先發預告文才能發佈；測試版直接發佈
+  let statusNote = "";   // 只留一句真正必要的當下狀態說明，其餘政策性文字移到「說明」分頁
   if (paper.status === "draft") {
-    if (isTest || annPub) {
-      actions.push(`<button type="button" class="primary-btn" data-exam-act="publish">${isTest ? "發佈（開放測試作答）" : "發佈測驗"}</button>`);
-      hints.push(isTest
-        ? "測試版發佈後，管理員可從「測試作答」走完整流程；不會出現在會友端。"
-        : "按「發佈測驗」後，開放時間內全體會友即可作答（發佈後題庫鎖定）。");
-    } else {
-      hints.push("正式版要先「發佈預告文」才能發佈測驗。");
+    // 準備進度沒完成就不顯示發佈按鈕——要做什麼看下方清單，不用另外堆文字解釋
+    if (checklist.requiredDone) {
+      primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">${isTest ? "發佈（開放測試作答）" : "發佈測驗"}</button>`);
     }
   } else if (paper.status === "published") {
-    actions.push(`<a class="primary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&popup=1" target="_blank" rel="noopener">${isLive ? "正式作答" : "測試作答"}</a>`);
-    actions.push('<button type="button" class="secondary-btn" data-exam-act="close">關閉測驗</button>');
-    hints.push("測驗進行中，開放時間內即可作答。要改題目，請先按「關閉測驗」再改回草稿。");
+    primaryActions.push(`<a class="primary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&popup=1" target="_blank" rel="noopener">${isLive ? "正式作答" : "測試作答"}</a>`);
+    primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="close">關閉測驗</button>');
+    statusNote = "測驗進行中，開放時間內即可作答；要改題目請先「關閉測驗」。";
   } else if (paper.status === "closed") {
-    if (canRevert) actions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">改回草稿</button>');
-    hints.push(isLive && !canRevert
-      ? "正式測驗已結束，請在「簡答批改」「統計」分頁進行結算與成績公布。"
-      : "測驗已關閉，不再接受作答。");
+    if (canRevert) moreActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">改回草稿</button>');
+    if (isLive && !canRevert) statusNote = "測驗已結束，請在「簡答批改」「統計」分頁進行結算與成績公布。";
   }
 
   // 清除作答紀錄：只有測試卷、且有紀錄時提供（獨立於「改回草稿」，方便不改題目直接重測）
   if (isTest && attemptCount > 0) {
-    actions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>`);
-    hints.push("「清除作答紀錄」只作用在測試卷，清掉後可從宣示畫面重新測試（不影響題目與設定）。");
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>`);
   }
 
-  // 測試版 → 同步到正式版（正式版已存在時才顯示；不存在時用上方「正式版（尚未建立）」按鈕建立）
-  if (isTest && liveOf) {
+  // 測試版 → 同步到正式版：準備進度沒完成一樣不顯示；就緒但正式版當下不能被覆蓋
+  // （已有作答／進行中）則顯示按鈕但停用，原因寫在旁邊一句話。
+  let pushNote = "";
+  if (isTest && liveOf && checklist.requiredDone) {
     const livePushBlocked = (liveOf.attemptCount || 0) > 0
-      ? `正式版已有 ${liveOf.attemptCount} 筆作答，無法再同步題目（會毀掉已計分的成績）。要重來請另建新試卷。`
+      ? `正式版已有 ${liveOf.attemptCount} 筆作答，無法再同步（要重來請另建新試卷）。`
       : liveOf.status === "published"
-        ? "正式版測驗進行中，請先切到「正式版」按「關閉測驗」，再回來同步題目。"
+        ? "正式版測驗進行中，請先切到「正式版」關閉測驗，再回來同步。"
         : "";
-    actions.push(`<button type="button" class="primary-btn" data-exam-act="push"${livePushBlocked ? " disabled" : ""}>同步到正式版</button>`);
-    hints.push(livePushBlocked
-      || "題目 / 設定改好後按「同步到正式版」把最新內容推過去；正式版若為「已關閉」會退回草稿要重新發佈。");
-  } else if (isTest && !liveOf) {
-    hints.push("題目改好後，用上方「正式版（尚未建立）」建立正式版，再去編預告文、發佈給會友。");
-  } else if (isLive && paper.pushed_from_id) {
-    hints.push("正式版只能編預告文與發佈；題目 / 設定要改請切到「測試版」。");
+    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="push"${livePushBlocked ? " disabled" : ""}>同步到正式版</button>`);
+    pushNote = livePushBlocked;
   }
 
   // 公布成績：正式版、已有作答、尚未公布 → 對外釋出並永久鎖定
   if (isLive && officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
-    actions.push('<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>');
-    hints.push("「公布成績」前會先自動收掉逾時未交的作答；公布後作答者才看得到分數與正解，且所有結算操作一律鎖定。");
+    primaryActions.push('<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>');
+    statusNote = "「公布成績」前會先自動收掉逾時未交的作答，公布後所有結算操作一律鎖定。";
   }
-  const actionHint = hints.join(" ");
+  const actionHint = [statusNote, pushNote].filter(Boolean).join(" ");
 
+  const showChecklist = paper.status === "draft" && !checklist.requiredDone;
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
       <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${isLive ? "brand" : "neutral"}">${isLive ? "正式版" : "測試版"}</span>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${hasNotice ? annBadge : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
-      <div class="exam-admin__actions">${actions.join("")}</div>
+      ${showChecklist ? examChecklistHtml(checklist) : ""}
+      <div class="exam-admin__actions">${primaryActions.join("")}</div>
       ${actionHint ? `<p class="exam-admin__meta">${esc(actionHint)}</p>` : ""}
+      ${moreActions.length ? `<details class="exam-admin__more"><summary>⋯ 更多</summary>
+        <div class="exam-admin__actions exam-admin__actions--more">${moreActions.join("")}</div>
+      </details>` : ""}
       ${isTest ? `<details class="exam-admin__testers"><summary>測試名單（開放指定會友作答這份測試版）</summary>
         <p class="exam-admin__meta">名單內的人即使不是管理員，也能用測試版連結進入作答（測試版須「已發佈」；不受開放時段限制）。</p>
         <div class="exam-admin__tester-add">
@@ -358,6 +469,7 @@ export async function renderExamPanel(root) {
       ${isLive ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
       <button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>
       <button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>
+      <button type="button" data-exam-sub="info" class="${examAdminSubview === "info" ? "active" : ""}">說明</button>
     </nav>
     <div id="exam-admin-sub"></div>`;
 
@@ -414,6 +526,7 @@ export async function renderExamPanel(root) {
     else if (examAdminSubview === "practice") renderExamPracticeRecords(sub, paper.id);
     else if (examAdminSubview === "stats") { sub.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(sub, paper.id, hasShortSection, paper.title); }
     else if (examAdminSubview === "explain") renderExamExplanationEditor(sub, questions);
+    else if (examAdminSubview === "info") renderExamInfoTab(sub, paper, { isLive, isTest, hasShortSection });
     else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">正式版的題目與試卷設定不提供編輯，一律由對應的測試版按「推上正式版」維護。要查看題目請用上方「預覽試卷」；要編輯答案詳解請切到「答案詳解」分頁。</div>';
     else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, questions, rerender);
     else renderExamQuestionBank(sub, paper, questions, rerender);
@@ -987,38 +1100,56 @@ function renderExamMetaForm(host, paper, questions, rerender) {
   host.querySelectorAll('.exam-admin__sec-row input').forEach((i) => i.addEventListener("input", refreshTotals));
   refreshTotals();
 
-  host.querySelector("#exam-meta-save").addEventListener("click", async (e) => {
-    const g = (f) => host.querySelector(`[data-f="${f}"]`).value;
-    const sections = collectSections();
-    if (!sections.length) { toast("至少要有一個題型"); return; }
-    e.target.disabled = true;
-    const res = await db.upsertExamPaper({
-      id: p.id, title: g("title"),
-      linked_plan_id: host.querySelector("#exam-meta-linked-plan").value || null,
-      open_at: fromLocalInput(g("open_at")), close_at: fromLocalInput(g("close_at")),
-      duration_minutes: Number(g("duration_minutes")) || 75,
-      sections,
-      pledge: { openText: g("pledge_open"), rules: lines(g("pledge_rules")), consentTemplate: g("pledge_consent") }
-    });
-    e.target.disabled = false;
-    if (!res.success) { toast(res.message || "儲存失敗"); return; }
-    toast("已儲存");
-    rerender();
-  });
+  wireSaveButton(
+    host.querySelector("#exam-meta-save"),
+    host.querySelectorAll('[data-f], .exam-admin__sec-row input, #exam-meta-linked-plan'),
+    async () => {
+      const g = (f) => host.querySelector(`[data-f="${f}"]`).value;
+      const sections = collectSections();
+      if (!sections.length) return { success: false, message: "至少要有一個題型" };
+      return db.upsertExamPaper({
+        id: p.id, title: g("title"),
+        linked_plan_id: host.querySelector("#exam-meta-linked-plan").value || null,
+        open_at: fromLocalInput(g("open_at")), close_at: fromLocalInput(g("close_at")),
+        duration_minutes: Number(g("duration_minutes")) || 75,
+        sections,
+        pledge: { openText: g("pledge_open"), rules: lines(g("pledge_rules")), consentTemplate: g("pledge_consent") }
+      });
+    },
+    rerender
+  );
 
-  host.querySelector("#exam-notice-save")?.addEventListener("click", async (e) => {
-    const payload = {
+  wireSaveButton(
+    host.querySelector("#exam-notice-save"),
+    host.querySelectorAll('[data-n]'),
+    () => db.saveExamAnnouncement(p.id, {
       headline: host.querySelector('[data-n="headline"]').value.trim(),
       body: host.querySelector('[data-n="body"]').value.trim(),
       ctaLabel: host.querySelector('[data-n="ctaLabel"]').value.trim()
-    };
-    e.target.disabled = true;
-    const res = await db.saveExamAnnouncement(p.id, payload);
-    e.target.disabled = false;
-    if (!res.success) { toast(res.message || "儲存失敗"); return; }
-    toast("公告設定已儲存");
-    rerender();
-  });
+    }),
+    rerender
+  );
+}
+
+// ── 說明分頁：把原本散在各按鈕旁邊的政策性文字集中收進來，主畫面只留最必要的狀態提示 ──
+function renderExamInfoTab(host, paper, ctx) {
+  const { isLive } = ctx;
+  const topics = [
+    ["測試版與正式版的關係", "測試版與正式版是兩份獨立的卷。題目、試卷設定、公告內容都只能在測試版編輯；準備好後按「同步到正式版」把最新內容整份推過去（每次同步都覆蓋，含公告文字）。正式版一旦有人作答，就不能再同步（會換題目 id，毀掉已計分的成績）；正式測驗進行中也要先「關閉測驗」才能再同步。"],
+    ["公告設定／發佈預告文", "公告內容（首頁置頂卡片的標題/內容/按鈕文字）在測試版的「試卷設定」分頁編輯。測試版按「發佈預告文」只有你自己（管理員）在首頁看得到，方便預覽效果；正式版的「發佈預告文」才會真的公開給全體會友——正式版不能自己編內容，一律用同步帶過去的。"],
+    ["自動評分", "自動評分關閉後，關閉測驗時不會自動計分，要等答案定稿、重新開啟自動評分後再手動重新計分一次。"],
+    ["答案詳解", "開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。"],
+    ["測試名單", "只有測試版才有。名單內的人即使不是管理員，也能用測試版連結進入作答（測試版須「已發佈」，且不受開放時段限制），方便找特定會友一起測試。"],
+    ["清除作答紀錄", "只作用在測試版。清掉後可以從宣示畫面重新測試，不會影響題目與設定內容。"],
+    ["複習（正式版限定）", "會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。"],
+    ["公布成績", "只有正式版、且所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。"]
+  ];
+  host.innerHTML = `<div class="exam-admin__info">
+    ${topics
+      .filter(([title]) => isLive || title !== "複習（正式版限定）")
+      .map(([title, body]) => `<details class="exam-admin__info-item"><summary>${esc(title)}</summary><p>${esc(body)}</p></details>`)
+      .join("")}
+  </div>`;
 }
 
 // ── 題目已鎖定時，仍可單獨編輯每一題的「答案詳解」（不影響題幹/選項/正解）──
@@ -1036,14 +1167,10 @@ function explanationOnlyCard(q) {
 
 function wireExplanationCards(host) {
   host.querySelectorAll(".exam-admin__q-card[data-qid]").forEach((card) => {
-    card.querySelector("[data-explain-save]")?.addEventListener("click", async (e) => {
+    wireSaveButton(card.querySelector("[data-explain-save]"), card, () => {
       const qid = card.dataset.qid;
       const text = card.querySelector("[data-explain-text]").value.trim();
-      e.target.disabled = true;
-      const res = await db.setExamQuestionExplanation(qid, text);
-      e.target.disabled = false;
-      if (!res.success) { toast(res.message || "儲存失敗"); return; }
-      toast("已儲存");
+      return db.setExamQuestionExplanation(qid, text);
     });
   });
 }
@@ -1086,19 +1213,15 @@ function renderExamQuestionBank(host, paper, questions, rerender) {
 
   const wire = (card) => {
     const sec = card.closest("[data-section]").dataset.section;
-    card.querySelector("[data-q-save]").addEventListener("click", async (e) => {
+    wireSaveButton(card.querySelector("[data-q-save]"), card, async () => {
       const built = collectQCard(card, sec, cfg[sec]);
-      if (built.error) { toast(built.error); return; }
-      e.target.disabled = true;
-      const res = await db.upsertExamQuestion({
+      if (built.error) return { success: false, message: built.error };
+      return db.upsertExamQuestion({
         id: card.dataset.qid || undefined, paper_id: paper.id, section: sec,
         position: Number(card.dataset.qpos) || undefined,
         points: built.points, payload: built.payload, answer_key: built.answer_key
       });
-      e.target.disabled = false;
-      if (!res.success) { toast(res.message || "儲存失敗"); return; }
-      toast("已儲存"); rerender();
-    });
+    }, rerender);
     card.querySelector("[data-q-del]")?.addEventListener("click", async () => {
       if (!confirm("刪除這一題？")) return;
       const res = await db.deleteExamQuestion(card.dataset.qid);

@@ -44,7 +44,7 @@ describe("0199: 公告內容編輯併入測試版的「試卷設定」分頁，�
     expect(fn).toContain('data-n="headline"');
     expect(fn).toContain('data-n="body"');
     expect(fn).toContain('data-n="ctaLabel"');
-    expect(fn).toContain("db.saveExamAnnouncement(p.id, payload)");
+    expect(fn).toContain("db.saveExamAnnouncement(p.id, {");
   });
 
   it("公告內容關閉後鎖定，跟試卷設定其他欄位的鎖定時機一致（status='closed'）", () => {
