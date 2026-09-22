@@ -16,10 +16,10 @@ import './design/icons.js';
 import './state.js?v=20260901_highlights_notes_review';
 import './auth.js?v=20260921_phone_number_scope_sync';
 import './auth-launch.mjs';
-import './db.js?v=20260922_exam_announcement_live_only_removed';
+import './db.js?v=20260923_pre_announcement';
 import './utils.js?v=20260916_reading_logs_pagination_fix';
 import './gamification.js?v=20260826_quiz_remove_duplicate_scope_filter';
-import { mountExamRunner } from './modules/exam.js?v=20260923_tab_visibility_lifecycle';
+import { mountExamRunner } from './modules/exam.js?v=20260923_test_live_lifecycle_split';
 
 const boot = document.getElementById('exam-boot');
 const setBoot = (msg) => { if (boot) boot.textContent = msg; };

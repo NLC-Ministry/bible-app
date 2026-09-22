@@ -37,27 +37,31 @@ describe("0199: exam_push_to_live 每次同步都覆蓋正式版的公告內容"
   });
 });
 
-describe("0199: 公告內容編輯併入測試版的「試卷設定」分頁，正式版不再能自己編輯", () => {
-  it("renderExamMetaForm（只給測試版用）多了一個公告設定 fieldset，讀寫同一個 paper.announcement", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("// ── 題目已鎖定時"));
-    expect(fn).toContain("<legend>公告設定${examInfoIcon(");
-    expect(fn).toContain('data-n="headline"');
-    expect(fn).toContain('data-n="body"');
-    expect(fn).toContain('data-n="ctaLabel"');
-    expect(fn).toContain("db.saveExamAnnouncement(p.id, {");
+describe("0199/0200: 公告內容編輯是測試版限定的獨立「公告」分頁，正式版不能自己編輯", () => {
+  // 這段架構前後改了兩次：0199 先把公告內容編輯併進測試版的「試卷設定」分頁；
+  // 使用者後來反饋不要跟試卷設定混在一起，改回獨立分頁——但維持「只有測試版
+  // 能編輯，正式版靠同步」這個 0199 就定下的規則沒變。
+  it("renderExamNoticeForm 是獨立函式，讀寫 paper.announcement，不在 renderExamMetaForm 裡面", () => {
+    const metaFn = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("// ── 題目已鎖定時"));
+    expect(metaFn).not.toContain('data-n="headline"');
+    expect(metaFn).not.toContain("db.saveExamAnnouncement");
+
+    const noticeFn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("function renderExamMetaForm"));
+    expect(noticeFn).toContain('data-n="headline"');
+    expect(noticeFn).toContain('data-n="body"');
+    expect(noticeFn).toContain('data-n="ctaLabel"');
+    expect(noticeFn).toContain("db.saveExamAnnouncement(p.id, {");
   });
 
   it("公告內容關閉後鎖定，跟試卷設定其他欄位的鎖定時機一致（status='closed'）", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("// ── 題目已鎖定時"));
-    expect(fn).toContain("const annLocked = p.status === \"closed\";");
+    const noticeFn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("function renderExamMetaForm"));
+    expect(noticeFn).toContain("const annLocked = p.status === \"closed\";");
   });
 
-  it("獨立的「預告文」分頁按鈕已經拿掉，兩個版本都不再顯示", () => {
-    expect(exam).not.toContain('data-exam-sub="notice"');
-  });
-
-  it("正式版切換／建立後不再導到已經不存在的 notice 分頁", () => {
-    expect(exam).not.toContain('examAdminSubview = "notice"');
+  it("「公告」分頁只有測試版看得到（跟題庫編輯／試卷設定同一組 canEditPaper 判斷）", () => {
+    expect(exam).toContain('<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">公告</button>');
+    expect(exam).toContain('...(canEditPaper ? ["bank", "meta", "notice"] : [])');
+    expect(exam).toContain('else if (examAdminSubview === "notice") renderExamNoticeForm(sub, paper, rerender);');
   });
 
   it("正式版仍保留「發佈預告文」/「撤下預告文」動作按鈕（只是內容不能自己編）", () => {

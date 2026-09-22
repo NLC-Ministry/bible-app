@@ -4,31 +4,34 @@ import { readFileSync } from "node:fs";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exam = read("js/modules/exam.js");
 
-// 分頁顯示時機依生命週期收斂：
-//   · 統計／答案詳解：草稿階段不會有作答/急著寫詳解，發佈後才出現。
+// 分頁顯示時機依「測試版管考前、正式版管考後」的原則收斂：
+//   · 統計／填答案／簡答批改／簡答指派／答案詳解：一律只在正式版出現——測試版
+//     沒有真實會友作答，這些「考後」工具擺著也用不到。
+//   · 統計／答案詳解另外還要求「非草稿」：草稿階段不會有作答/不急著寫詳解。
 //   · 填答案／簡答批改／簡答指派：成績公布後正解跟批改都鎖死了，收起來。
-//   · 複習紀錄：不受成績公布影響（會友複習視窗是獨立算的，公布當下可能還沒結束）。
+//   · 複習紀錄：只看是不是正式版，不受成績公布影響（會友複習視窗是獨立算的，
+//     公布當下可能還沒結束）。
 const fn = () => exam.slice(exam.indexOf("const isLive = paper.mode"), exam.indexOf("const annPub ="));
 
-describe("統計／答案詳解只在發佈後（非草稿）才顯示", () => {
-  it("showStats／showExplain 都是 paper.status !== \"draft\"", () => {
+describe("統計／填答案／簡答批改／簡答指派／答案詳解一律只在正式版出現", () => {
+  it("showStats／showExplain／showAnswers／showGrade／showAssign 都以 isLive 開頭", () => {
     const body = fn();
-    expect(body).toContain('const showStats = paper.status !== "draft";');
-    expect(body).toContain('const showExplain = paper.status !== "draft";');
+    expect(body).toContain('const showStats = isLive && paper.status !== "draft";');
+    expect(body).toContain('const showExplain = isLive && paper.status !== "draft";');
+    expect(body).toContain("const showAnswers = isLive && !resultsPublished;");
+    expect(body).toContain("const showGrade = isLive && hasShortSection && !resultsPublished;");
+    expect(body).toContain("const showAssign = isLive && hasShortSection && !resultsPublished;");
   });
 
-  it("分頁按鈕改用 showStats／showExplain 判斷要不要渲染", () => {
+  it("分頁按鈕改用這幾個 show* 變數判斷要不要渲染", () => {
     expect(exam).toContain('${showStats ? `<button type="button" data-exam-sub="stats"');
     expect(exam).toContain('${showExplain ? `<button type="button" data-exam-sub="explain"');
+    expect(exam).toContain('${showAnswers ? `<button type="button" data-exam-sub="answers"');
+    expect(exam).toContain('${showGrade ? `<button type="button" data-exam-sub="grade"');
   });
-});
 
-describe("成績公布後，填答案／簡答批改／簡答指派不再顯示；複習紀錄不受影響", () => {
-  it("showAnswers／showGrade／showAssign 都額外加了 !resultsPublished", () => {
-    const body = fn();
-    expect(body).toContain("const showAnswers = canFillAnswers && !resultsPublished;");
-    expect(body).toContain("const showGrade = hasShortSection && !resultsPublished;");
-    expect(body).toContain("const showAssign = hasShortSection && !resultsPublished;");
+  it("已經拿掉 canFillAnswers 這個變數——isLive 已經涵蓋它原本要判斷的事", () => {
+    expect(exam).not.toContain("canFillAnswers");
   });
 
   it("showPractice 維持只看 isLive，不受 resultsPublished 影響", () => {
@@ -37,7 +40,7 @@ describe("成績公布後，填答案／簡答批改／簡答指派不再顯示�
     expect(body).not.toContain("const showPractice = isLive && !resultsPublished;");
   });
 
-  it("resultsPublished 的宣告移到這些條件之前，確保算得出正確值", () => {
+  it("resultsPublished 的宣告在這些條件之前，確保算得出正確值", () => {
     const body = fn();
     const idxResultsPublished = body.indexOf("const resultsPublished =");
     const idxShowAnswers = body.indexOf("const showAnswers =");
@@ -49,7 +52,7 @@ describe("成績公布後，填答案／簡答批改／簡答指派不再顯示�
 describe("目前選中的分頁一旦不再顯示，自動跳到第一個還看得到的分頁，不會卡在空白畫面", () => {
   it("availableSubviews 涵蓋所有分頁，且用它來判斷要不要重新導向", () => {
     const body = fn();
-    expect(body).toContain('...(canEditPaper ? ["bank", "meta"] : [])');
+    expect(body).toContain('...(canEditPaper ? ["bank", "meta", "notice"] : [])');
     expect(body).toContain('...(showAnswers ? ["answers"] : [])');
     expect(body).toContain('...(showGrade ? ["grade"] : [])');
     expect(body).toContain('...(showAssign ? ["assign"] : [])');
