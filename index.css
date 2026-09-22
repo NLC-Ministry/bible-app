@@ -15921,6 +15921,49 @@ textarea::placeholder {
 .exam-admin__picker { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .exam-admin__picker label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; color: var(--text-secondary); flex: 1; min-width: 240px; }
 .exam-admin__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; align-items: center; }
+.exam-admin__actions--more { margin-top: 0.5rem; }
+
+/* 準備進度清單（草稿階段引導，就緒後自動消失） */
+.exam-admin__checklist { margin-top: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border-card); border-radius: var(--radius-md); background: var(--bg-input); }
+.exam-admin__checklist-progress { height: 6px; border-radius: 3px; background: var(--bg-card); overflow: hidden; margin-bottom: 0.6rem; }
+.exam-admin__checklist-progress-fill { display: block; height: 100%; background: var(--color-brand); transition: width 0.2s ease; }
+.exam-admin__checklist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.exam-admin__checklist-item { display: flex; align-items: baseline; gap: 0.45rem; font-size: 0.875rem; color: var(--text-secondary); }
+.exam-admin__checklist-item.is-done { color: var(--text-muted); }
+.exam-admin__checklist-item.is-optional { color: var(--text-muted); }
+.exam-admin__checklist-mark { flex: 0 0 auto; width: 1.1em; color: var(--color-brand); font-weight: var(--type-weight-strong, 500); }
+.exam-admin__checklist-item.is-done .exam-admin__checklist-mark { color: var(--color-success, var(--color-brand)); }
+
+/* 「⋯ 更多」收合區：把不常用的切換/維護動作收起來，預設不佔畫面 */
+.exam-admin__more { margin-top: 0.5rem; }
+.exam-admin__more > summary { cursor: pointer; font-size: 0.875rem; color: var(--text-secondary); }
+
+/* 儲存按鈕三態：有改動待存／儲存中／剛存好（.exam-admin 範圍夠廣，涵蓋試卷
+   設定表單跟題目卡片兩種容器，不用各自重複寫一份） */
+.exam-admin button.is-dirty { background: var(--color-brand); color: #fff; }
+.exam-admin button.is-saving { opacity: 0.7; }
+.exam-admin button.is-saved { background: var(--color-success, var(--color-brand)); color: #fff; }
+
+/* 說明分頁：政策性文字集中在這裡，主畫面不再堆長段落 */
+.exam-admin__info { display: flex; flex-direction: column; gap: 0.5rem; }
+.exam-admin__info-item { border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 0.65rem 0.9rem; }
+.exam-admin__info-item summary { cursor: pointer; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.exam-admin__info-item p { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; }
+
+/* 建立新試卷：標題輸入 modal（沿用 .tts-guide-modal-overlay 這個共用遮罩） */
+.exam-admin-modal__panel {
+  max-width: 420px; width: 92%;
+  display: flex; flex-direction: column;
+  padding: 0; border-radius: 20px; background: var(--bg-card); color: var(--text-primary);
+  border: 1px solid var(--border-card); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.exam-admin-modal__head { display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-card); }
+.exam-admin-modal__head h4 { flex: 1; margin: 0; font-size: 1rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.exam-admin-modal__x { background: none; border: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--text-secondary); padding: 0.1rem 0.4rem; }
+.exam-admin-modal__body { padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.exam-admin-modal__body label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; color: var(--text-secondary); }
+.exam-admin-modal__foot { display: flex; gap: 0.5rem; padding: 0.85rem 1rem; border-top: 1px solid var(--border-card); background: var(--bg-card); }
 .exam-admin__modeswitch { display: inline-flex; border: 1px solid var(--border-card); border-radius: 8px; overflow: hidden; }
 .exam-admin__modeswitch button {
   background: var(--bg-card); border: none; padding: 0.4rem 0.75rem; font-size: 0.875rem;
