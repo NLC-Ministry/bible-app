@@ -222,14 +222,16 @@ export async function renderExamPanel(root) {
   const who = isLive ? "全體會友" : "僅系統管理員（演練用，不會出現在會友端）";
   const hasShortSection = !!examSectionCfg(paper).shortanswer;   // 沒選「簡答題」→ 隱藏批改分頁
   const canEditPaper = isTest;   // 正式版不提供編輯，題目與設定一律由測試版「推上正式版」
-  const hasNotice = isLive;      // 測試版不用預告文（預告文只給會友端的正式版）
+  // 測試版也能編/發預告文，方便在推上正式版前先看看首頁卡片長怎樣——測試版
+  // 發佈後只有 admin/pastor 自己在首頁看得到（exam_home_exams 擋非 staff），
+  // 不會外流給一般會友。
+  const hasNotice = true;
   // 「填答案」：題目鎖定但要能補正解（正式版；或已有作答的測試版）——考完才給答案的情境
   const canFillAnswers = !canEditPaper || attemptCount > 0;
   if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "assign" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";
   if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = canFillAnswers ? "answers" : "notice";
-  if (!hasNotice && examAdminSubview === "notice") examAdminSubview = canEditPaper ? "bank" : "answers";
   if (examAdminSubview === "answers" && !canFillAnswers) examAdminSubview = "bank";
   const annPub = paper.announcement_published === true;
   const noticeReady = !!((paper.announcement || {}).headline || "").trim() && !!((paper.announcement || {}).body || "").trim();
@@ -262,12 +264,14 @@ export async function renderExamPanel(root) {
     ? "「答案詳解」目前對會友開放：每一題編輯處若有填寫答案詳解，成績公布後會友就看得到；簡答題的參考答案／評分要點永遠不會外流。"
     : "「答案詳解」目前對會友隱藏：開啟後，題目編輯處有填寫答案詳解的題目，會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫；簡答題的參考答案／評分要點不受影響，一律不對外顯示）。");
 
-  // ── 預告文（只有正式版有；獨立於 status，不鎖題庫）──
+  // ── 預告文（測試版與正式版都有；獨立於 status，不鎖題庫）──
+  // 測試版發佈後只有管理員自己在首頁看得到（可以拿來預覽卡片長怎樣），
+  // 正式版發佈後全體會友都看得到。
   if (hasNotice) {
     if (!annPub && paper.status !== "closed") {
       if (noticeReady) {
         actions.push('<button type="button" class="primary-btn" data-exam-act="announce">發佈預告文</button>');
-        hints.push(`發佈預告文後，${who}的首頁會出現預告區塊。`);
+        hints.push(isLive ? "發佈預告文後，全體會友的首頁會出現預告區塊。" : "發佈預告文後，只有你自己（管理員）在首頁會看到這張預告卡片，方便先預覽實際效果，不會出現在會友端。");
       } else {
         hints.push("在「預告文」分頁填好標題與內容後，這裡才會出現「發佈預告文」按鈕。");
       }
@@ -508,8 +512,12 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "announce" && !confirm("將把這份預告文發佈到全體會友的首頁。確定？")) return;
-    if (act === "unannounce" && !confirm("撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？")) return;
+    if (act === "announce" && !confirm(isLive
+      ? "將把這份預告文發佈到全體會友的首頁。確定？"
+      : "將把這份預告文發佈到首頁——只有你自己（管理員）看得到，用來預覽效果，不會出現在會友端。確定？")) return;
+    if (act === "unannounce" && !confirm(isLive
+      ? "撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？"
+      : "撤下後，你自己的首頁預覽就不會再顯示這份測試版的預告區塊。確定？")) return;
     if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。若自動評分已開啟且正解完整，關閉後才會開始計算正式成績。確定提前關閉？")) return;
     if (act === "publish" && !confirm(isTest
       ? "將開放「測試作答」——只有系統管理員能進入，不會出現在會友端。發佈後題庫會鎖定。確定？"
@@ -535,7 +543,7 @@ export async function renderExamPanel(root) {
     b.disabled = false;
     if (!res.success) { toast(res.message || "操作失敗"); return; }
     toast(
-      act === "announce" ? "預告文已發佈到會友首頁"
+      act === "announce" ? (isLive ? "預告文已發佈到會友首頁" : "預告文已發佈，可以到首頁預覽（僅管理員看得到）")
       : act === "unannounce" ? "已撤下預告文"
       : act === "publish" ? (isTest ? "已開放測試作答（僅系統管理員）" : "測驗已發佈，開放時間內可作答")
       : act === "close" ? "測驗已關閉"
@@ -549,19 +557,21 @@ export async function renderExamPanel(root) {
   keepScroll();
 }
 
-// ── 預告文編輯（首頁 8/30 宣示 banner 的內容來源）──
+// ── 預告文編輯（首頁 8/30 宣示 banner 的內容來源；測試版與正式版共用同一份表單）──
 function renderExamNoticeForm(host, paper, rerender) {
   const a = paper.announcement || {};
+  const isLive = paper.mode === "live";
   const locked = paper.status === "closed";
   const annPub = paper.announcement_published === true;
   const openTxt = paper.open_at ? toLocalInput(paper.open_at).replace("T", " ") : "（尚未設定）";
   const closeTxt = paper.close_at ? toLocalInput(paper.close_at).replace("T", " ") : "（尚未設定）";
+  const audience = isLive ? "會友首頁" : "首頁（僅你自己／管理員看得到，用來預覽效果，不會露出給一般會友）";
   host.innerHTML = `
     <div class="exam-admin__form">
-      <p class="exam-admin__hint">這裡的內容會顯示在會友首頁的「速讀測驗」置頂區塊。${
+      <p class="exam-admin__hint">這裡的內容會顯示在${audience}的「速讀測驗」置頂區塊。${
         locked ? "測驗已關閉，預告文已鎖定。"
-        : annPub ? "預告文已發佈、正在首頁顯示，仍可在此微調文案並儲存。"
-        : "填好標題與內容後，回上方按「發佈預告文」即可上線（不影響試卷草稿狀態）。"}</p>
+        : annPub ? `預告文已發佈、正在${isLive ? "首頁顯示" : "首頁預覽"}，仍可在此微調文案並儲存。`
+        : `填好標題與內容後，回上方按「發佈預告文」即可${isLive ? "上線" : "在首頁預覽"}（不影響試卷草稿狀態）。`}</p>
       <label>標題（必填）
         <input class="form-control" data-n="headline" maxlength="40" value="${esc(a.headline || "")}" ${locked ? "disabled" : ""}></label>
       <label>內容（必填）
