@@ -1887,9 +1887,7 @@ async function selectManagementPlan(planKey, forceRefresh = false) {
     const plans = getManagementPlans();
     const plan = plans.find(item => [item.globalPlanId, item.id, item.presetKey, item.name].filter(Boolean).map(String).includes(String(planKey))) || plans[0] || null;
     if (!plan) return;
-    state.activePlan = plan;
-    if (typeof window.syncActivePlanContext === 'function') window.syncActivePlanContext(plan);
-    localStorage.setItem('selected_plan_key', String(plan.presetKey || plan.globalPlanId || plan.id || ''));
+    state.adminManagementPlan = plan;
     window.currentPlanViewState = 'ORG_STATS';
     await loadActiveAdminPlanSubtab(forceRefresh);
   } catch (err) {
@@ -2771,7 +2769,7 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
       button.disabled = true;
       const originalLabel = button.textContent;
       button.textContent = '設定中…';
-      const result = await db.scheduleDailyQuizPublish(state.activePlan, quizDate, scope, selection, publishAt, answerCloseAt);
+      const result = await db.scheduleDailyQuizPublish(state.adminManagementPlan, quizDate, scope, selection, publishAt, answerCloseAt);
       if (typeof showToast === 'function') {
         showToast(result.success ? '已設定排程' : result.message || '設定排程失敗');
       }
@@ -2788,7 +2786,7 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = '發佈中…';
-    const result = await db.publishDailyQuiz(state.activePlan, quizDate, scope, selection);
+    const result = await db.publishDailyQuiz(state.adminManagementPlan, quizDate, scope, selection);
     if (typeof showToast === 'function') {
       showToast(result.success ? `已發佈給 ${result.data.publishedCount} 個小組` : result.message || '發佈失敗');
     }
@@ -2822,7 +2820,7 @@ async function waitForAdminQuizRegeneration(quizDate, variant, previousQuiz = nu
   let sawGenerating = false;
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5000));
-    const result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+    const result = await db.getDailyQuizDashboard(state.adminManagementPlan, quizDate);
     if (!result.success) continue;
     const quiz = (result.context?.reviewQuizzes || []).find(item => item.variant === variant);
     if (quiz?.generationStatus === 'generating') {
@@ -2899,7 +2897,7 @@ async function bindAdminDailyQuizActions(root, context, quizDate) {
         button.disabled = true;
         const originalLabel = button.textContent;
         button.textContent = '已送出，生成中…';
-        const result = await db.regenerateDailyQuiz(state.activePlan, quizDate, [variant]);
+        const result = await db.regenerateDailyQuiz(state.adminManagementPlan, quizDate, [variant]);
         if (!result.success) {
           button.disabled = false;
           button.textContent = originalLabel;
@@ -3127,11 +3125,11 @@ function bindAdminQuizSubtabNav(root) {
 
 async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '', prefetchedResult = null) {
   const root = document.getElementById('admin-daily-quiz-root');
-  if (!root || !state.activePlan) return;
+  if (!root || !state.adminManagementPlan) return;
   const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate || ''))
     ? String(requestedDate)
     : (root.dataset.quizDate || adminQuizDateToday());
-  const cacheKey = adminDailyQuizDashboardCacheKey(state.activePlan, quizDate);
+  const cacheKey = adminDailyQuizDashboardCacheKey(state.adminManagementPlan, quizDate);
 
   // Returning to the quiz tab for the same plan/date should reveal the DOM
   // that is already on screen. Do not re-render it and do not issue another
@@ -3146,7 +3144,7 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
   if (!result && !forceRefresh) result = adminDailyQuizDashboardCache.get(cacheKey) || null;
   if (!result) {
     if (firstPaint(root)) root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
-    result = await db.getDailyQuizDashboard(state.activePlan, quizDate);
+    result = await db.getDailyQuizDashboard(state.adminManagementPlan, quizDate);
   }
   adminDailyQuizDashboardCache.set(cacheKey, result);
   root.dataset.quizDashboardKey = cacheKey;
@@ -3214,7 +3212,7 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
   bindAdminQuizCarousels(root);
   bindAdminQuizCustomSection(root, context);
   bindAdminQuizPublishPanel(root, context, quizDate);
-  bindAdminQuizStatsPanel(root, state.activePlan);
+  bindAdminQuizStatsPanel(root, state.adminManagementPlan);
   if (typeof hydrateIcons === 'function') hydrateIcons(root);
 }
 
@@ -3288,7 +3286,7 @@ async function loadActiveAdminPlanSubtab(forceRefresh = false) {
 
   if (activeAdminPlanSubtab === 'teams') {
     const results = await Promise.allSettled([
-      renderAdminTeamPlacementLookup(state.activePlan, forceRefresh),
+      renderAdminTeamPlacementLookup(state.adminManagementPlan, forceRefresh),
       (async () => {
         // Both divisions use the same overview payload. The first call may
         // refresh it; the second renders from the cache populated above.
@@ -4068,8 +4066,11 @@ async function syncManagementPlanSelectForSubtab() {
     return;
   }
 
-  const activeKeys = state.activePlan
-    ? [state.activePlan.globalPlanId, state.activePlan.id, state.activePlan.presetKey, state.activePlan.name].filter(Boolean).map(String)
+  // 優先沿用「計畫篩選」上一次自己選的計畫（adminManagementPlan），只有從未選過時才預設帶入
+  // 使用者自己目前在讀的計畫（activePlan）；兩者分開存放，選這裡的計畫不會影響使用者的首頁/繼續閱讀狀態。
+  const referencePlan = state.adminManagementPlan || state.activePlan;
+  const activeKeys = referencePlan
+    ? [referencePlan.globalPlanId, referencePlan.id, referencePlan.presetKey, referencePlan.name].filter(Boolean).map(String)
     : [];
   const matchingOption = Array.from(select.options).find(o => activeKeys.includes(o.value));
   const ongoingPlan = plans.find(plan => plan.managementStatus === 'ongoing');
@@ -4357,7 +4358,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
   if (!container || !count || !inviteAllButton) return;
 
   const currentUser = state.currentUser || {};
-  const plan = state.activePlan;
+  const plan = state.adminManagementPlan;
   if (!MANAGEMENT_ROLES.includes(getUserRoleCode(currentUser)) || !plan) {
     count.textContent = "0 人";
     setBulkPlanInviteButton(inviteAllButton, []);
@@ -4437,7 +4438,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
     event.preventDefault();
     event.stopPropagation();
     if (bulkPlanInviteInProgress || eligibleMembers.length === 0) return;
-    const planAtStart = state.activePlan;
+    const planAtStart = state.adminManagementPlan;
     const confirmed = window.confirm(
       `確定要提醒目前篩選範圍內的 ${eligibleMembers.length} 人加入「${planAtStart?.name || "所選計畫"}」嗎？`
     );
@@ -4490,7 +4491,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
       const originalText = button.textContent;
       button.disabled = true;
       button.textContent = "提醒中...";
-      const result = await db.sendPlanJoinInvitation(state.activePlan, memberId);
+      const result = await db.sendPlanJoinInvitation(state.adminManagementPlan, memberId);
       if (!result || !result.success) {
         button.disabled = false;
         button.textContent = originalText;
@@ -4499,7 +4500,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
       }
       if (member) member.remindedToday = true;
       button.textContent = "今天已提醒";
-      if (typeof showToast === "function") showToast(`已提醒 ${member && member.name || "這位夥伴"} 加入「${state.activePlan && state.activePlan.name || "所選計畫"}」`);
+      if (typeof showToast === "function") showToast(`已提醒 ${member && member.name || "這位夥伴"} 加入「${state.adminManagementPlan && state.adminManagementPlan.name || "所選計畫"}」`);
     };
   });
 }
@@ -4520,7 +4521,7 @@ async function renderAdminJoinedPlanMembers(forceRefresh = false) {
   if (!container || !count) return;
 
   const currentUser = state.currentUser || {};
-  const plan = state.activePlan;
+  const plan = state.adminManagementPlan;
   if (!MANAGEMENT_ROLES.includes(getUserRoleCode(currentUser)) || !plan) {
     count.textContent = "0 人";
     container.innerHTML = '<div class="admin-unjoined-plan-empty">目前沒有可查看的資料。</div>';
@@ -4644,7 +4645,7 @@ export async function renderAdminTeamRegistrationStatus(forceRefresh = false, di
   }
 
   let overviewPlans = Array.isArray(cachedTeamsData.plans) ? cachedTeamsData.plans : [];
-  const selectedPlan = state.activePlan;
+  const selectedPlan = state.adminManagementPlan;
   if (selectedPlan) {
     const selectedKeys = [selectedPlan.globalPlanId, selectedPlan.id, selectedPlan.presetKey, selectedPlan.name]
       .filter(Boolean).map(String);
