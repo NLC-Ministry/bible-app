@@ -43,7 +43,7 @@
                                     ]
                     },
                     {
-                        "source":  "/modules/(.*)\\.(js|mjs)",
+                        "source":  "/js/modules/(.*)\\.(js|mjs)",
                         "headers":  [
                                         {
                                             "key":  "Cache-Control",
