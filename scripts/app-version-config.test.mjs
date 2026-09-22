@@ -54,7 +54,7 @@ describe("release onboarding startup timing", () => {
 
   it("checks onboarding only after initial data load and dashboard render", () => {
     const loadUserData = app.indexOf("db.loadUserData(true)");
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : "dashboard-view")');
+    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
     const onboarding = app.indexOf("maybeShowReleaseOnboarding({");
 
     expect(loadUserData).toBeGreaterThan(-1);

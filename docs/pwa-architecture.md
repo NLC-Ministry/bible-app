@@ -26,11 +26,12 @@ The app uses a deliberately limited offline model:
 
 ## Trusted offline reading
 
-- A successful online NLC session stores a minimal `offline_trusted_identity` snapshot when the device preference is enabled.
+- A successful online NLC session unconditionally stores a minimal `offline_trusted_identity` snapshot for every user — this is not a togglable device preference.
 - The snapshot expires 30 days after the last successful server verification.
 - Offline mode restores cached plans and reading logs, hides management navigation, and never treats the local snapshot as an access token.
-- Explicit logout or an authentication rejection removes the trusted identity. A transient network failure does not remove refresh credentials.
+- Explicit logout or an authentication rejection removes the trusted identity. A transient network failure does not remove refresh credentials. There is currently no other user-facing action that purges a device's cached identity short of logout.
 - Returning online revalidates the NLC session before restoring server-backed features and syncing queued reading logs.
+- 快速啟動聖經 (`quick_launch_bible_enabled`, opt-in in 偏好設定): on boot, if a cached identity exists, shows it immediately and lands on the reader tab without waiting for the OIDC code exchange or the NLC session sync — both run in the background via `db.js`'s `startBackgroundSessionReconciliation()`. A reachable-but-erroring (5xx) response from `nlc-session` is treated the same as a dead connection (see `isNetworkUnreachableError()`), so the cached identity is also kept during a backend outage/deploy, not just a real network drop.
 
 ## Offline Bible packs
 
@@ -51,7 +52,7 @@ The app uses a deliberately limited offline model:
 
 ## Cache routing
 
-- Navigation: Network First; `/index.html` fallback.
+- Navigation: Network First; `/index.html` fallback. A reachable-but-5xx response is treated the same as a failed fetch and also falls back to the cached shell (see `CacheManager.networkFirst`'s `fallbackUrl` handling), so a maintenance/deploy-time error page never overwrites the cached app shell.
 - Same-origin scripts, CSS, fonts, images, and manifest: Cache First.
 - Missing content-hashed CSS: retry the stable /index.css entry with a build-version query; deployment rewrites stale index.<hash>.css URLs to that stable entry.
 - `bible-api.com` and `bolls.life`: Network First with runtime cache fallback.

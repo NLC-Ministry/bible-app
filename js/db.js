@@ -356,8 +356,8 @@ const db = {
   _orgStructureSnapshotKey: "",
   _orgStructureRequestId: 0,
 
+  // 保持登入並允許離線閱讀已不是可關閉的使用者偏好——是系統設計，一律套用。
   storeOfflineIdentity(profile = null) {
-    if (localStorage.getItem("offline_reading_enabled") === "false") return;
     const sourceProfile = profile || (() => {
       try { return JSON.parse(localStorage.getItem("nlc_supabase_profile") || "null"); } catch { return null; }
     })();
@@ -388,6 +388,14 @@ const db = {
     // HTTP error response (401/409/500/…), which proves the network path
     // works and the failure is coming from the server itself.
     if (err instanceof TypeError) return true;
+    // A reachable server answering with a 5xx (site under maintenance,
+    // deploy in progress, Supabase/Edge Function outage) leaves the caller
+    // in the same position as a dead connection: there is no real answer
+    // about this account right now. Treat it the same way — fall back to
+    // the cached identity instead of blocking on/showing the login gate.
+    // Deliberately excludes 401/403/409/etc: those ARE a real, reachable
+    // answer about this specific token/account and must still gate normally.
+    if (typeof err.status === "number" && err.status >= 500 && err.status < 600) return true;
     return false;
   },
 
@@ -446,7 +454,6 @@ const db = {
   },
 
   tryRestoreOfflineSession() {
-    if (localStorage.getItem("offline_reading_enabled") === "false") return false;
     return this.applyCachedIdentitySnapshot({ markAsOffline: true });
   },
 
@@ -593,6 +600,27 @@ const db = {
           if (resumed) {
             return false;
           }
+        }
+
+        // ── Quick-launch Bible: don't wait even for THIS boot's OIDC code
+        // exchange. A normal boot always pays for auth.handleCallback() up
+        // front — cheap when there's no code/state in the URL, but a real
+        // Logto token-endpoint round trip when the user arrived via a fresh
+        // Member Hub SSO redirect. When the user opted in (偏好設定 →
+        // 快速啟動聖經) and this device has a recently-verified (<=30d)
+        // local identity, skip waiting on that exchange entirely: show the
+        // cached identity now, and let handleCallback() + the real session
+        // sync run in the background via startBackgroundSessionReconciliation.
+        // Same "display-only risk, writes still re-verified server-side"
+        // tradeoff already used by the optimistic-boot path below.
+        if (typeof auth !== "undefined"
+          && auth.isLoggedIn()
+          && localStorage.getItem("quick_launch_bible_enabled") === "true"
+          && this.applyCachedIdentitySnapshot({ markAsOffline: false })) {
+          window.__bootMark?.("quick-launch-shell-shown");
+          state.optimisticBootPending = true;
+          this.startBackgroundSessionReconciliation({ resolveCallbackFirst: true });
+          return true;
         }
 
         // ── OIDC Callback: Handle Logto redirect ──
@@ -1144,9 +1172,16 @@ const db = {
       if (response.status === 409 && payload.error === "profile_resolution_failed") {
         const msg = payload.message || "帳號資料暫時無法讀取，請重新登入。";
         this.showConnectionError(msg);
-        throw new Error(msg);
+        const profileErr = new Error(msg);
+        profileErr.status = response.status;
+        throw profileErr;
       }
-      throw new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
+      const syncErr = new Error(payload.message || payload.error || "NLC session sync failed: " + response.status);
+      // Tag the HTTP status so isNetworkUnreachableError() can tell "server
+      // reachable but erroring (5xx — maintenance, deploy in progress,
+      // backend outage)" apart from a real per-account decision (401/403).
+      syncErr.status = response.status;
+      throw syncErr;
     }
 
 
@@ -1192,12 +1227,45 @@ const db = {
   //    real write server-side regardless of what this shows, so a few
   //    seconds of a stale optimistic view is a display-only risk, not a
   //    security one.
-  async startBackgroundSessionReconciliation() {
+  async startBackgroundSessionReconciliation({ resolveCallbackFirst = false } = {}) {
     if (this._backgroundReconcilePending) return;
     this._backgroundReconcilePending = true;
     let succeeded = false;
     try {
       window.__bootMark?.("background-reconcile-start");
+      // Quick-launch path only: the real OIDC code exchange for THIS boot
+      // was never awaited up front, so finish it here before syncing —
+      // otherwise a fresh Member Hub SSO code would sit unused and expire.
+      if (resolveCallbackFirst && typeof auth !== "undefined" && typeof auth.handleCallback === "function") {
+        const hadWorkingSessionBefore = auth.isLoggedIn();
+        try {
+          await auth.handleCallback();
+        } catch (callbackErr) {
+          console.warn("[BackgroundReconcile] Background OIDC callback exchange failed:", callbackErr);
+        }
+        // auth.handleCallback() does NOT throw on a rejected/duplicate/
+        // expired code (e.g. a reload or a second tab re-submitting the
+        // same one-time code) — it fails via auth.js's _failCallback(),
+        // which synchronously clears tokens, resets state.currentUser, and
+        // flips the login gate on, all before returning normally. That's
+        // correct for a normal foreground login attempt, but here we
+        // already had a working cached session before this background
+        // exchange started (that's the whole premise of quick-launch) — a
+        // redundant/reused SSO code failing must not yank the user out of
+        // the reader they're already in. Re-apply the cached identity and
+        // stop here for THIS invocation instead of falling through to the
+        // hasTokens-gated check below, which would otherwise immediately
+        // re-show the gate since _failCallback() just cleared the tokens
+        // it depends on. Real re-validation still happens naturally on the
+        // next token-consuming call (proactive refresh, a data write's
+        // 401 retry, next foreground).
+        if (hadWorkingSessionBefore && !auth.isLoggedIn()) {
+          console.warn("[BackgroundReconcile] Background OIDC exchange failed on an already-cached session — keeping optimistic view.");
+          this.applyCachedIdentitySnapshot({ markAsOffline: false });
+          succeeded = true;
+          return;
+        }
+      }
       const sessionSync = await this.syncNlcSessionWithSupabase(true);
       const block = getUserOnboardingBlock(state.currentUser);
       const hasValidTokens = typeof auth !== "undefined" && auth.isLoggedIn();
