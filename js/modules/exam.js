@@ -99,6 +99,8 @@ const toLocalInput = (iso) => {
 };
 const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
 const lines = (t) => String(t || "").split("\n").map((s) => s.trim()).filter(Boolean);
+// 作答花費秒數 → 人看得懂的文字；null／undefined 一律回 null（呼叫端自己決定要不要顯示 —）
+const fmtExamSeconds = (secs) => (secs == null ? null : secs >= 60 ? `${Math.floor(secs / 60)} 分 ${secs % 60} 秒` : `${secs} 秒`);
 const parseIdText = (arr) => arr.map((r) => {
   const i = r.indexOf("|");
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
@@ -220,14 +222,16 @@ export async function renderExamPanel(root) {
   const who = isLive ? "全體會友" : "僅系統管理員（演練用，不會出現在會友端）";
   const hasShortSection = !!examSectionCfg(paper).shortanswer;   // 沒選「簡答題」→ 隱藏批改分頁
   const canEditPaper = isTest;   // 正式版不提供編輯，題目與設定一律由測試版「推上正式版」
-  const hasNotice = isLive;      // 測試版不用預告文（預告文只給會友端的正式版）
+  // 測試版也能編/發預告文，方便在推上正式版前先看看首頁卡片長怎樣——測試版
+  // 發佈後只有 admin/pastor 自己在首頁看得到（exam_home_exams 擋非 staff），
+  // 不會外流給一般會友。
+  const hasNotice = true;
   // 「填答案」：題目鎖定但要能補正解（正式版；或已有作答的測試版）——考完才給答案的情境
   const canFillAnswers = !canEditPaper || attemptCount > 0;
   if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "assign" && !hasShortSection) examAdminSubview = "bank";
   if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";
   if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = canFillAnswers ? "answers" : "notice";
-  if (!hasNotice && examAdminSubview === "notice") examAdminSubview = canEditPaper ? "bank" : "answers";
   if (examAdminSubview === "answers" && !canFillAnswers) examAdminSubview = "bank";
   const annPub = paper.announcement_published === true;
   const noticeReady = !!((paper.announcement || {}).headline || "").trim() && !!((paper.announcement || {}).body || "").trim();
@@ -260,12 +264,14 @@ export async function renderExamPanel(root) {
     ? "「答案詳解」目前對會友開放：每一題編輯處若有填寫答案詳解，成績公布後會友就看得到；簡答題的參考答案／評分要點永遠不會外流。"
     : "「答案詳解」目前對會友隱藏：開啟後，題目編輯處有填寫答案詳解的題目，會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫；簡答題的參考答案／評分要點不受影響，一律不對外顯示）。");
 
-  // ── 預告文（只有正式版有；獨立於 status，不鎖題庫）──
+  // ── 預告文（測試版與正式版都有；獨立於 status，不鎖題庫）──
+  // 測試版發佈後只有管理員自己在首頁看得到（可以拿來預覽卡片長怎樣），
+  // 正式版發佈後全體會友都看得到。
   if (hasNotice) {
     if (!annPub && paper.status !== "closed") {
       if (noticeReady) {
         actions.push('<button type="button" class="primary-btn" data-exam-act="announce">發佈預告文</button>');
-        hints.push(`發佈預告文後，${who}的首頁會出現預告區塊。`);
+        hints.push(isLive ? "發佈預告文後，全體會友的首頁會出現預告區塊。" : "發佈預告文後，只有你自己（管理員）在首頁會看到這張預告卡片，方便先預覽實際效果，不會出現在會友端。");
       } else {
         hints.push("在「預告文」分頁填好標題與內容後，這裡才會出現「發佈預告文」按鈕。");
       }
@@ -506,8 +512,12 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "announce" && !confirm("將把這份預告文發佈到全體會友的首頁。確定？")) return;
-    if (act === "unannounce" && !confirm("撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？")) return;
+    if (act === "announce" && !confirm(isLive
+      ? "將把這份預告文發佈到全體會友的首頁。確定？"
+      : "將把這份預告文發佈到首頁——只有你自己（管理員）看得到，用來預覽效果，不會出現在會友端。確定？")) return;
+    if (act === "unannounce" && !confirm(isLive
+      ? "撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？"
+      : "撤下後，你自己的首頁預覽就不會再顯示這份測試版的預告區塊。確定？")) return;
     if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。若自動評分已開啟且正解完整，關閉後才會開始計算正式成績。確定提前關閉？")) return;
     if (act === "publish" && !confirm(isTest
       ? "將開放「測試作答」——只有系統管理員能進入，不會出現在會友端。發佈後題庫會鎖定。確定？"
@@ -533,7 +543,7 @@ export async function renderExamPanel(root) {
     b.disabled = false;
     if (!res.success) { toast(res.message || "操作失敗"); return; }
     toast(
-      act === "announce" ? "預告文已發佈到會友首頁"
+      act === "announce" ? (isLive ? "預告文已發佈到會友首頁" : "預告文已發佈，可以到首頁預覽（僅管理員看得到）")
       : act === "unannounce" ? "已撤下預告文"
       : act === "publish" ? (isTest ? "已開放測試作答（僅系統管理員）" : "測驗已發佈，開放時間內可作答")
       : act === "close" ? "測驗已關閉"
@@ -547,19 +557,21 @@ export async function renderExamPanel(root) {
   keepScroll();
 }
 
-// ── 預告文編輯（首頁 8/30 宣示 banner 的內容來源）──
+// ── 預告文編輯（首頁 8/30 宣示 banner 的內容來源；測試版與正式版共用同一份表單）──
 function renderExamNoticeForm(host, paper, rerender) {
   const a = paper.announcement || {};
+  const isLive = paper.mode === "live";
   const locked = paper.status === "closed";
   const annPub = paper.announcement_published === true;
   const openTxt = paper.open_at ? toLocalInput(paper.open_at).replace("T", " ") : "（尚未設定）";
   const closeTxt = paper.close_at ? toLocalInput(paper.close_at).replace("T", " ") : "（尚未設定）";
+  const audience = isLive ? "會友首頁" : "首頁（僅你自己／管理員看得到，用來預覽效果，不會露出給一般會友）";
   host.innerHTML = `
     <div class="exam-admin__form">
-      <p class="exam-admin__hint">這裡的內容會顯示在會友首頁的「速讀測驗」置頂區塊。${
+      <p class="exam-admin__hint">這裡的內容會顯示在${audience}的「速讀測驗」置頂區塊。${
         locked ? "測驗已關閉，預告文已鎖定。"
-        : annPub ? "預告文已發佈、正在首頁顯示，仍可在此微調文案並儲存。"
-        : "填好標題與內容後，回上方按「發佈預告文」即可上線（不影響試卷草稿狀態）。"}</p>
+        : annPub ? `預告文已發佈、正在${isLive ? "首頁顯示" : "首頁預覽"}，仍可在此微調文案並儲存。`
+        : `填好標題與內容後，回上方按「發佈預告文」即可${isLive ? "上線" : "在首頁預覽"}（不影響試卷草稿狀態）。`}</p>
       <label>標題（必填）
         <input class="form-control" data-n="headline" maxlength="40" value="${esc(a.headline || "")}" ${locked ? "disabled" : ""}></label>
       <label>內容（必填）
@@ -647,12 +659,14 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
     ${scoped ? '<p class="exam-admin__meta exam-stats__scope">只顯示你負責範圍內的作答；隊伍總分也只計入範圍內成員，且只列出範圍內有人作答的隊。</p>' : ""}
     ${hasTeamStats ? `<p class="exam-admin__meta">團隊平均固定以隊伍編制計算：3 人隊除以 3、6 人隊除以 6；未完成／未作答的成員一律按 0 分計。${scoped ? "" : "沒有人作答的隊也會列出（0 分、排在最後）。"}${readingBook ? `<br>缺口分三類：<strong>未讀完</strong>＝有考試但沒讀完《${esc(readingBook)}》一遍（開「只統計讀完的人」時不計分）、<strong>未考試</strong>＝隊員完全沒作答、缺額＝隊伍沒滿編制（CSV 才有）。` : ""}${linkedPlanName ? `<br>團隊排行已鎖定對應計畫「${esc(linkedPlanName)}」，只統計這個計畫底下登記的隊伍（去「試卷設定」可以改）。` : ""}</p>` : (linkedPlanId ? `<p class="exam-admin__meta">對應計畫「${esc(linkedPlanName)}」底下沒有登記任何 3／6 人隊，不顯示團隊統計。</p>` : `<p class="exam-admin__meta">這份試卷沒有設定對應計畫（獨立測驗卷），不顯示團隊統計（去「試卷設定」可以設定）。</p>`)}
     <p class="exam-admin__meta">PR 值＝在「全教會同層級」（全體參加者／各大區／各牧區／各小組／同型團隊）的百分等級，夾 1–99；母體不足 5 顯示「—」。名次僅後台可見，公布給會友的內容不含名次。${prPending ? "<strong>成績尚未公布，PR 值待公布後才顯示。</strong>" : ""}</p>
+    ${o.eligibleCount != null ? `<p class="exam-admin__meta">參與率的應考人數＝${scoped ? "你負責範圍內" : "全教會"}${linkedPlanName ? `有登記對應計畫「${esc(linkedPlanName)}」讀經進度` : ""}的會友，共 ${o.eligibleCount} 人。</p>` : ""}
     ${readingBook ? `<label class="exam-admin__meta exam-stats__readgate" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
       <input type="checkbox" id="exam-stats-readgate"${requireRead ? " checked" : ""}>
       <span>只統計「已讀完《${esc(readingBook)}》至少一遍」的人${notReadCount ? `　·　目前有 <strong>${notReadCount}</strong> 人未讀完` : ""}</span>
     </label>${requireRead ? `<p class="exam-admin__meta">已排除未讀完《${esc(readingBook)}》的作答：整體平均、各大區/牧區/小組${hasTeamStats ? "、組隊規模、團隊排行" : ""}、PR 母體都只算讀過的人。下方作答名單仍列出全部（未讀完者標「不計入」）。</p>` : ""}` : ""}
     <div class="exam-stats__tiles">
       <div class="exam-stats__tile"><span>作答</span><strong>${num(o.submitted)}</strong></div>
+      ${o.eligibleCount != null ? `<div class="exam-stats__tile"><span>參與率（${num(o.submitted)}／${num(o.eligibleCount)}）</span><strong>${o.participationRate == null ? "—" : `${Math.round(o.participationRate * 100)}%`}</strong></div>` : ""}
       <div class="exam-stats__tile"><span>已批改</span><strong>${num(o.graded)}</strong></div>
       <div class="exam-stats__tile"><span>作答中</span><strong>${num(o.inProgress)}</strong></div>
       ${hasShort ? `<div class="exam-stats__tile"><span>平均（自動）</span><strong>${num(o.avgAuto)}</strong></div>` : ""}
@@ -720,6 +734,7 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
         ] : [
           { h: "分數", f: (r) => (r.status === "graded" ? `<strong>${num(r.totalScore ?? r.autoScore)}</strong>` : "計分中") }
         ]),
+        { h: "作答時間", f: (r) => fmtExamSeconds(r.timeSeconds) ?? "—" },
         ...(readingBook ? [{
           h: `讀完《${readingBook}》`,
           f: (r) => (r.firstRoundDone === true
@@ -750,16 +765,16 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
     const prHead = prVisible ? ["全教會PR", "牧區PR", "小組PR"] : [];
     const prVals = (r) => (prVisible ? [r.prChurch, r.prZone, r.prGroup] : []);
     const head = (hasShort
-      ? ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "自動", "簡答", "總分", "送出時間"]
-      : ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "分數", "送出時間"]).concat(readHead, prHead);
+      ? ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "自動", "簡答", "總分", "送出時間", "作答時間（秒）"]
+      : ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "分數", "送出時間", "作答時間（秒）"]).concat(readHead, prHead);
     const csv = [head.join(",")].concat(rows.map((r) => (hasShort ? [
       r.name, r.greatRegion, r.pastoralZone, r.smallGroup,
       r.teamLabel || "個人",
-      r.status, r.autoScore, r.manualScore, r.totalScore, r.submittedAt
+      r.status, r.autoScore, r.manualScore, r.totalScore, r.submittedAt, r.timeSeconds
     ] : [
       r.name, r.greatRegion, r.pastoralZone, r.smallGroup,
       r.teamLabel || "個人",
-      r.status, r.totalScore ?? r.autoScore, r.submittedAt
+      r.status, r.totalScore ?? r.autoScore, r.submittedAt, r.timeSeconds
     ]).concat(readVal(r), prVals(r)).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -2968,6 +2983,23 @@ class ExamRunner {
         </details>
       </div>`;
 
+    // ── 作答時間 / 答對率：跟 PR 分開顯示——作答時間送出當下就有，答對率
+    // 則跟逐題正確與否同一個 show_full 閘門（成績公布前／管理員預覽外一律 —）。
+    const statTileHtml = (label, value, caption) => `
+      <div class="exam-result__pr-tile">
+        <span class="exam-result__pr-tile-label">${label}</span>
+        <span class="exam-result__pr-tile-value${value == null ? " exam-result__pr-tile-value--muted" : ""}">${value == null ? "—" : value}</span>
+        ${caption ? `<span class="exam-result__pr-tile-caption">${caption}</span>` : ""}
+      </div>`;
+    const timeDisplay = fmtExamSeconds(d.timeSeconds);
+    const accuracyDisplay = d.accuracyRate == null ? null : `${Math.round(d.accuracyRate * 100)}%`;
+    const accuracyCaption = (d.accuracyCorrect != null && d.accuracyTotal != null) ? `答對 ${d.accuracyCorrect}／${d.accuracyTotal} 題` : null;
+    const metaBlockHtml = (timeDisplay == null && accuracyDisplay == null) ? "" : `
+      <div class="exam-result__pr-grid">
+        ${timeDisplay != null ? statTileHtml("作答時間", timeDisplay, null) : ""}
+        ${accuracyDisplay != null ? statTileHtml("答對率", accuracyDisplay, accuracyCaption) : ""}
+      </div>`;
+
     this.el.innerHTML = `
       <div class="glass-card" style="padding:1.4rem 1.5rem;">
         <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${this.paper.mode === "test" ? '　<span class="stat-badge stat-badge--neutral">測試版</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
@@ -2979,6 +3011,7 @@ class ExamRunner {
                 : ""}`
             : "你可以查看自己的填答內容；活動關閉並公布成績前，不顯示分數、對錯或正解。"}
         </div>
+        ${metaBlockHtml}
         ${prBlockHtml}
         ${lostShortInfo ? `
         <div class="exam-result__banner" style="border-color:var(--color-warning);background:color-mix(in srgb,var(--color-warning) 8%,var(--bg-card));">

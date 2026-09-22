@@ -18,7 +18,7 @@ import './design/icons.js';
 import './state.js?v=20260901_highlights_notes_review';
 import './auth.js?v=20260921_phone_number_scope_sync';
 import './auth-launch.mjs';
-import './db.js?v=20260921_daily_quiz_simplify';
+import './db.js?v=20260922_exam_announcement_live_only_removed';
 import './utils.js?v=20260916_reading_logs_pagination_fix';
 import './gamification.js?v=20260826_quiz_remove_duplicate_scope_filter';
 import { mountGradingWorkspace } from './modules/grading.js?v=20260915_grading_roster_search';
