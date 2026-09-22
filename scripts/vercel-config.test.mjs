@@ -64,8 +64,13 @@ expect(value).toContain("public");
   });
 
   it("keeps unhashed PWA runtime modules updateable", () => {
-    expect(headerFor("/modules/(.*)\\.(js|mjs)")).toContain("no-cache");
-    expect(headerFor("/modules/(.*)\\.(js|mjs)")).not.toContain("immutable");
+    // Real served path is js/modules/*.js (e.g. js/modules/exam.js) — a bare
+    // /modules/ source here never matches any actual request, silently leaving
+    // these files to fall back to Vercel's default caching. Found via a real
+    // production bug: admin.js's exam.js import stayed cached indefinitely
+    // regardless of how many times a user reopened the app.
+    expect(headerFor("/js/modules/(.*)\\.(js|mjs)")).toContain("no-cache");
+    expect(headerFor("/js/modules/(.*)\\.(js|mjs)")).not.toContain("immutable");
     expect(headerFor("/js/pwa/(.*)\\.js")).toContain("no-cache");
     expect(headerFor("/js/pwa/(.*)\\.js")).not.toContain("immutable");
   });
