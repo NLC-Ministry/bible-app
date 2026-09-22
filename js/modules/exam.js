@@ -99,6 +99,8 @@ const toLocalInput = (iso) => {
 };
 const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
 const lines = (t) => String(t || "").split("\n").map((s) => s.trim()).filter(Boolean);
+// 作答花費秒數 → 人看得懂的文字；null／undefined 一律回 null（呼叫端自己決定要不要顯示 —）
+const fmtExamSeconds = (secs) => (secs == null ? null : secs >= 60 ? `${Math.floor(secs / 60)} 分 ${secs % 60} 秒` : `${secs} 秒`);
 const parseIdText = (arr) => arr.map((r) => {
   const i = r.indexOf("|");
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
@@ -647,12 +649,14 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
     ${scoped ? '<p class="exam-admin__meta exam-stats__scope">只顯示你負責範圍內的作答；隊伍總分也只計入範圍內成員，且只列出範圍內有人作答的隊。</p>' : ""}
     ${hasTeamStats ? `<p class="exam-admin__meta">團隊平均固定以隊伍編制計算：3 人隊除以 3、6 人隊除以 6；未完成／未作答的成員一律按 0 分計。${scoped ? "" : "沒有人作答的隊也會列出（0 分、排在最後）。"}${readingBook ? `<br>缺口分三類：<strong>未讀完</strong>＝有考試但沒讀完《${esc(readingBook)}》一遍（開「只統計讀完的人」時不計分）、<strong>未考試</strong>＝隊員完全沒作答、缺額＝隊伍沒滿編制（CSV 才有）。` : ""}${linkedPlanName ? `<br>團隊排行已鎖定對應計畫「${esc(linkedPlanName)}」，只統計這個計畫底下登記的隊伍（去「試卷設定」可以改）。` : ""}</p>` : (linkedPlanId ? `<p class="exam-admin__meta">對應計畫「${esc(linkedPlanName)}」底下沒有登記任何 3／6 人隊，不顯示團隊統計。</p>` : `<p class="exam-admin__meta">這份試卷沒有設定對應計畫（獨立測驗卷），不顯示團隊統計（去「試卷設定」可以設定）。</p>`)}
     <p class="exam-admin__meta">PR 值＝在「全教會同層級」（全體參加者／各大區／各牧區／各小組／同型團隊）的百分等級，夾 1–99；母體不足 5 顯示「—」。名次僅後台可見，公布給會友的內容不含名次。${prPending ? "<strong>成績尚未公布，PR 值待公布後才顯示。</strong>" : ""}</p>
+    ${o.eligibleCount != null ? `<p class="exam-admin__meta">參與率的應考人數＝${scoped ? "你負責範圍內" : "全教會"}${linkedPlanName ? `有登記對應計畫「${esc(linkedPlanName)}」讀經進度` : ""}的會友，共 ${o.eligibleCount} 人。</p>` : ""}
     ${readingBook ? `<label class="exam-admin__meta exam-stats__readgate" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
       <input type="checkbox" id="exam-stats-readgate"${requireRead ? " checked" : ""}>
       <span>只統計「已讀完《${esc(readingBook)}》至少一遍」的人${notReadCount ? `　·　目前有 <strong>${notReadCount}</strong> 人未讀完` : ""}</span>
     </label>${requireRead ? `<p class="exam-admin__meta">已排除未讀完《${esc(readingBook)}》的作答：整體平均、各大區/牧區/小組${hasTeamStats ? "、組隊規模、團隊排行" : ""}、PR 母體都只算讀過的人。下方作答名單仍列出全部（未讀完者標「不計入」）。</p>` : ""}` : ""}
     <div class="exam-stats__tiles">
       <div class="exam-stats__tile"><span>作答</span><strong>${num(o.submitted)}</strong></div>
+      ${o.eligibleCount != null ? `<div class="exam-stats__tile"><span>參與率（${num(o.submitted)}／${num(o.eligibleCount)}）</span><strong>${o.participationRate == null ? "—" : `${Math.round(o.participationRate * 100)}%`}</strong></div>` : ""}
       <div class="exam-stats__tile"><span>已批改</span><strong>${num(o.graded)}</strong></div>
       <div class="exam-stats__tile"><span>作答中</span><strong>${num(o.inProgress)}</strong></div>
       ${hasShort ? `<div class="exam-stats__tile"><span>平均（自動）</span><strong>${num(o.avgAuto)}</strong></div>` : ""}
@@ -720,6 +724,7 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
         ] : [
           { h: "分數", f: (r) => (r.status === "graded" ? `<strong>${num(r.totalScore ?? r.autoScore)}</strong>` : "計分中") }
         ]),
+        { h: "作答時間", f: (r) => fmtExamSeconds(r.timeSeconds) ?? "—" },
         ...(readingBook ? [{
           h: `讀完《${readingBook}》`,
           f: (r) => (r.firstRoundDone === true
@@ -750,16 +755,16 @@ async function renderExamStats(host, paperId, hasShort = true, paperTitle = null
     const prHead = prVisible ? ["全教會PR", "牧區PR", "小組PR"] : [];
     const prVals = (r) => (prVisible ? [r.prChurch, r.prZone, r.prGroup] : []);
     const head = (hasShort
-      ? ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "自動", "簡答", "總分", "送出時間"]
-      : ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "分數", "送出時間"]).concat(readHead, prHead);
+      ? ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "自動", "簡答", "總分", "送出時間", "作答時間（秒）"]
+      : ["姓名", "大區", "牧區", "小組", "組隊", "狀態", "分數", "送出時間", "作答時間（秒）"]).concat(readHead, prHead);
     const csv = [head.join(",")].concat(rows.map((r) => (hasShort ? [
       r.name, r.greatRegion, r.pastoralZone, r.smallGroup,
       r.teamLabel || "個人",
-      r.status, r.autoScore, r.manualScore, r.totalScore, r.submittedAt
+      r.status, r.autoScore, r.manualScore, r.totalScore, r.submittedAt, r.timeSeconds
     ] : [
       r.name, r.greatRegion, r.pastoralZone, r.smallGroup,
       r.teamLabel || "個人",
-      r.status, r.totalScore ?? r.autoScore, r.submittedAt
+      r.status, r.totalScore ?? r.autoScore, r.submittedAt, r.timeSeconds
     ]).concat(readVal(r), prVals(r)).map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
@@ -2968,6 +2973,23 @@ class ExamRunner {
         </details>
       </div>`;
 
+    // ── 作答時間 / 答對率：跟 PR 分開顯示——作答時間送出當下就有，答對率
+    // 則跟逐題正確與否同一個 show_full 閘門（成績公布前／管理員預覽外一律 —）。
+    const statTileHtml = (label, value, caption) => `
+      <div class="exam-result__pr-tile">
+        <span class="exam-result__pr-tile-label">${label}</span>
+        <span class="exam-result__pr-tile-value${value == null ? " exam-result__pr-tile-value--muted" : ""}">${value == null ? "—" : value}</span>
+        ${caption ? `<span class="exam-result__pr-tile-caption">${caption}</span>` : ""}
+      </div>`;
+    const timeDisplay = fmtExamSeconds(d.timeSeconds);
+    const accuracyDisplay = d.accuracyRate == null ? null : `${Math.round(d.accuracyRate * 100)}%`;
+    const accuracyCaption = (d.accuracyCorrect != null && d.accuracyTotal != null) ? `答對 ${d.accuracyCorrect}／${d.accuracyTotal} 題` : null;
+    const metaBlockHtml = (timeDisplay == null && accuracyDisplay == null) ? "" : `
+      <div class="exam-result__pr-grid">
+        ${timeDisplay != null ? statTileHtml("作答時間", timeDisplay, null) : ""}
+        ${accuracyDisplay != null ? statTileHtml("答對率", accuracyDisplay, accuracyCaption) : ""}
+      </div>`;
+
     this.el.innerHTML = `
       <div class="glass-card" style="padding:1.4rem 1.5rem;">
         <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${this.paper.mode === "test" ? '　<span class="stat-badge stat-badge--neutral">測試版</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
@@ -2979,6 +3001,7 @@ class ExamRunner {
                 : ""}`
             : "你可以查看自己的填答內容；活動關閉並公布成績前，不顯示分數、對錯或正解。"}
         </div>
+        ${metaBlockHtml}
         ${prBlockHtml}
         ${lostShortInfo ? `
         <div class="exam-result__banner" style="border-color:var(--color-warning);background:color-mix(in srgb,var(--color-warning) 8%,var(--bg-card));">
