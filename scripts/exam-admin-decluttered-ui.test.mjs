@@ -83,7 +83,7 @@ describe("不常用的切換/維護動作收進「⋯ 更多」，主畫面只�
     expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">');
     expect(exam).toContain("primaryActions.push('<button type=\"button\" class=\"secondary-btn\" data-exam-act=\"close\">關閉測驗</button>');");
     expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="push"');
-    expect(exam).toContain("primaryActions.push('<button type=\"button\" class=\"primary-btn\" data-exam-act=\"publish-results\">公布成績</button>');");
+    expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
   });
 
   it("模板把 primaryActions 跟 moreActions 分開渲染，moreActions 包在收合的 details 裡", () => {
@@ -97,22 +97,41 @@ describe("不常用的切換/維護動作收進「⋯ 更多」，主畫面只�
   });
 });
 
-describe("「說明」分頁：把政策性文字集中收進來，主畫面不再堆長段落", () => {
-  it("多了一個 info 分頁按鈕跟對應的 renderExamInfoTab", () => {
-    expect(exam).toContain('<button type="button" data-exam-sub="info" class="${examAdminSubview === "info" ? "active" : ""}">說明</button>');
-    expect(exam).toContain('else if (examAdminSubview === "info") renderExamInfoTab(sub, paper, { isLive, isTest, hasShortSection });');
-    expect(exam).toContain("function renderExamInfoTab(host, paper, ctx)");
+describe("說明改成小圖示點擊彈出：不再另外開分頁，需要才點開", () => {
+  it("獨立的「說明」分頁已經整個拿掉", () => {
+    expect(exam).not.toContain('data-exam-sub="info"');
+    expect(exam).not.toContain("function renderExamInfoTab");
+    expect(exam).not.toContain('examAdminSubview === "info"');
   });
 
-  it("涵蓋測試版/正式版關係、公告設定、自動評分、答案詳解、測試名單、清除作答、公布成績等主題", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamInfoTab"), exam.indexOf("// ── 題目已鎖定時"));
-    ["測試版與正式版的關係", "公告設定／發佈預告文", "自動評分", "答案詳解", "測試名單", "清除作答紀錄", "公布成績"]
-      .forEach((topic) => expect(fn).toContain(topic));
+  it("examInfoIcon 用 Lucide 的 info 圖示（有 fallback），文字放在 data-info-text 屬性上", () => {
+    const fn = exam.slice(exam.indexOf("function examInfoIcon"), exam.indexOf("let _examInfoPopoverEl"));
+    expect(fn).toContain('typeof renderIcon === "function" ? renderIcon("info"');
+    expect(fn).toContain('data-info-text="${esc(text)}"');
   });
 
-  it("複習主題只在正式版顯示", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamInfoTab"), exam.indexOf("// ── 題目已鎖定時"));
-    expect(fn).toContain('.filter(([title]) => isLive || title !== "複習（正式版限定）")');
+  it("點擊用事件代理在 body 綁一次，重繪不用重綁；再點一次同一顆圖示會關閉，點別的地方也會關閉", () => {
+    expect(exam).toContain('const btn = e.target.closest("[data-info-text]");');
+    expect(exam).toContain("if (btn) { e.stopPropagation(); _toggleExamInfoPopover(btn); }");
+    expect(exam).toContain("if (_examInfoPopoverEl && _examInfoPopoverEl._anchor === anchorBtn) { _closeExamInfoPopover(); return; }");
+    expect(exam).toContain('document.addEventListener("click", _onDocClickCloseExamInfoPopover, true);');
+    expect(exam).toContain('if (e.key === "Escape") _closeExamInfoPopover();');
+  });
+
+  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：測試版/正式版關係、公告設定、自動評分、答案詳解、複習、清除作答、公布成績", () => {
+    expect(exam).toContain('examInfoIcon("測試版與正式版是兩份獨立的卷。');
+    expect(exam).toContain('<legend>公告設定${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
+  });
+
+  it("index.css 定義了圖示按鈕與彈出框的樣式", () => {
+    expect(css).toContain(".exam-admin__info-icon {");
+    expect(css).toContain(".exam-admin__info-popover {");
+    expect(css).not.toContain(".exam-admin__info-item");
   });
 });
 
