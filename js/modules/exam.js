@@ -356,18 +356,38 @@ export async function renderExamPanel(root) {
   // 發佈後只有 admin/pastor 自己在首頁看得到（exam_home_exams 擋非 staff），
   // 不會外流給一般會友。
   const hasNotice = true;
+  const resultsPublished = !!paper.results_published_at;     // 成績已公布 → 全部鎖定不得再改
   // 「填答案」：題目鎖定但要能補正解（正式版；或已有作答的測試版）——考完才給答案的情境
   const canFillAnswers = !canEditPaper || attemptCount > 0;
-  if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";
-  if (examAdminSubview === "assign" && !hasShortSection) examAdminSubview = "bank";
-  if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";
-  if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = "answers";
-  if (examAdminSubview === "answers" && !canFillAnswers) examAdminSubview = "bank";
+
+  // ── 各分頁「看不看得到」的規則，集中算一次 ──
+  // 統計／答案詳解：草稿階段不可能有作答／不急著寫詳解，發佈後才出現。
+  // 填答案／簡答批改／簡答指派：成績公布後正解跟批改都已經鎖死，收起來不留一個
+  // 按了也沒用的分頁。複習紀錄不受成績公布影響——會友的複習視窗是獨立算的
+  // （關卷後 24 小時內），公布成績當下複習可能都還沒結束，仍要看得到。
+  const showStats = paper.status !== "draft";
+  const showExplain = paper.status !== "draft";
+  const showAnswers = canFillAnswers && !resultsPublished;
+  const showGrade = hasShortSection && !resultsPublished;
+  const showAssign = hasShortSection && !resultsPublished;
+  const showPractice = isLive;
+  const availableSubviews = [
+    ...(canEditPaper ? ["bank", "meta"] : []),
+    ...(showAnswers ? ["answers"] : []),
+    ...(showGrade ? ["grade"] : []),
+    ...(showAssign ? ["assign"] : []),
+    ...(showPractice ? ["practice"] : []),
+    ...(showStats ? ["stats"] : []),
+    ...(showExplain ? ["explain"] : [])
+  ];
+  // 目前選的分頁如果因為狀態變化不再顯示了，跳到第一個還看得到的分頁，
+  // 不要卡在一個已經消失的分頁上、畫面空白。
+  if (!availableSubviews.includes(examAdminSubview)) examAdminSubview = availableSubviews[0] || "bank";
+
   const annPub = paper.announcement_published === true;
   const noticeReady = !!((paper.announcement || {}).headline || "").trim() && !!((paper.announcement || {}).body || "").trim();
   const autoScoreOn = paper.auto_score_enabled !== false;   // 預設開；答案未定稿時可先關
   const practiceEnabled = paper.practice_retake_enabled !== false;
-  const resultsPublished = !!paper.results_published_at;     // 成績已公布 → 全部鎖定不得再改
   const explanationOn = paper.show_answer_explanation === true;   // 預設關；不受成績公布鎖定
 
   const badge = paper.status === "published" ? "success" : "neutral";
@@ -468,12 +488,12 @@ export async function renderExamPanel(root) {
     <nav class="exam-admin__subnav">
       ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
       <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>` : ""}
-      ${canFillAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
-      ${hasShortSection ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
+      ${showAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
+      ${showGrade ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
       <button type="button" data-exam-sub="assign" class="${examAdminSubview === "assign" ? "active" : ""}">簡答指派</button>` : ""}
-      ${isLive ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
-      <button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>
-      <button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>
+      ${showPractice ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
+      ${showStats ? `<button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>` : ""}
+      ${showExplain ? `<button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>` : ""}
     </nav>
     <div id="exam-admin-sub"></div>`;
 
