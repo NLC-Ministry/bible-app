@@ -21,7 +21,7 @@ import {
 import { parseQuizImportText } from "./quiz-import.mjs";
 // Keep the ?v= in sync with any change to exam.js so a deploy isn't masked by a
 // Service Worker that cached /modules/exam.js at its bare (unversioned) URL.
-import { renderExamPanel } from "./exam.js?v=20260923_test_live_lifecycle_split";
+import { renderExamPanel } from "./exam.js?v=20260923_announcement_blank_guard";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");

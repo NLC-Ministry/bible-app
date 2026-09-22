@@ -13,7 +13,7 @@ import './design/icons.js';
 import './state.js?v=20260922_exam_announcement_live_only_removed';
 import './auth.js?v=20260922_exam_announcement_live_only_removed';
 import './auth-launch.mjs';
-import './db.js?v=20260923_pre_announcement';
+import './db.js?v=20260923_announcement_blank_guard';
 import './utils.js?v=20260922_exam_announcement_live_only_removed';
 import './gamification.js?v=20260922_exam_announcement_live_only_removed';
 import { initModalManager } from './modules/modal-manager.mjs';

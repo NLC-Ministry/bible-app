@@ -163,12 +163,15 @@ function wireSaveButton(btn, watchTarget, onSave, onDone) {
   if (!btn) return;
   const baseLabel = btn.textContent.trim();
   let savedTimer = null;
+  // 「clean」（沒有待存內容）故意跟「dirty」（有改動）用 disabled 狀態明顯區分開——
+  // 不然「已儲存 ✓」閃過去之後變回普通的 baseLabel，長得跟「從頭到尾都還沒填」
+  // 一模一樣，會讓人誤以為剛剛存的東西不見了、又要再存一次。
   const setState = (state) => {
     btn.classList.remove("is-dirty", "is-saving", "is-saved");
     if (state === "dirty") { btn.classList.add("is-dirty"); btn.textContent = `${baseLabel}（有改動未儲存）`; btn.disabled = false; }
     else if (state === "saving") { btn.classList.add("is-saving"); btn.textContent = "儲存中…"; btn.disabled = true; }
     else if (state === "saved") { btn.classList.add("is-saved"); btn.textContent = "已儲存 ✓"; btn.disabled = false; }
-    else { btn.textContent = baseLabel; btn.disabled = false; }
+    else { btn.textContent = baseLabel; btn.disabled = true; }
   };
   const markDirty = () => { clearTimeout(savedTimer); setState("dirty"); };
   if (watchTarget && typeof watchTarget.forEach === "function") {
@@ -185,6 +188,7 @@ function wireSaveButton(btn, watchTarget, onSave, onDone) {
     setState("saved");
     savedTimer = setTimeout(() => { setState("clean"); onDone?.(); }, 1800);
   });
+  setState("clean");   // 剛渲染出來時，表單內容跟伺服器資料一致，還沒有待存的東西
 }
 
 // ── 建立新試卷：先問標題，避免建立後畫面上一直是預設的「速讀測驗」──
