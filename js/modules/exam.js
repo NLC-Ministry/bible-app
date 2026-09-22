@@ -245,6 +245,11 @@ export async function renderExamPanel(root) {
         <div id="exam-admin-body" style="margin-top:1rem;"><div class="admin-user-directory__empty">載入大測驗設定…</div></div>
       </section>`;
     body = root.querySelector("#exam-admin-body");
+    // 說明小圖示：事件代理綁一次就好，body 本身重繪時不會被換掉，內容重繪也不用重綁
+    body.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-info-text]");
+      if (btn) { e.stopPropagation(); _toggleExamInfoPopover(btn); }
+    });
   }
   const _scrollY = window.scrollY;
   const keepScroll = () => requestAnimationFrame(() => window.scrollTo(0, _scrollY));
@@ -351,18 +356,38 @@ export async function renderExamPanel(root) {
   // 發佈後只有 admin/pastor 自己在首頁看得到（exam_home_exams 擋非 staff），
   // 不會外流給一般會友。
   const hasNotice = true;
+  const resultsPublished = !!paper.results_published_at;     // 成績已公布 → 全部鎖定不得再改
   // 「填答案」：題目鎖定但要能補正解（正式版；或已有作答的測試版）——考完才給答案的情境
   const canFillAnswers = !canEditPaper || attemptCount > 0;
-  if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";
-  if (examAdminSubview === "assign" && !hasShortSection) examAdminSubview = "bank";
-  if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";
-  if (!canEditPaper && (examAdminSubview === "bank" || examAdminSubview === "meta")) examAdminSubview = "answers";
-  if (examAdminSubview === "answers" && !canFillAnswers) examAdminSubview = "bank";
+
+  // ── 各分頁「看不看得到」的規則，集中算一次 ──
+  // 統計／答案詳解：草稿階段不可能有作答／不急著寫詳解，發佈後才出現。
+  // 填答案／簡答批改／簡答指派：成績公布後正解跟批改都已經鎖死，收起來不留一個
+  // 按了也沒用的分頁。複習紀錄不受成績公布影響——會友的複習視窗是獨立算的
+  // （關卷後 24 小時內），公布成績當下複習可能都還沒結束，仍要看得到。
+  const showStats = paper.status !== "draft";
+  const showExplain = paper.status !== "draft";
+  const showAnswers = canFillAnswers && !resultsPublished;
+  const showGrade = hasShortSection && !resultsPublished;
+  const showAssign = hasShortSection && !resultsPublished;
+  const showPractice = isLive;
+  const availableSubviews = [
+    ...(canEditPaper ? ["bank", "meta"] : []),
+    ...(showAnswers ? ["answers"] : []),
+    ...(showGrade ? ["grade"] : []),
+    ...(showAssign ? ["assign"] : []),
+    ...(showPractice ? ["practice"] : []),
+    ...(showStats ? ["stats"] : []),
+    ...(showExplain ? ["explain"] : [])
+  ];
+  // 目前選的分頁如果因為狀態變化不再顯示了，跳到第一個還看得到的分頁，
+  // 不要卡在一個已經消失的分頁上、畫面空白。
+  if (!availableSubviews.includes(examAdminSubview)) examAdminSubview = availableSubviews[0] || "bank";
+
   const annPub = paper.announcement_published === true;
   const noticeReady = !!((paper.announcement || {}).headline || "").trim() && !!((paper.announcement || {}).body || "").trim();
   const autoScoreOn = paper.auto_score_enabled !== false;   // 預設開；答案未定稿時可先關
   const practiceEnabled = paper.practice_retake_enabled !== false;
-  const resultsPublished = !!paper.results_published_at;     // 成績已公布 → 全部鎖定不得再改
   const explanationOn = paper.show_answer_explanation === true;   // 預設關；不受成績公布鎖定
 
   const badge = paper.status === "published" ? "success" : "neutral";
@@ -380,12 +405,12 @@ export async function renderExamPanel(root) {
     `<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`
   ];
   if (!resultsPublished) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>`);
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon("自動評分關閉後，關閉測驗時不會自動計分，要等答案定稿、重新開啟自動評分後再手動重新計分一次。")}`);
   }
   if (isLive && paper.status !== "closed" && !resultsPublished) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>`);
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon("會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。")}`);
   }
-  moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>`);
+  moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon("開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。")}`);
 
   // 預告文發佈/撤下：狀態本身已經有徽章顯示，按鈕收進「更多」即可，不用額外說明文字
   if (hasNotice) {
@@ -400,7 +425,7 @@ export async function renderExamPanel(root) {
   // 且正式卷若已有作答紀錄仍不給（避免動到已計分結果），測試卷則不限。
   const canRevert = paper.status === "closed" && (paper.mode === "test" || attemptCount === 0);
 
-  let statusNote = "";   // 只留一句真正必要的當下狀態說明，其餘政策性文字移到「說明」分頁
+  let statusNote = "";   // 只留一句真正必要的當下狀態說明，其餘政策性文字改成 ⓘ 小圖示點擊彈出
   if (paper.status === "draft") {
     // 準備進度沒完成就不顯示發佈按鈕——要做什麼看下方清單，不用另外堆文字解釋
     if (checklist.requiredDone) {
@@ -417,7 +442,7 @@ export async function renderExamPanel(root) {
 
   // 清除作答紀錄：只有測試卷、且有紀錄時提供（獨立於「改回草稿」，方便不改題目直接重測）
   if (isTest && attemptCount > 0) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>`);
+    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>${examInfoIcon("只作用在測試版。清掉後可以從宣示畫面重新測試，不會影響題目與設定內容。")}`);
   }
 
   // 測試版 → 同步到正式版：準備進度沒完成一樣不顯示；就緒但正式版當下不能被覆蓋
@@ -435,7 +460,7 @@ export async function renderExamPanel(root) {
 
   // 公布成績：正式版、已有作答、尚未公布 → 對外釋出並永久鎖定
   if (isLive && officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
-    primaryActions.push('<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>');
+    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("只有正式版、且所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。")}`);
     statusNote = "「公布成績」前會先自動收掉逾時未交的作答，公布後所有結算操作一律鎖定。";
   }
   const actionHint = [statusNote, pushNote].filter(Boolean).join(" ");
@@ -444,7 +469,7 @@ export async function renderExamPanel(root) {
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
-      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${isLive ? "brand" : "neutral"}">${isLive ? "正式版" : "測試版"}</span>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${hasNotice ? annBadge : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
+      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${isLive ? "brand" : "neutral"}">${isLive ? "正式版" : "測試版"}</span>${examInfoIcon("測試版與正式版是兩份獨立的卷。題目、試卷設定、公告內容都只能在測試版編輯；準備好後按「同步到正式版」把最新內容整份推過去（每次同步都覆蓋，含公告文字）。正式版一旦有人作答，就不能再同步（會換題目 id，毀掉已計分的成績）；正式測驗進行中也要先「關閉測驗」才能再同步。")}　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${hasNotice ? annBadge : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
       ${showChecklist ? examChecklistHtml(checklist) : ""}
       <div class="exam-admin__actions">${primaryActions.join("")}</div>
       ${actionHint ? `<p class="exam-admin__meta">${esc(actionHint)}</p>` : ""}
@@ -463,13 +488,12 @@ export async function renderExamPanel(root) {
     <nav class="exam-admin__subnav">
       ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
       <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>` : ""}
-      ${canFillAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
-      ${hasShortSection ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
+      ${showAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
+      ${showGrade ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
       <button type="button" data-exam-sub="assign" class="${examAdminSubview === "assign" ? "active" : ""}">簡答指派</button>` : ""}
-      ${isLive ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
-      <button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>
-      <button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>
-      <button type="button" data-exam-sub="info" class="${examAdminSubview === "info" ? "active" : ""}">說明</button>
+      ${showPractice ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
+      ${showStats ? `<button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>` : ""}
+      ${showExplain ? `<button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>` : ""}
     </nav>
     <div id="exam-admin-sub"></div>`;
 
@@ -526,7 +550,6 @@ export async function renderExamPanel(root) {
     else if (examAdminSubview === "practice") renderExamPracticeRecords(sub, paper.id);
     else if (examAdminSubview === "stats") { sub.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(sub, paper.id, hasShortSection, paper.title); }
     else if (examAdminSubview === "explain") renderExamExplanationEditor(sub, questions);
-    else if (examAdminSubview === "info") renderExamInfoTab(sub, paper, { isLive, isTest, hasShortSection });
     else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">正式版的題目與試卷設定不提供編輯，一律由對應的測試版按「推上正式版」維護。要查看題目請用上方「預覽試卷」；要編輯答案詳解請切到「答案詳解」分頁。</div>';
     else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, questions, rerender);
     else renderExamQuestionBank(sub, paper, questions, rerender);
@@ -1061,8 +1084,7 @@ function renderExamMetaForm(host, paper, questions, rerender) {
       </fieldset>
 
       <fieldset class="exam-admin__sec-cfg">
-        <legend>公告設定</legend>
-        <p class="exam-admin__meta">這裡的內容會出現在首頁的「速讀測驗」置頂區塊。測試版按「發佈預告文」只有你自己（管理員）看得到，用來預覽實際效果；推上正式版後，正式版要另外自己按「發佈預告文」才會公開給全體會友——內容以最後一次「同步到正式版」帶過去的為準，正式版不能自己改文字。</p>
+        <legend>公告設定${examInfoIcon("這裡的內容會出現在首頁的「速讀測驗」置頂區塊。測試版按「發佈預告文」只有你自己（管理員）看得到，用來預覽實際效果；推上正式版後，正式版要另外自己按「發佈預告文」才會公開給全體會友——內容以最後一次「同步到正式版」帶過去的為準，正式版不能自己改文字。")}</legend>
         <label>標題（必填）
           <input class="form-control" data-n="headline" maxlength="40" value="${esc(ann.headline || "")}" ${annLocked ? "disabled" : ""}></label>
         <label>內容（必填）
@@ -1131,25 +1153,37 @@ function renderExamMetaForm(host, paper, questions, rerender) {
   );
 }
 
-// ── 說明分頁：把原本散在各按鈕旁邊的政策性文字集中收進來，主畫面只留最必要的狀態提示 ──
-function renderExamInfoTab(host, paper, ctx) {
-  const { isLive } = ctx;
-  const topics = [
-    ["測試版與正式版的關係", "測試版與正式版是兩份獨立的卷。題目、試卷設定、公告內容都只能在測試版編輯；準備好後按「同步到正式版」把最新內容整份推過去（每次同步都覆蓋，含公告文字）。正式版一旦有人作答，就不能再同步（會換題目 id，毀掉已計分的成績）；正式測驗進行中也要先「關閉測驗」才能再同步。"],
-    ["公告設定／發佈預告文", "公告內容（首頁置頂卡片的標題/內容/按鈕文字）在測試版的「試卷設定」分頁編輯。測試版按「發佈預告文」只有你自己（管理員）在首頁看得到，方便預覽效果；正式版的「發佈預告文」才會真的公開給全體會友——正式版不能自己編內容，一律用同步帶過去的。"],
-    ["自動評分", "自動評分關閉後，關閉測驗時不會自動計分，要等答案定稿、重新開啟自動評分後再手動重新計分一次。"],
-    ["答案詳解", "開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。"],
-    ["測試名單", "只有測試版才有。名單內的人即使不是管理員，也能用測試版連結進入作答（測試版須「已發佈」，且不受開放時段限制），方便找特定會友一起測試。"],
-    ["清除作答紀錄", "只作用在測試版。清掉後可以從宣示畫面重新測試，不會影響題目與設定內容。"],
-    ["複習（正式版限定）", "會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。"],
-    ["公布成績", "只有正式版、且所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。"]
-  ];
-  host.innerHTML = `<div class="exam-admin__info">
-    ${topics
-      .filter(([title]) => isLive || title !== "複習（正式版限定）")
-      .map(([title, body]) => `<details class="exam-admin__info-item"><summary>${esc(title)}</summary><p>${esc(body)}</p></details>`)
-      .join("")}
-  </div>`;
+// ── 政策性說明改成小圖示點擊彈出——不佔畫面，需要才點開；不用另外開分頁 ──
+function examInfoIcon(text) {
+  const svg = typeof renderIcon === "function" ? renderIcon("info", { size: "sm", className: "nlc-icon" }) : "ⓘ";
+  return `<button type="button" class="exam-admin__info-icon" data-info-text="${esc(text)}" aria-label="說明">${svg}</button>`;
+}
+let _examInfoPopoverEl = null;
+function _closeExamInfoPopover() {
+  if (_examInfoPopoverEl) { _examInfoPopoverEl.remove(); _examInfoPopoverEl = null; }
+  document.removeEventListener("click", _onDocClickCloseExamInfoPopover, true);
+  document.removeEventListener("keydown", _onKeydownCloseExamInfoPopover, true);
+}
+function _onDocClickCloseExamInfoPopover(e) {
+  if (_examInfoPopoverEl && !_examInfoPopoverEl.contains(e.target) && !e.target.closest("[data-info-text]")) _closeExamInfoPopover();
+}
+function _onKeydownCloseExamInfoPopover(e) { if (e.key === "Escape") _closeExamInfoPopover(); }
+function _toggleExamInfoPopover(anchorBtn) {
+  if (_examInfoPopoverEl && _examInfoPopoverEl._anchor === anchorBtn) { _closeExamInfoPopover(); return; }
+  _closeExamInfoPopover();
+  const pop = document.createElement("div");
+  pop.className = "exam-admin__info-popover";
+  pop.setAttribute("role", "tooltip");
+  pop.textContent = anchorBtn.dataset.infoText || "";
+  pop._anchor = anchorBtn;
+  document.body.appendChild(pop);
+  const r = anchorBtn.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + window.scrollX;
+  pop.style.left = `${left}px`;
+  pop.style.top = `${r.bottom + window.scrollY + 6}px`;
+  _examInfoPopoverEl = pop;
+  document.addEventListener("click", _onDocClickCloseExamInfoPopover, true);
+  document.addEventListener("keydown", _onKeydownCloseExamInfoPopover, true);
 }
 
 // ── 題目已鎖定時，仍可單獨編輯每一題的「答案詳解」（不影響題幹/選項/正解）──

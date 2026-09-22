@@ -8,7 +8,7 @@ import './copy/zh-Hant.js?v=20260922_exam_announcement_live_only_removed';
 import './data/church_campaign.js?v=20260922_exam_announcement_live_only_removed';
 import './design/design-tokens.js';
 import './design/design-system-helpers.js?v=20260922_exam_announcement_live_only_removed';
-import './design/icon-registry.js?v=20260922_exam_announcement_live_only_removed';
+import './design/icon-registry.js?v=20260923_exam_info_icon';
 import './design/icons.js';
 import './state.js?v=20260922_exam_announcement_live_only_removed';
 import './auth.js?v=20260922_exam_announcement_live_only_removed';

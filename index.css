@@ -15945,10 +15945,22 @@ textarea::placeholder {
 .exam-admin button.is-saved { background: var(--color-success, var(--color-brand)); color: #fff; }
 
 /* 說明分頁：政策性文字集中在這裡，主畫面不再堆長段落 */
-.exam-admin__info { display: flex; flex-direction: column; gap: 0.5rem; }
-.exam-admin__info-item { border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 0.65rem 0.9rem; }
-.exam-admin__info-item summary { cursor: pointer; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.exam-admin__info-item p { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; }
+/* 說明小圖示：點一下在旁邊彈出一小段文字，取代原本的獨立「說明」分頁 */
+.exam-admin__info-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.4rem; height: 1.4rem; margin-left: 0.15rem; vertical-align: middle;
+  background: none; border: none; border-radius: 50%; padding: 0; cursor: pointer;
+  color: var(--text-muted);
+}
+.exam-admin__info-icon:hover, .exam-admin__info-icon:focus-visible { color: var(--color-brand); background: var(--bg-input); }
+.exam-admin__info-icon .nlc-icon { width: 1em; height: 1em; }
+.exam-admin__info-popover {
+  position: absolute; z-index: 500; max-width: 320px;
+  padding: 0.6rem 0.75rem; border-radius: var(--radius-md);
+  background: var(--bg-card); border: 1px solid var(--border-card);
+  box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.3);
+  font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;
+}
 
 /* 建立新試卷：標題輸入 modal（沿用 .tts-guide-modal-overlay 這個共用遮罩） */
 .exam-admin-modal__panel {

@@ -40,7 +40,7 @@ describe("0199: exam_push_to_live 每次同步都覆蓋正式版的公告內容"
 describe("0199: 公告內容編輯併入測試版的「試卷設定」分頁，正式版不再能自己編輯", () => {
   it("renderExamMetaForm（只給測試版用）多了一個公告設定 fieldset，讀寫同一個 paper.announcement", () => {
     const fn = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("// ── 題目已鎖定時"));
-    expect(fn).toContain("<legend>公告設定</legend>");
+    expect(fn).toContain("<legend>公告設定${examInfoIcon(");
     expect(fn).toContain('data-n="headline"');
     expect(fn).toContain('data-n="body"');
     expect(fn).toContain('data-n="ctaLabel"');
