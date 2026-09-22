@@ -95,6 +95,7 @@ const state = {
   activePlan: null,
   planDetailOpen: false,
   activePlans: [], // Array of multiple joined plans
+  adminManagementPlan: null, // Plan currently selected in 系統管理 → 計畫篩選; kept separate from activePlan so browsing plans as admin never changes the member's own active plan (home dashboard, resume-reading, etc.)
   readingLogs: [], // Array of { book: string, chapter: number, read_at: string, plan_id?: string, presetKey?: string }
   readerState: {
     bookId: 1, // Genesis

@@ -54,7 +54,12 @@ describe("release onboarding startup timing", () => {
 
   it("checks onboarding only after initial data load and dashboard render", () => {
     const loadUserData = app.indexOf("db.loadUserData(true)");
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
+    // lastIndexOf: quick-launch bible renders its own reader-view tab (and
+    // its own "first-tab-rendered" mark) BEFORE loadUserData resolves, by
+    // design (see js/app.js's quickLaunchBible branch) — that marker sits
+    // earlier in the source. The later occurrence is the default
+    // dashboard-view branch this test's invariant is actually about.
+    const firstTab = app.lastIndexOf('window.__bootMark?.("first-tab-rendered");');
     const onboarding = app.indexOf("maybeShowReleaseOnboarding({");
 
     expect(loadUserData).toBeGreaterThan(-1);

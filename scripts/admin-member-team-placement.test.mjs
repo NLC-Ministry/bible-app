@@ -55,7 +55,7 @@ describe("admin member team placement lookup tests", () => {
       admin.indexOf("export async function renderAdminPlanManagement()")
     );
     expect(lazyLoader).toContain("activeAdminPlanSubtab === 'teams'");
-    expect(lazyLoader).toContain("renderAdminTeamPlacementLookup(state.activePlan, forceRefresh)");
+    expect(lazyLoader).toContain("renderAdminTeamPlacementLookup(state.adminManagementPlan, forceRefresh)");
   });
 
   it("reuses the team placement payload when reopening the same plan and scope", () => {

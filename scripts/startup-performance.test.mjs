@@ -60,7 +60,11 @@ describe("startup performance contract", () => {
 
   it("does not block first dashboard render on care reminder fetches", () => {
     const forcedReminder = app.lastIndexOf("refreshCareReminderBadge({ force: true })");
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
+    // lastIndexOf: picks the default dashboard-view branch's marker, which
+    // sits after quick-launch bible's own earlier "first-tab-rendered" mark
+    // (see the sibling test file's comment for why quick-launch renders
+    // before load — irrelevant here since forcedReminder sits after both).
+    const firstTab = app.lastIndexOf('window.__bootMark?.("first-tab-rendered");');
 
     expect(forcedReminder).toBeGreaterThan(-1);
     expect(firstTab).toBeGreaterThan(-1);
@@ -68,7 +72,7 @@ describe("startup performance contract", () => {
   });
 
   it("does not block first dashboard render on organization-directory loading", () => {
-    const firstTab = app.indexOf('await appRouter.switchTab(resumePlan ? "plan-view" : (quickLaunchBible ? "reader-view" : "dashboard-view"))');
+    const firstTab = app.lastIndexOf('window.__bootMark?.("first-tab-rendered");');
     const orgLoad = app.lastIndexOf("db.loadOrgStructure()");
 
     expect(firstTab).toBeGreaterThan(-1);
