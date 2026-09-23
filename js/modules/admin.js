@@ -64,6 +64,18 @@ function updateExamFeatureControl(enabled, options = {}) {
     : "已關閉：隱藏「大測驗」分頁並停止作答；既有試卷、題目與成績都會保留。";
 }
 
+function updateLightningQuizFeatureControl(enabled, options = {}) {
+  const toggle = document.getElementById("admin-lightning-quiz-feature-toggle");
+  const status = document.getElementById("admin-lightning-quiz-feature-status");
+  if (!toggle || !status) return;
+  toggle.setAttribute("aria-checked", enabled ? "true" : "false");
+  toggle.setAttribute("aria-label", enabled ? "快問快答功能已開啟" : "快問快答功能已關閉");
+  toggle.disabled = options.disabled === true;
+  status.textContent = enabled
+    ? "已開啟：符合時段的當日題目會出現在首頁，會友可以限時作答。"
+    : "已關閉：首頁不會顯示快問快答卡片；後台仍可預先建立題目，開啟後立即生效。";
+}
+
 // 每日靈修／小組聚會週計畫「功能設定」總開關（migration 0156）。這是唯一放在
 // 這張卡片裡的一顆：關閉時「個人」分頁不會出現「功能設定」，且會清空所有
 // 會友已經自己開啟的個人偏好；開啟後不會幫任何人預設打開，要各自去「個人」
@@ -146,6 +158,8 @@ export async function renderAdminFeatureSettings() {
 
   const examToggle = document.getElementById("admin-exam-feature-toggle");
   const examFeedback = document.getElementById("admin-exam-feature-feedback");
+  const lightningQuizToggle = document.getElementById("admin-lightning-quiz-feature-toggle");
+  const lightningQuizFeedback = document.getElementById("admin-lightning-quiz-feature-feedback");
 
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   card.classList.toggle("hidden", !isAdmin);
@@ -167,10 +181,11 @@ export async function renderAdminFeatureSettings() {
   const masterFeedback = document.getElementById("admin-devotion-master-feedback");
 
   if (!isAdmin) {
-    const [quizResult, examResult, masterResult] = await Promise.all([
+    const [quizResult, examResult, masterResult, lightningQuizResult] = await Promise.all([
       db.getFeatureSetting("daily_quiz", false),
       db.getFeatureSetting("speed_reading_exam", false),
-      db.getFeatureSetting("devotion_group_features_master", false)
+      db.getFeatureSetting("devotion_group_features_master", false),
+      db.getFeatureSetting("lightning_quiz", false)
     ]);
     const quizEnabled = !quizResult.error && quizResult.enabled === true;
     window.dailyQuizFeatureEnabled = quizEnabled;
@@ -179,6 +194,7 @@ export async function renderAdminFeatureSettings() {
     window.speedReadingExamFeatureEnabled = examEnabled;
     applyAdminExamVisibility(examEnabled);
     window.devotionGroupFeaturesMasterEnabled = !masterResult.error && masterResult.enabled === true;
+    window.lightningQuizFeatureEnabled = !lightningQuizResult.error && lightningQuizResult.enabled === true;
     return;
   }
 
@@ -192,12 +208,15 @@ export async function renderAdminFeatureSettings() {
   updateExamFeatureControl(false, { disabled: true });
   if (masterFeedback) { masterFeedback.classList.add("hidden"); masterFeedback.textContent = ""; }
   updateDevotionMasterFeatureControl(false, { disabled: true });
+  if (lightningQuizFeedback) { lightningQuizFeedback.classList.add("hidden"); lightningQuizFeedback.textContent = ""; }
+  updateLightningQuizFeatureControl(false, { disabled: true });
 
-  const [result, quizResult, examResult, masterResult] = await Promise.all([
+  const [result, quizResult, examResult, masterResult, lightningQuizResult] = await Promise.all([
     db.getFeatureSetting("pastoral_sharing_wall", false),
     db.getFeatureSetting("daily_quiz", false),
     db.getFeatureSetting("speed_reading_exam", false),
-    db.getFeatureSetting("devotion_group_features_master", false)
+    db.getFeatureSetting("devotion_group_features_master", false),
+    db.getFeatureSetting("lightning_quiz", false)
   ]);
   if (result.error) {
     updatePastoralWallControl(false, { disabled: true });
@@ -227,6 +246,17 @@ export async function renderAdminFeatureSettings() {
     window.speedReadingExamFeatureEnabled = examEnabled;
     updateExamFeatureControl(examEnabled);
     applyAdminExamVisibility(examEnabled);
+  }
+  if (lightningQuizResult.error) {
+    updateLightningQuizFeatureControl(false, { disabled: true });
+    if (lightningQuizFeedback) {
+      lightningQuizFeedback.textContent = "無法載入設定：從伺服器獲取快問快答設定失敗。";
+      lightningQuizFeedback.classList.remove("hidden");
+    }
+  } else {
+    const lightningQuizEnabled = lightningQuizResult.enabled === true;
+    window.lightningQuizFeatureEnabled = lightningQuizEnabled;
+    updateLightningQuizFeatureControl(lightningQuizEnabled);
   }
   if (masterResult.error) {
     updateDevotionMasterFeatureControl(false, { disabled: true });
@@ -320,6 +350,30 @@ export async function renderAdminFeatureSettings() {
       applyAdminExamVisibility(nextEnabled);
       if (typeof showToast === "function") {
         showToast(nextEnabled ? "大測驗功能已開啟！" : "大測驗功能已關閉。");
+      }
+    });
+  }
+
+  if (lightningQuizToggle && !lightningQuizToggle.dataset.featureSettingBound) {
+    lightningQuizToggle.dataset.featureSettingBound = "true";
+    lightningQuizToggle.addEventListener("click", async () => {
+      const currentEnabled = lightningQuizToggle.getAttribute("aria-checked") === "true";
+      const nextEnabled = !currentEnabled;
+      updateLightningQuizFeatureControl(currentEnabled, { disabled: true });
+      lightningQuizFeedback?.classList.add("hidden");
+      const saveResult = await db.updateFeatureSetting("lightning_quiz", nextEnabled);
+      if (saveResult.error) {
+        updateLightningQuizFeatureControl(currentEnabled);
+        if (lightningQuizFeedback) {
+          lightningQuizFeedback.textContent = "更新設定失敗：無法將設定儲存至伺服器。";
+          lightningQuizFeedback.classList.remove("hidden");
+        }
+        return;
+      }
+      window.lightningQuizFeatureEnabled = nextEnabled;
+      updateLightningQuizFeatureControl(nextEnabled);
+      if (typeof showToast === "function") {
+        showToast(nextEnabled ? "快問快答功能已開啟！" : "快問快答功能已關閉。");
       }
     });
   }
