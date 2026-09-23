@@ -158,8 +158,11 @@ function bindSubmitForm(host, question) {
     if (submitBtn) submitBtn.disabled = true;
     const result = await db.submitLightningQuizAttempt(question.questionId, response);
     if (!result.success) {
-      if (submitBtn) submitBtn.disabled = false;
       showToast(result.message || "送出失敗，請稍後再試。");
+      // 送出失敗常常代表伺服器端狀態已經變了（例如時段剛好過了、或已經在
+      // 別的裝置送出過），停留在原本這張已經過時的作答畫面只會一直重複失
+      // 敗——直接整張卡重新抓最新狀態，該隱藏就隱藏、該顯示已完成就顯示。
+      void refreshLightningQuizHomeCard();
       return;
     }
     stopLiveTimer();
@@ -186,8 +189,10 @@ function bindStartButton(host, question) {
     btn.disabled = true;
     const result = await db.startLightningQuizAttempt(question.questionId);
     if (!result.success) {
-      btn.disabled = false;
       showToast(result.message || "無法開始作答，請稍後再試。");
+      // 同樣道理：開始失敗多半代表時段已經過了，直接重新整理整張卡片，
+      // 而不是留著一顆按下去只會一直失敗的「開始作答」鈕。
+      void refreshLightningQuizHomeCard();
       return;
     }
     renderAnsweringState(host, question, result.data?.startedAt || new Date().toISOString(), true);

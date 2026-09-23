@@ -11607,6 +11607,9 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   color: var(--text-secondary);
   font-weight: var(--type-weight-strong, 500);
 }
+.admin-lightning-quiz-stats-tag {
+  margin-left: 0.4rem;
+}
 
 .admin-lightning-quiz-leaderboard {
   margin-top: 1rem;
