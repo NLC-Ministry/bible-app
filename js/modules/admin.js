@@ -19,9 +19,7 @@ import {
   prependTaiwanExportTime
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
-// Keep the ?v= in sync with any change to exam.js so a deploy isn't masked by a
-// Service Worker that cached /modules/exam.js at its bare (unversioned) URL.
-import { renderExamPanel } from "./exam.js?v=20260923_announcement_blank_guard";
+import { renderExamPanel } from "./exam.js";
 
 function updatePastoralWallControl(enabled, options = {}) {
   const toggle = document.getElementById("admin-pastoral-wall-toggle");

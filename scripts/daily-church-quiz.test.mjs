@@ -290,7 +290,6 @@ describe("daily church quiz", () => {
     expect(admin).not.toContain('data-quiz-action="review"');
     expect(css).toContain('.admin-daily-quiz-load-error {');
     expect(css).toContain('.admin-daily-quiz-version--load-failed {');
-    expect(html).toMatch(/index\.css\?v=2026\d{4}_[a-z0-9_]+/);
   });
 
   it("deploys the redesigned publish RPC under a unique, safely repeatable migration", () => {

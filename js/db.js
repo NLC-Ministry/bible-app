@@ -7,7 +7,7 @@ import {
   applyLoginGateView,
   getLoginGateCopy,
   launchMemberHubContinue
-} from './login-onboarding-gate.mjs?v=20260828_login_gate_refresh_latest';
+} from './login-onboarding-gate.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -530,10 +530,6 @@ const db = {
     if (btnNlcGate) {
       btnNlcGate.addEventListener("click", (e) => {
         e.preventDefault();
-        if (typeof auth !== "undefined" && auth.shouldRepairBeforeLogin?.()) {
-          auth.startLoginRepair();
-          return;
-        }
         const mode = btnNlcGate.dataset.loginGateMode || "sso";
         if (mode === "hub-continue") {
           launchMemberHubContinue(typeof auth !== "undefined" ? auth : null);
@@ -560,24 +556,6 @@ const db = {
 
 
 
-    const shouldResumeLoginAfterRepair = urlParams.get("resume_login") === "1"
-      && sessionStorage.getItem("nlc_login_repair_resume_ready") === "1";
-    if (shouldResumeLoginAfterRepair) {
-      sessionStorage.removeItem("nlc_login_repair_resume_ready");
-      urlParams.delete("resume_login");
-      urlParams.delete("repaired");
-      urlParams.delete("version");
-      const cleanSearch = urlParams.toString();
-      window.history.replaceState(
-        {},
-        document.title,
-        window.location.pathname + (cleanSearch ? `?${cleanSearch}` : "") + window.location.hash
-      );
-      if (typeof authLaunch !== "undefined" && typeof authLaunch.startInteractiveAuth === "function") {
-        await authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" });
-        return false;
-      }
-    }
     if (sbUrl && sbKey) {
       try {
         // Initialize Supabase SDK
@@ -1282,7 +1260,7 @@ const db = {
         console.warn("[BackgroundReconcile] member_context_unavailable after live check — keeping optimistic view.", block);
       } else {
         console.warn("[BackgroundReconcile] Cached session no longer valid after live check:", block);
-        this.showConnectionError(copy.subtitle || undefined, { markRepair: false });
+        this.showConnectionError(copy.subtitle || undefined);
       }
     } catch (syncErr) {
       if (this.isNetworkUnreachableError(syncErr)) {
@@ -1312,22 +1290,15 @@ const db = {
     return user;
   },
 
-  // markRepair: false for routine session expiry \u2014 an expired/revoked token is
-  // not a stale-app symptom and must not route the next login through /repair.
-  showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { markRepair = true } = {}) {
+  showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
     state.isSupabaseMode = true;
-
-    if (markRepair && typeof auth !== "undefined" && typeof auth.markLoginFailure === "function") {
-      auth.markLoginFailure();
-    }
-    const repairArmed = typeof auth !== "undefined" && auth.shouldRepairBeforeLogin?.();
 
     const btnNlcGate = document.getElementById("btn-gate-nlc-login");
     if (btnNlcGate) {
       btnNlcGate.disabled = false;
       btnNlcGate.style.opacity = "1";
       btnNlcGate.style.cursor = "pointer";
-      btnNlcGate.textContent = repairArmed ? "\u4fee\u5fa9\u4e26\u91cd\u65b0\u767b\u5165" : "\u91cd\u65b0\u767b\u5165";
+      btnNlcGate.textContent = "\u91cd\u65b0\u767b\u5165";
     }
 
     const btnGoogleGate = document.getElementById("btn-gate-google-login");

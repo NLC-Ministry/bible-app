@@ -42,10 +42,4 @@ describe("primary tab navigation lifecycle", () => {
     expect(renderComplete).toBeGreaterThan(-1);
     expect(restore).toBeGreaterThan(renderComplete);
   });
-
-  it("bumps the app entry cache version", () => {
-    expect(htmlSource).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-    expect(appSource).toMatch(/\.\/db\.js\?v=2026\d{4}_/);
-    expect(appSource).toMatch(/\.\/utils\.js\?v=2026\d{4}_/);
-  });
 });

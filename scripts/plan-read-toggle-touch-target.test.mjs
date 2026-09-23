@@ -36,11 +36,5 @@ describe("plan chapter read toggle touch target", () => {
     expect(checkboxBlock).toContain("height: 24px");
     expect(checkboxBlock).toContain("pointer-events: none");
   });
-
-  it("bumps the stylesheet cache key", () => {
-    // Version-agnostic: this must not hardcode a specific bump's suffix,
-    // otherwise every unrelated future index.css cache-bust breaks it.
-    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
-  });
 });
 

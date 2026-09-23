@@ -19,6 +19,10 @@ export const RETIRED_BADGE_IDS = Object.freeze([
   "read_all_bible"
 ]);
 
+// Flags left behind by removed features. nlc_login_repair_required: the old
+// "修復並重新登入" detour, replaced by js/pwa/VersionWatcher.js stale-build checks.
+export const RETIRED_STORAGE_KEYS = Object.freeze(["nlc_login_repair_required"]);
+
 const retiredPlanKeys = new Set([
   ...RETIRED_PLAN_PRESET_KEYS,
   ...RETIRED_GLOBAL_PLAN_IDS,
@@ -97,6 +101,8 @@ export function cleanupProductionStorage(storage) {
   const unlockedBadges = parseStoredArray(storage, "unlocked_badges");
   const keptBadges = unlockedBadges.filter(id => !retiredBadgeIds.has(String(id)));
   storage.setItem("unlocked_badges", JSON.stringify(keptBadges));
+
+  RETIRED_STORAGE_KEYS.forEach(key => storage.removeItem(key));
 
   const keysToRemove = [];
   for (let index = 0; index < storage.length; index += 1) {

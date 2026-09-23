@@ -30,19 +30,3 @@ describe("vercel.json：chunk 永久快取，且沒有舊的未帶 hash 模組�
     expect(vercelConfig).not.toMatch(/"source":\s*"\/modules\//);
   });
 });
-
-describe("admin.js：動態載入 exam.js 的版本號要跟得上 exam.js 本身的最新 ?v=", () => {
-  it("exam.js 的 import 版本號已經同步到最新（不再是 0170 那次的舊版本號）", () => {
-    expect(admin).toMatch(/from "\.\/exam\.js\?v=[^"]+"/);
-    expect(admin).not.toContain("20260911_exam_paper_linked_plan");
-  });
-
-  it("import 版本號要跟 js/exam-entry.js 裡 exam.js 的版本號完全一致，避免兩邊各自漂移", () => {
-    const examEntry = read("js/exam-entry.js");
-    const adminVersionMatch = admin.match(/from "\.\/exam\.js\?v=([^"]+)"/);
-    const entryVersionMatch = examEntry.match(/from '\.\/modules\/exam\.js\?v=([^']+)'/);
-    expect(adminVersionMatch).not.toBeNull();
-    expect(entryVersionMatch).not.toBeNull();
-    expect(adminVersionMatch[1]).toBe(entryVersionMatch[1]);
-  });
-});

@@ -36,8 +36,4 @@ describe("Member Hub-only permission management", () => {
     expect(migration).toContain("role assignment is managed by Member Hub");
     expect(migration).toContain("ALTER TABLE public.profiles DROP COLUMN role");
   });
-
-  it("bumps the application cache key", () => {
-    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-  });
 });

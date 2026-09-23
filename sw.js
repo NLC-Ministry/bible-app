@@ -1,4 +1,4 @@
-import { CacheManager } from "./js/pwa/CacheManager.js?v=20260923-best-effort-precache";
+import { CacheManager } from "./js/pwa/CacheManager.js";
 
 const VERSION = "__BUILD_VERSION__";
 const cacheManager = new CacheManager({

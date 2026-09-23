@@ -74,11 +74,6 @@ describe("managed scope authority", () => {
     expect(db).not.toContain("async updateUserRole");
   });
 
-  it("cache-busts the changed application and scope-editor stylesheet", () => {
-    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
-  });
-
   it("never writes NULL into the NOT NULL managed_* columns", () => {
     // Regression guard: a partial scope backfill (e.g. only managedRegions
     // supplied) used to fall back to `|| null` for the other two columns,

@@ -38,8 +38,7 @@ const auth = {
     memberContext: "nlc_member_context",
     supabaseAccessToken: "nlc_supabase_access_token",
     supabaseExpiresAt: "nlc_supabase_expires_at",
-    supabaseProfile: "nlc_supabase_profile",
-    repairRequired: "nlc_login_repair_required"
+    supabaseProfile: "nlc_supabase_profile"
   },
 
   metadata: null,
@@ -325,59 +324,6 @@ const auth = {
     } catch (_) { /* noop */ }
   },
 
-  // Stale builds are now caught directly by js/pwa/VersionWatcher.js, so the
-  // login repair detour is only a last-resort safety net: it arms after the
-  // SECOND genuine login failure since the last successful login. Routine
-  // session expiry and user-cancelled logins never call this at all.
-  loginRepairThreshold: 2,
-
-  _getLoginFailureCount() {
-    try {
-      const raw = localStorage.getItem(this.keys.repairRequired);
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw);
-      // Legacy value was a bare timestamp — count it as one failure.
-      return typeof parsed === "object" && parsed ? Number(parsed.count) || 0 : 1;
-    } catch {
-      return 0;
-    }
-  },
-
-  markLoginFailure() {
-    const count = this._getLoginFailureCount() + 1;
-    try {
-      localStorage.setItem(this.keys.repairRequired, JSON.stringify({ count, at: Date.now() }));
-    } catch (error) {
-      console.warn("Could not persist login repair state", error);
-    }
-    if (count >= this.loginRepairThreshold) {
-      window.__nlcLoginRepairRequired = true;
-      const button = document.getElementById("btn-gate-nlc-login");
-      if (button) button.textContent = "修復並重新登入";
-    }
-  },
-
-  shouldRepairBeforeLogin() {
-    if (window.__nlcLoginRepairRequired) return true;
-    return this._getLoginFailureCount() >= this.loginRepairThreshold;
-  },
-
-  startLoginRepair() {
-    const repairUrl = new URL("/repair", window.location.origin);
-    repairUrl.searchParams.set("resume_login", "1");
-    repairUrl.searchParams.set("version", String(Date.now()));
-    window.location.assign(repairUrl.toString());
-  },
-
-  clearLoginRepairState() {
-    window.__nlcLoginRepairRequired = false;
-    try {
-      localStorage.removeItem(this.keys.repairRequired);
-    } catch (error) {
-      console.warn("Could not clear login repair state", error);
-    }
-  },
-
   _addBrowserLaunchTransportParams(targetUrl) {
     try {
       const url = new URL(targetUrl, window.location.origin);
@@ -461,12 +407,11 @@ const auth = {
   },
 
 
-  _failCallback(message, detail, { markRepair = true } = {}) {
+  _failCallback(message, detail) {
     if (detail) console.error(message, detail);
     this._clearFlowState();
     this._clearStoredTokens();
     this._resetAppAuthState();
-    if (markRepair) this.markLoginFailure();
     this._cleanCallbackUrl();
     if (typeof db !== "undefined" && db.updateAuthUI) db.updateAuthUI(null);
     this._showMessage(message || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
@@ -566,7 +511,6 @@ const auth = {
       window.location.href = `${endpoints.authorizationEndpoint}?${authParams}`;
     } catch (err) {
       console.error("Logto login redirect failed:", err);
-      this.markLoginFailure();
       this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
     }
   },
@@ -608,9 +552,7 @@ const auth = {
     const authErrorDescription = urlParams.get("error_description");
 
     if (authError) {
-      // Logto-reported errors (user cancelled, consent denied, \u2026) are not a
-      // stale-app symptom \u2014 don't count them toward the repair detour.
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription }, { markRepair: false });
+      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
     }
 
     if (!code && !stateVal) return false;
@@ -686,7 +628,6 @@ const auth = {
   },
 
   _saveTokens(tokenResponse) {
-    this.clearLoginRepairState();
     if (tokenResponse.access_token) localStorage.setItem(this.keys.accessToken, tokenResponse.access_token);
     if (tokenResponse.id_token) localStorage.setItem(this.keys.idToken, tokenResponse.id_token);
     if (tokenResponse.refresh_token) localStorage.setItem(this.keys.refreshToken, tokenResponse.refresh_token);

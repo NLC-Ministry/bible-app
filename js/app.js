@@ -2,20 +2,20 @@
 
 // Import support and core files needed before first paint.
 import '../config.js';
-import './data/bible_data.js?v=20260923_cloud_icon';
+import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260923_cloud_icon';
-import './data/church_campaign.js?v=20260923_cloud_icon';
+import './copy/zh-Hant.js';
+import './data/church_campaign.js';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260923_cloud_icon';
-import './design/icon-registry.js?v=20260923_cloud_icon';
+import './design/design-system-helpers.js';
+import './design/icon-registry.js';
 import './design/icons.js';
-import './state.js?v=20260923_cloud_icon';
-import './auth.js?v=20260923_cloud_icon';
+import './state.js';
+import './auth.js';
 import './auth-launch.mjs';
-import './db.js?v=20260923_cloud_icon';
-import './utils.js?v=20260923_cloud_icon';
-import './gamification.js?v=20260923_cloud_icon';
+import './db.js';
+import './utils.js';
+import './gamification.js';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import {
@@ -23,15 +23,15 @@ import {
   consumeBibleHubResume,
   hubContinueHref,
   launchMemberHubContinue
-} from './login-onboarding-gate.mjs?v=20260923_cloud_icon';
+} from './login-onboarding-gate.mjs';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260923_cloud_icon';
+import { initializePwa } from './pwa/PwaCoordinator.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { OfflineBibleRepository } from './pwa/OfflineBibleRepository.js';
 import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
-import { SupabaseRepository } from './pwa/SupabaseRepository.js?v=20260923_cloud_icon';
+import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
 
 window.__bootMark?.("core-imports-done");
@@ -1001,7 +1001,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const showingApp = appLayout && !appLayout.classList.contains("hidden")
       && (!gate || gate.classList.contains("hidden"));
     if (state.isSupabaseMode && showingApp) {
-      db.showConnectionError("登入狀態已失效，請重新登入。", { markRepair: false });
+      db.showConnectionError("登入狀態已失效，請重新登入。");
     }
   }
 
@@ -1324,7 +1324,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // does nothing — the next natural retry (focus, tab switch) picks it
       // back up instead of yanking the user out of what they were doing.
       if (typeof auth.isLoggedIn === "function" && !auth.isLoggedIn() && typeof window.db.showConnectionError === "function") {
-        window.db.showConnectionError("重新連線後登入狀態已失效，請重新登入。", { markRepair: false });
+        window.db.showConnectionError("重新連線後登入狀態已失效，請重新登入。");
       }
     }
   });
