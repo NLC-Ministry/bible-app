@@ -27,6 +27,7 @@ import {
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js?v=20260923_cloud_icon';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
+import { createUpdateBanner } from './pwa/UpdateBanner.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { OfflineBibleRepository } from './pwa/OfflineBibleRepository.js';
 import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
@@ -940,20 +941,31 @@ function isSafeToReloadForUpdate() {
   return true;
 }
 
+// Shown only when an update is found but can't apply silently; the user's tap
+// bypasses the safety check (their choice), the next safe foreground doesn't
+// need it.
+const appUpdateBanner = createUpdateBanner({
+  onUpdate: () => appVersionWatcher.check({ force: true, ignoreSafety: true })
+});
+// Event-driven only, no polling: launch, return to foreground (throttled to one
+// probe per 5 min for rapid app switching), a new SW taking control, a chunk
+// failing to load, and the 檢查更新 button. Nothing runs while the app is
+// closed or backgrounded.
 const appVersionWatcher = new VersionWatcher({
   currentVersion: appBuildId,
-  isSafeToReload: isSafeToReloadForUpdate
+  isSafeToReload: isSafeToReloadForUpdate,
+  onUpdateAvailable: version => appUpdateBanner.show(version),
+  minIntervalMs: 5 * 60 * 1000
 });
-const VERSION_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+// Manual check from 個人設定 → 檢查更新 (profile.js). The user asked, so skip
+// the safety check the same way the banner's tap does.
+window.checkAppUpdate = () => appVersionWatcher.check({ force: true, ignoreSafety: true });
 
 document.addEventListener("DOMContentLoaded", async () => {
   window.__bootMark?.("dom-content-loaded");
   // Boot-time check: if the HTML we just got was a stale cached copy, fix it
   // now, before the user has done anything worth preserving.
   appVersionWatcher.check({ force: true }).catch(() => {});
-  setInterval(() => {
-    if (document.visibilityState === "visible") appVersionWatcher.check().catch(() => {});
-  }, VERSION_CHECK_INTERVAL_MS);
   // Clear badge notification count on app startup / load
   clearBadge().catch(err => console.error("Failed to clear badge on startup:", err));
 

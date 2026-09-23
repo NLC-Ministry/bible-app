@@ -7,6 +7,12 @@
 // reload still lands on the old build (stuck SW / stale cached HTML), escalate
 // to /repair exactly once per target version. sessionStorage guards make both
 // steps one-shot so this can never loop.
+//
+// Not a safe moment (typing, TTS, unsynced queue) → report it through
+// onUpdateAvailable so the UI can offer a tap-to-update banner; the user's tap
+// calls check({ force: true, ignoreSafety: true }). Exception: a running build
+// older than /version.json's minVersion (release-policy.json, for breaking
+// backend changes) reloads immediately regardless of safety.
 
 export const VERSION_RELOAD_KEY = "nlc_version_reload_target";
 export const VERSION_REPAIR_KEY = "nlc_version_repair_target";
@@ -20,6 +26,7 @@ export class VersionWatcher {
     location = globalThis.location,
     getRegistration = () => globalThis.navigator?.serviceWorker?.getRegistration?.(),
     isSafeToReload = () => true,
+    onUpdateAvailable = () => {},
     now = () => Date.now(),
     minIntervalMs = 60000,
     updateTimeoutMs = 3000
@@ -30,6 +37,7 @@ export class VersionWatcher {
     this.location = location;
     this.getRegistration = getRegistration;
     this.isSafeToReload = isSafeToReload;
+    this.onUpdateAvailable = onUpdateAvailable;
     this.now = now;
     this.minIntervalMs = minIntervalMs;
     this.updateTimeoutMs = updateTimeoutMs;
@@ -41,12 +49,12 @@ export class VersionWatcher {
     return BUILD_ID_RE.test(String(this.currentVersion || ""));
   }
 
-  check({ force = false } = {}) {
+  check({ force = false, ignoreSafety = false } = {}) {
     if (!this.enabled) return Promise.resolve("disabled");
     if (this.inFlight) return this.inFlight;
     if (!force && this.now() - this.lastCheckAt < this.minIntervalMs) return Promise.resolve("throttled");
     this.lastCheckAt = this.now();
-    this.inFlight = this._check().finally(() => { this.inFlight = null; });
+    this.inFlight = this._check({ ignoreSafety }).finally(() => { this.inFlight = null; });
     return this.inFlight;
   }
 
@@ -56,15 +64,18 @@ export class VersionWatcher {
       if (!response.ok) return null;
       const data = await response.json();
       const version = String(data?.version || "");
-      return BUILD_ID_RE.test(version) ? version : null;
+      if (!BUILD_ID_RE.test(version)) return null;
+      const minVersion = String(data?.minVersion || "");
+      return { version, minVersion: BUILD_ID_RE.test(minVersion) ? minVersion : null };
     } catch {
       return null;
     }
   }
 
-  async _check() {
-    const remote = await this.fetchRemoteVersion();
-    if (!remote) return "unknown";
+  async _check({ ignoreSafety }) {
+    const info = await this.fetchRemoteVersion();
+    if (!info) return "unknown";
+    const remote = info.version;
 
     if (remote === this.currentVersion) {
       this._remove(VERSION_RELOAD_KEY);
@@ -72,7 +83,12 @@ export class VersionWatcher {
       return "current";
     }
 
-    if (!this.isSafeToReload()) return "deferred";
+    // Build ids are UTC timestamps (YYYYMMDDHHmmss), so string order = time order.
+    const forced = Boolean(info.minVersion) && this.currentVersion < info.minVersion;
+    if (!forced && !ignoreSafety && !this.isSafeToReload()) {
+      try { this.onUpdateAvailable(remote); } catch { /* UI must not break the check */ }
+      return "deferred";
+    }
 
     if (this._get(VERSION_RELOAD_KEY) === remote) {
       // Already reloaded once for this build and still running the old one.

@@ -52,6 +52,34 @@ export function cpDirRecursive(src, dest) {
 // into old in-memory app/db code, and the chunks are minified for free.
 export const CHUNK_DIR = "chunks";
 
+// release-policy.json → /version.json's minVersion. The cutoff is a wall-clock
+// time with an explicit offset (Vercel builds in UTC, so a bare local time
+// would silently shift by 8h). Converted to the same UTC YYYYMMDDHHmmss form
+// as build ids so the client compares plain strings.
+export function resolveMinVersion(policy, buildVer) {
+  const raw = policy?.forceUpdateBuiltBefore;
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw !== "string" || !/(?:[zZ]|[+-]\d{2}:\d{2})$/.test(raw.trim())) {
+    throw new Error(`release-policy.json: forceUpdateBuiltBefore must be an ISO time with a timezone, e.g. 2026-09-23T13:00:00+08:00 (got ${JSON.stringify(raw)})`);
+  }
+  const date = new Date(raw.trim());
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`release-policy.json: forceUpdateBuiltBefore is not a valid time: ${raw}`);
+  }
+  const minVersion = date.toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  // A cutoff after this build would force-reload this very build forever.
+  if (minVersion > buildVer) {
+    throw new Error(`release-policy.json: forceUpdateBuiltBefore (${raw}) is later than this build (${buildVer} UTC)`);
+  }
+  return minVersion;
+}
+
+export function readReleasePolicy(root) {
+  const path = join(root, "release-policy.json");
+  if (!existsSync(path)) return {};
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
 // Syntax-check an ES module file (the split entry has static `import`s, which
 // `new Function` cannot parse). `node --check` on a .mjs path parses as ESM.
 export function assertModuleParses(filePath) {
@@ -247,7 +275,8 @@ export function emitBundle({ root, outDir }) {
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
   // Probe for js/pwa/VersionWatcher.js: same build id baked into app.js, so a
   // running tab can tell it is stale. Generated every build — never hand-edited.
-  writeFileSync(join(outDir, "version.json"), JSON.stringify({ version: buildVer }), "utf8");
+  const minVersion = resolveMinVersion(readReleasePolicy(root), buildVer);
+  writeFileSync(join(outDir, "version.json"), JSON.stringify(minVersion ? { version: buildVer, minVersion } : { version: buildVer }), "utf8");
   cpDirRecursive(join(root, "js", "pwa"), join(outDir, "js", "pwa"));
 
   // ── 速讀測驗獨立頁：exam.html + esbuild(js/exam-entry.js) 打包成單一 bundle ──

@@ -66,10 +66,47 @@ describe("VersionWatcher", () => {
     expect(location.reload).not.toHaveBeenCalled();
   });
 
-  it("defers instead of reloading while it is unsafe", async () => {
+  it("defers while unsafe and reports the pending build to the UI", async () => {
+    const onUpdateAvailable = vi.fn();
     const { watcher, location } = setup({ safe: false });
+    watcher.onUpdateAvailable = onUpdateAvailable;
     expect(await watcher.check()).toBe("deferred");
     expect(location.reload).not.toHaveBeenCalled();
+    expect(onUpdateAvailable).toHaveBeenCalledWith(NEWER);
+  });
+
+  it("reloads on a user tap even while unsafe", async () => {
+    const { watcher, location } = setup({ safe: false });
+    expect(await watcher.check({ force: true, ignoreSafety: true })).toBe("reload");
+    expect(location.reload).toHaveBeenCalledOnce();
+  });
+
+  it("force-reloads a build older than minVersion regardless of safety", async () => {
+    const onUpdateAvailable = vi.fn();
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ version: NEWER, minVersion: NEWER }), { status: 200 }));
+    const { watcher, location } = setup({ safe: false, fetchImpl });
+    watcher.onUpdateAvailable = onUpdateAvailable;
+    expect(await watcher.check()).toBe("reload");
+    expect(location.reload).toHaveBeenCalledOnce();
+    expect(onUpdateAvailable).not.toHaveBeenCalled();
+  });
+
+  it("does not force a build that already meets minVersion", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ version: NEWER, minVersion: CURRENT }), { status: 200 }));
+    const { watcher, location } = setup({ safe: false, fetchImpl });
+    expect(await watcher.check()).toBe("deferred");
+    expect(location.reload).not.toHaveBeenCalled();
+  });
+
+  it("forced updates still go through the one-shot reload/repair guards", async () => {
+    const storage = memoryStorage();
+    storage.setItem(VERSION_RELOAD_KEY, NEWER);
+    storage.setItem(VERSION_REPAIR_KEY, NEWER);
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ version: NEWER, minVersion: NEWER }), { status: 200 }));
+    const { watcher, location } = setup({ storage, fetchImpl });
+    expect(await watcher.check()).toBe("gave-up");
+    expect(location.reload).not.toHaveBeenCalled();
+    expect(location.replace).not.toHaveBeenCalled();
   });
 
   it("treats an unreachable or malformed probe as unknown", async () => {

@@ -5,7 +5,7 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertChunksDoNotImportEntry } from "./bundle.mjs";
+import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertChunksDoNotImportEntry, resolveMinVersion, readReleasePolicy } from "./bundle.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -174,4 +174,24 @@ describe("emitBundle (integration, real repo)", () => {
       rmSync(out, { recursive: true, force: true });
     }
   }, 120000);
+});
+
+describe("release policy → minVersion", () => {
+  const BUILD = "20260923060000";
+  it("is null when no forced update is configured", () => {
+    expect(resolveMinVersion({ forceUpdateBuiltBefore: null }, BUILD)).toBeNull();
+    expect(resolveMinVersion({}, BUILD)).toBeNull();
+  });
+  it("converts a Taipei-time cutoff to the UTC build-id format", () => {
+    expect(resolveMinVersion({ forceUpdateBuiltBefore: "2026-09-23T13:00:00+08:00" }, BUILD)).toBe("20260923050000");
+  });
+  it("rejects a cutoff without a timezone (Vercel builds in UTC)", () => {
+    expect(() => resolveMinVersion({ forceUpdateBuiltBefore: "2026-09-23T13:00:00" }, BUILD)).toThrow(/timezone/);
+  });
+  it("rejects a cutoff later than the build, which would force-reload forever", () => {
+    expect(() => resolveMinVersion({ forceUpdateBuiltBefore: "2026-09-23T15:00:00+08:00" }, BUILD)).toThrow(/later than this build/);
+  });
+  it("ships with no forced update in the repo policy", () => {
+    expect(readReleasePolicy(root).forceUpdateBuiltBefore).toBeNull();
+  });
 });
