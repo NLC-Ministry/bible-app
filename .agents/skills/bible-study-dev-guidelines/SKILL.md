@@ -100,9 +100,9 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
   - **後果：測試通過不代表行為正確，只代表「程式碼文字長得像測試預期的樣子」**。如果測試是照著一支有 bug 的程式寫的，它反而會把那個 bug「鎖死」，之後任何修正都會被舊測試打成 fail。
   - **實際發生過的誤判案例**：`scripts/management-plan-hub.test.mjs` / `scripts/management-unjoined-plan-members.test.mjs` 斷言 `getManagementPlans()`/`selectManagementPlan()` 要優先選 `stageOnePlan`；但 `admin.js` 現在的行為是優先選 `ongoingPlan`（正確、刻意的新設計）。一開始誤判成「這是不小心的 regression」，還花時間把 `admin.js` 改回舊行為，後來才發現有一支**更新的**測試檔 `scripts/admin-ongoing-plan-selection.test.mjs` 明確記載「移除 hardcoded stageOnePlan、改用 ongoing plan 優先」才是刻意設計。最後用 `git diff` 確認把 `admin.js` 完整還原（diff 為零）並改掉那兩支舊測試才是對的。
   - **規則**：發現某支測試 fail、看起來像「這改動造成了 regression」時，先搜尋同一個函式/功能是否有**其他、更新的**測試檔案已經記載了刻意的新行為，不要只看到 fail 就假設現在的程式碼是錯的。
-* **CSS cache-bust：`npm run bump` 不會碰 `index.html` 裡的 `index.css?v=` 或 `css/*.css?v=`**：
-  - `scripts/bump-version.mjs` 只更新 `js/app.js` 內部 static import 的 `?v=...` 版本字串，以及 `index.html` 裡 `js/app.js?v=` 那一行。
-  - **改到 `index.css` 或 `css/` 底下任何檔案時，必須手動去 `index.html` 把對應的 `?v=` 字串加一版**，不要以為跑了 `npm run bump` 就全部處理好了。
+* **不要再手動加或改 `?v=` 版本字串**：
+  - JS/CSS 在正式環境一律經過 `scripts/bundle.mjs` 打包，檔名帶內容 hash（lazy 模組也是 `dist/chunks/*.[hash].js`），`?v=` 沒有作用，`npm run bump` 已移除。
+  - 使用者卡在舊版由 `js/pwa/VersionWatcher.js` 比對 `/version.json` 自動處理；後端有不相容改動時，改 `release-policy.json` 的 `forceUpdateBuiltBefore`（見 CLAUDE.md〈Cache-busting and updates〉）。
 * **Supabase migration 檔案不會自動部署**：
   - 這個 repo 的 git commit/push 只影響前端程式碼；`supabase/migrations/*.sql` 必須由使用者另外手動執行 `supabase db push` 或貼到 Supabase Dashboard 的 SQL Editor 才會真正生效。
   - **每次新增/修改 migration 檔案後，一定要明確提醒使用者「這支 migration 還沒部署，要記得手動跑」**，不要預設寫了檔案 = 資料庫已經改好了。這個 session 曾經一次累積到 5 支 migration（`0070`–`0074`）等待部署，容易忘記追蹤。

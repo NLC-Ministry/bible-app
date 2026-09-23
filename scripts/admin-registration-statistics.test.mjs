@@ -163,11 +163,6 @@ describe("admin registration statistics", () => {
     expect(admin).toContain('esc(Number(row.team3Count || 0))');
     expect(admin).toContain('esc(Number(row.team6Count || 0))');
   });
-
-  it("bumps the browser cache keys for the new UI", () => {
-    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
-    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-  });
 });
 
 describe("報名與註冊統計 → Google 試算表同步", () => {

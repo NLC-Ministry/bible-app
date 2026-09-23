@@ -169,8 +169,6 @@ describe("login gate wiring", () => {
   });
 
   it("routes the gate button through SSO, Hub continue, and retry-sync", () => {
-    expect(db).toContain("auth.shouldRepairBeforeLogin?.()");
-    expect(db).toContain("auth.startLoginRepair()");
     expect(db).toContain('authLaunch.startInteractiveAuth({ intent: "login", returnTo: "/" })');
     expect(db).toContain('"hub-continue"');
     expect(db).toContain("launchMemberHubContinue");

@@ -8,8 +8,7 @@
     "start": "npx serve .",
     "dev": "npx serve .",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "bump": "node scripts/bump-version.mjs"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.3",

@@ -98,10 +98,6 @@ describe("reader verse selection — 統一點選多節模型", () => {
   it("does not let collapsed browser text-selection events hide the bar", () => {
     expect(bible).not.toContain("selectionchange");
   });
-
-  it("bumps the app shell so mobile PWAs fetch the reworked reader module", () => {
-    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-  });
 });
 
 describe("selection bar CSS", () => {

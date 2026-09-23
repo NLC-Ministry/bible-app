@@ -72,12 +72,3 @@ describe("儲存按鈕：「沒有待存內容」跟「有改動待存」要能�
     expect(fn).toContain('else if (state === "saved") { btn.classList.add("is-saved"); btn.textContent = "已儲存 ✓"; btn.disabled = false; }');
   });
 });
-
-describe("admin.js 動態載入 exam.js 的版本號要跟得上", () => {
-  it("兩邊版本號一致", () => {
-    const examEntry = read("js/exam-entry.js");
-    const adminVersionMatch = admin.match(/from "\.\/exam\.js\?v=([^"]+)"/);
-    const entryVersionMatch = examEntry.match(/from '\.\/modules\/exam\.js\?v=([^']+)'/);
-    expect(adminVersionMatch[1]).toBe(entryVersionMatch[1]);
-  });
-});

@@ -5,21 +5,21 @@
 // 與 js/app.js 相同的核心前置（state.js 在 module-eval 時就需要 church_campaign /
 // design token 等全域）。不含 app 的 router / views / PWA / Tailwind / badge-service.ts。
 import '../config.js';
-import './data/bible_data.js?v=20260826_quiz_remove_duplicate_scope_filter';
+import './data/bible_data.js';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260826_quiz_remove_duplicate_scope_filter';
-import './data/church_campaign.js?v=20260901_round_schedule_restore';
+import './copy/zh-Hant.js';
+import './data/church_campaign.js';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260916_reading_logs_pagination_fix';
-import './design/icon-registry.js?v=20260923_cloud_icon';
+import './design/design-system-helpers.js';
+import './design/icon-registry.js';
 import './design/icons.js';
-import './state.js?v=20260901_highlights_notes_review';
-import './auth.js?v=20260921_phone_number_scope_sync';
+import './state.js';
+import './auth.js';
 import './auth-launch.mjs';
-import './db.js?v=20260923_lightning_quiz_no_leak';
-import './utils.js?v=20260916_reading_logs_pagination_fix';
-import './gamification.js?v=20260826_quiz_remove_duplicate_scope_filter';
-import { mountExamRunner } from './modules/exam.js?v=20260923_announcement_blank_guard';
+import './db.js';
+import './utils.js';
+import './gamification.js';
+import { mountExamRunner } from './modules/exam.js';
 
 const boot = document.getElementById('exam-boot');
 const setBoot = (msg) => { if (boot) boot.textContent = msg; };

@@ -63,11 +63,6 @@ describe("admin team registration overview", () => {
     expect(admin).toContain('team.status === "forming"');
   });
 
-  it("bumps the app cache key", () => {
-    expect(html).toMatch(/js\/app\.js\?v=2026\d{4}_/);
-    expect(html).toMatch(/index\.css\?v=2026\d{4}_/);
-  });
-
   it("removes local user permission management and uses native team disclosure", () => {
     expect(html).not.toContain('id="admin-users-accordion-root"');
     expect(html).toContain('<details class="glass-card admin-team-status-disclosure"');
