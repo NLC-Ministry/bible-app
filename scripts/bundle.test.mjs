@@ -157,6 +157,10 @@ describe("emitBundle (integration, real repo)", () => {
       expect(serviceWorker).toContain(`"/${cssFile}"`);
       expect(serviceWorker).toContain('"/index.css"');
       expect(serviceWorker).toMatch(/const VERSION = "\d{14}"/);
+      // Stale-build probe carries the same build id as the SW / app bundle.
+      const versionProbe = JSON.parse(rf(join(out, "version.json"), "utf8"));
+      expect(versionProbe.version).toMatch(/^\d{14}$/);
+      expect(serviceWorker).toContain(`const VERSION = "${versionProbe.version}"`);
 
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);

@@ -1282,7 +1282,7 @@ const db = {
         console.warn("[BackgroundReconcile] member_context_unavailable after live check — keeping optimistic view.", block);
       } else {
         console.warn("[BackgroundReconcile] Cached session no longer valid after live check:", block);
-        this.showConnectionError(copy.subtitle || undefined);
+        this.showConnectionError(copy.subtitle || undefined, { markRepair: false });
       }
     } catch (syncErr) {
       if (this.isNetworkUnreachableError(syncErr)) {
@@ -1312,15 +1312,22 @@ const db = {
     return user;
   },
 
-  showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
+  // markRepair: false for routine session expiry \u2014 an expired/revoked token is
+  // not a stale-app symptom and must not route the next login through /repair.
+  showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { markRepair = true } = {}) {
     state.isSupabaseMode = true;
+
+    if (markRepair && typeof auth !== "undefined" && typeof auth.markLoginFailure === "function") {
+      auth.markLoginFailure();
+    }
+    const repairArmed = typeof auth !== "undefined" && auth.shouldRepairBeforeLogin?.();
 
     const btnNlcGate = document.getElementById("btn-gate-nlc-login");
     if (btnNlcGate) {
       btnNlcGate.disabled = false;
       btnNlcGate.style.opacity = "1";
       btnNlcGate.style.cursor = "pointer";
-      btnNlcGate.textContent = "\u4fee\u5fa9\u4e26\u91cd\u65b0\u767b\u5165";
+      btnNlcGate.textContent = repairArmed ? "\u4fee\u5fa9\u4e26\u91cd\u65b0\u767b\u5165" : "\u91cd\u65b0\u767b\u5165";
     }
 
     const btnGoogleGate = document.getElementById("btn-gate-google-login");
@@ -1335,9 +1342,6 @@ const db = {
     if (gateDot && gateText) {
       gateDot.style.backgroundColor = "var(--color-danger)";
       gateText.textContent = message;
-    }
-    if (typeof auth !== "undefined" && typeof auth.markLoginFailure === "function") {
-      auth.markLoginFailure();
     }
 
     const loginGate = document.getElementById("login-gate");
@@ -6446,7 +6450,6 @@ db._lightningQuizErrorMessage = function(error) {
     return "快問快答資料庫版本尚未更新，請通知管理員完成系統更新。";
   }
   const messages = {
-    lightning_quiz_test_mode_restricted: "測試模式開啟中，目前只有系統管理員可以作答。",
     lightning_quiz_not_found: "找不到這一題，請重新整理頁面後再試一次。",
     lightning_quiz_outside_window: "現在不是這一題的作答時段。",
     lightning_quiz_already_answered: "這一題已經作答過了。",

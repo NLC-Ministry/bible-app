@@ -11467,12 +11467,58 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.4rem;
   padding: 0.25rem 0;
 }
-.lightning-quiz-teaser [data-icon],
 .lightning-quiz-result [data-icon] {
   color: var(--color-brand);
   width: 40px;
   height: 40px;
 }
+
+/* 題型預告卡片的飄動雲朵：兩朵雲不同大小/節奏地左右飄動，跟「不要閃電、
+   要會飄動的雲朵」這個回饋對應。跟雲柱動畫同一套純 CSS 形狀技法。 */
+.lightning-quiz-cloud-icon {
+  position: relative;
+  width: 88px;
+  height: 40px;
+  margin: 0 auto 0.25rem;
+}
+.lq-drift-cloud {
+  position: absolute;
+  bottom: 6px;
+  border-radius: 999px;
+  background: var(--color-brand);
+}
+.lq-drift-cloud::before,
+.lq-drift-cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+.lq-drift-cloud--back {
+  left: 0;
+  width: 34px;
+  height: 16px;
+  opacity: 0.45;
+  animation: lightningQuizCloudDrift 4.4s ease-in-out infinite;
+}
+.lq-drift-cloud--back::before { width: 16px; height: 16px; top: -8px; left: 4px; }
+.lq-drift-cloud--back::after { width: 12px; height: 12px; top: -6px; left: 18px; }
+.lq-drift-cloud--front {
+  left: 26px;
+  width: 46px;
+  height: 22px;
+  animation: lightningQuizCloudDrift 3.2s ease-in-out infinite reverse;
+}
+.lq-drift-cloud--front::before { width: 22px; height: 22px; top: -11px; left: 6px; }
+.lq-drift-cloud--front::after { width: 16px; height: 16px; top: -8px; left: 26px; }
+@keyframes lightningQuizCloudDrift {
+  0%, 100% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lq-drift-cloud { animation: none; }
+}
+
 .lightning-quiz-teaser__note {
   margin: 0 0 0.4rem;
   max-width: 32rem;

@@ -325,7 +325,10 @@ function wireReleaseOnboardingHelp() {
 
   const versionEl = document.getElementById("profile-app-version");
   if (versionEl) {
-    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.1"}`;
+    // Build id = the deploy this tab is actually running (same value as
+    // /version.json), so a "畫面是舊的" report can be confirmed from a screenshot.
+    const buildId = window.APP_BUILD_ID ? ` · ${window.APP_BUILD_ID}` : "";
+    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.1"}${buildId}`;
   }
 }
 

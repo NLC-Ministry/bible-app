@@ -1824,7 +1824,7 @@ export async function renderAdminLightningQuizQuestions() {
     <article class="announcement-item" data-admin-lightning-quiz-id="${escapeHTML(String(question.id))}">
       <div class="announcement-item__header">
         <div class="announcement-item__header-left">
-          <div class="announcement-item__icon-avatar" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="zap"></span></div>
+          <div class="announcement-item__icon-avatar" aria-hidden="true"><span class="nlc-icon nlc-icon--sm" data-icon="cloud"></span></div>
           <div class="announcement-item__title-group">
             <div class="announcement-item__tags">
               <span class="announcement-badge announcement-badge--default"><span>${escapeHTML(typeLabel)}</span></span>
@@ -2057,7 +2057,7 @@ const ADMIN_SECTIONS = [
   { id: 'statistics',    group: '計畫營運',   label: '計畫統計',       icon: 'barChart',      panel: 'plans',  sub: 'statistics' },
   { id: 'quizzes',       group: '測驗',       label: '小測驗',         icon: 'checkCircle',   panel: 'plans',  sub: 'quizzes', flag: 'quiz' },
   { id: 'exam',          group: '測驗',       label: '大測驗',         icon: 'pencil',        panel: 'plans',  sub: 'exam',    flag: 'exam' },
-  { id: 'lightning-quiz', group: '測驗',      label: '快問快答',       icon: 'zap',           panel: 'system', sub: 'lightning-quiz' },
+  { id: 'lightning-quiz', group: '測驗',      label: '快問快答',       icon: 'cloud',         panel: 'system', sub: 'lightning-quiz' },
   { id: 'devotions',     group: '內容管理',   label: '每日靈修',       icon: 'bookOpen',      panel: 'plans',  sub: 'devotions', flag: 'devotion' },
   { id: 'group-meeting', group: '內容管理',   label: '小組聚會',       icon: 'peoples',       panel: 'plans',  sub: 'group-meeting', flag: 'groupMeeting' },
   { id: 'settings',      group: '設定',       label: '功能開放設定',   icon: 'setting',       panel: 'system', sub: 'settings' }

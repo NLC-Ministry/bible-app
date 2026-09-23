@@ -45,7 +45,7 @@ describe("CacheManager", () => {
       globalThis.fetch = originalFetch;
     }
   });
-  it("rejects an incomplete app shell and removes its partial cache", async () => {
+  it("rejects when a required app-shell entry fails and removes its partial cache", async () => {
     const fetchImpl = vi.fn(async url => {
       if (String(url).includes("index.css")) throw new TypeError("offline");
       return new Response("asset", { status: 200 });
@@ -53,8 +53,20 @@ describe("CacheManager", () => {
     const storage = new MemoryCacheStorage(fetchImpl);
     const manager = new CacheManager({ version: "broken", fetchImpl, cacheStorage: storage });
 
-    await expect(manager.precache(["/", "/index.css", "/app.js"])).rejects.toThrow("offline");
+    await expect(manager.precache(["/", "/index.css", "/app.js"], { required: ["/index.css"] })).rejects.toThrow("offline");
     expect(await storage.keys()).not.toContain("newlife-bible-static-broken");
+  });
+  it("skips optional app-shell failures instead of aborting the install", async () => {
+    const fetchImpl = vi.fn(async url => {
+      if (String(url).includes("index.css")) throw new TypeError("offline");
+      return new Response("asset", { status: 200 });
+    });
+    const storage = new MemoryCacheStorage(fetchImpl);
+    const manager = new CacheManager({ version: "flaky", fetchImpl, cacheStorage: storage });
+
+    const skipped = await manager.precache(["/", "/index.css", "/app.js"], { required: ["/"] });
+    expect(skipped).toEqual(["/index.css"]);
+    expect(await storage.keys()).toContain("newlife-bible-static-flaky");
   });
   it("uses cache-first after the first successful response", async () => {
     const fetchImpl = vi.fn(async () => new Response("network", { status: 200 }));

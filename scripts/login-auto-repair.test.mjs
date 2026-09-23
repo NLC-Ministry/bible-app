@@ -15,7 +15,14 @@ describe("automatic login repair", () => {
     expect(auth).toContain('repairUrl.searchParams.set("resume_login", "1")');
     expect(db).toContain("auth.shouldRepairBeforeLogin?.()");
     expect(db).toContain("auth.startLoginRepair()");
-    expect(db).toContain('btnNlcGate.textContent = "\\u4fee\\u5fa9\\u4e26\\u91cd\\u65b0\\u767b\\u5165"');
+    expect(db).toContain('repairArmed ? "\\u4fee\\u5fa9\\u4e26\\u91cd\\u65b0\\u767b\\u5165"');
+  });
+
+  it("only arms the repair detour for repeated genuine failures, not session expiry or cancel", () => {
+    expect(auth).toContain("loginRepairThreshold: 2");
+    expect(auth).toMatch(/if \(authError\) \{[\s\S]*?\{ markRepair: false \}\);/);
+    expect(app).toContain('db.showConnectionError("登入狀態已失效，請重新登入。", { markRepair: false })');
+    expect(app).toContain('showConnectionError("重新連線後登入狀態已失效，請重新登入。", { markRepair: false })');
   });
 
   it("repairs only login and PWA state without deleting reading progress", () => {

@@ -240,6 +240,9 @@ export function emitBundle({ root, outDir }) {
     .replaceAll("__BUILD_JS_PATH__", `/${jsFile}`)
     .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`);
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
+  // Probe for js/pwa/VersionWatcher.js: same build id baked into app.js, so a
+  // running tab can tell it is stale. Generated every build — never hand-edited.
+  writeFileSync(join(outDir, "version.json"), JSON.stringify({ version: buildVer }), "utf8");
   cpDirRecursive(join(root, "js", "pwa"), join(outDir, "js", "pwa"));
 
   // Copy modules folder for lazy loading support
