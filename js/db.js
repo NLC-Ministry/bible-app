@@ -6483,7 +6483,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
     lightning_quiz_admin_required: "只有系統管理員可以管理快問快答。",
     lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
-    lightning_quiz_locked_has_attempts: "這一題已經有人作答，題目內容與日期已鎖定，只能調整時段或下架。",
+    lightning_quiz_has_attempts: "這一題已經有作答紀錄，無法刪除；可以到下方統計列清除該版本的作答紀錄後再刪除。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
@@ -6557,13 +6557,6 @@ db.adminDeleteLightningQuizQuestion = async function(id) {
   return this._callLightningQuizRpc("admin_delete_lightning_quiz_question", { p_id: id });
 };
 
-// 清掉「呼叫者自己」在這一題的測試作答紀錄，讓 admin 可以重新測試一次。只會
-// 刪自己的資料，SQL 端 WHERE user_id = actor_id 寫死，不會動到其他人的作答。
-db.adminResetLightningQuizAttempt = async function(questionId) {
-  if (!questionId) return { success: false, message: "找不到這一題。" };
-  return this._callLightningQuizRpc("admin_reset_lightning_quiz_attempt", { p_question_id: questionId });
-};
-
 db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
   return this._callLightningQuizRpc("admin_get_lightning_quiz_trend", {
     p_from: fromDate || null,
@@ -6571,11 +6564,22 @@ db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
   });
 };
 
-db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {
+db.adminGetLightningQuizLeaderboard = async function(questionId, questionVersion, limit) {
   if (!questionId) return { success: false, message: "找不到這一題。" };
   return this._callLightningQuizRpc("admin_get_lightning_quiz_leaderboard", {
     p_question_id: questionId,
+    p_question_version: questionVersion ?? null,
     p_limit: limit || 10
+  });
+};
+
+// 清掉「這一版」的全部作答紀錄（不分是誰答的）。管理員自己決定何時清除
+// 測試或不要的舊資料；系統不會自動幫忙清，也不會因為編輯題目而自動刪除。
+db.adminClearLightningQuizAttempts = async function(questionId, questionVersion) {
+  if (!questionId || questionVersion == null) return { success: false, message: "找不到這筆統計資料。" };
+  return this._callLightningQuizRpc("admin_clear_lightning_quiz_attempts", {
+    p_question_id: questionId,
+    p_question_version: questionVersion
   });
 };
 

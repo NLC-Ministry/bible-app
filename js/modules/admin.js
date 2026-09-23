@@ -1639,7 +1639,6 @@ function closeAdminLightningQuizEditor() {
   const body = document.getElementById('admin-lightning-quiz-question-body');
   const heading = document.getElementById('admin-lightning-quiz-form-title');
   const save = document.getElementById('admin-lightning-quiz-save');
-  const locked = document.getElementById('admin-lightning-quiz-locked-note');
   if (riseDate) riseDate.value = '';
   if (timeStart) timeStart.value = '';
   if (timeEnd) timeEnd.value = '';
@@ -1647,9 +1646,11 @@ function closeAdminLightningQuizEditor() {
   if (body) body.innerHTML = '';
   if (heading) heading.textContent = '新增題目';
   if (save) save.textContent = '儲存題目';
-  if (locked) locked.classList.add('hidden');
 }
 
+// 題目內容隨時可以直接編輯，不鎖、不用先清資料——題型/題目/選項/正解/日期
+// 只要有變動，SQL 端 admin_upsert_lightning_quiz_question 會自動把
+// content_version + 1，舊版本的作答結果原封不動留著，新版本重新開始累積。
 function openAdminLightningQuizEditor(question = null) {
   editingAdminLightningQuizId = question?.id || null;
   const editor = document.getElementById('admin-lightning-quiz-editor');
@@ -1660,11 +1661,9 @@ function openAdminLightningQuizEditor(question = null) {
   const body = document.getElementById('admin-lightning-quiz-question-body');
   const heading = document.getElementById('admin-lightning-quiz-form-title');
   const save = document.getElementById('admin-lightning-quiz-save');
-  const locked = document.getElementById('admin-lightning-quiz-locked-note');
   if (!editor || !body) return;
 
   editor.classList.remove('hidden');
-  editor.dataset.locked = question?.hasAttempts ? 'true' : 'false';
   if (riseDate) riseDate.value = question?.riseDate || '';
   if (timeStart) timeStart.value = question?.riseTimeStart?.slice(0, 5) || '';
   if (timeEnd) timeEnd.value = question?.riseTimeEnd?.slice(0, 5) || '';
@@ -1676,17 +1675,6 @@ function openAdminLightningQuizEditor(question = null) {
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
-  if (locked) locked.classList.toggle('hidden', !question?.hasAttempts);
-  if (question?.hasAttempts) {
-    // 已有作答紀錄：鎖定題型/題目/正解/日期，只能改時段或下架（跟 SQL 端
-    // admin_upsert_lightning_quiz_question 的鎖定規則一致）。
-    body.querySelectorAll('select, textarea, input').forEach(el => { el.disabled = true; });
-    body.querySelectorAll('[data-option-add],[data-pair-add],[data-item-add],[data-option-remove],[data-pair-remove],[data-item-remove]')
-      .forEach(el => { el.disabled = true; });
-    if (riseDate) riseDate.disabled = true;
-  } else if (riseDate) {
-    riseDate.disabled = false;
-  }
   if (heading) heading.textContent = editingAdminLightningQuizId ? '編輯題目' : '新增題目';
   if (save) save.textContent = editingAdminLightningQuizId ? '儲存修改' : '儲存題目';
   riseDate?.focus();
@@ -1792,11 +1780,7 @@ export async function renderAdminLightningQuizQuestions() {
       showToast(result.message || '儲存失敗，請稍後再試。');
       return;
     }
-    if (result.data?.swappedQuestionId) {
-      showToast('已儲存，並自動把同一天原本生效的題目下架（內容與結果都保留）。');
-    } else {
-      showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
-    }
+    showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
     closeAdminLightningQuizEditor();
     await renderAdminLightningQuizQuestions();
     // 新增/編輯題目後統計表要跟著多一列（哪怕暫時 0 作答），不然剛建好題目的
@@ -1834,14 +1818,12 @@ export async function renderAdminLightningQuizQuestions() {
             <div class="announcement-item__tags">
               <span class="announcement-badge announcement-badge--default"><span>${escapeHTML(typeLabel)}</span></span>
               ${statusBadge}
-              ${question.hasAttempts ? '<span class="stat-badge stat-badge--neutral">已有作答（內容鎖定）</span>' : ''}
             </div>
             <h4 class="announcement-item__title">${escapeHTML(formatAdminLightningQuizDate(question.riseDate))} ${escapeHTML((question.riseTimeStart || '').slice(0, 5))}–${escapeHTML((question.riseTimeEnd || '').slice(0, 5))}</h4>
             <p class="announcement-item__body">${escapeHTML(question.payload?.stem || '')}</p>
           </div>
         </div>
         <div class="announcement-item__meta">
-          <button type="button" class="circular-action-btn" data-lightning-quiz-reset title="清除我的測試作答，重新測試" aria-label="清除我的測試作答，重新測試"><span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span></button>
           <button type="button" class="circular-action-btn" data-lightning-quiz-edit title="編輯" aria-label="編輯"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
           <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-delete title="刪除" aria-label="刪除"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
         </div>
@@ -1851,20 +1833,8 @@ export async function renderAdminLightningQuizQuestions() {
 
   host.querySelectorAll('[data-admin-lightning-quiz-id]').forEach(card => {
     const question = questions.find(item => String(item.id) === card.dataset.adminLightningQuizId);
-    card.querySelector('[data-lightning-quiz-reset]')?.addEventListener('click', async () => {
-      const result = await db.adminResetLightningQuizAttempt(question.id);
-      if (!result.success) {
-        showToast(result.message || '清除失敗，請稍後再試。');
-        return;
-      }
-      showToast(result.data?.reset ? '已清除你的測試作答紀錄，回首頁即可重新測試這一題。' : '你目前沒有這一題的測試作答紀錄。');
-    });
     card.querySelector('[data-lightning-quiz-edit]')?.addEventListener('click', () => openAdminLightningQuizEditor(question));
     card.querySelector('[data-lightning-quiz-delete]')?.addEventListener('click', async () => {
-      if (question.hasAttempts) {
-        showToast('這一題已經有人作答，無法刪除，請改用下架（停用）。');
-        return;
-      }
       const confirmed = await window.showConfirmDialog({
         title: '確定要刪除這一題快問快答嗎？',
         message: '此動作無法復原。',
@@ -1906,25 +1876,31 @@ export async function renderAdminLightningQuizStats() {
     return;
   }
 
+  // 同一題編輯過內容，會有多列同一個 riseDate、不同 questionVersion——這是
+  // 預期行為（舊版本的結果留著當歷史，新版本重新累積），不是重複資料。
+  const rowKey = day => `${day.questionId}:${day.questionVersion}`;
   const rows = days.map((day, index) => {
     // 成長率：跟「上一次有題目的那天」比參與率，而不是硬性比前一個日曆日——
-    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。同一天換
-    // 題目會有兩列同一個 riseDate，跟「換題前的自己」比不是趨勢，跳過不比。
+    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。同一天
+    // 編輯過題目會有兩列同一個 riseDate，跟「編輯前的自己」比不是趨勢，跳過不比。
     const prev = days[index - 1];
     const growth = prev && prev.riseDate !== day.riseDate && prev.participationRate > 0
       ? ((day.participationRate - prev.participationRate) / prev.participationRate) * 100
       : null;
     const growthLabel = growth == null ? '—' : `${growth > 0 ? '+' : ''}${growth.toFixed(0)}%`;
-    const versionTag = day.isActive === false
-      ? '<span class="stat-badge stat-badge--neutral admin-lightning-quiz-stats-tag">已下架版本</span>'
+    const versionTag = day.isCurrentVersion === false
+      ? '<span class="stat-badge stat-badge--neutral admin-lightning-quiz-stats-tag">編輯前的舊版本</span>'
       : '';
-    return `<tr data-lightning-quiz-stats-row="${escapeHTML(String(day.questionId))}">
+    return `<tr data-lightning-quiz-stats-row="${escapeHTML(rowKey(day))}">
       <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}${versionTag}</td>
       <td>${escapeHTML(String(day.completedCount))} / ${escapeHTML(String(day.totalEligible))}（${escapeHTML(formatAdminLightningQuizPercent(day.participationRate))}）</td>
       <td>${growthLabel}</td>
       <td>${escapeHTML(String(day.correctCount))}</td>
       <td>${day.avgElapsedMs != null ? `${(Number(day.avgElapsedMs) / 1000).toFixed(1)} 秒` : '—'}</td>
-      <td><button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(String(day.questionId))}">查看排行榜</button></td>
+      <td>
+        <button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(rowKey(day))}">查看排行榜</button>
+        <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-clear="${escapeHTML(rowKey(day))}" title="清除這筆作答資料" aria-label="清除這筆作答資料"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1937,27 +1913,50 @@ export async function renderAdminLightningQuizStats() {
     </div>
     <div id="admin-lightning-quiz-leaderboard" class="admin-lightning-quiz-leaderboard hidden"></div>
   `;
+  if (typeof hydrateIcons === 'function') hydrateIcons(host);
 
   const leaderboardHost = host.querySelector('#admin-lightning-quiz-leaderboard');
   host.querySelectorAll('[data-lightning-quiz-leaderboard]').forEach(button => {
     button.addEventListener('click', async () => {
-      const questionId = button.dataset.lightningQuizLeaderboard;
-      const day = days.find(item => String(item.questionId) === questionId);
+      const day = days.find(item => rowKey(item) === button.dataset.lightningQuizLeaderboard);
+      if (!day) return;
       leaderboardHost.classList.remove('hidden');
       leaderboardHost.innerHTML = '<div class="admin-user-directory__empty">正在載入排行榜…</div>';
       leaderboardHost.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      const board = await db.adminGetLightningQuizLeaderboard(questionId, 10);
+      const board = await db.adminGetLightningQuizLeaderboard(day.questionId, day.questionVersion, 10);
       if (!board.success) {
         leaderboardHost.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(board.message || '載入排行榜失敗。')}</div>`;
         return;
       }
       const list = Array.isArray(board.data) ? board.data : [];
       leaderboardHost.innerHTML = `
-        <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day?.riseDate || ''))}最快答對排行榜</h4>
+        <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}最快答對排行榜</h4>
         ${list.length ? `<ol class="admin-lightning-quiz-leaderboard-list">
           ${list.map(entry => `<li><span>${escapeHTML(entry.name || '（未命名）')}</span><span>${(Number(entry.elapsedMs) / 1000).toFixed(1)} 秒</span></li>`).join('')}
         </ol>` : '<div class="admin-user-directory__empty">這一題目前還沒有人答對。</div>'}
       `;
+    });
+  });
+
+  host.querySelectorAll('[data-lightning-quiz-clear]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const day = days.find(item => rowKey(item) === button.dataset.lightningQuizClear);
+      if (!day) return;
+      const confirmed = await window.showConfirmDialog({
+        title: '確定要清除這筆作答資料嗎？',
+        message: `會把 ${formatAdminLightningQuizDate(day.riseDate)}這個版本的全部作答紀錄刪掉（不分是誰答的），此動作無法復原。`,
+        confirmText: '確認清除',
+        cancelText: '取消',
+        isDestructive: true
+      });
+      if (!confirmed) return;
+      const result = await db.adminClearLightningQuizAttempts(day.questionId, day.questionVersion);
+      if (!result.success) {
+        showToast(result.message || '清除失敗，請稍後再試。');
+        return;
+      }
+      showToast(`已清除 ${result.data?.deletedCount ?? 0} 筆作答資料。`);
+      void renderAdminLightningQuizStats();
     });
   });
 }
