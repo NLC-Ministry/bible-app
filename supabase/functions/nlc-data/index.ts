@@ -1,6 +1,45 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
 
+// >>> exam-write-token（nlc-data 與 exam-write 兩支 index.ts 內此區塊逐字相同；scripts/exam-write-path.test.mjs 會比對）
+// 大測驗「作答專用寫入憑證」：nlc-data 簽發、exam-write 驗證。直接內嵌、不 import 共用檔，
+// 因為部署只會打包函式自己的資料夾（../_shared 會 Module not found）。
+// token = "v1." + base64url(HMAC-SHA256(EXAM_WRITE_SECRET, "exam-write:v1:<attemptId>:<userId>"))
+// · 無狀態：不存 DB，驗證時用 attempt 的 user_id 重算比對；綁定「這份作答 + 這個人」。
+// · 沒有自己的到期時間——有效範圍由 DB 函式把關（exam_save_progress 只收 in_progress 且未逾
+//   截止 + 120 秒；exam_submit_attempt 只在 in_progress 時寫入），送出後就沒有可做的事。
+// · 換 EXAM_WRITE_SECRET＝所有已簽發憑證立即失效，前端自動退回 nlc-data 路徑。
+const examWriteEncoder = new TextEncoder();
+function examWriteBase64Url(bytes: Uint8Array): string {
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function examWriteHmac(secret: string, message: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw", examWriteEncoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, examWriteEncoder.encode(message)));
+}
+function examWriteTimingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function signExamWriteToken(secret: string, attemptId: string, userId: string): Promise<string> {
+  if (!secret || !attemptId || !userId) throw new Error("exam_write_token_args_missing");
+  return "v1." + examWriteBase64Url(await examWriteHmac(secret, `exam-write:v1:${attemptId}:${userId}`));
+}
+async function verifyExamWriteToken(
+  secret: string, attemptId: string, userId: string, token: unknown
+): Promise<boolean> {
+  if (!secret || !attemptId || !userId || typeof token !== "string" || !token.startsWith("v1.")) return false;
+  const expected = await signExamWriteToken(secret, attemptId, userId);
+  return examWriteTimingSafeEqual(expected, token);
+}
+// <<< exam-write-token
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -285,7 +324,8 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_upsert_lightning_quiz_question",
   "admin_delete_lightning_quiz_question",
   "admin_get_lightning_quiz_trend",
-  "admin_get_lightning_quiz_leaderboard"
+  "admin_get_lightning_quiz_leaderboard",
+  "admin_reset_lightning_quiz_attempt"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
@@ -819,6 +859,18 @@ Deno.serve(async (req: Request) => {
       }
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
+      // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
+      // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
+      // 沒設 EXAM_WRITE_SECRET 就不簽，前端自動沿用 nlc-data。
+      if (functionName === "exam_get_for_attempt") {
+        const attempt = (data as any)?.attempt;
+        const writeSecret = Deno.env.get("EXAM_WRITE_SECRET");
+        if (writeSecret && attempt?.id && attempt.status === "in_progress") {
+          const { data: owned } = await supabaseAdmin
+            .from("exam_attempts").select("id").eq("id", attempt.id).eq("user_id", profile.id).maybeSingle();
+          if (owned) attempt.writeToken = await signExamWriteToken(writeSecret, attempt.id, profile.id);
+        }
+      }
       return jsonResponse({ data });
     }
 

@@ -35,3 +35,7 @@ verify_jwt = false
 
 [functions.daily-quiz-schedule-sweep]
 verify_jwt = false
+
+# 大測驗作答寫入：憑證是 nlc-data 簽的作答專用 HMAC，不是 Supabase JWT
+[functions.exam-write]
+verify_jwt = false

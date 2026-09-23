@@ -31,6 +31,40 @@ SUPABASE_ANON_KEY
 
 Both functions must have `verify_jwt = false` because the incoming bearer token is a Logto token, not a Supabase token.
 
+## 大測驗作答寫入 (`exam-write`)
+
+作答中的「暫存」與「送出」不帶登入 token，改帶一張**這份作答專用的寫入憑證**，
+讓 75 分鐘的測驗不再受 Logto token 續期失敗影響（續期失敗前端會清掉登入，
+原本後面的暫存 / 送出就全部失敗）。
+
+- `nlc-data` 在 `exam_get_for_attempt` 回傳作答中的 attempt 時，附上
+  `attempt.writeToken` = HMAC-SHA256(`EXAM_WRITE_SECRET`, attemptId + 主人 user_id)，
+  無狀態，不存 DB。簽章程式碼**內嵌**在兩支函式的 `index.ts`（`>>> exam-write-token`
+  區塊，兩份逐字相同，測試會比對）——不放 `_shared/`，因為部署只打包函式自己的資料夾，
+  跨資料夾 import 會 `Module not found`。
+- `exam-write` 驗證憑證後，以 service role 呼叫 `exam_save_progress` /
+  `exam_submit_attempt`（`p_actor_id` = attempt 主人）。只有這兩支，截止時間 /
+  狀態 / 功能開關照 DB 原本的規則。
+- 前端（`db.saveExamProgress` / `db.submitExamAttempt`）優先走 `exam-write`；
+  沒有憑證、`exam-write` 未部署、憑證被拒（例如換了密鑰）或 5xx 時自動退回
+  `nlc-data`。所以部署順序不拘，沒設密鑰就等於沒啟用。
+
+Required Edge Function secret — **`nlc-data` 與 `exam-write` 要設同一個值**：
+
+```bash
+EXAM_WRITE_SECRET=<random string, 32+ bytes>   # e.g. openssl rand -base64 48
+```
+
+Deploy (`verify_jwt = false` is in `config.toml`; pass the flag anyway, see
+`issue-report-sheet-sync` below for why):
+
+```bash
+supabase functions deploy exam-write --no-verify-jwt
+supabase functions deploy nlc-data --no-verify-jwt
+```
+
+No migration needed.
+
 ## 每日小測驗生成 (`generate-daily-quizzes`)
 
 This scheduled function resolves the current church-campaign chapters in

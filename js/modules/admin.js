@@ -1795,6 +1795,9 @@ export async function renderAdminLightningQuizQuestions() {
     showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
     closeAdminLightningQuizEditor();
     await renderAdminLightningQuizQuestions();
+    // 新增/編輯題目後統計表要跟著多一列（哪怕暫時 0 作答），不然剛建好題目的
+    // 管理員會覺得「怎麼統計沒有出現」——這張表原本只在 init() 載入時渲染一次。
+    void renderAdminLightningQuizStats();
   };
 
   const result = await db.adminListLightningQuizQuestions();
@@ -1834,6 +1837,7 @@ export async function renderAdminLightningQuizQuestions() {
           </div>
         </div>
         <div class="announcement-item__meta">
+          <button type="button" class="circular-action-btn" data-lightning-quiz-reset title="清除我的測試作答，重新測試" aria-label="清除我的測試作答，重新測試"><span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span></button>
           <button type="button" class="circular-action-btn" data-lightning-quiz-edit title="編輯" aria-label="編輯"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
           <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-delete title="刪除" aria-label="刪除"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
         </div>
@@ -1843,6 +1847,14 @@ export async function renderAdminLightningQuizQuestions() {
 
   host.querySelectorAll('[data-admin-lightning-quiz-id]').forEach(card => {
     const question = questions.find(item => String(item.id) === card.dataset.adminLightningQuizId);
+    card.querySelector('[data-lightning-quiz-reset]')?.addEventListener('click', async () => {
+      const result = await db.adminResetLightningQuizAttempt(question.id);
+      if (!result.success) {
+        showToast(result.message || '清除失敗，請稍後再試。');
+        return;
+      }
+      showToast(result.data?.reset ? '已清除你的測試作答紀錄，回首頁即可重新測試這一題。' : '你目前沒有這一題的測試作答紀錄。');
+    });
     card.querySelector('[data-lightning-quiz-edit]')?.addEventListener('click', () => openAdminLightningQuizEditor(question));
     card.querySelector('[data-lightning-quiz-delete]')?.addEventListener('click', async () => {
       if (question.hasAttempts) {
@@ -1865,6 +1877,7 @@ export async function renderAdminLightningQuizQuestions() {
       showToast('題目已刪除。');
       closeAdminLightningQuizEditor();
       await renderAdminLightningQuizQuestions();
+      void renderAdminLightningQuizStats();
     });
   });
   if (typeof hydrateIcons === 'function') hydrateIcons(host);

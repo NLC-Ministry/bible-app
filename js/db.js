@@ -1,6 +1,6 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
-import { getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
+import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import {
@@ -2889,8 +2889,16 @@ const db = {
             if (filterPresetKey && !uPlan) return null;
 
             const uLogs = logsByUser[profile.id] || [];
+            // 書卷範圍：enrollment 自己的 target_books，沒有就退回對應 global_plan 的 books
+            // （同 loadPlans 的 effectiveBooks）；兩者都沒有就不過濾。
+            const linkedGlobalPlan = uPlan
+              ? (state.globalPlans || []).find(p => p.id === uPlan.global_plan_id || (uPlan.preset_key && p.presetKey === uPlan.preset_key))
+              : null;
+            const planScopeBooks = uPlan && Array.isArray(uPlan.target_books) && uPlan.target_books.length > 0
+              ? uPlan.target_books
+              : (linkedGlobalPlan && linkedGlobalPlan.books) || [];
             const filteredLogs = filterPresetKey
-              ? uLogs.filter(l => uPlan ? l.plan_id === uPlan.id : false)
+              ? filterLogsToPlanBooks(uLogs.filter(l => uPlan ? l.plan_id === uPlan.id : false), planScopeBooks)
               : uLogs;
 
             // Group filteredLogs to ensure each (book, chapter, round) is counted at most once
@@ -3804,9 +3812,12 @@ const db = {
   // invalid_logto_token / profile_identity_not_found，跟一般的業務錯誤
   // （分數超出配分之類）完全不同——這種狀況重試沒有用，呼叫端要改成請使用者
   // 重新登入，而不是照一般錯誤處理（見 grade.html 的批改頁）。
+  // 另一條路：refresh token 被拒時 auth.getValidAccessToken() 根本不發請求，
+  // 直接 throw「登入狀態已失效」——走的是 _callExamRpc 的 catch，也要認得。
   _isAuthExpiredError(error) {
     const raw = String((error && (error.error || error.message)) || "").toLowerCase();
-    return raw.includes("invalid_logto_token") || raw.includes("invalid_token") || raw.includes("profile_identity_not_found");
+    return raw.includes("invalid_logto_token") || raw.includes("invalid_token") || raw.includes("profile_identity_not_found")
+      || raw.includes("登入狀態已失效");
   },
 
   async _callExamRpc(functionName, args = {}) {
@@ -3828,7 +3839,13 @@ const db = {
       return { success: true, data };
     } catch (error) {
       console.warn(`[Exam] ${functionName} failed: ${String(error)}`);
-      return { success: false, error, message: this._examErrorMessage(error) };
+      const authExpired = this._isAuthExpiredError(error);
+      return {
+        success: false,
+        error,
+        authExpired,
+        message: authExpired ? "登入已過期，請重新登入才能繼續。" : this._examErrorMessage(error)
+      };
     }
   },
 
@@ -3956,15 +3973,53 @@ const db = {
   async markExamPracticeComplete(attemptId) {
     return this._callExamRpc("exam_mark_practice_complete", { p_attempt_id: attemptId });
   },
-  async saveExamProgress(attemptId, answers) {
+  // 暫存 / 送出優先走 exam-write（帶作答專用寫入憑證，不需要登入 token）——
+  // 考試中續期失敗也照常寫得進去。沒有憑證、或 exam-write 還沒部署 / 憑證被拒 /
+  // 連不上時，退回原本經 nlc-data 的路徑；業務錯誤（已鎖、逾時…）直接回傳，不重打。
+  async saveExamProgress(attemptId, answers, writeToken = null) {
+    const viaWrite = await this._callExamWrite(writeToken, {
+      action: "save", attemptId, answers: answers || {}
+    });
+    if (viaWrite) return viaWrite;
     return this._callExamRpc("exam_save_progress", { p_attempt_id: attemptId, p_answers: answers || {} });
   },
-  async submitExamAttempt(attemptId, answers, reason = "manual") {
+  async submitExamAttempt(attemptId, answers, reason = "manual", writeToken = null) {
+    const viaWrite = await this._callExamWrite(writeToken, {
+      action: "submit", attemptId, answers: answers || {}, reason
+    });
+    if (viaWrite) return viaWrite;
     return this._callExamRpc("exam_submit_attempt", {
       p_attempt_id: attemptId,
       p_answers: answers || {},
       p_reason: reason
     });
+  },
+  // 回傳 null＝這條路走不通、請呼叫端退回 nlc-data；其餘回傳跟 _callExamRpc 同形狀。
+  async _callExamWrite(writeToken, request) {
+    const cfg = state.supabaseConfig || (typeof SUPABASE_CONFIG !== "undefined" ? SUPABASE_CONFIG : null);
+    if (!writeToken || !cfg || !cfg.url) return null;
+    let response, payload;
+    try {
+      response = await fetch(cfg.url.replace(/\/+$/, "") + "/functions/v1/exam-write", {
+        method: "POST",
+        headers: { apikey: cfg.anonKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...request, token: writeToken })
+      });
+      payload = await response.json().catch(() => ({}));
+    } catch (error) {
+      console.warn(`[Exam] exam-write ${request.action} network error: ${String(error)}`);
+      return null;
+    }
+    if (response.ok) return { success: true, data: payload?.data };
+    // 400＝RPC 的業務錯誤（exam_attempt_locked / exam_time_up …）：跟 nlc-data 回的一樣，照常回報
+    if (response.status === 400 && payload && payload.error) {
+      const error = { message: String(payload.error), code: payload.code };
+      console.warn(`[Exam] exam-write ${request.action} failed: ${JSON.stringify(error)}`);
+      return { success: false, error, message: this._examErrorMessage(error) };
+    }
+    // 401 憑證被拒 / 404 未部署 / 5xx：交給原路徑
+    console.warn(`[Exam] exam-write ${request.action} unavailable (${response.status}); falling back to nlc-data`);
+    return null;
   },
   // 送出後救援：把本機暫存但 server 上是空的簡答題補寫回去（migration 0143）。
   // 只補「目前沒作答內容且未批改」的題；成績已公布後 server 會擋。
@@ -6426,7 +6481,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_already_answered: "這一題已經作答過了。",
     lightning_quiz_not_started: "請先按下開始作答。",
     lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
-    lightning_quiz_admin_required: "只有系統管理員或牧者可以管理快問快答。",
+    lightning_quiz_admin_required: "只有系統管理員可以管理快問快答。",
     lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
     lightning_quiz_locked_has_attempts: "這一題已經有人作答，題目內容與日期已鎖定，只能調整時段或下架。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
@@ -6500,6 +6555,13 @@ db.adminUpsertLightningQuizQuestion = async function(question) {
 db.adminDeleteLightningQuizQuestion = async function(id) {
   if (!id) return { success: false, message: "找不到這一題。" };
   return this._callLightningQuizRpc("admin_delete_lightning_quiz_question", { p_id: id });
+};
+
+// 清掉「呼叫者自己」在這一題的測試作答紀錄，讓 admin 可以重新測試一次。只會
+// 刪自己的資料，SQL 端 WHERE user_id = actor_id 寫死，不會動到其他人的作答。
+db.adminResetLightningQuizAttempt = async function(questionId) {
+  if (!questionId) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("admin_reset_lightning_quiz_attempt", { p_question_id: questionId });
 };
 
 db.adminGetLightningQuizTrend = async function(fromDate, toDate) {

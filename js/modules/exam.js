@@ -31,6 +31,11 @@ const toast = (m) => (typeof window.showToast === "function" ? window.showToast(
 const cssAttr = (v) => String(v).replace(/["\\]/g, "\\$&");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 「沒作答」的判定：undefined / null / 空字串 / 空陣列 / 空物件。上傳與本機鏡射都用這一條。
+export const isEmptyExamAnswer = (v) => v === undefined || v === null || v === ""
+  || (Array.isArray(v) && !v.length)
+  || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length);
+
 // 「目前有一份作答中的大測驗」的旗標 —— 讓 app 重整 / iOS 背景回收後能自動重開滿版頁
 const ACTIVE_KEY = "exam_active_paper";
 const setActiveExam = (id, attemptKind = "official") => {
@@ -2122,6 +2127,7 @@ export function mountExamRunner({ paperId = null, standalone = false, preview = 
     <div class="exam-fullscreen__bar">
       <p class="exam-fullscreen__title" id="exam-fs-title">大測驗</p>
       <div class="exam-fullscreen__bar-right">
+        <span class="exam-sync" id="exam-sync" role="status" aria-live="polite" hidden></span>
         <span class="exam-timer" id="exam-timer" hidden></span>
         <button type="button" class="secondary-btn" id="exam-back">返回</button>
       </div>
@@ -2157,7 +2163,19 @@ class ExamRunner {
     this.persistTimer = null;
     this.practiceSyncTimer = null;
     this._saveDebounce = null;
-    this.dirty = false;
+    // 同步狀態：dirtyIds＝改過、還沒確定進 server 的題；inflightIds＝正在上傳的題。
+    // 只上傳改過的題（不是整份）——另一台裝置 / 分頁就不會拿記憶體裡的舊答案整批蓋掉新的。
+    this.dirtyIds = new Set();
+    this.inflightIds = new Set();
+    this._flushPromise = null;
+    this._flushQueued = false;
+    this._unsyncedSince = 0;      // 第一筆未同步變更的時間；全部同步後歸零
+    this._staleWarned = false;    // 這一輪「太久沒同步」是否已跳過 toast
+    this._localFail = false;      // localStorage 寫入失敗（空間不足 / 無痕）
+    // 這份作答專用的寫入憑證（nlc-data 在 exam_get_for_attempt 回傳時簽發）。暫存 / 送出
+    // 帶著它走 exam-write，不依賴登入 token——考試中登入失效也照常存得進去。
+    this.writeToken = null;
+    this.syncEl = host.querySelector("#exam-sync");
     this.submitting = false;
     this.resyncing = false;
     this._matchResize = null;
@@ -2168,6 +2186,7 @@ class ExamRunner {
     this._onPageShow = (e) => { if (!e || e.persisted || e.type !== "pageshow") this.resync(); };
     this._onOnline = () => { this.flushSave(); this.resync(); };   // 斷線恢復：立刻補推 + 校時
     this._onBeforeUnload = (e) => {
+      this.persistLocal();
       if (this.attempt && this.attempt.status === "in_progress" && !this.submitting) {
         e.preventDefault(); e.returnValue = ""; return "";
       }
@@ -2208,6 +2227,7 @@ class ExamRunner {
 
     if (d.attempt) {
       this.attempt = d.attempt;
+      this.writeToken = d.attempt.writeToken || null;
       this.deadlineTs = 0;
       if (this.attemptKind !== "practice") this._anchorDeadline(this.attempt.secondsRemaining, this.attempt.deadlineAt);
       this.lsKey = "exam_resp_" + this.attempt.id;
@@ -2246,7 +2266,9 @@ class ExamRunner {
     // 作答途中主動續期，別讓 token 在 75 分鐘測驗中（~60 分）悄悄過期
     try { if (typeof auth !== "undefined") auth.scheduleProactiveRefresh?.(); } catch (_) {}
     if (!this.saveTimer) this.saveTimer = setInterval(() => this.flushSave(), 15000);
-    if (!this.persistTimer) this.persistTimer = setInterval(() => this.persistLocal(), 3000);
+    // 3 秒一次：寫本機鏡射 + 重畫同步狀態（「太久沒同步」要靠時間推進才會升級成警告）
+    if (!this.persistTimer) this.persistTimer = setInterval(() => { this.persistLocal(); this._renderSync(); }, 3000);
+    this._renderSync();
     if (this.attemptKind === "practice" && !this.practiceSyncTimer) {
       this.practiceSyncTimer = setInterval(() => this.resync(), 30000);
     }
@@ -2256,6 +2278,7 @@ class ExamRunner {
     window.removeEventListener("pageshow", this._onPageShow);
     window.removeEventListener("beforeunload", this._onBeforeUnload);
     window.removeEventListener("online", this._onOnline);
+    if (this.syncEl) this.syncEl.hidden = true;
     if (this._matchResize) { window.removeEventListener("resize", this._matchResize); this._matchResize = null; }
     if (this.saveTimer) { clearInterval(this.saveTimer); this.saveTimer = null; }
     if (this.persistTimer) { clearInterval(this.persistTimer); this.persistTimer = null; }
@@ -2384,6 +2407,7 @@ class ExamRunner {
       }
       const a = res.data.attempt;
       if (!a) return;
+      if (a.writeToken) this.writeToken = a.writeToken;
       if (a.status !== "in_progress") {           // 已在別處送出 / 被自動收卷
         this.attempt.status = a.status;
         clearActiveExam();
@@ -2426,6 +2450,9 @@ class ExamRunner {
       const local = JSON.parse(raw);
       Object.keys(local || {}).forEach((qid) => {
         if (qid === "__savedAt") return;        // meta 欄位，不是答案
+        // 本機跟 server 不一樣＝上次沒送到（斷線 / 登入過期後重新登入回來）→ 標成待上傳，
+        // boot 之後的 flushSave 才會真的把它推上去（只覆蓋記憶體不標記的話永遠不會送）。
+        if (JSON.stringify(this.RESP[qid]) !== JSON.stringify(local[qid])) this._markIdDirty(qid);
         this.RESP[qid] = local[qid];            // 本地最新，覆蓋
       });
     } catch (_) {}
@@ -2434,7 +2461,11 @@ class ExamRunner {
     if (!this.lsKey) return;
     try {
       localStorage.setItem(this.lsKey, JSON.stringify({ ...this.collectAnswers(), __savedAt: Date.now() }));
-    } catch (_) {}
+      this._localFail = false;
+    } catch (_) {
+      // 空間不足 / 無痕模式：本機這層失效，不能再靜默——同步狀態要讓使用者知道
+      this._localFail = true;
+    }
   }
   // 送出成功後不真的刪——留鏡射當救援網（見檔案頂端 pruneStaleExamResp）。只打一個時間戳，
   // 讓 prune 之後照 TTL 回收。要真的清才傳 { hard: true }。
@@ -2581,8 +2612,8 @@ class ExamRunner {
   async finishPractice() {
     if (!this.attempt || this.attemptKind !== "practice") return;
     this.persistLocal();
-    if (this.dirty) await this.flushSave();
-    if (this.dirty) { toast("答案尚未同步，請確認網路後再試一次"); return; }
+    if (this._hasUnsynced()) await this.flushSave();
+    if (this._hasUnsynced()) { toast("答案尚未同步，請確認網路後再試一次"); return; }
     const res = await db.markExamPracticeComplete(this.attempt.id);
     if (!res.success) { toast(res.message || "練習儲存失敗"); return; }
     toast("練習已儲存，原活動結束後 24 小時內仍可回來修改");
@@ -2663,17 +2694,17 @@ class ExamRunner {
     const sec = node.dataset.section;
     if (sec === "truefalse") {
       node.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
-        this.RESP[qid] = inp.value === "true"; this.markDirty();
+        this.RESP[qid] = inp.value === "true"; this.markDirty(qid);
       }));
     } else if (sec === "single") {
       node.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
-        this.RESP[qid] = Number(inp.value); this.markDirty();
+        this.RESP[qid] = Number(inp.value); this.markDirty(qid);
       }));
     } else if (sec === "multiple") {
       node.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
         const set = new Set(Array.isArray(this.RESP[qid]) ? this.RESP[qid] : []);
         inp.checked ? set.add(Number(inp.value)) : set.delete(Number(inp.value));
-        this.RESP[qid] = [...set].sort((a, b) => a - b); this.markDirty();
+        this.RESP[qid] = [...set].sort((a, b) => a - b); this.markDirty(qid);
       }));
     } else if (sec === "matching") {
       this.bindMatch(node, qid);
@@ -2681,7 +2712,7 @@ class ExamRunner {
       this.bindOrder(node, qid);
     } else if (sec === "shortanswer") {
       const ta = node.querySelector("textarea");
-      ta.addEventListener("input", () => { this.RESP[qid] = ta.value; this.markDirty(); });
+      ta.addEventListener("input", () => { this.RESP[qid] = ta.value; this.markDirty(qid); });
     }
   }
 
@@ -2712,10 +2743,10 @@ class ExamRunner {
           pending = null;
         } else if (usedBy) delete cur[usedBy];
       }
-      this.markDirty(); paint();
+      this.markDirty(qid); paint();
     });
     node.querySelector(".exam-match-clear").addEventListener("click", () => {
-      Object.keys(cur).forEach((k) => delete cur[k]); pending = null; this.markDirty(); paint();
+      Object.keys(cur).forEach((k) => delete cur[k]); pending = null; this.markDirty(qid); paint();
     });
     paint();
     if (!this._matchResize) {
@@ -2805,7 +2836,7 @@ class ExamRunner {
         }
         if (drag.ghost) drag.ghost.remove();
         drag = null;
-        this.markDirty();
+        this.markDirty(qid);
         this.rerenderOrder(qid);
       };
       chipEl.addEventListener("pointerup", finish);
@@ -2815,7 +2846,7 @@ class ExamRunner {
       ev.stopPropagation();
       const id = btn.closest(".exam-order-chip").dataset.id;
       const k = list.indexOf(id); if (k !== -1) list.splice(k, 1);
-      this.markDirty(); this.rerenderOrder(qid);
+      this.markDirty(qid); this.rerenderOrder(qid);
     }));
   }
 
@@ -2912,14 +2943,22 @@ class ExamRunner {
   }
 
   // ── 暫存 ──
-  markDirty() {
+  // 原則：server 才算數，本機鏡射只是幾秒鐘的緩衝。每一題改動都記在 dirtyIds，
+  // 只上傳改過的題；同步狀態（_renderSync）讓使用者隨時看得到有沒有進 server。
+  _markIdDirty(qid) {
+    if (!qid) return;
+    this.dirtyIds.add(qid);
+    if (!this._unsyncedSince) this._unsyncedSince = Date.now();
+  }
+  _hasUnsynced() { return this.dirtyIds.size > 0 || this.inflightIds.size > 0; }
+
+  markDirty(qid) {
     if (this.preview) return;
-    this.dirty = true;
+    if (qid) this._markIdDirty(qid);
+    else Object.keys(this.RESP).forEach((k) => this._markIdDirty(k));   // 保底：不知道哪題就全標
     this.persistLocal();
     // 每次作答異動都排一次 debounced 上傳，不要只靠 15 秒的固定間隔——
-    // 簡答題常是「打完最後一段就按送出」，若那一段還沒進 server，一旦送出的
-    // 大 payload 在爛網路上被截斷（簡答題文字量最大、又在 JSON 尾端，最容易掉），
-    // exam_submit_attempt 的 COALESCE(payload, 既有) 就沒有「既有」可退回 → 存成 NULL。
+    // 簡答題常是「打完最後一段就按送出」，那一段要盡快進 server。
     // practice 用短 debounce（本來就有），official 用稍長的，控制 server 負載。
     const debounceMs = this.attemptKind === "practice" ? 700 : 4000;
     if (this._saveDebounce) clearTimeout(this._saveDebounce);
@@ -2927,22 +2966,102 @@ class ExamRunner {
       this._saveDebounce = null;
       void this.flushSave();
     }, debounceMs);
+    this._renderSync();
   }
-  async flushSave() {
-    if (!this.dirty || !this.attempt || this.attempt.status !== "in_progress" || this.submitting) return;
-    this.dirty = false;
-    const res = await db.saveExamProgress(this.attempt.id, this.collectAnswers());
-    if (!res.success) {
-      this.dirty = true;   // 任何失敗（斷線 / 500 …）都留著下個週期重試
-      // 伺服器說作答已鎖 / 逾時：拉一次 resync 讓畫面切到正確狀態
-      if (res.error && /exam_attempt_locked|exam_time_up|exam_practice_locked|exam_attempt_not_found/.test(String(res.error?.message || res.message || ""))) {
-        this.resync();
+
+  // 同一時間只跑一個上傳：兩個請求並行時，帶舊值的那個可能晚到、把新值蓋掉。
+  // 上傳中又有新改動 → 排隊，這輪結束立刻再跑一輪。回傳的 promise 會等排隊的那輪也跑完。
+  // opts.force：送出流程自己呼叫時略過 submitting 檢查。
+  flushSave(opts = {}) {
+    if (!this.attempt || this.attempt.status !== "in_progress" || this.preview) return Promise.resolve();
+    if (this.submitting && !opts.force) return Promise.resolve();
+    if (this._flushPromise) { this._flushQueued = true; return this._flushPromise; }
+    const run = async () => {
+      try { await this._flushOnce(); } finally { this._flushPromise = null; }
+      if (this._flushQueued) {
+        this._flushQueued = false;
+        if (this.dirtyIds.size) await this.flushSave(opts);
       }
+    };
+    this._flushPromise = run();
+    return this._flushPromise;
+  }
+
+  async _flushOnce() {
+    this.syncShortAnswersFromDom();   // 語音輸入等沒觸發 input 事件的文字也要算進來
+    if (!this.dirtyIds.size) return;
+    const ids = [...this.dirtyIds];
+    this.dirtyIds.clear();
+    const payload = this._deltaPayload(ids);
+    if (!Object.keys(payload).length) {         // 只有清空的題：沒東西可送（見 _deltaPayload）
+      if (!this._hasUnsynced()) { this._unsyncedSince = 0; this._staleWarned = false; }
+      this._renderSync();
       return;
     }
+    ids.forEach((id) => this.inflightIds.add(id));
+    this._renderSync();
+    let res;
+    try {
+      res = await db.saveExamProgress(this.attempt.id, payload, this.writeToken);
+    } catch (e) {
+      res = { success: false, error: e, message: String(e) };
+    } finally {
+      ids.forEach((id) => this.inflightIds.delete(id));
+    }
+    if (!res || !res.success) {
+      // 任何失敗（斷線 / 500 / 登入過期 …）都留著下個週期重試，不打斷作答——
+      // 太久沒同步由 _renderSync 升級成警示。
+      ids.forEach((id) => this.dirtyIds.add(id));
+      if (res && res.error && /exam_attempt_locked|exam_time_up|exam_practice_locked|exam_attempt_not_found/.test(String(res.error?.message || res.message || ""))) {
+        // 伺服器說作答已鎖 / 逾時：拉一次 resync 讓畫面切到正確狀態
+        this.resync();
+      }
+      this._renderSync();
+      return;
+    }
+    if (!this._hasUnsynced()) { this._unsyncedSince = 0; this._staleWarned = false; }
+    this._renderSync();
     // 用 server 回報的剩餘秒數校正倒數（每 15 秒一次，免得只靠切背景才校時）
     this._anchorDeadline(res.data?.secondsRemaining, this.attempt.deadlineAt);
-    if (this.deadlineTs && Date.now() >= this.deadlineTs) this.submit("timeout");
+    if (!this.submitting && this.deadlineTs && Date.now() >= this.deadlineTs) this.submit("timeout");
+  }
+
+  // 只取指定題的答案。清空的題不送（跟 collectAnswers 同規則，沿用原本行為——
+  // server 端維持上一次的值；清空答案的正確處理放在「送出時驗收」那一步）。
+  _deltaPayload(ids) {
+    const out = {};
+    ids.forEach((qid) => {
+      const v = this.RESP[qid];
+      if (!isEmptyExamAnswer(v)) out[qid] = v;
+    });
+    return out;
+  }
+
+  // ── 同步狀態（計時器旁邊） ──
+  _renderSync() {
+    const el = this.syncEl;
+    if (!el) return;
+    if (this.preview || !this.attempt || this.attempt.status !== "in_progress") { el.hidden = true; return; }
+    el.hidden = false;
+    const pending = new Set([...this.dirtyIds, ...this.inflightIds]).size;
+    let text, tone;
+    if (!pending) {
+      text = "✓ 已儲存"; tone = "ok";
+    } else if (this._unsyncedSince && Date.now() - this._unsyncedSince > 30000) {
+      text = `⚠ ${pending} 題未上傳`; tone = "error";
+      if (!this._staleWarned) {
+        this._staleWarned = true;
+        toast(this._localFail
+          ? "答案還沒上傳，而且這台裝置也存不下來。請檢查網路，先不要關閉此頁。"
+          : "答案還沒上傳到伺服器（已暫存在這台裝置）。請檢查網路，先不要關閉此頁。");
+      }
+    } else if (this.inflightIds.size) {
+      text = "儲存中…"; tone = "pending";
+    } else {
+      text = `${pending} 題待儲存`; tone = "pending";
+    }
+    if (el.textContent !== text) el.textContent = text;
+    el.dataset.tone = tone;
   }
 
   // 簡答題保底：直接從 DOM textarea 讀回 this.RESP。iOS 語音輸入 / 部分第三方
@@ -2953,7 +3072,8 @@ class ExamRunner {
       const qid = ta.getAttribute("data-sa");
       if (!qid) return;
       const val = ta.value;
-      if (val != null && val !== this.RESP[qid]) { this.RESP[qid] = val; this.dirty = true; }
+      // 空 textarea 跟「沒作答」(undefined) 視為相同，不然每次開卷都會把空白簡答標成待上傳
+      if (val != null && val !== (this.RESP[qid] ?? "")) { this.RESP[qid] = val; this._markIdDirty(qid); }
     });
   }
 
@@ -2962,10 +3082,7 @@ class ExamRunner {
     const out = {};
     Object.keys(this.RESP).forEach((qid) => {
       const v = this.RESP[qid];
-      if (v === undefined || v === null || v === "") return;
-      if (Array.isArray(v) && !v.length) return;
-      if (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length) return;
-      out[qid] = v;
+      if (!isEmptyExamAnswer(v)) out[qid] = v;
     });
     return out;
   }
@@ -2985,12 +3102,7 @@ class ExamRunner {
     // 盡力而為：這一步失敗（離線）不擋送出——送出本身有 6 次重試、payload 也自帶答案。
     if (this._saveDebounce) { clearTimeout(this._saveDebounce); this._saveDebounce = null; }
     this.persistLocal();
-    if (this.dirty && this.attempt && this.attempt.status === "in_progress") {
-      try {
-        const pre = await db.saveExamProgress(this.attempt.id, this.collectAnswers());
-        if (pre && pre.success) this.dirty = false;
-      } catch (_) {}
-    }
+    try { await this.flushSave({ force: true }); } catch (_) {}
 
     const btn = this.el.querySelector("#exam-submit");
     if (btn) { btn.disabled = true; btn.textContent = "送出中…"; }
@@ -2999,8 +3111,10 @@ class ExamRunner {
     // 退避拉長到 ~65 秒總覆蓋，足以撐過「大家 token 同時到期」的續期尖峰
     const backoff = [2000, 5000, 10000, 20000, 30000];
     for (let attempt = 1; attempt <= 6; attempt++) {
-      res = await db.submitExamAttempt(this.attempt.id, this.collectAnswers(), reason);
+      res = await db.submitExamAttempt(this.attempt.id, this.collectAnswers(), reason, this.writeToken);
       if (res.success) break;
+      // 只有沒有寫入憑證（舊後端）才會碰到登入失效；那條路上重試沒用，直接走下方的失敗處理
+      if (res.authExpired) break;
       if (attempt < 6) {
         toast("送出未成功，重試中…（答案已暫存，不會遺失）");
         await sleep(backoff[attempt - 1] || 30000);
