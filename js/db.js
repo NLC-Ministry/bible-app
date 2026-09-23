@@ -6008,7 +6008,7 @@ const db = {
   // — a cold load asks for 3-4 different keys → 3-4 nlc-data POSTs. Fetch the
   // whole (tiny) allowlist in one `.in("key",[…])` and serve every key from a
   // short-lived per-load cache. Writes invalidate it; a 10 s TTL self-heals.
-  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden", "lightning_quiz"],
+  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden", "lightning_quiz_test_mode"],
   _featureSettings: null,        // { map: {key:bool}, at: number } | null
   _featureSettingsInflight: null,
   _invalidateFeatureSettings() { this._featureSettings = null; },
@@ -6057,7 +6057,7 @@ const db = {
   },
 
   async updateFeatureSetting(key, enabled) {
-    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden", "lightning_quiz"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden", "lightning_quiz_test_mode"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
     if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
@@ -6446,7 +6446,7 @@ db._lightningQuizErrorMessage = function(error) {
     return "快問快答資料庫版本尚未更新，請通知管理員完成系統更新。";
   }
   const messages = {
-    lightning_quiz_feature_disabled: "快問快答功能目前已關閉。",
+    lightning_quiz_test_mode_restricted: "測試模式開啟中，目前只有系統管理員可以作答。",
     lightning_quiz_not_found: "找不到這一題，請重新整理頁面後再試一次。",
     lightning_quiz_outside_window: "現在不是這一題的作答時段。",
     lightning_quiz_already_answered: "這一題已經作答過了。",
