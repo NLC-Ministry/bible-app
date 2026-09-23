@@ -113,15 +113,10 @@ self.addEventListener("fetch", event => {
 
   if (isStaticRequest(request)) {
     const url = new URL(request.url);
-    // App bundle + lazy ESM modules + their shared data: always try network first
-    // so a deploy is picked up immediately. index.html marks /js/modules & /js/data
-    // as "no-cache, must-revalidate"; cacheFirst here would ignore that and pin an
-    // old /js/modules/exam.js until the SW cache rotates. These are real served
-    // paths (js/modules/exam.js, js/data/bible_data.js) — matching bare /modules/
-    // or /data/ here never fires and silently falls through to cacheFirst below.
-    if ((url.pathname.includes("/app.") && url.pathname.endsWith(".js"))
-      || url.pathname.startsWith("/js/modules/")
-      || url.pathname.startsWith("/js/data/")) {
+    // Unhashed /app.js alias: network first so a deploy is picked up. Lazy view
+    // modules are content-hashed chunks under /chunks/ (scripts/bundle.mjs), so
+    // they fall through to cacheFirst below — a given filename never changes.
+    if (url.pathname === "/app.js") {
       event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 3000 }));
       return;
     }

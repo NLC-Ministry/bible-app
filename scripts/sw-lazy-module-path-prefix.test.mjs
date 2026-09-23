@@ -6,24 +6,27 @@ const sw = read("sw.js");
 const vercelConfig = read("vercel.json");
 const admin = read("js/modules/admin.js");
 
-// 真正的 bug：sw.js／vercel.json 判斷「lazy module 要不要一律 network-first / 不快取」
-// 時，路徑寫成 /modules/、/data/，但實際被請求的路徑是 js/modules/xxx.js、
-// js/data/xxx.js（少了 js/ 前綴）——導致這個判斷式永遠不會命中，所有 lazy module
-// （home.js/bible.js/plan.js/admin.js/profile.js/team-registration.js，以及被
-// admin.js 動態載入的 exam.js）全部掉進 cacheFirst：一旦快取過一次，不管改版
-// 幾次、使用者重開 App 幾次，都會一直吃同一份舊快取，直到 SW 整個換版才會清掉。
-describe("sw.js：lazy module 的路徑判斷要用真正被請求的 js/modules、js/data 前綴", () => {
-  it("network-first 判斷式用的是 /js/modules/、/js/data/，不是少了 js/ 前綴的 /modules/、/data/", () => {
-    expect(sw).toContain('url.pathname.startsWith("/js/modules/")');
-    expect(sw).toContain('url.pathname.startsWith("/js/data/")');
+// 歷史：lazy module 曾以「未帶 hash 的原始檔」發佈在 /modules/，靠 ?v= 查詢字串
+// 和 SW network-first 路徑判斷來避免吃到舊快取——路徑前綴寫錯過一次，導致 lazy
+// module 無論重開幾次都卡在舊版。現在 lazy module 一律由 esbuild code splitting
+// 產生「檔名帶內容 hash」的 chunk（dist/chunks/），檔名不變內容就不變，所以：
+//   - chunk 可以永久快取（immutable），SW 用 cacheFirst 就是正確的；
+//   - 不能再有任何「未帶 hash、內容會變」的 lazy module 路徑規則。
+describe("sw.js：lazy module 是帶 hash 的 chunk，不再有未帶 hash 的 network-first 路徑判斷", () => {
+  it("不再特判 /js/modules/、/js/data/、/modules/、/data/", () => {
+    expect(sw).not.toContain('url.pathname.startsWith("/js/modules/")');
+    expect(sw).not.toContain('url.pathname.startsWith("/js/data/")');
     expect(sw).not.toContain('url.pathname.startsWith("/modules/")');
     expect(sw).not.toContain('url.pathname.startsWith("/data/")');
   });
 });
 
-describe("vercel.json：/js/modules/ 的 Cache-Control 規則要跟 /js/pwa/、/js/data/ 用同樣的前綴", () => {
-  it("header source 是 /js/modules/(.*).(js|mjs)，不是少了 js/ 前綴的 /modules/", () => {
-    expect(vercelConfig).toContain('"/js/modules/(.*)\\\\.(js|mjs)"');
+describe("vercel.json：chunk 永久快取，且沒有舊的未帶 hash 模組規則", () => {
+  it("/chunks/ 是 immutable，/js/modules/ 與 /modules/ 規則已移除", () => {
+    const config = JSON.parse(vercelConfig);
+    const chunkRule = config.headers.find(rule => rule.source === "/chunks/(.*)");
+    expect(chunkRule.headers[0].value).toContain("immutable");
+    expect(vercelConfig).not.toContain('"/js/modules/(.*)');
     expect(vercelConfig).not.toMatch(/"source":\s*"\/modules\//);
   });
 });

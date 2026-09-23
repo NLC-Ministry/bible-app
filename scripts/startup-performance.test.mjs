@@ -16,12 +16,14 @@ describe("startup performance contract", () => {
     expect(app).not.toContain("from 'react-dom/client'");
     expect(app).not.toContain("../components/issue-report/IssueReportFab.tsx");
     expect(app).toContain("loadIssueReportUi");
-    expect(app).toContain("ISSUE_REPORT_UI_MODULE_PATH");
-    expect(app).toContain("import(path)");
+    // Lazy via a literal dynamic import, so esbuild splits it into its own chunk
+    // (bundle.test.mjs asserts React is absent from the built entry file).
+    expect(app).toContain("'issue-report-ui': () => import('./modules/issue-report-ui.js')");
   });
 
   it("uses the injected production build id instead of cache-busting every launch", () => {
-    expect(app).toContain('if (!/^\\d{14}$/.test(buildVersion))');
+    expect(app).toContain('const buildVersion = "__BUILD_VERSION__";');
+    expect(app).toContain("const appBuildId = /^\\d{14}$/.test(buildVersion) ? buildVersion : null;");
     expect(app).not.toContain('buildVersion.includes("__BUILD_VERSION__")');
   });
 

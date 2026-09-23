@@ -5,7 +5,7 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertRelativeModuleImportsResolve, copyLazyModuleRuntime } from "./bundle.mjs";
+import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertChunksDoNotImportEntry } from "./bundle.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -76,7 +76,7 @@ describe("emitBundle esbuild invocation", () => {
     const source = readFileSync(join(root, "scripts/bundle.mjs"), "utf8");
     expect(source).toContain("--outfile=");
     expect(source).toContain("ENOBUFS");
-    expect(source).toMatch(/issueReportEntry[\s\S]*--format=esm/);
+    expect(source).toMatch(/--splitting --format=esm/);
     expect(source).not.toMatch(
       /execSync\(`\$\{esbuildCmd\} "\$\{entryPoint\}" --bundle --minify --target=es2020`/
     );
@@ -95,27 +95,10 @@ describe("emitBundle guards", () => {
   });
 });
 
-describe("copied lazy module dependencies", () => {
-  it("rejects a lazy module whose relative dependency was not copied", () => {
-    const dir = mkdtempSync(join(tmpdir(), "bundle-missing-module-"));
-    try {
-      writeFileSync(join(dir, "plan.js"), 'import "../data/missing.mjs";');
-      expect(() => assertRelativeModuleImportsResolve(dir)).toThrow(/copied module dependency missing/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("copies shared data dependencies at the path lazy modules import", () => {
-    const out = mkdtempSync(join(tmpdir(), "bundle-lazy-runtime-"));
-    try {
-      expect(copyLazyModuleRuntime(root, out)).toBe(true);
-      expect(existsSync(join(out, "modules", "bible.js"))).toBe(true);
-      expect(existsSync(join(out, "data", "plan-progress-availability.mjs"))).toBe(true);
-      expect(() => assertRelativeModuleImportsResolve(join(out, "modules"))).not.toThrow();
-    } finally {
-      rmSync(out, { recursive: true, force: true });
-    }
+describe("split chunk guards", () => {
+  it("rejects a chunk that imports the renamed entry file back", () => {
+    expect(() => assertChunksDoNotImportEntry({ "plan.X.js": 'import{a}from"../app.js";' }, "app.js")).toThrow(/imports the entry file/);
+    expect(() => assertChunksDoNotImportEntry({ "plan.X.js": 'import{a}from"./chunk.Y.js";' }, "app.js")).not.toThrow();
   });
 });
 describe("emitBundle (integration, real repo)", () => {
@@ -169,21 +152,23 @@ describe("emitBundle (integration, real repo)", () => {
       expect(existsSync(join(out, "js", "pwa", "CacheManager.js"))).toBe(true);
       expect(existsSync(join(out, "js", "pwa", "SupabaseRepository.js"))).toBe(true);
       expect(readdirSync(join(out, "assets")).length).toBeGreaterThan(0);
-      // modules folder copied
-      expect(existsSync(join(out, "modules"))).toBe(true);
-      expect(readdirSync(join(out, "modules")).length).toBeGreaterThan(0);
-      expect(existsSync(join(out, "modules", "plan.js"))).toBe(true);
-      expect(existsSync(join(out, "modules", "plan-progress-reset.mjs"))).toBe(true);
-      expect(existsSync(join(out, "data", "plan-progress-availability.mjs"))).toBe(true);
-      const issueReportBundle = rf(join(out, "modules", "issue-report-ui.bundle.js"), "utf8");
-      expect(issueReportBundle).toMatch(/export\s*\{[^}]*mountIssueReportUi/);
+      // lazy view modules are content-hashed chunks, not raw copies
+      expect(existsSync(join(out, "modules"))).toBe(false);
+      expect(existsSync(join(out, "data"))).toBe(false);
+      const chunks = readdirSync(join(out, "chunks"));
+      for (const name of ["home", "bible", "plan", "profile", "admin", "team-registration", "campaign-rule-editor", "onboarding-helper", "issue-report-ui"]) {
+        expect(chunks.some((file) => new RegExp(`^${name}\\.[A-Z0-9]{8}\\.js$`).test(file))).toBe(true);
+      }
+      const issueReportChunk = chunks.find((file) => file.startsWith("issue-report-ui."));
+      expect(rf(join(out, "chunks", issueReportChunk), "utf8")).toMatch(/mountIssueReportUi/);
       // contains app bundle code
       const bundle = rf(join(out, jsFile), "utf8");
       expect(bundle.includes("MODULE_LOAD_FAILED")).toBe(true);
       expect(bundle).not.toContain("__BUILD_VERSION__");
-      expect(bundle).toContain("issue-report-ui.bundle.js");
-      expect(bundle).toMatch(/\d{14}/);
-      expect(bundle).toContain("_clean_demo_mode_v20");
+      expect(bundle).toContain(`"${versionProbe.version}"`);
+      expect(bundle).toMatch(/import\("\.\/chunks\/plan\.[A-Z0-9]{8}\.js"\)/);
+      // React stays in its own lazy chunk, out of the initial download
+      expect(bundle).not.toContain("react-dom.production");
       expect(bundle).not.toMatch(/\.includes\("\d{14}"\)/);
     } finally {
       rmSync(out, { recursive: true, force: true });

@@ -63,15 +63,12 @@ expect(value).toContain("public");
     expect(value).not.toContain("immutable");
   });
 
-  it("keeps unhashed PWA runtime modules updateable", () => {
-    // Real served path is js/modules/*.js (e.g. js/modules/exam.js) — a bare
-    // /modules/ source here never matches any actual request, silently leaving
-    // these files to fall back to Vercel's default caching. Found via a real
-    // production bug: admin.js's exam.js import stayed cached indefinitely
-    // regardless of how many times a user reopened the app.
-    expect(headerFor("/js/modules/(.*)\\.(js|mjs)")).toContain("no-cache");
-    expect(headerFor("/js/modules/(.*)\\.(js|mjs)")).not.toContain("immutable");
+  it("keeps the unhashed SW runtime updateable and hashed chunks immutable", () => {
+    // js/pwa/* is imported by sw.js by fixed path, so it must revalidate.
     expect(headerFor("/js/pwa/(.*)\\.js")).toContain("no-cache");
     expect(headerFor("/js/pwa/(.*)\\.js")).not.toContain("immutable");
+    // Lazy view modules ship as content-hashed chunks (scripts/bundle.mjs).
+    expect(headerFor("/chunks/(.*)")).toContain("immutable");
+    expect(headerFor("/version.json")).toContain("no-store");
   });
 });
