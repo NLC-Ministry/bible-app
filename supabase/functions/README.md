@@ -39,7 +39,9 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 
 - `nlc-data` 在 `exam_get_for_attempt` 回傳作答中的 attempt 時，附上
   `attempt.writeToken` = HMAC-SHA256(`EXAM_WRITE_SECRET`, attemptId + 主人 user_id)，
-  見 `_shared/exam-write-token.ts`。無狀態，不存 DB。
+  無狀態，不存 DB。簽章程式碼**內嵌**在兩支函式的 `index.ts`（`>>> exam-write-token`
+  區塊，兩份逐字相同，測試會比對）——不放 `_shared/`，因為部署只打包函式自己的資料夾，
+  跨資料夾 import 會 `Module not found`。
 - `exam-write` 驗證憑證後，以 service role 呼叫 `exam_save_progress` /
   `exam_submit_attempt`（`p_actor_id` = attempt 主人）。只有這兩支，截止時間 /
   狀態 / 功能開關照 DB 原本的規則。

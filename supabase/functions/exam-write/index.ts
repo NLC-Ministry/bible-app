@@ -4,7 +4,7 @@
 // token 約 15 分鐘就要續期，75 分鐘的測驗要續好幾次，任何一次續期失敗（尖峰、
 // refresh token 輪替衝突…）前端就會清掉登入，後面的暫存 / 送出全部失敗。
 // 改成：nlc-data 在 exam_get_for_attempt 回傳時簽一張「這份作答專用」的寫入憑證
-// （見 ../_shared/exam-write-token.ts），作答中的寫入帶這張憑證打這裡。
+// （見下方 exam-write-token 區塊），作答中的寫入帶這張憑證打這裡。
 //
 //   POST { action: "save",   attemptId, token, answers }
 //   POST { action: "submit", attemptId, token, answers, reason }
@@ -23,7 +23,45 @@
 // supabase/config.toml：[functions.exam-write] verify_jwt = false（憑證不是 Supabase JWT）。
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { verifyExamWriteToken } from "../_shared/exam-write-token.ts";
+
+// >>> exam-write-token（nlc-data 與 exam-write 兩支 index.ts 內此區塊逐字相同；scripts/exam-write-path.test.mjs 會比對）
+// 大測驗「作答專用寫入憑證」：nlc-data 簽發、exam-write 驗證。直接內嵌、不 import 共用檔，
+// 因為部署只會打包函式自己的資料夾（../_shared 會 Module not found）。
+// token = "v1." + base64url(HMAC-SHA256(EXAM_WRITE_SECRET, "exam-write:v1:<attemptId>:<userId>"))
+// · 無狀態：不存 DB，驗證時用 attempt 的 user_id 重算比對；綁定「這份作答 + 這個人」。
+// · 沒有自己的到期時間——有效範圍由 DB 函式把關（exam_save_progress 只收 in_progress 且未逾
+//   截止 + 120 秒；exam_submit_attempt 只在 in_progress 時寫入），送出後就沒有可做的事。
+// · 換 EXAM_WRITE_SECRET＝所有已簽發憑證立即失效，前端自動退回 nlc-data 路徑。
+const examWriteEncoder = new TextEncoder();
+function examWriteBase64Url(bytes: Uint8Array): string {
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function examWriteHmac(secret: string, message: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw", examWriteEncoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, examWriteEncoder.encode(message)));
+}
+function examWriteTimingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+async function signExamWriteToken(secret: string, attemptId: string, userId: string): Promise<string> {
+  if (!secret || !attemptId || !userId) throw new Error("exam_write_token_args_missing");
+  return "v1." + examWriteBase64Url(await examWriteHmac(secret, `exam-write:v1:${attemptId}:${userId}`));
+}
+async function verifyExamWriteToken(
+  secret: string, attemptId: string, userId: string, token: unknown
+): Promise<boolean> {
+  if (!secret || !attemptId || !userId || typeof token !== "string" || !token.startsWith("v1.")) return false;
+  const expected = await signExamWriteToken(secret, attemptId, userId);
+  return examWriteTimingSafeEqual(expected, token);
+}
+// <<< exam-write-token
 
 const MAX_BODY_BYTES = 512 * 1024;   // 整份卷含簡答也遠小於此；擋異常大 payload
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

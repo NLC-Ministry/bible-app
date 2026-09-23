@@ -1,11 +1,42 @@
-// 大測驗寫入憑證：簽發 / 驗證（supabase/functions/_shared）＋ 前端 db.js 的路徑選擇與退回
+// 大測驗寫入憑證：簽發 / 驗證（內嵌在 nlc-data 與 exam-write 的 index.ts）＋ 前端 db.js 的路徑選擇與退回
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
-import { signExamWriteToken, verifyExamWriteToken } from "../supabase/functions/_shared/exam-write-token.ts";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { transformSync } from "esbuild";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 const U = "33333333-3333-4333-8333-333333333333";
+
+const readFn = (name) => readFileSync(new URL(`../supabase/functions/${name}/index.ts`, import.meta.url), "utf8");
+const tokenBlock = (src) => {
+  const m = src.match(/\/\/ >>> exam-write-token[\s\S]*?\/\/ <<< exam-write-token/);
+  return m ? m[0].replace(/\r\n/g, "\n") : null;   // nlc-data 是 CRLF、exam-write 是 LF
+};
+const nlcBlock = tokenBlock(readFn("nlc-data"));
+const writeBlock = tokenBlock(readFn("exam-write"));
+// 執行 exam-write 那份內嵌程式碼（TS → JS）
+const { signExamWriteToken, verifyExamWriteToken } = new Function(
+  transformSync(`${writeBlock}\nreturn { signExamWriteToken, verifyExamWriteToken };`, { loader: "ts" }).code
+)();
+
+describe("edge function bundling", () => {
+  it("both functions embed the exact same token code (signer and verifier cannot drift)", () => {
+    expect(nlcBlock).toBeTruthy();
+    expect(writeBlock).toBeTruthy();
+    expect(nlcBlock).toBe(writeBlock);
+  });
+
+  it("no edge function imports from outside its own folder (deploy only bundles that folder)", () => {
+    const dir = new URL("../supabase/functions/", import.meta.url);
+    readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(new URL(`${d.name}/index.ts`, dir)))
+      .forEach((d) => {
+        const src = readFileSync(new URL(`${d.name}/index.ts`, dir), "utf8");
+        expect(src, `${d.name}/index.ts`).not.toMatch(/from\s+["']\.\.\//);
+      });
+  });
+});
 
 describe("exam write token", () => {
   it("verifies only for the same secret, attempt and owner", async () => {
