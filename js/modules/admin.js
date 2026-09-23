@@ -1792,7 +1792,11 @@ export async function renderAdminLightningQuizQuestions() {
       showToast(result.message || '儲存失敗，請稍後再試。');
       return;
     }
-    showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
+    if (result.data?.swappedQuestionId) {
+      showToast('已儲存，並自動把同一天原本生效的題目下架（內容與結果都保留）。');
+    } else {
+      showToast(editingAdminLightningQuizId ? '題目已更新。' : '題目已新增。');
+    }
     closeAdminLightningQuizEditor();
     await renderAdminLightningQuizQuestions();
     // 新增/編輯題目後統計表要跟著多一列（哪怕暫時 0 作答），不然剛建好題目的
@@ -1904,14 +1908,18 @@ export async function renderAdminLightningQuizStats() {
 
   const rows = days.map((day, index) => {
     // 成長率：跟「上一次有題目的那天」比參與率，而不是硬性比前一個日曆日——
-    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。
+    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。同一天換
+    // 題目會有兩列同一個 riseDate，跟「換題前的自己」比不是趨勢，跳過不比。
     const prev = days[index - 1];
-    const growth = prev && prev.participationRate > 0
+    const growth = prev && prev.riseDate !== day.riseDate && prev.participationRate > 0
       ? ((day.participationRate - prev.participationRate) / prev.participationRate) * 100
       : null;
     const growthLabel = growth == null ? '—' : `${growth > 0 ? '+' : ''}${growth.toFixed(0)}%`;
+    const versionTag = day.isActive === false
+      ? '<span class="stat-badge stat-badge--neutral admin-lightning-quiz-stats-tag">已下架版本</span>'
+      : '';
     return `<tr data-lightning-quiz-stats-row="${escapeHTML(String(day.questionId))}">
-      <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}</td>
+      <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}${versionTag}</td>
       <td>${escapeHTML(String(day.completedCount))} / ${escapeHTML(String(day.totalEligible))}（${escapeHTML(formatAdminLightningQuizPercent(day.participationRate))}）</td>
       <td>${growthLabel}</td>
       <td>${escapeHTML(String(day.correctCount))}</td>
