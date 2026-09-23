@@ -1940,6 +1940,17 @@
                 </button>
               </div>
               <p class="admin-feature-setting-feedback hidden" id="admin-exam-feature-feedback" role="status"></p>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>快問快答</strong>
+                  <span id="admin-lightning-quiz-feature-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-lightning-quiz-feature-toggle"
+                  role="switch" aria-checked="false" aria-label="開放快問快答" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-lightning-quiz-feature-feedback" role="status"></p>
               <!-- 每日靈修／小組聚會週計畫的實際開關搬到「個人」分頁的「功能設定」
                    子頁面，每個會友各自一份偏好；這裡只留一顆總開關，關閉時強制清空
                    所有會友的個人偏好。見 js/modules/admin.js renderAdminFeatureSettings()、
@@ -2884,7 +2895,7 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=20260922_fix_reading_plan_duplicate_join"></script>
+  <script type="module" src="js/app.js?v=20260923_lightning_quiz_feature_toggle"></script>
 </body>
 
 </html>

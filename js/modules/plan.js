@@ -5915,8 +5915,19 @@ async function renderPlanStatsView() {
   }
 }
 
+// 系統管理「計畫統計」（ORG_STATS 模式，由 admin.js 的 selectManagementPlan
+// 設定）看的是管理員在上方「計畫篩選」選的那個計畫（state.adminManagementPlan），
+// 不是這個人自己目前在讀的 activePlan——這兩個欄位故意分開存放（見
+// state.js 的 adminManagementPlan 註解），避免管理員切自己的計畫時連帶影響
+// 全教會統計。這裡統一提供正確的來源，ORG_STATS 相關的函式都要透過這個入口
+// 拿「現在該看哪個計畋」，不要直接讀 state.activePlan，否則「計畋篩選」怎麼
+// 切，全教會/大區/牧區的統計數字都不會變。
+function getOrgStatsContextPlan() {
+  return (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS && state.adminManagementPlan) || state.activePlan;
+}
+
 async function renderPlanHistoryView() {
-  if (!state.activePlan) return;
+  if (!getOrgStatsContextPlan()) return;
 
   // 1. Render Group Rankings/Participants table at top (Wait, the ranking table is no longer at top of stats, but we still trigger it to update scoped user list)
   await renderGroupParticipantsRankingTable();
@@ -5934,9 +5945,10 @@ function computeOrgUnitStats(users) {
   const totalCompleted = list.filter(u => (u.current_round || 1) > 1 || (u.plan_progress || 0) >= 100).length;
 
   let expectedPct = 50;
-  if (state.activePlan) {
-    const start = new Date(state.activePlan.startDate + "T00:00:00");
-    const end = new Date(state.activePlan.endDate + "T00:00:00");
+  const contextPlan = getOrgStatsContextPlan();
+  if (contextPlan) {
+    const start = new Date(contextPlan.startDate + "T00:00:00");
+    const end = new Date(contextPlan.endDate + "T00:00:00");
     const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -6098,7 +6110,8 @@ function bindOrgStatsTreeEvents(container) {
 // 熱力圖 + 趨勢圖的呈現方式。
 async function renderOrgStatsTree() {
   const container = document.getElementById("admin-org-stats-tree");
-  if (!container || !state.activePlan) return;
+  const contextPlan = getOrgStatsContextPlan();
+  if (!container || !contextPlan) return;
 
   if (!state.orgStructure || !Array.isArray(state.orgStructure.regions) || state.orgStructure.regions.length === 0) {
     if (typeof db.loadOrgStructure === "function") {
@@ -6108,7 +6121,7 @@ async function renderOrgStatsTree() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList();
+    allUsers = await db.fetchMergedUsersList(contextPlan.globalPlanId || contextPlan.presetKey || contextPlan.name || contextPlan.id);
   } catch (e) {
     console.warn('Failed to fetch users for org stats tree', e);
   }
@@ -6155,7 +6168,8 @@ function convertZoneCompletionToCSV(rows, exportedAt = new Date()) {
 }
 
 async function exportZoneCompletionCSV() {
-  if (!state.activePlan) {
+  const contextPlan = getOrgStatsContextPlan();
+  if (!contextPlan) {
     if (typeof showToast === "function") showToast("請先選擇一個計畫。");
     return;
   }
@@ -6168,7 +6182,7 @@ async function exportZoneCompletionCSV() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList();
+    allUsers = await db.fetchMergedUsersList(contextPlan.globalPlanId || contextPlan.presetKey || contextPlan.name || contextPlan.id);
   } catch (e) {
     console.warn('Failed to fetch users for zone export', e);
   }

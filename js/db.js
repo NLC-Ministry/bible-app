@@ -6008,7 +6008,7 @@ const db = {
   // — a cold load asks for 3-4 different keys → 3-4 nlc-data POSTs. Fetch the
   // whole (tiny) allowlist in one `.in("key",[…])` and serve every key from a
   // short-lived per-load cache. Writes invalidate it; a 10 s TTL self-heals.
-  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden"],
+  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden", "lightning_quiz"],
   _featureSettings: null,        // { map: {key:bool}, at: number } | null
   _featureSettingsInflight: null,
   _invalidateFeatureSettings() { this._featureSettings = null; },
@@ -6057,7 +6057,7 @@ const db = {
   },
 
   async updateFeatureSetting(key, enabled) {
-    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden", "lightning_quiz"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
     if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
