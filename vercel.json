@@ -43,25 +43,16 @@
                                     ]
                     },
                     {
-                        "source":  "/js/modules/(.*)\\.(js|mjs)",
+                        "source":  "/chunks/(.*)",
                         "headers":  [
                                         {
                                             "key":  "Cache-Control",
-                                            "value":  "no-cache, must-revalidate"
+                                            "value":  "public, max-age=31536000, immutable"
                                         }
                                     ]
                     },
                     {
                         "source":  "/js/pwa/(.*)\\.js",
-                        "headers":  [
-                                        {
-                                            "key":  "Cache-Control",
-                                            "value":  "no-cache, must-revalidate"
-                                        }
-                                    ]
-                    },
-                    {
-                        "source":  "/js/data/(.*)\\.(js|mjs)",
                         "headers":  [
                                         {
                                             "key":  "Cache-Control",
@@ -89,6 +80,15 @@
                     },
                     {
                         "source":  "/sw.js",
+                        "headers":  [
+                                        {
+                                            "key":  "Cache-Control",
+                                            "value":  "no-store, no-cache, must-revalidate, max-age=0"
+                                        }
+                                    ]
+                    },
+                    {
+                        "source":  "/version.json",
                         "headers":  [
                                         {
                                             "key":  "Cache-Control",

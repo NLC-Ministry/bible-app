@@ -18,14 +18,21 @@ export class CacheManager {
   get runtimeCacheName() { return `${this.prefix}-runtime-${this.version}`; }
   get allowedCacheNames() { return new Set([this.staticCacheName, this.runtimeCacheName]); }
 
-  async precache(urls) {
+  // Only `required` entries can fail the SW install. Everything else is best
+  // effort: an all-or-nothing precache meant one flaky asset fetch on mobile
+  // aborted the new worker's install, leaving the OLD worker (and its old
+  // cached shell) in control indefinitely. Skipped entries are filled lazily
+  // by the runtime fetch strategies instead.
+  async precache(urls, { required = [] } = {}) {
     const cache = await this.cacheStorage.open(this.staticCacheName);
-    try {
-      await Promise.all(urls.map(url => cache.add(url)));
-    } catch (error) {
+    const requiredSet = new Set(required);
+    const results = await Promise.allSettled(urls.map(url => cache.add(url)));
+    const failedRequired = results.find((result, index) => result.status === "rejected" && requiredSet.has(urls[index]));
+    if (failedRequired) {
       await this.cacheStorage.delete(this.staticCacheName);
-      throw error;
+      throw failedRequired.reason;
     }
+    return urls.filter((_, index) => results[index].status === "rejected");
   }
 
   async cacheFirst(request, { cacheName = this.staticCacheName } = {}) {

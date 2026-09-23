@@ -2,20 +2,20 @@
 
 // Import support and core files needed before first paint.
 import '../config.js';
-import './data/bible_data.js?v=20260923_lightning_quiz_test_mode';
+import './data/bible_data.js?v=20260923_cloud_icon';
 import './data/bible_verse_counts.js';
-import './copy/zh-Hant.js?v=20260923_lightning_quiz_test_mode';
-import './data/church_campaign.js?v=20260923_lightning_quiz_test_mode';
+import './copy/zh-Hant.js?v=20260923_cloud_icon';
+import './data/church_campaign.js?v=20260923_cloud_icon';
 import './design/design-tokens.js';
-import './design/design-system-helpers.js?v=20260923_lightning_quiz_test_mode';
-import './design/icon-registry.js?v=20260923_lightning_quiz_test_mode';
+import './design/design-system-helpers.js?v=20260923_cloud_icon';
+import './design/icon-registry.js?v=20260923_cloud_icon';
 import './design/icons.js';
-import './state.js?v=20260923_lightning_quiz_test_mode';
-import './auth.js?v=20260923_lightning_quiz_test_mode';
+import './state.js?v=20260923_cloud_icon';
+import './auth.js?v=20260923_cloud_icon';
 import './auth-launch.mjs';
-import './db.js?v=20260923_lightning_quiz_test_mode';
-import './utils.js?v=20260923_lightning_quiz_test_mode';
-import './gamification.js?v=20260923_lightning_quiz_test_mode';
+import './db.js?v=20260923_cloud_icon';
+import './utils.js?v=20260923_cloud_icon';
+import './gamification.js?v=20260923_cloud_icon';
 import { initModalManager } from './modules/modal-manager.mjs';
 
 import {
@@ -23,13 +23,15 @@ import {
   consumeBibleHubResume,
   hubContinueHref,
   launchMemberHubContinue
-} from './login-onboarding-gate.mjs?v=20260923_lightning_quiz_test_mode';
+} from './login-onboarding-gate.mjs?v=20260923_cloud_icon';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
-import { initializePwa } from './pwa/PwaCoordinator.js?v=20260923_lightning_quiz_test_mode';
+import { initializePwa } from './pwa/PwaCoordinator.js?v=20260923_cloud_icon';
+import { VersionWatcher } from './pwa/VersionWatcher.js';
+import { createUpdateBanner } from './pwa/UpdateBanner.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
 import { OfflineBibleRepository } from './pwa/OfflineBibleRepository.js';
 import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
-import { SupabaseRepository } from './pwa/SupabaseRepository.js?v=20260923_lightning_quiz_test_mode';
+import { SupabaseRepository } from './pwa/SupabaseRepository.js?v=20260923_cloud_icon';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
 
 window.__bootMark?.("core-imports-done");
@@ -63,15 +65,30 @@ function reportBootPerf() {
 cleanupProductionStorage(window.localStorage);
 initModalManager();
 
-let buildVersion = "__BUILD_VERSION__";
-if (!/^\d{14}$/.test(buildVersion)) {
-  buildVersion = "dev_" + Date.now();
-}
-buildVersion += "_clean_demo_mode_v20_quiz_manual_retry_v1_member_hub_name_sync_v1_quiz_load_error_v1_group_filter_reset_fix_v1_quiz_publish_flow_redesign_v1_row_cap_pagination_fix_v1_quiz_entry_reading_gate_v1_quiz_feature_reopen_restore_v1_admin_mobile_layout_v1_reader_audio_resume_fix_v1_joined_plan_collapse_v1_admin_tabs_lead_v1_0830_quiz_pledge_banner_v1_big_exam_p1_v1_fullscreen_resilience_v1_exam_p2_admin_v1_result_review_v1_feature_toggle_move_v1_paper_picker_v1_section_config_v1_exam_p3_stats_notify_v1_exam_announcement_flag_v1_exam_p4_resilience_v1_exam_no_shortanswer_hide_v1_exam_mode_switch_v1_noflash_sweep_v1_exam_p4_two_track_v1_notif_admin_anon_v1_exam_autoscore_toggle_v1_answer_only_editor_v1_exam_publish_results_lock_v1_push_guards_v1_result_pending_label_v1_staff_preview_label_v1_exam_close_ux_o1o2o3_v1_finalize_expired_v1_stats_team_size_v1_stats_scope_teamrank_v1_exam_practice_review_autoclose_v1_exam_multi_paper_profile_v1_exam_practice_grace_day_v1_exam_batch_grading_v1_region_cohort_v1_exam_empty_shortanswer_zero_v1_exam_team_fixed_divisor_v1_exam_full_result_paper_v1_exam_red_correction_overlay_v1_announcement_live_only_v1_result_numeric_answers_v1_match_review_draw_v1_choice_mark_v1_practice_to_review_rename_v1_pledge_copy_v1_registration_current_plan_default_v1_corrected_label_wording_v2_exam_token_resilience_v1_grading_full_sheet_v1_answers_export_v1_result_row_declutter_v1_perf_foreground_coordinator_a1_v1_perf_token_no_wipe_a2_v1_perf_badge_throttle_a5_v1_perf_chart_update_b7_v1_cohort_stage_kind_v1_ranking_baseline_schedule_v1_progress_baseline_round1_v1_level_teardown_v1_round_schedule_restore_v1_missed_chapters_reminder_v1_care_reminder_edit_merge_v1_reader_position_fromplan_fix_v1_reading_log_pagination_fix_v1_db_pagination_audit_v1_highlights_notes_review_v1_reader_next_chapter_jump_fix_v1_ten_verse_chapter_load_fix_v1_member_hub_org_dedupe_v1_profile_subpage_overlay_fix_v1_cohort_materialized_schedule_v1_cohort_plain_plan_award_only_v1_admin_section_nav_step1_v1_emergency_announcement_editor_v1_admin_section_open_fix_v1_admin_section_unified_v2_admin_section_mobile_drilldown_v1_r1final_monthly_split_v1_r1final_discover_lock_v1_r1final_award_aggregate_v1_exam_grading_fixes_v1_score_input_validation_v1_login_continuation_return_fix_v1_profile_subpage_close_selector_fix_v1_r1final_badge_puzzle_v1_devotion_editor_modal_video_v1_devotion_progress_notes_v1_devotion_ui_polish_v1_devotion_publish_all_v1_home_feature_cards_v1_home_cards_login_race_v1_myplans_devotion_order_v1_home_cards_no_planjs_dep_v1_gm_topic_passage_inline_v1_match_lines_on_top_v1_match_align_button_v1_devotion_share_copy_v1_devotion_share_scripture_v1_devotion_sync_log_v1_devotion_group_hidden_v1_devotion_hidden_toggle_v1_lock_ended_stage_team_v1_exam_grading_seq_v1_plan_gate_login_only_v1_lazy_supabase_lib_v1_lazy_chartjs_v1_boot_resilient_settled_v1_a1_revert_v1_lazy_html2canvas_v1_font_light_drop_v1_plan_audience_region_gate_v1_session_expiry_foreground_gate_v1_session_expired_event_v1_batch_select_capability_v1_batch_select_loaduserdata_v1_batch_select_orgstructure_v1_batch_select_globalplans_v1_read_dedup_v1_feature_settings_bulk_v1_org_structure_rpc_v1_batch_metric_label_v1_exam_pr_values_v1_issue_report_thread_exit_v1_verse_multi_select_v1_plan_series_filter_v1_team_invite_unfilled_v1_round_overflow_schedule_v1_book_badge_crowns_v1_prestige_svg_v1_exam_first_round_filter_v1_exam_paper_linked_plan_v1";
+// scripts/bundle.mjs replaces this placeholder with the build timestamp
+// (YYYYMMDDHHmmss, same value as /version.json). null in unbundled dev.
+const buildVersion = "__BUILD_VERSION__";
+const appBuildId = /^\d{14}$/.test(buildVersion) ? buildVersion : null;
+window.APP_BUILD_ID = appBuildId;
 const moduleCache = {};
-const RELEASE_ONBOARDING_MODULE_PATH = './modules/onboarding-helper.js?v=20260923_lightning_quiz_test_mode';
+// Every lazy view module, as a literal import() so esbuild can code-split each
+// into a content-hashed chunk (dist/chunks/<name>.<hash>.js). A tab that stays
+// open across a deploy therefore keeps loading ITS OWN build's chunks instead
+// of mixing the new server copy of plan.js into old in-memory app/db code.
+// No ?v= strings: the hash in the filename is the cache key.
+const LAZY_MODULE_LOADERS = {
+  home: () => import('./modules/home.js'),
+  bible: () => import('./modules/bible.js'),
+  plan: () => import('./modules/plan.js'),
+  profile: () => import('./modules/profile.js'),
+  admin: () => import('./modules/admin.js'),
+  'team-registration': () => import('./modules/team-registration.js'),
+  'campaign-rule-editor': () => import('./modules/campaign-rule-editor.js'),
+  'onboarding-helper': () => import('./modules/onboarding-helper.js'),
+  // React + TSX island; its own chunk keeps React out of the initial bundle.
+  'issue-report-ui': () => import('./modules/issue-report-ui.js'),
+};
 const RELEASE_ONBOARDING_STORAGE_KEY = "bible_onboarding_seen_version";
-const ISSUE_REPORT_UI_MODULE_PATH = './modules/issue-report-ui.bundle.js?v=' + buildVersion;
 let releaseOnboardingModulePromise = null;
 let careReminderBadgeLastRefresh = 0;
 
@@ -98,7 +115,7 @@ function shouldAutoShowReleaseOnboarding({ auth: authClient, syncComplete, stora
 
 async function loadReleaseOnboardingHelper() {
   if (!releaseOnboardingModulePromise) {
-    releaseOnboardingModulePromise = import(RELEASE_ONBOARDING_MODULE_PATH).then((mod) => {
+    releaseOnboardingModulePromise = LAZY_MODULE_LOADERS['onboarding-helper']().then((mod) => {
       if (window.__bibleDeferredInstallPrompt && typeof mod.captureInstallPrompt === "function") {
         mod.captureInstallPrompt(window.__bibleDeferredInstallPrompt);
       }
@@ -417,14 +434,16 @@ function initNotificationSystem() {
 // than "this file genuinely doesn't exist".
 const MODULE_LOAD_RETRY_DELAYS_MS = [400, 1200];
 
-async function loadModule(name, path) {
+async function loadModule(name) {
   if (moduleCache[name]) {
     return moduleCache[name];
   }
+  const loader = LAZY_MODULE_LOADERS[name];
+  if (!loader) throw new Error(`Unknown lazy module: ${name}`);
   let lastErr = null;
   for (let attempt = 0; attempt <= MODULE_LOAD_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      const mod = await import(path);
+      const mod = await loader();
       moduleCache[name] = mod;
       if (typeof mod.init === 'function') {
         mod.init();
@@ -439,6 +458,13 @@ async function loadModule(name, path) {
     }
   }
   console.error(`Failed to load module ${name} after ${MODULE_LOAD_RETRY_DELAYS_MS.length + 1} attempts:`, lastErr);
+  // Hashed chunks from an older deploy are gone from the server once a new
+  // build ships, so a tab opened before the deploy 404s here. That is exactly
+  // a stale-build case: let the version check reload into the new build. If
+  // the build is current (a genuine network failure), it does nothing.
+  try {
+    await appVersionWatcher.check({ force: true });
+  } catch (_) { /* fall through to the user-facing error */ }
   const moduleError = new Error(`載入頁面元件失敗，請重新整理頁面再試一次。`);
   moduleError.code = "MODULE_LOAD_FAILED";
   moduleError.cause = lastErr;
@@ -446,7 +472,7 @@ async function loadModule(name, path) {
 }
 
 async function loadIssueReportUi(options = {}) {
-  const mod = await loadModule('issue-report-ui', ISSUE_REPORT_UI_MODULE_PATH);
+  const mod = await loadModule('issue-report-ui');
   if (mod && typeof mod.mountIssueReportUi === "function") {
     mod.mountIssueReportUi(options);
   }
@@ -473,14 +499,14 @@ function scheduleIssueReportUiLoad(options = {}) {
 }
 
 async function ensurePlanFeatureModulesLoaded() {
-  await loadModule('team-registration', './modules/team-registration.js?v=' + buildVersion);
+  await loadModule('team-registration');
   if (state.currentUser && getUserRoleCode(state.currentUser) === 'admin') {
-    await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
+    await loadModule('campaign-rule-editor');
   }
 }
 
 async function ensureAdminFeatureModulesLoaded() {
-  await loadModule('campaign-rule-editor', './modules/campaign-rule-editor.js?v=' + buildVersion);
+  await loadModule('campaign-rule-editor');
 }
 
 // Focus-triggered refreshes fire on every app re-foreground (switching apps,
@@ -725,7 +751,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
     }
 
     if (tabId === "dashboard-view") {
-      const mod = await loadModule('home', './modules/home.js?v=' + buildVersion);
+      const mod = await loadModule('home');
       if (mod && typeof mod.updateDashboardView === 'function') {
         await mod.updateDashboardView();
       } else if (typeof window.updateDashboardView === 'function') {
@@ -733,7 +759,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "reader-view") {
-      const mod = await loadModule('bible', './modules/bible.js?v=' + buildVersion);
+      const mod = await loadModule('bible');
       if (mod && typeof mod.renderReaderText === 'function') {
         await mod.renderReaderText();
       } else if (typeof window.renderReaderText === 'function') {
@@ -744,7 +770,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       // 計畫資格只在登入時判斷（db.init）。這裡不再重新判斷、不再擋整頁，
       // 直接把計畫分頁渲染出來。
       hidePlanEligibilityGate();
-      const mod = await loadModule('plan', './modules/plan.js?v=' + buildVersion);
+      const mod = await loadModule('plan');
       await ensurePlanFeatureModulesLoaded();
       if (mod && typeof mod.renderPlanView === 'function') {
         await mod.renderPlanView();
@@ -760,7 +786,7 @@ appRouter.switchTab = async function (tabId, options = {}) {
       }
 
     } else if (tabId === "profile-view") {
-      const mod = await loadModule('profile', './modules/profile.js?v=' + buildVersion);
+      const mod = await loadModule('profile');
       if (typeof window.syncActivePlanContext === 'function') {
         window.syncActivePlanContext();
       }
@@ -774,8 +800,8 @@ appRouter.switchTab = async function (tabId, options = {}) {
         adminPane.classList.remove("hidden");
         adminPane.style.display = "block";
       }
-      await loadModule('plan', './modules/plan.js?v=' + buildVersion);
-      const mod = await loadModule('admin', './modules/admin.js?v=' + buildVersion);
+      await loadModule('plan');
+      const mod = await loadModule('admin');
       const isSystemAdmin = getUserRoleCode(state.currentUser) === 'admin';
 
       const MANAGEMENT_ROLES = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
@@ -902,8 +928,44 @@ async function applyOfflineBibleVersionFallback({ notifyToast = false } = {}) {
 }
 
 // Bootstrap the application on DomContentLoaded
+// Reloading is only safe when nothing in flight would be lost: unsynced offline
+// reading logs, text being typed, or TTS mid-chapter. Otherwise the check
+// reports "deferred" and simply retries on the next foreground/interval.
+function isSafeToReloadForUpdate() {
+  if (Number(document.documentElement.dataset.pendingSyncCount || 0) > 0) return false;
+  const active = document.activeElement;
+  if (active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))) return false;
+  try {
+    if (window.speechSynthesis && window.speechSynthesis.speaking) return false;
+  } catch (_) {}
+  return true;
+}
+
+// Shown only when an update is found but can't apply silently; the user's tap
+// bypasses the safety check (their choice), the next safe foreground doesn't
+// need it.
+const appUpdateBanner = createUpdateBanner({
+  onUpdate: () => appVersionWatcher.check({ force: true, ignoreSafety: true })
+});
+// Event-driven only, no polling: launch, return to foreground (throttled to one
+// probe per 5 min for rapid app switching), a new SW taking control, a chunk
+// failing to load, and the 檢查更新 button. Nothing runs while the app is
+// closed or backgrounded.
+const appVersionWatcher = new VersionWatcher({
+  currentVersion: appBuildId,
+  isSafeToReload: isSafeToReloadForUpdate,
+  onUpdateAvailable: version => appUpdateBanner.show(version),
+  minIntervalMs: 5 * 60 * 1000
+});
+// Manual check from 個人設定 → 檢查更新 (profile.js). The user asked, so skip
+// the safety check the same way the banner's tap does.
+window.checkAppUpdate = () => appVersionWatcher.check({ force: true, ignoreSafety: true });
+
 document.addEventListener("DOMContentLoaded", async () => {
   window.__bootMark?.("dom-content-loaded");
+  // Boot-time check: if the HTML we just got was a stale cached copy, fix it
+  // now, before the user has done anything worth preserving.
+  appVersionWatcher.check({ force: true }).catch(() => {});
   // Clear badge notification count on app startup / load
   clearBadge().catch(err => console.error("Failed to clear badge on startup:", err));
 
@@ -939,12 +1001,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const showingApp = appLayout && !appLayout.classList.contains("hidden")
       && (!gate || gate.classList.contains("hidden"));
     if (state.isSupabaseMode && showingApp) {
-      db.showConnectionError("登入狀態已失效，請重新登入。");
+      db.showConnectionError("登入狀態已失效，請重新登入。", { markRepair: false });
     }
   }
 
   function onAppForeground() {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    // Stale-build check has its own throttle; run it before ours so a resumed
+    // PWA picks up a new deploy even inside the 45s foreground window.
+    appVersionWatcher.check().catch(() => {});
     const now = Date.now();
     if (now - _lastForegroundRunAt < FOREGROUND_MIN_INTERVAL_MS) return;
     _lastForegroundRunAt = now;
@@ -1209,9 +1274,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // service worker has actually taken control (see ServiceWorkerRegistrar.js).
   // Routine focus-triggered data refreshes must never claim "已更新" themselves.
   window.addEventListener("pwa:update-ready", () => {
-    if (typeof showToast === "function") {
-      showToast("已更新至最新版本");
-    }
+    // A new SW taking control does not swap the code already running in this
+    // tab, so don't claim "已更新" here — let the version check decide whether
+    // this tab is actually stale and reload it if so.
+    appVersionWatcher.check({ force: true }).catch(() => {});
   });
 
   window.addEventListener("offline", () => {
@@ -1258,13 +1324,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       // does nothing — the next natural retry (focus, tab switch) picks it
       // back up instead of yanking the user out of what they were doing.
       if (typeof auth.isLoggedIn === "function" && !auth.isLoggedIn() && typeof window.db.showConnectionError === "function") {
-        window.db.showConnectionError("重新連線後登入狀態已失效，請重新登入。");
+        window.db.showConnectionError("重新連線後登入狀態已失效，請重新登入。", { markRepair: false });
       }
     }
   });
 
   // ── Background pre-warm: silently load plan module script only ──
-  loadModule('plan', './modules/plan.js?v=' + buildVersion).then(() => {
+  loadModule('plan').then(() => {
     ensurePlanFeatureModulesLoaded().catch(() => {});
   }).catch(() => {});
 

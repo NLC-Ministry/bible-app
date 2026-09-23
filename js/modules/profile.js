@@ -325,8 +325,59 @@ function wireReleaseOnboardingHelp() {
 
   const versionEl = document.getElementById("profile-app-version");
   if (versionEl) {
-    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.1"}`;
+    // Build id = the deploy this tab is actually running (same value as
+    // /version.json), so a "畫面是舊的" report can be confirmed from a screenshot.
+    const buildId = window.APP_BUILD_ID ? ` · ${window.APP_BUILD_ID}` : "";
+    versionEl.textContent = `版本 ${(window.APP_CONFIG && window.APP_CONFIG.appVersion) || window.APP_VERSION || "0.1.1"}${buildId}`;
   }
+}
+
+// 檢查更新: first tap asks VersionWatcher (window.checkAppUpdate, app.js) —
+// a newer build reloads immediately. If the app is already current but the
+// user still sees a broken screen, the row arms a second tap that runs the full
+// /repair (clears SW + caches, keeps login and reading progress).
+const CHECK_UPDATE_DEFAULT_STATUS = "畫面異常或看起來是舊版時使用";
+const CHECK_UPDATE_MESSAGES = {
+  reload: "發現新版本，正在更新…",
+  repair: "正在修復…",
+  current: "已是最新版本。畫面仍有問題？再按一次進行修復",
+  "gave-up": "自動更新沒有成功，再按一次進行修復",
+  unknown: "目前無法連線，請確認網路後再試",
+  disabled: "開發版無法檢查更新"
+};
+
+export function wireCheckAppUpdate({
+  doc = document,
+  checkAppUpdate = () => window.checkAppUpdate?.(),
+  startRepair = () => window.location.assign(`/repair?source=profile&version=${Date.now()}`)
+} = {}) {
+  const btn = doc.getElementById("btn-check-app-update");
+  const status = doc.getElementById("check-app-update-status");
+  if (!btn || !status || btn._checkAppUpdateBound) return;
+  btn._checkAppUpdateBound = true;
+  let repairArmed = false;
+
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    if (repairArmed) {
+      status.textContent = CHECK_UPDATE_MESSAGES.repair;
+      startRepair();
+      return;
+    }
+    status.textContent = "正在檢查…";
+    let result;
+    try {
+      result = await checkAppUpdate();
+    } catch {
+      result = "unknown";
+    }
+    status.textContent = CHECK_UPDATE_MESSAGES[result] || CHECK_UPDATE_DEFAULT_STATUS;
+    // reload/repair are navigating away — keep the row busy until they do.
+    if (result === "reload" || result === "repair") return;
+    repairArmed = result === "current" || result === "gave-up";
+    btn.disabled = false;
+  });
 }
 
 export async function renderProfileView() {
@@ -338,6 +389,7 @@ export async function renderProfileView() {
   wireProfileSummaryRefresh();
   renderMemberHubProfileLinks();
   wireReleaseOnboardingHelp();
+  wireCheckAppUpdate();
 
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();

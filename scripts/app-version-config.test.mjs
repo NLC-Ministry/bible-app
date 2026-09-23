@@ -42,8 +42,8 @@ describe("Bible app release version contract", () => {
 describe("release onboarding startup timing", () => {
   it("keeps the onboarding UI module out of the app entry's static imports", () => {
     expect(app).toContain("maybeShowReleaseOnboarding");
-    expect(app).toContain("RELEASE_ONBOARDING_MODULE_PATH");
-    expect(app).toContain("import(RELEASE_ONBOARDING_MODULE_PATH)");
+    expect(app).toContain("'onboarding-helper': () => import('./modules/onboarding-helper.js')");
+    expect(app).toContain("LAZY_MODULE_LOADERS['onboarding-helper']()");
     expect(app).not.toContain("import { maybeShowReleaseOnboarding } from './modules/onboarding-helper.js");
   });
 

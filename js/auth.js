@@ -325,24 +325,41 @@ const auth = {
     } catch (_) { /* noop */ }
   },
 
-  markLoginFailure() {
-    window.__nlcLoginRepairRequired = true;
+  // Stale builds are now caught directly by js/pwa/VersionWatcher.js, so the
+  // login repair detour is only a last-resort safety net: it arms after the
+  // SECOND genuine login failure since the last successful login. Routine
+  // session expiry and user-cancelled logins never call this at all.
+  loginRepairThreshold: 2,
+
+  _getLoginFailureCount() {
     try {
-      localStorage.setItem(this.keys.repairRequired, String(Date.now()));
+      const raw = localStorage.getItem(this.keys.repairRequired);
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw);
+      // Legacy value was a bare timestamp — count it as one failure.
+      return typeof parsed === "object" && parsed ? Number(parsed.count) || 0 : 1;
+    } catch {
+      return 0;
+    }
+  },
+
+  markLoginFailure() {
+    const count = this._getLoginFailureCount() + 1;
+    try {
+      localStorage.setItem(this.keys.repairRequired, JSON.stringify({ count, at: Date.now() }));
     } catch (error) {
       console.warn("Could not persist login repair state", error);
     }
-    const button = document.getElementById("btn-gate-nlc-login");
-    if (button) button.textContent = "修復並重新登入";
+    if (count >= this.loginRepairThreshold) {
+      window.__nlcLoginRepairRequired = true;
+      const button = document.getElementById("btn-gate-nlc-login");
+      if (button) button.textContent = "修復並重新登入";
+    }
   },
 
   shouldRepairBeforeLogin() {
     if (window.__nlcLoginRepairRequired) return true;
-    try {
-      return Boolean(localStorage.getItem(this.keys.repairRequired));
-    } catch {
-      return false;
-    }
+    return this._getLoginFailureCount() >= this.loginRepairThreshold;
   },
 
   startLoginRepair() {
@@ -444,12 +461,12 @@ const auth = {
   },
 
 
-  _failCallback(message, detail) {
+  _failCallback(message, detail, { markRepair = true } = {}) {
     if (detail) console.error(message, detail);
     this._clearFlowState();
     this._clearStoredTokens();
     this._resetAppAuthState();
-    this.markLoginFailure();
+    if (markRepair) this.markLoginFailure();
     this._cleanCallbackUrl();
     if (typeof db !== "undefined" && db.updateAuthUI) db.updateAuthUI(null);
     this._showMessage(message || "\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
@@ -591,7 +608,9 @@ const auth = {
     const authErrorDescription = urlParams.get("error_description");
 
     if (authError) {
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
+      // Logto-reported errors (user cancelled, consent denied, \u2026) are not a
+      // stale-app symptom \u2014 don't count them toward the repair detour.
+      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription }, { markRepair: false });
     }
 
     if (!code && !stateVal) return false;

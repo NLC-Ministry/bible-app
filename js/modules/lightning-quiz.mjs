@@ -68,11 +68,20 @@ function renderAnimationView() {
   `);
 }
 
+// 題型預告卡片用的飄動雲朵：兩朵雲、不同大小與飄動節奏，看起來比單朵雲更
+// 自然。純 CSS 形狀（同一套 border-radius 疊色技法），持續左右飄動。
+function driftingCloudsHtml() {
+  return `<div class="lightning-quiz-cloud-icon" aria-hidden="true">
+    <span class="lq-drift-cloud lq-drift-cloud--back"></span>
+    <span class="lq-drift-cloud lq-drift-cloud--front"></span>
+  </div>`;
+}
+
 function renderTeaserView(question) {
   const typeLabel = QUESTION_TYPE_LABELS[question.questionType] || "";
   return renderShell(`
     <div class="lightning-quiz-teaser">
-      <span class="nlc-icon nlc-icon--hero" data-icon="zap" aria-hidden="true"></span>
+      ${driftingCloudsHtml()}
       <h3 class="card-title">快問快答</h3>
       <p class="lightning-quiz-teaser__note">題型：${escapeHTML(typeLabel)}。按下開始後立即計時，答對越快越好！</p>
       <button type="button" class="primary-btn" data-lq-start>開始作答</button>

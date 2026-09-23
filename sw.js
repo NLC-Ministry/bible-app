@@ -1,4 +1,4 @@
-import { CacheManager } from "./js/pwa/CacheManager.js?v=20260922-maintenance-fallback";
+import { CacheManager } from "./js/pwa/CacheManager.js?v=20260923-best-effort-precache";
 
 const VERSION = "__BUILD_VERSION__";
 const cacheManager = new CacheManager({
@@ -41,6 +41,8 @@ function shouldBypassCache(request) {
     && (url.searchParams.has("code") || url.searchParams.has("state") || url.searchParams.has("error"));
 
   const isRepairPage = url.pathname === "/repair" || url.pathname === "/repair.html";
+  // The stale-build probe (VersionWatcher) must always see the live deploy.
+  const isVersionProbe = url.origin === self.location.origin && url.pathname === "/version.json";
 
   // 速讀「大測驗」是完全獨立的一頁：永遠走網路、絕不讓 Service Worker 用
   // networkFirst 的 "/" fallback 把它換成 SPA 外殼 (index.html)。
@@ -51,7 +53,7 @@ function shouldBypassCache(request) {
   const isGradePage = url.origin === self.location.origin
     && (url.pathname === "/grade" || url.pathname === "/grade.html" || url.pathname === "/grade/");
 
-  return isRepairPage || isExamPage || isGradePage || isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
+  return isRepairPage || isVersionProbe || isExamPage || isGradePage || isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
     hasAuthBridgeSignal || hasOauthCallbackSignal || url.pathname.includes("/auth/") || url.pathname.includes("/functions/v1/nlc-");
 }
 
@@ -85,7 +87,8 @@ async function cacheStaticWithStyleRecovery(request) {
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
-    await cacheManager.precache(APP_SHELL);
+    const skipped = await cacheManager.precache(APP_SHELL, { required: ["/"] });
+    if (skipped.length) console.warn("[SW] Precache skipped (will cache on demand):", skipped);
     await self.skipWaiting();
   })());
 });
@@ -110,15 +113,10 @@ self.addEventListener("fetch", event => {
 
   if (isStaticRequest(request)) {
     const url = new URL(request.url);
-    // App bundle + lazy ESM modules + their shared data: always try network first
-    // so a deploy is picked up immediately. index.html marks /js/modules & /js/data
-    // as "no-cache, must-revalidate"; cacheFirst here would ignore that and pin an
-    // old /js/modules/exam.js until the SW cache rotates. These are real served
-    // paths (js/modules/exam.js, js/data/bible_data.js) — matching bare /modules/
-    // or /data/ here never fires and silently falls through to cacheFirst below.
-    if ((url.pathname.includes("/app.") && url.pathname.endsWith(".js"))
-      || url.pathname.startsWith("/js/modules/")
-      || url.pathname.startsWith("/js/data/")) {
+    // Unhashed /app.js alias: network first so a deploy is picked up. Lazy view
+    // modules are content-hashed chunks under /chunks/ (scripts/bundle.mjs), so
+    // they fall through to cacheFirst below — a given filename never changes.
+    if (url.pathname === "/app.js") {
       event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 3000 }));
       return;
     }
