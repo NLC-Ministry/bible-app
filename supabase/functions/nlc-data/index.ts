@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
+import { signExamWriteToken } from "../_shared/exam-write-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
@@ -285,7 +286,8 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_upsert_lightning_quiz_question",
   "admin_delete_lightning_quiz_question",
   "admin_get_lightning_quiz_trend",
-  "admin_get_lightning_quiz_leaderboard"
+  "admin_get_lightning_quiz_leaderboard",
+  "admin_reset_lightning_quiz_attempt"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
@@ -819,6 +821,18 @@ Deno.serve(async (req: Request) => {
       }
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
+      // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
+      // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
+      // 沒設 EXAM_WRITE_SECRET 就不簽，前端自動沿用 nlc-data。
+      if (functionName === "exam_get_for_attempt") {
+        const attempt = (data as any)?.attempt;
+        const writeSecret = Deno.env.get("EXAM_WRITE_SECRET");
+        if (writeSecret && attempt?.id && attempt.status === "in_progress") {
+          const { data: owned } = await supabaseAdmin
+            .from("exam_attempts").select("id").eq("id", attempt.id).eq("user_id", profile.id).maybeSingle();
+          if (owned) attempt.writeToken = await signExamWriteToken(writeSecret, attempt.id, profile.id);
+        }
+      }
       return jsonResponse({ data });
     }
 

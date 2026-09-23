@@ -15995,6 +15995,13 @@ textarea::placeholder {
 .exam-fullscreen__inner { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; max-width: 720px; width: 100%; margin: 0 auto; padding: 1rem 1rem 4rem; }
 .exam-timer { font-weight: var(--type-weight-strong, 600); font-size: 0.9375rem; color: var(--text-primary); font-variant-numeric: tabular-nums; padding: 0.3rem 0.6rem; border: 1px solid var(--border-card); border-radius: 999px; }
 .exam-timer--low { border-color: var(--color-danger); color: var(--color-danger); }
+/* 同步狀態：平常低調（已儲存 / 儲存中），太久沒上傳才轉成警示色 */
+.exam-sync { font-size: 0.875rem; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exam-sync[data-tone="error"] { color: var(--color-danger); font-weight: var(--type-weight-medium, 500); }
+@media (max-width: 420px) {
+  .exam-fullscreen__bar { gap: 0.5rem; }
+  .exam-fullscreen__bar-right { gap: 0.5rem; }
+}
 
 .exam-section { margin: 0.25rem 0 1rem; }
 .exam-section__title { font-size: 1rem; font-weight: var(--type-weight-strong, 600); margin: 1.25rem 0 0.35rem; color: var(--text-primary); }

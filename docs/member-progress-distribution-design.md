@@ -128,9 +128,22 @@
 
 不需要改 DB，也不需要 migration。`plan.js` 是延遲載入的 chunk，建置時會自動換檔名。
 
-### 實作前要先查證
+### 查證結果：章數範圍（2026-09-23，已處理）
 
-- 別人的 `chapters_read`（`db.js` `_executeFetchMergedUsersList`，即 `uniqueLogs.length`）是用該計畫的 `plan_id` 篩選閱讀紀錄。要確認它是否只算計畫範圍內的書卷。如果有人讀了計畫以外的章節並記在這個計畫上，全部遍數模式的累計章數會偏多，需要額外排除。
+**問題**：自己的章數（`myPlanReadCount`）只算 `plan.days` 裡的章節；別人的 `chapters_read`（`db.js` `_executeFetchMergedUsersList`）只用 `plan_id` 篩選，**沒有檢查書卷**。本遍進度 % 也一樣。
+
+**寫入路徑**：`db.logChapterRead()` 有 4 個呼叫處。其中 3 處的章節來自計畫本身。第 4 處是 `bible.js` 讀經頁的「標記已讀」按鈕，它會把正在看的任何一章記到目前的計畫上；但 `#mark-read-btn` 已經不在 `index.html` 裡，所以不會執行。現在的程式不會寫出計畫外的紀錄。
+
+**實際資料**：用 SQL 查出 1 個人、5 筆計畫外的紀錄。都在 `church_r1final_2026_09`（9 月出埃及記），內容是民數記 16–20 章第 1 遍，打卡時間是 2026-09-01 21:23–21:41（台灣）。
+
+**原因**：`0142` 月度拆分沒有建立新的計畫紀錄，而是把組員原本第二階段那筆 enrollment（同一個 id）直接改指到 9 月計畫。`0142` 結尾的檢查會擋下任何非出埃及記的紀錄，所以這 5 筆一定是 migration 跑完之後才寫進來的：這位組員當時開著舊版 App，看到的仍是舊第二階段（出到申）的日程，提前讀了民數記。這是部署過渡期的一次性事件。
+
+**處理**：
+- 前端防線（已實作）：`js/data/current-round-progress.mjs` 新增 `filterLogsToPlanBooks()`。`fetchMergedUsersList` 算別人的 `chapters_read` 和本遍進度前，會先過濾掉計畫書卷以外的紀錄；書卷清單用 enrollment 的 `target_books`，沒有的話退回對應 global plan 的 `books`，兩者都沒有就不過濾。測試在 `scripts/plan-scope-log-filter.test.mjs`。
+- 這 5 筆資料：決定刪除，由使用者在 Supabase SQL Editor 執行。
+- 伺服器端檢查（`nlc-data` 或 trigger 擋掉計畫外書卷的寫入）：暫不做。
+
+**尚未涵蓋**：伺服器端的排行 RPC（例如 `get_reading_team_leaderboards`）的 `chapters_read` 是在 SQL 裡計算的，也沒有限定書卷。刪掉這 5 筆之後目前不受影響，但如果以後再出現類似資料，那邊不會自動排除。
 
 ### 驗證
 

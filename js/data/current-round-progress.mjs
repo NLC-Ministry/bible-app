@@ -123,3 +123,12 @@ export function segmentScheduleDaysForRoundCount(
   }
   return result;
 }
+// 別人的打卡只用 plan_id 撈，不保證書卷在計畫範圍內（例：0142 月度拆分時，開著舊版的
+// 使用者把民數記記到了改指 9 月出埃及記的同一筆 enrollment）。只留計畫書卷內的打卡，
+// 和自己那邊 uniquePlanLogs 只算 plan.days 章節的口徑一致。沒有書卷清單就不過濾。
+export function filterLogsToPlanBooks(logs, books) {
+  const list = Array.isArray(logs) ? logs : [];
+  const scope = new Set((Array.isArray(books) ? books : []).filter(Boolean).map(String));
+  if (scope.size === 0) return list;
+  return list.filter(log => log && scope.has(String(log.book)));
+}
