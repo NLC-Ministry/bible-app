@@ -1898,8 +1898,10 @@ export async function renderAdminLightningQuizStats() {
       <td>${escapeHTML(String(day.correctCount))}</td>
       <td>${day.avgElapsedMs != null ? `${(Number(day.avgElapsedMs) / 1000).toFixed(1)} 秒` : '—'}</td>
       <td>
-        <button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(rowKey(day))}">查看排行榜</button>
-        <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-clear="${escapeHTML(rowKey(day))}" title="清除這筆作答資料" aria-label="清除這筆作答資料"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
+        <div class="admin-lightning-quiz-stats-actions">
+          <button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(rowKey(day))}">查看排行榜</button>
+          <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-clear="${escapeHTML(rowKey(day))}" title="清除這筆作答資料" aria-label="清除這筆作答資料"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
+        </div>
       </td>
     </tr>`;
   }).join('');
