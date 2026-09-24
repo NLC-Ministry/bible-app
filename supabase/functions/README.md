@@ -10,6 +10,31 @@ Current flow:
 4. Frontend uses a small client shim that calls `nlc-data` for database reads/writes.
 5. `nlc-data` verifies the Logto access token on each request, resolves the current profile, and applies server-side table/action restrictions before using the Supabase service role.
 
+### Logto JWT 驗證（`NLC_JWT_VERIFY_MODE`）
+
+2026-09-24 以前，`nlc-data` 與 `nlc-session` 對 Logto JWT **只 base64 解開 payload、不驗簽章**
+——任何人都能自己做一張填了別人 `sub` 的 token 冒用身分；`nlc-session` 甚至會拿前端送來、
+未驗證的 `id_token` 裡的 email 去比對並綁定既有帳號（可冒用任何已知 email 的帳號，含管理員）。
+現在兩支都內嵌同一段 `logto-jwt-verify` 區塊，用 `${NLC_LOGTO_ISSUER}/jwks` 的公開金鑰驗
+簽章、`iss`、`exp`（容忍 60 秒時鐘誤差）。
+
+| `NLC_JWT_VERIFY_MODE` | `nlc-data`（每個請求） | `nlc-session`（登入綁帳號） |
+|---|---|---|
+| `report`（預設） | 驗證失敗**只記錄、照舊放行** | **一律擋**：未驗過的 `id_token` 不採用 |
+| `enforce` | 驗證失敗回 401（拿不到 JWKS 回 503） | 同上 |
+| `off` | 緊急開關：完全回到舊行為 | 同左 |
+
+上線步驟：
+
+1. 部署 `nlc-session`、`nlc-data`（維持 `report`）。
+2. 觀察幾天 Edge Function logs：搜尋 `logto_jwt_verify_summary`（每 5 分鐘一行各結果計數）與
+   `logto_jwt_verify_failed`（失敗明細，只含 `reason` / `aud` / `alg` / 過期幾秒，不含 token 或 sub）。
+   正常流量應該幾乎全是 `nlc-data:ok`；少量 `expired` 屬正常（前端會自動續期重試）。
+   若出現大量 `bad_signature` / `unknown_key` / `unsupported_alg`，**先別切 enforce**，回報處理。
+3. 從 log 的 `aud` 確認 access token 的 audience，選填 `NLC_LOGTO_AUDIENCE`（通常是
+   `https://platform.newlife.org.tw`）；`id_token` 的 audience 是 Logto app 的 client id，選填 `NLC_LOGTO_CLIENT_ID`。
+4. 確認無誤後 `supabase secrets set NLC_JWT_VERIFY_MODE=enforce`（不用重新部署）。
+
 Required Supabase Edge Function secrets:
 
 ```bash
