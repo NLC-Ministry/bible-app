@@ -6734,6 +6734,10 @@ body.dark-theme .pastoral-race-progress {
 
 .daily-quiz-match-item {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
   padding: 0.65rem;
   border: 1px solid var(--border-card);
   border-radius: 10px;
@@ -6744,14 +6748,25 @@ body.dark-theme .pastoral-race-progress {
   cursor: pointer;
 }
 
+/* 左欄的連線點翻到按鈕右側（貼著中間欄間），右欄維持在左側——連線點永遠在
+   兩欄的內側，線就不會畫過自己這顆按鈕的文字上面。跟大測驗連連看
+   （.exam-match-col--left .exam-match-node）同一招。 */
+.daily-quiz-matching-col[data-side="left"] .daily-quiz-match-item {
+  flex-direction: row-reverse;
+}
+
+.daily-quiz-match-item__label {
+  flex: 1;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 .daily-quiz-match-dot {
-  display: inline-block;
+  flex-shrink: 0;
   width: 0.55rem;
   height: 0.55rem;
-  margin-right: 0.4rem;
   border: 2px solid currentColor;
   border-radius: 50%;
-  vertical-align: -0.05rem;
 }
 
 .daily-quiz-match-item.is-selected {

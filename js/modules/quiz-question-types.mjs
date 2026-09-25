@@ -192,12 +192,15 @@ export function renderQuestionFieldsetHtml(question, index) {
         // 連線用的 SVG 不寫死在樣板裡，改由 bindQuestionFieldset 用
         // document.createElementNS 動態插入（跟 exam.js 連連看同一招）——
         // 設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
+        // 左欄用 CSS flex-direction: row-reverse 把連線點翻到右側（貼著中間
+        // 欄間），跟大測驗連連看（.exam-match-col--left .exam-match-node）同一
+        // 招——這樣連線點永遠在兩欄的內側，線不會畫過自己這顆按鈕的文字上面。
         return `<div class="daily-quiz-matching" data-matching-root>
           <div class="daily-quiz-matching-col" data-side="left">
-            ${shuffleMatchingItems(payload.left).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span>${escapeHtml(item.text)}</button>`).join("")}
+            ${shuffleMatchingItems(payload.left).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
           </div>
           <div class="daily-quiz-matching-col" data-side="right">
-            ${shuffleMatchingItems(payload.right).map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span>${escapeHtml(item.text)}</button>`).join("")}
+            ${shuffleMatchingItems(payload.right).map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
           </div>
         </div>`;
       case "ordering":
