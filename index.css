@@ -6705,10 +6705,26 @@ body.dark-theme .pastoral-race-progress {
 
 /* 題型四：配對——左右兩欄點選配對，flat 色塊、無漸層、無品牌色光暈 */
 .daily-quiz-matching {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   margin-top: 0.75rem;
+}
+
+.daily-quiz-match-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.daily-quiz-match-line {
+  stroke: var(--color-brand);
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 .daily-quiz-matching-col {
@@ -6717,6 +6733,7 @@ body.dark-theme .pastoral-race-progress {
 }
 
 .daily-quiz-match-item {
+  position: relative;
   padding: 0.65rem;
   border: 1px solid var(--border-card);
   border-radius: 10px;
@@ -6725,6 +6742,16 @@ body.dark-theme .pastoral-race-progress {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.daily-quiz-match-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.4rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  vertical-align: -0.05rem;
 }
 
 .daily-quiz-match-item.is-selected {
