@@ -1,11 +1,11 @@
 // js/modules/lightning-quiz.mjs
-// 首頁「快問快答」卡片：雲柱升起動畫 → 題型預告 → 按下開始限時作答 → 立即出結果。
+// 首頁「快問快答」卡片：題型預告 → 按下開始限時作答 → 立即出結果。
 // 完全獨立於 daily_quiz／speed_reading_exam（見 migration 0202），題型渲染／
 // 判分共用 quiz-question-types.mjs（題型一～五）。DOM 進出都靠 db.js 的
 // get/start/submitLightningQuizAttempt 這幾支 RPC 包裝，狀態機對應
 // get_todays_lightning_quiz() 回傳的 status：
 //   disabled / no_question / hidden → 整張卡隱藏
-//   available   → 播一次雲柱動畫（每題只播一次，localStorage 記錄）→ 題型預告 → 開始按鈕
+//   available   → 題型預告 → 開始按鈕
 //   in_progress → 可續答，沿用伺服器 started_at 繼續計時
 //   answered    → 顯示對錯與花費時間
 
@@ -22,18 +22,6 @@ let refreshInFlight = null;
 let liveTimer = null;
 let unbindCurrentFieldset = null;
 
-function seenKey(questionId) {
-  return `lightning_quiz_seen_${questionId}`;
-}
-
-function hasSeenAnimation(questionId) {
-  try { return localStorage.getItem(seenKey(questionId)) === "1"; } catch (_) { return false; }
-}
-
-function markSeenAnimation(questionId) {
-  try { localStorage.setItem(seenKey(questionId), "1"); } catch (_) { /* 私密模式等情境下略過即可，不影響作答 */ }
-}
-
 function stopLiveTimer() {
   if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
 }
@@ -42,34 +30,13 @@ function formatElapsed(ms) {
   return (Math.max(0, Number(ms) || 0) / 1000).toFixed(1) + " 秒";
 }
 
-// 雲柱升起動畫：純 CSS/HTML（<span> + border-radius），不用 SVG——設計系統的
-// icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG，五片扁圓用 flat 品牌色
-// + 疊層堆出雲柱的輪廓即可，不需要真的畫 SVG。
-function cloudPillarHtml() {
-  return `<div class="lightning-quiz-pillar" aria-hidden="true">
-    <span class="lq-cloud lq-cloud--1"></span>
-    <span class="lq-cloud lq-cloud--2"></span>
-    <span class="lq-cloud lq-cloud--3"></span>
-    <span class="lq-cloud lq-cloud--4"></span>
-    <span class="lq-cloud lq-cloud--5"></span>
-  </div>`;
-}
-
 function renderShell(bodyHtml) {
   return `<div class="lightning-quiz-card__inner">${bodyHtml}</div>`;
 }
 
-function renderAnimationView() {
-  return renderShell(`
-    <div class="lightning-quiz-rise" data-lq-rise>
-      ${cloudPillarHtml()}
-      <p class="lightning-quiz-rise__caption">今天的快問快答來了！</p>
-    </div>
-  `);
-}
-
 // 題型預告卡片用的飄動雲朵：兩朵雲、不同大小與飄動節奏，看起來比單朵雲更
-// 自然。純 CSS 形狀（同一套 border-radius 疊色技法），持續左右飄動。
+// 自然。純 CSS 形狀（border-radius 疊色），持續左右飄動；不用行內 SVG——
+// 設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
 function driftingCloudsHtml() {
   return `<div class="lightning-quiz-cloud-icon" aria-hidden="true">
     <span class="lq-drift-cloud lq-drift-cloud--back"></span>
@@ -200,31 +167,9 @@ function bindStartButton(host, question) {
 }
 
 function renderAvailableState(host, question) {
-  let shown = false;
-  let fallbackTimer = null;
-  const showTeaser = () => {
-    if (shown) return;
-    shown = true;
-    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-    markSeenAnimation(question.questionId);
-    host.innerHTML = renderTeaserView(question);
-    if (typeof hydrateIcons === "function") hydrateIcons(host);
-    bindStartButton(host, question);
-  };
-
-  if (hasSeenAnimation(question.questionId)) {
-    showTeaser();
-    return;
-  }
-
-  host.innerHTML = renderAnimationView();
-  // 監聽字幕（最後一個進場的元素，動畫 delay 最長）的 animationend；監聽整個
-  // 容器會先收到五片雲各自冒泡上來的 animationend，太早觸發。
-  const captionEl = host.querySelector(".lightning-quiz-rise__caption");
-  if (!captionEl) { showTeaser(); return; }
-  captionEl.addEventListener("animationend", showTeaser, { once: true });
-  // 保險：省電模式等情境可能不觸發 animationend，最多等 2.4 秒就直接進下一步。
-  fallbackTimer = setTimeout(showTeaser, 2400);
+  host.innerHTML = renderTeaserView(question);
+  if (typeof hydrateIcons === "function") hydrateIcons(host);
+  bindStartButton(host, question);
 }
 
 export async function refreshLightningQuizHomeCard() {

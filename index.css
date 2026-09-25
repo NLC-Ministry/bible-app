@@ -11443,7 +11443,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   font-variant-numeric: tabular-nums;
 }
 
-/* 首頁「快問快答」卡片（js/modules/lightning-quiz.mjs）。雲柱動畫、題型預告、
+/* 首頁「快問快答」卡片（js/modules/lightning-quiz.mjs）。題型預告、
    限時作答、對錯結果都在同一張卡切換內容，不用漸層／品牌色光暈，維持
    flat-color 的內容優先風格。 */
 .lightning-quiz-card.hidden { display: none; }
@@ -11455,50 +11455,6 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
   min-height: 120px;
   justify-content: center;
-}
-
-/* 雲柱升起動畫：五片扁圓由下往上依序浮現，帶一點透明度淡入，flat 品牌色，
-   不用漸層/發光。每題只播一次（js 端用 localStorage 記錄），播完就換成題型預告。 */
-.lightning-quiz-rise {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0 0.25rem;
-}
-.lightning-quiz-pillar {
-  position: relative;
-  width: 92px;
-  height: 128px;
-}
-.lq-cloud {
-  position: absolute;
-  left: 50%;
-  border-radius: 999px;
-  opacity: 0;
-  transform: translate(-50%, 14px) scale(0.85);
-  animation: lightningQuizCloudRise 0.55s ease-out forwards;
-}
-/* 五片扁圓由下往上、由寬變窄堆疊，密度（透明度）也由下往上遞增，堆出一根
-   「雲柱」的輪廓；用 color-mix 疊出不同透明度的品牌色平面，不是漸層。 */
-.lq-cloud--1 { bottom: 0;    width: 92px; height: 34px; background: color-mix(in srgb, var(--color-brand) 55%, transparent); animation-delay: 0s; }
-.lq-cloud--2 { bottom: 26px; width: 74px; height: 32px; background: color-mix(in srgb, var(--color-brand) 68%, transparent); animation-delay: 0.12s; }
-.lq-cloud--3 { bottom: 50px; width: 60px; height: 30px; background: color-mix(in srgb, var(--color-brand) 80%, transparent); animation-delay: 0.24s; }
-.lq-cloud--4 { bottom: 72px; width: 48px; height: 26px; background: color-mix(in srgb, var(--color-brand) 92%, transparent); animation-delay: 0.36s; }
-.lq-cloud--5 { bottom: 92px; width: 36px; height: 24px; background: var(--color-brand); animation-delay: 0.48s; }
-@keyframes lightningQuizCloudRise {
-  from { opacity: 0; transform: translate(-50%, 14px) scale(0.85); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
-}
-.lightning-quiz-rise__caption {
-  margin: 0;
-  font-size: 0.9375rem;
-  font-weight: var(--type-weight-strong, 500);
-  color: var(--text-primary);
-  /* 跟最後一片雲同時淡入，整體看起來像雲柱「帶著字」一起升起 */
-  opacity: 0;
-  animation: lightningQuizCloudRise 0.55s ease-out forwards;
-  animation-delay: 0.6s;
 }
 
 .lightning-quiz-teaser,
@@ -11516,7 +11472,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 }
 
 /* 題型預告卡片的飄動雲朵：兩朵雲不同大小/節奏地左右飄動，跟「不要閃電、
-   要會飄動的雲朵」這個回饋對應。跟雲柱動畫同一套純 CSS 形狀技法。 */
+   要會飄動的雲朵」這個回饋對應。純 CSS 形狀（border-radius 疊色）。 */
 .lightning-quiz-cloud-icon {
   position: relative;
   width: 88px;
