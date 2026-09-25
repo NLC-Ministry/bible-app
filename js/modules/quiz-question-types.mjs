@@ -189,8 +189,10 @@ export function renderQuestionFieldsetHtml(question, index) {
       case "multiple":
         return renderOptionsList(id, payload.options, true);
       case "matching":
+        // 連線用的 SVG 不寫死在樣板裡，改由 bindQuestionFieldset 用
+        // document.createElementNS 動態插入（跟 exam.js 連連看同一招）——
+        // 設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
         return `<div class="daily-quiz-matching" data-matching-root>
-          <svg class="daily-quiz-match-lines" aria-hidden="true"></svg>
           <div class="daily-quiz-matching-col" data-side="left">
             ${shuffleMatchingItems(payload.left).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span>${escapeHtml(item.text)}</button>`).join("")}
           </div>
@@ -268,19 +270,26 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
   if (type === "matching") {
     let selectedLeft = null;
     const matchingRoot = fieldsetEl.querySelector("[data-matching-root]");
+    const SVG_NS = "http://www.w3.org/2000/svg";
     const drawLines = () => {
-      const svg = matchingRoot?.querySelector(".daily-quiz-match-lines");
-      if (!matchingRoot || !svg) return;
+      if (!matchingRoot) return;
+      let svg = matchingRoot.querySelector(".daily-quiz-match-lines");
+      if (!svg) {
+        svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("class", "daily-quiz-match-lines");
+        svg.setAttribute("aria-hidden", "true");
+        matchingRoot.insertBefore(svg, matchingRoot.firstChild);
+      }
       while (svg.firstChild) svg.removeChild(svg.firstChild);
       const rootRect = matchingRoot.getBoundingClientRect();
       fieldsetEl.querySelectorAll("[data-left-id][data-paired-with]").forEach(leftButton => {
         const rightId = leftButton.getAttribute("data-paired-with");
-        const rightButton = Array.from(fieldsetEl.querySelectorAll("[data-right-id]")
-          .find(button => button.getAttribute("data-right-id") === rightId));
+        const rightButton = Array.from(fieldsetEl.querySelectorAll("[data-right-id]"))
+          .find(button => button.getAttribute("data-right-id") === rightId);
         if (!rightButton) return;
         const leftRect = leftButton.querySelector(".daily-quiz-match-dot")?.getBoundingClientRect() || leftButton.getBoundingClientRect();
         const rightRect = rightButton.querySelector(".daily-quiz-match-dot")?.getBoundingClientRect() || rightButton.getBoundingClientRect();
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        const line = document.createElementNS(SVG_NS, "line");
         line.setAttribute("x1", String(leftRect.left + leftRect.width / 2 - rootRect.left));
         line.setAttribute("y1", String(leftRect.top + leftRect.height / 2 - rootRect.top));
         line.setAttribute("x2", String(rightRect.left + rightRect.width / 2 - rootRect.left));

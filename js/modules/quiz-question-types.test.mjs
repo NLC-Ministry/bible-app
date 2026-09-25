@@ -9,8 +9,8 @@ import {
   readResponseFromFieldset,
   bindQuestionFieldset,
   isSupportedQuestionType,
-  formatResponseForDisplay
-  ,shuffleMatchingItems
+  formatResponseForDisplay,
+  shuffleMatchingItems
 } from "./quiz-question-types.mjs";
 
 describe("normalizeQuestion", () => {
@@ -177,10 +177,13 @@ describe("render + read + bind round-trip (jsdom)", () => {
       answerKey: { L1: "R1", L2: "R2" }
     });
     const fieldset = mount(renderQuestionFieldsetHtml(question, 0));
-    expect(fieldset.querySelector(".daily-quiz-match-lines")).not.toBeNull();
+    expect(fieldset.querySelector(".daily-quiz-match-lines")).toBeNull();
     expect(fieldset.querySelectorAll(".daily-quiz-match-dot").length).toBe(4);
     let lastResponse;
     bindQuestionFieldset(fieldset, "matching", response => { lastResponse = response; });
+    // 連線用的 SVG 是 bindQuestionFieldset 動態插入的（見 quiz-question-types.mjs
+    // 的 icon-audit 註解），綁定完成後才會出現。
+    expect(fieldset.querySelector(".daily-quiz-match-lines")).not.toBeNull();
 
     fieldset.querySelector('[data-left-id="L1"]').click();
     fieldset.querySelector('[data-right-id="R1"]').click();
