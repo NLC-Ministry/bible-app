@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+
+const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const sql = read("supabase/migrations/0211_lightning_quiz_publish_workflow.sql");
+
+function functionBody(name) {
+  const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+  expect(start, `${name} is defined`).toBeGreaterThanOrEqual(0);
+  const end = sql.indexOf("$$;", sql.indexOf("AS $$", start));
+  return sql.slice(start, end);
+}
+
+describe("快問快答 每題各自發布（0211）", () => {
+  it("每支新建立或覆寫的函式都在同一支 migration 裡 REVOKE ALL FROM PUBLIC", () => {
+    const names = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.([a-z_]+)\(/g)].map(match => match[1]);
+    expect(names.length).toBeGreaterThan(10);
+    for (const name of names) {
+      expect(sql, name).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${name}\\([^)]*\\) FROM PUBLIC;`));
+    }
+  });
+
+  it("拿掉全站測試模式與版本號，同一天最多一個已發布活動", () => {
+    expect(sql).toContain("DELETE FROM public.app_feature_settings WHERE key = 'lightning_quiz_test_mode'");
+    expect(sql).toContain("DROP COLUMN IF EXISTS question_version");
+    expect(sql).toContain("DROP COLUMN IF EXISTS content_version");
+    expect(sql).toContain("DROP COLUMN IF EXISTS is_active");
+    expect(sql).toMatch(/UNIQUE INDEX IF NOT EXISTS lightning_quiz_questions_published_rise_date_idx[\s\S]*WHERE status = 'published'/);
+    expect(sql).toContain("UNIQUE (question_id, user_id)");
+  });
+
+  it("鎖定＝非測試中，且時段已開始或已有人作答", () => {
+    const locked = functionBody("_lightning_quiz_is_locked");
+    expect(locked).toContain("q.status <> 'draft'");
+    expect(locked).toContain("_lightning_quiz_window_started(q.rise_date, q.rise_time_start)");
+    expect(locked).toContain("EXISTS (SELECT 1 FROM public.lightning_quiz_attempts");
+  });
+
+  it("會友端只看得到已發布的活動，沒有測試模式的特例", () => {
+    for (const name of ["get_todays_lightning_quiz", "start_lightning_quiz_attempt", "submit_lightning_quiz_attempt"]) {
+      const body = functionBody(name);
+      expect(body, name).toContain("status = 'published'");
+      expect(body, name).not.toContain("test_mode");
+    }
+  });
+
+  it("我的測驗只回已發布且時段已結束的活動（時段內不回正解），下架的不列", () => {
+    const history = functionBody("get_my_lightning_quiz_history");
+    expect(history).toContain("q.status = 'published'");
+    expect(history).toContain("_lightning_quiz_window_ended(q.rise_date, q.rise_time_end)");
+    expect(history).toContain("a.user_id = actor_id");
+    expect(history).toContain("'not_participated'");
+    expect(history).toContain("'incomplete'");
+  });
+
+  it("新增一律是草稿；已鎖定的活動儲存時另存成新草稿，原活動不動", () => {
+    const upsert = functionBody("admin_upsert_lightning_quiz_question");
+    expect(upsert).not.toContain("p_is_active");
+    expect(upsert).toContain("'draft', actor_id");
+    expect(upsert).toContain("IF public._lightning_quiz_is_locked(p_id) THEN");
+    expect(upsert).toContain("'draft', p_id, actor_id");
+    expect(upsert).toContain("'forked', TRUE");
+    expect(upsert).toContain("'unchanged', TRUE");
+  });
+
+  it("發布時自動下架同一天原本已發布的活動；鎖定後不能取消發布", () => {
+    const status = functionBody("admin_set_lightning_quiz_status");
+    expect(status).toMatch(/SET status = 'archived'\s+WHERE rise_date = q\.rise_date AND status = 'published' AND id <> q\.id/);
+    expect(status).toMatch(/p_status = 'draft' AND q\.status = 'published'[\s\S]*_lightning_quiz_is_locked\(q\.id\)[\s\S]*lightning_quiz_locked/);
+    expect(status).toContain("lightning_quiz_invalid_status_transition");
+  });
+
+  it("清除作答不動活動狀態（不能拿清除來繞過鎖定）", () => {
+    const clear = functionBody("admin_clear_lightning_quiz_attempts");
+    expect(clear).toContain("DELETE FROM public.lightning_quiz_attempts WHERE question_id = p_question_id");
+    expect(clear).not.toMatch(/UPDATE public\.lightning_quiz_questions/);
+  });
+});
+
+describe("前端與 nlc-data 接線", () => {
+  it("nlc-data 白名單包含新的 RPC", () => {
+    const edge = read("supabase/functions/nlc-data/index.ts");
+    expect(edge).toContain('"get_my_lightning_quiz_history"');
+    expect(edge).toContain('"admin_set_lightning_quiz_status"');
+  });
+
+  it("測試模式開關已從前端完全拿掉", () => {
+    for (const path of ["js/db.js", "js/modules/admin.js", "index.html"]) {
+      expect(read(path), path).not.toContain("lightning_quiz_test_mode");
+      expect(read(path), path).not.toContain("lightning-quiz-test-mode");
+    }
+  });
+
+  it("個人「我的測驗」有快問快答區塊，並在開啟與重新整理時載入", () => {
+    const profile = read("js/modules/profile.js");
+    expect(read("index.html")).toContain('id="profile-lightning-quiz-results"');
+    expect(profile.match(/void renderMyLightningQuizResults\(\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(profile).toContain("db.getMyLightningQuizHistory(from, to)");
+  });
+});

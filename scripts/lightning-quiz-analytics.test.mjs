@@ -80,15 +80,15 @@ describe("summarizeByRegion", () => {
 
 describe("buildTrendSeries", () => {
   const days = [
-    { questionId: "q2", questionVersion: 1, isCurrentVersion: true, riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 },
-    { questionId: "q1", questionVersion: 1, isCurrentVersion: false, riseDate: "2026-09-23", completedCount: 3, correctCount: 1, totalEligible: 100, avgElapsedMs: 5000 },
-    { questionId: "q1", questionVersion: 2, isCurrentVersion: true, riseDate: "2026-09-23", completedCount: 20, correctCount: 0, totalEligible: 100, avgElapsedMs: null }
+    { questionId: "q2", status: "published", riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 },
+    { questionId: "q1", status: "archived", riseDate: "2026-09-23", completedCount: 3, correctCount: 1, totalEligible: 100, avgElapsedMs: 5000 },
+    { questionId: "q1b", status: "published", riseDate: "2026-09-23", completedCount: 20, correctCount: 0, totalEligible: 100, avgElapsedMs: null }
   ];
 
-  it("keeps one point per day (current version only), sorted by date", () => {
+  it("keeps one point per day (published activity only, archived original dropped), sorted by date", () => {
     const series = buildTrendSeries(days);
     expect(series.map(point => point.riseDate)).toEqual(["2026-09-23", "2026-09-24"]);
-    expect(series[0]).toMatchObject({ questionVersion: 2, completed: 20, correct: 0, correctRate: 0, avgElapsedMs: null });
+    expect(series[0]).toMatchObject({ questionId: "q1b", completed: 20, correct: 0, correctRate: 0, avgElapsedMs: null });
     expect(series[1].participationRate).toBeCloseTo(0.3);
     expect(series[1].correctRate).toBeCloseTo(0.5);
   });

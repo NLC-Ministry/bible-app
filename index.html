@@ -1862,23 +1862,23 @@
                 <div>
                   <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
                   <h3 class="card-title" id="admin-lightning-quiz-title">快問快答</h3>
-                  <p>設定每天要升起的一題快問快答（一天最多一題），可自訂當天的顯示時段。</p>
+                  <p>新增的活動先是「測試中」，只有你看得到，可以隨時預覽測試；確認沒問題再按該活動的「發布」。同一天最多一個已發布的活動。</p>
                 </div>
                 <button type="button" class="primary-btn" id="admin-lightning-quiz-create">新增題目</button>
               </div>
-              <div class="admin-feature-setting-row">
-                <div class="admin-feature-setting-row__label">
-                  <strong>測試模式</strong>
-                  <span id="admin-lightning-quiz-test-mode-status">讀取設定中…</span>
+              <div id="admin-lightning-quiz-preview" class="announcement-form-panel admin-lightning-quiz-preview hidden">
+                <div class="admin-lightning-quiz-preview__head">
+                  <h4 class="announcement-form-panel__title">預覽測試（不會記錄作答）</h4>
+                  <div class="admin-lightning-quiz-preview__actions">
+                    <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新預覽</button>
+                    <button type="button" class="pill-btn" id="admin-lightning-quiz-preview-close">關閉</button>
+                  </div>
                 </div>
-                <button type="button" class="feature-switch" id="admin-lightning-quiz-test-mode-toggle"
-                  role="switch" aria-checked="false" aria-label="開啟快問快答測試模式" disabled>
-                  <span class="feature-switch__thumb" aria-hidden="true"></span>
-                </button>
+                <div id="admin-lightning-quiz-preview-host" class="glass-card lightning-quiz-card"></div>
               </div>
-              <p class="admin-feature-setting-feedback hidden" id="admin-lightning-quiz-test-mode-feedback" role="status"></p>
               <div id="admin-lightning-quiz-editor" class="announcement-form-panel hidden">
                 <h4 class="announcement-form-panel__title" id="admin-lightning-quiz-form-title">新增題目</h4>
+                <p id="admin-lightning-quiz-fork-note" class="admin-daily-quiz-note hidden">這個活動已經開始或已有人作答，題目與時間已鎖定。儲存後會另存為一個新的「測試中」活動，原活動與它的統計都不會變動。</p>
                 <div class="admin-lightning-quiz-schedule-row">
                   <label>升起日期
                     <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
@@ -1891,9 +1891,6 @@
                   </label>
                 </div>
                 <div id="admin-lightning-quiz-question-body"></div>
-                <label class="admin-lightning-quiz-active-toggle">
-                  <input type="checkbox" id="admin-lightning-quiz-is-active" checked> 啟用（取消勾選＝下架，不會顯示在首頁）
-                </label>
                 <div class="announcement-form-panel__actions">
                   <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-lightning-quiz-cancel">取消</button>
                   <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-lightning-quiz-save">儲存題目</button>
@@ -2560,6 +2557,10 @@
       <h4 class="profile-daily-quiz-results__heading">小測驗</h4>
       <p class="profile-exams__intro">PR 值公布前只顯示分數；公布後才會看到全教會／牧區／小組／讀經隊的 PR。</p>
       <div id="profile-daily-quiz-results" class="profile-daily-quiz-results__list" aria-live="polite"></div>
+
+      <h4 class="profile-daily-quiz-results__heading">快問快答</h4>
+      <p class="profile-exams__intro">活動時段結束後，這裡會顯示你的作答與正確答案；沒有作答的活動也會列出正解。</p>
+      <div id="profile-lightning-quiz-results" class="profile-daily-quiz-results__list" aria-live="polite"></div>
     </div>
   </div>
 

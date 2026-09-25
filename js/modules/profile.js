@@ -2,6 +2,7 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 
 
 import { showModal, hideModal } from "./modal-manager.mjs";
+import { formatResponseForDisplay, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
 
@@ -534,6 +535,61 @@ async function renderMyDailyQuizResults() {
   }).join("");
 }
 
+const LIGHTNING_QUIZ_RESULT_BADGES = {
+  correct: '<span class="stat-badge stat-badge--success">答對</span>',
+  wrong: '<span class="stat-badge stat-badge--danger">答錯</span>',
+  incomplete: '<span class="stat-badge stat-badge--neutral">未完成</span>',
+  not_participated: '<span class="stat-badge stat-badge--neutral">未參與</span>'
+};
+
+function taipeiDateString(date) {
+  return date.toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
+}
+
+// 快問快答：伺服器只回「已發布且時段已結束」的活動（這時候才附正解），
+// 所以時段內就算已經答完，也要等時段結束才會出現在這裡。
+async function renderMyLightningQuizResults() {
+  const host = document.getElementById("profile-lightning-quiz-results");
+  if (!host) return;
+  if (state.offlineMode || typeof db === "undefined" || typeof db.getMyLightningQuizHistory !== "function") {
+    host.innerHTML = '<div class="profile-exams__empty">目前無法載入快問快答紀錄。</div>';
+    return;
+  }
+  if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理快問快答紀錄…</div>';
+  const to = taipeiDateString(new Date());
+  const from = taipeiDateString(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
+  const result = await db.getMyLightningQuizHistory(from, to);
+  if (!result.success) {
+    host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入快問快答紀錄。")}</div>`;
+    return;
+  }
+  const items = Array.isArray(result.data) ? result.data : [];
+  if (!items.length) {
+    host.innerHTML = '<div class="profile-exams__empty">最近 30 天內還沒有已結束的快問快答。</div>';
+    return;
+  }
+  host.innerHTML = items.map(item => {
+    const payload = item.payload || {};
+    const answered = item.result === "correct" || item.result === "wrong";
+    const seconds = answered && Number.isFinite(Number(item.elapsedMs))
+      ? `${(Number(item.elapsedMs) / 1000).toFixed(1)} 秒` : "";
+    return `<article class="profile-daily-quiz-result-card profile-lightning-quiz-result">
+      <div class="profile-daily-quiz-result-card__head">
+        <strong>${escapeHTML(item.riseDate)}・${escapeHTML(QUESTION_TYPE_LABELS[item.questionType] || "")}</strong>
+        ${LIGHTNING_QUIZ_RESULT_BADGES[item.result] || ""}
+      </div>
+      <p class="profile-lightning-quiz-result__stem">${escapeHTML(payload.stem || "")}</p>
+      <dl class="profile-lightning-quiz-result__answers">
+        <dt>你的答案</dt>
+        <dd>${answered ? escapeHTML(formatResponseForDisplay(item.questionType, payload, item.response)) : "未作答"}</dd>
+        <dt>正確答案</dt>
+        <dd>${escapeHTML(formatResponseForDisplay(item.questionType, payload, item.answerKey))}</dd>
+        ${seconds ? `<dt>作答時間</dt><dd>${escapeHTML(seconds)}</dd>` : ""}
+      </dl>
+    </article>`;
+  }).join("");
+}
+
 async function renderCareReminders() {
   const containerCol = document.getElementById("profile-care-reminders-col");
   if (!containerCol) return;
@@ -615,7 +671,7 @@ function openProfileDetail(key) {
   if (key === "badges" && typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
   }
-  if (key === "exams") { void renderMyExamPapers(); void renderMyDailyQuizResults(); }
+  if (key === "exams") { void renderMyExamPapers(); void renderMyDailyQuizResults(); void renderMyLightningQuizResults(); }
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();
@@ -1111,6 +1167,7 @@ export function init() {
   document.getElementById("profile-exams-refresh")?.addEventListener("click", () => {
     void renderMyExamPapers();
     void renderMyDailyQuizResults();
+    void renderMyLightningQuizResults();
   });
 
   const btnShareApp = document.getElementById("btn-share-app");

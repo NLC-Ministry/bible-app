@@ -6038,7 +6038,7 @@ const db = {
   // — a cold load asks for 3-4 different keys → 3-4 nlc-data POSTs. Fetch the
   // whole (tiny) allowlist in one `.in("key",[…])` and serve every key from a
   // short-lived per-load cache. Writes invalidate it; a 10 s TTL self-heals.
-  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden", "lightning_quiz_test_mode"],
+  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden"],
   _featureSettings: null,        // { map: {key:bool}, at: number } | null
   _featureSettingsInflight: null,
   _invalidateFeatureSettings() { this._featureSettings = null; },
@@ -6087,7 +6087,7 @@ const db = {
   },
 
   async updateFeatureSetting(key, enabled) {
-    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden", "lightning_quiz_test_mode"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_hidden"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
     if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
@@ -6483,7 +6483,9 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
     lightning_quiz_admin_required: "只有系統管理員可以管理快問快答。",
     lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
-    lightning_quiz_has_attempts: "這一題已經有作答紀錄，無法刪除；可以到下方統計列清除該版本的作答紀錄後再刪除。",
+    lightning_quiz_has_attempts: "這個活動已經有作答紀錄，無法刪除；可以改用下架，或先到下方統計列清除作答紀錄。",
+    lightning_quiz_locked: "這個活動已經開始或已有人作答，不能取消發布；可以改用下架。",
+    lightning_quiz_invalid_status_transition: "目前的狀態不能這樣切換，請重新整理後再試。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
@@ -6531,6 +6533,14 @@ db.submitLightningQuizAttempt = async function(questionId, response) {
   });
 };
 
+// 會友「我的測驗」：只有已發布且時段已結束的活動，才會連同正解一起回傳。
+db.getMyLightningQuizHistory = async function(fromDate, toDate) {
+  return this._callLightningQuizRpc("get_my_lightning_quiz_history", {
+    p_from: fromDate || null,
+    p_to: toDate || null
+  });
+};
+
 db.adminListLightningQuizQuestions = async function(fromDate, toDate) {
   return this._callLightningQuizRpc("admin_list_lightning_quiz_questions", {
     p_from: fromDate || null,
@@ -6538,6 +6548,8 @@ db.adminListLightningQuizQuestions = async function(fromDate, toDate) {
   });
 };
 
+// 新增一律是草稿。已鎖定的活動儲存時會另存成新草稿（回傳 forked: true），
+// 原活動與統計不動。
 db.adminUpsertLightningQuizQuestion = async function(question) {
   const q = question || {};
   return this._callLightningQuizRpc("admin_upsert_lightning_quiz_question", {
@@ -6547,9 +6559,14 @@ db.adminUpsertLightningQuizQuestion = async function(question) {
     p_rise_time_end: q.riseTimeEnd || null,
     p_question_type: q.questionType || null,
     p_payload: q.payload || null,
-    p_answer_key: q.answerKey || null,
-    p_is_active: q.isActive !== false
+    p_answer_key: q.answerKey ?? null
   });
+};
+
+// status：published（發布／重新上架）、draft（取消發布）、archived（下架）。
+db.adminSetLightningQuizStatus = async function(id, status) {
+  if (!id) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("admin_set_lightning_quiz_status", { p_id: id, p_status: status });
 };
 
 db.adminDeleteLightningQuizQuestion = async function(id) {
@@ -6564,33 +6581,25 @@ db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
   });
 };
 
-db.adminGetLightningQuizLeaderboard = async function(questionId, questionVersion, limit) {
+db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {
   if (!questionId) return { success: false, message: "找不到這一題。" };
   return this._callLightningQuizRpc("admin_get_lightning_quiz_leaderboard", {
     p_question_id: questionId,
-    p_question_version: questionVersion ?? null,
     p_limit: limit || 10
   });
 };
 
-// 單題＋版本的作答明細：逐人名單（含未送出的 in_progress）與各牧區／大區
+// 單一活動的作答明細：逐人名單（含未送出的 in_progress）與各牧區／大區
 // 應答人數。彙總成牧區／大區分析在前端做（lightning-quiz-analytics.mjs）。
-db.adminGetLightningQuizResults = async function(questionId, questionVersion) {
-  if (!questionId || questionVersion == null) return { success: false, message: "找不到這筆統計資料。" };
-  return this._callLightningQuizRpc("admin_get_lightning_quiz_results", {
-    p_question_id: questionId,
-    p_question_version: questionVersion
-  });
+db.adminGetLightningQuizResults = async function(questionId) {
+  if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_results", { p_question_id: questionId });
 };
 
-// 清掉「這一版」的全部作答紀錄（不分是誰答的）。管理員自己決定何時清除
-// 測試或不要的舊資料；系統不會自動幫忙清，也不會因為編輯題目而自動刪除。
-db.adminClearLightningQuizAttempts = async function(questionId, questionVersion) {
-  if (!questionId || questionVersion == null) return { success: false, message: "找不到這筆統計資料。" };
-  return this._callLightningQuizRpc("admin_clear_lightning_quiz_attempts", {
-    p_question_id: questionId,
-    p_question_version: questionVersion
-  });
+// 清除一個活動的全部作答紀錄（不分是誰答的，無法復原）。
+db.adminClearLightningQuizAttempts = async function(questionId) {
+  if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
+  return this._callLightningQuizRpc("admin_clear_lightning_quiz_attempts", { p_question_id: questionId });
 };
 
 window.db = db;

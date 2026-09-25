@@ -1,6 +1,6 @@
 // js/modules/lightning-quiz-analytics.mjs
-// 快問快答後台分析的純函式：把 admin_get_lightning_quiz_results（0210）與
-// admin_get_lightning_quiz_trend（0209）的回傳彙總成作答總覽、牧區分析、
+// 快問快答後台分析的純函式：把 admin_get_lightning_quiz_results 與
+// admin_get_lightning_quiz_trend（皆見 0211）的回傳彙總成作答總覽、牧區分析、
 // 大區分析、歷史趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
 
 import { prependTaiwanExportTime, formatTaiwanExportDateTime } from "./export-time.mjs";
@@ -126,11 +126,12 @@ export function sortZoneRowsByRegion(rows) {
   });
 }
 
-// 歷史趨勢：同一天編輯過題目會有多個版本，只取目前版本，一天一個點。
+// 歷史趨勢：同一天可能有已下架的原活動與另存後發布的新活動，只取已發布的
+// 那一個，一天一個點（整天都被下架的日期不列入趨勢）。
 export function buildTrendSeries(days) {
   const list = Array.isArray(days) ? days : [];
   return list
-    .filter(day => day && day.isCurrentVersion !== false)
+    .filter(day => day && day.status !== "archived")
     .map(day => {
       const completed = Number(day.completedCount) || 0;
       const correct = Number(day.correctCount) || 0;
@@ -138,7 +139,6 @@ export function buildTrendSeries(days) {
       return {
         riseDate: day.riseDate,
         questionId: day.questionId,
-        questionVersion: day.questionVersion,
         completed,
         correct,
         eligible,
