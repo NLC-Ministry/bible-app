@@ -1,0 +1,155 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import {
+  buildOverviewCsv,
+  buildRegionCsv,
+  buildTrendCsv,
+  buildTrendSeries,
+  buildZoneCsv,
+  filterAttempts,
+  formatElapsedSeconds,
+  sortZoneRowsByRegion,
+  summarizeByRegion,
+  summarizeByZone
+} from "../js/modules/lightning-quiz-analytics.mjs";
+
+const EXPORTED_AT = new Date("2026-09-25T02:00:00Z");
+
+const results = {
+  attempts: [
+    { name: "王小明", greatRegion: "北區", pastoralZone: "信義牧區", smallGroup: "A 組", regionSort: 1, zoneSort: 2, status: "correct", elapsedMs: 4200, completedAt: "2026-09-25T01:00:05Z" },
+    { name: "李小華", greatRegion: "北區", pastoralZone: "信義牧區", smallGroup: "B 組", regionSort: 1, zoneSort: 2, status: "wrong", elapsedMs: 9100, completedAt: "2026-09-25T01:02:00Z" },
+    { name: "陳大同", greatRegion: "北區", pastoralZone: "大安牧區", smallGroup: "C 組", regionSort: 1, zoneSort: 1, status: "in_progress", elapsedMs: null, completedAt: null },
+    { name: "林\"引號\"", greatRegion: "南區", pastoralZone: "前鎮牧區", smallGroup: "", regionSort: 2, zoneSort: 1, status: "correct", elapsedMs: 3000, completedAt: "2026-09-25T01:01:00Z" },
+    { name: "未分配者", greatRegion: "", pastoralZone: "", smallGroup: "", regionSort: null, zoneSort: null, status: "correct", elapsedMs: 5000, completedAt: "2026-09-25T01:03:00Z" }
+  ],
+  eligible: [
+    { greatRegion: "北區", pastoralZone: "信義牧區", regionSort: 1, zoneSort: 2, count: 10 },
+    { greatRegion: "北區", pastoralZone: "大安牧區", regionSort: 1, zoneSort: 1, count: 5 },
+    { greatRegion: "南區", pastoralZone: "前鎮牧區", regionSort: 2, zoneSort: 1, count: 4 },
+    { greatRegion: "南區", pastoralZone: "小港牧區", regionSort: 2, zoneSort: 2, count: 0 },
+    { greatRegion: "", pastoralZone: "", regionSort: null, zoneSort: null, count: 1 }
+  ]
+};
+
+describe("summarizeByZone", () => {
+  const { rows, total } = summarizeByZone(results);
+  const byZone = Object.fromEntries(rows.map(row => [row.pastoralZone, row]));
+
+  it("counts completed attempts only, keeping in-progress out of the answer rate", () => {
+    expect(byZone["信義牧區"]).toMatchObject({ eligible: 10, completed: 2, correct: 1, inProgress: 0 });
+    expect(byZone["信義牧區"].participationRate).toBeCloseTo(0.2);
+    expect(byZone["信義牧區"].correctRate).toBeCloseTo(0.5);
+    expect(byZone["大安牧區"]).toMatchObject({ eligible: 5, completed: 0, inProgress: 1 });
+    expect(byZone["大安牧區"].correctRate).toBeNull();
+  });
+
+  it("guards divide-by-zero on zones with no eligible members", () => {
+    expect(byZone["小港牧區"].participationRate).toBeNull();
+    expect(byZone["小港牧區"].correctRate).toBeNull();
+  });
+
+  it("puts unassigned members last and totals the whole church", () => {
+    expect(rows[rows.length - 1].pastoralZone).toBe("");
+    expect(total).toMatchObject({ eligible: 20, completed: 4, correct: 3, inProgress: 1 });
+    expect(total.participationRate).toBeCloseTo(0.2);
+    expect(total.correctRate).toBeCloseTo(0.75);
+  });
+
+  it("orders zones by region then by the org's sort_order", () => {
+    expect(sortZoneRowsByRegion(rows).map(row => row.pastoralZone))
+      .toEqual(["大安牧區", "信義牧區", "前鎮牧區", "小港牧區", ""]);
+  });
+});
+
+describe("summarizeByRegion", () => {
+  it("aggregates zones into regions with the same totals", () => {
+    const { rows, total } = summarizeByRegion(results);
+    expect(rows.map(row => row.greatRegion)).toEqual(["北區", "南區", ""]);
+    expect(rows[0]).toMatchObject({ eligible: 15, completed: 2, correct: 1, inProgress: 1 });
+    expect(rows[1]).toMatchObject({ eligible: 4, completed: 1, correct: 1 });
+    expect(total).toMatchObject({ eligible: 20, completed: 4, correct: 3 });
+  });
+
+  it("handles an empty payload", () => {
+    const { rows, total } = summarizeByRegion({});
+    expect(rows).toEqual([]);
+    expect(total.participationRate).toBeNull();
+  });
+});
+
+describe("buildTrendSeries", () => {
+  const days = [
+    { questionId: "q2", questionVersion: 1, isCurrentVersion: true, riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 },
+    { questionId: "q1", questionVersion: 1, isCurrentVersion: false, riseDate: "2026-09-23", completedCount: 3, correctCount: 1, totalEligible: 100, avgElapsedMs: 5000 },
+    { questionId: "q1", questionVersion: 2, isCurrentVersion: true, riseDate: "2026-09-23", completedCount: 20, correctCount: 0, totalEligible: 100, avgElapsedMs: null }
+  ];
+
+  it("keeps one point per day (current version only), sorted by date", () => {
+    const series = buildTrendSeries(days);
+    expect(series.map(point => point.riseDate)).toEqual(["2026-09-23", "2026-09-24"]);
+    expect(series[0]).toMatchObject({ questionVersion: 2, completed: 20, correct: 0, correctRate: 0, avgElapsedMs: null });
+    expect(series[1].participationRate).toBeCloseTo(0.3);
+    expect(series[1].correctRate).toBeCloseTo(0.5);
+  });
+});
+
+describe("filterAttempts", () => {
+  it("filters by status and searches name / zone / group", () => {
+    expect(filterAttempts(results.attempts, { status: "correct" })).toHaveLength(3);
+    expect(filterAttempts(results.attempts, { search: "信義" }).map(a => a.name)).toEqual(["王小明", "李小華"]);
+    expect(filterAttempts(results.attempts, { search: "c 組" }).map(a => a.name)).toEqual(["陳大同"]);
+  });
+});
+
+describe("CSV builders", () => {
+  const lines = csv => csv.split("\n");
+
+  it("overview CSV has the export-time line, seconds, labels and escaped quotes", () => {
+    const csv = lines(buildOverviewCsv(results.attempts, EXPORTED_AT));
+    expect(csv[0]).toContain("匯出時間（台灣時間）");
+    expect(csv[1]).toBe('"姓名","大區","牧區","小組","結果","作答時間（秒）","送出時間"');
+    expect(csv[2]).toMatch(/^"王小明","北區","信義牧區","A 組","答對","4\.2",".*2026-09-25 09:00"$/);
+    expect(csv[4]).toBe('"陳大同","北區","大安牧區","C 組","未完成","",""');
+    expect(csv[5]).toContain('"林""引號"""');
+    expect(csv[6]).toContain('"未分配大區","未分配牧區"');
+  });
+
+  it("zone and region CSVs end with the church-wide total", () => {
+    const zone = lines(buildZoneCsv(summarizeByZone(results), EXPORTED_AT));
+    expect(zone[1]).toBe('"大區","牧區","應答人數","作答人數","參與率","答對人數","答對率"');
+    expect(zone[2]).toBe('"北區","大安牧區","5","0","0.0%","0",""');
+    expect(zone.at(-1)).toBe('"全教會合計","","20","4","20.0%","3","75.0%"');
+
+    const region = lines(buildRegionCsv(summarizeByRegion(results), EXPORTED_AT));
+    expect(region[1]).toBe('"大區","應答人數","作答人數","參與率","答對人數","答對率"');
+    expect(region.at(-1)).toBe('"全教會合計","20","4","20.0%","3","75.0%"');
+  });
+
+  it("trend CSV lists each day's participation and answer rate", () => {
+    const series = buildTrendSeries([
+      { riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 }
+    ]);
+    const csv = lines(buildTrendCsv(series, EXPORTED_AT));
+    expect(csv[2]).toBe('"2026-09-24","30","100","30.0%","15","50.0%","6.0"');
+  });
+
+  it("formats elapsed time in seconds with one decimal", () => {
+    expect(formatElapsedSeconds(12345)).toBe("12.3");
+    expect(formatElapsedSeconds(null)).toBe("");
+  });
+});
+
+describe("wiring", () => {
+  const migration = readFileSync("supabase/migrations/0210_lightning_quiz_results_analytics.sql", "utf8");
+  const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
+
+  it("the new RPC is admin-gated and never PUBLIC-executable", () => {
+    expect(migration).toContain("_lightning_quiz_actor_is_admin(actor_id)");
+    expect(migration).toContain("REVOKE ALL ON FUNCTION public.admin_get_lightning_quiz_results(uuid, int, uuid) FROM PUBLIC;");
+  });
+
+  it("nlc-data allows the new RPC", () => {
+    expect(nlcData).toContain('"admin_get_lightning_quiz_results"');
+  });
+});

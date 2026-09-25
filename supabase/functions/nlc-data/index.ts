@@ -416,7 +416,7 @@ const ISSUE_ADMIN_RPC_FUNCTIONS = new Set([
   "issue_admin_thread_list",
   "issue_admin_set_status"
 ]);
-// 首頁「快問快答」（lightning quiz，migration 0202，版本化統計見 0209）。
+// 首頁「快問快答」（lightning quiz，migration 0202，版本化統計見 0209，作答明細見 0210）。
 // 會友端三支自己在 SQL 端檢查 lightning_quiz_test_mode；admin_* 系列自己用
 // _lightning_quiz_actor_is_admin() 檢查 admin。這裡只需注入 p_actor_id。
 const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
@@ -428,6 +428,7 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_delete_lightning_quiz_question",
   "admin_get_lightning_quiz_trend",
   "admin_get_lightning_quiz_leaderboard",
+  "admin_get_lightning_quiz_results",
   "admin_clear_lightning_quiz_attempts"
 ]);
 const RPC_FUNCTIONS = new Set([

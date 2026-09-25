@@ -11660,6 +11660,91 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
 }
 
+/* 逐日統計／歷史趨勢切換 */
+.admin-lightning-quiz-stats-tabs {
+  display: inline-flex;
+  margin-bottom: 0.75rem;
+}
+.admin-lightning-quiz-stats-empty-cell {
+  text-align: center;
+  color: var(--text-secondary);
+}
+.admin-lightning-quiz-stats-table tr.admin-lightning-quiz-stats-total td {
+  font-weight: var(--type-weight-strong, 500);
+  border-bottom: none;
+}
+.admin-lightning-quiz-status--correct { color: var(--color-success-foreground); }
+.admin-lightning-quiz-status--wrong { color: var(--color-danger-foreground); }
+.admin-lightning-quiz-status--in_progress { color: var(--text-secondary); }
+
+/* 單題作答明細：作答總覽、牧區分析、大區分析三段，各自帶匯出按鈕 */
+.admin-lightning-quiz-detail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-card);
+}
+.admin-lightning-quiz-detail.hidden { display: none; }
+.admin-lightning-quiz-detail__head,
+.admin-lightning-quiz-detail__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.admin-lightning-quiz-detail__section {
+  margin-top: 1.25rem;
+}
+.admin-lightning-quiz-detail__section-head h5 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.admin-lightning-quiz-detail .admin-quiz-stats-roster-toolbar select {
+  width: auto;
+}
+.admin-lightning-quiz-detail .secondary-btn [data-icon],
+.admin-lightning-quiz-trend .secondary-btn [data-icon] {
+  margin-right: 0.25rem;
+}
+
+/* 歷史趨勢：日期區間＋匯出、兩張折線圖、資料表 */
+.admin-lightning-quiz-trend.hidden { display: none; }
+.admin-lightning-quiz-trend__toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.admin-lightning-quiz-trend__toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.admin-lightning-quiz-trend__charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.admin-lightning-quiz-trend__chart {
+  margin: 0;
+  min-width: 0;
+}
+.admin-lightning-quiz-trend__chart figcaption {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+.admin-lightning-quiz-trend__canvas {
+  position: relative;
+  height: 220px;
+}
+
 .admin-lightning-quiz-leaderboard {
   margin-top: 1rem;
   padding-top: 1rem;

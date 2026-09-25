@@ -9,6 +9,7 @@ const indexHtml = readFileSync("index.html", "utf8");
 const examHtml = readFileSync("exam.html", "utf8");
 const gradeHtml = readFileSync("grade.html", "utf8");
 const planModule = readFileSync("js/modules/plan.js", "utf8");
+const chartLoader = readFileSync("js/modules/chart-loader.mjs", "utf8");
 
 describe("startup performance contract", () => {
   it("keeps React issue-report UI out of the initial app bundle", () => {
@@ -113,10 +114,11 @@ describe("Chart.js is off the critical path (A2)", () => {
     expect(indexHtml).not.toMatch(/<script[^>]+cdn\.jsdelivr\.net\/npm\/chart\.js/);
   });
 
-  it("plan.js lazy-loads Chart.js via ensureChartLib, pinned to an exact version", () => {
-    expect(planModule).toContain("function ensureChartLib()");
-    expect(planModule).toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js@\d+\.\d+\.\d+/);
-    expect(planModule).not.toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js["']/);
+  it("chart-loader.mjs lazy-loads Chart.js via ensureChartLib, pinned to an exact version", () => {
+    expect(chartLoader).toContain("export function ensureChartLib()");
+    expect(chartLoader).toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js@\d+\.\d+\.\d+/);
+    expect(chartLoader).not.toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js["']/);
+    expect(planModule).toContain('import { ensureChartLib } from "./chart-loader.mjs";');
   });
 
   it("renderOrUpdateChart self-heals when Chart is not loaded yet", () => {
