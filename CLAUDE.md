@@ -108,9 +108,10 @@ Chapter text is fetched live from public Bible APIs (bible-api.com, bolls.life) 
 - **New SQL functions default to PUBLIC-executable — revoke explicitly in the same migration, every time.** Postgres grants `EXECUTE` on every newly created function to the `PUBLIC` pseudo-role by default, and `anon` inherits it *transitively* through that — `REVOKE EXECUTE ... FROM anon` alone is a no-op against a `PUBLIC` grant. This exact gap let ~29 functions stay silently anon-callable through two cleanup attempts (`0173`, `0177`) before a third, broader sweep (`0182_revoke_public_function_execute_sweep3.sql`) finally caught them by checking `has_function_privilege('anon', ..., 'EXECUTE')` instead of trusting a role-specific grant list. Don't rely on the next periodic sweep to catch it again — every `CREATE FUNCTION`/`CREATE OR REPLACE FUNCTION` in a new migration must be followed immediately by an explicit grant:
   ```sql
   CREATE OR REPLACE FUNCTION public.some_new_fn(...) ... AS $$ ... $$;
-  REVOKE ALL ON FUNCTION public.some_new_fn(...) FROM PUBLIC;
-  GRANT EXECUTE ON FUNCTION public.some_new_fn(...) TO authenticated; -- omit entirely (service_role only) if it must never be called directly by a client
+  REVOKE ALL ON FUNCTION public.some_new_fn(...) FROM PUBLIC, anon, authenticated;
+  GRANT EXECUTE ON FUNCTION public.some_new_fn(...) TO authenticated, service_role; -- drop authenticated (service_role only) if it must never be called directly by a client
   ```
+  **`FROM PUBLIC` alone is not enough.** Supabase's default privileges (`ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role`) grant every new function **directly** to `anon` and `authenticated`, which a PUBLIC revoke doesn't touch. That let `schedule_announcement` — no caller check, so anyone with the public anon key could post a published announcement to every member — become anon-callable **twice**: `0187` fixed the 5-arg version, then `0195` added a 7-arg overload that picked the direct grant up again. `0214_revoke_anon_function_execute.sql` revoked all 24 anon-executable functions and changed the default privileges so new functions are granted to `service_role` only; it ends with a check that fails if any `public` function is still anon-executable. Grant `authenticated` explicitly when a function needs it — including any function an RLS policy `TO authenticated` calls (e.g. `profile_matches_announcement_scope`). Verify with `has_function_privilege('anon', p.oid, 'EXECUTE')`, never by reading the grant statements.
   If the function is `SECURITY DEFINER` and performs a privileged mutation (i.e. it bypasses RLS), do **not** grant `authenticated` unless the function is genuinely meant to be invoked directly by the client — granting `authenticated` on a `SECURITY DEFINER` function that expects to only ever be reached through `nlc-data`'s allowlist/`applyForcedScope` is exactly the "direct RPC bypass" vulnerability shape already fixed more than once (`d317a12`, `485679a`, `bc09eff`). Default to `service_role`-only for those.
 
 ## Design system
@@ -125,7 +126,7 @@ Detailed Skill Documentation is persisted at `.agents/skills/bible-study-dev-gui
 
 1. **Security & Forced Scope**:
    - Edge Functions (`nlc-data`) and RPC functions must enforce explicit `user_id` and `plan_id` filtering (`applyForcedScope`) on writes/deletes to prevent accidental cross-tenant data mutation.
-   - Every new SQL function must explicitly `REVOKE ALL ... FROM PUBLIC` in the same migration it's created in — see the "New SQL functions default to PUBLIC-executable" rule under [Backend](#backend-supabase). Don't wait for the next Security Advisor sweep to catch it.
+   - Every new SQL function must explicitly `REVOKE ALL ... FROM PUBLIC, anon, authenticated` in the same migration it's created in, then `GRANT` only the roles it needs — see the "New SQL functions default to PUBLIC-executable" rule under [Backend](#backend-supabase). Don't wait for the next Security Advisor sweep to catch it.
 
 2. **Scroll State Preservation**:
    - When re-rendering container DOM (`innerHTML = ""`, e.g. `renderHorizontalDateStrip`), read `.scrollTop`/`.scrollLeft` beforehand and restore immediately after DOM update to prevent layout jumps.
