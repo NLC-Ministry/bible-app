@@ -74,6 +74,15 @@ function deepEqual(a, b) {
   return false;
 }
 
+export function shuffleMatchingItems(items, random = Math.random) {
+  const shuffled = Array.isArray(items) ? [...items] : [];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 /**
  * 把題目轉成統一的型別化格式。已經是新格式的原樣通過（驗證 type 合法）；
  * 舊版 AI 產生的純單選格式 {id, question, options, correctIndex, explanation, verseRef}
@@ -181,11 +190,12 @@ export function renderQuestionFieldsetHtml(question, index) {
         return renderOptionsList(id, payload.options, true);
       case "matching":
         return `<div class="daily-quiz-matching" data-matching-root>
+          <svg class="daily-quiz-match-lines" aria-hidden="true"></svg>
           <div class="daily-quiz-matching-col" data-side="left">
-            ${(payload.left || []).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}">${escapeHtml(item.text)}</button>`).join("")}
+            ${shuffleMatchingItems(payload.left).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span>${escapeHtml(item.text)}</button>`).join("")}
           </div>
           <div class="daily-quiz-matching-col" data-side="right">
-            ${(payload.right || []).map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}">${escapeHtml(item.text)}</button>`).join("")}
+            ${shuffleMatchingItems(payload.right).map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span>${escapeHtml(item.text)}</button>`).join("")}
           </div>
         </div>`;
       case "ordering":
@@ -257,6 +267,28 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
 
   if (type === "matching") {
     let selectedLeft = null;
+    const matchingRoot = fieldsetEl.querySelector("[data-matching-root]");
+    const drawLines = () => {
+      const svg = matchingRoot?.querySelector(".daily-quiz-match-lines");
+      if (!matchingRoot || !svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      const rootRect = matchingRoot.getBoundingClientRect();
+      fieldsetEl.querySelectorAll("[data-left-id][data-paired-with]").forEach(leftButton => {
+        const rightId = leftButton.getAttribute("data-paired-with");
+        const rightButton = Array.from(fieldsetEl.querySelectorAll("[data-right-id]")
+          .find(button => button.getAttribute("data-right-id") === rightId));
+        if (!rightButton) return;
+        const leftRect = leftButton.querySelector(".daily-quiz-match-dot")?.getBoundingClientRect() || leftButton.getBoundingClientRect();
+        const rightRect = rightButton.querySelector(".daily-quiz-match-dot")?.getBoundingClientRect() || rightButton.getBoundingClientRect();
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", String(leftRect.left + leftRect.width / 2 - rootRect.left));
+        line.setAttribute("y1", String(leftRect.top + leftRect.height / 2 - rootRect.top));
+        line.setAttribute("x2", String(rightRect.left + rightRect.width / 2 - rootRect.left));
+        line.setAttribute("y2", String(rightRect.top + rightRect.height / 2 - rootRect.top));
+        line.setAttribute("class", "daily-quiz-match-line");
+        svg.appendChild(line);
+      });
+    };
     const onClick = event => {
       const leftButton = event.target.closest("[data-left-id]");
       const rightButton = event.target.closest("[data-right-id]");
@@ -270,6 +302,7 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
             ?.classList.remove("is-paired");
           selectedLeft = null;
           emit();
+          drawLines();
           return;
         }
         fieldsetEl.querySelectorAll("[data-left-id]").forEach(button => button.classList.remove("is-selected"));
@@ -291,10 +324,16 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
         rightButton.classList.add("is-paired");
         selectedLeft = null;
         emit();
+        drawLines();
       }
     };
     fieldsetEl.addEventListener("click", onClick);
-    return () => fieldsetEl.removeEventListener("click", onClick);
+    window.addEventListener("resize", drawLines);
+    drawLines();
+    return () => {
+      fieldsetEl.removeEventListener("click", onClick);
+      window.removeEventListener("resize", drawLines);
+    };
   }
 
   if (type === "ordering") {

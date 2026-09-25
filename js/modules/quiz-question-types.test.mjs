@@ -10,6 +10,7 @@ import {
   bindQuestionFieldset,
   isSupportedQuestionType,
   formatResponseForDisplay
+  ,shuffleMatchingItems
 } from "./quiz-question-types.mjs";
 
 describe("normalizeQuestion", () => {
@@ -53,6 +54,15 @@ describe("normalizeQuestion", () => {
     expect(result.type).toBe("single");
     expect(result.payload.options).toEqual(["摩西", "約書亞", "大衛", "所羅門"]);
     expect(result.answerKey).toBeNull();
+  });
+});
+
+describe("matching layout", () => {
+  it("shuffles items with Fisher-Yates without mutating the source", () => {
+    const items = [{ id: "1" }, { id: "2" }, { id: "3" }];
+    const shuffled = shuffleMatchingItems(items, () => 0);
+    expect(shuffled.map(item => item.id)).toEqual(["2", "3", "1"]);
+    expect(items.map(item => item.id)).toEqual(["1", "2", "3"]);
   });
 });
 
@@ -167,6 +177,8 @@ describe("render + read + bind round-trip (jsdom)", () => {
       answerKey: { L1: "R1", L2: "R2" }
     });
     const fieldset = mount(renderQuestionFieldsetHtml(question, 0));
+    expect(fieldset.querySelector(".daily-quiz-match-lines")).not.toBeNull();
+    expect(fieldset.querySelectorAll(".daily-quiz-match-dot").length).toBe(4);
     let lastResponse;
     bindQuestionFieldset(fieldset, "matching", response => { lastResponse = response; });
 
