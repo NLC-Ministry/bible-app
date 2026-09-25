@@ -4,10 +4,10 @@
 //   首頁：db.start/submitLightningQuizAttempt（伺服器計時、判分、寫入作答紀錄）
 //   預覽：在瀏覽器計時、用 quiz-question-types.mjs 判分，完全不寫入任何資料
 // 首頁狀態機對應 get_todays_lightning_quiz() 回傳的 status：
-//   no_question / hidden → 整張卡隱藏
+//   no_question / hidden → 整張卡隱藏（活動時段一結束也是 hidden，結果改到「我的測驗」看）
 //   available   → 題型預告 → 開始按鈕
 //   in_progress → 可續答，沿用伺服器 started_at 繼續計時
-//   answered    → 顯示對錯與花費時間
+//   answered    → 顯示對錯與花費時間，直到活動結束
 
 import {
   normalizeQuestion,
@@ -59,7 +59,7 @@ function renderTeaserView(question) {
   `);
 }
 
-function renderQuestionView(question, canSubmit) {
+function renderQuestionView(question) {
   const normalized = normalizeQuestion({
     id: question.questionId,
     type: question.questionType,
@@ -73,9 +73,7 @@ function renderQuestionView(question, canSubmit) {
       </div>
       <form data-lq-form>
         ${renderQuestionFieldsetHtml(normalized, 0)}
-        ${canSubmit === false
-          ? `<p class="lightning-quiz-note lightning-quiz-note--warn">作答時間已截止，這一題無法再送出。</p>`
-          : `<button type="submit" class="primary-btn" data-lq-submit>送出答案</button>`}
+        <button type="submit" class="primary-btn" data-lq-submit>送出答案</button>
       </form>
     </div>
   `);
@@ -110,10 +108,9 @@ function startTimer(session, startedAtIso) {
 
 // api：{ start(), submit(response), onFailure() }。start/submit 回傳
 // { success, data, message }，形狀跟 db.js 的 RPC 包裝一致。
-function showAnswering(session, question, api, startedAtIso, canSubmit) {
+function showAnswering(session, question, api, startedAtIso) {
   stopSession(session);
-  paint(session, renderQuestionView(question, canSubmit));
-  if (canSubmit === false) return;
+  paint(session, renderQuestionView(question));
   startTimer(session, startedAtIso);
 
   const form = session.host.querySelector("[data-lq-form]");
@@ -153,7 +150,7 @@ function showTeaser(session, question, api) {
       api.onFailure();
       return;
     }
-    showAnswering(session, question, api, result.data?.startedAt || new Date().toISOString(), true);
+    showAnswering(session, question, api, result.data?.startedAt || new Date().toISOString());
   });
 }
 
@@ -161,6 +158,19 @@ function showTeaser(session, question, api) {
 
 let homeSession = null;
 let refreshInFlight = null;
+let homeEndTimer = null;
+
+// 首頁一直開著的話，活動結束那一刻自己重新整理一次（伺服器會回 hidden，卡片收起）。
+// 秒數由伺服器算（secondsUntilEnd），不依賴裝置時鐘或時區。
+function scheduleHomeEndRefresh(secondsUntilEnd) {
+  if (homeEndTimer) { clearTimeout(homeEndTimer); homeEndTimer = null; }
+  const seconds = Number(secondsUntilEnd);
+  if (!Number.isFinite(seconds) || seconds < 0) return;
+  homeEndTimer = setTimeout(() => {
+    homeEndTimer = null;
+    void refreshLightningQuizHomeCard();
+  }, (seconds + 1) * 1000);
+}
 
 function homeApi(question) {
   // 開始／送出失敗多半代表伺服器端狀態已經變了（時段剛好過了、在別的裝置
@@ -190,16 +200,18 @@ export async function refreshLightningQuizHomeCard() {
     const status = data.status || "hidden";
 
     if (status !== "available" && status !== "in_progress" && status !== "answered") {
+      scheduleHomeEndRefresh(null);
       card.classList.add("hidden");
       host.innerHTML = "";
       return;
     }
     card.classList.remove("hidden");
+    scheduleHomeEndRefresh(data.secondsUntilEnd);
 
     if (status === "answered") {
       paint(homeSession, renderResultView(data.isCorrect === true, data.elapsedMs));
     } else if (status === "in_progress") {
-      showAnswering(homeSession, data, homeApi(data), data.startedAt, data.canSubmit !== false);
+      showAnswering(homeSession, data, homeApi(data), data.startedAt);
     } else {
       showTeaser(homeSession, data, homeApi(data));
     }

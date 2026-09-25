@@ -11,6 +11,8 @@
 //
 // 依賴全域：state、db（js/db.js）、escapeHTML、hydrateIcons、window.showToast
 
+import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";
+
 const SECTION_ORDER = ["truefalse", "single", "multiple", "matching", "ordering", "shortanswer"];
 const SECTION_TITLE = {
   truefalse: "一、是非題", single: "二、單選題", multiple: "三、複選題",
@@ -3490,9 +3492,6 @@ function examResultRow(a, graded) {
   </div>`;
 }
 
-// 成績檢討的連連看：把 data-resp / data-key 畫成線（綠＝你連的、紅虛線＝正解更正）
-const _matchBoardsObserved = typeof WeakSet === "function" ? new WeakSet() : null;
-
 // 成績檢討的連連看：線太多會交叉成一團不好對答案。加一顆按鈕「整理成平行線」——
 // 把右欄照「你連的」重新排序，讓每條綠線都變水平；紅虛線（正解更正）就會一眼看出
 // 差在哪。再按一次還原原本順序。純視覺重排，不改任何作答資料。
@@ -3545,88 +3544,21 @@ function wireResultMatchAlign(board) {
       btn.textContent = "整理成平行線";
       btn.classList.remove("is-active");
     }
-    _paintResultMatchLines(board);
+    paintMatchReviewLines(board);
   });
 }
 
-// 連連看畫線：立刻畫一次，再等「下一個 frame」「字型載入完」各補畫一次
-// （fit-content 的方框寬度會隨中文字型載入而縮 → 圈圈位置會變 → 線要重畫），
-// 之後靠 ResizeObserver 只要方框尺寸變就自動重畫。
+// 連連看畫線（綠＝你連的、紅虛線＝正解更正）：畫線本身與重畫時機共用
+// quiz-review.mjs（小測驗／快問快答的檢討畫面也用同一份）；這裡只多加大測驗
+// 成績頁才有的「整理成平行線」按鈕。
 function drawResultMatchLines(root) {
   if (!root) return;
-  _paintResultMatchLines(root);
   try {
     const wireRoot = root.classList && root.classList.contains("exam-result__match-board") ? [root]
       : (root.querySelectorAll ? [...root.querySelectorAll(".exam-result__match-board")] : []);
     wireRoot.forEach(wireResultMatchAlign);
   } catch (_) {}
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => _paintResultMatchLines(root));
-  try { document.fonts?.ready?.then(() => _paintResultMatchLines(root)); } catch (_) {}
-  if (_matchBoardsObserved && typeof ResizeObserver === "function") {
-    root.querySelectorAll(".exam-result__match-board").forEach((board) => {
-      if (_matchBoardsObserved.has(board)) return;
-      _matchBoardsObserved.add(board);
-      let raf = 0;
-      const ro = new ResizeObserver(() => {
-        if (raf) cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(() => _paintResultMatchLines(board));
-      });
-      ro.observe(board);
-    });
-  }
-}
-
-function _paintResultMatchLines(root) {
-  if (!root) return;
-  const NS = "http://www.w3.org/2000/svg";
-  const boards = [];
-  if (root.classList && root.classList.contains("exam-result__match-board")) boards.push(root);
-  root.querySelectorAll && root.querySelectorAll(".exam-result__match-board").forEach((b) => boards.push(b));
-  boards.forEach((board) => {
-    let resp = {};
-    let key = null;
-    try { resp = JSON.parse(board.dataset.resp || "{}") || {}; } catch (_) { resp = {}; }
-    try { key = board.dataset.key ? JSON.parse(board.dataset.key) : null; } catch (_) { key = null; }
-
-    let svg = board.querySelector(".match-lines");
-    if (!svg) {
-      svg = document.createElementNS(NS, "svg");
-      svg.setAttribute("class", "match-lines");
-      board.insertBefore(svg, board.firstChild);
-    }
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-    const br = board.getBoundingClientRect();
-    if (!br.width || !br.height) return;   // 還沒排版（<details> 收合中）→ 等展開再畫
-    const dot = (side, id) =>
-      board.querySelector(`.exam-match-node[data-side="${side}"][data-id="${cssAttr(id)}"] .exam-match-dot`);
-    const drawLine = (lid, rid, color, dashed) => {
-      const la = dot("L", lid);
-      const rb = dot("R", rid);
-      if (!la || !rb) return;
-      const a = la.getBoundingClientRect();
-      const b = rb.getBoundingClientRect();
-      const line = document.createElementNS(NS, "line");
-      line.setAttribute("x1", a.left + a.width / 2 - br.left);
-      line.setAttribute("y1", a.top + a.height / 2 - br.top);
-      line.setAttribute("x2", b.left + b.width / 2 - br.left);
-      line.setAttribute("y2", b.top + b.height / 2 - br.top);
-      line.setAttribute("stroke", color);
-      line.setAttribute("stroke-width", "2.5");
-      line.setAttribute("stroke-linecap", "round");
-      if (dashed) line.setAttribute("stroke-dasharray", "6 4");
-      svg.appendChild(line);
-    };
-
-    // 正解（更正）：紅虛線，只畫使用者連錯的那幾條
-    if (key) {
-      Object.entries(key).forEach(([l, r]) => {
-        if (String(resp[l]) !== String(r)) drawLine(l, r, "var(--color-danger-foreground, var(--color-danger))", true);
-      });
-    }
-    // 使用者原來的線：綠色
-    Object.entries(resp).forEach(([l, r]) => drawLine(l, r, "var(--color-success-foreground, var(--color-success))", false));
-  });
+  drawMatchReviewLines(root);
 }
 
 export default { renderExamPanel, mountExamRunner };

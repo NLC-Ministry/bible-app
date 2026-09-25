@@ -6644,15 +6644,13 @@ body.dark-theme .pastoral-race-progress {
   line-height: 1.5;
 }
 
-.daily-quiz-form,
-.daily-quiz-review-list {
+.daily-quiz-form {
   display: grid;
   gap: 1rem;
   margin-top: 1rem;
 }
 
 .daily-quiz-question,
-.daily-quiz-review-item,
 .admin-daily-quiz-question {
   margin: 0;
   padding: 1rem;
@@ -6666,12 +6664,6 @@ body.dark-theme .pastoral-race-progress {
   padding: 0 0.35rem;
   color: var(--text-primary);
   font-weight: 500;
-}
-
-.daily-quiz-verse-ref,
-.daily-quiz-explanation {
-  color: var(--text-muted);
-  font-size: 0.875rem;
 }
 
 .daily-quiz-options {
@@ -6700,7 +6692,6 @@ body.dark-theme .pastoral-race-progress {
   justify-content: center;
 }
 
-.daily-quiz-answer-correct { color: var(--success-color, #15803d); }
 .daily-quiz-answer-wrong { color: var(--danger-color, #b91c1c); }
 
 /* 題型四：配對——左右兩欄點選配對，flat 色塊、無漸層、無品牌色光暈 */
@@ -11552,15 +11543,6 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   margin-top: 0.75rem;
   width: 100%;
 }
-.lightning-quiz-note {
-  margin: 0.5rem 0 0;
-  font-size: 0.875rem;
-  text-align: center;
-}
-.lightning-quiz-note--warn {
-  color: var(--color-danger-foreground);
-}
-
 .lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
 .lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }
 .lightning-quiz-result__time {
@@ -13275,60 +13257,51 @@ body.profile-subpage-open .main-content {
 .profile-exams__empty,
 .profile-exams__loading { padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.9375rem; }
 
-/* 小測驗紀錄（我的測驗子頁，緊接在大測驗清單下方） */
-.profile-daily-quiz-results__heading {
-  margin: 1.5rem 0 0;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-.profile-daily-quiz-results__list { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
-.profile-daily-quiz-result-card {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.9rem;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-}
-.profile-daily-quiz-result-card__head {
+/* 我的測驗：大測驗／小測驗／快問快答分頁，清單點進去才看結果 */
+.profile-exams-tabs { margin-bottom: 1rem; }
+.profile-exams-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.profile-daily-quiz-result-card__pr {
-  margin: 0;
-  color: var(--color-brand);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.profile-daily-quiz-result-card__pr--pending {
-  color: var(--text-muted);
-  font-weight: 400;
-}
+.profile-exams-row:hover,
+.profile-exams-row:focus-visible { border-color: var(--color-brand-border); }
+.profile-exams-row__main { display: grid; gap: 0.15rem; min-width: 0; }
+.profile-exams-row__main strong { font-weight: 500; font-size: 0.9375rem; }
+.profile-exams-row__main span { color: var(--text-secondary); font-size: 0.875rem; }
+.profile-exams-row__meta { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; color: var(--text-muted); }
+.profile-exams-row__score { color: var(--color-brand); font-weight: 500; font-size: 0.9375rem; }
+.profile-exams__list--rows { gap: 0.5rem; }
 
-/* 我的測驗：快問快答（時段結束後顯示自己的答案與正解） */
-.profile-lightning-quiz-result__stem {
-  margin: 0;
-  color: var(--text-primary);
+.profile-exams-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem 0;
+  border: none;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
   font-size: 0.9375rem;
-  line-height: 1.6;
+  cursor: pointer;
 }
-.profile-lightning-quiz-result__answers {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 0.75rem;
-  margin: 0;
-  font-size: 0.875rem;
-}
-.profile-lightning-quiz-result__answers dt {
-  color: var(--text-muted);
-}
-.profile-lightning-quiz-result__answers dd {
-  margin: 0;
-  color: var(--text-primary);
-}
+.profile-exams-detail__head { margin-bottom: 0.75rem; }
+.profile-exams-detail__head h4 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--text-primary); }
+.profile-exams-detail__head p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.875rem; }
+
+/* 小測驗／快問快答的逐題檢討（quiz-review.mjs，沿用大測驗成績頁的 exam-result__* 樣式） */
+.quiz-review-list { display: grid; gap: 0.25rem; }
 
 .profile-preferences-group {
   margin-bottom: 1rem;

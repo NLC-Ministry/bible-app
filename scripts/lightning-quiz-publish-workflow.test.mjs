@@ -91,10 +91,57 @@ describe("前端與 nlc-data 接線", () => {
     }
   });
 
-  it("個人「我的測驗」有快問快答區塊，並在開啟與重新整理時載入", () => {
+  it("我的測驗分成大測驗／小測驗／快問快答三個分頁，開啟與重新整理時都會載入", () => {
     const profile = read("js/modules/profile.js");
-    expect(read("index.html")).toContain('id="profile-lightning-quiz-results"');
-    expect(profile.match(/void renderMyLightningQuizResults\(\)/g)?.length).toBeGreaterThanOrEqual(2);
+    const html = read("index.html");
+    for (const tab of ["exam", "daily", "lightning"]) {
+      expect(html).toContain(`data-profile-exams-tab="${tab}"`);
+      expect(html).toContain(`data-profile-exams-panel="${tab}"`);
+    }
+    expect(html).toContain('id="profile-exams-detail"');
+    expect(profile).toMatch(/function refreshMyQuizzes\(\) \{[\s\S]*renderMyExamPapers\(\);[\s\S]*renderMyDailyQuizResults\(\);[\s\S]*renderMyLightningQuizResults\(\);/);
+    expect(profile.match(/refreshMyQuizzes\(\);/g)?.length).toBeGreaterThanOrEqual(2);
     expect(profile).toContain("db.getMyLightningQuizHistory(from, to)");
+  });
+});
+
+describe("我的測驗檢討與首頁撤掉（0213）", () => {
+  const sql0213 = read("supabase/migrations/0213_my_quiz_review.sql");
+  const body = name => {
+    const start = sql0213.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
+    expect(start, name).toBeGreaterThanOrEqual(0);
+    return sql0213.slice(start, sql0213.indexOf("$;", start));
+  };
+
+  it("每支函式都 REVOKE ALL FROM PUBLIC", () => {
+    const names = [...sql0213.matchAll(/CREATE OR REPLACE FUNCTION public\.([a-z_]+)\(/g)].map(match => match[1]);
+    expect(names).toEqual(["get_todays_lightning_quiz", "daily_quiz_get_my_results"]);
+    for (const name of names) {
+      expect(sql0213, name).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${name}\\([^)]*\\) FROM PUBLIC`));
+    }
+  });
+
+  it("活動一結束首頁就撤掉，並告訴前端還剩幾秒", () => {
+    const todays = body("get_todays_lightning_quiz");
+    expect(todays).toMatch(/IF now_time > q\.rise_time_end THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
+    expect(todays).not.toContain("canSubmit");
+    expect(todays.match(/'secondsUntilEnd', seconds_left/g)).toHaveLength(3);
+  });
+
+  it("小測驗逐題檢討只回自己已送出的作答", () => {
+    const results = body("daily_quiz_get_my_results");
+    expect(results).toContain("qa.user_id = actor_id");
+    expect(results).toContain("qa.status = 'submitted'");
+    expect(results).toContain("public.quiz_questions_for_member(qa.questions, TRUE)");
+  });
+
+  it("首頁卡片在活動結束時自己重新整理；大測驗與新的檢討畫面共用同一份連線程式", () => {
+    const lightning = read("js/modules/lightning-quiz.mjs");
+    expect(lightning).toContain("scheduleHomeEndRefresh(data.secondsUntilEnd)");
+    expect(lightning).not.toContain("canSubmit");
+    const exam = read("js/modules/exam.js");
+    expect(exam).toContain('import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";');
+    expect(exam).not.toContain("function _paintResultMatchLines");
+    expect(read("js/modules/plan.js")).toContain("renderDailyQuizReviewHtml(attempt, questions)");
   });
 });
