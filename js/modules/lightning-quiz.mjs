@@ -1,10 +1,10 @@
 // js/modules/lightning-quiz.mjs
-// 首頁「快問快答」卡片：題型預告 → 按下開始限時作答 → 立即出結果。
-// 完全獨立於 daily_quiz／speed_reading_exam（見 migration 0202），題型渲染／
-// 判分共用 quiz-question-types.mjs（題型一～五）。DOM 進出都靠 db.js 的
-// get/start/submitLightningQuizAttempt 這幾支 RPC 包裝，狀態機對應
-// get_todays_lightning_quiz() 回傳的 status：
-//   disabled / no_question / hidden → 整張卡隱藏
+// 「快問快答」作答流程：題型預告 → 按下開始限時作答 → 立即出結果。
+// 首頁卡片與後台「預覽測試」共用同一套畫面與互動，差別只在開始／送出接到哪裡：
+//   首頁：db.start/submitLightningQuizAttempt（伺服器計時、判分、寫入作答紀錄）
+//   預覽：在瀏覽器計時、用 quiz-question-types.mjs 判分，完全不寫入任何資料
+// 首頁狀態機對應 get_todays_lightning_quiz() 回傳的 status：
+//   no_question / hidden → 整張卡隱藏
 //   available   → 題型預告 → 開始按鈕
 //   in_progress → 可續答，沿用伺服器 started_at 繼續計時
 //   answered    → 顯示對錯與花費時間
@@ -15,15 +15,19 @@ import {
   bindQuestionFieldset,
   readResponseFromFieldset,
   isResponseComplete,
+  isAnswerCorrect,
   QUESTION_TYPE_LABELS
 } from "./quiz-question-types.mjs";
 
-let refreshInFlight = null;
-let liveTimer = null;
-let unbindCurrentFieldset = null;
+// 每個掛載點（首頁卡片、後台預覽）各自一份計時器與事件綁定，互不干擾。
+function createSession(host) {
+  return { host, timer: null, unbind: null };
+}
 
-function stopLiveTimer() {
-  if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+function stopSession(session) {
+  if (session.timer) { clearInterval(session.timer); session.timer = null; }
+  session.unbind?.();
+  session.unbind = null;
 }
 
 function formatElapsed(ms) {
@@ -34,9 +38,8 @@ function renderShell(bodyHtml) {
   return `<div class="lightning-quiz-card__inner">${bodyHtml}</div>`;
 }
 
-// 題型預告卡片用的飄動雲朵：兩朵雲、不同大小與飄動節奏，看起來比單朵雲更
-// 自然。純 CSS 形狀（border-radius 疊色），持續左右飄動；不用行內 SVG——
-// 設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
+// 題型預告卡片用的飄動雲朵：純 CSS 形狀（border-radius 疊色），持續左右飄動；
+// 不用行內 SVG——設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
 function driftingCloudsHtml() {
   return `<div class="lightning-quiz-cloud-icon" aria-hidden="true">
     <span class="lq-drift-cloud lq-drift-cloud--back"></span>
@@ -62,7 +65,6 @@ function renderQuestionView(question, canSubmit) {
     type: question.questionType,
     payload: question.payload
   });
-  const fieldsetHtml = renderQuestionFieldsetHtml(normalized, 0);
   return renderShell(`
     <div class="lightning-quiz-answering">
       <div class="lightning-quiz-answering__head">
@@ -70,7 +72,7 @@ function renderQuestionView(question, canSubmit) {
         <strong class="lightning-quiz-timer" data-lq-timer>0.0 秒</strong>
       </div>
       <form data-lq-form>
-        ${fieldsetHtml}
+        ${renderQuestionFieldsetHtml(normalized, 0)}
         ${canSubmit === false
           ? `<p class="lightning-quiz-note lightning-quiz-note--warn">作答時間已截止，這一題無法再送出。</p>`
           : `<button type="submit" class="primary-btn" data-lq-submit>送出答案</button>`}
@@ -89,31 +91,36 @@ function renderResultView(isCorrect, elapsedMs) {
   `);
 }
 
-function setCardVisible(card, visible) {
-  if (!card) return;
-  card.classList.toggle("hidden", !visible);
+function paint(session, html) {
+  session.host.innerHTML = html;
+  if (typeof hydrateIcons === "function") hydrateIcons(session.host);
 }
 
-function startLiveTimer(host, startedAtIso) {
-  stopLiveTimer();
+function startTimer(session, startedAtIso) {
+  if (session.timer) clearInterval(session.timer);
   const startedAtMs = Date.parse(startedAtIso) || Date.now();
   const tick = () => {
-    const el = host.querySelector("[data-lq-timer]");
-    if (!el) { stopLiveTimer(); return; }
+    const el = session.host.querySelector("[data-lq-timer]");
+    if (!el) { clearInterval(session.timer); session.timer = null; return; }
     el.textContent = formatElapsed(Date.now() - startedAtMs);
   };
   tick();
-  liveTimer = setInterval(tick, 100);
+  session.timer = setInterval(tick, 100);
 }
 
-function bindSubmitForm(host, question) {
-  const form = host.querySelector("[data-lq-form]");
-  const fieldset = host.querySelector(".daily-quiz-question");
-  if (!form || !fieldset) return;
+// api：{ start(), submit(response), onFailure() }。start/submit 回傳
+// { success, data, message }，形狀跟 db.js 的 RPC 包裝一致。
+function showAnswering(session, question, api, startedAtIso, canSubmit) {
+  stopSession(session);
+  paint(session, renderQuestionView(question, canSubmit));
+  if (canSubmit === false) return;
+  startTimer(session, startedAtIso);
 
-  unbindCurrentFieldset?.();
+  const form = session.host.querySelector("[data-lq-form]");
+  const fieldset = session.host.querySelector(".daily-quiz-question");
+  if (!form || !fieldset) return;
   let response = readResponseFromFieldset(fieldset, question.questionType);
-  unbindCurrentFieldset = bindQuestionFieldset(fieldset, question.questionType, value => { response = value; });
+  session.unbind = bindQuestionFieldset(fieldset, question.questionType, value => { response = value; });
 
   form.addEventListener("submit", async event => {
     event.preventDefault();
@@ -123,53 +130,47 @@ function bindSubmitForm(host, question) {
     }
     const submitBtn = form.querySelector("[data-lq-submit]");
     if (submitBtn) submitBtn.disabled = true;
-    const result = await db.submitLightningQuizAttempt(question.questionId, response);
+    const result = await api.submit(response);
     if (!result.success) {
       showToast(result.message || "送出失敗，請稍後再試。");
-      // 送出失敗常常代表伺服器端狀態已經變了（例如時段剛好過了、或已經在
-      // 別的裝置送出過），停留在原本這張已經過時的作答畫面只會一直重複失
-      // 敗——直接整張卡重新抓最新狀態，該隱藏就隱藏、該顯示已完成就顯示。
-      void refreshLightningQuizHomeCard();
+      api.onFailure();
       return;
     }
-    stopLiveTimer();
-    unbindCurrentFieldset?.();
-    unbindCurrentFieldset = null;
-    host.innerHTML = renderResultView(result.data?.isCorrect === true, result.data?.elapsedMs);
-    if (typeof hydrateIcons === "function") hydrateIcons(host);
+    stopSession(session);
+    paint(session, renderResultView(result.data?.isCorrect === true, result.data?.elapsedMs));
   });
 }
 
-function renderAnsweringState(host, question, startedAtIso, canSubmit) {
-  host.innerHTML = renderQuestionView(question, canSubmit);
-  if (typeof hydrateIcons === "function") hydrateIcons(host);
-  if (canSubmit !== false) {
-    startLiveTimer(host, startedAtIso);
-    bindSubmitForm(host, question);
-  }
-}
-
-function bindStartButton(host, question) {
-  const btn = host.querySelector("[data-lq-start]");
-  if (!btn) return;
-  btn.addEventListener("click", async () => {
+function showTeaser(session, question, api) {
+  stopSession(session);
+  paint(session, renderTeaserView(question));
+  const btn = session.host.querySelector("[data-lq-start]");
+  btn?.addEventListener("click", async () => {
     btn.disabled = true;
-    const result = await db.startLightningQuizAttempt(question.questionId);
+    const result = await api.start();
     if (!result.success) {
       showToast(result.message || "無法開始作答，請稍後再試。");
-      // 同樣道理：開始失敗多半代表時段已經過了，直接重新整理整張卡片，
-      // 而不是留著一顆按下去只會一直失敗的「開始作答」鈕。
-      void refreshLightningQuizHomeCard();
+      api.onFailure();
       return;
     }
-    renderAnsweringState(host, question, result.data?.startedAt || new Date().toISOString(), true);
+    showAnswering(session, question, api, result.data?.startedAt || new Date().toISOString(), true);
   });
 }
 
-function renderAvailableState(host, question) {
-  host.innerHTML = renderTeaserView(question);
-  if (typeof hydrateIcons === "function") hydrateIcons(host);
-  bindStartButton(host, question);
+// ── 首頁卡片 ──────────────────────────────────────────────────────────────
+
+let homeSession = null;
+let refreshInFlight = null;
+
+function homeApi(question) {
+  // 開始／送出失敗多半代表伺服器端狀態已經變了（時段剛好過了、在別的裝置
+  // 送出過、活動被下架），直接整張卡重新抓最新狀態，不要留著一直失敗的按鈕。
+  const onFailure = () => { void refreshLightningQuizHomeCard(); };
+  return {
+    start: () => db.startLightningQuizAttempt(question.questionId),
+    submit: response => db.submitLightningQuizAttempt(question.questionId, response),
+    onFailure
+  };
 }
 
 export async function refreshLightningQuizHomeCard() {
@@ -179,41 +180,29 @@ export async function refreshLightningQuizHomeCard() {
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
-    stopLiveTimer();
-    unbindCurrentFieldset?.();
-    unbindCurrentFieldset = null;
+    if (!homeSession || homeSession.host !== host) homeSession = createSession(host);
+    stopSession(homeSession);
 
-    if (typeof db === "undefined" || typeof db.getTodaysLightningQuiz !== "function") {
-      setCardVisible(card, false);
-      host.innerHTML = "";
-      return;
-    }
-
-    const result = await db.getTodaysLightningQuiz();
+    const result = typeof db !== "undefined" && typeof db.getTodaysLightningQuiz === "function"
+      ? await db.getTodaysLightningQuiz()
+      : { success: false };
     const data = result.success ? (result.data || {}) : { status: "hidden" };
     const status = data.status || "hidden";
 
-    if (status === "disabled" || status === "no_question" || status === "hidden") {
-      setCardVisible(card, false);
+    if (status !== "available" && status !== "in_progress" && status !== "answered") {
+      card.classList.add("hidden");
       host.innerHTML = "";
       return;
     }
-
-    setCardVisible(card, true);
+    card.classList.remove("hidden");
 
     if (status === "answered") {
-      host.innerHTML = renderResultView(data.isCorrect === true, data.elapsedMs);
-      if (typeof hydrateIcons === "function") hydrateIcons(host);
-      return;
+      paint(homeSession, renderResultView(data.isCorrect === true, data.elapsedMs));
+    } else if (status === "in_progress") {
+      showAnswering(homeSession, data, homeApi(data), data.startedAt, data.canSubmit !== false);
+    } else {
+      showTeaser(homeSession, data, homeApi(data));
     }
-
-    if (status === "in_progress") {
-      renderAnsweringState(host, data, data.startedAt, data.canSubmit !== false);
-      return;
-    }
-
-    // status === "available"
-    renderAvailableState(host, data);
   })();
 
   try {
@@ -221,4 +210,41 @@ export async function refreshLightningQuizHomeCard() {
   } finally {
     refreshInFlight = null;
   }
+}
+
+// ── 後台預覽測試 ──────────────────────────────────────────────────────────
+// question：{ questionType, payload, answerKey }。任何時間都能測（不受日期／
+// 時段限制），也不寫入任何作答紀錄，所以統計從發布那一刻起就是乾淨的。
+
+const previewSessions = new WeakMap();
+
+export function openLightningQuizPreview(host, question) {
+  if (!host || !question) return;
+  let session = previewSessions.get(host);
+  if (!session) {
+    session = createSession(host);
+    previewSessions.set(host, session);
+  }
+  let startedAtMs = 0;
+  const api = {
+    start: async () => {
+      startedAtMs = Date.now();
+      return { success: true, data: { startedAt: new Date(startedAtMs).toISOString() } };
+    },
+    submit: async response => ({
+      success: true,
+      data: {
+        isCorrect: isAnswerCorrect(question.questionType, question.answerKey, response),
+        elapsedMs: Date.now() - startedAtMs
+      }
+    }),
+    onFailure: () => {}
+  };
+  showTeaser(session, { questionId: "preview", ...question }, api);
+}
+
+export function closeLightningQuizPreview(host) {
+  const session = host && previewSessions.get(host);
+  if (session) stopSession(session);
+  if (host) host.innerHTML = "";
 }

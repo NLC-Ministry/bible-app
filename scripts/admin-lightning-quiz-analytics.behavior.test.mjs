@@ -6,12 +6,12 @@ let renderAdminLightningQuizStats;
 let downloads;
 
 const days = [
-  { questionId: "q1", questionVersion: 1, isCurrentVersion: true, riseDate: "2026-09-24", completedCount: 2, correctCount: 1, totalEligible: 10, participationRate: 0.2, avgElapsedMs: 5000 }
+  { questionId: "q1", status: "published", riseDate: "2026-09-24", attemptedCount: 2, completedCount: 2, correctCount: 1, totalEligible: 10, participationRate: 0.2, avgElapsedMs: 5000 }
 ];
 
 const results = {
   questionId: "q1",
-  questionVersion: 1,
+  status: "published",
   riseDate: "2026-09-24",
   attempts: [
     { name: "王小明", greatRegion: "北區", pastoralZone: "信義牧區", smallGroup: "A 組", regionSort: 1, zoneSort: 1, status: "correct", elapsedMs: 4200, completedAt: "2026-09-24T01:00:00Z" },
@@ -57,10 +57,10 @@ afterEach(() => {
 describe("快問快答 作答明細", () => {
   it("opens overview, zone and region tables for a question and exports each as CSV", async () => {
     await renderAdminLightningQuizStats();
-    document.querySelector('[data-lightning-quiz-detail="q1:1"]').click();
+    document.querySelector('[data-lightning-quiz-detail="q1"]').click();
     await flush();
 
-    expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1", 1);
+    expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1");
     const detail = document.getElementById("admin-lightning-quiz-detail");
     expect(detail.classList.contains("hidden")).toBe(false);
     expect(detail.querySelector("[data-lq-overview-body]").textContent).toContain("王小明");

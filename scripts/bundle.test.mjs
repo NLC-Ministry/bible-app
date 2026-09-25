@@ -191,7 +191,11 @@ describe("release policy → minVersion", () => {
   it("rejects a cutoff later than the build, which would force-reload forever", () => {
     expect(() => resolveMinVersion({ forceUpdateBuiltBefore: "2026-09-23T15:00:00+08:00" }, BUILD)).toThrow(/later than this build/);
   });
-  it("ships with no forced update in the repo policy", () => {
-    expect(readReleasePolicy(root).forceUpdateBuiltBefore).toBeNull();
+  // The committed file is the only source of this value (Vercel builds from git),
+  // so a release that needs a forced update must commit a cutoff. Only guard
+  // against values that would break the build: no timezone, or a future time.
+  it("repo policy is either off or a valid past cutoff", () => {
+    const nowBuild = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    expect(() => resolveMinVersion(readReleasePolicy(root), nowBuild)).not.toThrow();
   });
 });
