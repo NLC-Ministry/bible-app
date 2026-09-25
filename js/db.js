@@ -3539,6 +3539,7 @@ const db = {
       quiz_regeneration_permission_required: "只有牧者或系統管理員可以重新生成小測驗。",
       quiz_regeneration_variants_required: "請選擇需要重新生成的題目版本。",
       quiz_generation_secret_missing: "小測驗生成服務尚未完成排程密鑰設定。",
+      edge_function_url_missing: "小測驗生成服務尚未完成專案網址設定。",
       quiz_plan_date_not_found: "找不到這個日期對應的教會進度。",
       quiz_approval_locked: "題目審核通過後已鎖定，不能取消審核、修改或更換。",
       quiz_already_approved: "題目已審核通過，不能再更換。",
