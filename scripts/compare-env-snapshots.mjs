@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // 比對兩個環境的 supabase/queries/environment_consistency_check.sql 輸出（#266）。
 //
 //   node scripts/compare-env-snapshots.mjs --run
@@ -11,11 +10,10 @@
 // 仍會列出，但不影響 exit code。
 
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { PROD_REF, STAGING_REF, runSqlFile } from "./lib/supabase-cli-query.mjs";
 
-export const PROD_REF = "ztozevcqkfrohgjmngcj";
-export const STAGING_REF = "vzokpsscyivhgmhleplq";
+export { PROD_REF, STAGING_REF };
 // cron_job、vault_secret_name：staging 刻意不設定。extension_version：Supabase 平台自動升級。
 export const EXPECTED_DIFFERENCE_SECTIONS = new Set(["cron_job", "vault_secret_name", "extension_version"]);
 
@@ -136,16 +134,8 @@ export function formatReport({ unexpected, expected }, labelA = "prod", labelB =
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function runSnapshot(ref) {
-  if (!/^[a-z]{20}$/.test(ref)) throw new Error(`不合法的 project ref：${ref}`);
-  if (/["\r\n]/.test(SQL_PATH)) throw new Error(`不支援的路徑：${SQL_PATH}`);
-  // Windows 的 npx 是 .cmd，必須透過 shell 執行；ref 已驗證、路徑加引號，整串固定內容
-  const command = `npx supabase db query --linked --project-ref ${ref} -f "${SQL_PATH}"`;
-  const result = spawnSync(command, { encoding: "utf8", shell: true, maxBuffer: 64 * 1024 * 1024 });
-  const output = `${result.stdout || ""}`;
-  if (result.status !== 0 || !/"rows"\s*:/.test(output)) {
-    throw new Error(`查詢 ${ref} 失敗：\n${(result.stderr || "") + output}`.slice(0, 2000));
-  }
-  return parseSnapshot(output);
+  return runSqlFile(ref, SQL_PATH.replace(/\\/g, "/"))
+    .map(({ section, object, detail }) => ({ section, object, detail: detail ?? "" }));
 }
 
 function main(argv) {
