@@ -6573,6 +6573,16 @@ db.adminGetLightningQuizLeaderboard = async function(questionId, questionVersion
   });
 };
 
+// 單題＋版本的作答明細：逐人名單（含未送出的 in_progress）與各牧區／大區
+// 應答人數。彙總成牧區／大區分析在前端做（lightning-quiz-analytics.mjs）。
+db.adminGetLightningQuizResults = async function(questionId, questionVersion) {
+  if (!questionId || questionVersion == null) return { success: false, message: "找不到這筆統計資料。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_results", {
+    p_question_id: questionId,
+    p_question_version: questionVersion
+  });
+};
+
 // 清掉「這一版」的全部作答紀錄（不分是誰答的）。管理員自己決定何時清除
 // 測試或不要的舊資料；系統不會自動幫忙清，也不會因為編輯題目而自動刪除。
 db.adminClearLightningQuizAttempts = async function(questionId, questionVersion) {
