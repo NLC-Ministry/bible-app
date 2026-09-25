@@ -29,12 +29,11 @@ import { ensureChartLib } from "./chart-loader.mjs";
 import {
   normalizeQuestion,
   isResponseComplete,
-  isAnswerCorrect,
   renderQuestionFieldsetHtml,
   readResponseFromFieldset,
-  bindQuestionFieldset,
-  formatResponseForDisplay
+  bindQuestionFieldset
 } from "./quiz-question-types.mjs";
+import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
 
 // Reading plans tab view controller
 
@@ -3583,53 +3582,16 @@ function renderDailyQuizEntry(content, context, plan, quizDate) {
   });
 }
 
-// 舊格式（submit_daily_quiz 一次送出）的 attempt.answers 是「陣列位置對齊
-// questions 順序、元素是選到的選項索引」；新格式（daily_quiz_submit_answer
-// 逐題送出）是 [{questionId, response, correct, timeSpentSeconds}, ...]。
-// 兩種攤平成同一種 { [questionId]: {response, correct, timeSpentSeconds} } 的形狀，
-// 讓檢討畫面不用分兩套邏輯處理新舊資料。
-function normalizeAttemptAnswers(attempt, questions) {
-  const raw = Array.isArray(attempt?.answers) ? attempt.answers : [];
-  const byQuestionId = {};
-  const isNewFormat = raw.length > 0 && raw[0] && typeof raw[0] === "object" && !Array.isArray(raw[0]) && "questionId" in raw[0];
-  if (isNewFormat) {
-    raw.forEach(entry => { byQuestionId[entry.questionId] = entry; });
-  } else {
-    questions.forEach((question, index) => {
-      const response = raw[index] === null || raw[index] === undefined ? null : Number(raw[index]);
-      byQuestionId[question.id] = {
-        response,
-        correct: response != null ? isAnswerCorrect(question.type, question.answerKey, response) : false,
-        timeSpentSeconds: null
-      };
-    });
-  }
-  return byQuestionId;
-}
-
 function renderCompletedDailyQuiz(content, quiz) {
   const attempt = quiz.attempt;
   const questions = (quiz.questions || []).map(normalizeQuestion);
-  const answersByQuestionId = normalizeAttemptAnswers(attempt, questions);
   content.innerHTML = `
     <div class="daily-quiz-heading">
       <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">完成作答</h3></div>
       <span class="daily-quiz-score">${Number(attempt.score ?? 0)}／${Number(attempt.total ?? questions.length)}</span>
     </div>
-    <div class="daily-quiz-review-list">
-      ${questions.map((question, index) => {
-        const answer = answersByQuestionId[question.id] || {};
-        const correct = answer.correct === true;
-        return `<article class="daily-quiz-review-item">
-          <p><strong>${index + 1}. ${quizEscape(question.payload.stem)}</strong></p>
-          <p class="${correct ? "daily-quiz-answer-correct" : "daily-quiz-answer-wrong"}">
-            你的答案：${quizEscape(formatResponseForDisplay(question.type, question.payload, answer.response ?? null))}
-          </p>
-          ${correct ? "" : `<p class="daily-quiz-answer-correct">正確答案：${quizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>`}
-          ${question.explanation || question.verseRef ? `<p class="daily-quiz-explanation">${quizEscape(question.explanation)} · ${quizEscape(question.verseRef)}</p>` : ""}
-        </article>`;
-      }).join("")}
-    </div>`;
+    ${renderDailyQuizReviewHtml(attempt, questions)}`;
+  drawMatchReviewLines(content);
 }
 
 // 逐題送出＋最後結算，取代整份一次送出：每題一填完就各自小寫入一次

@@ -2551,16 +2551,32 @@
       <button type="button" class="profile-subpage__action" id="profile-exams-refresh">重新整理</button>
     </header>
     <div class="profile-subpage__body">
-      <p class="profile-exams__intro">正式作答與複習分開保存；只有正式作答列入評分。</p>
-      <div id="profile-exams-list" class="profile-exams__list" aria-live="polite"></div>
-
-      <h4 class="profile-daily-quiz-results__heading">小測驗</h4>
-      <p class="profile-exams__intro">PR 值公布前只顯示分數；公布後才會看到全教會／牧區／小組／讀經隊的 PR。</p>
-      <div id="profile-daily-quiz-results" class="profile-daily-quiz-results__list" aria-live="polite"></div>
-
-      <h4 class="profile-daily-quiz-results__heading">快問快答</h4>
-      <p class="profile-exams__intro">活動時段結束後，這裡會顯示你的作答與正確答案；沒有作答的活動也會列出正解。</p>
-      <div id="profile-lightning-quiz-results" class="profile-daily-quiz-results__list" aria-live="polite"></div>
+      <div id="profile-exams-browser">
+        <div class="capsule-segmented-control segment-track profile-exams-tabs" role="tablist" aria-label="測驗類別">
+          <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-profile-exams-tab="exam">大測驗</button>
+          <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-profile-exams-tab="daily">小測驗</button>
+          <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-profile-exams-tab="lightning">快問快答</button>
+        </div>
+        <section data-profile-exams-panel="exam">
+          <p class="profile-exams__intro">正式作答與複習分開保存；只有正式作答列入評分。點進去可以查看紀錄與成績。</p>
+          <div id="profile-exams-list" class="profile-exams__list" aria-live="polite"></div>
+        </section>
+        <section data-profile-exams-panel="daily" class="hidden">
+          <p class="profile-exams__intro">最近一週送出的小測驗；點進去可以逐題檢討。</p>
+          <div id="profile-daily-quiz-results" class="profile-exams__list profile-exams__list--rows" aria-live="polite"></div>
+        </section>
+        <section data-profile-exams-panel="lightning" class="hidden">
+          <p class="profile-exams__intro">最近一週已結束的快問快答；點進去可以看你的作答與正確答案，沒有作答的活動也會列出正解。</p>
+          <div id="profile-lightning-quiz-results" class="profile-exams__list profile-exams__list--rows" aria-live="polite"></div>
+        </section>
+      </div>
+      <div id="profile-exams-detail" class="profile-exams-detail hidden">
+        <button type="button" class="profile-exams-detail__back" id="profile-exams-detail-back">
+          <span class="nlc-icon nlc-icon--sm" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span>返回列表</span>
+        </button>
+        <div id="profile-exams-detail-body"></div>
+      </div>
     </div>
   </div>
 

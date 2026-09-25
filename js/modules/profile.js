@@ -2,7 +2,8 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 
 
 import { showModal, hideModal } from "./modal-manager.mjs";
-import { formatResponseForDisplay, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
+import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
+import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
 
@@ -435,6 +436,101 @@ function getMyExamDisplay(item) {
   return { group: "active", badge: "即將開放", kind: "warning", primary: null };
 }
 
+// ── 我的測驗：大測驗／小測驗／快問快答三個分頁，清單點進去才看結果 ─────────────
+
+const MY_QUIZ_RESULT_BADGES = {
+  correct: '<span class="stat-badge stat-badge--success">答對</span>',
+  wrong: '<span class="stat-badge stat-badge--danger">答錯</span>',
+  incomplete: '<span class="stat-badge stat-badge--neutral">未完成</span>',
+  not_participated: '<span class="stat-badge stat-badge--neutral">未參與</span>'
+};
+
+// 清單資料留著，點進詳細時直接用，不用再打一次 API。
+const myQuizLists = { exam: [], daily: [], lightning: [] };
+
+function taipeiDateString(date) {
+  return date.toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
+}
+
+// 小測驗、快問快答只看最近一週（含今天）。
+function recentWeekRange() {
+  return {
+    from: taipeiDateString(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)),
+    to: taipeiDateString(new Date())
+  };
+}
+
+function myQuizRowHtml(kind, key, title, subtitle, badgeHtml) {
+  return `<button type="button" class="profile-exams-row" data-profile-exams-kind="${kind}" data-profile-exams-key="${escapeHTML(String(key))}">
+    <span class="profile-exams-row__main"><strong>${escapeHTML(title)}</strong>${subtitle ? `<span>${escapeHTML(subtitle)}</span>` : ""}</span>
+    <span class="profile-exams-row__meta">${badgeHtml}<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
+  </button>`;
+}
+
+function setProfileExamsTab(tab) {
+  document.querySelectorAll("[data-profile-exams-tab]").forEach(button => {
+    const active = button.dataset.profileExamsTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-profile-exams-panel]").forEach(panel => {
+    panel.classList.toggle("hidden", panel.dataset.profileExamsPanel !== tab);
+  });
+}
+
+function closeProfileExamsDetail() {
+  document.getElementById("profile-exams-detail")?.classList.add("hidden");
+  document.getElementById("profile-exams-browser")?.classList.remove("hidden");
+  const body = document.getElementById("profile-exams-detail-body");
+  if (body) body.innerHTML = "";
+}
+
+function openProfileExamsDetail(html, { drawLines = false } = {}) {
+  const detail = document.getElementById("profile-exams-detail");
+  const body = document.getElementById("profile-exams-detail-body");
+  if (!detail || !body) return null;
+  body.innerHTML = html;
+  document.getElementById("profile-exams-browser")?.classList.add("hidden");
+  detail.classList.remove("hidden");
+  if (typeof hydrateIcons === "function") hydrateIcons(detail);
+  // 詳細頁要先顯示出來、有了版面，連線的點才量得到位置。
+  if (drawLines) drawMatchReviewLines(body);
+  detail.scrollIntoView?.({ block: "start" });
+  return body;
+}
+
+// ── 大測驗 ──────────────────────────────────────────────────────────────
+
+function renderMyExamDetail(item) {
+  const display = getMyExamDisplay(item);
+  const practiceLabel = item.practiceAttemptStatus === "in_progress" ? "繼續複習"
+    : item.canPractice ? "題目回顧" : item.practiceAttemptId ? "查看複習紀錄" : "";
+  const body = openProfileExamsDetail(`<article class="profile-exam-card">
+    <div class="profile-exam-card__head">
+      <div><h5>${escapeHTML(item.title || item.headline || "速讀大測驗")}</h5><p>${escapeHTML(formatExamDateRange(item.openAt, item.closeAt))}</p></div>
+      <span class="stat-badge stat-badge--${display.kind}">${display.badge}</span>
+    </div>
+    ${item.resultReady && item.myTotalScore != null ? `<div class="profile-exam-card__score"><span>正式成績</span><strong>${escapeHTML(String(item.myTotalScore))} 分</strong></div>` : ""}
+    <div class="profile-exam-card__records">
+      <span>正式作答：${item.officialAttemptId ? "已建立紀錄" : "尚未作答"}</span>
+      <span>複習：${item.practiceAttemptId ? "已有紀錄（不列入正式成績）" : "尚無紀錄"}${item.practiceCloseAt ? `・開放至 ${escapeHTML(formatExamSingleTime(item.practiceCloseAt))}` : ""}</span>
+    </div>
+    <div class="profile-exam-card__actions">
+      ${display.primary ? `<button type="button" class="primary-btn" data-profile-exam-official>${display.primary}</button>` : ""}
+      ${practiceLabel ? `<button type="button" class="secondary-btn" data-profile-exam-practice>${practiceLabel}</button>` : ""}
+    </div>
+  </article>`);
+  if (!body) return;
+  // 大測驗的逐題成績在獨立的測驗頁（exam.html），那裡已經有完整的檢討與連線。
+  const go = practice => {
+    const returnTo = `${location.pathname}${location.search}#my-exams`;
+    const url = `exam.html?paper=${encodeURIComponent(item.paperId)}${practice ? "&attempt=practice" : ""}&return=${encodeURIComponent(returnTo)}`;
+    try { location.assign(url); } catch (_) { location.href = url; }
+  };
+  body.querySelector("[data-profile-exam-official]")?.addEventListener("click", () => go(false));
+  body.querySelector("[data-profile-exam-practice]")?.addEventListener("click", () => go(true));
+}
+
 async function renderMyExamPapers() {
   const host = document.getElementById("profile-exams-list");
   if (!host) return;
@@ -449,6 +545,7 @@ async function renderMyExamPapers() {
     return;
   }
   const papers = Array.isArray(result.data) ? result.data.filter(item => item?.paperId) : [];
+  myQuizLists.exam = papers;
   if (!papers.length) {
     host.innerHTML = '<div class="profile-exams__empty">目前還沒有可參加或已完成的測驗。</div>';
     return;
@@ -461,36 +558,36 @@ async function renderMyExamPapers() {
       <h4>${labels[group]} <span>${items.length}</span></h4>
       ${items.map(item => {
         const display = getMyExamDisplay(item);
-        const practiceLabel = item.practiceAttemptStatus === "in_progress" ? "繼續複習"
-          : item.canPractice ? "題目回顧" : item.practiceAttemptId ? "查看複習紀錄" : "";
-        return `<article class="profile-exam-card" data-profile-exam-id="${escapeHTML(item.paperId)}">
-          <div class="profile-exam-card__head">
-            <div><h5>${escapeHTML(item.title || item.headline || "速讀大測驗")}</h5><p>${escapeHTML(formatExamDateRange(item.openAt, item.closeAt))}</p></div>
-            <span class="stat-badge stat-badge--${display.kind}">${display.badge}</span>
-          </div>
-          ${item.resultReady && item.myTotalScore != null ? `<div class="profile-exam-card__score"><span>正式成績</span><strong>${escapeHTML(String(item.myTotalScore))} 分</strong></div>` : ""}
-          <div class="profile-exam-card__records">
-            <span>正式作答：${item.officialAttemptId ? "已建立紀錄" : "尚未作答"}</span>
-            <span>複習：${item.practiceAttemptId ? "已有紀錄（不列入正式成績）" : "尚無紀錄"}${item.practiceCloseAt ? `・開放至 ${escapeHTML(formatExamSingleTime(item.practiceCloseAt))}` : ""}</span>
-          </div>
-          <div class="profile-exam-card__actions">
-            ${display.primary ? `<button type="button" class="primary-btn" data-profile-exam-official>${display.primary}</button>` : ""}
-            ${practiceLabel ? `<button type="button" class="secondary-btn" data-profile-exam-practice>${practiceLabel}</button>` : ""}
-          </div>
-        </article>`;
+        const score = item.resultReady && item.myTotalScore != null ? `<span class="profile-exams-row__score">${escapeHTML(String(item.myTotalScore))} 分</span>` : "";
+        return myQuizRowHtml("exam", papers.indexOf(item), item.title || item.headline || "速讀大測驗",
+          formatExamDateRange(item.openAt, item.closeAt),
+          `${score}<span class="stat-badge stat-badge--${display.kind}">${display.badge}</span>`);
       }).join("")}
     </section>`).join("");
   if (typeof hydrateIcons === "function") hydrateIcons(host);
-  host.querySelectorAll("[data-profile-exam-id]").forEach(card => {
-    const paperId = card.dataset.profileExamId;
-    const go = practice => {
-      const returnTo = `${location.pathname}${location.search}#my-exams`;
-      const url = `exam.html?paper=${encodeURIComponent(paperId)}${practice ? "&attempt=practice" : ""}&return=${encodeURIComponent(returnTo)}`;
-      try { location.assign(url); } catch (_) { location.href = url; }
-    };
-    card.querySelector("[data-profile-exam-official]")?.addEventListener("click", () => go(false));
-    card.querySelector("[data-profile-exam-practice]")?.addEventListener("click", () => go(true));
-  });
+}
+
+// ── 小測驗 ──────────────────────────────────────────────────────────────
+
+function renderMyDailyQuizDetail(item) {
+  let reviewHtml;
+  try {
+    const questions = (item.questions || []).map(normalizeQuestion);
+    reviewHtml = questions.length
+      ? renderDailyQuizReviewHtml({ answers: item.answers }, questions)
+      : '<div class="profile-exams__empty">這份小測驗沒有題目資料。</div>';
+  } catch (_) {
+    reviewHtml = '<div class="profile-exams__empty">這份小測驗的題目格式無法顯示。</div>';
+  }
+  const timeSeconds = Number.isFinite(item.timeSeconds) ? Math.round(item.timeSeconds) : null;
+  const timeLabel = timeSeconds == null ? ""
+    : timeSeconds >= 60 ? `${Math.floor(timeSeconds / 60)} 分 ${timeSeconds % 60} 秒` : `${timeSeconds} 秒`;
+  openProfileExamsDetail(`
+    <div class="profile-exams-detail__head">
+      <h4>${escapeHTML(item.quizDate)} 小測驗</h4>
+      <p>得分 ${escapeHTML(String(item.score))}／${escapeHTML(String(item.total))}${timeLabel ? `・作答時間 ${escapeHTML(timeLabel)}` : ""}</p>
+    </div>
+    ${reviewHtml}`, { drawLines: true });
 }
 
 // 小測驗只在使用者目前開著的計畫（state.activePlan）底下找——跟 plan.js 的
@@ -504,50 +601,47 @@ async function renderMyDailyQuizResults() {
     return;
   }
   if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理小測驗紀錄…</div>';
-  const to = new Date().toISOString().slice(0, 10);
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - 29);
-  const from = fromDate.toISOString().slice(0, 10);
+  const { from, to } = recentWeekRange();
   const result = await db.getMyDailyQuizResults(plan, from, to);
   if (!result.success) {
     host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入小測驗紀錄。")}</div>`;
     return;
   }
   const results = Array.isArray(result.results) ? result.results : [];
+  myQuizLists.daily = results;
   if (!results.length) {
-    host.innerHTML = '<div class="profile-exams__empty">最近 30 天內還沒有小測驗作答紀錄。</div>';
+    host.innerHTML = '<div class="profile-exams__empty">最近一週內還沒有小測驗作答紀錄。</div>';
     return;
   }
-  host.innerHTML = results.map(item => {
-    const correctRate = Number.isFinite(item.score) && Number.isFinite(item.total) && item.total > 0
-      ? Math.round((item.score / item.total) * 100) : null;
-    const timeSeconds = Number.isFinite(item.timeSeconds) ? Math.round(item.timeSeconds) : null;
-    const timeLabel = timeSeconds == null ? ""
-      : timeSeconds >= 60 ? `${Math.floor(timeSeconds / 60)} 分 ${timeSeconds % 60} 秒`
-      : `${timeSeconds} 秒`;
-    return `<article class="profile-daily-quiz-result-card">
-      <div class="profile-daily-quiz-result-card__head">
-        <strong>${escapeHTML(item.quizDate)}</strong>
-        <span class="stat-badge stat-badge--brand">${escapeHTML(String(item.score))}／${escapeHTML(String(item.total))}${correctRate != null ? `（${correctRate}%）` : ""}</span>
-      </div>
-      ${timeLabel ? `<p class="profile-daily-quiz-result-card__pr">作答時間：${escapeHTML(timeLabel)}</p>` : ""}
-    </article>`;
-  }).join("");
+  host.innerHTML = results.map((item, index) => myQuizRowHtml("daily", index, `${item.quizDate} 小測驗`, "",
+    `<span class="stat-badge stat-badge--brand">${escapeHTML(String(item.score))}／${escapeHTML(String(item.total))}</span>`)).join("");
+  if (typeof hydrateIcons === "function") hydrateIcons(host);
 }
 
-const LIGHTNING_QUIZ_RESULT_BADGES = {
-  correct: '<span class="stat-badge stat-badge--success">答對</span>',
-  wrong: '<span class="stat-badge stat-badge--danger">答錯</span>',
-  incomplete: '<span class="stat-badge stat-badge--neutral">未完成</span>',
-  not_participated: '<span class="stat-badge stat-badge--neutral">未參與</span>'
-};
+// ── 快問快答 ────────────────────────────────────────────────────────────
 
-function taipeiDateString(date) {
-  return date.toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
+function renderMyLightningQuizDetail(item) {
+  let reviewHtml;
+  try {
+    const question = normalizeQuestion({ id: item.questionId, type: item.questionType, payload: item.payload, answerKey: item.answerKey });
+    const answered = item.result === "correct" || item.result === "wrong";
+    const seconds = answered && Number.isFinite(Number(item.elapsedMs)) ? `${(Number(item.elapsedMs) / 1000).toFixed(1)} 秒` : "";
+    reviewHtml = renderQuestionReviewHtml(question, {
+      response: answered ? item.response : null,
+      result: item.result,
+      heading: QUESTION_TYPE_LABELS[item.questionType] || "",
+      extraHtml: seconds ? `<p class="exam-result__ln"><span class="exam-result__k">作答時間：</span>${escapeHTML(seconds)}</p>` : ""
+    });
+  } catch (_) {
+    reviewHtml = '<div class="profile-exams__empty">這一題的格式無法顯示。</div>';
+  }
+  openProfileExamsDetail(`
+    <div class="profile-exams-detail__head"><h4>${escapeHTML(item.riseDate)} 快問快答</h4></div>
+    ${reviewHtml}`, { drawLines: true });
 }
 
-// 快問快答：伺服器只回「已發布且時段已結束」的活動（這時候才附正解），
-// 所以時段內就算已經答完，也要等時段結束才會出現在這裡。
+// 伺服器只回「已發布且時段已結束」的活動（這時候才附正解），所以時段內就算
+// 已經答完，也要等時段結束才會出現在這裡。
 async function renderMyLightningQuizResults() {
   const host = document.getElementById("profile-lightning-quiz-results");
   if (!host) return;
@@ -556,38 +650,52 @@ async function renderMyLightningQuizResults() {
     return;
   }
   if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理快問快答紀錄…</div>';
-  const to = taipeiDateString(new Date());
-  const from = taipeiDateString(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
+  const { from, to } = recentWeekRange();
   const result = await db.getMyLightningQuizHistory(from, to);
   if (!result.success) {
     host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入快問快答紀錄。")}</div>`;
     return;
   }
   const items = Array.isArray(result.data) ? result.data : [];
+  myQuizLists.lightning = items;
   if (!items.length) {
-    host.innerHTML = '<div class="profile-exams__empty">最近 30 天內還沒有已結束的快問快答。</div>';
+    host.innerHTML = '<div class="profile-exams__empty">最近一週內還沒有已結束的快問快答。</div>';
     return;
   }
-  host.innerHTML = items.map(item => {
-    const payload = item.payload || {};
-    const answered = item.result === "correct" || item.result === "wrong";
-    const seconds = answered && Number.isFinite(Number(item.elapsedMs))
-      ? `${(Number(item.elapsedMs) / 1000).toFixed(1)} 秒` : "";
-    return `<article class="profile-daily-quiz-result-card profile-lightning-quiz-result">
-      <div class="profile-daily-quiz-result-card__head">
-        <strong>${escapeHTML(item.riseDate)}・${escapeHTML(QUESTION_TYPE_LABELS[item.questionType] || "")}</strong>
-        ${LIGHTNING_QUIZ_RESULT_BADGES[item.result] || ""}
-      </div>
-      <p class="profile-lightning-quiz-result__stem">${escapeHTML(payload.stem || "")}</p>
-      <dl class="profile-lightning-quiz-result__answers">
-        <dt>你的答案</dt>
-        <dd>${answered ? escapeHTML(formatResponseForDisplay(item.questionType, payload, item.response)) : "未作答"}</dd>
-        <dt>正確答案</dt>
-        <dd>${escapeHTML(formatResponseForDisplay(item.questionType, payload, item.answerKey))}</dd>
-        ${seconds ? `<dt>作答時間</dt><dd>${escapeHTML(seconds)}</dd>` : ""}
-      </dl>
-    </article>`;
-  }).join("");
+  host.innerHTML = items.map((item, index) => myQuizRowHtml("lightning", index, `${item.riseDate} 快問快答`,
+    QUESTION_TYPE_LABELS[item.questionType] || "", MY_QUIZ_RESULT_BADGES[item.result] || "")).join("");
+  if (typeof hydrateIcons === "function") hydrateIcons(host);
+}
+
+// ── 分頁與清單點擊（只綁一次，清單重繪不影響）──────────────────────────────
+
+// 每一列用它在已載入清單裡的位置當 key（同一天可能有兩筆，日期不一定唯一）。
+const MY_QUIZ_DETAIL_RENDERERS = {
+  exam: renderMyExamDetail,
+  daily: renderMyDailyQuizDetail,
+  lightning: renderMyLightningQuizDetail
+};
+
+function bindProfileExamsNavigation() {
+  const root = document.getElementById("profile-tab-content-exams");
+  if (!root || root.dataset.examsNavBound === "true") return;
+  root.dataset.examsNavBound = "true";
+  root.addEventListener("click", event => {
+    const tab = event.target.closest("[data-profile-exams-tab]");
+    if (tab) { setProfileExamsTab(tab.dataset.profileExamsTab); return; }
+    if (event.target.closest("#profile-exams-detail-back")) { closeProfileExamsDetail(); return; }
+    const row = event.target.closest("[data-profile-exams-kind]");
+    if (!row) return;
+    const kind = row.dataset.profileExamsKind;
+    const item = myQuizLists[kind]?.[Number(row.dataset.profileExamsKey)];
+    if (item && MY_QUIZ_DETAIL_RENDERERS[kind]) MY_QUIZ_DETAIL_RENDERERS[kind](item);
+  });
+}
+
+function refreshMyQuizzes() {
+  void renderMyExamPapers();
+  void renderMyDailyQuizResults();
+  void renderMyLightningQuizResults();
 }
 
 async function renderCareReminders() {
@@ -671,7 +779,7 @@ function openProfileDetail(key) {
   if (key === "badges" && typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
   }
-  if (key === "exams") { void renderMyExamPapers(); void renderMyDailyQuizResults(); void renderMyLightningQuizResults(); }
+  if (key === "exams") { closeProfileExamsDetail(); refreshMyQuizzes(); }
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();
@@ -1165,10 +1273,10 @@ export function init() {
     });
   }
   document.getElementById("profile-exams-refresh")?.addEventListener("click", () => {
-    void renderMyExamPapers();
-    void renderMyDailyQuizResults();
-    void renderMyLightningQuizResults();
+    closeProfileExamsDetail();
+    refreshMyQuizzes();
   });
+  bindProfileExamsNavigation();
 
   const btnShareApp = document.getElementById("btn-share-app");
   if (btnShareApp && btnShareApp.dataset.bound !== "true") {
