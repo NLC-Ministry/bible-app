@@ -56,6 +56,26 @@ SUPABASE_ANON_KEY
 
 Both functions must have `verify_jwt = false` because the incoming bearer token is a Logto token, not a Supabase token.
 
+## 從資料庫呼叫 Edge Function 的網址（Vault `project_url`）
+
+pg_cron 排程和 trigger 呼叫 Edge Function 時，網址由 `public.edge_function_url(name)`
+組成：讀 Vault 裡的 `project_url`，接上 `/functions/v1/<name>`（migration `0212`）。
+**每個環境都要各自設定自己的網址**；沒設定（或不是 `https://<ref>.supabase.co`）時，
+所有排程和 trigger 都只記 WARNING、不發出任何請求。
+
+```sql
+-- 正式環境
+select vault.create_secret('https://ztozevcqkfrohgjmngcj.supabase.co', 'project_url',
+  'Base URL used by edge_function_url() to call this project''s Edge Functions');
+-- staging
+select vault.create_secret('https://vzokpsscyivhgmhleplq.supabase.co', 'project_url',
+  'Base URL used by edge_function_url() to call this project''s Edge Functions');
+```
+
+**正式環境要先設定 `project_url`，再貼 `0212`**，順序反過來排程會悄悄停掉。
+新的 migration 不要再寫死 `*.supabase.co` 網址，一律用 `public.edge_function_url(...)`
+（`scripts/edge-function-url-from-vault.test.mjs` 會擋）。
+
 ## 大測驗作答寫入 (`exam-write`)
 
 作答中的「暫存」與「送出」不帶登入 token，改帶一張**這份作答專用的寫入憑證**，
