@@ -7,7 +7,7 @@
 | Supabase project ref | `ztozevcqkfrohgjmngcj` | `vzokpsscyivhgmhleplq`（Supabase 分支） |
 | 網址 | `https://ztozevcqkfrohgjmngcj.supabase.co` | `https://vzokpsscyivhgmhleplq.supabase.co` |
 | 前端 | Vercel Production | Vercel Preview（PR 的 preview 部署） |
-| 資料 | 真實會員資料 | 只有結構，沒有資料（樣本資料見 #267） |
+| 資料 | 真實會員資料 | 去識別化樣本：310 位「測試會友」及其讀經、測驗、小測驗資料（見下方） |
 
 ## 規則
 
@@ -25,7 +25,32 @@
 - Edge Functions：8 支都已部署（`--no-verify-jwt`）。
 - Secrets：`NLC_LOGTO_ISSUER`、`NLC_MEMBER_HUB_URL`、`NLC_PLATFORM_API_URL`、`NLC_JWT_VERIFY_MODE=enforce`、`EXAM_WRITE_SECRET`（staging 專用）。
 - pg_cron 排程：沒有。
-- 尚未完成：`APP_ORIGIN`、登入用的 Logto client（#265）、第一個管理員、樣本資料（#267）。
+- 樣本資料：2026-09-25 匯入（見下方「樣本資料」）。
+- 尚未完成：`APP_ORIGIN`、登入用的 Logto client（#265）、第一個管理員。
+
+## 樣本資料（#267）
+
+`scripts/staging-sample-data.mjs` 從正式環境**只讀**匯出去識別化樣本，匯入 staging。個資在正式資料庫裡就換掉，原始個資不會離開正式環境。
+
+| 資料 | 處理 |
+|---|---|
+| 會員 | 依大區分層抽 25%（2026-09-25：310 人）。姓名 → `測試會友 0001`、email → `user0001@example.invalid`；電話、頭像、NLC 會員編號、Member Hub 同步欄位清空 |
+| 會員 UUID | 用每次匯出隨機產生的鹽值重新編號；鹽值不寫進檔案，staging 的 id 對不回正式環境的真人 |
+| 組織 | 名稱換成 `大區 A`、`牧區 A-1`、`小組 A-1-3`，結構不變；`profiles.managed_*` 等以名稱存的欄位同步換掉 |
+| 自由文字 | 宣示姓名、簡答作答、批改評語、經文筆記、關心訊息、通知、隊名、邀請碼 → 假文字 |
+| 教會內容 | 讀經計畫、靈修、考卷與題目、小測驗、公告：原樣。人員欄位沒被抽到的改成 NULL 或佔位帳號 |
+| 不匯出 | `user_identities`、回報與回報對話、兩張稽核記錄表、批改草稿、試考名單 |
+
+```bash
+node scripts/staging-sample-data.mjs export ../staging-sample.json   # 只讀正式環境，約 6 分鐘
+node scripts/staging-sample-data.mjs check  ../staging-sample.json   # 個資檢查，有錯誤就不要匯入
+node scripts/staging-sample-data.mjs import ../staging-sample.json   # 只會寫入 staging，約 10 分鐘
+```
+
+- **匯出檔不要 commit**（`staging-sample*.json` 已加進 `.gitignore`），放在 repo 以外，匯入後就刪除。
+- `import` 的目標寫死為 staging；匯入前會自動跑個資檢查，沒通過就拒絕。
+- 可以重複執行：先刪掉 email 結尾是 `@example.invalid` 的樣本會員（連帶刪除他們的資料），再匯入。之後用 Logto 登入 staging 的真人帳號不受影響；教會內容已存在的列會略過（`ON CONFLICT DO NOTHING`）。
+- 匯入時暫時關閉 trigger 和 FK 檢查（`session_replication_role = replica`），匯入後會檢查主要的外鍵關聯。
 
 ## 比對兩個環境是否一致（#266）
 

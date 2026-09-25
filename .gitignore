@@ -29,3 +29,7 @@ dist/
 # a committed link would point every contributor's `--linked` command at one project.
 supabase/.temp/
 supabase/.branches/
+
+# Staging sample data exports (scripts/staging-sample-data.mjs). Anonymized but
+# still derived from member activity; never commit.
+staging-sample*.json
