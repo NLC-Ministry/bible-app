@@ -39,6 +39,7 @@ git push --force-with-lease origin <要測試的分支>:staging
 - **不要用 `bible-speed-reading.vercel.app` 當 staging**：它跟 `bible.newlife.org.tw` 是同一個正式部署。PWA 的登入狀態和離線讀經紀錄是依網址分開保存的，改用它的話，曾經從這個網址安裝 app 的會友會默默改連 staging，離線紀錄也會送到 staging。
 - **Deployment Protection**：staging 網址是 preview 部署，一樣要登入 Vercel 才看得到。免費方案只有專案擁有者能看；如果要讓同工一起測試，要在 Vercel 關掉 Preview 的 Deployment Protection（資料仍然要用 NLC 帳號登入才看得到）。
 - **登入**：staging 的 Logto client 要登記兩個 redirect URI：`https://bible-speed-reading-staging.vercel.app/` 和 `http://localhost:3100/`（#265）。程式用 `window.location.origin + "/"` 當 redirect URI，port 要完全一樣。
+  - **只有從這兩個網址打開才能登入。** Vercel 每次部署自動產生的網址（`bible-speed-reading-<隨機字串>-...vercel.app`，包括 PR 留言裡的 preview 網址）每次都不同，無法事先登記，從那些網址打開時 Logto 會回報 redirect URI 不符。要測某個 PR 的登入，就把它推到 `staging` 分支，再從固定網址打開。
 - `APP_ORIGIN` 不用設定：`nlc-data`、`nlc-session`、`exam-write` 會回應請求來源的 CORS。
 
 ## 套用 migration（#255）
