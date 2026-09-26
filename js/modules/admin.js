@@ -4220,7 +4220,7 @@ async function renderAdminDevotionPlan(root, forceRefresh = false) {
   const plans = getDevotionalPlans();
   if (!plans.length) {
     root.innerHTML = '<div class="admin-user-directory__empty" style="padding:1.5rem;text-align:center;">'
-      + '目前沒有靈修計畫。請先在 Supabase 執行 <code>scratch/seed_devotional_plan_acts_1.sql</code> 建立「使徒行傳靈修（一）」，再回到這裡編輯內容。</div>';
+      + '目前沒有靈修計畫。請先在 Supabase 執行 <code>supabase/seeds/seed_devotional_plan_acts_1.sql</code> 建立「使徒行傳靈修（一）」，再回到這裡編輯內容。</div>';
     return;
   }
   if (!adminDevotionSelectedPlanId || !plans.some(p => String(p.id) === String(adminDevotionSelectedPlanId))) {
@@ -4658,7 +4658,7 @@ async function renderAdminGroupMeetingPlan(root, forceRefresh = false) {
   const plans = getGroupMeetingPlans();
   if (!plans.length) {
     root.innerHTML = '<div class="admin-devotion__empty">目前沒有小組聚會計畫。請先在 Supabase 執行 '
-      + '<code>scratch/seed_group_meeting_plan_2026_h2.sql</code> 建立「小組聚會經營（2026 7-12月）」，再回到這裡編輯內容。</div>';
+      + '<code>supabase/seeds/seed_group_meeting_plan_2026_h2.sql</code> 建立「小組聚會經營（2026 7-12月）」，再回到這裡編輯內容。</div>';
     return;
   }
   if (!adminGroupMeetingSelectedPlanId || !plans.some(p => String(p.id) === String(adminGroupMeetingSelectedPlanId))) {
