@@ -34,7 +34,6 @@ window.APP_COPY = {
   },
   auth: {
     loginSubtitle: "跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。",
-    demoMode: "Demo 模式",
   },
   memberHub: {
     cardTitle: "新生命會員中心",
