@@ -49,11 +49,12 @@ describe("0198: 大測驗 admin UI 兩版都顯示「預告文」分頁，文案
     expect(exam).not.toContain('const hasNotice = isLive;');
   });
 
-  it("confirm 對話框、toast 都依 isLive 區分「全體會友」vs「僅管理員預覽」", () => {
+  it("confirm 對話框、toast 講清楚受眾：預告文一發佈就是給全體會友（沒有測試版預覽了，#258）", () => {
     // 0200 精簡畫面：原本按鈕旁那句常駐提示文字拿掉了（badge 已經看得出發佈狀態，
     // 細節放進「說明」分頁），但點擊當下的 confirm／toast 還是要講清楚受眾，這兩個沒動。
-    expect(exam).toContain("將把這份預告文發佈到首頁——只有你自己（管理員）看得到，用來預覽效果，不會出現在會友端。確定？");
-    expect(exam).toContain('"預告文已發佈，可以到首頁預覽（僅管理員看得到）"');
+    expect(exam).toContain('confirm("將把這份預告文發佈到全體會友的首頁。確定？")');
+    expect(exam).toContain('"預告文已發佈到會友首頁"');
+    expect(exam).not.toContain("只有你自己（管理員）看得到，用來預覽效果");
   });
 
   it("公告內容編輯是測試版限定的獨立分頁（renderExamNoticeForm），不跟試卷設定混在一起", () => {

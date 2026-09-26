@@ -3744,7 +3744,7 @@ const db = {
       forbidden_rpc: "沒有權限，或後端尚未更新（nlc-data 可能需要重新部署）。",
       exam_admin_required: "只有系統管理員可以進行此操作。",
       exam_paper_not_found: "找不到這份試卷。",
-      exam_paper_not_editable: "試卷已發佈，無法再編輯。",
+      exam_paper_not_editable: "試卷已發佈，無法再編輯。還沒有人作答時，可以先「撤回成草稿」。",
       exam_question_not_found: "找不到這一題。",
       exam_question_not_deletable: "試卷已發佈，無法刪除題目。",
       exam_already_published: "試卷已發佈。",
@@ -3753,13 +3753,9 @@ const db = {
       exam_announcement_already_published: "預告文已發佈。",
       exam_announcement_locked: "測驗已正式發佈，預告文無法再修改。",
       exam_announcement_would_blank_published: "這份公告已經發佈中，標題與內容不能存成空白。要清空請先按「撤下預告文」。",
-      exam_push_would_blank_announcement: "正式版的公告已經發佈給會友看了，測試版的標題／內容是空的，無法同步過去覆蓋掉。請先在測試版填好內容再同步。",
-      exam_reset_live_forbidden: "正式測驗不可清除作答紀錄。如需重置請由工程人員處理。",
-      exam_mode_locked: "已發佈的卷不能切換模式。請先「關閉測驗 → 改回草稿」再切。",
-      exam_push_source_not_test: "只有測試卷可以「推上正式版」。",
-      exam_push_live_has_attempts: "正式版已有人作答，不能再推題目上去（會毀掉已計分的成績）。要更新請另建新試卷。",
-      exam_push_live_not_closed: "正式版測驗進行中，請先「關閉測驗」再更新題目。",
-      exam_tester_user_not_found: "找不到這個 email 對應的使用者（對方要先登入過一次）。",
+      exam_reset_live_forbidden: "只有草稿可以清除作答紀錄（演練作答）。已發佈的測驗不可清除。",
+      exam_use_publish: "草稿請用「發佈測驗」發佈。",
+      exam_revert_has_attempts: "已經有人作答，不能撤回成草稿（題目已鎖定）。",
       exam_window_invalid: "請先設定正確的開放起訖時間。",
       exam_section_count_mismatch: "各大題題數與設定不符。",
       exam_answer_key_incomplete: "還有題目未填答案。",
@@ -3882,10 +3878,8 @@ const db = {
   async setExamStatus(paperId, status) {
     return this._callExamRpc("exam_set_status", { p_paper_id: paperId, p_status: status });
   },
-  // setExamMode removed 2026-09-16: zero callers anywhere in js/.
-  async pushExamToLive(testPaperId) {
-    return this._callExamRpc("exam_push_to_live", { p_test_paper_id: testPaperId });
-  },
+  // setExamMode removed 2026-09-16; pushExamToLive and the tester methods removed with the
+  // single-paper flow (#258). The backend functions are dropped in C3 (#260).
   async resetExamAttempts(paperId) {
     return this._callExamRpc("exam_reset_attempts", { p_paper_id: paperId });
   },
@@ -3915,15 +3909,6 @@ const db = {
   // 逾時自動收卷：把作答時間過了、卻沒送出（裝置睡眠 / 斷線）的 attempt 依已存作答結算
   async finalizeExpiredExam(paperId) {
     return this._callExamRpc("exam_finalize_expired", { p_paper_id: paperId });
-  },
-  async getExamPaperTesters(paperId) {
-    return this._callExamRpc("exam_get_paper_testers", { p_paper_id: paperId });
-  },
-  async addExamTester(paperId, email) {
-    return this._callExamRpc("exam_add_tester", { p_paper_id: paperId, p_email: email });
-  },
-  async removeExamTester(paperId, userId) {
-    return this._callExamRpc("exam_remove_tester", { p_paper_id: paperId, p_user_id: userId });
   },
 
   // 首頁 8/30 宣示 banner（一般會友；功能關閉 / 無已發預告試卷回 null）
