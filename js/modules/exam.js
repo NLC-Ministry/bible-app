@@ -113,8 +113,13 @@ const parseIdText = (arr) => arr.map((r) => {
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
 });
 
-// ── 準備進度檢查：草稿階段「還差什麼才能發佈／同步到正式版」的清單 ──
-// 只列真正會擋住動作的必要項（跟 exam_publish／exam_push_to_live 的伺服器端
+// 草稿卷上的作答是演練（#257）；C2 刪除前還存在的舊測試卷也算。
+function isRehearsalPaper(paper) {
+  return !!paper && (paper.status === "draft" || paper.mode === "test");
+}
+
+// ── 準備進度檢查：草稿階段「還差什麼才能發佈」的清單 ──
+// 只列真正會擋住動作的必要項（跟 exam_publish 的伺服器端
 // 驗證對齊，不是自己發明的規則），加上少數僅供參考、不擋動作的建議項。
 function examReadinessChecklist(paper, questions) {
   const cfg = examSectionCfg(paper);
@@ -132,12 +137,8 @@ function examReadinessChecklist(paper, questions) {
     { label: "各題型題目數與設定相符", done: countsMatch, required: true },
     { label: "開放時間已設定（結束時間須晚於開始時間，且在未來）", done: windowValid, required: true }
   ];
-  if (paper.mode === "live") {
-    items.push({ label: "公告內容已填寫完整", done: annFilled, required: true });
-    items.push({ label: "公告已發佈", done: paper.announcement_published === true, required: true });
-  } else {
-    items.push({ label: "公告內容已填寫（選填，方便之後同步到正式版）", done: annFilled, required: false });
-  }
+  items.push({ label: "公告內容已填寫完整", done: annFilled, required: true });
+  items.push({ label: "公告已發佈", done: paper.announcement_published === true, required: true });
   items.push({ label: "所有題目已填正解（簡答題除外）", done: keysComplete, required: false });
 
   const requiredItems = items.filter((i) => i.required);
@@ -309,34 +310,28 @@ export async function renderExamPanel(root) {
 
   const rerender = () => renderExamPanel(root);
   const createPaper = () => openExamCreateTitleModal(async (title) => {
-    const res = await db.upsertExamPaper({ title, mode: "test", section_targets: SECTION_TARGET_DEFAULT });
+    const res = await db.upsertExamPaper({ title, section_targets: SECTION_TARGET_DEFAULT });
     if (!res.success) { toast(res.message || "建立失敗"); return; }
     examAdminPaperId = res.data?.id || null;
     rerender();
   });
-  // ── 架構：第 1 層＝「試卷」（用測試版的 id 當識別），第 2 層＝測試版 / 正式版 ──
-  // 「試卷」清單：每份測試版一列；以前沒有測試版來源的獨立正式版也各算一份試卷。
-  const examList = papers.filter((p) => p.mode === "test" || !p.pushedFromId);
-  // 目前這份卷屬於哪一份「試卷」
-  const examKey = paper ? ((paper.mode === "live" && paper.pushed_from_id) ? paper.pushed_from_id : paper.id) : null;
-  const testOf = examList.find((p) => p.id === examKey && p.mode === "test") || null;
-  const liveOf = examKey ? papers.find((p) => p.mode === "live" && p.pushedFromId === examKey) : null;
-  if (paper && !examList.some((p) => p.id === examKey)) examList.push({ id: examKey, title: paper.title });
+  // ── 單一試卷（#257）：每份卷就是一份試卷，草稿時可編輯、可演練，沒有測試版／正式版。
+  // 舊的測試卷（mode='test'）在 C2（#259）刪除前不顯示；預設載入到它時改選第一份。
+  const examList = papers.filter((p) => p.mode !== "test");
+  if (paper && paper.mode === "test" && examList.length) {
+    examAdminPaperId = examList[0].id; renderExamPanel(root); return;
+  }
+  const shownPaper = paper && paper.mode !== "test" ? paper : null;
 
   const pickerBar = `
     <div class="exam-admin__picker">
       <label>試卷
         <select class="form-control" id="exam-paper-picker">
-          ${examList.map((p) => `<option value="${esc(p.id)}" ${p.id === examKey ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
+          ${examList.map((p) => `<option value="${esc(p.id)}" ${shownPaper && p.id === shownPaper.id ? "selected" : ""}>${esc(p.title)}</option>`).join("")}
         </select>
       </label>
       <button type="button" class="secondary-btn" id="exam-create-paper">＋ 建立新試卷</button>
-    </div>
-    ${paper && !(paper.mode === "live" && !paper.pushed_from_id) ? `
-    <div class="exam-admin__versions" role="group" aria-label="版本">
-      <button type="button" data-exam-act="ver-test" class="${paper.mode === "test" ? "is-on" : ""}" ${paper.mode === "test" || !testOf ? "disabled" : ""}>測試版</button>
-      <button type="button" data-exam-act="ver-live" class="${paper.mode === "live" ? "is-on" : ""}" ${paper.mode === "live" ? "disabled" : ""}>正式版${liveOf ? "" : "（尚未建立）"}</button>
-    </div>` : ""}`;
+    </div>`;
   const wirePicker = () => {
     body.querySelector("#exam-paper-picker")?.addEventListener("change", (e) => {
       examAdminPaperId = e.target.value || null; examAdminSubview = "bank"; rerender();
@@ -344,43 +339,40 @@ export async function renderExamPanel(root) {
     body.querySelector("#exam-create-paper")?.addEventListener("click", createPaper);
   };
 
-  if (!paper) {
-    body.innerHTML = `${papers.length ? pickerBar : ""}
+  if (!shownPaper) {
+    body.innerHTML = `${examList.length ? pickerBar : ""}
       <div class="exam-admin__paper">
-        <p class="exam-admin__meta">${papers.length ? "請從上方選一份試卷，或" : "目前沒有試卷。"}建立一份後即可開始出題。</p>
-        ${papers.length ? "" : '<button type="button" class="primary-btn" id="exam-create-paper">建立新試卷</button>'}
+        <p class="exam-admin__meta">${examList.length ? "請從上方選一份試卷，或" : "目前沒有試卷。"}建立一份後即可開始出題。</p>
+        ${examList.length ? "" : '<button type="button" class="primary-btn" id="exam-create-paper">建立新試卷</button>'}
       </div>`;
     // wirePicker() 已經用 body 範圍的 #exam-create-paper 選取器綁過一次了——這裡
-    // 不管 pickerBar 有沒有渲染都會命中同一顆按鈕（id 相同），不用再綁第二次
-    // （以前重複綁過，點一次會建立兩份試卷；現在 createPaper 只開 modal，重複
-    // 綁頂多彈出兩個一樣的視窗，一樣是要修的 bug，就一併修掉）。
+    // 不管 pickerBar 有沒有渲染都會命中同一顆按鈕（id 相同），不用再綁第二次。
     wirePicker();
     return;
   }
 
-  const isLive = paper.mode === "live";
-  const isTest = !isLive;
-  const who = isLive ? "全體會友" : "僅系統管理員（演練用，不會出現在會友端）";
+  const isDraft = paper.status === "draft";
   const hasShortSection = !!examSectionCfg(paper).shortanswer;   // 沒選「簡答題」→ 隱藏批改分頁
-  const canEditPaper = isTest;   // 正式版不提供編輯，題目與設定一律由測試版「推上正式版」
-  // 測試版也能編/發預告文，方便在推上正式版前先看看首頁卡片長怎樣——測試版
-  // 發佈後只有 admin/pastor 自己在首頁看得到（exam_home_exams 擋非 staff），
-  // 不會外流給一般會友。
+  // 題目與試卷設定只有草稿能改（伺服器端 exam_upsert_paper／exam_upsert_question 同樣限制）。
+  // 已發佈、還沒有人作答時可以「撤回成草稿」再改。
+  const canEditPaper = isDraft;
   const hasNotice = true;
   const resultsPublished = !!paper.results_published_at;     // 成績已公布 → 全部鎖定不得再改
+  // 草稿上的作答都是演練（is_test），發佈時自動清除；已發佈／已結束的卷上都是正式作答。
+  const rehearsalCount = isDraft ? attemptCount : 0;
 
   // ── 各分頁「看不看得到」的規則，集中算一次 ──
-  // 測試版只管考前的事（出題、設定、公告）；統計／填答案／簡答批改／簡答指派／
-  // 答案詳解／複習紀錄這些「考後」工作一律只在正式版出現——測試版沒有真實
-  // 會友作答，這些工具擺在那邊也用不到，一併收起來。
-  const showStats = isLive && paper.status !== "draft";
-  const showExplain = isLive && paper.status !== "draft";
-  const showAnswers = isLive && !resultsPublished;
-  const showGrade = isLive && hasShortSection && !resultsPublished;
-  const showAssign = isLive && hasShortSection && !resultsPublished;
-  const showPractice = isLive;
+  // 草稿也開放填答案、批改、統計，讓管理員演練完整流程（資料在發佈時清掉）。
+  const showStats = !isDraft || attemptCount > 0;
+  const showExplain = !isDraft;
+  const showAnswers = !resultsPublished;
+  const showGrade = hasShortSection && !resultsPublished;
+  const showAssign = hasShortSection && !resultsPublished;
+  const showPractice = !isDraft;
+  const showNotice = paper.status !== "closed";             // 公告在結束前都能改（伺服器端同樣限制）
   const availableSubviews = [
-    ...(canEditPaper ? ["bank", "meta", "notice"] : []),
+    ...(canEditPaper ? ["bank", "meta"] : []),
+    ...(showNotice ? ["notice"] : []),
     ...(showAnswers ? ["answers"] : []),
     ...(showGrade ? ["grade"] : []),
     ...(showAssign ? ["assign"] : []),
@@ -399,7 +391,7 @@ export async function renderExamPanel(root) {
   const explanationOn = paper.show_answer_explanation === true;   // 預設關；不受成績公布鎖定
 
   const badge = paper.status === "published" ? "success" : "neutral";
-  const statusLabel = { draft: "草稿（可編輯）", published: "測驗進行中", closed: "已關閉" }[paper.status] || paper.status;
+  const statusLabel = { draft: "草稿（可編輯、可演練）", published: "測驗進行中", closed: "已關閉" }[paper.status] || paper.status;
   const annBadge = annPub
     ? '　<span class="stat-badge stat-badge--brand">預告文已發佈</span>'
     : '　<span class="stat-badge stat-badge--neutral">預告文未發佈</span>';
@@ -415,7 +407,7 @@ export async function renderExamPanel(root) {
   if (!resultsPublished) {
     moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon("自動評分關閉後，關閉測驗時不會自動計分，要等答案定稿、重新開啟自動評分後再手動重新計分一次。")}`);
   }
-  if (isLive && paper.status !== "closed" && !resultsPublished) {
+  if (paper.status !== "closed" && !resultsPublished) {
     moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon("會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。")}`);
   }
   moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon("開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。")}`);
@@ -429,74 +421,55 @@ export async function renderExamPanel(root) {
     }
   }
 
-  // 「改回草稿」只在「已關閉」狀態才出現（測驗進行中不提供——要改題請先按「關閉測驗」）；
-  // 且正式卷若已有作答紀錄仍不給（避免動到已計分結果），測試卷則不限。
-  const canRevert = paper.status === "closed" && (paper.mode === "test" || attemptCount === 0);
+  // 撤回成草稿：已發佈或已結束、而且還沒有任何作答時才可以（伺服器端 exam_set_status
+  // 同樣檢查，有正式作答會回 exam_revert_has_attempts）。
+  const canRevert = !isDraft && attemptCount === 0;
 
   let statusNote = "";   // 只留一句真正必要的當下狀態說明，其餘政策性文字改成 ⓘ 小圖示點擊彈出
-  if (paper.status === "draft") {
+  const examUrl = `exam.html?paper=${encodeURIComponent(paper.id)}&popup=1`;
+  if (isDraft) {
+    primaryActions.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>${examInfoIcon("用這份草稿實際作答一次：送出、看分數、批改、看統計都跟正式測驗一樣。只有系統管理員／牧者能作答，會友看不到。演練作答會在「發佈測驗」時自動清除，所以發佈後你也能再正式作答一次。")}`);
     // 準備進度沒完成就不顯示發佈按鈕——要做什麼看下方清單，不用另外堆文字解釋
     if (checklist.requiredDone) {
-      primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">${isTest ? "發佈（開放測試作答）" : "發佈測驗"}</button>`);
+      primaryActions.push('<button type="button" class="primary-btn" data-exam-act="publish">發佈測驗</button>');
+    }
+    if (rehearsalCount > 0) {
+      moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon("清掉這份草稿上的所有演練作答，可以重新演練。發佈時也會自動清除。")}`);
     }
   } else if (paper.status === "published") {
-    primaryActions.push(`<a class="primary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&popup=1" target="_blank" rel="noopener">${isLive ? "正式作答" : "測試作答"}</a>`);
+    primaryActions.push(`<a class="primary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
     primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="close">關閉測驗</button>');
-    statusNote = "測驗進行中，開放時間內即可作答；要改題目請先「關閉測驗」。";
+    statusNote = canRevert
+      ? "測驗進行中。還沒有人作答，要改題目可以用「⋯ 更多」裡的「撤回成草稿」。"
+      : "測驗進行中，已經有人作答，題目已鎖定。";
   } else if (paper.status === "closed") {
-    if (canRevert) moreActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">改回草稿</button>');
-    if (isLive && !canRevert) statusNote = "測驗已結束，請在「簡答批改」「統計」分頁進行結算與成績公布。";
+    if (!canRevert) statusNote = "測驗已結束，請在「簡答批改」「統計」分頁進行結算與成績公布。";
   }
+  if (canRevert) moreActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">撤回成草稿</button>');
 
-  // 清除作答紀錄：只有測試卷、且有紀錄時提供（獨立於「改回草稿」，方便不改題目直接重測）
-  if (isTest && attemptCount > 0) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除作答紀錄（${attemptCount}）</button>${examInfoIcon("只作用在測試版。清掉後可以從宣示畫面重新測試，不會影響題目與設定內容。")}`);
-  }
-
-  // 測試版 → 同步到正式版：準備進度沒完成一樣不顯示；就緒但正式版當下不能被覆蓋
-  // （已有作答／進行中）則顯示按鈕但停用，原因寫在旁邊一句話。
-  let pushNote = "";
-  if (isTest && liveOf && checklist.requiredDone) {
-    const livePushBlocked = (liveOf.attemptCount || 0) > 0
-      ? `正式版已有 ${liveOf.attemptCount} 筆作答，無法再同步（要重來請另建新試卷）。`
-      : liveOf.status === "published"
-        ? "正式版測驗進行中，請先切到「正式版」關閉測驗，再回來同步。"
-        : "";
-    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="push"${livePushBlocked ? " disabled" : ""}>同步到正式版</button>`);
-    pushNote = livePushBlocked;
-  }
-
-  // 公布成績：正式版、已有作答、尚未公布 → 對外釋出並永久鎖定
-  if (isLive && officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
-    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("只有正式版、且所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。")}`);
+  // 公布成績：已有作答、尚未公布 → 對外釋出並永久鎖定
+  if (officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
+    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。")}`);
     statusNote = "「公布成績」前會先自動收掉逾時未交的作答，公布後所有結算操作一律鎖定。";
   }
-  const actionHint = [statusNote, pushNote].filter(Boolean).join(" ");
+  const actionHint = statusNote;
 
   const showChecklist = paper.status === "draft" && !checklist.requiredDone;
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
-      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${isLive ? "brand" : "neutral"}">${isLive ? "正式版" : "測試版"}</span>${examInfoIcon("測試版與正式版是兩份獨立的卷。題目、試卷設定、公告內容都只能在測試版編輯；準備好後按「同步到正式版」把最新內容整份推過去（每次同步都覆蓋，含公告文字）。正式版一旦有人作答，就不能再同步（會換題目 id，毀掉已計分的成績）；正式測驗進行中也要先「關閉測驗」才能再同步。")}　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${hasNotice ? annBadge : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
+      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${hasNotice ? annBadge : ""}${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（發佈時清除）</span>` : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
       ${showChecklist ? examChecklistHtml(checklist) : ""}
       <div class="exam-admin__actions">${primaryActions.join("")}</div>
       ${actionHint ? `<p class="exam-admin__meta">${esc(actionHint)}</p>` : ""}
       ${moreActions.length ? `<details class="exam-admin__more"><summary>⋯ 更多</summary>
         <div class="exam-admin__actions exam-admin__actions--more">${moreActions.join("")}</div>
       </details>` : ""}
-      ${isTest ? `<details class="exam-admin__testers"><summary>測試名單（開放指定會友作答這份測試版）</summary>
-        <p class="exam-admin__meta">名單內的人即使不是管理員，也能用測試版連結進入作答（測試版須「已發佈」；不受開放時段限制）。</p>
-        <div class="exam-admin__tester-add">
-          <input type="email" class="form-control" id="exam-tester-email" placeholder="輸入對方的 email">
-          <button type="button" class="secondary-btn" id="exam-tester-add-btn">加入</button>
-        </div>
-        <div id="exam-tester-list" class="exam-admin__tester-list"></div>
-      </details>` : ""}
     </div>
     <nav class="exam-admin__subnav">
       ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
-      <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>
-      <button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">公告</button>` : ""}
+      <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>` : ""}
+      ${showNotice ? `<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">公告</button>` : ""}
       ${showAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
       ${showGrade ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
       <button type="button" data-exam-sub="assign" class="${examAdminSubview === "assign" ? "active" : ""}">簡答指派</button>` : ""}
@@ -508,44 +481,9 @@ export async function renderExamPanel(root) {
 
   wirePicker();
 
-  // ── 測試名單（只有測試版有）──
-  if (isTest) {
-    const listEl = body.querySelector("#exam-tester-list");
-    const paintTesters = async () => {
-      if (!listEl) return;
-      const res = await db.getExamPaperTesters(paper.id);
-      const rows = res.success && Array.isArray(res.data) ? res.data : [];
-      listEl.innerHTML = rows.length
-        ? rows.map((r) => `<div class="exam-admin__tester-row">
-            <span>${esc(r.name || "（未命名）")}　<span class="exam-admin__meta">${esc(r.email || "")}</span></span>
-            <button type="button" class="secondary-btn" data-tester-remove="${esc(r.userId)}">移除</button>
-          </div>`).join("")
-        : '<p class="exam-admin__meta">目前沒有加入任何人。</p>';
-      listEl.querySelectorAll("[data-tester-remove]").forEach((btn) => btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        const r = await db.removeExamTester(paper.id, btn.dataset.testerRemove);
-        if (!r.success) { toast(r.message || "移除失敗"); btn.disabled = false; return; }
-        paintTesters();
-      }));
-    };
-    body.querySelector("#exam-tester-add-btn")?.addEventListener("click", async (e) => {
-      const inp = body.querySelector("#exam-tester-email");
-      const email = (inp?.value || "").trim();
-      if (!email) { toast("請先輸入 email"); return; }
-      e.target.disabled = true;
-      const r = await db.addExamTester(paper.id, email);
-      e.target.disabled = false;
-      if (!r.success) { toast(r.message || "加入失敗"); return; }
-      if (inp) inp.value = "";
-      toast(`已加入 ${r.data?.name || email}`);
-      paintTesters();
-    });
-    paintTesters();
-  }
-
   // 進批改 / 統計前先收掉逾時未交的作答（惰性掃描；沒有的話伺服器端很快返回 0）
   const sweepExpired = () =>
-    (isLive && attemptCount > 0 && !resultsPublished)
+    (attemptCount > 0 && !resultsPublished)
       ? db.finalizeExpiredExam(paper.id).catch(() => {})
       : Promise.resolve();
 
@@ -559,9 +497,9 @@ export async function renderExamPanel(root) {
     else if (examAdminSubview === "practice") renderExamPracticeRecords(sub, paper.id);
     else if (examAdminSubview === "stats") { sub.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(sub, paper.id, hasShortSection, paper.title); }
     else if (examAdminSubview === "explain") renderExamExplanationEditor(sub, questions);
-    else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">正式版的題目與試卷設定不提供編輯，一律由對應的測試版按「推上正式版」維護。要查看題目請用上方「預覽試卷」；要編輯答案詳解請切到「答案詳解」分頁。</div>';
+    else if (examAdminSubview === "notice" && showNotice) renderExamNoticeForm(sub, paper, rerender);
+    else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">題目與試卷設定只有草稿可以修改。還沒有人作答時，可以用「⋯ 更多」裡的「撤回成草稿」；要查看題目請用「預覽試卷」。</div>';
     else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, questions, rerender);
-    else if (examAdminSubview === "notice") renderExamNoticeForm(sub, paper, rerender);
     else renderExamQuestionBank(sub, paper, questions, rerender);
   };
   body.querySelectorAll("[data-exam-sub]").forEach((b) => b.addEventListener("click", () => {
@@ -611,22 +549,6 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "ver-test") {
-      examAdminPaperId = examKey; examAdminSubview = "bank"; rerender();
-      return;
-    }
-    if (act === "ver-live") {
-      if (liveOf) { examAdminPaperId = liveOf.id; examAdminSubview = "stats"; rerender(); return; }
-      if (!confirm("尚未建立正式版。要把這份測試版的題目與試卷設定推上正式版、建立一份正式版嗎？")) return;
-      b.disabled = true;
-      const r = await db.pushExamToLive(examKey);
-      b.disabled = false;
-      if (!r.success) { toast(r.message || "建立失敗"); return; }
-      toast("已建立正式版");
-      if (r.data && r.data.livePaperId) { examAdminPaperId = r.data.livePaperId; examAdminSubview = "stats"; }
-      rerender();
-      return;
-    }
     if (act === "finalize") {
       b.disabled = true;
       const r = await db.finalizeExpiredExam(paper.id);
@@ -646,28 +568,12 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "push") {
-      if (!confirm("把這份測試版的最新題目與設定同步到正式版？\n（正式版的預告文不受影響；若正式版為「已關閉」會退回草稿要重新發佈。正式版一旦有人作答就不能再同步。）")) return;
-      b.disabled = true;
-      const r = await db.pushExamToLive(paper.id);
-      b.disabled = false;
-      if (!r.success) { toast(r.message || "推送失敗"); return; }
-      toast((r.data && r.data.reverted) ? "正式版已更新，並退回草稿（請重新發佈）" : "正式版內容已更新");
-      rerender();
-      return;
-    }
-    if (act === "announce" && !confirm(isLive
-      ? "將把這份預告文發佈到全體會友的首頁。確定？"
-      : "將把這份預告文發佈到首頁——只有你自己（管理員）看得到，用來預覽效果，不會出現在會友端。確定？")) return;
-    if (act === "unannounce" && !confirm(isLive
-      ? "撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？"
-      : "撤下後，你自己的首頁預覽就不會再顯示這份測試版的預告區塊。確定？")) return;
+    if (act === "announce" && !confirm("將把這份預告文發佈到全體會友的首頁。確定？")) return;
+    if (act === "unannounce" && !confirm("撤下後，會友首頁就不會再顯示這份測驗的預告區塊。確定？")) return;
     if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。若自動評分已開啟且正解完整，關閉後才會開始計算正式成績。確定提前關閉？")) return;
-    if (act === "publish" && !confirm(isTest
-      ? "將開放「測試作答」——只有系統管理員能進入，不會出現在會友端。發佈後題庫會鎖定。確定？"
-      : "將開放作答（開放時間內全體會友可作答），發佈後題庫會鎖定。確定？")) return;
-    if (act === "reopen" && !confirm("把已關閉的測驗改回草稿以便修改題目？（預告文仍保留在首頁）")) return;
-    if (act === "reset" && !confirm(`確定清除這份測試卷的 ${attemptCount} 筆作答紀錄？（無法復原）`)) return;
+    if (act === "publish" && !confirm(`將開放作答（開放時間內全體會友可作答），發佈後題庫會鎖定。${rehearsalCount ? `\n這份草稿上的 ${rehearsalCount} 筆演練作答會一併清除。` : ""}確定？`)) return;
+    if (act === "reopen" && !confirm("撤回成草稿以便修改題目？（還沒有人作答才可以；預告文仍保留在首頁）")) return;
+    if (act === "reset" && !confirm(`確定清除這份草稿上的 ${rehearsalCount} 筆演練作答？（無法復原）`)) return;
     b.disabled = true;
     let res;
     if (act === "announce") res = await db.publishExamAnnouncement(paper.id);
@@ -675,24 +581,16 @@ export async function renderExamPanel(root) {
     else if (act === "publish") res = await db.publishExam(paper.id);
     else if (act === "close") res = await db.setExamStatus(paper.id, "closed");
     else if (act === "reset") res = await db.resetExamAttempts(paper.id);
-    else if (act === "reopen") {
-      res = await db.setExamStatus(paper.id, "draft");
-      // 測試卷改回草稿後，順手問要不要一併清掉舊作答紀錄（題目一改，舊分數就對不上了）
-      if (res.success && paper.mode === "test" && attemptCount > 0
-          && confirm(`已改回草稿。要一併清除舊的 ${attemptCount} 筆作答紀錄嗎？（改完題目建議清除，否則新舊分數會混在一起）`)) {
-        const r2 = await db.resetExamAttempts(paper.id);
-        if (!r2.success) toast(r2.message || "作答紀錄清除失敗");
-      }
-    }
+    else if (act === "reopen") res = await db.setExamStatus(paper.id, "draft");
     b.disabled = false;
     if (!res.success) { toast(res.message || "操作失敗"); return; }
     toast(
-      act === "announce" ? (isLive ? "預告文已發佈到會友首頁" : "預告文已發佈，可以到首頁預覽（僅管理員看得到）")
+      act === "announce" ? "預告文已發佈到會友首頁"
       : act === "unannounce" ? "已撤下預告文"
-      : act === "publish" ? (isTest ? "已開放測試作答（僅系統管理員）" : "測驗已發佈，開放時間內可作答")
+      : act === "publish" ? "測驗已發佈，開放時間內可作答"
       : act === "close" ? "測驗已關閉"
-      : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆作答紀錄`
-      : "已改回草稿"
+      : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆演練作答`
+      : "已撤回成草稿"
     );
     rerender();
   }));
@@ -1031,7 +929,7 @@ function examSectionCfg(paper) {
   return map;
 }
 
-// ── 公告／預告設定：只有測試版能編輯，正式版的內容一律由「同步到正式版」帶過去
+// ── 公告／預告設定：測驗結束前都能編輯
 //    （公告見 0199，預告見 0200）。獨立分頁，不跟試卷設定混在一起。
 //    公告＝測驗活動期間的入口文字（必填）；預告＝開考前的簡短通知（選填，可開關），
 //    公告一發佈就自動蓋掉預告，不用另外撤下。
@@ -1044,7 +942,7 @@ function renderExamNoticeForm(host, paper, rerender) {
   host.innerHTML = `
     <div class="exam-admin__form">
       <fieldset class="exam-admin__sec-cfg">
-        <legend>公告${examInfoIcon("這裡的內容會出現在首頁的「速讀測驗」置頂區塊，也是會友進入測驗的入口文字（必填）。按「發佈預告文」只有你自己（管理員）看得到，用來預覽實際效果；推上正式版後，正式版要另外自己按「發佈預告文」才會公開給全體會友——內容以最後一次「同步到正式版」帶過去的為準，正式版不能自己改文字。")}</legend>
+        <legend>公告${examInfoIcon("這裡的內容會出現在首頁的「速讀測驗」置頂區塊，也是會友進入測驗的入口文字（必填）。按「發佈預告文」後才會公開給全體會友；發佈測驗前必須先發佈預告文。")}</legend>
         <label>標題（必填）
           <input class="form-control" data-n="headline" maxlength="40" value="${esc(ann.headline || "")}" ${annLocked ? "disabled" : ""}></label>
         <label>內容（必填）
@@ -1112,8 +1010,7 @@ function renderExamMetaForm(host, paper, questions, rerender) {
 
   // 對應計畫：通常是某個「教會速讀階段」計畫。設定了，這份卷的團隊排行就只統計
   // 那個計畫底下登記的隊伍，不受標題書卷比對或考生現況影響；留空＝獨立測驗卷。
-  // 跟其他試卷設定一樣併進 #exam-meta-save，只有測試版草稿能改；推正式版時
-  // （exam_push_to_live）會一併帶過去，正式版本身不能單獨改這一項。
+  // 跟其他試卷設定一樣併進 #exam-meta-save，只有草稿能改。
   const stagePlans = [...(state.globalPlans || [])]
     .filter((gp) => gp.planKind === "church_campaign_stage" || gp.planKind === "church_campaign_stage_cohort")
     .sort((a, b) => (Number(a.stageNo) || 0) - (Number(b.stageNo) || 0) || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant"));
@@ -1131,7 +1028,6 @@ function renderExamMetaForm(host, paper, questions, rerender) {
         <select class="form-control" id="exam-meta-linked-plan">${planOptions}</select>
       </label>
       <p class="exam-admin__meta">這份卷的統計頁「團隊排行」只會列出對應計畫底下登記的 3／6 人隊，不會抓到升到下一階段或其他計畫的隊。獨立測驗卷（不選）維持舊行為。跟其他設定一樣按下方「儲存試卷設定」才會存，且只有測試版草稿能改；推正式版時會一併帶過去。</p>
-      <p class="exam-admin__meta">測試版與正式版是兩份獨立的卷。測試版改好後，用上方「推上正式版」把題目與設定複製過去。</p>
       <div class="exam-admin__form-row">
         <label>開放起<input type="datetime-local" class="form-control" data-f="open_at" value="${esc(toLocalInput(p.open_at))}"></label>
         <label>開放迄<input type="datetime-local" class="form-control" data-f="close_at" value="${esc(toLocalInput(p.close_at))}"></label>
@@ -1249,14 +1145,14 @@ function wireExplanationCards(host) {
   });
 }
 
-// ── 答案詳解分頁：獨立於「題庫編輯」，正式版／已鎖定的試卷也看得到、改得了 ──
-// （「題庫編輯」分頁本身只有測試版才會出現，正式版一律不能編輯題目——見 canEditPaper。
+// ── 答案詳解分頁：獨立於「題庫編輯」，已發佈／已鎖定的試卷也看得到、改得了 ──
+// （「題庫編輯」分頁只有草稿才會出現——見 canEditPaper。
 // 但答案詳解通常是測驗結束、看到結果之後才想補寫，所以另外開一個永遠看得到的分頁。）
 function renderExamExplanationEditor(host, questions) {
   const sorted = questions.slice()
     .sort((a, b) => (SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)) || (a.position - b.position));
   host.innerHTML = `
-    <p class="exam-admin__meta">答案詳解不受題目鎖定影響，正式版發佈或關閉後也能隨時補寫、修改；預設空白，一般題目不用填，只有有爭議或需要補充說明的題目才個別填寫。要不要讓會友看到，由上方「顯示/隱藏答案詳解」開關決定。</p>
+    <p class="exam-admin__meta">答案詳解不受題目鎖定影響，發佈或關閉後也能隨時補寫、修改；預設空白，一般題目不用填，只有有爭議或需要補充說明的題目才個別填寫。要不要讓會友看到，由上方「顯示/隱藏答案詳解」開關決定。</p>
     <div class="exam-admin__q-list">${sorted.map((q) => explanationOnlyCard(q)).join("")}</div>
   `;
   wireExplanationCards(host);
@@ -2214,7 +2110,7 @@ class ExamRunner {
     this.openState = d.state;
     if (this.titleEl && this.paper) {
       this.titleEl.textContent = this.paper.title
-        + (this.paper.mode === "test" ? "（測試版）" : "");
+        + (isRehearsalPaper(this.paper) ? "（演練）" : "");
     }
 
     // 後台預覽：唯讀呈現整卷題目，不建 attempt、不倒數、不送出、不跳結果畫面
@@ -2522,7 +2418,7 @@ class ExamRunner {
 
     this.el.innerHTML = `
       <div class="glass-card exam-pledge">
-        <h3>✅ ${esc(this.paper.title)}${this.paper.mode === "test" ? "（測試版）" : ""}｜測驗宣示</h3>
+        <h3>✅ ${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? "（演練）" : ""}｜測驗宣示</h3>
         <p class="exam-pledge__open">${esc(pledge.openText || "")}</p>
         <ol class="exam-pledge__rules">${rules.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
         <div class="exam-pledge__consent">
@@ -3294,7 +3190,7 @@ class ExamRunner {
 
     this.el.innerHTML = `
       <div class="glass-card" style="padding:1.4rem 1.5rem;">
-        <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${this.paper.mode === "test" ? '　<span class="stat-badge stat-badge--neutral">測試版</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
+        <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? '　<span class="stat-badge stat-badge--neutral">演練</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
         <div class="exam-result__banner">
           ${isPractice ? "複習已鎖定，本次不列入正式成績。" : "正式作答已送出，答案已鎖定。"}<br>
           ${showAuto

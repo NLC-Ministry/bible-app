@@ -58,10 +58,10 @@ describe("0199/0200: 公告內容編輯是測試版限定的獨立「公告」�
     expect(noticeFn).toContain("const annLocked = p.status === \"closed\";");
   });
 
-  it("「公告」分頁只有測試版看得到（跟題庫編輯／試卷設定同一組 canEditPaper 判斷）", () => {
+  it("「公告」分頁在測驗結束前都看得到（單一試卷 #258；伺服器端 exam_save_announcement 同樣擋 closed）", () => {
     expect(exam).toContain('<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">公告</button>');
-    expect(exam).toContain('...(canEditPaper ? ["bank", "meta", "notice"] : [])');
-    expect(exam).toContain('else if (examAdminSubview === "notice") renderExamNoticeForm(sub, paper, rerender);');
+    expect(exam).toContain('...(showNotice ? ["notice"] : [])');
+    expect(exam).toContain('else if (examAdminSubview === "notice" && showNotice) renderExamNoticeForm(sub, paper, rerender);');
   });
 
   it("正式版仍保留「發佈預告文」/「撤下預告文」動作按鈕（只是內容不能自己編）", () => {

@@ -49,9 +49,9 @@ describe("0201: exam_push_to_live 不准帶空白公告去覆蓋已發佈的正�
 });
 
 describe("0201: 前端有對應的錯誤訊息", () => {
-  it("db.js 的錯誤訊息表有這兩個新錯誤碼", () => {
+  it("db.js 的錯誤訊息表有公告不能存成空白的錯誤碼；推上正式版的已隨功能移除（#258）", () => {
     expect(db).toContain("exam_announcement_would_blank_published:");
-    expect(db).toContain("exam_push_would_blank_announcement:");
+    expect(db).not.toContain("exam_push_would_blank_announcement:");
   });
 });
 
