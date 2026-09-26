@@ -26,7 +26,8 @@
 - Secrets：`NLC_LOGTO_ISSUER`、`NLC_MEMBER_HUB_URL`、`NLC_PLATFORM_API_URL`、`NLC_JWT_VERIFY_MODE=enforce`、`EXAM_WRITE_SECRET`（staging 專用）。
 - pg_cron 排程：沒有。
 - 樣本資料：2026-09-25 匯入（見下方「樣本資料」）。
-- 尚未完成：`APP_ORIGIN`、登入用的 Logto client（#265）、第一個管理員。
+- Logto：staging 專用的 client（2026-09-26 建立），和正式環境的 client 分開（見下方「登入」）。
+- 尚未完成：第一個管理員。
 
 ## 部署前端到 staging
 
@@ -38,8 +39,17 @@ git push --force-with-lease origin <要測試的分支>:staging
 
 - **不要用 `bible-speed-reading.vercel.app` 當 staging**：它跟 `bible.newlife.org.tw` 是同一個正式部署。PWA 的登入狀態和離線讀經紀錄是依網址分開保存的，改用它的話，曾經從這個網址安裝 app 的會友會默默改連 staging，離線紀錄也會送到 staging。
 - **Deployment Protection**：staging 網址是 preview 部署，一樣要登入 Vercel 才看得到。免費方案只有專案擁有者能看；如果要讓同工一起測試，要在 Vercel 關掉 Preview 的 Deployment Protection（資料仍然要用 NLC 帳號登入才看得到）。
-- **登入**：staging 的 Logto client 要登記兩個 redirect URI：`https://bible-speed-reading-staging.vercel.app/` 和 `http://localhost:3100/`（#265）。程式用 `window.location.origin + "/"` 當 redirect URI，port 要完全一樣。
-- `APP_ORIGIN` 不用設定：`nlc-data`、`nlc-session`、`exam-write` 會回應請求來源的 CORS。
+- **登入**：staging 用自己的 Logto client，不和正式環境共用（#265）。
+  - **Vercel 環境變數**：`NLC_CLIENT_ID` 分成兩筆，**Production** 填正式 client ID，**Preview** 填 staging client ID。CI 部署 staging 時跑 `vercel pull --environment=preview`，所以 staging 讀的是 Preview 那筆。環境變數在 build 時才寫進 `config.js`，改完要重新部署一次（把分支推到 `staging`，或在 GitHub Actions 重跑）才會生效。CI log 的 `deploy` → `Build` 步驟會印出這次用到的 `NLC Client ID`，可以用來確認。
+  - **Redirect URIs**：`https://bible-speed-reading-staging.vercel.app/` 和 `http://localhost:3100/`，結尾都要有 `/`。程式用 `window.location.origin + "/"` 當 redirect URI，Logto 逐字比對，port 也要完全一樣。
+  - **CORS allowed origins**：`https://bible-speed-reading-staging.vercel.app` 和 `http://localhost:3100`，結尾**不加** `/`。
+  - **Post sign-out redirect URIs** 用不到：登出只清本機 token，不會導到 Logto 的 end-session。
+  - 正式環境的 client 只登記正式網域，不要把 staging 網址加進去。
+  - 按登入跳出「教會系統登入尚未完成設定」，代表頁面上的 client ID 是空的：可能 build 時 Preview 還沒設 `NLC_CLIENT_ID`，或瀏覽器還在跑 Service Worker 快取的舊版。先看 CI log 的 client ID，有的話開 `/repair` 清快取再試。
+  - `nlc-session` 的 `NLC_LOGTO_CLIENT_ID` secret（選填，檢查 id_token 的 `aud`）staging 目前沒設；之後要設的話，staging 要填 staging client ID，不是正式的。
+  - **只有從這兩個網址打開才能登入。** Vercel 每次部署自動產生的網址（`bible-speed-reading-<隨機字串>-...vercel.app`，包括 PR 留言裡的 preview 網址）每次都不同，無法事先登記，從那些網址打開時 Logto 會回報 redirect URI 不符。要測某個 PR 的登入，就把它推到 `staging` 分支，再從固定網址打開。
+- `APP_ORIGIN` 不用設定：沒設時 `nlc-data`、`nlc-session` 回 `Access-Control-Allow-Origin: *`，`exam-write` 回請求來源。這些 API 用 Bearer token 驗證、不靠 cookie，`*` 不會讓別的網站拿到資料。反而設了之後只能填一個網址，從 `http://localhost:3100` 連 staging 會被 CORS 擋掉。
+- `NLC_LOGTO_AUDIENCE` 不用設：access token 的 audience 由登入時的 `resource` 參數決定（`config.js` 的 `platformResource`，預設 `https://platform.newlife.org.tw`），兩個 client 一樣，分不出環境；正式環境也沒設。
 
 ## 套用 migration（#255）
 
