@@ -3,7 +3,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # staging：部署成 preview，並綁到固定網址 bible-speed-reading-staging.vercel.app
+    #（連 staging 資料庫，見 docs/staging.md）
+    branches: [main, staging]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -87,6 +89,15 @@ jobs:
             echo "- **URL**: $URL"
             echo "- **Target**: $([ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && echo production || echo preview)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Alias staging deployment
+        # 只有 staging 分支：把這次的 preview 部署綁到固定網址。main 永遠不會走到這裡。
+        if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          vercel alias set "$DEPLOY_URL" bible-speed-reading-staging.vercel.app
+          echo "- **Staging**: https://bible-speed-reading-staging.vercel.app" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment preview URL
         if: github.event_name == 'pull_request'

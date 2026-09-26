@@ -6,7 +6,7 @@
 |---|---|---|
 | Supabase project ref | `ztozevcqkfrohgjmngcj` | `vzokpsscyivhgmhleplq`（Supabase 分支） |
 | 網址 | `https://ztozevcqkfrohgjmngcj.supabase.co` | `https://vzokpsscyivhgmhleplq.supabase.co` |
-| 前端 | Vercel Production | Vercel Preview（PR 的 preview 部署） |
+| 前端 | `https://bible.newlife.org.tw`（也可從 `bible-speed-reading.vercel.app` 進入） | `https://bible-speed-reading-staging.vercel.app`（`staging` 分支）、PR 的 preview、本機 `http://localhost:3100` |
 | 資料 | 真實會員資料 | 去識別化樣本：310 位「測試會友」及其讀經、測驗、小測驗資料（見下方） |
 
 ## 規則
@@ -27,6 +27,19 @@
 - pg_cron 排程：沒有。
 - 樣本資料：2026-09-25 匯入（見下方「樣本資料」）。
 - 尚未完成：`APP_ORIGIN`、登入用的 Logto client（#265）、第一個管理員。
+
+## 部署前端到 staging
+
+`staging` 分支一 push，CI 就會部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址 **https://bible-speed-reading-staging.vercel.app**。`staging` 分支是拿來測試用的，想測哪個分支就把它推上去：
+
+```bash
+git push --force-with-lease origin <要測試的分支>:staging
+```
+
+- **不要用 `bible-speed-reading.vercel.app` 當 staging**：它跟 `bible.newlife.org.tw` 是同一個正式部署。PWA 的登入狀態和離線讀經紀錄是依網址分開保存的，改用它的話，曾經從這個網址安裝 app 的會友會默默改連 staging，離線紀錄也會送到 staging。
+- **Deployment Protection**：staging 網址是 preview 部署，一樣要登入 Vercel 才看得到。免費方案只有專案擁有者能看；如果要讓同工一起測試，要在 Vercel 關掉 Preview 的 Deployment Protection（資料仍然要用 NLC 帳號登入才看得到）。
+- **登入**：staging 的 Logto client 要登記兩個 redirect URI：`https://bible-speed-reading-staging.vercel.app/` 和 `http://localhost:3100/`（#265）。程式用 `window.location.origin + "/"` 當 redirect URI，port 要完全一樣。
+- `APP_ORIGIN` 不用設定：`nlc-data`、`nlc-session`、`exam-write` 會回應請求來源的 CORS。
 
 ## 套用 migration（#255）
 
