@@ -489,10 +489,8 @@ const db = {
                         hostname.startsWith('10.') ||
                         hostname.startsWith('172.') ||
                         hostname.endsWith('.local');
-    const forceOfflineDemo = false;
-
-    const sbUrl = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url ? SUPABASE_CONFIG.url.trim() : "");
-    const sbKey = forceOfflineDemo ? "" : (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.anonKey ? SUPABASE_CONFIG.anonKey.trim() : "");
+    const sbUrl = typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url ? SUPABASE_CONFIG.url.trim() : "";
+    const sbKey = typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.anonKey ? SUPABASE_CONFIG.anonKey.trim() : "";
     const statusBadge = document.getElementById("connection-status");
     const authSection = document.getElementById("sb-auth-section");
     const placeholder = document.getElementById("sb-disconnected-placeholder");
@@ -713,13 +711,8 @@ const db = {
         return false;
       }
     } else {
-      if (forceOfflineDemo) {
-        this.setDemoMode();
-        this.updateAuthUI(null);
-      } else {
-        console.error("Supabase config is missing or invalid!");
-        this.showConnectionError();
-      }
+      console.error("Supabase config is missing or invalid!");
+      this.showConnectionError();
       return false;
     }
   },
@@ -1406,7 +1399,7 @@ const db = {
         });
         window.__bootMark?.("login-gate-shown");
       } else {
-        // Demo mode: Ensure login gate is hidden and app is visible
+        // Not in Supabase mode (offline fallback): keep the app visible
         if (loginGate) loginGate.classList.add("hidden");
         if (appLayout) appLayout.classList.remove("hidden");
         window.__bootMark?.("app-shell-shown");
