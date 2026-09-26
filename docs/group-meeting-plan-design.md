@@ -8,13 +8,13 @@
 > 探索 filter、卡片 render 用 `isViewerPlan` / `viewerDevMode`、`enterPlanDetailState` 分支）、
 > `js/modules/admin.js`（功能開關 `admin-group-meeting-feature-*`、`ADMIN_SECTIONS` `group-meeting`、
 > `renderAdminGroupMeetingPlan` 逐週表單）、`index.html`（toggle row + `#admin-section-group-meeting`）、
-> `index.css`（`.group-meeting-view*` / `.gm-week-chip*`）、`scratch/seed_group_meeting_plan_2026_h2.sql`（27 週，`is_published=TRUE`）。
+> `index.css`（`.group-meeting-view*` / `.gm-week-chip*`）、`supabase/seeds/seed_group_meeting_plan_2026_h2.sql`（27 週，`is_published=TRUE`）。
 > build + 1091 tests pass。`campaign-stage-release-control.test` 的 source 斷言從 `isDevotional` 改成 `isViewerPlan`。
 > 未做 runtime 驗證。
 
 ## 部署順序
 1. SQL editor 跑 `0148_group_meeting_plan.sql`
-2. SQL editor 跑 `scratch/seed_group_meeting_plan_2026_h2.sql`
+2. SQL editor 跑 `supabase/seeds/seed_group_meeting_plan_2026_h2.sql`
 3. **重新部署 nlc-data**（不然 6 支 RPC 被擋 `forbidden_rpc`）
 4. 部署前端
 5. （可選）管理 → 小組聚會 → 核對 27 週內容
@@ -31,7 +31,7 @@
 2. 信息／奉獻經文：站內段落預覽 ＋「查看完整章節」（比照每日靈修）。
 3. **不做「已完成／已聚會」勾選**——純顯示。日曆格只標 今天 / 過去週。
 4. 可見性比照每日靈修：flag 開 → 全會友；flag 關 → 只有 admin/pastor（卡片黃色「開發中」badge）。
-5. 管理端：**逐週表單填**（不需要批次貼上匯入的 parser）。但因為 27 週 × 5 欄手動輸入很累，會附一支 `scratch/seed_group_meeting_plan_2026_h2.sql` 把 27 週先建好。
+5. 管理端：**逐週表單填**（不需要批次貼上匯入的 parser）。但因為 27 週 × 5 欄手動輸入很累，會附一支 `supabase/seeds/seed_group_meeting_plan_2026_h2.sql` 把 27 週先建好。
 6. 每月有「月主題」（如七月＝耶穌被賣的那一夜），每週有小標（如「設立主聖餐」）。
 7. **日期不綁死**：每週的顯示標籤用 `date_label`（例「7/1–7/2」，直接照教會材料），內容鍵是 `week_index`。
 8. **日曆以「一週（日～六）」呈現**。小組現在是週三／四聚會，但畫面就顯示整個 Sun–Sat 週。
@@ -107,7 +107,7 @@
   - 未開放的週：顯示「這一週 <日期> 開放」（比照 devotional locked）
 - `index.html`：admin toggle row + `#admin-section-group-meeting` panel（`#admin-group-meeting-root`）。
 - `index.css`：`.group-meeting-view*`（沿用 `.devotion-view*` 樣式，週日曆格子稍寬）。
-- `scratch/seed_group_meeting_plan_2026_h2.sql`：建計畫列（`plan_kind='group_meeting'`、`start_date` = 第一週的週六、`end_date` 12 月最後一週、`rules.groupMeetingFutureOpen=FALSE`），週資料等使用者貼文字後用批次匯入。
+- `supabase/seeds/seed_group_meeting_plan_2026_h2.sql`：建計畫列（`plan_kind='group_meeting'`、`start_date` = 第一週的週六、`end_date` 12 月最後一週、`rules.groupMeetingFutureOpen=FALSE`），週資料等使用者貼文字後用批次匯入。
 
 ## 部署順序（跟每日靈修一樣）
 
