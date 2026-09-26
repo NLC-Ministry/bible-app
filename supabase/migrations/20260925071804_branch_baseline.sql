@@ -1,0 +1,15 @@
+-- ============================================================================
+-- 20260925071804_branch_baseline.sql  —  佔位檔，沒有任何 SQL
+--
+-- 2026-09-25 開 Supabase staging 分支時，Supabase 在正式環境和 staging 的
+-- supabase_migrations.schema_migrations 都寫入了這個版本號。repo 裡要有同名
+-- 檔案，`supabase db push` 才不會因為「遠端有、本機沒有」而拒絕執行。
+--
+-- 從這支開始改用 Supabase CLI 管理 migration（#255）：
+--   * 新 migration 用 `npx supabase migration new <名稱>` 建立，檔名是時間戳，
+--     一定比這支新；不要再用 0215_xxx 這種四位數編號（CLI 會拒絕推送比遠端
+--     最新版本還舊的 migration）。
+--   * 0001–0214 已用 `supabase migration repair --status applied` 標記為已套用。
+--   * 套用：先 staging、驗證後再正式環境，見 docs/staging.md。
+-- ============================================================================
+SELECT 1;

@@ -15,7 +15,7 @@
 - **每個 secret 在兩個環境都不同**，不能沿用正式環境的值。
 - **對外有副作用的設定，staging 預設不啟用**：`GEMINI_API_KEY`、兩個 Google Sheet webhook（`ISSUE_REPORT_SHEET_WEBHOOK_*`、`REGISTRATION_STATS_SHEET_WEBHOOK_*`）、各排程的 cron secret、pg_cron 排程。要測到那個功能時才設定，並接到測試用的目的地。
 - **Staging 的防護跟正式環境一樣**：之後會有 Logto 同步進來的真實個資（#265）。
-- migration 先套用到 staging、驗證後再套用到正式環境。
+- migration 用 Supabase CLI 套用：先 staging、驗證後再正式環境（見下方「套用 migration」）。不要再手動貼到 SQL Editor。
 
 ## Staging 目前的設定（2026-09-25）
 
@@ -27,6 +27,41 @@
 - pg_cron 排程：沒有。
 - 樣本資料：2026-09-25 匯入（見下方「樣本資料」）。
 - 尚未完成：`APP_ORIGIN`、登入用的 Logto client（#265）、第一個管理員。
+
+## 套用 migration（#255）
+
+2026-09-25 起改用 Supabase CLI。兩個環境的 `supabase_migrations.schema_migrations` 都已經記錄 0001–0214 為已套用，CLI 會記住每個環境推過哪些 migration。
+
+**建立新 migration**（檔名會是時間戳，例如 `20260926093000_add_xxx.sql`）：
+
+```bash
+npx supabase migration new add_xxx
+```
+
+**不要再用 `0215_xxx.sql` 這種四位數編號**：`db push` 會拒絕（比遠端最新版本還舊），`scripts/migration-naming.test.mjs` 也會失敗。
+
+**套用**（一律明確指定環境，不依賴 `supabase link`）：
+
+```bash
+# 1. staging：先看會跑哪些，再真的套用
+npx supabase db push --linked --project-ref vzokpsscyivhgmhleplq --dry-run
+npx supabase db push --linked --project-ref vzokpsscyivhgmhleplq
+
+# 2. 在 staging 驗證功能
+
+# 3. 正式環境
+npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run
+npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj
+
+# 4. 確認兩邊還是一致
+node scripts/compare-env-snapshots.mjs --run
+```
+
+注意：
+- **正式環境不要加 `--include-all`**。那會把遠端沒有紀錄的舊 migration 全部補跑。
+- migration 檔頭寫的**順序要求 CLI 不會檢查**，例如 0212 的「先設定 Vault `project_url` 再套用」。推之前先讀檔頭。
+- `20260925071804_branch_baseline.sql` 是開分支時 Supabase 寫入的版本號的佔位檔，不要刪。
+- 需要登入（`npx supabase login`），不需要資料庫密碼。
 
 ## 樣本資料（#267）
 
