@@ -1932,32 +1932,46 @@
               </div>
             </div>
 
-            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-editor" aria-hidden="true">
-              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-form-title">
-                <div class="bottom-sheet-header">
-                  <h3 id="admin-lightning-quiz-form-title">新增題目</h3>
-                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-                </div>
-                <div class="bottom-sheet-body">
-                  <div class="admin-lightning-quiz-schedule-row">
-                    <label>日期
-                      <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
-                    </label>
-                    <label>開始時間
-                      <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
-                    </label>
-                    <label>結束時間
-                      <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
-                    </label>
-                  </div>
-                  <div id="admin-lightning-quiz-question-body"></div>
-                </div>
-                <div class="admin-lq-sheet__footer">
-                  <button type="button" class="pill-btn" id="admin-lightning-quiz-cancel">取消</button>
-                  <button type="button" class="primary-btn" id="admin-lightning-quiz-save">儲存題目</button>
-                </div>
+            <!-- 完整頁面（#317）：內容長的畫面不放彈窗。打開時隱藏上面的快問快答主畫面，
+                 「← 返回快問快答」回到原本的分頁；有打字還沒存會先確認。 -->
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-editor" aria-labelledby="admin-lightning-quiz-form-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <h3 class="card-title" id="admin-lightning-quiz-form-title">新增題目</h3>
               </div>
-            </div>
+              <div class="admin-lightning-quiz-schedule-row">
+                <label>日期
+                  <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
+                </label>
+                <label>開始時間
+                  <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
+                </label>
+                <label>結束時間
+                  <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
+                </label>
+              </div>
+              <div id="admin-lightning-quiz-question-body"></div>
+              <div class="admin-lq-subpage__footer">
+                <button type="button" class="pill-btn" id="admin-lightning-quiz-cancel">取消</button>
+                <button type="button" class="primary-btn" id="admin-lightning-quiz-save">儲存題目</button>
+              </div>
+            </section>
+
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-import" aria-labelledby="admin-lightning-quiz-import-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <h3 class="card-title" id="admin-lightning-quiz-import-title">匯入題目</h3>
+              </div>
+              <div id="admin-lightning-quiz-import-body" class="admin-lq-subpage__body"></div>
+            </section>
+
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-results" aria-labelledby="admin-lightning-quiz-results-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <h3 class="card-title" id="admin-lightning-quiz-results-title">作答明細</h3>
+              </div>
+              <div id="admin-lightning-quiz-results-body" class="admin-lq-subpage__body"></div>
+            </section>
 
             <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-preview" aria-hidden="true">
               <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-preview-title">
@@ -1971,16 +1985,6 @@
                 <div class="admin-lq-sheet__footer">
                   <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
                 </div>
-              </div>
-            </div>
-
-            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-import" aria-hidden="true">
-              <div class="bottom-sheet-container admin-lq-sheet admin-lq-sheet--wide" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-import-title">
-                <div class="bottom-sheet-header">
-                  <h3 id="admin-lightning-quiz-import-title">匯入題目</h3>
-                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-                </div>
-                <div class="bottom-sheet-body" id="admin-lightning-quiz-import-body"></div>
               </div>
             </div>
 

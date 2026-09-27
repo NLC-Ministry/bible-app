@@ -6525,14 +6525,6 @@ db.adminGetLightningQuizWeek = async function(weekStart) {
   return this._callLightningQuizRpc("admin_get_lightning_quiz_week", { p_week_start: weekStart });
 };
 
-db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {
-  if (!questionId) return { success: false, message: "找不到這一題。" };
-  return this._callLightningQuizRpc("admin_get_lightning_quiz_leaderboard", {
-    p_question_id: questionId,
-    p_limit: limit || 10
-  });
-};
-
 // 單一活動的作答明細：逐人名單（含未送出的 in_progress）與各牧區／大區
 // 應答人數。彙總成牧區／大區分析在前端做（lightning-quiz-analytics.mjs）。
 db.adminGetLightningQuizResults = async function(questionId) {

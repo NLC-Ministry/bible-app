@@ -153,9 +153,27 @@ function csvRate(value) {
   return value == null ? "" : `${(value * 100).toFixed(1)}%`;
 }
 
+// 單題名次（#316）：只有答對的有名次，依作答時間由快到慢；用時完全一樣就並列
+// （1、1、3）。在搜尋／篩選之前算，篩選後每個人仍保留全體名次。原本的順序不變
+// （admin_get_lightning_quiz_results 已經是答對→答錯→未送出、各自依用時排序）。
+export function rankAttempts(attempts) {
+  const list = Array.isArray(attempts) ? attempts : [];
+  const ranks = new Map();
+  const correct = list
+    .filter(attempt => attempt.status === "correct")
+    .sort((a, b) => (Number(a.elapsedMs) || 0) - (Number(b.elapsedMs) || 0));
+  correct.forEach((attempt, index) => {
+    const prev = correct[index - 1];
+    const tied = prev && (Number(prev.elapsedMs) || 0) === (Number(attempt.elapsedMs) || 0);
+    ranks.set(attempt, tied ? ranks.get(prev) : index + 1);
+  });
+  return list.map(attempt => ({ ...attempt, rank: ranks.get(attempt) ?? null }));
+}
+
 export function buildOverviewCsv(attempts, exportedAt = new Date()) {
-  const headers = ["姓名", "大區", "牧區", "小組", "結果", "作答時間（秒）", "送出時間"];
+  const headers = ["名次", "姓名", "大區", "牧區", "小組", "結果", "作答時間（秒）", "送出時間"];
   const rows = (Array.isArray(attempts) ? attempts : []).map(attempt => [
+    attempt.rank ?? "",
     attempt.name || "（未命名）",
     attempt.greatRegion || UNASSIGNED_REGION_LABEL,
     attempt.pastoralZone || UNASSIGNED_ZONE_LABEL,

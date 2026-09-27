@@ -5,6 +5,7 @@ import {
   buildRegionCsv,
   buildZoneCsv,
   filterAttempts,
+  rankAttempts,
   formatElapsedSeconds,
   sortZoneRowsByRegion,
   summarizeByRegion,
@@ -76,6 +77,28 @@ describe("summarizeByRegion", () => {
   });
 });
 
+describe("rankAttempts (#316)", () => {
+  it("ranks only correct answers, fastest first, keeping the original order", () => {
+    const ranked = rankAttempts(results.attempts);
+    expect(ranked.map(a => a.rank)).toEqual([2, null, null, 1, 3]);
+    expect(ranked.map(a => a.name)).toEqual(results.attempts.map(a => a.name));
+  });
+
+  it("gives identical times the same rank", () => {
+    const ranked = rankAttempts([
+      { name: "甲", status: "correct", elapsedMs: 3000 },
+      { name: "乙", status: "correct", elapsedMs: 3000 },
+      { name: "丙", status: "correct", elapsedMs: 4000 }
+    ]);
+    expect(ranked.map(a => a.rank)).toEqual([1, 1, 3]);
+  });
+
+  it("filtering keeps each person's overall rank", () => {
+    const ranked = rankAttempts(results.attempts);
+    expect(filterAttempts(ranked, { search: "王小明" }).map(a => a.rank)).toEqual([2]);
+  });
+});
+
 describe("filterAttempts", () => {
   it("filters by status and searches name / zone / group", () => {
     expect(filterAttempts(results.attempts, { status: "correct" })).toHaveLength(3);
@@ -88,11 +111,12 @@ describe("CSV builders", () => {
   const lines = csv => csv.split("\n");
 
   it("overview CSV has the export-time line, seconds, labels and escaped quotes", () => {
-    const csv = lines(buildOverviewCsv(results.attempts, EXPORTED_AT));
+    const csv = lines(buildOverviewCsv(rankAttempts(results.attempts), EXPORTED_AT));
     expect(csv[0]).toContain("匯出時間（台灣時間）");
-    expect(csv[1]).toBe('"姓名","大區","牧區","小組","結果","作答時間（秒）","送出時間"');
-    expect(csv[2]).toMatch(/^"王小明","北區","信義牧區","A 組","答對","4\.2",".*2026-09-25 09:00"$/);
-    expect(csv[4]).toBe('"陳大同","北區","大安牧區","C 組","未完成","",""');
+    expect(csv[1]).toBe('"名次","姓名","大區","牧區","小組","結果","作答時間（秒）","送出時間"');
+    expect(csv[2]).toMatch(/^"2","王小明","北區","信義牧區","A 組","答對","4\.2",".*2026-09-25 09:00"$/);
+    expect(csv[3]).toMatch(/^"","李小華",/);
+    expect(csv[4]).toBe('"","陳大同","北區","大安牧區","C 組","未完成","",""');
     expect(csv[5]).toContain('"林""引號"""');
     expect(csv[6]).toContain('"未分配大區","未分配牧區"');
   });
