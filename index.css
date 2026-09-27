@@ -6771,40 +6771,9 @@ body.dark-theme .pastoral-race-progress {
   font-weight: 500;
 }
 
-/* 題型五：排序——上下移動排列，不用原生 HTML5 拖放 */
-.daily-quiz-ordering-list {
-  display: grid;
-  gap: 0.55rem;
+/* 題型五：排序——沿用大測驗事件排序的積木（.exam-order-*）：點一下或拖進作答區 */
+.daily-quiz-ordering {
   margin: 0.75rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.daily-quiz-ordering-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.55rem;
-  padding: 0.65rem;
-  border: 1px solid var(--border-card);
-  border-radius: 10px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-}
-
-.daily-quiz-ordering-controls {
-  display: flex;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-.daily-quiz-ordering-controls button {
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  min-width: 2rem;
-  cursor: pointer;
 }
 
 .admin-daily-quiz-toolbar {

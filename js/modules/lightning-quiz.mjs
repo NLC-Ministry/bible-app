@@ -59,7 +59,7 @@ function renderTeaserView(question) {
   `);
 }
 
-function renderQuestionView(question) {
+function renderQuestionView(question, shuffleSeed) {
   const normalized = normalizeQuestion({
     id: question.questionId,
     type: question.questionType,
@@ -72,7 +72,7 @@ function renderQuestionView(question) {
         <strong class="lightning-quiz-timer" data-lq-timer>0.0 秒</strong>
       </div>
       <form data-lq-form>
-        ${renderQuestionFieldsetHtml(normalized, 0)}
+        ${renderQuestionFieldsetHtml(normalized, 0, { shuffleSeed })}
         <button type="submit" class="primary-btn" data-lq-submit>送出答案</button>
       </form>
     </div>
@@ -106,11 +106,12 @@ function startTimer(session, startedAtIso) {
   session.timer = setInterval(tick, 100);
 }
 
-// api：{ start(), submit(response), onFailure() }。start/submit 回傳
-// { success, data, message }，形狀跟 db.js 的 RPC 包裝一致。
+// api：{ start(), submit(response), onFailure(), shuffleSeed? }。start/submit 回傳
+// { success, data, message }，形狀跟 db.js 的 RPC 包裝一致。shuffleSeed 讓同一位
+// 會友續答時選項順序不變；預覽不給，每次隨機。
 function showAnswering(session, question, api, startedAtIso) {
   stopSession(session);
-  paint(session, renderQuestionView(question));
+  paint(session, renderQuestionView(question, api.shuffleSeed));
   startTimer(session, startedAtIso);
 
   const form = session.host.querySelector("[data-lq-form]");
@@ -179,7 +180,8 @@ function homeApi(question) {
   return {
     start: () => db.startLightningQuizAttempt(question.questionId),
     submit: response => db.submitLightningQuizAttempt(question.questionId, response),
-    onFailure
+    onFailure,
+    shuffleSeed: typeof state !== "undefined" ? `${state.currentUser?.id || ""}:lightning` : null
   };
 }
 

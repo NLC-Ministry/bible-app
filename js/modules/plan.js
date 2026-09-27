@@ -3677,13 +3677,15 @@ function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
     return;
   }
   const questions = (quiz.questions || []).map(normalizeQuestion);
+  // 同一位會友同一天重畫時選項順序不變（自訂題 id 如 c1 每天重複，所以帶計畫＋日期）。
+  const shuffleSeed = `${state.currentUser?.id || ""}:${plan?.id || ""}:${quizDate}`;
   content.innerHTML = `
     <div class="daily-quiz-heading">
       <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">${questions.length} 題</h3></div>
       <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發佈</span>
     </div>
     <form id="daily-quiz-form" class="daily-quiz-form">
-      ${questions.map((question, index) => renderQuestionFieldsetHtml(question, index)).join("")}
+      ${questions.map((question, index) => renderQuestionFieldsetHtml(question, index, { shuffleSeed })).join("")}
       <button type="submit" class="primary-btn daily-quiz-submit">送出答案</button>
     </form>`;
   bindDailyQuizAnswering(content, quiz, questions, plan, quizDate);

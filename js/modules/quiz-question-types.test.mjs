@@ -10,7 +10,10 @@ import {
   bindQuestionFieldset,
   isSupportedQuestionType,
   formatResponseForDisplay,
-  shuffleMatchingItems
+  shuffleItems,
+  createSeededRandom,
+  arrangeOrderingItems,
+  arrangeMatchingColumns
 } from "./quiz-question-types.mjs";
 
 describe("normalizeQuestion", () => {
@@ -57,12 +60,53 @@ describe("normalizeQuestion", () => {
   });
 });
 
-describe("matching layout", () => {
+describe("shuffling", () => {
   it("shuffles items with Fisher-Yates without mutating the source", () => {
     const items = [{ id: "1" }, { id: "2" }, { id: "3" }];
-    const shuffled = shuffleMatchingItems(items, () => 0);
+    const shuffled = shuffleItems(items, () => 0);
     expect(shuffled.map(item => item.id)).toEqual(["2", "3", "1"]);
     expect(items.map(item => item.id)).toEqual(["1", "2", "3"]);
+  });
+
+  it("a seeded random repeats for the same seed and differs across seeds", () => {
+    const draw = seed => { const random = createSeededRandom(seed); return [random(), random(), random()]; };
+    expect(draw("member-a:q1")).toEqual(draw("member-a:q1"));
+    expect(draw("member-a:q1")).not.toEqual(draw("member-b:q1"));
+    draw("member-a:q1").forEach(value => { expect(value).toBeGreaterThanOrEqual(0); expect(value).toBeLessThan(1); });
+    expect(createSeededRandom(null)).toBe(Math.random);
+  });
+
+  const ids = n => Array.from({ length: n }, (_, index) => ({ id: `I${index + 1}` }));
+
+  it("ordering never starts with any item already in its correct position", () => {
+    for (let n = 2; n <= 6; n += 1) {
+      for (let seed = 0; seed < 200; seed += 1) {
+        const arranged = arrangeOrderingItems(ids(n), createSeededRandom(`s${seed}`));
+        expect(arranged.map(item => item.id).sort()).toEqual(ids(n).map(item => item.id).sort());
+        arranged.forEach((item, position) => expect(item.id).not.toBe(`I${position + 1}`));
+      }
+    }
+  });
+
+  it("ordering with 4+ items avoids adjacent pairs already in correct sequence", () => {
+    for (let seed = 0; seed < 200; seed += 1) {
+      const arranged = arrangeOrderingItems(ids(5), createSeededRandom(`s${seed}`)).map(item => Number(item.id.slice(1)));
+      const adjacent = arranged.filter((value, position) => position > 0 && arranged[position - 1] + 1 === value).length;
+      expect(adjacent).toBe(0);
+    }
+  });
+
+  it("matching never lines up a left item with its own partner on the same row", () => {
+    for (let n = 2; n <= 6; n += 1) {
+      const left = Array.from({ length: n }, (_, index) => ({ id: `L${index + 1}` }));
+      const right = Array.from({ length: n }, (_, index) => ({ id: `R${index + 1}` }));
+      for (let seed = 0; seed < 200; seed += 1) {
+        const columns = arrangeMatchingColumns(left, right, createSeededRandom(`s${seed}`));
+        expect(columns.left).toHaveLength(n);
+        expect(columns.right).toHaveLength(n);
+        columns.left.forEach((item, row) => expect(columns.right[row].id.slice(1)).not.toBe(item.id.slice(1)));
+      }
+    }
   });
 });
 
@@ -141,9 +185,37 @@ describe("render + read + bind round-trip (jsdom)", () => {
 
     let lastResponse;
     bindQuestionFieldset(fieldset, "single", response => { lastResponse = response; });
-    fieldset.querySelectorAll("input[type=radio]")[0].click();
+    fieldset.querySelector('input[value="0"]').click();
     expect(lastResponse).toBe(0);
     expect(readResponseFromFieldset(fieldset, "single")).toBe(0);
+  });
+
+  it("single / multiple: display order is shuffled but each value keeps its original option index", () => {
+    const options = ["摩西", "約書亞", "大衛", "所羅門", "撒母耳", "以利亞"];
+    const question = normalizeQuestion({ id: "s2", type: "single", payload: { stem: "?", options }, answerKey: 0 });
+    const orders = new Set();
+    for (let seed = 0; seed < 20; seed += 1) {
+      const fieldset = mount(renderQuestionFieldsetHtml(question, 0, { shuffleSeed: `member-${seed}` }));
+      const labels = Array.from(fieldset.querySelectorAll("label"));
+      labels.forEach(label => {
+        expect(label.textContent.trim()).toBe(options[Number(label.querySelector("input").value)]);
+      });
+      orders.add(labels.map(label => label.querySelector("input").value).join(","));
+    }
+    expect(orders.size).toBeGreaterThan(1);
+  });
+
+  it("the same shuffleSeed re-renders every type in the same order", () => {
+    const questions = [
+      { id: "a", type: "single", payload: { stem: "?", options: ["1", "2", "3", "4", "5"] } },
+      { id: "b", type: "multiple", payload: { stem: "?", options: ["1", "2", "3", "4", "5"] } },
+      { id: "c", type: "ordering", payload: { stem: "?", items: [{ id: "I1", text: "1" }, { id: "I2", text: "2" }, { id: "I3", text: "3" }, { id: "I4", text: "4" }] } },
+      { id: "d", type: "matching", payload: { stem: "?", left: [{ id: "L1", text: "a" }, { id: "L2", text: "b" }, { id: "L3", text: "c" }], right: [{ id: "R1", text: "x" }, { id: "R2", text: "y" }, { id: "R3", text: "z" }] } }
+    ].map(normalizeQuestion);
+    questions.forEach(question => {
+      expect(renderQuestionFieldsetHtml(question, 0, { shuffleSeed: "member-a:2026-09-27" }))
+        .toBe(renderQuestionFieldsetHtml(question, 0, { shuffleSeed: "member-a:2026-09-27" }));
+    });
   });
 
   it("truefalse: renders two radios and reads boolean", () => {
@@ -160,9 +232,8 @@ describe("render + read + bind round-trip (jsdom)", () => {
     const fieldset = mount(renderQuestionFieldsetHtml(question, 0));
     let lastResponse;
     bindQuestionFieldset(fieldset, "multiple", response => { lastResponse = response; });
-    const checkboxes = fieldset.querySelectorAll("input[type=checkbox]");
-    checkboxes[0].click();
-    checkboxes[2].click();
+    fieldset.querySelector('input[value="0"]').click();
+    fieldset.querySelector('input[value="2"]').click();
     expect(lastResponse.sort()).toEqual([0, 2]);
   });
 
@@ -198,7 +269,7 @@ describe("render + read + bind round-trip (jsdom)", () => {
     expect(lastResponse).toEqual({ L2: "R2" });
   });
 
-  it("ordering: up/down buttons reorder the list", () => {
+  it("ordering: answer area starts empty; tap pool items to place them, ✕ sends one back", () => {
     const question = normalizeQuestion({
       id: "order1", type: "ordering",
       payload: { stem: "依事件發生順序排列", items: [{ id: "I1", text: "創造天地" }, { id: "I2", text: "挪亞洪水" }, { id: "I3", text: "巴別塔" }] },
@@ -207,11 +278,29 @@ describe("render + read + bind round-trip (jsdom)", () => {
     const fieldset = mount(renderQuestionFieldsetHtml(question, 0));
     let lastResponse;
     bindQuestionFieldset(fieldset, "ordering", response => { lastResponse = response; });
+    const tap = id => {
+      const chip = fieldset.querySelector(`[data-order-pool] [data-item-id="${id}"]`);
+      chip.dispatchEvent(new Event("pointerdown", { bubbles: true, cancelable: true }));
+      chip.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    };
 
-    // move the 3rd item ("I3") up once -> I1, I3, I2
-    const thirdItem = fieldset.querySelectorAll("li")[2];
-    thirdItem.querySelector("[data-order-up]").click();
-    expect(lastResponse).toEqual(["I1", "I3", "I2"]);
+    expect(readResponseFromFieldset(fieldset, "ordering")).toEqual([]);
+    expect(fieldset.querySelectorAll("[data-order-pool] [data-item-id]")).toHaveLength(3);
+    expect(isResponseComplete("ordering", [], question.payload)).toBe(false);
+
+    tap("I2");
+    tap("I1");
+    expect(lastResponse).toEqual(["I2", "I1"]);
+    expect(fieldset.querySelectorAll("[data-order-answer] .exam-order-num")[1].textContent).toBe("2");
+    expect(fieldset.querySelectorAll("[data-order-pool] [data-item-id]")).toHaveLength(1);
+
+    fieldset.querySelector('[data-order-answer] [data-item-id="I2"] .exam-chip-remove').click();
+    expect(lastResponse).toEqual(["I1"]);
+    tap("I2");
+    tap("I3");
+    expect(lastResponse).toEqual(["I1", "I2", "I3"]);
+    expect(isResponseComplete("ordering", lastResponse, question.payload)).toBe(true);
+    expect(fieldset.querySelector("[data-order-pool] .exam-order-empty")).not.toBeNull();
   });
 });
 
