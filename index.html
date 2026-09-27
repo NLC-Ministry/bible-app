@@ -1888,60 +1888,111 @@
                js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
                renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
           <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
-            <section class="glass-card admin-announcements" aria-labelledby="admin-lightning-quiz-title">
-              <div class="admin-announcements__header">
+            <!-- 快問快答後台（#313）：三個分頁（排程／題目清單／統計），新增、編輯、試作、
+                 匯入、排程規則、題目內容都是彈出面板（第一次顯示時搬到 body 底下）。 -->
+            <section class="glass-card admin-announcements admin-lq" aria-labelledby="admin-lightning-quiz-title">
+              <div class="admin-announcements__header admin-lq__header">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
                   <h3 class="card-title" id="admin-lightning-quiz-title">快問快答</h3>
-                  <p>新增的題目先是「準備中」，只有你看得到，可以隨時試作；確認沒問題再按「排程」。開始之前都能修改或取消排程；開始後題目鎖定，要沿用請按「複製成新題」。同一天只能排一題。</p>
                 </div>
-                <button type="button" class="primary-btn" id="admin-lightning-quiz-create">新增題目</button>
+                <div class="admin-lq__header-actions">
+                  <button type="button" class="primary-btn" id="admin-lightning-quiz-create">＋ 新增題目</button>
+                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-import-open">匯入題目</button>
+                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-rule-open">⚙ 排程規則</button>
+                </div>
               </div>
-              <div id="admin-lightning-quiz-preview" class="announcement-form-panel admin-lightning-quiz-preview hidden">
-                <div class="admin-lightning-quiz-preview__head">
-                  <h4 class="announcement-form-panel__title">試作（不會記錄作答）</h4>
-                  <div class="admin-lightning-quiz-preview__actions">
-                    <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
-                    <button type="button" class="pill-btn" id="admin-lightning-quiz-preview-close">關閉</button>
+              <div class="capsule-segmented-control segment-track admin-lq__tabs" role="tablist" aria-label="快問快答">
+                <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-tab="schedule">排程</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="list">題目清單</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="stats">統計</button>
+              </div>
+              <div data-lq-tab-panel="schedule">
+                <div id="admin-lightning-quiz-planner" class="admin-lightning-quiz-planner"></div>
+              </div>
+              <div data-lq-tab-panel="list" class="hidden">
+                <div id="admin-lightning-quiz-list" class="admin-lq-list" aria-live="polite">
+                  <div class="admin-user-directory__empty">正在載入題目…</div>
+                </div>
+              </div>
+              <div data-lq-tab-panel="stats" class="hidden">
+                <div id="admin-lightning-quiz-stats-body">
+                  <div class="admin-user-directory__empty">正在載入統計…</div>
+                </div>
+              </div>
+            </section>
+
+            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-question-sheet" aria-hidden="true">
+              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-question-sheet-title">
+                <div class="bottom-sheet-header">
+                  <h3 id="admin-lightning-quiz-question-sheet-title">題目</h3>
+                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+                </div>
+                <div class="bottom-sheet-body" id="admin-lightning-quiz-question-sheet-body"></div>
+              </div>
+            </div>
+
+            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-editor" aria-hidden="true">
+              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-form-title">
+                <div class="bottom-sheet-header">
+                  <h3 id="admin-lightning-quiz-form-title">新增題目</h3>
+                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+                </div>
+                <div class="bottom-sheet-body">
+                  <div class="admin-lightning-quiz-schedule-row">
+                    <label>日期
+                      <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
+                    </label>
+                    <label>開始時間
+                      <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
+                    </label>
+                    <label>結束時間
+                      <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
+                    </label>
                   </div>
+                  <div id="admin-lightning-quiz-question-body"></div>
                 </div>
-                <div id="admin-lightning-quiz-preview-host" class="glass-card lightning-quiz-card"></div>
-              </div>
-              <div id="admin-lightning-quiz-editor" class="announcement-form-panel hidden">
-                <h4 class="announcement-form-panel__title" id="admin-lightning-quiz-form-title">新增題目</h4>
-                <div class="admin-lightning-quiz-schedule-row">
-                  <label>日期
-                    <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
-                  </label>
-                  <label>開始時間
-                    <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
-                  </label>
-                  <label>結束時間
-                    <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
-                  </label>
-                </div>
-                <div id="admin-lightning-quiz-question-body"></div>
-                <div class="announcement-form-panel__actions">
-                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-lightning-quiz-cancel">取消</button>
-                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-lightning-quiz-save">儲存題目</button>
+                <div class="admin-lq-sheet__footer">
+                  <button type="button" class="pill-btn" id="admin-lightning-quiz-cancel">取消</button>
+                  <button type="button" class="primary-btn" id="admin-lightning-quiz-save">儲存題目</button>
                 </div>
               </div>
-              <div id="admin-lightning-quiz-planner" class="admin-lightning-quiz-planner"></div>
-              <div id="admin-lightning-quiz-list" class="announcements-list" aria-live="polite">
-                <div class="admin-user-directory__empty">正在載入題目…</div>
-              </div>
-            </section>
-            <section class="glass-card admin-announcements" aria-labelledby="admin-lightning-quiz-stats-title">
-              <div class="admin-announcements__header">
-                <div>
-                  <h3 class="card-title" id="admin-lightning-quiz-stats-title">統計與趨勢分析</h3>
-                  <p>以週為單位（週一到週日）：參與率、全部答完、答對率、週排行與大區／牧區分析；也可以看週趨勢、逐日明細，並匯出 CSV。</p>
+            </div>
+
+            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-preview" aria-hidden="true">
+              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-preview-title">
+                <div class="bottom-sheet-header">
+                  <h3 id="admin-lightning-quiz-preview-title">試作（不會記錄作答）</h3>
+                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" id="admin-lightning-quiz-preview-close" aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+                </div>
+                <div class="bottom-sheet-body">
+                  <div id="admin-lightning-quiz-preview-host" class="glass-card lightning-quiz-card"></div>
+                </div>
+                <div class="admin-lq-sheet__footer">
+                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
                 </div>
               </div>
-              <div id="admin-lightning-quiz-stats-body">
-                <div class="admin-user-directory__empty">正在載入統計…</div>
+            </div>
+
+            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-import" aria-hidden="true">
+              <div class="bottom-sheet-container admin-lq-sheet admin-lq-sheet--wide" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-import-title">
+                <div class="bottom-sheet-header">
+                  <h3 id="admin-lightning-quiz-import-title">匯入題目</h3>
+                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+                </div>
+                <div class="bottom-sheet-body" id="admin-lightning-quiz-import-body"></div>
               </div>
-            </section>
+            </div>
+
+            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-rule" aria-hidden="true">
+              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-rule-title">
+                <div class="bottom-sheet-header">
+                  <h3 id="admin-lightning-quiz-rule-title">排程規則</h3>
+                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+                </div>
+                <div class="bottom-sheet-body" id="admin-lightning-quiz-rule-body"></div>
+              </div>
+            </div>
           </div>
 
           <div id="admin-section-settings" class="card-col span-12 admin-section-panel hidden">

@@ -11534,6 +11534,160 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+/* 快問快答後台版面（#313）：三個分頁＋彈出面板，頁面不再一路往下疊。 */
+.admin-lq__header {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.admin-lq__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.admin-lq__tabs {
+  margin-bottom: 1rem;
+}
+.admin-lq__rule-summary {
+  margin: 0 0 0.75rem;
+}
+.admin-lq-sheet {
+  width: min(40rem, 100vw);
+  max-height: 88dvh;
+  user-select: text;
+  -webkit-user-select: text;
+  padding-top: 0.75rem;
+}
+.admin-lq-sheet--wide {
+  width: min(52rem, 100vw);
+}
+.admin-lq-sheet .bottom-sheet-body {
+  overflow-y: auto;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+}
+/* 面板內容太長時整個面板捲動，不要把文字框、表格壓扁 */
+.admin-lq-sheet .bottom-sheet-body > * {
+  flex-shrink: 0;
+}
+.admin-lq-sheet__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-card);
+  flex-shrink: 0;
+}
+@media (min-width: 720px) {
+  .admin-lq-sheet-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+  .admin-lq-sheet {
+    border-radius: 20px;
+    max-height: min(86dvh, 48rem);
+    padding-bottom: 1rem;
+  }
+}
+.admin-lq-detail__stem {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.admin-lq-detail__options {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+.admin-lq-detail__answer {
+  margin: 0;
+}
+.admin-lq-detail__delete {
+  color: var(--color-danger);
+  margin-left: auto;
+}
+.admin-lq-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.admin-lq-list__filter {
+  margin-bottom: 0.75rem;
+}
+.admin-lq-list__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.admin-lq-list__rows li + li {
+  border-top: 1px solid var(--border-default);
+}
+.admin-lq-row {
+  display: grid;
+  grid-template-columns: 8.5rem auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-lq-row:hover,
+.admin-lq-row:focus-visible {
+  background: var(--bg-input);
+}
+.admin-lq-row__when {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.admin-lq-row__stem {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-lq-list__more {
+  margin-top: 0.75rem;
+}
+.admin-lq-collapse > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+.admin-lq-collapse > summary h5 {
+  display: inline;
+  margin: 0;
+}
+.admin-lq-collapse[open] > summary {
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 560px) {
+  .admin-lq__header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .admin-lq__header-actions > * {
+    padding-inline: 0.5rem;
+    white-space: nowrap;
+  }
+  .admin-lq-row {
+    grid-template-columns: auto 1fr;
+  }
+  .admin-lq-row__stem {
+    grid-column: 1 / -1;
+  }
+}
 /* 排程日曆（#310）：一週一列，只列規則裡的星期；缺題的日子一眼看得出來。 */
 .admin-lightning-quiz-planner {
   display: flex;
@@ -11547,19 +11701,18 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
 }
 .admin-lightning-quiz-calendar__week {
-  display: grid;
-  grid-template-columns: 7.5rem 1fr;
-  gap: 0.5rem;
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 .admin-lightning-quiz-calendar__week-label {
   font-size: 0.875rem;
   color: var(--text-secondary);
-  align-self: center;
 }
+/* 一週固定一列：規則裡有幾天就幾欄，任何寬度都不換行 */
 .admin-lightning-quiz-calendar__days {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: repeat(var(--lq-days, 3), minmax(0, 1fr));
   gap: 0.5rem;
 }
 .admin-lightning-quiz-calendar__day {
@@ -11580,6 +11733,7 @@ button.admin-lightning-quiz-calendar__day {
   cursor: pointer;
 }
 .admin-lightning-quiz-calendar__day.is-missing {
+  cursor: pointer;
   border-style: dashed;
   border-color: var(--color-danger);
 }
@@ -11597,17 +11751,6 @@ button.admin-lightning-quiz-calendar__day {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.admin-lightning-quiz-planner__panel > summary {
-  cursor: pointer;
-  font-weight: 500;
-  padding: 0.25rem 0;
-}
-.admin-lightning-quiz-planner__panel[open] > summary {
-  margin-bottom: 0.5rem;
-}
-.admin-lightning-quiz-planner__panel textarea {
-  margin-bottom: 0.5rem;
 }
 .admin-lightning-quiz-rule {
   display: flex;
@@ -11638,20 +11781,11 @@ button.admin-lightning-quiz-calendar__day {
   font-size: 0.875rem;
 }
 @media (max-width: 560px) {
-  .admin-lightning-quiz-calendar__week {
-    grid-template-columns: 1fr;
-    gap: 0.25rem;
-  }
   .admin-lightning-quiz-calendar__days {
-    grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
     gap: 0.375rem;
   }
   .admin-lightning-quiz-calendar__day {
     padding: 0.375rem 0.5rem;
-  }
-  .admin-lightning-quiz-calendar__day .pill-btn {
-    padding: 0.25rem 0.75rem;
-    min-height: 0;
   }
 }
 .admin-lightning-quiz-source-note {
