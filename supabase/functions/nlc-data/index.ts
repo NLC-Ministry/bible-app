@@ -423,7 +423,6 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_get_lightning_quiz_trend",
   "admin_get_lightning_quiz_weeks",
   "admin_get_lightning_quiz_week",
-  "admin_get_lightning_quiz_leaderboard",
   "admin_get_lightning_quiz_results",
   "admin_get_lightning_quiz_settings",
   "admin_save_lightning_quiz_settings",

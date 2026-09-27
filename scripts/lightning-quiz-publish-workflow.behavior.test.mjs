@@ -114,7 +114,7 @@ describe("快問快答後台：分頁＋彈出面板（#309、#310、#313）", (
       adminImportLightningQuizQuestions: vi.fn(async items => ({ success: true, data: { imported: items.length } }))
     };
     vi.resetModules();
-    setupGlobals(sectionHtml);
+    setupGlobals(`<section class="view-pane active">${sectionHtml.replace("admin-section-panel hidden", "admin-section-panel")}</section>`);
     vi.stubGlobal("localStorage", dom.window.localStorage);
   });
 
@@ -193,7 +193,7 @@ describe("快問快答後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
   });
 
-  it("sheets close with the close button, a backdrop click, or Escape", async () => {
+  it("sheets close with the close button or Escape, but not with a click outside (#317)", async () => {
     await render();
     openDetail("draft-1");
     detail().querySelector("[data-lq-sheet-close]").click();
@@ -201,12 +201,64 @@ describe("快問快答後台：分頁＋彈出面板（#309、#310、#313）", (
 
     openDetail("draft-1");
     detail().dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
 
-    openDetail("draft-1");
     document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" }));
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
     expect(detail().parentElement).toBe(document.body);
+  });
+
+  it("new/edit is a full page: the main view hides, and 返回 comes straight back when nothing was typed (#317)", async () => {
+    await render();
+    document.querySelector('[data-lq-tab="list"]').click();
+    document.getElementById("admin-lightning-quiz-create").click();
+    expect(isOpen("admin-lightning-quiz-editor")).toBe(true);
+    expect(document.querySelector(".admin-lq").classList.contains("hidden")).toBe(true);
+
+    document.querySelector("#admin-lightning-quiz-editor [data-lq-subpage-back]").click();
+    await flush();
+    expect(isOpen("admin-lightning-quiz-editor")).toBe(false);
+    expect(document.querySelector(".admin-lq").classList.contains("hidden")).toBe(false);
+    // 回到原本的分頁
+    expect(document.querySelector('[data-lq-tab-panel="list"]').classList.contains("hidden")).toBe(false);
+  });
+
+  it("asks before throwing away typed text; 繼續編輯 keeps it, 放棄並返回 leaves", async () => {
+    const confirmDialog = vi.fn(async () => false);
+    dom.window.showConfirmDialog = confirmDialog;
+    await render();
+    document.getElementById("admin-lightning-quiz-create").click();
+    const stem = document.querySelector("#admin-lightning-quiz-question-body [data-field=\"stem\"]");
+    stem.value = "打到一半的題目";
+
+    document.getElementById("admin-lightning-quiz-cancel").click();
+    await flush();
+    expect(confirmDialog.mock.calls[0][0].title).toBe("要放棄這些內容嗎？");
+    expect(isOpen("admin-lightning-quiz-editor")).toBe(true);
+    expect(stem.value).toBe("打到一半的題目");
+
+    confirmDialog.mockResolvedValueOnce(true);
+    document.querySelector("#admin-lightning-quiz-editor [data-lq-subpage-back]").click();
+    await flush();
+    expect(isOpen("admin-lightning-quiz-editor")).toBe(false);
+  });
+
+  it("the phone back button closes a sheet first, then a full page, and otherwise lets the app handle it", async () => {
+    dom.window.showConfirmDialog = vi.fn(async () => true);
+    await render();
+    const closeLayer = dom.window.closeAdminLightningQuizLayer;
+    expect(closeLayer()).toBe(false);
+
+    document.getElementById("admin-lightning-quiz-import-open").click();
+    expect(isOpen("admin-lightning-quiz-import")).toBe(true);
+    expect(closeLayer()).toBe(true);
+    await flush();
+    expect(isOpen("admin-lightning-quiz-import")).toBe(false);
+
+    document.getElementById("admin-lightning-quiz-rule-open").click();
+    expect(closeLayer()).toBe(true);
+    expect(isOpen("admin-lightning-quiz-rule")).toBe(false);
+    expect(closeLayer()).toBe(false);
   });
 
   it("calendar marks empty rule days as 缺題; clicking one opens the editor on that date with the rule's times", async () => {

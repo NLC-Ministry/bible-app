@@ -43,6 +43,7 @@ import {
   formatRate,
   formatWeekRange,
   formatWeekday,
+  rankAttempts,
   sortZoneRowsByRegion,
   summarizeByRegion,
   summarizeByZone,
@@ -1671,11 +1672,11 @@ function formatAdminLightningQuizDate(dateStr) {
   return date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: 'long', day: 'numeric', weekday: 'short' });
 }
 
-// ── 彈出面板（#313）────────────────────────────────────────────────────
-// 新增／編輯、試作、題目內容、匯入、排程規則都是彈出面板（手機從下方滑出，
-// 桌機置中）。第一次打開時搬到 body 底下，避免被外層 glass-card 的
-// backdrop-filter 變成定位容器。Esc、點背景、關閉鈕都能關，關掉後焦點回到
-// 原本按的按鈕。
+// ── 彈出面板（#313、#317）─────────────────────────────────────────────
+// 內容短的畫面（試作、題目內容、排程規則）是彈出面板（手機從下方滑出，桌機
+// 置中）。第一次打開時搬到 body 底下，避免被外層 glass-card 的 backdrop-filter
+// 變成定位容器。✕ 與 Esc 能關（點外面不關，避免誤觸），關掉後焦點回到原本按的
+// 按鈕。內容長的畫面（新增／編輯、匯入、作答明細）是下面的完整頁面。
 const adminLightningQuizSheetOpeners = new Map();
 const adminLightningQuizSheetCloseHooks = {};
 
@@ -1697,7 +1698,8 @@ function openAdminLightningQuizSheet(id) {
   if (!sheet.dataset.lqSheetBound) {
     sheet.dataset.lqSheetBound = 'true';
     sheet.addEventListener('click', event => {
-      if (event.target === sheet || event.target.closest('[data-lq-sheet-close]')) closeAdminLightningQuizSheet(id);
+      // 點面板外面不關閉，避免誤觸（#317）；只有 ✕ 與 Esc 會關
+      if (event.target.closest('[data-lq-sheet-close]')) closeAdminLightningQuizSheet(id);
     });
   }
   if (!document.body.dataset.lqSheetEscBound) {
@@ -1715,6 +1717,82 @@ function openAdminLightningQuizSheet(id) {
   return sheet;
 }
 
+// ── 完整頁面（#317）──────────────────────────────────────────────────────
+// 新增／編輯、匯入、作答明細在快問快答區塊裡整頁顯示，主畫面（分頁區）先隱藏。
+// 「← 返回快問快答」回到原本的分頁與位置；isDirty() 為真時先確認要不要放棄。
+let adminLightningQuizOpenSubpage = null;
+const adminLightningQuizSubpageCloseHooks = {};
+
+function openAdminLightningQuizSubpage(id, { isDirty = () => false } = {}) {
+  const page = document.getElementById(id);
+  const main = document.querySelector('.admin-lq');
+  if (!page) return null;
+  closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet');
+  const previous = adminLightningQuizOpenSubpage;
+  if (previous && previous.id !== id) {
+    document.getElementById(previous.id)?.classList.add('hidden');
+    adminLightningQuizSubpageCloseHooks[previous.id]?.();
+  }
+  adminLightningQuizOpenSubpage = {
+    id,
+    isDirty,
+    opener: previous ? previous.opener : document.activeElement,
+    scrollY: previous ? previous.scrollY : (window.scrollY || 0)
+  };
+  page.querySelectorAll('[data-lq-subpage-back]').forEach(button => {
+    button.onclick = () => { void closeAdminLightningQuizSubpage(); };
+  });
+  main?.classList.add('hidden');
+  page.classList.remove('hidden');
+  page.scrollIntoView?.({ block: 'start' });
+  return page;
+}
+
+async function closeAdminLightningQuizSubpage({ force = false } = {}) {
+  const current = adminLightningQuizOpenSubpage;
+  if (!current) return true;
+  if (!force && current.isDirty()) {
+    const confirmed = await window.showConfirmDialog({
+      title: '要放棄這些內容嗎？',
+      message: '剛剛輸入的內容還沒有儲存，返回後就會消失。',
+      confirmText: '放棄並返回',
+      cancelText: '繼續編輯',
+      isDestructive: true
+    });
+    if (!confirmed) return false;
+  }
+  if (adminLightningQuizOpenSubpage !== current) return true;
+  adminLightningQuizOpenSubpage = null;
+  document.getElementById(current.id)?.classList.add('hidden');
+  adminLightningQuizSubpageCloseHooks[current.id]?.();
+  document.querySelector('.admin-lq')?.classList.remove('hidden');
+  // 回到原本的位置：原本按的按鈕還在就捲過去；清單重畫過了就回到原本的捲動位置
+  if (current.opener?.isConnected && current.opener.closest?.('.admin-lq')) {
+    current.opener.scrollIntoView?.({ block: 'center' });
+    current.opener.focus?.({ preventScroll: true });
+  } else {
+    try { window.scrollTo(0, current.scrollY); } catch (_) { /* 沒有捲動就算了 */ }
+  }
+  return true;
+}
+
+// 手機返回鍵（js/app.js 的 popstate）：先關彈窗、再關完整頁面，都沒有才離開後台區塊。
+window.closeAdminLightningQuizLayer = () => {
+  // 快問快答區塊沒在畫面上（切到別的分頁或別的後台功能）就不攔返回鍵
+  const section = document.getElementById('admin-section-lightning-quiz');
+  if (!section || section.classList.contains('hidden') || !section.closest('.view-pane.active')) return false;
+  const openSheet = [...document.querySelectorAll('.admin-lq-sheet-backdrop:not(.hidden)')].pop();
+  if (openSheet) {
+    closeAdminLightningQuizSheet(openSheet.id);
+    return true;
+  }
+  if (adminLightningQuizOpenSubpage) {
+    void closeAdminLightningQuizSubpage();
+    return true;
+  }
+  return false;
+};
+
 // ── 新增／編輯題目 ─────────────────────────────────────────────────────────
 function resetAdminLightningQuizEditor() {
   editingAdminLightningQuizId = null;
@@ -1729,11 +1807,16 @@ function resetAdminLightningQuizEditor() {
   if (body) body.innerHTML = '';
   if (heading) heading.textContent = '新增題目';
 }
-adminLightningQuizSheetCloseHooks['admin-lightning-quiz-editor'] = resetAdminLightningQuizEditor;
+adminLightningQuizSubpageCloseHooks['admin-lightning-quiz-editor'] = resetAdminLightningQuizEditor;
 
-function closeAdminLightningQuizEditor() {
-  closeAdminLightningQuizSheet('admin-lightning-quiz-editor');
-  resetAdminLightningQuizEditor();
+function adminLightningQuizEditorSnapshot() {
+  const fieldset = document.querySelector('#admin-lightning-quiz-question-body fieldset');
+  return JSON.stringify([
+    document.getElementById('admin-lightning-quiz-rise-date')?.value || '',
+    document.getElementById('admin-lightning-quiz-time-start')?.value || '',
+    document.getElementById('admin-lightning-quiz-time-end')?.value || '',
+    fieldset ? collectAdminLightningQuizQuestion(fieldset) : null
+  ]);
 }
 
 // 新增、編輯（還沒開始的題目）、複製成新題（已開始的題目：內容帶進來、日期留空，
@@ -1764,7 +1847,8 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
   if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
-  openAdminLightningQuizSheet('admin-lightning-quiz-editor');
+  const snapshot = adminLightningQuizEditorSnapshot();
+  openAdminLightningQuizSubpage('admin-lightning-quiz-editor', { isDirty: () => adminLightningQuizEditorSnapshot() !== snapshot });
   (source?.riseDate ? body.querySelector('textarea, input') : riseDate)?.focus?.();
 }
 
@@ -1858,6 +1942,16 @@ async function deleteAdminLightningQuizQuestion(question) {
   closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet');
   await renderAdminLightningQuizQuestions();
   void renderAdminLightningQuizStats();
+}
+
+// 作答明細（#316、#317）：完整頁面，從統計的「逐日明細」或「每週統計」進來。
+function openAdminLightningQuizResults(day) {
+  const title = document.getElementById('admin-lightning-quiz-results-title');
+  const body = document.getElementById('admin-lightning-quiz-results-body');
+  if (!body || !day) return;
+  if (title) title.textContent = `${formatAdminLightningQuizDate(day.riseDate)} 作答明細`;
+  openAdminLightningQuizSubpage('admin-lightning-quiz-results');
+  void renderAdminLightningQuizDetail(body, day);
 }
 
 // ── 題目面板：看題目與正解，所有操作都在這裡 ─────────────────────────────────
@@ -1974,7 +2068,7 @@ function renderAdminLightningQuizImportPreview(preview, parsed, planned) {
         <td>${escapeHTML(item.question.payload?.stem || '')}</td>
         <td>${item.pinned ? '指定日期' : '自動排入'}</td>
       </tr>`).join(''))}
-    <div class="admin-lq-sheet__footer">
+    <div class="admin-lq-subpage__footer">
       <button type="button" class="secondary-btn" data-lq-import-save="draft">匯入為準備中</button>
       <button type="button" class="primary-btn" data-lq-import-save="schedule">匯入並排程</button>
     </div>`;
@@ -2030,11 +2124,13 @@ function openAdminLightningQuizImport() {
       textarea.value = '';
       preview.innerHTML = '';
       planned = null;
-      closeAdminLightningQuizSheet('admin-lightning-quiz-import');
+      await closeAdminLightningQuizSubpage({ force: true });
       await renderAdminLightningQuizQuestions();
     });
   }
-  openAdminLightningQuizSheet('admin-lightning-quiz-import');
+  openAdminLightningQuizSubpage('admin-lightning-quiz-import', {
+    isDirty: () => Boolean(body.querySelector('[data-lq-import-text]')?.value.trim())
+  });
   body.querySelector('[data-lq-import-text]')?.focus?.();
 }
 
@@ -2181,7 +2277,7 @@ export async function renderAdminLightningQuizQuestions() {
   if (!host || !cancelButton || !saveButton) return;
 
   bindAdminLightningQuizChrome();
-  cancelButton.onclick = closeAdminLightningQuizEditor;
+  cancelButton.onclick = () => { void closeAdminLightningQuizSubpage(); };
   saveButton.onclick = async () => {
     const riseDate = document.getElementById('admin-lightning-quiz-rise-date')?.value || '';
     const timeStart = document.getElementById('admin-lightning-quiz-time-start')?.value || '';
@@ -2217,7 +2313,7 @@ export async function renderAdminLightningQuizQuestions() {
     }
     if (result.data?.unchanged) showToast('內容沒有變更。');
     else showToast(editingAdminLightningQuizId ? '題目已更新。' : '已新增，目前是「準備中」；確認後按「排程」。');
-    closeAdminLightningQuizEditor();
+    await closeAdminLightningQuizSubpage({ force: true });
     await renderAdminLightningQuizQuestions();
   };
 
@@ -2266,9 +2362,10 @@ function adminLightningQuizOrgStatCells(row) {
 
 function renderAdminLightningQuizOverviewRows(attempts) {
   if (!attempts.length) {
-    return '<tr><td colspan="5" class="admin-lightning-quiz-stats-empty-cell">沒有符合條件的作答紀錄。</td></tr>';
+    return '<tr><td colspan="6" class="admin-lightning-quiz-stats-empty-cell">沒有符合條件的作答紀錄。</td></tr>';
   }
   return attempts.map(attempt => `<tr>
+    <td class="admin-lightning-quiz-rank">${attempt.rank == null ? '—' : escapeHTML(String(attempt.rank))}</td>
     <td>${escapeHTML(attempt.name || '（未命名）')}</td>
     <td>${escapeHTML(attempt.pastoralZone || UNASSIGNED_ZONE_LABEL)}</td>
     <td>${escapeHTML(attempt.smallGroup || '—')}</td>
@@ -2286,11 +2383,10 @@ function adminLightningQuizOrgTable(headers, bodyRows) {
   </div>`;
 }
 
-// 單題＋版本的作答明細：作答總覽（可搜尋／篩選）、牧區分析、大區分析，各自可匯出 CSV。
+// 一題的作答明細：作答總覽（依名次，可搜尋／篩選）、牧區分析、大區分析，各自可匯出 CSV。
+// 顯示在完整頁面裡（#317），名次在搜尋／篩選之前算好（#316）。
 async function renderAdminLightningQuizDetail(detailHost, day) {
-  detailHost.classList.remove('hidden');
   detailHost.innerHTML = '<div class="admin-user-directory__empty">正在載入作答明細…</div>';
-  detailHost.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   const result = await db.adminGetLightningQuizResults(day.questionId);
   if (!result.success) {
@@ -2298,21 +2394,16 @@ async function renderAdminLightningQuizDetail(detailHost, day) {
     return;
   }
   const data = result.data || {};
-  const attempts = Array.isArray(data.attempts) ? data.attempts : [];
+  const attempts = rankAttempts(Array.isArray(data.attempts) ? data.attempts : []);
   const zoneSummary = summarizeByZone(data);
   const regionSummary = summarizeByRegion(data);
   const zoneRows = sortZoneRowsByRegion(zoneSummary.rows);
   const fileSuffix = day.riseDate;
 
   detailHost.innerHTML = `
-    <div class="admin-lightning-quiz-detail__head">
-      <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}作答明細</h4>
-      <button type="button" class="secondary-btn" data-lq-detail-close>收合</button>
-    </div>
-
     <section class="admin-lightning-quiz-detail__section" aria-label="作答總覽">
       <div class="admin-lightning-quiz-detail__section-head">
-        <h5>作答總覽</h5>
+        <h5>作答總覽（依名次：答對的依作答時間由快到慢）</h5>
         ${adminLightningQuizExportButton('data-lq-export="overview"')}
       </div>
       <div class="admin-quiz-stats-roster-toolbar">
@@ -2326,7 +2417,7 @@ async function renderAdminLightningQuizDetail(detailHost, day) {
       </div>
       <div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
-          <thead><tr><th>姓名</th><th>牧區</th><th>小組</th><th>結果</th><th>作答時間</th></tr></thead>
+          <thead><tr><th>名次</th><th>姓名</th><th>牧區</th><th>小組</th><th>結果</th><th>作答時間</th></tr></thead>
           <tbody data-lq-overview-body>${renderAdminLightningQuizOverviewRows(attempts)}</tbody>
         </table>
       </div>
@@ -2372,11 +2463,6 @@ async function renderAdminLightningQuizDetail(detailHost, day) {
   const rerenderOverview = () => { overviewBody.innerHTML = renderAdminLightningQuizOverviewRows(currentOverview()); };
   searchInput.addEventListener('input', rerenderOverview);
   statusSelect.addEventListener('change', rerenderOverview);
-
-  detailHost.querySelector('[data-lq-detail-close]')?.addEventListener('click', () => {
-    detailHost.classList.add('hidden');
-    detailHost.innerHTML = '';
-  });
 
   detailHost.querySelectorAll('[data-lq-export]').forEach(button => {
     button.addEventListener('click', () => {
@@ -2551,11 +2637,9 @@ function renderAdminLightningQuizWeekPanel(panel) {
       <button type="button" class="pill-btn" data-lq-week-today>本週</button>
     </div>
     <div data-lq-week-body></div>
-    <div data-lq-week-detail class="admin-lightning-quiz-detail hidden"></div>
   `;
   const label = panel.querySelector('[data-lq-week-label]');
   const body = panel.querySelector('[data-lq-week-body]');
-  const detailHost = panel.querySelector('[data-lq-week-detail]');
   const nextButton = panel.querySelector('[data-lq-week-next]');
   let requestSeq = 0;
 
@@ -2563,8 +2647,6 @@ function renderAdminLightningQuizWeekPanel(panel) {
     const seq = ++requestSeq;
     label.textContent = `${formatWeekRange(weekStart)}${weekStart === thisWeek ? '（本週）' : ''}`;
     nextButton.disabled = weekStart >= thisWeek;
-    detailHost.classList.add('hidden');
-    detailHost.innerHTML = '';
     body.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的統計…</div>';
     const result = await db.adminGetLightningQuizWeek(weekStart);
     if (seq !== requestSeq) return; // 載入期間又切到別週
@@ -2656,7 +2738,7 @@ function renderAdminLightningQuizWeekPanel(panel) {
     body.querySelectorAll('[data-lq-week-question]').forEach(button => {
       button.addEventListener('click', () => {
         const question = questions.find(item => String(item.questionId) === button.dataset.lqWeekQuestion);
-        if (question) void renderAdminLightningQuizDetail(detailHost, question);
+        if (question) openAdminLightningQuizResults(question);
       });
     });
     body.querySelectorAll('[data-lq-week-export]').forEach(button => {
@@ -2706,7 +2788,6 @@ export async function renderAdminLightningQuizStats() {
       <td>
         <div class="admin-lightning-quiz-stats-actions">
           <button type="button" class="secondary-btn" data-lightning-quiz-detail="${escapeHTML(rowKey(day))}">作答明細</button>
-          <button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(rowKey(day))}">查看排行榜</button>
         </div>
       </td>
     </tr>`;
@@ -2727,8 +2808,6 @@ export async function renderAdminLightningQuizStats() {
           <tbody>${rows}</tbody>
         </table>
       </div>` : '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>'}
-      <div id="admin-lightning-quiz-detail" class="admin-lightning-quiz-detail hidden"></div>
-      <div id="admin-lightning-quiz-leaderboard" class="admin-lightning-quiz-leaderboard hidden"></div>
     </div>
   `;
   if (typeof hydrateIcons === 'function') hydrateIcons(host);
@@ -2754,35 +2833,10 @@ export async function renderAdminLightningQuizStats() {
     });
   });
 
-  const detailHost = host.querySelector('#admin-lightning-quiz-detail');
   host.querySelectorAll('[data-lightning-quiz-detail]').forEach(button => {
     button.addEventListener('click', () => {
       const day = days.find(item => rowKey(item) === button.dataset.lightningQuizDetail);
-      if (!day) return;
-      void renderAdminLightningQuizDetail(detailHost, day);
-    });
-  });
-
-  const leaderboardHost = host.querySelector('#admin-lightning-quiz-leaderboard');
-  host.querySelectorAll('[data-lightning-quiz-leaderboard]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const day = days.find(item => rowKey(item) === button.dataset.lightningQuizLeaderboard);
-      if (!day) return;
-      leaderboardHost.classList.remove('hidden');
-      leaderboardHost.innerHTML = '<div class="admin-user-directory__empty">正在載入排行榜…</div>';
-      leaderboardHost.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      const board = await db.adminGetLightningQuizLeaderboard(day.questionId, 10);
-      if (!board.success) {
-        leaderboardHost.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(board.message || '載入排行榜失敗。')}</div>`;
-        return;
-      }
-      const list = Array.isArray(board.data) ? board.data : [];
-      leaderboardHost.innerHTML = `
-        <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}最快答對排行榜</h4>
-        ${list.length ? `<ol class="admin-lightning-quiz-leaderboard-list">
-          ${list.map(entry => `<li><span>${escapeHTML(entry.name || '（未命名）')}</span><span>${(Number(entry.elapsedMs) / 1000).toFixed(1)} 秒</span></li>`).join('')}
-        </ol>` : '<div class="admin-user-directory__empty">這一題目前還沒有人答對。</div>'}
-      `;
+      if (day) openAdminLightningQuizResults(day);
     });
   });
 }

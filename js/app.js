@@ -1386,6 +1386,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
+        // 快問快答後台（#317）：返回鍵先關它的彈窗、再關完整頁面，都沒有才離開後台區塊。
+        if (typeof window.closeAdminLightningQuizLayer === "function"
+          && window.closeAdminLightningQuizLayer()) {
+          pushRootState();
+          return;
+        }
+
         // Admin section drill-in (mobile) — back returns to the function list.
         if (isAdminSectionOpen) {
           if (typeof window.closeAdminSection === "function") window.closeAdminSection();

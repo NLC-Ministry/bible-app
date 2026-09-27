@@ -72,3 +72,32 @@ describe("migration 20260927121803", () => {
     expect(read("index.html")).not.toContain("admin-lightning-quiz-fork-note");
   });
 });
+
+describe("#316 / #317 wiring", () => {
+  it("the per-question leaderboard is gone everywhere; the answer detail carries the rank instead", () => {
+    const drop = read("supabase/migrations/20260927143318_drop_lightning_quiz_leaderboard.sql");
+    expect(drop).toContain("DROP FUNCTION IF EXISTS public.admin_get_lightning_quiz_leaderboard(uuid, integer, uuid);");
+    expect(read("supabase/functions/nlc-data/index.ts")).not.toContain("admin_get_lightning_quiz_leaderboard");
+    expect(read("js/db.js")).not.toContain("adminGetLightningQuizLeaderboard");
+    const admin = read("js/modules/admin.js");
+    expect(admin).not.toContain("查看排行榜");
+    expect(admin).toContain("rankAttempts(Array.isArray(data.attempts)");
+  });
+
+  it("the app's back-button handler asks the lightning admin to close its sheet or page first", () => {
+    const app = read("js/app.js");
+    const hook = app.indexOf("window.closeAdminLightningQuizLayer()");
+    expect(hook).toBeGreaterThan(-1);
+    expect(hook).toBeLessThan(app.indexOf("// Admin section drill-in (mobile)"));
+  });
+
+  it("long screens are full pages, short ones stay sheets", () => {
+    const html = read("index.html");
+    for (const id of ["admin-lightning-quiz-editor", "admin-lightning-quiz-import", "admin-lightning-quiz-results"]) {
+      expect(html).toMatch(new RegExp(`<section class="glass-card admin-lq-subpage hidden" id="${id}"`));
+    }
+    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview", "admin-lightning-quiz-rule"]) {
+      expect(html).toMatch(new RegExp(`class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="${id}"`));
+    }
+  });
+});

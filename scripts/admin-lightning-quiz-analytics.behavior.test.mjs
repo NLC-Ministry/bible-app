@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
+import { readFileSync } from "node:fs";
 
 let dom;
 let renderAdminLightningQuizStats;
@@ -43,9 +44,16 @@ const weeks = [
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// 用 index.html 裡真正的快問快答區塊（作答明細是它裡面的完整頁面，#317）
+const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const sectionHtml = indexHtml.slice(
+  indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),
+  indexHtml.indexOf('<div id="admin-section-settings"')
+);
+
 beforeEach(async () => {
   vi.resetModules();
-  dom = new JSDOM(`<!doctype html><body><div id="admin-lightning-quiz-stats-body"></div></body>`, { url: "https://example.test" });
+  dom = new JSDOM(`<!doctype html><body><section class="view-pane active">${sectionHtml}</section></body>`, { url: "https://example.test" });
   downloads = [];
   vi.stubGlobal("window", dom.window);
   vi.stubGlobal("document", dom.window.document);
@@ -82,9 +90,16 @@ describe("快問快答 作答明細", () => {
     await flush();
 
     expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1");
-    const detail = document.getElementById("admin-lightning-quiz-detail");
-    expect(detail.classList.contains("hidden")).toBe(false);
-    expect(detail.querySelector("[data-lq-overview-body]").textContent).toContain("王小明");
+    // 作答明細是完整頁面：快問快答主畫面先隱藏
+    const page = document.getElementById("admin-lightning-quiz-results");
+    expect(page.classList.contains("hidden")).toBe(false);
+    expect(document.querySelector(".admin-lq").classList.contains("hidden")).toBe(true);
+    expect(document.getElementById("admin-lightning-quiz-results-title").textContent).toContain("作答明細");
+    const detail = document.getElementById("admin-lightning-quiz-results-body");
+    // 名次（#316）：答對的有名次，答錯的顯示「—」
+    const rows = [...detail.querySelectorAll("[data-lq-overview-body] tr")].map(row => [...row.cells].slice(0, 2).map(cell => cell.textContent));
+    expect(rows).toEqual([["1", "王小明"], ["—", "李小華"]]);
+    expect(document.querySelector("[data-lightning-quiz-leaderboard]")).toBeNull();
     expect(detail.textContent).toContain("牧區分析");
     expect(detail.textContent).toContain("大區分析");
     expect(detail.textContent).toContain("全教會合計");
@@ -106,6 +121,12 @@ describe("快問快答 作答明細", () => {
     const overviewCsv = await downloads[0].blob.text();
     expect(overviewCsv).toContain("李小華");
     expect(overviewCsv).not.toContain("王小明");
+    expect(overviewCsv).toContain('"名次","姓名"');
+
+    document.querySelector("#admin-lightning-quiz-results [data-lq-subpage-back]").click();
+    await flush();
+    expect(page.classList.contains("hidden")).toBe(true);
+    expect(document.querySelector(".admin-lq").classList.contains("hidden")).toBe(false);
   });
 
   it("opens on the weekly view: summary, leaderboard, org tables, per-question detail and CSV exports", async () => {
@@ -129,7 +150,9 @@ describe("快問快答 作答明細", () => {
     panel.querySelector('[data-lq-week-question="q1"]').click();
     await flush();
     expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1");
-    expect(panel.querySelector("[data-lq-week-detail]").classList.contains("hidden")).toBe(false);
+    expect(document.getElementById("admin-lightning-quiz-results").classList.contains("hidden")).toBe(false);
+    document.querySelector("#admin-lightning-quiz-results [data-lq-subpage-back]").click();
+    await flush();
 
     panel.querySelector('[data-lq-week-export="members"]').click();
     panel.querySelector('[data-lq-week-export="region"]').click();
