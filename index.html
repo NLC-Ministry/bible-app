@@ -1681,6 +1681,12 @@
                   <span class="admin-user-directory__count" id="admin-user-directory-count" style="white-space:nowrap;">讀取中…</span>
                   </div>
                 </div>
+              <details class="admin-user-directory__panel" id="admin-user-directory-filters-panel" open>
+                <summary class="admin-user-directory__panel-summary">
+                  <span class="admin-user-directory__panel-title">篩選條件</span>
+                  <span class="admin-user-directory__panel-meta" id="admin-user-directory-filters-summary">未套用</span>
+                </summary>
+                <div class="admin-user-directory__panel-body">
               <fieldset class="admin-user-directory__org-filters">
                 <legend>組織架構篩選</legend>
                 <div class="admin-user-directory__org-filter">
@@ -1705,24 +1711,49 @@
                   </details>
                 </div>
               </fieldset>
+              <fieldset class="admin-user-directory__org-filters admin-user-directory__plan-filters">
+                <legend>計畫篩選</legend>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan">
+                  <span>讀經計畫</span>
+                  <select id="admin-user-directory-filter-plan" class="form-control"></select>
+                </label>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan-participation">
+                  <span>計畫參與</span>
+                  <select id="admin-user-directory-filter-plan-participation" class="form-control">
+                    <option value="all">全部</option>
+                    <option value="joined">已加入此計畫</option>
+                    <option value="not_joined">未加入此計畫</option>
+                  </select>
+                </label>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan-team">
+                  <span>團隊</span>
+                  <select id="admin-user-directory-filter-plan-team" class="form-control">
+                    <option value="all">全部</option>
+                    <option value="joined">已組隊</option>
+                    <option value="not_joined">未組隊（個人速讀中）</option>
+                  </select>
+                </label>
+              </fieldset>
               <fieldset class="admin-user-directory__filters">
-                <legend>篩選條件</legend>
+                <legend>其他條件</legend>
                 <label>
                   <input type="checkbox" id="admin-user-directory-filter-incomplete">
                   <span>未填會員資料（沒有牧區或沒有名稱）</span>
                 </label>
-                <label>
-                  <input type="checkbox" id="admin-user-directory-filter-stage-one">
-                  <span>未加入第一階段計畫</span>
-                </label>
-                <label>
-                  <input type="checkbox" id="admin-user-directory-filter-unjoined-team">
-                  <span>未加入團隊（個人速讀中）</span>
-                </label>
               </fieldset>
+                </div>
+              </details>
+              <details class="admin-user-directory__panel" id="admin-user-directory-results-panel" open>
+                <summary class="admin-user-directory__panel-summary">
+                  <span class="admin-user-directory__panel-title">查詢結果</span>
+                  <span class="admin-user-directory__panel-meta" id="admin-user-directory-results-summary">讀取中…</span>
+                </summary>
+                <div class="admin-user-directory__panel-body">
               <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入使用者資料…</div>
               </div>
+                </div>
+              </details>
               </div>
             </section>
           </div>

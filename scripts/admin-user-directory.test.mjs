@@ -27,8 +27,17 @@ describe("read-only admin user directory", () => {
     expect(section).toContain('id="admin-user-directory-filter-group-options"');
     expect(section).toContain('id="admin-user-directory-filter-incomplete"');
     expect(section).toContain("未填會員資料（沒有牧區或沒有名稱）");
-    expect(section).toContain('id="admin-user-directory-filter-stage-one"');
-    expect(section).toContain("未加入第一階段計畫");
+    // 計畫不再寫死第一階段：任選一個計畫，再篩「是否加入」與「是否組隊」。
+    expect(section).not.toContain('id="admin-user-directory-filter-stage-one"');
+    expect(section).not.toContain("未加入第一階段計畫");
+    expect(section).toContain('id="admin-user-directory-filter-plan"');
+    expect(section).toContain('id="admin-user-directory-filter-plan-participation"');
+    expect(section).toContain('id="admin-user-directory-filter-plan-team"');
+    // 篩選條件與查詢結果都可以收起。
+    expect(section).toContain('<details class="admin-user-directory__panel" id="admin-user-directory-filters-panel" open>');
+    expect(section).toContain('<details class="admin-user-directory__panel" id="admin-user-directory-results-panel" open>');
+    expect(section).toContain('id="admin-user-directory-filters-summary"');
+    expect(section).toContain('id="admin-user-directory-results-summary"');
     expect(section).not.toContain('id="admin-user-directory-filter-name-review"');
     // The only static button here is the CSV export (a read, not a write) —
     // this directory has no write action at all.
@@ -68,11 +77,11 @@ describe("read-only admin user directory", () => {
     expect(method).not.toContain(".update(");
     expect(method).not.toContain(".delete(");
     expect(method).not.toContain(".upsert(");
-    expect(method).toContain('const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001"');
+    expect(method).not.toContain("firstStageGlobalPlanId");
     expect(method).toContain('.from("reading_plans")');
-    expect(method).toContain('const firstStagePresetKey = "church_stage_01"');
-    expect(method).toContain('.or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`)');
-    expect(method).toContain("joined_stage_one:");
+    expect(method).toContain('.select("user_id, global_plan_id, preset_key")');
+    expect(method).toContain("resolveEnrollmentPlanId(enrollment, presetKeyToPlanId)");
+    expect(method).toContain("joined_plan_ids:");
   });
 
   it("computes is_joined_team / team_name from reading_team_members — regression for the always-false 未加入團隊 filter", () => {
@@ -88,11 +97,10 @@ describe("read-only admin user directory", () => {
     const method = db.slice(start, end);
 
     expect(method).toContain('.from("reading_team_members")');
-    expect(method).toContain('.select("user_id, team_id, member_role")');
+    expect(method).toContain('.select("user_id, team_id, global_plan_id, member_role")');
     expect(method).toContain('.from("reading_teams")');
-    expect(method).toContain("is_joined_team: teamMembershipByUser.has(String(profile.id))");
-    expect(method).toContain("team_name:");
-    expect(method).toContain("member_role:");
+    // 組隊狀態依計畫分開記錄，不再是「任一計畫有組隊就算」。
+    expect(method).toContain("teams_by_plan:");
     // Still read-only, same guarantee as the rest of this method.
     expect(method).not.toContain(".update(");
     expect(method).not.toContain(".delete(");
@@ -117,9 +125,17 @@ describe("read-only admin user directory", () => {
     // placeholder-name detection list on the frontend anymore.
     expect(directory).not.toContain("INVENTED_DISPLAY_NAMES");
     expect(directory).not.toContain("placeholderNames");
-    expect(directory).toContain("notJoinedStageOneOnly");
+    expect(directory).toContain("matchesAdminUserDirectoryPlanFilters(profile, planFilters)");
     expect(directory).toContain("statusClass");
-    expect(directory).toContain("第一階段計畫");
+    expect(directory).not.toContain("第一階段計畫");
+    expect(directory).toContain("escapeHTML(planName)");
+    expect(directory).toContain("escapeHTML(teamText)");
+    // 隱藏的計畫不列入下拉選單。
+    const planOptions = admin.slice(
+      admin.indexOf("function getAdminUserDirectoryPlans()"),
+      admin.indexOf("function renderAdminUserDirectoryList")
+    );
+    expect(planOptions).toContain("!plan.isHidden");
     // No write action anywhere in this directory (the old name-review
     // approve/edit action was removed entirely, not just hidden).
     expect(directory).not.toContain("db.update");

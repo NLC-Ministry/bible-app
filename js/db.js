@@ -3,6 +3,7 @@ import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
+import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
 import {
   applyLoginGateView,
   getLoginGateCopy,
@@ -2462,8 +2463,6 @@ const db = {
       return { data: [], error: new Error("admin_user_directory_admin_required") };
     }
     try {
-      const firstStageGlobalPlanId = "00000000-0000-0000-c026-000000000001";
-      const firstStagePresetKey = "church_stage_01";
       let profiles = [];
 
       const { data: pData, error: pError } = await fetchAllRows(() => state.supabase
@@ -2484,19 +2483,32 @@ const db = {
         profiles = pData || [];
       }
 
+      // 計畫參與：一次抓全部報名紀錄，後台切換計畫時不必重新查詢。舊的列可能只有
+      // preset_key 沒有 global_plan_id，依 state.globalPlans 的 presetKey 對回計畫。
       const { data: enrollmentsResult } = await fetchAllRows(() => state.supabase
         .from("reading_plans")
-        .select("user_id")
-        .or(`global_plan_id.eq.${firstStageGlobalPlanId},preset_key.eq.${firstStagePresetKey}`));
+        .select("user_id, global_plan_id, preset_key"));
 
-      const joinedProfileIds = new Set((enrollmentsResult || []).map(plan => String(plan.user_id)));
+      const presetKeyToPlanId = new Map();
+      (Array.isArray(state.globalPlans) ? state.globalPlans : []).forEach(plan => {
+        if (plan && plan.presetKey && plan.presetKey !== plan.id) presetKeyToPlanId.set(String(plan.presetKey), String(plan.id));
+      });
+      const joinedPlanIdsByUser = new Map();
+      (enrollmentsResult || []).forEach(enrollment => {
+        const planId = resolveEnrollmentPlanId(enrollment, presetKeyToPlanId);
+        if (!planId || !enrollment.user_id) return;
+        const userId = String(enrollment.user_id);
+        if (!joinedPlanIdsByUser.has(userId)) joinedPlanIdsByUser.set(userId, new Set());
+        joinedPlanIdsByUser.get(userId).add(planId);
+      });
 
       // 團隊組隊狀態：先前這裡完全沒有查詢過，profile.is_joined_team／team_name
       // 一直是 undefined，導致後台「未加入團隊」篩選勾選框形同虛設（永遠不會排除
       // 任何人），使用者卡片上的組隊狀態也永遠顯示「未加入團隊」。
+      // 依計畫分開記錄：同一計畫的 3 人組與 6 人組可各有一隊。
       const { data: teamMembershipsResult } = await fetchAllRows(() => state.supabase
         .from("reading_team_members")
-        .select("user_id, team_id, member_role"));
+        .select("user_id, team_id, global_plan_id, member_role"));
 
       const teamIds = Array.from(new Set((teamMembershipsResult || []).map(m => m.team_id).filter(Boolean)));
       let teamNameById = new Map();
@@ -2507,28 +2519,27 @@ const db = {
         );
         teamNameById = new Map((teamsResult || []).map(t => [String(t.id), t.name]));
       }
-      // A member can belong to more than one team across different plans;
-      // the directory card only has room for one, so — matching the same
-      // "last membership wins" simplification already used elsewhere for
-      // this kind of display (see _getAdminMemberTeamPlacementsFallback) —
-      // later rows overwrite earlier ones here.
-      const teamMembershipByUser = new Map();
+      const teamsByPlanByUser = new Map();
       (teamMembershipsResult || []).forEach(m => {
-        teamMembershipByUser.set(String(m.user_id), {
-          team_name: teamNameById.get(String(m.team_id)) || "",
-          member_role: m.member_role || null
+        if (!m.user_id || !m.global_plan_id) return;
+        const userId = String(m.user_id);
+        if (!teamsByPlanByUser.has(userId)) teamsByPlanByUser.set(userId, {});
+        const teamsByPlan = teamsByPlanByUser.get(userId);
+        const planId = String(m.global_plan_id);
+        if (!teamsByPlan[planId]) teamsByPlan[planId] = [];
+        teamsByPlan[planId].push({
+          name: teamNameById.get(String(m.team_id)) || "",
+          role: m.member_role || null
         });
       });
 
       return {
         data: profiles.map(profile => {
-          const membership = teamMembershipByUser.get(String(profile.id));
+          const userId = String(profile.id);
           return {
             ...profile,
-            joined_stage_one: joinedProfileIds.has(String(profile.id)),
-            is_joined_team: teamMembershipByUser.has(String(profile.id)),
-            team_name: membership?.team_name || null,
-            member_role: membership?.member_role || null
+            joined_plan_ids: Array.from(joinedPlanIdsByUser.get(userId) || []),
+            teams_by_plan: teamsByPlanByUser.get(userId) || {}
           };
         }),
         error: null
