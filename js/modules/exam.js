@@ -3130,6 +3130,8 @@ class ExamRunner {
     const showAuto = graded && auto !== "—" && auto !== null && auto !== undefined;
     const staffPreview = d.staffPreview === true;   // 管理員在「公布成績」前提前看到的預覽
     const isPractice = d.attemptKind === "practice" || this.attemptKind === "practice";
+    // 草稿卷上的作答是演練（#258）：不計成績、發佈時自動清除，可以重新演練
+    const isRehearsal = !isPractice && isRehearsalPaper(this.paper);
 
     // ── PR 值（僅正式卷、已批改、已公布才有；不含任何隊友分數）──
     // 大數字卡片 + 一句話說明放進可收合的 <details>，取代整段文字說明擠在
@@ -3188,7 +3190,7 @@ class ExamRunner {
       <div class="glass-card" style="padding:1.4rem 1.5rem;">
         <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? '　<span class="stat-badge stat-badge--neutral">演練</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
         <div class="exam-result__banner">
-          ${isPractice ? "複習已鎖定，本次不列入正式成績。" : "正式作答已送出，答案已鎖定。"}<br>
+          ${isRehearsal ? "這是<strong>演練作答</strong>，不列入成績，會友看不到；發佈測驗時會自動清除。" : isPractice ? "複習已鎖定，本次不列入正式成績。" : "正式作答已送出，答案已鎖定。"}<br>
           ${showAuto
             ? `${esc(autoLabel)}：<strong>${auto}</strong> 分${hasShort
                 ? `　｜　簡答題：<strong>${d.manualScore ?? "—"}</strong> 分　｜　總分：<strong>${total ?? "—"}</strong> 分`
@@ -3217,9 +3219,23 @@ class ExamRunner {
             <summary class="exam-result__summary">先確認你的作答已收到</summary>
             <div class="exam-result__list">${answers.map((a) => examResultRow(a, false)).join("")}</div>
           </details>`}
-        <button type="button" class="secondary-btn" id="exam-result-close" style="margin-top:1rem;">關閉</button>
+        <div class="exam-admin__actions" style="margin-top:1rem;">
+          ${isRehearsal ? '<button type="button" class="primary-btn" id="exam-result-rehearse-again">重新演練</button>' : ""}
+          <button type="button" class="secondary-btn" id="exam-result-close">關閉</button>
+        </div>
       </div>`;
     this.el.querySelector("#exam-result-close")?.addEventListener("click", () => this.destroy());
+    this.el.querySelector("#exam-result-rehearse-again")?.addEventListener("click", async (e) => {
+      if (!confirm("清掉你這次的演練作答，重新演練一次？（只會清掉你自己的演練，不影響其他人）")) return;
+      e.target.disabled = true;
+      const r = await db.resetMyExamRehearsal(this.paper.id);
+      if (!r.success) { e.target.disabled = false; toast(r.message || "清除失敗"); return; }
+      try { if (this.lsKey) localStorage.removeItem(this.lsKey); } catch (_) {}
+      clearActiveExam();
+      this.attempt = null;
+      this.writeToken = null;
+      await this.boot();
+    });
 
     // 連連看：畫線（等排版完成；收合的 <details> 展開時再補畫；視窗縮放重畫）
     const redrawMatch = () => drawResultMatchLines(this.el);
