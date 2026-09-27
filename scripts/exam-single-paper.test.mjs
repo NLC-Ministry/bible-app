@@ -95,8 +95,9 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
     }
   });
 
-  it("hides legacy test papers until C2 deletes them", () => {
-    expect(exam).toContain('const examList = papers.filter((p) => p.mode !== "test");');
+  it("lists every paper: legacy test papers are gone after C2/C3 (#259/#260)", () => {
+    expect(exam).toContain("const examList = papers;");
+    expect(exam).not.toMatch(/.modes*[!=]==s*"test"/);
   });
 
   it("offers a rehearsal link while draft and clears rehearsal attempts from the more menu", () => {
@@ -114,7 +115,7 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
   });
 
   it("labels drafts as rehearsal in the exam runner", () => {
-    expect(exam).toContain('return !!paper && (paper.status === "draft" || paper.mode === "test");');
+    expect(exam).toContain('return !!paper && paper.status === "draft";');
     expect(exam).not.toContain('this.paper.mode === "test" ? "（測試版）"');
   });
 });
