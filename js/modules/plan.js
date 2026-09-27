@@ -10,6 +10,7 @@ import {
   shouldHidePlanTeamInviteShortcut
 } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
+import { applyPlanSidebarVisibility } from "./plan-sidebar-visibility.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import {
@@ -1686,19 +1687,19 @@ function userHasNoPlanAtAll() {
   return !hasVisibleGroupMeeting;
 }
 
-// 「已結束」分頁維持原本一律隱藏這張卡；「我的計畫」／「探索計畫」分頁則改成
-// 只在完全沒有任何計畫時才顯示。兩份清單（joined/preset）各自渲染時都會呼叫
+// 「已結束」分頁維持原本整欄隱藏；「我的計畫」／「探索計畫」分頁的歡迎卡只在
+// 完全沒有任何計畫時才顯示，但「全域計畫管理」卡對系統管理員一律保留（見
+// plan-sidebar-visibility.mjs）。兩份清單（joined/preset）各自渲染時都會呼叫
 // 這裡，且各自從 DOM 讀目前作用中的分頁，所以不管先渲染哪一份都能算對。
 function updatePlanSidebarIntroCardVisibility() {
-  const sidebarCard = document.getElementById("plan-sidebar-info-card");
-  if (!sidebarCard) return;
   const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
-  const filter = activePill ? activePill.getAttribute("data-filter") : "mine";
-  if (filter === "completed") {
-    sidebarCard.classList.add("hidden");
-    return;
-  }
-  sidebarCard.classList.toggle("hidden", !userHasNoPlanAtAll());
+  applyPlanSidebarVisibility({
+    sidebar: document.getElementById("plan-sidebar-info-card"),
+    introCard: document.getElementById("plan-sidebar-intro-card"),
+    filter: activePill ? activePill.getAttribute("data-filter") : "mine",
+    hasAnyPlan: !userHasNoPlanAtAll(),
+    isSystemAdmin: getUserRoleCode(state.currentUser) === "admin"
+  });
 }
 
 // 靈修影片連結只存网址，縮圖用 YouTube 自家公開的縮圖 CDN 現拼現算
