@@ -1074,7 +1074,6 @@ const db = {
       : [];
     if (profile.avatar_url) state.currentUser.avatar_url = profile.avatar_url;
     if (Array.isArray(lockedFields)) state.profileLockedFields = lockedFields;
-    state.currentUser.is_demo = false;
 
     this.refreshRoleDependentUI();
   },
@@ -1452,10 +1451,6 @@ const db = {
           return this.loadOfflineSnapshot();
         }
         if (state.isSupabaseMode && state.supabase) {
-      if (state.currentUser) {
-        state.currentUser.is_demo = false;
-      }
-
       let user = null;
       const isOidcMode = typeof auth !== "undefined" && auth.isLoggedIn();
       if (isOidcMode) {
@@ -1479,7 +1474,7 @@ const db = {
         const [[globalPlansResult, profileResult, plansResult], logsResult, highlightsResult] = await Promise.all([
           this.batchSelect([
             state.supabase.from("global_plans").select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
-            state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
+            state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
             state.supabase.from("reading_plans").select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
           ]),
           skipReadingLogs
@@ -1570,7 +1565,6 @@ const db = {
             state.currentUser.small_group = profile.small_group;
             state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
-            state.currentUser.is_demo = !!profile.is_demo;
 
           } else {
             // First-time login: create profile without local org placement (Hub-owned).
@@ -1582,7 +1576,6 @@ const db = {
             state.currentUser.small_group = "";
             state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
             state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
-            state.currentUser.is_demo = false;
 
 
             try {
@@ -1606,7 +1599,6 @@ const db = {
           if (profile && (!localSyncedAt || (remoteSyncedAt && remoteSyncedAt >= localSyncedAt))) {
             this.applyNlcProfile(profile);
           }
-          state.currentUser.is_demo = false;
         }
 
         // 2. Load Reading Logs
@@ -1865,7 +1857,6 @@ const db = {
         small_group: "",
         role_id: "10000000-0000-4000-8000-000000000001",
         role_definition: getRoleDefinition("10000000-0000-4000-8000-000000000001"),
-        is_demo: false,
         chapters_read: 0,
         plan_progress: 0,
         streak: 0,
@@ -2213,7 +2204,7 @@ const db = {
 
       // The plan UI updates state.readingLogs optimistically before this runs.
       // Always persist independently; local existence does not mean a DB row exists.
-      if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
         if (!user || !user.id) {
           const authError = new Error("Unable to persist reading progress: authenticated profile unavailable");
@@ -2282,7 +2273,7 @@ const db = {
     } else {
       state.readingLogs = state.readingLogs.filter(l => !isSameChapterLog(l));
 
-      if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+      if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
         if (user) {
           const applyDeleteFilters = query => {
@@ -2315,11 +2306,6 @@ const db = {
   },
 
   async syncProfileStatsToSupabase() {
-    if (state.currentUser && state.currentUser.is_demo) {
-      console.warn("syncProfileStatsToSupabase aborted: current user is demo user.");
-      return { aborted: true, reason: "demo" };
-    }
-
     const editedName = state.currentUser.name || "";
     const lockedFields = new Set(state.profileLockedFields || []);
 
@@ -2468,14 +2454,12 @@ const db = {
       const { data: pData, error: pError } = await fetchAllRows(() => state.supabase
         .from("profiles")
         .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id, role_definition:role_definitions(id, code, label)")
-        .eq("is_demo", false)
         .order("name", { ascending: true }));
 
       if (pError) {
         const { data: fallbackProfiles, error: fbErr } = await fetchAllRows(() => state.supabase
           .from("profiles")
           .select("id, name, email, great_region, pastoral_zone, small_group, is_active, member_context_synced_at, member_context_sync_status, role_id")
-          .eq("is_demo", false)
           .order("name", { ascending: true }));
         if (fbErr) return { data: [], error: fbErr };
         profiles = fallbackProfiles || [];
@@ -2561,7 +2545,6 @@ const db = {
       const { data, error } = await fetchAllRows(() => state.supabase
         .from("profiles")
         .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id, role_definition:role_definitions(id, code, label, scope_type)")
-        .eq("is_demo", false)
         .eq("is_active", true)
         .order("name", { ascending: true }));
 
@@ -2569,7 +2552,6 @@ const db = {
         const { data: fbData, error: fbError } = await fetchAllRows(() => state.supabase
           .from("profiles")
           .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id")
-          .eq("is_demo", false)
           .eq("is_active", true)
           .order("name", { ascending: true }));
         if (fbError) return { data: [], error: fbError };
@@ -2804,8 +2786,7 @@ const db = {
       try {
         const { data: usersProfiles, error: profilesError } = await fetchAllRows(() => state.supabase
           .from("profiles")
-          .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups")
-          .eq("is_demo", false));
+          .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups"));
         if (profilesError) throw profilesError;
 
         const buildPlansQuery = () => {
@@ -3141,7 +3122,7 @@ const db = {
   },
 
   async saveDevotionalNote(date, content, noteId = null) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return null;
 
@@ -3203,7 +3184,7 @@ const db = {
   },
 
   async deleteDevotionalNote(noteId) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const { error } = await state.supabase
         .from("devotional_notes")
         .delete()
@@ -3225,7 +3206,7 @@ const db = {
   },
 
   async getVerseNotesForChapter(bookName, chapter) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return {};
       const { data, error } = await state.supabase
@@ -3259,7 +3240,7 @@ const db = {
       await this.deleteVerseNote(bookName, chapter, verse);
       return "";
     }
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return "";
       const { error } = await state.supabase
@@ -3284,7 +3265,7 @@ const db = {
   },
 
   async deleteVerseNote(bookName, chapter, verse) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return;
       const { error } = await state.supabase
@@ -3308,7 +3289,7 @@ const db = {
   // getVerseNotesForChapter() 只抓正在讀的那一章。走 fetchAllRows 分頁，避免
   // 筆記數一多又重演「累積閱讀章數卡在1000」那個問題。
   async getAllVerseNotesForUser() {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return [];
       const { data, error } = await fetchAllRows(() => state.supabase
@@ -3342,7 +3323,7 @@ const db = {
   // 的來源；這裡只負責背景把同一筆資料 upsert/delete 到 Supabase，呼叫端
   // （bible.js）刻意不 await，失敗也只是暫時沒同步，不影響畫面互動。
   async saveHighlight(bookName, chapter, verse, color) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) return;
+    if (!state.isSupabaseMode || !state.supabase) return;
     const user = await this.getCurrentDbUser();
     if (!user) return;
     const { error } = await state.supabase
@@ -3358,7 +3339,7 @@ const db = {
   },
 
   async deleteHighlight(bookName, chapter, verse) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) return;
+    if (!state.isSupabaseMode || !state.supabase) return;
     const user = await this.getCurrentDbUser();
     if (!user) return;
     const { error } = await state.supabase
@@ -3374,7 +3355,7 @@ const db = {
   // 開機/登入時把伺服器上的螢光資料整批拉回來，跟本機 localStorage 合併
   // （伺服器為準，換裝置或清過瀏覽器資料時才看得到舊標記）。
   async fetchAllHighlights() {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { data: [], error: null };
     }
     const user = await this.getCurrentDbUser();
@@ -3386,7 +3367,7 @@ const db = {
   },
 
   async toggleDevotionalLike(noteId) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return false;
 
@@ -3423,7 +3404,7 @@ const db = {
   },
 
   async addDevotionalComment(noteId, content) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const user = await this.getCurrentDbUser();
       if (!user) return null;
 
@@ -3508,7 +3489,7 @@ const db = {
   },
 
   async _callReadingTeamRpc(functionName, args) {
-    if (!state.isSupabaseMode || !state.supabase || state.currentUser && state.currentUser.is_demo) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "團隊報名需登入正式帳號後使用。" };
     }
     try {
@@ -3579,7 +3560,7 @@ const db = {
   },
 
   async _callQuizRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "小測驗功能需要登入正式帳號。" };
     }
     try {
@@ -3823,7 +3804,7 @@ const db = {
   },
 
   async _callExamRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "大測驗功能需要登入正式帳號。" };
     }
     try {
@@ -4165,7 +4146,7 @@ const db = {
   async getReadingTeamCarryoverOffer(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到下一階段計畫。" };
-    if (!state.isSupabaseMode || !state.supabase || state.currentUser && state.currentUser.is_demo) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: true, context: { eligible: false, teams: [] } };
     }
     const result = await this._callReadingTeamRpc("get_reading_team_carryover_offer", {
@@ -4185,7 +4166,7 @@ const db = {
   },
 
   async getReadingTeamRegistrationOverview() {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       const mockStats = await this.getReadingTeamStatistics({
         id: "00000000-0000-4000-8000-000000000001"
       });
@@ -4377,9 +4358,8 @@ const db = {
     try {
       const { data: profiles, error: profilesError } = await fetchAllRows(() => state.supabase
         .from("profiles")
-        .select("id, name, great_region, pastoral_zone, small_group, is_active, is_demo")
-        .eq("is_active", true)
-        .eq("is_demo", false));
+        .select("id, name, great_region, pastoral_zone, small_group, is_active")
+        .eq("is_active", true));
       if (profilesError) throw profilesError;
 
       const aliases = [planId, plan && plan.presetKey, plan && plan.preset_key, plan && plan.name]
@@ -4455,9 +4435,8 @@ const db = {
     try {
       const { data: profiles, error: profilesError } = await fetchAllRows(() => state.supabase
         .from("profiles")
-        .select("id, name, great_region, pastoral_zone, small_group, is_active, is_demo")
-        .eq("is_active", true)
-        .eq("is_demo", false));
+        .select("id, name, great_region, pastoral_zone, small_group, is_active")
+        .eq("is_active", true));
       if (profilesError) throw profilesError;
 
       const aliases = [planId, plan && plan.presetKey, plan && plan.preset_key, plan && plan.name]
@@ -4537,9 +4516,8 @@ const db = {
 
       const { data: profiles, error: profilesError } = await fetchAllRows(() => client
         .from("profiles")
-        .select("id, name, email, great_region, pastoral_zone, small_group, is_active, is_demo")
-        .eq("is_active", true)
-        .eq("is_demo", false));
+        .select("id, name, email, great_region, pastoral_zone, small_group, is_active")
+        .eq("is_active", true));
 
       if (profilesError) throw profilesError;
 
@@ -4652,7 +4630,7 @@ const db = {
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return {
         success: true,
         context: {
@@ -4713,7 +4691,7 @@ const db = {
   async getReadingTeamLeaderboards(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊排行榜。" };
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return {
         success: true,
         context: {
@@ -4756,7 +4734,7 @@ const db = {
   async getPastoralZoneLeaderboard(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到目前計畫，暫時無法載入牧區排行榜。" };
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       const ownZone = String(state.currentUser && state.currentUser.pastoral_zone || "").trim();
       return {
         success: true,
@@ -4780,7 +4758,7 @@ const db = {
   async getPersonalPlanRankingSummary(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到目前計畫，暫時無法載入個人排名。" };
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return {
         success: true,
         context: {
@@ -4939,7 +4917,7 @@ const db = {
 
     let newPlanObj = null;
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const user = await this.getCurrentDbUser();
         if (user) {
@@ -5113,7 +5091,7 @@ const db = {
       scheduleSettings && scheduleSettings.restWeekdays
     );
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const { error } = await state.supabase
         .from("reading_plans")
         .update({
@@ -5170,7 +5148,7 @@ const db = {
 
     loader.show("退出計畫中...");
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { error } = await state.supabase.from("reading_plans").delete().eq("id", planId);
         if (error) throw error;
@@ -5316,7 +5294,7 @@ const db = {
     let persistenceVerificationError = null;
     let storage = "local";
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       storage = "supabase";
       const { data, error } = await state.supabase.rpc("publish_global_plan_rules", {
         p_plan_id: campaignId,
@@ -5391,7 +5369,7 @@ const db = {
   },
 
   async saveGlobalPlan(plan) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const payload = {
           name: plan.name,
@@ -5471,7 +5449,7 @@ const db = {
   // 梯次是「普通固定日期計畫 + 沿用獎勵」：後端只需複製來源階段的 target_books、
   // 帶上 rules.stageNo / cohortSourceStageNo（發獎用），排程由前端一般路徑處理。
   async createRegionStageCohort({ greatRegion, sourceStageNo, startDate, endDate, isHidden = true }) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "此功能需要登入正式帳號。" };
     }
     try {
@@ -5506,7 +5484,7 @@ const db = {
 
     const usesRemoteDatabase = state.isSupabaseMode
       && state.supabase
-      && !(state.currentUser && state.currentUser.is_demo)
+     
       && key.includes("-");
 
     if (usesRemoteDatabase) {
@@ -5561,7 +5539,7 @@ const db = {
   },
 
   async deleteGlobalPlan(planId) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { error } = await state.supabase
           .from("global_plans")
@@ -5689,7 +5667,7 @@ const db = {
   },
 
   async saveAnnouncement(title, content, expiresAt = null) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const user = await this.getCurrentDbUser();
         const userId = user ? user.id : (state.currentUser ? state.currentUser.id : null);
@@ -5723,7 +5701,7 @@ const db = {
   },
 
   async updateAnnouncement(id, title, content, expiresAt = null) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { error } = await state.supabase
           .from('church_announcements')
@@ -5758,7 +5736,7 @@ const db = {
   },
 
   async deleteAnnouncement(id) {
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { error } = await state.supabase
           .from('church_announcements')
@@ -5802,7 +5780,7 @@ const db = {
     return key ? map[key] : "目前無法載入每日靈修，請稍後再試。";
   },
   async _callDevotionRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "每日靈修需要登入正式帳號。" };
     }
     try {
@@ -5875,9 +5853,6 @@ const db = {
   // 讀取這份靈修計畫綁定的 YouTube 播放清單影片（伺服器端抓公開 RSS，免金鑰）。
   // 走 nlc-data 的 devotion_fetch_playlist_videos action，不是 RPC。
   async fetchDevotionPlaylistVideos(globalPlanId, playlistIdOverride) {
-    if (state.currentUser && state.currentUser.is_demo) {
-      return { success: false, message: "示範模式無法抓取影片。" };
-    }
     if (typeof auth === "undefined" || !auth.isLoggedIn()) {
       return { success: false, message: "請先登入後再試。" };
     }
@@ -5925,7 +5900,7 @@ const db = {
     return key ? map[key] : "目前無法載入小組聚會計畫，請稍後再試。";
   },
   async _callGroupMeetingRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "小組聚會計畫需要登入正式帳號。" };
     }
     try {
@@ -5969,7 +5944,7 @@ const db = {
   // 總開關（admin 專屬）+ 每人一份的個人偏好。get_/set_my_* 一律只碰呼叫者
   // 自己那筆，沒有「目標使用者」這個概念。
   async _callDevotionGroupFeatureRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "這個功能需要登入正式帳號。" };
     }
     try {
@@ -6015,7 +5990,7 @@ const db = {
 
   // 回報對話串（migration 0153）：未讀數字，餵鈴鐺 / 通知中心。
   async fetchIssueThreadUnread() {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { total: 0, error: null };
     }
     return this._dedupRead("issueThreadUnread", async () => {
@@ -6066,7 +6041,7 @@ const db = {
       return { enabled: Boolean(fallback), error: new Error("unknown_feature_setting") };
     }
 
-    if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+    if (state.isSupabaseMode && state.supabase) {
       const map = await this._featureSettingsMap();
       if (map) {
         return { enabled: key in map ? map[key] : Boolean(fallback), error: null };
@@ -6090,7 +6065,7 @@ const db = {
     }
 
     const normalized = enabled === true;
-    if (state.isSupabaseMode && state.supabase && !state.currentUser.is_demo) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { data, error } = await state.supabase
           .from("app_feature_settings")
@@ -6132,26 +6107,6 @@ const db = {
     return this._dedupRead("careReminders", () => this._fetchCareRemindersImpl());
   },
   async _fetchCareRemindersImpl() {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
-                        hostname === '::1' || hostname.startsWith('192.168.') ||
-                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
-                        hostname.endsWith('.local');
-
-    // 🔒 安全防護：虛擬關心提醒資料僅限 localhost 測試環境
-    if (state.currentUser && state.currentUser.is_demo) {
-      if (!isLocalhost) {
-        // Production demo mode: never expose mock care data
-        return { data: [], error: null };
-      }
-      // localhost + demo: use getMockCareReminders() from mock_stats.js
-      if (typeof window.getMockCareReminders === 'function') {
-        return { data: window.getMockCareReminders(), error: null };
-      }
-      return { data: [], error: null };
-    }
-
-    // Real Supabase mode
     if (state.isSupabaseMode && state.supabase) {
       try {
         const profileId = state.currentProfileId;
@@ -6183,18 +6138,7 @@ const db = {
   },
 
   async acknowledgeCareReminder(reminderId) {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
-                        hostname === '::1' || hostname.startsWith('192.168.') ||
-                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
-                        hostname.endsWith('.local');
-
-    if (state.currentUser && state.currentUser.is_demo) {
-      if (isLocalhost && typeof window.dismissMockCareReminder === 'function') {
-        window.dismissMockCareReminder(reminderId);
-      }
-      return { error: null };
-    } else if (state.isSupabaseMode && state.supabase) {
+    if (state.isSupabaseMode && state.supabase) {
       try {
         const { error } = await state.supabase
           .from("care_reminders")
@@ -6209,22 +6153,6 @@ const db = {
   },
 
   async fetchAllNotifications() {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
-                        hostname === '::1' || hostname.startsWith('192.168.') ||
-                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
-                        hostname.endsWith('.local');
-
-    if (state.currentUser && state.currentUser.is_demo) {
-      if (!isLocalhost) {
-        return { data: [], error: null };
-      }
-      if (typeof window.getMockCareReminders === 'function') {
-        return { data: window.getMockCareReminders(), error: null };
-      }
-      return { data: [], error: null };
-    }
-
     if (state.isSupabaseMode && state.supabase) {
       try {
         const profileId = state.currentProfileId;
@@ -6256,26 +6184,6 @@ const db = {
   },
 
   async acknowledgeAllCareReminders() {
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' ||
-                        hostname === '::1' || hostname.startsWith('192.168.') ||
-                        hostname.startsWith('10.') || hostname.startsWith('172.') ||
-                        hostname.endsWith('.local');
-
-    if (state.currentUser && state.currentUser.is_demo) {
-      if (isLocalhost && typeof window.getMockCareReminders === 'function') {
-        const mockData = window.getMockCareReminders();
-        if (Array.isArray(mockData)) {
-          mockData.forEach(item => {
-            if (typeof window.dismissMockCareReminder === 'function') {
-              window.dismissMockCareReminder(item.id);
-            }
-          });
-        }
-      }
-      return { error: null };
-    }
-
     if (state.isSupabaseMode && state.supabase) {
       try {
         const profileId = state.currentProfileId;
@@ -6297,7 +6205,7 @@ const db = {
   // 一則給這位成員，讓對話框可以直接顯示「已發送的內容」並開放編輯，而不是
   // 讓使用者送出後就再也看不到自己寫了什麼。
   async getTodayCareReminderFor(recipientId, planKey = "") {
-    if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+    if (!state.isSupabaseMode || !state.supabase) {
       return { data: null, error: null };
     }
     const senderId = state.currentProfileId || (state.currentUser && state.currentUser.id) || null;
@@ -6341,13 +6249,6 @@ const db = {
     }
     if (trimmedMsg.length > 300) {
       return { error: new Error("訊息不能超過 300 字") };
-    }
-
-    // Demo 模式：僅模擬，不真正寫入。不印出訊息全文——即使只是示範帳號，
-    // 使用者輸入的文字內容也不該進 console。
-    if (state.currentUser && state.currentUser.is_demo) {
-      console.info("[Demo] sendCareReminder (simulated):", { recipientId, reason, messageLength: trimmedMsg.length });
-      return { error: null };
     }
 
     // 生產模式：透過 nlc-data 的 send_care_reminder action 安全送出（server 端強制 sender_id）
@@ -6406,9 +6307,6 @@ const db = {
   // 📊 syncRegistrationStatisticsToSheet – 將報名與註冊統計覆寫到 Google 試算表
   // 透過 nlc-data 的 sync_registration_stats_sheet action（server 端驗證 admin 身分後轉發到 Apps Script Web App）
   async syncRegistrationStatisticsToSheet({ planName, greatRegions, pastoralZones, summary } = {}) {
-    if (state.currentUser && state.currentUser.is_demo) {
-      return { success: false, message: "示範模式無法同步至 Google 試算表。" };
-    }
     if (typeof auth === "undefined" || !auth.isLoggedIn()) {
       return { success: false, message: "請先登入後再試。" };
     }
@@ -6504,7 +6402,7 @@ db._lightningQuizErrorMessage = function(error) {
 };
 
 db._callLightningQuizRpc = async function(functionName, args = {}) {
-  if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+  if (!state.isSupabaseMode || !state.supabase) {
     return { success: false, message: "快問快答功能需要登入正式帳號。" };
   }
   try {

@@ -682,7 +682,6 @@ async function updatePlanTeamInviteShortcutVisibility() {
 
   const canLoadTeams = state.isSupabaseMode
     && state.supabase
-    && !(state.currentUser && state.currentUser.is_demo)
     && typeof window.isReadingTeamPlan === "function"
     && typeof db !== "undefined"
     && typeof db.getMyReadingTeam === "function";
@@ -970,7 +969,7 @@ function initPlanControls() {
         // 1. Clear the persisted logs before changing local state. A Supabase
         // enrollment always has a UUID, so never query a non-existent preset_key
         // column on reading_logs.
-        if (state.isSupabaseMode && state.supabase && !(state.currentUser && state.currentUser.is_demo)) {
+        if (state.isSupabaseMode && state.supabase) {
           const user = await db.getCurrentDbUser();
           if (!user || !user.id || !planId) throw new Error("找不到可重置的讀經計畫資料");
           const cacheKey = `reading_logs:${user.id}`;
@@ -1985,10 +1984,9 @@ function renderJoinedPlansList() {
           const teamContainer = card.querySelector(".plan-card-team-controls");
           if (teamContainer) {
             teamContainer.classList.add("plan-card-participation-slot");
-            const isDemo = state.currentUser && state.currentUser.is_demo;
             const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
 
-            if (isDemo || !isLoggedIn) {
+            if (!isLoggedIn) {
               teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">團隊功能需登入正式帳號</span>`;
             } else {
               teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
@@ -2040,7 +2038,7 @@ async function joinTeamGlobally(inviteCode) {
     return { success: false, message: "請輸入邀請碼。" };
   }
 
-  if (!state.isSupabaseMode || !state.supabase || (state.currentUser && state.currentUser.is_demo)) {
+  if (!state.isSupabaseMode || !state.supabase) {
     return { success: false, message: "團隊功能需登入正式帳號使用。" };
   }
 

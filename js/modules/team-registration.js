@@ -726,7 +726,6 @@ import {
     if (!actionsRow
       || !state.isSupabaseMode
       || !state.supabase
-      || (state.currentUser && state.currentUser.is_demo)
       || typeof db.getReadingTeamCarryoverOffer !== "function"
       || typeof db.carryReadingTeamsToStage !== "function"
       || typeof isCampaignStageKind !== "function") {

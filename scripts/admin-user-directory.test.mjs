@@ -72,7 +72,8 @@ describe("read-only admin user directory", () => {
     expect(method).toContain('getUserRoleCode(state.currentUser) !== "admin"');
     expect(method).toContain('.from("profiles")');
     expect(method).toContain('member_context_synced_at');
-    expect(method).toContain('.eq("is_demo", false)');
+    // is_demo 已停用（#263）：profiles_no_demo 保證沒有示範帳號，不再篩選
+    expect(method).not.toContain("is_demo");
     expect(method).not.toContain('.eq("is_active", true)');
     expect(method).not.toContain(".update(");
     expect(method).not.toContain(".delete(");

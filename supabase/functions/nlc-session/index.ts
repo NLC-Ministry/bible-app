@@ -111,7 +111,7 @@ const corsHeaders = {
 };
 
 const PROFILE_LOOKUP_SELECT = "id, name, email, phone, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, member_context_synced_at, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url";
-const PROFILE_RESPONSE_SELECT = "id, name, email, phone, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_RESPONSE_SELECT = "id, name, email, phone, avatar_url, nlc_member_id, role_id, great_region_id, pastoral_zone_id, small_group_id, great_region, pastoral_zone, small_group, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 
 function parseJwt(token: string) {
   try {
@@ -911,7 +911,6 @@ Deno.serve(async (req: Request) => {
       pastoral_zone: projectedOrg.pastoral_zone,
       small_group: projectedOrg.small_group,
       role_id: syncedRoleId,
-      is_demo: false,
       is_active: true,
       last_seen_at: nowIso,
       member_context_synced_at: memberContext ? nowIso : (existingProfile?.member_context_synced_at || null),
