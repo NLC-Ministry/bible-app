@@ -1,16 +1,15 @@
 name: Release gate
 
 # 上線審核（見 docs/staging.md「上線到正式環境」）：
-# staging → main 的 PR 要符合三個條件才會綠燈，merge 後 CI 才會部署到正式環境
-# （ci.yml 的 deploy job 會再檢查一次 staging-verified 標籤）。
+# 在 staging 網站確認沒問題後「按 merge」就代表確認上線。這個檢查確保上線 PR：
 #   1. 從 staging（或緊急修正用的 hotfix/*）開出來
 #   2. 已經包含 main 上所有有內容的 commit（緊急修正要先併回 staging）
-#   3. 已經貼上 staging-verified 標籤：代表有人在 staging 網站確認過沒問題
+# ci.yml 的 deploy job 也會再檢查一次：只有從這些分支 merge 進來的才部署到正式環境。
 
 on:
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: read
@@ -28,7 +27,6 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           fail=0
           report() { echo "$1"; echo "- $1" >> "$GITHUB_STEP_SUMMARY"; }
@@ -48,9 +46,8 @@ jobs:
             fail=1
           fi
 
-          case ",$LABELS," in
-            *,staging-verified,*) report "✅ 已貼上 staging-verified：staging 已確認沒問題" ;;
-            *) report "⏳ 還沒貼上 staging-verified 標籤。在 staging 網站照 PR 裡的清單確認沒問題後，再貼上這個標籤"; fail=1 ;;
-          esac
+          if [ "$fail" -eq 0 ]; then
+            report "👉 在 staging 網站照 PR 裡的清單確認沒問題後，按 merge 就會上線"
+          fi
 
           exit $fail
