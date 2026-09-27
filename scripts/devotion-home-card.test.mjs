@@ -204,8 +204,12 @@ describe("計畫分頁側欄「每日陪你靈修」歡迎卡：只在完全沒�
     const idx = plan.indexOf("function updatePlanSidebarIntroCardVisibility()");
     expect(idx).toBeGreaterThan(-1);
     const body = plan.slice(idx, idx + 600);
-    expect(body).toContain('if (filter === "completed")');
-    expect(body).toContain('sidebarCard.classList.toggle("hidden", !userHasNoPlanAtAll())');
+    // 已結束 / 歡迎卡 / 管理卡的實際規則在 plan-sidebar-visibility.mjs（行為測試在
+    // scripts/plan-sidebar-visibility.test.mjs）。
+    expect(body).toContain("applyPlanSidebarVisibility({");
+    expect(body).toContain('introCard: document.getElementById("plan-sidebar-intro-card")');
+    expect(body).toContain("hasAnyPlan: !userHasNoPlanAtAll()");
+    expect(html).toContain('id="plan-sidebar-intro-card"');
 
     const joinedIdx = plan.indexOf("function renderJoinedPlansList()");
     expect(plan.slice(joinedIdx, joinedIdx + 700)).toContain("updatePlanSidebarIntroCardVisibility();");
