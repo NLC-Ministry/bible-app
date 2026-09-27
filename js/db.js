@@ -6479,8 +6479,10 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
     lightning_quiz_admin_required: "只有系統管理員可以管理快問快答。",
     lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
-    lightning_quiz_has_attempts: "這個活動已經有作答紀錄，無法刪除；可以改用下架，或先到下方統計列清除作答紀錄。",
-    lightning_quiz_locked: "這個活動已經開始或已有人作答，不能取消發布；可以改用下架。",
+    lightning_quiz_has_attempts: "這一題已經有人作答，不能刪除。",
+    lightning_quiz_locked: "這一題已經開始或已有人作答，題目已鎖定；要沿用請按「複製成新題」。",
+    lightning_quiz_date_taken: "這一天已經排了另一題；一天只能排一題，請先把那一題取消排程或換日期。",
+    lightning_quiz_window_passed: "這個時段已經開始或結束了，請改成還沒到的日期或時間。",
     lightning_quiz_invalid_status_transition: "目前的狀態不能這樣切換，請重新整理後再試。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
     lightning_quiz_week_required: "請選擇要看的週。",
@@ -6560,7 +6562,7 @@ db.adminUpsertLightningQuizQuestion = async function(question) {
   });
 };
 
-// status：published（發布／重新上架）、draft（取消發布）、archived（下架）。
+// status：published（排程）、draft（取消排程，只有開始前可以）。
 db.adminSetLightningQuizStatus = async function(id, status) {
   if (!id) return { success: false, message: "找不到這一題。" };
   return this._callLightningQuizRpc("admin_set_lightning_quiz_status", { p_id: id, p_status: status });
@@ -6605,12 +6607,6 @@ db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {
 db.adminGetLightningQuizResults = async function(questionId) {
   if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
   return this._callLightningQuizRpc("admin_get_lightning_quiz_results", { p_question_id: questionId });
-};
-
-// 清除一個活動的全部作答紀錄（不分是誰答的，無法復原）。
-db.adminClearLightningQuizAttempts = async function(questionId) {
-  if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
-  return this._callLightningQuizRpc("admin_clear_lightning_quiz_attempts", { p_question_id: questionId });
 };
 
 window.db = db;

@@ -82,27 +82,33 @@ describe("後台預覽測試", () => {
   });
 });
 
-describe("後台活動清單：每題各自發布", () => {
-  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
-  const base = { questionType: "single", payload: singleQuestion.payload, answerKey: 1, riseTimeStart: "12:00:00", riseTimeEnd: "12:30:00" };
+describe("後台題目清單：準備中 → 已排程 → 作答中 → 已結束（#309）", () => {
+  const taipei = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
+  const shift = days => {
+    const date = new Date(`${taipei}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+  const base = { questionType: "single", payload: singleQuestion.payload, answerKey: 1, riseTimeStart: "07:00:00", riseTimeEnd: "10:00:00" };
   const questions = [
-    { ...base, id: "draft-1", riseDate: today, status: "draft", locked: false },
-    { ...base, id: "live-1", riseDate: today, status: "published", locked: true },
-    { ...base, id: "old-1", riseDate: "2026-01-01", status: "archived", locked: true }
+    { ...base, id: "draft-1", riseDate: shift(3), status: "draft", locked: false },
+    { ...base, id: "sched-1", riseDate: shift(1), status: "published", locked: false },
+    { ...base, id: "live-1", riseDate: taipei, riseTimeStart: "00:00:00", riseTimeEnd: "23:59:59", status: "published", locked: true },
+    { ...base, id: "ended-1", riseDate: shift(-2), status: "published", locked: true }
   ];
 
   beforeEach(() => {
     dbStub = {
       adminListLightningQuizQuestions: vi.fn(async () => ({ success: true, data: questions })),
-      adminSetLightningQuizStatus: vi.fn(async () => ({ success: true, data: { archivedQuestionId: "live-1" } })),
-      adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } }))
+      adminSetLightningQuizStatus: vi.fn(async () => ({ success: true, data: {} })),
+      adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } })),
+      adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } }))
     };
     vi.resetModules();
     setupGlobals(`
       <div id="admin-lightning-quiz-preview" class="hidden"><div id="admin-lightning-quiz-preview-host"></div></div>
       <div id="admin-lightning-quiz-editor" class="hidden">
         <h4 id="admin-lightning-quiz-form-title"></h4>
-        <p id="admin-lightning-quiz-fork-note" class="hidden"></p>
         <input id="admin-lightning-quiz-rise-date"><input id="admin-lightning-quiz-time-start"><input id="admin-lightning-quiz-time-end">
         <div id="admin-lightning-quiz-question-body"></div>
         <button id="admin-lightning-quiz-cancel"></button><button id="admin-lightning-quiz-save"></button>
@@ -113,42 +119,54 @@ describe("後台活動清單：每題各自發布", () => {
   });
 
   const card = id => document.querySelector(`[data-admin-lightning-quiz-id="${id}"]`);
+  const stage = id => card(id).querySelector("[data-lightning-quiz-stage]").textContent;
   const actions = id => [...card(id).querySelectorAll("[data-lightning-quiz-status]")].map(button => button.dataset.lightningQuizStatus);
 
-  it("測試中只能發布；已鎖定的已發布活動只能下架；已下架可以重新上架", async () => {
-    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-publish-list");
+  it("shows one stage badge per question and only the next step as its action", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-stages");
     await renderAdminLightningQuizQuestions();
+    expect(["draft-1", "sched-1", "live-1", "ended-1"].map(stage)).toEqual(["準備中", "已排程", "作答中", "已結束"]);
     expect(actions("draft-1")).toEqual(["published"]);
-    expect(actions("live-1")).toEqual(["archived"]);
-    expect(actions("old-1")).toEqual(["published"]);
-    expect(card("live-1").textContent).toContain("已鎖定");
-    expect(card("draft-1").textContent).toContain("測試中");
+    expect(actions("sched-1")).toEqual(["draft"]);
+    expect(actions("live-1")).toEqual([]);
+    expect(actions("ended-1")).toEqual([]);
+    const text = document.getElementById("admin-lightning-quiz-list").textContent;
+    expect(text).not.toContain("下架");
+    expect(text).not.toContain("測試中");
   });
 
-  it("發布同一天已有已發布活動的草稿時，先提示原活動會自動下架", async () => {
+  it("locked questions cannot be edited or deleted, only copied into a new draft with the date cleared", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-copy");
+    await renderAdminLightningQuizQuestions();
+    expect(card("live-1").querySelector("[data-lightning-quiz-edit]")).toBeNull();
+    expect(card("live-1").querySelector("[data-lightning-quiz-delete]")).toBeNull();
+    expect(card("sched-1").querySelector("[data-lightning-quiz-edit]")).not.toBeNull();
+
+    card("live-1").querySelector("[data-lightning-quiz-copy]").click();
+    expect(document.getElementById("admin-lightning-quiz-editor").classList.contains("hidden")).toBe(false);
+    expect(document.getElementById("admin-lightning-quiz-form-title").textContent).toContain("複製成新題");
+    expect(document.getElementById("admin-lightning-quiz-rise-date").value).toBe("");
+    expect(document.getElementById("admin-lightning-quiz-time-start").value).toBe("00:00");
+  });
+
+  it("scheduling asks for confirmation with the date and time, then calls the RPC", async () => {
     const confirmDialog = vi.fn(async () => true);
     dom.window.showConfirmDialog = confirmDialog;
-    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-publish-conflict");
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-schedule");
     await renderAdminLightningQuizQuestions();
-
     card("draft-1").querySelector('[data-lightning-quiz-status="published"]').click();
     await flush();
-    expect(confirmDialog.mock.calls[0][0].message).toContain("原本已發布的活動會自動下架");
+    expect(confirmDialog.mock.calls[0][0].title).toBe("確定要排程這一題嗎？");
+    expect(confirmDialog.mock.calls[0][0].message).toContain("07:00–10:00");
     expect(db.adminSetLightningQuizStatus).toHaveBeenCalledWith("draft-1", "published");
   });
 
-  it("打開已鎖定活動的編輯畫面時，提示儲存會另存為新活動", async () => {
-    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-publish-fork");
+  it("試作 opens the in-admin run-through at any time", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-try");
     await renderAdminLightningQuizQuestions();
-    card("live-1").querySelector("[data-lightning-quiz-edit]").click();
-    expect(document.getElementById("admin-lightning-quiz-fork-note").classList.contains("hidden")).toBe(false);
-    expect(document.getElementById("admin-lightning-quiz-save").textContent).toBe("另存為新活動");
-  });
-
-  it("預覽測試按鈕在後台打開預覽，不需要等到活動時段", async () => {
-    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-publish-preview");
-    await renderAdminLightningQuizQuestions();
-    card("old-1").querySelector("[data-lightning-quiz-preview]").click();
+    const button = card("ended-1").querySelector("[data-lightning-quiz-preview]");
+    expect(button.textContent).toBe("試作");
+    button.click();
     expect(document.getElementById("admin-lightning-quiz-preview").classList.contains("hidden")).toBe(false);
     expect(document.getElementById("admin-lightning-quiz-preview-host").textContent).toContain("開始作答");
   });

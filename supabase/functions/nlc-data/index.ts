@@ -424,8 +424,7 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_get_lightning_quiz_weeks",
   "admin_get_lightning_quiz_week",
   "admin_get_lightning_quiz_leaderboard",
-  "admin_get_lightning_quiz_results",
-  "admin_clear_lightning_quiz_attempts"
+  "admin_get_lightning_quiz_results"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
