@@ -55,6 +55,22 @@
 
 PR 上的 `release-gate` 檢查會確認來源分支是 `staging`（或 `hotfix/*`），而且已經包含 `main` 上所有的修改（緊急修正要先併回 staging）。
 
+## 每日靈修與小組聚會（政策審核中，2026-09-27 起）
+
+這兩個功能還在等政策通過，**內容一律在 staging 編輯與測試**：
+
+| | 正式環境 | staging |
+|---|---|---|
+| `app_feature_settings.devotion_group_hidden` | **TRUE**：對所有人隱藏，含管理員 | **FALSE**：管理員看得到後台，可以編輯內容 |
+| 內容（`global_plans` 的 devotional / group_meeting、`plan_devotion_days`、`plan_group_meeting_weeks`） | 保留 2026-09-16 的版本，不再修改 | **以這裡為準** |
+
+- 後台**沒有**「完全隱藏」開關（已移除），`db.updateFeatureSetting` 也不能改這個旗標，避免有人誤按提前公開。
+- 要讓 staging 的會友端也看得到，在 staging 後台「功能設定」打開每日靈修／小組經營的總開關，再到「個人 → 功能設定」打開自己的偏好。
+- **政策通過要上線時**（之後另外處理）：
+  1. 把 staging 的這兩個功能的內容複製到正式環境（到時候寫一支只複製這幾張表的工具，比照 `staging-sample-data.mjs`）。
+  2. 新增 migration：`UPDATE public.app_feature_settings SET enabled = FALSE WHERE key = 'devotion_group_hidden';`
+  3. 跟著一次上線 PR 發布，由維護者按 merge 確認。
+
 ## 套用 migration（#255）
 
 2026-09-25 起改用 Supabase CLI。兩個環境的 `supabase_migrations.schema_migrations` 都已經記錄 0001–0214 為已套用，CLI 會記住每個環境推過哪些 migration。
