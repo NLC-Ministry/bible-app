@@ -31,7 +31,7 @@ function recoveryFields(user) {
 }
 
 export function getUserOnboardingBlock(user, options = {}) {
-  if (!user || user.is_demo) return null;
+  if (!user) return null;
   if (!isCanonicalMemberJourneyProjection(user)) {
     return { reason: 'member_context_unavailable', requiredAction: '', requiredActionUrl: null };
   }

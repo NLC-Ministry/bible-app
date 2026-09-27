@@ -23,6 +23,24 @@ const results = {
   ]
 };
 
+const weekData = {
+  weekStart: "2026-09-21",
+  weekEnd: "2026-09-27",
+  questions: [
+    { questionId: "q1", status: "published", riseDate: "2026-09-21", completedCount: 2, correctCount: 1 },
+    { questionId: "q2", status: "published", riseDate: "2026-09-23", completedCount: 1, correctCount: 1 }
+  ],
+  members: [
+    { userId: "u1", name: "王小明", greatRegion: "北區", pastoralZone: "信義牧區", smallGroup: "A 組", regionSort: 1, zoneSort: 1, answered: 2, correct: 2, correctElapsedMs: 7000 },
+    { userId: "u2", name: "李小華", greatRegion: "南區", pastoralZone: "前鎮牧區", smallGroup: "B 組", regionSort: 2, zoneSort: 1, answered: 1, correct: 0, correctElapsedMs: 0 }
+  ],
+  eligible: results.eligible
+};
+
+const weeks = [
+  { weekStart: "2026-09-21", weekEnd: "2026-09-27", questionCount: 2, participants: 2, allAnswered: 1, completedAttempts: 3, correctAttempts: 2, avgElapsedMs: 5000, totalEligible: 10 }
+];
+
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeEach(async () => {
@@ -38,7 +56,9 @@ beforeEach(async () => {
   vi.stubGlobal("showToast", vi.fn());
   vi.stubGlobal("db", {
     adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days } })),
-    adminGetLightningQuizResults: vi.fn(async () => ({ success: true, data: results }))
+    adminGetLightningQuizResults: vi.fn(async () => ({ success: true, data: results })),
+    adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: weekData })),
+    adminGetLightningQuizWeeks: vi.fn(async () => ({ success: true, data: { weeks } }))
   });
   dom.window.HTMLElement.prototype.scrollIntoView = () => {};
   // 攔截 CSV 下載：記下 Blob 內容與檔名，不真的觸發瀏覽器下載
@@ -57,6 +77,7 @@ afterEach(() => {
 describe("快問快答 作答明細", () => {
   it("opens overview, zone and region tables for a question and exports each as CSV", async () => {
     await renderAdminLightningQuizStats();
+    document.querySelector('[data-lq-stats-tab="daily"]').click();
     document.querySelector('[data-lightning-quiz-detail="q1"]').click();
     await flush();
 
@@ -87,20 +108,74 @@ describe("快問快答 作答明細", () => {
     expect(overviewCsv).not.toContain("王小明");
   });
 
-  it("switches to the 歷史趨勢 tab and exports the trend CSV even if Chart.js cannot load", async () => {
+  it("opens on the weekly view: summary, leaderboard, org tables, per-question detail and CSV exports", async () => {
+    await renderAdminLightningQuizStats();
+    await flush();
+
+    const panel = document.querySelector('[data-lq-stats-panel="week"]');
+    expect(panel.classList.contains("hidden")).toBe(false);
+    expect(document.querySelector('[data-lq-stats-panel="daily"]').classList.contains("hidden")).toBe(true);
+    expect(db.adminGetLightningQuizWeek).toHaveBeenCalledTimes(1);
+    expect(db.adminGetLightningQuizWeek.mock.calls[0][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const text = panel.textContent;
+    expect(text).toContain("本週");
+    expect(text).toContain("2 / 10 人（20.0%）");
+    expect(text).toContain("2 題全答");
+    expect(text).toContain("1. 王小明");
+    expect(text).not.toContain("2. 李小華"); // 沒答對的人不上榜
+    expect(text).toContain("大區分析");
+    expect(text).toContain("牧區分析");
+
+    panel.querySelector('[data-lq-week-question="q1"]').click();
+    await flush();
+    expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1");
+    expect(panel.querySelector("[data-lq-week-detail]").classList.contains("hidden")).toBe(false);
+
+    panel.querySelector('[data-lq-week-export="members"]').click();
+    panel.querySelector('[data-lq-week-export="region"]').click();
+    panel.querySelector('[data-lq-week-export="zone"]').click();
+    expect(downloads.map(d => d.filename)).toEqual([
+      "快問快答_週名單_2026-09-21週.csv",
+      "快問快答_週大區分析_2026-09-21週.csv",
+      "快問快答_週牧區分析_2026-09-21週.csv"
+    ]);
+    expect(await downloads[0].blob.text()).toContain('"1","王小明"');
+  });
+
+  it("moves between weeks; the next button stops at this week", async () => {
+    await renderAdminLightningQuizStats();
+    await flush();
+    const panel = document.querySelector('[data-lq-stats-panel="week"]');
+    const thisWeek = db.adminGetLightningQuizWeek.mock.calls[0][0];
+    expect(panel.querySelector("[data-lq-week-next]").disabled).toBe(true);
+
+    panel.querySelector("[data-lq-week-prev]").click();
+    await flush();
+    const prevWeek = db.adminGetLightningQuizWeek.mock.calls[1][0];
+    expect(new Date(thisWeek) - new Date(prevWeek)).toBe(7 * 24 * 3600 * 1000);
+    expect(panel.querySelector("[data-lq-week-next]").disabled).toBe(false);
+
+    panel.querySelector("[data-lq-week-today]").click();
+    await flush();
+    expect(db.adminGetLightningQuizWeek.mock.calls[2][0]).toBe(thisWeek);
+  });
+
+  it("switches to the 週趨勢 tab and exports the weekly trend CSV even if Chart.js cannot load", async () => {
     await renderAdminLightningQuizStats();
     document.querySelector('[data-lq-stats-tab="trend"]').click();
+    await flush();
     await flush();
 
     const trend = document.querySelector('[data-lq-stats-panel="trend"]');
     expect(trend.classList.contains("hidden")).toBe(false);
-    expect(document.querySelector('[data-lq-stats-panel="daily"]').classList.contains("hidden")).toBe(true);
-    expect(trend.querySelector("[data-lq-trend-from]").value).toBe("2026-09-24");
+    expect(db.adminGetLightningQuizWeeks).toHaveBeenCalledTimes(1);
+    expect(trend.querySelector("[data-lq-trend-from]").value).toBe("2026-09-21");
+    expect(trend.textContent).toContain("9/21～9/27");
     expect(trend.textContent).toContain("20.0%");
-    expect(trend.textContent).toContain("50.0%");
+    expect(trend.textContent).toContain("66.7%");
 
     trend.querySelector("[data-lq-trend-export]").click();
-    expect(downloads[0].filename).toMatch(/^快問快答_歷史趨勢_\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(await downloads[0].blob.text()).toContain('"2026-09-24","2","10","20.0%","1","50.0%","5.0"');
+    expect(downloads[0].filename).toMatch(/^快問快答_週趨勢_\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(await downloads[0].blob.text()).toContain('"2026-09-21","2","2","10","20.0%","1","2","3","66.7%","5.0"');
   });
 });

@@ -1893,15 +1893,15 @@
                 <div>
                   <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
                   <h3 class="card-title" id="admin-lightning-quiz-title">快問快答</h3>
-                  <p>新增的活動先是「測試中」，只有你看得到，可以隨時預覽測試；確認沒問題再按該活動的「發布」。同一天最多一個已發布的活動。</p>
+                  <p>新增的題目先是「準備中」，只有你看得到，可以隨時試作；確認沒問題再按「排程」。開始之前都能修改或取消排程；開始後題目鎖定，要沿用請按「複製成新題」。同一天只能排一題。</p>
                 </div>
                 <button type="button" class="primary-btn" id="admin-lightning-quiz-create">新增題目</button>
               </div>
               <div id="admin-lightning-quiz-preview" class="announcement-form-panel admin-lightning-quiz-preview hidden">
                 <div class="admin-lightning-quiz-preview__head">
-                  <h4 class="announcement-form-panel__title">預覽測試（不會記錄作答）</h4>
+                  <h4 class="announcement-form-panel__title">試作（不會記錄作答）</h4>
                   <div class="admin-lightning-quiz-preview__actions">
-                    <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新預覽</button>
+                    <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
                     <button type="button" class="pill-btn" id="admin-lightning-quiz-preview-close">關閉</button>
                   </div>
                 </div>
@@ -1909,9 +1909,8 @@
               </div>
               <div id="admin-lightning-quiz-editor" class="announcement-form-panel hidden">
                 <h4 class="announcement-form-panel__title" id="admin-lightning-quiz-form-title">新增題目</h4>
-                <p id="admin-lightning-quiz-fork-note" class="admin-daily-quiz-note hidden">這個活動已經開始或已有人作答，題目與時間已鎖定。儲存後會另存為一個新的「測試中」活動，原活動與它的統計都不會變動。</p>
                 <div class="admin-lightning-quiz-schedule-row">
-                  <label>升起日期
+                  <label>日期
                     <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
                   </label>
                   <label>開始時間
@@ -1927,6 +1926,7 @@
                   <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-lightning-quiz-save">儲存題目</button>
                 </div>
               </div>
+              <div id="admin-lightning-quiz-planner" class="admin-lightning-quiz-planner"></div>
               <div id="admin-lightning-quiz-list" class="announcements-list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入題目…</div>
               </div>
@@ -1935,7 +1935,7 @@
               <div class="admin-announcements__header">
                 <div>
                   <h3 class="card-title" id="admin-lightning-quiz-stats-title">統計與趨勢分析</h3>
-                  <p>逐日參與率、答對人數與平均耗時；可展開單題作答明細（作答總覽、牧區／大區分析）與歷史趨勢，並匯出 CSV。</p>
+                  <p>以週為單位（週一到週日）：參與率、全部答完、答對率、週排行與大區／牧區分析；也可以看週趨勢、逐日明細，並匯出 CSV。</p>
                 </div>
               </div>
               <div id="admin-lightning-quiz-stats-body">

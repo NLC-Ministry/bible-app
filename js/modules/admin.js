@@ -28,18 +28,38 @@ import {
   UNASSIGNED_REGION_LABEL,
   UNASSIGNED_ZONE_LABEL,
   buildOverviewCsv,
+  addDays,
   buildRegionCsv,
-  buildTrendCsv,
-  buildTrendSeries,
+  buildWeekLeaderboard,
+  buildWeekMembersCsv,
+  buildWeekRegionCsv,
+  buildWeekZoneCsv,
+  buildWeeklyTrendCsv,
+  buildWeeklyTrendSeries,
   buildZoneCsv,
   filterAttempts,
   formatElapsedSeconds,
   formatRate,
+  formatWeekRange,
+  formatWeekday,
   sortZoneRowsByRegion,
   summarizeByRegion,
-  summarizeByZone
+  summarizeByZone,
+  summarizeWeek,
+  summarizeWeekByRegion,
+  summarizeWeekByZone,
+  weekStartOf
 } from "./lightning-quiz-analytics.mjs";
 import { openLightningQuizPreview, closeLightningQuizPreview } from "./lightning-quiz.mjs";
+import {
+  DEFAULT_LIGHTNING_QUIZ_SETTINGS,
+  LIGHTNING_QUIZ_STAGE_LABELS,
+  buildLightningQuizCalendar,
+  copyLightningQuizQuestion,
+  lightningQuizStage,
+  parseLightningImportText,
+  planLightningImport
+} from "./lightning-quiz-schedule.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
 import { renderExamPanel } from "./exam.js";
 
@@ -1653,55 +1673,52 @@ function formatAdminLightningQuizDate(dateStr) {
 function closeAdminLightningQuizEditor() {
   editingAdminLightningQuizId = null;
   document.getElementById('admin-lightning-quiz-editor')?.classList.add('hidden');
-  document.getElementById('admin-lightning-quiz-fork-note')?.classList.add('hidden');
   const riseDate = document.getElementById('admin-lightning-quiz-rise-date');
   const timeStart = document.getElementById('admin-lightning-quiz-time-start');
   const timeEnd = document.getElementById('admin-lightning-quiz-time-end');
   const body = document.getElementById('admin-lightning-quiz-question-body');
   const heading = document.getElementById('admin-lightning-quiz-form-title');
-  const save = document.getElementById('admin-lightning-quiz-save');
   if (riseDate) riseDate.value = '';
   if (timeStart) timeStart.value = '';
   if (timeEnd) timeEnd.value = '';
   if (body) body.innerHTML = '';
   if (heading) heading.textContent = '新增題目';
-  if (save) save.textContent = '儲存題目';
 }
 
-// 已鎖定的活動（非測試中，且時段已開始或已有人作答）還是可以打開來改，但儲存時
-// SQL 端會另存成新的測試活動，原活動與統計不動。提示與按鈕文字先講清楚，
-// 讓管理員按下儲存前就知道會發生什麼。
-function openAdminLightningQuizEditor(question = null) {
-  editingAdminLightningQuizId = question?.id || null;
+// 新增、編輯（還沒開始的題目）、複製成新題（已開始的題目：內容帶進來、日期留空，
+// 存成新的準備中題目）。開始後的題目不能編輯（#309）。新增時帶入排程規則的預設
+// 時段；從日曆的「新增」進來會再帶入那一天（prefill，#310）。
+function openAdminLightningQuizEditor(question = null, { copy = false, prefill = null } = {}) {
+  const rule = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  const source = copy
+    ? copyLightningQuizQuestion(question)
+    : question || { id: null, riseDate: '', riseTimeStart: rule.timeStart, riseTimeEnd: rule.timeEnd, ...prefill };
+  editingAdminLightningQuizId = source?.id || null;
   const editor = document.getElementById('admin-lightning-quiz-editor');
-  const forkNote = document.getElementById('admin-lightning-quiz-fork-note');
   const riseDate = document.getElementById('admin-lightning-quiz-rise-date');
   const timeStart = document.getElementById('admin-lightning-quiz-time-start');
   const timeEnd = document.getElementById('admin-lightning-quiz-time-end');
   const body = document.getElementById('admin-lightning-quiz-question-body');
   const heading = document.getElementById('admin-lightning-quiz-form-title');
-  const save = document.getElementById('admin-lightning-quiz-save');
   if (!editor || !body) return;
 
-  const locked = question?.locked === true;
   editor.classList.remove('hidden');
-  forkNote?.classList.toggle('hidden', !locked);
-  if (riseDate) riseDate.value = question?.riseDate || '';
-  if (timeStart) timeStart.value = question?.riseTimeStart?.slice(0, 5) || '';
-  if (timeEnd) timeEnd.value = question?.riseTimeEnd?.slice(0, 5) || '';
-  body.innerHTML = renderAdminLightningQuizQuestionFieldsetHtml(question ? {
-    type: question.questionType,
-    payload: question.payload,
-    answerKey: question.answerKey
+  if (riseDate) riseDate.value = source?.riseDate || '';
+  if (timeStart) timeStart.value = source?.riseTimeStart?.slice(0, 5) || '';
+  if (timeEnd) timeEnd.value = source?.riseTimeEnd?.slice(0, 5) || '';
+  body.innerHTML = renderAdminLightningQuizQuestionFieldsetHtml(source ? {
+    type: source.questionType,
+    payload: source.payload,
+    answerKey: source.answerKey
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
-  if (heading) heading.textContent = !question ? '新增題目' : locked ? '修改並另存為新活動' : '編輯題目';
-  if (save) save.textContent = !question ? '儲存題目' : locked ? '另存為新活動' : '儲存修改';
+  if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
+  editor.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   riseDate?.focus();
 }
 
-// 預覽測試：在後台跑完整作答流程，任何時間都能測，不寫入任何作答紀錄。
+// 試作：在後台跑完整作答流程，任何時間都能做，不寫入任何作答紀錄。
 function openAdminLightningQuizPreviewPanel(question) {
   const panel = document.getElementById('admin-lightning-quiz-preview');
   const host = document.getElementById('admin-lightning-quiz-preview-host');
@@ -1731,62 +1748,225 @@ function adminLightningQuizTaipeiNow() {
   };
 }
 
-// 已發布活動的排程狀態：即將開始／進行中／已結束（以台灣時間計算）。
-function adminLightningQuizScheduleBadge(question, now) {
-  const start = question.riseTimeStart || '';
-  const end = question.riseTimeEnd || '';
-  const ended = question.riseDate < now.date || (question.riseDate === now.date && now.time > end);
-  const started = question.riseDate < now.date || (question.riseDate === now.date && now.time >= start);
-  if (ended) return '<span class="stat-badge stat-badge--neutral">已結束</span>';
-  if (started) return '<span class="stat-badge stat-badge--success">進行中</span>';
-  return '<span class="stat-badge stat-badge--brand">即將開始</span>';
-}
-
-const ADMIN_LIGHTNING_QUIZ_STATUS_BADGES = {
-  draft: '<span class="stat-badge stat-badge--warning">測試中</span>',
-  published: '<span class="stat-badge stat-badge--success">已發布</span>',
-  archived: '<span class="stat-badge stat-badge--neutral">已下架</span>'
+const ADMIN_LIGHTNING_QUIZ_STAGE_BADGE_KIND = {
+  draft: 'warning',
+  scheduled: 'brand',
+  live: 'success',
+  ended: 'neutral'
 };
 
-async function changeAdminLightningQuizStatus(question, nextStatus, questions) {
-  const dateLabel = formatAdminLightningQuizDate(question.riseDate);
-  let dialog;
-  if (nextStatus === 'published') {
-    const conflict = questions.some(item => item.id !== question.id && item.status === 'published' && item.riseDate === question.riseDate);
-    dialog = {
-      title: question.status === 'archived' ? '確定要重新上架這個活動嗎？' : '確定要發布這個活動嗎？',
-      message: conflict
-        ? `發布後，會友會在 ${dateLabel}的排定時段看到這一題。${dateLabel}原本已發布的活動會自動下架（作答與統計都保留）。`
-        : `發布後，會友會在 ${dateLabel}的排定時段看到這一題。`,
-      confirmText: question.status === 'archived' ? '重新上架' : '發布'
+async function changeAdminLightningQuizStatus(question, nextStatus) {
+  const when = `${formatAdminLightningQuizDate(question.riseDate)} ${(question.riseTimeStart || '').slice(0, 5)}–${(question.riseTimeEnd || '').slice(0, 5)}`;
+  const dialog = nextStatus === 'published'
+    ? {
+      title: '確定要排程這一題嗎？',
+      message: `排程後，會友會在 ${when} 看到這一題。開始之前都還可以修改或取消排程。`,
+      confirmText: '排程'
+    }
+    : {
+      title: '確定要取消排程嗎？',
+      message: '取消後回到「準備中」，會友看不到這一題。',
+      confirmText: '取消排程'
     };
-  } else if (nextStatus === 'archived') {
-    dialog = {
-      title: '確定要下架這個活動嗎？',
-      message: '下架後，首頁與會友的「我的測驗」都不會再顯示這個活動；後台統計保留，之後可以重新上架。',
-      confirmText: '下架',
-      isDestructive: true
-    };
-  } else {
-    dialog = {
-      title: '確定要取消發布嗎？',
-      message: '取消發布後，活動回到「測試中」，會友看不到。',
-      confirmText: '取消發布'
-    };
-  }
-  const confirmed = await window.showConfirmDialog({ cancelText: '取消', ...dialog });
+  const confirmed = await window.showConfirmDialog({ cancelText: '返回', ...dialog });
   if (!confirmed) return;
 
   const result = await db.adminSetLightningQuizStatus(question.id, nextStatus);
-  if (!result.success) {
-    showToast(result.message || '更新狀態失敗，請稍後再試。');
-  } else if (nextStatus === 'published') {
-    showToast(result.data?.archivedQuestionId ? '已發布，同一天原本的活動已自動下架。' : '已發布。');
-  } else {
-    showToast(nextStatus === 'archived' ? '已下架。' : '已取消發布，活動回到測試中。');
-  }
+  if (!result.success) showToast(result.message || '更新狀態失敗，請稍後再試。');
+  else showToast(nextStatus === 'published' ? '已排程。' : '已取消排程，回到準備中。');
   await renderAdminLightningQuizQuestions();
   void renderAdminLightningQuizStats();
+}
+
+// ── 排程日曆、排程規則、文字匯入（#310）─────────────────────────────────
+let adminLightningQuizSettings = null;
+const ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+async function loadAdminLightningQuizSettings() {
+  if (adminLightningQuizSettings) return adminLightningQuizSettings;
+  const result = await db.adminGetLightningQuizSettings();
+  adminLightningQuizSettings = result.success && result.data ? result.data : { ...DEFAULT_LIGHTNING_QUIZ_SETTINGS };
+  return adminLightningQuizSettings;
+}
+
+function describeAdminLightningQuizRule(settings) {
+  const days = (settings.weekdays || []).map(day => ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS[day - 1]).join('、');
+  return `每週${days}　${settings.timeStart}–${settings.timeEnd}`;
+}
+
+function renderAdminLightningQuizCalendarHtml(questions, settings, now) {
+  const weeks = buildLightningQuizCalendar({ weekdays: settings.weekdays, questions, now, weeks: 4 });
+  return `<div class="admin-lightning-quiz-calendar">
+    ${weeks.map(week => `<div class="admin-lightning-quiz-calendar__week">
+      <span class="admin-lightning-quiz-calendar__week-label">${escapeHTML(formatWeekRange(week.weekStart))}</span>
+      <div class="admin-lightning-quiz-calendar__days">
+        ${week.days.map(day => {
+          const label = `<span class="admin-lightning-quiz-calendar__date">${escapeHTML(formatWeekday(day.date))}</span>`;
+          if (day.question) {
+            return `<button type="button" class="admin-lightning-quiz-calendar__day" data-lq-calendar-open="${escapeHTML(String(day.question.id))}">
+              ${label}
+              <span class="stat-badge stat-badge--${ADMIN_LIGHTNING_QUIZ_STAGE_BADGE_KIND[day.stage]}">${LIGHTNING_QUIZ_STAGE_LABELS[day.stage]}</span>
+              <span class="admin-lightning-quiz-calendar__stem">${escapeHTML(day.question.payload?.stem || '')}</span>
+            </button>`;
+          }
+          if (day.missing) {
+            return `<div class="admin-lightning-quiz-calendar__day is-missing" data-lq-calendar-missing="${escapeHTML(day.date)}">
+              ${label}
+              <span class="stat-badge stat-badge--danger">缺題</span>
+              <button type="button" class="pill-btn" data-lq-calendar-add="${escapeHTML(day.date)}">新增</button>
+            </div>`;
+          }
+          return `<div class="admin-lightning-quiz-calendar__day is-past">${label}<span class="admin-lightning-quiz-calendar__stem">—</span></div>`;
+        }).join('')}
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderAdminLightningQuizImportPreview(preview, parsed, planned) {
+  const errors = [...parsed.errors, ...planned.errors].sort((a, b) => a.number - b.number);
+  if (errors.length) {
+    preview.innerHTML = `<div class="admin-lightning-quiz-import__errors" role="alert">
+      <p>有 ${errors.length} 題需要修正，修正後再按一次「解析」（這時候一題都還沒有存）：</p>
+      <ul>${errors.map(error => `<li>第 ${escapeHTML(String(error.number))} 題：${escapeHTML(error.message)}</li>`).join('')}</ul>
+    </div>`;
+    return;
+  }
+  preview.innerHTML = `
+    <p class="admin-daily-quiz-note">共 ${planned.plan.length} 題，會排在下面這些日子。確認沒問題再匯入：</p>
+    ${adminLightningQuizOrgTable(['日期', '時段', '題型', '題目', ''],
+      planned.plan.map(item => `<tr>
+        <td>${escapeHTML(formatWeekday(item.date))}</td>
+        <td>${escapeHTML(item.timeStart)}–${escapeHTML(item.timeEnd)}</td>
+        <td>${escapeHTML(ADMIN_QUIZ_CUSTOM_TYPE_LABELS[item.question.type] || item.question.type)}</td>
+        <td>${escapeHTML(item.question.payload?.stem || '')}</td>
+        <td>${item.pinned ? '指定日期' : '自動排入'}</td>
+      </tr>`).join(''))}
+    <div class="announcement-form-panel__actions">
+      <button type="button" class="secondary-btn" data-lq-import-save="draft">匯入為準備中</button>
+      <button type="button" class="primary-btn" data-lq-import-save="schedule">匯入並排程</button>
+    </div>`;
+}
+
+function bindAdminLightningQuizImport(panel, getQuestions) {
+  const textarea = panel.querySelector('[data-lq-import-text]');
+  const preview = panel.querySelector('[data-lq-import-preview]');
+  let planned = null;
+  panel.querySelector('[data-lq-import-parse]').addEventListener('click', () => {
+    const now = adminLightningQuizTaipeiNow();
+    const parsed = parseLightningImportText(textarea.value, { today: now.date });
+    if (!parsed.items.length && !parsed.errors.length) {
+      preview.innerHTML = '<div class="admin-user-directory__empty">請先貼上題目。</div>';
+      planned = null;
+      return;
+    }
+    planned = planLightningImport(parsed.items, {
+      existingDates: getQuestions().map(question => question.riseDate),
+      settings: adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS,
+      now
+    });
+    renderAdminLightningQuizImportPreview(preview, parsed, planned);
+  });
+  preview.addEventListener('click', async event => {
+    const button = event.target.closest('[data-lq-import-save]');
+    if (!button || !planned || planned.errors.length) return;
+    const schedule = button.dataset.lqImportSave === 'schedule';
+    preview.querySelectorAll('[data-lq-import-save]').forEach(other => { other.disabled = true; });
+    const result = await db.adminImportLightningQuizQuestions(planned.plan.map(item => ({
+      riseDate: item.date,
+      riseTimeStart: item.timeStart,
+      riseTimeEnd: item.timeEnd,
+      questionType: item.question.type,
+      payload: item.question.payload,
+      answerKey: item.question.answerKey
+    })), schedule);
+    if (!result.success) {
+      preview.querySelectorAll('[data-lq-import-save]').forEach(other => { other.disabled = false; });
+      showToast(result.message || '匯入失敗，這次一題都沒有匯入。');
+      return;
+    }
+    showToast(`已匯入 ${result.data?.imported ?? planned.plan.length} 題${schedule ? '並排程' : '（準備中）'}。`);
+    textarea.value = '';
+    preview.innerHTML = '';
+    planned = null;
+    await renderAdminLightningQuizQuestions();
+  });
+}
+
+function bindAdminLightningQuizRule(panel, rerender) {
+  const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  panel.querySelectorAll('[data-lq-rule-day]').forEach(input => {
+    input.checked = (settings.weekdays || []).includes(Number(input.value));
+  });
+  panel.querySelector('[data-lq-rule-start]').value = settings.timeStart;
+  panel.querySelector('[data-lq-rule-end]').value = settings.timeEnd;
+  panel.querySelector('[data-lq-rule-save]').addEventListener('click', async event => {
+    const weekdays = [...panel.querySelectorAll('[data-lq-rule-day]:checked')].map(input => Number(input.value));
+    const timeStart = panel.querySelector('[data-lq-rule-start]').value;
+    const timeEnd = panel.querySelector('[data-lq-rule-end]').value;
+    if (!weekdays.length) { showToast('請至少選一天。'); return; }
+    if (!timeStart || !timeEnd || timeStart >= timeEnd) { showToast('結束時間必須晚於開始時間。'); return; }
+    event.currentTarget.disabled = true;
+    const result = await db.adminSaveLightningQuizSettings({ weekdays, timeStart, timeEnd });
+    event.currentTarget.disabled = false;
+    if (!result.success) { showToast(result.message || '儲存失敗，請稍後再試。'); return; }
+    adminLightningQuizSettings = result.data;
+    showToast('排程規則已儲存。');
+    rerender();
+  });
+}
+
+function renderAdminLightningQuizPlanner(questions) {
+  const host = document.getElementById('admin-lightning-quiz-planner');
+  if (!host) return;
+  const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  host._questions = questions;
+  // 規則與匯入的面板只建一次，清單重新整理時不會把正在貼的文字洗掉
+  if (!host.querySelector('[data-lq-calendar]')) {
+    host.innerHTML = `
+      <section class="admin-lightning-quiz-detail__section" aria-label="排程日曆">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>接下來 4 週</h5>
+          <span class="admin-daily-quiz-note" data-lq-rule-summary></span>
+        </div>
+        <div data-lq-calendar></div>
+      </section>
+      <details class="admin-lightning-quiz-planner__panel" data-lq-rule-panel>
+        <summary>排程規則</summary>
+        <div class="admin-lightning-quiz-rule">
+          <fieldset class="admin-lightning-quiz-rule__days"><legend>哪幾天有快問快答</legend>
+            ${ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS.map((label, index) => `<label><input type="checkbox" data-lq-rule-day value="${index + 1}"> 週${label}</label>`).join('')}
+          </fieldset>
+          <label>預設開始<input type="time" class="form-control" data-lq-rule-start></label>
+          <label>預設結束<input type="time" class="form-control" data-lq-rule-end></label>
+          <button type="button" class="primary-btn" data-lq-rule-save>儲存規則</button>
+        </div>
+      </details>
+      <details class="admin-lightning-quiz-planner__panel" data-lq-import-panel>
+        <summary>文字匯入（一次貼多題）</summary>
+        <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。</p>
+        <textarea class="form-control" rows="10" data-lq-import-text placeholder="[單選] 亞伯拉罕原本住在哪座城市？&#10;A. 哈蘭&#10;B. 吾珥&#10;答案：B&#10;&#10;日期：10/9&#10;[是非] 摩西在米甸住了四十年。&#10;答案：對"></textarea>
+        <button type="button" class="secondary-btn" data-lq-import-parse>解析</button>
+        <div data-lq-import-preview aria-live="polite"></div>
+      </details>`;
+    bindAdminLightningQuizRule(host.querySelector('[data-lq-rule-panel]'), () => renderAdminLightningQuizPlanner(host._questions || []));
+    bindAdminLightningQuizImport(host.querySelector('[data-lq-import-panel]'), () => host._questions || []);
+    host.addEventListener('click', event => {
+      const add = event.target.closest('[data-lq-calendar-add]');
+      if (add) {
+        const rule = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+        openAdminLightningQuizEditor(null, { prefill: { riseDate: add.dataset.lqCalendarAdd, riseTimeStart: rule.timeStart, riseTimeEnd: rule.timeEnd } });
+        return;
+      }
+      const open = event.target.closest('[data-lq-calendar-open]');
+      if (open) {
+        document.querySelector(`[data-admin-lightning-quiz-id="${open.dataset.lqCalendarOpen}"]`)
+          ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+  host.querySelector('[data-lq-rule-summary]').textContent = `排程規則：${describeAdminLightningQuizRule(settings)}`;
+  host.querySelector('[data-lq-calendar]').innerHTML = renderAdminLightningQuizCalendarHtml(questions, settings, adminLightningQuizTaipeiNow());
 }
 
 export async function renderAdminLightningQuizQuestions() {
@@ -1804,7 +1984,7 @@ export async function renderAdminLightningQuizQuestions() {
     const timeEnd = document.getElementById('admin-lightning-quiz-time-end')?.value || '';
     const fieldset = document.querySelector('#admin-lightning-quiz-question-body fieldset');
     if (!riseDate || !timeStart || !timeEnd) {
-      showToast('請設定升起日期與開始／結束時間。');
+      showToast('請設定日期與開始／結束時間。');
       return;
     }
     if (timeStart >= timeEnd) {
@@ -1832,18 +2012,18 @@ export async function renderAdminLightningQuizQuestions() {
       return;
     }
     if (result.data?.unchanged) showToast('內容沒有變更。');
-    else if (result.data?.forked) showToast('原活動已鎖定，已另存為新的測試活動，原活動與統計不變。');
-    else showToast(editingAdminLightningQuizId ? '題目已更新。' : '已新增為測試中的活動，確認後再按「發布」。');
+    else showToast(editingAdminLightningQuizId ? '題目已更新。' : '已新增，目前是「準備中」；確認後按「排程」。');
     closeAdminLightningQuizEditor();
     await renderAdminLightningQuizQuestions();
   };
 
-  const result = await db.adminListLightningQuizQuestions();
+  const [result] = await Promise.all([db.adminListLightningQuizQuestions(), loadAdminLightningQuizSettings()]);
   if (!result.success) {
     host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入失敗，請稍後再試。')}</div>`;
     return;
   }
   const questions = Array.isArray(result.data) ? result.data : [];
+  renderAdminLightningQuizPlanner(questions);
   if (!questions.length) {
     host.innerHTML = '<div class="admin-user-directory__empty">目前尚無題目，請按「新增題目」設定第一題。</div>';
     return;
@@ -1852,18 +2032,14 @@ export async function renderAdminLightningQuizQuestions() {
   const now = adminLightningQuizTaipeiNow();
   host.innerHTML = questions.map(question => {
     const typeLabel = ADMIN_QUIZ_CUSTOM_TYPE_LABELS[question.questionType] || question.questionType;
-    const source = question.sourceQuestionId
-      ? questions.find(item => item.id === question.sourceQuestionId)
-      : null;
-    const sourceNote = question.sourceQuestionId
-      ? `<p class="admin-lightning-quiz-source-note">${source ? `由 ${escapeHTML(formatAdminLightningQuizDate(source.riseDate))}的活動修改另存` : '由已刪除的活動修改另存'}</p>`
-      : '';
-    const statusActions = {
-      draft: '<button type="button" class="primary-btn" data-lightning-quiz-status="published">發布</button>',
-      published: `${question.locked ? '' : '<button type="button" class="secondary-btn" data-lightning-quiz-status="draft">取消發布</button>'}
-        <button type="button" class="secondary-btn" data-lightning-quiz-status="archived">下架</button>`,
-      archived: '<button type="button" class="secondary-btn" data-lightning-quiz-status="published">重新上架</button>'
-    }[question.status] || '';
+    const stage = lightningQuizStage(question, now);
+    // 已開始或已有人作答（locked）：不能編輯、不能取消排程、不能刪除，只能複製成新題
+    const locked = question.locked === true;
+    const stageAction = stage === 'draft'
+      ? '<button type="button" class="primary-btn" data-lightning-quiz-status="published">排程</button>'
+      : !locked
+        ? '<button type="button" class="secondary-btn" data-lightning-quiz-status="draft">取消排程</button>'
+        : '<button type="button" class="secondary-btn" data-lightning-quiz-copy>複製成新題</button>';
     return `
     <article class="announcement-item" data-admin-lightning-quiz-id="${escapeHTML(String(question.id))}">
       <div class="announcement-item__header">
@@ -1872,23 +2048,20 @@ export async function renderAdminLightningQuizQuestions() {
           <div class="announcement-item__title-group">
             <div class="announcement-item__tags">
               <span class="announcement-badge announcement-badge--default"><span>${escapeHTML(typeLabel)}</span></span>
-              ${ADMIN_LIGHTNING_QUIZ_STATUS_BADGES[question.status] || ''}
-              ${question.status === 'published' ? adminLightningQuizScheduleBadge(question, now) : ''}
-              ${question.locked ? '<span class="stat-badge stat-badge--neutral">已鎖定</span>' : ''}
+              <span class="stat-badge stat-badge--${ADMIN_LIGHTNING_QUIZ_STAGE_BADGE_KIND[stage]}" data-lightning-quiz-stage="${stage}">${LIGHTNING_QUIZ_STAGE_LABELS[stage]}</span>
             </div>
             <h4 class="announcement-item__title">${escapeHTML(formatAdminLightningQuizDate(question.riseDate))} ${escapeHTML((question.riseTimeStart || '').slice(0, 5))}–${escapeHTML((question.riseTimeEnd || '').slice(0, 5))}</h4>
             <p class="announcement-item__body">${escapeHTML(question.payload?.stem || '')}</p>
-            ${sourceNote}
           </div>
         </div>
-        <div class="announcement-item__meta">
-          <button type="button" class="circular-action-btn" data-lightning-quiz-edit title="${question.locked ? '修改並另存為新活動' : '編輯'}" aria-label="${question.locked ? '修改並另存為新活動' : '編輯'}"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
+        ${locked ? '' : `<div class="announcement-item__meta">
+          <button type="button" class="circular-action-btn" data-lightning-quiz-edit title="編輯" aria-label="編輯"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
           <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-delete title="刪除" aria-label="刪除"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
-        </div>
+        </div>`}
       </div>
       <div class="admin-lightning-quiz-actions">
-        <button type="button" class="secondary-btn" data-lightning-quiz-preview>預覽測試</button>
-        ${statusActions}
+        <button type="button" class="secondary-btn" data-lightning-quiz-preview>試作</button>
+        ${stageAction}
       </div>
     </article>`;
   }).join('');
@@ -1897,13 +2070,14 @@ export async function renderAdminLightningQuizQuestions() {
     const question = questions.find(item => String(item.id) === card.dataset.adminLightningQuizId);
     card.querySelector('[data-lightning-quiz-preview]')?.addEventListener('click', () => openAdminLightningQuizPreviewPanel(question));
     card.querySelectorAll('[data-lightning-quiz-status]').forEach(button => {
-      button.addEventListener('click', () => changeAdminLightningQuizStatus(question, button.dataset.lightningQuizStatus, questions));
+      button.addEventListener('click', () => changeAdminLightningQuizStatus(question, button.dataset.lightningQuizStatus));
     });
     card.querySelector('[data-lightning-quiz-edit]')?.addEventListener('click', () => openAdminLightningQuizEditor(question));
+    card.querySelector('[data-lightning-quiz-copy]')?.addEventListener('click', () => openAdminLightningQuizEditor(question, { copy: true }));
     card.querySelector('[data-lightning-quiz-delete]')?.addEventListener('click', async () => {
       const confirmed = await window.showConfirmDialog({
         title: '確定要刪除這一題快問快答嗎？',
-        message: '此動作無法復原。已經有作答紀錄的活動不能刪除，請改用下架。',
+        message: '此動作無法復原。',
         confirmText: '確認刪除',
         cancelText: '取消',
         isDestructive: true
@@ -1993,13 +2167,11 @@ async function renderAdminLightningQuizDetail(detailHost, day) {
   const zoneSummary = summarizeByZone(data);
   const regionSummary = summarizeByRegion(data);
   const zoneRows = sortZoneRowsByRegion(zoneSummary.rows);
-  // 同一天可能有已下架的原活動與另存後發布的新活動，檔名要分得開。
-  const isArchived = day.status === 'archived';
-  const fileSuffix = `${day.riseDate}${isArchived ? '_已下架' : ''}`;
+  const fileSuffix = day.riseDate;
 
   detailHost.innerHTML = `
     <div class="admin-lightning-quiz-detail__head">
-      <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}${isArchived ? '（已下架）' : ''}作答明細</h4>
+      <h4 class="announcement-form-panel__title">${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}作答明細</h4>
       <button type="button" class="secondary-btn" data-lq-detail-close>收合</button>
     </div>
 
@@ -2093,11 +2265,11 @@ function destroyAdminLightningQuizTrendCharts() {
   adminLightningQuizTrendCharts = [];
 }
 
-function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
+function adminLightningQuizTrendChartConfig(series, valueKey, label, color, describe) {
   return {
     type: 'line',
     data: {
-      labels: series.map(point => String(point.riseDate).slice(5)),
+      labels: series.map(point => point.label),
       datasets: [{
         label,
         data: series.map(point => point[valueKey] == null ? null : Math.round(point[valueKey] * 1000) / 10),
@@ -2115,12 +2287,7 @@ function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: context => {
-              const point = series[context.dataIndex];
-              return valueKey === 'participationRate'
-                ? `${label} ${context.formattedValue}%（${point.completed} / ${point.eligible} 人）`
-                : `${label} ${context.formattedValue}%（${point.correct} / ${point.completed} 人）`;
-            }
+            label: context => `${label} ${context.formattedValue}%（${describe(series[context.dataIndex])}）`
           }
         }
       },
@@ -2131,13 +2298,20 @@ function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
   };
 }
 
-// 歷史趨勢：參與趨勢、答對率趨勢兩張折線圖＋資料表。依日期區間在前端篩選
-// 已經載入的逐日資料，不另外打 RPC。
-function renderAdminLightningQuizTrendPanel(panel, days) {
+// 週趨勢（#311）：參與率、答對率兩張折線圖＋每週資料表。週資料由
+// admin_get_lightning_quiz_weeks 一次取回，依起迄週在前端篩選。
+async function renderAdminLightningQuizTrendPanel(panel) {
+  panel.innerHTML = '<div class="admin-user-directory__empty">正在載入週趨勢…</div>';
+  const result = await db.adminGetLightningQuizWeeks();
+  if (!result.success) {
+    panel.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入週趨勢失敗，請稍後再試。')}</div>`;
+    return null;
+  }
+  const allSeries = buildWeeklyTrendSeries(result.data?.weeks);
   panel.innerHTML = `
     <div class="admin-lightning-quiz-trend__toolbar">
-      <label>起<input type="date" class="form-control" data-lq-trend-from></label>
-      <label>迄<input type="date" class="form-control" data-lq-trend-to></label>
+      <label>起（週）<input type="date" class="form-control" data-lq-trend-from></label>
+      <label>迄（週）<input type="date" class="form-control" data-lq-trend-to></label>
       ${adminLightningQuizExportButton('data-lq-trend-export')}
     </div>
     <div data-lq-trend-body></div>
@@ -2146,40 +2320,44 @@ function renderAdminLightningQuizTrendPanel(panel, days) {
   const fromInput = panel.querySelector('[data-lq-trend-from]');
   const toInput = panel.querySelector('[data-lq-trend-to]');
   const body = panel.querySelector('[data-lq-trend-body]');
-  const allSeries = buildTrendSeries(days);
   if (allSeries.length) {
-    fromInput.value = allSeries[0].riseDate;
-    toInput.value = allSeries[allSeries.length - 1].riseDate;
+    fromInput.value = allSeries[0].weekStart;
+    toInput.value = allSeries[allSeries.length - 1].weekStart;
   }
-  const currentSeries = () => allSeries.filter(point =>
-    (!fromInput.value || point.riseDate >= fromInput.value) && (!toInput.value || point.riseDate <= toInput.value));
+  // 選的日期不一定是週一：起日算它那一週，迄日也包含它那一週
+  const currentSeries = () => {
+    const from = fromInput.value ? weekStartOf(fromInput.value) : '';
+    const to = toInput.value ? weekStartOf(toInput.value) : '';
+    return allSeries.filter(point => (!from || point.weekStart >= from) && (!to || point.weekStart <= to));
+  };
 
   const draw = async () => {
     destroyAdminLightningQuizTrendCharts();
     const series = currentSeries();
     if (!series.length) {
-      body.innerHTML = '<div class="admin-user-directory__empty">這個日期區間沒有作答紀錄。</div>';
+      body.innerHTML = '<div class="admin-user-directory__empty">這段期間沒有已發布的快問快答。</div>';
       return;
     }
     body.innerHTML = `
       <div class="admin-lightning-quiz-trend__charts">
         <figure class="admin-lightning-quiz-trend__chart">
-          <figcaption>參與趨勢（作答人數 ÷ 應答人數）</figcaption>
+          <figcaption>參與率（這週至少答 1 題的人 ÷ 應答人數）</figcaption>
           <div class="admin-lightning-quiz-trend__canvas"><canvas data-lq-trend-chart="participationRate"></canvas></div>
         </figure>
         <figure class="admin-lightning-quiz-trend__chart">
-          <figcaption>答對率趨勢（答對人數 ÷ 作答人數）</figcaption>
+          <figcaption>答對率（答對題數 ÷ 送出題數）</figcaption>
           <div class="admin-lightning-quiz-trend__canvas"><canvas data-lq-trend-chart="correctRate"></canvas></div>
         </figure>
       </div>
       <div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
-          <thead><tr><th>日期</th><th>作答／應答</th><th>參與率</th><th>答對人數</th><th>答對率</th><th>平均作答時間</th></tr></thead>
+          <thead><tr><th>週</th><th>題數</th><th>參與／應答</th><th>參與率</th><th>全部答完</th><th>答對率</th><th>平均作答時間</th></tr></thead>
           <tbody>${series.map(point => `<tr>
-            <td>${escapeHTML(formatAdminLightningQuizDate(point.riseDate))}</td>
-            <td>${escapeHTML(String(point.completed))} / ${escapeHTML(String(point.eligible))}</td>
+            <td>${escapeHTML(point.label)}</td>
+            <td>${escapeHTML(String(point.questionCount))}</td>
+            <td>${escapeHTML(String(point.participants))} / ${escapeHTML(String(point.eligible))}</td>
             <td>${escapeHTML(formatRate(point.participationRate))}</td>
-            <td>${escapeHTML(String(point.correct))}</td>
+            <td>${escapeHTML(String(point.allAnswered))}</td>
             <td>${escapeHTML(formatRate(point.correctRate))}</td>
             <td>${point.avgElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(point.avgElapsedMs))} 秒`}</td>
           </tr>`).join('')}</tbody>
@@ -2200,17 +2378,163 @@ function renderAdminLightningQuizTrendPanel(panel, days) {
     const brand = rootStyle.getPropertyValue('--color-brand').trim() || '#04A9D2';
     const success = rootStyle.getPropertyValue('--color-success-foreground').trim() || brand;
     adminLightningQuizTrendCharts = [
-      new Chart(participationCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'participationRate', '參與率', brand)),
-      new Chart(correctCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'correctRate', '答對率', success))
+      new Chart(participationCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'participationRate', '參與率', brand,
+        point => `${point.participants} / ${point.eligible} 人`)),
+      new Chart(correctCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'correctRate', '答對率', success,
+        point => `${point.correct} / ${point.completed} 題`))
     ];
   };
 
   fromInput.addEventListener('change', () => { void draw(); });
   toInput.addEventListener('change', () => { void draw(); });
   panel.querySelector('[data-lq-trend-export]')?.addEventListener('click', () => {
-    downloadAdminLightningQuizCsv(buildTrendCsv(currentSeries()), `快問快答_歷史趨勢_${formatTaiwanDate()}.csv`);
+    downloadAdminLightningQuizCsv(buildWeeklyTrendCsv(currentSeries()), `快問快答_週趨勢_${formatTaiwanDate()}.csv`);
   });
   return draw;
+}
+
+function adminLightningQuizWeekOrgCells(row) {
+  return `<td>${escapeHTML(String(row.eligible))}</td>
+    <td>${escapeHTML(String(row.participants))}</td>
+    <td>${escapeHTML(formatRate(row.participationRate))}</td>
+    <td>${escapeHTML(String(row.allAnswered))}</td>
+    <td>${escapeHTML(formatRate(row.correctRate))}</td>`;
+}
+
+// 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
+// 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
+function renderAdminLightningQuizWeekPanel(panel) {
+  const thisWeek = weekStartOf(formatTaiwanDate());
+  let weekStart = thisWeek;
+  panel.innerHTML = `
+    <div class="admin-lightning-quiz-trend__toolbar admin-lightning-quiz-week__toolbar">
+      <button type="button" class="secondary-btn" data-lq-week-prev>‹ 上一週</button>
+      <strong data-lq-week-label></strong>
+      <button type="button" class="secondary-btn" data-lq-week-next>下一週 ›</button>
+      <button type="button" class="pill-btn" data-lq-week-today>本週</button>
+    </div>
+    <div data-lq-week-body></div>
+    <div data-lq-week-detail class="admin-lightning-quiz-detail hidden"></div>
+  `;
+  const label = panel.querySelector('[data-lq-week-label]');
+  const body = panel.querySelector('[data-lq-week-body]');
+  const detailHost = panel.querySelector('[data-lq-week-detail]');
+  const nextButton = panel.querySelector('[data-lq-week-next]');
+  let requestSeq = 0;
+
+  const load = async () => {
+    const seq = ++requestSeq;
+    label.textContent = `${formatWeekRange(weekStart)}${weekStart === thisWeek ? '（本週）' : ''}`;
+    nextButton.disabled = weekStart >= thisWeek;
+    detailHost.classList.add('hidden');
+    detailHost.innerHTML = '';
+    body.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的統計…</div>';
+    const result = await db.adminGetLightningQuizWeek(weekStart);
+    if (seq !== requestSeq) return; // 載入期間又切到別週
+    if (!result.success) {
+      body.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入週統計失敗，請稍後再試。')}</div>`;
+      return;
+    }
+    const week = result.data || {};
+    const questions = Array.isArray(week.questions) ? week.questions : [];
+    if (!questions.length) {
+      body.innerHTML = '<div class="admin-user-directory__empty">這週沒有已發布的快問快答。</div>';
+      return;
+    }
+    const summary = summarizeWeek(week);
+    const zoneSummary = summarizeWeekByZone(week);
+    const regionSummary = summarizeWeekByRegion(week);
+    const leaderboard = buildWeekLeaderboard(week, 20);
+    const fileSuffix = `${week.weekStart}週`;
+
+    body.innerHTML = `
+      <div class="admin-daily-quiz-metrics admin-lightning-quiz-week__metrics">
+        <span>題數 <strong>${escapeHTML(String(summary.questionCount))}</strong></span>
+        <span>參與 <strong>${escapeHTML(String(summary.participants))} / ${escapeHTML(String(summary.eligible))} 人（${escapeHTML(formatRate(summary.participationRate))}）</strong></span>
+        <span>${escapeHTML(String(summary.questionCount))} 題全答 <strong>${escapeHTML(String(summary.allAnswered))} 人</strong></span>
+        <span>答對率 <strong>${escapeHTML(formatRate(summary.correctRate))}</strong></span>
+        <span>答對平均用時 <strong>${summary.avgCorrectElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(summary.avgCorrectElapsedMs))} 秒`}</strong></span>
+      </div>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="這週的題目">
+        <div class="admin-lightning-quiz-detail__section-head"><h5>這週的題目</h5></div>
+        ${adminLightningQuizOrgTable(['日期', '送出人數', '答對人數', '答對率', ''],
+          questions.map(question => {
+            const completed = Number(question.completedCount) || 0;
+            const correct = Number(question.correctCount) || 0;
+            return `<tr>
+              <td>${escapeHTML(formatWeekday(question.riseDate))}</td>
+              <td>${escapeHTML(String(completed))}</td>
+              <td>${escapeHTML(String(correct))}</td>
+              <td>${escapeHTML(formatRate(completed > 0 ? correct / completed : null))}</td>
+              <td><button type="button" class="secondary-btn" data-lq-week-question="${escapeHTML(String(question.questionId))}">作答明細</button></td>
+            </tr>`;
+          }).join(''))}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>週排行榜（答對題數多的在前，同分比答對總用時）</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="members"')}
+        </div>
+        ${leaderboard.length ? `<ol class="admin-lightning-quiz-leaderboard-list">
+          ${leaderboard.map(entry => `<li><span>${escapeHTML(String(entry.rank))}. ${escapeHTML(entry.name || '（未命名）')}</span><span>答對 ${escapeHTML(String(entry.correct))} 題・${escapeHTML(formatElapsedSeconds(entry.correctElapsedMs))} 秒</span></li>`).join('')}
+        </ol>` : '<div class="admin-user-directory__empty">這週還沒有人答對。</div>'}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="大區分析">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>大區分析</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="region"')}
+        </div>
+        ${adminLightningQuizOrgTable(
+          ['大區', '應答人數', '參與人數', '參與率', '全部答完', '答對率'],
+          regionSummary.rows.map(row => `<tr>
+            <td>${escapeHTML(row.greatRegion || UNASSIGNED_REGION_LABEL)}</td>
+            ${adminLightningQuizWeekOrgCells(row)}
+          </tr>`).join('')
+            + `<tr class="admin-lightning-quiz-stats-total"><td>全教會合計</td>${adminLightningQuizWeekOrgCells(regionSummary.total)}</tr>`
+        )}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="牧區分析">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>牧區分析</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="zone"')}
+        </div>
+        ${adminLightningQuizOrgTable(
+          ['大區', '牧區', '應答人數', '參與人數', '參與率', '全部答完', '答對率'],
+          sortZoneRowsByRegion(zoneSummary.rows).map(row => `<tr>
+            <td>${escapeHTML(row.greatRegion || UNASSIGNED_REGION_LABEL)}</td>
+            <td>${escapeHTML(row.pastoralZone || UNASSIGNED_ZONE_LABEL)}</td>
+            ${adminLightningQuizWeekOrgCells(row)}
+          </tr>`).join('')
+            + `<tr class="admin-lightning-quiz-stats-total"><td colspan="2">全教會合計</td>${adminLightningQuizWeekOrgCells(zoneSummary.total)}</tr>`
+        )}
+      </section>
+    `;
+    if (typeof hydrateIcons === 'function') hydrateIcons(body);
+
+    body.querySelectorAll('[data-lq-week-question]').forEach(button => {
+      button.addEventListener('click', () => {
+        const question = questions.find(item => String(item.questionId) === button.dataset.lqWeekQuestion);
+        if (question) void renderAdminLightningQuizDetail(detailHost, question);
+      });
+    });
+    body.querySelectorAll('[data-lq-week-export]').forEach(button => {
+      button.addEventListener('click', () => {
+        const kind = button.dataset.lqWeekExport;
+        if (kind === 'members') downloadAdminLightningQuizCsv(buildWeekMembersCsv(week), `快問快答_週名單_${fileSuffix}.csv`);
+        else if (kind === 'region') downloadAdminLightningQuizCsv(buildWeekRegionCsv(regionSummary), `快問快答_週大區分析_${fileSuffix}.csv`);
+        else if (kind === 'zone') downloadAdminLightningQuizCsv(buildWeekZoneCsv(zoneSummary), `快問快答_週牧區分析_${fileSuffix}.csv`);
+      });
+    });
+  };
+
+  panel.querySelector('[data-lq-week-prev]').addEventListener('click', () => { weekStart = addDays(weekStart, -7); void load(); });
+  nextButton.addEventListener('click', () => { if (weekStart < thisWeek) { weekStart = addDays(weekStart, 7); void load(); } });
+  panel.querySelector('[data-lq-week-today]').addEventListener('click', () => { weekStart = thisWeek; void load(); });
+  return load();
 }
 
 export async function renderAdminLightningQuizStats() {
@@ -2224,28 +2548,19 @@ export async function renderAdminLightningQuizStats() {
   }
   const days = Array.isArray(result.data?.days) ? result.data.days : [];
   destroyAdminLightningQuizTrendCharts();
-  if (!days.length) {
-    host.innerHTML = '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>';
-    return;
-  }
 
-  // 一個活動一列。同一天可能有已下架的原活動與另存後發布的新活動兩列——
-  // 這是預期行為（原活動的結果保留當歷史），不是重複資料。
+  // 一題一列（一天最多一題已排程）。
   const rowKey = day => String(day.questionId);
   const rows = days.map((day, index) => {
     // 成長率：跟「上一次有題目的那天」比參與率，而不是硬性比前一個日曆日——
-    // 快問快答不保證每天都有題目，相鄰兩筆資料本來就可能隔好幾天。同一天
-    // 的兩列是同一天的不同活動，互相比較不是趨勢，跳過不比。
+    // 快問快答一週只有一三五，相鄰兩筆資料本來就會隔好幾天。
     const prev = days[index - 1];
-    const growth = prev && prev.riseDate !== day.riseDate && prev.participationRate > 0
+    const growth = prev && prev.participationRate > 0
       ? ((day.participationRate - prev.participationRate) / prev.participationRate) * 100
       : null;
     const growthLabel = growth == null ? '—' : `${growth > 0 ? '+' : ''}${growth.toFixed(0)}%`;
-    const statusTag = day.status === 'archived'
-      ? '<span class="stat-badge stat-badge--neutral admin-lightning-quiz-stats-tag">已下架</span>'
-      : '';
     return `<tr data-lightning-quiz-stats-row="${escapeHTML(rowKey(day))}">
-      <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}${statusTag}</td>
+      <td>${escapeHTML(formatAdminLightningQuizDate(day.riseDate))}</td>
       <td>${escapeHTML(String(day.completedCount))} / ${escapeHTML(String(day.totalEligible))}（${escapeHTML(formatAdminLightningQuizPercent(day.participationRate))}）</td>
       <td>${growthLabel}</td>
       <td>${escapeHTML(String(day.correctCount))}</td>
@@ -2254,7 +2569,6 @@ export async function renderAdminLightningQuizStats() {
         <div class="admin-lightning-quiz-stats-actions">
           <button type="button" class="secondary-btn" data-lightning-quiz-detail="${escapeHTML(rowKey(day))}">作答明細</button>
           <button type="button" class="secondary-btn" data-lightning-quiz-leaderboard="${escapeHTML(rowKey(day))}">查看排行榜</button>
-          <button type="button" class="circular-action-btn btn-danger-soft" data-lightning-quiz-clear="${escapeHTML(rowKey(day))}" title="清除這筆作答資料" aria-label="清除這筆作答資料"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
         </div>
       </td>
     </tr>`;
@@ -2262,23 +2576,26 @@ export async function renderAdminLightningQuizStats() {
 
   host.innerHTML = `
     <div class="capsule-segmented-control segment-track admin-lightning-quiz-stats-tabs" role="tablist" aria-label="統計檢視">
-      <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="daily">逐日統計</button>
-      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">歷史趨勢</button>
+      <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="week">每週統計</button>
+      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">週趨勢</button>
+      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="daily">逐日明細</button>
     </div>
-    <div data-lq-stats-panel="daily">
-      <div class="admin-lightning-quiz-stats-table-wrap">
+    <div data-lq-stats-panel="week" class="admin-lightning-quiz-week"></div>
+    <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
+    <div data-lq-stats-panel="daily" class="hidden">
+      ${days.length ? `<div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
           <thead><tr><th>日期</th><th>完成／應答（參與率）</th><th>參與率成長</th><th>答對人數</th><th>平均耗時</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>
+      </div>` : '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>'}
       <div id="admin-lightning-quiz-detail" class="admin-lightning-quiz-detail hidden"></div>
       <div id="admin-lightning-quiz-leaderboard" class="admin-lightning-quiz-leaderboard hidden"></div>
     </div>
-    <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
   `;
   if (typeof hydrateIcons === 'function') hydrateIcons(host);
 
+  void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'));
   const trendPanel = host.querySelector('[data-lq-stats-panel="trend"]');
   let drawTrend = null;
   host.querySelectorAll('[data-lq-stats-tab]').forEach(tab => {
@@ -2292,10 +2609,9 @@ export async function renderAdminLightningQuizStats() {
       host.querySelectorAll('[data-lq-stats-panel]').forEach(panel => {
         panel.classList.toggle('hidden', panel.dataset.lqStatsPanel !== target);
       });
-      // 歷史趨勢第一次切進來才建圖表（Chart.js 也是這時候才載入）
+      // 週趨勢第一次切進來才載資料、建圖表（Chart.js 也是這時候才載入）
       if (target === 'trend' && !drawTrend) {
-        drawTrend = renderAdminLightningQuizTrendPanel(trendPanel, days);
-        void drawTrend();
+        drawTrend = renderAdminLightningQuizTrendPanel(trendPanel).then(draw => draw && draw());
       }
     });
   });
@@ -2329,32 +2645,6 @@ export async function renderAdminLightningQuizStats() {
           ${list.map(entry => `<li><span>${escapeHTML(entry.name || '（未命名）')}</span><span>${(Number(entry.elapsedMs) / 1000).toFixed(1)} 秒</span></li>`).join('')}
         </ol>` : '<div class="admin-user-directory__empty">這一題目前還沒有人答對。</div>'}
       `;
-    });
-  });
-
-  host.querySelectorAll('[data-lightning-quiz-clear]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const day = days.find(item => rowKey(item) === button.dataset.lightningQuizClear);
-      if (!day) return;
-      // 直接刪除、無法復原，影響的不只這張表：確認視窗把後果與人數講清楚。
-      const confirmed = await window.showConfirmDialog({
-        title: '確定要清除這個活動的作答紀錄嗎？',
-        message: `將刪除 ${day.attemptedCount} 位會友在 ${formatAdminLightningQuizDate(day.riseDate)}的作答紀錄。`
-          + '他們的「我的測驗」會變成未參與，排行榜也會一併清除；如果時段還沒結束，這些會友可以重新作答。'
-          + '清除後活動仍維持鎖定，不能因此修改題目或時間。此動作無法復原。',
-        confirmText: '確認清除',
-        cancelText: '取消',
-        isDestructive: true
-      });
-      if (!confirmed) return;
-      const result = await db.adminClearLightningQuizAttempts(day.questionId);
-      if (!result.success) {
-        showToast(result.message || '清除失敗，請稍後再試。');
-        return;
-      }
-      showToast(`已清除 ${result.data?.deletedCount ?? 0} 筆作答紀錄。`);
-      void renderAdminLightningQuizStats();
-      void renderAdminLightningQuizQuestions();
     });
   });
 }

@@ -351,12 +351,12 @@ const EXAM_ADMIN_RPC_FUNCTIONS = new Set([
   // exam_get_grading_workspace / _sheet / _save_grading_draft / _grade_attempt /
   // _grade_attempts_bulk 也不在此：閘門是「指派給我」，批改人員不必是 admin。
 ]);
-const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_SELECT = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_contract_version, member_context_membership_lifecycle_state, member_context_placement_state, member_context_placement_workflow_state, member_context_has_required_placement, member_context_required_action, member_context_required_action_url, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 // Missing the member_context_contract_version/membership_lifecycle_state/
 // placement_* / required_action* columns — used as a retry target wherever a
 // query against PROFILE_SELECT fails, so a database that hasn't run the
 // member-journey migration yet degrades instead of hard-failing.
-const PROFILE_SELECT_LEGACY = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
+const PROFILE_SELECT_LEGACY = "id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)";
 // 每日靈修（devotional plan，migration 0145）。write 的 RPC 自己在 SQL 端用
 // _devotion_actor_can_manage() 檢查 admin/pastor；get_devotional_plan 自己檢查
 // daily_devotion flag（管理者放行）。這裡只需注入 p_actor_id。
@@ -421,9 +421,13 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_set_lightning_quiz_status",
   "admin_delete_lightning_quiz_question",
   "admin_get_lightning_quiz_trend",
+  "admin_get_lightning_quiz_weeks",
+  "admin_get_lightning_quiz_week",
   "admin_get_lightning_quiz_leaderboard",
   "admin_get_lightning_quiz_results",
-  "admin_clear_lightning_quiz_attempts"
+  "admin_get_lightning_quiz_settings",
+  "admin_save_lightning_quiz_settings",
+  "admin_import_lightning_quiz_questions"
 ]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
@@ -500,7 +504,7 @@ async function fetchProfileData(supabaseAdmin: any, userId: string) {
   try {
     const { data: basicProfile, error: basicError } = await supabaseAdmin
       .from("profiles")
-      .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_demo, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
+      .select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments")
       .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
       .maybeSingle();
     if (!basicError) return basicProfile;
@@ -713,7 +717,6 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   let query = supabaseAdmin
     .from("profiles")
     .select("id")
-    .eq("is_demo", false)
     .eq("is_active", true);
 
   if (roleCode === "great_zone_leader") {

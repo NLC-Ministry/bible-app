@@ -1,7 +1,7 @@
 // js/modules/lightning-quiz-analytics.mjs
-// 快問快答後台分析的純函式：把 admin_get_lightning_quiz_results 與
-// admin_get_lightning_quiz_trend（皆見 0211）的回傳彙總成作答總覽、牧區分析、
-// 大區分析、歷史趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
+// 快問快答後台分析的純函式：把 admin_get_lightning_quiz_results（0211）與
+// admin_get_lightning_quiz_week／_weeks（週統計，#311）的回傳彙總成作答總覽、
+// 牧區分析、大區分析、週排行、週趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
 
 import { prependTaiwanExportTime, formatTaiwanExportDateTime } from "./export-time.mjs";
 
@@ -126,30 +126,6 @@ export function sortZoneRowsByRegion(rows) {
   });
 }
 
-// 歷史趨勢：同一天可能有已下架的原活動與另存後發布的新活動，只取已發布的
-// 那一個，一天一個點（整天都被下架的日期不列入趨勢）。
-export function buildTrendSeries(days) {
-  const list = Array.isArray(days) ? days : [];
-  return list
-    .filter(day => day && day.status !== "archived")
-    .map(day => {
-      const completed = Number(day.completedCount) || 0;
-      const correct = Number(day.correctCount) || 0;
-      const eligible = Number(day.totalEligible) || 0;
-      return {
-        riseDate: day.riseDate,
-        questionId: day.questionId,
-        completed,
-        correct,
-        eligible,
-        participationRate: ratio(completed, eligible),
-        correctRate: ratio(correct, completed),
-        avgElapsedMs: day.avgElapsedMs == null ? null : Number(day.avgElapsedMs)
-      };
-    })
-    .sort((a, b) => String(a.riseDate).localeCompare(String(b.riseDate)));
-}
-
 export function filterAttempts(attempts, { search = "", status = "all" } = {}) {
   const needle = String(search || "").trim().toLowerCase();
   return (Array.isArray(attempts) ? attempts : []).filter(attempt => {
@@ -216,16 +192,231 @@ export function buildRegionCsv(summary, exportedAt = new Date()) {
   return toCsv(headers, rows, exportedAt);
 }
 
-export function buildTrendCsv(series, exportedAt = new Date()) {
-  const headers = ["日期", "作答人數", "應答人數", "參與率", "答對人數", "答對率", "平均作答時間（秒）"];
+// ── 週統計（#311）────────────────────────────────────────────────────────
+// 一週是週一到週日（台灣日期），日期一律用 YYYY-MM-DD 字串計算，不受瀏覽器時區影響。
+
+function parseDateUTC(dateStr) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr || ""));
+  return match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null;
+}
+
+export function addDays(dateStr, days) {
+  const date = parseDateUTC(dateStr);
+  if (!date) return "";
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function weekStartOf(dateStr) {
+  const date = parseDateUTC(dateStr);
+  return date ? addDays(dateStr, -((date.getUTCDay() + 6) % 7)) : "";
+}
+
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+
+function shortDate(dateStr) {
+  const date = parseDateUTC(dateStr);
+  return date ? `${date.getUTCMonth() + 1}/${date.getUTCDate()}` : "";
+}
+
+export function formatWeekday(dateStr) {
+  const date = parseDateUTC(dateStr);
+  return date ? `${shortDate(dateStr)}（${WEEKDAY_LABELS[date.getUTCDay()]}）` : "";
+}
+
+export function formatWeekRange(weekStart) {
+  return weekStart ? `${shortDate(weekStart)}～${shortDate(addDays(weekStart, 6))}` : "";
+}
+
+function emptyWeekBucket(extra) {
+  return { ...extra, eligible: 0, participants: 0, allAnswered: 0, completed: 0, correct: 0 };
+}
+
+function finalizeWeekBucket(bucket) {
+  return {
+    ...bucket,
+    participationRate: ratio(bucket.participants, bucket.eligible),
+    allAnsweredRate: ratio(bucket.allAnswered, bucket.eligible),
+    correctRate: ratio(bucket.correct, bucket.completed)
+  };
+}
+
+function summarizeWeekBy(week, keyOf, makeBucket, labelKey, sortField) {
+  const members = Array.isArray(week?.members) ? week.members : [];
+  const eligible = Array.isArray(week?.eligible) ? week.eligible : [];
+  const questionCount = Array.isArray(week?.questions) ? week.questions.length : 0;
+  const buckets = new Map();
+  const bucketFor = row => {
+    const key = keyOf(row);
+    if (!buckets.has(key)) buckets.set(key, emptyWeekBucket(makeBucket(row)));
+    const bucket = buckets.get(key);
+    if (sortKey(row[sortField]) < sortKey(bucket[sortField])) bucket[sortField] = row[sortField];
+    return bucket;
+  };
+  eligible.forEach(row => { bucketFor(row).eligible += Number(row.count) || 0; });
+  members.forEach(member => {
+    const answered = Number(member.answered) || 0;
+    if (answered <= 0) return;
+    const bucket = bucketFor(member);
+    bucket.participants += 1;
+    if (questionCount > 0 && answered >= questionCount) bucket.allAnswered += 1;
+    bucket.completed += answered;
+    bucket.correct += Number(member.correct) || 0;
+  });
+  const rows = [...buckets.values()]
+    .sort((a, b) => compareOrg(a, b, labelKey, sortField))
+    .map(finalizeWeekBucket);
+  const total = finalizeWeekBucket(rows.reduce((acc, row) => {
+    acc.eligible += row.eligible;
+    acc.participants += row.participants;
+    acc.allAnswered += row.allAnswered;
+    acc.completed += row.completed;
+    acc.correct += row.correct;
+    return acc;
+  }, emptyWeekBucket({})));
+  return { rows, total, questionCount };
+}
+
+export function summarizeWeekByZone(week) {
+  return summarizeWeekBy(
+    week,
+    row => `${row.greatRegion || ""}\u0000${row.pastoralZone || ""}`,
+    row => ({
+      greatRegion: row.greatRegion || "",
+      pastoralZone: row.pastoralZone || "",
+      regionSort: row.regionSort ?? null,
+      zoneSort: row.zoneSort ?? null
+    }),
+    "pastoralZone",
+    "zoneSort"
+  );
+}
+
+export function summarizeWeekByRegion(week) {
+  return summarizeWeekBy(
+    week,
+    row => row.greatRegion || "",
+    row => ({ greatRegion: row.greatRegion || "", regionSort: row.regionSort ?? null }),
+    "greatRegion",
+    "regionSort"
+  );
+}
+
+// 整週彙總：參與＝這週至少送出 1 題；全部答完＝這週每一題都送出；
+// 答對率＝答對題數 ÷ 送出題數；平均用時＝答對的題目平均幾秒。
+export function summarizeWeek(week) {
+  const { total, questionCount } = summarizeWeekByRegion(week);
+  const members = Array.isArray(week?.members) ? week.members : [];
+  const correctElapsed = members.reduce((sum, member) => sum + (Number(member.correctElapsedMs) || 0), 0);
+  return {
+    ...total,
+    questionCount,
+    avgCorrectElapsedMs: total.correct > 0 ? Math.round(correctElapsed / total.correct) : null
+  };
+}
+
+function compareWeekMembers(a, b) {
+  return (Number(b.correct) || 0) - (Number(a.correct) || 0)
+    || (Number(a.correctElapsedMs) || 0) - (Number(b.correctElapsedMs) || 0)
+    || String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant");
+}
+
+// 週排行：答對題數多的在前；同分比答對題目的總用時（短的在前）。沒答對任何一題
+// 的人不上榜。題數與總用時都一樣時名次並列。
+export function buildWeekLeaderboard(week, limit = 20) {
+  const members = (Array.isArray(week?.members) ? week.members : [])
+    .filter(member => (Number(member.correct) || 0) > 0)
+    .sort(compareWeekMembers);
+  let rank = 0;
+  return members.slice(0, Math.max(0, limit)).map((member, index, list) => {
+    const prev = list[index - 1];
+    const tied = prev && Number(prev.correct) === Number(member.correct)
+      && Number(prev.correctElapsedMs) === Number(member.correctElapsedMs);
+    if (!tied) rank = index + 1;
+    return { ...member, rank };
+  });
+}
+
+export function buildWeeklyTrendSeries(weeks) {
+  return (Array.isArray(weeks) ? weeks : [])
+    .map(week => {
+      const participants = Number(week.participants) || 0;
+      const eligible = Number(week.totalEligible) || 0;
+      const completed = Number(week.completedAttempts) || 0;
+      const correct = Number(week.correctAttempts) || 0;
+      const allAnswered = Number(week.allAnswered) || 0;
+      return {
+        weekStart: week.weekStart,
+        label: formatWeekRange(week.weekStart),
+        questionCount: Number(week.questionCount) || 0,
+        participants,
+        eligible,
+        allAnswered,
+        completed,
+        correct,
+        participationRate: ratio(participants, eligible),
+        allAnsweredRate: ratio(allAnswered, eligible),
+        correctRate: ratio(correct, completed),
+        avgElapsedMs: week.avgElapsedMs == null ? null : Number(week.avgElapsedMs)
+      };
+    })
+    .sort((a, b) => String(a.weekStart).localeCompare(String(b.weekStart)));
+}
+
+function weekOrgCells(row) {
+  return [row.eligible, row.participants, csvRate(row.participationRate), row.allAnswered, csvRate(row.correctRate)];
+}
+
+export function buildWeekZoneCsv(summary, exportedAt = new Date()) {
+  const headers = ["大區", "牧區", "應答人數", "參與人數", "參與率", "全部答完", "答對率"];
+  const rows = sortZoneRowsByRegion(summary?.rows || []).map(row => [
+    row.greatRegion || UNASSIGNED_REGION_LABEL,
+    row.pastoralZone || UNASSIGNED_ZONE_LABEL,
+    ...weekOrgCells(row)
+  ]);
+  if (summary?.total) rows.push(["全教會合計", "", ...weekOrgCells(summary.total)]);
+  return toCsv(headers, rows, exportedAt);
+}
+
+export function buildWeekRegionCsv(summary, exportedAt = new Date()) {
+  const headers = ["大區", "應答人數", "參與人數", "參與率", "全部答完", "答對率"];
+  const rows = (summary?.rows || []).map(row => [row.greatRegion || UNASSIGNED_REGION_LABEL, ...weekOrgCells(row)]);
+  if (summary?.total) rows.push(["全教會合計", ...weekOrgCells(summary.total)]);
+  return toCsv(headers, rows, exportedAt);
+}
+
+// 週名單：這週有送出作答的每一位會友，依週排行的順序；沒答對的人沒有名次。
+export function buildWeekMembersCsv(week, exportedAt = new Date()) {
+  const questionCount = Array.isArray(week?.questions) ? week.questions.length : 0;
+  const headers = ["名次", "姓名", "大區", "牧區", "小組", `送出題數（共 ${questionCount} 題）`, "答對題數", "答對總用時（秒）"];
+  const ranks = new Map(buildWeekLeaderboard(week, Number.MAX_SAFE_INTEGER).map(member => [member.userId, member.rank]));
+  const rows = [...(Array.isArray(week?.members) ? week.members : [])].sort(compareWeekMembers).map(member => [
+    ranks.get(member.userId) ?? "",
+    member.name || "（未命名）",
+    member.greatRegion || UNASSIGNED_REGION_LABEL,
+    member.pastoralZone || UNASSIGNED_ZONE_LABEL,
+    member.smallGroup || "",
+    Number(member.answered) || 0,
+    Number(member.correct) || 0,
+    (Number(member.correct) || 0) > 0 ? formatElapsedSeconds(member.correctElapsedMs) : ""
+  ]);
+  return toCsv(headers, rows, exportedAt);
+}
+
+export function buildWeeklyTrendCsv(series, exportedAt = new Date()) {
+  const headers = ["週（週一）", "題數", "參與人數", "應答人數", "參與率", "全部答完", "答對題數", "送出題數", "答對率", "平均作答時間（秒）"];
   const rows = (Array.isArray(series) ? series : []).map(point => [
-    point.riseDate,
-    point.completed,
+    point.weekStart,
+    point.questionCount,
+    point.participants,
     point.eligible,
     csvRate(point.participationRate),
+    point.allAnswered,
     point.correct,
+    point.completed,
     csvRate(point.correctRate),
     formatElapsedSeconds(point.avgElapsedMs)
   ]);
   return toCsv(headers, rows, exportedAt);
 }
+

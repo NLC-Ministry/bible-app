@@ -134,7 +134,6 @@ export function tableQueries(salt) {
           ["name", `'測試會友 ' || lpad(s.seq::text, 4, '0')`],
           ["email", `'user' || lpad(s.seq::text, 4, '0') || '${SAMPLE_EMAIL_SUFFIX}'`],
           ["phone", "NULL"], ["avatar_url", "NULL"], ["auth_user_id", "NULL"], ["nlc_member_id", "NULL"],
-          ["is_demo", "false"],
           ["great_region", b.orgName("t.great_region_id")],
           ["pastoral_zone", b.orgName("t.pastoral_zone_id")],
           ["small_group", b.orgName("t.small_group_id")],
@@ -149,8 +148,7 @@ export function tableQueries(salt) {
           ["name", "'測試佔位帳號（匯入用）'"],
           ["email", `'placeholder${SAMPLE_EMAIL_SUFFIX}'`],
           ["role_id", "(SELECT id FROM public.role_definitions WHERE code = 'member')"],
-          ["is_active", "false"],
-          ["is_demo", "false"]
+          ["is_active", "false"]
         ])}`
     },
     // 教會內容：原樣，只把人員欄位換掉
