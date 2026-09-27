@@ -33,7 +33,7 @@ describe("admin member team placement lookup tests", () => {
     expect(html).not.toContain('data-team-filter="joined"');
     expect(html).not.toContain('data-team-filter="unjoined"');
     expect(html).not.toContain("admin-team-placement-tabs");
-    expect(html).toContain('id="admin-user-directory-filter-unjoined-team"');
+    expect(html).toContain('id="admin-user-directory-filter-plan-team"');
   });
 
   it("filters the 尚未加入團隊 list to unjoined members and respects the shared org filter", () => {

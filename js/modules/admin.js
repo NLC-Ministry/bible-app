@@ -11,8 +11,12 @@ import {
 import { resolveAdminRegistrationSummary } from "./admin-registration-summary.mjs";
 import {
   ADMIN_ORG_UNASSIGNED,
+  ADMIN_PLAN_FILTER_ALL,
   buildAdminUserDirectoryOrgOptions,
-  matchesAdminUserDirectoryOrgFilters
+  formatProfilePlanTeams,
+  getProfilePlanStatus,
+  matchesAdminUserDirectoryOrgFilters,
+  matchesAdminUserDirectoryPlanFilters
 } from "./admin-user-directory-filter.mjs";
 import {
   formatTaiwanDate,
@@ -636,37 +640,81 @@ function bindAdminUserDirectoryOrgFilterActions(root, search) {
   });
 }
 
+function getAdminUserDirectoryPlanFilters() {
+  return {
+    planId: document.getElementById("admin-user-directory-filter-plan")?.value || "",
+    participation: document.getElementById("admin-user-directory-filter-plan-participation")?.value || ADMIN_PLAN_FILTER_ALL,
+    team: document.getElementById("admin-user-directory-filter-plan-team")?.value || ADMIN_PLAN_FILTER_ALL,
+    currentProfileId: String(state.currentProfileId || state.currentUser?.id || "")
+  };
+}
+
+// 計畫下拉選單：與報名統計同一份計畫清單，但不列出已隱藏的計畫。
+function getAdminUserDirectoryPlans() {
+  const globalPlans = Array.isArray(state.globalPlans) ? state.globalPlans : [];
+  const hiddenPlanIds = new Set(globalPlans.filter(plan => plan && plan.isHidden).map(plan => String(plan.id)));
+  return getAdminRegistrationStatisticsPlans().filter(plan => !plan.isHidden && !hiddenPlanIds.has(String(plan.id)));
+}
+
+function populateAdminUserDirectoryPlanSelect(planSelect) {
+  const previousValue = planSelect.value;
+  const plans = getAdminUserDirectoryPlans();
+  planSelect.innerHTML = "";
+  plans.forEach(plan => planSelect.options.add(new Option(plan.name || "未命名計畫", String(plan.id))));
+  const optionValues = new Set(Array.from(planSelect.options).map(option => option.value));
+  if (previousValue && optionValues.has(previousValue)) {
+    planSelect.value = previousValue;
+    return;
+  }
+  const defaultPlan = selectDefaultAdminRegistrationStatisticsPlan(plans);
+  if (defaultPlan && optionValues.has(String(defaultPlan.id))) planSelect.value = String(defaultPlan.id);
+}
+
 function renderAdminUserDirectoryList(query = "") {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
   if (!list || !count) return;
   const incompleteOnly = document.getElementById("admin-user-directory-filter-incomplete")?.checked === true;
-  const notJoinedStageOneOnly = document.getElementById("admin-user-directory-filter-stage-one")?.checked === true;
-  const unjoinedTeamOnly = document.getElementById("admin-user-directory-filter-unjoined-team")?.checked === true;
+  const planSelect = document.getElementById("admin-user-directory-filter-plan");
+  const planFilters = getAdminUserDirectoryPlanFilters();
+  const planName = planSelect?.selectedOptions?.[0]?.textContent || "所選計畫";
+  const hasPlanFilter = planFilters.participation !== ADMIN_PLAN_FILTER_ALL || planFilters.team !== ADMIN_PLAN_FILTER_ALL;
   const orgFilters = getAdminUserDirectoryOrgFilters();
-  const currentProfileId = String(state.currentProfileId || state.currentUser?.id || "");
   const normalizedQuery = String(query || "").trim().toLocaleLowerCase("zh-Hant");
   const filteredProfiles = adminUserDirectoryProfiles.filter(profile => {
     const normalizedName = String(profile.name || "").trim();
     const missingRequiredProfile = !normalizedName || !String(profile.pastoral_zone || "").trim();
     if (incompleteOnly && !missingRequiredProfile) return false;
-    const eligibleForStageOneInvitation = profile.is_active === true
-      && String(profile.id || "") !== currentProfileId;
-    if (notJoinedStageOneOnly && (profile.joined_stage_one === true || !eligibleForStageOneInvitation)) return false;
-    if (unjoinedTeamOnly && profile.is_joined_team === true) return false;
+    if (!matchesAdminUserDirectoryPlanFilters(profile, planFilters)) return false;
     if (!matchesAdminUserDirectoryOrgFilters(profile, orgFilters)) return false;
     const roleLabel = profile.role_definition?.label || profile.role_definition?.code || "一般會友";
-    return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group, profile.team_name]
+    const teamLabel = formatProfilePlanTeams(getProfilePlanStatus(profile, planFilters.planId).teams);
+    return [profile.name, profile.email, roleLabel, profile.great_region, profile.pastoral_zone, profile.small_group, teamLabel]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase("zh-Hant")
       .includes(normalizedQuery);
   });
-  adminUserDirectoryFilteredProfiles = filteredProfiles;
+  // 匯出的組隊狀態跟著畫面上選的計畫走。
+  adminUserDirectoryFilteredProfiles = filteredProfiles.map(profile => ({
+    ...profile,
+    team_name: formatProfilePlanTeams(getProfilePlanStatus(profile, planFilters.planId).teams) || null,
+    member_role: null
+  }));
   const hasOrgFilter = Object.values(orgFilters).some(values => values.length > 0);
-  count.textContent = normalizedQuery || incompleteOnly || notJoinedStageOneOnly || unjoinedTeamOnly || hasOrgFilter
+  count.textContent = normalizedQuery || incompleteOnly || hasPlanFilter || hasOrgFilter
     ? `${filteredProfiles.length} / ${adminUserDirectoryProfiles.length} 人`
     : `${adminUserDirectoryProfiles.length} 人`;
+
+  const appliedFilterCount = Object.values(orgFilters).filter(values => values.length > 0).length
+    + (planFilters.participation !== ADMIN_PLAN_FILTER_ALL ? 1 : 0)
+    + (planFilters.team !== ADMIN_PLAN_FILTER_ALL ? 1 : 0)
+    + (incompleteOnly ? 1 : 0);
+  const filtersSummary = document.getElementById("admin-user-directory-filters-summary");
+  if (filtersSummary) filtersSummary.textContent = appliedFilterCount > 0 ? `已套用 ${appliedFilterCount} 項` : "未套用";
+  const resultsSummary = document.getElementById("admin-user-directory-results-summary");
+  if (resultsSummary) resultsSummary.textContent = `${filteredProfiles.length} 人`;
+
   if (filteredProfiles.length === 0) {
     list.innerHTML = '<div class="admin-user-directory__empty">沒有符合條件的使用者。</div>';
     return;
@@ -689,9 +737,8 @@ function renderAdminUserDirectoryList(query = "") {
       ? "全教會"
       : (defaultScopes.join("、") || "僅本人");
     const statusClass = profile.is_active === false ? "disabled" : "active";
-    const teamText = profile.team_name
-      ? `${profile.member_role === "leader" ? "👑 [隊長] " : ""}${escapeHTML(profile.team_name)}`
-      : "未加入團隊 (個人速讀中)";
+    const planStatus = getProfilePlanStatus(profile, planFilters.planId);
+    const teamText = formatProfilePlanTeams(planStatus.teams) || "未加入團隊 (個人速讀中)";
 
     return `
       <details class="admin-user-directory__card">
@@ -710,8 +757,8 @@ function renderAdminUserDirectoryList(query = "") {
             <div><dt>大區</dt><dd>${escapeHTML(greatRegion)}</dd></div>
             <div><dt>牧區</dt><dd>${escapeHTML(pastoralZone)}</dd></div>
             <div><dt>小組</dt><dd>${escapeHTML(smallGroup)}</dd></div>
-            <div><dt>團隊組隊狀態</dt><dd>${teamText}</dd></div>
-            <div><dt>第一階段計畫</dt><dd>${profile.joined_stage_one === true ? "已加入" : "未加入"}</dd></div>
+            <div><dt>${escapeHTML(planName)}</dt><dd>${planStatus.joined ? "已加入" : "未加入"}</dd></div>
+            <div><dt>團隊組隊狀態</dt><dd>${escapeHTML(teamText)}</dd></div>
             <div><dt>會員中心同步</dt><dd>${escapeHTML(syncLabel)}・${escapeHTML(formatAdminUserSyncTime(profile.member_context_synced_at))}</dd></div>
           </dl>
         </div>
@@ -725,21 +772,21 @@ export async function renderAdminUserDirectory() {
   const list = document.getElementById("admin-user-directory-list");
   const count = document.getElementById("admin-user-directory-count");
   const incompleteFilter = document.getElementById("admin-user-directory-filter-incomplete");
-  const stageOneFilter = document.getElementById("admin-user-directory-filter-stage-one");
-  const unjoinedTeamFilter = document.getElementById("admin-user-directory-filter-unjoined-team");
+  const planSelect = document.getElementById("admin-user-directory-filter-plan");
+  const participationFilter = document.getElementById("admin-user-directory-filter-plan-participation");
+  const teamFilter = document.getElementById("admin-user-directory-filter-plan-team");
   const orgFiltersRoot = document.querySelector(".admin-user-directory__org-filters");
-  if (!column || !search || !list || !count || !incompleteFilter || !stageOneFilter
-    || !orgFiltersRoot) return;
+  if (!column || !search || !list || !count || !incompleteFilter || !planSelect
+    || !participationFilter || !teamFilter || !orgFiltersRoot) return;
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   column.classList.toggle("hidden", !isAdmin);
   if (!isAdmin) return;
-  search.disabled = true;
-  incompleteFilter.disabled = true;
-  stageOneFilter.disabled = true;
-  if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = true;
+  const filterControls = [search, incompleteFilter, planSelect, participationFilter, teamFilter];
+  filterControls.forEach(control => { control.disabled = true; });
   orgFiltersRoot.setAttribute("aria-disabled", "true");
   count.textContent = "讀取中…";
   if (firstPaint(list)) list.innerHTML = '<div class="admin-user-directory__empty">正在載入使用者資料…</div>';
+  populateAdminUserDirectoryPlanSelect(planSelect);
   const result = await db.fetchAdminUserProfiles();
   if (result.error) {
     count.textContent = "0 人";
@@ -747,10 +794,10 @@ export async function renderAdminUserDirectory() {
     return;
   }
   adminUserDirectoryProfiles = result.data || [];
-  search.disabled = false;
-  incompleteFilter.disabled = false;
-  stageOneFilter.disabled = false;
-  if (unjoinedTeamFilter) unjoinedTeamFilter.disabled = false;
+  filterControls.forEach(control => { control.disabled = false; });
+  // 沒有可選的計畫時，計畫相關條件無從判斷，保持停用。
+  const hasPlans = planSelect.options.length > 0;
+  [planSelect, participationFilter, teamFilter].forEach(control => { control.disabled = !hasPlans; });
   orgFiltersRoot.setAttribute("aria-disabled", "false");
   refreshAdminUserDirectoryOrgFilterOptions();
   bindAdminUserDirectoryOrgFilterActions(orgFiltersRoot, search);
@@ -768,8 +815,9 @@ export async function renderAdminUserDirectory() {
   window.convertOrgStructureToCSV = convertOrgStructureToCSV;
   search.oninput = () => renderAdminUserDirectoryList(search.value);
   incompleteFilter.onchange = () => renderAdminUserDirectoryList(search.value);
-  stageOneFilter.onchange = () => renderAdminUserDirectoryList(search.value);
-  if (unjoinedTeamFilter) unjoinedTeamFilter.onchange = () => renderAdminUserDirectoryList(search.value);
+  planSelect.onchange = () => renderAdminUserDirectoryList(search.value);
+  participationFilter.onchange = () => renderAdminUserDirectoryList(search.value);
+  teamFilter.onchange = () => renderAdminUserDirectoryList(search.value);
   renderAdminUserDirectoryList(search.value);
 }
 
