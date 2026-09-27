@@ -1161,7 +1161,7 @@ function renderExamExplanationEditor(host, questions) {
 // ── 題庫編輯（依試卷啟用的題型，每題可存 / 刪 / 新增）──
 function renderExamQuestionBank(host, paper, questions, rerender) {
   if (paper.status !== "draft") {
-    host.innerHTML = '<div class="admin-user-directory__empty">試卷已' + (paper.status === "published" ? "發佈" : "關閉") + '，題目已鎖定。要改題請先「改回草稿」（會影響已作答的人，請謹慎）。要編輯答案詳解請切到上方「答案詳解」分頁，不受鎖定影響。</div>';
+    host.innerHTML = '<div class="admin-user-directory__empty">試卷已' + (paper.status === "published" ? "發佈" : "關閉") + '，題目已鎖定。還沒有人作答時，可以用「⋯ 更多」裡的「撤回成草稿」再修改；已經有人作答就不能再改題。要編輯答案詳解請切到上方「答案詳解」分頁，不受鎖定影響。</div>';
     return;
   }
   const cfg = examSectionCfg(paper);
