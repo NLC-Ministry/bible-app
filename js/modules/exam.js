@@ -113,9 +113,9 @@ const parseIdText = (arr) => arr.map((r) => {
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
 });
 
-// 草稿卷上的作答是演練（#257）；C2 刪除前還存在的舊測試卷也算。
+// 草稿卷上的作答是演練（#257）。
 function isRehearsalPaper(paper) {
-  return !!paper && (paper.status === "draft" || paper.mode === "test");
+  return !!paper && paper.status === "draft";
 }
 
 // ── 準備進度檢查：草稿階段「還差什麼才能發佈」的清單 ──
@@ -316,12 +316,8 @@ export async function renderExamPanel(root) {
     rerender();
   });
   // ── 單一試卷（#257）：每份卷就是一份試卷，草稿時可編輯、可演練，沒有測試版／正式版。
-  // 舊的測試卷（mode='test'）在 C2（#259）刪除前不顯示；預設載入到它時改選第一份。
-  const examList = papers.filter((p) => p.mode !== "test");
-  if (paper && paper.mode === "test" && examList.length) {
-    examAdminPaperId = examList[0].id; renderExamPanel(root); return;
-  }
-  const shownPaper = paper && paper.mode !== "test" ? paper : null;
+  const examList = papers;
+  const shownPaper = paper;
 
   const pickerBar = `
     <div class="exam-admin__picker">

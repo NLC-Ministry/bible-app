@@ -65,8 +65,8 @@ describe("0198: 大測驗 admin UI 兩版都顯示「預告文」分頁，文案
   });
 });
 
-describe("0198: 首頁卡片渲染已經支援標示「測試版」badge（既有邏輯，這次改動只是讓它真正被觸發）", () => {
-  it("home.js 依 d.mode === 'test' 顯示測試版徽章", () => {
-    expect(home).toContain('d.mode === "test" ? \'<span class="stat-badge stat-badge--neutral">測試版</span>\'');
+describe("C3（#260）：沒有測試版了，首頁卡片不再有「測試版」badge", () => {
+  it("home.js 不再依 d.mode 顯示測試版徽章", () => {
+    expect(home).not.toContain('d.mode === "test"');
   });
 });
