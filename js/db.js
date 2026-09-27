@@ -3766,6 +3766,7 @@ const db = {
       exam_announcement_would_blank_published: "這份公告已經發佈中，標題與內容不能存成空白。要清空請先按「撤下預告文」。",
       exam_reset_live_forbidden: "只有草稿可以清除作答紀錄（演練作答）。已發佈的測驗不可清除。",
       exam_use_publish: "草稿請用「發佈測驗」發佈。",
+      exam_rehearsal_draft_only: "只有草稿可以重新演練；這份測驗已經發佈了。",
       exam_revert_has_attempts: "已經有人作答，不能撤回成草稿（題目已鎖定）。",
       exam_window_invalid: "請先設定正確的開放起訖時間。",
       exam_section_count_mismatch: "各大題題數與設定不符。",
@@ -3893,6 +3894,10 @@ const db = {
   // single-paper flow (#258). The backend functions are dropped in C3 (#260).
   async resetExamAttempts(paperId) {
     return this._callExamRpc("exam_reset_attempts", { p_paper_id: paperId });
+  },
+  // 只清掉自己在草稿卷上的演練作答，可以馬上重新演練（#258）
+  async resetMyExamRehearsal(paperId) {
+    return this._callExamRpc("exam_reset_my_rehearsal", { p_paper_id: paperId });
   },
   async setExamAutoScore(paperId, enabled) {
     return this._callExamRpc("exam_set_auto_score", { p_paper_id: paperId, p_enabled: !!enabled });
