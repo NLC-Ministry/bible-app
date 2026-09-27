@@ -2,16 +2,17 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 
 // 上線審核（2026-09-27）：日常開發在 staging 分支，上線要開 staging → main 的 PR，
-// 使用者在 staging 確認後貼上 staging-verified 標籤；CI 部署正式環境前會再檢查一次。
-// 免費的私人 repo 不能設分支保護，所以把關放在部署這一步。見 docs/staging.md。
+// 使用者在 staging 網站確認後按 merge 就代表確認上線；CI 部署正式環境前會檢查
+// 這個 commit 是從 staging（或 hotfix/*）的 PR merge 進來的。免費的私人 repo 不能設
+// 分支保護，所以把關放在部署這一步。見 docs/staging.md。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const ci = read(".github/workflows/ci.yml");
 const gate = read(".github/workflows/release-gate.yml");
 
 describe("release-gate workflow", () => {
-  it("runs on PRs into main, including when labels change", () => {
+  it("runs on PRs into main", () => {
     expect(gate).toMatch(/pull_request:\s*\r?\n\s+branches:\s*\[main\]/);
-    expect(gate).toMatch(/types:\s*\[opened, reopened, synchronize, labeled, unlabeled\]/);
+    expect(gate).toMatch(/types:\s*\[opened, reopened, synchronize\]/);
   });
 
   it("only accepts staging or hotfix/* as the source branch", () => {
@@ -22,9 +23,9 @@ describe("release-gate workflow", () => {
     expect(gate).toContain('git rev-list --no-merges "$HEAD_SHA..origin/main"');
   });
 
-  it("stays red until the staging-verified label is added", () => {
-    expect(gate).toContain("*,staging-verified,*)");
-    expect(gate).toContain("exit $fail");
+  it("no longer needs a label: merging is the approval", () => {
+    expect(gate).not.toContain("staging-verified");
+    expect(gate).not.toMatch(/labeled/);
   });
 
   it("passes PR data through env vars, never interpolated straight into the script", () => {
@@ -36,29 +37,30 @@ describe("release-gate workflow", () => {
 
 describe("production deploy gate in ci.yml", () => {
   const deploy = ci.slice(ci.indexOf("  deploy:"));
-  const gateStep = deploy.slice(deploy.indexOf("- name: Require staging-verified before production deploy"), deploy.indexOf("- uses: actions/setup-node@v4"));
+  const gateStep = deploy.slice(deploy.indexOf("- name: Require a release PR before production deploy"), deploy.indexOf("- uses: actions/setup-node@v4"));
 
   it("runs only for pushes to main, before anything is built or deployed", () => {
     expect(gateStep).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
-    expect(deploy.indexOf("Require staging-verified")).toBeLessThan(deploy.indexOf("- name: Deploy"));
-    expect(deploy.indexOf("Require staging-verified")).toBeLessThan(deploy.indexOf("vercel pull"));
+    expect(deploy.indexOf("Require a release PR")).toBeLessThan(deploy.indexOf("- name: Deploy"));
+    expect(deploy.indexOf("Require a release PR")).toBeLessThan(deploy.indexOf("vercel pull"));
   });
 
-  it("fails the deploy unless the commit came from a merged PR labelled staging-verified", () => {
+  it("fails the deploy unless the commit came from a merged PR from staging or hotfix/*", () => {
     expect(gateStep).toContain("listPullRequestsAssociatedWithCommit");
     expect(gateStep).toContain("pr.merged_at && pr.base.ref === 'main'");
-    expect(gateStep).toContain("label.name === 'staging-verified'");
+    expect(gateStep).toContain("pr.head.ref === 'staging' || pr.head.ref.startsWith('hotfix/')");
     expect(gateStep).toContain("core.setFailed(");
+    expect(gateStep).not.toContain("staging-verified");
   });
 });
 
 describe("release PR checklist", () => {
-  it("exists and tells the reviewer to verify staging before adding the label", () => {
+  it("exists and asks the reviewer to check staging, then merge", () => {
     expect(existsSync(new URL("../.github/pull_request_template.md", import.meta.url))).toBe(true);
     const template = read(".github/pull_request_template.md");
-    expect(template).toContain("staging-verified");
     expect(template).toContain("https://bible-speed-reading-staging.vercel.app");
-    expect(template).toContain("--project-ref ztozevcqkfrohgjmngcj --dry-run");
+    expect(template).toContain("打開 ______ → 應該看到 ______");
     expect(template).toContain("Create a merge commit");
+    expect(template).not.toContain("staging-verified");
   });
 });

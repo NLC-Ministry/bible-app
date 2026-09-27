@@ -1,29 +1,28 @@
 <!--
-上線 PR（staging → main）。流程見 docs/staging.md「上線到正式環境」。
-緊急修正（hotfix/* → main）也用這份清單，staging 那幾項改成在本機或正式環境確認。
+上線 PR（staging → main）。在 staging 確認沒問題後按 merge，就會上線到正式網站。
+流程見 docs/staging.md「上線到正式環境」。
 -->
 
-## 這次上線的內容
-<!-- 列出這次要上線的改動、對應的 issue -->
+## 這次上線改了什麼
+<!-- 用一兩句白話寫：會友或管理員會看到什麼不一樣 -->
 -
 
-## 上線前：在 staging 確認（全部打勾後再貼 `staging-verified` 標籤）
-- [ ] CI 的 `build-and-test` 通過
-- [ ] staging 網站（https://bible-speed-reading-staging.vercel.app）已經是這次的版本（`staging` 分支最新一次部署成功）
-- [ ] 在 staging 實際操作過這次改到的功能：<!-- 寫下操作了哪些 -->
-- [ ] 會友常用的功能沒有被影響：首頁、讀經打卡、計畫、小測驗
-- [ ] 這次有 migration 的話，已經推到 staging：`npx supabase db push --linked --project-ref vzokpsscyivhgmhleplq`
-- [ ] 正式環境要套用的 migration（`npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run` 的結果）：<!-- 沒有就寫「無」 -->
-- [ ] migration 的檔頭有沒有寫上線順序要求（例如要先設定 Vault / secret）：<!-- 沒有就寫「無」 -->
-- [ ] 要重新部署的 Edge Function：<!-- 沒有就寫「無」 -->
-- [ ] 資料庫結構有「舊版前端會壞掉」的改動嗎？有的話要設定 `release-policy.json` 的 `forceUpdateBuiltBefore`
+## 按 merge 之前，請在 staging 網站確認
+staging 網站：https://bible-speed-reading-staging.vercel.app
 
-**確認完，把這個 PR 貼上 `staging-verified` 標籤**，`release-gate` 才會變綠燈。沒有這個標籤，就算 merge 了也不會部署到正式環境。
+<!-- 每一項寫成「打開哪個頁面 → 應該看到什麼」 -->
+- [ ] 打開 ______ → 應該看到 ______
+- [ ] 首頁、讀經、計畫都能正常打開
 
-## 上線（merge 之後，依序）
-- [ ] 用 **Create a merge commit** merge（不要用 squash）
-- [ ] 正式環境套用 migration：`npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj`
-- [ ] 重新部署上面列出的 Edge Function
-- [ ] CI 的 deploy 成功，正式網站（https://bible.newlife.org.tw）已經是新版本
-- [ ] 在正式環境快速確認這次改到的功能
-- [ ] `node scripts/compare-env-snapshots.mjs --run`：兩個環境仍然一致
+**確認沒問題 → 按下方的 Merge（選「Create a merge commit」）→ 就會上線。**
+有問題就先不要 merge，告訴開發者要改什麼。
+
+---
+<details>
+<summary>開發者用（上線前後的技術步驟）</summary>
+
+- 資料庫要更新的項目（正式環境 `db push --dry-run` 的結果）：<!-- 沒有就寫「無」 -->
+- 要重新部署的 Edge Function：<!-- 沒有就寫「無」 -->
+- 舊版前端會壞掉的改動（要設 `release-policy.json` 的 `forceUpdateBuiltBefore`）：<!-- 沒有就寫「無」 -->
+- merge 後：正式環境 `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj`、部署 Edge Function、確認正式網站已更新、`node scripts/compare-env-snapshots.mjs --run`
+</details>
