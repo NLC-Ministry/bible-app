@@ -102,7 +102,9 @@ describe("後台題目清單：準備中 → 已排程 → 作答中 → 已結�
       adminListLightningQuizQuestions: vi.fn(async () => ({ success: true, data: questions })),
       adminSetLightningQuizStatus: vi.fn(async () => ({ success: true, data: {} })),
       adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } })),
-      adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } }))
+      adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } })),
+      adminGetLightningQuizSettings: vi.fn(async () => ({ success: true, data: { weekdays: [1, 3, 5], timeStart: "07:00", timeEnd: "10:00" } })),
+      adminImportLightningQuizQuestions: vi.fn(async items => ({ success: true, data: { imported: items.length } }))
     };
     vi.resetModules();
     setupGlobals(`
@@ -114,6 +116,7 @@ describe("後台題目清單：準備中 → 已排程 → 作答中 → 已結�
         <button id="admin-lightning-quiz-cancel"></button><button id="admin-lightning-quiz-save"></button>
       </div>
       <button id="admin-lightning-quiz-create"></button>
+      <div id="admin-lightning-quiz-planner"></div>
       <div id="admin-lightning-quiz-list"></div>
       <div id="admin-lightning-quiz-stats-body"></div>`);
   });
@@ -159,6 +162,51 @@ describe("後台題目清單：準備中 → 已排程 → 作答中 → 已結�
     expect(confirmDialog.mock.calls[0][0].title).toBe("確定要排程這一題嗎？");
     expect(confirmDialog.mock.calls[0][0].message).toContain("07:00–10:00");
     expect(db.adminSetLightningQuizStatus).toHaveBeenCalledWith("draft-1", "published");
+  });
+
+  it("calendar marks empty rule days as 缺題; 新增 opens the editor on that date with the rule's times", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-calendar");
+    await renderAdminLightningQuizQuestions();
+    const planner = document.getElementById("admin-lightning-quiz-planner");
+    expect(planner.textContent).toContain("每週一、三、五　07:00–10:00");
+    expect(planner.querySelectorAll(".admin-lightning-quiz-calendar__week")).toHaveLength(4);
+    const missing = planner.querySelector("[data-lq-calendar-add]");
+    expect(missing).not.toBeNull();
+    missing.click();
+    expect(document.getElementById("admin-lightning-quiz-rise-date").value).toBe(missing.dataset.lqCalendarAdd);
+    expect(document.getElementById("admin-lightning-quiz-time-start").value).toBe("07:00");
+    expect(document.getElementById("admin-lightning-quiz-form-title").textContent).toBe("新增題目");
+  });
+
+  it("text import previews the dates first, then imports everything in one call", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-import");
+    await renderAdminLightningQuizQuestions();
+    const planner = document.getElementById("admin-lightning-quiz-planner");
+    planner.querySelector("[data-lq-import-text]").value = "[是非] 第一題\n答案：對\n\n[是非] 第二題\n答案：錯";
+    planner.querySelector("[data-lq-import-parse]").click();
+    const preview = planner.querySelector("[data-lq-import-preview]");
+    expect(preview.textContent).toContain("共 2 題");
+    expect(db.adminImportLightningQuizQuestions).not.toHaveBeenCalled();
+
+    preview.querySelector('[data-lq-import-save="schedule"]').click();
+    await flush();
+    const [items, schedule] = db.adminImportLightningQuizQuestions.mock.calls[0];
+    expect(schedule).toBe(true);
+    expect(items.map(item => item.payload.stem)).toEqual(["第一題", "第二題"]);
+    expect(items.every(item => item.riseTimeStart === "07:00" && item.riseTimeEnd === "10:00")).toBe(true);
+    // 已經有題目的日子（這個測試的四題）不會被排進去
+    expect(items.map(item => item.riseDate).some(date => questions.some(q => q.riseDate === date))).toBe(false);
+  });
+
+  it("shows import errors by question number and offers no import button", async () => {
+    const { renderAdminLightningQuizQuestions } = await import("../js/modules/admin.js?lq-import-errors");
+    await renderAdminLightningQuizQuestions();
+    const planner = document.getElementById("admin-lightning-quiz-planner");
+    planner.querySelector("[data-lq-import-text]").value = "[是非] 好的\n答案：對\n\n[單選] 沒答案\nA. 一\nB. 二";
+    planner.querySelector("[data-lq-import-parse]").click();
+    const preview = planner.querySelector("[data-lq-import-preview]");
+    expect(preview.textContent).toContain("第 2 題");
+    expect(preview.querySelector("[data-lq-import-save]")).toBeNull();
   });
 
   it("試作 opens the in-admin run-through at any time", async () => {

@@ -51,7 +51,15 @@ import {
   weekStartOf
 } from "./lightning-quiz-analytics.mjs";
 import { openLightningQuizPreview, closeLightningQuizPreview } from "./lightning-quiz.mjs";
-import { LIGHTNING_QUIZ_STAGE_LABELS, copyLightningQuizQuestion, lightningQuizStage } from "./lightning-quiz-schedule.mjs";
+import {
+  DEFAULT_LIGHTNING_QUIZ_SETTINGS,
+  LIGHTNING_QUIZ_STAGE_LABELS,
+  buildLightningQuizCalendar,
+  copyLightningQuizQuestion,
+  lightningQuizStage,
+  parseLightningImportText,
+  planLightningImport
+} from "./lightning-quiz-schedule.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
 import { renderExamPanel } from "./exam.js";
 
@@ -1678,9 +1686,13 @@ function closeAdminLightningQuizEditor() {
 }
 
 // 新增、編輯（還沒開始的題目）、複製成新題（已開始的題目：內容帶進來、日期留空，
-// 存成新的準備中題目）。開始後的題目不能編輯（#309）。
-function openAdminLightningQuizEditor(question = null, { copy = false } = {}) {
-  const source = copy ? copyLightningQuizQuestion(question) : question;
+// 存成新的準備中題目）。開始後的題目不能編輯（#309）。新增時帶入排程規則的預設
+// 時段；從日曆的「新增」進來會再帶入那一天（prefill，#310）。
+function openAdminLightningQuizEditor(question = null, { copy = false, prefill = null } = {}) {
+  const rule = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  const source = copy
+    ? copyLightningQuizQuestion(question)
+    : question || { id: null, riseDate: '', riseTimeStart: rule.timeStart, riseTimeEnd: rule.timeEnd, ...prefill };
   editingAdminLightningQuizId = source?.id || null;
   const editor = document.getElementById('admin-lightning-quiz-editor');
   const riseDate = document.getElementById('admin-lightning-quiz-rise-date');
@@ -1766,6 +1778,197 @@ async function changeAdminLightningQuizStatus(question, nextStatus) {
   void renderAdminLightningQuizStats();
 }
 
+// ── 排程日曆、排程規則、文字匯入（#310）─────────────────────────────────
+let adminLightningQuizSettings = null;
+const ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+
+async function loadAdminLightningQuizSettings() {
+  if (adminLightningQuizSettings) return adminLightningQuizSettings;
+  const result = await db.adminGetLightningQuizSettings();
+  adminLightningQuizSettings = result.success && result.data ? result.data : { ...DEFAULT_LIGHTNING_QUIZ_SETTINGS };
+  return adminLightningQuizSettings;
+}
+
+function describeAdminLightningQuizRule(settings) {
+  const days = (settings.weekdays || []).map(day => ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS[day - 1]).join('、');
+  return `每週${days}　${settings.timeStart}–${settings.timeEnd}`;
+}
+
+function renderAdminLightningQuizCalendarHtml(questions, settings, now) {
+  const weeks = buildLightningQuizCalendar({ weekdays: settings.weekdays, questions, now, weeks: 4 });
+  return `<div class="admin-lightning-quiz-calendar">
+    ${weeks.map(week => `<div class="admin-lightning-quiz-calendar__week">
+      <span class="admin-lightning-quiz-calendar__week-label">${escapeHTML(formatWeekRange(week.weekStart))}</span>
+      <div class="admin-lightning-quiz-calendar__days">
+        ${week.days.map(day => {
+          const label = `<span class="admin-lightning-quiz-calendar__date">${escapeHTML(formatWeekday(day.date))}</span>`;
+          if (day.question) {
+            return `<button type="button" class="admin-lightning-quiz-calendar__day" data-lq-calendar-open="${escapeHTML(String(day.question.id))}">
+              ${label}
+              <span class="stat-badge stat-badge--${ADMIN_LIGHTNING_QUIZ_STAGE_BADGE_KIND[day.stage]}">${LIGHTNING_QUIZ_STAGE_LABELS[day.stage]}</span>
+              <span class="admin-lightning-quiz-calendar__stem">${escapeHTML(day.question.payload?.stem || '')}</span>
+            </button>`;
+          }
+          if (day.missing) {
+            return `<div class="admin-lightning-quiz-calendar__day is-missing" data-lq-calendar-missing="${escapeHTML(day.date)}">
+              ${label}
+              <span class="stat-badge stat-badge--danger">缺題</span>
+              <button type="button" class="pill-btn" data-lq-calendar-add="${escapeHTML(day.date)}">新增</button>
+            </div>`;
+          }
+          return `<div class="admin-lightning-quiz-calendar__day is-past">${label}<span class="admin-lightning-quiz-calendar__stem">—</span></div>`;
+        }).join('')}
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderAdminLightningQuizImportPreview(preview, parsed, planned) {
+  const errors = [...parsed.errors, ...planned.errors].sort((a, b) => a.number - b.number);
+  if (errors.length) {
+    preview.innerHTML = `<div class="admin-lightning-quiz-import__errors" role="alert">
+      <p>有 ${errors.length} 題需要修正，修正後再按一次「解析」（這時候一題都還沒有存）：</p>
+      <ul>${errors.map(error => `<li>第 ${escapeHTML(String(error.number))} 題：${escapeHTML(error.message)}</li>`).join('')}</ul>
+    </div>`;
+    return;
+  }
+  preview.innerHTML = `
+    <p class="admin-daily-quiz-note">共 ${planned.plan.length} 題，會排在下面這些日子。確認沒問題再匯入：</p>
+    ${adminLightningQuizOrgTable(['日期', '時段', '題型', '題目', ''],
+      planned.plan.map(item => `<tr>
+        <td>${escapeHTML(formatWeekday(item.date))}</td>
+        <td>${escapeHTML(item.timeStart)}–${escapeHTML(item.timeEnd)}</td>
+        <td>${escapeHTML(ADMIN_QUIZ_CUSTOM_TYPE_LABELS[item.question.type] || item.question.type)}</td>
+        <td>${escapeHTML(item.question.payload?.stem || '')}</td>
+        <td>${item.pinned ? '指定日期' : '自動排入'}</td>
+      </tr>`).join(''))}
+    <div class="announcement-form-panel__actions">
+      <button type="button" class="secondary-btn" data-lq-import-save="draft">匯入為準備中</button>
+      <button type="button" class="primary-btn" data-lq-import-save="schedule">匯入並排程</button>
+    </div>`;
+}
+
+function bindAdminLightningQuizImport(panel, getQuestions) {
+  const textarea = panel.querySelector('[data-lq-import-text]');
+  const preview = panel.querySelector('[data-lq-import-preview]');
+  let planned = null;
+  panel.querySelector('[data-lq-import-parse]').addEventListener('click', () => {
+    const now = adminLightningQuizTaipeiNow();
+    const parsed = parseLightningImportText(textarea.value, { today: now.date });
+    if (!parsed.items.length && !parsed.errors.length) {
+      preview.innerHTML = '<div class="admin-user-directory__empty">請先貼上題目。</div>';
+      planned = null;
+      return;
+    }
+    planned = planLightningImport(parsed.items, {
+      existingDates: getQuestions().map(question => question.riseDate),
+      settings: adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS,
+      now
+    });
+    renderAdminLightningQuizImportPreview(preview, parsed, planned);
+  });
+  preview.addEventListener('click', async event => {
+    const button = event.target.closest('[data-lq-import-save]');
+    if (!button || !planned || planned.errors.length) return;
+    const schedule = button.dataset.lqImportSave === 'schedule';
+    preview.querySelectorAll('[data-lq-import-save]').forEach(other => { other.disabled = true; });
+    const result = await db.adminImportLightningQuizQuestions(planned.plan.map(item => ({
+      riseDate: item.date,
+      riseTimeStart: item.timeStart,
+      riseTimeEnd: item.timeEnd,
+      questionType: item.question.type,
+      payload: item.question.payload,
+      answerKey: item.question.answerKey
+    })), schedule);
+    if (!result.success) {
+      preview.querySelectorAll('[data-lq-import-save]').forEach(other => { other.disabled = false; });
+      showToast(result.message || '匯入失敗，這次一題都沒有匯入。');
+      return;
+    }
+    showToast(`已匯入 ${result.data?.imported ?? planned.plan.length} 題${schedule ? '並排程' : '（準備中）'}。`);
+    textarea.value = '';
+    preview.innerHTML = '';
+    planned = null;
+    await renderAdminLightningQuizQuestions();
+  });
+}
+
+function bindAdminLightningQuizRule(panel, rerender) {
+  const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  panel.querySelectorAll('[data-lq-rule-day]').forEach(input => {
+    input.checked = (settings.weekdays || []).includes(Number(input.value));
+  });
+  panel.querySelector('[data-lq-rule-start]').value = settings.timeStart;
+  panel.querySelector('[data-lq-rule-end]').value = settings.timeEnd;
+  panel.querySelector('[data-lq-rule-save]').addEventListener('click', async event => {
+    const weekdays = [...panel.querySelectorAll('[data-lq-rule-day]:checked')].map(input => Number(input.value));
+    const timeStart = panel.querySelector('[data-lq-rule-start]').value;
+    const timeEnd = panel.querySelector('[data-lq-rule-end]').value;
+    if (!weekdays.length) { showToast('請至少選一天。'); return; }
+    if (!timeStart || !timeEnd || timeStart >= timeEnd) { showToast('結束時間必須晚於開始時間。'); return; }
+    event.currentTarget.disabled = true;
+    const result = await db.adminSaveLightningQuizSettings({ weekdays, timeStart, timeEnd });
+    event.currentTarget.disabled = false;
+    if (!result.success) { showToast(result.message || '儲存失敗，請稍後再試。'); return; }
+    adminLightningQuizSettings = result.data;
+    showToast('排程規則已儲存。');
+    rerender();
+  });
+}
+
+function renderAdminLightningQuizPlanner(questions) {
+  const host = document.getElementById('admin-lightning-quiz-planner');
+  if (!host) return;
+  const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+  host._questions = questions;
+  // 規則與匯入的面板只建一次，清單重新整理時不會把正在貼的文字洗掉
+  if (!host.querySelector('[data-lq-calendar]')) {
+    host.innerHTML = `
+      <section class="admin-lightning-quiz-detail__section" aria-label="排程日曆">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>接下來 4 週</h5>
+          <span class="admin-daily-quiz-note" data-lq-rule-summary></span>
+        </div>
+        <div data-lq-calendar></div>
+      </section>
+      <details class="admin-lightning-quiz-planner__panel" data-lq-rule-panel>
+        <summary>排程規則</summary>
+        <div class="admin-lightning-quiz-rule">
+          <fieldset class="admin-lightning-quiz-rule__days"><legend>哪幾天有快問快答</legend>
+            ${ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS.map((label, index) => `<label><input type="checkbox" data-lq-rule-day value="${index + 1}"> 週${label}</label>`).join('')}
+          </fieldset>
+          <label>預設開始<input type="time" class="form-control" data-lq-rule-start></label>
+          <label>預設結束<input type="time" class="form-control" data-lq-rule-end></label>
+          <button type="button" class="primary-btn" data-lq-rule-save>儲存規則</button>
+        </div>
+      </details>
+      <details class="admin-lightning-quiz-planner__panel" data-lq-import-panel>
+        <summary>文字匯入（一次貼多題）</summary>
+        <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。</p>
+        <textarea class="form-control" rows="10" data-lq-import-text placeholder="[單選] 亞伯拉罕原本住在哪座城市？&#10;A. 哈蘭&#10;B. 吾珥&#10;答案：B&#10;&#10;日期：10/9&#10;[是非] 摩西在米甸住了四十年。&#10;答案：對"></textarea>
+        <button type="button" class="secondary-btn" data-lq-import-parse>解析</button>
+        <div data-lq-import-preview aria-live="polite"></div>
+      </details>`;
+    bindAdminLightningQuizRule(host.querySelector('[data-lq-rule-panel]'), () => renderAdminLightningQuizPlanner(host._questions || []));
+    bindAdminLightningQuizImport(host.querySelector('[data-lq-import-panel]'), () => host._questions || []);
+    host.addEventListener('click', event => {
+      const add = event.target.closest('[data-lq-calendar-add]');
+      if (add) {
+        const rule = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
+        openAdminLightningQuizEditor(null, { prefill: { riseDate: add.dataset.lqCalendarAdd, riseTimeStart: rule.timeStart, riseTimeEnd: rule.timeEnd } });
+        return;
+      }
+      const open = event.target.closest('[data-lq-calendar-open]');
+      if (open) {
+        document.querySelector(`[data-admin-lightning-quiz-id="${open.dataset.lqCalendarOpen}"]`)
+          ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+  host.querySelector('[data-lq-rule-summary]').textContent = `排程規則：${describeAdminLightningQuizRule(settings)}`;
+  host.querySelector('[data-lq-calendar]').innerHTML = renderAdminLightningQuizCalendarHtml(questions, settings, adminLightningQuizTaipeiNow());
+}
+
 export async function renderAdminLightningQuizQuestions() {
   const host = document.getElementById('admin-lightning-quiz-list');
   const createButton = document.getElementById('admin-lightning-quiz-create');
@@ -1814,12 +2017,13 @@ export async function renderAdminLightningQuizQuestions() {
     await renderAdminLightningQuizQuestions();
   };
 
-  const result = await db.adminListLightningQuizQuestions();
+  const [result] = await Promise.all([db.adminListLightningQuizQuestions(), loadAdminLightningQuizSettings()]);
   if (!result.success) {
     host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入失敗，請稍後再試。')}</div>`;
     return;
   }
   const questions = Array.isArray(result.data) ? result.data : [];
+  renderAdminLightningQuizPlanner(questions);
   if (!questions.length) {
     host.innerHTML = '<div class="admin-user-directory__empty">目前尚無題目，請按「新增題目」設定第一題。</div>';
     return;

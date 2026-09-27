@@ -6486,10 +6486,21 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_invalid_status_transition: "目前的狀態不能這樣切換，請重新整理後再試。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
     lightning_quiz_week_required: "請選擇要看的週。",
+    lightning_quiz_weekdays_required: "請至少選一天。",
+    lightning_quiz_import_empty: "沒有可以匯入的題目。",
+    lightning_quiz_import_too_many: "一次最多匯入 60 題。",
+    lightning_quiz_import_duplicate_date: "這次匯入有兩題排在同一天，請重新整理後再試。",
+    lightning_quiz_import_invalid_item: "有題目的內容不完整，這次一題都沒有匯入。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
-  return key ? messages[key] : "快問快答資料處理失敗，請稍後再試。";
+  if (!key) return "快問快答資料處理失敗，請稍後再試。";
+  // 文字匯入會帶上是哪一天／第幾題（例：lightning_quiz_date_taken:2026-10-09），一起告訴管理員
+  const detail = raw.match(/lightning_quiz_(?:date_taken|window_passed):(\d{4}-\d{2}-\d{2})/);
+  const itemNo = raw.match(/lightning_quiz_import_invalid_item:(\d+)/);
+  if (detail) return `${detail[1]}：${messages[key]}（這次一題都沒有匯入）`;
+  if (itemNo) return `第 ${itemNo[1]} 題：${messages[key]}`;
+  return messages[key];
 };
 
 db._callLightningQuizRpc = async function(functionName, args = {}) {
@@ -6577,6 +6588,28 @@ db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
   return this._callLightningQuizRpc("admin_get_lightning_quiz_trend", {
     p_from: fromDate || null,
     p_to: toDate || null
+  });
+};
+
+// 排程規則（#310）：哪幾天有快問快答（ISO：1＝週一）與預設時段 "HH:MM"。
+db.adminGetLightningQuizSettings = async function() {
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_settings", {});
+};
+
+db.adminSaveLightningQuizSettings = async function({ weekdays, timeStart, timeEnd }) {
+  return this._callLightningQuizRpc("admin_save_lightning_quiz_settings", {
+    p_weekdays: weekdays,
+    p_time_start: timeStart,
+    p_time_end: timeEnd
+  });
+};
+
+// 文字匯入（#310）：一次寫入多題，全部成功或全部失敗。schedule＝匯入後直接排程。
+db.adminImportLightningQuizQuestions = async function(items, schedule) {
+  if (!Array.isArray(items) || !items.length) return { success: false, message: "沒有可以匯入的題目。" };
+  return this._callLightningQuizRpc("admin_import_lightning_quiz_questions", {
+    p_items: items,
+    p_schedule: schedule === true
   });
 };
 
