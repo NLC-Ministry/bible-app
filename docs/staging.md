@@ -29,13 +29,33 @@
 - Logto：staging 專用的 client（2026-09-26 建立），和正式環境的 client 分開（見下方「登入」）。
 - 尚未完成：第一個管理員。
 
-## 部署前端到 staging
+## 開發流程：在 staging 分支上工作（2026-09-27 起）
 
-`staging` 分支一 push，CI 就會部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址 **https://bible-speed-reading-staging.vercel.app**。`staging` 分支是拿來測試用的，想測哪個分支就把它推上去：
+| 分支 | 網站 | 資料庫 |
+|---|---|---|
+| `staging`（日常開發都在這裡） | https://bible-speed-reading-staging.vercel.app | staging `vzokpsscyivhgmhleplq` |
+| `main`（只透過上線 PR 更新） | https://bible.newlife.org.tw | 正式 `ztozevcqkfrohgjmngcj` |
 
-```bash
-git push --force-with-lease origin <要測試的分支>:staging
-```
+- **日常修改直接 commit 到 `staging` 再 push**。CI 會跑測試、部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址。
+- **不要 force push `staging`**：它上面可能有還沒上線的修改，蓋掉就不見了。
+- **大功能**（要做好幾天、或有上線順序要求，例如大測驗 C3）從 `staging` 開短期分支，完成後 merge 回 `staging`。不然會跟其他修改綁在一起上線。
+- **不要直接 push 到 `main`**。免費的私人 repo 不能設定分支保護，所以改成在部署時把關：沒有經過上線審核的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
+- **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，把 `main` 併回 `staging`：`git switch staging && git merge origin/main && git push`。
+- migration 跟著分支走：commit 到 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
+
+## 上線到正式環境（審核機制）
+
+1. 在 GitHub 開 PR：**`staging` → `main`**。PR 會自動帶出檢查清單（`.github/pull_request_template.md`）。
+2. 照清單在 **staging 網站**確認：這次改到的功能、會友常用的功能、要套用的 migration 和 Edge Function。
+3. 確認沒問題後，**在 PR 貼上 `staging-verified` 標籤**。`release-gate` 檢查會變綠燈，它檢查三件事：
+   - 來源分支是 `staging`（或 `hotfix/*`）
+   - 已經包含 `main` 上所有有內容的修改（緊急修正要先併回 staging）
+   - 已經貼上 `staging-verified`
+4. 用 **Create a merge commit** merge（不要用 squash，兩條分支的歷史才不會分岔）。
+5. CI 部署前會再檢查一次：這個 commit 必須來自已 merge、而且貼了 `staging-verified` 的 PR。**沒有就不部署**，正式網站維持原狀。直接 push 到 `main` 的 commit 也一樣不會部署。
+6. 依清單完成上線後的步驟：正式環境 migration、Edge Function、在正式網站確認、`compare-env-snapshots.mjs --run`。
+
+要撤回審核：把 `staging-verified` 標籤拿掉，`release-gate` 會變回紅燈。
 
 - **不要用 `bible-speed-reading.vercel.app` 當 staging**：它跟 `bible.newlife.org.tw` 是同一個正式部署。PWA 的登入狀態和離線讀經紀錄是依網址分開保存的，改用它的話，曾經從這個網址安裝 app 的會友會默默改連 staging，離線紀錄也會送到 staging。
 - **Deployment Protection**：staging 網址是 preview 部署，一樣要登入 Vercel 才看得到。免費方案只有專案擁有者能看；如果要讓同工一起測試，要在 Vercel 關掉 Preview 的 Deployment Protection（資料仍然要用 NLC 帳號登入才看得到）。
@@ -47,7 +67,7 @@ git push --force-with-lease origin <要測試的分支>:staging
   - 正式環境的 client 只登記正式網域，不要把 staging 網址加進去。
   - 按登入跳出「教會系統登入尚未完成設定」，代表頁面上的 client ID 是空的：可能 build 時 Preview 還沒設 `NLC_CLIENT_ID`，或瀏覽器還在跑 Service Worker 快取的舊版。先看 CI log 的 client ID，有的話開 `/repair` 清快取再試。
   - `nlc-session` 的 `NLC_LOGTO_CLIENT_ID` secret（選填，檢查 id_token 的 `aud`）staging 目前沒設；之後要設的話，staging 要填 staging client ID，不是正式的。
-  - **只有從這兩個網址打開才能登入。** Vercel 每次部署自動產生的網址（`bible-speed-reading-<隨機字串>-...vercel.app`，包括 PR 留言裡的 preview 網址）每次都不同，無法事先登記，從那些網址打開時 Logto 會回報 redirect URI 不符。要測某個 PR 的登入，就把它推到 `staging` 分支，再從固定網址打開。
+  - **只有從這兩個網址打開才能登入。** Vercel 每次部署自動產生的網址（`bible-speed-reading-<隨機字串>-...vercel.app`，包括 PR 留言裡的 preview 網址）每次都不同，無法事先登記，從那些網址打開時 Logto 會回報 redirect URI 不符。要測登入，就從 staging 固定網址打開。
 - `APP_ORIGIN` 不用設定：沒設時 `nlc-data`、`nlc-session` 回 `Access-Control-Allow-Origin: *`，`exam-write` 回請求來源。這些 API 用 Bearer token 驗證、不靠 cookie，`*` 不會讓別的網站拿到資料。反而設了之後只能填一個網址，從 `http://localhost:3100` 連 staging 會被 CORS 擋掉。
 - `NLC_LOGTO_AUDIENCE` 不用設：access token 的 audience 由登入時的 `resource` 參數決定（`config.js` 的 `platformResource`，預設 `https://platform.newlife.org.tw`），兩個 client 一樣，分不出環境；正式環境也沒設。
 

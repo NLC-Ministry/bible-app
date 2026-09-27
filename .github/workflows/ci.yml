@@ -54,6 +54,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require staging-verified before production deploy
+        # 上線審核的最後一關（見 release-gate.yml、docs/staging.md）：main 上的這個 commit
+        # 必須來自一個已 merge、而且貼了 staging-verified 標籤的 PR。直接 push 到 main、
+        # 或沒有審核就 merge 的，一律不部署到正式環境。
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const release = prs.find((pr) => pr.merged_at && pr.base.ref === 'main'
+              && pr.labels.some((label) => label.name === 'staging-verified'));
+            if (!release) {
+              core.setFailed('這個 commit 沒有對應到貼了 staging-verified 標籤的上線 PR，不部署到正式環境。請從 staging 開 PR、在 staging 確認後貼上標籤再 merge。');
+              return;
+            }
+            core.summary.addRaw(`上線審核通過：#${release.number}（${release.head.ref} → main）`).write();
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
