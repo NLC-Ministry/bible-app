@@ -65,6 +65,7 @@ window.APP_COPY = {
   },
   reader: {
     nextChapter: "下一章",
+    swipeTip: "左右滑動可以換章",
     catchUpNextDay: "補讀下一天",
   },
   common: {

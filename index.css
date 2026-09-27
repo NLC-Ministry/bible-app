@@ -9793,6 +9793,61 @@ body.reader-navbar-hidden.reader-page .mobile-nav-bar,
   }
 }
 
+/* Swipe-to-change-chapter hint (#314). bible.js sets data-direction while a
+   horizontal swipe is in progress and data-armed once releasing would change
+   the chapter; --reader-swipe-progress (0–1) fades the pill in before that. */
+#reader-view .reader-swipe-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 330;
+  pointer-events: none;
+}
+
+#reader-view .reader-swipe-hint__pill {
+  position: fixed;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+#reader-view .reader-swipe-hint__pill--prev {
+  left: calc(56px + env(safe-area-inset-left, 0px));
+}
+
+#reader-view .reader-swipe-hint__pill--next {
+  right: calc(56px + env(safe-area-inset-right, 0px));
+}
+
+#reader-view .reader-swipe-hint[data-direction="prev"] .reader-swipe-hint__pill--prev,
+#reader-view .reader-swipe-hint[data-direction="next"] .reader-swipe-hint__pill--next {
+  opacity: calc(var(--reader-swipe-progress, 0) * 0.6);
+}
+
+#reader-view .reader-swipe-hint[data-direction="prev"][data-armed] .reader-swipe-hint__pill--prev,
+#reader-view .reader-swipe-hint[data-direction="next"][data-armed] .reader-swipe-hint__pill--next {
+  opacity: 1;
+  color: var(--color-brand);
+  border-color: var(--color-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #reader-view .reader-swipe-hint__pill {
+    transition: none;
+  }
+}
+
 /* Original Premium Bible navigation styles (Pill Slider & Frameless Grid) */
 .segmented-control.bible-native-tabs {
   background: rgba(255, 255, 255, 0.04);
