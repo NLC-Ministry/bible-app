@@ -97,22 +97,10 @@ function updateDevotionMasterFeatureControl(enabled, options = {}) {
     : "已關閉：「個人」分頁不會出現「功能設定」；所有會友已經自己開啟的個人偏好也會一併清空。";
 }
 
-// 政策審核期間的「完全隱藏」開關（app_feature_settings.devotion_group_hidden）。
-// 開啟＝每日靈修 + 小組聚會對所有人隱藏（含系統管理員本人）。這是唯一凌駕角色
-// 判斷的旗標；平常維持關閉。
-function updateDevotionHiddenControl(enabled, options = {}) {
-  const toggle = document.getElementById("admin-devotion-hidden-toggle");
-  const status = document.getElementById("admin-devotion-hidden-status");
-  if (!toggle || !status) return;
-  toggle.setAttribute("aria-checked", enabled ? "true" : "false");
-  toggle.setAttribute("aria-label", enabled ? "目前完全隱藏中" : "目前未隱藏");
-  toggle.disabled = options.disabled === true;
-  status.textContent = options.error
-    ? "讀取設定失敗。"
-    : (enabled
-      ? "鎖定中：每日靈修與小組聚會對所有人隱藏，包含管理員本人。政策通過後關閉即恢復。"
-      : "未鎖定：功能依上方總開關與各會友個人偏好正常運作。");
-}
+// 政策審核期間的「完全隱藏」旗標（app_feature_settings.devotion_group_hidden）：
+// TRUE＝每日靈修 + 小組聚會對所有人隱藏（含系統管理員本人）。後台不提供開關
+// （2026-09-27）——正式環境維持 TRUE，內容改在 staging 編輯與測試（staging 設為
+// FALSE）；政策通過要上線時，用 migration 改成 FALSE 並隨上線 PR 發布。見 docs/staging.md。
 
 // 「每日靈修」計劃管理分頁：admin / pastor 一律看得到（功能對會友暫不開放時
 // 也要能先建內容）。參數保留以相容既有呼叫，但不再拿來 gate。
@@ -175,7 +163,6 @@ export async function renderAdminFeatureSettings() {
       window.devotionGroupHidden = !!(r && r.enabled === true);
       applyAdminDevotionVisibility();
       applyAdminGroupMeetingVisibility();
-      updateDevotionHiddenControl(window.devotionGroupHidden, { error: !!(r && r.error) });
     }).catch(() => {});
   }
 
@@ -279,38 +266,6 @@ export async function renderAdminFeatureSettings() {
         showToast(nextEnabled
           ? "功能設定已開啟。「個人」分頁會多出「功能設定」，會友可以自己選擇要不要啟用。"
           : `功能設定已關閉。${Number.isFinite(resetCount) && resetCount > 0 ? `已一併清空 ${resetCount} 位會友自己開啟過的個人偏好。` : ""}`);
-      }
-    });
-  }
-
-  const hiddenToggle = document.getElementById("admin-devotion-hidden-toggle");
-  const hiddenFeedback = document.getElementById("admin-devotion-hidden-feedback");
-  if (hiddenToggle && !hiddenToggle.dataset.featureSettingBound) {
-    hiddenToggle.dataset.featureSettingBound = "true";
-    hiddenToggle.addEventListener("click", async () => {
-      const currentEnabled = hiddenToggle.getAttribute("aria-checked") === "true";
-      const nextEnabled = !currentEnabled;
-      if (nextEnabled && typeof window.confirm === "function"
-        && !window.confirm("開啟後，每日靈修與小組聚會會對「所有人」隱藏，包含你自己。確定要現在鎖定嗎？")) return;
-      updateDevotionHiddenControl(currentEnabled, { disabled: true });
-      hiddenFeedback?.classList.add("hidden");
-      const saveResult = await db.updateFeatureSetting("devotion_group_hidden", nextEnabled);
-      if (saveResult.error) {
-        updateDevotionHiddenControl(currentEnabled);
-        if (hiddenFeedback) {
-          hiddenFeedback.textContent = "更新設定失敗：無法將設定儲存至伺服器。";
-          hiddenFeedback.classList.remove("hidden");
-        }
-        return;
-      }
-      window.devotionGroupHidden = nextEnabled;
-      updateDevotionHiddenControl(nextEnabled);
-      applyAdminDevotionVisibility();
-      applyAdminGroupMeetingVisibility();
-      if (typeof showToast === "function") {
-        showToast(nextEnabled
-          ? "已鎖定：每日靈修與小組聚會現在對所有人（含你）隱藏。"
-          : "已解除鎖定：功能恢復，依上方總開關與各會友個人偏好運作。");
       }
     });
   }
