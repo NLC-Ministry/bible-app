@@ -28,16 +28,27 @@ import {
   UNASSIGNED_REGION_LABEL,
   UNASSIGNED_ZONE_LABEL,
   buildOverviewCsv,
+  addDays,
   buildRegionCsv,
-  buildTrendCsv,
-  buildTrendSeries,
+  buildWeekLeaderboard,
+  buildWeekMembersCsv,
+  buildWeekRegionCsv,
+  buildWeekZoneCsv,
+  buildWeeklyTrendCsv,
+  buildWeeklyTrendSeries,
   buildZoneCsv,
   filterAttempts,
   formatElapsedSeconds,
   formatRate,
+  formatWeekRange,
+  formatWeekday,
   sortZoneRowsByRegion,
   summarizeByRegion,
-  summarizeByZone
+  summarizeByZone,
+  summarizeWeek,
+  summarizeWeekByRegion,
+  summarizeWeekByZone,
+  weekStartOf
 } from "./lightning-quiz-analytics.mjs";
 import { openLightningQuizPreview, closeLightningQuizPreview } from "./lightning-quiz.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
@@ -2093,11 +2104,11 @@ function destroyAdminLightningQuizTrendCharts() {
   adminLightningQuizTrendCharts = [];
 }
 
-function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
+function adminLightningQuizTrendChartConfig(series, valueKey, label, color, describe) {
   return {
     type: 'line',
     data: {
-      labels: series.map(point => String(point.riseDate).slice(5)),
+      labels: series.map(point => point.label),
       datasets: [{
         label,
         data: series.map(point => point[valueKey] == null ? null : Math.round(point[valueKey] * 1000) / 10),
@@ -2115,12 +2126,7 @@ function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: context => {
-              const point = series[context.dataIndex];
-              return valueKey === 'participationRate'
-                ? `${label} ${context.formattedValue}%（${point.completed} / ${point.eligible} 人）`
-                : `${label} ${context.formattedValue}%（${point.correct} / ${point.completed} 人）`;
-            }
+            label: context => `${label} ${context.formattedValue}%（${describe(series[context.dataIndex])}）`
           }
         }
       },
@@ -2131,13 +2137,20 @@ function adminLightningQuizTrendChartConfig(series, valueKey, label, color) {
   };
 }
 
-// 歷史趨勢：參與趨勢、答對率趨勢兩張折線圖＋資料表。依日期區間在前端篩選
-// 已經載入的逐日資料，不另外打 RPC。
-function renderAdminLightningQuizTrendPanel(panel, days) {
+// 週趨勢（#311）：參與率、答對率兩張折線圖＋每週資料表。週資料由
+// admin_get_lightning_quiz_weeks 一次取回，依起迄週在前端篩選。
+async function renderAdminLightningQuizTrendPanel(panel) {
+  panel.innerHTML = '<div class="admin-user-directory__empty">正在載入週趨勢…</div>';
+  const result = await db.adminGetLightningQuizWeeks();
+  if (!result.success) {
+    panel.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入週趨勢失敗，請稍後再試。')}</div>`;
+    return null;
+  }
+  const allSeries = buildWeeklyTrendSeries(result.data?.weeks);
   panel.innerHTML = `
     <div class="admin-lightning-quiz-trend__toolbar">
-      <label>起<input type="date" class="form-control" data-lq-trend-from></label>
-      <label>迄<input type="date" class="form-control" data-lq-trend-to></label>
+      <label>起（週）<input type="date" class="form-control" data-lq-trend-from></label>
+      <label>迄（週）<input type="date" class="form-control" data-lq-trend-to></label>
       ${adminLightningQuizExportButton('data-lq-trend-export')}
     </div>
     <div data-lq-trend-body></div>
@@ -2146,40 +2159,44 @@ function renderAdminLightningQuizTrendPanel(panel, days) {
   const fromInput = panel.querySelector('[data-lq-trend-from]');
   const toInput = panel.querySelector('[data-lq-trend-to]');
   const body = panel.querySelector('[data-lq-trend-body]');
-  const allSeries = buildTrendSeries(days);
   if (allSeries.length) {
-    fromInput.value = allSeries[0].riseDate;
-    toInput.value = allSeries[allSeries.length - 1].riseDate;
+    fromInput.value = allSeries[0].weekStart;
+    toInput.value = allSeries[allSeries.length - 1].weekStart;
   }
-  const currentSeries = () => allSeries.filter(point =>
-    (!fromInput.value || point.riseDate >= fromInput.value) && (!toInput.value || point.riseDate <= toInput.value));
+  // 選的日期不一定是週一：起日算它那一週，迄日也包含它那一週
+  const currentSeries = () => {
+    const from = fromInput.value ? weekStartOf(fromInput.value) : '';
+    const to = toInput.value ? weekStartOf(toInput.value) : '';
+    return allSeries.filter(point => (!from || point.weekStart >= from) && (!to || point.weekStart <= to));
+  };
 
   const draw = async () => {
     destroyAdminLightningQuizTrendCharts();
     const series = currentSeries();
     if (!series.length) {
-      body.innerHTML = '<div class="admin-user-directory__empty">這個日期區間沒有作答紀錄。</div>';
+      body.innerHTML = '<div class="admin-user-directory__empty">這段期間沒有已發布的快問快答。</div>';
       return;
     }
     body.innerHTML = `
       <div class="admin-lightning-quiz-trend__charts">
         <figure class="admin-lightning-quiz-trend__chart">
-          <figcaption>參與趨勢（作答人數 ÷ 應答人數）</figcaption>
+          <figcaption>參與率（這週至少答 1 題的人 ÷ 應答人數）</figcaption>
           <div class="admin-lightning-quiz-trend__canvas"><canvas data-lq-trend-chart="participationRate"></canvas></div>
         </figure>
         <figure class="admin-lightning-quiz-trend__chart">
-          <figcaption>答對率趨勢（答對人數 ÷ 作答人數）</figcaption>
+          <figcaption>答對率（答對題數 ÷ 送出題數）</figcaption>
           <div class="admin-lightning-quiz-trend__canvas"><canvas data-lq-trend-chart="correctRate"></canvas></div>
         </figure>
       </div>
       <div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
-          <thead><tr><th>日期</th><th>作答／應答</th><th>參與率</th><th>答對人數</th><th>答對率</th><th>平均作答時間</th></tr></thead>
+          <thead><tr><th>週</th><th>題數</th><th>參與／應答</th><th>參與率</th><th>全部答完</th><th>答對率</th><th>平均作答時間</th></tr></thead>
           <tbody>${series.map(point => `<tr>
-            <td>${escapeHTML(formatAdminLightningQuizDate(point.riseDate))}</td>
-            <td>${escapeHTML(String(point.completed))} / ${escapeHTML(String(point.eligible))}</td>
+            <td>${escapeHTML(point.label)}</td>
+            <td>${escapeHTML(String(point.questionCount))}</td>
+            <td>${escapeHTML(String(point.participants))} / ${escapeHTML(String(point.eligible))}</td>
             <td>${escapeHTML(formatRate(point.participationRate))}</td>
-            <td>${escapeHTML(String(point.correct))}</td>
+            <td>${escapeHTML(String(point.allAnswered))}</td>
             <td>${escapeHTML(formatRate(point.correctRate))}</td>
             <td>${point.avgElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(point.avgElapsedMs))} 秒`}</td>
           </tr>`).join('')}</tbody>
@@ -2200,17 +2217,163 @@ function renderAdminLightningQuizTrendPanel(panel, days) {
     const brand = rootStyle.getPropertyValue('--color-brand').trim() || '#04A9D2';
     const success = rootStyle.getPropertyValue('--color-success-foreground').trim() || brand;
     adminLightningQuizTrendCharts = [
-      new Chart(participationCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'participationRate', '參與率', brand)),
-      new Chart(correctCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'correctRate', '答對率', success))
+      new Chart(participationCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'participationRate', '參與率', brand,
+        point => `${point.participants} / ${point.eligible} 人`)),
+      new Chart(correctCanvas.getContext('2d'), adminLightningQuizTrendChartConfig(series, 'correctRate', '答對率', success,
+        point => `${point.correct} / ${point.completed} 題`))
     ];
   };
 
   fromInput.addEventListener('change', () => { void draw(); });
   toInput.addEventListener('change', () => { void draw(); });
   panel.querySelector('[data-lq-trend-export]')?.addEventListener('click', () => {
-    downloadAdminLightningQuizCsv(buildTrendCsv(currentSeries()), `快問快答_歷史趨勢_${formatTaiwanDate()}.csv`);
+    downloadAdminLightningQuizCsv(buildWeeklyTrendCsv(currentSeries()), `快問快答_週趨勢_${formatTaiwanDate()}.csv`);
   });
   return draw;
+}
+
+function adminLightningQuizWeekOrgCells(row) {
+  return `<td>${escapeHTML(String(row.eligible))}</td>
+    <td>${escapeHTML(String(row.participants))}</td>
+    <td>${escapeHTML(formatRate(row.participationRate))}</td>
+    <td>${escapeHTML(String(row.allAnswered))}</td>
+    <td>${escapeHTML(formatRate(row.correctRate))}</td>`;
+}
+
+// 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
+// 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
+function renderAdminLightningQuizWeekPanel(panel) {
+  const thisWeek = weekStartOf(formatTaiwanDate());
+  let weekStart = thisWeek;
+  panel.innerHTML = `
+    <div class="admin-lightning-quiz-trend__toolbar admin-lightning-quiz-week__toolbar">
+      <button type="button" class="secondary-btn" data-lq-week-prev>‹ 上一週</button>
+      <strong data-lq-week-label></strong>
+      <button type="button" class="secondary-btn" data-lq-week-next>下一週 ›</button>
+      <button type="button" class="pill-btn" data-lq-week-today>本週</button>
+    </div>
+    <div data-lq-week-body></div>
+    <div data-lq-week-detail class="admin-lightning-quiz-detail hidden"></div>
+  `;
+  const label = panel.querySelector('[data-lq-week-label]');
+  const body = panel.querySelector('[data-lq-week-body]');
+  const detailHost = panel.querySelector('[data-lq-week-detail]');
+  const nextButton = panel.querySelector('[data-lq-week-next]');
+  let requestSeq = 0;
+
+  const load = async () => {
+    const seq = ++requestSeq;
+    label.textContent = `${formatWeekRange(weekStart)}${weekStart === thisWeek ? '（本週）' : ''}`;
+    nextButton.disabled = weekStart >= thisWeek;
+    detailHost.classList.add('hidden');
+    detailHost.innerHTML = '';
+    body.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的統計…</div>';
+    const result = await db.adminGetLightningQuizWeek(weekStart);
+    if (seq !== requestSeq) return; // 載入期間又切到別週
+    if (!result.success) {
+      body.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入週統計失敗，請稍後再試。')}</div>`;
+      return;
+    }
+    const week = result.data || {};
+    const questions = Array.isArray(week.questions) ? week.questions : [];
+    if (!questions.length) {
+      body.innerHTML = '<div class="admin-user-directory__empty">這週沒有已發布的快問快答。</div>';
+      return;
+    }
+    const summary = summarizeWeek(week);
+    const zoneSummary = summarizeWeekByZone(week);
+    const regionSummary = summarizeWeekByRegion(week);
+    const leaderboard = buildWeekLeaderboard(week, 20);
+    const fileSuffix = `${week.weekStart}週`;
+
+    body.innerHTML = `
+      <div class="admin-daily-quiz-metrics admin-lightning-quiz-week__metrics">
+        <span>題數 <strong>${escapeHTML(String(summary.questionCount))}</strong></span>
+        <span>參與 <strong>${escapeHTML(String(summary.participants))} / ${escapeHTML(String(summary.eligible))} 人（${escapeHTML(formatRate(summary.participationRate))}）</strong></span>
+        <span>${escapeHTML(String(summary.questionCount))} 題全答 <strong>${escapeHTML(String(summary.allAnswered))} 人</strong></span>
+        <span>答對率 <strong>${escapeHTML(formatRate(summary.correctRate))}</strong></span>
+        <span>答對平均用時 <strong>${summary.avgCorrectElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(summary.avgCorrectElapsedMs))} 秒`}</strong></span>
+      </div>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="這週的題目">
+        <div class="admin-lightning-quiz-detail__section-head"><h5>這週的題目</h5></div>
+        ${adminLightningQuizOrgTable(['日期', '送出人數', '答對人數', '答對率', ''],
+          questions.map(question => {
+            const completed = Number(question.completedCount) || 0;
+            const correct = Number(question.correctCount) || 0;
+            return `<tr>
+              <td>${escapeHTML(formatWeekday(question.riseDate))}</td>
+              <td>${escapeHTML(String(completed))}</td>
+              <td>${escapeHTML(String(correct))}</td>
+              <td>${escapeHTML(formatRate(completed > 0 ? correct / completed : null))}</td>
+              <td><button type="button" class="secondary-btn" data-lq-week-question="${escapeHTML(String(question.questionId))}">作答明細</button></td>
+            </tr>`;
+          }).join(''))}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>週排行榜（答對題數多的在前，同分比答對總用時）</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="members"')}
+        </div>
+        ${leaderboard.length ? `<ol class="admin-lightning-quiz-leaderboard-list">
+          ${leaderboard.map(entry => `<li><span>${escapeHTML(String(entry.rank))}. ${escapeHTML(entry.name || '（未命名）')}</span><span>答對 ${escapeHTML(String(entry.correct))} 題・${escapeHTML(formatElapsedSeconds(entry.correctElapsedMs))} 秒</span></li>`).join('')}
+        </ol>` : '<div class="admin-user-directory__empty">這週還沒有人答對。</div>'}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="大區分析">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>大區分析</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="region"')}
+        </div>
+        ${adminLightningQuizOrgTable(
+          ['大區', '應答人數', '參與人數', '參與率', '全部答完', '答對率'],
+          regionSummary.rows.map(row => `<tr>
+            <td>${escapeHTML(row.greatRegion || UNASSIGNED_REGION_LABEL)}</td>
+            ${adminLightningQuizWeekOrgCells(row)}
+          </tr>`).join('')
+            + `<tr class="admin-lightning-quiz-stats-total"><td>全教會合計</td>${adminLightningQuizWeekOrgCells(regionSummary.total)}</tr>`
+        )}
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="牧區分析">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>牧區分析</h5>
+          ${adminLightningQuizExportButton('data-lq-week-export="zone"')}
+        </div>
+        ${adminLightningQuizOrgTable(
+          ['大區', '牧區', '應答人數', '參與人數', '參與率', '全部答完', '答對率'],
+          sortZoneRowsByRegion(zoneSummary.rows).map(row => `<tr>
+            <td>${escapeHTML(row.greatRegion || UNASSIGNED_REGION_LABEL)}</td>
+            <td>${escapeHTML(row.pastoralZone || UNASSIGNED_ZONE_LABEL)}</td>
+            ${adminLightningQuizWeekOrgCells(row)}
+          </tr>`).join('')
+            + `<tr class="admin-lightning-quiz-stats-total"><td colspan="2">全教會合計</td>${adminLightningQuizWeekOrgCells(zoneSummary.total)}</tr>`
+        )}
+      </section>
+    `;
+    if (typeof hydrateIcons === 'function') hydrateIcons(body);
+
+    body.querySelectorAll('[data-lq-week-question]').forEach(button => {
+      button.addEventListener('click', () => {
+        const question = questions.find(item => String(item.questionId) === button.dataset.lqWeekQuestion);
+        if (question) void renderAdminLightningQuizDetail(detailHost, question);
+      });
+    });
+    body.querySelectorAll('[data-lq-week-export]').forEach(button => {
+      button.addEventListener('click', () => {
+        const kind = button.dataset.lqWeekExport;
+        if (kind === 'members') downloadAdminLightningQuizCsv(buildWeekMembersCsv(week), `快問快答_週名單_${fileSuffix}.csv`);
+        else if (kind === 'region') downloadAdminLightningQuizCsv(buildWeekRegionCsv(regionSummary), `快問快答_週大區分析_${fileSuffix}.csv`);
+        else if (kind === 'zone') downloadAdminLightningQuizCsv(buildWeekZoneCsv(zoneSummary), `快問快答_週牧區分析_${fileSuffix}.csv`);
+      });
+    });
+  };
+
+  panel.querySelector('[data-lq-week-prev]').addEventListener('click', () => { weekStart = addDays(weekStart, -7); void load(); });
+  nextButton.addEventListener('click', () => { if (weekStart < thisWeek) { weekStart = addDays(weekStart, 7); void load(); } });
+  panel.querySelector('[data-lq-week-today]').addEventListener('click', () => { weekStart = thisWeek; void load(); });
+  return load();
 }
 
 export async function renderAdminLightningQuizStats() {
@@ -2224,10 +2387,6 @@ export async function renderAdminLightningQuizStats() {
   }
   const days = Array.isArray(result.data?.days) ? result.data.days : [];
   destroyAdminLightningQuizTrendCharts();
-  if (!days.length) {
-    host.innerHTML = '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>';
-    return;
-  }
 
   // 一個活動一列。同一天可能有已下架的原活動與另存後發布的新活動兩列——
   // 這是預期行為（原活動的結果保留當歷史），不是重複資料。
@@ -2262,23 +2421,26 @@ export async function renderAdminLightningQuizStats() {
 
   host.innerHTML = `
     <div class="capsule-segmented-control segment-track admin-lightning-quiz-stats-tabs" role="tablist" aria-label="統計檢視">
-      <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="daily">逐日統計</button>
-      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">歷史趨勢</button>
+      <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="week">每週統計</button>
+      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">週趨勢</button>
+      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="daily">逐日明細</button>
     </div>
-    <div data-lq-stats-panel="daily">
-      <div class="admin-lightning-quiz-stats-table-wrap">
+    <div data-lq-stats-panel="week" class="admin-lightning-quiz-week"></div>
+    <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
+    <div data-lq-stats-panel="daily" class="hidden">
+      ${days.length ? `<div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
           <thead><tr><th>日期</th><th>完成／應答（參與率）</th><th>參與率成長</th><th>答對人數</th><th>平均耗時</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
-      </div>
+      </div>` : '<div class="admin-user-directory__empty">目前還沒有任何題目的作答紀錄。</div>'}
       <div id="admin-lightning-quiz-detail" class="admin-lightning-quiz-detail hidden"></div>
       <div id="admin-lightning-quiz-leaderboard" class="admin-lightning-quiz-leaderboard hidden"></div>
     </div>
-    <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
   `;
   if (typeof hydrateIcons === 'function') hydrateIcons(host);
 
+  void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'));
   const trendPanel = host.querySelector('[data-lq-stats-panel="trend"]');
   let drawTrend = null;
   host.querySelectorAll('[data-lq-stats-tab]').forEach(tab => {
@@ -2292,10 +2454,9 @@ export async function renderAdminLightningQuizStats() {
       host.querySelectorAll('[data-lq-stats-panel]').forEach(panel => {
         panel.classList.toggle('hidden', panel.dataset.lqStatsPanel !== target);
       });
-      // 歷史趨勢第一次切進來才建圖表（Chart.js 也是這時候才載入）
+      // 週趨勢第一次切進來才載資料、建圖表（Chart.js 也是這時候才載入）
       if (target === 'trend' && !drawTrend) {
-        drawTrend = renderAdminLightningQuizTrendPanel(trendPanel, days);
-        void drawTrend();
+        drawTrend = renderAdminLightningQuizTrendPanel(trendPanel).then(draw => draw && draw());
       }
     });
   });

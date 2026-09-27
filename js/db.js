@@ -6483,6 +6483,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_locked: "這個活動已經開始或已有人作答，不能取消發布；可以改用下架。",
     lightning_quiz_invalid_status_transition: "目前的狀態不能這樣切換，請重新整理後再試。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
+    lightning_quiz_week_required: "請選擇要看的週。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -6575,6 +6576,20 @@ db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
     p_from: fromDate || null,
     p_to: toDate || null
   });
+};
+
+// 週統計（#311）：每週一列，給週趨勢圖。
+db.adminGetLightningQuizWeeks = async function(fromDate, toDate) {
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_weeks", {
+    p_from: fromDate || null,
+    p_to: toDate || null
+  });
+};
+
+// 某一週（週一到週日）的逐人彙總與應答人數；彙總在前端做（lightning-quiz-analytics.mjs）。
+db.adminGetLightningQuizWeek = async function(weekStart) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_week", { p_week_start: weekStart });
 };
 
 db.adminGetLightningQuizLeaderboard = async function(questionId, limit) {

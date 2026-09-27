@@ -11643,6 +11643,14 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   flex-wrap: wrap;
   margin-bottom: 1rem;
 }
+.admin-lightning-quiz-week__toolbar {
+  align-items: center;
+}
+.admin-lightning-quiz-week__metrics {
+  justify-content: flex-start;
+  gap: 0.5rem 1.25rem;
+  margin-bottom: 1rem;
+}
 .admin-lightning-quiz-trend__toolbar label {
   display: flex;
   flex-direction: column;

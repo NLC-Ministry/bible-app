@@ -3,8 +3,6 @@ import { readFileSync } from "node:fs";
 import {
   buildOverviewCsv,
   buildRegionCsv,
-  buildTrendCsv,
-  buildTrendSeries,
   buildZoneCsv,
   filterAttempts,
   formatElapsedSeconds,
@@ -78,22 +76,6 @@ describe("summarizeByRegion", () => {
   });
 });
 
-describe("buildTrendSeries", () => {
-  const days = [
-    { questionId: "q2", status: "published", riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 },
-    { questionId: "q1", status: "archived", riseDate: "2026-09-23", completedCount: 3, correctCount: 1, totalEligible: 100, avgElapsedMs: 5000 },
-    { questionId: "q1b", status: "published", riseDate: "2026-09-23", completedCount: 20, correctCount: 0, totalEligible: 100, avgElapsedMs: null }
-  ];
-
-  it("keeps one point per day (published activity only, archived original dropped), sorted by date", () => {
-    const series = buildTrendSeries(days);
-    expect(series.map(point => point.riseDate)).toEqual(["2026-09-23", "2026-09-24"]);
-    expect(series[0]).toMatchObject({ questionId: "q1b", completed: 20, correct: 0, correctRate: 0, avgElapsedMs: null });
-    expect(series[1].participationRate).toBeCloseTo(0.3);
-    expect(series[1].correctRate).toBeCloseTo(0.5);
-  });
-});
-
 describe("filterAttempts", () => {
   it("filters by status and searches name / zone / group", () => {
     expect(filterAttempts(results.attempts, { status: "correct" })).toHaveLength(3);
@@ -124,14 +106,6 @@ describe("CSV builders", () => {
     const region = lines(buildRegionCsv(summarizeByRegion(results), EXPORTED_AT));
     expect(region[1]).toBe('"大區","應答人數","作答人數","參與率","答對人數","答對率"');
     expect(region.at(-1)).toBe('"全教會合計","20","4","20.0%","3","75.0%"');
-  });
-
-  it("trend CSV lists each day's participation and answer rate", () => {
-    const series = buildTrendSeries([
-      { riseDate: "2026-09-24", completedCount: 30, correctCount: 15, totalEligible: 100, avgElapsedMs: 6000 }
-    ]);
-    const csv = lines(buildTrendCsv(series, EXPORTED_AT));
-    expect(csv[2]).toBe('"2026-09-24","30","100","30.0%","15","50.0%","6.0"');
   });
 
   it("formats elapsed time in seconds with one decimal", () => {

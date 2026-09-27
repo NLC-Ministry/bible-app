@@ -421,6 +421,8 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_set_lightning_quiz_status",
   "admin_delete_lightning_quiz_question",
   "admin_get_lightning_quiz_trend",
+  "admin_get_lightning_quiz_weeks",
+  "admin_get_lightning_quiz_week",
   "admin_get_lightning_quiz_leaderboard",
   "admin_get_lightning_quiz_results",
   "admin_clear_lightning_quiz_attempts"
