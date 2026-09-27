@@ -74,13 +74,79 @@ function deepEqual(a, b) {
   return false;
 }
 
-export function shuffleMatchingItems(items, random = Math.random) {
+export function shuffleItems(items, random = Math.random) {
   const shuffled = Array.isArray(items) ? [...items] : [];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
   }
   return shuffled;
+}
+
+/**
+ * 同一個 seed 永遠產生同一串亂數（FNV-1a 雜湊 + mulberry32），讓同一位會友
+ * 重新整理／續答時選項順序不會跳動；不同會友 seed 不同，順序也就不同。
+ * seed 為空時退回 Math.random（後台預覽每次看不同排列）。
+ */
+export function createSeededRandom(seed) {
+  if (seed == null || seed === "") return Math.random;
+  let state = 0x811c9dc5;
+  for (const character of String(seed)) {
+    state ^= character.codePointAt(0);
+    state = Math.imul(state, 0x01000193);
+  }
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 洗幾次、留「送分程度」最低的那一種；score 為 0 就提早收工。
+function pickLeastGivenAway(length, random, score, attempts = 50) {
+  const indices = Array.from({ length }, (_, index) => index);
+  let best = null;
+  let bestScore = Infinity;
+  for (let attempt = 0; attempt < attempts && bestScore > 0; attempt += 1) {
+    const candidate = shuffleItems(indices, random);
+    const candidateScore = score(candidate);
+    if (candidateScore < bestScore) {
+      best = candidate;
+      bestScore = candidateScore;
+    }
+  }
+  return best || indices;
+}
+
+// 排序題：payload.items 是照正解順序存的（三個出題來源都是 answerKey = items.map(id)）。
+// 一開始的排列不能有任何項目已經在正確位置，其次盡量少出現「前後兩項已經接對」。
+export function arrangeOrderingItems(items, random = Math.random) {
+  const list = Array.isArray(items) ? items : [];
+  const order = pickLeastGivenAway(list.length, random, permutation => {
+    let fixed = 0;
+    let adjacent = 0;
+    permutation.forEach((original, position) => {
+      if (original === position) fixed += 1;
+      if (position > 0 && permutation[position - 1] + 1 === original) adjacent += 1;
+    });
+    return fixed * list.length + adjacent;
+  });
+  return order.map(index => list[index]);
+}
+
+// 配對題：payload 慣例是 left[i] 配 right[i]。左欄照常打亂，右欄再排成
+// 盡量沒有任何一列「左右兩格剛好是一對」。
+export function arrangeMatchingColumns(left, right, random = Math.random) {
+  const leftList = Array.isArray(left) ? left : [];
+  const rightList = Array.isArray(right) ? right : [];
+  const leftOrder = shuffleItems(leftList.map((_, index) => index), random);
+  const rightOrder = pickLeastGivenAway(rightList.length, random, permutation =>
+    permutation.filter((original, row) => original === leftOrder[row]).length);
+  return {
+    left: leftOrder.map(index => leftList[index]),
+    right: rightOrder.map(index => rightList[index])
+  };
 }
 
 /**
@@ -163,19 +229,45 @@ export function isAnswerCorrect(type, answerKey, response) {
   return false;
 }
 
-function renderOptionsList(id, options, multiple) {
+// 顯示順序打亂，但 value 仍是原本的選項索引——作答格式、判分、檢討畫面都不受影響。
+function renderOptionsList(id, options, multiple, random) {
   const inputType = multiple ? "checkbox" : "radio";
   const name = multiple ? `q-${id}[]` : `q-${id}`;
+  const indexed = (options || []).map((option, optionIndex) => ({ option, optionIndex }));
   return `<div class="daily-quiz-options">
-    ${(options || []).map((option, optionIndex) => `
+    ${shuffleItems(indexed, random).map(({ option, optionIndex }) => `
       <label><input type="${inputType}" name="${escapeHtml(name)}" value="${optionIndex}"><span>${escapeHtml(option)}</span></label>
     `).join("")}
   </div>`;
 }
 
-/** 渲染一題的 <fieldset> HTML；不含送出按鈕（由呼叫端的表單負責）。 */
-export function renderQuestionFieldsetHtml(question, index) {
+// 排序題沿用大測驗「事件排序」的積木（index.css 的 .exam-order-*）：待排序區打亂、
+// 作答區一開始是空的；點一下加入作答區，也可以拖進作答區指定位置、在作答區內
+// 拖動換位、拖回待排序區或按 ✕ 移回。
+const ORDER_EMPTY_ANSWER = "拖曳項目到這裡排序";
+const ORDER_EMPTY_POOL = "已全部放入作答區";
+
+function orderChipHtml(item, answerIndex) {
+  const inAnswer = answerIndex != null;
+  return `<div class="exam-order-chip" data-item-id="${escapeHtml(item.id)}" data-pool-index="${item.poolIndex}">
+    ${inAnswer ? `<span class="exam-order-num">${answerIndex + 1}</span>` : '<span class="exam-order-chip__grip">⠿</span>'}
+    <span class="exam-order-chip__text">${escapeHtml(item.text)}</span>
+    ${inAnswer ? '<button type="button" class="exam-chip-remove" aria-label="移回待排序">✕</button>' : ""}
+  </div>`;
+}
+
+function orderZoneHtml(chipsHtml, emptyText) {
+  return chipsHtml.length ? chipsHtml.join("") : `<span class="exam-order-empty">${emptyText}</span>`;
+}
+
+/**
+ * 渲染一題的 <fieldset> HTML；不含送出按鈕（由呼叫端的表單負責）。
+ * options.shuffleSeed：同一個 seed（通常是會友 id + 當天測驗）重畫時選項順序不變；
+ * 不給則每次隨機。
+ */
+export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}) {
   const { id, type, payload } = question;
+  const random = createSeededRandom(shuffleSeed ? `${shuffleSeed}:${id}` : null);
   const legend = `${index + 1}. ${escapeHtml(payload.stem)}`;
   const body = (() => {
     switch (type) {
@@ -185,34 +277,36 @@ export function renderQuestionFieldsetHtml(question, index) {
           <label><input type="radio" name="q-${escapeHtml(id)}" value="false"><span>錯</span></label>
         </div>`;
       case "single":
-        return renderOptionsList(id, payload.options, false);
+        return renderOptionsList(id, payload.options, false, random);
       case "multiple":
-        return renderOptionsList(id, payload.options, true);
-      case "matching":
+        return renderOptionsList(id, payload.options, true, random);
+      case "matching": {
         // 連線用的 SVG 不寫死在樣板裡，改由 bindQuestionFieldset 用
         // document.createElementNS 動態插入（跟 exam.js 連連看同一招）——
         // 設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
         // 左欄用 CSS flex-direction: row-reverse 把連線點翻到右側（貼著中間
         // 欄間），跟大測驗連連看（.exam-match-col--left .exam-match-node）同一
         // 招——這樣連線點永遠在兩欄的內側，線不會畫過自己這顆按鈕的文字上面。
+        const columns = arrangeMatchingColumns(payload.left, payload.right, random);
         return `<div class="daily-quiz-matching" data-matching-root>
           <div class="daily-quiz-matching-col" data-side="left">
-            ${shuffleMatchingItems(payload.left).map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
+            ${columns.left.map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
           </div>
           <div class="daily-quiz-matching-col" data-side="right">
-            ${shuffleMatchingItems(payload.right).map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
+            ${columns.right.map(item => `<button type="button" class="daily-quiz-match-item" data-right-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
           </div>
         </div>`;
-      case "ordering":
-        return `<ol class="daily-quiz-ordering-list" data-ordering-root>
-          ${(payload.items || []).map(item => `<li data-item-id="${escapeHtml(item.id)}">
-            <span>${escapeHtml(item.text)}</span>
-            <span class="daily-quiz-ordering-controls">
-              <button type="button" data-order-up aria-label="上移">${"▲"}</button>
-              <button type="button" data-order-down aria-label="下移">${"▼"}</button>
-            </span>
-          </li>`).join("")}
-        </ol>`;
+      }
+      case "ordering": {
+        const pool = arrangeOrderingItems(payload.items, random)
+          .map((item, poolIndex) => ({ id: item.id, text: item.text, poolIndex }));
+        return `<div class="daily-quiz-ordering" data-ordering-root>
+          <p class="exam-order-hint">把下方項目拖進「作答區」，並在作答區內拖動調整順序（點一下也可加入）。</p>
+          <div class="exam-order-answer" data-order-answer>${orderZoneHtml([], ORDER_EMPTY_ANSWER)}</div>
+          <p class="exam-order-sub">待排序項目</p>
+          <div class="exam-order-pool" data-order-pool>${orderZoneHtml(pool.map(item => orderChipHtml(item)), ORDER_EMPTY_POOL)}</div>
+        </div>`;
+      }
       default:
         return "";
     }
@@ -249,7 +343,7 @@ export function readResponseFromFieldset(fieldsetEl, type) {
       return pairs;
     }
     case "ordering": {
-      return Array.from(fieldsetEl.querySelectorAll("[data-item-id]")).map(li => li.getAttribute("data-item-id"));
+      return Array.from(fieldsetEl.querySelectorAll("[data-order-answer] [data-item-id]")).map(chip => chip.getAttribute("data-item-id"));
     }
     default:
       return null;
@@ -349,24 +443,108 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
   }
 
   if (type === "ordering") {
-    const onClick = event => {
-      const li = event.target.closest("li[data-item-id]");
-      if (!li) return;
-      if (event.target.closest("[data-order-up]")) {
-        const prev = li.previousElementSibling;
-        if (prev) li.parentElement.insertBefore(li, prev);
-        else return;
-      } else if (event.target.closest("[data-order-down]")) {
-        const next = li.nextElementSibling;
-        if (next) li.parentElement.insertBefore(next, li);
-        else return;
-      } else {
-        return;
-      }
+    const root = fieldsetEl.querySelector("[data-ordering-root]");
+    const answerZone = root?.querySelector("[data-order-answer]");
+    const poolZone = root?.querySelector("[data-order-pool]");
+    if (!root || !answerZone || !poolZone) return () => {};
+
+    const items = new Map(Array.from(poolZone.querySelectorAll("[data-item-id]")).map(chip => {
+      const id = chip.getAttribute("data-item-id");
+      return [id, {
+        id,
+        text: chip.querySelector(".exam-order-chip__text")?.textContent ?? "",
+        poolIndex: Number(chip.getAttribute("data-pool-index"))
+      }];
+    }));
+    const placed = [];
+    const repaint = () => {
+      answerZone.innerHTML = orderZoneHtml(placed.map((id, k) => orderChipHtml(items.get(id), k)), ORDER_EMPTY_ANSWER);
+      const pool = [...items.values()].filter(item => !placed.includes(item.id)).sort((a, b) => a.poolIndex - b.poolIndex);
+      poolZone.innerHTML = orderZoneHtml(pool.map(item => orderChipHtml(item)), ORDER_EMPTY_POOL);
       emit();
     };
-    fieldsetEl.addEventListener("click", onClick);
-    return () => fieldsetEl.removeEventListener("click", onClick);
+
+    let drag = null;
+    const zoneAt = (x, y) => document.elementFromPoint?.(x, y)?.closest("[data-order-answer], [data-order-pool]") || null;
+    const indexAt = (zone, y, skipId) => {
+      const chips = Array.from(zone.querySelectorAll("[data-item-id]")).filter(chip => chip.getAttribute("data-item-id") !== skipId);
+      const index = chips.findIndex(chip => {
+        const rect = chip.getBoundingClientRect();
+        return y < rect.top + rect.height / 2;
+      });
+      return index === -1 ? chips.length : index;
+    };
+    const onPointerDown = event => {
+      const chip = event.target.closest("[data-item-id]");
+      if (!chip || event.target.closest(".exam-chip-remove")) return;
+      event.preventDefault();
+      const rect = chip.getBoundingClientRect();
+      drag = {
+        chip, id: chip.getAttribute("data-item-id"), fromPool: !!chip.closest("[data-order-pool]"),
+        startX: event.clientX, startY: event.clientY, dx: event.clientX - rect.left, dy: event.clientY - rect.top,
+        width: rect.width, moved: false, ghost: null
+      };
+      try { chip.setPointerCapture(event.pointerId); } catch (_) {}
+    };
+    const onPointerMove = event => {
+      if (!drag) return;
+      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 6) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        const ghost = drag.chip.cloneNode(true);
+        ghost.removeAttribute("data-item-id");
+        ghost.classList.add("is-ghost");
+        ghost.style.width = `${drag.width}px`;
+        document.body.appendChild(ghost);
+        drag.ghost = ghost;
+        drag.chip.classList.add("is-placeholder");
+      }
+      drag.ghost.style.left = `${event.clientX - drag.dx}px`;
+      drag.ghost.style.top = `${event.clientY - drag.dy}px`;
+    };
+    const onPointerEnd = event => {
+      if (!drag) return;
+      const { id, fromPool, moved, ghost } = drag;
+      drag = null;
+      ghost?.remove();
+      const current = placed.indexOf(id);
+      if (!moved) {
+        if (!fromPool) return;
+        placed.push(id);
+      } else {
+        const zone = zoneAt(event.clientX, event.clientY);
+        if (zone === answerZone) {
+          const index = indexAt(zone, event.clientY, id);
+          if (current !== -1) placed.splice(current, 1);
+          placed.splice(index, 0, id);
+        } else if (zone === poolZone && current !== -1) {
+          placed.splice(current, 1);
+        }
+      }
+      repaint();
+    };
+    const onClick = event => {
+      const removeButton = event.target.closest(".exam-chip-remove");
+      if (!removeButton) return;
+      const index = placed.indexOf(removeButton.closest("[data-item-id]")?.getAttribute("data-item-id"));
+      if (index === -1) return;
+      placed.splice(index, 1);
+      repaint();
+    };
+    root.addEventListener("pointerdown", onPointerDown);
+    root.addEventListener("pointermove", onPointerMove);
+    root.addEventListener("pointerup", onPointerEnd);
+    root.addEventListener("pointercancel", onPointerEnd);
+    root.addEventListener("click", onClick);
+    return () => {
+      drag?.ghost?.remove();
+      drag = null;
+      root.removeEventListener("pointerdown", onPointerDown);
+      root.removeEventListener("pointermove", onPointerMove);
+      root.removeEventListener("pointerup", onPointerEnd);
+      root.removeEventListener("pointercancel", onPointerEnd);
+      root.removeEventListener("click", onClick);
+    };
   }
 
   return () => {};
