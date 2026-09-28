@@ -315,7 +315,7 @@ export async function renderExamPanel(root) {
     examAdminPaperId = res.data?.id || null;
     rerender();
   });
-  // ── 單一試卷（#257）：每份卷就是一份試卷，草稿時可編輯、可演練，沒有測試版／正式版。
+  // ── 單一試卷（#257）：每份卷就是一份試卷，準備中、已排程可編輯、可試作，沒有測試版／正式版。
   const examList = papers;
   const shownPaper = paper;
 
@@ -360,7 +360,7 @@ export async function renderExamPanel(root) {
 
   // ── 分頁固定三個（#301）：題目／設定／作答與成績，不會再出現又消失 ──
   // 不能改的時候欄位變成唯讀，上面寫一句原因。作答與成績裡的小分頁依階段決定：
-  // 準備中、已排程也開放批改、統計，讓管理員演練完整流程（資料在開放作答時清掉）。
+  // 試作（#302）不算進統計、批改：準備中、已排程的「作答與成績」只顯示一句話。
   const showGrade = hasShortSection && !resultsPublished;
   const showAssign = hasShortSection && !resultsPublished;
   const showPractice = !canEditPaper;
@@ -400,10 +400,10 @@ export async function renderExamPanel(root) {
   const examUrl = `exam.html?paper=${encodeURIComponent(paper.id)}&popup=1`;
   const tools = [];
   if (isDraft || isScheduled) {
-    tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>${examInfoIcon("實際作答一次：送出、看分數、批改、看統計都跟正式測驗一樣。只有系統管理員／牧者能作答，會友看不到。演練作答會在開放作答時自動清除，所以開放後你也能再正式作答一次。")}`);
-    tools.push(`<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`);
+    // 「試作」合併原本的演練作答與預覽試卷（#302）：實際作答一次，送出就看得到分數與對錯
+    tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">試作</a>${examInfoIcon("用會友看到的畫面實際作答一次，送出後馬上看得到分數與對錯。試作只有你自己看得到，不算進成績、統計、首頁卡片；開放作答時會自動清除，所以開放後你也能再正式作答一次。")}`);
     if (rehearsalCount > 0) {
-      tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon("清掉這份試卷上的所有演練作答，可以重新演練。開放作答時也會自動清除。")}`);
+      tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除所有試作（${rehearsalCount}）</button>${examInfoIcon("清掉這份試卷上所有人的試作。開放作答時也會自動清除。")}`);
     }
   } else if (stage === "open") {
     tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
@@ -422,7 +422,7 @@ export async function renderExamPanel(root) {
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
-      <p><strong>${esc(paper.title)}</strong>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}</p>
+      <p><strong>${esc(paper.title)}</strong>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">試作 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}</p>
       ${stageBar}
       <p class="exam-admin__next">${esc(nextStep)}</p>
       ${showChecklist ? examChecklistHtml(checklist) : ""}
@@ -446,7 +446,9 @@ export async function renderExamPanel(root) {
 
   // 作答與成績：統計／簡答批改／批改指派／複習紀錄。還沒有作答時只寫一句話。
   const renderResults = async (sub) => {
-    if (attemptCount === 0) {
+    // 試作不算（#302）：只看真正的作答
+    const realAttemptCount = Math.max(0, attemptCount - (paperRes.data?.testAttemptCount || 0));
+    if (realAttemptCount === 0) {
       sub.innerHTML = `<div class="admin-user-directory__empty">${canEditPaper || stage === "open"
         ? "開放作答後會出現在這裡。"
         : "這份測驗沒有人作答。"}</div>`;
@@ -549,9 +551,9 @@ export async function renderExamPanel(root) {
       return;
     }
     if (act === "close" && !confirm("提前結束後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。關閉後會自動計分；之後修正正解，分數也會自動重新計算。確定提前結束？")) return;
-    if (act === "publish" && !confirm(`排程後，會友首頁會立刻出現這份測驗的卡片，開放時間到了就能作答。開放作答前仍可修改題目內容。${rehearsalCount ? `\n這份試卷上的 ${rehearsalCount} 筆演練作答會一併清除。` : ""}確定排程？`)) return;
+    if (act === "publish" && !confirm(`排程後，會友首頁會立刻出現這份測驗的卡片，開放時間到了就能作答。開放作答前仍可修改題目內容。${rehearsalCount ? `\n這份試卷上的 ${rehearsalCount} 筆試作會一併清除。` : ""}確定排程？`)) return;
     if (act === "reopen" && !confirm("取消排程後，會友首頁的卡片會消失，試卷回到準備中。確定取消排程？")) return;
-    if (act === "reset" && !confirm(`確定清除這份試卷上的 ${rehearsalCount} 筆演練作答？（無法復原）`)) return;
+    if (act === "reset" && !confirm(`確定清除這份試卷上的 ${rehearsalCount} 筆試作？（無法復原）`)) return;
     b.disabled = true;
     let res;
     if (act === "publish") res = await db.publishExam(paper.id);
@@ -563,7 +565,7 @@ export async function renderExamPanel(root) {
     toast(
       act === "publish" ? "已排程，會友首頁已出現這份測驗的卡片"
       : act === "close" ? "已提前結束，已收卷並計分"
-      : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆演練作答`
+      : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆試作`
       : "已取消排程，首頁卡片已移除"
     );
     rerender();
@@ -2072,7 +2074,7 @@ class ExamRunner {
     this.openState = d.state;
     if (this.titleEl && this.paper) {
       this.titleEl.textContent = this.paper.title
-        + (isRehearsalPaper(this.paper) ? "（演練）" : "");
+        + (isRehearsalPaper(this.paper) ? "（試作）" : "");
     }
 
     // 後台預覽：唯讀呈現整卷題目，不建 attempt、不倒數、不送出、不跳結果畫面
@@ -2380,7 +2382,7 @@ class ExamRunner {
 
     this.el.innerHTML = `
       <div class="glass-card exam-pledge">
-        <h3>✅ ${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? "（演練）" : ""}｜測驗宣示</h3>
+        <h3>✅ ${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? "（試作）" : ""}｜測驗宣示</h3>
         <p class="exam-pledge__open">${esc(pledge.openText || "")}</p>
         <ol class="exam-pledge__rules">${rules.map((r) => `<li>${esc(r)}</li>`).join("")}</ol>
         <div class="exam-pledge__consent">
@@ -3096,7 +3098,7 @@ class ExamRunner {
     const showAuto = graded && auto !== "—" && auto !== null && auto !== undefined;
     const staffPreview = d.staffPreview === true;   // 管理員在「公布成績」前提前看到的預覽
     const isPractice = d.attemptKind === "practice" || this.attemptKind === "practice";
-    // 準備中、已排程的卷上的作答是演練（#258、#298）：不計成績、開放作答時自動清除，可以重新演練
+    // 準備中、已排程的卷上的作答是試作（#258、#298、#302）：不計成績、開放作答時自動清除，可以重新試作
     const isRehearsal = !isPractice && isRehearsalPaper(this.paper);
 
     // ── PR 值（僅正式卷、已批改、已公布才有；不含任何隊友分數）──
@@ -3154,9 +3156,9 @@ class ExamRunner {
 
     this.el.innerHTML = `
       <div class="glass-card" style="padding:1.4rem 1.5rem;">
-        <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? '　<span class="stat-badge stat-badge--neutral">演練</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
+        <h3 style="margin:0 0 .5rem;">${esc(this.paper.title)}${isRehearsalPaper(this.paper) ? '　<span class="stat-badge stat-badge--neutral">試作</span>' : ""}${isPractice ? '　<span class="stat-badge stat-badge--warning">複習</span>' : ""}</h3>
         <div class="exam-result__banner">
-          ${isRehearsal ? "這是<strong>演練作答</strong>，不列入成績，會友看不到；開放作答時會自動清除。" : isPractice ? "複習已鎖定，本次不列入正式成績。" : "正式作答已送出，答案已鎖定。"}<br>
+          ${isRehearsal ? "這是<strong>試作</strong>，不列入成績，只有你自己看得到；開放作答時會自動清除。" : isPractice ? "複習已鎖定，本次不列入正式成績。" : "正式作答已送出，答案已鎖定。"}<br>
           ${showAuto
             ? `${esc(autoLabel)}：<strong>${auto}</strong> 分${hasShort
                 ? `　｜　簡答題：<strong>${d.manualScore ?? "—"}</strong> 分　｜　總分：<strong>${total ?? "—"}</strong> 分`
@@ -3186,13 +3188,13 @@ class ExamRunner {
             <div class="exam-result__list">${answers.map((a) => examResultRow(a, false)).join("")}</div>
           </details>`}
         <div class="exam-admin__actions" style="margin-top:1rem;">
-          ${isRehearsal ? '<button type="button" class="primary-btn" id="exam-result-rehearse-again">重新演練</button>' : ""}
+          ${isRehearsal ? '<button type="button" class="primary-btn" id="exam-result-rehearse-again">重新試作</button>' : ""}
           <button type="button" class="secondary-btn" id="exam-result-close">關閉</button>
         </div>
       </div>`;
     this.el.querySelector("#exam-result-close")?.addEventListener("click", () => this.destroy());
     this.el.querySelector("#exam-result-rehearse-again")?.addEventListener("click", async (e) => {
-      if (!confirm("清掉你這次的演練作答，重新演練一次？（只會清掉你自己的演練，不影響其他人）")) return;
+      if (!confirm("清掉你這次的試作，重新試作一次？（只會清掉你自己的試作，不影響其他人）")) return;
       e.target.disabled = true;
       const r = await db.resetMyExamRehearsal(this.paper.id);
       if (!r.success) { e.target.disabled = false; toast(r.message || "清除失敗"); return; }

@@ -101,9 +101,9 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
     expect(exam).not.toMatch(/.modes*[!=]==s*"test"/);
   });
 
-  it("offers a rehearsal link while draft and clears rehearsal attempts from the more menu", () => {
-    expect(exam).toContain(">演練作答</a>");
-    expect(exam).toContain('data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>');
+  it("offers a 試作 link before opening and can clear all trials (#302)", () => {
+    expect(exam).toContain(">試作</a>");
+    expect(exam).toContain('data-exam-act="reset">清除所有試作（${rehearsalCount}）</button>');
   });
 
   it("lets admins unschedule only before the paper opens (#298)", () => {
@@ -112,8 +112,8 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
     expect(exam).not.toContain("canRevert");
   });
 
-  it("warns that publishing clears rehearsal attempts", () => {
-    expect(exam).toContain("筆演練作答會一併清除。");
+  it("warns that scheduling clears trial attempts", () => {
+    expect(exam).toContain("筆試作會一併清除。");
   });
 
   it("labels preparing and scheduled papers as rehearsal in the exam runner (#298)", () => {

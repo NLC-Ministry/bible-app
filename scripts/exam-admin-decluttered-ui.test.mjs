@@ -74,7 +74,7 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
 });
 
 describe("主畫面只留當下真正要做的事：一顆主按鈕＋直接列出的次要工具，沒有「⋯ 更多」（#300）", () => {
-  it("答案詳解／複習開關放在「作答規則」列，清除演練作答放在次要工具（自動評分開關已拿掉，#299）", () => {
+  it("答案詳解／複習開關放在「作答規則」列，清除所有試作放在次要工具（自動評分開關已拿掉，#299）", () => {
     expect(exam).not.toContain('data-exam-act="autoscore"');
     expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>');
     expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>');
@@ -84,12 +84,12 @@ describe("主畫面只留當下真正要做的事：一顆主按鈕＋直接列�
     expect(exam).toContain('tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">');
   });
 
-  it("主按鈕：排程／取消排程／提前結束／公布成績；演練作答、預覽試卷、正式作答是次要工具", () => {
+  it("主按鈕：排程／取消排程／提前結束／公布成績；試作、正式作答是次要工具（#302 起試作取代演練作答與預覽試卷）", () => {
     expect(exam).toContain('mainAction = `<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon(');
     expect(exam).toContain(`mainAction = '<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>';`);
     expect(exam).toContain(`mainAction = '<button type="button" class="secondary-btn" data-exam-act="close">提前結束</button>';`);
     expect(exam).toContain('mainAction = `<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
-    expect(exam).toContain('tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>');
+    expect(exam).toContain('tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">試作</a>');
   });
 
   it("模板：主按鈕一列、次要工具一列、作答規則一列；沒有收合的 details", () => {
@@ -127,13 +127,13 @@ describe("說明改成小圖示點擊彈出：不再另外開分頁，需要才�
     expect(exam).toContain('if (e.key === "Escape") _closeExamInfoPopover();');
   });
 
-  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：演練作答、首頁卡片、答案詳解、複習、清除演練、公布成績", () => {
+  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：試作、首頁卡片、答案詳解、複習、清除試作、公布成績", () => {
     expect(exam).not.toContain('examInfoIcon("測試版與正式版是兩份獨立的卷。');
-    expect(exam).toContain('>演練作答</a>${examInfoIcon(');
+    expect(exam).toContain('>試作</a>${examInfoIcon(');
     expect(exam).toContain('<legend>首頁卡片${examInfoIcon(');
     expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon(');
-    expect(exam).toContain('data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon(');
+    expect(exam).toContain('data-exam-act="reset">清除所有試作（${rehearsalCount}）</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
   });
 

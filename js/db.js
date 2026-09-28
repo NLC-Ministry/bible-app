@@ -3746,7 +3746,7 @@ const db = {
       exam_announcement_locked: "測驗已結束，首頁卡片文字不能再修改。",
       exam_reset_live_forbidden: "開放作答後不能清除作答紀錄。",
       exam_use_publish: "準備中的試卷請用「排程」。",
-      exam_rehearsal_draft_only: "已經開放作答，不能再演練了。",
+      exam_rehearsal_draft_only: "已經開放作答，不能再試作了。",
       exam_window_invalid: "請先設定正確的開放起訖時間。",
       exam_section_count_mismatch: "各大題題數與設定不符。",
       exam_answer_key_incomplete: "還有題目未填答案。",
@@ -3879,7 +3879,7 @@ const db = {
   async resetExamAttempts(paperId) {
     return this._callExamRpc("exam_reset_attempts", { p_paper_id: paperId });
   },
-  // 只清掉自己在草稿卷上的演練作答，可以馬上重新演練（#258）
+  // 只清掉自己的試作，可以馬上重新試作（#258、#302）
   async resetMyExamRehearsal(paperId) {
     return this._callExamRpc("exam_reset_my_rehearsal", { p_paper_id: paperId });
   },
