@@ -84,7 +84,8 @@ describe("clients: push-to-live and tester list are gone", () => {
   it("db.js drops the methods and explains the new errors", () => {
     expect(db).not.toMatch(/pushExamToLive\(|ExamTester\(|getExamPaperTesters\(/);
     expect(db).toContain("exam_use_publish:");
-    expect(db).toContain("exam_revert_has_attempts:");
+    // #298：撤回改成「取消排程」，只在開放前可用
+    expect(db).toContain("exam_already_open:");
   });
 });
 
@@ -100,22 +101,23 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
     expect(exam).not.toMatch(/.modes*[!=]==s*"test"/);
   });
 
-  it("offers a rehearsal link while draft and clears rehearsal attempts from the more menu", () => {
-    expect(exam).toContain(">演練作答</a>");
-    expect(exam).toContain('data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>');
+  it("offers a 試作 link before opening and can clear all trials (#302)", () => {
+    expect(exam).toContain(">試作</a>");
+    expect(exam).toContain('data-exam-act="reset">清除所有試作（${rehearsalCount}）</button>');
   });
 
-  it("lets admins revert to draft only when nobody has attempted", () => {
-    expect(exam).toContain("const canRevert = !isDraft && attemptCount === 0;");
-    expect(exam).toContain('data-exam-act="reopen">撤回成草稿</button>');
+  it("lets admins unschedule only before the paper opens (#298)", () => {
+    const actions = exam.slice(exam.indexOf("} else if (isScheduled) {"), exam.indexOf('} else if (stage === "open") {'));
+    expect(actions).toContain('data-exam-act="reopen">取消排程</button>');
+    expect(exam).not.toContain("canRevert");
   });
 
-  it("warns that publishing clears rehearsal attempts", () => {
-    expect(exam).toContain("筆演練作答會一併清除。");
+  it("warns that scheduling clears trial attempts", () => {
+    expect(exam).toContain("筆試作會一併清除。");
   });
 
-  it("labels drafts as rehearsal in the exam runner", () => {
-    expect(exam).toContain('return !!paper && paper.status === "draft";');
+  it("labels preparing and scheduled papers as rehearsal in the exam runner (#298)", () => {
+    expect(exam).toContain('return ["preparing", "scheduled"].includes(examStage(paper));');
     expect(exam).not.toContain('this.paper.mode === "test" ? "（測試版）"');
   });
 });

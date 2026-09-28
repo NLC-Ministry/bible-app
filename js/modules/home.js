@@ -2778,15 +2778,17 @@ function getExamHomeCardState(d, serverNow) {
     note = d.myTotalScore != null ? `你的總分：${d.myTotalScore} 分` : "成績已公布。";
     action = { kind: "result", label: "查看成績" };
   } else if (my === "submitted" || my === "graded") {
-    badge = "已完成作答"; badgeKind = "brand";
-    note = "正式答案已鎖定；現在可查看自己的填答內容。";
+    // 批改中（已截止、成績還沒公布）跟作答中已交卷分開說：前者讓人知道成績公布後會通知（#298）
+    const grading = d.status === "closed" || (closeTs && serverNow > closeTs);
+    badge = grading ? "批改中" : "已完成作答"; badgeKind = "brand";
+    note = grading ? "已完成作答，成績公布後會通知你。" : "正式答案已鎖定；現在可查看自己的填答內容。";
     action = { kind: "review", label: "查看我的作答" };
   } else if (my === "in_progress") {
     badge = "作答中"; badgeKind = "brand";
     note = "你有一份未完成的測驗，計時仍在進行。";
     action = { kind: "resume", label: "繼續作答" };
   } else if (d.status === "closed" || (closeTs && serverNow > closeTs)) {
-    badge = "已結束"; badgeKind = "neutral"; note = d.body || "測驗已結束。";
+    badge = "已收卷"; badgeKind = "neutral"; note = "本次測驗已經結束。";
   } else if (d.canEnter === true) {
     badge = "開放中"; badgeKind = "success";
     action = { kind: "enter", label: d.ctaLabel || "進入測驗" };
@@ -2800,7 +2802,7 @@ function getExamHomeCardState(d, serverNow) {
   return { badge, badgeKind, note, action, practiceAction, countdownTo };
 }
 
-// 首頁「速讀大測驗」置頂區塊：同時呈現所有已發預告試卷，每卷狀態完全獨立。
+// 首頁「速讀大測驗」置頂區塊：同時呈現所有已排程的試卷（排程後就出現，#298），每卷狀態完全獨立。
 async function refreshExamHomeBanner() {
   const card = document.getElementById("quiz-announcement-banner");
   const host = document.getElementById("exam-home-banner");
