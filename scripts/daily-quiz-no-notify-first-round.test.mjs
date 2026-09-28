@@ -22,9 +22,11 @@ describe("daily quiz publish sends no notification", () => {
   });
 
   it("marks the existing unread quiz notifications as read without deleting them", () => {
-    expect(migration).toContain("UPDATE public.quiz_notifications
-SET status = 'read', read_at = NOW()
-WHERE status = 'unread';");
+    expect(migration).toContain([
+      "UPDATE public.quiz_notifications",
+      "SET status = 'read', read_at = NOW()",
+      "WHERE status = 'unread';"
+    ].join("\n"));
     expect(migration).not.toContain("DELETE FROM public.quiz_notifications");
   });
 });
