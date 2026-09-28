@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 
 // #302（大測驗 R5，屬於 #297）：「試作」合併演練作答與預覽試卷；試作只有自己看得到，
 // 不算進成績、統計、首頁卡片、我的測驗；開放作答時自動清除（#298）。
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+// 換行統一成 \n：Windows 上 git（autocrlf）會把檔案 checkout 成 CRLF
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const migration = read("supabase/migrations/20260928041142_exam_trial_attempts_out_of_stats.sql");
 const exam = read("js/modules/exam.js");
 
