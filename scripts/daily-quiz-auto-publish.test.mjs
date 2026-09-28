@@ -104,7 +104,8 @@ describe("AI generates a day ahead", () => {
 describe("frontend", () => {
   it("leaders only see stats; admins get the auto-publish switch", () => {
     expect(admin).toContain("const canPublish = typeof getUserRoleCode === 'function' && getUserRoleCode(state.currentUser) === 'admin';");
-    expect(admin).toContain("const activeSubtab = !canPublish\n    ? 'stats'");
+    // #307 起是「日曆／規則設定／統計」三個分頁；非系統管理員固定在統計
+    expect(admin).toContain("const tab = canPublish\n    ? (ADMIN_QUIZ_TABS.some(item => item.key === root.dataset.quizActiveTab) ? root.dataset.quizActiveTab : 'calendar')\n    : 'stats';");
     expect(admin).toContain("void bindAdminQuizAutoRule(root);");
     expect(admin).toContain("每天 00:00 自動發給全部小組、23:59 截止");
   });

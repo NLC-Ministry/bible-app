@@ -23,7 +23,8 @@ import {
   prependTaiwanExportTime
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
-import { formatResponseForDisplay } from "./quiz-question-types.mjs";
+import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
+import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
   UNASSIGNED_REGION_LABEL,
@@ -3902,7 +3903,7 @@ function renderAdminQuizAutoRuleHtml() {
     <div class="admin-daily-quiz-heading">
       <div><p class="admin-registration-statistics__eyebrow">自動發佈</p><h2>每天自動發佈</h2></div>
     </div>
-    <p class="admin-daily-quiz-note">開啟後，每天 00:00 自動發給全部小組、23:59 截止。題目是前一天中午 AI 出好的那一版；某一天還沒有題目就不會發。</p>
+    <p class="admin-daily-quiz-note">開啟後，每天 00:00 自動發給全部小組、23:59 截止。題目用前一天中午 AI 出好的那一版，或你在日曆上設定的自訂題目；某一天還沒有題目就不會發。</p>
     <label class="admin-quiz-schedule-checkbox">
       <input type="checkbox" data-quiz-auto-rule-toggle disabled>
       <span data-quiz-auto-rule-label>讀取中…</span>
@@ -3917,7 +3918,7 @@ async function bindAdminQuizAutoRule(root) {
   if (!toggle || !label) return;
   const show = rule => {
     toggle.checked = rule.enabled === true;
-    label.textContent = rule.enabled ? '已開啟每天 00:00 自動發佈' : '未開啟（目前要手動發佈）';
+    label.textContent = rule.enabled ? '已開啟每天 00:00 自動發佈' : '未開啟（小測驗不會自動發給小組）';
   };
   const result = await db.getDailyQuizAutoPublishRule(state.adminManagementPlan);
   if (!result.success) { label.textContent = result.message || '無法讀取自動發佈設定'; return; }
@@ -3934,6 +3935,7 @@ async function bindAdminQuizAutoRule(root) {
     if (!saved.success) { toggle.checked = !turnOn; showToast(saved.message || '儲存失敗'); return; }
     show(saved.data || { enabled: turnOn });
     showToast(turnOn ? '已開啟每天自動發佈' : '已關閉每天自動發佈');
+    root._refreshQuizCalendar?.();
   });
 }
 
@@ -4454,100 +4456,289 @@ function bindAdminQuizSubtabNav(root) {
   });
 }
 
-async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDate = '', prefetchedResult = null) {
-  const root = document.getElementById('admin-daily-quiz-root');
-  if (!root || !state.adminManagementPlan) return;
-  const quizDate = /^\d{4}-\d{2}-\d{2}$/.test(String(requestedDate || ''))
-    ? String(requestedDate)
-    : (root.dataset.quizDate || adminQuizDateToday());
-  const cacheKey = adminDailyQuizDashboardCacheKey(state.adminManagementPlan, quizDate);
+// ── 小測驗後台（#307）：三個分頁「日曆／規則設定／統計」────────────────────
+// 日曆是未來 7 天，每天一格；點進某一天可以看題目、換一版、改成自訂題目、
+// 試作、這天不發。畫面上不再有「版本 A／B」「審核」「發佈範圍」——發佈一律由
+// 每天 00:00 的自動發佈負責（#306）。小組長、牧區長只看統計。
+const ADMIN_QUIZ_TABS = [
+  { key: 'calendar', label: '日曆' },
+  { key: 'rules', label: '規則設定' },
+  { key: 'stats', label: '統計' }
+];
 
-  // Returning to the quiz tab for the same plan/date should reveal the DOM
-  // that is already on screen. Do not re-render it and do not issue another
-  // dashboard request. New data is fetched only by an explicit refresh,
-  // regeneration action, date/plan change without a cache entry, or first load.
-  if (!forceRefresh && !prefetchedResult && root.dataset.quizDashboardKey === cacheKey) return;
+const ADMIN_QUIZ_DAY_STATUS = {
+  waiting: { label: '等待出題', kind: 'neutral' },
+  generating: { label: '出題中', kind: 'neutral' },
+  failed: { label: '出題失敗', kind: 'danger' },
+  scheduled: { label: '已排程', kind: 'brand' },
+  skipped: { label: '這天不發', kind: 'neutral' },
+  open: { label: '作答中', kind: 'success' },
+  ended: { label: '已結束', kind: 'neutral' },
+  not_published: { label: '沒有發佈', kind: 'neutral' }
+};
 
-  root.querySelectorAll('[data-editor-for]').forEach(editor => editor._escapeController?.abort());
-  document.body.classList.remove('admin-quiz-editor-open');
-  root.dataset.quizDate = quizDate;
-  let result = prefetchedResult;
-  if (!result && !forceRefresh) result = adminDailyQuizDashboardCache.get(cacheKey) || null;
-  if (!result) {
-    if (firstPaint(root)) root.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗資料…</div>';
-    result = await db.getDailyQuizDashboard(state.adminManagementPlan, quizDate);
+const ADMIN_QUIZ_WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+function adminQuizDayLabel(iso) {
+  const [year, month, day] = String(iso || '').split('-').map(Number);
+  if (!year) return String(iso || '');
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return `${month}/${day}（${ADMIN_QUIZ_WEEKDAYS[weekday]}）`;
+}
+
+function adminQuizDaySummary(day, today) {
+  if (day.status === 'open' || day.status === 'ended') {
+    const rate = `完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)}`;
+    return day.status === 'ended' && day.averageScore != null ? `${rate}・平均 ${day.averageScore}` : rate;
   }
-  adminDailyQuizDashboardCache.set(cacheKey, result);
-  root.dataset.quizDashboardKey = cacheKey;
-  if (!result.success) {
-    const message = result.message || '目前無法載入小測驗資料，請稍後再試。';
-    const timedOut = message.includes('逾時');
-    root.innerHTML = `
-      <div class="admin-daily-quiz-toolbar">
-        <label for="admin-daily-quiz-date">測驗日期<input id="admin-daily-quiz-date" class="form-control" type="date" value="${adminQuizEscape(quizDate)}"></label>
-        <span>版本狀態載入未完成</span>
+  if (day.status === 'scheduled') return day.source === 'custom' ? '自訂題目' : 'AI 題目';
+  if (day.needsAttention) return '還沒有題目';
+  if (day.status === 'waiting' && day.date > today) return '前一天中午出題';
+  return '';
+}
+
+function adminQuizIsEditableDay(day, today) {
+  return day.date >= today && !['open', 'ended'].includes(day.status) && Number(day.publishedGroups || 0) === 0;
+}
+
+function renderAdminQuizCalendarHtml(calendar, selectedDate) {
+  const today = calendar.today;
+  const days = Array.isArray(calendar.days) ? calendar.days : [];
+  return `${calendar.autoPublishEnabled ? '' : `<div class="admin-quiz-calendar-notice" role="status">
+      每天自動發佈還沒開啟，下面這些天都不會自動發給小組。
+      <button type="button" class="exam-admin__link" data-quiz-goto-rules>到「規則設定」開啟</button>
+    </div>`}
+    <div class="admin-quiz-calendar" role="list">
+      ${days.map(day => {
+        const status = ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
+        const classes = ['admin-quiz-calendar__day',
+          day.date === selectedDate ? 'is-selected' : '',
+          day.needsAttention ? 'is-alert' : '',
+          day.date === today ? 'is-today' : ''].filter(Boolean).join(' ');
+        const summary = adminQuizDaySummary(day, today);
+        return `<button type="button" role="listitem" class="${classes}" data-quiz-day="${adminQuizEscape(day.date)}" aria-pressed="${day.date === selectedDate}">
+          <span class="admin-quiz-calendar__date">${day.date === today ? '今天 ' : ''}${adminQuizEscape(adminQuizDayLabel(day.date))}</span>
+          <span class="stat-badge stat-badge--${day.needsAttention ? 'danger' : status.kind}">${adminQuizEscape(status.label)}</span>
+          ${summary ? `<span class="admin-quiz-calendar__summary">${adminQuizEscape(summary)}</span>` : ''}
+        </button>`;
+      }).join('')}
+    </div>
+    <div data-quiz-day-detail></div>`;
+}
+
+function renderAdminQuizDayQuestionsHtml(rawQuestions) {
+  const questions = [];
+  (Array.isArray(rawQuestions) ? rawQuestions : []).forEach(raw => {
+    try { questions.push(normalizeQuestion(raw)); } catch { /* 格式不認得的題目略過，不讓整頁壞掉 */ }
+  });
+  if (!questions.length) return '';
+  return `<ol class="admin-quiz-day-questions">${questions.map(question => `
+    <li>
+      <p class="admin-quiz-day-questions__stem"><span class="role-badge">${adminQuizEscape(QUESTION_TYPE_LABELS[question.type] || question.type)}</span> ${adminQuizEscape(question.payload?.stem || '')}</p>
+      <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+    </li>`).join('')}</ol>`;
+}
+
+function renderAdminQuizDayDetailHtml(day, today) {
+  const status = ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
+  const editable = adminQuizIsEditableDay(day, today);
+  const hasQuestions = Array.isArray(day.questions) && day.questions.length > 0;
+  const actions = [];
+  if (hasQuestions) actions.push('<button type="button" class="secondary-btn" data-quiz-day-act="trial">試作</button>');
+  if (editable) {
+    if (day.source !== 'custom') {
+      actions.push(`<button type="button" class="secondary-btn" data-quiz-day-act="swap">${hasQuestions ? '換一版' : '請 AI 出題'}</button>`);
+    }
+    actions.push(`<button type="button" class="secondary-btn" data-quiz-day-act="custom">${day.source === 'custom' ? '修改自訂題目' : '改成自訂題目'}</button>`);
+    if (day.source === 'custom') actions.push('<button type="button" class="secondary-btn" data-quiz-day-act="use-ai">改回 AI 題目</button>');
+    actions.push(day.skip
+      ? '<button type="button" class="secondary-btn" data-quiz-day-act="unskip">恢復發佈</button>'
+      : '<button type="button" class="secondary-btn" data-quiz-day-act="skip">這天不發</button>');
+  }
+  const published = day.status === 'open' || day.status === 'ended';
+  return `<section class="glass-card admin-daily-quiz-block" aria-live="polite">
+    <div class="admin-daily-quiz-heading">
+      <div>
+        <p class="admin-registration-statistics__eyebrow">${adminQuizEscape(adminQuizDayLabel(day.date))}</p>
+        <h2>${adminQuizEscape(status.label)}${day.source === 'custom' ? '・自訂題目' : day.source === 'ai' ? '・AI 題目' : ''}</h2>
       </div>
-      <section class="glass-card admin-daily-quiz-block" aria-labelledby="admin-quiz-load-error-title">
-        <div class="admin-daily-quiz-heading">
-          <div><p class="admin-registration-statistics__eyebrow">題目審核</p><h2 id="admin-quiz-load-error-title">每日兩版題目</h2></div>
-        </div>
-        <div class="admin-daily-quiz-load-error" role="alert">
-          <span class="admin-daily-quiz-load-error__icon" aria-hidden="true"><span class="nlc-icon" data-icon="refresh"></span></span>
-          <div class="admin-daily-quiz-load-error__content">
-            <h3>${timedOut ? '版本狀態載入逾時' : '暫時無法取得版本狀態'}</h3>
-            <p>${adminQuizEscape(message)} 已保留原有題目與審核狀態。</p>
-          </div>
-        </div>
-        <div class="admin-daily-quiz-versions">
-          ${['A', 'B'].map(variant => `<article class="admin-daily-quiz-version admin-daily-quiz-version--load-failed" data-quiz-version="${variant}">
-            <div class="admin-daily-quiz-version-title"><strong>版本 ${variant}</strong><span class="role-badge">狀態載入失敗</span></div>
-            <p class="admin-daily-quiz-empty">暫時無法確認生成與審核狀態。</p>
-            <div class="admin-daily-quiz-version-actions">
-              <button type="button" class="secondary-btn" data-quiz-load-retry data-quiz-variant="${variant}">重試載入</button>
-              <button type="button" class="secondary-btn" disabled>載入後才可編輯</button>
-              <button type="button" class="primary-btn" disabled>載入後才可審核</button>
-            </div>
-          </article>`).join('')}
-        </div>
-      </section>`;
-    root.querySelector('#admin-daily-quiz-date')?.addEventListener('change', event => {
-      void renderAdminDailyQuizManagement(false, event.target.value);
-    });
-    root.querySelectorAll('[data-quiz-load-retry]').forEach(button => {
-      button.addEventListener('click', () => {
-        button.disabled = true;
-        button.textContent = '載入中…';
-        void renderAdminDailyQuizManagement(true, quizDate);
-      });
-    });
-    if (typeof hydrateIcons === 'function') hydrateIcons(root);
+    </div>
+    ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能再修改。</p>` : ''}
+    ${day.status === 'failed' ? `<p class="admin-daily-quiz-note admin-quiz-day-alert">AI 出題失敗${day.aiError ? `（${adminQuizEscape(day.aiError)}）` : ''}。可以按「請 AI 出題」再試一次，或改成自訂題目。</p>` : ''}
+    ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
+    ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
+    ${actions.length ? `<div class="admin-quiz-day-actions">${actions.join('')}</div>` : ''}
+    <div data-quiz-day-work></div>
+    ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}
+  </section>`;
+}
+
+function renderAdminQuizDayImportHtml() {
+  return `<div class="admin-quiz-custom-editor">
+    <label for="admin-quiz-day-import">貼上題目（每題之間空一行，第一行寫題型，例如 [單選]、[是非]）</label>
+    <textarea id="admin-quiz-day-import" class="form-control" rows="10" placeholder="[單選] 以色列人在曠野吃的食物叫什麼？
+A. 嗎哪
+B. 餅
+答案：A
+
+[是非] 摩西帶領以色列人出埃及。
+答案：對"></textarea>
+    <p class="admin-daily-quiz-note" data-quiz-import-result>共 2～10 題。貼上後按「檢查格式」。</p>
+    <div class="admin-quiz-day-actions">
+      <button type="button" class="secondary-btn" data-quiz-import-check>檢查格式</button>
+      <button type="button" class="primary-btn" data-quiz-import-save disabled>儲存成這天的題目</button>
+      <button type="button" class="secondary-btn" data-quiz-import-cancel>取消</button>
+    </div>
+  </div>`;
+}
+
+async function renderAdminQuizCalendar(root, selectedDate = null) {
+  const panel = root.querySelector('[data-quiz-tab-panel="calendar"]');
+  if (!panel) return;
+  if (!panel.querySelector('.admin-quiz-calendar')) panel.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗日曆…</div>';
+  const result = await db.getDailyQuizCalendar(state.adminManagementPlan, null, 7);
+  if (!result.success) {
+    panel.innerHTML = `<div class="admin-user-directory__empty">${adminQuizEscape(result.message || '無法載入小測驗日曆')}</div>`;
     return;
   }
-  const context = result.context || {};
-  const approvedCount = Array.isArray(context.approvedVariants) ? context.approvedVariants.length : 0;
-  // #306：只有系統管理員能出題、發佈；小組長、牧區長只看統計
+  const calendar = result.data || {};
+  const days = Array.isArray(calendar.days) ? calendar.days : [];
+  const current = days.some(day => day.date === selectedDate) ? selectedDate
+    : (days.some(day => day.date === root.dataset.quizSelectedDay) ? root.dataset.quizSelectedDay : days[0]?.date);
+  root.dataset.quizSelectedDay = current || '';
+  panel.innerHTML = renderAdminQuizCalendarHtml(calendar, current);
+
+  const showDetail = date => {
+    const day = days.find(item => item.date === date);
+    const host = panel.querySelector('[data-quiz-day-detail]');
+    if (!day || !host) return;
+    root.dataset.quizSelectedDay = date;
+    panel.querySelectorAll('[data-quiz-day]').forEach(button => {
+      const on = button.dataset.quizDay === date;
+      button.classList.toggle('is-selected', on);
+      button.setAttribute('aria-pressed', String(on));
+    });
+    host.innerHTML = renderAdminQuizDayDetailHtml(day, calendar.today);
+    bindAdminQuizDayDetail(root, host, day);
+  };
+  panel.querySelectorAll('[data-quiz-day]').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.quizDay)));
+  panel.querySelector('[data-quiz-goto-rules]')?.addEventListener('click', () => switchAdminQuizTab(root, 'rules'));
+  if (current) showDetail(current);
+}
+
+function bindAdminQuizDayDetail(root, host, day) {
+  const work = host.querySelector('[data-quiz-day-work]');
+  const plan = state.adminManagementPlan;
+  const reload = () => renderAdminQuizCalendar(root, day.date);
+  const confirmDialog = async (title, message, confirmText) => (typeof window.showConfirmDialog === 'function'
+    ? window.showConfirmDialog({ title, message, confirmText, cancelText: '返回' })
+    : window.confirm(`${title}\n${message}`));
+  const run = async (button, action, successText) => {
+    button.disabled = true;
+    const result = await action();
+    button.disabled = false;
+    if (!result.success) { showToast(result.message || '操作失敗，請稍後再試。'); return; }
+    showToast(successText);
+    await reload();
+  };
+
+  host.querySelectorAll('[data-quiz-day-act]').forEach(button => button.addEventListener('click', async () => {
+    const act = button.dataset.quizDayAct;
+    if (act === 'trial') {
+      mountDailyQuizTrial(work, day.questions, { onClose: () => { work.innerHTML = ''; } });
+      work.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      return;
+    }
+    if (act === 'custom') {
+      work.innerHTML = renderAdminQuizDayImportHtml();
+      bindAdminQuizDayImport(work, day, reload);
+      return;
+    }
+    if (act === 'swap') {
+      if (!await confirmDialog('請 AI 重新出題？', `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題大約要半分鐘。`, '重新出題')) return;
+      await run(button, () => db.swapDailyQuizVersion(plan, day.date), '已請 AI 重新出題，稍後重新整理就會看到新題目。');
+      return;
+    }
+    if (act === 'use-ai') {
+      if (!await confirmDialog('改回 AI 題目？', '這一天的自訂題目會刪掉，改用 AI 出的題目。', '改回 AI 題目')) return;
+      await run(button, () => db.setDailyQuizDayCustom(plan, day.date, null), '已改回 AI 題目。');
+      return;
+    }
+    if (act === 'skip') {
+      if (!await confirmDialog('這天不發？', `${adminQuizDayLabel(day.date)} 00:00 不會自動發佈小測驗。之後還可以恢復。`, '這天不發')) return;
+      await run(button, () => db.setDailyQuizDaySkip(plan, day.date, true), '這一天不會發佈。');
+      return;
+    }
+    if (act === 'unskip') {
+      await run(button, () => db.setDailyQuizDaySkip(plan, day.date, false), '已恢復發佈。');
+    }
+  }));
+}
+
+function bindAdminQuizDayImport(work, day, reload) {
+  const textarea = work.querySelector('#admin-quiz-day-import');
+  const resultEl = work.querySelector('[data-quiz-import-result]');
+  const saveBtn = work.querySelector('[data-quiz-import-save]');
+  let parsed = null;
+  textarea?.addEventListener('input', () => { parsed = null; saveBtn.disabled = true; });
+  work.querySelector('[data-quiz-import-check]')?.addEventListener('click', () => {
+    const { questions, errors } = parseQuizImportText(textarea.value);
+    const countOk = questions.length >= 2 && questions.length <= 10;
+    parsed = errors.length === 0 && countOk ? questions : null;
+    saveBtn.disabled = !parsed;
+    resultEl.textContent = errors.length
+      ? `有 ${errors.length} 個地方要修正：${errors.slice(0, 3).map(error => `第 ${Number(error.index) + 1} 題：${error.message || error}`).join('；')}`
+      : countOk ? `格式正確，共 ${questions.length} 題。` : `目前 ${questions.length} 題，需要 2～10 題。`;
+  });
+  work.querySelector('[data-quiz-import-cancel]')?.addEventListener('click', () => { work.innerHTML = ''; });
+  saveBtn?.addEventListener('click', async () => {
+    if (!parsed) return;
+    saveBtn.disabled = true;
+    const result = await db.setDailyQuizDayCustom(state.adminManagementPlan, day.date, parsed);
+    if (!result.success) { saveBtn.disabled = false; showToast(result.message || '儲存失敗'); return; }
+    showToast(`已把 ${adminQuizDayLabel(day.date)} 改成自訂題目。`);
+    await reload();
+  });
+}
+
+function switchAdminQuizTab(root, target) {
+  root.dataset.quizActiveTab = target;
+  root.querySelectorAll('[data-quiz-tab]').forEach(button => {
+    const on = button.dataset.quizTab === target;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-selected', String(on));
+  });
+  root.querySelectorAll('[data-quiz-tab-panel]').forEach(panel => {
+    panel.classList.toggle('hidden', panel.dataset.quizTabPanel !== target);
+  });
+}
+
+export async function renderAdminDailyQuizManagement(forceRefresh = false) {
+  const root = document.getElementById('admin-daily-quiz-root');
+  if (!root || !state.adminManagementPlan) return;
+  const planKey = String(db._quizPlanId?.(state.adminManagementPlan) || '');
+  // 回到這個分頁、同一個計畫：保留畫面，不重新載入（明確重新整理才重抓）
+  if (!forceRefresh && root.dataset.quizPlanKey === planKey && root.childElementCount) return;
+  root.dataset.quizPlanKey = planKey;
+
   const canPublish = typeof getUserRoleCode === 'function' && getUserRoleCode(state.currentUser) === 'admin';
-  const activeSubtab = !canPublish
-    ? 'stats'
-    : (['custom', 'review', 'publish', 'stats'].includes(root.dataset.quizActiveSubtab)
-      ? root.dataset.quizActiveSubtab
-      : 'custom');
+  const tab = canPublish
+    ? (ADMIN_QUIZ_TABS.some(item => item.key === root.dataset.quizActiveTab) ? root.dataset.quizActiveTab : 'calendar')
+    : 'stats';
+  root.dataset.quizActiveTab = tab;
   root.innerHTML = `
-    <div class="admin-daily-quiz-toolbar">
-      <label for="admin-daily-quiz-date">測驗日期<input id="admin-daily-quiz-date" class="form-control" type="date" value="${adminQuizEscape(quizDate)}"></label>
-      <span>${approvedCount} 版已審核</span>
+    ${canPublish ? `<div class="segment-track admin-quiz-subtab-nav" role="tablist" aria-label="小測驗管理">
+      ${ADMIN_QUIZ_TABS.map(item => `<button type="button" class="segment-toggle-btn${item.key === tab ? ' active' : ''}" data-quiz-tab="${item.key}" role="tab" aria-selected="${item.key === tab}">${item.label}</button>`).join('')}
     </div>
-    ${canPublish ? `${renderAdminQuizSubtabNavHtml(activeSubtab)}
-    <div data-quiz-subtab-panel="custom" class="${activeSubtab === 'custom' ? '' : 'hidden'}">${renderAdminQuizCustomSectionHtml(context)}</div>
-    <div data-quiz-subtab-panel="review" class="${activeSubtab === 'review' ? '' : 'hidden'}">${renderAdminQuizReviewCards(context)}</div>
-    <div data-quiz-subtab-panel="publish" class="${activeSubtab === 'publish' ? '' : 'hidden'}">${renderAdminQuizPublishPanel(context)}</div>` : ''}
-    <div data-quiz-subtab-panel="stats" class="${activeSubtab === 'stats' ? '' : 'hidden'}">${renderAdminQuizStatsSectionHtml()}</div>`;
+    <div data-quiz-tab-panel="calendar" class="${tab === 'calendar' ? '' : 'hidden'}"></div>
+    <div data-quiz-tab-panel="rules" class="${tab === 'rules' ? '' : 'hidden'}">${renderAdminQuizAutoRuleHtml()}</div>` : ''}
+    <div data-quiz-tab-panel="stats" class="${tab === 'stats' ? '' : 'hidden'}">${renderAdminQuizStatsSectionHtml()}</div>`;
+
   if (canPublish) {
-    bindAdminQuizSubtabNav(root);
-    await bindAdminDailyQuizActions(root, context, quizDate);
-    bindAdminQuizCarousels(root);
-    bindAdminQuizCustomSection(root, context);
-    bindAdminQuizPublishPanel(root, context, quizDate);
+    root.querySelectorAll('[data-quiz-tab]').forEach(button => button.addEventListener('click', () => switchAdminQuizTab(root, button.dataset.quizTab)));
+    // 規則開關改了，日曆上方的「還沒開啟」提示要跟著更新
+    root._refreshQuizCalendar = () => renderAdminQuizCalendar(root, root.dataset.quizSelectedDay || null);
+    void renderAdminQuizCalendar(root);
     void bindAdminQuizAutoRule(root);
   }
   bindAdminQuizStatsPanel(root, state.adminManagementPlan);

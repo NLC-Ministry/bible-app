@@ -264,7 +264,12 @@ const QUIZ_RPC_FUNCTIONS = new Set([
   "cancel_daily_quiz_schedule",
   // #306：自動發佈規則（讀／寫都只給系統管理員，SQL 端檢查）
   "get_daily_quiz_auto_publish_rule",
-  "set_daily_quiz_auto_publish_rule"
+  "set_daily_quiz_auto_publish_rule",
+  // #307：7 天日曆與每一天的設定（只給系統管理員，SQL 端檢查）
+  "get_daily_quiz_calendar",
+  "set_daily_quiz_day_skip",
+  "set_daily_quiz_day_custom",
+  "swap_daily_quiz_version"
 ]);
 // 速讀「大測驗」(migration 0096). Gated by the speed_reading_exam feature flag;
 // authoring/grading RPCs additionally require an admin/pastor profile.
