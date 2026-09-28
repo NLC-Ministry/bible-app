@@ -561,7 +561,7 @@
       <section id="reader-view" class="view-pane hidden">
 
         <!-- Native Reader Toolbar -->
-        <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar">
+        <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar" data-swipe-ignore>
           <button type="button" class="reader-icon-btn native-toolbar-btn reader-back-btn" id="reader-back-btn"
             title="&#x8FD4;&#x56DE;" aria-label="&#x8FD4;&#x56DE;">
             <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
@@ -594,7 +594,7 @@
           </button>
         </div>
 
-        <div class="reader-audio-timeline hidden" id="reader-audio-timeline" aria-live="polite">
+        <div class="reader-audio-timeline hidden" id="reader-audio-timeline" aria-live="polite" data-swipe-ignore>
           <span class="reader-audio-timeline__label" id="reader-audio-progress-label">第 1 節／共 1 節</span>
           <div class="reader-audio-timeline__track" role="progressbar" aria-label="朗讀進度"
             aria-valuemin="1" aria-valuemax="1" aria-valuenow="1" id="reader-audio-progress-track">
@@ -620,6 +620,16 @@
           </button>
         </div>
 
+        <!-- ── Swipe-to-change-chapter hint (#314)：滑動中由 bible.js 設 data-direction / data-armed ── -->
+        <div class="reader-swipe-hint" id="reader-swipe-hint" aria-hidden="true">
+          <span class="reader-swipe-hint__pill reader-swipe-hint__pill--prev">
+            <span class="nlc-icon nlc-icon--sm" data-icon="chevronLeft" aria-hidden="true"></span><span>上一章</span>
+          </span>
+          <span class="reader-swipe-hint__pill reader-swipe-hint__pill--next">
+            <span>下一章</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+          </span>
+        </div>
+
         <!-- ── Main Bible Text Area ── -->
         <article class="reader-body reader-body-full reader-reading-surface">
           <div class="reader-header">
@@ -632,7 +642,7 @@
           </div>
 
           <!-- Selection Bottom Bar React Mount Root -->
-          <div id="selection-bottom-bar-root"></div>
+          <div id="selection-bottom-bar-root" data-swipe-ignore></div>
 
           <!-- Sticky Bottom Action Bar (Context-Aware Read Tracking) -->
           <div class="reader-bottom-action-bar hidden" id="reader-bottom-action-bar">

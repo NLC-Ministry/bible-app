@@ -4,6 +4,7 @@ import { createReaderBottomDwellController, observeReaderEndSentinel } from "./r
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
+import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -227,6 +228,80 @@ function initImmersivePlanReader() {
     mainSurface.dataset.planReaderBottomDwellBound = "true";
     mainSurface.addEventListener("scroll", handleReaderScroll, { passive: true });
     mainSurface.addEventListener("scrollend", handleReaderScroll, { passive: true });
+  }
+}
+
+// ── 左右滑動 / 鍵盤 ← → 換章（#314） ──
+// 往左滑＝下一章、往右滑＝上一章；超過門檻時邊緣出現提示，放手才換章。
+// 換章一律走 navigateToChapter，跟按鈕完全同一條路（停止朗讀、跨書卷、不自動記已讀）。
+const READER_SWIPE_TIP_STORAGE_KEY = "bible_reader_swipe_tip_seen";
+
+// 目錄、搜尋、文字設定、版本選單、筆記編輯器開著時都不換章。
+const READER_BLOCKING_LAYER_SELECTOR =
+  "#bible-version-picker-modal:not(.hidden), .full-page-overlay:not(.hidden), .bottom-sheet-backdrop:not(.hidden)";
+
+function isReaderChapterNavAvailable() {
+  const body = document.body;
+  return Boolean(
+    window.appRouter && window.appRouter.currentTab === "reader-view" &&
+    !body.classList.contains("reader-modal-open") &&
+    !body.classList.contains("verse-note-editor-open") &&
+    !document.querySelector(READER_BLOCKING_LAYER_SELECTOR)
+  );
+}
+
+function canNavigateReaderChapter(direction) {
+  return Boolean(resolveAdjacentChapter(BIBLE_BOOKS, state.readerState?.bookId, state.readerState?.chapter, direction));
+}
+
+function setReaderSwipeHint(direction, { progress = 0, armed = false } = {}) {
+  const hint = document.getElementById("reader-swipe-hint");
+  if (!hint) return;
+  if (!direction) {
+    hint.removeAttribute("data-direction");
+    hint.removeAttribute("data-armed");
+    hint.style.removeProperty("--reader-swipe-progress");
+    return;
+  }
+  hint.setAttribute("data-direction", direction > 0 ? "next" : "prev");
+  hint.toggleAttribute("data-armed", armed);
+  hint.style.setProperty("--reader-swipe-progress", String(Math.round(progress * 100) / 100));
+}
+
+function initReaderChapterGestures() {
+  const readerView = document.getElementById("reader-view");
+  if (!readerView || readerView.dataset.chapterGesturesBound === "true") return;
+  readerView.dataset.chapterGesturesBound = "true";
+
+  createReaderSwipeController({
+    surface: readerView,
+    isEnabled: isReaderChapterNavAvailable,
+    canNavigate: canNavigateReaderChapter,
+    onHint: setReaderSwipeHint,
+    onNavigate: direction => { navigateToChapter(direction); }
+  });
+
+  document.addEventListener("keydown", event => {
+    if (!isReaderChapterNavAvailable()) return;
+    const direction = readerArrowKeyDirection(event);
+    if (!direction || !canNavigateReaderChapter(direction)) return;
+    event.preventDefault();
+    navigateToChapter(direction);
+  });
+}
+
+// 第一次在手機上讀到經文時提示一次可以左右滑；只是介面偏好，存不了就算了。
+function maybeShowReaderSwipeTip() {
+  if (!isReaderChapterNavAvailable()) return;
+  try {
+    if (!window.matchMedia?.("(pointer: coarse)").matches) return;
+    if (localStorage.getItem(READER_SWIPE_TIP_STORAGE_KEY)) return;
+    localStorage.setItem(READER_SWIPE_TIP_STORAGE_KEY, "1");
+  } catch {
+    return;
+  }
+  if (typeof showToast === "function") {
+    showToast((window.APP_COPY && window.APP_COPY.reader && window.APP_COPY.reader.swipeTip) || "左右滑動可以換章", 3500);
   }
 }
 
@@ -533,6 +608,7 @@ export function initReaderControls() {
 
   initSmartFloatingReaderNav();
   initImmersivePlanReader();
+  initReaderChapterGestures();
 
   const markReadBtn = document.getElementById("mark-read-btn");
   if (markReadBtn) {
@@ -1016,6 +1092,7 @@ export async function renderReaderText(options = {}) {
 
     renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
+    maybeShowReaderSwipeTip();
   } catch (error) {
     if (renderRequestId !== readerRenderRequestId
       || String(state.readerState?.version || "CUNP").toUpperCase() !== requestedVersion) return false;
@@ -2489,40 +2566,30 @@ export function updateReaderBottomActionBar() {
   bar.classList.add("hidden");
 }
 
+// 背景預載下一章與上一章，往左或往右滑都能馬上出現（#314）。
 function triggerPredictivePrefetch() {
-  const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
-  if (!currentBook) return;
+  const requestedVersion = String(state.readerState?.version || "CUNP").toUpperCase();
+  [1, -1].forEach(direction => {
+    const target = resolveAdjacentChapter(BIBLE_BOOKS, state.readerState.bookId, state.readerState.chapter, direction);
+    if (!target) return;
 
-  let nextBookEng = currentBook.eng;
-  let nextChapter = state.readerState.chapter + 1;
-
-  if (nextChapter > currentBook.chapters) {
-    const nextBook = BIBLE_BOOKS.find(b => b.id === currentBook.id + 1);
-    if (nextBook) {
-      nextBookEng = nextBook.eng;
-      nextChapter = 1;
-    } else {
+    const cacheKey = window.getBibleChapterCacheKey
+      ? window.getBibleChapterCacheKey(target.book.eng, target.chapter, requestedVersion)
+      : `${requestedVersion}_${target.book.eng}_${target.chapter}`;
+    if (window._bibleChapterCache && window._bibleChapterCache[cacheKey]) {
       return;
     }
-  }
 
-  const requestedVersion = String(state.readerState?.version || "CUNP").toUpperCase();
-  const cacheKey = window.getBibleChapterCacheKey
-    ? window.getBibleChapterCacheKey(nextBookEng, nextChapter, requestedVersion)
-    : `${requestedVersion}_${nextBookEng}_${nextChapter}`;
-  if (window._bibleChapterCache && window._bibleChapterCache[cacheKey]) {
-    return;
-  }
-
-  fetchBibleChapter(nextBookEng, nextChapter, requestedVersion)
-    .then(data => {
-      if (window._bibleChapterCache && data && !data.isPlaceholder) {
-        window._bibleChapterCache[cacheKey] = data;
-      }
-    })
-    .catch(err => {
-      console.warn(`⚠️ [背景預載失敗] 無法預載下一章: ${cacheKey}`, err);
-    });
+    fetchBibleChapter(target.book.eng, target.chapter, requestedVersion)
+      .then(data => {
+        if (window._bibleChapterCache && data && !data.isPlaceholder) {
+          window._bibleChapterCache[cacheKey] = data;
+        }
+      })
+      .catch(err => {
+        console.warn(`⚠️ [背景預載失敗] 無法預載${direction > 0 ? "下" : "上"}一章: ${cacheKey}`, err);
+      });
+  });
 }
 
 function checkReaderBottomDwell(surface = getReaderScrollSurface(), isAtBottom = null) {
