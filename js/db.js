@@ -4212,6 +4212,33 @@ const db = {
     });
   },
 
+  // carry_reading_teams_to_stage 的略過原因（20260928101011，#321）→ 給隊長看的說明。
+  // captainBlocked：這組隊伍整隊帶不過去的原因；memberNotes：被略過的隊員，一種原因一行。
+  describeReadingTeamCarryoverSkips({ skippedTeam = null, skippedMembers = [], targetName = "" } = {}) {
+    const target = `「${targetName || "下一個計畫"}」`;
+    const captainMessages = {
+      captain_already_in_target: `你已經在${target}的這個組別加入了其他團隊，沒辦法用這個身份帶隊。`,
+      plan_requires_pastoral_zone: `你還沒設定牧區，沒辦法加入${target}。請先到會員中心完成牧區設定，再回來帶隊。`,
+      plan_audience_restricted: `${target}只開放特定大區參加，你的大區資料不符合，沒辦法帶隊。`
+    };
+    const memberMessages = {
+      already_in_target_team: names => `${names}已在這個計畫加入其他團隊，未一併帶入。`,
+      plan_requires_pastoral_zone: names => `${names}還沒設定牧區，未一併帶入；請他們到會員中心設定牧區後，再用邀請碼加入。`,
+      plan_audience_restricted: names => `${names}的大區不在這個計畫的開放範圍，未一併帶入。`
+    };
+    const captainBlocked = skippedTeam
+      ? (captainMessages[skippedTeam.reason] || `目前沒辦法帶隊進入${target}，請稍後再試。`)
+      : null;
+    const byReason = new Map();
+    (Array.isArray(skippedMembers) ? skippedMembers : []).forEach(member => {
+      if (!member || !member.name) return;
+      const reason = memberMessages[member.reason] ? member.reason : "already_in_target_team";
+      byReason.set(reason, [...(byReason.get(reason) || []), member.name]);
+    });
+    const memberNotes = [...byReason].map(([reason, names]) => memberMessages[reason](names.join("、")));
+    return { captainBlocked, memberNotes };
+  },
+
   async getReadingTeamRegistrationOverview() {
     if (!state.isSupabaseMode || !state.supabase) {
       const mockStats = await this.getReadingTeamStatistics({

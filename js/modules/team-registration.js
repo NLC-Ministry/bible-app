@@ -1,5 +1,6 @@
 import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team-progress-metrics.mjs";
 import { isCampaignStageKind } from "../data/campaign-stage-kinds.mjs";
+import { findNextCampaignStagePlan } from "../data/campaign-next-stage.mjs";
 import {
   countScheduleDaysCoveredByChapters,
   countExpectedScheduleDays,
@@ -732,15 +733,13 @@ import {
       return;
     }
 
-    const currentStageNo = Number(plan && (plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo)) || 0);
-    if (!currentStageNo) return;
-
-    const nextStagePlan = (state.globalPlans || []).find(candidate =>
-      candidate
-      && isCampaignStageKind(candidate)
-      && !(typeof isPlanHidden === "function" && isPlanHidden(candidate))
-      && Number(candidate.stageNo || (candidate.campaignDefinition && candidate.campaignDefinition.stageNo) || 0) === currentStageNo + 1
-    );
+    // 下一張 = 同活動、同對象大區、開始日期緊接在後的計畫（#321：月度期末賽都是 stageNo 2，
+    // 不能再用 stageNo + 1 找）。
+    const nextStagePlan = findNextCampaignStagePlan(plan, state.globalPlans, {
+      isHidden: candidate => typeof isPlanHidden === "function"
+        ? isPlanHidden(candidate)
+        : Boolean(candidate.isHidden || candidate.is_hidden)
+    });
     if (!nextStagePlan) return;
 
     const offerResult = await db.getReadingTeamCarryoverOffer(nextStagePlan);
@@ -748,32 +747,33 @@ import {
     const offer = offerResult.context || {};
     const offerTeams = Array.isArray(offer.teams) ? offer.teams : [];
     if (!offer.eligible || !offerTeams.some(item => Number(item.division) === Number(team.division))) return;
+    // 後端算出來的來源計畫必須就是目前這張，按鈕才掛在這張卡片上。
+    const currentPlanId = String(plan && (plan.globalPlanId || plan.id) || "");
+    if (offer.sourcePlanId && String(offer.sourcePlanId) !== currentPlanId) return;
 
-    const targetStageNo = Number(offer.targetStageNo
-      || nextStagePlan.stageNo
-      || (nextStagePlan.campaignDefinition && nextStagePlan.campaignDefinition.stageNo)
-      || 0);
+    const targetName = String(offer.targetPlanName || nextStagePlan.name || "下一個計畫");
 
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "text-xs";
     btn.dataset.carryTeamToStage = "";
     btn.style.cssText = "background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem; font-weight:500; color: var(--color-brand); margin-right: auto;";
-    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span><span>帶隊進入第 ${targetStageNo} 階段</span>`;
+    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span><span>帶隊進入下一個計畫</span>`;
+    btn.title = targetName;
     actionsRow.insertBefore(btn, actionsRow.firstChild);
     if (typeof hydrateIcons === "function") hydrateIcons(btn);
 
     btn.addEventListener("click", async () => {
       const confirmed = await window.showConfirmDialog({
-        title: `帶隊進入第 ${targetStageNo} 階段`,
-        message: `確認後「${team.name || ""}」全體隊員會直接加入第 ${targetStageNo} 階段，不需要重新報名或輸入邀請碼。若有隊員已經在第 ${targetStageNo} 階段加入了別的隊伍，會略過那位隊員，其餘隊員照常帶入。`,
+        title: "帶隊進入下一個計畫",
+        message: `確認後「${team.name || ""}」全體隊員會直接加入「${targetName}」，不需要重新報名或輸入邀請碼。\n若有隊員已經在那個計畫加入了別的隊伍，或還沒設定牧區，會略過那位隊員，其餘隊員照常帶入。`,
         confirmText: "帶隊進入",
         cancelText: "取消"
       });
       if (!confirmed) return;
 
       btn.disabled = true;
-      loader.show("正在帶領團隊進入下一階段…");
+      loader.show("正在帶領團隊進入下一個計畫…");
       const carryResult = await db.carryReadingTeamsToStage(nextStagePlan);
       loader.hide();
       btn.disabled = false;
@@ -787,21 +787,19 @@ import {
       const skippedTeams = (carryResult.data && carryResult.data.skippedTeams) || [];
       const thisTeamSkipped = skippedTeams.find(item => Number(item.division) === Number(team.division));
 
-      if (thisTeamSkipped) {
-        alert(`你已經在第 ${targetStageNo} 階段的這個組別加入了其他團隊，沒辦法用這個身份帶隊。`);
+      const thisTeamResult = carriedTeams.find(item => Number(item.division) === Number(team.division));
+      const { captainBlocked, memberNotes } = db.describeReadingTeamCarryoverSkips({
+        skippedTeam: thisTeamSkipped,
+        skippedMembers: thisTeamResult && thisTeamResult.skippedMembers,
+        targetName
+      });
+
+      if (captainBlocked) {
+        alert(captainBlocked);
         return;
       }
 
-      const thisTeamResult = carriedTeams.find(item => Number(item.division) === Number(team.division));
-      const skippedNames = ((thisTeamResult && thisTeamResult.skippedMembers) || [])
-        .map(member => member.name)
-        .filter(Boolean);
-
-      let message = `已將「${team.name || ""}」帶入第 ${targetStageNo} 階段。`;
-      if (skippedNames.length) {
-        message += `\n${skippedNames.join("、")}已在第 ${targetStageNo} 階段加入其他團隊，未一併帶入。`;
-      }
-      alert(message);
+      alert([`已將「${team.name || ""}」帶入「${targetName}」。`, ...memberNotes].join("\n"));
       window.location.reload(true);
     });
   }
