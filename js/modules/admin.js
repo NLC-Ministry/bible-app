@@ -4474,7 +4474,8 @@ const ADMIN_QUIZ_DAY_STATUS = {
   skipped: { label: '這天不發', kind: 'neutral' },
   open: { label: '作答中', kind: 'success' },
   ended: { label: '已結束', kind: 'neutral' },
-  not_published: { label: '沒有發佈', kind: 'neutral' }
+  not_published: { label: '沒有發佈', kind: 'neutral' },
+  outside_plan: { label: '不在計畫期間', kind: 'neutral' }
 };
 
 const ADMIN_QUIZ_WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -4498,7 +4499,7 @@ function adminQuizDaySummary(day, today) {
 }
 
 function adminQuizIsEditableDay(day, today) {
-  return day.date >= today && !['open', 'ended'].includes(day.status) && Number(day.publishedGroups || 0) === 0;
+  return day.date >= today && !['open', 'ended', 'outside_plan'].includes(day.status) && Number(day.publishedGroups || 0) === 0;
 }
 
 function renderAdminQuizCalendarHtml(calendar, selectedDate) {
@@ -4567,6 +4568,7 @@ function renderAdminQuizDayDetailHtml(day, today) {
     ${day.status === 'failed' ? `<p class="admin-daily-quiz-note admin-quiz-day-alert">AI 出題失敗${day.aiError ? `（${adminQuizEscape(day.aiError)}）` : ''}。可以按「請 AI 出題」再試一次，或改成自訂題目。</p>` : ''}
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
     ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
+    ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
     ${actions.length ? `<div class="admin-quiz-day-actions">${actions.join('')}</div>` : ''}
     <div data-quiz-day-work></div>
     ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}

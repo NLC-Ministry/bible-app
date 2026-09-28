@@ -115,6 +115,21 @@ describe("migration: calendar and per-day settings (#307)", () => {
   });
 });
 
+describe("days outside the plan (#307 補充)", () => {
+  const outside = read("supabase/migrations/20260928094106_daily_quiz_calendar_outside_plan.sql");
+
+  it("the calendar marks days outside the plan's dates instead of 等待出題", () => {
+    expect(outside).toContain("WHEN plan_start IS NOT NULL AND (d < plan_start OR d > plan_end) THEN 'outside_plan'");
+    expect(outside.indexOf("'outside_plan'")).toBeLessThan(outside.indexOf("WHEN d < today THEN 'not_published'"));
+    expect(outside).toContain("GRANT EXECUTE ON FUNCTION public.get_daily_quiz_calendar(uuid, date, integer, uuid) TO authenticated, service_role;");
+  });
+
+  it("the admin UI labels them and offers no actions", () => {
+    expect(admin).toContain("outside_plan: { label: '不在計畫期間', kind: 'neutral' }");
+    expect(admin).toContain("!['open', 'ended', 'outside_plan'].includes(day.status)");
+  });
+});
+
 describe("admin UI (#307)", () => {
   const uiWithComments = admin.slice(admin.indexOf("// ── 小測驗後台（#307）"), admin.indexOf("async function loadActiveAdminPlanSubtab("));
   // 說明註解本身會提到「版本 A／B」「審核」「發佈範圍」，檢查畫面時先拿掉註解
