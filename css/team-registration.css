@@ -828,6 +828,23 @@ body.reading-team-modal-open .main-content {
   height: 100%;
 }
 
+/* #293：第 2 遍以後的兩層進度條。底層淡色滿格＝前一遍已完成；
+   上層（既有的 span，寬度用行內 style 設本遍進度）＝本遍進度。 */
+.reading-team-progress--layered {
+  display: grid;
+}
+
+.reading-team-progress--layered > * {
+  grid-area: 1 / 1;
+  width: 100%;
+}
+
+.reading-team-progress__base {
+  background: var(--reading-team-accent-soft);
+  display: block;
+  height: 100%;
+}
+
 .reading-team-dialog__footer {
   border-top: 1px solid var(--reading-team-separator);
   gap: 10px;

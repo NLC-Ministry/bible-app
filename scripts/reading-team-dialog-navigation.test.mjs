@@ -8,6 +8,7 @@ import {
   countExpectedScheduleDays,
   countLateCompletedDays
 } from "../js/data/schedule-progress.mjs";
+import { getRoundProgressDisplay } from "../js/data/round-progress-display.mjs";
 
 const teamUi = readFileSync(new URL("../js/modules/team-registration.js", import.meta.url), "utf8");
 
@@ -74,7 +75,8 @@ describe("reading team dialog navigation", () => {
       isCampaignStageKind,
       countScheduleDaysCoveredByChapters,
       countExpectedScheduleDays,
-      countLateCompletedDays
+      countLateCompletedDays,
+      getRoundProgressDisplay
     });
 
     dom.window.eval(teamUi.replace(/^import[^;]+;\s*/gm, ""));

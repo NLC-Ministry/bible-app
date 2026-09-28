@@ -3017,6 +3017,26 @@ body:not(.dark-theme) .settings-row-btn:hover {
   transition: width 0.4s ease;
 }
 
+/* #293：第 2 遍以後的兩層進度條。底層淡色滿格＝前一遍已完成（皇冠取代 0%）；
+   上層品牌色＝本遍進度。用 grid 疊層，比 absolute 定位更不容易被外層
+   overflow/尺寸規則打亂。 */
+.plan-progress-wrapper--layered {
+  display: grid;
+}
+
+.plan-progress-wrapper--layered > * {
+  grid-area: 1 / 1;
+  width: 100%;
+}
+
+.plan-progress-bar-base {
+  height: 100%;
+  background: var(--color-brand-subtle);
+}
+
+/* .plan-progress-bar 上層仍用行內 style="width: X%" 設定本遍進度，
+   行內樣式的優先順序本來就會蓋過上面 grid 子項的 width:100%，不用另外處理。 */
+
 .day-section {
   border-bottom: 1px solid var(--border-card);
   padding: 1rem 0;

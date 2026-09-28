@@ -35,6 +35,7 @@ import {
   bindQuestionFieldset
 } from "./quiz-question-types.mjs";
 import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
 // Reading plans tab view controller
 
@@ -1957,18 +1958,30 @@ function renderJoinedPlansList() {
       } else {
         // Normal active plan: a big progress number carries the card instead of a "進度：" text row
         const totalChapters = plan.currentRoundTotalChapters || plan.totalChapters;
-        const progressCaption = currentRound > 1
-          ? `已讀 ${plan.completedChapters} / ${totalChapters} 章・第 ${currentRound} 遍（已完成 ${currentRound - 1} 遍 👑）`
+        // #293：第 2 遍以後不要再讓大字單獨顯示「0%」——改成皇冠圖示＋「第 N 遍」，
+        // caption 改成本遍實際章數，round 1 畫面完全不變。
+        const roundProgress = getRoundProgressDisplay({
+          round: currentRound,
+          progress,
+          read: plan.completedChapters,
+          total: totalChapters
+        });
+        const progressCaption = roundProgress.isMultiRound
+          ? roundProgress.roundStatusText
           : `已讀 ${plan.completedChapters} / ${totalChapters} 章`;
+        const progressHeroValue = roundProgress.isMultiRound
+          ? `<span class="nlc-icon nlc-icon--sm" data-icon="crown" aria-hidden="true"></span>${roundProgress.roundLabel}`
+          : `${progress}%`;
         const progressHero = isUpcomingFixed
           ? renderPlanCardProgressHero({ value: escapeHTML(getPlanStartCountdownText(plan)), tone: "warning" })
-          : renderPlanCardProgressHero({ value: `${progress}%`, caption: progressCaption });
+          : renderPlanCardProgressHero({ value: progressHeroValue, caption: progressCaption });
 
         const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan);
         const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls"></div>` : "";
         const progressHtml = isUpcomingFixed
           ? ""
-          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact" style="width: 100%;">
+          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact${roundProgress.isMultiRound ? " plan-progress-wrapper--layered" : ""}" style="width: 100%;">
+              ${roundProgress.isMultiRound ? `<div class="plan-progress-bar-base"></div>` : ""}
               <div class="plan-progress-bar" style="width: ${progress}%;"></div>
             </div>`;
 
@@ -3510,8 +3523,17 @@ function getDailyQuizTaiwanToday() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+// 已經讀完一遍（第一遍全部打卡，或已進入第 2 遍以後）就不再檢查當天進度，
+// 每次小測驗都可以直接作答；判斷方式跟 memberIsCompletedOnce 同一套。
+function hasCompletedDailyQuizFirstRound(plan) {
+  return Boolean(plan?.isPlanCompleted) || Number(plan?.currentRound || 1) > 1;
+}
+
 function getDailyQuizReadingProgress(plan, quizDate) {
   const round = Number(plan?.currentRound || 1);
+  if (hasCompletedDailyQuizFirstRound(plan)) {
+    return { total: 0, completed: 0, remaining: 0, isComplete: true, firstRoundCompleted: true };
+  }
   const day = Array.isArray(plan?.days)
     ? plan.days.find(item => String(item?.isoDate || "") === String(quizDate || ""))
     : null;
@@ -3560,7 +3582,9 @@ function renderDailyQuizEntry(content, context, plan, quizDate) {
     ? "今天的小測驗已完成，可查看答案與解說"
     : isClosed
       ? `作答時間已於 ${formatDailyQuizTaiwanClock(assignedQuiz.answerCloseAt)} 截止`
-      : "完成今天的速讀進度後即可作答";
+      : hasCompletedDailyQuizFirstRound(plan)
+        ? "你已讀完一遍，可以直接作答"
+        : "完成今天的速讀進度後即可作答";
 
   content.innerHTML = `
     <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description" ${isClosed ? "disabled" : ""}>
