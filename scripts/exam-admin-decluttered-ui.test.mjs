@@ -74,8 +74,8 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
 });
 
 describe("不常用的切換/維護動作收進「⋯ 更多」，主畫面只留當下真正要做的事", () => {
-  it("actions 陣列拆成 primaryActions／moreActions 兩份，自動評分/答案詳解/複習/清除演練都進更多", () => {
-    expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">');
+  it("actions 陣列拆成 primaryActions／moreActions 兩份，答案詳解/複習/清除演練都進更多（自動評分開關已拿掉，#299）", () => {
+    expect(exam).not.toContain('data-exam-act="autoscore"');
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">');
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">');
     // #298：沒有「發佈預告文」了；「取消排程」是已排程時的主要動作
@@ -124,11 +124,10 @@ describe("說明改成小圖示點擊彈出：不再另外開分頁，需要才�
     expect(exam).toContain('if (e.key === "Escape") _closeExamInfoPopover();');
   });
 
-  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：演練作答、首頁卡片、自動評分、答案詳解、複習、清除演練、公布成績", () => {
+  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：演練作答、首頁卡片、答案詳解、複習、清除演練、公布成績", () => {
     expect(exam).not.toContain('examInfoIcon("測試版與正式版是兩份獨立的卷。');
     expect(exam).toContain('>演練作答</a>${examInfoIcon(');
     expect(exam).toContain('<legend>首頁卡片${examInfoIcon(');
-    expect(exam).toContain('data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon(');

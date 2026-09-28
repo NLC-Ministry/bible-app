@@ -3772,7 +3772,7 @@ const db = {
       exam_practice_locked: "測驗活動已結束，複習已鎖定、不能再修改。",
       exam_practice_no_submit: "複習不需要正式送出；答案會自動儲存到活動結束。",
       exam_practice_not_gradable: "複習不列入正式簡答批改。",
-      exam_scoring_before_close: "請先關閉測驗，才能執行自動評分。",
+      exam_scoring_before_close: "請先關閉測驗，才能計分。",
       exam_grading_before_close: "請先關閉測驗，才能開始簡答批改。",
       exam_results_before_close: "請先關閉測驗，才能公布答案與成績。",
       exam_auto_score_pending: "請先完成自動題計分，再開始簡答批改。",
@@ -3790,6 +3790,11 @@ const db = {
       exam_grading_attempt_not_gradable: "這份作答不在可批改狀態。",
       exam_grading_batch_too_large: "單次最多送出 200 張，請分批。"
     };
+    // 公布成績前的檢查會把「還差什麼」接在錯誤碼後面（#299），直接顯示給管理員
+    const missingKeys = raw.match(/exam_answer_keys_incomplete:\s*([^\n]+)/);
+    if (missingKeys) return `還有題目沒填正解：${missingKeys[1].trim()}。填好才能公布成績。`;
+    const ungraded = raw.match(/exam_grading_incomplete:\s*([^\n]+)/);
+    if (ungraded) return `${ungraded[1].trim()}，批改完才能公布成績。`;
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : "目前無法載入大測驗資料，請稍後再試。";
   },
@@ -3883,9 +3888,7 @@ const db = {
   async resetMyExamRehearsal(paperId) {
     return this._callExamRpc("exam_reset_my_rehearsal", { p_paper_id: paperId });
   },
-  async setExamAutoScore(paperId, enabled) {
-    return this._callExamRpc("exam_set_auto_score", { p_paper_id: paperId, p_enabled: !!enabled });
-  },
+  // setExamAutoScore removed (#299): 收卷一律計分；exam_set_auto_score 函式留到 #303 才刪。
   async setExamPracticeEnabled(paperId, enabled) {
     return this._callExamRpc("exam_set_practice_enabled", { p_paper_id: paperId, p_enabled: !!enabled });
   },

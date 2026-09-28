@@ -390,7 +390,7 @@ export async function renderExamPanel(root) {
   // 不要卡在一個已經消失的分頁上、畫面空白。
   if (!availableSubviews.includes(examAdminSubview)) examAdminSubview = availableSubviews[0] || "bank";
 
-  const autoScoreOn = paper.auto_score_enabled !== false;   // 預設開；答案未定稿時可先關
+  // 沒有「自動評分」開關了（#299）：收卷一律計分，批改中改正解會自動重算。
   const practiceEnabled = paper.practice_retake_enabled !== false;
   const explanationOn = paper.show_answer_explanation === true;   // 預設關；不受成績公布鎖定
 
@@ -411,9 +411,6 @@ export async function renderExamPanel(root) {
   const moreActions = [
     `<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`
   ];
-  if (!resultsPublished) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon("自動評分關閉後，關閉測驗時不會自動計分，要等答案定稿、重新開啟自動評分後再手動重新計分一次。")}`);
-  }
   if (paper.status !== "closed" && !resultsPublished) {
     moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon("會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。")}`);
   }
@@ -449,7 +446,7 @@ export async function renderExamPanel(root) {
 
   // 公布成績：已有作答、尚未公布 → 對外釋出並永久鎖定
   if (officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
-    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("所有作答都已批改完成才能按。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、重新計分、批改、清除作答）一律永久鎖定，無法復原。")}`);
+    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("所有題目（簡答題除外）都要有正解、簡答題都要批改完才能公布；還差什麼，按下去會直接告訴你。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、批改、清除作答）一律永久鎖定，無法復原。")}`);
     statusNote = "「公布成績」前會先自動收掉逾時未交的作答，公布後所有結算操作一律鎖定。";
   }
   const actionHint = statusNote;
@@ -458,7 +455,7 @@ export async function renderExamPanel(root) {
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
-      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}${autoScoreOn || resultsPublished ? "" : '　<span class="stat-badge stat-badge--danger">自動評分關閉</span>'}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
+      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
       ${showChecklist ? examChecklistHtml(checklist) : ""}
       <div class="exam-admin__actions">${primaryActions.join("")}</div>
       ${actionHint ? `<p class="exam-admin__meta">${esc(actionHint)}</p>` : ""}
@@ -510,24 +507,6 @@ export async function renderExamPanel(root) {
   }));
   body.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click", async () => {
     const act = b.dataset.examAct;
-    if (act === "autoscore") {
-      const turnOn = !autoScoreOn;
-      if (!turnOn && !confirm("關閉自動評分後，關閉測驗時也不會自動計分；須在答案定稿後重新開啟並手動計分。確定？")) return;
-      b.disabled = true;
-      const r = await db.setExamAutoScore(paper.id, turnOn);
-      b.disabled = false;
-      if (!r.success) { toast(r.message || "切換失敗"); return; }
-      if (turnOn && paper.status === "closed" && confirm("已開啟自動評分。要立刻重新計分現有的正式作答嗎？")) {
-        const r2 = await db.recomputeExamScores(paper.id);
-        toast(r2.success ? `已重新計分 ${r2.data?.recomputed ?? ""} 筆` : (r2.message || "重新計分失敗"));
-      } else {
-        toast(turnOn
-          ? (paper.status === "closed" ? "已開啟自動評分" : "已開啟；測驗關閉前仍不會提前評分")
-          : "已關閉自動評分");
-      }
-      rerender();
-      return;
-    }
     if (act === "practice-toggle") {
       const turnOn = !practiceEnabled;
       if (!turnOn && !confirm("關閉後不再接受新的複習；已建立的複習仍可修改到原活動結束時間後 24 小時。確定？")) return;
@@ -568,7 +547,7 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。若自動評分已開啟且正解完整，關閉後才會開始計算正式成績。確定提前關閉？")) return;
+    if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。關閉後會自動計分；之後修正正解，分數也會自動重新計算。確定提前關閉？")) return;
     if (act === "publish" && !confirm(`排程後，會友首頁會立刻出現這份測驗的卡片，開放時間到了就能作答。開放作答前仍可修改題目內容。${rehearsalCount ? `\n這份試卷上的 ${rehearsalCount} 筆演練作答會一併清除。` : ""}確定排程？`)) return;
     if (act === "reopen" && !confirm("取消排程後，會友首頁的卡片會消失，試卷回到準備中。確定取消排程？")) return;
     if (act === "reset" && !confirm(`確定清除這份試卷上的 ${rehearsalCount} 筆演練作答？（無法復原）`)) return;
@@ -1405,17 +1384,17 @@ function renderExamAnswerKeys(host, paper, questions, rerender) {
     return;
   }
 
+  // 批改中改正解，伺服器會在同一個交易裡把所有已送出的作答重新計分（#299）
+  const grading = paper.status === "closed";
   host.innerHTML = `
-    <p class="exam-admin__meta">題目已鎖定，這裡只填「正解」。適合「考完才拿到官方答案」的情況——填好後回上方按「開啟自動評分」→「重新計分」即可結算。</p>
+    <p class="exam-admin__meta">${grading
+      ? "改了正解，所有人的分數會自動重新計算，不用另外按「重新計分」。"
+      : "可以先填正解；收卷時會自動計分，之後再改也會自動重算。"}</p>
     ${SECTION_ORDER.filter((s) => bySec[s]).map((s) => `
       <section class="exam-admin__bank-sec">
         <h4>${esc(SECTION_TITLE[s])}</h4>
         <div class="exam-admin__q-list">${bySec[s].map((q, i) => answerKeyCard(q, i + 1)).join("")}</div>
-      </section>`).join("")}
-    ${paper.status !== "closed" ? '<p class="exam-admin__meta">測驗尚未關閉：可以先填正解，但不得提前自動評分；時間到會自動關閉。</p>' : ""}
-    <div class="exam-admin__ak-foot">
-      <button type="button" class="primary-btn" id="exam-ak-recompute" ${paper.status !== "closed" ? "disabled" : ""}>重新計分（依目前正解）</button>
-    </div>`;
+      </section>`).join("")}`;
 
   host.querySelectorAll(".exam-admin__ak-card").forEach((card) => {
     card.querySelector("[data-ak-save]").addEventListener("click", async (e) => {
@@ -1427,16 +1406,9 @@ function renderExamAnswerKeys(host, paper, questions, rerender) {
       if (!r.success) { toast(r.message || "儲存失敗"); return; }
       const st = card.querySelector("[data-ak-status]");
       if (st) st.textContent = "已設定 ✓";
-      toast("已儲存正解");
+      const n = Number(r.data?.recomputed) || 0;
+      toast(n ? `已儲存正解，${n} 份作答的分數已重新計算` : "已儲存正解");
     });
-  });
-  host.querySelector("#exam-ak-recompute")?.addEventListener("click", async (e) => {
-    if (!confirm("依目前已填的正解，重新計算所有已送出的作答分數？")) return;
-    e.target.disabled = true;
-    const r = await db.recomputeExamScores(paper.id);
-    e.target.disabled = false;
-    toast(r.success ? `已重新計分 ${r.data?.recomputed ?? ""} 筆` : (r.message || "重新計分失敗"));
-    if (r.success) rerender();
   });
 }
 
@@ -3368,7 +3340,7 @@ function examResultRow(a, graded) {
   const ok = a.autoCorrect === true;
   const scored = a.autoCorrect === true || a.autoCorrect === false;   // null = 尚未計分
   if (!scored) {
-    // 還沒判定對錯（自動評分關閉 / 尚未重新計分）——不要顯示「答錯」
+    // 還沒判定對錯（還沒收卷計分）——不要顯示「答錯」
     const answered = a.response !== null && a.response !== undefined
       && !(Array.isArray(a.response) && a.response.length === 0)
       && !(typeof a.response === "object" && !Array.isArray(a.response) && Object.keys(a.response).length === 0);
