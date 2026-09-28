@@ -4204,12 +4204,13 @@ const db = {
       : result;
   },
 
-  async carryReadingTeamsToStage(plan) {
+  // division：只帶那一組（3 / 6）；不給 = 隊長在上一個計畫的所有組別。
+  async carryReadingTeamsToStage(plan, division = null) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到下一階段計畫。" };
-    return this._callReadingTeamRpc("carry_reading_teams_to_stage", {
-      p_target_global_plan_id: planId
-    });
+    const args = { p_target_global_plan_id: planId };
+    if ([3, 6].includes(Number(division))) args.p_division = Number(division);
+    return this._callReadingTeamRpc("carry_reading_teams_to_stage", args);
   },
 
   // carry_reading_teams_to_stage 的略過原因（20260928101011，#321）→ 給隊長看的說明。

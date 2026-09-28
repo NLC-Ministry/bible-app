@@ -67,12 +67,13 @@ describe("plan join navigation", () => {
       plan.indexOf("function isChapterReadForRound")
     );
 
-    expect(presetFlow).toContain("openPlanDetailsDialog(plan, { onJoin: async () => {");
-    expect(presetFlow).toContain("joinPlanSoloFromCard(plan, key)");
+    expect(presetFlow).toContain("openPlanDetailsDialog(plan, { onJoin: () => joinPlanFromExplore(plan, key) });");
+    const joinFromExplore = plan.slice(plan.indexOf("async function joinPlanFromExplore"), plan.indexOf("function getJoinedPlanStartTime"));
+    expect(joinFromExplore).toContain("joinPlanSoloFromCard(plan, key)");
     expect(presetFlow).not.toContain("createTeamFromPlanCard");
     expect(presetFlow).not.toContain('data-plan-card-action="team-create"');
     expect(presetFlow).not.toContain("openJoinModeDialog(plan)");
-    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("joinPlanSoloFromCard(plan, key)"));
+    expect(presetFlow.indexOf("openPlanDetailsDialog")).toBeLessThan(presetFlow.indexOf("joinPlanFromExplore(plan, key)"));
     expect(plan).not.toContain("async function createTeamFromPlanCard");
   });
 
