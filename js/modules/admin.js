@@ -3386,9 +3386,6 @@ function adminQuizGroupMatchesScope(group, scope) {
 }
 
 function renderAdminQuizScopeResults(context, scope) {
-  if (scope && scope.scopeType === 'admin') {
-    return '<p class="admin-daily-quiz-empty">測試發布：只有系統管理員會收到，不屬於任何小組，不影響任何組員的名單或平均分數。</p>';
-  }
   const groups = (Array.isArray(context.managedGroups) ? context.managedGroups : [])
     .filter(group => adminQuizGroupMatchesScope(group, scope));
   if (!groups.length) return '<p class="admin-daily-quiz-empty">此範圍內目前沒有可管理的小組。</p>';
@@ -3421,17 +3418,10 @@ function renderAdminQuizScopeSelectorHtml(prefix) {
     <select id="${prefix}-zone-select" class="form-control"></select>
     <select id="${prefix}-group-select" class="form-control"></select>
     <select id="${prefix}-master-select" class="hidden" style="display:none;"></select>
-  </div>
-  <label class="admin-quiz-schedule-checkbox">
-    <input type="checkbox" id="${prefix}-admin-only-toggle">
-    僅發布給系統管理員（測試用，不會發給任何真的會友）
-  </label>`;
+  </div>`;
 }
 
 function getAdminQuizScope(prefix) {
-  if (document.getElementById(`${prefix}-admin-only-toggle`)?.checked) {
-    return { scopeType: "admin", scopeName: null };
-  }
   const readScope = id => {
     const value = document.getElementById(id)?.value || "";
     return value === "unassigned" ? "" : value;
@@ -3890,7 +3880,6 @@ function adminQuizFormatTaiwanDateTime(iso) {
 
 function renderAdminQuizScheduleStatusHtml(schedule) {
   const scopeLabel = schedule.scopeType === 'all' ? '你負責的全部小組'
-    : schedule.scopeType === 'admin' ? '系統管理員（測試用）'
     : (schedule.scopeName || '');
   const versionLabel = schedule.hasCustomQuestions ? '自訂題目' : `版本 ${schedule.variant}`;
   return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
@@ -3907,11 +3896,52 @@ function renderAdminQuizScheduleStatusHtml(schedule) {
   </section>`;
 }
 
+// ── 自動發佈規則（#306）：每天 00:00 發給全部小組、23:59 截止，用前一天中午 AI 出好的題目 ──
+function renderAdminQuizAutoRuleHtml() {
+  return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-auto-rule">
+    <div class="admin-daily-quiz-heading">
+      <div><p class="admin-registration-statistics__eyebrow">自動發佈</p><h2>每天自動發佈</h2></div>
+    </div>
+    <p class="admin-daily-quiz-note">開啟後，每天 00:00 自動發給全部小組、23:59 截止。題目是前一天中午 AI 出好的那一版；某一天還沒有題目就不會發。</p>
+    <label class="admin-quiz-schedule-checkbox">
+      <input type="checkbox" data-quiz-auto-rule-toggle disabled>
+      <span data-quiz-auto-rule-label>讀取中…</span>
+    </label>
+  </section>`;
+}
+
+async function bindAdminQuizAutoRule(root) {
+  const section = root.querySelector('#admin-quiz-auto-rule');
+  const toggle = section?.querySelector('[data-quiz-auto-rule-toggle]');
+  const label = section?.querySelector('[data-quiz-auto-rule-label]');
+  if (!toggle || !label) return;
+  const show = rule => {
+    toggle.checked = rule.enabled === true;
+    label.textContent = rule.enabled ? '已開啟每天 00:00 自動發佈' : '未開啟（目前要手動發佈）';
+  };
+  const result = await db.getDailyQuizAutoPublishRule(state.adminManagementPlan);
+  if (!result.success) { label.textContent = result.message || '無法讀取自動發佈設定'; return; }
+  show(result.data || {});
+  toggle.disabled = false;
+  toggle.addEventListener('change', async () => {
+    const turnOn = toggle.checked;
+    if (!window.confirm(turnOn
+      ? '開啟後，每天 00:00 會自動把小測驗發給全部小組、23:59 截止。確定開啟？'
+      : '關閉後，之後每天都要手動發佈。確定關閉？')) { toggle.checked = !turnOn; return; }
+    toggle.disabled = true;
+    const saved = await db.setDailyQuizAutoPublishRule(state.adminManagementPlan, turnOn);
+    toggle.disabled = false;
+    if (!saved.success) { toggle.checked = !turnOn; showToast(saved.message || '儲存失敗'); return; }
+    show(saved.data || { enabled: turnOn });
+    showToast(turnOn ? '已開啟每天自動發佈' : '已關閉每天自動發佈');
+  });
+}
+
 function renderAdminQuizPublishPanel(context) {
-  if (context.pendingSchedule) return renderAdminQuizScheduleStatusHtml(context.pendingSchedule);
+  if (context.pendingSchedule) return renderAdminQuizAutoRuleHtml() + renderAdminQuizScheduleStatusHtml(context.pendingSchedule);
   const approvedVariants = Array.isArray(context.approvedVariants) ? context.approvedVariants : [];
   const hasApproved = variant => approvedVariants.some(item => item.variant === variant);
-  return `<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
+  return `${renderAdminQuizAutoRuleHtml()}<section class="glass-card admin-daily-quiz-block" id="admin-quiz-publish-panel">
     <div class="admin-daily-quiz-heading">
       <div><p class="admin-registration-statistics__eyebrow">組織發佈</p><h2>發佈小測驗</h2></div>
     </div>
@@ -3963,12 +3993,6 @@ function updateAdminQuizPublishState(root, context, selectedVersion) {
   const customConfirmed = root.dataset.quizCustomConfirmed === 'true';
   if (customOption) customOption.disabled = !customConfirmed;
   if (customHint) customHint.classList.toggle('hidden', customConfirmed);
-  // 選「僅系統管理員」時，大區/牧區/小組跟這個範圍無關，整組鎖起來。
-  const isAdminOnlyScope = scope.scopeType === 'admin';
-  ['region', 'zone', 'group'].forEach(part => {
-    const select = root.querySelector(`#admin-quiz-publish-${part}-select`);
-    if (select) select.disabled = isAdminOnlyScope;
-  });
   if (!publishBtn) return;
   let ready = false;
   if (selectedVersion === 'A' || selectedVersion === 'B') {
@@ -4019,7 +4043,6 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
   ['region', 'zone', 'group'].forEach(part => {
     panel.querySelector(`#admin-quiz-publish-${part}-select`)?.addEventListener('change', refresh);
   });
-  panel.querySelector('#admin-quiz-publish-admin-only-toggle')?.addEventListener('change', refresh);
 
   versionButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -4040,7 +4063,6 @@ function bindAdminQuizPublishPanel(root, context, quizDate) {
     if (!selectedVersion) return;
     const scope = getAdminQuizScope('admin-quiz-publish');
     const scopeLabel = scope.scopeType === 'all' ? '你負責的全部小組'
-      : scope.scopeType === 'admin' ? '系統管理員（測試用）'
       : scope.scopeName;
     let selection;
     if (selectedVersion === 'C') {
@@ -4503,24 +4525,31 @@ async function renderAdminDailyQuizManagement(forceRefresh = false, requestedDat
   }
   const context = result.context || {};
   const approvedCount = Array.isArray(context.approvedVariants) ? context.approvedVariants.length : 0;
-  const activeSubtab = ['custom', 'review', 'publish', 'stats'].includes(root.dataset.quizActiveSubtab)
-    ? root.dataset.quizActiveSubtab
-    : 'custom';
+  // #306：只有系統管理員能出題、發佈；小組長、牧區長只看統計
+  const canPublish = typeof getUserRoleCode === 'function' && getUserRoleCode(state.currentUser) === 'admin';
+  const activeSubtab = !canPublish
+    ? 'stats'
+    : (['custom', 'review', 'publish', 'stats'].includes(root.dataset.quizActiveSubtab)
+      ? root.dataset.quizActiveSubtab
+      : 'custom');
   root.innerHTML = `
     <div class="admin-daily-quiz-toolbar">
       <label for="admin-daily-quiz-date">測驗日期<input id="admin-daily-quiz-date" class="form-control" type="date" value="${adminQuizEscape(quizDate)}"></label>
       <span>${approvedCount} 版已審核</span>
     </div>
-    ${renderAdminQuizSubtabNavHtml(activeSubtab)}
+    ${canPublish ? `${renderAdminQuizSubtabNavHtml(activeSubtab)}
     <div data-quiz-subtab-panel="custom" class="${activeSubtab === 'custom' ? '' : 'hidden'}">${renderAdminQuizCustomSectionHtml(context)}</div>
     <div data-quiz-subtab-panel="review" class="${activeSubtab === 'review' ? '' : 'hidden'}">${renderAdminQuizReviewCards(context)}</div>
-    <div data-quiz-subtab-panel="publish" class="${activeSubtab === 'publish' ? '' : 'hidden'}">${renderAdminQuizPublishPanel(context)}</div>
+    <div data-quiz-subtab-panel="publish" class="${activeSubtab === 'publish' ? '' : 'hidden'}">${renderAdminQuizPublishPanel(context)}</div>` : ''}
     <div data-quiz-subtab-panel="stats" class="${activeSubtab === 'stats' ? '' : 'hidden'}">${renderAdminQuizStatsSectionHtml()}</div>`;
-  bindAdminQuizSubtabNav(root);
-  await bindAdminDailyQuizActions(root, context, quizDate);
-  bindAdminQuizCarousels(root);
-  bindAdminQuizCustomSection(root, context);
-  bindAdminQuizPublishPanel(root, context, quizDate);
+  if (canPublish) {
+    bindAdminQuizSubtabNav(root);
+    await bindAdminDailyQuizActions(root, context, quizDate);
+    bindAdminQuizCarousels(root);
+    bindAdminQuizCustomSection(root, context);
+    bindAdminQuizPublishPanel(root, context, quizDate);
+    void bindAdminQuizAutoRule(root);
+  }
   bindAdminQuizStatsPanel(root, state.adminManagementPlan);
   if (typeof hydrateIcons === 'function') hydrateIcons(root);
 }

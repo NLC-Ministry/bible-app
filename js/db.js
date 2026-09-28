@@ -3531,6 +3531,7 @@ const db = {
       quiz_not_ready: "這一版題目尚未生成完成。",
       quiz_approval_required: "至少需要一版已審核題目才能發佈。",
       quiz_publish_scope_required: "只能發佈到你所負責組織範圍內的小組。",
+      quiz_publish_admin_only: "只有系統管理員可以發佈小測驗。",
       quiz_publish_groups_required: "目前沒有可以發佈的小組。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
       quiz_publication_not_found: "找不到這份小測驗發佈紀錄。",
@@ -3649,6 +3650,19 @@ const db = {
       p_publish_at: publishAt,
       p_answer_close_at: answerCloseAt || null
     });
+  },
+
+  // 自動發佈規則（#306）：每天 00:00 發給全部小組、23:59 截止；只有系統管理員能讀寫
+  async getDailyQuizAutoPublishRule(plan) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("get_daily_quiz_auto_publish_rule", { p_global_plan_id: planId });
+  },
+
+  async setDailyQuizAutoPublishRule(plan, enabled) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("set_daily_quiz_auto_publish_rule", { p_global_plan_id: planId, p_enabled: !!enabled });
   },
 
   async cancelDailyQuizSchedule(scheduleId) {

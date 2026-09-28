@@ -94,16 +94,16 @@ describe("0195: get_daily_quiz_dashboard recognizes admin-scope publications as 
   });
 });
 
-describe("admin.js — 僅系統管理員 scope UI", () => {
-  it("adds an admin-only toggle to the scope selector and reads it before region/zone/group", () => {
-    expect(admin).toContain("id=\"${prefix}-admin-only-toggle\"");
-    expect(admin).toContain('document.getElementById(`${prefix}-admin-only-toggle`)?.checked');
-    expect(admin).toContain('return { scopeType: "admin", scopeName: null };');
+// #306：「僅系統管理員（測試用）」範圍拿掉了——測試一律在 staging（見 #305 共用原則）。
+describe("admin.js — 僅系統管理員 scope UI（#306 已移除）", () => {
+  it("the scope selector no longer offers an admin-only toggle", () => {
+    expect(admin).not.toContain("admin-only-toggle");
+    expect(admin).not.toContain('return { scopeType: "admin", scopeName: null };');
+    expect(admin).not.toContain("系統管理員（測試用）");
   });
 
-  it("locks the region/zone/group selects when the admin-only scope is chosen", () => {
-    expect(admin).toContain("const isAdminOnlyScope = scope.scopeType === 'admin';");
-    expect(admin).toContain("if (select) select.disabled = isAdminOnlyScope;");
+  it("no longer locks region/zone/group selects for an admin-only scope", () => {
+    expect(admin).not.toContain("isAdminOnlyScope");
   });
 
   // The "同時發佈到首頁公告" checkbox this test used to cover was removed

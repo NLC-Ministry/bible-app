@@ -261,7 +261,10 @@ const QUIZ_RPC_FUNCTIONS = new Set([
   // 真正的掃描/發佈 run_daily_quiz_schedule_sweep 不在這裡——只有排程 Edge
   // Function 用 service-role client 直接呼叫，前端永遠拿不到。
   "schedule_daily_quiz_publish",
-  "cancel_daily_quiz_schedule"
+  "cancel_daily_quiz_schedule",
+  // #306：自動發佈規則（讀／寫都只給系統管理員，SQL 端檢查）
+  "get_daily_quiz_auto_publish_rule",
+  "set_daily_quiz_auto_publish_rule"
 ]);
 // 速讀「大測驗」(migration 0096). Gated by the speed_reading_exam feature flag;
 // authoring/grading RPCs additionally require an admin/pastor profile.
