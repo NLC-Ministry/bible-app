@@ -78,10 +78,10 @@ describe("frontend (#299)", () => {
     expect(db).not.toContain("async setExamAutoScore(");
   });
 
-  it("the answer-key tab explains automatic rescoring and reports how many were rescored", () => {
-    const tab = exam.slice(exam.indexOf("function renderExamAnswerKeys"), exam.indexOf("// ── 簡答批改佇列"));
-    expect(tab).toContain("改了正解，所有人的分數會自動重新計算");
-    expect(tab).toContain("份作答的分數已重新計算");
+  it("the questions tab explains automatic rescoring and reports how many were rescored", () => {
+    expect(exam).toContain("修正正解後，所有人的分數會自動重新計算。");
+    const wire = exam.slice(exam.indexOf("function wireAnswerKeyCards"), exam.indexOf("// ── 簡答批改佇列"));
+    expect(wire).toContain("份作答的分數已重新計算");
   });
 
   it("publish errors show the server's detail", () => {

@@ -58,10 +58,9 @@ describe("0199/0200: 公告內容編輯是測試版限定的獨立「公告」�
     expect(noticeFn).toContain("const annLocked = p.status === \"closed\";");
   });
 
-  it("「首頁卡片」分頁在測驗結束前都看得到（伺服器端 exam_save_announcement 同樣擋 closed）", () => {
-    expect(exam).toContain('<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">首頁卡片</button>');
-    expect(exam).toContain('...(showNotice ? ["notice"] : [])');
-    expect(exam).toContain('else if (examAdminSubview === "notice" && showNotice) renderExamNoticeForm(sub, paper, rerender);');
+  it("首頁卡片文字放在「設定」分頁，任何階段都看得到；結束後唯讀（伺服器端 exam_save_announcement 同樣擋 closed，#301）", () => {
+    expect(exam).toContain('renderExamNoticeForm(sub.querySelector("[data-settings-card]"), paper, rerender);');
+    expect(exam).not.toContain('data-exam-sub="notice"');
   });
 
   it("#298：沒有「發佈預告文」/「撤下預告文」了——排程後首頁卡片自動出現", () => {

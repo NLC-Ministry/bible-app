@@ -81,7 +81,8 @@ export async function maybeResumeExam() {
 
 // ══════════════════════════════════════════════════════════════ 後台面板（P2：題庫編輯 + 批改）
 const SECTION_TARGET_DEFAULT = { truefalse: 20, single: 20, multiple: 10, matching: 10, ordering: 10, shortanswer: 3 };
-let examAdminSubview = "bank";          // bank | meta | answers | grade | assign | practice | stats | explain
+let examAdminSubview = "questions";     // 固定三個分頁（#301）：questions 題目 | settings 設定 | results 作答與成績
+let examAdminResultsView = "stats";     // 作答與成績裡的小分頁：stats | grade | assign | practice
 let examAdminGradeFilter = "pending";   // pending | graded | all
 let examAdminGradeSearchQuery = "";     // 批改名單的姓名搜尋關鍵字
 let examAdminPaperId = null;            // 目前選中的試卷（null = 最新那份）
@@ -214,7 +215,7 @@ function openExamCreateTitleModal(onConfirm) {
       </div>
       <div class="exam-admin-modal__body">
         <label>標題<input class="form-control" id="exam-create-title" maxlength="60" placeholder="例：2026 第一階段速讀測驗" value="速讀測驗"></label>
-        <p class="exam-admin__meta">之後仍可在「試卷設定」隨時修改。</p>
+        <p class="exam-admin__meta">之後仍可在「設定」分頁修改。</p>
       </div>
       <div class="exam-admin-modal__foot">
         <button type="button" class="primary-btn" id="exam-create-confirm">建立</button>
@@ -329,7 +330,7 @@ export async function renderExamPanel(root) {
     </div>`;
   const wirePicker = () => {
     body.querySelector("#exam-paper-picker")?.addEventListener("change", (e) => {
-      examAdminPaperId = e.target.value || null; examAdminSubview = "bank"; rerender();
+      examAdminPaperId = e.target.value || null; examAdminSubview = "questions"; examAdminResultsView = "stats"; rerender();
     });
     body.querySelector("#exam-create-paper")?.addEventListener("click", createPaper);
   };
@@ -357,28 +358,15 @@ export async function renderExamPanel(root) {
   // 準備中、已排程的作答都是試作（is_test），開放作答時自動清除；之後的都是正式作答。
   const rehearsalCount = (isDraft || isScheduled) ? (paperRes.data?.testAttemptCount ?? attemptCount) : 0;
 
-  // ── 各分頁「看不看得到」的規則，集中算一次 ──
-  // 準備中、已排程也開放填答案、批改、統計，讓管理員試作完整流程（資料在開放作答時清掉）。
-  const showStats = !canEditPaper || attemptCount > 0;
-  const showExplain = !canEditPaper;                         // 能改題目時，詳解直接在題目卡片裡改
-  const showAnswers = !resultsPublished;
+  // ── 分頁固定三個（#301）：題目／設定／作答與成績，不會再出現又消失 ──
+  // 不能改的時候欄位變成唯讀，上面寫一句原因。作答與成績裡的小分頁依階段決定：
+  // 準備中、已排程也開放批改、統計，讓管理員演練完整流程（資料在開放作答時清掉）。
   const showGrade = hasShortSection && !resultsPublished;
   const showAssign = hasShortSection && !resultsPublished;
   const showPractice = !canEditPaper;
-  const showNotice = paper.status !== "closed";             // 首頁卡片文字在結束前都能改（伺服器端同樣限制）
-  const availableSubviews = [
-    ...(canEditPaper ? ["bank", "meta"] : []),
-    ...(showNotice ? ["notice"] : []),
-    ...(showAnswers ? ["answers"] : []),
-    ...(showGrade ? ["grade"] : []),
-    ...(showAssign ? ["assign"] : []),
-    ...(showPractice ? ["practice"] : []),
-    ...(showStats ? ["stats"] : []),
-    ...(showExplain ? ["explain"] : [])
-  ];
-  // 目前選的分頁如果因為狀態變化不再顯示了，跳到第一個還看得到的分頁，
-  // 不要卡在一個已經消失的分頁上、畫面空白。
-  if (!availableSubviews.includes(examAdminSubview)) examAdminSubview = availableSubviews[0] || "bank";
+  const resultsViews = ["stats", ...(showGrade ? ["grade", "assign"] : []), ...(showPractice ? ["practice"] : [])];
+  if (!["questions", "settings", "results"].includes(examAdminSubview)) examAdminSubview = "questions";
+  if (!resultsViews.includes(examAdminResultsView)) examAdminResultsView = "stats";
 
   // 沒有「自動評分」開關了（#299）：收卷一律計分，批改中改正解會自動重算。
   const practiceEnabled = paper.practice_retake_enabled !== false;
@@ -421,7 +409,7 @@ export async function renderExamPanel(root) {
     tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
   }
 
-  // ── 作答規則（#301 會搬進「設定」分頁）──
+  // ── 作答規則：放在「設定」分頁（#301）──
   const rules = [];
   if (paper.status !== "closed" && !resultsPublished) {
     rules.push(`<span class="exam-admin__rule">送出後可複習：<strong>${practiceEnabled ? "開" : "關"}</strong>
@@ -440,18 +428,11 @@ export async function renderExamPanel(root) {
       ${showChecklist ? examChecklistHtml(checklist) : ""}
       ${mainAction ? `<div class="exam-admin__actions">${mainAction}</div>` : ""}
       ${tools.length ? `<div class="exam-admin__actions exam-admin__actions--tools">${tools.join("")}</div>` : ""}
-      <p class="exam-admin__rules">${rules.join("")}</p>
     </div>
-    <nav class="exam-admin__subnav">
-      ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
-      <button type="button" data-exam-sub="meta" class="${examAdminSubview === "meta" ? "active" : ""}">試卷設定</button>` : ""}
-      ${showNotice ? `<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">首頁卡片</button>` : ""}
-      ${showAnswers ? `<button type="button" data-exam-sub="answers" class="${examAdminSubview === "answers" ? "active" : ""}">填答案</button>` : ""}
-      ${showGrade ? `<button type="button" data-exam-sub="grade" class="${examAdminSubview === "grade" ? "active" : ""}">簡答批改</button>
-      <button type="button" data-exam-sub="assign" class="${examAdminSubview === "assign" ? "active" : ""}">簡答指派</button>` : ""}
-      ${showPractice ? `<button type="button" data-exam-sub="practice" class="${examAdminSubview === "practice" ? "active" : ""}">複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}</button>` : ""}
-      ${showStats ? `<button type="button" data-exam-sub="stats" class="${examAdminSubview === "stats" ? "active" : ""}">統計</button>` : ""}
-      ${showExplain ? `<button type="button" data-exam-sub="explain" class="${examAdminSubview === "explain" ? "active" : ""}">答案詳解</button>` : ""}
+    <nav class="exam-admin__subnav" aria-label="試卷分頁">
+      <button type="button" data-exam-sub="questions" class="${examAdminSubview === "questions" ? "active" : ""}">題目</button>
+      <button type="button" data-exam-sub="settings" class="${examAdminSubview === "settings" ? "active" : ""}">設定</button>
+      <button type="button" data-exam-sub="results" class="${examAdminSubview === "results" ? "active" : ""}">作答與成績</button>
     </nav>
     <div id="exam-admin-sub"></div>`;
 
@@ -463,20 +444,60 @@ export async function renderExamPanel(root) {
       ? db.finalizeExpiredExam(paper.id).catch(() => {})
       : Promise.resolve();
 
+  // 作答與成績：統計／簡答批改／批改指派／複習紀錄。還沒有作答時只寫一句話。
+  const renderResults = async (sub) => {
+    if (attemptCount === 0) {
+      sub.innerHTML = `<div class="admin-user-directory__empty">${canEditPaper || stage === "open"
+        ? "開放作答後會出現在這裡。"
+        : "這份測驗沒有人作答。"}</div>`;
+      return;
+    }
+    const labels = { stats: "統計", grade: "簡答批改", assign: "批改指派", practice: `複習紀錄${practiceAttemptCount ? `（${practiceAttemptCount}）` : ""}` };
+    sub.innerHTML = `
+      <nav class="exam-admin__subnav exam-admin__subnav--inner" aria-label="作答與成績">
+        ${resultsViews.map((v) => `<button type="button" data-exam-results="${v}" class="${examAdminResultsView === v ? "active" : ""}">${labels[v]}</button>`).join("")}
+      </nav>
+      <div id="exam-admin-results"></div>`;
+    const host = sub.querySelector("#exam-admin-results");
+    const show = async () => {
+      if (examAdminResultsView === "grade") { host.innerHTML = '<div class="admin-user-directory__empty">載入批改清單…</div>'; await sweepExpired(); renderExamGrading(host, paper.id, resultsPublished || paper.status !== "closed", paper.status, paper.title); }
+      else if (examAdminResultsView === "assign") { host.innerHTML = '<div class="admin-user-directory__empty">載入指派清單…</div>'; await sweepExpired(); renderExamAssign(host, paper.id, resultsPublished); }
+      else if (examAdminResultsView === "practice") renderExamPracticeRecords(host, paper.id);
+      else { host.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(host, paper.id, hasShortSection, paper.title); }
+    };
+    sub.querySelectorAll("[data-exam-results]").forEach((b) => b.addEventListener("click", () => {
+      if (examAdminResultsView === b.dataset.examResults) return;
+      examAdminResultsView = b.dataset.examResults;
+      sub.querySelectorAll("[data-exam-results]").forEach((x) => x.classList.toggle("active", x === b));
+      show();
+    }));
+    await show();
+  };
+
+  // 設定：試卷設定（開放作答後唯讀）＋首頁卡片文字＋作答規則
+  const renderSettings = (sub) => {
+    const reason = examLockReason(stage, "settings");
+    sub.innerHTML = `
+      ${reason ? `<p class="exam-admin__lock-note">${esc(reason)}</p>` : ""}
+      <div data-settings-meta></div>
+      <div data-settings-card></div>
+      <fieldset class="exam-admin__sec-cfg exam-admin__rules-cfg">
+        <legend>作答規則</legend>
+        <p class="exam-admin__rules">${rules.join("")}</p>
+      </fieldset>`;
+    renderExamMetaForm(sub.querySelector("[data-settings-meta]"), paper, questions, rerender, { readOnly: !canEditPaper });
+    renderExamNoticeForm(sub.querySelector("[data-settings-card]"), paper, rerender);
+    wireActs(sub);
+  };
+
   // 子分頁切換：只換 #exam-admin-sub 這一塊 + 切 nav 的 active，不整塊重繪、不重打 API
   const renderSub = async () => {
     const sub = body.querySelector("#exam-admin-sub");
     if (!sub) return;
-    if (examAdminSubview === "answers") renderExamAnswerKeys(sub, paper, questions, rerender);
-    else if (examAdminSubview === "grade") { sub.innerHTML = '<div class="admin-user-directory__empty">載入批改清單…</div>'; await sweepExpired(); renderExamGrading(sub, paper.id, resultsPublished || paper.status !== "closed", paper.status, paper.title); }
-    else if (examAdminSubview === "assign") { sub.innerHTML = '<div class="admin-user-directory__empty">載入指派清單…</div>'; await sweepExpired(); renderExamAssign(sub, paper.id, resultsPublished); }
-    else if (examAdminSubview === "practice") renderExamPracticeRecords(sub, paper.id);
-    else if (examAdminSubview === "stats") { sub.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>'; await sweepExpired(); renderExamStats(sub, paper.id, hasShortSection, paper.title); }
-    else if (examAdminSubview === "explain") renderExamExplanationEditor(sub, questions);
-    else if (examAdminSubview === "notice" && showNotice) renderExamNoticeForm(sub, paper, rerender);
-    else if (!canEditPaper) sub.innerHTML = '<div class="admin-user-directory__empty">開放作答後題目與試卷設定就鎖定了。要查看題目請用「預覽試卷」；答案詳解可以在「答案詳解」分頁補寫。</div>';
-    else if (examAdminSubview === "meta") renderExamMetaForm(sub, paper, questions, rerender);
-    else renderExamQuestionBank(sub, paper, questions, rerender);
+    if (examAdminSubview === "settings") renderSettings(sub);
+    else if (examAdminSubview === "results") await renderResults(sub);
+    else if (canEditPaper) renderExamQuestionBank(sub, paper, questions, rerender);
+    else renderExamLockedQuestions(sub, paper, questions, stage);
   };
   body.querySelectorAll("[data-exam-sub]").forEach((b) => b.addEventListener("click", () => {
     if (examAdminSubview === b.dataset.examSub) return;
@@ -484,7 +505,8 @@ export async function renderExamPanel(root) {
     body.querySelectorAll("[data-exam-sub]").forEach((x) => x.classList.toggle("active", x === b));
     renderSub();
   }));
-  body.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click", async () => {
+  // 動作按鈕：標頭與「設定」分頁都有，用同一支處理
+  const handleAct = async (b) => {
     const act = b.dataset.examAct;
     if (act === "practice-toggle") {
       const turnOn = !practiceEnabled;
@@ -545,10 +567,25 @@ export async function renderExamPanel(root) {
       : "已取消排程，首頁卡片已移除"
     );
     rerender();
-  }));
+  };
+  const wireActs = (scope) => scope.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click", () => handleAct(b)));
+  wireActs(body.querySelector(".exam-admin__paper"));
 
   renderSub();
   keepScroll();
+}
+
+// ── 不能改的時候，分頁上面那一句原因（#301）──
+function examLockReason(stage, area) {
+  if (area === "questions") {
+    if (stage === "open") return "已開放作答，題目已鎖定；正解和答案詳解仍可修改。";
+    if (stage === "grading") return "已收卷，題目已鎖定；修正正解後，所有人的分數會自動重新計算。答案詳解仍可補寫。";
+    if (stage === "published") return "成績已公布，題目和正解都已鎖定；答案詳解仍可補寫。";
+    return "";
+  }
+  if (stage === "open") return "已開放作答，試卷設定已鎖定；首頁卡片文字和作答規則仍可修改。";
+  if (stage === "grading" || stage === "published") return "測驗已結束，試卷設定和首頁卡片文字已鎖定；答案詳解的顯示設定仍可修改。";
+  return "";
 }
 
 // ── 統計報表（整體 / 大區 / 牧區 / 小組 / 逐題正確率 / 名單）──
@@ -921,7 +958,7 @@ function renderExamNoticeForm(host, paper, rerender) {
 }
 
 // ── 試卷設定表單（含題型與配分）──
-function renderExamMetaForm(host, paper, questions, rerender) {
+function renderExamMetaForm(host, paper, questions, rerender, { readOnly = false } = {}) {
   const p = paper;
   // 已排程：題型題數在排程時驗證過，開放前不能再改（伺服器端 exam_scheduled_structure_locked）
   const structureLocked = examStage(p) === "scheduled";
@@ -966,7 +1003,7 @@ function renderExamMetaForm(host, paper, questions, rerender) {
       <label>對應計畫
         <select class="form-control" id="exam-meta-linked-plan">${planOptions}</select>
       </label>
-      <p class="exam-admin__meta">這份卷的統計頁「團隊排行」只會列出對應計畫底下登記的 3／6 人隊，不會抓到升到下一階段或其他計畫的隊。獨立測驗卷（不選）維持舊行為。跟其他設定一樣按下方「儲存試卷設定」才會存，且只有測試版草稿能改；推正式版時會一併帶過去。</p>
+      <p class="exam-admin__meta">這份卷的統計頁「團隊排行」只會列出對應計畫底下登記的 3／6 人隊，不會抓到升到下一階段或其他計畫的隊。獨立測驗卷（不選）維持舊行為。跟其他設定一樣按下方「儲存試卷設定」才會存；開放作答前都能改。</p>
       <div class="exam-admin__form-row">
         <label>開放起<input type="datetime-local" class="form-control" data-f="open_at" value="${esc(toLocalInput(p.open_at))}"></label>
         <label>開放迄<input type="datetime-local" class="form-control" data-f="close_at" value="${esc(toLocalInput(p.close_at))}"></label>
@@ -1007,6 +1044,13 @@ function renderExamMetaForm(host, paper, questions, rerender) {
   };
   host.querySelectorAll('.exam-admin__sec-row input').forEach((i) => i.addEventListener("input", refreshTotals));
   refreshTotals();
+
+  // 開放作答後唯讀（#301）：欄位看得到、改不了，也不出現儲存按鈕
+  if (readOnly) {
+    host.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = true; });
+    host.querySelector("#exam-meta-save")?.remove();
+    return;
+  }
 
   wireSaveButton(
     host.querySelector("#exam-meta-save"),
@@ -1061,47 +1105,11 @@ function _toggleExamInfoPopover(anchorBtn) {
   document.addEventListener("keydown", _onKeydownCloseExamInfoPopover, true);
 }
 
-// ── 題目已鎖定時，仍可單獨編輯每一題的「答案詳解」（不影響題幹/選項/正解）──
-function explanationOnlyCard(q) {
-  const pl = q.payload || {};
-  const stem = pl.stem || "";
-  return `<div class="exam-admin__q-card" data-qid="${esc(q.id)}">
-    <p class="exam-admin__meta"><strong>${esc(SECTION_TITLE[q.section] || q.section)}　第 ${q.position} 題</strong>${stem ? `：${esc(stem)}` : ""}</p>
-    <label>答案詳解（選填；有爭議或需要補充說明的題目才填）<textarea class="form-control" rows="2" data-explain-text>${esc(pl.answerExplanation || "")}</textarea></label>
-    <div class="exam-admin__q-actions">
-      <button type="button" class="primary-btn" data-explain-save>儲存答案詳解</button>
-    </div>
-  </div>`;
-}
-
-function wireExplanationCards(host) {
-  host.querySelectorAll(".exam-admin__q-card[data-qid]").forEach((card) => {
-    wireSaveButton(card.querySelector("[data-explain-save]"), card, () => {
-      const qid = card.dataset.qid;
-      const text = card.querySelector("[data-explain-text]").value.trim();
-      return db.setExamQuestionExplanation(qid, text);
-    });
-  });
-}
-
-// ── 答案詳解分頁：獨立於「題庫編輯」，開放作答後／已鎖定的試卷也看得到、改得了 ──
-// （「題庫編輯」分頁只有草稿才會出現——見 canEditPaper。
-// 但答案詳解通常是測驗結束、看到結果之後才想補寫，所以另外開一個永遠看得到的分頁。）
-function renderExamExplanationEditor(host, questions) {
-  const sorted = questions.slice()
-    .sort((a, b) => (SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)) || (a.position - b.position));
-  host.innerHTML = `
-    <p class="exam-admin__meta">答案詳解不受題目鎖定影響，開放作答後、收卷後也能隨時補寫、修改；預設空白，一般題目不用填，只有有爭議或需要補充說明的題目才個別填寫。要不要讓會友看到，由上方「顯示/隱藏答案詳解」開關決定。</p>
-    <div class="exam-admin__q-list">${sorted.map((q) => explanationOnlyCard(q)).join("")}</div>
-  `;
-  wireExplanationCards(host);
-}
-
 // ── 題庫編輯（依試卷啟用的題型，每題可存 / 刪 / 新增）──
 function renderExamQuestionBank(host, paper, questions, rerender) {
   const stage = examStage(paper);
   if (stage !== "preparing" && stage !== "scheduled") {
-    host.innerHTML = '<div class="admin-user-directory__empty">開放作答後題目就鎖定了。要編輯答案詳解請切到上方「答案詳解」分頁，不受鎖定影響。</div>';
+    host.innerHTML = '<div class="admin-user-directory__empty">開放作答後題目就鎖定了。</div>';
     return;
   }
   // 已排程：可以改題目內容，但不能新增／刪除（題數在排程時驗證過，#298）
@@ -1109,7 +1117,7 @@ function renderExamQuestionBank(host, paper, questions, rerender) {
   const cfg = examSectionCfg(paper);
   const activeSections = SECTION_ORDER.filter((s) => cfg[s]);
   if (!activeSections.length) {
-    host.innerHTML = '<div class="admin-user-directory__empty">這份試卷還沒設定題型。請先到「試卷設定」勾選要哪些題型。</div>';
+    host.innerHTML = '<div class="admin-user-directory__empty">這份試卷還沒設定題型。請先到「設定」分頁勾選要哪些題型。</div>';
     return;
   }
   const bySection = {};
@@ -1198,7 +1206,7 @@ function qEditCard(sec, q, secCfg, { allowDelete = true } = {}) {
   } else if (sec === "shortanswer") {
     body += `<label>參考答案（僅供批改內部參考，不會給會友看）<textarea class="form-control" rows="3" data-p="ref">${esc(pl.referenceAnswer || "")}</textarea></label>
       <label>評分要點（每行一項，僅供批改內部參考，不會給會友看）<textarea class="form-control" rows="3" data-p="rubric">${esc((pl.rubric || []).join("\n"))}</textarea></label>
-      <p class="exam-admin__meta">配分 ${(secCfg && secCfg.pointsPer) ?? 10} 分（在「試卷設定 → 題型與配分」調整）</p>`;
+      <p class="exam-admin__meta">配分 ${(secCfg && secCfg.pointsPer) ?? 10} 分（在「設定」分頁的「題型與配分」調整）</p>`;
   }
   // 六種題型都可以填「答案詳解」：預設空白、一般題目不用填，只有題目有爭議或
   // 需要補充說明時才個別填寫；要在試卷上方按「顯示答案詳解」開關後才會出現給會友看。
@@ -1340,32 +1348,49 @@ function collectAnswerKey(card, sec) {
   return { error: "不支援的題型" };
 }
 
-function renderExamAnswerKeys(host, paper, questions, rerender) {
-  const locked = !!paper.results_published_at;
-  const list = (questions || []).filter((q) => q.section !== "shortanswer")
-    .slice().sort((a, b) => (SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)) || (a.position - b.position));
-  if (!list.length) { host.innerHTML = '<div class="admin-user-directory__empty">這份試卷沒有可自動計分的題目。</div>'; return; }
-
+// ── 開放作答後的「題目」分頁（#301）：題目唯讀，每一題旁邊直接改正解和答案詳解 ──
+// 正解到成績公布前都能改（批改中改了會自動重算，#299）；答案詳解任何時候都能補寫。
+function renderExamLockedQuestions(host, paper, questions, stage) {
+  const keysEditable = !paper.results_published_at;
+  const sorted = (questions || []).slice()
+    .sort((a, b) => (SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)) || (a.position - b.position));
+  if (!sorted.length) { host.innerHTML = '<div class="admin-user-directory__empty">這份試卷沒有題目。</div>'; return; }
   const bySec = {};
-  list.forEach((q) => (bySec[q.section] ||= []).push(q));
+  sorted.forEach((q) => (bySec[q.section] ||= []).push(q));
+  const reason = examLockReason(stage, "questions");
 
-  if (locked) {
-    host.innerHTML = '<div class="admin-user-directory__empty">成績已公布並鎖定，正解與計分不可再更改。</div>';
-    return;
-  }
-
-  // 批改中改正解，伺服器會在同一個交易裡把所有已送出的作答重新計分（#299）
-  const grading = paper.status === "closed";
   host.innerHTML = `
-    <p class="exam-admin__meta">${grading
-      ? "改了正解，所有人的分數會自動重新計算，不用另外按「重新計分」。"
-      : "可以先填正解；收卷時會自動計分，之後再改也會自動重算。"}</p>
-    ${SECTION_ORDER.filter((s) => bySec[s]).map((s) => `
+    ${reason ? `<p class="exam-admin__lock-note">${esc(reason)}</p>` : ""}
+    ${SECTION_ORDER.filter((sec) => bySec[sec]).map((sec) => `
       <section class="exam-admin__bank-sec">
-        <h4>${esc(SECTION_TITLE[s])}</h4>
-        <div class="exam-admin__q-list">${bySec[s].map((q, i) => answerKeyCard(q, i + 1)).join("")}</div>
+        <h4>${esc(SECTION_TITLE[sec])}</h4>
+        <div class="exam-admin__q-list">${bySec[sec].map((q, i) => lockedQuestionCard(q, i + 1, keysEditable)).join("")}</div>
       </section>`).join("")}`;
 
+  wireAnswerKeyCards(host);
+  host.querySelectorAll("[data-explain-card]").forEach((card) => {
+    const text = card.querySelector("[data-explain-text]");
+    wireSaveButton(card.querySelector("[data-explain-save]"), [text], () =>
+      db.setExamQuestionExplanation(card.dataset.qid, text.value.trim()));
+  });
+}
+
+function lockedQuestionCard(q, ordinal, keysEditable) {
+  const pl = q.payload || {};
+  const keyPart = keysEditable && q.section !== "shortanswer"
+    ? answerKeyCard(q, ordinal)
+    : `<p class="exam-admin__ak-stem"><strong>${ordinal}.</strong> ${esc(pl.stem || "")}</p>`;
+  return `<div class="exam-admin__q-card exam-admin__q-card--locked">
+    ${keyPart}
+    <div class="exam-admin__explain" data-explain-card data-qid="${esc(q.id)}">
+      <label>答案詳解（選填；有爭議或需要補充說明的題目才填）<textarea class="form-control" rows="2" data-explain-text>${esc(pl.answerExplanation || "")}</textarea></label>
+      <div class="exam-admin__q-actions"><button type="button" class="secondary-btn" data-explain-save>儲存答案詳解</button></div>
+    </div>
+  </div>`;
+}
+
+// 正解卡片的儲存：伺服器在批改中會順便把所有作答重新計分，回傳重算了幾份（#299）
+function wireAnswerKeyCards(host) {
   host.querySelectorAll(".exam-admin__ak-card").forEach((card) => {
     card.querySelector("[data-ak-save]").addEventListener("click", async (e) => {
       const built = collectAnswerKey(card, card.dataset.section);

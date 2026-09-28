@@ -99,8 +99,10 @@ describe("主畫面只留當下真正要做的事：一顆主按鈕＋直接列�
     expect(exam).not.toContain('<details class="exam-admin__more">');
   });
 
-  it("事件委派用 [data-exam-act] 查整個 body，各區的按鈕不用分開綁定", () => {
-    expect(exam).toContain('body.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click"');
+  it("動作按鈕用同一支 handleAct 處理，標頭與「設定」分頁（作答規則）各自綁一次", () => {
+    expect(exam).toContain('const wireActs = (scope) => scope.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click", () => handleAct(b)));');
+    expect(exam).toContain('wireActs(body.querySelector(".exam-admin__paper"));');
+    expect(exam).toContain("wireActs(sub);");
   });
 });
 
@@ -156,7 +158,8 @@ describe("儲存按鈕三態回饋：有改動待存／儲存中／剛存好", (
     expect(exam).toContain('wireSaveButton(\n    host.querySelector("#exam-meta-save"),\n    host.querySelectorAll(\'[data-f], .exam-admin__sec-row input, #exam-meta-linked-plan\'),');
     expect(exam).toContain('wireSaveButton(\n    host.querySelector("#exam-notice-save"),\n    host.querySelectorAll(\'[data-n]\'),');
     expect(exam).toContain('wireSaveButton(card.querySelector("[data-q-save]"), card, async () => {');
-    expect(exam).toContain('wireSaveButton(card.querySelector("[data-explain-save]"), card, () => {');
+    // 開放作答後的題目卡片（#301）：答案詳解的存檔鈕只監聽自己的文字框，不會被旁邊的正解欄位誤判待存
+    expect(exam).toContain('wireSaveButton(card.querySelector("[data-explain-save]"), [text], () =>');
   });
 
   it("index.css 定義了 is-dirty／is-saving／is-saved 三種按鈕樣式", () => {
