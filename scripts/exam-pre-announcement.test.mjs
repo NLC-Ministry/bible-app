@@ -115,24 +115,16 @@ describe("0200: 前端串接", () => {
     expect(occurrences).toBe(2);
   });
 
-  it("renderExamNoticeForm 多了「預告」fieldset：開關 + 標題 + 內容，沒有入口按鈕欄位", () => {
+  // #298：預告退場——排程後首頁卡片就自動出現，不需要開考前另一則通知。
+  // 伺服器端不再讀 pre_announcement_*（#303 才刪欄位與 RPC）。
+  it("#298：後台不再有「預告」編輯區，只剩一組全部選填的首頁卡片文字", () => {
     const fn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("// ── 試卷設定表單"));
-    expect(fn).toContain("<legend>預告");
-    expect(fn).toContain('id="exam-pre-enabled"');
-    expect(fn).toContain('data-p="headline"');
-    expect(fn).toContain('data-p="body"');
-    expect(fn).not.toContain('data-p="ctaLabel"');
-  });
-
-  it("預告的儲存按鈕呼叫 db.saveExamPreAnnouncement，帶入開關勾選狀態", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("// ── 試卷設定表單"));
-    expect(fn).toContain('db.saveExamPreAnnouncement(p.id, {');
-    expect(fn).toContain('host.querySelector("#exam-pre-enabled").checked');
-  });
-
-  it("公告跟預告兩個儲存按鈕各自只監聽自己的欄位（data-n vs data-p + 開關），不會互相誤判待存", () => {
-    const fn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("// ── 試卷設定表單"));
+    expect(fn).not.toContain("<legend>預告");
+    expect(fn).not.toContain('id="exam-pre-enabled"');
+    expect(fn).not.toContain("saveExamPreAnnouncement");
+    expect(fn).toContain("<legend>首頁卡片");
+    expect(fn).toContain("標題（選填，不填就用試卷標題）");
+    expect(fn).toContain("說明（選填，不填就用開放時間自動產生）");
     expect(fn).toContain("host.querySelectorAll('[data-n]')");
-    expect(fn).toContain("[...host.querySelectorAll('[data-p]'), host.querySelector(\"#exam-pre-enabled\")]");
   });
 });

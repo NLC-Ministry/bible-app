@@ -102,7 +102,7 @@ function updateExamFeatureControl(enabled, options = {}) {
   toggle.setAttribute("aria-label", enabled ? "大測驗（速讀測驗）功能已開啟" : "大測驗（速讀測驗）功能已關閉");
   toggle.disabled = options.disabled === true;
   status.textContent = enabled
-    ? "已開啟：計劃管理會出現「大測驗」分頁，可出題、發佈、批改與作答。"
+    ? "已開啟：計劃管理會出現「大測驗」分頁，可出題、排程、批改與作答。"
     : "已關閉：隱藏「大測驗」分頁並停止作答；既有試卷、題目與成績都會保留。";
 }
 

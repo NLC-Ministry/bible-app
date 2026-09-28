@@ -57,9 +57,9 @@ describe("exam_reset_my_rehearsal", () => {
 });
 
 describe("作答結果畫面", () => {
-  it("演練作答標明不列入成績，並有「重新演練」按鈕（複習不算演練）", () => {
+  it("試作標明不列入成績，並有「重新試作」按鈕（複習不算試作；#302 起「演練」改稱「試作」）", () => {
     expect(exam).toContain("const isRehearsal = !isPractice && isRehearsalPaper(this.paper);");
-    expect(exam).toContain("這是<strong>演練作答</strong>");
+    expect(exam).toContain("這是<strong>試作</strong>");
     expect(exam).toContain('id="exam-result-rehearse-again"');
     expect(exam).toContain("db.resetMyExamRehearsal(this.paper.id)");
   });

@@ -3,81 +3,95 @@ import { readFileSync } from "node:fs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exam = read("js/modules/exam.js");
+const css = read("index.css");
 
-// 單一試卷（#257／#258）：每份卷只有一份，分頁顯示時機依試卷狀態決定：
-//   · 題庫編輯／試卷設定：只有草稿（伺服器端 exam_upsert_paper／exam_upsert_question 同樣限制）。
-//   · 公告：測驗結束前都能改（伺服器端 exam_save_announcement 擋 closed）。
-//   · 填答案／簡答批改／簡答指派：成績公布前都開放，草稿也有——管理員要能演練批改。
-//   · 統計：非草稿；草稿有演練作答時也開放，讓管理員演練完整流程。
-//   · 答案詳解、複習紀錄：非草稿（會友才會有複習；詳解是考後才補）。
-const fn = () => exam.slice(exam.indexOf('const isDraft = paper.status === "draft";'), exam.indexOf("const annPub ="));
+// 分頁固定三個（#301，屬於 #297）：題目／設定／作答與成績，不會隨階段出現又消失。
+//   · 題目：準備中、已排程可以出題（正解、詳解都在題目卡片裡）；開放作答後題目唯讀，
+//           每一題旁邊仍可改正解（成績公布前）和答案詳解。
+//   · 設定：試卷設定（開放作答後唯讀）＋首頁卡片文字（結束前可改）＋作答規則開關。
+//   · 作答與成績：統計／簡答批改／批改指派／複習紀錄；還沒有作答時只寫一句話。
+const panel = exam.slice(exam.indexOf("export async function renderExamPanel"), exam.indexOf("// ── 不能改的時候，分頁上面那一句原因"));
 
-describe("分頁顯示規則依試卷狀態，不再區分測試版／正式版", () => {
-  it("編輯類分頁只看是不是草稿", () => {
-    const body = fn();
-    expect(body).toContain("const canEditPaper = isDraft;");
-    expect(body).toContain('const showNotice = paper.status !== "closed";');
+describe("三個固定分頁", () => {
+  it("nav 永遠是題目／設定／作答與成績", () => {
+    expect(panel).toContain('data-exam-sub="questions" class="${examAdminSubview === "questions" ? "active" : ""}">題目</button>');
+    expect(panel).toContain('data-exam-sub="settings" class="${examAdminSubview === "settings" ? "active" : ""}">設定</button>');
+    expect(panel).toContain('data-exam-sub="results" class="${examAdminSubview === "results" ? "active" : ""}">作答與成績</button>');
+    expect(panel.match(/data-exam-sub="/g)).toHaveLength(3);
   });
 
-  it("草稿也能填答案、批改、指派（演練）；成績公布後收起來", () => {
-    const body = fn();
-    expect(body).toContain("const showAnswers = !resultsPublished;");
-    expect(body).toContain("const showGrade = hasShortSection && !resultsPublished;");
-    expect(body).toContain("const showAssign = hasShortSection && !resultsPublished;");
+  it("舊的分頁與依狀態增減的判斷都拿掉了", () => {
+    for (const gone of ["availableSubviews", "showNotice", "showAnswers", "showExplain", "showStats",
+      'data-exam-sub="bank"', 'data-exam-sub="meta"', 'data-exam-sub="answers"', 'data-exam-sub="explain"',
+      "renderExamAnswerKeys", "renderExamExplanationEditor"]) {
+      expect(exam, gone).not.toContain(gone);
+    }
   });
 
-  it("統計：非草稿，或草稿上已經有演練作答；答案詳解、複習紀錄：非草稿", () => {
-    const body = fn();
-    expect(body).toContain("const showStats = !isDraft || attemptCount > 0;");
-    expect(body).toContain("const showExplain = !isDraft;");
-    expect(body).toContain("const showPractice = !isDraft;");
+  it("不認得的分頁值一律回到「題目」；換試卷也回到「題目」", () => {
+    expect(panel).toContain('if (!["questions", "settings", "results"].includes(examAdminSubview)) examAdminSubview = "questions";');
+    expect(panel).toContain('examAdminSubview = "questions"; examAdminResultsView = "stats"; rerender();');
   });
 
-  it("不再用 isLive／isTest 判斷任何分頁", () => {
-    expect(exam).not.toMatch(/\bisLive\b/);
-    expect(exam).not.toMatch(/\bisTest\b/);
-  });
-
-  it("分頁按鈕改用這幾個 show* 變數判斷要不要渲染", () => {
-    expect(exam).toContain('${showStats ? `<button type="button" data-exam-sub="stats"');
-    expect(exam).toContain('${showExplain ? `<button type="button" data-exam-sub="explain"');
-    expect(exam).toContain('${showAnswers ? `<button type="button" data-exam-sub="answers"');
-    expect(exam).toContain('${showGrade ? `<button type="button" data-exam-sub="grade"');
-    expect(exam).toContain('${showNotice ? `<button type="button" data-exam-sub="notice"');
-  });
-
-  it("resultsPublished 的宣告在這些條件之前，確保算得出正確值", () => {
-    const body = fn();
-    const idxResultsPublished = body.indexOf("const resultsPublished =");
-    const idxShowAnswers = body.indexOf("const showAnswers =");
-    expect(idxResultsPublished).toBeGreaterThan(-1);
-    expect(idxShowAnswers).toBeGreaterThan(idxResultsPublished);
+  it("手機上三個分頁平均分寬，不會擠成兩行", () => {
+    expect(css).toContain(".exam-admin__subnav > button { flex: 1 1 0; white-space: nowrap; }");
   });
 });
 
-describe("目前選中的分頁一旦不再顯示，自動跳到第一個還看得到的分頁，不會卡在空白畫面", () => {
-  it("availableSubviews 涵蓋所有分頁，且用它來判斷要不要重新導向", () => {
-    const body = fn();
-    expect(body).toContain('...(canEditPaper ? ["bank", "meta"] : [])');
-    expect(body).toContain('...(showNotice ? ["notice"] : [])');
-    expect(body).toContain('...(showAnswers ? ["answers"] : [])');
-    expect(body).toContain('...(showGrade ? ["grade"] : [])');
-    expect(body).toContain('...(showAssign ? ["assign"] : [])');
-    expect(body).toContain('...(showPractice ? ["practice"] : [])');
-    expect(body).toContain('...(showStats ? ["stats"] : [])');
-    expect(body).toContain('...(showExplain ? ["explain"] : [])');
-    expect(body).toContain('if (!availableSubviews.includes(examAdminSubview)) examAdminSubview = availableSubviews[0] || "bank";');
+describe("題目分頁", () => {
+  it("能改題目時用題庫編輯；開放作答後改成唯讀題目＋正解＋詳解", () => {
+    expect(panel).toContain("else if (canEditPaper) renderExamQuestionBank(sub, paper, questions, rerender);");
+    expect(panel).toContain("else renderExamLockedQuestions(sub, paper, questions, stage);");
   });
 
-  it("舊的逐條 if 導向邏輯已經拿掉，統一由 availableSubviews 處理", () => {
-    expect(exam).not.toContain('if (examAdminSubview === "grade" && !hasShortSection) examAdminSubview = "bank";');
-    expect(exam).not.toContain('if (examAdminSubview === "practice" && !isLive) examAdminSubview = "bank";');
-    expect(exam).not.toContain("canFillAnswers");
+  it("鎖定時正解到成績公布前都能改，答案詳解任何時候都能補寫", () => {
+    const locked = exam.slice(exam.indexOf("function renderExamLockedQuestions"), exam.indexOf("function wireAnswerKeyCards"));
+    expect(locked).toContain("const keysEditable = !paper.results_published_at;");
+    expect(locked).toContain('keysEditable && q.section !== "shortanswer"');
+    expect(locked).toContain("data-explain-save");
+    expect(locked).toContain('examLockReason(stage, "questions")');
+  });
+});
+
+describe("設定分頁", () => {
+  it("試卷設定開放作答後唯讀，首頁卡片文字與作答規則放在同一頁", () => {
+    expect(panel).toContain('renderExamMetaForm(sub.querySelector("[data-settings-meta]"), paper, questions, rerender, { readOnly: !canEditPaper });');
+    expect(panel).toContain('renderExamNoticeForm(sub.querySelector("[data-settings-card]"), paper, rerender);');
+    expect(panel).toContain("<legend>作答規則</legend>");
+    expect(panel).toContain('data-exam-act="practice-toggle"');
+    expect(panel).toContain('data-exam-act="explain-toggle"');
   });
 
-  it("公告分頁在草稿以外也能開（不會被「只有草稿能編輯」的提示擋住）", () => {
-    const sub = exam.slice(exam.indexOf("const renderSub = async () => {"), exam.indexOf('body.querySelectorAll("[data-exam-sub]")'));
-    expect(sub.indexOf('examAdminSubview === "notice" && showNotice')).toBeGreaterThan(-1);
-    expect(sub.indexOf('examAdminSubview === "notice" && showNotice')).toBeLessThan(sub.indexOf("else if (!canEditPaper)"));
+  it("唯讀時欄位停用、沒有儲存按鈕", () => {
+    const meta = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("function examInfoIcon"));
+    expect(meta).toContain('host.querySelectorAll("input, select, textarea").forEach((el) => { el.disabled = true; });');
+    expect(meta).toContain('host.querySelector("#exam-meta-save")?.remove();');
+  });
+
+  it("作答規則不在標頭了", () => {
+    const header = panel.slice(panel.indexOf("body.innerHTML = `"), panel.indexOf('<nav class="exam-admin__subnav"'));
+    expect(header).not.toContain("rules.join");
+  });
+});
+
+describe("作答與成績分頁", () => {
+  it("小分頁：統計一定有；有簡答題且成績未公布才有批改／指派；開放作答後才有複習紀錄", () => {
+    expect(panel).toContain('const resultsViews = ["stats", ...(showGrade ? ["grade", "assign"] : []), ...(showPractice ? ["practice"] : [])];');
+    expect(panel).toContain("const showGrade = hasShortSection && !resultsPublished;");
+    expect(panel).toContain("const showPractice = !canEditPaper;");
+  });
+
+  it("還沒有作答時只寫一句話", () => {
+    expect(panel).toContain('"開放作答後會出現在這裡。"');
+    expect(panel).toContain('"這份測驗沒有人作答。"');
+  });
+});
+
+describe("鎖定原因", () => {
+  it("每個鎖定階段都有一句原因", () => {
+    const fn = exam.slice(exam.indexOf("function examLockReason"), exam.indexOf("// ── 統計報表"));
+    expect(fn).toContain("已開放作答，題目已鎖定；正解和答案詳解仍可修改。");
+    expect(fn).toContain("已開放作答，試卷設定已鎖定；首頁卡片文字和作答規則仍可修改。");
+    expect(css).toContain(".exam-admin__lock-note");
   });
 });

@@ -128,7 +128,7 @@ describe("exam.js — 統計頁「讀完一遍」欄 + 過濾開關", () => {
   });
 
   it("後台統計呼叫端把 paper.title 傳進去", () => {
-    expect(ui).toContain("renderExamStats(sub, paper.id, hasShortSection, paper.title)");
+    expect(ui).toContain("renderExamStats(host, paper.id, hasShortSection, paper.title)");
   });
 
   it("團隊排行表拆「未讀完 / 未考試」欄（有對應書卷時），CSV 再多「缺額」", () => {
