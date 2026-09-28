@@ -3523,8 +3523,17 @@ function getDailyQuizTaiwanToday() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+// 已經讀完一遍（第一遍全部打卡，或已進入第 2 遍以後）就不再檢查當天進度，
+// 每次小測驗都可以直接作答；判斷方式跟 memberIsCompletedOnce 同一套。
+function hasCompletedDailyQuizFirstRound(plan) {
+  return Boolean(plan?.isPlanCompleted) || Number(plan?.currentRound || 1) > 1;
+}
+
 function getDailyQuizReadingProgress(plan, quizDate) {
   const round = Number(plan?.currentRound || 1);
+  if (hasCompletedDailyQuizFirstRound(plan)) {
+    return { total: 0, completed: 0, remaining: 0, isComplete: true, firstRoundCompleted: true };
+  }
   const day = Array.isArray(plan?.days)
     ? plan.days.find(item => String(item?.isoDate || "") === String(quizDate || ""))
     : null;
@@ -3573,7 +3582,9 @@ function renderDailyQuizEntry(content, context, plan, quizDate) {
     ? "今天的小測驗已完成，可查看答案與解說"
     : isClosed
       ? `作答時間已於 ${formatDailyQuizTaiwanClock(assignedQuiz.answerCloseAt)} 截止`
-      : "完成今天的速讀進度後即可作答";
+      : hasCompletedDailyQuizFirstRound(plan)
+        ? "你已讀完一遍，可以直接作答"
+        : "完成今天的速讀進度後即可作答";
 
   content.innerHTML = `
     <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description" ${isClosed ? "disabled" : ""}>
