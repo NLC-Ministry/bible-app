@@ -105,17 +105,18 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
     expect(exam).toContain('data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>');
   });
 
-  it("lets admins revert to draft only when nobody has attempted", () => {
-    expect(exam).toContain("const canRevert = !isDraft && attemptCount === 0;");
-    expect(exam).toContain('data-exam-act="reopen">撤回成草稿</button>');
+  it("lets admins unschedule only before the paper opens (#298)", () => {
+    const actions = exam.slice(exam.indexOf("} else if (isScheduled) {"), exam.indexOf('} else if (stage === "open") {'));
+    expect(actions).toContain('data-exam-act="reopen">取消排程</button>');
+    expect(exam).not.toContain("canRevert");
   });
 
   it("warns that publishing clears rehearsal attempts", () => {
     expect(exam).toContain("筆演練作答會一併清除。");
   });
 
-  it("labels drafts as rehearsal in the exam runner", () => {
-    expect(exam).toContain('return !!paper && paper.status === "draft";');
+  it("labels preparing and scheduled papers as rehearsal in the exam runner (#298)", () => {
+    expect(exam).toContain('return ["preparing", "scheduled"].includes(examStageOf(paper));');
     expect(exam).not.toContain('this.paper.mode === "test" ? "（測試版）"');
   });
 });

@@ -58,15 +58,15 @@ describe("0199/0200: 公告內容編輯是測試版限定的獨立「公告」�
     expect(noticeFn).toContain("const annLocked = p.status === \"closed\";");
   });
 
-  it("「公告」分頁在測驗結束前都看得到（單一試卷 #258；伺服器端 exam_save_announcement 同樣擋 closed）", () => {
-    expect(exam).toContain('<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">公告</button>');
+  it("「首頁卡片」分頁在測驗結束前都看得到（伺服器端 exam_save_announcement 同樣擋 closed）", () => {
+    expect(exam).toContain('<button type="button" data-exam-sub="notice" class="${examAdminSubview === "notice" ? "active" : ""}">首頁卡片</button>');
     expect(exam).toContain('...(showNotice ? ["notice"] : [])');
     expect(exam).toContain('else if (examAdminSubview === "notice" && showNotice) renderExamNoticeForm(sub, paper, rerender);');
   });
 
-  it("正式版仍保留「發佈預告文」/「撤下預告文」動作按鈕（只是內容不能自己編）", () => {
-    expect(exam).toContain('data-exam-act="announce"');
-    expect(exam).toContain('data-exam-act="unannounce"');
-    expect(exam).toContain("const hasNotice = true;");
+  it("#298：沒有「發佈預告文」/「撤下預告文」了——排程後首頁卡片自動出現", () => {
+    expect(exam).not.toContain('data-exam-act="announce"');
+    expect(exam).not.toContain('data-exam-act="unannounce"');
+    expect(exam).not.toContain("publishExamAnnouncement");
   });
 });

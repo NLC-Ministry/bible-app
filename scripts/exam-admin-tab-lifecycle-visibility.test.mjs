@@ -4,18 +4,20 @@ import { readFileSync } from "node:fs";
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exam = read("js/modules/exam.js");
 
-// 單一試卷（#257／#258）：每份卷只有一份，分頁顯示時機依試卷狀態決定：
-//   · 題庫編輯／試卷設定：只有草稿（伺服器端 exam_upsert_paper／exam_upsert_question 同樣限制）。
-//   · 公告：測驗結束前都能改（伺服器端 exam_save_announcement 擋 closed）。
-//   · 填答案／簡答批改／簡答指派：成績公布前都開放，草稿也有——管理員要能演練批改。
-//   · 統計：非草稿；草稿有演練作答時也開放，讓管理員演練完整流程。
-//   · 答案詳解、複習紀錄：非草稿（會友才會有複習；詳解是考後才補）。
-const fn = () => exam.slice(exam.indexOf('const isDraft = paper.status === "draft";'), exam.indexOf("const annPub ="));
+// 單一試卷（#257／#258），五個階段（#297／#298）：分頁顯示時機依階段決定：
+//   · 題庫編輯／試卷設定：準備中、已排程（伺服器端 exam_upsert_paper／exam_upsert_question 同樣限制）。
+//   · 首頁卡片：測驗結束前都能改（伺服器端 exam_save_announcement 擋 closed）。
+//   · 填答案／簡答批改／簡答指派：成績公布前都開放，準備中也有——管理員要能演練批改。
+//   · 統計：開放作答後；準備中／已排程有演練作答時也開放，讓管理員演練完整流程。
+//   · 答案詳解、複習紀錄：開放作答後（能改題目時詳解直接在題目卡片裡改）。
+const fn = () => exam.slice(exam.indexOf("const stage = examStageOf(paper);"), exam.indexOf("const autoScoreOn ="));
 
-describe("分頁顯示規則依試卷狀態，不再區分測試版／正式版", () => {
-  it("編輯類分頁只看是不是草稿", () => {
+describe("分頁顯示規則依試卷階段，不再區分測試版／正式版", () => {
+  it("編輯類分頁：準備中、已排程都能改", () => {
     const body = fn();
-    expect(body).toContain("const canEditPaper = isDraft;");
+    expect(body).toContain('const isDraft = stage === "preparing";');
+    expect(body).toContain('const isScheduled = stage === "scheduled";');
+    expect(body).toContain("const canEditPaper = isDraft || isScheduled;");
     expect(body).toContain('const showNotice = paper.status !== "closed";');
   });
 
@@ -26,11 +28,11 @@ describe("分頁顯示規則依試卷狀態，不再區分測試版／正式版"
     expect(body).toContain("const showAssign = hasShortSection && !resultsPublished;");
   });
 
-  it("統計：非草稿，或草稿上已經有演練作答；答案詳解、複習紀錄：非草稿", () => {
+  it("統計：開放作答後，或準備中／已排程已經有演練作答；答案詳解、複習紀錄：開放作答後", () => {
     const body = fn();
-    expect(body).toContain("const showStats = !isDraft || attemptCount > 0;");
-    expect(body).toContain("const showExplain = !isDraft;");
-    expect(body).toContain("const showPractice = !isDraft;");
+    expect(body).toContain("const showStats = !canEditPaper || attemptCount > 0;");
+    expect(body).toContain("const showExplain = !canEditPaper;");
+    expect(body).toContain("const showPractice = !canEditPaper;");
   });
 
   it("不再用 isLive／isTest 判斷任何分頁", () => {
@@ -75,7 +77,7 @@ describe("目前選中的分頁一旦不再顯示，自動跳到第一個還看�
     expect(exam).not.toContain("canFillAnswers");
   });
 
-  it("公告分頁在草稿以外也能開（不會被「只有草稿能編輯」的提示擋住）", () => {
+  it("首頁卡片分頁在開放作答後也能開（不會被「題目已鎖定」的提示擋住）", () => {
     const sub = exam.slice(exam.indexOf("const renderSub = async () => {"), exam.indexOf('body.querySelectorAll("[data-exam-sub]")'));
     expect(sub.indexOf('examAdminSubview === "notice" && showNotice')).toBeGreaterThan(-1);
     expect(sub.indexOf('examAdminSubview === "notice" && showNotice')).toBeLessThan(sub.indexOf("else if (!canEditPaper)"));

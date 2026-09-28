@@ -26,7 +26,7 @@ describe("建立新試卷：先跳出標題輸入，不再直接用預設標題�
   });
 
   it("空白試卷清單的 #exam-create-paper 按鈕不再重複綁定兩次（原本 wirePicker + 額外一次）", () => {
-    const fn = exam.slice(exam.indexOf("if (!shownPaper) {"), exam.indexOf('const isDraft = paper.status === "draft";'));
+    const fn = exam.slice(exam.indexOf("if (!shownPaper) {"), exam.indexOf("const stage = examStageOf(paper);"));
     expect(fn).toContain("wirePicker();");
     expect(fn).not.toContain('.exam-admin__paper #exam-create-paper');
   });
@@ -38,10 +38,10 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
     expect(fn).toContain('{ label: "已選擇題型並設定題數", done: activeSections.length > 0, required: true }');
     expect(fn).toContain("countsMatch");
     expect(fn).toContain("windowValid");
-    // 單一試卷（#258）：公告一律是發佈的必要條件，不再分測試版／正式版
     expect(fn).not.toContain("paper.mode");
-    expect(fn).toContain('{ label: "公告內容已填寫完整", done: annFilled, required: true }');
-    expect(fn).toContain('{ label: "公告已發佈", done: paper.announcement_published === true, required: true }');
+    // #298：首頁卡片文字沒填會自動產生、排程後自動出現，清單只列出題的事
+    expect(fn).not.toContain("公告");
+    expect(fn).not.toContain("announcement_published");
   });
 
   it("只有必要項（required）會擋住 requiredDone，選填項不影響", () => {
@@ -58,7 +58,7 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
   });
 
   it("checklist 就緒後主畫面不再顯示清單（showChecklist 只在 draft 且未就緒時為真）", () => {
-    expect(exam).toContain('const showChecklist = paper.status === "draft" && !checklist.requiredDone;');
+    expect(exam).toContain("const showChecklist = isDraft && !checklist.requiredDone;");
   });
 
   it("examChecklistHtml 渲染一條進度條 + 逐項打勾清單", () => {
@@ -74,17 +74,19 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
 });
 
 describe("不常用的切換/維護動作收進「⋯ 更多」，主畫面只留當下真正要做的事", () => {
-  it("actions 陣列拆成 primaryActions／moreActions 兩份，自動評分/答案詳解/複習/公告發佈/清除演練/撤回成草稿都進更多", () => {
+  it("actions 陣列拆成 primaryActions／moreActions 兩份，自動評分/答案詳解/複習/清除演練都進更多", () => {
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="autoscore">');
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">');
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">');
-    expect(exam).toContain('moreActions.push(\'<button type="button" class="secondary-btn" data-exam-act="announce">發佈預告文</button>\');');
-    expect(exam).toContain('moreActions.push(\'<button type="button" class="secondary-btn" data-exam-act="reopen">撤回成草稿</button>\');');
+    // #298：沒有「發佈預告文」了；「取消排程」是已排程時的主要動作
+    expect(exam).not.toContain('data-exam-act="announce"');
+    expect(exam).not.toContain("撤回成草稿");
     expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">');
   });
 
-  it("演練作答/發佈/正式作答/關閉測驗/公布成績是 primaryActions（主要 CTA）", () => {
-    expect(exam).toContain(`primaryActions.push('<button type="button" class="primary-btn" data-exam-act="publish">發佈測驗</button>');`);
+  it("演練作答/排程/取消排程/正式作答/關閉測驗/公布成績是 primaryActions（主要 CTA）", () => {
+    expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon(');
+    expect(exam).toContain(`primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>');`);
     expect(exam).toContain(">演練作答</a>");
     expect(exam).toContain("primaryActions.push('<button type=\"button\" class=\"secondary-btn\" data-exam-act=\"close\">關閉測驗</button>');");
     expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
@@ -122,10 +124,10 @@ describe("說明改成小圖示點擊彈出：不再另外開分頁，需要才�
     expect(exam).toContain('if (e.key === "Escape") _closeExamInfoPopover();');
   });
 
-  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：演練作答、公告設定、自動評分、答案詳解、複習、清除演練、公布成績", () => {
+  it("原本說明分頁的幾個主題，改成放在對應位置的圖示旁邊：演練作答、首頁卡片、自動評分、答案詳解、複習、清除演練、公布成績", () => {
     expect(exam).not.toContain('examInfoIcon("測試版與正式版是兩份獨立的卷。');
     expect(exam).toContain('>演練作答</a>${examInfoIcon(');
-    expect(exam).toContain('examInfoIcon("這裡的內容會出現在首頁的「速讀測驗」置頂區塊');
+    expect(exam).toContain('<legend>首頁卡片${examInfoIcon(');
     expect(exam).toContain('data-exam-act="autoscore">${autoScoreOn ? "關閉自動評分" : "開啟自動評分"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon(');
     expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon(');
