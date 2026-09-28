@@ -3531,6 +3531,10 @@ const db = {
       quiz_not_ready: "這一版題目尚未生成完成。",
       quiz_approval_required: "至少需要一版已審核題目才能發佈。",
       quiz_publish_scope_required: "只能發佈到你所負責組織範圍內的小組。",
+      quiz_publish_admin_only: "只有系統管理員可以發佈小測驗。",
+      quiz_date_passed: "已經過去的日子不能再修改。",
+      quiz_generating: "AI 正在出這一天的題目，請稍等一下再試。",
+      quiz_generation_secret_missing: "這個環境沒有設定 AI 出題，不能換一版。",
       quiz_publish_groups_required: "目前沒有可以發佈的小組。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
       quiz_publication_not_found: "找不到這份小測驗發佈紀錄。",
@@ -3544,7 +3548,7 @@ const db = {
       invalid_quiz_question_id: "每題都需要一個題目編號。",
       duplicate_quiz_question_id: "有題目編號重複，請重新整理後再試一次。",
       invalid_quiz_answer_key: "答案設定不正確，請檢查是否對應到題目的選項／配對／排序項目。",
-      quiz_already_published: "這一版已經發佈，為避免改變組員正在作答的內容，不能再修改或取消審核。",
+      quiz_already_published: "這一天的小測驗已經發佈，為避免改變組員正在作答的內容，不能再修改。",
       quiz_already_submitted: "這份小測驗已經送出過了。",
       quiz_incomplete: "還有題目尚未作答，請全部完成後再送出。",
       quiz_question_not_found: "找不到這一題，請重新整理頁面後再試一次。",
@@ -3649,6 +3653,48 @@ const db = {
       p_publish_at: publishAt,
       p_answer_close_at: answerCloseAt || null
     });
+  },
+
+  // 自動發佈規則（#306）：每天 00:00 發給全部小組、23:59 截止；只有系統管理員能讀寫
+  async getDailyQuizAutoPublishRule(plan) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("get_daily_quiz_auto_publish_rule", { p_global_plan_id: planId });
+  },
+
+  async setDailyQuizAutoPublishRule(plan, enabled) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("set_daily_quiz_auto_publish_rule", { p_global_plan_id: planId, p_enabled: !!enabled });
+  },
+
+  // 小測驗日曆（#307）：未來幾天的狀態、題目、完成率；以及每一天的設定。全部只給系統管理員。
+  async getDailyQuizCalendar(plan, fromDate = null, days = 7) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("get_daily_quiz_calendar", { p_global_plan_id: planId, p_from: fromDate || null, p_days: days });
+  },
+
+  async setDailyQuizDaySkip(plan, quizDate, skip) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("set_daily_quiz_day_skip", { p_global_plan_id: planId, p_quiz_date: quizDate, p_skip: !!skip });
+  },
+
+  // questions 為 null：改回 AI 題目
+  async setDailyQuizDayCustom(plan, quizDate, questions) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("set_daily_quiz_day_custom", {
+      p_global_plan_id: planId, p_quiz_date: quizDate,
+      p_questions: Array.isArray(questions) && questions.length ? questions : null
+    });
+  },
+
+  async swapDailyQuizVersion(plan, quizDate) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("swap_daily_quiz_version", { p_global_plan_id: planId, p_quiz_date: quizDate });
   },
 
   async cancelDailyQuizSchedule(scheduleId) {

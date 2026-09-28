@@ -213,10 +213,8 @@ describe("daily church quiz", () => {
     expect(plan).toContain("dailyQuizRenderRequestId += 1");
   });
 
-  it("uses two-version and 發佈 wording consistently in the quiz UI", () => {
-    expect(admin).toContain("每日兩版題目");
+  it("uses 發佈 wording consistently in the quiz UI（#307 起後台是 7 天日曆，不再有兩版題目）", () => {
     expect(admin).not.toContain("每日三版題目");
-    expect(admin).toContain("<h2>發佈小測驗</h2>");
     expect(admin).not.toContain("發布小測驗");
     // 「發佈小測驗」的文案／流程已經整個搬去後台，打卡清單不該再出現它。
     expect(plan).not.toContain("發佈小測驗");
@@ -245,23 +243,13 @@ describe("daily church quiz", () => {
     expect(db).toContain('return "小測驗載入逾時，請稍後再試。"');
     expect(db).toContain('normalized.includes("pgrst202")');
     expect(db).toContain('return "小測驗資料庫版本尚未更新，請通知管理員完成系統更新。"');
-    expect(admin).toContain('class="admin-daily-quiz-load-error"');
-    expect(admin).toContain('data-quiz-load-retry');
-    expect(admin).toContain("['A', 'B'].map(variant");
-    expect(admin).toContain('狀態載入失敗');
-    expect(admin).toContain('已保留原有題目與審核狀態');
+    // #307：日曆載入失敗時顯示 db.js 整理過的中文訊息，不露出資料庫原文；
+    // 回到同一個計畫的小測驗分頁時保留畫面，不重新載入。
+    expect(admin).toContain("panel.innerHTML = `<div class=\"admin-user-directory__empty\">${adminQuizEscape(result.message || '無法載入小測驗日曆')}</div>`;");
     expect(admin).not.toContain('data-quiz-action="refresh-status"');
     expect(admin).not.toContain('重新載入狀態');
-    expect(admin).toContain("void renderAdminDailyQuizManagement(true, quizDate)");
-    expect(admin).toContain("prefetchedResult = null");
-    expect(admin).toContain('const adminDailyQuizDashboardCache = new Map()');
-    expect(admin).toContain('root.dataset.quizDashboardKey === cacheKey');
-    expect(admin).toContain('adminDailyQuizDashboardCache.get(cacheKey)');
-    expect(admin).toContain('adminDailyQuizDashboardCache.set(cacheKey, result)');
-    expect(admin).toContain('renderAdminDailyQuizManagement(false, event.target.value)');
+    expect(admin).toContain("if (!forceRefresh && root.dataset.quizPlanKey === planKey && root.childElementCount) return;");
     expect(css).not.toContain('.admin-daily-quiz-version--status-loading {');
-    expect(admin).toContain('載入後才可審核');
-    expect(admin).toContain('載入後才可編輯');
     expect(admin).toContain('編輯題目');
     expect(admin).toContain('data-quiz-action="toggle-edit"');
     expect(admin).toContain('class="admin-daily-quiz-editor-shell"');
