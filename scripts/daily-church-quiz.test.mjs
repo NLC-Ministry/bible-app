@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const schema = read("supabase/migrations/0084_daily_church_quizzes.sql");
 const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
 const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");

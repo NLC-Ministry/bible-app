@@ -7,9 +7,10 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 // 原本規劃另一支 exam_stats_first_round_filter.sql，從未實際部署過就被
 // 0170_exam_paper_linked_plan.sql 的 exam_get_stats 整個取代，拆兩支徒增
 // 「先跑一支再跑另一支把它蓋掉」的困惑，所以刪掉、內容併過來這一支。
-const sql = readFileSync(join(root, "supabase", "migrations", "0170_exam_paper_linked_plan.sql"), "utf8");
-const ui = readFileSync(join(root, "js", "modules", "exam.js"), "utf8");
-const db = readFileSync(join(root, "js", "db.js"), "utf8");
+const read = (...parts) => readFileSync(join(root, ...parts), "utf8").replace(/\r\n/g, "\n");
+const sql = read("supabase", "migrations", "0170_exam_paper_linked_plan.sql");
+const ui = read("js", "modules", "exam.js");
+const db = read("js", "db.js");
 
 describe("0170: _user_read_book_once — 讀過該書卷一遍的判定", () => {
   it("current_round >= 2，或第 1 遍打卡相異章數 >= 該書卷章數", () => {
