@@ -50,8 +50,8 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
     expect(fn).toContain("requiredDone: requiredItems.every((i) => i.done)");
   });
 
-  it("草稿階段的發佈按鈕改用 checklist.requiredDone 判斷要不要出現；「同步到正式版」已移除", () => {
-    expect(exam).toContain("if (checklist.requiredDone) {");
+  it("準備中的「排程」按鈕改用 checklist.requiredDone 判斷要不要出現；「同步到正式版」已移除", () => {
+    expect(exam).toContain("if (isDraft && checklist.requiredDone) {");
     expect(exam).not.toContain('data-exam-act="push"');
     // 舊的「isTest || annPub」文字判斷已經拿掉，改成 checklist 統一處理
     expect(exam).not.toContain("if (isTest || annPub) {");
@@ -73,32 +73,33 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
   });
 });
 
-describe("不常用的切換/維護動作收進「⋯ 更多」，主畫面只留當下真正要做的事", () => {
-  it("actions 陣列拆成 primaryActions／moreActions 兩份，答案詳解/複習/清除演練都進更多（自動評分開關已拿掉，#299）", () => {
+describe("主畫面只留當下真正要做的事：一顆主按鈕＋直接列出的次要工具，沒有「⋯ 更多」（#300）", () => {
+  it("答案詳解／複習開關放在「作答規則」列，清除演練作答放在次要工具（自動評分開關已拿掉，#299）", () => {
     expect(exam).not.toContain('data-exam-act="autoscore"');
-    expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">');
-    expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">');
+    expect(exam).toContain('data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>');
+    expect(exam).toContain('data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>');
     // #298：沒有「發佈預告文」了；「取消排程」是已排程時的主要動作
     expect(exam).not.toContain('data-exam-act="announce"');
     expect(exam).not.toContain("撤回成草稿");
-    expect(exam).toContain('moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">');
+    expect(exam).toContain('tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">');
   });
 
-  it("演練作答/排程/取消排程/正式作答/關閉測驗/公布成績是 primaryActions（主要 CTA）", () => {
-    expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon(');
-    expect(exam).toContain(`primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>');`);
-    expect(exam).toContain(">演練作答</a>");
-    expect(exam).toContain("primaryActions.push('<button type=\"button\" class=\"secondary-btn\" data-exam-act=\"close\">關閉測驗</button>');");
-    expect(exam).toContain('primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
+  it("主按鈕：排程／取消排程／提前結束／公布成績；演練作答、預覽試卷、正式作答是次要工具", () => {
+    expect(exam).toContain('mainAction = `<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon(');
+    expect(exam).toContain(`mainAction = '<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>';`);
+    expect(exam).toContain(`mainAction = '<button type="button" class="secondary-btn" data-exam-act="close">提前結束</button>';`);
+    expect(exam).toContain('mainAction = `<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon(');
+    expect(exam).toContain('tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>');
   });
 
-  it("模板把 primaryActions 跟 moreActions 分開渲染，moreActions 包在收合的 details 裡", () => {
-    expect(exam).toContain('<div class="exam-admin__actions">${primaryActions.join("")}</div>');
-    expect(exam).toContain('<details class="exam-admin__more"><summary>⋯ 更多</summary>');
-    expect(exam).toContain('<div class="exam-admin__actions exam-admin__actions--more">${moreActions.join("")}</div>');
+  it("模板：主按鈕一列、次要工具一列、作答規則一列；沒有收合的 details", () => {
+    expect(exam).toContain('${mainAction ? `<div class="exam-admin__actions">${mainAction}</div>` : ""}');
+    expect(exam).toContain('<div class="exam-admin__actions exam-admin__actions--tools">${tools.join("")}</div>');
+    expect(exam).toContain('<p class="exam-admin__rules">${rules.join("")}</p>');
+    expect(exam).not.toContain('<details class="exam-admin__more">');
   });
 
-  it("事件委派用 [data-exam-act] 查整個 body，主區跟更多區的按鈕不用分開綁定", () => {
+  it("事件委派用 [data-exam-act] 查整個 body，各區的按鈕不用分開綁定", () => {
     expect(exam).toContain('body.querySelectorAll("[data-exam-act]").forEach((b) => b.addEventListener("click"');
   });
 });

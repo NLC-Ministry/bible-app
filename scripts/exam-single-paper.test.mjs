@@ -84,7 +84,8 @@ describe("clients: push-to-live and tester list are gone", () => {
   it("db.js drops the methods and explains the new errors", () => {
     expect(db).not.toMatch(/pushExamToLive\(|ExamTester\(|getExamPaperTesters\(/);
     expect(db).toContain("exam_use_publish:");
-    expect(db).toContain("exam_revert_has_attempts:");
+    // #298：撤回改成「取消排程」，只在開放前可用
+    expect(db).toContain("exam_already_open:");
   });
 });
 
@@ -116,7 +117,7 @@ describe("admin UI: one paper, edit and rehearse while draft", () => {
   });
 
   it("labels preparing and scheduled papers as rehearsal in the exam runner (#298)", () => {
-    expect(exam).toContain('return ["preparing", "scheduled"].includes(examStageOf(paper));');
+    expect(exam).toContain('return ["preparing", "scheduled"].includes(examStage(paper));');
     expect(exam).not.toContain('this.paper.mode === "test" ? "（測試版）"');
   });
 });

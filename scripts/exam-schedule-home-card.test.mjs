@@ -141,10 +141,9 @@ describe("migration: rehearsal attempts while preparing or scheduled, cleared at
 });
 
 describe("admin UI (#298)", () => {
-  it("uses the server stage, falling back to its own reckoning", () => {
-    const fn = exam.slice(exam.indexOf("function examStageOf(paper)"), exam.indexOf("function isRehearsalPaper"));
-    expect(fn).toContain("if (paper.stage) return paper.stage;");
-    expect(fn).toContain('return !openAt || Date.now() < openAt ? "scheduled" : "open";');
+  it("derives the stage with the shared examStage (#300, see exam-stage.test.mjs)", () => {
+    expect(exam).toContain('import { EXAM_STAGES, examStage, examNextStepText, formatExamTime } from "./exam-stage.mjs";');
+    expect(exam).toContain("const stage = examStage(paper);");
   });
 
   it("the checklist no longer asks for a published announcement", () => {
@@ -156,8 +155,8 @@ describe("admin UI (#298)", () => {
     const scheduled = exam.slice(exam.indexOf("} else if (isScheduled) {"), exam.indexOf('} else if (stage === "open") {'));
     expect(scheduled).toContain('data-exam-act="reopen">取消排程</button>');
     expect(scheduled).not.toContain('data-exam-act="close"');
-    const open = exam.slice(exam.indexOf('} else if (stage === "open") {'), exam.indexOf('} else if (paper.status === "closed") {'));
-    expect(open).toContain('data-exam-act="close">關閉測驗</button>');
+    const open = exam.slice(exam.indexOf('} else if (stage === "open") {'), exam.indexOf('} else if (stage === "grading"'));
+    expect(open).toContain('data-exam-act="close">提前結束</button>');
   });
 
   it("the question bank hides add/delete while scheduled", () => {
@@ -170,14 +169,14 @@ describe("admin UI (#298)", () => {
 
   it("the settings form locks sections while scheduled and leaves them out of the save", () => {
     const meta = exam.slice(exam.indexOf("function renderExamMetaForm"), exam.indexOf("// ── 政策性說明改成小圖示"));
-    expect(meta).toContain('const structureLocked = examStageOf(p) === "scheduled";');
+    expect(meta).toContain('const structureLocked = examStage(p) === "scheduled";');
     expect(meta).toContain("const sections = structureLocked ? undefined : collectSections();");
   });
 
   it("the card-text form previews the same default body as the server", () => {
     const form = exam.slice(exam.indexOf("function examDefaultCardBody"), exam.indexOf("// ── 試卷設定表單"));
-    expect(form).toContain('timeZone: "Asia/Taipei"');
-    expect(form).toContain("開放，至");
+    // 時間格式跟伺服器一樣用台北時間（formatExamTime，見 exam-stage.test.mjs）
+    expect(form).toContain("${formatExamTime(paper.open_at)} 開放，至 ${formatExamTime(paper.close_at)} 截止");
     expect(form).toContain("；作答限時 ${paper.duration_minutes} 分鐘。");
   });
 

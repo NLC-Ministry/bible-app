@@ -10,7 +10,7 @@ const exam = read("js/modules/exam.js");
 //   · 填答案／簡答批改／簡答指派：成績公布前都開放，準備中也有——管理員要能演練批改。
 //   · 統計：開放作答後；準備中／已排程有演練作答時也開放，讓管理員演練完整流程。
 //   · 答案詳解、複習紀錄：開放作答後（能改題目時詳解直接在題目卡片裡改）。
-const fn = () => exam.slice(exam.indexOf("const stage = examStageOf(paper);"), exam.indexOf("const autoScoreOn ="));
+const fn = () => exam.slice(exam.indexOf("const stage = examStage(paper);"), exam.indexOf("// ── 五格進度條＋一句下一步（#300）──"));
 
 describe("分頁顯示規則依試卷階段，不再區分測試版／正式版", () => {
   it("編輯類分頁：準備中、已排程都能改", () => {

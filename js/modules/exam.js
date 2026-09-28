@@ -12,6 +12,7 @@
 // 依賴全域：state、db（js/db.js）、escapeHTML、hydrateIcons、window.showToast
 
 import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";
+import { EXAM_STAGES, examStage, examNextStepText, formatExamTime } from "./exam-stage.mjs";
 
 const SECTION_ORDER = ["truefalse", "single", "multiple", "matching", "ordering", "shortanswer"];
 const SECTION_TITLE = {
@@ -113,22 +114,11 @@ const parseIdText = (arr) => arr.map((r) => {
   return i < 0 ? { id: r.trim(), text: "" } : { id: r.slice(0, i).trim(), text: r.slice(i + 1).trim() };
 });
 
-// 五個階段（#297）：preparing 準備中／scheduled 已排程／open 作答中／grading 批改中／published 已公布。
-// 伺服器有回 stage 就用伺服器的（exam_get_paper_admin、exam_get_for_attempt），
-// 沒有才用欄位自己推算。
-function examStageOf(paper) {
-  if (!paper) return null;
-  if (paper.stage) return paper.stage;
-  if (paper.results_published_at || paper.resultsPublishedAt) return "published";
-  if (paper.status === "draft") return "preparing";
-  const openAt = Date.parse(paper.open_at || paper.openAt || "");
-  if (paper.status === "published") return !openAt || Date.now() < openAt ? "scheduled" : "open";
-  return "grading";
-}
+// 五個階段見 exam-stage.mjs 的 examStage（#300）。
 
 // 準備中、已排程（還沒開放作答）的卷上的作答都是試作，開放作答時自動清除（#257、#298）。
 function isRehearsalPaper(paper) {
-  return ["preparing", "scheduled"].includes(examStageOf(paper));
+  return ["preparing", "scheduled"].includes(examStage(paper));
 }
 
 // ── 準備進度檢查：準備中「還差什麼才能排程」的清單 ──
@@ -260,7 +250,7 @@ export async function renderExamPanel(root) {
         <div class="exam-admin__row">
           <div>
             <h3 class="card-title" style="margin:0;">大測驗（速讀測驗）</h3>
-            <p class="exam-admin__hint">功能開關在「系統管理 → 功能開放設定」。這裡負責出題、發佈、批改與預覽。</p>
+            <p class="exam-admin__hint">功能開關在「系統管理 → 功能開放設定」。這裡負責出題、排程、批改與公布成績。</p>
           </div>
         </div>
         <div id="exam-admin-body" style="margin-top:1rem;"><div class="admin-user-directory__empty">載入大測驗設定…</div></div>
@@ -282,7 +272,7 @@ export async function renderExamPanel(root) {
   }
 
   // 非系統管理員（牧者 / 牧區長 / 區長 / 小組長）：只看統計，且由 exam_get_stats
-  // 依委派範圍過濾。不載入出題 / 發佈 / 批改（那些 RPC 仍是 admin-only）。
+  // 依委派範圍過濾。不載入出題 / 排程 / 批改（那些 RPC 仍是 admin-only）。
   const isExamAdmin = typeof getUserRoleCode === "function"
     && getUserRoleCode(state.currentUser) === "admin";
   if (!isExamAdmin) {
@@ -356,7 +346,7 @@ export async function renderExamPanel(root) {
     return;
   }
 
-  const stage = examStageOf(paper);
+  const stage = examStage(paper);
   const isDraft = stage === "preparing";
   const isScheduled = stage === "scheduled";
   const hasShortSection = !!examSectionCfg(paper).shortanswer;   // 沒選「簡答題」→ 隱藏批改分頁
@@ -394,74 +384,63 @@ export async function renderExamPanel(root) {
   const practiceEnabled = paper.practice_retake_enabled !== false;
   const explanationOn = paper.show_answer_explanation === true;   // 預設關；不受成績公布鎖定
 
-  const badge = stage === "open" ? "success" : isScheduled ? "brand" : "neutral";
-  const statusLabel = {
-    preparing: "準備中（可編輯、可演練）",
-    scheduled: "已排程（首頁已出現卡片）",
-    open: "作答中",
-    grading: "批改中",
-    published: "已公布成績"
-  }[stage] || paper.status;
-
-  // 準備進度：不論目前階段為何都先算出來——準備中拿來擋「排程」按鈕
-  // 要不要出現，其他階段純粹不用。
+  // 準備清單只列出題的事；正解沒填完只提醒、不擋排程
   const checklist = examReadinessChecklist(paper, questions);
 
-  const primaryActions = [];
-  const moreActions = [
-    `<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`
-  ];
-  if (paper.status !== "closed" && !resultsPublished) {
-    moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon("會友送出正式作答後，如果開著「開放複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。")}`);
-  }
-  moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon("開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。")}`);
+  // ── 五格進度條＋一句下一步（#300）──
+  const stageIdx = EXAM_STAGES.findIndex((s) => s.key === stage);
+  const stageBar = `<ol class="exam-stage-bar" aria-label="試卷進度">${EXAM_STAGES.map((s, i) => `
+    <li class="exam-stage-bar__step${i < stageIdx ? " is-done" : ""}${i === stageIdx ? " is-current" : ""}"${i === stageIdx ? ' aria-current="step"' : ""}>
+      <span class="exam-stage-bar__num">${i + 1}</span><span class="exam-stage-bar__label">${esc(s.label)}</span>
+    </li>`).join("")}</ol>`;
+  const nextStep = examNextStepText(stage, paper, { checklistDone: checklist.requiredDone, officialAttemptCount });
 
-  // 首頁卡片跟著階段自動出現：排程後就顯示、準備中永遠看不到，沒有另外的「發佈預告文」（#298）。
-
-  let statusNote = "";   // 只留一句真正必要的當下狀態說明，其餘政策性文字改成 ⓘ 小圖示點擊彈出
-  const examUrl = `exam.html?paper=${encodeURIComponent(paper.id)}&popup=1`;
-  const rehearsalInfo = "實際作答一次：送出、看分數、批改、看統計都跟正式測驗一樣。只有系統管理員／牧者能作答，會友看不到。演練作答會在開放作答時自動清除，所以開放後你也能再正式作答一次。";
-  if (isDraft || isScheduled) {
-    primaryActions.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>${examInfoIcon(rehearsalInfo)}`);
-    if (rehearsalCount > 0) {
-      moreActions.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon("清掉這份試卷上的所有演練作答，可以重新演練。開放作答時也會自動清除。")}`);
-    }
-  }
-  if (isDraft) {
-    // 準備進度沒完成就不顯示排程按鈕——要做什麼看下方清單，不用另外堆文字解釋
-    if (checklist.requiredDone) {
-      primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon("排程後，會友首頁會立刻出現這份測驗的卡片（倒數到開放時間），開放時間到了自動可以作答。開放作答前仍可修改題目內容，也可以「取消排程」。")}`);
-    }
+  // ── 每個階段只有一顆主按鈕：排程／取消排程／提前結束／公布成績 ──
+  let mainAction = "";
+  if (isDraft && checklist.requiredDone) {
+    mainAction = `<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon("排程後，會友首頁會立刻出現這份測驗的卡片（倒數到開放時間），開放時間到了自動可以作答。開放作答前仍可修改題目內容，也可以「取消排程」。")}`;
   } else if (isScheduled) {
     // 取消排程：只有還沒開放作答時可以（伺服器端 exam_set_status 同樣檢查）
-    primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>');
-    statusNote = "首頁已出現這份測驗的卡片。開放作答前仍可修改題目內容；要新增或刪除題目、改題型題數，請先「取消排程」。";
+    mainAction = '<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>';
   } else if (stage === "open") {
-    primaryActions.push(`<a class="primary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
-    primaryActions.push('<button type="button" class="secondary-btn" data-exam-act="close">關閉測驗</button>');
-    statusNote = "作答中，題目已鎖定。";
-  } else if (paper.status === "closed") {
-    statusNote = "測驗已結束，請在「簡答批改」「統計」分頁進行結算與成績公布。";
+    mainAction = '<button type="button" class="secondary-btn" data-exam-act="close">提前結束</button>';
+  } else if (stage === "grading" && officialAttemptCount > 0) {
+    mainAction = `<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("所有題目（簡答題除外）都要有正解、簡答題都要批改完才能公布；還差什麼，按下去會直接告訴你。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、批改、清除作答）一律永久鎖定，無法復原。")}`;
   }
 
-  // 公布成績：已有作答、尚未公布 → 對外釋出並永久鎖定
-  if (officialAttemptCount > 0 && paper.status === "closed" && !resultsPublished) {
-    primaryActions.push(`<button type="button" class="primary-btn" data-exam-act="publish-results">公布成績</button>${examInfoIcon("所有題目（簡答題除外）都要有正解、簡答題都要批改完才能公布；還差什麼，按下去會直接告訴你。公布後作答者才看得到自己的分數與正解，且所有結算操作（改正解、批改、清除作答）一律永久鎖定，無法復原。")}`);
-    statusNote = "「公布成績」前會先自動收掉逾時未交的作答，公布後所有結算操作一律鎖定。";
+  // ── 次要工具：直接列出來，不再收進收合選單 ──
+  const examUrl = `exam.html?paper=${encodeURIComponent(paper.id)}&popup=1`;
+  const tools = [];
+  if (isDraft || isScheduled) {
+    tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">演練作答</a>${examInfoIcon("實際作答一次：送出、看分數、批改、看統計都跟正式測驗一樣。只有系統管理員／牧者能作答，會友看不到。演練作答會在開放作答時自動清除，所以開放後你也能再正式作答一次。")}`);
+    tools.push(`<a class="secondary-btn" href="exam.html?paper=${encodeURIComponent(paper.id)}&preview=1&popup=1" target="_blank" rel="noopener">預覽試卷</a>`);
+    if (rehearsalCount > 0) {
+      tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除演練作答（${rehearsalCount}）</button>${examInfoIcon("清掉這份試卷上的所有演練作答，可以重新演練。開放作答時也會自動清除。")}`);
+    }
+  } else if (stage === "open") {
+    tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
   }
-  const actionHint = statusNote;
+
+  // ── 作答規則（#301 會搬進「設定」分頁）──
+  const rules = [];
+  if (paper.status !== "closed" && !resultsPublished) {
+    rules.push(`<span class="exam-admin__rule">送出後可複習：<strong>${practiceEnabled ? "開" : "關"}</strong>
+      <button type="button" class="exam-admin__link" data-exam-act="practice-toggle">${practiceEnabled ? "關閉複習" : "開啟複習"}</button>${examInfoIcon("會友送出正式作答後，如果開著「送出後可複習」，可以再開一次複習模式重新作答練習；複習永遠不計入正式成績、不影響統計與團隊排行，開放到原活動結束時間後 24 小時為止。")}</span>`);
+  }
+  rules.push(`<span class="exam-admin__rule">公布成績時顯示答案詳解：<strong>${explanationOn ? "開" : "關"}</strong>
+    <button type="button" class="exam-admin__link" data-exam-act="explain-toggle">${explanationOn ? "隱藏答案詳解" : "顯示答案詳解"}</button>${examInfoIcon("開啟後，題目編輯處有填寫「答案詳解」的題目，成績公布後會友才看得到（一般題目不用填，只有有爭議或需要補充說明時才個別填寫）；簡答題的參考答案／評分要點不受這個開關影響，永遠不會外流給會友。")}</span>`);
 
   const showChecklist = isDraft && !checklist.requiredDone;
   body.innerHTML = `
     ${pickerBar}
     <div class="exam-admin__paper">
-      <p><strong>${esc(paper.title)}</strong>　<span class="stat-badge stat-badge--${badge}">${esc(statusLabel)}</span>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}${resultsPublished ? '　<span class="stat-badge stat-badge--brand">成績已公布（鎖定）</span>' : ""}${explanationOn ? '　<span class="stat-badge stat-badge--brand">答案詳解已開放</span>' : ""}</p>
+      <p><strong>${esc(paper.title)}</strong>${rehearsalCount ? `　<span class="stat-badge stat-badge--neutral">演練作答 ${rehearsalCount} 筆（開放作答時清除）</span>` : ""}</p>
+      ${stageBar}
+      <p class="exam-admin__next">${esc(nextStep)}</p>
       ${showChecklist ? examChecklistHtml(checklist) : ""}
-      <div class="exam-admin__actions">${primaryActions.join("")}</div>
-      ${actionHint ? `<p class="exam-admin__meta">${esc(actionHint)}</p>` : ""}
-      ${moreActions.length ? `<details class="exam-admin__more"><summary>⋯ 更多</summary>
-        <div class="exam-admin__actions exam-admin__actions--more">${moreActions.join("")}</div>
-      </details>` : ""}
+      ${mainAction ? `<div class="exam-admin__actions">${mainAction}</div>` : ""}
+      ${tools.length ? `<div class="exam-admin__actions exam-admin__actions--tools">${tools.join("")}</div>` : ""}
+      <p class="exam-admin__rules">${rules.join("")}</p>
     </div>
     <nav class="exam-admin__subnav">
       ${canEditPaper ? `<button type="button" data-exam-sub="bank" class="${examAdminSubview === "bank" ? "active" : ""}">題庫編輯</button>
@@ -547,7 +526,7 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
-    if (act === "close" && !confirm("關閉後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。關閉後會自動計分；之後修正正解，分數也會自動重新計算。確定提前關閉？")) return;
+    if (act === "close" && !confirm("提前結束後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。關閉後會自動計分；之後修正正解，分數也會自動重新計算。確定提前結束？")) return;
     if (act === "publish" && !confirm(`排程後，會友首頁會立刻出現這份測驗的卡片，開放時間到了就能作答。開放作答前仍可修改題目內容。${rehearsalCount ? `\n這份試卷上的 ${rehearsalCount} 筆演練作答會一併清除。` : ""}確定排程？`)) return;
     if (act === "reopen" && !confirm("取消排程後，會友首頁的卡片會消失，試卷回到準備中。確定取消排程？")) return;
     if (act === "reset" && !confirm(`確定清除這份試卷上的 ${rehearsalCount} 筆演練作答？（無法復原）`)) return;
@@ -561,7 +540,7 @@ export async function renderExamPanel(root) {
     if (!res.success) { toast(res.message || "操作失敗"); return; }
     toast(
       act === "publish" ? "已排程，會友首頁已出現這份測驗的卡片"
-      : act === "close" ? "測驗已關閉"
+      : act === "close" ? "已提前結束，已收卷並計分"
       : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆演練作答`
       : "已取消排程，首頁卡片已移除"
     );
@@ -905,19 +884,10 @@ function examSectionCfg(paper) {
 // ── 首頁卡片文字：測驗結束前都能編輯，全部選填（#298）──
 //    排程後卡片自動出現在會友首頁；標題沒填用試卷標題，說明沒填用開放／截止時間
 //    自動產生（伺服器端 _exam_member_paper_summary 同樣的規則）。舊的「預告」已退場。
-const EXAM_WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 function examDefaultCardBody(paper) {
   if (!paper.open_at || !paper.close_at) return "";
-  const fmt = (iso) => {
-    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Taipei", month: "numeric", day: "numeric", weekday: "short",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-    }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
-    const dow = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.weekday);
-    return `${parts.month}/${parts.day}（${EXAM_WEEKDAYS[dow]}）${parts.hour}:${parts.minute}`;
-  };
   const limit = Number(paper.duration_minutes) > 0 ? `；作答限時 ${paper.duration_minutes} 分鐘。` : "。";
-  return `${fmt(paper.open_at)} 開放，至 ${fmt(paper.close_at)} 截止${limit}`;
+  return `${formatExamTime(paper.open_at)} 開放，至 ${formatExamTime(paper.close_at)} 截止${limit}`;
 }
 
 function renderExamNoticeForm(host, paper, rerender) {
@@ -935,7 +905,7 @@ function renderExamNoticeForm(host, paper, rerender) {
           <textarea class="form-control" rows="4" data-n="body" ${annLocked ? "disabled" : ""} placeholder="${esc(defaultBody || "設定開放時間後，這裡會自動產生說明。")}">${esc(ann.body || "")}</textarea></label>
         <label>入口按鈕文字（選填，預設「進入測驗」）
           <input class="form-control" data-n="ctaLabel" maxlength="12" value="${esc(ann.ctaLabel || "")}" ${annLocked ? "disabled" : ""}></label>
-        ${annLocked ? '<p class="exam-admin__meta">測驗已關閉，首頁卡片文字已鎖定。</p>' : '<button type="button" class="primary-btn" id="exam-notice-save">儲存首頁卡片</button>'}
+        ${annLocked ? '<p class="exam-admin__meta">測驗已結束，首頁卡片文字已鎖定。</p>' : '<button type="button" class="primary-btn" id="exam-notice-save">儲存首頁卡片</button>'}
       </fieldset>
     </div>`;
   wireSaveButton(
@@ -954,7 +924,7 @@ function renderExamNoticeForm(host, paper, rerender) {
 function renderExamMetaForm(host, paper, questions, rerender) {
   const p = paper;
   // 已排程：題型題數在排程時驗證過，開放前不能再改（伺服器端 exam_scheduled_structure_locked）
-  const structureLocked = examStageOf(p) === "scheduled";
+  const structureLocked = examStage(p) === "scheduled";
   const rules = ((p.pledge || {}).rules || []).join("\n");
   const cfg = examSectionCfg(p);
   // 題庫已經寫的題目數量，用來自動帶入下面的「題數」——題目是第一手事實，
@@ -1114,14 +1084,14 @@ function wireExplanationCards(host) {
   });
 }
 
-// ── 答案詳解分頁：獨立於「題庫編輯」，已發佈／已鎖定的試卷也看得到、改得了 ──
+// ── 答案詳解分頁：獨立於「題庫編輯」，開放作答後／已鎖定的試卷也看得到、改得了 ──
 // （「題庫編輯」分頁只有草稿才會出現——見 canEditPaper。
 // 但答案詳解通常是測驗結束、看到結果之後才想補寫，所以另外開一個永遠看得到的分頁。）
 function renderExamExplanationEditor(host, questions) {
   const sorted = questions.slice()
     .sort((a, b) => (SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)) || (a.position - b.position));
   host.innerHTML = `
-    <p class="exam-admin__meta">答案詳解不受題目鎖定影響，發佈或關閉後也能隨時補寫、修改；預設空白，一般題目不用填，只有有爭議或需要補充說明的題目才個別填寫。要不要讓會友看到，由上方「顯示/隱藏答案詳解」開關決定。</p>
+    <p class="exam-admin__meta">答案詳解不受題目鎖定影響，開放作答後、收卷後也能隨時補寫、修改；預設空白，一般題目不用填，只有有爭議或需要補充說明的題目才個別填寫。要不要讓會友看到，由上方「顯示/隱藏答案詳解」開關決定。</p>
     <div class="exam-admin__q-list">${sorted.map((q) => explanationOnlyCard(q)).join("")}</div>
   `;
   wireExplanationCards(host);
@@ -1129,7 +1099,7 @@ function renderExamExplanationEditor(host, questions) {
 
 // ── 題庫編輯（依試卷啟用的題型，每題可存 / 刪 / 新增）──
 function renderExamQuestionBank(host, paper, questions, rerender) {
-  const stage = examStageOf(paper);
+  const stage = examStage(paper);
   if (stage !== "preparing" && stage !== "scheduled") {
     host.innerHTML = '<div class="admin-user-directory__empty">開放作答後題目就鎖定了。要編輯答案詳解請切到上方「答案詳解」分頁，不受鎖定影響。</div>';
     return;
@@ -2226,7 +2196,7 @@ class ExamRunner {
       card.className = "exam-leave-overlay";
       card.innerHTML = `
         <div class="exam-leave-card">
-          <p class="exam-leave-card__title">測驗已關閉</p>
+          <p class="exam-leave-card__title">已離開測驗</p>
           <p class="exam-leave-card__note">可直接關閉此分頁。</p>
           <button type="button" class="secondary-btn" id="exam-standalone-home">回首頁</button>
         </div>`;
@@ -2399,7 +2369,7 @@ class ExamRunner {
         <button type="button" id="exam-pledge-start" class="primary-btn" style="width:100%;" disabled>
           開始作答（${this.paper.durationMinutes} 分鐘）
         </button>
-        ${this.openState === "preview" ? '<p class="exam-pledge__note">（預覽模式：測驗尚未正式發佈）</p>' : ""}
+        ${this.openState === "preview" ? '<p class="exam-pledge__note">（預覽模式：只看題目，不會建立作答）</p>' : ""}
       </div>`;
 
     const nameEl = this.el.querySelector("#exam-pledge-name");

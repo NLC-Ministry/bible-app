@@ -16581,7 +16581,7 @@ textarea::placeholder {
 .exam-admin__picker { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .exam-admin__picker label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; color: var(--text-secondary); flex: 1; min-width: 240px; }
 .exam-admin__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; align-items: center; }
-.exam-admin__actions--more { margin-top: 0.5rem; }
+.exam-admin__actions--tools { margin-top: 0.5rem; }
 
 /* 準備進度清單（草稿階段引導，就緒後自動消失） */
 .exam-admin__checklist { margin-top: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border-card); border-radius: var(--radius-md); background: var(--bg-input); }
@@ -16594,9 +16594,18 @@ textarea::placeholder {
 .exam-admin__checklist-mark { flex: 0 0 auto; width: 1.1em; color: var(--color-brand); font-weight: var(--type-weight-strong, 500); }
 .exam-admin__checklist-item.is-done .exam-admin__checklist-mark { color: var(--color-success, var(--color-brand)); }
 
-/* 「⋯ 更多」收合區：把不常用的切換/維護動作收起來，預設不佔畫面 */
-.exam-admin__more { margin-top: 0.5rem; }
-.exam-admin__more > summary { cursor: pointer; font-size: 0.875rem; color: var(--text-secondary); }
+/* 五格進度條（#300）：① 準備中 → ② 已排程 → ③ 作答中 → ④ 批改中 → ⑤ 已公布，目前這格亮起來 */
+.exam-stage-bar { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; }
+.exam-stage-bar__step { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; padding: 0.5rem 0.25rem; border-radius: var(--radius-md); background: var(--bg-input); color: var(--text-muted); font-size: 0.875rem; text-align: center; min-width: 0; }
+.exam-stage-bar__num { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 999px; border: 1px solid var(--border-card); background: var(--bg-card); font-size: 0.875rem; }
+.exam-stage-bar__label { white-space: nowrap; }
+.exam-stage-bar__step.is-done { color: var(--text-secondary); }
+.exam-stage-bar__step.is-done .exam-stage-bar__num { border-color: var(--color-brand-border); color: var(--color-brand); }
+.exam-stage-bar__step.is-current { background: var(--color-brand-subtle); color: var(--color-brand); font-weight: var(--type-weight-strong, 500); }
+.exam-stage-bar__step.is-current .exam-stage-bar__num { background: var(--color-brand); border-color: var(--color-brand); color: #fff; }
+.exam-admin__next { margin: 0.6rem 0 0; font-size: 0.875rem; color: var(--text-primary); }
+.exam-admin__rules { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; margin: 0.75rem 0 0; font-size: 0.875rem; color: var(--text-secondary); }
+.exam-admin__rule { display: inline-flex; align-items: center; gap: 0.35rem; }
 
 /* 儲存按鈕三態：有改動待存／儲存中／剛存好（.exam-admin 範圍夠廣，涵蓋試卷
    設定表單跟題目卡片兩種容器，不用各自重複寫一份） */
