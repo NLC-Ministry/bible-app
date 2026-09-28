@@ -4,23 +4,25 @@
 
 | | 正式環境 | staging |
 |---|---|---|
-| Supabase project ref | `ztozevcqkfrohgjmngcj` | `vzokpsscyivhgmhleplq`（Supabase 分支） |
-| 網址 | `https://ztozevcqkfrohgjmngcj.supabase.co` | `https://vzokpsscyivhgmhleplq.supabase.co` |
+| Supabase project ref | `ztozevcqkfrohgjmngcj` | `dbtjsljrytzonjvclgrd`（Supabase 分支） |
+| 網址 | `https://ztozevcqkfrohgjmngcj.supabase.co` | `https://dbtjsljrytzonjvclgrd.supabase.co` |
 | 前端 | `https://bible.newlife.org.tw`（也可從 `bible-speed-reading.vercel.app` 進入） | `https://bible-speed-reading-staging.vercel.app`（`staging` 分支）、PR 的 preview、本機 `http://localhost:3100` |
 | 資料 | 真實會員資料 | 去識別化樣本：310 位「測試會友」及其讀經、測驗、小測驗資料（見下方） |
 
 ## 規則
 
-- **Supabase CLI 一律明確指定環境**：`--project-ref ztozevcqkfrohgjmngcj` 或 `--project-ref vzokpsscyivhgmhleplq`。不要依賴 `supabase link`；`supabase/.temp/` 已加進 `.gitignore`。
+- **Supabase CLI 一律明確指定環境**：`--project-ref ztozevcqkfrohgjmngcj` 或 `--project-ref dbtjsljrytzonjvclgrd`。不要依賴 `supabase link`；`supabase/.temp/` 已加進 `.gitignore`。
 - **每個 secret 在兩個環境都不同**，不能沿用正式環境的值。
 - **對外有副作用的設定，staging 預設不啟用**：`GEMINI_API_KEY`、兩個 Google Sheet webhook（`ISSUE_REPORT_SHEET_WEBHOOK_*`、`REGISTRATION_STATS_SHEET_WEBHOOK_*`）、各排程的 cron secret、pg_cron 排程。要測到那個功能時才設定，並接到測試用的目的地。
 - **Staging 的防護跟正式環境一樣**：之後會有 Logto 同步進來的真實個資（#265）。
 - migration 用 Supabase CLI 套用：先 staging、驗證後再正式環境（見下方「套用 migration」）。不要再手動貼到 SQL Editor。
 
-## Staging 目前的設定（2026-09-25）
+## Staging 目前的設定（2026-09-25 建立，2026-09-28 重建）
+
+> **2026-09-28 重建**：原本的分支 `vzokpsscyivhgmhleplq` 建立時是「非永久」（persistent: false），被 Supabase 清掉了。新分支 `dbtjsljrytzonjvclgrd` 已設成**永久**（`supabase branches update <id> --persistent`；網頁上建分支時找不到這個選項，要用指令）。重建步驟：套用 staging 分支的全部 migration → 設 Vault `project_url` → 移除建分支時一起重建出來的 pg_cron 排程 → 設 secrets、部署 8 支 Edge Function → 改 Vercel Preview 的 `SUPABASE_URL`／`SUPABASE_ANON_KEY` → 匯入樣本資料。
 
 - 結構：和正式環境一致（含 0211–0214）。
-- Vault：只有 `project_url` = `https://vzokpsscyivhgmhleplq.supabase.co`（見 `supabase/functions/README.md`）。
+- Vault：只有 `project_url` = `https://dbtjsljrytzonjvclgrd.supabase.co`（見 `supabase/functions/README.md`）。
 - Storage：私有 bucket `issue-report-shots`，和 0153 一致。
 - Edge Functions：8 支都已部署（`--no-verify-jwt`）。
 - Secrets：`NLC_LOGTO_ISSUER`、`NLC_MEMBER_HUB_URL`、`NLC_PLATFORM_API_URL`、`NLC_JWT_VERIFY_MODE=enforce`、`EXAM_WRITE_SECRET`（staging 專用）。
@@ -33,7 +35,7 @@
 
 | 分支 | 網站 | 資料庫 |
 |---|---|---|
-| `staging`（日常開發都在這裡） | https://bible-speed-reading-staging.vercel.app | staging `vzokpsscyivhgmhleplq` |
+| `staging`（日常開發都在這裡） | https://bible-speed-reading-staging.vercel.app | staging `dbtjsljrytzonjvclgrd` |
 | `main`（只透過上線 PR 更新） | https://bible.newlife.org.tw | 正式 `ztozevcqkfrohgjmngcj` |
 
 - **日常修改直接 commit 到 `staging` 再 push**。CI 會跑測試、部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址。
@@ -87,8 +89,8 @@ npx supabase migration new add_xxx
 
 ```bash
 # 1. staging：先看會跑哪些，再真的套用
-npx supabase db push --linked --project-ref vzokpsscyivhgmhleplq --dry-run
-npx supabase db push --linked --project-ref vzokpsscyivhgmhleplq
+npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd --dry-run
+npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd
 
 # 2. 在 staging 驗證功能
 

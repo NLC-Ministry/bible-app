@@ -68,7 +68,7 @@ pg_cron 排程和 trigger 呼叫 Edge Function 時，網址由 `public.edge_func
 select vault.create_secret('https://ztozevcqkfrohgjmngcj.supabase.co', 'project_url',
   'Base URL used by edge_function_url() to call this project''s Edge Functions');
 -- staging
-select vault.create_secret('https://vzokpsscyivhgmhleplq.supabase.co', 'project_url',
+select vault.create_secret('https://dbtjsljrytzonjvclgrd.supabase.co', 'project_url',
   'Base URL used by edge_function_url() to call this project''s Edge Functions');
 ```
 
