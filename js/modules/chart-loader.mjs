@@ -1,6 +1,6 @@
 // js/modules/chart-loader.mjs
 // 效能重構 A2：Chart.js（~200KB）以前是 index.html <head> 的 render-blocking
-// <script>，但只有計畫分頁的統計 / 排名子分頁與後台快問快答趨勢圖會畫圖。
+// <script>，但只有計畫分頁的統計 / 排名子分頁與後台雲柱測驗趨勢圖會畫圖。
 // 改成第一次要畫圖時才動態載入 CDN bundle（鎖版），把它移出首屏關鍵路徑。
 let _chartLibPromise = null;
 export function ensureChartLib() {

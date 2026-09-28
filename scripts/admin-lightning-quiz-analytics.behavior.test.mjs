@@ -44,7 +44,7 @@ const weeks = [
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// 用 index.html 裡真正的快問快答區塊（作答明細是它裡面的完整頁面，#317）
+// 用 index.html 裡真正的雲柱測驗區塊（作答明細是它裡面的完整頁面，#317）
 const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const sectionHtml = indexHtml.slice(
   indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),
@@ -82,7 +82,7 @@ afterEach(() => {
   dom.window.close();
 });
 
-describe("快問快答 作答明細", () => {
+describe("雲柱測驗 作答明細", () => {
   it("opens overview, zone and region tables for a question and exports each as CSV", async () => {
     await renderAdminLightningQuizStats();
     document.querySelector('[data-lq-stats-tab="daily"]').click();
@@ -90,7 +90,7 @@ describe("快問快答 作答明細", () => {
     await flush();
 
     expect(db.adminGetLightningQuizResults).toHaveBeenCalledWith("q1");
-    // 作答明細是完整頁面：快問快答主畫面先隱藏
+    // 作答明細是完整頁面：雲柱測驗主畫面先隱藏
     const page = document.getElementById("admin-lightning-quiz-results");
     expect(page.classList.contains("hidden")).toBe(false);
     expect(document.querySelector(".admin-lq").classList.contains("hidden")).toBe(true);
@@ -114,9 +114,9 @@ describe("快問快答 作答明細", () => {
     detail.querySelector('[data-lq-export="zone"]').click();
     detail.querySelector('[data-lq-export="region"]').click();
     expect(downloads.map(d => d.filename)).toEqual([
-      "快問快答_作答總覽_2026-09-24.csv",
-      "快問快答_牧區分析_2026-09-24.csv",
-      "快問快答_大區分析_2026-09-24.csv"
+      "雲柱測驗_作答總覽_2026-09-24.csv",
+      "雲柱測驗_牧區分析_2026-09-24.csv",
+      "雲柱測驗_大區分析_2026-09-24.csv"
     ]);
     const overviewCsv = await downloads[0].blob.text();
     expect(overviewCsv).toContain("李小華");
@@ -158,9 +158,9 @@ describe("快問快答 作答明細", () => {
     panel.querySelector('[data-lq-week-export="region"]').click();
     panel.querySelector('[data-lq-week-export="zone"]').click();
     expect(downloads.map(d => d.filename)).toEqual([
-      "快問快答_週名單_2026-09-21週.csv",
-      "快問快答_週大區分析_2026-09-21週.csv",
-      "快問快答_週牧區分析_2026-09-21週.csv"
+      "雲柱測驗_週名單_2026-09-21週.csv",
+      "雲柱測驗_週大區分析_2026-09-21週.csv",
+      "雲柱測驗_週牧區分析_2026-09-21週.csv"
     ]);
     expect(await downloads[0].blob.text()).toContain('"1","王小明"');
   });
@@ -198,7 +198,7 @@ describe("快問快答 作答明細", () => {
     expect(trend.textContent).toContain("66.7%");
 
     trend.querySelector("[data-lq-trend-export]").click();
-    expect(downloads[0].filename).toMatch(/^快問快答_週趨勢_\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(downloads[0].filename).toMatch(/^雲柱測驗_週趨勢_\d{4}-\d{2}-\d{2}\.csv$/);
     expect(await downloads[0].blob.text()).toContain('"2026-09-21","2","2","10","20.0%","1","2","3","66.7%","5.0"');
   });
 });
