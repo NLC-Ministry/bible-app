@@ -4,10 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const sql = readFileSync(join(root, "supabase", "migrations", "0170_exam_paper_linked_plan.sql"), "utf8");
-const ui = readFileSync(join(root, "js", "modules", "exam.js"), "utf8");
-const db = readFileSync(join(root, "js", "db.js"), "utf8");
-const ef = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
+const read = (...parts) => readFileSync(join(root, ...parts), "utf8").replace(/\r\n/g, "\n");
+const sql = read("supabase", "migrations", "0170_exam_paper_linked_plan.sql");
+const ui = read("js", "modules", "exam.js");
+const db = read("js", "db.js");
+const ef = read("supabase", "functions", "nlc-data", "index.ts");
 
 // 使用者需求（2026-09-11）：
 //   「這樣對應不精準要用id去對應，這個試卷就是單單對應那個計畫」

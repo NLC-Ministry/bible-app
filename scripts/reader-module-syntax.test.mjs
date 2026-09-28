@@ -1,7 +1,6 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { transformSync } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -20,17 +19,10 @@ describe("lazy-loaded reader module syntax", () => {
     expect(duplicates).toEqual([]);
   });
 
+  // esbuild 的 JS API 直接解析，不透過 `npx`（Windows 上叫 npx.cmd，execFileSync("npx") 會 ENOENT，#325）。
   it("parses as ESM so the reader can lazy-load and render verses", () => {
-    const outDir = mkdtempSync(join(tmpdir(), "reader-module-syntax-"));
-    try {
-      execFileSync(
-        "npx",
-        ["esbuild", biblePath, "--format=esm", `--outfile=${join(outDir, "bible.js")}`],
-        { cwd: root, stdio: "pipe" }
-      );
-    } finally {
-      rmSync(outDir, { recursive: true, force: true });
-    }
+    expect(() => transformSync(readFileSync(biblePath, "utf8"), { format: "esm", loader: "js", sourcefile: biblePath }))
+      .not.toThrow();
   });
 
   it("styles the load-retry state that replaces empty placeholder scripture", () => {
