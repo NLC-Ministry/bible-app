@@ -11,6 +11,7 @@ const teamUi = read("js/modules/team-registration.js");
 const migrationByDate = read("supabase/migrations/20260928101011_carryover_next_plan_by_date.sql");
 const migrationDivision = read("supabase/migrations/20260928120418_carryover_single_division.sql");
 const migrationTaoyuan = read("supabase/migrations/20260928101019_taoyuan_first_round_final_exodus.sql");
+const migrationTaoyuanLevNumDeut = read("supabase/migrations/20260928155627_taoyuan_first_round_final_lev_num_deut.sql");
 
 // 取出某個 CREATE OR REPLACE FUNCTION 到下一個 REVOKE 之間的本體。
 const sliceFunction = (sql, name) => {
@@ -196,6 +197,43 @@ describe("reading team stage carryover", () => {
     expect(rules.books).toEqual(["出埃及記"]);
     // 重跑不覆蓋管理員的開放／隱藏設定
     const onConflict = migrationTaoyuan.slice(migrationTaoyuan.indexOf("ON CONFLICT"));
+    expect(onConflict).not.toContain("is_hidden");
+  });
+
+  it("creates the 桃園 first-round-final 利未記／民數記／申命記 plans, all hidden until admin opens them (#326)", () => {
+    expect(migrationTaoyuanLevNumDeut).toContain("'church_campaign_stage_cohort'");
+    expect(migrationTaoyuanLevNumDeut).toContain("ARRAY['桃園']::TEXT[]");
+    expect(migrationTaoyuanLevNumDeut).toContain("'2026-11-01'::DATE, '2026-11-30'::DATE, ARRAY['利未記']::TEXT[]");
+    expect(migrationTaoyuanLevNumDeut).toContain("'2026-12-01'::DATE, '2026-12-31'::DATE, ARRAY['民數記']::TEXT[]");
+    expect(migrationTaoyuanLevNumDeut).toContain("'2027-01-01'::DATE, '2027-01-31'::DATE, ARRAY['申命記']::TEXT[]");
+    expect(migrationTaoyuanLevNumDeut).toContain("'00000000-0000-0000-c326-000000202611'::UUID");
+    expect(migrationTaoyuanLevNumDeut).toContain("'00000000-0000-0000-c326-000000202612'::UUID");
+    expect(migrationTaoyuanLevNumDeut).toContain("'00000000-0000-0000-c326-000000202701'::UUID");
+
+    const rulesBlobs = [...migrationTaoyuanLevNumDeut.matchAll(/'(\{"parentCampaignId".*?\})'::JSONB/g)]
+      .map(match => JSON.parse(match[1]));
+    expect(rulesBlobs).toHaveLength(3);
+    expect(rulesBlobs.map(rules => rules.presetKey)).toEqual([
+      "church_r1final_taoyuan_2026_11",
+      "church_r1final_taoyuan_2026_12",
+      "church_r1final_taoyuan_2027_01"
+    ]);
+    expect(rulesBlobs.map(rules => rules.books)).toEqual([["利未記"], ["民數記"], ["申命記"]]);
+    rulesBlobs.forEach(rules => {
+      expect(rules.parentCampaignId).toBe("00000000-0000-0000-c026-000000002029");
+      expect(rules.stageNo).toBe(2);
+      expect(rules.presetKey.startsWith("church_r1final_")).toBe(true);
+    });
+
+    // 三張都先隱藏，由管理員每月開放
+    const valuesSection = migrationTaoyuanLevNumDeut.slice(
+      migrationTaoyuanLevNumDeut.indexOf("VALUES"),
+      migrationTaoyuanLevNumDeut.indexOf("ON CONFLICT")
+    );
+    expect(valuesSection.match(/TRUE, TRUE, 'church_campaign_stage_cohort'/g)).toHaveLength(3);
+
+    // 重跑不覆蓋管理員的開放／隱藏設定
+    const onConflict = migrationTaoyuanLevNumDeut.slice(migrationTaoyuanLevNumDeut.indexOf("ON CONFLICT"));
     expect(onConflict).not.toContain("is_hidden");
   });
 
