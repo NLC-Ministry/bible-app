@@ -17,7 +17,7 @@ import {
   weekStartOf
 } from "../js/modules/lightning-quiz-analytics.mjs";
 
-// #311：快問快答週統計（週一到週日，一週一三五 3 題）
+// #311：雲柱測驗週統計（週一到週日，一週一三五 3 題）
 const EXPORTED_AT = new Date("2026-09-28T02:00:00Z");
 
 const week = {

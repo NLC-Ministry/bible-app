@@ -83,7 +83,7 @@ describe("quiz-review 檢討畫面", () => {
   });
 });
 
-describe("首頁快問快答：活動結束就撤掉", () => {
+describe("首頁雲柱測驗：活動結束就撤掉", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.useFakeTimers();
@@ -101,10 +101,45 @@ describe("首頁快問快答：活動結束就撤掉", () => {
     const card = document.getElementById("lightning-quiz-card");
     expect(card.classList.contains("hidden")).toBe(false);
     expect(card.textContent).toContain("答對了");
+    // #323：送出後結果畫面也有飄動雲朵和「雲柱測驗」標題，一直留到活動結束
+    expect(card.querySelectorAll(".lightning-quiz-result .lq-drift-cloud")).toHaveLength(2);
+    expect(card.querySelector(".lightning-quiz-result .card-title").textContent).toBe("雲柱測驗");
 
-    await vi.advanceTimersByTimeAsync(61 * 1000);
+    await vi.advanceTimersByTimeAsync(30 * 1000);
+    expect(card.querySelectorAll(".lq-drift-cloud")).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(31 * 1000);
     expect(db.getTodaysLightningQuiz).toHaveBeenCalledTimes(2);
     expect(card.classList.contains("hidden")).toBe(true);
+  });
+
+  it("重新打開 App 時，已作答（答錯）也顯示雲朵與結果", async () => {
+    vi.stubGlobal("db", {
+      getTodaysLightningQuiz: vi.fn(async () => ({
+        success: true, data: { status: "answered", isCorrect: false, elapsedMs: 9100, secondsUntilEnd: 600 }
+      }))
+    });
+    const { refreshLightningQuizHomeCard } = await import("../js/modules/lightning-quiz.mjs?home-reopen");
+    await refreshLightningQuizHomeCard();
+    const card = document.getElementById("lightning-quiz-card");
+    expect(card.querySelector(".lightning-quiz-result.is-wrong")).not.toBeNull();
+    expect(card.querySelectorAll(".lq-drift-cloud")).toHaveLength(2);
+    expect(card.querySelector(".lightning-quiz-result__verdict").textContent).toContain("答錯了");
+    expect(card.textContent).toContain("9.1 秒");
+  });
+});
+
+describe("雲柱測驗改名（#323）", () => {
+  it("會友看得到的畫面與訊息不再出現舊名「快問快答」", async () => {
+    const { readFileSync } = await import("node:fs");
+    const stripComments = text => text
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    for (const file of ["index.html", "js/db.js", "js/modules/admin.js", "js/modules/profile.js", "js/modules/lightning-quiz.mjs"]) {
+      const source = stripComments(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"));
+      expect(source, file).not.toContain("快問快答");
+    }
   });
 });
 
@@ -115,7 +150,7 @@ describe("個人「我的測驗」分頁", () => {
       <div id="profile-exams-browser">
         <button type="button" class="segment-toggle-btn active" data-profile-exams-tab="exam">大測驗</button>
         <button type="button" class="segment-toggle-btn" data-profile-exams-tab="daily">小測驗</button>
-        <button type="button" class="segment-toggle-btn" data-profile-exams-tab="lightning">快問快答</button>
+        <button type="button" class="segment-toggle-btn" data-profile-exams-tab="lightning">雲柱測驗</button>
         <section data-profile-exams-panel="exam"><div id="profile-exams-list"></div></section>
         <section data-profile-exams-panel="daily" class="hidden"><div id="profile-daily-quiz-results"></div></section>
         <section data-profile-exams-panel="lightning" class="hidden"><div id="profile-lightning-quiz-results"></div></section>
@@ -156,7 +191,7 @@ describe("個人「我的測驗」分頁", () => {
         success: true,
         data: [{
           questionId: "lq1", riseDate: "2026-09-24", questionType: "single",
-          payload: { stem: "快問快答題目", options: ["A", "B"] }, answerKey: 1,
+          payload: { stem: "雲柱測驗題目", options: ["A", "B"] }, answerKey: 1,
           result: "not_participated", response: null, elapsedMs: null
         }]
       }))

@@ -1578,7 +1578,7 @@ export async function renderAdminAnnouncements() {
   if (typeof hydrateIcons === "function") hydrateIcons(host);
 }
 
-// ── 首頁「快問快答」(lightning quiz, migration 0202) ───────────────────────
+// ── 首頁「雲柱測驗」(lightning quiz, migration 0202) ───────────────────────
 // 完全獨立於 daily_quiz／speed_reading_exam；單題編輯器重用 daily_quiz 自訂
 // 題目編輯器（ADMIN_QUIZ_CUSTOM_TYPE_LABELS / renderAdminQuizCustomQuestionBodyHtml
 // / bindAdminQuizCustomQuestionBlock 等，定義在本檔案後段）的題型一～五輸入
@@ -1598,7 +1598,7 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
 }
 
 // 跟 collectAdminQuizCustomQuestionFromBlock 邏輯相同，但不需要 id/explanation
-// /verseRef（快問快答一次只有一題，不需要跨題 id 前綴，也沒有解說欄位）。
+// /verseRef（雲柱測驗一次只有一題，不需要跨題 id 前綴，也沒有解說欄位）。
 function collectAdminLightningQuizQuestion(fieldset) {
   const type = fieldset.querySelector('[data-field="type"]')?.value || 'single';
   const stem = fieldset.querySelector('[data-field="stem"]')?.value.trim() || '';
@@ -1719,8 +1719,8 @@ function openAdminLightningQuizSheet(id) {
 }
 
 // ── 完整頁面（#317）──────────────────────────────────────────────────────
-// 新增／編輯、匯入、作答明細在快問快答區塊裡整頁顯示，主畫面（分頁區）先隱藏。
-// 「← 返回快問快答」回到原本的分頁與位置；isDirty() 為真時先確認要不要放棄。
+// 新增／編輯、匯入、作答明細在雲柱測驗區塊裡整頁顯示，主畫面（分頁區）先隱藏。
+// 「← 返回雲柱測驗」回到原本的分頁與位置；isDirty() 為真時先確認要不要放棄。
 let adminLightningQuizOpenSubpage = null;
 const adminLightningQuizSubpageCloseHooks = {};
 
@@ -1779,7 +1779,7 @@ async function closeAdminLightningQuizSubpage({ force = false } = {}) {
 
 // 手機返回鍵（js/app.js 的 popstate）：先關彈窗、再關完整頁面，都沒有才離開後台區塊。
 window.closeAdminLightningQuizLayer = () => {
-  // 快問快答區塊沒在畫面上（切到別的分頁或別的後台功能）就不攔返回鍵
+  // 雲柱測驗區塊沒在畫面上（切到別的分頁或別的後台功能）就不攔返回鍵
   const section = document.getElementById('admin-section-lightning-quiz');
   if (!section || section.classList.contains('hidden') || !section.closest('.view-pane.active')) return false;
   const openSheet = [...document.querySelectorAll('.admin-lq-sheet-backdrop:not(.hidden)')].pop();
@@ -1927,7 +1927,7 @@ async function changeAdminLightningQuizStatus(question, nextStatus) {
 
 async function deleteAdminLightningQuizQuestion(question) {
   const confirmed = await window.showConfirmDialog({
-    title: '確定要刪除這一題快問快答嗎？',
+    title: '確定要刪除這一題雲柱測驗嗎？',
     message: '此動作無法復原。',
     confirmText: '確認刪除',
     cancelText: '取消',
@@ -2019,7 +2019,7 @@ function openAdminLightningQuizRule() {
   const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
   body.innerHTML = `
     <div class="admin-lightning-quiz-rule">
-      <fieldset class="admin-lightning-quiz-rule__days"><legend>哪幾天有快問快答</legend>
+      <fieldset class="admin-lightning-quiz-rule__days"><legend>哪幾天有雲柱測驗</legend>
         ${ADMIN_LIGHTNING_QUIZ_WEEKDAY_LABELS.map((label, index) => `<label><input type="checkbox" data-lq-rule-day value="${index + 1}" ${(settings.weekdays || []).includes(index + 1) ? 'checked' : ''}> 週${label}</label>`).join('')}
       </fieldset>
       <label>預設開始<input type="time" class="form-control" data-lq-rule-start value="${escapeHTML(settings.timeStart)}"></label>
@@ -2470,11 +2470,11 @@ async function renderAdminLightningQuizDetail(detailHost, day) {
       const kind = button.dataset.lqExport;
       if (kind === 'overview') {
         // 匯出目前搜尋／篩選後看到的名單
-        downloadAdminLightningQuizCsv(buildOverviewCsv(currentOverview()), `快問快答_作答總覽_${fileSuffix}.csv`);
+        downloadAdminLightningQuizCsv(buildOverviewCsv(currentOverview()), `雲柱測驗_作答總覽_${fileSuffix}.csv`);
       } else if (kind === 'zone') {
-        downloadAdminLightningQuizCsv(buildZoneCsv(zoneSummary), `快問快答_牧區分析_${fileSuffix}.csv`);
+        downloadAdminLightningQuizCsv(buildZoneCsv(zoneSummary), `雲柱測驗_牧區分析_${fileSuffix}.csv`);
       } else if (kind === 'region') {
-        downloadAdminLightningQuizCsv(buildRegionCsv(regionSummary), `快問快答_大區分析_${fileSuffix}.csv`);
+        downloadAdminLightningQuizCsv(buildRegionCsv(regionSummary), `雲柱測驗_大區分析_${fileSuffix}.csv`);
       }
     });
   });
@@ -2557,7 +2557,7 @@ async function renderAdminLightningQuizTrendPanel(panel) {
     destroyAdminLightningQuizTrendCharts();
     const series = currentSeries();
     if (!series.length) {
-      body.innerHTML = '<div class="admin-user-directory__empty">這段期間沒有已發布的快問快答。</div>';
+      body.innerHTML = '<div class="admin-user-directory__empty">這段期間沒有已發布的雲柱測驗。</div>';
       return;
     }
     body.innerHTML = `
@@ -2610,7 +2610,7 @@ async function renderAdminLightningQuizTrendPanel(panel) {
   fromInput.addEventListener('change', () => { void draw(); });
   toInput.addEventListener('change', () => { void draw(); });
   panel.querySelector('[data-lq-trend-export]')?.addEventListener('click', () => {
-    downloadAdminLightningQuizCsv(buildWeeklyTrendCsv(currentSeries()), `快問快答_週趨勢_${formatTaiwanDate()}.csv`);
+    downloadAdminLightningQuizCsv(buildWeeklyTrendCsv(currentSeries()), `雲柱測驗_週趨勢_${formatTaiwanDate()}.csv`);
   });
   return draw;
 }
@@ -2658,7 +2658,7 @@ function renderAdminLightningQuizWeekPanel(panel) {
     const week = result.data || {};
     const questions = Array.isArray(week.questions) ? week.questions : [];
     if (!questions.length) {
-      body.innerHTML = '<div class="admin-user-directory__empty">這週沒有已發布的快問快答。</div>';
+      body.innerHTML = '<div class="admin-user-directory__empty">這週沒有已發布的雲柱測驗。</div>';
       return;
     }
     const summary = summarizeWeek(week);
@@ -2745,9 +2745,9 @@ function renderAdminLightningQuizWeekPanel(panel) {
     body.querySelectorAll('[data-lq-week-export]').forEach(button => {
       button.addEventListener('click', () => {
         const kind = button.dataset.lqWeekExport;
-        if (kind === 'members') downloadAdminLightningQuizCsv(buildWeekMembersCsv(week), `快問快答_週名單_${fileSuffix}.csv`);
-        else if (kind === 'region') downloadAdminLightningQuizCsv(buildWeekRegionCsv(regionSummary), `快問快答_週大區分析_${fileSuffix}.csv`);
-        else if (kind === 'zone') downloadAdminLightningQuizCsv(buildWeekZoneCsv(zoneSummary), `快問快答_週牧區分析_${fileSuffix}.csv`);
+        if (kind === 'members') downloadAdminLightningQuizCsv(buildWeekMembersCsv(week), `雲柱測驗_週名單_${fileSuffix}.csv`);
+        else if (kind === 'region') downloadAdminLightningQuizCsv(buildWeekRegionCsv(regionSummary), `雲柱測驗_週大區分析_${fileSuffix}.csv`);
+        else if (kind === 'zone') downloadAdminLightningQuizCsv(buildWeekZoneCsv(zoneSummary), `雲柱測驗_週牧區分析_${fileSuffix}.csv`);
       });
     });
   };
@@ -2774,7 +2774,7 @@ export async function renderAdminLightningQuizStats() {
   const rowKey = day => String(day.questionId);
   const rows = days.map((day, index) => {
     // 成長率：跟「上一次有題目的那天」比參與率，而不是硬性比前一個日曆日——
-    // 快問快答一週只有一三五，相鄰兩筆資料本來就會隔好幾天。
+    // 雲柱測驗一週只有一三五，相鄰兩筆資料本來就會隔好幾天。
     const prev = days[index - 1];
     const growth = prev && prev.participationRate > 0
       ? ((day.participationRate - prev.participationRate) / prev.participationRate) * 100
@@ -2956,7 +2956,7 @@ const ADMIN_SECTIONS = [
   { id: 'statistics',    group: '計畫營運',   label: '計畫統計',       icon: 'barChart',      panel: 'plans',  sub: 'statistics' },
   { id: 'quizzes',       group: '測驗',       label: '小測驗',         icon: 'checkCircle',   panel: 'plans',  sub: 'quizzes', flag: 'quiz' },
   { id: 'exam',          group: '測驗',       label: '大測驗',         icon: 'pencil',        panel: 'plans',  sub: 'exam',    flag: 'exam' },
-  { id: 'lightning-quiz', group: '測驗',      label: '快問快答',       icon: 'cloud',         panel: 'system', sub: 'lightning-quiz' },
+  { id: 'lightning-quiz', group: '測驗',      label: '雲柱測驗',       icon: 'cloud',         panel: 'system', sub: 'lightning-quiz' },
   { id: 'devotions',     group: '內容管理',   label: '每日靈修',       icon: 'bookOpen',      panel: 'plans',  sub: 'devotions', flag: 'devotion' },
   { id: 'group-meeting', group: '內容管理',   label: '小組聚會',       icon: 'peoples',       panel: 'plans',  sub: 'group-meeting', flag: 'groupMeeting' },
   { id: 'settings',      group: '設定',       label: '功能開放設定',   icon: 'setting',       panel: 'system', sub: 'settings' }

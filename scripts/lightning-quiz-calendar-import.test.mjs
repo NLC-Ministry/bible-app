@@ -8,7 +8,7 @@ import {
   resolveImportDate
 } from "../js/modules/lightning-quiz-schedule.mjs";
 
-// #310：快問快答一三五排程日曆＋文字匯入
+// #310：雲柱測驗一三五排程日曆＋文字匯入
 const settings = { weekdays: [1, 3, 5], timeStart: "07:00", timeEnd: "10:00" };
 // 2026-09-28 是週一
 const now = { date: "2026-09-28", time: "08:00:00" };

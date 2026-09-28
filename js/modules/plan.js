@@ -64,7 +64,7 @@ const PLAN_ROUTE = Object.freeze({
 window.currentPlanViewState = window.currentPlanViewState || PLAN_ROUTE.LIST;
 
 // 效能重構 A2：Chart.js 改成第一次要畫圖時才動態載入，載入器放在
-// chart-loader.mjs 跟後台快問快答趨勢圖共用。
+// chart-loader.mjs 跟後台雲柱測驗趨勢圖共用。
 window.ensureChartLib = ensureChartLib;
 
 // 效能重構 B7：同一個 <canvas> 還在就只 chart.update()，不要每次 destroy + new Chart。

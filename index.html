@@ -298,7 +298,7 @@
             <div class="exam-home-banner" id="exam-home-banner"></div>
           </div>
 
-          <!-- 首頁「快問快答」：單題限時搶答卡片。內容由 js/modules/lightning-quiz.mjs
+          <!-- 首頁「雲柱測驗」：單題限時搶答卡片。內容由 js/modules/lightning-quiz.mjs
                透過 get_todays_lightning_quiz() 決定；沒有題目/不在時段內/功能關閉時整塊隱藏。 -->
           <div class="glass-card card-col span-12 bento-card lightning-quiz-card hidden" id="lightning-quiz-card">
             <div id="lightning-quiz-host"></div>
@@ -1894,17 +1894,17 @@
             </section>
           </div>
 
-          <!-- 首頁「快問快答」後台：題目 CRUD ＋ 統計與趨勢分析。內容由
+          <!-- 首頁「雲柱測驗」後台：題目 CRUD ＋ 統計與趨勢分析。內容由
                js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
                renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
           <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
-            <!-- 快問快答後台（#313）：三個分頁（排程／題目清單／統計），新增、編輯、試作、
+            <!-- 雲柱測驗後台（#313）：三個分頁（排程／題目清單／統計），新增、編輯、試作、
                  匯入、排程規則、題目內容都是彈出面板（第一次顯示時搬到 body 底下）。 -->
             <section class="glass-card admin-announcements admin-lq" aria-labelledby="admin-lightning-quiz-title">
               <div class="admin-announcements__header admin-lq__header">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
-                  <h3 class="card-title" id="admin-lightning-quiz-title">快問快答</h3>
+                  <h3 class="card-title" id="admin-lightning-quiz-title">雲柱測驗</h3>
                 </div>
                 <div class="admin-lq__header-actions">
                   <button type="button" class="primary-btn" id="admin-lightning-quiz-create">＋ 新增題目</button>
@@ -1912,7 +1912,7 @@
                   <button type="button" class="secondary-btn" id="admin-lightning-quiz-rule-open">⚙ 排程規則</button>
                 </div>
               </div>
-              <div class="capsule-segmented-control segment-track admin-lq__tabs" role="tablist" aria-label="快問快答">
+              <div class="capsule-segmented-control segment-track admin-lq__tabs" role="tablist" aria-label="雲柱測驗">
                 <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-tab="schedule">排程</button>
                 <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="list">題目清單</button>
                 <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="stats">統計</button>
@@ -1942,11 +1942,11 @@
               </div>
             </div>
 
-            <!-- 完整頁面（#317）：內容長的畫面不放彈窗。打開時隱藏上面的快問快答主畫面，
-                 「← 返回快問快答」回到原本的分頁；有打字還沒存會先確認。 -->
+            <!-- 完整頁面（#317）：內容長的畫面不放彈窗。打開時隱藏上面的雲柱測驗主畫面，
+                 「← 返回雲柱測驗」回到原本的分頁；有打字還沒存會先確認。 -->
             <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-editor" aria-labelledby="admin-lightning-quiz-form-title">
               <div class="admin-lq-subpage__head">
-                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
                 <h3 class="card-title" id="admin-lightning-quiz-form-title">新增題目</h3>
               </div>
               <div class="admin-lightning-quiz-schedule-row">
@@ -1969,7 +1969,7 @@
 
             <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-import" aria-labelledby="admin-lightning-quiz-import-title">
               <div class="admin-lq-subpage__head">
-                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
                 <h3 class="card-title" id="admin-lightning-quiz-import-title">匯入題目</h3>
               </div>
               <div id="admin-lightning-quiz-import-body" class="admin-lq-subpage__body"></div>
@@ -1977,7 +1977,7 @@
 
             <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-results" aria-labelledby="admin-lightning-quiz-results-title">
               <div class="admin-lq-subpage__head">
-                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回快問快答</button>
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
                 <h3 class="card-title" id="admin-lightning-quiz-results-title">作答明細</h3>
               </div>
               <div id="admin-lightning-quiz-results-body" class="admin-lq-subpage__body"></div>
@@ -2639,7 +2639,7 @@
         <div class="capsule-segmented-control segment-track profile-exams-tabs" role="tablist" aria-label="測驗類別">
           <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-profile-exams-tab="exam">大測驗</button>
           <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-profile-exams-tab="daily">小測驗</button>
-          <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-profile-exams-tab="lightning">快問快答</button>
+          <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-profile-exams-tab="lightning">雲柱測驗</button>
         </div>
         <section data-profile-exams-panel="exam">
           <p class="profile-exams__intro">正式作答與複習分開保存；只有正式作答列入評分。點進去可以查看紀錄與成績。</p>
@@ -2650,7 +2650,7 @@
           <div id="profile-daily-quiz-results" class="profile-exams__list profile-exams__list--rows" aria-live="polite"></div>
         </section>
         <section data-profile-exams-panel="lightning" class="hidden">
-          <p class="profile-exams__intro">最近一週已結束的快問快答；點進去可以看你的作答與正確答案，沒有作答的活動也會列出正解。</p>
+          <p class="profile-exams__intro">最近一週已結束的雲柱測驗；點進去可以看你的作答與正確答案，沒有作答的活動也會列出正解。</p>
           <div id="profile-lightning-quiz-results" class="profile-exams__list profile-exams__list--rows" aria-live="polite"></div>
         </section>
       </div>

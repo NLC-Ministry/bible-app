@@ -11,7 +11,7 @@ function functionBody(name) {
   return sql.slice(start, end);
 }
 
-describe("快問快答 每題各自發布（0211）", () => {
+describe("雲柱測驗 每題各自發布（0211）", () => {
   it("每支新建立或覆寫的函式都在同一支 migration 裡 REVOKE ALL FROM PUBLIC", () => {
     const names = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.([a-z_]+)\(/g)].map(match => match[1]);
     expect(names.length).toBeGreaterThan(10);
@@ -91,7 +91,7 @@ describe("前端與 nlc-data 接線", () => {
     }
   });
 
-  it("我的測驗分成大測驗／小測驗／快問快答三個分頁，開啟與重新整理時都會載入", () => {
+  it("我的測驗分成大測驗／小測驗／雲柱測驗三個分頁，開啟與重新整理時都會載入", () => {
     const profile = read("js/modules/profile.js");
     const html = read("index.html");
     for (const tab of ["exam", "daily", "lightning"]) {
