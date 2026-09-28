@@ -4204,12 +4204,40 @@ const db = {
       : result;
   },
 
-  async carryReadingTeamsToStage(plan) {
+  // division：只帶那一組（3 / 6）；不給 = 隊長在上一個計畫的所有組別。
+  async carryReadingTeamsToStage(plan, division = null) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到下一階段計畫。" };
-    return this._callReadingTeamRpc("carry_reading_teams_to_stage", {
-      p_target_global_plan_id: planId
+    const args = { p_target_global_plan_id: planId };
+    if ([3, 6].includes(Number(division))) args.p_division = Number(division);
+    return this._callReadingTeamRpc("carry_reading_teams_to_stage", args);
+  },
+
+  // carry_reading_teams_to_stage 的略過原因（20260928101011，#321）→ 給隊長看的說明。
+  // captainBlocked：這組隊伍整隊帶不過去的原因；memberNotes：被略過的隊員，一種原因一行。
+  describeReadingTeamCarryoverSkips({ skippedTeam = null, skippedMembers = [], targetName = "" } = {}) {
+    const target = `「${targetName || "下一個計畫"}」`;
+    const captainMessages = {
+      captain_already_in_target: `你已經在${target}的這個組別加入了其他團隊，沒辦法用這個身份帶隊。`,
+      plan_requires_pastoral_zone: `你還沒設定牧區，沒辦法加入${target}。請先到會員中心完成牧區設定，再回來帶隊。`,
+      plan_audience_restricted: `${target}只開放特定大區參加，你的大區資料不符合，沒辦法帶隊。`
+    };
+    const memberMessages = {
+      already_in_target_team: names => `${names}已在這個計畫加入其他團隊，未一併帶入。`,
+      plan_requires_pastoral_zone: names => `${names}還沒設定牧區，未一併帶入；請他們到會員中心設定牧區後，再用邀請碼加入。`,
+      plan_audience_restricted: names => `${names}的大區不在這個計畫的開放範圍，未一併帶入。`
+    };
+    const captainBlocked = skippedTeam
+      ? (captainMessages[skippedTeam.reason] || `目前沒辦法帶隊進入${target}，請稍後再試。`)
+      : null;
+    const byReason = new Map();
+    (Array.isArray(skippedMembers) ? skippedMembers : []).forEach(member => {
+      if (!member || !member.name) return;
+      const reason = memberMessages[member.reason] ? member.reason : "already_in_target_team";
+      byReason.set(reason, [...(byReason.get(reason) || []), member.name]);
     });
+    const memberNotes = [...byReason].map(([reason, names]) => memberMessages[reason](names.join("、")));
+    return { captainBlocked, memberNotes };
   },
 
   async getReadingTeamRegistrationOverview() {
@@ -6398,7 +6426,7 @@ const db = {
 // a result set passes PostgREST's default row cap.
 db.fetchAllRows = fetchAllRows;
 
-// ── 首頁「快問快答」(lightning quiz, migration 0202) ───────────────────────
+// ── 首頁「雲柱測驗」(lightning quiz, migration 0202) ───────────────────────
 // 完全獨立於 daily_quiz／speed_reading_exam；題型渲染/判分共用
 // js/modules/quiz-question-types.mjs。RPC 名稱與 nlc-data 白名單
 // （LIGHTNING_QUIZ_RPC_FUNCTIONS）一一對應。
@@ -6409,12 +6437,12 @@ db._lightningQuizErrorMessage = function(error) {
     || normalized.includes("canceling statement")
     || normalized.includes("query timeout")
     || normalized.includes("57014")) {
-    return "快問快答載入逾時，請稍後再試。";
+    return "雲柱測驗載入逾時，請稍後再試。";
   }
   if (normalized.includes("pgrst202")
     || normalized.includes("could not find the function")
     || normalized.includes("schema cache")) {
-    return "快問快答資料庫版本尚未更新，請通知管理員完成系統更新。";
+    return "雲柱測驗資料庫版本尚未更新，請通知管理員完成系統更新。";
   }
   const messages = {
     lightning_quiz_not_found: "找不到這一題，請重新整理頁面後再試一次。",
@@ -6422,7 +6450,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_already_answered: "這一題已經作答過了。",
     lightning_quiz_not_started: "請先按下開始作答。",
     lightning_quiz_window_closed: "作答時間已截止，無法再送出答案。",
-    lightning_quiz_admin_required: "只有系統管理員可以管理快問快答。",
+    lightning_quiz_admin_required: "只有系統管理員可以管理雲柱測驗。",
     lightning_quiz_invalid_time_window: "顯示時段設定不正確，結束時間必須晚於開始時間。",
     lightning_quiz_has_attempts: "這一題已經有人作答，不能刪除。",
     lightning_quiz_locked: "這一題已經開始或已有人作答，題目已鎖定；要沿用請按「複製成新題」。",
@@ -6439,7 +6467,7 @@ db._lightningQuizErrorMessage = function(error) {
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
-  if (!key) return "快問快答資料處理失敗，請稍後再試。";
+  if (!key) return "雲柱測驗資料處理失敗，請稍後再試。";
   // 文字匯入會帶上是哪一天／第幾題（例：lightning_quiz_date_taken:2026-10-09），一起告訴管理員
   const detail = raw.match(/lightning_quiz_(?:date_taken|window_passed):(\d{4}-\d{2}-\d{2})/);
   const itemNo = raw.match(/lightning_quiz_import_invalid_item:(\d+)/);
@@ -6450,7 +6478,7 @@ db._lightningQuizErrorMessage = function(error) {
 
 db._callLightningQuizRpc = async function(functionName, args = {}) {
   if (!state.isSupabaseMode || !state.supabase) {
-    return { success: false, message: "快問快答功能需要登入正式帳號。" };
+    return { success: false, message: "雲柱測驗功能需要登入正式帳號。" };
   }
   try {
     const { data, error } = await state.supabase.rpc(functionName, args);
@@ -6536,7 +6564,7 @@ db.adminGetLightningQuizTrend = async function(fromDate, toDate) {
   });
 };
 
-// 排程規則（#310）：哪幾天有快問快答（ISO：1＝週一）與預設時段 "HH:MM"。
+// 排程規則（#310）：哪幾天有雲柱測驗（ISO：1＝週一）與預設時段 "HH:MM"。
 db.adminGetLightningQuizSettings = async function() {
   return this._callLightningQuizRpc("admin_get_lightning_quiz_settings", {});
 };

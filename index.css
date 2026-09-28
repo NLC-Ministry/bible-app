@@ -11475,7 +11475,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   font-variant-numeric: tabular-nums;
 }
 
-/* 首頁「快問快答」卡片（js/modules/lightning-quiz.mjs）。題型預告、
+/* 首頁「雲柱測驗」卡片（js/modules/lightning-quiz.mjs）。題型預告、
    限時作答、對錯結果都在同一張卡切換內容，不用漸層／品牌色光暈，維持
    flat-color 的內容優先風格。 */
 .lightning-quiz-card.hidden { display: none; }
@@ -11497,13 +11497,24 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.4rem;
   padding: 0.25rem 0;
 }
-.lightning-quiz-result [data-icon] {
-  color: var(--color-brand);
-  width: 40px;
-  height: 40px;
+/* 結果畫面（#323）：上面沿用預告的飄動雲朵與「雲柱測驗」標題，對錯改成
+   標題下方一行「小圖示＋文字」，不再用大圖示跟雲朵疊在一起。 */
+.lightning-quiz-result__verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.lightning-quiz-result__verdict [data-icon] {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
 }
 
-/* 題型預告卡片的飄動雲朵：兩朵雲不同大小/節奏地左右飄動，跟「不要閃電、
+/* 預告與結果畫面共用的飄動雲朵：兩朵雲不同大小/節奏地左右飄動，跟「不要閃電、
    要會飄動的雲朵」這個回饋對應。純 CSS 形狀（border-radius 疊色）。 */
 .lightning-quiz-cloud-icon {
   position: relative;
@@ -11592,7 +11603,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   color: var(--text-secondary);
 }
 
-/* 後台「快問快答」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
+/* 後台「雲柱測驗」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
 .admin-lightning-quiz-schedule-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -11606,7 +11617,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
-/* 快問快答後台版面（#313）：三個分頁＋彈出面板，頁面不再一路往下疊。 */
+/* 雲柱測驗後台版面（#313）：三個分頁＋彈出面板，頁面不再一路往下疊。 */
 .admin-lq__header {
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -13596,7 +13607,7 @@ body.profile-subpage-open .main-content {
 .profile-exams__empty,
 .profile-exams__loading { padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.9375rem; }
 
-/* 我的測驗：大測驗／小測驗／快問快答分頁，清單點進去才看結果 */
+/* 我的測驗：大測驗／小測驗／雲柱測驗分頁，清單點進去才看結果 */
 .profile-exams-tabs { margin-bottom: 1rem; }
 .profile-exams-row {
   display: flex;
@@ -13639,7 +13650,7 @@ body.profile-subpage-open .main-content {
 .profile-exams-detail__head h4 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--text-primary); }
 .profile-exams-detail__head p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.875rem; }
 
-/* 小測驗／快問快答的逐題檢討（quiz-review.mjs，沿用大測驗成績頁的 exam-result__* 樣式） */
+/* 小測驗／雲柱測驗的逐題檢討（quiz-review.mjs，沿用大測驗成績頁的 exam-result__* 樣式） */
 .quiz-review-list { display: grid; gap: 0.25rem; }
 
 .profile-preferences-group {

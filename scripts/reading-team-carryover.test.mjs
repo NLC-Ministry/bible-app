@@ -8,6 +8,16 @@ const plan = read("js/modules/plan.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const teamUi = read("js/modules/team-registration.js");
+const migrationByDate = read("supabase/migrations/20260928101011_carryover_next_plan_by_date.sql");
+const migrationDivision = read("supabase/migrations/20260928120418_carryover_single_division.sql");
+const migrationTaoyuan = read("supabase/migrations/20260928101019_taoyuan_first_round_final_exodus.sql");
+
+// 取出某個 CREATE OR REPLACE FUNCTION 到下一個 REVOKE 之間的本體。
+const sliceFunction = (sql, name) => {
+  const start = sql.indexOf("CREATE OR REPLACE FUNCTION " + name + "(");
+  expect(start, name + " not found").toBeGreaterThanOrEqual(0);
+  return sql.slice(start, sql.indexOf("REVOKE ALL ON FUNCTION " + name, start));
+};
 
 describe("reading team stage carryover", () => {
   it("offers carryover only to captains of the immediately previous stage", () => {
@@ -37,7 +47,7 @@ describe("reading team stage carryover", () => {
       expect(migration).toContain("FUNCTION public." + name);
     }
     expect(db).toContain("getReadingTeamCarryoverOffer(plan)");
-    expect(db).toContain("carryReadingTeamsToStage(plan)");
+    expect(db).toContain("carryReadingTeamsToStage(plan, division = null)");
   });
 
   // 0154: a member who quit the roster mid-season and independently joined a
@@ -83,27 +93,110 @@ describe("reading team stage carryover", () => {
     expect(insert).not.toMatch(/^\s*'normal',/m);
   });
 
-  // The old flow was a single auto-fired confirm dialog (once per session,
-  // silently suppressed forever if declined, no way to retry after a
-  // failure). Replaced with a persistent button on the captain's own team
-  // card so they can check and retry on their own terms.
-  it("replaces the one-shot auto popup with a persistent captain-triggered button", () => {
+  // 舊流程：先是一次性自動彈窗（0058 時代），後來改成上一個計畫團隊卡片上的常駐按鈕。
+  // #321 再改成「在下一個計畫裡帶隊」：加入團隊視窗最上面＋加入計畫時的提示，每隊一顆按鈕。
+  it("offers carry-over inside the next plan, one button per team (#321)", () => {
     expect(plan).not.toContain("maybeOfferNextStageTeamCarryover");
     expect(plan).not.toContain("reading_team_carryover_deferred_");
     expect(plan).not.toContain("teamCarryoverCheckedSignature");
+    // 上一個計畫團隊卡片上的舊按鈕已拿掉
+    expect(teamUi).not.toContain("renderCaptainCarryoverAction");
+    expect(teamUi).not.toContain("carryTeamToStage");
+    expect(teamUi).not.toContain("findNextCampaignStagePlan");
 
-    expect(teamUi).toContain("async function renderCaptainCarryoverAction");
-    expect(teamUi).toContain("void renderCaptainCarryoverAction(container, plan, team)");
-    expect(teamUi).toContain("db.getReadingTeamCarryoverOffer(nextStagePlan)");
-    expect(teamUi).toContain("db.carryReadingTeamsToStage(nextStagePlan)");
-    expect(teamUi).toContain("carryTeamToStage");
-    expect(teamUi).toContain("帶隊進入第");
-    // Only offered when the offer RPC says this team's division is eligible.
-    expect(teamUi).toContain("offerTeams.some(item => Number(item.division) === Number(team.division))");
-    // Reports skipped individuals/teams from the new response shape, doesn't
-    // just show a generic success/failure toast.
-    expect(teamUi).toContain("skippedMembers");
-    expect(teamUi).toContain("thisTeamSkipped");
+    // 目標計畫就是使用者所在的這張，後端的 offer 以它為準
+    expect(teamUi).toContain("db.getReadingTeamCarryoverOffer(plan)");
+    expect(teamUi).toContain("db.carryReadingTeamsToStage(plan, sourceTeam.division)");
+    // 加入團隊視窗最上面，只列這裡還沒加入的組別
+    expect(teamUi).toContain("data-team-carryover");
+    expect(teamUi).toContain("void renderCarryoverSection(availableDivisions)");
+    expect(teamUi).toContain("availableDivisions.includes(Number(team.division))");
+    expect(teamUi).toContain("帶上一個計畫的隊伍一起加入");
+    // 加入計畫時的提示
+    expect(teamUi).toContain("window.offerReadingTeamCarryoverOnJoin = async function");
+    expect(teamUi).toContain("只有我自己加入");
+    expect(plan).toContain("async function joinPlanFromExplore(plan, key)");
+    expect(plan).toContain("window.offerReadingTeamCarryoverOnJoin(plan)");
+    expect(plan).toContain("onJoin: () => joinPlanFromExplore(plan, key)");
+    // 結果說明（誰被略過、為什麼）
+    expect(teamUi).toContain("db.describeReadingTeamCarryoverSkips(");
+    expect(db).toContain("plan_requires_pastoral_zone: names =>");
+  });
+
+  // #321: 第一輪期末賽拆成 9～12 月四張、全部 stageNo 2，stageNo + 1 找不到 9 月 → 10 月。
+  it("finds the previous plan by start date within the same campaign and region (#321)", () => {
+    const fn = sliceFunction(migrationByDate, "public.previous_campaign_stage_plan_id");
+    expect(fn).toContain("source_plan.start_date < target_plan.start_date");
+    expect(fn).toContain("source_plan.audience_regions IS NOT DISTINCT FROM target_plan.audience_regions");
+    expect(fn).toContain("rules->>'parentCampaignId'");
+    expect(fn).toContain("ORDER BY source_plan.start_date DESC");
+    expect(fn).toContain("supersededBy");
+
+    for (const name of ["get_reading_team_carryover_offer", "carry_reading_teams_to_stage"]) {
+      const body = sliceFunction(migrationByDate, "public." + name);
+      expect(body).toContain("public.previous_campaign_stage_plan_id(target_plan.id)");
+      expect(body).not.toContain("target_stage_no - 1");
+      expect(body).not.toContain("target_stage_no <= 1");
+    }
+  });
+
+  it("skips members who can't join the target plan instead of failing the whole team (#321)", () => {
+    const carry = sliceFunction(migrationByDate, "public.carry_reading_teams_to_stage");
+    expect(migrationByDate).toContain("PERFORM public.assert_campaign_stage_open(p_target_global_plan_id, p_profile_id)");
+    expect(carry).toContain("public.campaign_stage_join_block_reason(p_target_global_plan_id, source_member.user_id)");
+    expect(carry).toContain("captain_block_reason := public.campaign_stage_join_block_reason(p_target_global_plan_id, actor_id)");
+    expect(carry).toContain("'reason', blocked.reason");
+    expect(carry).toContain("'targetPlanName', target_plan.name");
+    // 0154 行為保留
+    expect(carry).toContain("captain_already_in_target");
+    expect(carry).toContain("pg_advisory_xact_lock");
+    expect(carry).toContain("team_carryover_captain_required");
+    expect(carry).not.toMatch(/^\s*level,/m);
+  });
+
+  it("locks down the new helper functions to service_role (#321)", () => {
+    for (const sig of [
+      "public.campaign_stage_join_block_reason(UUID, UUID)",
+      "public.previous_campaign_stage_plan_id(UUID)"
+    ]) {
+      expect(migrationByDate).toContain(`REVOKE ALL ON FUNCTION ${sig} FROM PUBLIC, anon, authenticated;`);
+      expect(migrationByDate).toContain(`GRANT EXECUTE ON FUNCTION ${sig} TO service_role;`);
+    }
+    for (const sig of [
+      "public.get_reading_team_carryover_offer(UUID, UUID)",
+      "public.carry_reading_teams_to_stage(UUID, UUID)"
+    ]) {
+      expect(migrationByDate).toContain(`REVOKE ALL ON FUNCTION ${sig} FROM PUBLIC, anon, authenticated;`);
+    }
+  });
+
+  it("carries a single division when asked (#321)", () => {
+    const fn = sliceFunction(migrationDivision, "public.carry_reading_teams_to_stage");
+    expect(migrationDivision).toContain("DROP FUNCTION IF EXISTS public.carry_reading_teams_to_stage(UUID, UUID);");
+    expect(fn).toContain("p_division INTEGER DEFAULT NULL");
+    expect(fn).toContain("AND (p_division IS NULL OR team.division = p_division)");
+    // 其餘行為跟 20260928101011 一樣
+    expect(fn).toContain("public.previous_campaign_stage_plan_id(target_plan.id)");
+    expect(fn).toContain("public.campaign_stage_join_block_reason(p_target_global_plan_id, source_member.user_id)");
+    expect(fn).toContain("pg_advisory_xact_lock");
+    expect(fn).not.toMatch(/^s*level,/m);
+    expect(migrationDivision).toContain("REVOKE ALL ON FUNCTION public.carry_reading_teams_to_stage(UUID, UUID, INTEGER) FROM PUBLIC, anon, authenticated;");
+    expect(migrationDivision).toContain("GRANT EXECUTE ON FUNCTION public.carry_reading_teams_to_stage(UUID, UUID, INTEGER) TO authenticated, service_role;");
+    expect(db).toContain("args.p_division = Number(division)");
+  });
+
+  it("creates the 桃園 first-round-final Exodus plan right after the 桃園 warm-up (#321)", () => {
+    expect(migrationTaoyuan).toContain("'church_campaign_stage_cohort'");
+    expect(migrationTaoyuan).toContain("ARRAY['桃園']::TEXT[]");
+    expect(migrationTaoyuan).toContain("'2026-10-01'::DATE, '2026-10-31'::DATE, ARRAY['出埃及記']::TEXT[]");
+    const rules = JSON.parse(migrationTaoyuan.match(/'(\{"parentCampaignId".*?\})'::JSONB/)[1]);
+    expect(rules.parentCampaignId).toBe("00000000-0000-0000-c026-000000002029");
+    expect(rules.stageNo).toBe(2);
+    expect(rules.presetKey.startsWith("church_r1final_")).toBe(true);
+    expect(rules.books).toEqual(["出埃及記"]);
+    // 重跑不覆蓋管理員的開放／隱藏設定
+    const onConflict = migrationTaoyuan.slice(migrationTaoyuan.indexOf("ON CONFLICT"));
+    expect(onConflict).not.toContain("is_hidden");
   });
 
   it("uses the account logout icon for captain member removal controls", () => {

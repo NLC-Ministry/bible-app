@@ -2,7 +2,7 @@
 
 排查特定問題時寫的查詢，全部**只讀**，不會修改資料（`scripts/diagnostic-queries-read-only.test.mjs` 會檢查）。
 
-- 在 SQL Editor 執行前，先確認左上角選的是哪個專案：正式環境 `ztozevcqkfrohgjmngcj`，或 staging `vzokpsscyivhgmhleplq`。
+- 在 SQL Editor 執行前，先確認左上角選的是哪個專案：正式環境 `ztozevcqkfrohgjmngcj`，或 staging `dbtjsljrytzonjvclgrd`。
 - 用 CLI 執行時一律明確指定環境：
   ```bash
   npx supabase db query --linked --project-ref <ref> -f supabase/queries/diagnostics/<檔名>.sql

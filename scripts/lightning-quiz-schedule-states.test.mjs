@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { copyLightningQuizQuestion, lightningQuizStage } from "../js/modules/lightning-quiz-schedule.mjs";
 
-// #309：快問快答狀態只剩 準備中 → 已排程 → 作答中 → 已結束
+// #309：雲柱測驗狀態只剩 準備中 → 已排程 → 作答中 → 已結束
 const read = path => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/20260927121803_lightning_quiz_schedule_states.sql");
 const fnBlock = name => {

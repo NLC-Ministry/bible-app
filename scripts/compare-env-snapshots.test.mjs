@@ -117,6 +117,6 @@ describe("diffSnapshots", () => {
 describe("--run targets", () => {
   it("uses the documented project refs", () => {
     expect(PROD_REF).toBe("ztozevcqkfrohgjmngcj");
-    expect(STAGING_REF).toBe("vzokpsscyivhgmhleplq");
+    expect(STAGING_REF).toBe("dbtjsljrytzonjvclgrd");
   });
 });

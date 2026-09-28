@@ -436,7 +436,7 @@ function getMyExamDisplay(item) {
   return { group: "active", badge: "即將開放", kind: "warning", primary: null };
 }
 
-// ── 我的測驗：大測驗／小測驗／快問快答三個分頁，清單點進去才看結果 ─────────────
+// ── 我的測驗：大測驗／小測驗／雲柱測驗三個分頁，清單點進去才看結果 ─────────────
 
 const MY_QUIZ_RESULT_BADGES = {
   correct: '<span class="stat-badge stat-badge--success">答對</span>',
@@ -452,7 +452,7 @@ function taipeiDateString(date) {
   return date.toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
 }
 
-// 小測驗、快問快答只看最近一週（含今天）。
+// 小測驗、雲柱測驗只看最近一週（含今天）。
 function recentWeekRange() {
   return {
     from: taipeiDateString(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)),
@@ -618,7 +618,7 @@ async function renderMyDailyQuizResults() {
   if (typeof hydrateIcons === "function") hydrateIcons(host);
 }
 
-// ── 快問快答 ────────────────────────────────────────────────────────────
+// ── 雲柱測驗 ────────────────────────────────────────────────────────────
 
 function renderMyLightningQuizDetail(item) {
   let reviewHtml;
@@ -636,7 +636,7 @@ function renderMyLightningQuizDetail(item) {
     reviewHtml = '<div class="profile-exams__empty">這一題的格式無法顯示。</div>';
   }
   openProfileExamsDetail(`
-    <div class="profile-exams-detail__head"><h4>${escapeHTML(item.riseDate)} 快問快答</h4></div>
+    <div class="profile-exams-detail__head"><h4>${escapeHTML(item.riseDate)} 雲柱測驗</h4></div>
     ${reviewHtml}`, { drawLines: true });
 }
 
@@ -646,23 +646,23 @@ async function renderMyLightningQuizResults() {
   const host = document.getElementById("profile-lightning-quiz-results");
   if (!host) return;
   if (state.offlineMode || typeof db === "undefined" || typeof db.getMyLightningQuizHistory !== "function") {
-    host.innerHTML = '<div class="profile-exams__empty">目前無法載入快問快答紀錄。</div>';
+    host.innerHTML = '<div class="profile-exams__empty">目前無法載入雲柱測驗紀錄。</div>';
     return;
   }
-  if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理快問快答紀錄…</div>';
+  if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理雲柱測驗紀錄…</div>';
   const { from, to } = recentWeekRange();
   const result = await db.getMyLightningQuizHistory(from, to);
   if (!result.success) {
-    host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入快問快答紀錄。")}</div>`;
+    host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入雲柱測驗紀錄。")}</div>`;
     return;
   }
   const items = Array.isArray(result.data) ? result.data : [];
   myQuizLists.lightning = items;
   if (!items.length) {
-    host.innerHTML = '<div class="profile-exams__empty">最近一週內還沒有已結束的快問快答。</div>';
+    host.innerHTML = '<div class="profile-exams__empty">最近一週內還沒有已結束的雲柱測驗。</div>';
     return;
   }
-  host.innerHTML = items.map((item, index) => myQuizRowHtml("lightning", index, `${item.riseDate} 快問快答`,
+  host.innerHTML = items.map((item, index) => myQuizRowHtml("lightning", index, `${item.riseDate} 雲柱測驗`,
     QUESTION_TYPE_LABELS[item.questionType] || "", MY_QUIZ_RESULT_BADGES[item.result] || "")).join("");
   if (typeof hydrateIcons === "function") hydrateIcons(host);
 }

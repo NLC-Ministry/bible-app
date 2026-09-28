@@ -103,6 +103,103 @@ import {
     if (typeof hydrateIcons === "function") hydrateIcons(root);
   }
 
+  // ── 帶上一個計畫的隊伍一起加入（#321）────────────────────────────────────
+  // 入口在「下一個計畫」裡：加入團隊視窗的最上面，以及按「加入計畫」時的提示。
+  // 後端以目標計畫為準：傳入這張計畫，它會找出上一張（同活動、同對象大區、
+  // 日期緊接在前），列出你在上一張當隊長、而且這裡還沒加入該組別的隊伍。
+
+  // 回傳可帶的隊伍（[{ sourceTeamId, name, division, memberCount }]）；不能帶就回 []。
+  async function getCarryoverTeams(plan) {
+    if (!plan || !state.isSupabaseMode || !state.supabase
+      || typeof db.getReadingTeamCarryoverOffer !== "function"
+      || !isCampaignStageKind(plan) || isCampaignStageEnded(plan)) {
+      return [];
+    }
+    const result = await db.getReadingTeamCarryoverOffer(plan);
+    const offer = result && result.success ? result.context || {} : {};
+    return offer.eligible && Array.isArray(offer.teams) ? offer.teams : [];
+  }
+
+  // 帶一支隊伍進這張計畫，並告訴隊長結果（誰被略過、為什麼）。帶成功回 true。
+  async function carryTeamIntoPlan(plan, sourceTeam) {
+    const planName = plan.name || "這個計畫";
+    loader.show("正在帶隊伍加入…");
+    const result = await db.carryReadingTeamsToStage(plan, sourceTeam.division);
+    loader.hide();
+    if (!result.success) {
+      alert(result.message || "帶隊失敗，請稍後再試。");
+      return false;
+    }
+    const data = result.data || {};
+    const division = Number(sourceTeam.division);
+    const skippedTeam = (data.skippedTeams || []).find(item => Number(item.division) === division);
+    const carriedTeam = (data.teams || []).find(item => Number(item.division) === division);
+    const { captainBlocked, memberNotes } = db.describeReadingTeamCarryoverSkips({
+      skippedTeam,
+      skippedMembers: carriedTeam && carriedTeam.skippedMembers,
+      targetName: planName
+    });
+    if (captainBlocked || !carriedTeam) {
+      alert(captainBlocked || "帶隊失敗，請稍後再試。");
+      return false;
+    }
+    alert([`已將「${sourceTeam.name || ""}」帶入「${planName}」。`, ...memberNotes].join("\n"));
+    return true;
+  }
+
+  function renderCarryoverTeamButtons(teams) {
+    return teams.map(team => `
+      <button type="button" class="reading-team-choice" data-carryover-division="${Number(team.division)}">
+        <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
+        <span class="reading-team-choice__body"><strong>帶「${escapeHTML(team.name || "我的團隊")}」加入</strong><span class="reading-team-choice__description">${escapeHTML(`${Number(team.division)} 人組・${Number(team.memberCount || 0)} 位隊員`)}</span></span>
+        <span class="reading-team-choice__arrow"><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
+      </button>`).join("");
+  }
+
+  // 「加入計畫」時的提示：可以帶隊就先問。回傳
+  //   "none"    —— 沒有可帶的隊伍，照原本流程加入
+  //   "solo"    —— 隊長選「只有我自己加入」
+  //   "carried" —— 已帶隊加入（隊長也一起加入了這張計畫）
+  //   null      —— 關掉視窗，什麼都不做
+  window.offerReadingTeamCarryoverOnJoin = async function offerReadingTeamCarryoverOnJoin(plan) {
+    const teams = await getCarryoverTeams(plan);
+    if (!teams.length) return "none";
+    return new Promise(resolve => {
+      const overlay = createOverlay("reading-team-carryover-join-dialog", "reading-team-carryover-join-title");
+      const panel = overlay.firstElementChild;
+      panel.classList.add("reading-team-dialog--choice");
+      panel.innerHTML = `
+        <header class="reading-team-dialog__header">
+          <div><p class="reading-team-eyebrow">${escapeHTML(plan.name || "教會讀經計畫")}</p><h3 id="reading-team-carryover-join-title">要帶隊伍一起加入嗎？</h3></div>
+          <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
+        </header>
+        <p class="reading-team-dialog__intro">你是上一個計畫這些隊伍的隊長。帶隊加入後，隊員會直接加入這個計畫和同一支隊伍，不用重新報名或輸入邀請碼。</p>
+        <div class="reading-team-choice-grid">
+          ${renderCarryoverTeamButtons(teams)}
+          <button type="button" class="reading-team-choice" data-carryover-solo>
+            <span class="reading-team-choice__icon"><span class="nlc-icon nlc-icon--md" data-icon="user" aria-hidden="true"></span></span>
+            <span class="reading-team-choice__body"><strong>只有我自己加入</strong><span class="reading-team-choice__description">之後也可以從「建立 / 加入團隊」帶隊</span></span>
+            <span class="reading-team-choice__arrow"><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
+          </button>
+        </div>`;
+      const finish = value => { removeOverlay(overlay); resolve(value); };
+      panel.querySelector("[data-team-close]").onclick = () => finish(null);
+      panel.querySelector("[data-carryover-solo]").onclick = () => finish("solo");
+      panel.querySelectorAll("[data-carryover-division]").forEach(button => {
+        button.onclick = async () => {
+          const team = teams.find(item => Number(item.division) === Number(button.dataset.carryoverDivision));
+          panel.querySelectorAll("button").forEach(item => { item.disabled = true; });
+          const carried = team ? await carryTeamIntoPlan(plan, team) : false;
+          if (carried) return finish("carried");
+          panel.querySelectorAll("button").forEach(item => { item.disabled = false; });
+        };
+      });
+      closeOnBackdrop(overlay, () => finish(null));
+      hydrate(overlay);
+      panel.querySelector("[data-carryover-division]")?.focus();
+    });
+  };
+
   window.offerReadingTeamParticipation = function offerReadingTeamParticipation(plan) {
     if (!isSupportedPlan(plan)) return Promise.resolve(null);
     return new Promise(resolve => {
@@ -449,6 +546,7 @@ import {
           <button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </header>
         <p class="reading-team-dialog__intro">${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加 3 人團隊與 6 人團隊，章節進度只需打卡一次。"}</p>
+        <section class="reading-team-carryover" data-team-carryover hidden aria-labelledby="reading-team-carryover-title" style="margin-bottom: 1rem;"></section>
         <div class="reading-team-division-choice-grid" role="group" aria-label="選擇團隊人數">
           ${divisionChoices}
         </div>
@@ -507,6 +605,48 @@ import {
         await refresh();
       };
       hydrate(panel);
+      void renderCarryoverSection(availableDivisions);
+    };
+
+    // 最上面的「帶上一個計畫的隊伍一起加入」：只列這裡還沒加入的組別。
+    const renderCarryoverSection = async availableDivisions => {
+      const section = panel.querySelector("[data-team-carryover]");
+      if (!section) return;
+      const teams = (await getCarryoverTeams(plan))
+        .filter(team => availableDivisions.includes(Number(team.division)));
+      // 載入期間使用者可能已經換畫面或關掉視窗。
+      if (closed || !teams.length || !section.isConnected) return;
+      section.innerHTML = `
+        <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.6rem;">
+          <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
+          <div><h4 id="reading-team-carryover-title" style="margin: 0; font-size: 0.95rem; font-weight: 500;">帶上一個計畫的隊伍一起加入</h4><p style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">隊員不用重新報名或輸入邀請碼。</p></div>
+        </div>
+        <div class="reading-team-choice-grid">${renderCarryoverTeamButtons(teams)}</div>
+        <p style="margin: 1rem 0 0; font-size: 0.875rem; color: var(--text-muted); text-align: center;">或是建立一支新團隊</p>`;
+      section.hidden = false;
+      section.querySelectorAll("[data-carryover-division]").forEach(button => {
+        button.onclick = async () => {
+          const team = teams.find(item => Number(item.division) === Number(button.dataset.carryoverDivision));
+          if (!team) return;
+          const confirmed = await window.showConfirmDialog({
+            title: "帶隊伍一起加入",
+            message: `確認後「${team.name || ""}」的隊員會直接加入「${plan.name || "這個計畫"}」和同一支隊伍。\n若有隊員已經在這個計畫加入了別的隊伍，或還沒設定牧區，會略過那位隊員，其餘隊員照常帶入。`,
+            confirmText: "帶隊加入",
+            cancelText: "取消"
+          });
+          if (!confirmed) return;
+          section.querySelectorAll("button").forEach(item => { item.disabled = true; });
+          const carried = await carryTeamIntoPlan(plan, team);
+          if (closed) return;
+          if (!carried) {
+            section.querySelectorAll("button").forEach(item => { item.disabled = false; });
+            return;
+          }
+          preferredDivision = Number(team.division);
+          await refresh();
+        };
+      });
+      hydrate(section);
     };
 
     const renderTeam = (context, allContexts = [context]) => {
@@ -717,95 +857,6 @@ import {
     }));
   }
 
-  // 隊長手動把這支隊伍帶進下一階段——取代舊版「一次性自動彈窗」（容易被誤關、
-  // 關掉後整個 session 都不會再問，也沒有任何地方能重試）。這裡改成一個常駐在
-  // 團隊卡片上的按鈕：只有偵測到「下一階段已開放、且這個組別確實可以帶隊」時
-  // 才會出現，隊長隨時可以自己按，失敗了也能立刻再按一次。
-  async function renderCaptainCarryoverAction(container, plan, team) {
-    const actionsRow = container.querySelector(".reading-team-inline-actions");
-    if (!actionsRow
-      || !state.isSupabaseMode
-      || !state.supabase
-      || typeof db.getReadingTeamCarryoverOffer !== "function"
-      || typeof db.carryReadingTeamsToStage !== "function"
-      || typeof isCampaignStageKind !== "function") {
-      return;
-    }
-
-    const currentStageNo = Number(plan && (plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo)) || 0);
-    if (!currentStageNo) return;
-
-    const nextStagePlan = (state.globalPlans || []).find(candidate =>
-      candidate
-      && isCampaignStageKind(candidate)
-      && !(typeof isPlanHidden === "function" && isPlanHidden(candidate))
-      && Number(candidate.stageNo || (candidate.campaignDefinition && candidate.campaignDefinition.stageNo) || 0) === currentStageNo + 1
-    );
-    if (!nextStagePlan) return;
-
-    const offerResult = await db.getReadingTeamCarryoverOffer(nextStagePlan);
-    if (!offerResult.success) return;
-    const offer = offerResult.context || {};
-    const offerTeams = Array.isArray(offer.teams) ? offer.teams : [];
-    if (!offer.eligible || !offerTeams.some(item => Number(item.division) === Number(team.division))) return;
-
-    const targetStageNo = Number(offer.targetStageNo
-      || nextStagePlan.stageNo
-      || (nextStagePlan.campaignDefinition && nextStagePlan.campaignDefinition.stageNo)
-      || 0);
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "text-xs";
-    btn.dataset.carryTeamToStage = "";
-    btn.style.cssText = "background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem; font-weight:500; color: var(--color-brand); margin-right: auto;";
-    btn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span><span>帶隊進入第 ${targetStageNo} 階段</span>`;
-    actionsRow.insertBefore(btn, actionsRow.firstChild);
-    if (typeof hydrateIcons === "function") hydrateIcons(btn);
-
-    btn.addEventListener("click", async () => {
-      const confirmed = await window.showConfirmDialog({
-        title: `帶隊進入第 ${targetStageNo} 階段`,
-        message: `確認後「${team.name || ""}」全體隊員會直接加入第 ${targetStageNo} 階段，不需要重新報名或輸入邀請碼。若有隊員已經在第 ${targetStageNo} 階段加入了別的隊伍，會略過那位隊員，其餘隊員照常帶入。`,
-        confirmText: "帶隊進入",
-        cancelText: "取消"
-      });
-      if (!confirmed) return;
-
-      btn.disabled = true;
-      loader.show("正在帶領團隊進入下一階段…");
-      const carryResult = await db.carryReadingTeamsToStage(nextStagePlan);
-      loader.hide();
-      btn.disabled = false;
-
-      if (!carryResult.success) {
-        alert(carryResult.message || "帶隊失敗，請稍後再試。");
-        return;
-      }
-
-      const carriedTeams = (carryResult.data && carryResult.data.teams) || [];
-      const skippedTeams = (carryResult.data && carryResult.data.skippedTeams) || [];
-      const thisTeamSkipped = skippedTeams.find(item => Number(item.division) === Number(team.division));
-
-      if (thisTeamSkipped) {
-        alert(`你已經在第 ${targetStageNo} 階段的這個組別加入了其他團隊，沒辦法用這個身份帶隊。`);
-        return;
-      }
-
-      const thisTeamResult = carriedTeams.find(item => Number(item.division) === Number(team.division));
-      const skippedNames = ((thisTeamResult && thisTeamResult.skippedMembers) || [])
-        .map(member => member.name)
-        .filter(Boolean);
-
-      let message = `已將「${team.name || ""}」帶入第 ${targetStageNo} 階段。`;
-      if (skippedNames.length) {
-        message += `\n${skippedNames.join("、")}已在第 ${targetStageNo} 階段加入其他團隊，未一併帶入。`;
-      }
-      alert(message);
-      window.location.reload(true);
-    });
-  }
-
   window.renderMyReadingTeamInline = function renderMyReadingTeamInline(container, plan, context, mode = "members") {
     if (!container || !context || !context.team) return;
     const team = context.team;
@@ -862,11 +913,10 @@ import {
 
     // Only the captain may manage the roster or dissolve the whole team.
 
-    if (isCurrentUserCaptain) {
-      // 容器一定要在（carry 按鈕靠它 insertBefore）；解散按鈕只在階段還沒結束時放。
+    if (canManageRosterInline) {
       container.innerHTML += `
         <div class="reading-team-inline-actions" style="margin-top: 1.2rem; display: flex; justify-content: flex-end; border-top: 1px dashed var(--border-card); padding-top: 0.8rem;">
-          ${canManageRosterInline ? '<button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>' : ''}
+          <button type="button" class="text-xs text-danger" data-disband-team-inline style="background:none; border:none; padding:0.5rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem; font-weight:500; opacity:0.7;"><span class="nlc-icon nlc-icon--sm" data-icon="trash"></span><span>解散團隊</span></button>
         </div>`;
     }
 
@@ -895,12 +945,6 @@ import {
           alert("解散團隊失敗: " + ((result && (result.message || result.error && result.error.message)) || "未知錯誤"));
         }
       });
-    }
-
-    // 「帶隊進入下一階段」即使目前這個階段已結束也要能用（那正是往前走的正途）——
-    // 只綁隊長身分，不受 stageEnded 影響。
-    if (isCurrentUserCaptain) {
-      void renderCaptainCarryoverAction(container, plan, team);
     }
 
     container.querySelector("[data-rename-team-inline]")?.addEventListener("click", async () => {

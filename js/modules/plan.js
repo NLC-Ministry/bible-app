@@ -64,7 +64,7 @@ const PLAN_ROUTE = Object.freeze({
 window.currentPlanViewState = window.currentPlanViewState || PLAN_ROUTE.LIST;
 
 // 效能重構 A2：Chart.js 改成第一次要畫圖時才動態載入，載入器放在
-// chart-loader.mjs 跟後台快問快答趨勢圖共用。
+// chart-loader.mjs 跟後台雲柱測驗趨勢圖共用。
 window.ensureChartLib = ensureChartLib;
 
 // 效能重構 B7：同一個 <canvas> 還在就只 chart.update()，不要每次 destroy + new Chart。
@@ -1588,6 +1588,28 @@ async function joinPlanSoloFromCard(plan, key) {
   return joinedPlan;
 }
 
+// 探索計畫的「加入計畫」：上一個計畫的隊長可以直接帶隊加入（#321），
+// 不能帶隊（或選「只有我自己加入」）就走原本的個人加入。
+async function joinPlanFromExplore(plan, key) {
+  if (typeof window.offerReadingTeamCarryoverOnJoin === "function") {
+    const choice = await window.offerReadingTeamCarryoverOnJoin(plan);
+    if (choice === null) return;
+    if (choice === "carried") {
+      // 帶隊時後端已經替隊長和隊員加入了計畫；重新載入讓計畫清單與團隊狀態一致。
+      window.location.reload();
+      return;
+    }
+    // "none" / "solo"：照原本的個人加入確認流程。
+  }
+  await confirmPlanJoin({
+    plan,
+    mode: "solo",
+    onConfirm: async () => {
+      await joinPlanSoloFromCard(plan, key);
+    }
+  });
+}
+
 function getJoinedPlanStartTime(plan) {
   if (!plan || !plan.startDate) return Number.MAX_SAFE_INTEGER;
   const date = new Date(`${plan.startDate}T00:00:00`);
@@ -2690,15 +2712,7 @@ function renderPresetPlansList() {
         openPlanDetailsDialog(plan);
         return;
       }
-      openPlanDetailsDialog(plan, { onJoin: async () => {
-        await confirmPlanJoin({
-          plan,
-          mode: "solo",
-          onConfirm: async () => {
-            await joinPlanSoloFromCard(plan, key);
-          }
-        });
-      }});
+      openPlanDetailsDialog(plan, { onJoin: () => joinPlanFromExplore(plan, key) });
     };
 
     card.onclick = event => {
@@ -2714,13 +2728,7 @@ function renderPresetPlansList() {
     card.querySelector('[data-plan-card-action="solo-join"]')?.addEventListener("click", async event => {
       event.preventDefault();
       event.stopPropagation();
-      await confirmPlanJoin({
-        plan,
-        mode: "solo",
-        onConfirm: async () => {
-          await joinPlanSoloFromCard(plan, key);
-        }
-      });
+      await joinPlanFromExplore(plan, key);
     });
     card.querySelector('[data-plan-card-action="member-hub-pastoral-zone"]')?.addEventListener("click", event => {
       event.preventDefault();

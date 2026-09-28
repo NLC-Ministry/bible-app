@@ -1,5 +1,5 @@
 // js/modules/lightning-quiz-analytics.mjs
-// 快問快答後台分析的純函式：把 admin_get_lightning_quiz_results（0211）與
+// 雲柱測驗後台分析的純函式：把 admin_get_lightning_quiz_results（0211）與
 // admin_get_lightning_quiz_week／_weeks（週統計，#311）的回傳彙總成作答總覽、
 // 牧區分析、大區分析、週排行、週趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
 

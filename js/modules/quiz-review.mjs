@@ -3,7 +3,7 @@
 //   選擇題：標出「你選的」與「正解」
 //   連連看：畫線——你的連線是綠色實線，連錯的地方補一條紅色虛線的正解
 //   排序題：列出你的順序（位置對的標綠、錯的標出應在第幾）與正確順序
-// 小測驗、快問快答共用；連連看畫線 paintMatchReviewLines 大測驗 exam.js 也共用。
+// 小測驗、雲柱測驗共用；連連看畫線 paintMatchReviewLines 大測驗 exam.js 也共用。
 
 import { isAnswerCorrect } from "./quiz-question-types.mjs";
 

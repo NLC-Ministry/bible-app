@@ -83,7 +83,7 @@ describe("後台預覽測試", () => {
   });
 });
 
-describe("快問快答後台：分頁＋彈出面板（#309、#310、#313）", () => {
+describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", () => {
   const taipei = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
   const shift = days => {
     const date = new Date(`${taipei}T00:00:00Z`);
@@ -97,7 +97,7 @@ describe("快問快答後台：分頁＋彈出面板（#309、#310、#313）", (
     { ...base, id: "live-1", riseDate: taipei, riseTimeStart: "00:00:00", riseTimeEnd: "23:59:59", status: "published", locked: true },
     ...Array.from({ length: 12 }, (_, index) => ({ ...base, id: `ended-${index + 1}`, riseDate: shift(-2 - index), status: "published", locked: true }))
   ];
-  // 用 index.html 裡真正的快問快答區塊，不另外手寫假的 DOM
+  // 用 index.html 裡真正的雲柱測驗區塊，不另外手寫假的 DOM
   const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const sectionHtml = indexHtml.slice(
     indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),

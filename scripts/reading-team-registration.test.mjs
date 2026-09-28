@@ -225,8 +225,12 @@ describe("NLC and browser integration", () => {
       plan.indexOf("card.querySelector('[data-plan-card-action=\"solo-join\"]')"),
       plan.indexOf("container.appendChild(card)", plan.indexOf("card.querySelector('[data-plan-card-action=\"solo-join\"]')"))
     );
-    expect(soloHandler).toContain("confirmPlanJoin");
-    expect(soloHandler.indexOf("confirmPlanJoin")).toBeLessThan(soloHandler.indexOf("joinPlanSoloFromCard"));
+    expect(soloHandler).toContain("joinPlanFromExplore(plan, key)");
+    // 探索卡片的兩個加入入口共用 joinPlanFromExplore：可以帶隊就先問（#321），
+    // 個人加入一律先經過 confirmPlanJoin。
+    const joinFromExplore = plan.slice(plan.indexOf("async function joinPlanFromExplore"), plan.indexOf("function getJoinedPlanStartTime"));
+    expect(joinFromExplore).toContain("confirmPlanJoin");
+    expect(joinFromExplore.indexOf("confirmPlanJoin")).toBeLessThan(joinFromExplore.indexOf("joinPlanSoloFromCard"));
   });
 
   it("requires confirmation before joining from preset plan details", () => {
@@ -235,10 +239,7 @@ describe("NLC and browser integration", () => {
       plan.indexOf("card.onclick = event =>")
     );
     expect(openDetailsFlow).toContain("openPlanDetailsDialog(plan");
-    expect(openDetailsFlow).toContain("onJoin");
-    expect(openDetailsFlow).toContain("confirmPlanJoin");
-    expect(openDetailsFlow).toContain("joinPlanSoloFromCard(plan, key)");
-    expect(openDetailsFlow.indexOf("confirmPlanJoin")).toBeLessThan(openDetailsFlow.indexOf("joinPlanSoloFromCard(plan, key)"));
+    expect(openDetailsFlow).toContain("onJoin: () => joinPlanFromExplore(plan, key)");
   });
 
   it("opens team setup from the joined-plan card's participation control, never before the user has actually joined", () => {

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 export const PROD_REF = "ztozevcqkfrohgjmngcj";
-export const STAGING_REF = "vzokpsscyivhgmhleplq";
+export const STAGING_REF = "dbtjsljrytzonjvclgrd";
 
 /** 解析 `supabase db query` 的輸出：前面可能有 "Initialising login role..." 之類的訊息。 */
 export function parseCliRows(output) {

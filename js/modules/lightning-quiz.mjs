@@ -1,5 +1,6 @@
 // js/modules/lightning-quiz.mjs
-// 「快問快答」作答流程：題型預告 → 按下開始限時作答 → 立即出結果。
+// 「雲柱測驗」（舊名「快問快答」，程式代號 lightning quiz）作答流程：
+// 題型預告 → 按下開始限時作答 → 立即出結果。
 // 首頁卡片與後台「預覽測試」共用同一套畫面與互動，差別只在開始／送出接到哪裡：
 //   首頁：db.start/submitLightningQuizAttempt（伺服器計時、判分、寫入作答紀錄）
 //   預覽：在瀏覽器計時、用 quiz-question-types.mjs 判分，完全不寫入任何資料
@@ -7,7 +8,7 @@
 //   no_question / hidden → 整張卡隱藏（活動時段一結束也是 hidden，結果改到「我的測驗」看）
 //   available   → 題型預告 → 開始按鈕
 //   in_progress → 可續答，沿用伺服器 started_at 繼續計時
-//   answered    → 顯示對錯與花費時間，直到活動結束
+//   answered    → 飄動雲朵＋對錯與花費時間，直到活動結束
 
 import {
   normalizeQuestion,
@@ -38,7 +39,8 @@ function renderShell(bodyHtml) {
   return `<div class="lightning-quiz-card__inner">${bodyHtml}</div>`;
 }
 
-// 題型預告卡片用的飄動雲朵：純 CSS 形狀（border-radius 疊色），持續左右飄動；
+// 題型預告與結果畫面共用的飄動雲朵（#323：送出後也一直飄到活動結束、卡片收起）。
+// 純 CSS 形狀（border-radius 疊色），持續左右飄動；
 // 不用行內 SVG——設計系統的 icon-audit 測試會擋下 Lucide 註冊表以外的行內 SVG。
 function driftingCloudsHtml() {
   return `<div class="lightning-quiz-cloud-icon" aria-hidden="true">
@@ -52,7 +54,7 @@ function renderTeaserView(question) {
   return renderShell(`
     <div class="lightning-quiz-teaser">
       ${driftingCloudsHtml()}
-      <h3 class="card-title">快問快答</h3>
+      <h3 class="card-title">雲柱測驗</h3>
       <p class="lightning-quiz-teaser__note">題型：${escapeHTML(typeLabel)}。按下開始後立即計時，答對越快越好！</p>
       <button type="button" class="primary-btn" data-lq-start>開始作答</button>
     </div>
@@ -82,8 +84,12 @@ function renderQuestionView(question, shuffleSeed) {
 function renderResultView(isCorrect, elapsedMs) {
   return renderShell(`
     <div class="lightning-quiz-result ${isCorrect ? "is-correct" : "is-wrong"}">
-      <span class="nlc-icon nlc-icon--hero" data-icon="${isCorrect ? "checkCircle" : "closeOne"}" aria-hidden="true"></span>
-      <h3 class="card-title">${isCorrect ? "答對了！" : "答錯了"}</h3>
+      ${driftingCloudsHtml()}
+      <h3 class="card-title">雲柱測驗</h3>
+      <p class="lightning-quiz-result__verdict">
+        <span class="nlc-icon" data-icon="${isCorrect ? "checkCircle" : "closeOne"}" aria-hidden="true"></span>
+        <span>${isCorrect ? "答對了！" : "答錯了"}</span>
+      </p>
       <p class="lightning-quiz-result__time">花費時間：${escapeHTML(formatElapsed(elapsedMs))}</p>
     </div>
   `);

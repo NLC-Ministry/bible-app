@@ -3425,7 +3425,7 @@ function wireResultMatchAlign(board) {
 }
 
 // 連連看畫線（綠＝你連的、紅虛線＝正解更正）：畫線本身與重畫時機共用
-// quiz-review.mjs（小測驗／快問快答的檢討畫面也用同一份）；這裡只多加大測驗
+// quiz-review.mjs（小測驗／雲柱測驗的檢討畫面也用同一份）；這裡只多加大測驗
 // 成績頁才有的「整理成平行線」按鈕。
 function drawResultMatchLines(root) {
   if (!root) return;
