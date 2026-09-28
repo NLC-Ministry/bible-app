@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const plan = read("js/modules/plan.js");
 
 // renderPersonalTrendChart()'s week/30-day/12-month windows used to be built
