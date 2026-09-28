@@ -3,6 +3,7 @@ import { validateVerseSource } from "./verse-validator.mjs";
 import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
+import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -313,6 +314,15 @@ export function updateDashboardView() {
   if (hasRegularActivePlan) {
     const progress = state.activePlan.progress || 0;
     const currentRound = state.activePlan.currentRound || 1;
+    const currentRoundTotalChapters = state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters;
+    // #293：第 2 遍以後不要再讓「0%」單獨出現——用「第幾遍」代表進度，
+    // 本遍的實際章數改到狀態文字裡（見下方 roundProgress.roundStatusText）。
+    const roundProgress = getRoundProgressDisplay({
+      round: currentRound,
+      progress,
+      read: state.activePlan.completedChapters,
+      total: currentRoundTotalChapters
+    });
     const started = isPlanStarted(state.activePlan);
     const countdownText = started
       ? ""
@@ -324,11 +334,9 @@ export function updateDashboardView() {
     const isPlanAvailable = started || isAdmin;
     let statusText = "";
     if (started) {
-      if (currentRound > 1) {
-        statusText = `已完成第 ${currentRound - 1} 遍 | 第 ${currentRound} 遍：${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
-      } else {
-        statusText = `進度: ${progress}% (${state.activePlan.completedChapters} / ${state.activePlan.currentRoundTotalChapters || state.activePlan.totalChapters} 章)`;
-      }
+      statusText = roundProgress.isMultiRound
+        ? roundProgress.roundStatusText
+        : `進度: ${progress}% (${state.activePlan.completedChapters} / ${currentRoundTotalChapters} 章)`;
     } else {
       statusText = `<span class="text-brand" style="font-weight: 500;">${waitingLabel}</span> (將於 ${state.activePlan.startDate} 開始)`;
     }
@@ -418,8 +426,9 @@ export function updateDashboardView() {
         <p style="font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.2rem;">
           ${periodHtml}
         </p>
-        <div class="plan-progress-wrapper plan-progress-wrapper--spaced">
-          <div class="plan-progress-bar" style="width: ${progress}%;"></div>
+        <div class="plan-progress-wrapper plan-progress-wrapper--spaced${roundProgress.isMultiRound ? " plan-progress-wrapper--layered" : ""}">
+          ${roundProgress.isMultiRound ? `<div class="plan-progress-bar-base"></div>` : ""}
+          <div class="plan-progress-bar" style="width: ${roundProgress.isMultiRound ? roundProgress.progressLayers.currentRoundPercent : progress}%;"></div>
         </div>
         <p style="font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); margin-top: 0.5rem; text-align: right; margin-bottom: 1rem;">
           ${statusText}
@@ -444,7 +453,9 @@ export function updateDashboardView() {
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--success">
-              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="trendTwo" aria-hidden="true"></span>${totalCompletionRate}%
+              ${roundProgress.isMultiRound
+                ? `<span class="nlc-icon dashboard-stat-strip__icon" data-icon="crown" aria-hidden="true"></span>${roundProgress.roundLabel}`
+                : `<span class="nlc-icon dashboard-stat-strip__icon" data-icon="trendTwo" aria-hidden="true"></span>${totalCompletionRate}%`}
             </span>
             <span class="dashboard-stat-strip__label">計畫進度</span>
           </div>

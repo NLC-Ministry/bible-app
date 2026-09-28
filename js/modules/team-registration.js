@@ -5,6 +5,7 @@ import {
   countExpectedScheduleDays,
   countLateCompletedDays
 } from "../data/schedule-progress.mjs";
+import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
 // Independent 3-person / 6-person competition team registration.
 // Organisation small-group and pastoral-zone scopes are deliberately not used here.
@@ -252,12 +253,16 @@ import {
       read: metrics.currentRoundRead,
       completedRead: metrics.completedChapters,
       journeyChapters: metrics.journeyChapters,
-      progress: metrics.progress
+      progress: metrics.progress,
+      round: metrics.round
     };
   }
 
   function renderMember(member, totalChapters, plan, options = {}) {
-    const { read, progress } = getMemberProgress(member, totalChapters);
+    const { read, progress, round } = getMemberProgress(member, totalChapters);
+    // #293：第 2 遍以後不要再讓右側單獨顯示「0%」——改成皇冠圖示＋「第 N 遍」，
+    // 進度條也改兩層，round 1 畫面完全不變。
+    const roundProgress = getRoundProgressDisplay({ round, progress, read, total: totalChapters });
     const canRemind = Boolean(member.userId && !member.isMe);
     const canRemove = Boolean(options.canRemoveMembers && member.userId && !member.isMe && member.role !== "captain");
     const canTransferCaptain = Boolean(options.canTransferCaptain && member.userId && !member.isMe && member.role !== "captain");
@@ -279,9 +284,11 @@ import {
       <div class="reading-team-member__body">
         <div class="reading-team-member__title"><strong>${escapeHTML(memberLabel)}</strong>${member.role === "captain" ? '<span class="stat-badge stat-badge--brand">隊長</span>' : ""}${member.isMe ? '<span class="reading-team-me">你</span>' : ""}</div>
         <div class="reading-team-member__meta"><span>${member.hasJoinedPlan ? `第 ${Number(member.currentRound || 1)} 遍・${read} 章` : "尚未加入本計畫"}</span><span>最後閱讀：${escapeHTML(formatLastRead(member.lastReadAt))}</span></div>
-        <div class="reading-team-progress" role="progressbar" aria-label="${escapeHTML(memberLabel)}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div>
+        <div class="reading-team-progress${roundProgress.isMultiRound ? " reading-team-progress--layered" : ""}" role="progressbar" aria-label="${escapeHTML(memberLabel)}進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}">${roundProgress.isMultiRound ? `<span class="reading-team-progress__base"></span>` : ""}<span style="width:${progress}%"></span></div>
       </div>
-      <strong class="reading-team-member__percent">${progress}%</strong>
+      <strong class="reading-team-member__percent">${roundProgress.isMultiRound
+        ? `<span class="nlc-icon nlc-icon--sm" data-icon="crown" aria-hidden="true"></span>${roundProgress.roundLabel}`
+        : `${progress}%`}</strong>
       ${memberActions ? `<div class="reading-team-member__actions">${memberActions}</div>` : ""}
     </article>`;
   }
@@ -291,15 +298,24 @@ import {
       button.addEventListener("click", () => {
         const member = members.find(item => String(item.userId) === String(button.dataset.teamRemindUser));
         if (!member || typeof window.openCareReminderDialog !== "function") return;
-        const { read, progress } = getMemberProgress(member, totalChapters);
+        const { read, progress, round } = getMemberProgress(member, totalChapters);
+        // #293：第 2 遍以後，本遍才剛開始（progress === 0）不能再說「尚未開始」——
+        // 前一遍其實已經讀完了，isNotStarted 錯了會連帶讓提醒訊息的預設範本
+        // （defaultMessages.inactive，見 plan.js openCareReminderDialog）把人當成
+        // 完全沒讀過。
+        const roundProgress = getRoundProgressDisplay({ round, progress, read, total: totalChapters });
+        const isRoundJustStarted = roundProgress.isMultiRound && progress === 0;
+        const statusStr = isRoundJustStarted
+          ? roundProgress.completedRoundsLabel
+          : progress >= 100 ? "已完成本遍" : progress > 0 ? `已完成 ${progress}%` : "尚未開始";
         window.openCareReminderDialog({
           ...member,
           id: member.userId,
           completed: read,
-          statusStr: progress >= 100 ? "已完成本遍" : progress > 0 ? `已完成 ${progress}%` : "尚未開始",
-          statusColor: progress >= 100 ? "var(--color-success-foreground)" : progress > 0 ? "var(--color-brand)" : "var(--text-muted)",
-          isBehind: progress > 0 && progress < 100,
-          isNotStarted: progress === 0,
+          statusStr,
+          statusColor: isRoundJustStarted || progress > 0 ? (progress >= 100 ? "var(--color-success-foreground)" : "var(--color-brand)") : "var(--text-muted)",
+          isBehind: !isRoundJustStarted && progress > 0 && progress < 100,
+          isNotStarted: !isRoundJustStarted && progress === 0,
           readingTeamId: team.id,
           readingTeamPlanId: team.globalPlanId
         });
