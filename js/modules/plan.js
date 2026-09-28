@@ -35,6 +35,7 @@ import {
   bindQuestionFieldset
 } from "./quiz-question-types.mjs";
 import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
 // Reading plans tab view controller
 
@@ -1957,18 +1958,30 @@ function renderJoinedPlansList() {
       } else {
         // Normal active plan: a big progress number carries the card instead of a "進度：" text row
         const totalChapters = plan.currentRoundTotalChapters || plan.totalChapters;
-        const progressCaption = currentRound > 1
-          ? `已讀 ${plan.completedChapters} / ${totalChapters} 章・第 ${currentRound} 遍（已完成 ${currentRound - 1} 遍 👑）`
+        // #293：第 2 遍以後不要再讓大字單獨顯示「0%」——改成皇冠圖示＋「第 N 遍」，
+        // caption 改成本遍實際章數，round 1 畫面完全不變。
+        const roundProgress = getRoundProgressDisplay({
+          round: currentRound,
+          progress,
+          read: plan.completedChapters,
+          total: totalChapters
+        });
+        const progressCaption = roundProgress.isMultiRound
+          ? roundProgress.roundStatusText
           : `已讀 ${plan.completedChapters} / ${totalChapters} 章`;
+        const progressHeroValue = roundProgress.isMultiRound
+          ? `<span class="nlc-icon nlc-icon--sm" data-icon="crown" aria-hidden="true"></span>${roundProgress.roundLabel}`
+          : `${progress}%`;
         const progressHero = isUpcomingFixed
           ? renderPlanCardProgressHero({ value: escapeHTML(getPlanStartCountdownText(plan)), tone: "warning" })
-          : renderPlanCardProgressHero({ value: `${progress}%`, caption: progressCaption });
+          : renderPlanCardProgressHero({ value: progressHeroValue, caption: progressCaption });
 
         const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(plan);
         const teamHtml = isTeamPlan ? `<div class="plan-card-team-controls"></div>` : "";
         const progressHtml = isUpcomingFixed
           ? ""
-          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact" style="width: 100%;">
+          : `<div class="plan-progress-wrapper plan-progress-wrapper--compact${roundProgress.isMultiRound ? " plan-progress-wrapper--layered" : ""}" style="width: 100%;">
+              ${roundProgress.isMultiRound ? `<div class="plan-progress-bar-base"></div>` : ""}
               <div class="plan-progress-bar" style="width: ${progress}%;"></div>
             </div>`;
 
