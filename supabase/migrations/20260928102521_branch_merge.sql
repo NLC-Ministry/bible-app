@@ -1,0 +1,20 @@
+-- ============================================================================
+-- 20260928102521_branch_merge.sql  —  佔位檔，沒有任何 SQL
+--
+-- 2026-09-28 10:25（UTC）在 Supabase 網頁上對 staging 分支按了「Merge」，
+-- Supabase 把分支和正式環境的結構差異直接套到正式環境，寫入這個版本號
+-- （正式環境的名稱是 branch_merge_2026-09-28T10-25-18），並刪掉了 staging 分支。
+-- repo 裡要有同名檔案，`supabase db push` 才不會因為「遠端有、本機沒有」而拒絕執行。
+--
+-- 那次合併實際做的事（53 個語句，內容見正式環境 schema_migrations.statements）：
+--   * 重建約 48 個函式（大測驗、小測驗、快問快答、#321 隊伍延續），內容跟當時
+--     已經套用的 migration 相同。
+--   * DROP TRIGGER on_auth_user_created ON auth.users（0001 建的；staging 分支
+--     沒有這個 trigger，所以合併時被當成差異刪掉）。後續處理見 docs/staging.md。
+--   * campaign_stage_join_block_reason／previous_campaign_stage_plan_id 的權限
+--     改成只給 service_role，跟 20260928101011 的設定一樣。
+--
+-- 教訓：不要在 Supabase 網頁上按分支的「Merge」。上線一律用 staging → main 的 PR，
+-- merge 之後用 `supabase db push` 套用 migration（見 docs/staging.md）。
+-- ============================================================================
+SELECT 1;

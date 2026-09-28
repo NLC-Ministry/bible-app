@@ -11,6 +11,8 @@
 
 ## 規則
 
+- ⛔ **不要在 Supabase 網頁上按 staging 分支的「Merge」**。它會把 staging 的結構差異直接套到正式環境，然後**刪掉 staging 分支**（2026-09-28 發生過一次，見 `20260928102521_branch_merge.sql`）。上線一律走 staging → main 的 PR，再用 `supabase db push` 套 migration。
+- 已知的結構差異（2026-09-28）：正式環境的 `reading_plans` 還有 `0138` 應該刪掉的 `level` 欄位，staging 已補上同名欄位讓兩邊一致；正式環境的 `auth.users` 少了 `0001` 建的 `on_auth_user_created` trigger（被上面那次 Merge 刪掉，正式環境只用 NLC 登入，目前沒有影響）。
 - **Supabase CLI 一律明確指定環境**：`--project-ref ztozevcqkfrohgjmngcj` 或 `--project-ref dbtjsljrytzonjvclgrd`。不要依賴 `supabase link`；`supabase/.temp/` 已加進 `.gitignore`。
 - **每個 secret 在兩個環境都不同**，不能沿用正式環境的值。
 - **對外有副作用的設定，staging 預設不啟用**：`GEMINI_API_KEY`、兩個 Google Sheet webhook（`ISSUE_REPORT_SHEET_WEBHOOK_*`、`REGISTRATION_STATS_SHEET_WEBHOOK_*`）、各排程的 cron secret、pg_cron 排程。要測到那個功能時才設定，並接到測試用的目的地。
