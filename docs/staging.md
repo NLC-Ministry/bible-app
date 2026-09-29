@@ -23,7 +23,7 @@
 
 > **2026-09-28 重建**：原本的分支 `vzokpsscyivhgmhleplq` 建立時是「非永久」（persistent: false），被 Supabase 清掉了。新分支 `dbtjsljrytzonjvclgrd` 已設成**永久**（`supabase branches update <id> --persistent`；網頁上建分支時找不到這個選項，要用指令）。重建步驟：套用 staging 分支的全部 migration → 設 Vault `project_url` → 移除建分支時一起重建出來的 pg_cron 排程 → 設 secrets、部署 8 支 Edge Function → 改 Vercel Preview 的 `SUPABASE_URL`／`SUPABASE_ANON_KEY` → 用正式環境的結構重建 staging 的 public schema（見下）→ 匯入樣本資料。
 >
-> **為什麼要用正式環境的結構重建**：Supabase 建分支時是把 migration 一支支重跑，但正式環境早期有些權限、函式設定是在網頁上手動改的、沒寫進 migration，重跑出來跟正式環境差了 168 項。做法：`supabase db dump --linked --project-ref ztozevcqkfrohgjmngcj --schema public`（只有結構，需要 Docker）→ 在 staging 用一個 transaction 執行 `DROP SCHEMA public CASCADE;` 加上這份結構 → 重新匯入樣本資料。之後 `compare-env-snapshots.mjs --run` 只剩 4 項無關緊要的差異：`lightning_quiz_settings_weekdays_check` 括號寫法不同（意思一樣），以及 3 項 `supabase_admin` 的預設權限（平台帳號的設定，我們改不到）。
+> **為什麼要用正式環境的結構重建**：Supabase 建分支時是把 migration 一支支重跑，但正式環境早期有些權限、函式設定是在網頁上手動改的、沒寫進 migration，重跑出來跟正式環境差了 168 項。做法：`supabase db dump --linked --project-ref ztozevcqkfrohgjmngcj --schema public`（只有結構，需要 Docker）→ 在 staging 用一個 transaction 執行 `DROP SCHEMA public CASCADE;` 加上這份結構 → 重新匯入樣本資料。之後 `compare-env-snapshots.mjs --run` 只剩 4 項無關緊要的差異：`lightning_quiz_settings_weekdays_check` 括號寫法不同（意思一樣）已由 migration `20260929041515` 在兩個環境重建成一致（#333）；另外 3 項是正式環境才有的 `supabase_admin` 預設權限（`public supabase_admin f/r/S`，平台帳號的設定）——`postgres` 不是 superuser 也不是 `supabase_admin` 成員，在正式環境執行 REVOKE 會 permission denied，而且只影響 `supabase_admin` 建的物件（我們的物件都屬於 `postgres`），**決定永久忽略**，比對腳本會把它們歸為預期差異（#333）。
 
 - 結構：和正式環境一致（含 0211–0214）。
 - Vault：只有 `project_url` = `https://dbtjsljrytzonjvclgrd.supabase.co`（見 `supabase/functions/README.md`）。

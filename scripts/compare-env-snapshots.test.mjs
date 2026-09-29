@@ -112,6 +112,26 @@ describe("diffSnapshots", () => {
     expect(unexpected).toHaveLength(1);
     expect(formatReport({ unexpected, expected: [] })).toContain("❌ 1 項非預期差異");
   });
+
+  // #333：supabase_admin 的預設權限是平台帳號的設定，兩邊都改不到，永久忽略。
+  it("treats supabase_admin default privileges as expected", () => {
+    const withAcl = [...prod, row("default_acl", "public supabase_admin f", "{postgres=X/supabase_admin}")];
+    const { unexpected, expected } = diffSnapshots(withAcl, prod);
+    expect(unexpected).toEqual([]);
+    expect(expected.map(d => [d.section, d.object, d.kind])).toEqual([
+      ["default_acl", "public supabase_admin f", "only_in_a"]
+    ]);
+    expect(formatReport({ unexpected, expected })).toContain("supabase_admin 的預設權限");
+  });
+
+  it("still flags postgres default privileges as unexpected", () => {
+    const withAcl = [...prod, row("default_acl", "public postgres f", "{service_role=X/postgres}")];
+    const { unexpected, expected } = diffSnapshots(withAcl, prod);
+    expect(expected).toEqual([]);
+    expect(unexpected.map(d => [d.section, d.object, d.kind])).toEqual([
+      ["default_acl", "public postgres f", "only_in_a"]
+    ]);
+  });
 });
 
 describe("--run targets", () => {
