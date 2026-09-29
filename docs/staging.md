@@ -42,12 +42,12 @@
 | `staging`（日常開發都在這裡） | https://bible-speed-reading-staging.vercel.app | staging `dbtjsljrytzonjvclgrd` |
 | `main`（只透過上線 PR 更新） | https://bible.newlife.org.tw | 正式 `ztozevcqkfrohgjmngcj` |
 
-- **日常修改直接 commit 到 `staging` 再 push**。CI 會跑測試、部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址。
+- **每個修改都在自己的本地 `task/*` 分支上做，由「整合者」合併進 `staging` 再 push**（流程見 CLAUDE.md「Parallel tasks and integration」和 `.claude/skills/handoff`、`.claude/skills/integrate`）。push 之後 CI 會跑測試、部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址。
 - **不要 force push `staging`**：它上面可能有還沒上線的修改，蓋掉就不見了。
-- **大功能**（要做好幾天、或有上線順序要求，例如大測驗 C3）從 `staging` 開短期分支，完成後 merge 回 `staging`。不然會跟其他修改綁在一起上線。
+- **大功能**（要做好幾天、或有上線順序要求，例如大測驗 C3）一樣是 `task/*` 分支，只是做完再交接；還沒準備好上線就不要標 `Status: ready`，不然會跟其他修改綁在一起上線。
 - **不要直接 push 到 `main`**。免費的私人 repo 不能設定分支保護，所以改成在部署時把關：不是從 `staging`（或 `hotfix/*`）的 PR merge 進來的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
 - **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，把 `main` 併回 `staging`：`git switch staging && git merge origin/main && git push`。
-- migration 跟著分支走：commit 到 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
+- migration 跟著分支走：整合者合併進 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
 
 ## 上線到正式環境（審核機制）
 
