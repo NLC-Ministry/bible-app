@@ -17,8 +17,7 @@ WITH target_profiles AS (
   SELECT p.id, p.name, p.email, p.pastoral_zone, p.great_region, p.small_group,
          p.is_active, p.created_at
   FROM public.profiles p
-  WHERE p.is_demo = false
-    AND p.role_id = '10000000-0000-4000-8000-000000000001' -- 只鎖定一般會友，絕不動到幹部/管理員角色
+  WHERE p.role_id = '10000000-0000-4000-8000-000000000001' -- 只鎖定一般會友，絕不動到幹部/管理員角色
     AND (
       NULLIF(btrim(p.name), '') IS NULL
       OR p.name IN ('NLC User', '尚未取得姓名', '未命名使用者', '教會肢體')
@@ -50,8 +49,7 @@ WITH target_profiles AS (
   SELECT p.id, p.name, p.email, p.pastoral_zone, p.great_region, p.small_group,
          p.is_active, p.created_at
   FROM public.profiles p
-  WHERE p.is_demo = false
-    AND p.role_id = '10000000-0000-4000-8000-000000000001'
+  WHERE p.role_id = '10000000-0000-4000-8000-000000000001'
     AND (
       NULLIF(btrim(p.name), '') IS NULL
       OR p.name IN ('NLC User', '尚未取得姓名', '未命名使用者', '教會肢體')

@@ -3,7 +3,7 @@
 -- 計畫 UUID：00000000-0000-0000-c026-000000000001
 --
 -- 定義：
--- - 註冊人數：profiles 中 is_active = TRUE 且 is_demo = FALSE 的帳號
+-- - 註冊人數：profiles 中 is_active = TRUE 的帳號
 -- - 報名人數：上述帳號中，在 reading_plans 加入所選 global_plan_id 的不重複人數
 -- - 未填 pastoral_zone 的帳號會列在「未設定牧區」
 
@@ -41,7 +41,6 @@ eligible_profiles AS (
     COALESCE(NULLIF(BTRIM(profile.pastoral_zone), ''), '未設定牧區') AS pastoral_zone
   FROM public.profiles AS profile
   WHERE profile.is_active = TRUE
-    AND profile.is_demo = FALSE
 ),
 signed_up_profiles AS (
   SELECT DISTINCT reading_plan.user_id
