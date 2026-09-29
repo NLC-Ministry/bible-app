@@ -92,20 +92,22 @@ describe("daily church quiz", () => {
     // review_daily_quiz was dropped in migration 0196 — AI generation now
     // auto-approves, there's no manual review RPC left to allowlist.
     for (const rpc of [
-      "get_daily_quiz_dashboard", "request_daily_quiz_regeneration", "update_daily_quiz_questions",
-      "publish_daily_quiz", "submit_daily_quiz", "get_quiz_notifications",
+      "get_daily_quiz_dashboard", "submit_daily_quiz", "get_quiz_notifications",
       "mark_quiz_notifications_read"
     ]) {
       expect(edge).toContain(`"${rpc}"`);
       expect(quizSql).toContain(`public.${rpc}`);
     }
     expect(edge).not.toContain('"review_daily_quiz"');
+    // #308：審核、換版、手動發佈的 RPC 都拿掉了，發佈只剩每天 00:00 的自動發佈。
+    for (const rpc of ["request_daily_quiz_regeneration", "update_daily_quiz_questions", "publish_daily_quiz"]) {
+      expect(edge).not.toContain(`"${rpc}"`);
+    }
     expect(db).toContain("async getDailyQuizDashboard(plan, quizDate)");
-    expect(db).toContain("async publishDailyQuiz(plan, quizDate, scope = {}, selection = {})");
-    expect(db).toContain('p_scope_type: scope.scopeType || "all"');
-    expect(db).toContain("p_variant: selection.variant || null");
     expect(db).toContain("async submitDailyQuiz(publicationId, answers)");
-    expect(db).toContain("async regenerateDailyQuiz(plan, quizDate, variants = [])");
+    expect(db).not.toContain("async publishDailyQuiz(");
+    expect(db).not.toContain("async regenerateDailyQuiz(");
+    expect(db).not.toContain("async updateDailyQuizQuestions(");
   });
 
   it("places the member entrance below chapter progress only after assignment", () => {
@@ -129,61 +131,37 @@ describe("daily church quiz", () => {
     expect(css).toContain("font-size: 14px;");
   });
 
-  it("shows approved version numbers only to publishers after review", () => {
-    // 這整組發佈 UI（範圍/版本挑選/自訂題目編輯器）現在只活在系統管理後台。
-    expect(admin).toContain('const approvedVariants = Array.isArray(context.approvedVariants)');
-    expect(admin).toContain('data-quiz-version-choice="A"');
-    expect(admin).toContain('data-quiz-version-choice="B"');
-    expect(admin).toContain('data-quiz-version-choice="C"');
-    expect(admin).toContain('今日 AI 題目尚未完成審核');
-    expect(plan).not.toContain('data-quiz-version-choice');
+  it("#308: no A/B version choice or review wording is left anywhere", () => {
+    expect(admin).not.toContain("approvedVariants");
+    expect(admin).not.toContain("data-quiz-version-choice");
+    expect(admin).not.toContain("今日 AI 題目尚未完成審核");
+    expect(plan).not.toContain("data-quiz-version-choice");
+    expect(admin).not.toContain("每日生成、審核、發佈與作答");
   });
 
   it("moves the five-question-type custom editor and text importer into the admin backend", () => {
     // 上一輪「五種題型＋文字匯入」擴充當初加錯地方（打卡清單），這裡鎖住
     // 它們現在只存在於後台，不會又悄悄跑回 plan.js 的打卡清單流程。
     expect(admin).toContain("import { parseQuizImportText } from \"./quiz-import.mjs\"");
-    expect(admin).toContain("function renderAdminQuizImportPanelHtml()");
-    expect(admin).toContain("從文字匯入題目");
+    expect(admin).toContain("parseQuizImportText(textarea.value)");
     expect(admin).toContain("ADMIN_QUIZ_CUSTOM_TYPE_LABELS");
     expect(admin).toContain("truefalse: '是非'");
-    expect(admin).toContain("function adminAdaptLegacyQuizQuestion(question = {})");
     expect(plan).not.toContain("quiz-import.mjs");
     expect(plan).not.toContain("QUIZ_CUSTOM_TYPE_LABELS");
   });
 
-  it("keeps custom-question authoring out of the publish tab, gated by an explicit confirm step", () => {
-    // 「自訂題目」自成一個分頁（排在題目審核前面），出題/匯入/複製都在那裡
-    // 完成；要按「確認自訂題目」才算數，發佈分頁只看這個旗標，完全不放編輯
-    // 題目的東西——範圍/版本/發佈按鈕以外什麼都沒有。
-    expect(admin).toContain("{ key: 'custom', label: '自訂題目' }");
-    expect(admin.indexOf("{ key: 'custom'")).toBeLessThan(admin.indexOf("{ key: 'review'"));
-    expect(admin).toContain("function renderAdminQuizCustomSectionHtml(context)");
-    expect(admin).toContain("data-quiz-custom-confirm");
-    expect(admin).toContain("確認自訂題目");
-    expect(admin).toContain("root.dataset.quizCustomConfirmed = 'true'");
-    expect(admin).toContain("root.dataset.quizCustomConfirmed = 'false'");
-    expect(admin).toContain("ready = customConfirmed;");
-    expect(admin).not.toContain("data-quiz-custom-slot");
-    // renderAdminQuizPublishPanel 本身不該再呼叫題目編輯器的 render/bind 函式。
-    const publishPanelSource = admin.slice(admin.indexOf("function renderAdminQuizPublishPanel"), admin.indexOf("function updateAdminQuizPublishState"));
-    expect(publishPanelSource).not.toContain("renderAdminQuizCustomEditorHtml");
-    const bindPublishPanelSource = admin.slice(admin.indexOf("function bindAdminQuizPublishPanel"), admin.indexOf("function collectAdminQuizQuestions"));
-    expect(bindPublishPanelSource).not.toContain("bindAdminQuizCustomEditor(");
-    expect(bindPublishPanelSource).not.toContain("bindAdminQuizCustomCopyButtons(");
-  });
-
-  it("adds review, publishing and scoped member results to plan management", () => {
+  it("#308: the old 自訂題目／審核／發佈 tabs are gone; plan management is calendar／rules／stats", () => {
     // Admin nav moved from data-plan-subtab tabs to unified #admin-section-* panels.
     expect(html).toContain('id="admin-section-quizzes"');
-    expect(admin).toContain("renderAdminQuizReviewCards");
-    expect(admin).toContain("renderAdminQuizPublishPanel");
-    expect(admin).toContain('id="admin-quiz-publish-btn"');
-    expect(admin).toContain('data-quiz-version-choice="C"');
-    expect(admin).toContain('data-quiz-action="regenerate"');
-    expect(admin).toContain("更換後會清除目前題目並重新生成");
-    expect(admin).toContain("group.members");
-    expect(admin).toContain("averageScore");
+    expect(admin).toContain("{ key: 'calendar', label: '日曆' }");
+    expect(admin).toContain("renderAdminQuizCalendar(root)");
+    for (const gone of [
+      "{ key: 'custom', label: '自訂題目' }", "{ key: 'review'", "renderAdminQuizReviewCards",
+      "renderAdminQuizPublishPanel", 'id="admin-quiz-publish-btn"', 'data-quiz-action="regenerate"',
+      "renderAdminQuizScopeSelectorHtml", "data-quiz-custom-confirm"
+    ]) {
+      expect(admin, gone).not.toContain(gone);
+    }
   });
 
   it("schedules one generator invocation at 00:05 Taipei time", () => {
@@ -205,8 +183,9 @@ describe("daily church quiz", () => {
     expect(html).toContain('id="admin-daily-quiz-feature-toggle"');
     expect(admin).toContain('updateFeatureSetting("daily_quiz", nextEnabled)');
     expect(plan).toContain('isDailyQuizFeatureEnabled()');
-    expect(admin).toContain("adminDailyQuizDashboardCache.clear()");
-    expect(admin).toContain("delete quizRoot.dataset.quizDashboardKey");
+    // 重新開啟後清掉計畫 key，下次進小測驗分頁才會重新載入日曆（#308 修正）
+    expect(admin).toContain("delete quizRoot.dataset.quizPlanKey");
+    expect(admin).not.toContain("adminDailyQuizDashboardCache");
     expect(admin).toContain("切換至小測驗分頁後會載入原有資料");
     expect(plan).toContain('window.addEventListener("daily-quiz-feature-changed"');
     expect(plan).toContain("void renderDailyQuizSection(state.activePlan, selectedDay, lastTrackerRequestId)");
@@ -250,34 +229,13 @@ describe("daily church quiz", () => {
     expect(admin).not.toContain('重新載入狀態');
     expect(admin).toContain("if (!forceRefresh && root.dataset.quizPlanKey === planKey && root.childElementCount) return;");
     expect(css).not.toContain('.admin-daily-quiz-version--status-loading {');
-    expect(admin).toContain('編輯題目');
-    expect(admin).toContain('data-quiz-action="toggle-edit"');
-    expect(admin).toContain('class="admin-daily-quiz-editor-shell"');
-    expect(admin).toContain('role="dialog" aria-modal="true"');
-    expect(admin).toContain('data-quiz-editor-close');
-    expect(admin).toContain("document.body.classList.toggle('admin-quiz-editor-open', opening)");
-    expect(css).toContain('min-height: 100dvh;');
-    expect(css).toContain('body.admin-quiz-editor-open');
-    expect(css).toMatch(/\.admin-daily-quiz-editor-wrap \{[\s\S]*overflow-y: auto;/);
-    expect(css).toMatch(/\.admin-daily-quiz-editor-shell \{[\s\S]*min-height: 100dvh;/);
-    expect(css).toMatch(/\.admin-daily-quiz-editor \.admin-daily-quiz-question \{[\s\S]*border: 0;/);
-    expect(admin).toContain('data-quiz-carousel');
-    expect(admin).toContain('data-quiz-slide-track');
-    expect(admin).toContain('data-quiz-slide="previous"');
-    expect(admin).toContain('data-quiz-slide="next"');
-    expect(admin).toContain('bindAdminQuizCarousels(root)');
-    expect(css).toContain('scroll-snap-type: x mandatory;');
-    expect(css).toContain('.admin-daily-quiz-question-slide {');
-    expect(admin).toContain("editorWrap.dataset.dirty = 'true'");
-    expect(admin).toContain("editor.dataset.dirty === 'true'");
-    expect(admin).toContain('目前有尚未儲存的題目修改');
-    expect(admin).toContain("editor.querySelector('[data-quiz-editor-close]')?.click()");
-    expect(admin).toContain("button.textContent = '儲存中…'");
-    // 人工審核（data-quiz-action="review" / 審核通過按鈕）在 0196 拿掉了——
-    // AI 生成完直接視為審核通過，見 daily-quiz-remove-manual-review.test.mjs。
+    // 人工審核（data-quiz-action="review" / 審核通過按鈕）在 0196 拿掉了；
+    // 逐題編輯 AI 題目的彈窗與輪播在 #308 跟著舊畫面一起移除。
     expect(admin).not.toContain('data-quiz-action="review"');
-    expect(css).toContain('.admin-daily-quiz-load-error {');
-    expect(css).toContain('.admin-daily-quiz-version--load-failed {');
+    expect(admin).not.toContain('data-quiz-action="toggle-edit"');
+    expect(admin).not.toContain("admin-daily-quiz-editor-shell");
+    expect(css).not.toContain("admin-daily-quiz-editor-shell");
+    expect(css).not.toContain(".admin-daily-quiz-version--load-failed");
   });
 
   it("deploys the redesigned publish RPC under a unique, safely repeatable migration", () => {
@@ -318,8 +276,9 @@ describe("daily church quiz", () => {
     // run_daily_quiz_schedule_sweep 刻意不進 nlc-data 的 allowlist——只有排程
     // Edge Function 用 service-role client 直接呼叫，前端拿不到。
     expect(edge).not.toContain('"run_daily_quiz_schedule_sweep"');
-    expect(edge).toContain('"schedule_daily_quiz_publish"');
-    expect(edge).toContain('"cancel_daily_quiz_schedule"');
+    // #308：排程發佈整個拿掉，allowlist 也移除。
+    expect(edge).not.toContain('"schedule_daily_quiz_publish"');
+    expect(edge).not.toContain('"cancel_daily_quiz_schedule"');
 
     // 作答截止：quiz_publications 新欄位 + 三支送出答案的 RPC 都要擋。
     expect(scheduledPublish).toContain("ADD COLUMN IF NOT EXISTS answer_close_at TIMESTAMPTZ");
@@ -335,15 +294,10 @@ describe("daily church quiz", () => {
     expect(scheduleSweep).toContain('supabase.rpc("run_daily_quiz_schedule_sweep")');
     expect(configToml).toMatch(/\[functions\.daily-quiz-schedule-sweep\]\s*\nverify_jwt = false/);
 
-    // 前端：db.js 新方法 + admin.js 發佈分頁的排程 UI + 會友端截止顯示。
-    // postAnnouncement 參數在 0196 拿掉了（公告功能整個移除，見
-    // daily-quiz-remove-manual-review.test.mjs）。
-    expect(db).toContain("async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null)");
-    expect(db).toContain("async cancelDailyQuizSchedule(scheduleId)");
-    expect(admin).toContain("function renderAdminQuizScheduleStatusHtml(schedule)");
-    expect(admin).toContain("data-quiz-schedule-toggle");
-    expect(admin).toContain("db.scheduleDailyQuizPublish(");
-    expect(admin).toContain("db.cancelDailyQuizSchedule(");
+    // 前端：排程發佈的 UI 與 db.js 方法在 #308 移除；會友端截止顯示保留。
+    expect(db).not.toContain("scheduleDailyQuizPublish");
+    expect(db).not.toContain("cancelDailyQuizSchedule");
+    expect(admin).not.toContain("data-quiz-schedule-toggle");
     expect(plan).toContain("assignedQuiz.answerCloseAt");
     expect(plan).toContain('"作答已截止"');
   });

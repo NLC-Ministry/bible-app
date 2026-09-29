@@ -3520,22 +3520,13 @@ const db = {
       return "小測驗資料庫版本尚未更新，請通知管理員完成系統更新。";
     }
     const messages = {
-      quiz_review_required: "只有牧者或系統管理員可以審核與修改小測驗。",
-      quiz_regeneration_permission_required: "只有牧者或系統管理員可以重新生成小測驗。",
-      quiz_regeneration_variants_required: "請選擇需要重新生成的題目版本。",
-      quiz_generation_secret_missing: "小測驗生成服務尚未完成排程密鑰設定。",
       edge_function_url_missing: "小測驗生成服務尚未完成專案網址設定。",
       quiz_plan_date_not_found: "找不到這個日期對應的教會進度。",
-      quiz_approval_locked: "題目審核通過後已鎖定，不能取消審核、修改或更換。",
-      quiz_already_approved: "題目已審核通過，不能再更換。",
-      quiz_not_ready: "這一版題目尚未生成完成。",
-      quiz_approval_required: "至少需要一版已審核題目才能發佈。",
-      quiz_publish_scope_required: "只能發佈到你所負責組織範圍內的小組。",
+      quiz_approval_locked: "題目已鎖定，不能修改或更換。",
       quiz_publish_admin_only: "只有系統管理員可以發佈小測驗。",
       quiz_date_passed: "已經過去的日子不能再修改。",
       quiz_generating: "AI 正在出這一天的題目，請稍等一下再試。",
       quiz_generation_secret_missing: "這個環境沒有設定 AI 出題，不能換一版。",
-      quiz_publish_groups_required: "目前沒有可以發佈的小組。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
       quiz_publication_not_found: "找不到這份小測驗發佈紀錄。",
       quiz_not_available: "這份小測驗目前無法作答。",
@@ -3555,8 +3546,6 @@ const db = {
       quiz_attempt_not_found: "找不到這次的作答紀錄，請先作答至少一題。",
       quiz_stats_permission_required: "沒有權限查看這份小測驗結果統計。",
       quiz_stats_date_range_required: "請選擇正確的日期區間。",
-      quiz_schedule_publish_time_required: "排程時間必須晚於現在。",
-      quiz_schedule_not_found: "找不到這筆排程，可能已經發佈或取消。",
       quiz_answer_window_closed: "作答時間已截止，無法再送出答案。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
@@ -3600,61 +3589,6 @@ const db = {
     return result.success ? { success: true, context: result.data || {} } : result;
   },
 
-  async regenerateDailyQuiz(plan, quizDate, variants = []) {
-    const planId = this._quizPlanId(plan);
-    if (!planId || !/^\d{4}-\d{2}-\d{2}$/.test(String(quizDate || ""))) {
-      return { success: false, message: "找不到小測驗對應的計畫日期。" };
-    }
-    return this._callQuizRpc("request_daily_quiz_regeneration", {
-      p_global_plan_id: planId,
-      p_quiz_date: quizDate,
-      p_variants: Array.isArray(variants) ? variants : []
-    });
-  },
-
-  async updateDailyQuizQuestions(quizId, questions) {
-    return this._callQuizRpc("update_daily_quiz_questions", {
-      p_quiz_id: quizId,
-      p_questions: questions
-    });
-  },
-
-  async publishDailyQuiz(plan, quizDate, scope = {}, selection = {}) {
-    const planId = this._quizPlanId(plan);
-    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
-    return this._callQuizRpc("publish_daily_quiz", {
-      p_global_plan_id: planId,
-      p_quiz_date: quizDate,
-      p_scope_type: scope.scopeType || "all",
-      p_scope_name: scope.scopeName || null,
-      p_variant: selection.variant || null,
-      p_custom_questions: Array.isArray(selection.customQuestions) && selection.customQuestions.length
-        ? selection.customQuestions
-        : null
-    });
-  },
-
-  // 排程發佈：跟 publishDailyQuiz 同一組範圍/版本參數，多帶 publishAt（必填，
-  // 未來時間）和 answerCloseAt（選填的作答截止時間）。就緒檢查（版本要已生成
-  // /自訂題目要驗證過）在 SQL 端的 schedule_daily_quiz_publish 做，跟
-  // publish_daily_quiz 同一套規則。
-  async scheduleDailyQuizPublish(plan, quizDate, scope = {}, selection = {}, publishAt, answerCloseAt = null) {
-    const planId = this._quizPlanId(plan);
-    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
-    return this._callQuizRpc("schedule_daily_quiz_publish", {
-      p_global_plan_id: planId,
-      p_quiz_date: quizDate,
-      p_scope_type: scope.scopeType || "all",
-      p_scope_name: scope.scopeName || null,
-      p_variant: selection.variant || null,
-      p_custom_questions: Array.isArray(selection.customQuestions) && selection.customQuestions.length
-        ? selection.customQuestions
-        : null,
-      p_publish_at: publishAt,
-      p_answer_close_at: answerCloseAt || null
-    });
-  },
-
   // 自動發佈規則（#306）：每天 00:00 發給全部小組、23:59 截止；只有系統管理員能讀寫
   async getDailyQuizAutoPublishRule(plan) {
     const planId = this._quizPlanId(plan);
@@ -3695,10 +3629,6 @@ const db = {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
     return this._callQuizRpc("swap_daily_quiz_version", { p_global_plan_id: planId, p_quiz_date: quizDate });
-  },
-
-  async cancelDailyQuizSchedule(scheduleId) {
-    return this._callQuizRpc("cancel_daily_quiz_schedule", { p_schedule_id: scheduleId });
   },
 
   async submitDailyQuiz(publicationId, answers) {

@@ -241,10 +241,9 @@ const ADMIN_RPC_FUNCTIONS = new Set([
   "create_region_stage_cohort"
 ]);
 const QUIZ_RPC_FUNCTIONS = new Set([
+  // 發佈只剩每天 00:00 的自動發佈（service role，#306）；審核、換版、手動／排程發佈
+  // 的 RPC 已在 #308 移除。
   "get_daily_quiz_dashboard",
-  "request_daily_quiz_regeneration",
-  "update_daily_quiz_questions",
-  "publish_daily_quiz",
   "submit_daily_quiz",
   "get_quiz_notifications",
   "mark_quiz_notifications_read",
@@ -257,11 +256,8 @@ const QUIZ_RPC_FUNCTIONS = new Set([
   "daily_quiz_get_stats",
   // 0188：會友端「我的測驗」查詢；0196 起不再有 PR，只有自己的分數與作答時間。
   "daily_quiz_get_my_results",
-  // 0189：排程發佈（設定/取消），就緒檢查在 SQL 端跟 publish_daily_quiz 同一套。
-  // 真正的掃描/發佈 run_daily_quiz_schedule_sweep 不在這裡——只有排程 Edge
-  // Function 用 service-role client 直接呼叫，前端永遠拿不到。
-  "schedule_daily_quiz_publish",
-  "cancel_daily_quiz_schedule",
+  // 自動發佈 run_daily_quiz_schedule_sweep 不在這裡——只有排程 Edge Function
+  // 用 service-role client 直接呼叫，前端永遠拿不到。
   // #306：自動發佈規則（讀／寫都只給系統管理員，SQL 端檢查）
   "get_daily_quiz_auto_publish_rule",
   "set_daily_quiz_auto_publish_rule",
