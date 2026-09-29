@@ -4,6 +4,7 @@ import { createReaderBottomDwellController, observeReaderEndSentinel } from "./r
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
+import { formatSequentialCheckMessage, getSequentialCheckBlock } from "../data/current-round-progress.mjs";
 import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
 
 export function openReaderLayer(element) {
@@ -171,6 +172,8 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
   // than showing a toast, matching this auto-mark flow's existing "never
   // interrupt with an intrusive subtitle/toast" design.
   if (state.offlineMode) return false;
+  // 照順序打卡（#331）：還沒輪到的章讀到底不記錄，也不跳提示。
+  if (getSequentialCheckBlock(taskContext.plan, taskContext.book.name, state.readerState.chapter, taskContext.round, true)) return false;
 
   const planDayChKey = `${taskContext.book.name}_${state.readerState.chapter}`;
   const readKey = `isReadR${taskContext.round}`;
@@ -637,6 +640,13 @@ export function initReaderControls() {
 
       if (state.offlineMode) {
         showToast("離線閱讀模式無法記錄進度，恢復連線後再試");
+        return;
+      }
+
+      // 速讀計畫照順序打卡（#331）：只能勾下一章、只能取消最後勾的那一章。
+      const sequentialBlock = getSequentialCheckBlock(state.activePlan, bookObj.name, state.readerState.chapter, planRound, isChecked);
+      if (sequentialBlock) {
+        showToast(formatSequentialCheckMessage(sequentialBlock, (window.APP_COPY && window.APP_COPY.plan) || {}));
         return;
       }
 

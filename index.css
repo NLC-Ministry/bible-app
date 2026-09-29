@@ -5217,6 +5217,110 @@ button.logout-btn:hover {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
+/* 照順序打卡（#331）：下一章標示、還沒輪到的章上鎖 */
+.task-next-label {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong);
+  line-height: 1.3;
+  color: var(--color-brand);
+}
+.plan-task-item--next .task-checkbox {
+  border-color: var(--color-brand) !important;
+}
+.plan-task-item--locked .task-title {
+  color: var(--text-muted);
+}
+.plan-task-item .task-checkbox.task-checkbox--locked {
+  color: var(--text-muted);
+  border-style: dashed !important;
+}
+.plan-task-item .task-checkbox.task-checkbox--locked svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
+}
+
+/* 當天閱讀紀錄（#330）：唯讀，依遍數分組 */
+.plan-day-records {
+  width: 100%;
+  padding: 0.9rem 1.2rem 0.4rem;
+  border-top: 1px solid var(--border-card);
+}
+.plan-day-records:first-child {
+  border-top: none;
+  padding-top: 0.4rem;
+}
+.plan-day-records__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-secondary);
+}
+.plan-day-records__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-day-records__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.125rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.plan-day-records__row + .plan-day-records__row {
+  border-top: 1px dashed var(--border-card);
+}
+/* 章節按鈕保留 44px 觸控高度，遍數和勾號對齊同一高度 */
+.plan-day-records__round,
+.plan-day-records__check {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.plan-day-records__round {
+  min-width: 3.5rem;
+  color: var(--text-muted);
+  font-weight: var(--type-weight-strong);
+}
+.plan-day-records__check {
+  color: var(--color-success-foreground);
+}
+.plan-day-records__check svg {
+  width: 14px;
+  height: 14px;
+}
+.plan-day-records__ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.875rem;
+  min-width: 0;
+}
+.plan-day-records__range {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: var(--type-weight-regular);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.plan-day-records__range:hover {
+  color: var(--color-brand);
+}
+.plan-day-records__range:focus-visible {
+  outline: 2px solid var(--color-brand-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* Dropdown Menu for right options btn */
 .options-menu-container {
   position: relative;
@@ -12328,46 +12432,6 @@ button.admin-lightning-quiz-calendar__day {
   gap: 0.75rem;
 }
 
-.missed-chapters-list {
-  width: 100%;
-  margin: 0 0 1.25rem 0;
-  padding: 0.75rem 0.9rem;
-  list-style: none;
-  border: 1px solid var(--border-card);
-  border-radius: 12px;
-  background: var(--bg-secondary);
-  max-height: 40vh;
-  overflow-y: auto;
-  text-align: left;
-}
-
-.missed-chapters-list li {
-  display: flex;
-  gap: 0.6rem;
-  padding: 0.3rem 0;
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
-
-.missed-chapters-list li + li {
-  border-top: 1px dashed var(--border-card);
-}
-
-.missed-chapters-date {
-  flex: 0 0 3.2rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.missed-chapters-items {
-  color: var(--text-primary);
-}
-
-.missed-chapters-more {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
 .plan-round-advance-footer {
   width: 100%;
   margin-top: 1rem;
@@ -12382,14 +12446,6 @@ button.admin-lightning-quiz-calendar__day {
 .plan-round-advance-footer .congrats-upgrade-btn {
   width: 100%;
   max-width: 320px;
-}
-
-.plan-round-advance-hint {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 .congrats-inline-banner {

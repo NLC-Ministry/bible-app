@@ -132,3 +132,187 @@ export function filterLogsToPlanBooks(logs, books) {
   if (scope.size === 0) return list;
   return list.filter(log => log && scope.has(String(log.book)));
 }
+
+// ── 日期：一律換成「本地日期」──────────────────────────────────────────
+// reading_logs.read_at 是 timestamptz（寫入時 new Date().toISOString()，UTC）。
+// 直接 slice(0, 10) 取到的是 UTC 日期——台灣凌晨 00:00–07:59 打的卡會被算成前一天。
+// 純日期字串（YYYY-MM-DD）本來就是本地日期，原樣回傳。
+export function toLocalDateKey(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return toLocalDateKey(new Date(text));
+}
+
+// ── 當天閱讀紀錄（#330）─────────────────────────────────────────────────
+// 直接看打卡紀錄：這天（本地日期）在「這個計畫」讀了哪些章，依遍數分組。
+// 只算明確歸屬本計畫的紀錄（plan_id / global_plan_id / preset_key），
+// 沒有歸屬的紀錄（閱讀器裡 plan_id = NULL 的打卡）不列入。
+//   scope：{ planId, globalPlanId, presetKey, chapterOrder }
+//     chapterOrder：["book_chapter", ...] 計畫的閱讀順序；有給就只留計畫內的章、照這個順序排。
+//   excludeKeys：已經出現在「本遍進度」清單的 book_chapter_round，不重複列。
+// 回傳 { total, groups: [{ round, chapters: [{book, chapter}], ranges: [{book, from, to}] }] }，
+// 遍數由大到小（最近的遍數在上面）。
+function logBelongsToPlan(log, { planId, globalPlanId, presetKey } = {}) {
+  if (!log) return false;
+  if (planId && log.plan_id && String(log.plan_id) === String(planId)) return true;
+  if (globalPlanId && log.global_plan_id && String(log.global_plan_id) === String(globalPlanId)) return true;
+  const logPresetKey = log.presetKey || log.preset_key || null;
+  if (presetKey && logPresetKey && String(logPresetKey) === String(presetKey)) return true;
+  return false;
+}
+
+export function getDayReadingRecords(logs, scope = {}, dateKey, excludeKeys = []) {
+  const targetDate = toLocalDateKey(dateKey);
+  const empty = { total: 0, groups: [] };
+  if (!targetDate) return empty;
+  const order = Array.isArray(scope.chapterOrder) ? scope.chapterOrder : null;
+  const orderIndex = order ? new Map(order.map((key, index) => [String(key), index])) : null;
+  const excluded = new Set((excludeKeys || []).map(String));
+  const seen = new Set();
+  const byRound = new Map();
+
+  (Array.isArray(logs) ? logs : []).forEach(log => {
+    if (!logBelongsToPlan(log, scope)) return;
+    if (toLocalDateKey(log.read_at || log.readAt) !== targetDate) return;
+    const book = String(log.book || "");
+    const chapter = Number(log.chapter);
+    if (!book || !Number.isFinite(chapter)) return;
+    const chapterKey = `${book}_${chapter}`;
+    if (orderIndex && !orderIndex.has(chapterKey)) return;
+    const round = Math.max(1, Math.floor(Number(log.round) || 1));
+    const key = `${chapterKey}_${round}`;
+    if (seen.has(key) || excluded.has(key)) return;
+    seen.add(key);
+    if (!byRound.has(round)) byRound.set(round, []);
+    byRound.get(round).push({ book, chapter, sortIndex: orderIndex ? orderIndex.get(chapterKey) : null });
+  });
+
+  const groups = Array.from(byRound.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([round, items]) => {
+      const chapters = items
+        .sort((a, b) => {
+          if (a.sortIndex !== null && b.sortIndex !== null) return a.sortIndex - b.sortIndex;
+          if (a.book !== b.book) return a.book.localeCompare(b.book);
+          return a.chapter - b.chapter;
+        })
+        .map(({ book, chapter }) => ({ book, chapter }));
+      const ranges = [];
+      chapters.forEach(({ book, chapter }) => {
+        const last = ranges[ranges.length - 1];
+        if (last && last.book === book && last.to + 1 === chapter) last.to = chapter;
+        else ranges.push({ book, from: chapter, to: chapter });
+      });
+      return { round, chapters, ranges };
+    });
+  return { total: seen.size, groups };
+}
+
+// 日曆格用：一次把本計畫的打卡依本地日期算好章數（book_chapter_round 去重），
+// 不用每一格各掃一次全部紀錄。口徑和 getDayReadingRecords 一致。
+export function countDayReadingRecordsByDate(logs, scope = {}) {
+  const order = Array.isArray(scope.chapterOrder) ? new Set(scope.chapterOrder.map(String)) : null;
+  const seenByDate = new Map();
+  (Array.isArray(logs) ? logs : []).forEach(log => {
+    if (!logBelongsToPlan(log, scope)) return;
+    const dateKey = toLocalDateKey(log.read_at || log.readAt);
+    if (!dateKey) return;
+    const chapterKey = `${log.book}_${Number(log.chapter)}`;
+    if (order && !order.has(chapterKey)) return;
+    if (!seenByDate.has(dateKey)) seenByDate.set(dateKey, new Set());
+    seenByDate.get(dateKey).add(`${chapterKey}_${Math.max(1, Math.floor(Number(log.round) || 1))}`);
+  });
+  const counts = new Map();
+  seenByDate.forEach((keys, dateKey) => counts.set(dateKey, keys.size));
+  return counts;
+}
+
+// ── 照順序打卡（#331）───────────────────────────────────────────────────
+// 速讀系列（教會階段計畫、延後大區梯次）的目前這遍：只能勾「下一章」
+// （照讀經順序第一個還沒勾的章），只能取消「最後勾的那一章」。
+// 舊資料有缺口時，下一章就停在最早的缺口，自然引導先補完。
+const SEQUENTIAL_CHECK_PLAN_KINDS = new Set([
+  "church_campaign",
+  "church_campaign_stage",
+  "church_campaign_stage_cohort"
+]);
+
+export function isSequentialCheckPlan(plan) {
+  if (!plan || typeof plan !== "object") return false;
+  return SEQUENTIAL_CHECK_PLAN_KINDS.has(String(plan.planKind || plan.plan_kind || ""));
+}
+
+// 目前這遍的閱讀順序：先按日期、同一天內按清單順序。
+export function getRoundCheckState(days, round) {
+  const targetRound = Math.max(1, Math.floor(Number(round) || 1));
+  const order = [];
+  const seen = new Set();
+  (Array.isArray(days) ? days : []).forEach(day => {
+    (day && Array.isArray(day.chapters) ? day.chapters : []).forEach(chapter => {
+      if (!chapter || Number(chapter.round || targetRound) !== targetRound) return;
+      const key = `${chapter.book}_${Number(chapter.chapter)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      order.push(chapter);
+    });
+  });
+  const isRead = chapter => Boolean(chapter[`isReadR${targetRound}`]);
+  const nextIndex = order.findIndex(chapter => !isRead(chapter));
+  let lastReadIndex = -1;
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    if (isRead(order[i])) { lastReadIndex = i; break; }
+  }
+  return {
+    round: targetRound,
+    order,
+    nextIndex,
+    next: nextIndex >= 0 ? order[nextIndex] : null,
+    lastReadIndex,
+    lastRead: lastReadIndex >= 0 ? order[lastReadIndex] : null,
+    readCount: order.filter(isRead).length,
+    total: order.length,
+    isComplete: order.length > 0 && nextIndex === -1
+  };
+}
+
+// 回傳 { ok: true } 或 { ok: false, reason: "not_next" | "not_last", target: {book, chapter} }。
+// 不在這遍清單裡的章不受限（例如閱讀器裡讀計畫外的章）。
+export function canToggleRoundChapter(checkState, book, chapter, willCheck) {
+  if (!checkState || !Array.isArray(checkState.order)) return { ok: true };
+  const index = checkState.order.findIndex(item =>
+    String(item.book) === String(book) && Number(item.chapter) === Number(chapter)
+  );
+  if (index < 0) return { ok: true };
+  const alreadyRead = Boolean(checkState.order[index][`isReadR${checkState.round}`]);
+  if (willCheck) {
+    if (alreadyRead || index === checkState.nextIndex) return { ok: true };
+    const target = checkState.next;
+    return { ok: false, reason: "not_next", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
+  }
+  if (!alreadyRead || index === checkState.lastReadIndex) return { ok: true };
+  const target = checkState.lastRead;
+  return { ok: false, reason: "not_last", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
+}
+
+// 給四個寫入點共用：這次打卡／取消可不可以。不是速讀計畫、不是目前這遍 → 不限。
+export function getSequentialCheckBlock(plan, book, chapter, round, willCheck) {
+  if (!isSequentialCheckPlan(plan)) return null;
+  const currentRound = Math.max(1, Math.floor(Number(plan.currentRound) || 1));
+  if (Number(round || currentRound) !== currentRound) return null;
+  const result = canToggleRoundChapter(getRoundCheckState(plan.days, currentRound), book, chapter, willCheck);
+  return result.ok ? null : result;
+}
+
+export function formatSequentialCheckMessage(block, copy = {}) {
+  if (!block) return "";
+  const label = block.target ? `${block.target.book} ${block.target.chapter}章` : "";
+  if (block.reason === "not_last") {
+    return String(copy.sequentialUncheckBlocked || "只能取消最後勾的那一章（{chapter}）").replace("{chapter}", label);
+  }
+  return String(copy.sequentialCheckBlocked || "請照順序打卡，先讀完 {chapter}").replace("{chapter}", label);
+}
