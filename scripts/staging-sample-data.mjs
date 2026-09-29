@@ -166,7 +166,6 @@ export function tableQueries(salt) {
     q("lightning_quiz_questions", [["created_by", b.remap("t.created_by")]]),
     q("daily_quizzes", [["reviewed_by", b.remap("t.reviewed_by")], ["updated_by", b.remap("t.updated_by")]]),
     q("quiz_publications", [["published_by", b.remapOrPlaceholder("t.published_by")]]),
-    q("quiz_publication_schedules", [["created_by", b.remapOrPlaceholder("t.created_by")], ["scope_name", b.mapList("t.scope_name")]]),
     q("verse_likes"),
     // 抽樣到的會員的資料
     q("reading_plans", [["user_id", b.remap("t.user_id")]], b.inSampled("t.user_id")),
@@ -340,9 +339,7 @@ export function chunkRows(rows, maxBytes = 700_000) {
 }
 
 export const RESET_SQL = `-- 刪掉上一次匯入的樣本會員；他們的資料由 ON DELETE CASCADE 一起刪掉。
--- quiz_publications / quiz_publication_schedules 對 profiles 是 RESTRICT，要先刪。
-DELETE FROM public.quiz_publication_schedules
-  WHERE created_by IN (SELECT id FROM public.profiles WHERE email LIKE '%${SAMPLE_EMAIL_SUFFIX}');
+-- quiz_publications 對 profiles 是 RESTRICT，要先刪。
 DELETE FROM public.quiz_publications
   WHERE published_by IN (SELECT id FROM public.profiles WHERE email LIKE '%${SAMPLE_EMAIL_SUFFIX}');
 DELETE FROM public.profiles WHERE email LIKE '%${SAMPLE_EMAIL_SUFFIX}';`;
