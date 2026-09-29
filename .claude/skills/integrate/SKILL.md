@@ -1,6 +1,6 @@
 ---
 name: integrate
-description: Merge handed-off task/* branches into staging and push, or open/update the staging→main release PR. Whoever merges is the integrator for that run. Use whenever you are about to merge anything into staging, push staging, apply a migration, or open a release PR.
+description: Merge handed-off task/* branches into staging and push, open/update the staging→main release PR, or finish a release after the user merged it (production migrations, merge main back into staging, close issues). Whoever merges is the integrator for that run. Use whenever you are about to merge anything into staging, push staging, apply a migration, open a release PR, or the user says a release PR was merged.
 ---
 
 # Integrate: task branches → staging (→ release PR)
@@ -69,4 +69,17 @@ git log --format='- %(trailers:key=Release-note,valueonly,separator=)' --no-merg
 git log --format='- [ ] %(trailers:key=Verify,valueonly,separator=)' --no-merges origin/main..origin/staging
 git diff --name-only origin/main origin/staging -- supabase/migrations/
 ```
-Build the body from `.github/pull_request_template.md` with those lines (commits without trailers: read their subject). Hold the lock while creating/editing it. Migrations → note that production `db push` runs after the merge; breaking backend change → `release-policy.json` per CLAUDE.md. **Never merge the PR** (the guard blocks `gh pr merge`); after the user merges, push production migrations if any.
+Build the body from `.github/pull_request_template.md` with those lines (commits without trailers: read their subject). Hold the lock while creating/editing it. Migrations → note that production `db push` runs after the merge; breaking backend change → `release-policy.json` per CLAUDE.md. **Never merge the PR** (the guard blocks `gh pr merge`).
+
+## 9. After the user says the release PR is merged
+Take the lock, then:
+1. **Production migrations** (only if the release included any): from a clean worktree of `origin/main`, `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
+2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds.
+3. **Merge `main` back into `staging`** so `main` never drifts ahead (each release adds a merge commit that only `main` has; a hotfix would otherwise stay missing on `staging`):
+   ```bash
+   git fetch origin
+   git merge-base --is-ancestor origin/staging origin/main && git push origin origin/main:refs/heads/staging
+   ```
+   Not an ancestor (staging moved on since the merge) → in a temporary detached worktree of `origin/staging`: `git merge --no-ff origin/main -m "Merge main back into staging after release #<PR>"`, `npm test`, `git push origin HEAD:staging`. Afterwards `git rev-list --count origin/staging..origin/main` must be `0`.
+4. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`).
+5. Release the lock.

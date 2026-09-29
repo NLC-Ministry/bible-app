@@ -46,7 +46,7 @@
 - **不要 force push `staging`**：它上面可能有還沒上線的修改，蓋掉就不見了。
 - **大功能**（要做好幾天、或有上線順序要求，例如大測驗 C3）一樣是 `task/*` 分支，只是做完再交接；還沒準備好上線就不要標 `Status: ready`，不然會跟其他修改綁在一起上線。
 - **不要直接 push 到 `main`**。免費的私人 repo 不能設定分支保護，所以改成在部署時把關：不是從 `staging`（或 `hotfix/*`）的 PR merge 進來的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
-- **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，把 `main` 併回 `staging`：`git switch staging && git merge origin/main && git push`。
+- **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，由整合者把 `main` 併回 `staging`（跟一般上線後一樣，見下方第 5 步）。
 - migration 跟著分支走：整合者合併進 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
 
 ## 上線到正式環境（審核機制）
@@ -57,7 +57,8 @@
 2. 照清單在 **staging 網站**確認。
 3. 沒問題就按 **Merge**（選 **Create a merge commit**，不要用 squash，兩條分支的歷史才不會分岔）。有問題就先不要 merge。
 4. CI 部署正式環境前會檢查：這個 commit 必須來自從 `staging`（或 `hotfix/*`）開出來、已經 merge 的 PR。**直接 push 到 `main` 的不會部署**，正式網站維持原狀。
-5. 開發者完成上線後的步驟：正式環境 migration、Edge Function、確認正式網站、`compare-env-snapshots.mjs --run`。
+5. 跟開發者說「merge 了」，由整合者完成上線後的步驟（`.claude/skills/integrate` 第 9 步）：正式環境 migration、Edge Function、確認正式網站、`compare-env-snapshots.mjs --run`、**把 `main` 併回 `staging`**、關閉做完的 issue。
+   - 為什麼要併回：每次按 merge，GitHub 都會在 `main` 多一筆只有 `main` 才有的合併紀錄，不併回的話 GitHub 會一直顯示 `main`「比 staging 超前 N 個 commit」；如果是 hotfix，staging 還會少掉那個修正。通常可以直接快轉，不會多出新的 commit。
 
 PR 上的 `release-gate` 檢查會確認來源分支是 `staging`（或 `hotfix/*`），而且已經包含 `main` 上所有的修改（緊急修正要先併回 staging）。
 
