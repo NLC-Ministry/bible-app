@@ -109,11 +109,10 @@ issues AS (
   SELECT
     'ERROR', 'profiles', 'ACTIVE_PROFILE_NAME_BLANK',
     profile.id::TEXT, profile.email,
-    JSONB_BUILD_OBJECT('isDemo', profile.is_demo, 'isActive', profile.is_active),
+    JSONB_BUILD_OBJECT('isActive', profile.is_active),
     '從會員中心重新同步 displayName，或確認此帳號是否應停用。'
   FROM role_by_profile AS profile
   WHERE profile.is_active = TRUE
-    AND profile.is_demo = FALSE
     AND BTRIM(COALESCE(profile.name, '')) = ''
 
   UNION ALL
@@ -130,7 +129,6 @@ issues AS (
       COUNT(*) AS profile_count
     FROM public.profiles AS profile
     WHERE profile.is_active = TRUE
-      AND profile.is_demo = FALSE
       AND NULLIF(BTRIM(profile.email), '') IS NOT NULL
     GROUP BY LOWER(BTRIM(profile.email))
     HAVING COUNT(*) > 1
@@ -177,8 +175,7 @@ issues AS (
     ),
     '重新登入觸發 nlc-session；成功同步必須留下 memberId 與 Logto identity。'
   FROM role_by_profile AS profile
-  WHERE profile.is_demo = FALSE
-    AND profile.member_context_sync_status = 'success'
+  WHERE profile.member_context_sync_status = 'success'
     AND (
       profile.nlc_member_id IS NULL
       OR NOT EXISTS (
@@ -238,7 +235,6 @@ issues AS (
     '先確認會員中心 API 回應，再重新登入；不要直接覆寫同步欄位。'
   FROM role_by_profile AS profile
   WHERE profile.is_active = TRUE
-    AND profile.is_demo = FALSE
     AND profile.member_context_sync_status IN ('degraded', 'failed')
 
   -- -----------------------------------------------------------------------

@@ -69,7 +69,6 @@ CREATE TABLE public.profiles (
   small_group TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'member',
   nlc_member_id UUID UNIQUE,
-  is_demo BOOLEAN NOT NULL DEFAULT FALSE,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   last_seen_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
@@ -344,7 +343,6 @@ SELECT
 FROM public.profiles p
 LEFT JOIN public.reading_plans rp ON rp.user_id = p.id
 LEFT JOIN public.reading_logs rl ON rl.user_id = p.id
-WHERE p.is_demo = FALSE
 GROUP BY p.id, p.name, p.role, p.great_region, p.pastoral_zone, p.small_group;
 
 -- ============================================================

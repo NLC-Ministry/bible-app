@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const migration = readFileSync("supabase/migrations/0052_admin_registration_statistics.sql", "utf8");
 const summaryMigration = readFileSync("supabase/migrations/0055_admin_registration_summary.sql", "utf8");
 const teamCountsMigration = readFileSync("supabase/migrations/0080_admin_registration_team_counts.sql", "utf8");
+// 最新定義：#263 刪掉示範帳號欄位時改寫的版本
+const latestMigration = readFileSync("supabase/migrations/20260929093001_drop_profiles_is_demo.sql", "utf8");
 const orgSortOrderMigration = readFileSync("supabase/migrations/0133_org_display_sort_order.sql", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
@@ -15,13 +17,23 @@ describe("admin registration statistics", () => {
   it("aggregates active real accounts and selected-plan signups by great region and pastoral zone", () => {
     expect(migration).toContain("get_admin_registration_statistics");
     expect(migration).toContain("profile.is_active = TRUE");
-    expect(migration).toContain("profile.is_demo = FALSE");
     expect(migration).toContain("reading_plan.global_plan_id = p_global_plan_id");
     expect(migration).toContain("BTRIM(profile.great_region)");
     expect(migration).toContain("BTRIM(profile.pastoral_zone)");
     expect(migration).toContain("'greatRegions'");
     expect(migration).toContain("'未設定牧區'");
     expect(migration).toContain("'pastoralZones'");
+  });
+
+  it("latest definition (#263) counts active accounts without the removed demo filter", () => {
+    const text = latestMigration.replace(/\r\n/g, "\n");
+    const start = text.indexOf("CREATE OR REPLACE FUNCTION public.get_admin_registration_statistics(");
+    const block = text.slice(start, text.indexOf("-- ──", start + 1));
+    expect(start).toBeGreaterThanOrEqual(0);
+    // 三個統計 CTE（總計／牧區／大區）的母體都只剩 is_active = TRUE
+    expect(block.match(/WHERE profile\.is_active = TRUE\n {2}\), signed_up_profiles AS/g)).toHaveLength(3);
+    expect(block).toContain("reading_plan.global_plan_id = p_global_plan_id");
+    expect(block).not.toContain(["is", "demo"].join("_"));
   });
 
   it("keeps the report admin-only across direct and Member Hub auth paths", () => {

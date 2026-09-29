@@ -47,8 +47,7 @@ ORDER BY read_at DESC;
 EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
 SELECT id
 FROM public.profiles
-WHERE is_demo = false
-  AND is_active = true
+WHERE is_active = true
   AND great_region = '請替換為大區名稱';
 ```
 

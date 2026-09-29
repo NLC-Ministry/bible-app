@@ -16,7 +16,6 @@ WITH placeholder_names AS (
 eligible_profiles AS (
   SELECT p.*
   FROM public.profiles p
-  WHERE p.is_demo = FALSE
 ),
 last_read AS (
   SELECT user_id, MAX(read_at) AS last_read_at
