@@ -6,8 +6,8 @@
 //   node scripts/compare-env-snapshots.mjs <prod 檔案> <staging 檔案>
 //       比對兩份輸出。可以是 `supabase db query` 的 JSON，或 SQL Editor 匯出的 CSV。
 //
-// 有「非預期」差異時 exit code 為 1。EXPECTED_DIFFERENCE_SECTIONS 裡的類別
-// 仍會列出，但不影響 exit code。
+// 有「非預期」差異時 exit code 為 1。EXPECTED_DIFFERENCE_SECTIONS 裡的類別和
+// supabase_admin 的 default_acl（見 isExpectedDifference）仍會列出，但不影響 exit code。
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,14 @@ import { PROD_REF, STAGING_REF, runSqlFile } from "./lib/supabase-cli-query.mjs"
 export { PROD_REF, STAGING_REF };
 // cron_job、vault_secret_name：staging 刻意不設定。extension_version：Supabase 平台自動升級。
 export const EXPECTED_DIFFERENCE_SECTIONS = new Set(["cron_job", "vault_secret_name", "extension_version"]);
+
+// supabase_admin 的預設權限（object 格式 "<schema> <role> <objtype>"）：平台帳號的設定，
+// postgres 不是 superuser 也不是 supabase_admin 成員，兩邊都改不到，決定永久忽略（#333）。
+// 只影響 supabase_admin 建的物件，我們的物件都屬於 postgres。其他角色的 default_acl 差異仍算非預期。
+export function isExpectedDifference({ section, object }) {
+  if (EXPECTED_DIFFERENCE_SECTIONS.has(section)) return true;
+  return section === "default_acl" && object.split(" ")[1] === "supabase_admin";
+}
 
 const SQL_PATH = fileURLToPath(new URL("../supabase/queries/environment_consistency_check.sql", import.meta.url));
 
@@ -104,8 +112,8 @@ export function diffSnapshots(rowsA, rowsB) {
   }
   differences.sort((x, y) => x.section.localeCompare(y.section) || x.object.localeCompare(y.object));
   return {
-    unexpected: differences.filter(d => !EXPECTED_DIFFERENCE_SECTIONS.has(d.section)),
-    expected: differences.filter(d => EXPECTED_DIFFERENCE_SECTIONS.has(d.section))
+    unexpected: differences.filter(d => !isExpectedDifference(d)),
+    expected: differences.filter(d => isExpectedDifference(d))
   };
 }
 
@@ -127,7 +135,7 @@ export function formatReport({ unexpected, expected }, labelA = "prod", labelB =
   out.push(unexpected.length === 0
     ? `✅ ${labelA} 與 ${labelB} 一致（預期差異除外）`
     : `❌ ${unexpected.length} 項非預期差異：\n${group(unexpected)}`);
-  if (expected.length) out.push(`\nℹ️ ${expected.length} 項預期差異（staging 刻意不設定的排程／secret、平台自動升級的 extension 版本）：\n${group(expected)}`);
+  if (expected.length) out.push(`\nℹ️ ${expected.length} 項預期差異（staging 刻意不設定的排程／secret、平台自動升級的 extension 版本、supabase_admin 的預設權限（平台帳號，我們改不到））：\n${group(expected)}`);
   return out.join("\n");
 }
 
