@@ -37,7 +37,8 @@ describe("準備進度清單：草稿階段引導完成必要項目，取代原�
     const fn = exam.slice(exam.indexOf("function examReadinessChecklist"), exam.indexOf("function examChecklistHtml"));
     expect(fn).toContain('{ label: "已選擇題型並設定題數", done: activeSections.length > 0, required: true }');
     expect(fn).toContain("countsMatch");
-    expect(fn).toContain("windowValid");
+    // #339：開放時間改在「排程」視窗裡選，不再是清單項目（見 exam-rehearsal-ignores-window.test.mjs）
+    expect(fn).not.toContain("windowValid");
     expect(fn).not.toContain("paper.mode");
     // #298：首頁卡片文字沒填會自動產生、排程後自動出現，清單只列出題的事
     expect(fn).not.toContain("公告");

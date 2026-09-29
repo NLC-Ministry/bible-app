@@ -16450,6 +16450,11 @@ textarea::placeholder {
 .exam-admin-modal__body { padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .exam-admin-modal__body label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; color: var(--text-secondary); }
 .exam-admin-modal__foot { display: flex; gap: 0.5rem; padding: 0.85rem 1rem; border-top: 1px solid var(--border-card); background: var(--bg-card); }
+/* 排程視窗（#339）：擋下的原因／只提醒的警告 */
+.exam-admin__sched-msg { margin: 0; padding: 0.5rem 0.7rem; border-radius: var(--radius-md); font-size: 0.875rem; line-height: 1.5; }
+.exam-admin__sched-msg + .exam-admin__sched-msg { margin-top: 0.4rem; }
+.exam-admin__sched-msg.is-error { background: var(--color-danger-subtle); color: var(--color-danger); }
+.exam-admin__sched-msg.is-warning { background: var(--color-warning-subtle); color: var(--text-primary); }
 .exam-admin__modeswitch { display: inline-flex; border: 1px solid var(--border-card); border-radius: 8px; overflow: hidden; }
 .exam-admin__modeswitch button {
   background: var(--bg-card); border: none; padding: 0.4rem 0.75rem; font-size: 0.875rem;

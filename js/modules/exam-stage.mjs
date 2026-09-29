@@ -55,7 +55,7 @@ export function examNextStepText(stage, paper, { checklistDone = false, official
   switch (stage) {
     case "preparing":
       return checklistDone
-        ? "準備好了。按「排程」後，會友首頁就會出現這份測驗。"
+        ? "準備好了。按「排程」後選擇開放時間，會友首頁就會出現這份測驗。"
         : "完成下面的清單，就可以排程。";
     case "scheduled":
       return `開放時間 ${openAt}，時間到會自動開放作答。開放前仍可修改題目內容。`;

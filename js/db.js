@@ -3723,7 +3723,7 @@ const db = {
       exam_reset_live_forbidden: "開放作答後不能清除作答紀錄。",
       exam_use_publish: "準備中的試卷請用「排程」。",
       exam_rehearsal_draft_only: "已經開放作答，不能再試作了。",
-      exam_window_invalid: "請先設定正確的開放起訖時間。",
+      exam_window_invalid: "開放時間不正確：結束時間要晚於開始時間，而且要在未來。請重新選擇。",
       exam_section_count_mismatch: "各大題題數與設定不符。",
       exam_answer_key_incomplete: "還有題目未填答案。",
       exam_not_open: "測驗目前未開放作答。",
