@@ -105,18 +105,13 @@ describe("0200: 首頁清單／單卡 fallback 都要能撈到「只有預告、
 });
 
 describe("0200: 前端串接", () => {
-  it("db.js 新增 saveExamPreAnnouncement 呼叫 exam_save_pre_announcement", () => {
-    expect(db).toContain("async saveExamPreAnnouncement(paperId, preAnnouncement, enabled) {");
-    expect(db).toContain('this._callExamRpc("exam_save_pre_announcement"');
-  });
-
-  it("nlc-data 的兩個 allowlist（一般 + admin-only）都加了 exam_save_pre_announcement", () => {
-    const occurrences = edge.split("exam_save_pre_announcement").length - 1;
-    expect(occurrences).toBe(2);
+  // #303：預告的欄位與 RPC 已刪（20260929041621_exam_drop_legacy_columns.sql）。
+  it("#303：db.js 與 nlc-data 都不再有 exam_save_pre_announcement", () => {
+    expect(db).not.toContain("saveExamPreAnnouncement");
+    expect(edge).not.toContain("exam_save_pre_announcement");
   });
 
   // #298：預告退場——排程後首頁卡片就自動出現，不需要開考前另一則通知。
-  // 伺服器端不再讀 pre_announcement_*（#303 才刪欄位與 RPC）。
   it("#298：後台不再有「預告」編輯區，只剩一組全部選填的首頁卡片文字", () => {
     const fn = exam.slice(exam.indexOf("function renderExamNoticeForm"), exam.indexOf("// ── 試卷設定表單"));
     expect(fn).not.toContain("<legend>預告");

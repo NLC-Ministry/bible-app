@@ -3900,20 +3900,6 @@ const db = {
       p_announcement: announcement || {}
     });
   },
-  async publishExamAnnouncement(paperId) {
-    return this._callExamRpc("exam_publish_announcement", { p_paper_id: paperId });
-  },
-  async unpublishExamAnnouncement(paperId) {
-    return this._callExamRpc("exam_unpublish_announcement", { p_paper_id: paperId });
-  },
-  // 預告：開考前的簡短通知，跟公告分開存，沒有獨立的發佈/撤下——內容+開關存了就立刻生效
-  async saveExamPreAnnouncement(paperId, preAnnouncement, enabled) {
-    return this._callExamRpc("exam_save_pre_announcement", {
-      p_paper_id: paperId,
-      p_pre_announcement: preAnnouncement || {},
-      p_enabled: enabled === true
-    });
-  },
   async publishExam(paperId) {
     return this._callExamRpc("exam_publish", { p_paper_id: paperId });
   },
@@ -3929,7 +3915,6 @@ const db = {
   async resetMyExamRehearsal(paperId) {
     return this._callExamRpc("exam_reset_my_rehearsal", { p_paper_id: paperId });
   },
-  // setExamAutoScore removed (#299): 收卷一律計分；exam_set_auto_score 函式留到 #303 才刪。
   async setExamPracticeEnabled(paperId, enabled) {
     return this._callExamRpc("exam_set_practice_enabled", { p_paper_id: paperId, p_enabled: !!enabled });
   },
@@ -3963,10 +3948,9 @@ const db = {
   },
 
   // 作答
-  async getExamForAttempt(paperId = null, { preview = false, attemptKind = "official" } = {}) {
+  async getExamForAttempt(paperId = null, { attemptKind = "official" } = {}) {
     return this._callExamRpc("exam_get_for_attempt", {
       p_paper_id: paperId || null,
-      p_preview: !!preview,
       p_attempt_kind: attemptKind === "practice" ? "practice" : "official"
     });
   },
