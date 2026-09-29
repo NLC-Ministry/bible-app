@@ -13,6 +13,7 @@
 
 import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";
 import { EXAM_STAGES, examStage, examNextStepText, formatExamTime } from "./exam-stage.mjs";
+import { checkExamScheduleWindow, isExamWindowExpired } from "./exam-schedule-window.mjs";
 
 const SECTION_ORDER = ["truefalse", "single", "multiple", "matching", "ordering", "shortanswer"];
 const SECTION_TITLE = {
@@ -125,19 +126,18 @@ function isRehearsalPaper(paper) {
 // ── 準備進度檢查：準備中「還差什麼才能排程」的清單 ──
 // 只列出題的事，跟 exam_publish 的伺服器端驗證對齊（不是自己發明的規則），
 // 加上少數僅供參考、不擋動作的建議項。首頁卡片文字沒填會自動產生，不用檢查（#298）。
+// 開放時間不在清單裡：按「排程」時才在視窗裡選（#339）。
 function examReadinessChecklist(paper, questions) {
   const cfg = examSectionCfg(paper);
   const activeSections = Object.keys(cfg);
   const bySection = {};
   (Array.isArray(questions) ? questions : []).forEach((q) => { (bySection[q.section] ||= []).push(q); });
   const countsMatch = activeSections.length > 0 && activeSections.every((t) => (bySection[t]?.length || 0) === cfg[t].count);
-  const windowValid = !!paper.open_at && !!paper.close_at && new Date(paper.close_at) > new Date(paper.open_at) && new Date(paper.close_at) > new Date();
   const keysComplete = questions.length > 0 && questions.every((q) => q.section === "shortanswer" || (Array.isArray(q.answer_key) ? q.answer_key.length > 0 : q.answer_key != null));
 
   const items = [
     { label: "已選擇題型並設定題數", done: activeSections.length > 0, required: true },
-    { label: "各題型題目數與設定相符", done: countsMatch, required: true },
-    { label: "開放時間已設定（結束時間須晚於開始時間，且在未來）", done: windowValid, required: true }
+    { label: "各題型題目數與設定相符", done: countsMatch, required: true }
   ];
   items.push({ label: "所有題目已填正解（簡答題除外）", done: keysComplete, required: false });
 
@@ -238,6 +238,81 @@ function openExamCreateTitleModal(onConfirm) {
   };
   confirmBtn.addEventListener("click", submit);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+}
+
+// ── 排程視窗（#339）：開放時間在這裡選，不在「設定」分頁填 ──
+// reschedule＝已排程時改時間（exam_upsert_paper 同樣檢查 exam_window_invalid）。
+// onConfirm({ openAt, closeAt }) 回傳 { success, message? }；失敗時視窗留著、顯示原因。
+function openExamScheduleModal(paper, { reschedule = false, rehearsalCount = 0 } = {}, onConfirm) {
+  const overlay = document.createElement("div");
+  overlay.className = "tts-guide-modal-overlay exam-admin-modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  // 試卷上舊的時間照樣帶入，但已經過期的要標出來請他重選
+  const expired = isExamWindowExpired(paper);
+  const intro = reschedule
+    ? "改完後首頁卡片的時間會跟著更新。開放時間到了會自動開放作答。"
+    : `排程後，會友首頁會立刻出現這份測驗的卡片（倒數到開放時間），開放時間到了自動可以作答。開放作答前仍可修改題目內容，也可以「取消排程」。${rehearsalCount ? `這份試卷上的 ${rehearsalCount} 筆試作會一併清除。` : ""}`;
+  const baseLabel = reschedule ? "儲存開放時間" : "排程";
+  overlay.innerHTML = `
+    <div class="exam-admin-modal__panel">
+      <div class="exam-admin-modal__head">
+        <h4>${reschedule ? "改開放時間" : "排程"}</h4>
+        <button type="button" class="exam-admin-modal__x" data-sched="x" aria-label="關閉">&times;</button>
+      </div>
+      <div class="exam-admin-modal__body">
+        <p class="exam-admin__meta">${esc(intro)}</p>
+        ${expired ? '<p class="exam-admin__sched-msg is-warning" data-sched="expired">原本的開放時間已過期，請重新選擇。</p>' : ""}
+        <label>開始時間<input type="datetime-local" class="form-control" data-sched="open" value="${esc(toLocalInput(paper.open_at))}"></label>
+        <label>結束時間<input type="datetime-local" class="form-control" data-sched="close" value="${esc(toLocalInput(paper.close_at))}"></label>
+        <p class="exam-admin__meta">作答時限 ${esc(String(paper.duration_minutes || ""))} 分鐘（在「設定」分頁修改）。</p>
+        <div data-sched="msgs"></div>
+      </div>
+      <div class="exam-admin-modal__foot">
+        <button type="button" class="primary-btn" data-sched="confirm">${baseLabel}</button>
+        <button type="button" class="pill-btn" data-sched="cancel">取消</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const $ = (k) => overlay.querySelector(`[data-sched="${k}"]`);
+  const openEl = $("open");
+  const closeEl = $("close");
+  const msgs = $("msgs");
+  const confirmBtn = $("confirm");
+  let serverError = "";
+  const values = () => ({ openAt: fromLocalInput(openEl.value), closeAt: fromLocalInput(closeEl.value) });
+  const refresh = () => {
+    const { errors, warnings } = checkExamScheduleWindow({ ...values(), durationMinutes: paper.duration_minutes });
+    const html = [
+      ...(serverError ? [`<p class="exam-admin__sched-msg is-error">${esc(serverError)}</p>`] : []),
+      ...errors.map((m) => `<p class="exam-admin__sched-msg is-error">${esc(m)}</p>`),
+      ...warnings.map((m) => `<p class="exam-admin__sched-msg is-warning">${esc(m)}</p>`)
+    ];
+    msgs.innerHTML = html.join("");
+    confirmBtn.disabled = errors.length > 0;
+    confirmBtn.textContent = warnings.length ? `仍要${baseLabel}` : baseLabel;
+    return errors.length === 0;
+  };
+  [openEl, closeEl].forEach((el) => el.addEventListener("input", () => {
+    serverError = "";
+    $("expired")?.remove();   // 重選過就不用再提醒「原本的已過期」
+    refresh();
+  }));
+  $("x").addEventListener("click", close);
+  $("cancel").addEventListener("click", close);
+  confirmBtn.addEventListener("click", async () => {
+    if (!refresh()) return;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "處理中…";
+    const res = await onConfirm(values());
+    if (res && res.success) { close(); return; }
+    serverError = (res && res.message) || "操作失敗";
+    refresh();
+  });
+  refresh();
+  (expired || !openEl.value ? openEl : confirmBtn).focus();
 }
 
 export async function renderExamPanel(root) {
@@ -386,7 +461,7 @@ export async function renderExamPanel(root) {
   // ── 每個階段只有一顆主按鈕：排程／取消排程／提前結束／公布成績 ──
   let mainAction = "";
   if (isDraft && checklist.requiredDone) {
-    mainAction = `<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon("排程後，會友首頁會立刻出現這份測驗的卡片（倒數到開放時間），開放時間到了自動可以作答。開放作答前仍可修改題目內容，也可以「取消排程」。")}`;
+    mainAction = `<button type="button" class="primary-btn" data-exam-act="publish">排程</button>${examInfoIcon("按下去選開放時間。排程後，會友首頁會立刻出現這份測驗的卡片（倒數到開放時間），開放時間到了自動可以作答。開放作答前仍可修改題目內容，也可以「取消排程」。")}`;
   } else if (isScheduled) {
     // 取消排程：只有還沒開放作答時可以（伺服器端 exam_set_status 同樣檢查）
     mainAction = '<button type="button" class="secondary-btn" data-exam-act="reopen">取消排程</button>';
@@ -405,6 +480,8 @@ export async function renderExamPanel(root) {
     if (rehearsalCount > 0) {
       tools.push(`<button type="button" class="secondary-btn" data-exam-act="reset">清除所有試作（${rehearsalCount}）</button>${examInfoIcon("清掉這份試卷上所有人的試作。開放作答時也會自動清除。")}`);
     }
+    // 已排程改時間：跟排程同一個視窗（#339）
+    if (isScheduled) tools.push('<button type="button" class="secondary-btn" data-exam-act="reschedule">改開放時間</button>');
   } else if (stage === "open") {
     tools.push(`<a class="secondary-btn" href="${examUrl}" target="_blank" rel="noopener">正式作答</a>`);
   }
@@ -550,21 +627,35 @@ export async function renderExamPanel(root) {
       rerender();
       return;
     }
+    // 排程／改開放時間：在視窗裡選時間（#339）。排程＝先存時間再 exam_publish；
+    // 排程失敗時時間已存在準備中的卷上，沒有副作用（準備中的時間不影響試作）。
+    if (act === "publish" || act === "reschedule") {
+      const reschedule = act === "reschedule";
+      openExamScheduleModal(paper, { reschedule, rehearsalCount }, async ({ openAt, closeAt }) => {
+        const saved = await db.upsertExamPaper({ id: paper.id, open_at: openAt, close_at: closeAt });
+        if (!saved.success) return saved;
+        if (!reschedule) {
+          const published = await db.publishExam(paper.id);
+          if (!published.success) return published;
+        }
+        toast(reschedule ? "已更新開放時間" : "已排程，會友首頁已出現這份測驗的卡片");
+        rerender();
+        return { success: true };
+      });
+      return;
+    }
     if (act === "close" && !confirm("提前結束後會立即收卷並鎖定所有正式作答；複習不受影響，仍可修改至原活動結束時間後 24 小時。關閉後會自動計分；之後修正正解，分數也會自動重新計算。確定提前結束？")) return;
-    if (act === "publish" && !confirm(`排程後，會友首頁會立刻出現這份測驗的卡片，開放時間到了就能作答。開放作答前仍可修改題目內容。${rehearsalCount ? `\n這份試卷上的 ${rehearsalCount} 筆試作會一併清除。` : ""}確定排程？`)) return;
     if (act === "reopen" && !confirm("取消排程後，會友首頁的卡片會消失，試卷回到準備中。確定取消排程？")) return;
     if (act === "reset" && !confirm(`確定清除這份試卷上的 ${rehearsalCount} 筆試作？（無法復原）`)) return;
     b.disabled = true;
     let res;
-    if (act === "publish") res = await db.publishExam(paper.id);
-    else if (act === "close") res = await db.setExamStatus(paper.id, "closed");
+    if (act === "close") res = await db.setExamStatus(paper.id, "closed");
     else if (act === "reset") res = await db.resetExamAttempts(paper.id);
     else if (act === "reopen") res = await db.setExamStatus(paper.id, "draft");
     b.disabled = false;
     if (!res.success) { toast(res.message || "操作失敗"); return; }
     toast(
-      act === "publish" ? "已排程，會友首頁已出現這份測驗的卡片"
-      : act === "close" ? "已提前結束，已收卷並計分"
+      act === "close" ? "已提前結束，已收卷並計分"
       : act === "reset" ? `已清除 ${res.data?.deletedAttempts ?? ""} 筆試作`
       : "已取消排程，首頁卡片已移除"
     );
@@ -933,7 +1024,8 @@ function renderExamNoticeForm(host, paper, rerender) {
   const p = paper;
   const ann = p.announcement || {};
   const annLocked = p.status === "closed";
-  const defaultBody = examDefaultCardBody(p);
+  // 準備中的卷還沒選開放時間（或留著舊的），排程時才決定（#339）
+  const defaultBody = examStage(p) === "preparing" ? "" : examDefaultCardBody(p);
   host.innerHTML = `
     <div class="exam-admin__form">
       <fieldset class="exam-admin__sec-cfg">
@@ -941,7 +1033,7 @@ function renderExamNoticeForm(host, paper, rerender) {
         <label>標題（選填，不填就用試卷標題）
           <input class="form-control" data-n="headline" maxlength="40" value="${esc(ann.headline || "")}" placeholder="${esc(p.title || "")}" ${annLocked ? "disabled" : ""}></label>
         <label>說明（選填，不填就用開放時間自動產生）
-          <textarea class="form-control" rows="4" data-n="body" ${annLocked ? "disabled" : ""} placeholder="${esc(defaultBody || "設定開放時間後，這裡會自動產生說明。")}">${esc(ann.body || "")}</textarea></label>
+          <textarea class="form-control" rows="4" data-n="body" ${annLocked ? "disabled" : ""} placeholder="${esc(defaultBody || "排程時選好開放時間後，這裡會自動產生說明。")}">${esc(ann.body || "")}</textarea></label>
         <label>入口按鈕文字（選填，預設「進入測驗」）
           <input class="form-control" data-n="ctaLabel" maxlength="12" value="${esc(ann.ctaLabel || "")}" ${annLocked ? "disabled" : ""}></label>
         ${annLocked ? '<p class="exam-admin__meta">測驗已結束，首頁卡片文字已鎖定。</p>' : '<button type="button" class="primary-btn" id="exam-notice-save">儲存首頁卡片</button>'}
@@ -964,6 +1056,11 @@ function renderExamMetaForm(host, paper, questions, rerender, { readOnly = false
   const p = paper;
   // 已排程：題型題數在排程時驗證過，開放前不能再改（伺服器端 exam_scheduled_structure_locked）
   const structureLocked = examStage(p) === "scheduled";
+  // 開放時間不在這裡填：按「排程」時在視窗裡選，已排程時按「改開放時間」（#339）
+  const windowText = p.open_at && p.close_at ? `${formatExamTime(p.open_at)} 至 ${formatExamTime(p.close_at)}` : "";
+  const windowNote = examStage(p) === "preparing" ? "開放時間：按「排程」時選擇。"
+    : structureLocked ? `開放時間：${windowText}。要改請按上方「改開放時間」。`
+    : `開放時間：${windowText}。`;
   const rules = ((p.pledge || {}).rules || []).join("\n");
   const cfg = examSectionCfg(p);
   // 題庫已經寫的題目數量，用來自動帶入下面的「題數」——題目是第一手事實，
@@ -1006,10 +1103,7 @@ function renderExamMetaForm(host, paper, questions, rerender, { readOnly = false
         <select class="form-control" id="exam-meta-linked-plan">${planOptions}</select>
       </label>
       <p class="exam-admin__meta">這份卷的統計頁「團隊排行」只會列出對應計畫底下登記的 3／6 人隊，不會抓到升到下一階段或其他計畫的隊。獨立測驗卷（不選）維持舊行為。跟其他設定一樣按下方「儲存試卷設定」才會存；開放作答前都能改。</p>
-      <div class="exam-admin__form-row">
-        <label>開放起<input type="datetime-local" class="form-control" data-f="open_at" value="${esc(toLocalInput(p.open_at))}"></label>
-        <label>開放迄<input type="datetime-local" class="form-control" data-f="close_at" value="${esc(toLocalInput(p.close_at))}"></label>
-      </div>
+      <p class="exam-admin__meta">${esc(windowNote)}</p>
       <label>限時（分）<input type="number" class="form-control" data-f="duration_minutes" value="${p.duration_minutes}"></label>
 
       <fieldset class="exam-admin__sec-cfg">
@@ -1064,7 +1158,6 @@ function renderExamMetaForm(host, paper, questions, rerender, { readOnly = false
       return db.upsertExamPaper({
         id: p.id, title: g("title"),
         linked_plan_id: host.querySelector("#exam-meta-linked-plan").value || null,
-        open_at: fromLocalInput(g("open_at")), close_at: fromLocalInput(g("close_at")),
         duration_minutes: Number(g("duration_minutes")) || 75,
         sections,
         pledge: { openText: g("pledge_open"), rules: lines(g("pledge_rules")), consentTemplate: g("pledge_consent") }
@@ -2398,6 +2491,12 @@ class ExamRunner {
     const teamId = state.myReadingTeam?.team?.id || state.readingTeam?.team?.id || null;
     const res = await db.startExamAttempt(this.paper.id, pledgeName, teamId);
     if (!res.success) { toast(res.message || "無法開始"); this.renderPledge(); return; }
+    // 剛開始就沒有剩餘時間（#339）：不要進作答畫面讓倒數立刻自動收卷，直接說明原因
+    if (!res.data?.resumed && res.data?.secondsRemaining != null && Number(res.data.secondsRemaining) <= 0) {
+      clearActiveExam();
+      this.el.innerHTML = this.closedCard("作答時間已到：這份測驗的結束時間已經過了，沒有剩餘的作答時間。");
+      return;
+    }
     return this.boot();
   }
 
