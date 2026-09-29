@@ -182,4 +182,37 @@ describe("桃園版第一輪期末賽算進鐵獎（#327）", () => {
     expect(status.collected).toBe(4);
     expect(status.canSynthesize).toBe(true);
   });
+
+  it("1/2 用全教會版合成後，1 月在桃園版多讀的遍數仍會讓鐵獎升級（取較高者）", () => {
+    state.activePlans.push(...CHURCH.map(key => plan(key)));
+    vi.setSystemTime(at(2027, 1, 2, 9));
+    // 合成當下四卷各 1 遍 → S=4 → tier 1
+    store.set("church_r1final_synthesized", "1");
+    store.set("church_r1final_iron_tier", "1");
+    expect(api.getFirstRoundFinalStatus().ironTier).toBe(1);
+
+    // 1 月在桃園版申命記多讀了幾遍
+    state.activePlans.push(cohortPlan(TAOYUAN[3], 4, 100));
+    vi.setSystemTime(at(2027, 1, 31));
+    const status = api.getFirstRoundFinalStatus();
+    expect(status.months[3].completedRounds).toBeGreaterThan(1);
+    expect(status.previewTier).toBeGreaterThan(1);
+    expect(status.ironTier).toBe(status.previewTier);
+    expect(store.get("church_r1final_iron_tier")).toBe(String(status.previewTier));   // 升級會寫回
+  });
+
+  it("合成後等級只升不降：目前算出的等級較低時，維持合成時的等級", () => {
+    state.activePlans.push(...CHURCH.map(key => plan(key)));   // S=4 → tier 1
+    store.set("church_r1final_synthesized", "1");
+    store.set("church_r1final_iron_tier", "5");
+    const status = api.getFirstRoundFinalStatus();
+    expect(status.previewTier).toBe(1);
+    expect(status.ironTier).toBe(5);
+    expect(store.get("church_r1final_iron_tier")).toBe("5");
+  });
+
+  it("還沒合成時，鐵獎等級一律 0", () => {
+    state.activePlans.push(...TAOYUAN.map(key => cohortPlan(key, 3, 100)));
+    expect(api.getFirstRoundFinalStatus().ironTier).toBe(0);
+  });
 });

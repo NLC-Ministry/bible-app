@@ -117,7 +117,7 @@ describe("badge unlock state stays synced with the live reading plan", () => {
     expect(getCampaignStageCompletedRounds(4)).toBe(5);   // 沒 live → fallback 自己的快取
   });
 
-  it("第一輪期末賽鐵獎：合成前一律 0；合成後讀凍結的 iron_tier（不再跑 live min）", () => {
+  it("第一輪期末賽鐵獎：合成前一律 0；合成後讀 iron_tier，只升不降", () => {
     const mf = (key, currentRound, progress) => ({ presetKey: key, currentRound, progress, planKind: "church_campaign_stage", stageNo: 2 });
     // 四卷都完成第一遍，但使用者「還沒按合成」 → 鐵獎徽章等效等級 = 0
     state.activePlans = [
@@ -131,7 +131,7 @@ describe("badge unlock state stays synced with the live reading plan", () => {
     localStorage.setItem("church_r1final_iron_tier", "3");
     expect(getCampaignStageCompletedRounds(2)).toBe(3);
 
-    // 凍結後即使 live 計畫變動也不再改變
+    // 合成後計畫輪替出 activePlans，等級也不會往下掉
     state.activePlans = [];
     expect(getCampaignStageCompletedRounds(2)).toBe(3);
   });

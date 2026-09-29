@@ -683,6 +683,14 @@ function getFirstRoundFinalStatus() {
   const synthesized = (() => { try { return localStorage.getItem(FIRST_ROUND_FINAL_STORAGE.synthesized) === "1"; } catch (_e) { return false; } })();
   const thresholdMet = months.length === 4 && minRounds >= 1;
   const frozenTier = (() => { try { return Number(localStorage.getItem(FIRST_ROUND_FINAL_STORAGE.ironTier)) || 0; } catch (_e) { return 0; } })();
+  const previewTier = thresholdMet ? ironTierFromSum(starSum) : 0;
+  // 合成後取「合成時記下的等級」和「目前四卷算出的等級」較高者（#327）：全教會版 1/2 就能
+  // 合成，桃園版 1 月還在讀，之後多讀的遍數也要算進去。只升不降：計畫輪替出 activePlans
+  // 後也不會掉；升上去就寫回，之後從這個等級起算。
+  const ironTier = synthesized ? Math.max(frozenTier, previewTier) : 0;
+  if (synthesized && ironTier > frozenTier) {
+    try { localStorage.setItem(FIRST_ROUND_FINAL_STORAGE.ironTier, String(ironTier)); } catch (_e) {}
+  }
 
   return {
     months, total: months.length || 4,
@@ -690,8 +698,8 @@ function getFirstRoundFinalStatus() {
     synthesisDate: synthDateStr,                                 // 這個人適用的合成日
     seasonEndDate, seasonEndLabel: formatMonthDayLabel(seasonEndDate),
     seasonEnded, synthesized, thresholdMet,
-    previewTier: thresholdMet ? ironTierFromSum(starSum) : 0,   // 按鈕上顯示的預覽
-    ironTier: synthesized ? frozenTier : 0,                     // 徽章實際等級（凍結）
+    previewTier,                                                // 按鈕上顯示的預覽
+    ironTier,                                                   // 徽章實際等級（合成後只升不降）
     canSynthesize: seasonEnded && thresholdMet && !synthesized,
     ironAwardEarned: synthesized && thresholdMet
   };
