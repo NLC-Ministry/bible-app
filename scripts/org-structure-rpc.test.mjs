@@ -25,8 +25,16 @@ describe("migration 0166: get_org_structure_tree", () => {
     expect(migration).toContain("p_role_code = 'great_zone_leader' AND profile.great_region  = ANY(p_scope_regions)");
     expect(migration).toContain("p_role_code = 'zone_leader'        AND profile.pastoral_zone = ANY(p_scope_zones)");
     expect(migration).toContain("p_role_code = 'group_leader'       AND profile.small_group   = ANY(p_scope_groups)");
-    // leader rows only count active, non-demo members (mirrors getVisibleProfileIds)
-    expect(migration).toContain("profile.is_demo = FALSE AND profile.is_active = TRUE");
+  });
+
+  it("latest definition (#263): leader rows only count active members", () => {
+    const latest = readFileSync(join(root, "supabase", "migrations", "20260929093001_drop_profiles_is_demo.sql"), "utf8");
+    const start = latest.indexOf("CREATE OR REPLACE FUNCTION public.get_org_structure_tree(");
+    const block = latest.slice(start, latest.indexOf("-- ──", start + 1));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(block).toContain("profile.is_active = TRUE AND (");
+    expect(block).toContain("OR profile.id = resolved_actor_id");
+    expect(block).not.toContain(["is", "demo"].join("_"));
   });
 
   it("tolerates the sort-order tables not existing yet (older DBs)", () => {

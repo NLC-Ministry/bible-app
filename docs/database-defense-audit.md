@@ -10,7 +10,7 @@
 |---|---:|---|
 | `verse_likes.like_count` 可由瀏覽器任意覆寫或寫成負數 | Critical | 非負 CHECK、撤銷直接寫入、只允許原子 RPC |
 | NLC service-role 代理允許一般使用者直接寫 `profiles` 與 `verse_likes` | Critical | 從 OWN_WRITE allowlist 移除，profile 只能走 `save_profile`，like 只能走 RPC allowlist |
-| `profiles_manage_own FOR ALL` 可能讓成員嘗試修改 `role/is_active/is_demo` 或刪除帳號 | Critical | 改成 UPDATE-only policy，加 privileged-field trigger |
+| `profiles_manage_own FOR ALL` 可能讓成員嘗試修改 `role/is_active`、示範帳號旗標（#263 已刪除）或刪除帳號 | Critical | 改成 UPDATE-only policy，加 privileged-field trigger |
 | `reading_logs.plan_id` 可指向另一位使用者的 plan | Critical | owner trigger + 既有資料 preflight audit |
 | `UNIQUE(user_id, plan_id, ...)` 無法限制 `plan_id IS NULL` 的重複列 | High | 清理重複個人紀錄 + partial unique index |
 | 舊分頁把 `current_round` 或 level 寫回舊值 | High | progress transition trigger，除明確降級外禁止倒退 |
