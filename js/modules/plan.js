@@ -36,6 +36,14 @@ import {
 } from "./quiz-question-types.mjs";
 import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import {
+  countDayReadingRecordsByDate,
+  formatSequentialCheckMessage,
+  getDayReadingRecords,
+  getRoundCheckState,
+  getSequentialCheckBlock,
+  isSequentialCheckPlan
+} from "../data/current-round-progress.mjs";
 
 // Reading plans tab view controller
 
@@ -2888,6 +2896,12 @@ function renderHorizontalDateStrip() {
     });
   };
 
+  // 日曆格和當天清單用同一套判斷（#330）：一次算好每天的打卡章數
+  const recordCountsByDate = countDayReadingRecordsByDate(
+    state.readingLogs,
+    getPlanReadingRecordScope(state.activePlan)
+  );
+
   // 6. Generate single flat continuous array of dates within the sliding window
   let cells = [];
   let curr = new Date(windowStart);
@@ -2921,21 +2935,15 @@ function renderHorizontalDateStrip() {
         dayCell.setAttribute("aria-current", "date");
       }
 
-      const totalChapters = day.chapters ? day.chapters.length : 0;
-      let completedChapters = 0;
-
-      if (totalChapters > 0) {
-        day.chapters.forEach(ch => {
-          const currentRound = state.activePlan.currentRound || 1;
-          const taskRound = ch.round || currentRound;
-          const isRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
-
-          if (isRead) completedChapters++;
-        });
-      }
-
-      const isDayCompleted = totalChapters > 0 && completedChapters === totalChapters;
-      const isPartiallyCompleted = totalChapters > 0 && completedChapters > 0 && completedChapters < totalChapters;
+      const cellStatus = getPlanDayCellStatus(
+        state.activePlan,
+        day,
+        recordCountsByDate.get(getPlanDayDateKey(day)) || 0
+      );
+      const totalChapters = cellStatus.taskCount;
+      const completedChapters = cellStatus.doneCount;
+      const isDayCompleted = cellStatus.completed;
+      const isPartiallyCompleted = cellStatus.partial;
 
       const isPast = cell.year < todayYear ||
         (cell.year === todayYear && cell.month < todayMonth) ||
@@ -3105,6 +3113,111 @@ function renderPlanProgressUpgradeOverlay(plan = state.activePlan) {
   showCongratsModal(plan, availability.currentRound);
 }
 
+// ── 當天閱讀紀錄（#330）───────────────────────────────────────────────
+// 只算明確歸屬本計畫的打卡；章節順序以目前這遍的閱讀順序為準。
+function getPlanReadingRecordScope(plan) {
+  if (!plan) return { chapterOrder: [] };
+  const round = Number(plan.currentRound || 1);
+  const chapterOrder = [];
+  const seen = new Set();
+  const pushKey = ch => {
+    const key = `${ch.book}_${Number(ch.chapter)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    chapterOrder.push(key);
+  };
+  const days = Array.isArray(plan.days) ? plan.days : [];
+  days.forEach(day => (day.chapters || []).forEach(ch => {
+    if (Number(ch.round || round) === round) pushKey(ch);
+  }));
+  days.forEach(day => (day.chapters || []).forEach(pushKey));
+  return {
+    planId: plan.id || null,
+    globalPlanId: plan.globalPlanId || plan.global_plan_id || null,
+    presetKey: plan.presetKey || plan.preset_key || null,
+    chapterOrder
+  };
+}
+
+function getPlanDayDateKey(day) {
+  if (!day) return "";
+  const dayOfMonth = day.date ? Number(String(day.date).split("/")[1]) : NaN;
+  if (!day.year || !day.month || !Number.isFinite(dayOfMonth)) return "";
+  return `${day.year}-${String(day.month).padStart(2, "0")}-${String(dayOfMonth).padStart(2, "0")}`;
+}
+
+// 日曆格與當天清單共用：有本遍任務看任務完成度；沒有本遍任務時，那天有打卡紀錄就算完成。
+function getPlanDayCellStatus(plan, day, recordCount = 0) {
+  const round = Number((plan && plan.currentRound) || 1);
+  const tasks = (day && Array.isArray(day.chapters) ? day.chapters : [])
+    .filter(ch => Number(ch.round || round) === round);
+  const doneCount = tasks.filter(ch => Boolean(ch["isReadR" + round] || ch.isRead)).length;
+  return {
+    taskCount: tasks.length,
+    doneCount,
+    recordCount,
+    completed: tasks.length > 0 ? doneCount === tasks.length : recordCount > 0,
+    partial: tasks.length > 0 && doneCount > 0 && doneCount < tasks.length
+  };
+}
+
+// 進入目前這遍之前的日子（第 2 遍起才有）。
+function isPlanDayBeforeCurrentRound(plan, day) {
+  const round = Number((plan && plan.currentRound) || 1);
+  if (round <= 1 || !day || !Array.isArray(plan.days)) return false;
+  const firstDay = plan.days.find(item => (item.chapters || []).some(ch => Number(ch.round || round) === round));
+  return Boolean(firstDay) && Number(day.dayNum) < Number(firstDay.dayNum);
+}
+
+function renderPlanDayNotice(text) {
+  return `
+        <div style="text-align: center; padding: 2rem; background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 14px; color: var(--text-secondary); font-weight: 500; width: 100%;">
+          ${text}
+        </div>
+      `;
+}
+
+// 當天紀錄的章節用一般閱讀模式打開（不帶計畫情境）→ 讀到底不會自動打卡成舊的遍數。
+function openRecordChapterInReader(bookName, chapter) {
+  if (state.readerState) {
+    state.readerState.fromPlan = false;
+    state.readerState.planDayNum = null;
+    state.readerState.planRound = null;
+    state.readerState.planContextId = null;
+    state.readerState.returnTab = "plan-view";
+  }
+  openReaderPassage({ book: bookName, chapterFrom: Number(chapter) || 1, verseFrom: 1 });
+}
+
+function renderDayReadingRecordsSection(records) {
+  const copy = (window.APP_COPY && window.APP_COPY.plan) || {};
+  const section = document.createElement("section");
+  section.className = "plan-day-records";
+  section.setAttribute("aria-label", copy.dayRecordsTitle || "當天閱讀紀錄");
+  const rowsHtml = records.groups.map(group => {
+    const rangesHtml = group.ranges.map(range => {
+      const label = range.from === range.to
+        ? `${range.book} ${range.from}章`
+        : `${range.book} ${range.from}–${range.to}章`;
+      return `<button type="button" class="plan-day-records__range" data-book="${escapeHTML(range.book)}" data-chapter="${range.from}" aria-label="閱讀 ${escapeHTML(label)}">${escapeHTML(label)}</button>`;
+    }).join("");
+    return `
+      <li class="plan-day-records__row">
+        <span class="plan-day-records__round">第${group.round}遍</span>
+        <span class="plan-day-records__check" aria-hidden="true">${typeof renderIcon === "function" ? renderIcon("check", { size: "sm", className: "nlc-icon" }) : ""}</span>
+        <span class="plan-day-records__ranges">${rangesHtml}</span>
+      </li>`;
+  }).join("");
+  section.innerHTML = `
+    <h4 class="plan-day-records__title">${escapeHTML(copy.dayRecordsTitle || "當天閱讀紀錄")}</h4>
+    <ul class="plan-day-records__list">${rowsHtml}</ul>
+  `;
+  section.querySelectorAll(".plan-day-records__range").forEach(button => {
+    button.addEventListener("click", () => openRecordChapterInReader(button.dataset.book, button.dataset.chapter));
+  });
+  return section;
+}
+
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
 
   const container = document.getElementById("plan-tasks-list");
@@ -3150,6 +3263,21 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   const visibleChapters = (selectedDay.chapters || []).filter(ch =>
     Number(ch.round || currentRound) === currentRound
   );
+  // 當天實際讀了哪些章（#330）：已經列在本遍任務的不重複列。
+  const dayRecords = getDayReadingRecords(
+    state.readingLogs,
+    getPlanReadingRecordScope(state.activePlan),
+    getPlanDayDateKey(selectedDay),
+    visibleChapters.map(ch => `${ch.book}_${Number(ch.chapter)}_${Number(ch.round || currentRound)}`)
+  );
+  // 沒有本遍任務時：有紀錄 → 顯示紀錄；本遍開始前又沒紀錄 → 「無紀錄」；其餘才是休息日。
+  const dayEmptyKind = visibleChapters.length > 0
+    ? null
+    : dayRecords.total > 0
+      ? "records"
+      : (!selectedDay.isRestDay && isPlanDayBeforeCurrentRound(state.activePlan, selectedDay))
+        ? "no_records"
+        : "rest";
 
   // Render day subtitle
   const daySubtitle = document.getElementById("plan-day-subtitle");
@@ -3191,8 +3319,15 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // Render status pill for day
   const statusPill = document.getElementById("plan-day-status-pill");
   if (statusPill) {
-    if (!visibleChapters || visibleChapters.length === 0) {
-      statusPill.textContent = (window.APP_COPY && window.APP_COPY.plan.restDayPill) || "休息日";
+    const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
+    if (dayEmptyKind === "records") {
+      statusPill.textContent = String(planCopy.dayRecordsPill || "已讀 {count} 章").replace("{count}", dayRecords.total);
+      statusPill.className = "stat-badge stat-badge--success";
+    } else if (dayEmptyKind === "no_records") {
+      statusPill.textContent = planCopy.dayNoRecordsPill || "無紀錄";
+      statusPill.className = "stat-badge stat-badge--neutral";
+    } else if (dayEmptyKind === "rest") {
+      statusPill.textContent = planCopy.restDayPill || "休息日";
       statusPill.className = "stat-badge stat-badge--brand";
     } else {
       const allDone = visibleChapters.every(ch => {
@@ -3213,11 +3348,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   // Update completion check on the active date card in the calendar dynamically
   const activeCard = document.querySelector(`.plan-day-cell[data-day-num="${state.selectedPlanDay}"]`);
   if (activeCard && state.activePlan) {
-    const isDayCompleted = visibleChapters && visibleChapters.length > 0 && visibleChapters.every(ch => {
-      const currentRound = state.activePlan.currentRound || 1;
-      const taskRound = ch.round || currentRound;
-      return Boolean(ch["isReadR" + taskRound] || ch.isRead);
-    });
+    const isDayCompleted = getPlanDayCellStatus(state.activePlan, selectedDay, dayRecords.total).completed;
 
     if (isDayCompleted) {
       activeCard.classList.add("completed");
@@ -3252,31 +3383,34 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   }
 
   // Render items
-  if (!visibleChapters || visibleChapters.length === 0) {
+  if (dayEmptyKind) {
     // 區分「這一天真的是休息日」與「整個計畫排程壞了（每一天都空）」——後者不能
     // 用休息日文案蓋過去，否則跟正常休息日分不出來（桃園延後梯次事故）。
     const planDays = Array.isArray(state.activePlan && state.activePlan.days) ? state.activePlan.days : [];
     const scheduleIsBroken = planDays.length > 0
       && !planDays.some(day => Array.isArray(day.chapters) && day.chapters.length > 0);
+    const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
     if (scheduleIsBroken) {
       console.error(
         `[plan] 計畫「${state.activePlan.name}」(${state.activePlan.id}) 每一天都沒有章節，排程尚未就緒。`
       );
-      container.innerHTML = `
-        <div style="text-align: center; padding: 2rem; background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 14px; color: var(--text-secondary); font-weight: 500; width: 100%;">
-          此計畫的每日進度尚未就緒，請聯絡教會同工。
-        </div>
-      `;
+      container.innerHTML = renderPlanDayNotice("此計畫的每日進度尚未就緒，請聯絡教會同工。");
+    } else if (dayEmptyKind === "records") {
+      container.appendChild(renderDayReadingRecordsSection(dayRecords));
+    } else if (dayEmptyKind === "no_records") {
+      container.innerHTML = renderPlanDayNotice(planCopy.dayNoRecordsBanner || "這天沒有閱讀紀錄");
     } else {
-      container.innerHTML = `
-        <div style="text-align: center; padding: 2rem; background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 14px; color: var(--text-secondary); font-weight: 500; width: 100%;">
-          ${(window.APP_COPY && window.APP_COPY.plan.restDayBanner) || "今天是補讀或靈修休息日，好好親近神吧"}
-        </div>
-      `;
+      container.innerHTML = renderPlanDayNotice(planCopy.restDayBanner || "今天是補讀或靈修休息日，好好親近神吧");
     }
     hideDailyQuizSection();
     return;
   }
+
+  // 速讀計畫照順序打卡（#331）：標出「下一章」，還沒輪到的章上鎖（仍可點開閱讀）。
+  const roundCheckState = isSequentialCheckPlan(state.activePlan)
+    ? getRoundCheckState(state.activePlan.days, currentRound)
+    : null;
+  const nextCheckChapter = roundCheckState && roundCheckState.next;
 
   visibleChapters.forEach(ch => {
 
@@ -3290,19 +3424,36 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
       : "";
 
     const isCurrentRead = Boolean(ch["isReadR" + taskRound] || ch.isRead);
+    const isNextChapter = Boolean(nextCheckChapter
+      && nextCheckChapter.book === ch.book
+      && Number(nextCheckChapter.chapter) === Number(ch.chapter));
+    const isLockedChapter = Boolean(roundCheckState) && !isCurrentRead && !isNextChapter;
+    if (isNextChapter) taskItem.classList.add("plan-task-item--next");
+    if (isLockedChapter) taskItem.classList.add("plan-task-item--locked");
+    const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
+    const checkboxContent = isLockedChapter && typeof renderIcon === "function"
+      ? renderIcon("lock", { size: "sm", className: "nlc-icon" })
+      : content;
+    const toggleLabel = isLockedChapter
+      ? `${ch.book} ${ch.chapter}章，${planCopy.sequentialLockedLabel || "請先讀完前面的章節"}`
+      : `${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}`;
+    const nextLabelHtml = isNextChapter
+      ? `<span class="task-next-label">${planCopy.sequentialNextLabel || "下一章"}</span>`
+      : "";
     taskItem.innerHTML = `
       <button type="button"
               class="task-read-toggle"
               data-is-current-read="${isCurrentRead ? 'true' : 'false'}"
               aria-pressed="${isCurrentRead ? 'true' : 'false'}"
-              aria-label="${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}">
-        <span class="task-checkbox ${cssClass}" aria-hidden="true">
-          ${content}
+              ${isLockedChapter ? 'aria-disabled="true"' : ''}
+              aria-label="${toggleLabel}">
+        <span class="task-checkbox ${cssClass}${isLockedChapter ? ' task-checkbox--locked' : ''}" aria-hidden="true">
+          ${checkboxContent}
         </span>
       </button>
       <button type="button" class="task-open-button" aria-label="閱讀 ${ch.book} ${ch.chapter}章">
         <span class="task-title">
-          ${ch.book} ${ch.chapter}章
+          ${ch.book} ${ch.chapter}章${nextLabelHtml}
         </span>
         ${roundLabelHtml}
         <span class="task-arrow" aria-hidden="true">
@@ -3327,11 +3478,10 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     openButton.addEventListener("click", openChapter);
     container.appendChild(taskItem);
   });
+  if (dayRecords.total > 0) container.appendChild(renderDayReadingRecordsSection(dayRecords));
   void renderDailyQuizSection(state.activePlan, selectedDay, currentRequestId);
 
-  // 停在「本遍最後一個閱讀日」且已勾完、卻還沒 100% → 提醒前面有漏（本 session 一遍只跳一次）
-  maybePromptMissedRoundChapters(state.activePlan);
-  // 常駐「進入下一遍」按鈕（可重複手動觸發檢查）
+  // 常駐「進入下一遍」按鈕：本遍讀完就出現
   renderRoundAdvanceButton(state.activePlan, selectedDay);
 }
 
@@ -3834,6 +3984,13 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
+  // 速讀計畫照順序打卡（#331）：只能勾下一章、只能取消最後勾的那一章。
+  const sequentialBlock = getSequentialCheckBlock(state.activePlan, book, chapter, currentRound, willBeChecked);
+  if (sequentialBlock) {
+    showToast(formatSequentialCheckMessage(sequentialBlock, (window.APP_COPY && window.APP_COPY.plan) || {}));
+    return;
+  }
+
   if (checkboxEl) {
     checkboxEl.setAttribute("aria-pressed", String(willBeChecked));
     checkboxEl.setAttribute("aria-label", `${book} ${chapter}章，${willBeChecked ? "取消已讀" : "標記已讀"}`);
@@ -4230,9 +4387,10 @@ window.triggerPlanUpgradeFlow = async function() {
   }
 };
 
-// ── 最後一天漏讀提醒 ─────────────────────────────────────────────
-// 使用者讀到「本遍最後一個閱讀日」、卻還沒 100% 時，前面一定有漏勾的章節。
-// 不提醒的話他會以為「明明讀完了卻進不了下一遍 ＝ 系統壞了」。
+// ── 進入下一遍 ───────────────────────────────────────────────────
+// 速讀計畫照順序打卡（#331）後，「最後一章勾完」就等於「整遍讀完」，
+// 不再需要漏勾清單。只留一行防呆：舊版 app、多裝置、離線佇列仍可能留下缺口，
+// 進入下一遍前確認整遍讀完，沒讀完就提示從哪一章開始。
 
 function getCurrentRoundLastReadingDay(plan) {
   if (!plan || !Array.isArray(plan.days)) return null;
@@ -4244,122 +4402,19 @@ function getCurrentRoundLastReadingDay(plan) {
   return null;
 }
 
-function getCurrentRoundMissedChapters(plan) {
-  if (!plan || !Array.isArray(plan.days)) return [];
-  const round = plan.currentRound || 1;
-  const missed = [];
-  plan.days.forEach(day => {
-    (day.chapters || []).forEach(ch => {
-      if (Number(ch.round || round) !== round) return;
-      if (!ch["isReadR" + round]) {
-        missed.push({ book: ch.book, chapter: ch.chapter, dayNum: day.dayNum, date: day.date });
-      }
-    });
-  });
-  return missed;
+// 本遍還沒讀完 → 回傳提示文字；讀完 → null。
+function getRoundIncompleteMessage(plan) {
+  if (!plan || !Array.isArray(plan.days)) return null;
+  const checkState = getRoundCheckState(plan.days, plan.currentRound || 1);
+  if (checkState.isComplete || !checkState.next) return null;
+  const remaining = checkState.total - checkState.readCount;
+  const nextLabel = `${checkState.next.book} ${checkState.next.chapter}章`;
+  const template = (window.APP_COPY && window.APP_COPY.plan && window.APP_COPY.plan.roundIncomplete)
+    || "還有 {count} 章沒讀，請從 {chapter} 開始";
+  return template.replace("{count}", remaining).replace("{chapter}", nextLabel);
 }
 
-function maybePromptMissedRoundChapters(plan) {
-  if (!plan || !Array.isArray(plan.days)) return;
-  const round = plan.currentRound || 1;
-
-  // 本遍已 100% → 不是這個情境（會走「進入下一遍」的恭喜 modal）
-  const total = plan.currentRoundTotalChapters || 0;
-  const done = plan.completedChapters || 0;
-  if (plan.isPlanCompleted || Number(plan.progress) >= 100 || (total > 0 && done >= total)) return;
-
-  // 本 session 這一遍已提醒過 → 不再跳
-  if (plan.missedRoundPromptedRound === round) return;
-
-  // 「本遍最後一個閱讀日」還沒全部勾完 → 使用者還在計畫中間，不打擾
-  const lastDay = getCurrentRoundLastReadingDay(plan);
-  if (!lastDay) return;
-  const lastDayDone = (lastDay.chapters || [])
-    .filter(ch => Number(ch.round || round) === round)
-    .every(ch => Boolean(ch["isReadR" + round]));
-  if (!lastDayDone) return;
-
-  const missed = getCurrentRoundMissedChapters(plan);
-  if (missed.length === 0) return; // 保險：有洞才會 progress<100，理論上到不了這
-
-  plan.missedRoundPromptedRound = round;
-  showMissedChaptersModal(plan, round, missed);
-}
-
-function showMissedChaptersModal(plan, round, missed) {
-  const oldModal = document.getElementById("missed-chapters-modal");
-  if (oldModal) oldModal.remove();
-
-  const roundLabel = round === 1 ? "第一遍" : `第${round}遍`;
-  const expired = isPlanExpired(plan);
-
-  const byDay = new Map();
-  missed.forEach(m => {
-    if (!byDay.has(m.dayNum)) byDay.set(m.dayNum, { date: m.date, items: [] });
-    byDay.get(m.dayNum).items.push(`${m.book}${m.chapter}`);
-  });
-  const groups = [...byDay.values()];
-  const shownGroups = groups.slice(0, 10);
-  const shownCount = shownGroups.reduce((sum, g) => sum + g.items.length, 0);
-  const restCount = missed.length - shownCount;
-  const listHtml = shownGroups.map(g =>
-    `<li><span class="missed-chapters-date">${escapeHTML(g.date || "")}</span><span class="missed-chapters-items">${escapeHTML(g.items.join("、"))}</span></li>`
-  ).join("") + (restCount > 0 ? `<li class="missed-chapters-more">…還有 ${restCount} 章</li>` : "");
-
-  const firstMissedDay = missed[0].dayNum;
-
-  const modal = document.createElement("div");
-  modal.id = "missed-chapters-modal";
-  modal.className = "congrats-modal-overlay";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "true");
-  modal.setAttribute("aria-labelledby", "missed-chapters-title");
-  modal.innerHTML = `
-    <div class="congrats-modal-box">
-      <span class="plan-upgrade-gate__icon" aria-hidden="true">
-        <span class="nlc-icon nlc-icon--lg" data-icon="bookOne"></span>
-      </span>
-      <h3 class="congrats-title" id="missed-chapters-title">還差 ${missed.length} 章才能${expired ? "完成本遍" : "進入下一遍"}</h3>
-      <p class="congrats-desc-secondary">你已經讀到${roundLabel}最後一天了，但前面有 ${missed.length} 章還沒打卡完成${expired ? "。計畫時間已過，補讀完可計入補讀章數，但無法再進入下一遍。" : "。補讀完這些章節，「進入下一遍」就會出現。"}</p>
-      <ul class="missed-chapters-list">${listHtml}</ul>
-      <div class="congrats-actions">
-        <button id="btn-missed-goto" type="button" class="congrats-upgrade-btn">去補讀第一個</button>
-        <button id="btn-missed-later" type="button" class="congrats-later-btn">知道了</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  if (typeof hydrateIcons === "function") hydrateIcons(modal);
-
-  modal.querySelector("#btn-missed-later")?.addEventListener("click", () => modal.remove());
-  modal.querySelector("#btn-missed-goto")?.addEventListener("click", () => {
-    modal.remove();
-    const day = (plan.days || []).find(d => d.dayNum === firstMissedDay);
-    if (!day) return;
-    state.selectedPlanDay = firstMissedDay;
-    state.calendarViewYear = day.year || new Date().getFullYear();
-    state.calendarViewMonth = day.month || (new Date().getMonth() + 1);
-    // 日曆整段一次渲染，目標格已在 DOM → 只切 active class + 捲動容器內部，不重繪、不整頁跳
-    const prev = document.querySelector(".plan-day-cell.active");
-    if (prev) { prev.classList.remove("active"); prev.setAttribute("aria-selected", "false"); }
-    const target = document.querySelector(`.plan-day-cell[data-day-num="${firstMissedDay}"]`);
-    if (target) {
-      target.classList.add("active");
-      target.setAttribute("aria-selected", "true");
-      const scroller = target.closest(".calendar-scroll-container");
-      if (scroller) {
-        requestAnimationFrame(() => {
-          scroller.scrollTop = target.offsetTop - (scroller.clientHeight / 2) + (target.offsetHeight / 2);
-        });
-      }
-    }
-    if (typeof renderPlanScheduleTracker === "function") renderPlanScheduleTracker(true);
-  });
-}
-
-// 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」且該日已勾完時出現，
-// 不管整體進度是否 100%。按下時即時重算漏章：
-//   有漏 → 再跳一次漏章清單（略過 session 旗標，這是使用者主動點的）
-//   沒漏 → 走既有 triggerPlanUpgradeFlow（過期計畫則只結算本遍）
+// 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」且該日已勾完時出現。
 function renderRoundAdvanceButton(plan, selectedDay) {
   const container = document.getElementById("plan-tasks-list");
   if (!container) return;
@@ -4381,15 +4436,14 @@ function renderRoundAdvanceButton(plan, selectedDay) {
   footer.className = "plan-round-advance-footer";
   footer.innerHTML = `
     <button id="btn-plan-round-advance" type="button" class="congrats-upgrade-btn">${expired ? "結算本遍" : "進入下一遍"}</button>
-    <p class="plan-round-advance-hint">讀完最後一天了嗎？按這裡檢查前面有沒有漏勾，${expired ? "並結算本遍" : "沒漏就進入下一遍"}。</p>
   `;
   container.appendChild(footer);
 
   footer.querySelector("#btn-plan-round-advance")?.addEventListener("click", () => {
     if (typeof calculatePlanProgress === "function") calculatePlanProgress();
-    const missed = getCurrentRoundMissedChapters(plan);
-    if (missed.length > 0) {
-      showMissedChaptersModal(plan, round, missed);
+    const incompleteMessage = getRoundIncompleteMessage(plan);
+    if (incompleteMessage) {
+      showToast(incompleteMessage);
       return;
     }
     if (expired) {
@@ -4409,10 +4463,7 @@ async function handleRoundCompletion(plan) {
   const currentRoundCompleted = plan.completedChapters || 0;
   const isCurrentRoundCompleted = currentRoundTotal > 0 && currentRoundCompleted >= currentRoundTotal;
 
-  if (!isCurrentRoundCompleted) {
-    maybePromptMissedRoundChapters(plan);
-    return;
-  }
+  if (!isCurrentRoundCompleted) return;
 
   // Prevent multiple triggers for the same round completion in the same session
   if (plan.lastPromptedRound === currentRound) return;
@@ -4956,6 +5007,8 @@ async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
   // Offline reading mode is read-only for progress — skip silently, matching
   // this auto-mark flow's existing "no intrusive toast" design.
   if (state.offlineMode) return false;
+  // 照順序打卡（#331）：還沒輪到的章讀到底不記錄，也不跳提示。
+  if (getSequentialCheckBlock(task.plan, task.chapter.book, task.chapter.chapter, task.round, true)) return false;
 
   const readKey = `isReadR${task.round}`;
   const previousRoundRead = Boolean(task.chapter[readKey]);

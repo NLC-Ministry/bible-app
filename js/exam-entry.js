@@ -63,8 +63,7 @@ const setBoot = (msg) => { if (boot) boot.textContent = msg; };
 
   const qs = new URLSearchParams(location.search);
   const paperId = qs.get('paper') || null;
-  const preview = qs.get('preview') === '1' || qs.get('preview') === 'true';
   const attemptKind = qs.get('attempt') === 'practice' ? 'practice' : 'official';
   boot?.remove();
-  mountExamRunner({ paperId, standalone: true, preview, attemptKind });
+  mountExamRunner({ paperId, standalone: true, attemptKind });
 })();

@@ -5,7 +5,7 @@
 
 -- (1) 有幾份「模擬測試卷」、哪份 test / 哪份 live
 SELECT pr.id, pr.title, pr.mode, pr.status,
-       pr.auto_score_enabled, pr.results_published_at, pr.pushed_from_id,
+       pr.results_published_at, pr.pushed_from_id,
        pr.total_points,
        (SELECT COUNT(*) FROM public.exam_questions q WHERE q.paper_id = pr.id) AS questions,
        (SELECT COUNT(*) FROM public.exam_attempts  a WHERE a.paper_id = pr.id) AS attempts

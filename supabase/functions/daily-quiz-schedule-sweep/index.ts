@@ -1,8 +1,8 @@
-// 小測驗排程發佈掃描器（migration 0189）。由 pg_cron 每 5 分鐘呼叫一次，找出
-// 時間到了的 quiz_publication_schedules 並真正發佈。verify_jwt = false ——
+// 小測驗自動發佈掃描器（migration 0189 建立；#306 起負責每天 00:00 的自動發佈，
+// #308 拿掉舊的排程發佈）。由 pg_cron 每 5 分鐘呼叫一次。verify_jwt = false ——
 // 用共享密鑰 header 守門，不是 Logto/Supabase token。
 //
-//   POST { }   → 呼叫 run_daily_quiz_schedule_sweep()，回傳處理/發佈/失敗筆數
+//   POST { }   → 呼叫 run_daily_quiz_schedule_sweep()，回傳 { autoPublish }
 //
 // 需要的 secrets：
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY（平台內建）

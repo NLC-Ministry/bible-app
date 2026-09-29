@@ -2,7 +2,7 @@ import {
   getUserOnboardingBlock
 } from "./member-journey.mjs";
 import { isCampaignStageKind, isCanonicalCampaignStageKind } from "./data/campaign-stage-kinds.mjs";
-import { segmentScheduleDaysForRoundCount } from "./data/current-round-progress.mjs";
+import { segmentScheduleDaysForRoundCount, toLocalDateKey } from "./data/current-round-progress.mjs";
 
 // ============================================================
 // utils.js — Shared utilities used across all view controllers
@@ -1853,7 +1853,7 @@ function generateChurchCampaignPlanObject(definition, presetKey, scheduleSetting
   // current_round_started_at，而不是下一輪第一次打卡的日期或今天——只有
   // 舊資料還沒有這個欄位時才退回舊邏輯。
   const confirmedRoundEntryAtCampaign = scheduleSettings && scheduleSettings.currentRoundStartedAt
-    ? new Date(String(scheduleSettings.currentRoundStartedAt).slice(0, 10) + "T00:00:00")
+    ? new Date(toLocalDateKey(scheduleSettings.currentRoundStartedAt) + "T00:00:00")
     : null;
   const hasConfirmedRoundEntryCampaign = confirmedRoundEntryAtCampaign && !Number.isNaN(confirmedRoundEntryAtCampaign.getTime());
   const confirmedRoundEntryOffsetCampaign = hasConfirmedRoundEntryCampaign
@@ -1865,7 +1865,7 @@ function generateChurchCampaignPlanObject(definition, presetKey, scheduleSetting
   for (let round = 1; round <= completedRoundCount; round += 1) {
     const offsets = new Map();
     matchingLogs.filter(log => Number(log.round || 1) === round).forEach(log => {
-      const readDate = new Date(String(log.read_at || log.readAt || "").slice(0, 10) + "T00:00:00");
+      const readDate = new Date(toLocalDateKey(log.read_at || log.readAt) + "T00:00:00");
       if (Number.isNaN(readDate.getTime())) return;
       const offset = Math.max(0, Math.min(lastOffset, Math.floor((readDate - startDate) / 86400000)));
       offsets.set(`${log.book}_${log.chapter}`, offset);
@@ -1881,7 +1881,7 @@ function generateChurchCampaignPlanObject(definition, presetKey, scheduleSetting
       const nextRoundOffsets = matchingLogs
         .filter(log => Number(log.round || 1) === round + 1)
         .map(log => {
-          const readDate = new Date(String(log.read_at || log.readAt || "").slice(0, 10) + "T00:00:00");
+          const readDate = new Date(toLocalDateKey(log.read_at || log.readAt) + "T00:00:00");
           if (Number.isNaN(readDate.getTime())) return null;
           return Math.max(0, Math.min(lastOffset, Math.floor((readDate - startDate) / 86400000)));
         })
@@ -2138,7 +2138,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
   todayZeroForRounds.setHours(0, 0, 0, 0);
   const todayOffsetForRounds = Math.max(1, Math.floor((todayZeroForRounds - start) / (1000 * 60 * 60 * 24)) + 1);
   const confirmedRoundEntryAt = scheduleSettings && scheduleSettings.currentRoundStartedAt
-    ? new Date(String(scheduleSettings.currentRoundStartedAt).slice(0, 10) + "T00:00:00")
+    ? new Date(toLocalDateKey(scheduleSettings.currentRoundStartedAt) + "T00:00:00")
     : null;
   const hasConfirmedRoundEntry = confirmedRoundEntryAt && !Number.isNaN(confirmedRoundEntryAt.getTime());
 
@@ -2153,8 +2153,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
       const nextRoundLogs = (state.readingLogs || []).filter(l => (l.round || 1) === r + 1);
       if (nextRoundLogs.length > 0) {
         const minDateStr = nextRoundLogs.reduce((min, log) => log.read_at < min ? log.read_at : min, nextRoundLogs[0].read_at);
-        const minDate = new Date(minDateStr.substring(0, 10));
-        minDate.setHours(0, 0, 0, 0);
+        const minDate = new Date(toLocalDateKey(minDateStr) + "T00:00:00");
         d_r = Math.max(1, Math.floor((minDate - start) / (1000 * 60 * 60 * 24)) + 1);
         d_r = Math.max(d_r, prevD + 1);
       } else {

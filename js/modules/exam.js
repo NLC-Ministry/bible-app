@@ -1980,7 +1980,7 @@ function gradeCard(it, grouped = false, paperId = "") {
 }
 
 // ────────────────────────────────────────────────────────────── 滿版作答頁
-export function mountExamRunner({ paperId = null, standalone = false, preview = false, attemptKind = "official" } = {}) {
+export function mountExamRunner({ paperId = null, standalone = false, attemptKind = "official" } = {}) {
   document.getElementById("exam-fullscreen")?.remove();
   const host = document.createElement("div");
   host.id = "exam-fullscreen";
@@ -1998,17 +1998,16 @@ export function mountExamRunner({ paperId = null, standalone = false, preview = 
   document.body.appendChild(host);
   try { document.body.dataset.examOpen = "1"; document.body.style.overflow = "hidden"; } catch (_) {}
 
-  const runner = new ExamRunner(host, paperId, standalone, preview, attemptKind);
+  const runner = new ExamRunner(host, paperId, standalone, attemptKind);
   host.querySelector("#exam-back").addEventListener("click", () => runner.requestExit());
   runner.boot();
   return runner;
 }
 
 class ExamRunner {
-  constructor(host, paperId, standalone = false, preview = false, attemptKind = "official") {
+  constructor(host, paperId, standalone = false, attemptKind = "official") {
     this.host = host;
     this.standalone = standalone;
-    this.preview = !!preview;
     this.attemptKind = attemptKind === "practice" ? "practice" : "official";
     this.el = host.querySelector("#exam-fs-inner");
     this.titleEl = host.querySelector("#exam-fs-title");
@@ -2057,10 +2056,7 @@ class ExamRunner {
 
   async boot() {
     this.el.innerHTML = '<div class="admin-user-directory__empty">載入測驗…</div>';
-    const res = await db.getExamForAttempt(this.paperId, {
-      preview: this.preview,
-      attemptKind: this.attemptKind
-    });
+    const res = await db.getExamForAttempt(this.paperId, { attemptKind: this.attemptKind });
     if (!res.success) {
       // 網路 / 功能未開等錯誤：不清 active 旗標，保留稍後自動重試的機會
       this.el.innerHTML = `<div class="admin-user-directory__empty">${esc(res.message)}
@@ -2075,16 +2071,6 @@ class ExamRunner {
     if (this.titleEl && this.paper) {
       this.titleEl.textContent = this.paper.title
         + (isRehearsalPaper(this.paper) ? "（試作）" : "");
-    }
-
-    // 後台預覽：唯讀呈現整卷題目，不建 attempt、不倒數、不送出、不跳結果畫面
-    // （不動 exam_active_paper 旗標，以免影響使用者自己可能進行中的作答續作）
-    if (this.preview || d.preview) {
-      this.attempt = { status: "preview", paperSnapshot: { questions: d.previewQuestions || [] }, layout: {} };
-      this.deadlineTs = 0;
-      this.hydrateFromAttempt();
-      this.renderRunner();
-      return;
     }
 
     if (d.attempt) {
@@ -2161,7 +2147,7 @@ class ExamRunner {
 
   // 關閉獨立測驗頁：優先「上一頁」回到進入前的分頁（/ 允許 bfcache 時會原樣瞬間還原
   // SPA 狀態，見 docs/exam-close-ux-analysis.md O1），其次 ?return=。
-  // 都沒有時（target="_blank" 開的預覽 / 作答分頁）——不冷啟整個 app，改給收尾卡。
+  // 都沒有時（target="_blank" 開的作答分頁）——不冷啟整個 app，改給收尾卡。
   _leaveStandalone() {
     let ret = null;
     let isPopup = false;
@@ -2172,7 +2158,7 @@ class ExamRunner {
       isPopup = qs.get("popup") === "1";
     } catch (_) { ret = null; }
 
-    // 後台用新分頁開的預覽 / 作答（popup=1）：直接給收尾卡，不冷啟 app。
+    // 後台用新分頁開的作答（popup=1）：直接給收尾卡，不冷啟 app。
     if (isPopup && !ret) {
       try { window.close(); } catch (_) {}
       this._renderStandaloneEndCard();
@@ -2396,7 +2382,6 @@ class ExamRunner {
         <button type="button" id="exam-pledge-start" class="primary-btn" style="width:100%;" disabled>
           開始作答（${this.paper.durationMinutes} 分鐘）
         </button>
-        ${this.openState === "preview" ? '<p class="exam-pledge__note">（預覽模式：只看題目，不會建立作答）</p>' : ""}
       </div>`;
 
     const nameEl = this.el.querySelector("#exam-pledge-name");
@@ -2437,12 +2422,7 @@ class ExamRunner {
       </section>`;
     }).join("");
 
-    const bar = this.preview
-      ? `<div class="exam-submit-bar">
-           <p class="exam-q__note">預覽模式：此畫面僅供檢視題目，不會計時、不會建立作答紀錄。</p>
-           <button type="button" id="exam-preview-close" class="secondary-btn" style="width:100%;">關閉預覽</button>
-         </div>`
-      : this.attemptKind === "practice"
+    const bar = this.attemptKind === "practice"
         ? `<div class="exam-submit-bar exam-submit-bar--practice">
              <p class="exam-q__note">複習模式｜不列入正式成績。答案會自動儲存，原活動結束後 24 小時內可再次進入修改。</p>
              <button type="button" id="exam-practice-finish" class="secondary-btn">暫時完成練習</button>
@@ -2454,12 +2434,6 @@ class ExamRunner {
 
     if (typeof hydrateIcons === "function") hydrateIcons(this.el);
     this.el.querySelectorAll("[data-exam-q]").forEach((node) => this.bindQuestion(node, layout));
-
-    if (this.preview) {
-      if (this.timerEl) this.timerEl.hidden = true;
-      this.el.querySelector("#exam-preview-close")?.addEventListener("click", () => this.destroy());
-      return;
-    }
 
     if (this.attemptKind === "practice") {
       if (this.timerEl) this.timerEl.hidden = true;
@@ -2815,7 +2789,6 @@ class ExamRunner {
   _hasUnsynced() { return this.dirtyIds.size > 0 || this.inflightIds.size > 0; }
 
   markDirty(qid) {
-    if (this.preview) return;
     if (qid) this._markIdDirty(qid);
     else Object.keys(this.RESP).forEach((k) => this._markIdDirty(k));   // 保底：不知道哪題就全標
     this.persistLocal();
@@ -2835,7 +2808,7 @@ class ExamRunner {
   // 上傳中又有新改動 → 排隊，這輪結束立刻再跑一輪。回傳的 promise 會等排隊的那輪也跑完。
   // opts.force：送出流程自己呼叫時略過 submitting 檢查。
   flushSave(opts = {}) {
-    if (!this.attempt || this.attempt.status !== "in_progress" || this.preview) return Promise.resolve();
+    if (!this.attempt || this.attempt.status !== "in_progress") return Promise.resolve();
     if (this.submitting && !opts.force) return Promise.resolve();
     if (this._flushPromise) { this._flushQueued = true; return this._flushPromise; }
     const run = async () => {
@@ -2903,7 +2876,7 @@ class ExamRunner {
   _renderSync() {
     const el = this.syncEl;
     if (!el) return;
-    if (this.preview || !this.attempt || this.attempt.status !== "in_progress") { el.hidden = true; return; }
+    if (!this.attempt || this.attempt.status !== "in_progress") { el.hidden = true; return; }
     el.hidden = false;
     const pending = new Set([...this.dirtyIds, ...this.inflightIds]).size;
     let text, tone;
@@ -3053,7 +3026,7 @@ class ExamRunner {
     //    自動呼叫 exam_backfill_shortanswer 補回；仍缺的把本機版塞進 answer 物件，
     //    由 examResultRow 顯示 + 標注，讓使用者至少看得到、能截圖。 ──
     let lostShortInfo = null;   // null | { count, state: "ok" | "partial" | "failed" }
-    if (!this.preview && this.attempt && this.attempt.id) {
+    if (this.attempt && this.attempt.id) {
       const localResp = this._readLocalMirror();
       const isEmptyResp = (v) => v == null || (typeof v === "string" && v.trim() === "");
       const findLost = (list) => (Array.isArray(list) ? list : []).filter((a) =>

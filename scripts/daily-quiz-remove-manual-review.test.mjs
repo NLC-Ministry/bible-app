@@ -26,13 +26,12 @@ describe("0196: AI generation auto-approves, no manual review", () => {
     expect(edge).not.toContain('"review_daily_quiz"');
   });
 
-  it("keeps question editing available up to publish time (not locked by review anymore)", () => {
-    // renderAdminQuizQuestionEditor's `locked` param now always gets false
-    // from the review-card call site — editing is only ever blocked by the
-    // backend's "already published" check, not by an approval flag.
-    expect(admin).toContain("renderAdminQuizQuestionEditor(quiz, false)");
-    expect(admin).toContain("編輯題目");
-    expect(admin).toContain('data-quiz-action="regenerate"');
+  it("#308: the per-question AI editor is gone; changing a day's questions goes through 換一版／自訂題目", () => {
+    expect(admin).not.toContain("renderAdminQuizQuestionEditor");
+    expect(admin).not.toContain("update_daily_quiz_questions");
+    expect(edge).not.toContain('"update_daily_quiz_questions"');
+    expect(edge).toContain('"swap_daily_quiz_version"');
+    expect(edge).toContain('"set_daily_quiz_day_custom"');
   });
 });
 
