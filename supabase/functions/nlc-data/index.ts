@@ -429,6 +429,12 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
 const READING_STATS_RPC_FUNCTIONS = new Set([
   "get_my_plan_chapter_total"
 ]);
+// 打卡／取消打卡（#355）：所有打卡規則都在這兩支 SQL 裡。它們以 p_user_id 決定寫誰的
+// 紀錄，所以 p_user_id 一律蓋成 Logto 驗證過的 profile.id，前端傳什麼都不算。
+const CHECK_IN_RPC_FUNCTIONS = new Set([
+  "record_chapter_read",
+  "unrecord_chapter_read"
+]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -443,6 +449,7 @@ const RPC_FUNCTIONS = new Set([
   ...GROUP_MEETING_RPC_FUNCTIONS,
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
   ...READING_STATS_RPC_FUNCTIONS,
+  ...CHECK_IN_RPC_FUNCTIONS,
   ...DEVOTION_GROUP_FEATURE_RPC_FUNCTIONS,
   ...ISSUE_RPC_FUNCTIONS
 ]);
@@ -958,7 +965,19 @@ Deno.serve(async (req: Request) => {
       // current_profile_id() (NULL under the service-role key nlc-data
       // runs on) and raises "profile_required".
       let rpcArgs: Record<string, unknown>;
-      if (functionName === "get_org_structure_tree") {
+      if (CHECK_IN_RPC_FUNCTIONS.has(functionName)) {
+        // 只帶白名單參數，p_user_id 最後蓋上，client 帶的 p_user_id / p_actor_id 都被丟掉。
+        const clientArgs = (body.args || {}) as Record<string, unknown>;
+        rpcArgs = {
+          p_plan_id: clientArgs.p_plan_id ?? null,
+          p_book: clientArgs.p_book ?? null,
+          p_chapter: clientArgs.p_chapter ?? null,
+          p_round: clientArgs.p_round ?? null,
+          ...(functionName === "record_chapter_read" ? { p_read_at: clientArgs.p_read_at ?? null } : {}),
+          p_client_id: clientArgs.p_client_id ?? null,
+          p_user_id: profile.id,
+        };
+      } else if (functionName === "get_org_structure_tree") {
         // Pass the caller's role + managed scope resolved the SAME way
         // applyForcedScope resolves it for profiles selects, so the RPC only
         // filters and the two paths can never diverge.

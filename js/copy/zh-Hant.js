@@ -35,6 +35,16 @@ window.APP_COPY = {
     sequentialUncheckBlocked: "只能取消最後勾的那一章（{chapter}）",
     roundIncomplete: "還有 {count} 章沒讀，請從 {chapter} 開始",
     syncFail: "進度沒同步成功，等一下再試試",
+    // 打卡 RPC 的 reason（js/data/check-in-reasons.mjs，#355）
+    checkInReasons: {
+      not_owner: "這不是你的計畫，無法記錄",
+      invalid_chapter: "章節資料不正確，無法記錄",
+      stage_not_open: "這個階段尚未開放，無法記錄已讀",
+      plan_closed: "計畫已截止，無法再修改打卡",
+      old_round: "這是已完成的舊一遍，不能再修改",
+      already_read: "這章已經記錄過了",
+      already_unread: "這章本來就沒有記錄",
+    },
     autoRecordDone: "✓ 已記錄到〈{plan}〉",
     autoRecordPending: "讀到這裡停一下就會記錄",
     autoRecordNotRecorded: "未記錄：{reason}",
