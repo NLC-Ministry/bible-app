@@ -26,8 +26,9 @@ describe("nlc-data query composition", () => {
     const scopeIndex = source.indexOf(
       "({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));"
     );
+    // #351: ordering moved into the shared applyOrder() helper (multi-column).
     const orderIndex = source.indexOf(
-      "query = query.order(body.order.column"
+      "query = applyOrder(query, body);"
     );
 
     expect(scopeIndex).toBeGreaterThan(-1);
