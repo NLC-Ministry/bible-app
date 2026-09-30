@@ -689,6 +689,21 @@ function forceUserPayload(table: string, payload: any, profileId: string, action
   return payload;
 }
 
+// Multi-column ORDER BY (#351). The client sends every chained .order() in
+// `orders` and the first one again in `order`; older clients send only
+// `order`. Paginated reads rely on the trailing unique key (id, or
+// team_id + user_id) so each .range() page slices the same row order.
+function applyOrder(query: any, spec: { order?: any; orders?: any }) {
+  const orders = Array.isArray(spec.orders) && spec.orders.length > 0
+    ? spec.orders
+    : (spec.order ? [spec.order] : []);
+  for (const entry of orders) {
+    if (!entry || typeof entry.column !== "string" || !entry.column) continue;
+    query = query.order(entry.column, { ascending: entry.ascending !== false });
+  }
+  return query;
+}
+
 function applyFilters(query: any, filters: any[] = []) {
   for (const filter of filters) {
     if (!filter || !filter.type || !filter.column) continue;
@@ -809,7 +824,7 @@ async function applyForcedScope(query: any, table: string, action: string, profi
 async function runSelectPipeline(
   spec: {
     table?: unknown; select?: unknown; filters?: any[]; or?: unknown;
-    order?: any; range?: any; limit?: unknown; returning?: unknown;
+    order?: any; orders?: any; range?: any; limit?: unknown; returning?: unknown;
   },
   profile: any,
   supabaseAdmin: any,
@@ -833,7 +848,7 @@ async function runSelectPipeline(
   query = applyFilters(query, spec.filters || []);
   if (spec.or) query = query.or(spec.or);
   ({ query } = await applyForcedScope(query, table, "select", profile, supabaseAdmin));
-  if (spec.order?.column) query = query.order(spec.order.column, { ascending: spec.order.ascending !== false });
+  query = applyOrder(query, spec);
   if (spec.range && Number.isInteger(spec.range.from) && Number.isInteger(spec.range.to)) {
     const rangeFrom = Math.max(0, spec.range.from);
     const rangeTo = Math.min(Math.max(rangeFrom, spec.range.to), rangeFrom + 199);
@@ -1501,7 +1516,7 @@ Deno.serve(async (req: Request) => {
     if (body.or) query = query.or(body.or);
     ({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));
     if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
-    if (body.order?.column) query = query.order(body.order.column, { ascending: body.order.ascending !== false });
+    query = applyOrder(query, body);
     if (body.range && Number.isInteger(body.range.from) && Number.isInteger(body.range.to)) {
       const rangeFrom = Math.max(0, body.range.from);
       const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + 199);
