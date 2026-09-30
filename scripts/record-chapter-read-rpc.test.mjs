@@ -238,16 +238,17 @@ describe("db.js wiring", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("falls back to the direct table write when the RPC is not callable here", async () => {
-    rpc.mockResolvedValue({ data: null, error: { error: "forbidden_rpc" } });
-    const upsert = vi.fn(async () => ({ data: null, error: null }));
-    from.mockImplementation(() => ({ upsert }));
-    await db.logChapterRead("創世記", 3, true, 1, { id: P, currentRound: 1 });
-    expect(upsert).toHaveBeenCalledTimes(1);
-    expect(upsert.mock.calls[0][0]).toMatchObject({ user_id: U, plan_id: P, book: "創世記", chapter: 3, round: 1 });
-    // 之後不再白打一次 RPC
+  it("#359: throws (no direct table write) when the RPC is not callable, and retries it next time", async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { error: "forbidden_rpc" } });
+    const error = await db.logChapterRead("創世記", 3, true, 1, { id: P, currentRound: 1 }).catch(e => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.checkInRpcUnavailable).toBe(true);
+    expect(error.code).not.toBe("CHECK_IN_REJECTED");
+    expect(from).not.toHaveBeenCalled();
+    // 不記住「呼叫不到」：下一次照樣打 RPC（nlc-data 重新部署後不用重新整理）
     await db.logChapterRead("創世記", 4, true, 1, { id: P, currentRound: 1 });
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(from).not.toHaveBeenCalled();
   });
 
   it("free reading (no plan) keeps the direct table path", async () => {

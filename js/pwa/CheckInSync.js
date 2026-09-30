@@ -1,5 +1,5 @@
 // 把 CheckInOutbox（純邏輯）接到 app 上（#356）：
-//  - 送出：db.logChapterRead(..., { direct: true }) → 走 #355 的 record/unrecord RPC（RPC 不可用時退回直接寫表）
+//  - 送出：db.logChapterRead(..., { direct: true }) → 走 #355 的 record/unrecord RPC（#359：RPC 不可用時 throw，這筆留在 outbox 重送）
 //  - 何時送：app 啟動、每次 enqueue、online、回前景（app.js onAppForeground）、SW Background Sync、
 //    登入身分確認後（db.syncNlcSessionWithSupabase）。沒有輪詢計時器。
 //  - 伺服器拒絕：退回那一章的本機狀態、重算進度、重畫、toast 顯示原因

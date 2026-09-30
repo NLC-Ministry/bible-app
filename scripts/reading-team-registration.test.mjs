@@ -586,7 +586,8 @@ describe("NLC and browser integration", () => {
     expect(migration).not.toContain("reading_team_logs");
     expect(migration).toMatch(/LEFT JOIN public\.reading_plans plan[\s\S]*plan\.user_id = membership\.user_id/);
     expect(migration).toMatch(/FROM public\.reading_logs log WHERE log\.plan_id = plan\.id/);
-    expect(db).toContain('onConflict: "user_id,plan_id,book,chapter,round"');
+    // #359：計畫內紀錄只經 record_chapter_read 寫（SQL 端 ON CONFLICT (user_id, plan_id, book, chapter, round)）
+    expect(db).toContain('this._callCheckInRpc("record_chapter_read"');
   });
 
   it("does not reuse organisation statistics as team registration", () => {

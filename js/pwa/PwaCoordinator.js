@@ -232,8 +232,8 @@ export class PwaCoordinator {
       const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
       const result = existingRow?.id
         ? (repository
-          ? await repository.update({ read_at: row.read_at }, query => query.eq("id", existingRow.id), { invalidate: [cacheKey] })
-          : await dataClient.from("reading_logs").update({ read_at: row.read_at }).eq("id", existingRow.id))
+          ? await repository.update({ read_at: row.read_at }, query => query.eq("id", existingRow.id).is("plan_id", null), { invalidate: [cacheKey] })
+          : await dataClient.from("reading_logs").update({ read_at: row.read_at }).eq("id", existingRow.id).is("plan_id", null))
         : (repository
           ? await repository.insert(row, { invalidate: [cacheKey] })
           : await dataClient.from("reading_logs").insert(row));
@@ -248,6 +248,28 @@ export class PwaCoordinator {
       const error = new Error("Authentication session unavailable");
       error.status = 401;
       throw error;
+    }
+
+    // 計畫內的舊佇列項目（#356 以前排進來、或 outbox 當時還沒就緒）：資料庫只收 RPC 寫的
+    // 計畫內紀錄（#359），改送 record/unrecord_chapter_read。規則拒絕＝伺服器已決定，標成
+    // 永久失敗（4xx）不再重送；RPC 呼叫不到＝暫時性（503），留著重送。
+    if (payload.planId) {
+      try {
+        await window.db._persistChapterCheckIn(Boolean(payload.isChecked), {
+          planId: payload.planId,
+          book: payload.book,
+          chapter: payload.chapter,
+          round: payload.round,
+          readAt: payload.readAt || null
+        });
+      } catch (error) {
+        if (error?.code === "CHECK_IN_REJECTED") error.status = 422;
+        else if (error?.checkInRpcUnavailable) error.status = 503;
+        throw error;
+      }
+      await window.db._invalidateReadingLogCache?.(user.id);
+      window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan", source: "offline-sync" } }));
+      return;
     }
 
     const repository = window.readingLogRepository || null;
