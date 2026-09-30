@@ -1482,7 +1482,10 @@ const db = {
             : (window.readingLogRepository
               ? window.readingLogRepository.fetch({
                 cacheKey: `reading_logs:${user.id}`,
-                query: table => table.select("book, chapter, read_at, plan_id, round").eq("user_id", user.id),
+                // 分頁一定要有唯一且固定的排序（#348）。沒排序時，小組長以上經過
+                // nlc-data forced scope 的查詢在不同連線上會走不同索引、回傳順序不同，
+                // 前後頁接不起來 → 有的紀錄抓兩次、有的沒抓到，累積章數每次重整都不一樣。
+                query: table => table.select("book, chapter, read_at, plan_id, round").eq("user_id", user.id).order("id", { ascending: true }),
                 onData: (rows, meta) => this.applyReadingLogsSnapshot(rows, { notify: true, source: meta.source })
               })
               // window.readingLogRepository only exists when js/app.js has run (it's
@@ -1492,7 +1495,7 @@ const db = {
               // 1,189 chapters, well past PostgREST's 1000-row default, and an
               // unpaginated fetch here silently truncates chapters_read *and* gets
               // written into the offline localStorage snapshot.
-              : fetchAllRows(() => state.supabase.from("reading_logs").select("book, chapter, read_at, plan_id, round").eq("user_id", user.id))),
+              : fetchAllRows(() => state.supabase.from("reading_logs").select("book, chapter, read_at, plan_id, round").eq("user_id", user.id).order("id", { ascending: true }))),
           skipReadingLogs ? Promise.resolve({ data: [], error: null }) : this.fetchAllHighlights()
         ]);
 
@@ -3364,6 +3367,21 @@ const db = {
       .from("highlights")
       .select("book, chapter, verse, color, updated_at")
       .eq("user_id", user.id));
+  },
+
+  // 個人統計「累積閱讀章數」的伺服器數字（#348）：本人在這個個人計畫裡、
+  // 同一章同一遍只算一次。回傳整數；拿不到（離線、舊版 nlc-data、dev 模式的
+  // 真 Supabase client 沒有權限）就回 null，呼叫端退回前端自己數。
+  async fetchPlanChapterTotal(planId) {
+    if (!planId || !state.isSupabaseMode || !state.supabase || typeof state.supabase.rpc !== "function") return null;
+    try {
+      const { data, error } = await state.supabase.rpc("get_my_plan_chapter_total", { p_plan_id: planId });
+      if (error) return null;
+      const total = Number(data);
+      return Number.isInteger(total) && total >= 0 ? total : null;
+    } catch (_) {
+      return null;
+    }
   },
 
   async toggleDevotionalLike(noteId) {

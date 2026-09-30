@@ -424,6 +424,11 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_save_lightning_quiz_settings",
   "admin_import_lightning_quiz_questions"
 ]);
+// 個人統計「累積閱讀章數」由伺服器算（#348）。只算呼叫者自己的紀錄，
+// 所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。
+const READING_STATS_RPC_FUNCTIONS = new Set([
+  "get_my_plan_chapter_total"
+]);
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -437,6 +442,7 @@ const RPC_FUNCTIONS = new Set([
   ...DEVOTION_RPC_FUNCTIONS,
   ...GROUP_MEETING_RPC_FUNCTIONS,
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
+  ...READING_STATS_RPC_FUNCTIONS,
   ...DEVOTION_GROUP_FEATURE_RPC_FUNCTIONS,
   ...ISSUE_RPC_FUNCTIONS
 ]);
@@ -957,6 +963,7 @@ Deno.serve(async (req: Request) => {
         || DEVOTION_GROUP_FEATURE_RPC_FUNCTIONS.has(functionName)
         || ISSUE_RPC_FUNCTIONS.has(functionName)
         || LIGHTNING_QUIZ_RPC_FUNCTIONS.has(functionName)
+        || READING_STATS_RPC_FUNCTIONS.has(functionName)
         || functionName === "get_admin_registration_statistics"
         || functionName === "create_region_stage_cohort") {
         rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };
