@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { CheckInOutbox, checkInOutboxKey, createOfflineOperationsStore, CHECK_IN_OPERATION_TYPE } from "../js/pwa/CheckInOutbox.js";
 import { confirmLogoutWithPendingCheckIns, revertRejectedCheckIn, sendQueuedCheckIn, renderPendingCheckInChip } from "../js/pwa/CheckInSync.js";
-import { isCheckInBlockedOffline } from "../js/data/reader-auto-record.mjs";
+import { isCheckInBlockedOffline } from "../js/data/chapter-complete.mjs";
 
 const U1 = "user-1";
 const U2 = "user-2";
