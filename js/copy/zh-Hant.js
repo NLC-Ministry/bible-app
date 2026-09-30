@@ -82,6 +82,9 @@ window.APP_COPY = {
   },
   reader: {
     nextChapter: "下一章",
+    prevChapter: "上一章",
+    chapterNavLabel: "換章",
+    chapterChanged: "已切換到 {chapter}",
     swipeTip: "左右滑動可以換章",
     catchUpNextDay: "補讀下一天",
   },

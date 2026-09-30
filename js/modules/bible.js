@@ -13,6 +13,7 @@ import {
   selectAutoRecordPlanTask
 } from "../data/reader-auto-record.mjs";
 import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
+import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from "./reader-page-flip.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -76,7 +77,7 @@ function initSmartFloatingReaderNav() {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      navigateToChapter(direction);
+      flipToReaderChapter(direction);
       wakeFloatingNav(900);
     });
   };
@@ -342,10 +343,19 @@ function initImmersivePlanReader() {
   }
 }
 
-// ── 左右滑動 / 鍵盤 ← → 換章（#314） ──
-// 往左滑＝下一章、往右滑＝上一章；超過門檻時邊緣出現提示，放手才換章。
-// 換章一律走 navigateToChapter，跟按鈕完全同一條路（停止朗讀、跨書卷、不自動記已讀）。
+// ── 換章：左右滑動／鍵盤 ← →／章末連結／電腦版兩側按鈕，全部播同一個翻頁動畫（#314、#347） ──
+// 往左滑＝下一章、往右滑＝上一章；頁面跟著手指走，放手時拖得夠遠或撥得夠快才換章。
+// 換章一律走 navigateToChapter，跟按鈕完全同一條路（停止朗讀、跨書卷）；翻頁本身不做任何打卡判斷（#363）。
+// 滑動教學：舊版存 "1"＝看過一次；現在存「看過幾次」。滑過一次（READER_SWIPED_STORAGE_KEY）就永久不再出現。
 const READER_SWIPE_TIP_STORAGE_KEY = "bible_reader_swipe_tip_seen";
+const READER_SWIPED_STORAGE_KEY = "bible_reader_swiped";
+const READER_SWIPE_TIP_MAX_SHOWS = 3;
+// 預覽紙片只做開頭這幾節（夠蓋滿一個螢幕），不用整章。
+const READER_FLIP_PREVIEW_VERSES = 40;
+let readerSwipeTipShownThisSession = false;
+let readerPageFlip = null;
+let readerFadeNextRender = false;
+let readerAnnounceNextRender = false;
 
 // 目錄、搜尋、文字設定、版本選單、筆記編輯器開著時都不換章。
 const READER_BLOCKING_LAYER_SELECTOR =
@@ -365,18 +375,108 @@ function canNavigateReaderChapter(direction) {
   return Boolean(resolveAdjacentChapter(BIBLE_BOOKS, state.readerState?.bookId, state.readerState?.chapter, direction));
 }
 
-function setReaderSwipeHint(direction, { progress = 0, armed = false } = {}) {
-  const hint = document.getElementById("reader-swipe-hint");
-  if (!hint) return;
-  if (!direction) {
-    hint.removeAttribute("data-direction");
-    hint.removeAttribute("data-armed");
-    hint.style.removeProperty("--reader-swipe-progress");
-    return;
+function getReaderHeadingText(book, chapter) {
+  return usesEnglishReaderLabels() ? `${book.eng} Chapter ${chapter}` : `${book.name} ${chapter}章`;
+}
+
+function getReaderChapterCacheKey(bookEngName, chapter, version) {
+  return window.getBibleChapterCacheKey
+    ? window.getBibleChapterCacheKey(bookEngName, chapter, version)
+    : `${version}_${bookEngName}_${chapter}`;
+}
+
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+}
+
+// 翻頁舞台蓋住的範圍＝閱讀區，扣掉底部分頁列和經文選取工具列：
+// 紙片不從毛玻璃底下滑過（省掉每格重算模糊），選取工具列也不會被蓋住或跟著閃。
+const READER_STAGE_BOTTOM_CHROME = [".mobile-nav-bar", ".youversion-action-bar"];
+
+function getReaderStageRect() {
+  const surface = document.querySelector("#reader-view .reader-reading-surface");
+  if (!surface) return null;
+  const rect = surface.getBoundingClientRect();
+  const top = Math.max(rect.top, 0);
+  let bottom = Math.min(rect.bottom, window.innerHeight || rect.bottom);
+  READER_STAGE_BOTTOM_CHROME.forEach(selector => {
+    const chrome = document.querySelector(selector);
+    if (!chrome) return;
+    const chromeRect = chrome.getBoundingClientRect();
+    if (chromeRect.height > 0 && chromeRect.top > top && chromeRect.top < bottom) bottom = chromeRect.top;
+  });
+  return { left: rect.left, right: rect.right, width: rect.width, top, bottom, height: bottom - top };
+}
+
+function getReaderFlipParts() {
+  const surface = document.querySelector("#reader-view .reader-reading-surface");
+  return {
+    surface,
+    header: surface ? surface.querySelector(".reader-header") : null,
+    container: document.getElementById("bible-content")
+  };
+}
+
+function buildReaderCurrentPage(stageRect) {
+  const { header, container } = getReaderFlipParts();
+  if (!container) return null;
+  return buildViewportSnapshot({ header, container, stageRect });
+}
+
+function buildReaderTargetPage(direction, stageRect) {
+  const { surface, header, container } = getReaderFlipParts();
+  const target = resolveAdjacentChapter(BIBLE_BOOKS, state.readerState?.bookId, state.readerState?.chapter, direction);
+  if (!container || !target) return null;
+  const version = String(state.readerState?.version || "CUNP").toUpperCase();
+  const cached = window._bibleChapterCache && window._bibleChapterCache[getReaderChapterCacheKey(target.book.eng, target.chapter, version)];
+  const verses = cached && !cached.isPlaceholder && Array.isArray(cached.verses) && cached.verses.length ? cached.verses : null;
+  return buildChapterPreview({
+    header,
+    container,
+    surface,
+    stageRect,
+    headingText: getReaderHeadingText(target.book, target.chapter),
+    fillContent: shell => {
+      if (!verses) {
+        // 還沒預載到：先放骨架，照樣翻過去，之後沿用一般的載入／重試畫面。
+        if (typeof ComponentSkeletonLoader !== "undefined") ComponentSkeletonLoader.show("reader", shell);
+        return;
+      }
+      verses.slice(0, READER_FLIP_PREVIEW_VERSES).forEach(v => {
+        shell.appendChild(buildVerseElement(v, target.book.name, target.chapter));
+      });
+      if (verses.length <= READER_FLIP_PREVIEW_VERSES) shell.appendChild(buildChapterEndNav(target.book.id, target.chapter));
+    }
+  });
+}
+
+function getReaderPageFlip() {
+  if (readerPageFlip) return readerPageFlip;
+  const readerView = document.getElementById("reader-view");
+  if (!readerView) return null;
+  readerPageFlip = createReaderPageFlip({
+    host: readerView,
+    getStageRect: getReaderStageRect,
+    buildCurrentPage: buildReaderCurrentPage,
+    buildTargetPage: buildReaderTargetPage,
+    onCommit: direction => navigateToChapter(direction)
+  });
+  return readerPageFlip;
+}
+
+// 按鈕、鍵盤、章末連結共用：播完整個翻頁並換章。
+export function flipToReaderChapter(direction) {
+  if (!direction || !canNavigateReaderChapter(direction)) return Promise.resolve(false);
+  const flip = getReaderPageFlip();
+  if (!flip || prefersReducedMotion()) {
+    readerFadeNextRender = true;
+    return navigateToChapter(direction);
   }
-  hint.setAttribute("data-direction", direction > 0 ? "next" : "prev");
-  hint.toggleAttribute("data-armed", armed);
-  hint.style.setProperty("--reader-swipe-progress", String(Math.round(progress * 100) / 100));
+  return flip.play(direction);
+}
+
+function markReaderSwiped() {
+  try { localStorage.setItem(READER_SWIPED_STORAGE_KEY, "1"); } catch { /* 無痕模式：這次就好 */ }
 }
 
 function initReaderChapterGestures() {
@@ -388,8 +488,16 @@ function initReaderChapterGestures() {
     surface: readerView,
     isEnabled: isReaderChapterNavAvailable,
     canNavigate: canNavigateReaderChapter,
-    onHint: setReaderSwipeHint,
-    onNavigate: direction => { navigateToChapter(direction); }
+    // 手指一放上去：上一個還在播的翻頁（或滑動教學）直接收尾
+    onGestureStart: () => { readerPageFlip?.finishNow(); },
+    onDragStart: direction => { getReaderPageFlip()?.begin(direction); },
+    onDrag: (direction, { progress }) => { readerPageFlip?.update(progress); },
+    onDragEnd: ({ direction, commit, velocity, immediate }) => {
+      if (commit) markReaderSwiped();
+      const flip = getReaderPageFlip();
+      if (flip) flip.release({ direction, commit, velocity, immediate });
+      else if (commit) navigateToChapter(direction);
+    }
   });
 
   document.addEventListener("keydown", event => {
@@ -397,23 +505,53 @@ function initReaderChapterGestures() {
     const direction = readerArrowKeyDirection(event);
     if (!direction || !canNavigateReaderChapter(direction)) return;
     event.preventDefault();
-    navigateToChapter(direction);
+    flipToReaderChapter(direction);
   });
 }
 
-// 第一次在手機上讀到經文時提示一次可以左右滑；只是介面偏好，存不了就算了。
+function readSwipeTipShowCount() {
+  const raw = localStorage.getItem(READER_SWIPE_TIP_STORAGE_KEY);
+  if (!raw) return 0;
+  const count = Number(raw);
+  return Number.isFinite(count) && count > 0 ? count : 1;
+}
+
+// 手機上還沒滑過換章的人：頁面自己往左、往右各掀一下＋提示文字。每次開 App 最多一次、
+// 總共最多 3 次；滑過一次就永久不再出現。只是介面偏好，存不了就算了。
 function maybeShowReaderSwipeTip() {
+  if (readerSwipeTipShownThisSession) return;
   if (!isReaderChapterNavAvailable()) return;
   try {
     if (!window.matchMedia?.("(pointer: coarse)").matches) return;
-    if (localStorage.getItem(READER_SWIPE_TIP_STORAGE_KEY)) return;
-    localStorage.setItem(READER_SWIPE_TIP_STORAGE_KEY, "1");
+    if (localStorage.getItem(READER_SWIPED_STORAGE_KEY)) return;
+    const count = readSwipeTipShowCount();
+    if (count >= READER_SWIPE_TIP_MAX_SHOWS) return;
+    localStorage.setItem(READER_SWIPE_TIP_STORAGE_KEY, String(count + 1));
   } catch {
     return;
   }
+  readerSwipeTipShownThisSession = true;
   if (typeof showToast === "function") {
     showToast((window.APP_COPY && window.APP_COPY.reader && window.APP_COPY.reader.swipeTip) || "左右滑動可以換章", 3500);
   }
+  setTimeout(() => { void playReaderSwipeDemo(); }, 700);
+}
+
+async function playReaderSwipeDemo() {
+  const flip = getReaderPageFlip();
+  if (!flip || !isReaderChapterNavAvailable()) return;
+  if (canNavigateReaderChapter(1)) {
+    const played = await flip.peek(1);
+    if (!played) return; // 被使用者的手勢打斷，就不再繼續示範
+  }
+  if (canNavigateReaderChapter(-1) && isReaderChapterNavAvailable()) await flip.peek(-1);
+}
+
+function announceReaderChapter(text) {
+  const announcer = document.getElementById("reader-chapter-announcer");
+  if (!announcer || !text) return;
+  const copy = (window.APP_COPY && window.APP_COPY.reader) || {};
+  announcer.textContent = String(copy.chapterChanged || "已切換到 {chapter}").replace("{chapter}", text);
 }
 
 export function initReaderControls() {
@@ -711,10 +849,10 @@ export function initReaderControls() {
   const prevChapterBtn = document.getElementById("prev-chapter-btn");
   const nextChapterBtn = document.getElementById("next-chapter-btn");
   if (prevChapterBtn) prevChapterBtn.addEventListener("click", () => {
-    navigateToChapter(-1);
+    flipToReaderChapter(-1);
   });
   if (nextChapterBtn) nextChapterBtn.addEventListener("click", () => {
-    navigateToChapter(1);
+    flipToReaderChapter(1);
   });
 
   initSmartFloatingReaderNav();
@@ -1057,6 +1195,8 @@ export async function navigateToChapter(direction, options = {}) {
   // 朗讀自動接章的情況由 continueReaderAudioToNextChapter 先處理。
   // 必須在下面改動 readerState 之前呼叫，這樣記錄的是「離開的這一章」。
   if (!autoContinue) recordLeavingReaderChapter();
+  // 手動換章：換好後幫螢幕報讀器播報新的章名（#347）。朗讀自動接章不播，免得蓋過朗讀。
+  if (!autoContinue) readerAnnounceNextRender = true;
   const hadAudioPosition = isSpeaking || !document.getElementById("reader-audio-timeline")?.classList.contains("hidden");
   if (!autoContinue) stopReaderAudio(true);
   const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
@@ -1143,9 +1283,7 @@ export async function renderReaderText(options = {}) {
   const book = BIBLE_BOOKS.find(b => b.id === bookId) || BIBLE_BOOKS[0];
   const chapter = Number(state.readerState && state.readerState.chapter) || 1;
 
-  if (heading) heading.textContent = usesEnglishReaderLabels()
-    ? `${book.eng} Chapter ${chapter}`
-    : `${book.name} ${chapter}章`;
+  if (heading) heading.textContent = getReaderHeadingText(book, chapter);
   updatePillLabels();
   renderReaderPicker();
   loadVerseNotesForChapter(book.name, chapter);
@@ -1216,8 +1354,18 @@ export async function renderReaderText(options = {}) {
       return false;
     }
 
-    renderVersesList(container, verses, book.name, chapter);
+    // 快取命中時上面已經畫過同一份經文，不用再整章重畫一次（#347：換章更快）。
+    if (data !== cachedData) renderVersesList(container, verses, book.name, chapter);
     triggerPredictivePrefetch();
+    if (readerFadeNextRender || options.autoContinue === true) {
+      // 朗讀自動接章、或系統開了「減少動態效果」：不翻頁，只淡入。
+      readerFadeNextRender = false;
+      container.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: "ease-out" });
+    }
+    if (readerAnnounceNextRender) {
+      readerAnnounceNextRender = false;
+      announceReaderChapter(getReaderHeadingText(book, chapter));
+    }
     maybeShowReaderSwipeTip();
   } catch (error) {
     if (renderRequestId !== readerRenderRequestId
@@ -1690,42 +1838,127 @@ function renderUnifiedSelectionBar() {
   }, 100);
 }
 
+// 一節經文的 DOM（沒有事件監聽）。閱讀器本身和翻頁動畫的預覽（#347）共用，兩邊版面才會一模一樣。
+function buildVerseElement(v, bookName, chapter) {
+  const verseDiv = document.createElement("div");
+  verseDiv.className = "bible-verse";
+  verseDiv.dataset.verse = String(v.verse);
+  verseDiv.id = `reader-verse-${v.verse}`;
+  verseDiv.tabIndex = 0;
+  verseDiv.setAttribute("role", "button");
+  verseDiv.setAttribute("aria-pressed", "false");
+  verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選取或取消選取`);
+
+  const highlightKey = `${bookName}_${chapter}_${v.verse}`;
+  if (state.highlights[highlightKey]) {
+    verseDiv.style.setProperty("--verse-highlight-color", state.highlights[highlightKey]);
+    verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
+  }
+
+  verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
+  return verseDiv;
+}
+
+// 章末換章連結（#347）：「‹ 上一章｜下一章 ›」，跟在經文後面、不浮動。
+// 沒有上一章（創 1）或下一章（啟 22）的那一側不顯示。
+function buildChapterEndNav(bookId, chapter) {
+  const copy = (window.APP_COPY && window.APP_COPY.reader) || {};
+  const hasPrev = Boolean(resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, -1));
+  const hasNext = Boolean(resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, 1));
+  const nav = document.createElement("nav");
+  nav.className = "reader-chapter-end-nav";
+  nav.setAttribute("aria-label", copy.chapterNavLabel || "換章");
+
+  const makeIcon = name => {
+    const icon = document.createElement("span");
+    icon.className = "nlc-icon nlc-icon--sm";
+    icon.dataset.icon = name;
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  };
+  const makeLink = (direction, label, available) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "reader-chapter-end-link";
+    button.dataset.chapterNav = String(direction);
+    button.hidden = !available;
+    const text = document.createElement("span");
+    text.textContent = label;
+    if (direction < 0) button.append(makeIcon("chevronLeft"), text);
+    else button.append(text, makeIcon("chevronRight"));
+    return button;
+  };
+  const separator = document.createElement("span");
+  separator.className = "reader-chapter-end-sep";
+  separator.setAttribute("aria-hidden", "true");
+  separator.textContent = "｜";
+  separator.hidden = !(hasPrev && hasNext);
+
+  nav.append(
+    makeLink(-1, copy.prevChapter || "上一章", hasPrev),
+    separator,
+    makeLink(1, copy.nextChapter || "下一章", hasNext)
+  );
+  if (typeof hydrateIcons === "function") hydrateIcons(nav);
+  return nav;
+}
+
+// 目前畫面上這一章的經文（點選經文時查文字用）。
+let renderedReaderChapter = { bookId: 0, bookName: "", chapter: 0, textByVerse: new Map() };
+
+// 經文點選、章末連結都用容器上的一組監聽（事件委派），不再每節各掛兩個——長章節換章更快。
+function bindReaderContentEvents(container) {
+  if (!container || container.dataset.readerEventsBound === "true") return;
+  container.dataset.readerEventsBound = "true";
+
+  const toggleVerseFromElement = verseDiv => {
+    const verse = Number(verseDiv.dataset.verse);
+    const { bookId, bookName, chapter, textByVerse } = renderedReaderChapter;
+    if (!verse || !textByVerse.has(verse)) return;
+    // 點一下 = 切換該節在選取集合裡的有無（跨章保留）。不再有長按 / 兩套模式。
+    toggleVerseSelection({ bookId, bookName, chapter, verse, text: textByVerse.get(verse) });
+  };
+
+  container.addEventListener("click", event => {
+    const navButton = event.target.closest?.("[data-chapter-nav]");
+    if (navButton && container.contains(navButton)) {
+      event.preventDefault();
+      event.stopPropagation();
+      flipToReaderChapter(Number(navButton.dataset.chapterNav));
+      return;
+    }
+    const verseDiv = event.target.closest?.(".bible-verse[data-verse]");
+    if (!verseDiv || !container.contains(verseDiv)) return;
+    event.stopPropagation();
+    toggleVerseFromElement(verseDiv);
+  });
+  container.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const verseDiv = event.target.closest?.(".bible-verse[data-verse]");
+    if (!verseDiv || event.target !== verseDiv) return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggleVerseFromElement(verseDiv);
+  });
+}
+
 function renderVersesList(container, verses, bookName, chapter) {
+  bindReaderContentEvents(container);
   container.innerHTML = "";
   const bookId = currentReaderBookId();
+  renderedReaderChapter = {
+    bookId,
+    bookName,
+    chapter,
+    textByVerse: new Map(verses.map(v => [Number(v.verse), v.text]))
+  };
+  const fragment = document.createDocumentFragment();
   verses.forEach(v => {
-    const verseDiv = document.createElement("div");
-    verseDiv.className = "bible-verse";
-    verseDiv.dataset.verse = String(v.verse);
-    verseDiv.id = `reader-verse-${v.verse}`;
-    verseDiv.tabIndex = 0;
-    verseDiv.setAttribute("role", "button");
-    verseDiv.setAttribute("aria-pressed", "false");
-    verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選取或取消選取`);
-
-    const highlightKey = `${bookName}_${chapter}_${v.verse}`;
-    if (state.highlights[highlightKey]) {
-      verseDiv.style.setProperty("--verse-highlight-color", state.highlights[highlightKey]);
-      verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
-    }
-
-    verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
-    setVerseNoteBadge(verseDiv, Boolean(state.verseNotes[highlightKey]));
-
-    // 點一下 = 切換該節在選取集合裡的有無（跨章保留）。不再有長按 / 兩套模式。
-    const toggleThisVerse = e => {
-      e.stopPropagation();
-      toggleVerseSelection({ bookId, bookName, chapter, verse: v.verse, text: v.text });
-    };
-    verseDiv.addEventListener("click", toggleThisVerse);
-    verseDiv.addEventListener("keydown", e => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      e.preventDefault();
-      toggleThisVerse(e);
-    });
-
-    container.appendChild(verseDiv);
+    const verseDiv = buildVerseElement(v, bookName, chapter);
+    setVerseNoteBadge(verseDiv, Boolean(state.verseNotes[`${bookName}_${chapter}_${v.verse}`]));
+    fragment.appendChild(verseDiv);
   });
+  container.appendChild(fragment);
 
   applySelectionClassesToDom();
 
@@ -1743,6 +1976,8 @@ function renderVersesList(container, verses, bookName, chapter) {
   sentinel.setAttribute("aria-hidden", "true");
   sentinel.style.cssText = "height:1px;width:100%;pointer-events:none;";
   container.appendChild(sentinel);
+
+  container.appendChild(buildChapterEndNav(bookId, chapter));
 }
 
 let verseNotesLoadToken = 0;

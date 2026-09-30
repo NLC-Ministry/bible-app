@@ -66,7 +66,8 @@ describe("verse notes (per-verse reading annotations)", () => {
     expect(bible).toContain('class="verse-note-editor-verse-text">${escapeHTML(verseText || "")}');
     // 選取集合的每個項目都存了該節文字（text），筆記編輯框直接用它
     expect(bible).toContain("verseSelection.set(key, entry)");
-    expect(bible).toContain("verse: v.verse, text: v.text");
+    // #347 起點選經文改成容器事件委派，文字從這一章的 textByVerse 查
+    expect(bible).toContain("verse, text: textByVerse.get(verse)");
     expect(bible).not.toContain("autofocus");
     expect(css).toContain(".verse-note-editor-quote {");
     expect(css).toContain(".verse-note-editor-verse-text {");

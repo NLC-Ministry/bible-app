@@ -1,7 +1,8 @@
 // js/modules/reader-chapter-nav.mjs
 //
-// 讀經頁換章的輸入方式（#314）：左右滑動、鍵盤 ← →，以及預載用的「相鄰章」計算。
-// 實際換章一律交給 bible.js 的 navigateToChapter(±1)，這裡只判斷「使用者是不是要換章」。
+// 讀經頁換章的輸入方式（#314、#347）：左右滑動、鍵盤 ← →，以及預載用的「相鄰章」計算。
+// 實際換章一律交給 bible.js 的 navigateToChapter(±1)，這裡只判斷「使用者是不是要換章」，
+// 並在拖動中回報位移，讓翻頁動畫（reader-page-flip.mjs）跟著手指走。
 
 // 從螢幕最邊緣起手的滑動留給系統（Android 返回、iOS 邊緣滑動），不當成換章。
 export const SWIPE_EDGE_GUARD_PX = 24;
@@ -14,6 +15,36 @@ export const SWIPE_AXIS_RATIO = 1.5;
 export function getSwipeCommitDistance(viewportWidth) {
   const width = Number(viewportWidth) || 0;
   return Math.max(56, Math.min(96, width * 0.22));
+}
+
+// 快速輕撥（#347）：沒拖到上面的距離，但往同一個方向撥得夠快，也算要換章。
+export const FLICK_MIN_VELOCITY = 0.4;   // px/ms
+export const FLICK_MIN_DISTANCE_PX = 16;
+// 用放開前這段時間內的移動算速度；太短（同一格內連發的事件）不算，免得除以接近 0。
+const VELOCITY_WINDOW_MS = 100;
+const VELOCITY_MIN_SPAN_MS = 8;
+
+export function shouldCommitSwipe({ dx, velocity = 0, commitDistance }) {
+  const distance = Math.abs(Number(dx) || 0);
+  if (distance >= Number(commitDistance)) return true;
+  const v = Number(velocity) || 0;
+  return Math.abs(v) >= FLICK_MIN_VELOCITY
+    && distance >= FLICK_MIN_DISTANCE_PX
+    && Math.sign(v) === Math.sign(dx);
+}
+
+// samples: [{ x, t }]，回傳最後一段的水平速度（px/ms，往左為負）。
+export function computeSwipeVelocity(samples) {
+  const list = Array.isArray(samples) ? samples : [];
+  if (list.length < 2) return 0;
+  const last = list[list.length - 1];
+  let first = list[0];
+  for (const sample of list) {
+    if (last.t - sample.t <= VELOCITY_WINDOW_MS) { first = sample; break; }
+  }
+  const span = last.t - first.t;
+  if (!(span >= VELOCITY_MIN_SPAN_MS)) return 0;
+  return (last.x - first.x) / span;
 }
 
 // 往左滑（dx < 0）＝下一章 (+1)；往右滑（dx > 0）＝上一章 (-1)。
@@ -72,19 +103,26 @@ function hasActiveTextSelection(win) {
 }
 
 /**
- * 在 surface 上綁左右滑動換章。
- * - isEnabled(): 此刻能不能滑（讀經頁在前景、沒有彈窗…）
- * - canNavigate(direction): 那個方向還有章可去（創 1 章 / 啟 22 章回傳 false）
- * - onNavigate(direction): 放手且超過門檻時呼叫
- * - onHint(direction, { progress, armed }): 滑動中更新提示；direction 為 0 代表收起提示
+ * 在 surface 上偵測左右滑動換章。
+ * - isEnabled(): 此刻能不能換章（讀經頁在前景、沒有彈出面板等）
+ * - canNavigate(direction): 那個方向有沒有下一章（創 1 章／啟 22 章的邊界回 false）
+ * - onGestureStart(): 手指剛放上去（用來把上一個還在播的翻頁動畫直接收尾）
+ * - onDragStart(direction): 確定是橫向拖動、要開始跟手了
+ * - onDrag(direction, { dx, progress }): 拖動中；progress＝位移佔螢幕寬的比例
+ * - onDragEnd({ direction, commit, velocity, immediate }): 放開（或取消）；commit＝要不要換章
+ * - onNavigate(direction): 沒給 onDragEnd 時，確定換章就呼叫這個
  */
 export function createReaderSwipeController({
   surface,
   isEnabled = () => true,
   canNavigate = () => true,
+  onGestureStart = () => {},
+  onDragStart = () => {},
+  onDrag = () => {},
+  onDragEnd = null,
   onNavigate,
-  onHint = () => {},
-  win = typeof window !== "undefined" ? window : null
+  win = typeof window !== "undefined" ? window : null,
+  now = () => (typeof performance !== "undefined" ? performance.now() : Date.now())
 } = {}) {
   if (!surface || typeof surface.addEventListener !== "function") {
     return { destroy() {} };
@@ -94,14 +132,25 @@ export function createReaderSwipeController({
 
   const viewportWidth = () => Number(win?.innerWidth) || Number(surface.clientWidth) || 0;
 
-  const clearHint = () => onHint(0, { progress: 0, armed: false });
+  const endDrag = (commit, { immediate = false } = {}) => {
+    if (!gesture || !gesture.dragging) return;
+    const { direction } = gesture;
+    const velocity = computeSwipeVelocity(gesture.samples);
+    gesture.dragging = false;
+    if (typeof onDragEnd === "function") {
+      onDragEnd({ direction, commit, velocity, immediate });
+    } else if (commit) {
+      onNavigate?.(direction);
+    }
+  };
 
   const abort = () => {
-    if (gesture?.hinted) clearHint();
+    endDrag(false, { immediate: true });
     gesture = null;
   };
 
   const onTouchStart = event => {
+    if (gesture?.dragging) abort();
     gesture = null;
     if (!event.touches || event.touches.length !== 1) return;
     if (!isEnabled()) return;
@@ -109,14 +158,16 @@ export function createReaderSwipeController({
     const touch = event.touches[0];
     const width = viewportWidth();
     if (isInSwipeEdgeGuard(touch.clientX, width)) return;
+    onGestureStart();
     gesture = {
       startX: touch.clientX,
       startY: touch.clientY,
       width,
       axis: "pending",
       direction: 0,
-      armed: false,
-      hinted: false
+      dx: 0,
+      dragging: false,
+      samples: []
     };
   };
 
@@ -133,34 +184,42 @@ export function createReaderSwipeController({
       if (gesture.axis === "vertical") { gesture = null; return; }
     }
 
-    // 長按反白文字後拖曳是在調整選取範圍，不是換章。
+    // 長按選字後拖動調整選取範圍時，不換章
     if (hasActiveTextSelection(win)) { abort(); return; }
 
     const direction = swipeDirectionFromDelta(dx);
+    if (gesture.dragging && direction !== gesture.direction) {
+      // 拖回起點另一側：先把這個方向的翻頁收起來
+      endDrag(false, { immediate: true });
+    }
+    gesture.dx = dx;
     if (!direction || !canNavigate(direction)) {
-      if (gesture.hinted) clearHint();
-      gesture.hinted = false;
       gesture.direction = 0;
-      gesture.armed = false;
       return;
     }
-
-    const commit = getSwipeCommitDistance(gesture.width);
-    const progress = Math.min(1, Math.abs(dx) / commit);
-    gesture.direction = direction;
-    gesture.armed = progress >= 1;
-    gesture.hinted = true;
-    onHint(direction, { progress, armed: gesture.armed });
+    if (!gesture.dragging) {
+      gesture.direction = direction;
+      gesture.dragging = true;
+      gesture.samples = [];
+      onDragStart(direction);
+    }
+    gesture.samples.push({ x: touch.clientX, t: now() });
+    if (gesture.samples.length > 12) gesture.samples.shift();
+    const progress = gesture.width > 0 ? Math.min(1, Math.abs(dx) / gesture.width) : 0;
+    onDrag(direction, { dx, progress });
   };
 
   const onTouchEnd = () => {
     if (!gesture) return;
-    const { direction, armed, hinted } = gesture;
-    gesture = null;
-    if (hinted) clearHint();
-    if (armed && direction && isEnabled() && canNavigate(direction)) {
-      onNavigate?.(direction);
+    if (gesture.dragging) {
+      const commit = shouldCommitSwipe({
+        dx: gesture.dx,
+        velocity: computeSwipeVelocity(gesture.samples),
+        commitDistance: getSwipeCommitDistance(gesture.width)
+      }) && isEnabled() && canNavigate(gesture.direction);
+      endDrag(commit);
     }
+    gesture = null;
   };
 
   const options = { passive: true };

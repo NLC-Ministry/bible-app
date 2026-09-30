@@ -2,8 +2,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
+  computeSwipeVelocity,
   createReaderSwipeController,
   getSwipeCommitDistance,
+  shouldCommitSwipe,
   isInSwipeEdgeGuard,
   readerArrowKeyDirection,
   resolveAdjacentChapter,
@@ -49,6 +51,22 @@ describe("reader chapter swipe helpers (#314)", () => {
     expect(resolveSwipeAxis(3, 40)).toBe("vertical");
   });
 
+  it("commits a swipe on distance, or on a fast flick in the same direction", () => {
+    expect(shouldCommitSwipe({ dx: -90, velocity: 0, commitDistance: 82 })).toBe(true);
+    expect(shouldCommitSwipe({ dx: -30, velocity: -0.8, commitDistance: 82 })).toBe(true);
+    expect(shouldCommitSwipe({ dx: -30, velocity: -0.2, commitDistance: 82 })).toBe(false);
+    expect(shouldCommitSwipe({ dx: -10, velocity: -1.5, commitDistance: 82 })).toBe(false);
+    // 往左拖了一段、最後往回撥：方向不一致不算
+    expect(shouldCommitSwipe({ dx: -30, velocity: 0.8, commitDistance: 82 })).toBe(false);
+  });
+
+  it("measures swipe velocity over the last moments and ignores same-frame bursts", () => {
+    expect(computeSwipeVelocity([{ x: 300, t: 0 }, { x: 250, t: 50 }])).toBe(-1);
+    expect(computeSwipeVelocity([{ x: 300, t: 0 }, { x: 250, t: 2 }])).toBe(0);
+    expect(computeSwipeVelocity([{ x: 300, t: 0 }, { x: 290, t: 400 }, { x: 240, t: 450 }])).toBe(-1);
+    expect(computeSwipeVelocity([])).toBe(0);
+  });
+
   it("resolves adjacent chapters across book boundaries and stops at both ends", () => {
     expect(resolveAdjacentChapter(BOOKS, 1, 5, 1)).toEqual({ book: BOOKS[0], chapter: 6 });
     expect(resolveAdjacentChapter(BOOKS, 40, 28, 1)).toEqual({ book: BOOKS[3], chapter: 1 });
@@ -82,15 +100,17 @@ describe("createReaderSwipeController (#314)", () => {
     surface.innerHTML = `<div class="bible-verse" role="button">經文</div><button type="button">按鈕</button>`;
     document.body.appendChild(surface);
     const onNavigate = vi.fn();
-    const onHint = vi.fn();
+    const onDrag = vi.fn();
+    const onDragStart = vi.fn();
     controller = createReaderSwipeController({
       surface,
       onNavigate,
-      onHint,
+      onDrag,
+      onDragStart,
       win: { innerWidth: 375, getSelection: () => null },
       ...overrides
     });
-    return { onNavigate, onHint };
+    return { onNavigate, onDrag, onDragStart };
   }
 
   function touch(type, target, points) {
@@ -111,11 +131,13 @@ describe("createReaderSwipeController (#314)", () => {
   }
 
   it("navigates to the next chapter on a long enough left swipe that starts on a verse", () => {
-    const { onNavigate, onHint } = setup();
+    const { onNavigate, onDrag, onDragStart } = setup();
     swipe(surface.querySelector(".bible-verse"), [300, 400], [180, 405]);
     expect(onNavigate).toHaveBeenCalledWith(1);
-    expect(onHint).toHaveBeenCalledWith(1, expect.objectContaining({ armed: true }));
-    expect(onHint).toHaveBeenLastCalledWith(0, expect.objectContaining({ armed: false }));
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    expect(onDragStart).toHaveBeenCalledWith(1);
+    // 頁面跟著手指：progress＝位移佔螢幕寬的比例（120 / 375）
+    expect(onDrag).toHaveBeenLastCalledWith(1, expect.objectContaining({ dx: -120, progress: 0.32 }));
   });
 
   it("navigates to the previous chapter on a right swipe", () => {
@@ -131,11 +153,11 @@ describe("createReaderSwipeController (#314)", () => {
   });
 
   it("ignores vertical scrolling and diagonal drags", () => {
-    const { onNavigate, onHint } = setup();
+    const { onNavigate, onDrag } = setup();
     swipe(surface, [200, 500], [190, 200]);
     swipe(surface, [300, 500], [180, 400]);
     expect(onNavigate).not.toHaveBeenCalled();
-    expect(onHint).not.toHaveBeenCalled();
+    expect(onDrag).not.toHaveBeenCalled();
   });
 
   it("ignores swipes from the screen edge and from buttons", () => {
@@ -146,10 +168,51 @@ describe("createReaderSwipeController (#314)", () => {
   });
 
   it("does nothing at the first or last chapter", () => {
-    const { onNavigate, onHint } = setup({ canNavigate: direction => direction > 0 });
+    const { onNavigate, onDrag, onDragStart } = setup({ canNavigate: direction => direction > 0 });
     swipe(surface, [80, 400], [250, 400]);
     expect(onNavigate).not.toHaveBeenCalled();
-    expect(onHint).not.toHaveBeenCalledWith(-1, expect.anything());
+    expect(onDragStart).not.toHaveBeenCalled();
+    expect(onDrag).not.toHaveBeenCalled();
+  });
+
+  it("flips on a short but fast flick, and not on the same distance dragged slowly", () => {
+    let clock = 0;
+    const { onNavigate } = setup({ now: () => clock });
+    const flick = stepMs => {
+      touch("touchstart", surface, [[300, 400]]);
+      [285, 270, 255].forEach(x => { clock += stepMs; touch("touchmove", surface, [[x, 400]]); });
+      touch("touchend", surface, []);
+    };
+    flick(20);   // 30px in 40ms ≈ 0.75 px/ms
+    expect(onNavigate).toHaveBeenCalledWith(1);
+    onNavigate.mockClear();
+    flick(200);  // 30px in 400ms ≈ 0.08 px/ms
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("reports drag start / end so the page can follow the finger, and cancels when dragged back", () => {
+    const onDragEnd = vi.fn();
+    setup({ onDragEnd });
+    touch("touchstart", surface, [[300, 400]]);
+    touch("touchmove", surface, [[200, 400]]);
+    touch("touchmove", surface, [[290, 400]]);
+    touch("touchend", surface, []);
+    expect(onDragEnd).toHaveBeenCalledWith(expect.objectContaining({ direction: 1, commit: false }));
+    onDragEnd.mockClear();
+    swipe(surface, [300, 400], [150, 400]);
+    expect(onDragEnd).toHaveBeenCalledWith(expect.objectContaining({ direction: 1, commit: true }));
+  });
+
+  it("hands a drag that crosses back over the start to the other direction", () => {
+    const onDragEnd = vi.fn();
+    const { onDragStart } = setup({ onDragEnd });
+    touch("touchstart", surface, [[200, 400]]);
+    touch("touchmove", surface, [[150, 400]]);
+    touch("touchmove", surface, [[300, 400]]);
+    touch("touchend", surface, []);
+    expect(onDragStart.mock.calls.map(call => call[0])).toEqual([1, -1]);
+    expect(onDragEnd).toHaveBeenNthCalledWith(1, expect.objectContaining({ direction: 1, commit: false, immediate: true }));
+    expect(onDragEnd).toHaveBeenLastCalledWith(expect.objectContaining({ direction: -1, commit: true }));
   });
 
   it("does nothing while disabled (dialogs open, another tab)", () => {
@@ -175,26 +238,44 @@ describe("createReaderSwipeController (#314)", () => {
   });
 });
 
-describe("reader wiring (#314)", () => {
-  it("routes swipes and arrow keys through navigateToChapter", () => {
+describe("reader wiring (#314, #347)", () => {
+  it("routes swipes through the page flip, and buttons, keys and chapter-end links through the same flip", () => {
     expect(bible).toContain("initReaderChapterGestures();");
-    expect(bible).toMatch(/onNavigate: direction => \{ navigateToChapter\(direction\); \}/);
-    expect(bible).toMatch(/readerArrowKeyDirection\(event\)[\s\S]{0,200}navigateToChapter\(direction\)/);
+    expect(bible).toContain("onDragStart: direction => { getReaderPageFlip()?.begin(direction); }");
+    expect(bible).toContain("flip.release({ direction, commit, velocity, immediate })");
+    expect(bible).toContain("onCommit: direction => navigateToChapter(direction)");
+    expect(bible).toMatch(/readerArrowKeyDirection\(event\)[\s\S]{0,200}flipToReaderChapter\(direction\)/);
+    expect(bible).toMatch(/const bindFloatingButton[\s\S]{0,300}flipToReaderChapter\(direction\)/);
+    expect(bible).toMatch(/\[data-chapter-nav\][\s\S]{0,300}flipToReaderChapter\(Number\(navButton\.dataset\.chapterNav\)\)/);
   });
 
   it("prefetches both the next and the previous chapter", () => {
     expect(bible).toMatch(/function triggerPredictivePrefetch\(\)[\s\S]{0,300}\[1, -1\]\.forEach/);
   });
 
-  it("shows the one-time swipe tip with guarded storage access", () => {
+  it("repeats the swipe tip (max 3 times, once per session) until the member has swiped once", () => {
     expect(bible).toContain('READER_SWIPE_TIP_STORAGE_KEY = "bible_reader_swipe_tip_seen"');
-    expect(bible).toMatch(/function maybeShowReaderSwipeTip\(\)[\s\S]*?try \{[\s\S]*?localStorage\.getItem/);
+    expect(bible).toContain('READER_SWIPED_STORAGE_KEY = "bible_reader_swiped"');
+    expect(bible).toContain("READER_SWIPE_TIP_MAX_SHOWS = 3");
+    expect(bible).toMatch(/function maybeShowReaderSwipeTip\(\)[\s\S]*?try \{[\s\S]*?localStorage\.getItem\(READER_SWIPED_STORAGE_KEY\)/);
+    expect(bible).toContain("if (commit) markReaderSwiped();");
   });
 
-  it("renders the edge hint and keeps the reader chrome out of swipe handling", () => {
-    expect(html).toContain('id="reader-swipe-hint"');
+  it("drops the old edge hint, keeps reader chrome out of swipe handling, hides floating buttons on touch", () => {
+    expect(html).not.toContain('id="reader-swipe-hint"');
+    expect(css).not.toContain(".reader-swipe-hint");
     expect(html).toMatch(/id="reader-top-navbar" data-swipe-ignore/);
     expect(html).toMatch(/id="selection-bottom-bar-root" data-swipe-ignore/);
-    expect(css).toContain('.reader-swipe-hint[data-direction="next"][data-armed]');
+    expect(css).toMatch(/@media \(hover: none\) and \(pointer: coarse\) \{\s*#reader-view \.reader-floating-nav \{\s*display: none !important;/);
+    expect(html).toContain('id="reader-chapter-announcer"');
+  });
+
+  it("puts a 上一章｜下一章 link row at the chapter end, hiding the side that does not exist", () => {
+    expect(bible).toContain("function buildChapterEndNav(bookId, chapter)");
+    expect(bible).toContain('makeLink(-1, copy.prevChapter || "上一章", hasPrev)');
+    expect(bible).toContain('makeLink(1, copy.nextChapter || "下一章", hasNext)');
+    expect(bible).toContain("button.hidden = !available;");
+    expect(bible).toContain("container.appendChild(buildChapterEndNav(bookId, chapter));");
+    expect(css).toMatch(/\.reader-chapter-end-link \{[^}]*min-height: 44px;/);
   });
 });
