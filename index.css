@@ -17261,3 +17261,61 @@ textarea::placeholder {
   .org-stats-node__name { font-size: 0.9rem; }
 }
 .exam-assign__meta { font-size: 0.875rem; color: var(--text-muted); }
+
+/* #358 進度提醒橫幅（首頁）＋ 計畫頁「這一遍還沒完成」摘要。
+   純色 + token；不用漸層／品牌光暈。normal＝品牌色外框，urgent／final＝警示暖色外框（final 較粗、底色較深）。 */
+.plan-reminder-banner { display: grid; gap: 0.5rem; }
+.plan-reminder-banner.hidden { display: none; }
+.plan-reminder-banner__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-brand);
+  background-color: color-mix(in srgb, var(--color-brand) 6%, var(--bg-card));
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.plan-reminder-banner__item--urgent {
+  border: 1.5px solid var(--color-warning);
+  background-color: color-mix(in srgb, var(--color-warning) 8%, var(--bg-card));
+}
+.plan-reminder-banner__item--final {
+  border: 2px solid var(--color-danger);
+  background-color: color-mix(in srgb, var(--color-danger) 10%, var(--bg-card));
+}
+.plan-reminder-banner__icon { flex-shrink: 0; color: var(--color-brand); }
+.plan-reminder-banner__item--urgent .plan-reminder-banner__icon { color: var(--color-warning); }
+.plan-reminder-banner__item--final .plan-reminder-banner__icon { color: var(--color-danger-foreground); }
+.plan-reminder-banner__main { flex: 1; min-width: 0; }
+.plan-reminder-banner__title { font-size: 1rem; font-weight: var(--type-weight-strong, 500); }
+.plan-reminder-banner__plan {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-reminder-banner__close { flex-shrink: 0; }
+
+.plan-unfinished-summary { margin: 0 0 0.75rem; }
+.plan-unfinished-summary.hidden { display: none; }
+.plan-unfinished-summary__inner {
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-card);
+  background-color: var(--bg-card);
+}
+.plan-unfinished-summary__label { margin: 0 0 0.25rem; font-size: 0.875rem; color: var(--text-muted); }
+.plan-unfinished-summary__ranges {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+  max-height: 7.5rem;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.plan-unfinished-summary__deadline { margin: 0; font-size: 0.875rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.plan-unfinished-summary__deadline--urgent { color: var(--color-danger-foreground); }
+.plan-unfinished-summary__grace { margin: 0.15rem 0 0; font-size: 0.875rem; color: var(--text-muted); }

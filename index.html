@@ -292,6 +292,10 @@
                --color-warning 強調語言），比一般公告更醒目；沒有就整塊隱藏。 -->
           <div class="glass-card card-col span-12 bento-card urgent-announcement-banner hidden" id="urgent-announcements-banner" aria-live="polite"></div>
 
+          <!-- 進度提醒橫幅（#358）：落後的速讀計畫「本週還差 N 章，截止 M/D」，可關閉、當天不再出現。
+               內容由 js/modules/home.js refreshPlanReminderBanner() 依 js/data/plan-reminders.mjs 決定；沒有落後時整塊隱藏。 -->
+          <div class="card-col span-12 plan-reminder-banner hidden" id="plan-reminder-banner" aria-live="polite"></div>
+
           <!-- 置頂：速讀「大測驗」預告 / 入口。內容由後台「預告文」分頁維護，
                透過 db.getExamHomeBanner() 帶入；功能關閉或尚未發佈預告時整塊隱藏。 -->
           <div class="glass-card card-col span-12 bento-card quiz-announcement-banner hidden" id="quiz-announcement-banner">
@@ -978,6 +982,8 @@
           <!-- 子分頁 1：每日讀經進度表 -->
           <div id="subview-plan-schedule">
             <!-- plan-schedule-view-container dynamically renders Card view or Calendar view mutually exclusively -->
+            <!-- 這一遍還沒完成的章節 + 截止倒數（#358），由 plan.js renderPlanUnfinishedSummary() 填入 -->
+            <div id="plan-unfinished-summary" class="plan-unfinished-summary hidden"></div>
             <div id="plan-schedule-view-container" class="w-full">
               <!-- Populated dynamically by JS -->
             </div>

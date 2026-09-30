@@ -36,6 +36,7 @@ import {
 } from "./quiz-question-types.mjs";
 import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import { getUnfinishedChapters, formatUnfinishedRanges, getDeadlineInfo, isSpeedReadingPlan, toDateKey as toReminderDateKey } from "../data/plan-reminders.mjs";
 import {
   countDayReadingRecordsByDate,
   formatSequentialCheckMessage,
@@ -3223,6 +3224,36 @@ function renderDayReadingRecordsSection(records) {
   return section;
 }
 
+// #358：計畫頁「這一遍還沒完成」＋截止倒數。純邏輯在 js/data/plan-reminders.mjs；
+// 這裡只負責把結果畫進 #plan-unfinished-summary。全部讀完 / 不是速讀計畫 / 彈性計畫沒截止日時，
+// 只在有內容可講時才顯示，其餘整塊隱藏。
+function renderPlanUnfinishedSummary(plan = state.activePlan) {
+  const host = document.getElementById("plan-unfinished-summary");
+  if (!host) return;
+  const hide = () => { host.classList.add("hidden"); host.innerHTML = ""; };
+  if (!plan || !isSpeedReadingPlan(plan) || !Array.isArray(plan.days)) return hide();
+
+  const unfinished = getUnfinishedChapters(plan);
+  const deadline = getDeadlineInfo(plan, toReminderDateKey(new Date()));
+  const round = Number(plan.currentRound || 1);
+  if (unfinished.length === 0 && !deadline.text) return hide();
+
+  const rangesText = formatUnfinishedRanges(unfinished);
+  const roundLabel = round > 1 ? `第 ${round} 遍` : "這一遍";
+  const listHtml = unfinished.length > 0
+    ? `<p class="plan-unfinished-summary__label">${escapeHTML(roundLabel)}還沒完成（${unfinished.length} 章）：</p>
+       <p class="plan-unfinished-summary__ranges">${escapeHTML(rangesText)}</p>`
+    : `<p class="plan-unfinished-summary__label">${escapeHTML(roundLabel)}的章節都完成了</p>`;
+  const urgent = deadline.phase === "open" && deadline.daysLeft <= 3 && unfinished.length > 0;
+  const deadlineHtml = deadline.text
+    ? `<p class="plan-unfinished-summary__deadline${urgent ? " plan-unfinished-summary__deadline--urgent" : ""}">${escapeHTML(deadline.text)}</p>
+       ${deadline.graceNote && deadline.phase !== "closed" ? `<p class="plan-unfinished-summary__grace">${escapeHTML(deadline.graceNote)}</p>` : ""}`
+    : "";
+
+  host.classList.remove("hidden");
+  host.innerHTML = `<div class="plan-unfinished-summary__inner">${listHtml}${deadlineHtml}</div>`;
+}
+
 async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = null) {
 
   const container = document.getElementById("plan-tasks-list");
@@ -3243,6 +3274,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
   }
 
   renderPlanProgressUpgradeOverlay(state.activePlan);
+  renderPlanUnfinishedSummary(state.activePlan);
 
   const currentRequestId = ++lastTrackerRequestId;
 

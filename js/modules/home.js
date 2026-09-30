@@ -5,6 +5,7 @@ import { DevotionalSharingController } from "./devotional-sharing-controller.mjs
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import { decideReminderBanners, readDismissed, saveDismissal, toDateKey as toReminderDateKey } from "../data/plan-reminders.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -187,6 +188,7 @@ export function updateDashboardView() {
 
   renderDailyVerse();
   updateAnnouncementsList();
+  refreshPlanReminderBanner();
   void refreshExamHomeBanner();
   void refreshDevotionHomeCard();
   void refreshGroupMeetingHomeCard();
@@ -736,6 +738,65 @@ function formatRelativeAnnouncementTime(dateString) {
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return dateString;
   return date.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit' });
+}
+
+// #358：進度提醒橫幅。落後（本遍排定到今天卻還沒打卡）的速讀計畫各一則；沒落後就整塊隱藏。
+// 決策全在 js/data/plan-reminders.mjs；這裡只做讀 localStorage（try/catch）、畫、綁事件。
+// 點橫幅 → 開該計畫；按 ✕ → 當天不再出現（同一天內重畫也不會回來）。
+function refreshPlanReminderBanner() {
+  const host = document.getElementById("plan-reminder-banner");
+  if (!host) return;
+  const hide = () => { host.classList.add("hidden"); host.innerHTML = ""; };
+  try {
+    const plans = Array.isArray(state.activePlans) ? state.activePlans : [];
+    const todayKey = toReminderDateKey(new Date());
+    let storage = null;
+    try { storage = window.localStorage; } catch (_) { storage = null; }
+    const banners = decideReminderBanners({ plans, todayKey, dismissed: readDismissed(storage) });
+    if (!banners.length) return hide();
+
+    host.classList.remove("hidden");
+    host.innerHTML = banners.map(banner => `
+      <div class="plan-reminder-banner__item plan-reminder-banner__item--${banner.level}" data-plan-key="${escapeHTML(banner.planKey)}" role="button" tabindex="0">
+        <span class="plan-reminder-banner__icon nlc-icon nlc-icon--md" data-icon="bell" aria-hidden="true"></span>
+        <div class="plan-reminder-banner__main">
+          <div class="plan-reminder-banner__title">${escapeHTML(banner.message)}</div>
+          ${banner.planName ? `<div class="plan-reminder-banner__plan">${escapeHTML(banner.planName)}</div>` : ""}
+        </div>
+        <button type="button" class="plan-reminder-banner__close icon-button icon-button--subtle" aria-label="今天不再提醒" data-plan-reminder-dismiss>
+          <span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </div>`).join("");
+
+    const openPlan = (planKey) => {
+      const plan = plans.find(p => p && String(p.globalPlanId || p.id || p.presetKey || "") === planKey);
+      if (!plan) return;
+      state.activePlan = plan;
+      if (typeof window.openActivePlanFromDashboard === "function") window.openActivePlanFromDashboard();
+    };
+    host.querySelectorAll(".plan-reminder-banner__item").forEach(item => {
+      const planKey = item.getAttribute("data-plan-key") || "";
+      item.addEventListener("click", (event) => {
+        if (event.target.closest("[data-plan-reminder-dismiss]")) return;
+        openPlan(planKey);
+      });
+      item.addEventListener("keydown", (event) => {
+        if (event.target !== item) return;
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPlan(planKey); }
+      });
+      const closeBtn = item.querySelector("[data-plan-reminder-dismiss]");
+      if (closeBtn) closeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        saveDismissal(storage, planKey, todayKey);
+        item.remove();
+        if (!host.querySelector(".plan-reminder-banner__item")) hide();
+      });
+    });
+    if (typeof hydrateIcons === "function") hydrateIcons(host);
+  } catch (e) {
+    console.warn("[Home] refreshPlanReminderBanner error:", e);
+    hide();
+  }
 }
 
 // 重要／緊急公告單獨置頂（#urgent-announcements-banner），暖色外框，比一般公告醒目。
