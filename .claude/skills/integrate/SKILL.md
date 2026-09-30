@@ -20,6 +20,7 @@ for b in $(git branch --format='%(refname:short)' --no-merged origin/staging --l
   git log -1 --format="$b | %(trailers:key=Status,valueonly,separator=) | dep: %(trailers:key=Depends-on,valueonly,separator=) | mig: %(trailers:key=Migration,valueonly,separator=) | note: %(trailers:key=Integrator-note,valueonly,separator=)" "$b"
 done
 ```
+Also note each branch's `Reading-log-write` trailer (`%(trailers:key=Reading-log-write,valueonly,separator=)`).
 Merge only `Status: ready`. Order by `Depends-on`, then by migration timestamp. A branch without trailers is not ready — leave it.
 
 ## 3. Dry-run conflicts (touches nothing)
@@ -60,7 +61,7 @@ git worktree remove "<worktree>"
 git branch -d task/<x>
 node .claude/hooks/integration.mjs release
 ```
-Only remove a task worktree whose branch you merged. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app.
+Only remove a task worktree whose branch you merged. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app. If any merged branch has `Reading-log-write: yes`, the `Verify` list you give must also include checking with an account that is **behind schedule** and one that has **gaps** (an unchecked chapter before the last checked one) — check-in changes break exactly those accounts first.
 
 ## 8. Release PR (staging → main) — only after the user says staging is verified
 ```bash
@@ -81,5 +82,6 @@ Take the lock, then:
    git merge-base --is-ancestor origin/staging origin/main && git push origin origin/main:refs/heads/staging
    ```
    Not an ancestor (staging moved on since the merge) → in a temporary detached worktree of `origin/staging`: `git merge --no-ff origin/main -m "Merge main back into staging after release #<PR>"`, `npm test`, `git push origin HEAD:staging`. Afterwards `git rev-list --count origin/staging..origin/main` must be `0`.
-4. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`).
-5. Release the lock.
+4. **Reading-log health check**: if the release included any `Reading-log-write: yes` branch, run `supabase/queries/reading_log_health.sql` in the production SQL Editor the next day (one section at a time) and compare check-ins per day, users with gaps, and the rejection rate against the days before the release; tell the user if anything jumped.
+5. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`).
+6. Release the lock.
