@@ -22,7 +22,9 @@ const nlcData = read("supabase/functions/nlc-data/index.ts");
 const dbSource = read("js/db.js");
 const pwaCoordinator = read("js/pwa/PwaCoordinator.js");
 
-const FLAG_LINE = "  PERFORM set_config('app.check_in_rpc', 'on', true);\n\n";
+const FLAG_ON = "PERFORM set_config('app.check_in_rpc', 'on', true);";
+const FLAG_OFF = "PERFORM set_config('app.check_in_rpc', 'off', true);";
+const ALLOWED_WRAPPER_LINES = [FLAG_ON, FLAG_OFF, "BEGIN", "EXCEPTION WHEN OTHERS THEN", "WHEN OTHERS THEN", "RAISE;", "END;"];
 const functionSource = (text, name) => {
   const start = text.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   const endMarker = `$${name}$;`;
@@ -36,16 +38,46 @@ describe("migration: plan-bound reading_logs only through the check-in RPCs", ()
     expect(migrationFile > baseFile).toBe(true);
   });
 
-  it("re-creates record/unrecord exactly as #355 plus only the transaction-local flag", () => {
+  it("re-creates record/unrecord as #355 with only the flag wrapper added (nothing removed or changed)", () => {
+    const lines = text => text.split("\n").map(line => line.trim()).filter(Boolean);
     for (const name of ["record_chapter_read", "unrecord_chapter_read"]) {
-      const original = functionSource(baseMigration, name);
-      const updated = functionSource(migration, name);
-      expect(original, name).not.toBe("");
-      expect(updated, name).toContain(FLAG_LINE);
-      expect(updated.replace(FLAG_LINE, ""), name).toBe(original);
-      // 旗標在碰 reading_logs 之前就設好
-      expect(updated.indexOf("set_config('app.check_in_rpc'")).toBeLessThan(updated.indexOf("public.reading_logs"));
+      const original = lines(functionSource(baseMigration, name));
+      const updated = lines(functionSource(migration, name));
+      expect(original.length, name).toBeGreaterThan(0);
+      // 原本每一行都依序還在；多出來的只能是旗標包裝
+      const added = [];
+      let i = 0;
+      for (const line of updated) {
+        if (i < original.length && line === original[i]) i += 1;
+        else added.push(line);
+      }
+      expect(i, name).toBe(original.length);
+      for (const line of added) expect(ALLOWED_WRAPPER_LINES, `${name}: ${line}`).toContain(line);
     }
+  });
+
+  it("turns the flag on right before each reading_logs write and back off right after, also on errors", () => {
+    for (const [name, dml] of [
+      ["record_chapter_read", "INSERT INTO public.reading_logs"],
+      ["reset_plan_reading_logs", "DELETE FROM public.reading_logs"],
+      ["unrecord_chapter_read", "DELETE FROM public.reading_logs"]
+    ]) {
+      const body = functionSource(migration, name);
+      expect(body.split(FLAG_ON).length - 1, name).toBe(1);
+      const on = body.indexOf(FLAG_ON);
+      const write = body.indexOf(dml);
+      const diagnostics = body.indexOf("GET DIAGNOSTICS", write);
+      // on → DML → GET DIAGNOSTICS → off，中間沒有別的語句
+      expect(body.slice(on + FLAG_ON.length, write).trim(), name).toBe("");
+      expect(body.slice(body.indexOf(";", diagnostics) + 1).trimStart().startsWith(FLAG_OFF), name).toBe(true);
+      // 出錯也設回 off 再 RAISE
+      expect(body, name).toMatch(/WHEN OTHERS THEN\n\s+PERFORM set_config\('app\.check_in_rpc', 'off', true\);\n\s+RAISE;/);
+      // 函式開頭不再整段開著旗標
+      expect(body.slice(0, body.indexOf("<<checks>>") >= 0 ? body.indexOf("<<checks>>") : on), name).not.toContain(FLAG_ON);
+    }
+    // record 的 raise_exception 分支也先設回 off
+    expect(functionSource(migration, "record_chapter_read"))
+      .toMatch(/EXCEPTION WHEN raise_exception THEN\n\s+PERFORM set_config\('app\.check_in_rpc', 'off', true\);/);
   });
 
   it("keeps every function service_role-only (REVOKE FROM PUBLIC, anon, authenticated + minimal GRANT)", () => {

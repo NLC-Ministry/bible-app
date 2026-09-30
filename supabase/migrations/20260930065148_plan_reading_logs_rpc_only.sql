@@ -5,9 +5,10 @@
 -- 這支 migration 讓 plan_id 不是 NULL 的 reading_logs 只能由那兩支 RPC 寫入：
 --
 --   1. record_chapter_read / unrecord_chapter_read（CREATE OR REPLACE，內容跟
---      20260930042246_record_chapter_read.sql 完全相同，只在函式開頭多一行
---      PERFORM set_config('app.check_in_rpc', 'on', true);）＋同樣的 REVOKE / GRANT。
---      is_local = true：旗標只活在這個交易（nlc-data 每個 RPC 請求＝一個交易），不會外洩。
+--      20260930042246_record_chapter_read.sql 相同，只多了：寫 reading_logs 的那一句
+--      前面 PERFORM set_config('app.check_in_rpc', 'on', true);、後面立刻設回 'off'，
+--      出錯時也在 EXCEPTION WHEN OTHERS 裡設回 'off' 再 RAISE）＋同樣的 REVOKE / GRANT。
+--      旗標只在那一句 DML 期間是 'on'：函式回傳後，同一個交易裡後面的語句不會跟著繞過 trigger。
 --   2. 新 trigger trg_reading_logs_check_in_rpc_only（BEFORE INSERT OR UPDATE OR DELETE，FOR EACH ROW）：
 --      受影響的列 plan_id 不是 NULL（UPDATE 看新舊兩邊）而且 app.check_in_rpc 不是 'on'
 --      → RAISE EXCEPTION 'check_in_via_rpc_only'。
@@ -60,8 +61,6 @@ DECLARE
   v_reason TEXT := NULL;
   v_inserted INTEGER := 0;
 BEGIN
-  PERFORM set_config('app.check_in_rpc', 'on', true);
-
   <<checks>>
   BEGIN
     SELECT * INTO v_enrollment
@@ -140,11 +139,14 @@ BEGIN
     END IF;
 
     BEGIN
+      PERFORM set_config('app.check_in_rpc', 'on', true);
       INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, round, read_at)
       VALUES (p_user_id, p_plan_id, p_book, p_chapter, p_round, v_read_at)
       ON CONFLICT (user_id, plan_id, book, chapter, round) DO NOTHING;
       GET DIAGNOSTICS v_inserted = ROW_COUNT;
+      PERFORM set_config('app.check_in_rpc', 'off', true);
     EXCEPTION WHEN raise_exception THEN
+      PERFORM set_config('app.check_in_rpc', 'off', true);
       -- 0098 / 0010 的 trigger 兜底（理論上上面已先擋掉，這裡只防競態）
       IF SQLERRM = 'campaign_stage_progress_not_open' THEN
         v_reason := 'stage_not_open';
@@ -153,6 +155,9 @@ BEGIN
         v_reason := 'not_owner';
         EXIT checks;
       END IF;
+      RAISE;
+    WHEN OTHERS THEN
+      PERFORM set_config('app.check_in_rpc', 'off', true);
       RAISE;
     END;
 
@@ -199,8 +204,6 @@ DECLARE
   v_reason TEXT := NULL;
   v_deleted INTEGER := 0;
 BEGIN
-  PERFORM set_config('app.check_in_rpc', 'on', true);
-
   <<checks>>
   BEGIN
     SELECT * INTO v_enrollment
@@ -253,13 +256,20 @@ BEGIN
       EXIT checks;
     END IF;
 
-    DELETE FROM public.reading_logs log
-    WHERE log.user_id = p_user_id
-      AND log.plan_id = p_plan_id
-      AND log.book = p_book
-      AND log.chapter = p_chapter
-      AND log.round = p_round;
-    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    BEGIN
+      PERFORM set_config('app.check_in_rpc', 'on', true);
+      DELETE FROM public.reading_logs log
+      WHERE log.user_id = p_user_id
+        AND log.plan_id = p_plan_id
+        AND log.book = p_book
+        AND log.chapter = p_chapter
+        AND log.round = p_round;
+      GET DIAGNOSTICS v_deleted = ROW_COUNT;
+      PERFORM set_config('app.check_in_rpc', 'off', true);
+    EXCEPTION WHEN OTHERS THEN
+      PERFORM set_config('app.check_in_rpc', 'off', true);
+      RAISE;
+    END;
 
     v_ok := TRUE;
     v_reason := CASE WHEN v_deleted = 0 THEN 'already_unread' ELSE NULL END;
@@ -302,12 +312,17 @@ BEGIN
     RAISE EXCEPTION 'not_owner' USING ERRCODE = 'P0001';
   END IF;
 
-  PERFORM set_config('app.check_in_rpc', 'on', true);
-
-  DELETE FROM public.reading_logs log
-  WHERE log.user_id = p_user_id
-    AND log.plan_id = p_plan_id;
-  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  BEGIN
+    PERFORM set_config('app.check_in_rpc', 'on', true);
+    DELETE FROM public.reading_logs log
+    WHERE log.user_id = p_user_id
+      AND log.plan_id = p_plan_id;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    PERFORM set_config('app.check_in_rpc', 'off', true);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM set_config('app.check_in_rpc', 'off', true);
+    RAISE;
+  END;
 
   RETURN v_deleted;
 END;
