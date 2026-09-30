@@ -2,6 +2,7 @@ import { getResponsePayloadBytes, networkMetrics } from './performance/network-m
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
+import { checkInReasonMessage, isCheckInRpcUnavailable, normalizeCheckInResult } from './data/check-in-reasons.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
 import {
@@ -2178,6 +2179,91 @@ const db = {
     };
   },
 
+  // ── 打卡 RPC（#355）─────────────────────────────────────────────────────
+  // 回傳 { ok, reason }：ok=false 是規則拒絕（reason 見 js/data/check-in-reasons.mjs）；
+  // 網路／登入／伺服器錯誤一律 throw，跟規則拒絕分開。RPC 在這個環境呼叫不到時 throw 的
+  // error 帶 checkInRpcUnavailable=true。user id 由 nlc-data 以登入身分注入，這裡不傳。
+  _checkInRpcUnavailable: false,
+  _newCheckInClientId() {
+    try {
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
+    } catch (_) { /* fall through */ }
+    return `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  },
+  async _callCheckInRpc(functionName, args) {
+    const client = state.supabase;
+    if (this._checkInRpcUnavailable || !state.isSupabaseMode || !client || typeof client.rpc !== "function") {
+      const unavailable = new Error("check_in_rpc_unavailable");
+      unavailable.checkInRpcUnavailable = true;
+      throw unavailable;
+    }
+    const { data, error } = await client.rpc(functionName, args);
+    if (error) {
+      const rpcError = new Error(error.message || error.error || String(error));
+      rpcError.code = error.code || null;
+      rpcError.status = Number(error.status || 0);
+      if (isCheckInRpcUnavailable(error)) {
+        rpcError.checkInRpcUnavailable = true;
+        this._checkInRpcUnavailable = true;
+      }
+      throw rpcError;
+    }
+    const result = normalizeCheckInResult(data);
+    if (!result) throw new Error(`${functionName}_bad_response`);
+    return result;
+  },
+  async recordChapterRead({ plan = null, planId = null, book, chapter, round, readAt = null, clientId = null } = {}) {
+    const targetPlanId = planId || (plan && plan.id) || null;
+    return this._callCheckInRpc("record_chapter_read", {
+      p_plan_id: targetPlanId,
+      p_book: book,
+      p_chapter: Number(chapter),
+      p_round: Number(round || (plan && plan.currentRound) || 1),
+      p_read_at: readAt ? new Date(readAt).toISOString() : new Date().toISOString(),
+      p_client_id: clientId || this._newCheckInClientId()
+    });
+  },
+  async unrecordChapterRead({ plan = null, planId = null, book, chapter, round, clientId = null } = {}) {
+    const targetPlanId = planId || (plan && plan.id) || null;
+    return this._callCheckInRpc("unrecord_chapter_read", {
+      p_plan_id: targetPlanId,
+      p_book: book,
+      p_chapter: Number(chapter),
+      p_round: Number(round || (plan && plan.currentRound) || 1),
+      p_client_id: clientId || this._newCheckInClientId()
+    });
+  },
+  // RPC 寫入不經 readingLogRepository，要自己清掉它的離線快取，否則下次載入會看到舊資料。
+  async _invalidateReadingLogCache(userId) {
+    const repository = window.readingLogRepository;
+    if (!userId || !repository || typeof repository.deleteCache !== "function") return;
+    try {
+      await repository.deleteCache(`reading_logs:${userId}`);
+    } catch (error) {
+      console.warn("[ReadingLog] Cache invalidation failed after check-in RPC", error);
+    }
+  },
+  // logChapterRead 用：true = RPC 已處理；false = 這個環境呼叫不到 RPC，改走舊路徑；
+  // 規則拒絕 → throw code=CHECK_IN_REJECTED（帶 reason 與中文訊息，呼叫端照舊還原勾勾＋提示）。
+  async _persistChapterCheckIn(isChecked, { planId, book, chapter, round, readAt = null }) {
+    let result;
+    try {
+      result = isChecked
+        ? await this.recordChapterRead({ planId, book, chapter, round, readAt })
+        : await this.unrecordChapterRead({ planId, book, chapter, round });
+    } catch (error) {
+      if (error && error.checkInRpcUnavailable) return false;
+      throw error;
+    }
+    if (!result.ok) {
+      const rejected = new Error(checkInReasonMessage(result.reason));
+      rejected.code = "CHECK_IN_REJECTED";
+      rejected.reason = result.reason;
+      throw rejected;
+    }
+    return true;
+  },
+
   // Save log to DB/LocalStorage
   async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null) {
     // Offline reading mode only ever has the cached 30-day-old snapshot —
@@ -2235,63 +2321,73 @@ const db = {
           throw authError;
         }
 
-        const row = {
-          user_id: user.id,
-          plan_id: planId,
-          book,
-          chapter: Number(chapter),
-          read_at: todayISO,
-          round: Number(round)
-        };
-        const cacheKey = `reading_logs:${user.id}`;
-        const repository = window.readingLogRepository || null;
-        const throwWriteError = result => {
-          if (!result?.error) return result;
-          const error = new Error(result.error.message || result.error.error || String(result.error));
-          error.status = Number(result.status || result.error.status || 0);
-          error.code = result.error.code || null;
-          throw error;
-        };
-        const insertReadingLog = () => repository
-          ? repository.insert(row, { invalidate: [cacheKey] })
-          : state.supabase.from("reading_logs").insert(row);
-        const updateReadingLog = id => repository
-          ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
-          : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
-        const compatiblePlanWrite = async () => {
-          const existingResult = await state.supabase.from("reading_logs").select("id")
-            .eq("user_id", user.id).eq("plan_id", planId).eq("book", book)
-            .eq("chapter", Number(chapter)).eq("round", Number(round)).limit(1);
-          throwWriteError(existingResult);
-          const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
-          return existingRow?.id ? updateReadingLog(existingRow.id) : insertReadingLog();
-        };
-
-        let writeResult;
-        if (planId) {
-          try {
-            writeResult = repository
-              ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
-              : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
-            throwWriteError(writeResult);
-          } catch (upsertError) {
-            console.warn("[ReadingLog] Upsert failed; retrying with compatible update/insert", {
-              planId, book, chapter: Number(chapter), round: Number(round), error: upsertError
-            });
-            writeResult = await compatiblePlanWrite();
-          }
+        // 計畫內打卡一律走伺服器 RPC（#355，規則只有一份）；RPC 在這個環境呼叫不到
+        // （nlc-data 未重新部署、migration 未套、本機 dev 的真 Supabase client）才退回舊的直接寫表。
+        const rpcHandled = planId
+          ? await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO })
+          : false;
+        if (rpcHandled) {
+          await this._invalidateReadingLogCache(user.id);
+          console.info("[ReadingLog] Persisted via record_chapter_read", { planId, book, chapter: Number(chapter), round: Number(round) });
         } else {
-          const deleteResult = repository
-            ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
-              .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
-            : await state.supabase.from("reading_logs").delete()
-              .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
-              .eq("round", round).is("plan_id", null);
-          throwWriteError(deleteResult);
-          writeResult = await insertReadingLog();
+          const row = {
+            user_id: user.id,
+            plan_id: planId,
+            book,
+            chapter: Number(chapter),
+            read_at: todayISO,
+            round: Number(round)
+          };
+          const cacheKey = `reading_logs:${user.id}`;
+          const repository = window.readingLogRepository || null;
+          const throwWriteError = result => {
+            if (!result?.error) return result;
+            const error = new Error(result.error.message || result.error.error || String(result.error));
+            error.status = Number(result.status || result.error.status || 0);
+            error.code = result.error.code || null;
+            throw error;
+          };
+          const insertReadingLog = () => repository
+            ? repository.insert(row, { invalidate: [cacheKey] })
+            : state.supabase.from("reading_logs").insert(row);
+          const updateReadingLog = id => repository
+            ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
+            : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
+          const compatiblePlanWrite = async () => {
+            const existingResult = await state.supabase.from("reading_logs").select("id")
+              .eq("user_id", user.id).eq("plan_id", planId).eq("book", book)
+              .eq("chapter", Number(chapter)).eq("round", Number(round)).limit(1);
+            throwWriteError(existingResult);
+            const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
+            return existingRow?.id ? updateReadingLog(existingRow.id) : insertReadingLog();
+          };
+
+          let writeResult;
+          if (planId) {
+            try {
+              writeResult = repository
+                ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+                : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+              throwWriteError(writeResult);
+            } catch (upsertError) {
+              console.warn("[ReadingLog] Upsert failed; retrying with compatible update/insert", {
+                planId, book, chapter: Number(chapter), round: Number(round), error: upsertError
+              });
+              writeResult = await compatiblePlanWrite();
+            }
+          } else {
+            const deleteResult = repository
+              ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
+                .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
+              : await state.supabase.from("reading_logs").delete()
+                .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
+                .eq("round", round).is("plan_id", null);
+            throwWriteError(deleteResult);
+            writeResult = await insertReadingLog();
+          }
+          throwWriteError(writeResult);
+          console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
         }
-        throwWriteError(writeResult);
-        console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
       }
     } else {
       state.readingLogs = state.readingLogs.filter(l => !isSameChapterLog(l));
@@ -2299,8 +2395,15 @@ const db = {
       if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
         if (user) {
+          // 計畫內取消打卡走 unrecord_chapter_read（#355）；成功後只剩「同章、沒有 plan_id 的
+          // 自由閱讀紀錄」要照舊清掉（本機狀態把它當成同一章，不清會重整後又出現勾勾）。
+          const rpcHandled = planId
+            ? await this._persistChapterCheckIn(false, { planId, book, chapter, round })
+            : false;
+          if (rpcHandled) await this._invalidateReadingLogCache(user.id);
           const applyDeleteFilters = query => {
             query = query.eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
+            if (rpcHandled) return query.is("plan_id", null);
             return planId ? query.or(`plan_id.eq.${planId},plan_id.is.null`) : query.is("plan_id", null);
           };
           const cacheKey = `reading_logs:${user.id}`;
