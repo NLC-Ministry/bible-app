@@ -45,6 +45,13 @@ window.APP_COPY = {
       already_read: "這章已經記錄過了",
       already_unread: "這章本來就沒有記錄",
     },
+    // 打卡 outbox（js/pwa/CheckInOutbox.js，#356）
+    checkInPending: "{count} 章等待同步",
+    checkInPendingRoundAdvance: "還有 {count} 章等待同步，連線後再進入下一遍",
+    checkInLogoutTitle: "還有打卡沒同步",
+    checkInLogoutMessage: "還有 {count} 章的打卡還沒送到伺服器，現在登出這些紀錄會遺失。確定要登出嗎？",
+    checkInLogoutConfirm: "仍要登出",
+    checkInLogoutCancel: "先不要",
     autoRecordDone: "✓ 已記錄到〈{plan}〉",
     autoRecordPending: "讀到這裡停一下就會記錄",
     autoRecordNotRecorded: "未記錄：{reason}",

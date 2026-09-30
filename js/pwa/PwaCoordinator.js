@@ -67,7 +67,12 @@ export class PwaCoordinator {
   installReadingLogQueue() {
     if (!window.db || typeof window.db.logChapterRead !== "function" || this.originalLogChapterRead) return;
     this.originalLogChapterRead = window.db.logChapterRead.bind(window.db);
-    window.db.logChapterRead = async (book, chapter, isChecked, roundOverride = null, planOverride = null) => {
+    window.db.logChapterRead = async (book, chapter, isChecked, roundOverride = null, planOverride = null, options = undefined) => {
+      // 計畫內打卡由 db.logChapterRead 自己放進打卡 outbox（js/pwa/CheckInOutbox.js，#356），
+      // outbox 送出時（options.direct）也直接過；這個舊佇列只剩自由閱讀在用。
+      if (options?.direct || this.usesCheckInOutbox(planOverride)) {
+        return this.originalLogChapterRead(book, chapter, isChecked, roundOverride, planOverride, options);
+      }
       const payload = this.createReadingPayload(book, chapter, isChecked, roundOverride, planOverride);
       if (!navigator.onLine && this.shouldQueue(payload)) {
         await this.applyLocalReadingChange(book, chapter, isChecked, roundOverride, planOverride);
@@ -82,6 +87,11 @@ export class PwaCoordinator {
         return { queued: true, offline: true };
       }
     };
+  }
+
+  usesCheckInOutbox(planOverride = null) {
+    const plan = planOverride || window.state?.activePlan || null;
+    return Boolean(plan?.id && typeof window.db?.canQueueCheckIn === "function" && window.db.canQueueCheckIn());
   }
 
   createReadingPayload(book, chapter, isChecked, roundOverride, planOverride = null) {

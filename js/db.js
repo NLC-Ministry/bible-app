@@ -482,7 +482,7 @@ const db = {
       const plans = JSON.parse(localStorage.getItem("active_reading_plans") || "[]");
       const logs = JSON.parse(localStorage.getItem("reading_logs") || "[]");
       state.activePlans = Array.isArray(plans) ? plans : [];
-      state.readingLogs = Array.isArray(logs) ? logs : [];
+      state.readingLogs = this._overlayPendingCheckIns(Array.isArray(logs) ? logs : []);
       state.activePlan = selectMostRecentActivePlan(state.activePlans);
       if (typeof calculateAllPlansProgress === "function") calculateAllPlansProgress();
       this["calculateStreak"]();
@@ -1204,6 +1204,11 @@ const db = {
     this.applyNlcProfile(payload.profile, payload.locked_fields || []);
     this.storeOfflineIdentity(payload.profile);
     this.setOfflineNavLock(false);
+    // 登入身分剛向伺服器確認過（重新登入、恢復連線）：丟掉別人的打卡、補送自己的（#356）。
+    try {
+      window.checkInOutbox?.handleSessionVerified?.(state.currentProfileId)
+        ?.catch?.(error => console.warn("[CheckInOutbox] Flush after session sync failed", error));
+    } catch (_) { /* outbox is best-effort here */ }
     return payload;
   },
 
@@ -1442,7 +1447,8 @@ const db = {
       const key = `${log.book}_${log.chapter}_${planKey}_${round}`;
       if (!uniqueMap[key] || new Date(log.read_at) > new Date(uniqueMap[key].read_at)) uniqueMap[key] = log;
     });
-    state.readingLogs = Object.values(uniqueMap);
+    // 還在 outbox 裡沒送出的打卡（#356）疊回去，重新載入後畫面不會把剛勾的章又顯示成沒勾。
+    state.readingLogs = this._overlayPendingCheckIns(Object.values(uniqueMap));
     if (state.currentUser) state.currentUser.chapters_read = state.readingLogs.length;
     if (notify) {
       window.dispatchEvent(new CustomEvent("app:dataRefresh", {
@@ -2245,12 +2251,12 @@ const db = {
   },
   // logChapterRead 用：true = RPC 已處理；false = 這個環境呼叫不到 RPC，改走舊路徑；
   // 規則拒絕 → throw code=CHECK_IN_REJECTED（帶 reason 與中文訊息，呼叫端照舊還原勾勾＋提示）。
-  async _persistChapterCheckIn(isChecked, { planId, book, chapter, round, readAt = null }) {
+  async _persistChapterCheckIn(isChecked, { planId, book, chapter, round, readAt = null, clientId = null }) {
     let result;
     try {
       result = isChecked
-        ? await this.recordChapterRead({ planId, book, chapter, round, readAt })
-        : await this.unrecordChapterRead({ planId, book, chapter, round });
+        ? await this.recordChapterRead({ planId, book, chapter, round, readAt, clientId })
+        : await this.unrecordChapterRead({ planId, book, chapter, round, clientId });
     } catch (error) {
       if (error && error.checkInRpcUnavailable) return false;
       throw error;
@@ -2264,21 +2270,43 @@ const db = {
     return true;
   },
 
+  // ── 打卡 outbox（#356）────────────────────────────────────────────────
+  // 計畫內打卡先寫進手機（js/pwa/CheckInOutbox.js），再背景送 RPC。outbox 還沒就緒、
+  // 不是 Supabase 模式、或不知道目前使用者時，退回直接寫入（舊行為）。
+  _checkInUserId() {
+    return state.currentProfileId || null;
+  },
+  canQueueCheckIn() {
+    const outbox = typeof window !== "undefined" ? window.checkInOutbox : null;
+    return Boolean(outbox && outbox.ready && state.isSupabaseMode && this._checkInUserId());
+  },
+  _overlayPendingCheckIns(logs) {
+    const outbox = typeof window !== "undefined" ? window.checkInOutbox : null;
+    if (!outbox || !outbox.ready || typeof outbox.applyPendingToLogs !== "function") return logs;
+    try {
+      return outbox.applyPendingToLogs(logs, { userId: this._checkInUserId() });
+    } catch (error) {
+      console.warn("[CheckInOutbox] Could not overlay pending check-ins", error);
+      return logs;
+    }
+  },
+
   // Save log to DB/LocalStorage
-  async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null) {
-    // Offline reading mode only ever has the cached 30-day-old snapshot —
-    // there is no live session to write through, and nothing queues these
-    // writes for later (unlike the authenticated-online IndexedDB queue).
-    // Fail fast and clearly instead of attempting (and always losing) a
-    // network round-trip.
-    if (state.offlineMode) {
+  // options.direct（只給 outbox 送出時用）：不進 outbox、直接送 RPC；readAt＝按下時間、clientId＝佇列那筆的 id。
+  async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null, options = {}) {
+    const direct = Boolean(options && options.direct);
+    const targetPlan = planOverride || state.activePlan;
+    // 計畫內打卡在離線時也照收（進 outbox，#356）；只有沒辦法排隊的（自由閱讀、outbox 未就緒）
+    // 才維持「離線閱讀模式無法記錄」——離線快照沒有可以寫入的連線。
+    const useOutbox = !direct && Boolean(targetPlan && targetPlan.id) && this.canQueueCheckIn();
+    if (state.offlineMode && !useOutbox && !direct) {
       const offlineError = new Error("離線閱讀模式無法記錄進度，恢復連線後再試");
       offlineError.code = "OFFLINE_READ_ONLY";
       throw offlineError;
     }
-    const todayISO = new Date().toISOString();
-    const targetPlan = planOverride || state.activePlan;
-    if (isChecked && targetPlan && isPlanProgressLocked(targetPlan, { hidden: window.isPlanHidden?.(targetPlan) })) {
+    const todayISO = (direct && options.readAt) ? new Date(options.readAt).toISOString() : new Date().toISOString();
+    // 鎖住的階段在按下時就擋；outbox 送出時由伺服器判斷（stage_not_open）。
+    if (!direct && isChecked && targetPlan && isPlanProgressLocked(targetPlan, { hidden: window.isPlanHidden?.(targetPlan) })) {
       const progressError = new Error("此階段尚未正式開放，無法記錄已讀");
       progressError.code = "PLAN_PROGRESS_LOCKED";
       throw progressError;
@@ -2313,7 +2341,9 @@ const db = {
 
       // The plan UI updates state.readingLogs optimistically before this runs.
       // Always persist independently; local existence does not mean a DB row exists.
-      if (state.isSupabaseMode && state.supabase) {
+      if (useOutbox) {
+        await this._enqueueCheckIn(true, { planId, book, chapter, round, pressedAt: todayISO });
+      } else if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
         if (!user || !user.id) {
           const authError = new Error("Unable to persist reading progress: authenticated profile unavailable");
@@ -2324,7 +2354,7 @@ const db = {
         // 計畫內打卡一律走伺服器 RPC（#355，規則只有一份）；RPC 在這個環境呼叫不到
         // （nlc-data 未重新部署、migration 未套、本機 dev 的真 Supabase client）才退回舊的直接寫表。
         const rpcHandled = planId
-          ? await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO })
+          ? await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO, clientId: direct ? options.clientId : null })
           : false;
         if (rpcHandled) {
           await this._invalidateReadingLogCache(user.id);
@@ -2392,13 +2422,21 @@ const db = {
     } else {
       state.readingLogs = state.readingLogs.filter(l => !isSameChapterLog(l));
 
-      if (state.isSupabaseMode && state.supabase) {
+      if (useOutbox) {
+        await this._enqueueCheckIn(false, { planId, book, chapter, round, pressedAt: todayISO });
+      } else if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
+        if (!user && direct) {
+          // outbox 送出時沒有登入身分：不能當成功（會把這筆從佇列拿掉），丟 401 讓它留著重送。
+          const authError = new Error("Unable to persist reading progress: authenticated profile unavailable");
+          authError.status = 401;
+          throw authError;
+        }
         if (user) {
           // 計畫內取消打卡走 unrecord_chapter_read（#355）；成功後只剩「同章、沒有 plan_id 的
           // 自由閱讀紀錄」要照舊清掉（本機狀態把它當成同一章，不清會重整後又出現勾勾）。
           const rpcHandled = planId
-            ? await this._persistChapterCheckIn(false, { planId, book, chapter, round })
+            ? await this._persistChapterCheckIn(false, { planId, book, chapter, round, clientId: direct ? options.clientId : null })
             : false;
           if (rpcHandled) await this._invalidateReadingLogCache(user.id);
           const applyDeleteFilters = query => {
@@ -2429,6 +2467,20 @@ const db = {
     if (typeof checkAchievements !== 'undefined') {
       await checkAchievements();
     }
+    return useOutbox ? { queued: true } : undefined;
+  },
+
+  // 進 outbox 這一步不會失敗（CheckInOutbox.enqueue 寫不進 IndexedDB 也會留在記憶體）。
+  async _enqueueCheckIn(checked, { planId, book, chapter, round, pressedAt }) {
+    await window.checkInOutbox.enqueue({
+      userId: this._checkInUserId(),
+      planId,
+      book,
+      chapter: Number(chapter),
+      round: Number(round) || 1,
+      checked,
+      pressedAt
+    });
   },
 
   async syncProfileStatsToSupabase() {
