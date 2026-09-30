@@ -319,6 +319,8 @@ function mapGlobalPlanRecord(dbPlan) {
     groupMeetingFutureOpen: Boolean(dbPlan.rules && dbPlan.rules.groupMeetingFutureOpen),
     ruleVersion: Number(dbPlan.rule_version || (campaignDefinition && campaignDefinition.version) || 1),
     publishedAt: dbPlan.published_at || null,
+    // 截止後寬限天數（#355 加 global_plans.grace_days；欄位還不存在時為 null，前端用預設值）。
+    graceDays: dbPlan.grace_days === undefined || dbPlan.grace_days === null ? null : Number(dbPlan.grace_days),
     campaignDefinition
   };
 }
@@ -1704,6 +1706,7 @@ const db = {
                 planObj.isFixed = isFixed;
                 planObj.is_fixed = isFixed;
                 planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
+                if (linkedGlobalPlan && linkedGlobalPlan.graceDays != null) planObj.graceDays = linkedGlobalPlan.graceDays;
                 planObj.planKind = linkedGlobalPlan?.planKind || (campaignStageNo >= 1 ? "church_campaign_stage" : "standard");
                 planObj.stageNo = linkedGlobalPlan?.stageNo || campaignStageNo || null;
                 // cohort：獎名 / 輪次 / 母 campaign 沿用來源正式階段（發獎 + 詳情頁獎章用）。
