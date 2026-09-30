@@ -1641,37 +1641,6 @@ body.offline-mode #offline-mode-banner {
   display: flex;
 }
 
-/* 「N 章等待同步」（js/pwa/CheckInSync.js，#356）：outbox 有東西才出現，不擋操作；
-   點一下立即再送一次。顏色全部走主題 token，三個主題自動跟著換。 */
-.checkin-pending-chip {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 9997;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  max-width: calc(100vw - 2rem);
-  padding: 0.35rem 0.8rem;
-  border: 1px solid var(--border-card);
-  border-radius: 999px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  box-shadow: var(--shadow-md);
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: var(--type-weight-strong);
-  line-height: 1.3;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.checkin-pending-chip svg {
-  flex: none;
-  color: var(--color-warning);
-}
-
 #offline-mode-banner-synced-at {
   display: block;
   font-weight: 400;
@@ -5248,7 +5217,7 @@ button.logout-btn:hover {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* 「下一章」建議標示（#357 起只是建議，不再上鎖） */
+/* 照順序打卡（#331）：下一章標示、還沒輪到的章上鎖 */
 .task-next-label {
   display: block;
   margin-top: 0.1rem;
@@ -5259,6 +5228,18 @@ button.logout-btn:hover {
 }
 .plan-task-item--next .task-checkbox {
   border-color: var(--color-brand) !important;
+}
+.plan-task-item--locked .task-title {
+  color: var(--text-muted);
+}
+.plan-task-item .task-checkbox.task-checkbox--locked {
+  color: var(--text-muted);
+  border-style: dashed !important;
+}
+.plan-task-item .task-checkbox.task-checkbox--locked svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
 }
 
 /* 當天閱讀紀錄（#330）：唯讀，依遍數分組 */
@@ -8820,165 +8801,22 @@ body.reader-modal-open .main-content {
   transition: font-size 0.16s ease;
 }
 
-/* 章末「完成本章」（#357）：讀經頁與計畫內嵌閱讀器共用。
-   平面色、字重 400/500、中性陰影；字級跟著閱讀字級放大，按鈕高度至少 48px（長輩好按）。 */
-.chapter-complete {
-  --chapter-complete-font: clamp(1rem, calc(var(--reader-font-size, 20px) * 0.9), 1.6rem);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.75rem;
-  margin: 2rem 0 0.75rem;
-  padding: 0;
-  font-size: var(--chapter-complete-font) !important;
-  line-height: 1.4;
-}
-.chapter-complete[hidden],
-.chapter-complete [hidden] {
-  display: none !important;
-}
-.chapter-complete__choices {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.chapter-complete__choices-label {
-  margin: 0;
-  font-size: 0.85em;
-  font-weight: 400;
-  color: var(--text-muted);
+/* 章末打卡狀態列（#349）：小字、靜音色；用主題 token，light / dark / warm 都跟著翻。 */
+.reader-record-status {
+  margin: 1.5rem 0 0.5rem;
+  padding: 0.5rem 0;
   text-align: center;
-}
-.chapter-complete__choice-track {
-  flex-wrap: wrap;
-}
-.chapter-complete__choice.segment-toggle-btn {
-  min-height: 44px;
-  min-width: 0;
-  padding: 0.4em 0.75em;
-  font-size: 0.85em;
-  font-weight: 400;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3em;
-}
-.chapter-complete__choice.segment-toggle-btn.active {
-  font-weight: 500;
-}
-.chapter-complete__choice-done {
-  display: inline-flex;
-  color: var(--color-success-foreground);
-}
-.chapter-complete__choice-done svg {
-  width: 1em;
-  height: 1em;
-}
-.chapter-complete__choice-select {
-  width: 100%;
-  min-height: 44px;
-  padding: 0.4em 0.75em;
-  font: inherit;
-  font-size: 0.9em;
-  color: var(--text-primary);
-  background: var(--bg-card, var(--bg-app));
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-}
-.chapter-complete__choices.is-pulsing {
-  animation: chapter-complete-pulse 0.9s ease-out 1;
-}
-.chapter-complete__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5em;
-  width: 100%;
-  min-height: max(48px, 2.6em);
-  padding: 0.6em 1em;
-  font: inherit;
-  font-size: 1em;
-  font-weight: 500;
-  line-height: 1.3;
-  color: #ffffff;
-  background: var(--color-brand);
-  border: 1px solid var(--color-brand);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.chapter-complete__button:hover {
-  background: var(--color-brand-hover);
-  border-color: var(--color-brand-hover);
-}
-.chapter-complete__button:active {
-  background: var(--color-brand-active);
-}
-.chapter-complete__button:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus-ring);
-}
-.chapter-complete__button[aria-disabled="true"] {
-  color: var(--text-muted);
-  background: transparent;
-  border-color: var(--border-card);
-  box-shadow: none;
-}
-.chapter-complete__button.is-pressed {
-  color: var(--color-success-foreground);
-  background: var(--color-success-subtle);
-  border-color: var(--color-success-border);
-  box-shadow: none;
-}
-.chapter-complete__button:not(.is-pressed) .chapter-complete__icon {
-  opacity: 0.9;
-}
-.chapter-complete__icon {
-  display: inline-flex;
-}
-.chapter-complete__icon svg {
-  width: 1.15em;
-  height: 1.15em;
-}
-.chapter-complete__label {
-  overflow-wrap: anywhere;
-}
-.chapter-complete__status {
-  margin: 0;
-  font-size: 0.8em;
+  font-size: 0.875rem !important;
   font-weight: 400;
   line-height: 1.5;
-  text-align: center;
   color: var(--text-muted);
 }
-.chapter-complete__status[data-kind="blocked"] {
-  color: var(--color-danger-foreground);
+.reader-record-status[hidden] {
+  display: none;
 }
-/* 讀到章末／朗讀唸完：閃一次提醒（只放大一點點＋外框，沒有發光）。 */
-.chapter-complete__button.is-pulsing {
-  animation: chapter-complete-pulse 0.9s ease-out 1;
-}
-.chapter-complete__button.is-just-completed .chapter-complete__icon {
-  animation: chapter-complete-pop 0.35s ease-out 1;
-}
-@keyframes chapter-complete-pulse {
-  0% { transform: scale(1); outline: 0 solid transparent; outline-offset: 0; }
-  35% { transform: scale(1.03); outline: 3px solid var(--color-brand-border); outline-offset: 3px; }
-  100% { transform: scale(1); outline: 0 solid transparent; outline-offset: 6px; }
-}
-@keyframes chapter-complete-pop {
-  0% { transform: scale(0.6); }
-  60% { transform: scale(1.25); }
-  100% { transform: scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .chapter-complete__button.is-pulsing,
-  .chapter-complete__choices.is-pulsing,
-  .chapter-complete__button.is-just-completed .chapter-complete__icon {
-    animation: none;
-  }
+.reader-record-status[data-state="done"] {
+  font-weight: 500;
+  color: var(--color-success-foreground);
 }
 
 #reader-view .bible-text-container,
@@ -17423,61 +17261,3 @@ textarea::placeholder {
   .org-stats-node__name { font-size: 0.9rem; }
 }
 .exam-assign__meta { font-size: 0.875rem; color: var(--text-muted); }
-
-/* #358 進度提醒橫幅（首頁）＋ 計畫頁「這一遍還沒完成」摘要。
-   純色 + token；不用漸層／品牌光暈。normal＝品牌色外框，urgent／final＝警示暖色外框（final 較粗、底色較深）。 */
-.plan-reminder-banner { display: grid; gap: 0.5rem; }
-.plan-reminder-banner.hidden { display: none; }
-.plan-reminder-banner__item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.85rem;
-  border-radius: 12px;
-  border: 1px solid var(--color-brand);
-  background-color: color-mix(in srgb, var(--color-brand) 6%, var(--bg-card));
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.plan-reminder-banner__item--urgent {
-  border: 1.5px solid var(--color-warning);
-  background-color: color-mix(in srgb, var(--color-warning) 8%, var(--bg-card));
-}
-.plan-reminder-banner__item--final {
-  border: 2px solid var(--color-danger);
-  background-color: color-mix(in srgb, var(--color-danger) 10%, var(--bg-card));
-}
-.plan-reminder-banner__icon { flex-shrink: 0; color: var(--color-brand); }
-.plan-reminder-banner__item--urgent .plan-reminder-banner__icon { color: var(--color-warning); }
-.plan-reminder-banner__item--final .plan-reminder-banner__icon { color: var(--color-danger-foreground); }
-.plan-reminder-banner__main { flex: 1; min-width: 0; }
-.plan-reminder-banner__title { font-size: 1rem; font-weight: var(--type-weight-strong, 500); }
-.plan-reminder-banner__plan {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.plan-reminder-banner__close { flex-shrink: 0; }
-
-.plan-unfinished-summary { margin: 0 0 0.75rem; }
-.plan-unfinished-summary.hidden { display: none; }
-.plan-unfinished-summary__inner {
-  padding: 0.75rem 0.9rem;
-  border-radius: 12px;
-  border: 1px solid var(--border-card);
-  background-color: var(--bg-card);
-}
-.plan-unfinished-summary__label { margin: 0 0 0.25rem; font-size: 0.875rem; color: var(--text-muted); }
-.plan-unfinished-summary__ranges {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  color: var(--text-primary);
-  max-height: 7.5rem;
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-.plan-unfinished-summary__deadline { margin: 0; font-size: 0.875rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.plan-unfinished-summary__deadline--urgent { color: var(--color-danger-foreground); }
-.plan-unfinished-summary__grace { margin: 0.15rem 0 0; font-size: 0.875rem; color: var(--text-muted); }

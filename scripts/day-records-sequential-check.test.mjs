@@ -1,13 +1,14 @@
-// #330 當天閱讀紀錄 + 「下一章」建議與整遍完成檢查（#357 拿掉了 #331 的照順序限制）
+// #330 當天閱讀紀錄 + #331 照順序打卡
 process.env.TZ = "Asia/Taipei";
 
 import { describe, expect, it } from "vitest";
-import * as roundProgress from "../js/data/current-round-progress.mjs";
 import {
+  canToggleRoundChapter,
   countDayReadingRecordsByDate,
-  formatRoundIncompleteMessage,
+  formatSequentialCheckMessage,
   getDayReadingRecords,
   getRoundCheckState,
+  getSequentialCheckBlock,
   isSequentialCheckPlan,
   toLocalDateKey
 } from "../js/data/current-round-progress.mjs";
@@ -100,7 +101,7 @@ describe("getDayReadingRecords (#330)", () => {
   });
 });
 
-describe("next-chapter suggestion and round completion (#357)", () => {
+describe("sequential check (#331)", () => {
   const chapter = (n, round, read) => ({ book: "出埃及記", chapter: n, round, [`isReadR${round}`]: read });
   const days = (round, readSet) => [
     { dayNum: 1, chapters: [chapter(1, round, readSet.has(1)), chapter(2, round, readSet.has(2))] },
@@ -108,11 +109,35 @@ describe("next-chapter suggestion and round completion (#357)", () => {
     { dayNum: 3, chapters: [chapter(4, round, readSet.has(4)), chapter(5, round, readSet.has(5))] }
   ];
 
-  it("suggests the first unread chapter in reading order, including gaps", () => {
+  it("next chapter is the first unread one in reading order, including legacy gaps", () => {
     const state = getRoundCheckState(days(1, new Set([1, 3, 4])), 1);
     expect(state.next.chapter).toBe(2);
+    expect(state.lastRead.chapter).toBe(4);
     expect(state.readCount).toBe(3);
     expect(state.isComplete).toBe(false);
+  });
+
+  it("only allows checking the next chapter (reading ahead in order is fine)", () => {
+    const state = getRoundCheckState(days(1, new Set([1, 2])), 1);
+    expect(canToggleRoundChapter(state, "出埃及記", 3, true)).toEqual({ ok: true });
+    expect(canToggleRoundChapter(state, "出埃及記", 5, true)).toEqual({
+      ok: false, reason: "not_next", target: { book: "出埃及記", chapter: 3 }
+    });
+    // 已經勾過的再勾一次不擋（no-op）
+    expect(canToggleRoundChapter(state, "出埃及記", 1, true)).toEqual({ ok: true });
+  });
+
+  it("only allows unchecking the last checked chapter", () => {
+    const state = getRoundCheckState(days(1, new Set([1, 2, 3])), 1);
+    expect(canToggleRoundChapter(state, "出埃及記", 3, false)).toEqual({ ok: true });
+    expect(canToggleRoundChapter(state, "出埃及記", 2, false)).toEqual({
+      ok: false, reason: "not_last", target: { book: "出埃及記", chapter: 3 }
+    });
+  });
+
+  it("ignores chapters outside the round's list", () => {
+    const state = getRoundCheckState(days(1, new Set()), 1);
+    expect(canToggleRoundChapter(state, "民數記", 9, true)).toEqual({ ok: true });
   });
 
   it("uses only the current round's chapters when several rounds share the calendar", () => {
@@ -122,26 +147,28 @@ describe("next-chapter suggestion and round completion (#357)", () => {
     expect(state.next.chapter).toBe(2);
   });
 
-  it("shows the suggestion only for speed-reading campaign plans", () => {
-    expect(isSequentialCheckPlan({ planKind: "church_campaign_stage" })).toBe(true);
+  it("applies only to speed-reading campaign plans and the current round", () => {
+    const plan = { planKind: "church_campaign_stage", currentRound: 1, days: days(1, new Set([1])) };
+    expect(isSequentialCheckPlan(plan)).toBe(true);
     expect(isSequentialCheckPlan({ plan_kind: "church_campaign_stage_cohort" })).toBe(true);
     expect(isSequentialCheckPlan({ planKind: "church_campaign" })).toBe(true);
     expect(isSequentialCheckPlan({ planKind: "devotional" })).toBe(false);
     expect(isSequentialCheckPlan({ planKind: "group_meeting" })).toBe(false);
     expect(isSequentialCheckPlan({})).toBe(false);
+
+    expect(getSequentialCheckBlock(plan, "出埃及記", 4, 1, true)).toMatchObject({ reason: "not_next" });
+    expect(getSequentialCheckBlock(plan, "出埃及記", 2, 1, true)).toBeNull();
+    expect(getSequentialCheckBlock({ ...plan, planKind: undefined }, "出埃及記", 4, 1, true)).toBeNull();
+    // 已完成的遍數由既有唯讀保護處理，這裡不重複擋
+    expect(getSequentialCheckBlock({ ...plan, currentRound: 2 }, "出埃及記", 4, 1, true)).toBeNull();
   });
 
-  it("the in-order check rule is gone (no exports left to block a check)", () => {
-    expect(roundProgress.getSequentialCheckBlock).toBeUndefined();
-    expect(roundProgress.canToggleRoundChapter).toBeUndefined();
-    expect(roundProgress.formatSequentialCheckMessage).toBeUndefined();
-  });
-
-  it("round-advance message lists every missing chapter (gaps anywhere), null when complete", () => {
-    expect(formatRoundIncompleteMessage(getRoundCheckState(days(1, new Set([1, 3, 5])), 1)))
-      .toBe("還有 2 章沒完成：出埃及記 2章、出埃及記 4章");
-    expect(formatRoundIncompleteMessage(getRoundCheckState(days(1, new Set([1, 2, 3, 4, 5])), 1))).toBeNull();
-    expect(formatRoundIncompleteMessage(getRoundCheckState(days(1, new Set()), 1), {}, { limit: 2 }))
-      .toBe("還有 5 章沒完成：出埃及記 1章、出埃及記 2章 等");
+  it("formats the toast text", () => {
+    expect(formatSequentialCheckMessage({ reason: "not_next", target: { book: "出埃及記", chapter: 12 } }))
+      .toBe("請照順序打卡，先讀完 出埃及記 12章");
+    expect(formatSequentialCheckMessage(
+      { reason: "not_last", target: { book: "出埃及記", chapter: 12 } },
+      { sequentialUncheckBlocked: "只能取消 {chapter}" }
+    )).toBe("只能取消 出埃及記 12章");
   });
 });

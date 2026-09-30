@@ -232,10 +232,10 @@ export function countDayReadingRecordsByDate(logs, scope = {}) {
   return counts;
 }
 
-// ── 「下一章」建議與整遍完成檢查 ─────────────────────────────────────────
-// 速讀系列（教會階段計畫、延後大區梯次）在計畫頁標出「下一章」（照讀經順序第一個還沒勾的章）。
-// 只是建議：#357（決定 5B）拿掉了 #331 的照順序打卡限制，任何一章都能勾／取消。
-// 「進入下一遍」仍要這一遍全部完成（getRoundCheckState().isComplete）。
+// ── 照順序打卡（#331）───────────────────────────────────────────────────
+// 速讀系列（教會階段計畫、延後大區梯次）的目前這遍：只能勾「下一章」
+// （照讀經順序第一個還沒勾的章），只能取消「最後勾的那一章」。
+// 舊資料有缺口時，下一章就停在最早的缺口，自然引導先補完。
 const SEQUENTIAL_CHECK_PLAN_KINDS = new Set([
   "church_campaign",
   "church_campaign_stage",
@@ -263,27 +263,56 @@ export function getRoundCheckState(days, round) {
   });
   const isRead = chapter => Boolean(chapter[`isReadR${targetRound}`]);
   const nextIndex = order.findIndex(chapter => !isRead(chapter));
+  let lastReadIndex = -1;
+  for (let i = order.length - 1; i >= 0; i -= 1) {
+    if (isRead(order[i])) { lastReadIndex = i; break; }
+  }
   return {
     round: targetRound,
     order,
     nextIndex,
     next: nextIndex >= 0 ? order[nextIndex] : null,
+    lastReadIndex,
+    lastRead: lastReadIndex >= 0 ? order[lastReadIndex] : null,
     readCount: order.filter(isRead).length,
     total: order.length,
     isComplete: order.length > 0 && nextIndex === -1
   };
 }
 
-// 「進入下一遍」被擋時的提示：列出這一遍還缺哪幾章（最多列 limit 章，其餘用「等」）。
-// 整遍完成 → null。
-export function formatRoundIncompleteMessage(checkState, copy = {}, { limit = 6 } = {}) {
-  if (!checkState || !Array.isArray(checkState.order) || checkState.isComplete) return null;
-  const round = Math.max(1, Math.floor(Number(checkState.round) || 1));
-  const missing = checkState.order.filter(chapter => !chapter[`isReadR${round}`]);
-  if (missing.length === 0) return null;
-  const labels = missing.slice(0, limit).map(chapter => `${chapter.book} ${Number(chapter.chapter)}章`);
-  const list = labels.join("、") + (missing.length > limit ? (copy.roundIncompleteMore || " 等") : "");
-  return String(copy.roundIncomplete || "還有 {count} 章沒完成：{chapters}")
-    .split("{count}").join(String(missing.length))
-    .split("{chapters}").join(list);
+// 回傳 { ok: true } 或 { ok: false, reason: "not_next" | "not_last", target: {book, chapter} }。
+// 不在這遍清單裡的章不受限（例如閱讀器裡讀計畫外的章）。
+export function canToggleRoundChapter(checkState, book, chapter, willCheck) {
+  if (!checkState || !Array.isArray(checkState.order)) return { ok: true };
+  const index = checkState.order.findIndex(item =>
+    String(item.book) === String(book) && Number(item.chapter) === Number(chapter)
+  );
+  if (index < 0) return { ok: true };
+  const alreadyRead = Boolean(checkState.order[index][`isReadR${checkState.round}`]);
+  if (willCheck) {
+    if (alreadyRead || index === checkState.nextIndex) return { ok: true };
+    const target = checkState.next;
+    return { ok: false, reason: "not_next", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
+  }
+  if (!alreadyRead || index === checkState.lastReadIndex) return { ok: true };
+  const target = checkState.lastRead;
+  return { ok: false, reason: "not_last", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
+}
+
+// 給四個寫入點共用：這次打卡／取消可不可以。不是速讀計畫、不是目前這遍 → 不限。
+export function getSequentialCheckBlock(plan, book, chapter, round, willCheck) {
+  if (!isSequentialCheckPlan(plan)) return null;
+  const currentRound = Math.max(1, Math.floor(Number(plan.currentRound) || 1));
+  if (Number(round || currentRound) !== currentRound) return null;
+  const result = canToggleRoundChapter(getRoundCheckState(plan.days, currentRound), book, chapter, willCheck);
+  return result.ok ? null : result;
+}
+
+export function formatSequentialCheckMessage(block, copy = {}) {
+  if (!block) return "";
+  const label = block.target ? `${block.target.book} ${block.target.chapter}章` : "";
+  if (block.reason === "not_last") {
+    return String(copy.sequentialUncheckBlocked || "只能取消最後勾的那一章（{chapter}）").replace("{chapter}", label);
+  }
+  return String(copy.sequentialCheckBlocked || "請照順序打卡，先讀完 {chapter}").replace("{chapter}", label);
 }

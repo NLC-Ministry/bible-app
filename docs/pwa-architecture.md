@@ -50,17 +50,6 @@ The app uses a deliberately limited offline model:
 5. The client uses its current authenticated data client; the Service Worker never stores tokens.
 6. Permanent 4xx failures stop retrying. Network errors and retryable status codes use bounded exponential backoff.
 
-The steps above now apply only to free reading (no plan). Plan check-ins go through the check-in outbox below.
-
-## Check-in outbox (#356)
-
-- `js/pwa/CheckInOutbox.js` (pure logic) + `js/pwa/CheckInSync.js` (app glue, created in `app.js` right after the `IndexedDbClient`).
-- Every plan-bound check/uncheck from `db.logChapterRead()` is written to the outbox first, online or offline, and the UI stays optimistic. Records live in the existing `offline_operations` store with `type: "CHECK_IN_CHAPTER"`, `status: "outbox"` (no schema bump; the old sync manager only picks `status: "pending"`). Key `planId|book|chapter|round`, so check → uncheck collapses to the latest intent. Each record carries user id, desired state, pressed-at time and a `client_id` — never credentials. If IndexedDB fails the item stays in memory and is still sent; `isSafeToReloadForUpdate` then refuses to reload.
-- Flush (FIFO, single-flight): app start, after each enqueue, `online`, `onAppForeground`, SW `SYNC_REQUEST` (Background Sync tag `newlife-reading-sync`), and every successful `nlc-session` sync (re-login / reconnect). No polling timer. The sender is `db.logChapterRead(..., { direct: true, readAt, clientId })` → `record_chapter_read` / `unrecord_chapter_read`.
-- Thrown error (network, 401, 5xx) → item stays, flush stops, exponential backoff (2 s … 5 min) gates non-forced flushes. `{ ok: true }` (incl. `already_read`) → removed. `{ ok: false, reason }` → removed, the chapter is reverted in `state.readingLogs`, progress recalculated, tracker re-rendered, toast with the zh-Hant reason.
-- Reloaded reading logs get pending intents overlaid (`db._overlayPendingCheckIns`). Only the signed-in user's items are sent; another user's are dropped when a session is verified. Explicit logout asks for confirmation when items are pending and then clears them. 「進入下一遍」 flushes first and refuses while that plan still has pending items.
-- A 「N 章等待同步」 chip (`.checkin-pending-chip`) shows while the current user has pending items; tapping it forces a flush.
-
 ## Cache routing
 
 - Navigation: Network First; `/index.html` fallback. A reachable-but-5xx response is treated the same as a failed fetch and also falls back to the cached shell (see `CacheManager.networkFirst`'s `fallbackUrl` handling), so a maintenance/deploy-time error page never overwrites the cached app shell.

@@ -872,8 +872,6 @@ const auth = {
     localStorage.removeItem("bible_highlights_owner");
     try { sessionStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
     try { localStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
-    // 打卡 outbox（#356）：登出畫面已先確認過；這裡清掉，下一個登入的人不會送出上一位的打卡。
-    try { await window.checkInOutbox?.clear?.(); } catch (_) {}
 
     if (typeof state !== "undefined" && state.supabase && state.supabase.auth && typeof state.supabase.auth.signOut === "function") {
       try {

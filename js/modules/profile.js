@@ -4,7 +4,6 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
-import { confirmLogoutWithPendingCheckIns } from "../pwa/CheckInSync.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
 
@@ -1164,12 +1163,6 @@ export function updateHeaderAvatar() {
 }
 
 async function handleLogoutAndClearCache() {
-  // 還有打卡沒送出（#356）：先試著送，送不完要使用者確認才登出（確認後清掉 outbox）。
-  try {
-    if (!(await confirmLogoutWithPendingCheckIns())) return;
-  } catch (error) {
-    console.warn("[CheckInOutbox] Pending check-in check before logout failed", error);
-  }
   loader.show("\u767b\u51fa\u4e2b\u6e05\u9664\u5feb\u53d6\u4e2d...");
   try {
     if (navigator.serviceWorker) {

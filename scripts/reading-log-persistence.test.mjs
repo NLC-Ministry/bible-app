@@ -11,16 +11,12 @@ const end = source.indexOf("async syncProfileStatsToSupabase", start);
 const logChapterReadSource = source.slice(start, end);
 
 describe("reading log persistence contract", () => {
-  // #359：計畫內打卡只走 record/unrecord_chapter_read，直接寫表只剩自由閱讀（plan_id NULL）。
-  it("plan check-ins have no direct-table fallback; free reading writes plan_id NULL rows", () => {
-    expect(logChapterReadSource).not.toContain("compatiblePlanWrite");
-    expect(logChapterReadSource).not.toContain('from("reading_logs").upsert(');
-    expect(logChapterReadSource).not.toContain("repository.upsert(");
-    expect(logChapterReadSource).not.toContain("plan_id.eq.");
-    expect(logChapterReadSource).not.toContain("rpcHandled");
-    expect(logChapterReadSource).toContain("plan_id: null,");
+  it("falls back to update-or-insert when plan upsert is unavailable", () => {
+    expect(logChapterReadSource).toContain('from("reading_logs").upsert(row');
+    expect(logChapterReadSource).toContain('onConflict: "user_id,plan_id,book,chapter,round"');
+    expect(logChapterReadSource).toContain("compatiblePlanWrite");
+    expect(logChapterReadSource).toContain('update({ read_at: todayISO })');
     expect(logChapterReadSource).toContain("insertReadingLog()");
-    expect(logChapterReadSource).toContain('.is("plan_id", null)');
   });
 
   it("persists against the plan that opened the reader even if active context changes", () => {

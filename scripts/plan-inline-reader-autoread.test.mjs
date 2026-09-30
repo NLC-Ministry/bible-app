@@ -1,45 +1,33 @@
-// 計畫內嵌閱讀器（#357）：章末用共用的「完成本章」按鈕；讀到底、換章都不寫入。
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const plan = readFileSync("js/modules/plan.js", "utf8");
+const bible = readFileSync("js/modules/bible.js", "utf8");
 const css = readFileSync("index.css", "utf8");
 
-const between = (source, start, end) => {
-  const from = source.indexOf(start);
-  expect(from).toBeGreaterThan(-1);
-  const to = source.indexOf(end, from);
-  expect(to).toBeGreaterThan(from);
-  return source.slice(from, to);
-};
-
-describe("plan inline reader chapter-complete integration", () => {
-  it("renders the shared button before the end sentinel and only pulses at the end", () => {
-    expect(plan).toContain('import { observeReaderEndSentinel } from "./reader-end-sentinel.mjs"');
-    expect(plan).toContain('import { createChapterCompleteController } from "./chapter-complete-button.mjs"');
-    const render = between(plan, "async function renderInlineScriptureText", "window.navigateInlineChapter");
-    const button = render.indexOf('inlineChapterComplete.createElement("plan-inline-chapter-complete")');
-    expect(button).toBeGreaterThan(-1);
-    expect(button).toBeLessThan(render.indexOf('id = "plan-inline-reader-end-sentinel"'));
-    const observer = between(plan, "function bindInlineReaderEndObserver", "window.openPlanInlineReader");
-    expect(observer).toContain("inlineChapterComplete.pulse()");
-    expect(observer).not.toContain("logChapterRead");
+describe("plan inline reader auto-read integration", () => {
+  it("binds the one-second dwell controller to the actual plan scroll surface", () => {
+    expect(plan).toContain('import { createReaderBottomDwellController, observeReaderEndSentinel }');
+    expect(plan).toContain('const scrollSurface = document.querySelector(".main-content")');
+    expect(plan).toContain("dwellMs: 1000");
+    expect(plan).toContain("initInlineReaderBottomDwell()");
+    expect(plan).toContain("scheduleInlineReaderBottomDwellCheck()");
+    expect(plan).toContain('id = "plan-inline-reader-end-sentinel"');
+    expect(plan).toContain("observeReaderEndSentinel");
+    expect(plan).toContain('addEventListener("scrollend", handleInlineReaderScroll');
     expect(plan).not.toContain("window.scrollTo({ top: 0");
   });
 
-  it("has no automatic write path left (dwell, leaving the chapter)", () => {
-    expect(plan).not.toContain("createReaderBottomDwellController");
-    expect(plan).not.toContain("autoMarkInlineReaderTaskRead");
-    expect(plan).not.toContain("inlineReaderReachedEndKey");
-    expect(plan).not.toContain("state.inlineReader.autoMarked");
-    const nav = between(plan, "window.navigateInlineChapter", "// ====");
-    expect(nav).not.toContain("logChapterRead");
-  });
-
-  it("closes the reader and runs the round-completion flow after the last chapter is completed", () => {
-    const submit = between(plan, "async function submitInlineReaderChapterCheckIn", "const inlineChapterComplete");
-    expect(submit).toContain("submitChapterCheckIn(task, willCheck");
-    expect(submit).toMatch(/await window\.closePlanInlineReader\(\);[\s\S]*await handleRoundCompletion/);
+  it("persists the correct round, notifies once, and skips chapters already marked read", () => {
+    expect(plan).toContain("isInlineReaderTaskRead(task)");
+    expect(plan).toContain("state.inlineReader.autoMarked");
+    expect(plan).toContain("state.inlineReader.autoMarkInFlight");
+    expect(plan).toContain("await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round, task.plan)");
+    expect(plan).toContain('console.info("[AutoRead] Inline reading log persisted"');
+    expect(plan).not.toContain("自動已讀測試");
+    expect(plan).toMatch(/await window\.closePlanInlineReader\(\);[\s\S]*await handleRoundCompletion/);
+    expect(bible).toContain("true, taskContext.round, taskContext.plan");
+    expect(bible).toContain("taskContext.chapter[readKey] = true");
   });
 
   it("hides support and global navigation while retaining inline chapter controls", () => {

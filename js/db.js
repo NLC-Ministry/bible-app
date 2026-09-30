@@ -2,7 +2,6 @@ import { getResponsePayloadBytes, networkMetrics } from './performance/network-m
 import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
-import { checkInReasonMessage, isCheckInRpcUnavailable, normalizeCheckInResult } from './data/check-in-reasons.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
 import {
@@ -319,8 +318,6 @@ function mapGlobalPlanRecord(dbPlan) {
     groupMeetingFutureOpen: Boolean(dbPlan.rules && dbPlan.rules.groupMeetingFutureOpen),
     ruleVersion: Number(dbPlan.rule_version || (campaignDefinition && campaignDefinition.version) || 1),
     publishedAt: dbPlan.published_at || null,
-    // 截止後寬限天數（#355 加 global_plans.grace_days；欄位還不存在時為 null，前端用預設值）。
-    graceDays: dbPlan.grace_days === undefined || dbPlan.grace_days === null ? null : Number(dbPlan.grace_days),
     campaignDefinition
   };
 }
@@ -484,7 +481,7 @@ const db = {
       const plans = JSON.parse(localStorage.getItem("active_reading_plans") || "[]");
       const logs = JSON.parse(localStorage.getItem("reading_logs") || "[]");
       state.activePlans = Array.isArray(plans) ? plans : [];
-      state.readingLogs = this._overlayPendingCheckIns(Array.isArray(logs) ? logs : []);
+      state.readingLogs = Array.isArray(logs) ? logs : [];
       state.activePlan = selectMostRecentActivePlan(state.activePlans);
       if (typeof calculateAllPlansProgress === "function") calculateAllPlansProgress();
       this["calculateStreak"]();
@@ -1206,11 +1203,6 @@ const db = {
     this.applyNlcProfile(payload.profile, payload.locked_fields || []);
     this.storeOfflineIdentity(payload.profile);
     this.setOfflineNavLock(false);
-    // 登入身分剛向伺服器確認過（重新登入、恢復連線）：丟掉別人的打卡、補送自己的（#356）。
-    try {
-      window.checkInOutbox?.handleSessionVerified?.(state.currentProfileId)
-        ?.catch?.(error => console.warn("[CheckInOutbox] Flush after session sync failed", error));
-    } catch (_) { /* outbox is best-effort here */ }
     return payload;
   },
 
@@ -1449,8 +1441,7 @@ const db = {
       const key = `${log.book}_${log.chapter}_${planKey}_${round}`;
       if (!uniqueMap[key] || new Date(log.read_at) > new Date(uniqueMap[key].read_at)) uniqueMap[key] = log;
     });
-    // 還在 outbox 裡沒送出的打卡（#356）疊回去，重新載入後畫面不會把剛勾的章又顯示成沒勾。
-    state.readingLogs = this._overlayPendingCheckIns(Object.values(uniqueMap));
+    state.readingLogs = Object.values(uniqueMap);
     if (state.currentUser) state.currentUser.chapters_read = state.readingLogs.length;
     if (notify) {
       window.dispatchEvent(new CustomEvent("app:dataRefresh", {
@@ -1706,7 +1697,6 @@ const db = {
                 planObj.isFixed = isFixed;
                 planObj.is_fixed = isFixed;
                 planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
-                if (linkedGlobalPlan && linkedGlobalPlan.graceDays != null) planObj.graceDays = linkedGlobalPlan.graceDays;
                 planObj.planKind = linkedGlobalPlan?.planKind || (campaignStageNo >= 1 ? "church_campaign_stage" : "standard");
                 planObj.stageNo = linkedGlobalPlan?.stageNo || campaignStageNo || null;
                 // cohort：獎名 / 輪次 / 母 campaign 沿用來源正式階段（發獎 + 詳情頁獎章用）。
@@ -2188,121 +2178,21 @@ const db = {
     };
   },
 
-  // ── 打卡 RPC（#355）─────────────────────────────────────────────────────
-  // 回傳 { ok, reason }：ok=false 是規則拒絕（reason 見 js/data/check-in-reasons.mjs）；
-  // 網路／登入／伺服器錯誤一律 throw，跟規則拒絕分開。RPC 在這個環境呼叫不到時 throw 的
-  // error 帶 checkInRpcUnavailable=true。user id 由 nlc-data 以登入身分注入，這裡不傳。
-  // #359：計畫內打卡沒有直接寫表的退路了，所以「呼叫不到」不再記住——每次都重試 RPC
-  // （nlc-data 重新部署後不用重新整理就能送出 outbox 裡的紀錄）。
-  _newCheckInClientId() {
-    try {
-      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
-    } catch (_) { /* fall through */ }
-    return `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  },
-  async _callCheckInRpc(functionName, args) {
-    const client = state.supabase;
-    if (!state.isSupabaseMode || !client || typeof client.rpc !== "function") {
-      const unavailable = new Error("check_in_rpc_unavailable");
-      unavailable.checkInRpcUnavailable = true;
-      throw unavailable;
-    }
-    const { data, error } = await client.rpc(functionName, args);
-    if (error) {
-      const rpcError = new Error(error.message || error.error || String(error));
-      rpcError.code = error.code || null;
-      rpcError.status = Number(error.status || 0);
-      if (isCheckInRpcUnavailable(error)) rpcError.checkInRpcUnavailable = true;
-      throw rpcError;
-    }
-    const result = normalizeCheckInResult(data);
-    if (!result) throw new Error(`${functionName}_bad_response`);
-    return result;
-  },
-  async recordChapterRead({ plan = null, planId = null, book, chapter, round, readAt = null, clientId = null } = {}) {
-    const targetPlanId = planId || (plan && plan.id) || null;
-    return this._callCheckInRpc("record_chapter_read", {
-      p_plan_id: targetPlanId,
-      p_book: book,
-      p_chapter: Number(chapter),
-      p_round: Number(round || (plan && plan.currentRound) || 1),
-      p_read_at: readAt ? new Date(readAt).toISOString() : new Date().toISOString(),
-      p_client_id: clientId || this._newCheckInClientId()
-    });
-  },
-  async unrecordChapterRead({ plan = null, planId = null, book, chapter, round, clientId = null } = {}) {
-    const targetPlanId = planId || (plan && plan.id) || null;
-    return this._callCheckInRpc("unrecord_chapter_read", {
-      p_plan_id: targetPlanId,
-      p_book: book,
-      p_chapter: Number(chapter),
-      p_round: Number(round || (plan && plan.currentRound) || 1),
-      p_client_id: clientId || this._newCheckInClientId()
-    });
-  },
-  // RPC 寫入不經 readingLogRepository，要自己清掉它的離線快取，否則下次載入會看到舊資料。
-  async _invalidateReadingLogCache(userId) {
-    const repository = window.readingLogRepository;
-    if (!userId || !repository || typeof repository.deleteCache !== "function") return;
-    try {
-      await repository.deleteCache(`reading_logs:${userId}`);
-    } catch (error) {
-      console.warn("[ReadingLog] Cache invalidation failed after check-in RPC", error);
-    }
-  },
-  // logChapterRead 用：計畫內打卡唯一的寫入路徑（#359：資料庫只收 RPC 寫的計畫內紀錄）。
-  // 成功回 true；RPC 呼叫不到／網路／伺服器錯誤 → throw（outbox 會留著這筆、之後重送）；
-  // 規則拒絕 → throw code=CHECK_IN_REJECTED（帶 reason 與中文訊息，呼叫端照舊還原勾勾＋提示）。
-  async _persistChapterCheckIn(isChecked, { planId, book, chapter, round, readAt = null, clientId = null }) {
-    const result = isChecked
-      ? await this.recordChapterRead({ planId, book, chapter, round, readAt, clientId })
-      : await this.unrecordChapterRead({ planId, book, chapter, round, clientId });
-    if (!result.ok) {
-      const rejected = new Error(checkInReasonMessage(result.reason));
-      rejected.code = "CHECK_IN_REJECTED";
-      rejected.reason = result.reason;
-      throw rejected;
-    }
-    return true;
-  },
-
-  // ── 打卡 outbox（#356）────────────────────────────────────────────────
-  // 計畫內打卡先寫進手機（js/pwa/CheckInOutbox.js），再背景送 RPC。outbox 還沒就緒、
-  // 不是 Supabase 模式、或不知道目前使用者時，當場直接送 RPC（#359 起不再直接寫表）。
-  _checkInUserId() {
-    return state.currentProfileId || null;
-  },
-  canQueueCheckIn() {
-    const outbox = typeof window !== "undefined" ? window.checkInOutbox : null;
-    return Boolean(outbox && outbox.ready && state.isSupabaseMode && this._checkInUserId());
-  },
-  _overlayPendingCheckIns(logs) {
-    const outbox = typeof window !== "undefined" ? window.checkInOutbox : null;
-    if (!outbox || !outbox.ready || typeof outbox.applyPendingToLogs !== "function") return logs;
-    try {
-      return outbox.applyPendingToLogs(logs, { userId: this._checkInUserId() });
-    } catch (error) {
-      console.warn("[CheckInOutbox] Could not overlay pending check-ins", error);
-      return logs;
-    }
-  },
-
   // Save log to DB/LocalStorage
-  // options.direct（只給 outbox 送出時用）：不進 outbox、直接送 RPC；readAt＝按下時間、clientId＝佇列那筆的 id。
-  async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null, options = {}) {
-    const direct = Boolean(options && options.direct);
-    const targetPlan = planOverride || state.activePlan;
-    // 計畫內打卡在離線時也照收（進 outbox，#356）；只有沒辦法排隊的（自由閱讀、outbox 未就緒）
-    // 才維持「離線閱讀模式無法記錄」——離線快照沒有可以寫入的連線。
-    const useOutbox = !direct && Boolean(targetPlan && targetPlan.id) && this.canQueueCheckIn();
-    if (state.offlineMode && !useOutbox && !direct) {
+  async logChapterRead(book, chapter, isChecked, roundOverride = null, planOverride = null) {
+    // Offline reading mode only ever has the cached 30-day-old snapshot —
+    // there is no live session to write through, and nothing queues these
+    // writes for later (unlike the authenticated-online IndexedDB queue).
+    // Fail fast and clearly instead of attempting (and always losing) a
+    // network round-trip.
+    if (state.offlineMode) {
       const offlineError = new Error("離線閱讀模式無法記錄進度，恢復連線後再試");
       offlineError.code = "OFFLINE_READ_ONLY";
       throw offlineError;
     }
-    const todayISO = (direct && options.readAt) ? new Date(options.readAt).toISOString() : new Date().toISOString();
-    // 鎖住的階段在按下時就擋；outbox 送出時由伺服器判斷（stage_not_open）。
-    if (!direct && isChecked && targetPlan && isPlanProgressLocked(targetPlan, { hidden: window.isPlanHidden?.(targetPlan) })) {
+    const todayISO = new Date().toISOString();
+    const targetPlan = planOverride || state.activePlan;
+    if (isChecked && targetPlan && isPlanProgressLocked(targetPlan, { hidden: window.isPlanHidden?.(targetPlan) })) {
       const progressError = new Error("此階段尚未正式開放，無法記錄已讀");
       progressError.code = "PLAN_PROGRESS_LOCKED";
       throw progressError;
@@ -2337,9 +2227,7 @@ const db = {
 
       // The plan UI updates state.readingLogs optimistically before this runs.
       // Always persist independently; local existence does not mean a DB row exists.
-      if (useOutbox) {
-        await this._enqueueCheckIn(true, { planId, book, chapter, round, pressedAt: todayISO });
-      } else if (state.isSupabaseMode && state.supabase) {
+      if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
         if (!user || !user.id) {
           const authError = new Error("Unable to persist reading progress: authenticated profile unavailable");
@@ -2347,34 +2235,52 @@ const db = {
           throw authError;
         }
 
-        // 計畫內打卡只走伺服器 RPC（#355 規則只有一份；#359 資料庫也只收 RPC 寫的計畫內紀錄）。
-        // RPC 呼叫不到就 throw——outbox 留著重送，不再退回直接寫表。
+        const row = {
+          user_id: user.id,
+          plan_id: planId,
+          book,
+          chapter: Number(chapter),
+          read_at: todayISO,
+          round: Number(round)
+        };
+        const cacheKey = `reading_logs:${user.id}`;
+        const repository = window.readingLogRepository || null;
+        const throwWriteError = result => {
+          if (!result?.error) return result;
+          const error = new Error(result.error.message || result.error.error || String(result.error));
+          error.status = Number(result.status || result.error.status || 0);
+          error.code = result.error.code || null;
+          throw error;
+        };
+        const insertReadingLog = () => repository
+          ? repository.insert(row, { invalidate: [cacheKey] })
+          : state.supabase.from("reading_logs").insert(row);
+        const updateReadingLog = id => repository
+          ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
+          : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
+        const compatiblePlanWrite = async () => {
+          const existingResult = await state.supabase.from("reading_logs").select("id")
+            .eq("user_id", user.id).eq("plan_id", planId).eq("book", book)
+            .eq("chapter", Number(chapter)).eq("round", Number(round)).limit(1);
+          throwWriteError(existingResult);
+          const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
+          return existingRow?.id ? updateReadingLog(existingRow.id) : insertReadingLog();
+        };
+
+        let writeResult;
         if (planId) {
-          await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO, clientId: direct ? options.clientId : null });
-          await this._invalidateReadingLogCache(user.id);
-          console.info("[ReadingLog] Persisted via record_chapter_read", { planId, book, chapter: Number(chapter), round: Number(round) });
+          try {
+            writeResult = repository
+              ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+              : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
+            throwWriteError(writeResult);
+          } catch (upsertError) {
+            console.warn("[ReadingLog] Upsert failed; retrying with compatible update/insert", {
+              planId, book, chapter: Number(chapter), round: Number(round), error: upsertError
+            });
+            writeResult = await compatiblePlanWrite();
+          }
         } else {
-          // 自由閱讀（plan_id NULL）照舊直接寫表。
-          const row = {
-            user_id: user.id,
-            plan_id: null,
-            book,
-            chapter: Number(chapter),
-            read_at: todayISO,
-            round: Number(round)
-          };
-          const cacheKey = `reading_logs:${user.id}`;
-          const repository = window.readingLogRepository || null;
-          const throwWriteError = result => {
-            if (!result?.error) return result;
-            const error = new Error(result.error.message || result.error.error || String(result.error));
-            error.status = Number(result.status || result.error.status || 0);
-            error.code = result.error.code || null;
-            throw error;
-          };
-          const insertReadingLog = () => repository
-            ? repository.insert(row, { invalidate: [cacheKey] })
-            : state.supabase.from("reading_logs").insert(row);
           const deleteResult = repository
             ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
               .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
@@ -2382,33 +2288,21 @@ const db = {
               .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
               .eq("round", round).is("plan_id", null);
           throwWriteError(deleteResult);
-          throwWriteError(await insertReadingLog());
-          console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
+          writeResult = await insertReadingLog();
         }
+        throwWriteError(writeResult);
+        console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
       }
     } else {
       state.readingLogs = state.readingLogs.filter(l => !isSameChapterLog(l));
 
-      if (useOutbox) {
-        await this._enqueueCheckIn(false, { planId, book, chapter, round, pressedAt: todayISO });
-      } else if (state.isSupabaseMode && state.supabase) {
+      if (state.isSupabaseMode && state.supabase) {
         const user = await this.getCurrentDbUser();
-        if (!user && direct) {
-          // outbox 送出時沒有登入身分：不能當成功（會把這筆從佇列拿掉），丟 401 讓它留著重送。
-          const authError = new Error("Unable to persist reading progress: authenticated profile unavailable");
-          authError.status = 401;
-          throw authError;
-        }
         if (user) {
-          // 計畫內取消打卡只走 unrecord_chapter_read（#355/#359，呼叫不到就 throw）；成功後只剩
-          // 「同章、沒有 plan_id 的自由閱讀紀錄」要照舊直接清掉（本機狀態把它當成同一章，不清會重整後又出現勾勾）。
-          if (planId) {
-            await this._persistChapterCheckIn(false, { planId, book, chapter, round, clientId: direct ? options.clientId : null });
-            await this._invalidateReadingLogCache(user.id);
-          }
-          const applyDeleteFilters = query => query
-            .eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round)
-            .is("plan_id", null);
+          const applyDeleteFilters = query => {
+            query = query.eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
+            return planId ? query.or(`plan_id.eq.${planId},plan_id.is.null`) : query.is("plan_id", null);
+          };
           const cacheKey = `reading_logs:${user.id}`;
           const deleteResult = window.readingLogRepository
             ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: [cacheKey] })
@@ -2432,20 +2326,6 @@ const db = {
     if (typeof checkAchievements !== 'undefined') {
       await checkAchievements();
     }
-    return useOutbox ? { queued: true } : undefined;
-  },
-
-  // 進 outbox 這一步不會失敗（CheckInOutbox.enqueue 寫不進 IndexedDB 也會留在記憶體）。
-  async _enqueueCheckIn(checked, { planId, book, chapter, round, pressedAt }) {
-    await window.checkInOutbox.enqueue({
-      userId: this._checkInUserId(),
-      planId,
-      book,
-      chapter: Number(chapter),
-      round: Number(round) || 1,
-      checked,
-      pressedAt
-    });
   },
 
   async syncProfileStatsToSupabase() {
