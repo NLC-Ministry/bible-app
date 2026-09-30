@@ -5,6 +5,13 @@ import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoi
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { formatSequentialCheckMessage, getSequentialCheckBlock } from "../data/current-round-progress.mjs";
+import {
+  AUTO_RECORD_REASONS,
+  getAutoRecordDecision,
+  planIdOf,
+  readPlanLastOpened,
+  selectAutoRecordPlanTask
+} from "../data/reader-auto-record.mjs";
 import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
 
 export function openReaderLayer(element) {
@@ -153,41 +160,138 @@ function isCurrentPlanReaderTaskRead(taskContext) {
   return Boolean(chapter[`isReadR${round}`] || (round === 1 && chapter.isRead));
 }
 
-function getCurrentPlanReaderTargetKey() {
-  const taskContext = getCurrentPlanReaderTask();
-  if (!taskContext) return "";
-  const { book, day, round, plan } = taskContext;
-  return [plan.id || plan.globalPlanId || plan.presetKey || "plan", day.dayNum, round, book.name, state.readerState.chapter].join("|");
+// 讀到底自動打卡（#349）用的任務解析：
+//   1. 從計畫進來（fromPlan）且該計畫含這章 → 用那個計畫（情境計畫優先）。
+//   2. 否則（從底部分頁列進讀經、切分頁再回來、情境計畫不含這章）→ 在所有進行中計畫裡
+//      找「目前這一遍」含這章的；多個時取最近開啟的計畫。
+// 手動勾選（mark-read-btn）刻意仍走 state.activePlan，不吃這個 fallback。
+function resolveReaderAutoRecordTask() {
+  const contextTask = getCurrentPlanReaderTask();
+  if (contextTask) return contextTask;
+  const book = BIBLE_BOOKS.find(item => Number(item.id) === Number(state.readerState?.bookId));
+  if (!book || !Array.isArray(state.activePlans) || state.activePlans.length === 0) return null;
+  const found = selectAutoRecordPlanTask({
+    plans: state.activePlans,
+    bookName: book.name,
+    chapterNum: state.readerState.chapter,
+    activePlanId: planIdOf(state.activePlan),
+    lastOpened: readPlanLastOpened(),
+    isUsable: plan => !isPlanExpired(plan)
+      && !isPlanProgressLocked(plan, { hidden: window.isPlanHidden?.(plan) })
+  });
+  return found ? { book, chapter: found.chapter, day: found.day, round: found.round, plan: found.plan } : null;
 }
 
-async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
-  const taskContext = getCurrentPlanReaderTask();
-  if (!taskContext || getCurrentPlanReaderTargetKey() !== expectedTargetKey) return false;
-  if (isCurrentPlanReaderTaskRead(taskContext)) return true;
-  if (state.readerState.autoMarked || state.readerState.autoMarkInFlight) return false;
-  if (taskContext.plan && isPlanExpired(taskContext.plan)) return false;
-  if (isPlanProgressLocked(taskContext.plan, { hidden: window.isPlanHidden?.(taskContext.plan) })) return false;
-  if (taskContext.round < Number(taskContext.plan.currentRound || 1)) return false;
-  // Offline reading mode is read-only for progress — skip silently rather
-  // than showing a toast, matching this auto-mark flow's existing "never
-  // interrupt with an intrusive subtitle/toast" design.
-  if (state.offlineMode) return false;
-  // 照順序打卡（#331）：還沒輪到的章讀到底不記錄，也不跳提示。
-  if (getSequentialCheckBlock(taskContext.plan, taskContext.book.name, state.readerState.chapter, taskContext.round, true)) return false;
+function getReaderTaskTargetKey(taskContext, chapterNum = state.readerState.chapter) {
+  if (!taskContext) return "";
+  const { book, day, round, plan } = taskContext;
+  return [plan.id || plan.globalPlanId || plan.presetKey || "plan", day.dayNum, round, book.name, chapterNum].join("|");
+}
 
-  const planDayChKey = `${taskContext.book.name}_${state.readerState.chapter}`;
+function getCurrentPlanReaderTargetKey() {
+  return getReaderTaskTargetKey(resolveReaderAutoRecordTask());
+}
+
+function getReaderTaskDecision(taskContext) {
+  if (!taskContext) return getAutoRecordDecision({ hasTask: false });
+  const { plan, round } = taskContext;
+  return getAutoRecordDecision({
+    hasTask: true,
+    alreadyRead: isCurrentPlanReaderTaskRead(taskContext),
+    offline: Boolean(state.offlineMode),
+    expired: Boolean(plan && isPlanExpired(plan)),
+    locked: isPlanProgressLocked(taskContext.plan, { hidden: window.isPlanHidden?.(taskContext.plan) }),
+    isOldRound: round < Number(plan.currentRound || 1)
+  });
+}
+
+// ── 章末打卡狀態列 ──
+// 只在這章解析得到計畫任務時顯示；自由閱讀計畫外的章不顯示任何東西。
+let readerRecordFailedKey = "";
+const readerAutoRecordInFlightKeys = new Set();
+// 這一章的章末是否已到過（捲到底／sentinel 可見）。換章時用來判斷「到底後直接換章」也算讀完。
+let reachedEndTargetKey = "";
+
+function formatReaderRecordCopy(template, values) {
+  return Object.keys(values).reduce((text, key) => text.split(`{${key}}`).join(values[key]), template);
+}
+
+function getReaderRecordStatusText(taskContext) {
+  const copy = (window.APP_COPY && window.APP_COPY.plan) || {};
+  const decision = getReaderTaskDecision(taskContext);
+  if (decision.reason === AUTO_RECORD_REASONS.ALREADY_READ) {
+    return { kind: "done", text: formatReaderRecordCopy(copy.autoRecordDone || "✓ 已記錄到〈{plan}〉", { plan: taskContext.plan.name || taskContext.plan.title || "" }) };
+  }
+  const failed = readerRecordFailedKey && readerRecordFailedKey === getReaderTaskTargetKey(taskContext);
+  if (decision.ok && !failed) return { kind: "pending", text: copy.autoRecordPending || "讀到這裡停一下就會記錄" };
+  const reasonText = {
+    [AUTO_RECORD_REASONS.OFFLINE]: copy.autoRecordReasonOffline || "離線中",
+    [AUTO_RECORD_REASONS.EXPIRED]: copy.autoRecordReasonExpired || "計畫已結束",
+    [AUTO_RECORD_REASONS.LOCKED]: copy.autoRecordReasonLocked || "這個階段尚未開放",
+    [AUTO_RECORD_REASONS.OLD_ROUND]: copy.autoRecordReasonOldRound || "這是已完成的舊一遍，不能再修改"
+  }[decision.reason] || copy.autoRecordReasonSyncFailed || "同步失敗，請稍後再試";
+  return { kind: "blocked", text: formatReaderRecordCopy(copy.autoRecordNotRecorded || "未記錄：{reason}", { reason: reasonText }) };
+}
+
+function updateReaderRecordStatus() {
+  const el = document.getElementById("reader-record-status");
+  if (!el) return;
+  const taskContext = resolveReaderAutoRecordTask();
+  if (!taskContext) {
+    el.textContent = "";
+    el.dataset.state = "";
+    el.hidden = true;
+    return;
+  }
+  const status = getReaderRecordStatusText(taskContext);
+  el.textContent = status.text;
+  el.dataset.state = status.kind;
+  el.hidden = false;
+}
+
+// 換章／朗讀唸完之前呼叫：如果這章的章末已到過（或 force），先用「離開前」的章節快照送出記錄，
+// 再讓呼叫端去改 readerState。不等網路；失敗照樣跳同步失敗 toast。
+function recordLeavingReaderChapter({ force = false } = {}) {
+  const taskContext = resolveReaderAutoRecordTask();
+  if (!taskContext) return;
+  const chapterNum = state.readerState.chapter;
+  const targetKey = getReaderTaskTargetKey(taskContext, chapterNum);
+  if (!force && reachedEndTargetKey !== targetKey) return;
+  void autoMarkCurrentPlanReaderTaskRead(targetKey, { taskContext, chapterNum, targetKey });
+}
+
+// snapshot（換章／朗讀時傳入）＝離開前抓好的 { taskContext, chapterNum, targetKey }，
+// 寫入一律用它，不再讀 state.readerState.chapter（那時可能已經是新的一章）。
+async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey, snapshot = null) {
+  const taskContext = snapshot ? snapshot.taskContext : resolveReaderAutoRecordTask();
+  const chapterNum = snapshot ? snapshot.chapterNum : state.readerState.chapter;
+  const targetKey = snapshot ? snapshot.targetKey : getReaderTaskTargetKey(taskContext);
+  if (!taskContext || targetKey !== expectedTargetKey) return false;
+  const decision = getReaderTaskDecision(taskContext);
+  if (decision.reason === AUTO_RECORD_REASONS.ALREADY_READ) return true;
+  if (!decision.ok) {
+    if (targetKey === getCurrentPlanReaderTargetKey()) updateReaderRecordStatus();
+    return false;
+  }
+  if (readerAutoRecordInFlightKeys.has(targetKey)) return false;
+  const isCurrentTarget = () => targetKey === getCurrentPlanReaderTargetKey();
+
   const readKey = `isReadR${taskContext.round}`;
   const previousRoundRead = Boolean(taskContext.chapter[readKey]);
   const previousRead = Boolean(taskContext.chapter.isRead);
-  state.readerState.autoMarked = true;
-  state.readerState.autoMarkInFlight = true;
+  readerAutoRecordInFlightKeys.add(targetKey);
+  if (isCurrentTarget()) {
+    state.readerState.autoMarked = true;
+    state.readerState.autoMarkInFlight = true;
+  }
+  readerRecordFailedKey = readerRecordFailedKey === targetKey ? "" : readerRecordFailedKey;
   taskContext.chapter[readKey] = true;
   if (taskContext.round === 1) taskContext.chapter.isRead = true;
   try {
     window.renderPlanScheduleTracker?.();
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
-    await db.logChapterRead(taskContext.book.name, state.readerState.chapter, true, taskContext.round, taskContext.plan);
+    await db.logChapterRead(taskContext.book.name, chapterNum, true, taskContext.round, taskContext.plan);
 
     const shouldHandleR1 = taskContext.plan.isPlanCompleted && !taskContext.plan.upgradePromptHandled;
     const shouldHandleR2 = taskContext.plan.isRound2Completed && !taskContext.plan.round2UpgradePromptHandled;
@@ -195,21 +299,25 @@ async function autoMarkCurrentPlanReaderTaskRead(expectedTargetKey) {
       await window.handleRoundCompletion(taskContext.plan);
     }
     console.info("[AutoRead] Reading log persisted", { targetKey: expectedTargetKey });
+    updateReaderRecordStatus();
     return true;
   } catch (error) {
     console.error("Failed to auto-mark reader progress", error);
-    state.readerState.autoMarked = false;
+    if (isCurrentTarget()) state.readerState.autoMarked = false;
     taskContext.chapter[readKey] = previousRoundRead;
     taskContext.chapter.isRead = previousRead;
+    readerRecordFailedKey = targetKey;
     window.renderPlanScheduleTracker?.();
     calculatePlanProgress();
     if (typeof updateDashboardView === "function") updateDashboardView();
+    updateReaderRecordStatus();
     if (typeof showToast === "function") {
       showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
     }
     return false;
   } finally {
-    state.readerState.autoMarkInFlight = false;
+    readerAutoRecordInFlightKeys.delete(targetKey);
+    if (isCurrentTarget()) state.readerState.autoMarkInFlight = false;
   }
 }
 
@@ -662,8 +770,10 @@ export function initReaderControls() {
         }
       }
 
+      updateReaderRecordStatus();
       db.logChapterRead(bookObj.name, state.readerState.chapter, isChecked, planRound, state.activePlan)
         .then(async () => {
+          updateReaderRecordStatus();
           if (state.activePlan) {
             const plan = state.activePlan;
             const shouldHandleR1 = plan.isPlanCompleted && !plan.upgradePromptHandled;
@@ -681,6 +791,7 @@ export function initReaderControls() {
         .catch(error => {
           console.error("Failed to update reader progress in background", error);
           markReadBtn.classList.toggle("checked", wasChecked);
+          updateReaderRecordStatus();
           if (state.activePlan && planDayChKey) {
             window.renderPlanScheduleTracker?.();
             calculatePlanProgress();
@@ -942,6 +1053,10 @@ async function resetReaderScrollAfterChapterRender(sessionId) {
 
 export async function navigateToChapter(direction, options = {}) {
   const autoContinue = options.autoContinue === true;
+  // 統一已讀規則（#349）：章末到過之後，手動換章（按鈕／滑動／鍵盤）也算讀完。
+  // 朗讀自動接章的情況由 continueReaderAudioToNextChapter 先處理。
+  // 必須在下面改動 readerState 之前呼叫，這樣記錄的是「離開的這一章」。
+  if (!autoContinue) recordLeavingReaderChapter();
   const hadAudioPosition = isSpeaking || !document.getElementById("reader-audio-timeline")?.classList.contains("hidden");
   if (!autoContinue) stopReaderAudio(true);
   const currentBook = BIBLE_BOOKS.find(b => b.id === state.readerState.bookId);
@@ -1016,6 +1131,7 @@ export async function renderReaderText(options = {}) {
   closeSelectionBottomBar({ clearSelection: false });
   state.readerState.autoMarked = false;
   state.readerState.autoMarkInFlight = false;
+  reachedEndTargetKey = "";
   if (readerBottomDwellController) readerBottomDwellController.reset();
   readerEndObserver?.disconnect();
   readerEndObserver = null;
@@ -1138,6 +1254,7 @@ export async function renderReaderText(options = {}) {
     setReaderScrollTop(0, "auto");
   }
   updateReaderBottomActionBar();
+  updateReaderRecordStatus();
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
   refreshVerseSelectionUI();   // 跨章：把仍在選取集合裡、屬於這一章的節重新標記並重建工具列
@@ -1612,6 +1729,15 @@ function renderVersesList(container, verses, bookName, chapter) {
 
   applySelectionClassesToDom();
 
+  // 章末打卡狀態列（#349）：內容由 updateReaderRecordStatus 依計畫任務決定，沒有任務就隱藏。
+  const recordStatus = document.createElement("div");
+  recordStatus.id = "reader-record-status";
+  recordStatus.className = "reader-record-status";
+  recordStatus.setAttribute("role", "status");
+  recordStatus.setAttribute("aria-live", "polite");
+  recordStatus.hidden = true;
+  container.appendChild(recordStatus);
+
   const sentinel = document.createElement("div");
   sentinel.id = "reader-end-sentinel";
   sentinel.setAttribute("aria-hidden", "true");
@@ -2077,6 +2203,8 @@ function speakNextVerseInQueue(sessionId) {
 
 async function continueReaderAudioToNextChapter(sessionId) {
   if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  // 朗讀把最後一節唸完＝這章讀完（即使頁面沒捲到底；最後一章沒有下一章也一樣）。
+  recordLeavingReaderChapter({ force: true });
   const moved = await navigateToChapter(1, { autoContinue: true });
   if (!moved || sessionId !== currentAudioSessionId || !isSpeaking) {
     if (verseListForSpeaking.length > 0) {
@@ -2604,17 +2732,16 @@ function triggerPredictivePrefetch() {
 
 function checkReaderBottomDwell(surface = getReaderScrollSurface(), isAtBottom = null) {
   if (!readerBottomDwellController || !surface) return;
-  const taskContext = getCurrentPlanReaderTask();
+  const taskContext = resolveReaderAutoRecordTask();
   readerBottomDwellController.check(surface, {
     eligible: Boolean(
       taskContext &&
       window.appRouter && window.appRouter.currentTab === "reader-view" &&
-      !isPlanProgressLocked(taskContext.plan, { hidden: window.isPlanHidden?.(taskContext.plan) }) &&
-      !isCurrentPlanReaderTaskRead(taskContext) &&
+      getReaderTaskDecision(taskContext).ok &&
       !state.readerState.autoMarked &&
       !state.readerState.autoMarkInFlight
     ),
-    targetKey: getCurrentPlanReaderTargetKey(),
+    targetKey: getReaderTaskTargetKey(taskContext),
     isAtBottom
   });
 }
@@ -2633,6 +2760,7 @@ function bindReaderEndObserver() {
       readerEndVisible = isVisible;
       if (isVisible) {
         const targetKey = getCurrentPlanReaderTargetKey();
+        if (targetKey) reachedEndTargetKey = targetKey;
         const noticeKey = targetKey || `missing|${state.readerState?.bookId}|${state.readerState?.chapter}`;
         if (state.readerState?.fromPlan && readerAutoReadNoticeKey !== noticeKey) {
           readerAutoReadNoticeKey = noticeKey;

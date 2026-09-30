@@ -8801,6 +8801,24 @@ body.reader-modal-open .main-content {
   transition: font-size 0.16s ease;
 }
 
+/* 章末打卡狀態列（#349）：小字、靜音色；用主題 token，light / dark / warm 都跟著翻。 */
+.reader-record-status {
+  margin: 1.5rem 0 0.5rem;
+  padding: 0.5rem 0;
+  text-align: center;
+  font-size: 0.875rem !important;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.reader-record-status[hidden] {
+  display: none;
+}
+.reader-record-status[data-state="done"] {
+  font-weight: 500;
+  color: var(--color-success-foreground);
+}
+
 #reader-view .bible-text-container,
 #reader-view .verse-text,
 #reader-view .verse-num {
