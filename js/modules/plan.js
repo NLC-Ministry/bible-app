@@ -44,6 +44,7 @@ import {
   getSequentialCheckBlock,
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
+import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
 
 // Reading plans tab view controller
 
@@ -1461,6 +1462,8 @@ async function openJoinedPlanProgress(plan) {
   if (!plan) return;
   delete plan.upgradeOverlayDismissedRound;
   state.activePlan = plan;
+  // 「最近開啟的計畫」時間戳（#349）：讀經頁沒有計畫情境時，用它在多個含這章的計畫裡挑一個。
+  recordPlanOpened(plan);
   state.planDetailOpen = true;
   state.planActiveSubTab = "today";
   window.currentPlanViewState = PLAN_ROUTE.DETAIL;
@@ -4960,6 +4963,20 @@ state.inlineReader = {
 let inlineReaderBottomDwellController = null;
 let inlineReaderEndObserver = null;
 let inlineReaderEndVisible = false;
+// 這一章的章末是否已到過（#349）：到底後直接按上一章／下一章也算讀完。
+let inlineReaderReachedEndKey = "";
+
+function getInlineReaderTaskDecision(task) {
+  if (!task) return getAutoRecordDecision({ hasTask: false });
+  return getAutoRecordDecision({
+    hasTask: true,
+    alreadyRead: isInlineReaderTaskRead(task),
+    offline: Boolean(state.offlineMode),
+    expired: isPlanExpired(task.plan),
+    locked: isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) }),
+    isOldRound: task.round < Number(task.plan.currentRound || 1)
+  });
+}
 
 function getCurrentInlineReaderTask() {
   const plan = state.activePlan;
@@ -5000,15 +5017,12 @@ function findInlineReaderLog(task) {
 async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
   const task = getCurrentInlineReaderTask();
   if (!task || getInlineReaderTargetKey() !== expectedTargetKey) return false;
-  if (isInlineReaderTaskRead(task)) return true;
+  const decision = getInlineReaderTaskDecision(task);
+  if (decision.reason === AUTO_RECORD_REASONS.ALREADY_READ) return true;
   if (state.inlineReader.autoMarked || state.inlineReader.autoMarkInFlight) return false;
-  if (isPlanExpired(task.plan) || task.round < Number(task.plan.currentRound || 1)) return false;
-  if (isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) })) return false;
-  // Offline reading mode is read-only for progress — skip silently, matching
-  // this auto-mark flow's existing "no intrusive toast" design.
-  if (state.offlineMode) return false;
-  // 照順序打卡（#331）：還沒輪到的章讀到底不記錄，也不跳提示。
-  if (getSequentialCheckBlock(task.plan, task.chapter.book, task.chapter.chapter, task.round, true)) return false;
+  // 讀到底照常記錄（#349）：這裡刻意沒有「照順序打卡」（#331）的檢查，那條只留在手動勾選。
+  // 離線／已結束／鎖住／舊遍數仍不寫入（決定於共用的 getAutoRecordDecision）。
+  if (!decision.ok) return false;
 
   const readKey = `isReadR${task.round}`;
   const previousRoundRead = Boolean(task.chapter[readKey]);
@@ -5058,8 +5072,7 @@ function checkInlineReaderBottomDwell(surface = document.querySelector(".main-co
   inlineReaderBottomDwellController?.check(surface, {
     eligible: Boolean(
       task &&
-      !isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) }) &&
-      !isInlineReaderTaskRead(task) &&
+      getInlineReaderTaskDecision(task).ok &&
       !state.inlineReader.autoMarked &&
       !state.inlineReader.autoMarkInFlight
     ),
@@ -5085,6 +5098,7 @@ function bindInlineReaderEndObserver() {
     onChange: isVisible => {
       inlineReaderEndVisible = isVisible;
       if (isVisible) {
+        inlineReaderReachedEndKey = getInlineReaderTargetKey() || inlineReaderReachedEndKey;
         console.info("[AutoRead] Inline reader bottom detected", { targetKey: getInlineReaderTargetKey() || null });
         checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
       } else inlineReaderBottomDwellController?.cancel();
@@ -5205,6 +5219,7 @@ async function renderInlineScriptureText() {
 
   state.inlineReader.autoMarked = false;
   state.inlineReader.autoMarkInFlight = false;
+  inlineReaderReachedEndKey = "";
   inlineReaderBottomDwellController?.reset();
   inlineReaderEndObserver?.disconnect();
   inlineReaderEndObserver = null;
@@ -5290,6 +5305,10 @@ async function renderInlineScriptureText() {
 window.navigateInlineChapter = function (direction) {
   const newIndex = state.inlineReader.currentIndex + direction;
   if (newIndex >= 0 && newIndex < state.inlineReader.chaptersList.length) {
+    // 章末到過之後換章也算讀完（#349）。autoMarkInlineReaderTaskRead 在第一個 await 之前就
+    // 已抓好「離開的這一章」的 task，之後才改 currentIndex，所以記的是舊的一章。
+    const leavingKey = getInlineReaderTargetKey();
+    if (leavingKey && inlineReaderReachedEndKey === leavingKey) void autoMarkInlineReaderTaskRead(leavingKey);
     state.inlineReader.currentIndex = newIndex;
     renderInlineScriptureText();
   }
