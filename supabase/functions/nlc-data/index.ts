@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
+import { classifyReadingLogWrite, READING_LOG_PLAN_WRITE_ERROR } from "./reading-log-writes.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
 // >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
@@ -1508,6 +1509,27 @@ Deno.serve(async (req: Request) => {
       && !(OWN_WRITE_UPDATE_ONLY_TABLES.has(table) && action !== "update")) || canReportInsert;
     const canAdminWrite = ["insert", "update", "delete", "upsert"].includes(action) && (ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && (isAdmin(profile) || canManagePlans(profile));
     if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
+
+    // #359 計畫內打卡只能經 record_chapter_read / unrecord_chapter_read（資料庫 trigger 也會擋）。
+    // client 直接寫 reading_logs 只剩自由閱讀（plan_id NULL）；「重置計畫進度」改走 reset_plan_reading_logs。
+    const readingLogWrite = classifyReadingLogWrite(body);
+    if (readingLogWrite.kind === "reject") {
+      return jsonResponse({
+        error: READING_LOG_PLAN_WRITE_ERROR,
+        message: "Plan check-ins must go through record_chapter_read / unrecord_chapter_read"
+      }, 403);
+    }
+    if (readingLogWrite.kind === "reset_plan") {
+      const { data: deletedCount, error: resetError } = await supabaseAdmin.rpc("reset_plan_reading_logs", {
+        p_plan_id: readingLogWrite.planId,
+        p_user_id: profile.id,
+      });
+      if (resetError) {
+        const status = resetError.message === "not_owner" ? 403 : 400;
+        return jsonResponse({ error: resetError.message, code: resetError.code }, status);
+      }
+      return jsonResponse({ data: [], count: Number(deletedCount || 0) });
+    }
 
 
     const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);

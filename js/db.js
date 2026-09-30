@@ -2189,7 +2189,8 @@ const db = {
   // 回傳 { ok, reason }：ok=false 是規則拒絕（reason 見 js/data/check-in-reasons.mjs）；
   // 網路／登入／伺服器錯誤一律 throw，跟規則拒絕分開。RPC 在這個環境呼叫不到時 throw 的
   // error 帶 checkInRpcUnavailable=true。user id 由 nlc-data 以登入身分注入，這裡不傳。
-  _checkInRpcUnavailable: false,
+  // #359：計畫內打卡沒有直接寫表的退路了，所以「呼叫不到」不再記住——每次都重試 RPC
+  // （nlc-data 重新部署後不用重新整理就能送出 outbox 裡的紀錄）。
   _newCheckInClientId() {
     try {
       if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID();
@@ -2198,7 +2199,7 @@ const db = {
   },
   async _callCheckInRpc(functionName, args) {
     const client = state.supabase;
-    if (this._checkInRpcUnavailable || !state.isSupabaseMode || !client || typeof client.rpc !== "function") {
+    if (!state.isSupabaseMode || !client || typeof client.rpc !== "function") {
       const unavailable = new Error("check_in_rpc_unavailable");
       unavailable.checkInRpcUnavailable = true;
       throw unavailable;
@@ -2208,10 +2209,7 @@ const db = {
       const rpcError = new Error(error.message || error.error || String(error));
       rpcError.code = error.code || null;
       rpcError.status = Number(error.status || 0);
-      if (isCheckInRpcUnavailable(error)) {
-        rpcError.checkInRpcUnavailable = true;
-        this._checkInRpcUnavailable = true;
-      }
+      if (isCheckInRpcUnavailable(error)) rpcError.checkInRpcUnavailable = true;
       throw rpcError;
     }
     const result = normalizeCheckInResult(data);
@@ -2249,18 +2247,13 @@ const db = {
       console.warn("[ReadingLog] Cache invalidation failed after check-in RPC", error);
     }
   },
-  // logChapterRead 用：true = RPC 已處理；false = 這個環境呼叫不到 RPC，改走舊路徑；
+  // logChapterRead 用：計畫內打卡唯一的寫入路徑（#359：資料庫只收 RPC 寫的計畫內紀錄）。
+  // 成功回 true；RPC 呼叫不到／網路／伺服器錯誤 → throw（outbox 會留著這筆、之後重送）；
   // 規則拒絕 → throw code=CHECK_IN_REJECTED（帶 reason 與中文訊息，呼叫端照舊還原勾勾＋提示）。
   async _persistChapterCheckIn(isChecked, { planId, book, chapter, round, readAt = null, clientId = null }) {
-    let result;
-    try {
-      result = isChecked
-        ? await this.recordChapterRead({ planId, book, chapter, round, readAt, clientId })
-        : await this.unrecordChapterRead({ planId, book, chapter, round, clientId });
-    } catch (error) {
-      if (error && error.checkInRpcUnavailable) return false;
-      throw error;
-    }
+    const result = isChecked
+      ? await this.recordChapterRead({ planId, book, chapter, round, readAt, clientId })
+      : await this.unrecordChapterRead({ planId, book, chapter, round, clientId });
     if (!result.ok) {
       const rejected = new Error(checkInReasonMessage(result.reason));
       rejected.code = "CHECK_IN_REJECTED";
@@ -2272,7 +2265,7 @@ const db = {
 
   // ── 打卡 outbox（#356）────────────────────────────────────────────────
   // 計畫內打卡先寫進手機（js/pwa/CheckInOutbox.js），再背景送 RPC。outbox 還沒就緒、
-  // 不是 Supabase 模式、或不知道目前使用者時，退回直接寫入（舊行為）。
+  // 不是 Supabase 模式、或不知道目前使用者時，當場直接送 RPC（#359 起不再直接寫表）。
   _checkInUserId() {
     return state.currentProfileId || null;
   },
@@ -2351,18 +2344,17 @@ const db = {
           throw authError;
         }
 
-        // 計畫內打卡一律走伺服器 RPC（#355，規則只有一份）；RPC 在這個環境呼叫不到
-        // （nlc-data 未重新部署、migration 未套、本機 dev 的真 Supabase client）才退回舊的直接寫表。
-        const rpcHandled = planId
-          ? await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO, clientId: direct ? options.clientId : null })
-          : false;
-        if (rpcHandled) {
+        // 計畫內打卡只走伺服器 RPC（#355 規則只有一份；#359 資料庫也只收 RPC 寫的計畫內紀錄）。
+        // RPC 呼叫不到就 throw——outbox 留著重送，不再退回直接寫表。
+        if (planId) {
+          await this._persistChapterCheckIn(true, { planId, book, chapter, round, readAt: todayISO, clientId: direct ? options.clientId : null });
           await this._invalidateReadingLogCache(user.id);
           console.info("[ReadingLog] Persisted via record_chapter_read", { planId, book, chapter: Number(chapter), round: Number(round) });
         } else {
+          // 自由閱讀（plan_id NULL）照舊直接寫表。
           const row = {
             user_id: user.id,
-            plan_id: planId,
+            plan_id: null,
             book,
             chapter: Number(chapter),
             read_at: todayISO,
@@ -2380,42 +2372,14 @@ const db = {
           const insertReadingLog = () => repository
             ? repository.insert(row, { invalidate: [cacheKey] })
             : state.supabase.from("reading_logs").insert(row);
-          const updateReadingLog = id => repository
-            ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
-            : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
-          const compatiblePlanWrite = async () => {
-            const existingResult = await state.supabase.from("reading_logs").select("id")
-              .eq("user_id", user.id).eq("plan_id", planId).eq("book", book)
-              .eq("chapter", Number(chapter)).eq("round", Number(round)).limit(1);
-            throwWriteError(existingResult);
-            const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
-            return existingRow?.id ? updateReadingLog(existingRow.id) : insertReadingLog();
-          };
-
-          let writeResult;
-          if (planId) {
-            try {
-              writeResult = repository
-                ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
-                : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
-              throwWriteError(writeResult);
-            } catch (upsertError) {
-              console.warn("[ReadingLog] Upsert failed; retrying with compatible update/insert", {
-                planId, book, chapter: Number(chapter), round: Number(round), error: upsertError
-              });
-              writeResult = await compatiblePlanWrite();
-            }
-          } else {
-            const deleteResult = repository
-              ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
-                .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
-              : await state.supabase.from("reading_logs").delete()
-                .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
-                .eq("round", round).is("plan_id", null);
-            throwWriteError(deleteResult);
-            writeResult = await insertReadingLog();
-          }
-          throwWriteError(writeResult);
+          const deleteResult = repository
+            ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
+              .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
+            : await state.supabase.from("reading_logs").delete()
+              .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
+              .eq("round", round).is("plan_id", null);
+          throwWriteError(deleteResult);
+          throwWriteError(await insertReadingLog());
           console.info("[ReadingLog] Persisted", { planId, book, chapter: Number(chapter), round: Number(round) });
         }
       }
@@ -2433,17 +2397,15 @@ const db = {
           throw authError;
         }
         if (user) {
-          // 計畫內取消打卡走 unrecord_chapter_read（#355）；成功後只剩「同章、沒有 plan_id 的
-          // 自由閱讀紀錄」要照舊清掉（本機狀態把它當成同一章，不清會重整後又出現勾勾）。
-          const rpcHandled = planId
-            ? await this._persistChapterCheckIn(false, { planId, book, chapter, round, clientId: direct ? options.clientId : null })
-            : false;
-          if (rpcHandled) await this._invalidateReadingLogCache(user.id);
-          const applyDeleteFilters = query => {
-            query = query.eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
-            if (rpcHandled) return query.is("plan_id", null);
-            return planId ? query.or(`plan_id.eq.${planId},plan_id.is.null`) : query.is("plan_id", null);
-          };
+          // 計畫內取消打卡只走 unrecord_chapter_read（#355/#359，呼叫不到就 throw）；成功後只剩
+          // 「同章、沒有 plan_id 的自由閱讀紀錄」要照舊直接清掉（本機狀態把它當成同一章，不清會重整後又出現勾勾）。
+          if (planId) {
+            await this._persistChapterCheckIn(false, { planId, book, chapter, round, clientId: direct ? options.clientId : null });
+            await this._invalidateReadingLogCache(user.id);
+          }
+          const applyDeleteFilters = query => query
+            .eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round)
+            .is("plan_id", null);
           const cacheKey = `reading_logs:${user.id}`;
           const deleteResult = window.readingLogRepository
             ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: [cacheKey] })
