@@ -12,12 +12,13 @@ describe("locked campaign stage progress", () => {
     expect(isPlanProgressLocked(stage, { hidden: false, todayISO: "2026-09-01" })).toBe(false);
   });
 
-  it("guards both bottom-dwell readers and the shared data write path", () => {
+  it("guards both chapter-complete buttons and the shared data write path", () => {
     const bible = read("js/modules/bible.js");
     const plan = read("js/modules/plan.js");
     const db = read("js/db.js");
-    expect(bible).toContain("isPlanProgressLocked(taskContext.plan");
-    expect(plan).toContain("isPlanProgressLocked(task.plan");
+    expect(bible).toContain("isLocked: isReaderPlanLocked");
+    expect(bible).toContain("return isPlanProgressLocked(plan, { hidden: window.isPlanHidden?.(plan) });");
+    expect(plan).toContain("isLocked: plan => isPlanProgressLocked(plan, { hidden: window.isPlanHidden?.(plan) })");
     expect(db).toContain('progressError.code = "PLAN_PROGRESS_LOCKED"');
   });
 

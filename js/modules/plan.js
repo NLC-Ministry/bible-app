@@ -11,7 +11,7 @@ import {
 } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 import { applyPlanSidebarVisibility } from "./plan-sidebar-visibility.mjs";
-import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
+import { observeReaderEndSentinel } from "./reader-end-sentinel.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import {
   countScheduleDaysCoveredByChapters,
@@ -38,13 +38,18 @@ import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.m
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import {
   countDayReadingRecordsByDate,
-  formatSequentialCheckMessage,
+  formatRoundIncompleteMessage,
   getDayReadingRecords,
   getRoundCheckState,
-  getSequentialCheckBlock,
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
-import { AUTO_RECORD_REASONS, getAutoRecordDecision, isCheckInBlockedOffline, recordPlanOpened } from "../data/reader-auto-record.mjs";
+import {
+  getChapterTaskBlock,
+  isCheckInBlockedOffline,
+  resolveChapterCompleteTarget,
+  submitChapterCheckIn
+} from "../data/chapter-complete.mjs";
+import { createChapterCompleteController } from "./chapter-complete-button.mjs";
 
 // Reading plans tab view controller
 
@@ -450,10 +455,8 @@ window.PlanPageController = {
       forceHidden(shell.schedule, false);
       state.inlineReader.active = false;
       document.body.classList.remove("plan-inline-reader-open");
-      inlineReaderBottomDwellController?.cancel();
       inlineReaderEndObserver?.disconnect();
       inlineReaderEndObserver = null;
-      inlineReaderEndVisible = false;
       const inlineReader = document.getElementById("plan-inline-reader");
       if (inlineReader) inlineReader.classList.add("hidden");
       ensurePlanViewModeToggle();
@@ -1464,8 +1467,6 @@ async function openJoinedPlanProgress(plan) {
   if (!plan) return;
   delete plan.upgradeOverlayDismissedRound;
   state.activePlan = plan;
-  // 「最近開啟的計畫」時間戳（#349）：讀經頁沒有計畫情境時，用它在多個含這章的計畫裡挑一個。
-  recordPlanOpened(plan);
   state.planDetailOpen = true;
   state.planActiveSubTab = "today";
   window.currentPlanViewState = PLAN_ROUTE.DETAIL;
@@ -3411,7 +3412,7 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     return;
   }
 
-  // 速讀計畫照順序打卡（#331）：標出「下一章」，還沒輪到的章上鎖（仍可點開閱讀）。
+  // 速讀計畫標出「下一章」只是建議（#357 決定 5B：不再限制順序，任何一章都能勾）。
   const roundCheckState = isSequentialCheckPlan(state.activePlan)
     ? getRoundCheckState(state.activePlan.days, currentRound)
     : null;
@@ -3432,16 +3433,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     const isNextChapter = Boolean(nextCheckChapter
       && nextCheckChapter.book === ch.book
       && Number(nextCheckChapter.chapter) === Number(ch.chapter));
-    const isLockedChapter = Boolean(roundCheckState) && !isCurrentRead && !isNextChapter;
     if (isNextChapter) taskItem.classList.add("plan-task-item--next");
-    if (isLockedChapter) taskItem.classList.add("plan-task-item--locked");
     const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
-    const checkboxContent = isLockedChapter && typeof renderIcon === "function"
-      ? renderIcon("lock", { size: "sm", className: "nlc-icon" })
-      : content;
-    const toggleLabel = isLockedChapter
-      ? `${ch.book} ${ch.chapter}章，${planCopy.sequentialLockedLabel || "請先讀完前面的章節"}`
-      : `${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}`;
+    const toggleLabel = `${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}`;
     const nextLabelHtml = isNextChapter
       ? `<span class="task-next-label">${planCopy.sequentialNextLabel || "下一章"}</span>`
       : "";
@@ -3450,10 +3444,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
               class="task-read-toggle"
               data-is-current-read="${isCurrentRead ? 'true' : 'false'}"
               aria-pressed="${isCurrentRead ? 'true' : 'false'}"
-              ${isLockedChapter ? 'aria-disabled="true"' : ''}
               aria-label="${toggleLabel}">
-        <span class="task-checkbox ${cssClass}${isLockedChapter ? ' task-checkbox--locked' : ''}" aria-hidden="true">
-          ${checkboxContent}
+        <span class="task-checkbox ${cssClass}" aria-hidden="true">
+          ${content}
         </span>
       </button>
       <button type="button" class="task-open-button" aria-label="閱讀 ${ch.book} ${ch.chapter}章">
@@ -3989,13 +3982,6 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
-  // 速讀計畫照順序打卡（#331）：只能勾下一章、只能取消最後勾的那一章。
-  const sequentialBlock = getSequentialCheckBlock(state.activePlan, book, chapter, currentRound, willBeChecked);
-  if (sequentialBlock) {
-    showToast(formatSequentialCheckMessage(sequentialBlock, (window.APP_COPY && window.APP_COPY.plan) || {}));
-    return;
-  }
-
   if (checkboxEl) {
     checkboxEl.setAttribute("aria-pressed", String(willBeChecked));
     checkboxEl.setAttribute("aria-label", `${book} ${chapter}章，${willBeChecked ? "取消已讀" : "標記已讀"}`);
@@ -4421,7 +4407,7 @@ window.triggerPlanUpgradeFlow = async function() {
 // ── 進入下一遍 ───────────────────────────────────────────────────
 // 速讀計畫照順序打卡（#331）後，「最後一章勾完」就等於「整遍讀完」，
 // 不再需要漏勾清單。只留一行防呆：舊版 app、多裝置、離線佇列仍可能留下缺口，
-// 進入下一遍前確認整遍讀完，沒讀完就提示從哪一章開始。
+// 進入下一遍前確認整遍讀完，沒讀完就列出缺哪幾章。
 
 function getCurrentRoundLastReadingDay(plan) {
   if (!plan || !Array.isArray(plan.days)) return null;
@@ -4433,16 +4419,11 @@ function getCurrentRoundLastReadingDay(plan) {
   return null;
 }
 
-// 本遍還沒讀完 → 回傳提示文字；讀完 → null。
+// 本遍還沒讀完 → 回傳提示文字（列出缺哪幾章）；讀完 → null。
 function getRoundIncompleteMessage(plan) {
   if (!plan || !Array.isArray(plan.days)) return null;
   const checkState = getRoundCheckState(plan.days, plan.currentRound || 1);
-  if (checkState.isComplete || !checkState.next) return null;
-  const remaining = checkState.total - checkState.readCount;
-  const nextLabel = `${checkState.next.book} ${checkState.next.chapter}章`;
-  const template = (window.APP_COPY && window.APP_COPY.plan && window.APP_COPY.plan.roundIncomplete)
-    || "還有 {count} 章沒讀，請從 {chapter} 開始";
-  return template.replace("{count}", remaining).replace("{chapter}", nextLabel);
+  return formatRoundIncompleteMessage(checkState, (window.APP_COPY && window.APP_COPY.plan) || {});
 }
 
 // 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」且該日已勾完時出現。
@@ -4962,7 +4943,7 @@ window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = nu
     || state.activePlan?.globalPlanId
     || state.activePlan?.presetKey
     || null;
-  console.info("[AutoRead] Opened plan chapter in reader", {
+  console.info("[PlanReader] Opened plan chapter in reader", {
     planContextId: state.readerState.planContextId, book: book.name, chapter: state.readerState.chapter, round: state.readerState.planRound
   });
 
@@ -4983,28 +4964,10 @@ state.inlineReader = {
   active: false,
   dayNum: 0,
   chaptersList: [],
-  currentIndex: 0,
-  autoMarked: false,
-  autoMarkInFlight: false
+  currentIndex: 0
 };
 
-let inlineReaderBottomDwellController = null;
 let inlineReaderEndObserver = null;
-let inlineReaderEndVisible = false;
-// 這一章的章末是否已到過（#349）：到底後直接按上一章／下一章也算讀完。
-let inlineReaderReachedEndKey = "";
-
-function getInlineReaderTaskDecision(task) {
-  if (!task) return getAutoRecordDecision({ hasTask: false });
-  return getAutoRecordDecision({
-    hasTask: true,
-    alreadyRead: isInlineReaderTaskRead(task),
-    offline: isCheckInBlockedOffline({ offlineMode: Boolean(state.offlineMode), plan: task.plan }),
-    expired: isPlanExpired(task.plan),
-    locked: isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) }),
-    isOldRound: task.round < Number(task.plan.currentRound || 1)
-  });
-}
 
 function getCurrentInlineReaderTask() {
   const plan = state.activePlan;
@@ -5013,145 +4976,55 @@ function getCurrentInlineReaderTask() {
   const chapter = reader.chaptersList[reader.currentIndex];
   if (!chapter) return null;
   const round = Number(chapter.round || plan.currentRound || 1);
-  return { plan, chapter, round };
+  return { plan, chapter, round, bookName: chapter.book, chapterNum: Number(chapter.chapter) };
 }
 
-function getInlineReaderTargetKey() {
-  const task = getCurrentInlineReaderTask();
-  if (!task) return "";
-  return [
-    task.plan.id || task.plan.globalPlanId || task.plan.presetKey || "plan",
-    state.inlineReader.dayNum,
-    task.round,
-    task.chapter.book,
-    task.chapter.chapter
-  ].join("|");
-}
-
-function isInlineReaderTaskRead(task) {
-  if (!task) return false;
-  return Boolean(task.chapter[`isReadR${task.round}`] || (task.round === 1 && task.chapter.isRead));
-}
-
-function findInlineReaderLog(task) {
-  return (state.readingLogs || []).find(log =>
-    String(log.book) === String(task.chapter.book) &&
-    Number(log.chapter) === Number(task.chapter.chapter) &&
-    Number(log.round || 1) === task.round &&
-    (log.plan_id === task.plan.id || log.presetKey === task.plan.presetKey || log.preset_key === task.plan.presetKey)
-  );
-}
-
-async function autoMarkInlineReaderTaskRead(expectedTargetKey) {
-  const task = getCurrentInlineReaderTask();
-  if (!task || getInlineReaderTargetKey() !== expectedTargetKey) return false;
-  const decision = getInlineReaderTaskDecision(task);
-  if (decision.reason === AUTO_RECORD_REASONS.ALREADY_READ) return true;
-  if (state.inlineReader.autoMarked || state.inlineReader.autoMarkInFlight) return false;
-  // 讀到底照常記錄（#349）：這裡刻意沒有「照順序打卡」（#331）的檢查，那條只留在手動勾選。
-  // 離線／已結束／鎖住／舊遍數仍不寫入（決定於共用的 getAutoRecordDecision）。
-  if (!decision.ok) return false;
-
-  const readKey = `isReadR${task.round}`;
-  const previousRoundRead = Boolean(task.chapter[readKey]);
-  const previousRead = Boolean(task.chapter.isRead);
-  const existingLog = findInlineReaderLog(task);
-  state.inlineReader.autoMarked = true;
-  state.inlineReader.autoMarkInFlight = true;
-  task.chapter[readKey] = true;
-  if (task.round === 1) task.chapter.isRead = true;
-
-  try {
-    calculatePlanProgress();
-    await db.logChapterRead(task.chapter.book, task.chapter.chapter, true, task.round, task.plan);
-    if (typeof db.saveLocalUserStats === "function") db.saveLocalUserStats();
-    calculatePlanProgress();
-    window.setDataVersion?.(previous => previous + 1);
-    window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
-    if (task.plan.progress >= 100) {
-      await window.closePlanInlineReader();
-      await handleRoundCompletion(task.plan);
-    }
-    console.info("[AutoRead] Inline reading log persisted", { targetKey: expectedTargetKey });
-    return true;
-  } catch (error) {
-    console.error("Failed to auto-mark inline reader progress", error);
-    task.chapter[readKey] = previousRoundRead;
-    task.chapter.isRead = previousRead;
-    if (!existingLog && Array.isArray(state.readingLogs)) {
-      state.readingLogs = state.readingLogs.filter(log => !(
-        String(log.book) === String(task.chapter.book) &&
-        Number(log.chapter) === Number(task.chapter.chapter) &&
-        Number(log.round || 1) === task.round &&
-        (log.plan_id === task.plan.id || log.presetKey === task.plan.presetKey || log.preset_key === task.plan.presetKey)
-      ));
-    }
-    state.inlineReader.autoMarked = false;
-    calculatePlanProgress();
-    showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "閱讀進度同步失敗，請稍後再試");
-    return false;
-  } finally {
-    state.inlineReader.autoMarkInFlight = false;
-  }
-}
-
-function checkInlineReaderBottomDwell(surface = document.querySelector(".main-content"), isAtBottom = null) {
-  const task = getCurrentInlineReaderTask();
-  inlineReaderBottomDwellController?.check(surface, {
-    eligible: Boolean(
-      task &&
-      getInlineReaderTaskDecision(task).ok &&
-      !state.inlineReader.autoMarked &&
-      !state.inlineReader.autoMarkInFlight
-    ),
-    targetKey: getInlineReaderTargetKey(),
-    isAtBottom
+function getInlineReaderChapterBlock(task, willCheck) {
+  return getChapterTaskBlock(task, willCheck, {
+    offlineMode: Boolean(state.offlineMode),
+    isExpired: plan => isPlanExpired(plan),
+    isLocked: plan => isPlanProgressLocked(plan, { hidden: window.isPlanHidden?.(plan) })
   });
 }
 
-function handleInlineReaderScroll(event) {
-  checkInlineReaderBottomDwell(event.currentTarget || event.target);
+async function submitInlineReaderChapterCheckIn(task, willCheck) {
+  const result = await submitChapterCheckIn(task, willCheck, { recalc: calculatePlanProgress });
+  if (!result.ok) return result;
+  if (typeof db.saveLocalUserStats === "function") db.saveLocalUserStats();
+  window.setDataVersion?.(previous => previous + 1);
+  window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
+  if (willCheck && task.plan.progress >= 100) {
+    await window.closePlanInlineReader();
+    await handleRoundCompletion(task.plan);
+  }
+  return result;
 }
 
+// 內嵌閱讀器章末「完成本章」（#357，與讀經頁共用元件）。內嵌閱讀器一定從計畫進來 → 記到 state.activePlan。
+// 讀到底、換章都不寫入；只有按下才記錄。
+const inlineChapterComplete = createChapterCompleteController({
+  getTarget: () => resolveChapterCompleteTarget({ contextTask: getCurrentInlineReaderTask() }),
+  getBlock: getInlineReaderChapterBlock,
+  submit: submitInlineReaderChapterCheckIn
+});
+
+// 讀到章末：按鈕閃一次提醒，不寫入（#357 決定 1B）。
 function bindInlineReaderEndObserver() {
   inlineReaderEndObserver?.disconnect();
   inlineReaderEndObserver = null;
-  inlineReaderEndVisible = false;
   const root = document.querySelector(".main-content");
   const sentinel = document.getElementById("plan-inline-reader-end-sentinel");
   if (!root || !sentinel) return;
+  let reminded = false;
   inlineReaderEndObserver = observeReaderEndSentinel({
     root,
     sentinel,
     onChange: isVisible => {
-      inlineReaderEndVisible = isVisible;
-      if (isVisible) {
-        inlineReaderReachedEndKey = getInlineReaderTargetKey() || inlineReaderReachedEndKey;
-        console.info("[AutoRead] Inline reader bottom detected", { targetKey: getInlineReaderTargetKey() || null });
-        checkInlineReaderBottomDwell(root, () => inlineReaderEndVisible);
-      } else inlineReaderBottomDwellController?.cancel();
+      if (!isVisible || reminded) return;
+      reminded = true;
+      inlineChapterComplete.pulse();
     }
   });
-}
-function scheduleInlineReaderBottomDwellCheck() {
-  requestAnimationFrame(() => requestAnimationFrame(() => checkInlineReaderBottomDwell()));
-}
-
-function initInlineReaderBottomDwell() {
-  const scrollSurface = document.querySelector(".main-content");
-  if (!scrollSurface) return;
-  if (!inlineReaderBottomDwellController) {
-    inlineReaderBottomDwellController = createReaderBottomDwellController({
-      dwellMs: 1000,
-      bottomThreshold: 96,
-      onComplete: autoMarkInlineReaderTaskRead
-    });
-  }
-  if (scrollSurface.dataset.inlineReaderBottomDwellBound !== "true") {
-    scrollSurface.dataset.inlineReaderBottomDwellBound = "true";
-    scrollSurface.addEventListener("scroll", handleInlineReaderScroll, { passive: true });
-    scrollSurface.addEventListener("scrollend", handleInlineReaderScroll, { passive: true });
-  }
 }
 
 window.openPlanInlineReader = async function (bookName, chapter, dayNum, round = null) {
@@ -5189,7 +5062,7 @@ window.openPlanInlineReader = async function (bookName, chapter, dayNum, round =
 
   // Now that renderPlanView() is fully settled, apply inline reader DOM state
   document.body.classList.add("plan-inline-reader-open");
-  console.info("[AutoRead] Opened inline plan reader", {
+  console.info("[PlanReader] Opened inline plan reader", {
     planId: state.activePlan?.id || null, book: bookName, chapter: Number(chapter), round: targetRound
   });
 
@@ -5208,17 +5081,14 @@ window.openPlanInlineReader = async function (bookName, chapter, dayNum, round =
   const inlineReader = document.getElementById("plan-inline-reader");
   if (inlineReader) inlineReader.classList.remove("hidden");
 
-  initInlineReaderBottomDwell();
   renderInlineScriptureText();
 };
 
 window.closePlanInlineReader = async function () {
   state.inlineReader.active = false;
   document.body.classList.remove("plan-inline-reader-open");
-  inlineReaderBottomDwellController?.cancel();
   inlineReaderEndObserver?.disconnect();
   inlineReaderEndObserver = null;
-  inlineReaderEndVisible = false;
 
   // Show checklist interface elements
   const carousel = document.getElementById("plan-date-carousel");
@@ -5245,13 +5115,8 @@ async function renderInlineScriptureText() {
   const currentCh = state.inlineReader.chaptersList[state.inlineReader.currentIndex];
   if (!currentCh) return;
 
-  state.inlineReader.autoMarked = false;
-  state.inlineReader.autoMarkInFlight = false;
-  inlineReaderReachedEndKey = "";
-  inlineReaderBottomDwellController?.reset();
   inlineReaderEndObserver?.disconnect();
   inlineReaderEndObserver = null;
-  inlineReaderEndVisible = false;
 
   // Set Title
   const titleEl = document.getElementById("plan-inline-reader-title");
@@ -5283,6 +5148,8 @@ async function renderInlineScriptureText() {
           verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.875rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
           container.appendChild(verseDiv);
         });
+        container.appendChild(inlineChapterComplete.createElement("plan-inline-chapter-complete"));
+        inlineChapterComplete.render();
         const sentinel = document.createElement("div");
         sentinel.id = "plan-inline-reader-end-sentinel";
         sentinel.setAttribute("aria-hidden", "true");
@@ -5327,22 +5194,17 @@ async function renderInlineScriptureText() {
   // The plan detail page scrolls inside .main-content, not the browser window.
   const scrollSurface = document.querySelector(".main-content" );
   if (scrollSurface) scrollSurface.scrollTop = 0;
-  scheduleInlineReaderBottomDwellCheck();
 }
 
 window.navigateInlineChapter = function (direction) {
   const newIndex = state.inlineReader.currentIndex + direction;
   if (newIndex >= 0 && newIndex < state.inlineReader.chaptersList.length) {
-    // 章末到過之後換章也算讀完（#349）。autoMarkInlineReaderTaskRead 在第一個 await 之前就
-    // 已抓好「離開的這一章」的 task，之後才改 currentIndex，所以記的是舊的一章。
-    const leavingKey = getInlineReaderTargetKey();
-    if (leavingKey && inlineReaderReachedEndKey === leavingKey) void autoMarkInlineReaderTaskRead(leavingKey);
+    // 換章不會記錄已讀（#357 決定 3A）：只有按「完成本章」才算。
     state.inlineReader.currentIndex = newIndex;
     renderInlineScriptureText();
   }
 };
 
-// Window scroll listener for inline reader automatic check-in has been removed to prevent screen jumping and layout shift.
 
 
 // ==================== PERSONAL STATS & HEATMAP & ACHIEVEMENTS ====================
