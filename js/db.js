@@ -97,11 +97,26 @@ function quotePostgrestValue(value) {
 // counts/lists quietly stop growing instead of erroring. buildQuery must be
 // a factory that returns a *fresh* query builder each call (chainable
 // builders here are single-use), since .range() is appended per page.
-async function fetchAllRows(buildQuery, pageSize = 200) {
+//
+// Every page is also ordered by a unique tie-breaker (#351), appended after
+// whatever .order() the caller already set. Without a unique order, each
+// page is a separate request that PostgreSQL may answer in a different row
+// order (a different plan on another pooled connection, or rows moved by an
+// UPDATE such as nlc-session touching profiles on every login), so pages
+// overlap and some rows are never fetched — #348 showed 421 chapters coming
+// back as 374/375/418. `orderBy` defaults to the primary key `id`; a table
+// without an `id` column must pass its own unique key (reading_team_members:
+// ["team_id", "user_id"]). scripts/paginated-stable-order.test.mjs enforces it.
+const READING_TEAM_MEMBERS_ORDER = ["team_id", "user_id"]; // composite PK, no id column
+async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = 200 } = {}) {
   const rows = [];
   let from = 0;
   while (true) {
-    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    let query = buildQuery();
+    if (typeof query.order === "function") {
+      for (const column of orderBy) query = query.order(column, { ascending: true });
+    }
+    const { data, error } = await query.range(from, from + pageSize - 1);
     if (error) return { data: rows, error };
     const page = data || [];
     rows.push(...page);
@@ -875,8 +890,13 @@ const db = {
         this.request.or = expression;
         return this;
       }
+      // Chained .order() calls accumulate, like supabase-js (#351). `orders`
+      // carries all of them; `order` keeps the first one for an nlc-data
+      // deployed before multi-column support, which reads only `order`.
       order(column, options = {}) {
-        this.request.order = { column, ascending: options.ascending !== false };
+        const entry = { column, ascending: options.ascending !== false };
+        this.request.orders = [...(this.request.orders || []), entry];
+        if (!this.request.order) this.request.order = entry;
         return this;
       }
       limit(count) {
@@ -2495,7 +2515,7 @@ const db = {
       // 依計畫分開記錄：同一計畫的 3 人組與 6 人組可各有一隊。
       const { data: teamMembershipsResult } = await fetchAllRows(() => state.supabase
         .from("reading_team_members")
-        .select("user_id, team_id, global_plan_id, member_role"));
+        .select("user_id, team_id, global_plan_id, member_role"), { orderBy: READING_TEAM_MEMBERS_ORDER });
 
       const teamIds = Array.from(new Set((teamMembershipsResult || []).map(m => m.team_id).filter(Boolean)));
       let teamNameById = new Map();
@@ -4222,7 +4242,7 @@ const db = {
       if (teamIds.length > 0) {
         const { data: mRows, error: mErr } = await fetchAllRows(() => client
           .from("reading_team_members")
-          .select("team_id, user_id, member_role"));
+          .select("team_id, user_id, member_role"), { orderBy: READING_TEAM_MEMBERS_ORDER });
         if (!mErr && Array.isArray(mRows)) members = mRows;
       }
 
@@ -4533,7 +4553,7 @@ const db = {
         const { data: teamMembers, error: tmError } = await fetchAllRows(() => client
           .from("reading_team_members")
           .select("user_id, team_id, member_role, division, global_plan_id")
-          .eq("global_plan_id", planId));
+          .eq("global_plan_id", planId), { orderBy: READING_TEAM_MEMBERS_ORDER });
         if (!tmError && teamMembers) memberships = teamMembers;
       }
 
