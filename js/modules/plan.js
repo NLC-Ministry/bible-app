@@ -58,6 +58,8 @@ let dateClickDebounceTimer = null;
 let viewMode = 'calendar'; // Today reading always shows calendar + chapter list
 let planSearchQuery = '';
 let planTeamInviteVisibilityRequestId = 0;
+// 個人統計「累積閱讀章數」的伺服器請求序號：只讓最後一次 render 的回應寫回畫面。
+let planChapterTotalRenderToken = 0;
 // 計畫分頁的「系列」篩選（全部 / campaign / devotional / group_meeting / other）。
 // 只有「靈修」或「小組」任一系列有可見計畫時，那排 pill 才會顯示（審核未過 = 完全不出現）。
 let activePlanSeries = (() => {
@@ -5941,7 +5943,22 @@ async function renderPlanStatsView() {
           }
         });
       }
-      reportStatTotalChapters.textContent = uniqueKeys.size;
+      const localTotal = uniqueKeys.size;
+      reportStatTotalChapters.textContent = localTotal;
+
+      // 伺服器數字為準（#348）：前端這份 readingLogs 是分頁抓回來的，只要載入
+      // 出過差錯就會少算。先顯示本機數字，伺服器回來再換掉。取兩者較大的：
+      // 本機多出來的只會是剛打勾、還沒寫進資料庫的章節（樂觀更新），伺服器
+      // 多出來的就是本機漏抓的。
+      const totalPlanId = state.activePlan.id;
+      const totalRenderToken = ++planChapterTotalRenderToken;
+      if (totalPlanId && typeof db.fetchPlanChapterTotal === "function") {
+        db.fetchPlanChapterTotal(totalPlanId).then(serverTotal => {
+          if (serverTotal === null || totalRenderToken !== planChapterTotalRenderToken) return;
+          if (!state.activePlan || state.activePlan.id !== totalPlanId) return;
+          reportStatTotalChapters.textContent = Math.max(serverTotal, localTotal);
+        });
+      }
     }
 
     // Render heatmap, trend chart, and badges wall
