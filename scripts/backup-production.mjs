@@ -19,8 +19,12 @@ import {
   appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync
 } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+// 備份只在 Windows 上跑（backup-production.ps1 排程）；固定用 Windows 路徑規則，
+// CI（Linux）跑測試時才會和實際環境一致（#352）。
+import { win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const { isAbsolute, join, relative, resolve } = win32;
 
 export const PROD_REF = "ztozevcqkfrohgjmngcj";
 export const MONTHLY_FULL_KEEP = 3;
