@@ -32,6 +32,14 @@ export function getAutoRecordDecision({
   return { ok: true, reason: null };
 }
 
+// 離線閱讀模式下還能不能打卡（#356）：計畫內的打卡進 outbox、連線後補送，所以照收；
+// 只有沒辦法排隊的（自由閱讀、outbox 未就緒）才擋。
+export function isCheckInBlockedOffline({ offlineMode = false, plan = null, db = globalThis.db } = {}) {
+  if (!offlineMode) return false;
+  const canQueue = Boolean(plan && plan.id && db && typeof db.canQueueCheckIn === "function" && db.canQueueCheckIn());
+  return !canQueue;
+}
+
 export function planIdOf(plan) {
   if (!plan) return "";
   return String(plan.id || plan.globalPlanId || plan.presetKey || "");

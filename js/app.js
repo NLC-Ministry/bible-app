@@ -26,6 +26,7 @@ import {
 } from './login-onboarding-gate.mjs';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js';
+import { installCheckInSync } from './pwa/CheckInSync.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
 import { IndexedDbClient } from './pwa/IndexedDbClient.js';
@@ -933,6 +934,8 @@ async function applyOfflineBibleVersionFallback({ notifyToast = false } = {}) {
 // reports "deferred" and simply retries on the next foreground/interval.
 function isSafeToReloadForUpdate() {
   if (Number(document.documentElement.dataset.pendingSyncCount || 0) > 0) return false;
+  // 打卡 outbox 平常存在 IndexedDB，重新整理不會掉；只有寫不進去、只留在記憶體的才不能重整。
+  if (window.checkInOutbox?.hasUnsavedItems?.()) return false;
   const active = document.activeElement;
   if (active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName))) return false;
   try {
@@ -1010,6 +1013,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Stale-build check has its own throttle; run it before ours so a resumed
     // PWA picks up a new deploy even inside the 45s foreground window.
     appVersionWatcher.check().catch(() => {});
+    // 打卡 outbox 有自己的退避時間，不受下面 45 秒節流影響（#356）。
+    window.checkInOutbox?.flush().catch(() => {});
     const now = Date.now();
     if (now - _lastForegroundRunAt < FOREGROUND_MIN_INTERVAL_MS) return;
     _lastForegroundRunAt = now;
@@ -1120,6 +1125,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // One authoritative path for reading-log snapshots and mutations.
   const repositoryCache = "indexedDB" in window ? new IndexedDbClient() : null;
   window.pwaDataStore = repositoryCache;
+  // 打卡 outbox（#356）：先讀出還沒送出的打卡，載入 reading_logs 時才能疊回畫面。
+  // IndexedDB 卡住時最多等 1.5 秒，之後 outbox 讀完會自己補疊。
+  try {
+    const checkInOutbox = installCheckInSync({ dbClient: repositoryCache });
+    await Promise.race([checkInOutbox.loadPromise, new Promise(resolve => setTimeout(resolve, 1500))]);
+  } catch (error) {
+    console.warn("[CheckInOutbox] Initialization failed; check-ins are written directly.", error);
+  }
   window.offlineBibleRepository = new OfflineBibleRepository({ dbClient: repositoryCache });
   initOfflineBibleControls(window.offlineBibleRepository).catch(error => {
     console.warn("[PWA] Offline Bible controls failed to initialize.", error);
@@ -1257,6 +1270,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     await initializePwa();
   } catch (error) {
     console.warn("[PWA] Initialization failed; continuing in online-only mode.", error);
+  }
+  // 開 app：丟掉別人的打卡、補送自己的（#356）。
+  if (window.checkInOutbox && state.currentProfileId) {
+    window.checkInOutbox.handleSessionVerified(state.currentProfileId)
+      .catch(error => console.warn("[CheckInOutbox] Startup flush failed", error));
   }
 
   window.addEventListener("pwa:sync-status", event => {

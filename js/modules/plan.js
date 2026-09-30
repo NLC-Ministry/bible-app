@@ -44,7 +44,7 @@ import {
   getSequentialCheckBlock,
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
-import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
+import { AUTO_RECORD_REASONS, getAutoRecordDecision, isCheckInBlockedOffline, recordPlanOpened } from "../data/reader-auto-record.mjs";
 
 // Reading plans tab view controller
 
@@ -3981,7 +3981,7 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
-  if (state.offlineMode) {
+  if (isCheckInBlockedOffline({ offlineMode: Boolean(state.offlineMode), plan: state.activePlan })) {
     showToast("離線閱讀模式無法記錄進度，恢復連線後再試");
     if (checkboxEl) {
       checkboxEl.checked = isCurrentlyRead;
@@ -4292,6 +4292,16 @@ function setPlanUpgradeOverlayBusy(busy, nextRoundLabel = "", errorMessage = "")
   }
 }
 
+async function getPendingCheckInsBeforeRoundAdvance(plan) {
+  const outbox = window.checkInOutbox;
+  if (!plan || !plan.id || !outbox || typeof outbox.ensurePlanSynced !== "function") return 0;
+  if (outbox.pendingCount({ planId: plan.id }) === 0) return 0;
+  const remaining = await outbox.ensurePlanSynced(plan.id);
+  // 送出期間被拒絕的章已經退回，進度要重算後再判斷能不能進下一遍。
+  if (typeof calculatePlanProgress === "function") calculatePlanProgress();
+  return remaining;
+}
+
 window.triggerPlanUpgradeFlow = async function() {
   const plan = state.activePlan;
   if (!plan) return;
@@ -4301,6 +4311,22 @@ window.triggerPlanUpgradeFlow = async function() {
     showToast("計畫時間已過，無法再進行升級。");
     const modal = document.getElementById("congrats-modal");
     if (modal) modal.remove();
+    return;
+  }
+
+  // 打卡 outbox 還有這個計畫的章沒送出（#356）：先送；還送不出去（離線）就先不進下一遍，
+  // 否則伺服器還沒有這些紀錄、之後補送會被當成舊一遍（old_round）拒絕。
+  let pendingCheckIns = 0;
+  planUpgradeInFlight = true; // 等 outbox 送出期間擋住連點
+  try {
+    pendingCheckIns = await getPendingCheckInsBeforeRoundAdvance(plan);
+  } finally {
+    planUpgradeInFlight = false;
+  }
+  if (pendingCheckIns > 0) {
+    const template = (window.APP_COPY && window.APP_COPY.plan && window.APP_COPY.plan.checkInPendingRoundAdvance)
+      || "還有 {count} 章等待同步，連線後再進入下一遍";
+    showToast(template.split("{count}").join(String(pendingCheckIns)));
     return;
   }
 
@@ -4973,7 +4999,7 @@ function getInlineReaderTaskDecision(task) {
   return getAutoRecordDecision({
     hasTask: true,
     alreadyRead: isInlineReaderTaskRead(task),
-    offline: Boolean(state.offlineMode),
+    offline: isCheckInBlockedOffline({ offlineMode: Boolean(state.offlineMode), plan: task.plan }),
     expired: isPlanExpired(task.plan),
     locked: isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) }),
     isOldRound: task.round < Number(task.plan.currentRound || 1)

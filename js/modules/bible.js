@@ -8,6 +8,7 @@ import { formatSequentialCheckMessage, getSequentialCheckBlock } from "../data/c
 import {
   AUTO_RECORD_REASONS,
   getAutoRecordDecision,
+  isCheckInBlockedOffline,
   planIdOf,
   readPlanLastOpened,
   selectAutoRecordPlanTask
@@ -198,7 +199,7 @@ function getReaderTaskDecision(taskContext) {
   return getAutoRecordDecision({
     hasTask: true,
     alreadyRead: isCurrentPlanReaderTaskRead(taskContext),
-    offline: Boolean(state.offlineMode),
+    offline: isCheckInBlockedOffline({ offlineMode: Boolean(state.offlineMode), plan }),
     expired: Boolean(plan && isPlanExpired(plan)),
     locked: isPlanProgressLocked(taskContext.plan, { hidden: window.isPlanHidden?.(taskContext.plan) }),
     isOldRound: round < Number(plan.currentRound || 1)
@@ -746,7 +747,7 @@ export function initReaderControls() {
         return;
       }
 
-      if (state.offlineMode) {
+      if (isCheckInBlockedOffline({ offlineMode: Boolean(state.offlineMode), plan: state.activePlan })) {
         showToast("離線閱讀模式無法記錄進度，恢復連線後再試");
         return;
       }
