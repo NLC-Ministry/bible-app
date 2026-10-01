@@ -1,6 +1,6 @@
 ---
 name: bible-study-dev-guidelines
-description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG 避坑指南 (Bible Study Development Guidelines & Anti-Bug Patterns)
+description: 聖經速讀計畫的開發規範與避坑指南——改 UI 重繪／捲動位置、全螢幕疊層、TTS 朗讀與聲音選擇、選擇器 Modal、自動打卡、計畫進度即時更新、Edge Function／RPC／migration 查詢欄位、或判斷測試失敗是否為 regression 之前載入。 (Bible Study Development Guidelines & Anti-Bug Patterns)
 ---
 
 # 📖 聖經速讀計畫專案開發規範與避坑指南
@@ -55,6 +55,7 @@ description: 聖經速讀計畫專案架構規範、開發經驗與常犯 BUG �
 
 ## 🎨 5. 人性化 UI/UX 互動規範 (User-First Design Rules)
 
+* **選項超過 3 個用選擇器 Modal**：用帶清楚勾選標記的 Picker Modal（如 `#bible-version-picker-modal`），不要用單一按鈕無限輪替切換。
 * **深色模式對比度與 Modal 按鈕規範 (Dark Theme Contrast & Modals)**：
   - 彈窗 Modal (如 `#bible-version-picker-modal`) 在 Dark Theme 下，按鈕預設背景**嚴禁為純白全顯狀態 (`background: #fff`)**。
   - 應繼承主題變數 `background: var(--bg-surface, rgba(255, 255, 255, 0.05)) !important` 與 `color: var(--text-primary, #f8fafc) !important`，確保白字高清可讀、無白底融化文字狀況。

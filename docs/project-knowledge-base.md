@@ -4,7 +4,7 @@
 >
 > **資訊新鮮度警語**：本文件內容整理自歷次對話留下的工作記憶，是**時間點快照**，不是即時資料庫狀態。特別是「未部署」的標記，可能在整理當下已經被使用者部署完成、只是沒有回頭更新記錄。**任何「未部署」「待辦」的描述，使用前務必先用 `git log` / 直接查 Supabase 現況核實，不要盲目相信文件說的還沒做。** 本文件寫成當下，`supabase/migrations/` 最新的檔案是 `0191_normalize_placeholder_org_unit_names.sql`；`0173`–`0189` 這段（安全性 REVOKE 掃描、每日小測驗五題型、排行榜/PR 公布）是本文件整理者記憶快照**之後**才發生的既成事實，細節請直接看那些 migration 檔案與對應的 git commit/PR，本文件不重複描述。
 >
-> 更完整的架構規範見同倉庫的 [`CLAUDE.md`](../CLAUDE.md) 與 `.agents/skills/bible-study-dev-guidelines/SKILL.md`；本文件著重在「發生過的事、為什麼這樣設計、學到的教訓」，跟 CLAUDE.md 的「現況架構說明」互補，不重複貼原文。
+> 更完整的架構規範見同倉庫的 [`CLAUDE.md`](../CLAUDE.md) 與 `.claude/skills/bible-study-dev-guidelines/SKILL.md`；本文件著重在「發生過的事、為什麼這樣設計、學到的教訓」，跟 CLAUDE.md 的「現況架構說明」互補，不重複貼原文。
 
 ---
 
