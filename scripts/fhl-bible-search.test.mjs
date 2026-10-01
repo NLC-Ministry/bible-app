@@ -95,15 +95,22 @@ describe("FHL short-keyword search helpers (#366)", () => {
   });
 });
 
-describe("reader search wiring (#366)", () => {
-  it("sends 1–2 character queries to FHL and longer ones to bolls.life", () => {
-    expect(bible).toContain("const fhlVersion = shortQuery ? getFhlSearchVersion(translation) : null;");
-    expect(bible).toContain("fhlVersion ? fetchFhlSearch(trimmed, fhlVersion) : fetchBollsSearch(trimmed, translation)");
+describe("reader search wiring (#366, #378)", () => {
+  it("routes each reader version to its search source", () => {
+    expect(bible).toContain("const plan = getBibleSearchPlan(translation);");
+    expect(bible).toContain('if (plan.source === "offline") return searchOfflinePack(trimmed, plan.version);');
+    expect(bible).toContain('plan.source === "fhl" ? fetchFhlSearch(trimmed, plan.version) : fetchBollsSearch(trimmed, plan.version)');
   });
 
-  it("asks for 3 characters instead of failing when the version has no FHL match", () => {
-    expect(bible).toContain('isShortBibleQuery(query) && !getFhlSearchVersion(searchVersion)');
-    expect(bible).toContain('"請至少輸入 3 個字"');
+  it("asks for 3 characters only on bolls.life (English) versions", () => {
+    expect(bible).toContain('getBibleSearchPlan(searchVersion).source === "bolls" && isShortBibleQuery(query)');
+    expect(bible).toContain('if (plan.source === "bolls" && isShortBibleQuery(trimmed)) {');
+  });
+
+  it("searches every FHL query variant and highlights all of them", () => {
+    expect(bible).toContain("const { fhlVersion, queries } = getFhlSearchQueries(query, translation);");
+    expect(bible).toContain("results.highlightTerms = queries;");
+    expect(bible).toContain("Array.isArray(results.highlightTerms) ? results.highlightTerms : []");
   });
 
   it("notes when results were cut off and escapes API text before highlighting", () => {
@@ -111,9 +118,9 @@ describe("reader search wiring (#366)", () => {
     expect(bible).toContain('const safeText = escapeHTML(String(item.text || "").replace(/<[^>]*>/g, ""));');
   });
 
-  it("clears the previous results when a search fails", () => {
+  it("clears the previous results when a search fails and shows the matching message", () => {
     expect(bible).toMatch(
-      /searchResultsContainer\.innerHTML = "";\s*if \(searchResultsCountEl\) searchResultsCountEl\.textContent = "搜尋失敗，請稍後再試";/
+      /searchResultsContainer\.innerHTML = "";\s*if \(searchResultsCountEl\) searchResultsCountEl\.textContent = getBibleSearchErrorMessage\(err\);/
     );
   });
 

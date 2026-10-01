@@ -169,6 +169,45 @@ async function fetchFromBolls(bookEngName, chapter, translation, bookIdentifier 
     verses: normalizeVerses(data)
   }, `Bolls ${translation}`, isEnglish, getExpectedVerseCount(bookEngName, chapter));
 }
+// #379：bolls.life 已經沒有和合本修訂版（get-chapter/RCUVTS 回傳 []），改向信望愛取章節。
+const FHL_CHAPTER_ENDPOINT = "https://bible.fhl.net/json/qb.php";
+const FHL_CHAPTER_VERSIONS = Object.freeze({ RCUVTS: "rcuv" });
+
+// 信望愛的修訂版經文夾有段落小標題 <h2>…</h2>、人名底線 <u>、詩歌換行 <br/>，
+// 以及註腳「( [ 3.16] 「他獨一的兒子」或譯……)」；併節（併於上節）以 "a" 表示。
+function cleanFhlChapterText(text) {
+  const raw = String(text ?? "");
+  if (raw.trim() === "a") return "併於上節";
+  return raw
+    .replace(/<h\d[^>]*>[\s\S]*?<\/h\d>/gi, "")
+    .replace(/\(\s*\[\s*[\d.\-–\s]+\][^()]*\)/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/[ \t\r\n]+/g, "")
+    .trim();
+}
+
+function mapFhlChapterRecords(records) {
+  if (!Array.isArray(records)) return [];
+  return records
+    .map(record => ({ verse: Number(record.sec), text: cleanFhlChapterText(record.bible_text) }))
+    .filter(verse => verse.verse > 0 && verse.text);
+}
+
+async function fetchFromFhl(bookEngName, chapter, translation) {
+  const fhlVersion = FHL_CHAPTER_VERSIONS[String(translation).toUpperCase()];
+  const book = typeof BIBLE_BOOKS !== "undefined" ? BIBLE_BOOKS.find(b => b.eng === bookEngName) : null;
+  if (!fhlVersion || !book) throw new Error(`信望愛沒有這個譯本或書卷：${translation} ${bookEngName}`);
+  const params = new URLSearchParams({ chineses: book.abbrev, chap: String(chapter), version: fhlVersion, gb: "0" });
+  const payload = await fetchJson(`${FHL_CHAPTER_ENDPOINT}?${params.toString()}`);
+  if (!payload || payload.status !== "success") {
+    throw new Error(`信望愛 ${translation} 讀取失敗：${payload && payload.status ? payload.status : "沒有回應"}`);
+  }
+  return assertCompleteEnough({
+    reference: `${bookEngName} ${chapter}`,
+    verses: mapFhlChapterRecords(payload.record)
+  }, `信望愛 ${translation}`, false, getExpectedVerseCount(bookEngName, chapter));
+}
+
 const BIBLE_FALLBACK = {
   "Genesis_1": {
     reference: "創世記 1章",
@@ -265,12 +304,15 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
   const isEnglishVersion = ["ESV", "NIV", "NLT", "WEB"].includes(preferredVersion);
   const sources = [];
 
+  const fhlChapterVersion = FHL_CHAPTER_VERSIONS[preferredVersion];
   if (preferredVersion === "OCCB" && offlineRepository && typeof offlineRepository.getRemoteChapter === "function") {
     sources.push(async () => {
       const result = await offlineRepository.getRemoteChapter(preferredVersion, bookEngName, chapter);
       if (!result) throw new Error("OCCB 資料包沒有這個章節");
       return result;
     });
+  } else if (fhlChapterVersion) {
+    sources.push(() => fetchFromFhl(bookEngName, chapter, preferredVersion));
   } else if (bollsBookId) {
     sources.push(() => fetchFromBolls(bookEngName, chapter, preferredVersion, bollsBookId));
   }
@@ -294,7 +336,8 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
 
   const fallbackKey = `${bookEngName}_${chapter}`;
   const fallback = BIBLE_FALLBACK[fallbackKey];
-  if (!isEnglishVersion && fallback && fallback.verses && fallback.verses.length > 0) {
+  // 內建備用經文是新標點和合本的字，不能拿來冒充信望愛來源的版本（修訂版）；取不到就走下方的重試畫面。
+  if (!isEnglishVersion && !fhlChapterVersion && fallback && fallback.verses && fallback.verses.length > 0) {
     const versionedFallback = { ...fallback, translation: preferredVersion };
     window._bibleChapterCache[cacheKey] = versionedFallback;
     return versionedFallback;
@@ -340,6 +383,8 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
 }
 
 window.BIBLE_BOOKS = BIBLE_BOOKS;
+window.cleanFhlChapterText = cleanFhlChapterText;
+window.mapFhlChapterRecords = mapFhlChapterRecords;
 window.fetchBibleChapter = fetchBibleChapter;
 window.getBibleChapterCacheKey = getBibleChapterCacheKey;
 
