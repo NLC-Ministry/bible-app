@@ -40,18 +40,16 @@ describe("campaign stage release control", () => {
     expect(db).toContain("Global plan visibility update was not verified");
   });
 
-  it("shows locked campaign stages to members without enrollment actions", () => {
+  it("keeps locked campaign stages out of the member explore list and without enrollment actions", () => {
     expect(visibilityMigration).toContain("plan_kind = 'church_campaign_stage'");
     expect(edgeFunction).toContain('query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage")');
     expect(planModule).toContain("missingCampaignStages");
-    // 探索清單顯示鎖住階段的判斷：現在額外要求 discoverWhenLocked（月度期末賽 = true，
-    // 第三階段之後 = false → 完全隱藏）。
-    expect(planModule).toContain("window.isCampaignStageLocked(plan)");
-    expect(planModule).toContain("window.isCampaignStageDiscoverableWhileLocked(plan)");
-    // 第三階段起的隱藏階段：探索清單只有系統管理員 (role === "admin") 看得到。
-    expect(planModule).toContain("const isFullyHiddenCampaignStage = isHidden");
-    expect(planModule).toContain('if (isFullyHiddenCampaignStage && viewerRole !== "admin") return false;');
-    expect(planModule).toContain("if (isHidden && !canManageHiddenPlans() && !showAsLocked) return false;");
+    // #372：鎖住的階段（含 discoverWhenLocked 的月度期末賽）會友端不再顯示，
+    // 誰看得到由 getExplorePlanVisibility 決定（行為測試見 explore-plan-visibility.test.mjs）。
+    expect(planModule).toContain("const exploreVisibility = getExplorePlanVisibility({");
+    expect(planModule).toContain("lockedStage: window.isCampaignStageLocked(plan)");
+    expect(planModule).toContain("discoverableWhileLocked: window.isCampaignStageDiscoverableWhileLocked(plan)");
+    expect(planModule).toContain("if (!exploreVisibility.visible) return false;");
     expect(planModule).toContain("const isLockedStage = window.isCampaignStageLocked(plan)");
     // 鎖住的教會階段在探索清單卡片不顯示任何動作。每日靈修 / 小組聚會這類「只看
     // 內容」的計畫已經整個搬到「我的計畫」（見 buildViewerOnlyPlanCard），不再
