@@ -879,7 +879,7 @@ export function initReaderControls() {
       }
 
       if (state.activePlan && isPlanExpired(state.activePlan)) {
-        showToast("此計畫已過期，無法再修改打卡紀錄。");
+        showToast(getPlanEndedNotice(state.activePlan.endDate));
         return;
       }
 

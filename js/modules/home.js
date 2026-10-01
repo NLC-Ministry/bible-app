@@ -5,6 +5,7 @@ import { DevotionalSharingController } from "./devotional-sharing-controller.mjs
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import { formatPlanEndDate, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -222,13 +223,20 @@ export function updateDashboardView() {
     const waitingLabel = countdownText
       ? `等待開始・${countdownText}`
       : "等待開始";
+    // #372：計畫過了 endDate → 卡片改成「已結束」狀態。以前照常畫「第 32 天」、
+    // 「今日進度 0/0」，按鈕又只跳「無法進入」，會友以為 App 壞了。
+    const ended = typeof isPlanExpired === "function" && isPlanExpired(state.activePlan);
     const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === 'admin';
     const isPlanAvailable = started || isAdmin;
     let statusText = "";
-    if (started) {
-      statusText = roundProgress.isMultiRound
-        ? roundProgress.roundStatusText
-        : `進度: ${progress}% (${state.activePlan.completedChapters} / ${currentRoundTotalChapters} 章)`;
+    const progressStatusText = roundProgress.isMultiRound
+      ? roundProgress.roundStatusText
+      : `進度: ${progress}% (${state.activePlan.completedChapters} / ${currentRoundTotalChapters} 章)`;
+    if (ended) {
+      const endDateLabel = formatPlanEndDate(state.activePlan.endDate);
+      statusText = `${endDateLabel ? `已於 ${endDateLabel} 結束` : "已結束"}・${progressStatusText}`;
+    } else if (started) {
+      statusText = progressStatusText;
     } else {
       statusText = `<span class="text-brand" style="font-weight: 500;">${waitingLabel}</span> (將於 ${state.activePlan.startDate} 開始)`;
     }
@@ -310,7 +318,9 @@ export function updateDashboardView() {
       <div class="plan-progress-header">
         <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
           <h4 style="font-size: 1.15rem; font-weight: 500; color: var(--text-primary); margin: 0;">${state.activePlan.name}</h4>
-          ${started
+          ${ended
+        ? `<span class="stat-badge stat-badge--neutral">已結束</span>`
+        : started
         ? `<span class="stat-badge stat-badge--success">第 ${dayNum} 天</span>`
         : `<span class="stat-badge stat-badge--brand">${waitingLabel}</span>`
       }
@@ -338,9 +348,11 @@ export function updateDashboardView() {
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">
             <span class="dashboard-stat-strip__value dashboard-stat-strip__value--brand">
-              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="bookOpen" aria-hidden="true"></span>${todayReadCount}/${todayTotalCount} 章
+              <span class="nlc-icon dashboard-stat-strip__icon" data-icon="bookOpen" aria-hidden="true"></span>${ended
+                ? `${state.activePlan.completedChapters || 0}/${currentRoundTotalChapters} 章`
+                : `${todayReadCount}/${todayTotalCount} 章`}
             </span>
-            <span class="dashboard-stat-strip__label">${progressLabel}</span>
+            <span class="dashboard-stat-strip__label">${ended ? (roundProgress.isMultiRound ? "本遍完成" : "完成章數") : progressLabel}</span>
           </div>
           <div class="dashboard-stat-strip__divider"></div>
           <div class="dashboard-stat-strip__item">
@@ -354,8 +366,11 @@ export function updateDashboardView() {
         </div>
       </div>
       <div style="display: flex; gap: 1rem; margin-top: 1.2rem;">
-        <button class="secondary-btn flex-btn" onclick="event.stopPropagation(); window.openActivePlanFromDashboard()">讀經表</button>
-        <button class="primary-btn flex-btn" onclick="event.stopPropagation(); window.startReadingCurrentChapter()" ${isPlanAvailable ? '' : 'disabled style="opacity: 0.6; cursor: not-allowed;"'}>開始閱讀</button>
+        ${ended
+          ? `<button class="secondary-btn flex-btn" onclick="event.stopPropagation(); window.openActivePlanFromDashboard()">查看紀錄</button>
+        <button class="primary-btn flex-btn" onclick="event.stopPropagation(); appRouter.switchTab('plan-view', { onboardingPlanDestination: 'discover' })">找下一個計畫</button>`
+          : `<button class="secondary-btn flex-btn" onclick="event.stopPropagation(); window.openActivePlanFromDashboard()">讀經表</button>
+        <button class="primary-btn flex-btn" onclick="event.stopPropagation(); window.startReadingCurrentChapter()" ${isPlanAvailable ? '' : 'disabled style="opacity: 0.6; cursor: not-allowed;"'}>開始閱讀</button>`}
       </div>
     `;
     planSummaryDiv.classList.add("route-plan-card");
@@ -1969,10 +1984,8 @@ window.openGroupMeetingPlanFromDashboard = function () {
 window.openActivePlanFromDashboard = function (event) {
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (!state.activePlan) return;
-  if (typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
-    showToast("此計畫已過期，無法再進入進度閱讀。");
-    return;
-  }
+  // 已結束的計畫也放行（#372）：跟計畫分頁一樣進去「查看紀錄」，
+  // 進入詳情時 plan.js 的 setPlanState 會提示「已結束、可以查看但無法再打卡」。
   state.planDetailOpen = true;
   state.selectedPlanDay = null;
   localStorage.setItem("selected_plan_key", state.activePlan.presetKey || state.activePlan.id || "");
@@ -1990,7 +2003,7 @@ window.startReadingCurrentChapter = function () {
   }
 
   if (state.activePlan && typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
-    showToast("此計畫已過期，無法再進入進度閱讀。");
+    showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }
   if (!state.activePlan) {
