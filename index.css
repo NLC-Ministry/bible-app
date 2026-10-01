@@ -1825,7 +1825,8 @@ vercel-live-feedback,
   background-color: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
-  padding: 2rem;
+  /* #365：2rem 會跟著字級放大；窄螢幕以畫面寬度為上限，免得內容被擠成一字一行 */
+  padding: min(2rem, 7vw);
   box-shadow: var(--shadow-card);
   transition: var(--transition-smooth);
   height: 100%;
@@ -5413,7 +5414,7 @@ button.logout-btn:hover {
 .calendar-heatmap {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(206px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 206px), 1fr));
   gap: 1rem;
   align-items: start;
 }
@@ -6172,7 +6173,7 @@ body.dark-theme .pastoral-race-progress {
 }
 .distribution-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 0.75rem;
 }
 .distribution-metric-card {
@@ -6286,7 +6287,7 @@ body.dark-theme .pastoral-race-progress {
   color: #f59e0b;
 }
 .distribution-metrics-grid.merged-stats {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
 }
 @media (max-width: 900px) {
   .distribution-metrics-grid.merged-stats {
@@ -11765,7 +11766,7 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
 /* 後台「雲柱測驗」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
 .admin-lightning-quiz-schedule-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
   gap: 0.75rem;
   margin-bottom: 0.75rem;
 }
@@ -12192,7 +12193,7 @@ button.admin-lightning-quiz-calendar__day {
 }
 .admin-lightning-quiz-trend__charts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -15296,7 +15297,7 @@ select,
 
 .admin-unjoined-plan-members {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: 0.65rem;
 }
 
@@ -16637,7 +16638,7 @@ textarea::placeholder {
 
 /* PR 值：一個個獨立的大數字卡片，取代整段擠在一起的說明文字 */
 .exam-result__pr { margin: 0.85rem 0; }
-.exam-result__pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; }
+.exam-result__pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: 0.6rem; }
 .exam-result__pr-tile { border: 1px solid var(--border-card); border-radius: 12px; padding: 0.85rem 0.9rem; background: var(--bg-secondary); display: flex; flex-direction: column; gap: 0.2rem; }
 .exam-result__pr-tile--church { border-color: var(--color-brand); background: color-mix(in srgb, var(--color-brand) 8%, transparent); }
 .exam-result__pr-tile-label { font-size: 0.875rem; color: var(--text-secondary); }
@@ -16900,7 +16901,7 @@ textarea::placeholder {
 }
 
 /* 大測驗統計報表 */
-.exam-stats__tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+.exam-stats__tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
 .exam-stats__tile { border: 1px solid var(--border-card); border-radius: 10px; padding: 0.6rem 0.75rem; background: var(--bg-card); display: flex; flex-direction: column; gap: 0.2rem; }
 .exam-stats__tile span { font-size: 0.875rem; color: var(--text-muted); }
 .exam-stats__tile strong { font-size: 1.1rem; color: var(--text-primary); font-variant-numeric: tabular-nums; }
@@ -17576,3 +17577,190 @@ textarea::placeholder {
   .org-stats-node__name { font-size: 0.9rem; }
 }
 .exam-assign__meta { font-size: 0.875rem; color: var(--text-muted); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   #365 放大相容：系統字級放大、顯示大小調大（Android 新版 Chrome 等同整頁
+   放大、可用寬度剩約 240–300px）時，內容不得「超框又捲不到」。
+   原則：放不下就換行；真的不能換行的在自己的區塊內左右滑；對話框整個面板
+   可上下捲。這段刻意集中放在檔尾，蓋過前面同權重的寫死尺寸。
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* 聖經譯本選單：卡片比畫面高時整張可捲（之前置中又不能捲，標題和 ✕ 跑出畫面） */
+.version-picker-card {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 登入畫面：內容比畫面高時可捲；margin:auto 讓卡片在放得下時仍置中 */
+.login-gate {
+  overflow-y: auto;
+  padding: clamp(12px, 4vw, 1.5rem);
+}
+
+.login-card {
+  margin: auto;
+  padding: clamp(20px, 8vw, 3rem) clamp(16px, 7vw, 2.5rem);
+}
+
+/* 首頁每日金句卡：卡片跟著內容長高（內容層已改為正常排版，見 index.html），
+   頂端「每日金句／天父小卡」切換與換底圖鈕放不下就換行 */
+#verse-card {
+  padding: 0; /* 內容層改成正常排版後，bento-card 的內距會在暗色遮罩外露出一圈底圖 */
+}
+
+#daily-verse-content > div:first-child {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+#verse-card .verse-mode-toggle {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+/* 底部按讚／換一句／分享：字放不下時整顆換行，不把字擠成直排 */
+#verse-card-toolbar {
+  flex-wrap: wrap;
+}
+
+#verse-card-toolbar button {
+  flex: 1 1 auto !important;
+  white-space: nowrap;
+}
+
+/* 首頁「進行中的計畫」統計列：數字、標籤放不下就換行，不截斷 */
+.dashboard-stat-strip__value,
+.dashboard-stat-strip__label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.dashboard-stat-strip__value {
+  flex-wrap: wrap;
+}
+
+/* 首頁公告、標題列：左側標題區至少保留約 10rem，不夠就把右側擠到下一行 */
+.announcement-item__header {
+  flex-wrap: wrap;
+}
+
+.announcement-item__header-left {
+  flex: 1 1 10rem;
+}
+
+/* 計畫卡片：標題換行（管理者的「會友看不到」標記也在標題裡，不能截掉）；
+   獎勵說明、兩顆按鈕放不下就各自換到下一行 */
+.plan-card__title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.plan-card__status-row {
+  flex-wrap: wrap;
+}
+
+.plan-card--available .plan-card__actions,
+.plan-card--available-upcoming .plan-card__actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+}
+
+/* 計畫管理表格的按鈕不換行：表格本身在區塊內左右滑，按鈕字不要被擠成直排 */
+.admin-campaign-rules-btn,
+.admin-toggle-hidden-plan-btn {
+  white-space: nowrap;
+}
+
+/* 計畫詳情頂部分頁：字放不下時換行，不要擠進隔壁分頁 */
+.plan-detail-tab-btn {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 個人統計卡：「超前 N 天」徽章與圖示放不下就換行（bento 卡有 overflow:hidden） */
+.profile-stat-card__meta {
+  flex-wrap: wrap;
+}
+
+.profile-stat-card__value .stat-badge {
+  white-space: normal;
+}
+
+/* 排名 → 牧區賽跑：牧區名稱區至少約 9rem，分數放不下就換到下一行 */
+.pastoral-race-heading,
+.pastoral-race-progress-meta {
+  flex-wrap: wrap;
+}
+
+.pastoral-race-identity {
+  flex: 1 1 9rem;
+}
+
+/* 個人頁頂部：太窄時名字與所屬小組改放到頭像下方，整行給它用 */
+.profile-summary-header {
+  flex-wrap: wrap;
+  container: profile-summary / inline-size;
+}
+
+@container profile-summary (max-width: 15rem) {
+  .profile-summary-header__meta {
+    order: 1;
+    flex: 1 1 100%;
+  }
+}
+
+/* 個人頁設定清單：副標題換行，不截斷 */
+.app-settings-item__subtitle {
+  white-space: normal;
+}
+
+/* 讀經 → 書卷目錄：篩選框至少約 10rem，放不下時「檢視」切換換到下一行 */
+#bible-nav-overlay .bible-nav-sheet__toolbar.mode-selector-bar {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+}
+
+#bible-nav-overlay .bible-nav-sheet__filter {
+  flex: 1 1 10rem;
+}
+
+/* 書卷格：平常最多 5 欄；放大後每格至少 3rem，兩字書名（撒上、王下）不會直排 */
+#bible-nav-overlay .bible-nav-grid {
+  grid-template-columns: repeat(auto-fill, minmax(max(3rem, 18%), 1fr));
+}
+
+#bible-nav-overlay .bible-nav-grid .grid-item-book .abbrev-title {
+  white-space: nowrap;
+}
+
+/* 管理 → 計畫營運的「查看範圍」：摘要至少約 12rem，重新整理鈕放不下就換行 */
+.admin-plan-filter-card--org {
+  flex-wrap: wrap;
+}
+
+.admin-plan-filter-card--org .admin-plan-filter-disclosure {
+  flex: 1 1 12rem;
+}
+
+/* 管理 → 權限管理、組員總覽：標題列的計數／匯出鈕放不下就換行 */
+.admin-org-permissions__summary {
+  flex-wrap: wrap;
+}
+
+.admin-org-permissions__summary > div {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.member-list-header-wrapper > div {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* 朗讀指引、測驗宣示對話框：內距隨畫面寬度縮，不跟著字級放大 */
+#tts-guide-modal > .modal-panel,
+#quiz-pledge-modal > .modal-panel {
+  padding: clamp(14px, 5vw, 1.5rem) !important;
+}

@@ -24,7 +24,7 @@ describe("admin participant basic information", () => {
     expect(admin).toContain("escapeHTML(email)");
     expect(admin).toContain("escapeHTML(roleLabel)");
     expect(admin).toContain("escapeHTML(placement)");
-    expect(css).toContain("repeat(auto-fit, minmax(12rem, 1fr))");
+    expect(css).toContain("repeat(auto-fit, minmax(min(100%, 12rem), 1fr))");
     expect(plan).not.toContain('aria-label="參與者基本資料"');
     expect(plan).not.toContain("participantEmail");
   });
