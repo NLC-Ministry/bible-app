@@ -4453,7 +4453,9 @@ function renderRoundGapNotice(plan, checkState) {
   return notice;
 }
 
-// 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」且該日已勾完時出現。
+// 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」、而且整遍每一章都勾完才出現（#374）。
+// 不限順序後「最後一天勾完」不等於整遍讀完；還缺章時不顯示按鈕，缺哪幾章由清單上方的
+// 「前面還有 X 章沒勾」提示告訴會友，不讓會友按了才被擋。
 function renderRoundAdvanceButton(plan, selectedDay) {
   const container = document.getElementById("plan-tasks-list");
   if (!container) return;
@@ -4463,11 +4465,7 @@ function renderRoundAdvanceButton(plan, selectedDay) {
   const round = plan.currentRound || 1;
   const lastDay = getCurrentRoundLastReadingDay(plan);
   if (!lastDay || lastDay.dayNum !== selectedDay.dayNum) return;
-
-  const lastDayChapters = (selectedDay.chapters || []).filter(ch => Number(ch.round || round) === round);
-  if (lastDayChapters.length === 0) return;
-  const lastDayDone = lastDayChapters.every(ch => Boolean(ch["isReadR" + round]));
-  if (!lastDayDone) return;
+  if (!getRoundCheckState(plan.days, round).isComplete) return;
 
   const expired = isPlanExpired(plan);
   const footer = document.createElement("div");
@@ -4480,6 +4478,7 @@ function renderRoundAdvanceButton(plan, selectedDay) {
 
   footer.querySelector("#btn-plan-round-advance")?.addEventListener("click", () => {
     if (typeof calculatePlanProgress === "function") calculatePlanProgress();
+    // 防呆：按鈕出現後資料又變了（多裝置、同步中）→ 仍擋下並列出缺的章。
     const incompleteMessage = getRoundIncompleteMessage(plan);
     if (incompleteMessage) {
       showToast(incompleteMessage);
