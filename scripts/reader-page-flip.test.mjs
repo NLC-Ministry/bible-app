@@ -33,9 +33,13 @@ describe("computeFlipFrame", () => {
     expect(computeFlipFrame(1, 1)).toMatchObject({ x: -1, dim: 0 });
   });
 
-  it("previous chapter: the previous page comes back in from the left and covers the current one", () => {
-    expect(computeFlipFrame(-1, 0)).toMatchObject({ x: -1, dim: 0 });
-    expect(computeFlipFrame(-1, 1)).toMatchObject({ x: -0, rotate: -0, dim: FLIP_MAX_DIM });
+  it("previous chapter (#380): the current page also moves — to the right — and uncovers the previous one", () => {
+    expect(computeFlipFrame(-1, 0)).toEqual({ x: 0, rotate: 0, dim: FLIP_MAX_DIM });
+    const half = computeFlipFrame(-1, 0.5);
+    expect(half.x).toBe(0.5);
+    expect(half.rotate).toBeCloseTo(FLIP_MAX_TILT_DEG / 2);
+    expect(half.dim).toBeCloseTo(FLIP_MAX_DIM / 2);
+    expect(computeFlipFrame(-1, 1)).toMatchObject({ x: 1, dim: 0 });
   });
 
   it("lite mode (slow phones, reduced motion) drops the tilt and the dimming", () => {
@@ -162,12 +166,17 @@ describe("createReaderPageFlip", () => {
     expect(host.querySelector(".reader-flip-stage")).toBeNull();
   });
 
-  it("previous: only the previous-chapter preview moves; the live page stays underneath", () => {
-    const { flip, buildCurrentPage } = setup();
+  it("previous (#380): the current page moves right over a still previous-chapter preview; the live page is fully covered", () => {
+    const { flip, buildCurrentPage, buildTargetPage } = setup();
     flip.begin(-1);
-    expect(buildCurrentPage).not.toHaveBeenCalled();
-    expect(host.querySelector(".reader-flip-under")).toBeNull();
-    expect(host.querySelector(".reader-flip-mover.target")).not.toBeNull();
+    expect(buildCurrentPage).toHaveBeenCalledTimes(1);
+    expect(buildTargetPage).toHaveBeenCalledWith(-1, expect.anything());
+    expect(host.querySelector(".reader-flip-under.target")).not.toBeNull();
+    const mover = host.querySelector(".reader-flip-mover.current");
+    expect(mover).not.toBeNull();
+    expect(mover.classList.contains("is-prev")).toBe(true);
+    flip.update(0.5);
+    expect(mover.style.transform).toContain("translate3d(187.5px");
     flip.finishNow();
   });
 
