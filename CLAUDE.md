@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The maintainer's standing rule (2026-09-29): 「每次都要跟我討論完，之後也只先開 issue」. For every new request — feature, bug fix, or behavior change, however small it looks:
 
 1. **Discuss first.** Investigate (read code, find the root cause), then report back in chat: what you found, the proposed approach, which files/migrations it touches, and any open decisions. Do **not** edit code, write migrations, or change data yet.
-2. **Then only open a GitHub issue** (`gh issue create`) capturing the agreed plan, and stop there. The issue is the deliverable of that turn.
-3. **Implement only after the maintainer explicitly says to** (e.g. 「做吧」「開始改」). Reference the issue number in the commit/branch (the repo convention is `(#123)` in the commit subject).
+2. **Then only open a GitHub issue** (`gh issue create`) capturing the agreed plan, and stop there. The issue is the deliverable of that turn. End it with the 「給實作 session」 block (format: `issue-brief` skill).
+3. **Implement only after the maintainer explicitly says to** (e.g. 「做吧」「開始改」). Reference the issue number in the commit/branch (the repo convention is `(#123)` in the commit subject). Before starting, run the `issue-brief` skill's pre-start check.
 
 A detailed request is not permission to implement. If a request is ambiguous about whether it's asking for discussion or implementation, treat it as discussion.
 
