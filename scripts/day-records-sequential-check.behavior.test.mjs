@@ -198,15 +198,38 @@ describe("check-off in any order (#363)", () => {
     expect(list.querySelector(".plan-round-gap-notice")).toBeNull();
   });
 
-  it("advancing with a gap lists the chapters still unchecked instead of a missed-chapter modal", async () => {
+  it("hides 進入下一遍 while a chapter is still unchecked, even when the last day is done (#374)", async () => {
     setup({ round2Read: [1, 3, 4, 5] });
     const { list } = await showDay(5);
+    expect(list.querySelector("#btn-plan-round-advance")).toBeNull();
+    // 缺哪一章由清單上方的提示告訴會友
+    expect(list.querySelector(".plan-round-gap-notice").textContent).toContain(`${BOOK} 2章`);
+    expect(document.getElementById("missed-chapters-modal")).toBeNull();
+  });
+
+  it("shows 進入下一遍 only once the whole round is checked, and it advances (#374)", async () => {
+    setup({ round2Read: [1, 2, 3, 4, 5] });
+    window.triggerPlanUpgradeFlow = vi.fn();
+    let { list } = await showDay(4);
+    expect(list.querySelector("#btn-plan-round-advance")).toBeNull(); // 不是最後一個閱讀日
+    ({ list } = await showDay(5));
     const advance = list.querySelector("#btn-plan-round-advance");
     expect(advance).not.toBeNull();
-    expect(list.textContent).not.toContain("漏勾");
+    advance.click();
+    expect(showToast).not.toHaveBeenCalled();
+    expect(window.triggerPlanUpgradeFlow).toHaveBeenCalledTimes(1);
+  });
+
+  it("still blocks and lists the chapters if the data changes after the button appeared (#374)", async () => {
+    setup({ round2Read: [1, 2, 3, 4, 5] });
+    window.triggerPlanUpgradeFlow = vi.fn();
+    const { list } = await showDay(5);
+    const advance = list.querySelector("#btn-plan-round-advance");
+    // 例如另一台裝置剛取消了第 2 章、同步進來
+    state.activePlan.days[2].chapters[1].isReadR2 = false;
     advance.click();
     expect(showToast).toHaveBeenCalledWith(`這一遍還有 1 章沒勾：${BOOK} 2章`);
-    expect(document.getElementById("missed-chapters-modal")).toBeNull();
+    expect(window.triggerPlanUpgradeFlow).not.toHaveBeenCalled();
   });
 
   it("does not suggest a next chapter or show the notice for plans outside the speed-reading series", async () => {
