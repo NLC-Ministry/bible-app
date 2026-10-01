@@ -4,7 +4,6 @@ import { createReaderBottomDwellController, observeReaderEndSentinel } from "./r
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
-import { formatSequentialCheckMessage, getSequentialCheckBlock } from "../data/current-round-progress.mjs";
 import {
   AUTO_RECORD_REASONS,
   getAutoRecordDecision,
@@ -886,13 +885,6 @@ export function initReaderControls() {
 
       if (state.offlineMode) {
         showToast("離線閱讀模式無法記錄進度，恢復連線後再試");
-        return;
-      }
-
-      // 速讀計畫照順序打卡（#331）：只能勾下一章、只能取消最後勾的那一章。
-      const sequentialBlock = getSequentialCheckBlock(state.activePlan, bookObj.name, state.readerState.chapter, planRound, isChecked);
-      if (sequentialBlock) {
-        showToast(formatSequentialCheckMessage(sequentialBlock, (window.APP_COPY && window.APP_COPY.plan) || {}));
         return;
       }
 
