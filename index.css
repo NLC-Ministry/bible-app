@@ -9833,8 +9833,21 @@ body.reader-navbar-hidden.reader-page .mobile-nav-bar,
   box-shadow: 10px 0 28px rgba(0, 0, 0, 0.16), 1px 0 0 rgba(0, 0, 0, 0.06);
 }
 
+/* 往右翻（上一章）：以右側為軸、陰影在左緣，跟往左翻對稱（#380） */
+#reader-view .reader-flip-mover.is-prev {
+  transform-origin: right center;
+  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.16), -1px 0 0 rgba(0, 0, 0, 0.06);
+}
+
 #reader-view .reader-flip-mover.is-lite {
   box-shadow: none;
+}
+
+/* 左右翻頁拖動中暫停上下捲動（bible.js lockReaderScrollForFlip，#380）：不讓斜拖產生慣性捲動，
+   否則慣性會蓋掉換章時的「捲回開頭」。放手就恢復。 */
+#reader-view .reader-reading-surface.reader-flip-scroll-locked,
+.main-content.reader-flip-scroll-locked {
+  overflow-y: hidden !important;
 }
 
 /* 拖動時瀏覽器只處理上下捲動，左右交給翻頁；Android Chrome 瀏覽器模式的左右「上一頁」手勢也關掉 */
