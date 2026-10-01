@@ -1403,6 +1403,8 @@ const db = {
         if (loginGate) loginGate.classList.add("hidden");
         if (appLayout) appLayout.classList.remove("hidden");
         window.__bootMark?.("app-shell-shown");
+        // app.js waits for this before pushing its back-button history entry (#389).
+        window.dispatchEvent(new CustomEvent("app:shell-shown"));
       }
     } else {
       // Online mode: Show login gate, hide app container
