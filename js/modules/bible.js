@@ -3,6 +3,7 @@
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
+import { filterBibleBooks, parseBibleReference } from "./bible-reference-parser.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import {
   AUTO_RECORD_REASONS,
@@ -618,6 +619,26 @@ export function initReaderControls() {
   const searchClearBtn = document.getElementById("global-search-clear-btn");
   const searchResultsContainer = document.getElementById("global-search-results");
   const searchResultsCountEl = document.getElementById("search-results-count");
+  const searchReferenceHintEl = document.getElementById("global-search-reference-hint");
+  let searchRequestId = 0;
+
+  // #362：🔍 只找經文內容；輸入看起來像出處時，只多一行指路提示（不可點、不跳轉）。
+  function updateSearchReferenceHint(query) {
+    if (!searchReferenceHintEl) return;
+    const parsed = query ? parseReaderReference(query) : null;
+    const show = isReaderReferenceResult(parsed);
+    searchReferenceHintEl.textContent = show
+      ? (usesEnglishReaderLabels() ? "To jump to a passage, use the table of contents" : "要跳到章節，請從目錄輸入")
+      : "";
+    searchReferenceHintEl.classList.toggle("hidden", !show);
+  }
+
+  function resetSearchResults() {
+    searchRequestId += 1;
+    if (searchResultsContainer) searchResultsContainer.innerHTML = "";
+    updateSearchReferenceHint("");
+    if (searchResultsCountEl) searchResultsCountEl.textContent = "請輸入關鍵字進行搜尋";
+  }
 
   if (searchBtn && searchOverlay) {
     searchBtn.addEventListener("click", () => {
@@ -627,8 +648,7 @@ export function initReaderControls() {
         searchInput.focus();
       }
       if (searchClearBtn) searchClearBtn.classList.add("hidden");
-      if (searchResultsContainer) searchResultsContainer.innerHTML = "";
-      if (searchResultsCountEl) searchResultsCountEl.textContent = "請輸入關鍵字進行搜尋";
+      resetSearchResults();
     });
   }
 
@@ -642,8 +662,7 @@ export function initReaderControls() {
     searchClearBtn.addEventListener("click", () => {
       searchInput.value = "";
       searchClearBtn.classList.add("hidden");
-      if (searchResultsContainer) searchResultsContainer.innerHTML = "";
-      if (searchResultsCountEl) searchResultsCountEl.textContent = "請輸入關鍵字進行搜尋";
+      resetSearchResults();
       searchInput.focus();
     });
   }
@@ -658,18 +677,21 @@ export function initReaderControls() {
       
       clearTimeout(searchTimeout);
       if (!query) {
-        if (searchResultsContainer) searchResultsContainer.innerHTML = "";
-        if (searchResultsCountEl) searchResultsCountEl.textContent = "請輸入關鍵字進行搜尋";
+        resetSearchResults();
         return;
       }
+      const requestId = ++searchRequestId;
+      updateSearchReferenceHint(query);
       
       if (searchResultsCountEl) searchResultsCountEl.textContent = "正在搜尋中...";
       
       searchTimeout = setTimeout(async () => {
         try {
           const results = await window.searchBibleText(query, state.readerState.version || "CUNP");
+          if (requestId !== searchRequestId) return;
           renderSearchResults(results, query);
         } catch (err) {
+          if (requestId !== searchRequestId) return;
           console.error("Search error:", err);
           if (searchResultsCountEl) searchResultsCountEl.textContent = "搜尋失敗，請稍後再試";
         }
@@ -2545,8 +2567,45 @@ let navOverlayState = {
   selectedChapter: 1,
   selectedVerse: 1,
   viewMode: 'grid',
-  autoAdvance: true
+  autoAdvance: true,
+  filterQuery: ''
 };
+
+function clearBibleNavFilter() {
+  navOverlayState.filterQuery = '';
+  const input = document.getElementById("bible-nav-filter-input");
+  if (input) input.value = "";
+}
+
+function bindBibleNavFilter() {
+  const input = document.getElementById("bible-nav-filter-input");
+  if (!input || input.dataset.bound) return;
+  input.dataset.bound = "true";
+  input.addEventListener("input", () => {
+    navOverlayState.filterQuery = input.value;
+    if (navOverlayState.activeTab === 'book') renderBibleNavContent();
+  });
+  input.addEventListener("keydown", (e) => {
+    // 中文輸入法選字時的 Enter 不算送出。
+    if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
+    const query = input.value.trim();
+    if (!query) return;
+    const parsed = parseReaderReference(query);
+    if (parsed.kind === "reference") {
+      e.preventDefault();
+      jumpToReaderReference(parsed);
+      return;
+    }
+    if (isReaderReferenceResult(parsed)) return;
+    // 只有書卷：進 Enter 目標那一卷；篩到只剩一卷時也一樣。
+    const { books, target } = filterBibleBooks(query, { books: BIBLE_BOOKS, language: getReaderReferenceLanguage() });
+    const book = target || (books.length === 1 ? books[0] : null);
+    if (book) {
+      e.preventDefault();
+      selectNavBook(book.id);
+    }
+  });
+}
 
 window.openBibleNavOverlay = function() {
   const overlay = document.getElementById("bible-nav-overlay");
@@ -2555,6 +2614,8 @@ window.openBibleNavOverlay = function() {
   navOverlayState.selectedBookId = state.readerState.bookId;
   navOverlayState.selectedChapter = state.readerState.chapter;
   navOverlayState.selectedVerse = 1;
+  clearBibleNavFilter();
+  bindBibleNavFilter();
 
   updateBibleNavLocale();
   
@@ -2630,6 +2691,7 @@ window.openBibleNavOverlay = function() {
 
 window.switchNavTab = function(tabName) {
   navOverlayState.activeTab = tabName;
+  if (tabName !== 'book') clearBibleNavFilter();
   
   document.querySelectorAll("#bible-nav-overlay .segmented-tab").forEach(tab => {
     tab.classList.toggle("active", tab.dataset.tab === tabName);
@@ -2671,6 +2733,11 @@ function updateBibleNavLocale() {
   });
   const viewLabel = document.getElementById("bible-nav-view-label");
   if (viewLabel) viewLabel.textContent = english ? "View" : "檢視";
+  const filterInput = document.getElementById("bible-nav-filter-input");
+  if (filterInput) {
+    filterInput.placeholder = english ? "Filter books or enter a reference" : "篩選書卷或輸入出處";
+    filterInput.setAttribute("aria-label", filterInput.placeholder);
+  }
   const gridBtn = document.getElementById("view-mode-grid");
   const listBtn = document.getElementById("view-mode-list");
   if (gridBtn) {
@@ -2690,15 +2757,43 @@ function renderBibleNavContent() {
   
   container.innerHTML = "";
   const book = BIBLE_BOOKS.find(b => b.id === navOverlayState.selectedBookId);
+  const filterWrap = document.getElementById("bible-nav-filter");
+  if (filterWrap) filterWrap.classList.toggle("hidden", navOverlayState.activeTab !== 'book');
   
   if (navOverlayState.activeTab === 'book') {
     document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "flex";
+
+    // #362：篩選書卷；輸入完整出處時最上方出現「前往」列。
+    const filterQuery = String(navOverlayState.filterQuery || "").trim();
+    const { books: visibleBooks, filtered } = filterBibleBooks(filterQuery, {
+      books: BIBLE_BOOKS,
+      language: getReaderReferenceLanguage()
+    });
+    if (filterQuery) {
+      const parsed = parseReaderReference(filterQuery);
+      if (isReaderReferenceResult(parsed)) {
+        const actions = document.createElement("div");
+        actions.className = "reference-jump-panel bible-nav-reference";
+        renderReaderReferenceActions(actions, parsed);
+        container.appendChild(actions);
+      }
+    }
+    if (filtered && !visibleBooks.length) {
+      if (!container.childElementCount) {
+        const empty = document.createElement("div");
+        empty.className = "bible-nav-empty";
+        empty.textContent = usesEnglishReaderLabels() ? "No matching books" : "找不到符合的書卷";
+        container.appendChild(empty);
+      }
+      return;
+    }
+    const hasOld = visibleBooks.some(b => b.section === 'old');
+    const hasNew = visibleBooks.some(b => b.section !== 'old');
     
     if (navOverlayState.viewMode === 'grid') {
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
       oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
-      container.appendChild(oldSection);
       
       const oldGrid = document.createElement("div");
       oldGrid.className = "bible-nav-grid";
@@ -2710,7 +2805,7 @@ function renderBibleNavContent() {
       const newGrid = document.createElement("div");
       newGrid.className = "bible-nav-grid";
       
-      BIBLE_BOOKS.forEach(b => {
+      visibleBooks.forEach(b => {
         const item = document.createElement("div");
         item.className = "grid-item-book";
         item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
@@ -2727,14 +2822,12 @@ function renderBibleNavContent() {
         }
       });
       
-      container.appendChild(oldGrid);
-      container.appendChild(newSection);
-      container.appendChild(newGrid);
+      if (hasOld) container.append(oldSection, oldGrid);
+      if (hasNew) container.append(newSection, newGrid);
     } else {
       const oldSection = document.createElement("div");
       oldSection.className = "bible-nav-section-title";
       oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
-      container.appendChild(oldSection);
       
       const oldList = document.createElement("div");
       oldList.className = "bible-nav-list";
@@ -2746,7 +2839,7 @@ function renderBibleNavContent() {
       const newList = document.createElement("div");
       newList.className = "bible-nav-list";
       
-      BIBLE_BOOKS.forEach(b => {
+      visibleBooks.forEach(b => {
         const item = document.createElement("div");
         item.className = "book-list-item-asym";
         item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
@@ -2766,9 +2859,8 @@ function renderBibleNavContent() {
         }
       });
       
-      container.appendChild(oldList);
-      container.appendChild(newSection);
-      container.appendChild(newList);
+      if (hasOld) container.append(oldSection, oldList);
+      if (hasNew) container.append(newSection, newList);
     }
   } else if (navOverlayState.activeTab === 'chapter') {
     document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "none";
@@ -2823,8 +2915,9 @@ function selectNavChapter(chNum) {
   window.switchNavTab('verse');
 }
 
-async function selectNavVerse(vNum) {
-  navOverlayState.selectedVerse = vNum;
+// vNum 為 null 時只換章（renderReaderText 會捲回章首）；highlightVerses 為要一起閃底色的節（#362 範圍／頓號）。
+async function selectNavVerse(vNum, highlightVerses = null) {
+  navOverlayState.selectedVerse = vNum || 1;
   
   closeReaderLayer(document.getElementById("bible-nav-overlay"));
   
@@ -2848,27 +2941,101 @@ async function selectNavVerse(vNum) {
     await renderReaderText();
     
     const container = document.getElementById("bible-content");
-    if (container) {
+    if (container && vNum) {
+      const flashVerses = new Set(Array.isArray(highlightVerses) && highlightVerses.length ? highlightVerses : [vNum]);
       setTimeout(() => {
         const verses = container.querySelectorAll(".bible-verse");
         for (let v of verses) {
           const numEl = v.querySelector(".verse-num");
-          if ((v.dataset.verse && parseInt(v.dataset.verse) === vNum) || (numEl && parseInt(numEl.textContent) === vNum)) {
-            v.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            const oldBg = v.style.backgroundColor;
-            v.style.backgroundColor = 'var(--color-brand-subtle, rgba(4,169,210,0.22))';
-            setTimeout(() => {
-              v.style.backgroundColor = oldBg;
-            }, 1500);
-            break;
-          }
+          const verseNum = v.dataset.verse ? parseInt(v.dataset.verse) : (numEl ? parseInt(numEl.textContent) : NaN);
+          if (!flashVerses.has(verseNum)) continue;
+          if (verseNum === vNum) v.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          const oldBg = v.style.backgroundColor;
+          v.style.backgroundColor = 'var(--color-brand-subtle, rgba(4,169,210,0.22))';
+          setTimeout(() => {
+            v.style.backgroundColor = oldBg;
+          }, 1500);
         }
       }, 100);
     }
   } catch (err) {
     console.error(err);
   }
+}
+
+// ── 輸入出處直接跳轉（#362）：搜尋框與目錄篩選共用 ──
+function getReaderReferenceLanguage() {
+  return usesEnglishReaderLabels() ? "en" : "zh";
+}
+
+function parseReaderReference(query) {
+  return parseBibleReference(query, {
+    books: BIBLE_BOOKS,
+    verseCounts: typeof BIBLE_VERSE_COUNTS !== "undefined" ? BIBLE_VERSE_COUNTS : null,
+    language: getReaderReferenceLanguage()
+  });
+}
+
+function isReaderReferenceResult(parsed) {
+  return Boolean(parsed) && (parsed.kind === "reference" || parsed.kind === "choices" || parsed.kind === "error");
+}
+
+function jumpToReaderReference(reference) {
+  if (!reference || reference.kind !== "reference" || !reference.book) return;
+  navOverlayState.selectedBookId = reference.book.id;
+  navOverlayState.selectedChapter = reference.chapter;
+  const verses = Array.isArray(reference.verses) ? reference.verses : [];
+  selectNavVerse(verses.length ? verses[0] : null, verses);
+}
+
+function createReferenceJumpCard(result, english) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "reference-jump-card";
+  if (result.kind === "reference") {
+    card.innerHTML = `
+      <span class="nlc-icon reference-jump-card__icon" data-icon="bookOpen" aria-hidden="true"></span>
+      <span class="reference-jump-card__body">
+        <span class="reference-jump-card__eyebrow">${english ? "Go to" : "前往"}</span>
+        <span class="reference-jump-card__title">${escapeHTML(result.label)}</span>
+      </span>
+      <span class="nlc-icon reference-jump-card__chevron" data-icon="chevronRight" aria-hidden="true"></span>
+    `;
+    card.addEventListener("click", () => jumpToReaderReference(result));
+  } else {
+    card.disabled = true;
+    card.classList.add("reference-jump-card--disabled");
+    const bookLabel = result.book ? (english ? result.book.eng : result.book.name) : "";
+    card.innerHTML = `
+      <span class="nlc-icon reference-jump-card__icon" data-icon="bookOpen" aria-hidden="true"></span>
+      <span class="reference-jump-card__body">
+        ${bookLabel ? `<span class="reference-jump-card__eyebrow">${escapeHTML(bookLabel)}</span>` : ""}
+        <span class="reference-jump-card__hint">${escapeHTML(result.message || "")}</span>
+      </span>
+    `;
+  }
+  return card;
+}
+
+// 在 container 裡畫出「前往」卡片／多卷候選／錯誤說明（目錄篩選用）；回傳是否有畫東西。
+function renderReaderReferenceActions(container, parsed) {
+  if (!container) return false;
+  container.innerHTML = "";
+  if (!isReaderReferenceResult(parsed)) return false;
+  const english = getReaderReferenceLanguage() === "en";
+
+  if (parsed.kind === "choices") {
+    const note = document.createElement("div");
+    note.className = "reference-jump-note";
+    note.textContent = english ? "Which book did you mean?" : "要找的是哪一卷？";
+    container.appendChild(note);
+    parsed.choices.forEach(choice => container.appendChild(createReferenceJumpCard(choice, english)));
+  } else {
+    container.appendChild(createReferenceJumpCard(parsed, english));
+  }
+  if (typeof hydrateIcons === "function") hydrateIcons(container);
+  return true;
 }
 
 window.__BIBLE_SEARCH_CORPUS = window.__BIBLE_SEARCH_CORPUS || null;
