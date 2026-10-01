@@ -59,7 +59,7 @@ function shouldBypassCache(request) {
 
 function isBibleRequest(request) {
   const hostname = new URL(request.url).hostname.toLowerCase();
-  return hostname === "bible-api.com" || hostname === "bolls.life";
+  return hostname === "bible-api.com" || hostname === "bolls.life" || hostname === "bible.fhl.net";
 }
 
 function isStaticRequest(request) {

@@ -2351,6 +2351,13 @@
     </div>
 
     <div class="mode-selector-bar bible-nav-sheet__toolbar">
+      <div class="search-input-wrapper bible-nav-sheet__filter" id="bible-nav-filter">
+        <span class="nlc-icon search-icon-inside" data-icon="search" aria-hidden="true"></span>
+        <input type="search" class="search-input-field bible-nav-sheet__filter-input" id="bible-nav-filter-input"
+          placeholder="篩選書卷或輸入出處" aria-label="篩選書卷或輸入出處" autocomplete="off" enterkeyhint="go">
+        <button type="button" class="search-clear-btn hidden" id="bible-nav-filter-clear-btn"
+          aria-label="&#x6E05;&#x9664;"><span class="nlc-icon" data-icon="closeOne"></span></button>
+      </div>
       <div class="bible-nav-sheet__view-mode">
         <span class="bible-nav-sheet__toggle-label" id="bible-nav-view-label">檢視</span>
         <div class="view-mode-container bible-nav-sheet__toggle-group segment-track" role="group"
@@ -2381,6 +2388,7 @@
       </div>
       <button class="search-cancel-btn" id="global-search-cancel-btn" type="button">&#x53D6;&#x6D88;</button>
     </header>
+    <div class="search-reference-hint hidden" id="global-search-reference-hint" role="note" aria-live="polite"></div>
     <div class="search-results-info" id="search-results-count">
       &#x8F38;&#x5165;&#x95DC;&#x9375;&#x5B57;&#x958B;&#x59CB;&#x641C;&#x5C0B;</div>
     <div class="overlay-scroll-content" id="global-search-results"></div>

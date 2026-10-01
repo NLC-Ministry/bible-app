@@ -4913,6 +4913,14 @@ button.logout-btn:hover {
   display: none;
 }
 
+/* #367：閱讀器搜尋框與目錄篩選框都有 app 自己的 ✕，藏起瀏覽器內建的清除鈕，避免出現兩個 ✕。 */
+#global-search-input::-webkit-search-cancel-button,
+#bible-nav-filter-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 .plan-search-panel__clear {
   width: 34px;
   height: 34px;
@@ -9355,6 +9363,112 @@ body.reader-page .reader-ref-chip {
 
 .search-result-ref {
   color: var(--reader-accent) !important;
+}
+
+/* ── 輸入出處直接跳轉（#362）：目錄篩選的「前往」卡片、🔍 搜尋框的指路提示 ── */
+.reference-jump-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-card);
+}
+
+.reference-jump-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-subtle);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reference-jump-card:active {
+  transform: none;
+  background: color-mix(in srgb, var(--color-brand) 18%, var(--bg-card));
+}
+
+.reference-jump-card__icon,
+.reference-jump-card__chevron {
+  flex-shrink: 0;
+  color: var(--reader-accent);
+}
+
+.reference-jump-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.reference-jump-card__eyebrow {
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-regular);
+  color: var(--text-muted);
+}
+
+.reference-jump-card__title {
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.reference-jump-card__hint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.reference-jump-card--disabled,
+.reference-jump-card:disabled {
+  cursor: default;
+  border-color: var(--border-card);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--bg-card));
+}
+
+.reference-jump-card--disabled .reference-jump-card__icon {
+  color: var(--text-muted);
+}
+
+.reference-jump-note {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.search-reference-hint {
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--color-brand) 6%, var(--bg-card));
+  border-bottom: 1px solid var(--border-card);
+}
+
+#bible-nav-overlay .bible-nav-sheet__filter {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 0.75rem;
+}
+
+#bible-nav-overlay .bible-nav-reference {
+  background: transparent;
+  border-bottom: none;
+  padding: 0.75rem 1rem 0.25rem;
+}
+
+#bible-nav-overlay .bible-nav-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
 
