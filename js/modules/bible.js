@@ -371,6 +371,7 @@ let readerSwipeTipShownThisSession = false;
 let readerPageFlip = null;
 let readerFadeNextRender = false;
 let readerAnnounceNextRender = false;
+let readerFlipStartScrollTop = null;
 
 // 目錄、搜尋、文字設定、版本選單、筆記編輯器開著時都不換章。
 const READER_BLOCKING_LAYER_SELECTOR =
@@ -505,10 +506,19 @@ function initReaderChapterGestures() {
     canNavigate: canNavigateReaderChapter,
     // 手指一放上去：上一個還在播的翻頁（或滑動教學）直接收尾
     onGestureStart: () => { readerPageFlip?.finishNow(); },
-    onDragStart: direction => { getReaderPageFlip()?.begin(direction); },
+    onDragStart: direction => {
+      // 記住手勢開始時的捲動位置：取消翻頁時還原，不讓斜著拖帶動的上下捲動留下來（#380）
+      readerFlipStartScrollTop = getReaderScrollSurface()?.scrollTop ?? null;
+      getReaderPageFlip()?.begin(direction);
+    },
     onDrag: (direction, { progress }) => { readerPageFlip?.update(progress); },
     onDragEnd: ({ direction, commit, velocity, immediate }) => {
       if (commit) markReaderSwiped();
+      else if (readerFlipStartScrollTop !== null) {
+        const surface = getReaderScrollSurface();
+        if (surface) surface.scrollTop = readerFlipStartScrollTop;
+      }
+      readerFlipStartScrollTop = null;
       const flip = getReaderPageFlip();
       if (flip) flip.release({ direction, commit, velocity, immediate });
       else if (commit) navigateToChapter(direction);

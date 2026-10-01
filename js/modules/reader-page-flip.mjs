@@ -30,17 +30,17 @@ function clamp01(value) {
 }
 
 // 翻頁進度 progress（0＝還沒翻、1＝翻完）→ 會動的那張紙片要擺在哪。
-// direction  1（下一章）：會動的是「目前這頁」，往左拉走，露出底下的下一章。
-// direction -1（上一章）：會動的是「上一章」，從左邊蓋回來，蓋住目前這頁。
-// x 是以舞台寬度為單位的位移比例；dim 是被蓋住那一頁的遮罩透明度。
+// 不管往哪邊翻，動的都是「目前這頁」（#380）：手指摸到哪一頁，哪一頁就跟著走。
+// direction  1（下一章）：目前這頁往左翻走，露出底下的下一章。
+// direction -1（上一章）：目前這頁往右翻走，露出底下的上一章。
+// x 是以舞台寬度為單位的位移比例；dim 是底下那一頁還被蓋住時的遮罩透明度。
 export function computeFlipFrame(direction, progress, { lite = false } = {}) {
   const p = clamp01(progress);
-  const covered = direction > 0 ? 1 - p : p; // 底下那頁「被蓋住」的程度
-  const offset = direction > 0 ? -p : -(1 - p);
+  const sign = direction > 0 ? -1 : 1;
   return {
-    x: offset,
-    rotate: lite ? 0 : -FLIP_MAX_TILT_DEG * Math.abs(offset),
-    dim: lite ? 0 : FLIP_MAX_DIM * covered
+    x: sign * p,
+    rotate: lite ? 0 : sign * FLIP_MAX_TILT_DEG * p,
+    dim: lite ? 0 : FLIP_MAX_DIM * (1 - p)
   };
 }
 
@@ -193,12 +193,13 @@ export function createReaderPageFlip({
     const stageRect = getStageRect?.();
     if (!stageRect || stageRect.width <= 0 || stageRect.height <= 0) return false;
 
-    const moverIsCurrent = direction > 0;
+    // 兩個方向都一樣：上面是目前畫面的快照（跟著手指走），底下是目標章開頭的預覽（不動）。
+    // 兩張都是靜態紙片，真正的經文頁整個被蓋住，拖動時不會看到它上下捲（#380）。
     let mover;
     let under = null;
     try {
-      mover = moverIsCurrent ? buildCurrentPage(stageRect) : buildTargetPage(direction, stageRect);
-      if (moverIsCurrent) under = buildTargetPage(direction, stageRect);
+      mover = buildCurrentPage(stageRect);
+      under = buildTargetPage(direction, stageRect);
     } catch (error) {
       console.warn("[PageFlip] 無法建立翻頁紙片，改成直接換章", error);
       return false;
@@ -222,6 +223,7 @@ export function createReaderPageFlip({
     dim.className = "reader-flip-dim";
     stage.appendChild(dim);
     mover.classList.add("reader-flip-mover");
+    if (direction < 0) mover.classList.add("is-prev");
     if (lite || reducedMotion()) mover.classList.add("is-lite");
     stage.appendChild(mover);
     host.appendChild(stage);

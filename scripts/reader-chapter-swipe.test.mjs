@@ -241,12 +241,18 @@ describe("createReaderSwipeController (#314)", () => {
 describe("reader wiring (#314, #347)", () => {
   it("routes swipes through the page flip, and buttons, keys and chapter-end links through the same flip", () => {
     expect(bible).toContain("initReaderChapterGestures();");
-    expect(bible).toContain("onDragStart: direction => { getReaderPageFlip()?.begin(direction); }");
+    expect(bible).toMatch(/onDragStart: direction => \{[\s\S]{0,250}getReaderPageFlip\(\)\?\.begin\(direction\);/);
     expect(bible).toContain("flip.release({ direction, commit, velocity, immediate })");
     expect(bible).toContain("onCommit: direction => navigateToChapter(direction)");
     expect(bible).toMatch(/readerArrowKeyDirection\(event\)[\s\S]{0,200}flipToReaderChapter\(direction\)/);
     expect(bible).toMatch(/const bindFloatingButton[\s\S]{0,300}flipToReaderChapter\(direction\)/);
     expect(bible).toMatch(/\[data-chapter-nav\][\s\S]{0,300}flipToReaderChapter\(Number\(navButton\.dataset\.chapterNav\)\)/);
+  });
+
+  it("restores the scroll position when a flip is cancelled (#380)", () => {
+    expect(bible).toContain("readerFlipStartScrollTop = getReaderScrollSurface()?.scrollTop ?? null;");
+    expect(bible).toMatch(/if \(commit\) markReaderSwiped\(\);\s*else if \(readerFlipStartScrollTop !== null\) \{[\s\S]{0,120}surface\.scrollTop = readerFlipStartScrollTop;/);
+    expect(css).toMatch(/\.reader-flip-mover\.is-prev \{\s*transform-origin: right center;/);
   });
 
   it("prefetches both the next and the previous chapter", () => {
