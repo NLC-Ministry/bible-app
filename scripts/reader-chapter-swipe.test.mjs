@@ -249,9 +249,12 @@ describe("reader wiring (#314, #347)", () => {
     expect(bible).toMatch(/\[data-chapter-nav\][\s\S]{0,300}flipToReaderChapter\(Number\(navButton\.dataset\.chapterNav\)\)/);
   });
 
-  it("restores the scroll position when a flip is cancelled (#380)", () => {
-    expect(bible).toContain("readerFlipStartScrollTop = getReaderScrollSurface()?.scrollTop ?? null;");
-    expect(bible).toMatch(/if \(commit\) markReaderSwiped\(\);\s*else if \(readerFlipStartScrollTop !== null\) \{[\s\S]{0,120}surface\.scrollTop = readerFlipStartScrollTop;/);
+  it("locks vertical scrolling during a flip, restores it on cancel and starts the new chapter at the top (#380)", () => {
+    expect(bible).toMatch(/onDragStart: direction => \{[\s\S]{0,400}lockReaderScrollForFlip\(\);/);
+    expect(bible).toContain('surface?.classList.add("reader-flip-scroll-locked");');
+    expect(bible).toMatch(/const startScrollTop = unlockReaderScrollForFlip\(\);[\s\S]{0,300}surface\.scrollTop = startScrollTop;/);
+    expect(bible).toContain('if (commit) Promise.resolve(done).then(moved => { if (moved !== false) setReaderScrollTop(0, "auto"); });');
+    expect(css).toMatch(/\.reader-reading-surface\.reader-flip-scroll-locked,[\s\S]{0,80}overflow-y: hidden !important;/);
     expect(css).toMatch(/\.reader-flip-mover\.is-prev \{\s*transform-origin: right center;/);
   });
 
@@ -264,7 +267,7 @@ describe("reader wiring (#314, #347)", () => {
     expect(bible).toContain('READER_SWIPED_STORAGE_KEY = "bible_reader_swiped"');
     expect(bible).toContain("READER_SWIPE_TIP_MAX_SHOWS = 3");
     expect(bible).toMatch(/function maybeShowReaderSwipeTip\(\)[\s\S]*?try \{[\s\S]*?localStorage\.getItem\(READER_SWIPED_STORAGE_KEY\)/);
-    expect(bible).toContain("if (commit) markReaderSwiped();");
+    expect(bible).toMatch(/if \(commit\) \{\s*markReaderSwiped\(\);/);
   });
 
   it("drops the old edge hint, keeps reader chrome out of swipe handling, hides floating buttons on touch", () => {
