@@ -46,6 +46,8 @@ import {
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
 import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
+import { getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
+import { getExplorePlanVisibility } from "./explore-plan-visibility.mjs";
 
 // Reading plans tab view controller
 
@@ -1473,7 +1475,7 @@ async function openJoinedPlanProgress(plan) {
   if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(plan);
   state.selectedPlanDay = null;
   localStorage.setItem("selected_plan_key", getPlanStorageKey(plan));
-  if (isPlanExpired(plan)) showToast("此計畫已過期，僅供查看紀錄與統計。");
+  if (isPlanExpired(plan)) showToast(getPlanEndedNotice(plan.endDate));
   if (typeof window.setPlanState === "function") {
     await window.setPlanState(PLAN_ROUTE.DETAIL);
   } else {
@@ -2565,20 +2567,17 @@ function renderPresetPlansList() {
     // （見 renderJoinedPlansList 裡的 buildViewerOnlyPlanCard），探索清單不再重複出現。
     const planKind = plan.planKind || plan.plan_kind;
     if (planKind === "devotional" || planKind === "group_meeting") return false;
-    // 隱藏的計畫：一般會友看不到。例外：被鎖住的教會階段**且**標記為
-    // discoverWhenLocked（月度期末賽）→ 顯示為 available-locked。第三階段之後
-    // 沒帶這個旗標 → 完全隱藏，等管理員開放（is_hidden 轉 false）才現身。
-    const showAsLocked = window.isCampaignStageLocked(plan)
-      && window.isCampaignStageDiscoverableWhileLocked(plan);
-    // 第三階段起（2027 年～，沒帶 discoverWhenLocked）的隱藏階段計畫：探索清單裡
-    // 只有「系統管理員」看得到；牧者 / 區長 / 小組長也都看不到，直到 is_hidden
-    // 轉 false 才對所有人現身。（一般隱藏計畫仍照 canManageHiddenPlans 放行給管理者預覽。）
-    const isFullyHiddenCampaignStage = isHidden
-      && window.isCampaignStageLocked(plan)
-      && !window.isCampaignStageDiscoverableWhileLocked(plan);
-    const viewerRole = (state.currentUser && getUserRoleCode(state.currentUser)) || "member";
-    if (isFullyHiddenCampaignStage && viewerRole !== "admin") return false;
-    if (isHidden && !canManageHiddenPlans() && !showAsLocked) return false;
+    // 已結束／尚未開放（隱藏、鎖住）的計畫：會友端不顯示，管理者預覽時標
+    // 「會友看不到」——規則見 getExplorePlanVisibility（#372）。
+    const exploreVisibility = getExplorePlanVisibility({
+      expired: isPlanExpired(plan),
+      hidden: isHidden,
+      lockedStage: window.isCampaignStageLocked(plan),
+      discoverableWhileLocked: window.isCampaignStageDiscoverableWhileLocked(plan),
+      viewerRole: (state.currentUser && getUserRoleCode(state.currentUser)) || "member",
+      canManageHidden: canManageHiddenPlans()
+    });
+    if (!exploreVisibility.visible) return false;
     if (!matchesSearch) return false;
     if (!matchesPlanSeries(plan)) return false;
     if (isAlreadyJoined) return false;
@@ -2604,7 +2603,7 @@ function renderPresetPlansList() {
 
     // 走到這裡代表這張卡會顯示。如果它只是因為「我是管理員 / 有隱藏計畫管理權」
     // 才沒被濾掉（會友端其實看不到），就標記起來。
-    if (!showAsLocked && (isFullyHiddenCampaignStage || (isHidden && canManageHiddenPlans()))) {
+    if (exploreVisibility.managerOnly) {
       markManagerOnly(plan);
     }
     return true;
@@ -2655,7 +2654,8 @@ function renderPresetPlansList() {
     const description = plan.description || "";
     const awardName = plan.awardName || plan.campaignDefinition && plan.campaignDefinition.awardName || "";
     const isUpcomingFixed = isFixed && isFixedPlanUpcoming(plan);
-    const upcomingNotice = isUpcomingFixed
+    // 鎖住的階段已經標「尚未開放」，不能再同時說「已開放預覽與預先加入」（#372）。
+    const upcomingNotice = isUpcomingFixed && !isLockedStage
       ? `已開放預覽與預先加入・${plan.startDate} 正式開始，敬請期待`
       : "";
 
@@ -3969,7 +3969,7 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
   }
 
   if (state.activePlan && isPlanExpired(state.activePlan)) {
-    showToast("此計畫已過期，無法再修改打卡紀錄。");
+    showToast(getPlanEndedNotice(state.activePlan.endDate));
     if (checkboxEl) {
       checkboxEl.checked = isCurrentlyRead;
     }
@@ -4949,7 +4949,7 @@ async function renderAdminPlanManagement() {
 window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = null) {
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (state.activePlan && isPlanExpired(state.activePlan)) {
-    showToast("此計畫已過期，無法再進入進度閱讀。");
+    showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }
   const book = BIBLE_BOOKS.find(b => b.name === bookName || b.eng === bookName);
@@ -5164,7 +5164,7 @@ function initInlineReaderBottomDwell() {
 window.openPlanInlineReader = async function (bookName, chapter, dayNum, round = null) {
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
   if (state.activePlan && isPlanExpired(state.activePlan)) {
-    showToast("此計畫已過期，無法再進入進度閱讀。");
+    showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }
   if (!state.activePlan) return;
@@ -8228,7 +8228,7 @@ async function setPlanState(newState) {
   const normalized = String(newState || "").toUpperCase();
   if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL" || normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
     if (state.activePlan && isPlanExpired(state.activePlan)) {
-      showToast("此計畫已過期，僅供查看紀錄與統計。");
+      showToast(getPlanEndedNotice(state.activePlan.endDate));
     }
   }
 
