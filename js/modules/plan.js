@@ -7423,7 +7423,7 @@ window.displayParticipantsList = function (limit = 100) {
   if (headerEl) {
     // 名次欄寬度 36px
     if (_canSendCare) {
-      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px 44px";
+      headerEl.style.gridTemplateColumns = "36px minmax(4.5em, 1fr) 80px 80px 70px 90px 44px";
       let reminderHeader = document.getElementById("members-ranking-reminder-col");
       if (!reminderHeader) {
         reminderHeader = Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
@@ -7436,7 +7436,7 @@ window.displayParticipantsList = function (limit = 100) {
         headerEl.appendChild(reminderHeader);
       }
     } else {
-      headerEl.style.gridTemplateColumns = "36px 1fr 80px 80px 70px 90px";
+      headerEl.style.gridTemplateColumns = "36px minmax(4.5em, 1fr) 80px 80px 70px 90px";
       const reminderHeader = document.getElementById("members-ranking-reminder-col")
         || Array.from(headerEl.children).find(child => child.id === "members-ranking-reminder-col" || child.textContent === "提醒");
       if (reminderHeader) reminderHeader.remove();
@@ -7457,7 +7457,7 @@ window.displayParticipantsList = function (limit = 100) {
     // 名次欄 36px 加入 grid
     itemRow.style.cssText = `
       display: grid;
-      grid-template-columns: 36px 1fr 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
+      grid-template-columns: 36px minmax(4.5em, 1fr) 80px 80px 70px 90px${_canSendCare ? ' 44px' : ''};
       gap: 0.4rem;
       align-items: center;
       padding: 0.6rem 0.2rem;
