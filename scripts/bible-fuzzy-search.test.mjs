@@ -30,6 +30,7 @@ describe("ranked fuzzy Bible search", () => {
     expect(bible).toContain('setTimeout(async () =>');
     expect(bible).toContain('}, 400)');
     expect(bible).toContain('window.__BIBLE_SEARCH_REQUEST_CACHE');
-    expect(bible).toContain('rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: 120 })');
+    expect(bible).toContain("const BIBLE_SEARCH_RESULT_LIMIT = 120;");
+    expect(bible.match(/rankBibleSearchResults\(mapped, query, \{ includeFuzzy: true, limit: BIBLE_SEARCH_RESULT_LIMIT \}\)/g)).toHaveLength(2);
   });
 });

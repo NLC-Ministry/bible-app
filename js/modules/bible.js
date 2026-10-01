@@ -4,6 +4,13 @@ import { createReaderBottomDwellController, observeReaderEndSentinel } from "./r
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import { filterBibleBooks, parseBibleReference } from "./bible-reference-parser.mjs";
+import {
+  buildFhlSearchUrl,
+  getFhlSearchVersion,
+  isShortBibleQuery,
+  mapFhlSearchRecords,
+  readFhlSearchPayload
+} from "./fhl-bible-search.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import {
   AUTO_RECORD_REASONS,
@@ -682,17 +689,27 @@ export function initReaderControls() {
       }
       const requestId = ++searchRequestId;
       updateSearchReferenceHint(query);
+
+      // #366：1～2 個字只有信望愛搜得到；當代譯本、英文版本在信望愛沒有對應，直接提示字數。
+      const searchVersion = state.readerState.version || "CUNP";
+      if (isShortBibleQuery(query) && !getFhlSearchVersion(searchVersion)) {
+        if (searchResultsContainer) searchResultsContainer.innerHTML = "";
+        if (searchResultsCountEl) searchResultsCountEl.textContent = "請至少輸入 3 個字";
+        return;
+      }
       
       if (searchResultsCountEl) searchResultsCountEl.textContent = "正在搜尋中...";
       
       searchTimeout = setTimeout(async () => {
         try {
-          const results = await window.searchBibleText(query, state.readerState.version || "CUNP");
+          const results = await window.searchBibleText(query, searchVersion);
           if (requestId !== searchRequestId) return;
           renderSearchResults(results, query);
         } catch (err) {
           if (requestId !== searchRequestId) return;
           console.error("Search error:", err);
+          // 不留上一次的結果，避免「搜尋失敗」底下還列著別的關鍵字的經文。
+          if (searchResultsContainer) searchResultsContainer.innerHTML = "";
           if (searchResultsCountEl) searchResultsCountEl.textContent = "搜尋失敗，請稍後再試";
         }
       }, 400);
@@ -709,18 +726,23 @@ export function initReaderControls() {
     }
     
     if (searchResultsCountEl) {
-      searchResultsCountEl.textContent = `共找到 ${results.length} 筆符合的結果`;
+      const truncated = Number(results.totalCount) > results.length;
+      searchResultsCountEl.textContent = truncated
+        ? `結果太多，只顯示前 ${results.length} 筆`
+        : `共找到 ${results.length} 筆符合的結果`;
     }
     
+    // 經文來自外部 API：先去標籤再 escape，最後才加 <mark>，不把 API 內容直接放進 innerHTML。
+    const highlightPattern = new RegExp(`(${escapeRegExp(escapeHTML(query))})`, "gi");
     results.forEach(item => {
       const div = document.createElement("div");
       div.className = "search-result-item";
       
-      const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
-      const highlightedText = item.text.replace(regex, "<mark>$1</mark>");
+      const safeText = escapeHTML(String(item.text || "").replace(/<[^>]*>/g, ""));
+      const highlightedText = safeText.replace(highlightPattern, "<mark>$1</mark>");
       
       div.innerHTML = `
-        <div class="search-result-ref">${item.bookName} ${item.chapter}章:${item.verse}節</div>
+        <div class="search-result-ref">${escapeHTML(item.bookName)} ${Number(item.chapter)}章:${Number(item.verse)}節</div>
         <div class="search-result-text">${highlightedText}</div>
       `;
       
@@ -3057,36 +3079,68 @@ function searchLocalBibleCorpus(query) {
     }));
 }
 
+const BIBLE_SEARCH_RESULT_LIMIT = 120;
+
+function withTotalCount(results, totalCount) {
+  results.totalCount = totalCount;
+  return results;
+}
+
+async function fetchBollsSearch(query, translation) {
+  const url = `https://bolls.life/search/${encodeURIComponent(translation)}/?search=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Search request failed");
+  const data = await res.json();
+  const mapped = data.map(item => {
+    const book = BIBLE_BOOKS.find(b => b.id === item.book);
+    return {
+      book: item.book,
+      bookName: book ? book.name : String(item.book),
+      bookEng: book ? book.eng : "",
+      chapter: item.chapter,
+      verse: item.verse,
+      text: item.text
+    };
+  });
+  return withTotalCount(
+    rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: BIBLE_SEARCH_RESULT_LIMIT }),
+    mapped.length
+  );
+}
+
+// #366：1～2 個字改由信望愛搜尋（bolls.life 規定至少 3 個字）。
+async function fetchFhlSearch(query, fhlVersion) {
+  const res = await fetch(buildFhlSearchUrl(query, fhlVersion));
+  if (!res.ok) throw new Error("Search request failed");
+  const { records, totalCount } = readFhlSearchPayload(await res.json());
+  const mapped = mapFhlSearchRecords(records, BIBLE_BOOKS);
+  return withTotalCount(
+    rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: BIBLE_SEARCH_RESULT_LIMIT }),
+    Math.max(totalCount, mapped.length)
+  );
+}
+
 window.searchBibleText = async function(query, translation = "CUNP") {
-  const localResults = searchLocalBibleCorpus(query);
+  const trimmed = String(query ?? "").trim();
+  const localResults = searchLocalBibleCorpus(trimmed);
   if (localResults) return localResults;
 
+  const shortQuery = isShortBibleQuery(trimmed);
+  const fhlVersion = shortQuery ? getFhlSearchVersion(translation) : null;
+  if (shortQuery && !fhlVersion) throw new Error("Search query too short");
+
   window.__BIBLE_SEARCH_REQUEST_CACHE = window.__BIBLE_SEARCH_REQUEST_CACHE || new Map();
-  const cacheKey = `${String(translation).toUpperCase()}:${String(query).trim().toLocaleLowerCase()}`;
+  const source = fhlVersion ? `fhl-${fhlVersion}` : "bolls";
+  const cacheKey = `${source}:${String(translation).toUpperCase()}:${trimmed.toLocaleLowerCase()}`;
   if (window.__BIBLE_SEARCH_REQUEST_CACHE.has(cacheKey)) {
     return window.__BIBLE_SEARCH_REQUEST_CACHE.get(cacheKey);
   }
 
-  const url = `https://bolls.life/search/${encodeURIComponent(translation)}/?search=${encodeURIComponent(query)}`;
-  const request = fetch(url).then(async res => {
-    if (!res.ok) throw new Error("Search request failed");
-    const data = await res.json();
-    const mapped = data.map(item => {
-      const book = BIBLE_BOOKS.find(b => b.id === item.book);
-      return {
-        book: item.book,
-        bookName: book ? book.name : String(item.book),
-        bookEng: book ? book.eng : "",
-        chapter: item.chapter,
-        verse: item.verse,
-        text: item.text
-      };
+  const request = (fhlVersion ? fetchFhlSearch(trimmed, fhlVersion) : fetchBollsSearch(trimmed, translation))
+    .catch(error => {
+      window.__BIBLE_SEARCH_REQUEST_CACHE.delete(cacheKey);
+      throw error;
     });
-    return rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: 120 });
-  }).catch(error => {
-    window.__BIBLE_SEARCH_REQUEST_CACHE.delete(cacheKey);
-    throw error;
-  });
   window.__BIBLE_SEARCH_REQUEST_CACHE.set(cacheKey, request);
   return request;
 };

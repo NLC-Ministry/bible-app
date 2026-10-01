@@ -55,7 +55,7 @@ The app uses a deliberately limited offline model:
 - Navigation: Network First; `/index.html` fallback. A reachable-but-5xx response is treated the same as a failed fetch and also falls back to the cached shell (see `CacheManager.networkFirst`'s `fallbackUrl` handling), so a maintenance/deploy-time error page never overwrites the cached app shell.
 - Same-origin scripts, CSS, fonts, images, and manifest: Cache First.
 - Missing content-hashed CSS: retry the stable /index.css entry with a build-version query; deployment rewrites stale index.<hash>.css URLs to that stable entry.
-- `bible-api.com` and `bolls.life`: Network First with runtime cache fallback.
+- `bible-api.com`, `bolls.life` and `bible.fhl.net` (1–2 character keyword search, #366): Network First with runtime cache fallback.
 - Non-GET and sensitive API traffic: bypass Service Worker handling.
 
 ## Versioning
