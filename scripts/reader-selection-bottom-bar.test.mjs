@@ -25,9 +25,14 @@ describe("reader verse selection — 統一點選多節模型", () => {
     expect(bible).toContain("const verseSelection = new Map();");
     expect(bible).toContain("function verseSelKey(bookId, chapter, verse)");
     expect(bible).toContain("function toggleVerseSelection(entry)");
+    // #347：改成容器上的事件委派（不再每節各掛監聽），點到哪一節就切換哪一節
+    const events = bible.slice(bible.indexOf("function bindReaderContentEvents("), bible.indexOf("function renderVersesList("));
+    expect(events).toContain("toggleVerseSelection({ bookId, bookName, chapter, verse, text: textByVerse.get(verse) })");
+    expect(events).toContain('container.addEventListener("click"');
+    expect(events).toContain('event.target.closest?.(".bible-verse[data-verse]")');
     const rvl = bible.slice(bible.indexOf("function renderVersesList("), bible.indexOf("function loadVerseNotesForChapter"));
-    expect(rvl).toContain("toggleVerseSelection({ bookId, bookName, chapter, verse: v.verse, text: v.text })");
-    expect(rvl).toContain('verseDiv.addEventListener("click", toggleThisVerse)');
+    expect(rvl).toContain("bindReaderContentEvents(container);");
+    expect(rvl).not.toContain("verseDiv.addEventListener");
     // 換章後把仍在集合裡、屬於本章的節重新標記
     expect(rvl).toContain("applySelectionClassesToDom();");
   });

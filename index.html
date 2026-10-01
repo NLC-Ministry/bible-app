@@ -620,15 +620,8 @@
           </button>
         </div>
 
-        <!-- ── Swipe-to-change-chapter hint (#314)：滑動中由 bible.js 設 data-direction / data-armed ── -->
-        <div class="reader-swipe-hint" id="reader-swipe-hint" aria-hidden="true">
-          <span class="reader-swipe-hint__pill reader-swipe-hint__pill--prev">
-            <span class="nlc-icon nlc-icon--sm" data-icon="chevronLeft" aria-hidden="true"></span><span>上一章</span>
-          </span>
-          <span class="reader-swipe-hint__pill reader-swipe-hint__pill--next">
-            <span>下一章</span><span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
-          </span>
-        </div>
+        <!-- ── 換章播報（#347）：只給螢幕報讀器，換章後由 bible.js 寫入「已切換到 ○○ 第 N 章」 ── -->
+        <div class="sr-only" id="reader-chapter-announcer" aria-live="polite" aria-atomic="true"></div>
 
         <!-- ── Main Bible Text Area ── -->
         <article class="reader-body reader-body-full reader-reading-surface">
