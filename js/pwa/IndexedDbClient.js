@@ -57,6 +57,9 @@ export class IndexedDbClient {
   put(storeName, value) { return this.run(storeName, "readwrite", store => store.put(value)); }
   delete(storeName, key) { return this.run(storeName, "readwrite", store => store.delete(key)); }
   getAll(storeName) { return this.run(storeName, "readonly", store => store.getAll()); }
+  getAllByIndex(storeName, indexName, value) {
+    return this.run(storeName, "readonly", store => store.index(indexName).getAll(IDBKeyRange.only(value)));
+  }
   clear(storeName) { return this.run(storeName, "readwrite", store => store.clear()); }
 
   async putMany(storeName, values) {

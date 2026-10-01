@@ -50,6 +50,13 @@ export class OfflineBibleRepository extends EventTarget {
     return this.dbClient.get("bible_packs", String(translation).toUpperCase());
   }
 
+  // #378：當代譯本搜尋在本機比對，需要一次讀出已安裝譯本的全部章節。
+  async getAllChapters(translation) {
+    if (!this.dbClient || typeof this.dbClient.getAllByIndex !== "function") return [];
+    const rows = await this.dbClient.getAllByIndex("bible_chapters", "translation", String(translation).toUpperCase());
+    return Array.isArray(rows) ? rows : [];
+  }
+
   async listInstalledPacks() {
     if (!this.dbClient) return [];
     return this.dbClient.getAll("bible_packs");

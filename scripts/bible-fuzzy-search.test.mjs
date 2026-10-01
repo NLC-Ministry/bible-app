@@ -31,6 +31,8 @@ describe("ranked fuzzy Bible search", () => {
     expect(bible).toContain('}, 400)');
     expect(bible).toContain('window.__BIBLE_SEARCH_REQUEST_CACHE');
     expect(bible).toContain("const BIBLE_SEARCH_RESULT_LIMIT = 120;");
-    expect(bible.match(/rankBibleSearchResults\(mapped, query, \{ includeFuzzy: true, limit: BIBLE_SEARCH_RESULT_LIMIT \}\)/g)).toHaveLength(2);
+    // bolls.life（英文版本）保留模糊比對，總筆數算真正符合的；信望愛與離線資料本身就是精確比對（#378）。
+    expect(bible).toContain("rankBibleSearchResults(mapped, query, { includeFuzzy: true, limit: Math.max(mapped.length, 1) })");
+    expect(bible).toContain("return withTotalCount(matches.slice(0, BIBLE_SEARCH_RESULT_LIMIT), matches.length);");
   });
 });
