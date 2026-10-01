@@ -10,7 +10,6 @@ import {
   recordPlanOpened,
   selectAutoRecordPlanTask
 } from "../js/data/reader-auto-record.mjs";
-import { getSequentialCheckBlock } from "../js/data/current-round-progress.mjs";
 
 const BOOK = "出埃及記";
 const chapter = (n, round = 1, read = false) => ({
@@ -41,9 +40,8 @@ describe("getAutoRecordDecision", () => {
     expect(getAutoRecordDecision(base)).toEqual({ ok: true, reason: null });
   });
   it("has no sequential condition: a chapter far ahead of the next one still records", () => {
-    // 前面 1-4 章沒讀、直接讀第 5 章：手動勾選會擋，自動打卡不擋。
+    // 前面 1-4 章沒讀、直接讀第 5 章：照樣記錄（#363 起手動勾也不限順序）。
     const p = plan("p", [[chapter(1), chapter(2), chapter(3), chapter(4)], [chapter(5)]]);
-    expect(getSequentialCheckBlock(p, BOOK, 5, 1, true)).not.toBeNull();
     const found = findChapterInPlan(p, BOOK, 5, { round: 1 });
     expect(found).not.toBeNull();
     expect(getAutoRecordDecision({ ...base, hasTask: Boolean(found) }).ok).toBe(true);
@@ -147,9 +145,9 @@ describe("auto paths no longer apply the #331 sequential rule", () => {
     expect(body).toContain("getInlineReaderTaskDecision");
     expect(body).not.toContain("getSequentialCheckBlock");
   });
-  it("manual paths keep the in-order rule", () => {
-    expect(bible).toContain("const sequentialBlock = getSequentialCheckBlock(state.activePlan");
-    expect(plansSrc).toContain("const sequentialBlock = getSequentialCheckBlock(state.activePlan");
+  it("manual paths do not apply the in-order rule either (#363)", () => {
+    expect(bible).not.toContain("getSequentialCheckBlock");
+    expect(plansSrc).not.toContain("getSequentialCheckBlock");
   });
   it("navigation and TTS completion record the chapter being left, before readerState changes", () => {
     const nav = between(bible, "export async function navigateToChapter", "let newChapter");

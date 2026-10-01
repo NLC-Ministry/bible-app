@@ -5217,7 +5217,7 @@ button.logout-btn:hover {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* 照順序打卡（#331）：下一章標示、還沒輪到的章上鎖 */
+/* 速讀計畫當天清單：建議的「下一章」標示（打卡不限順序，#363） */
 .task-next-label {
   display: block;
   margin-top: 0.1rem;
@@ -5229,17 +5229,44 @@ button.logout-btn:hover {
 .plan-task-item--next .task-checkbox {
   border-color: var(--color-brand) !important;
 }
-.plan-task-item--locked .task-title {
-  color: var(--text-muted);
+
+/* 前面跳過、還沒勾的章（#363）：清單上方一塊提示，章名點了直接打開 */
+.plan-round-gap-notice {
+  width: 100%;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-card);
 }
-.plan-task-item .task-checkbox.task-checkbox--locked {
-  color: var(--text-muted);
-  border-style: dashed !important;
+.plan-round-gap-notice__text {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
 }
-.plan-task-item .task-checkbox.task-checkbox--locked svg {
-  width: 12px;
-  height: 12px;
-  stroke-width: 2.5;
+.plan-round-gap-notice__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+.plan-round-gap-notice__link {
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-brand);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.plan-round-gap-notice__more {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
 }
 
 /* 當天閱讀紀錄（#330）：唯讀，依遍數分組 */
