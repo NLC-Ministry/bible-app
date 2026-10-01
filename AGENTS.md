@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Codex agents should use the shared repository instructions in [`CLAUDE.md`](CLAUDE.md) and [`.agents/skills/bible-study-dev-guidelines/SKILL.md`](.agents/skills/bible-study-dev-guidelines/SKILL.md).
+Codex agents should use the shared repository instructions in [`CLAUDE.md`](CLAUDE.md) and [`.claude/skills/bible-study-dev-guidelines/SKILL.md`](.claude/skills/bible-study-dev-guidelines/SKILL.md).
 
 ## 🗄️ 核心規範：Database Migration Schema 全局對齊 (Database Migration Integrity Rule)
 
