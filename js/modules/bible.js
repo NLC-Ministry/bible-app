@@ -372,6 +372,23 @@ let readerPageFlip = null;
 let readerFadeNextRender = false;
 let readerAnnounceNextRender = false;
 let readerFlipStartScrollTop = null;
+let readerFlipScrollLockSurface = null;
+
+// 左右翻頁期間暫停閱讀區的上下捲動；結束時恢復，回傳手勢開始時的捲動位置。
+function lockReaderScrollForFlip() {
+  const surface = getReaderScrollSurface();
+  readerFlipStartScrollTop = surface ? surface.scrollTop : null;
+  readerFlipScrollLockSurface = surface || null;
+  surface?.classList.add("reader-flip-scroll-locked");
+}
+
+function unlockReaderScrollForFlip() {
+  readerFlipScrollLockSurface?.classList.remove("reader-flip-scroll-locked");
+  readerFlipScrollLockSurface = null;
+  const startScrollTop = readerFlipStartScrollTop;
+  readerFlipStartScrollTop = null;
+  return startScrollTop;
+}
 
 // 目錄、搜尋、文字設定、版本選單、筆記編輯器開著時都不換章。
 const READER_BLOCKING_LAYER_SELECTOR =
@@ -507,21 +524,28 @@ function initReaderChapterGestures() {
     // 手指一放上去：上一個還在播的翻頁（或滑動教學）直接收尾
     onGestureStart: () => { readerPageFlip?.finishNow(); },
     onDragStart: direction => {
-      // 記住手勢開始時的捲動位置：取消翻頁時還原，不讓斜著拖帶動的上下捲動留下來（#380）
-      readerFlipStartScrollTop = getReaderScrollSurface()?.scrollTop ?? null;
+      // 確定是左右翻頁：記住捲動位置，並暫停上下捲動（#380）。
+      // 斜著拖時瀏覽器會同時上下捲，放手後還有慣性；慣性會蓋掉換章時「捲回開頭」，
+      // 新的一章就停在跟舊的一章差不多的節數。一開始就不讓它捲，就沒有慣性。
+      lockReaderScrollForFlip();
       getReaderPageFlip()?.begin(direction);
     },
     onDrag: (direction, { progress }) => { readerPageFlip?.update(progress); },
     onDragEnd: ({ direction, commit, velocity, immediate }) => {
-      if (commit) markReaderSwiped();
-      else if (readerFlipStartScrollTop !== null) {
+      const startScrollTop = unlockReaderScrollForFlip();
+      if (commit) {
+        markReaderSwiped();
+      } else if (startScrollTop !== null) {
+        // 放棄翻頁：回到原來的位置
         const surface = getReaderScrollSurface();
-        if (surface) surface.scrollTop = readerFlipStartScrollTop;
+        if (surface) surface.scrollTop = startScrollTop;
       }
-      readerFlipStartScrollTop = null;
       const flip = getReaderPageFlip();
-      if (flip) flip.release({ direction, commit, velocity, immediate });
-      else if (commit) navigateToChapter(direction);
+      const done = flip
+        ? flip.release({ direction, commit, velocity, immediate })
+        : (commit ? navigateToChapter(direction) : null);
+      // 換章：翻頁動畫結束後再確認一次停在新的一章開頭（保險）
+      if (commit) Promise.resolve(done).then(moved => { if (moved !== false) setReaderScrollTop(0, "auto"); });
     }
   });
 
