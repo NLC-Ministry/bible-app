@@ -38,10 +38,11 @@ import { renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.m
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import {
   countDayReadingRecordsByDate,
-  formatSequentialCheckMessage,
+  formatChapterList,
   getDayReadingRecords,
   getRoundCheckState,
-  getSequentialCheckBlock,
+  getRoundGapChapters,
+  getRoundUnreadChapters,
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
 import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
@@ -3411,11 +3412,13 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     return;
   }
 
-  // 速讀計畫照順序打卡（#331）：標出「下一章」，還沒輪到的章上鎖（仍可點開閱讀）。
+  // 速讀計畫：標出建議的「下一章」；打卡不限順序（#363），任何一章都能勾、能取消。
   const roundCheckState = isSequentialCheckPlan(state.activePlan)
     ? getRoundCheckState(state.activePlan.days, currentRound)
     : null;
   const nextCheckChapter = roundCheckState && roundCheckState.next;
+  const gapNotice = renderRoundGapNotice(state.activePlan, roundCheckState);
+  if (gapNotice) container.appendChild(gapNotice);
 
   visibleChapters.forEach(ch => {
 
@@ -3432,16 +3435,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
     const isNextChapter = Boolean(nextCheckChapter
       && nextCheckChapter.book === ch.book
       && Number(nextCheckChapter.chapter) === Number(ch.chapter));
-    const isLockedChapter = Boolean(roundCheckState) && !isCurrentRead && !isNextChapter;
     if (isNextChapter) taskItem.classList.add("plan-task-item--next");
-    if (isLockedChapter) taskItem.classList.add("plan-task-item--locked");
     const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
-    const checkboxContent = isLockedChapter && typeof renderIcon === "function"
-      ? renderIcon("lock", { size: "sm", className: "nlc-icon" })
-      : content;
-    const toggleLabel = isLockedChapter
-      ? `${ch.book} ${ch.chapter}章，${planCopy.sequentialLockedLabel || "請先讀完前面的章節"}`
-      : `${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}`;
+    const toggleLabel = `${ch.book} ${ch.chapter}章，${isCurrentRead ? '取消已讀' : '標記已讀'}`;
     const nextLabelHtml = isNextChapter
       ? `<span class="task-next-label">${planCopy.sequentialNextLabel || "下一章"}</span>`
       : "";
@@ -3450,10 +3446,9 @@ async function renderPlanScheduleTracker(skipCarouselUpdate = false, signal = nu
               class="task-read-toggle"
               data-is-current-read="${isCurrentRead ? 'true' : 'false'}"
               aria-pressed="${isCurrentRead ? 'true' : 'false'}"
-              ${isLockedChapter ? 'aria-disabled="true"' : ''}
               aria-label="${toggleLabel}">
-        <span class="task-checkbox ${cssClass}${isLockedChapter ? ' task-checkbox--locked' : ''}" aria-hidden="true">
-          ${checkboxContent}
+        <span class="task-checkbox ${cssClass}" aria-hidden="true">
+          ${content}
         </span>
       </button>
       <button type="button" class="task-open-button" aria-label="閱讀 ${ch.book} ${ch.chapter}章">
@@ -3989,13 +3984,6 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
-  // 速讀計畫照順序打卡（#331）：只能勾下一章、只能取消最後勾的那一章。
-  const sequentialBlock = getSequentialCheckBlock(state.activePlan, book, chapter, currentRound, willBeChecked);
-  if (sequentialBlock) {
-    showToast(formatSequentialCheckMessage(sequentialBlock, (window.APP_COPY && window.APP_COPY.plan) || {}));
-    return;
-  }
-
   if (checkboxEl) {
     checkboxEl.setAttribute("aria-pressed", String(willBeChecked));
     checkboxEl.setAttribute("aria-label", `${book} ${chapter}章，${willBeChecked ? "取消已讀" : "標記已讀"}`);
@@ -4393,9 +4381,8 @@ window.triggerPlanUpgradeFlow = async function() {
 };
 
 // ── 進入下一遍 ───────────────────────────────────────────────────
-// 速讀計畫照順序打卡（#331）後，「最後一章勾完」就等於「整遍讀完」，
-// 不再需要漏勾清單。只留一行防呆：舊版 app、多裝置、離線佇列仍可能留下缺口，
-// 進入下一遍前確認整遍讀完，沒讀完就提示從哪一章開始。
+// 打卡不限順序（#363）：「最後一個閱讀日勾完」不等於「整遍讀完」。進入下一遍前確認
+// 整遍讀完，沒讀完就列出還沒勾的章；平常在當天清單上方提示前面跳過的章。
 
 function getCurrentRoundLastReadingDay(plan) {
   if (!plan || !Array.isArray(plan.days)) return null;
@@ -4407,16 +4394,63 @@ function getCurrentRoundLastReadingDay(plan) {
   return null;
 }
 
-// 本遍還沒讀完 → 回傳提示文字；讀完 → null。
+// 本遍還沒讀完 → 回傳提示文字（列出還沒勾的章）；讀完 → null。
 function getRoundIncompleteMessage(plan) {
   if (!plan || !Array.isArray(plan.days)) return null;
   const checkState = getRoundCheckState(plan.days, plan.currentRound || 1);
   if (checkState.isComplete || !checkState.next) return null;
-  const remaining = checkState.total - checkState.readCount;
-  const nextLabel = `${checkState.next.book} ${checkState.next.chapter}章`;
+  const unread = getRoundUnreadChapters(checkState);
   const template = (window.APP_COPY && window.APP_COPY.plan && window.APP_COPY.plan.roundIncomplete)
-    || "還有 {count} 章沒讀，請從 {chapter} 開始";
-  return template.replace("{count}", remaining).replace("{chapter}", nextLabel);
+    || "這一遍還有 {count} 章沒勾：{chapters}";
+  return template.replace("{count}", unread.length).replace("{chapters}", formatChapterList(unread));
+}
+
+function findPlanDayNumForChapter(plan, chapter, round) {
+  const day = (plan.days || []).find(item => (item.chapters || []).some(ch =>
+    ch.book === chapter.book
+    && Number(ch.chapter) === Number(chapter.chapter)
+    && Number(ch.round || round) === round
+  ));
+  return day ? day.dayNum : null;
+}
+
+// 當天清單上方：「第 N 遍前面還有 X 章沒勾：…」，章名點了直接用計畫情境打開（讀到底就會記錄）。
+// 只提示「排在最後勾的那一章之前」的缺口；照順序讀、只是還沒讀到的章不算。
+function renderRoundGapNotice(plan, checkState) {
+  const gaps = getRoundGapChapters(checkState);
+  if (!plan || gaps.length === 0) return null;
+  const round = checkState.round;
+  const planCopy = (window.APP_COPY && window.APP_COPY.plan) || {};
+  const notice = document.createElement("div");
+  notice.className = "plan-round-gap-notice";
+  notice.setAttribute("role", "status");
+  const text = document.createElement("p");
+  text.className = "plan-round-gap-notice__text";
+  text.textContent = (planCopy.roundGapNotice || "第 {round} 遍前面還有 {count} 章沒勾：")
+    .replace("{round}", round)
+    .replace("{count}", gaps.length);
+  notice.appendChild(text);
+  const links = document.createElement("div");
+  links.className = "plan-round-gap-notice__links";
+  const shown = gaps.slice(0, 5);
+  shown.forEach(chapter => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "plan-round-gap-notice__link";
+    button.textContent = `${chapter.book} ${Number(chapter.chapter)}章`;
+    button.addEventListener("click", () => {
+      window.openPlanChapterInReader(chapter.book, Number(chapter.chapter), findPlanDayNumForChapter(plan, chapter, round), round);
+    });
+    links.appendChild(button);
+  });
+  if (gaps.length > shown.length) {
+    const more = document.createElement("span");
+    more.className = "plan-round-gap-notice__more";
+    more.textContent = (planCopy.roundGapMore || "…等 {count} 章").replace("{count}", gaps.length);
+    links.appendChild(more);
+  }
+  notice.appendChild(links);
+  return notice;
 }
 
 // 常駐「進入下一遍」按鈕：停在「本遍最後一個閱讀日」且該日已勾完時出現。

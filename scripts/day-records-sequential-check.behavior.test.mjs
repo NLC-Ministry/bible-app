@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// #330 當天閱讀紀錄 + #331 照順序打卡：實際載入 plan.js，渲染當天清單、點勾選框。
+// #330 當天閱讀紀錄 + #363 打卡不限順序：實際載入 plan.js，渲染當天清單、點勾選框。
 process.env.TZ = "Asia/Taipei";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,67 +148,74 @@ describe("day reading records (#330)", () => {
   });
 });
 
-describe("sequential check-off (#331)", () => {
-  it("marks the next chapter and locks later ones", async () => {
+describe("check-off in any order (#363)", () => {
+  it("suggests the next chapter but locks nothing", async () => {
     setup();
     let { list } = await showDay(3);
     expect(taskRow(list, 2).classList.contains("plan-task-item--next")).toBe(true);
     expect(taskRow(list, 2).textContent).toContain("下一章");
     ({ list } = await showDay(4));
-    const locked = taskRow(list, 3);
-    expect(locked.classList.contains("plan-task-item--locked")).toBe(true);
-    expect(locked.querySelector(".task-read-toggle").getAttribute("aria-disabled")).toBe("true");
-    expect(locked.querySelector('[data-test-icon="lock"]')).not.toBeNull();
+    const later = taskRow(list, 3);
+    expect(list.querySelector(".plan-task-item--locked")).toBeNull();
+    expect(later.querySelector(".task-read-toggle").hasAttribute("aria-disabled")).toBe(false);
+    expect(later.querySelector('[data-test-icon="lock"]')).toBeNull();
   });
 
-  it("refuses to check a chapter out of order and says which one comes first", async () => {
+  it("checks a chapter out of order", async () => {
     setup();
     const { list } = await showDay(4);
     taskRow(list, 3).querySelector(".task-read-toggle").click();
     await flush();
-    expect(showToast).toHaveBeenCalledWith(`請照順序打卡，先讀完 ${BOOK} 2章`);
-    expect(db.logChapterRead).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 3, true, 2);
   });
 
-  it("checks the next chapter", async () => {
-    setup();
-    const { list } = await showDay(3);
-    taskRow(list, 2).querySelector(".task-read-toggle").click();
-    await flush();
-    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 2, true, 2);
-  });
-
-  it("only lets the last checked chapter be unchecked", async () => {
+  it("unchecks any checked chapter, not only the last one", async () => {
     setup({ round2Read: [1, 2] });
     const { list } = await showDay(3);
     taskRow(list, 1).querySelector(".task-read-toggle").click();
     await flush();
-    expect(showToast).toHaveBeenCalledWith(`只能取消最後勾的那一章（${BOOK} 2章）`);
-    expect(db.logChapterRead).not.toHaveBeenCalled();
-
-    taskRow(list, 2).querySelector(".task-read-toggle").click();
-    await flush();
-    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 2, false, 2);
+    expect(showToast).not.toHaveBeenCalled();
+    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 1, false, 2);
   });
 
-  it("advancing with a legacy gap points to the first unread chapter instead of a missed-chapter list", async () => {
-    setup({ round2Read: [1, 3, 4, 5] }); // 舊版 app 跳著勾留下的缺口
+  it("shows the skipped chapters above the day's list and opens one with the plan context", async () => {
+    setup({ round2Read: [1, 3, 4] });
+    window.openPlanChapterInReader = vi.fn();
+    const { list } = await showDay(4);
+    const notice = list.querySelector(".plan-round-gap-notice");
+    expect(notice).not.toBeNull();
+    expect(notice.textContent).toContain("第 2 遍前面還有 1 章沒勾");
+    const link = notice.querySelector(".plan-round-gap-notice__link");
+    expect(link.textContent).toBe(`${BOOK} 2章`);
+    link.click();
+    expect(window.openPlanChapterInReader).toHaveBeenCalledWith(BOOK, 2, 3, 2);
+  });
+
+  it("does not show the notice when the member is simply reading in order", async () => {
+    setup({ round2Read: [1, 2] });
+    const { list } = await showDay(4);
+    expect(list.querySelector(".plan-round-gap-notice")).toBeNull();
+  });
+
+  it("advancing with a gap lists the chapters still unchecked instead of a missed-chapter modal", async () => {
+    setup({ round2Read: [1, 3, 4, 5] });
     const { list } = await showDay(5);
     const advance = list.querySelector("#btn-plan-round-advance");
     expect(advance).not.toBeNull();
     expect(list.textContent).not.toContain("漏勾");
     advance.click();
-    expect(showToast).toHaveBeenCalledWith(`還有 1 章沒讀，請從 ${BOOK} 2章 開始`);
+    expect(showToast).toHaveBeenCalledWith(`這一遍還有 1 章沒勾：${BOOK} 2章`);
     expect(document.getElementById("missed-chapters-modal")).toBeNull();
   });
 
-  it("does not restrict plans outside the speed-reading series", async () => {
-    setup({ planKind: null }); // 自訂計畫：沒有 plan_kind
+  it("does not suggest a next chapter or show the notice for plans outside the speed-reading series", async () => {
+    setup({ planKind: null, round2Read: [1, 3] }); // 自訂計畫：沒有 plan_kind
     const { list } = await showDay(4);
-    expect(list.querySelector(".plan-task-item--locked")).toBeNull();
     expect(list.querySelector(".plan-task-item--next")).toBeNull();
-    taskRow(list, 3).querySelector(".task-read-toggle").click();
+    expect(list.querySelector(".plan-round-gap-notice")).toBeNull();
+    taskRow(list, 4).querySelector(".task-read-toggle").click();
     await flush();
-    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 3, true, 2);
+    expect(db.logChapterRead).toHaveBeenCalledWith(BOOK, 4, true, 2);
   });
 });

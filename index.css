@@ -5217,7 +5217,7 @@ button.logout-btn:hover {
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* 照順序打卡（#331）：下一章標示、還沒輪到的章上鎖 */
+/* 速讀計畫當天清單：建議的「下一章」標示（打卡不限順序，#363） */
 .task-next-label {
   display: block;
   margin-top: 0.1rem;
@@ -5229,17 +5229,44 @@ button.logout-btn:hover {
 .plan-task-item--next .task-checkbox {
   border-color: var(--color-brand) !important;
 }
-.plan-task-item--locked .task-title {
-  color: var(--text-muted);
+
+/* 前面跳過、還沒勾的章（#363）：清單上方一塊提示，章名點了直接打開 */
+.plan-round-gap-notice {
+  width: 100%;
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: 14px;
+  background: var(--bg-card);
 }
-.plan-task-item .task-checkbox.task-checkbox--locked {
-  color: var(--text-muted);
-  border-style: dashed !important;
+.plan-round-gap-notice__text {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
 }
-.plan-task-item .task-checkbox.task-checkbox--locked svg {
-  width: 12px;
-  height: 12px;
-  stroke-width: 2.5;
+.plan-round-gap-notice__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+.plan-round-gap-notice__link {
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-brand);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.plan-round-gap-notice__more {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
 }
 
 /* 當天閱讀紀錄（#330）：唯讀，依遍數分組 */
@@ -9654,59 +9681,123 @@ body.reader-navbar-hidden.reader-page .mobile-nav-bar,
   }
 }
 
-/* Swipe-to-change-chapter hint (#314). bible.js sets data-direction while a
-   horizontal swipe is in progress and data-armed once releasing would change
-   the chapter; --reader-swipe-progress (0–1) fades the pill in before that. */
-#reader-view .reader-swipe-hint {
-  position: fixed;
+/* 翻頁動畫（#347）。reader-page-flip.mjs 在閱讀區上方疊一層舞台，只移動兩張螢幕大小的
+   紙片（目前畫面的快照／目標章開頭的預覽），真正的經文頁不動。放手後的動畫由 Web Animations
+   在合成器上跑（只動 transform / opacity）；will-change 只存在於紙片存在的那一下。 */
+#reader-view.active {
+  position: relative;
+}
+
+#reader-view .reader-flip-stage {
+  position: absolute;
+  z-index: 200;
+  overflow: hidden;
+  pointer-events: auto;
+  perspective: 1400px;
+  contain: layout paint;
+}
+
+#reader-view .reader-flip-page {
+  position: absolute;
   inset: 0;
-  z-index: 330;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+#reader-view .reader-flip-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 1);
+  opacity: 0;
   pointer-events: none;
 }
 
-#reader-view .reader-swipe-hint__pill {
-  position: fixed;
-  top: 50%;
+#reader-view .reader-flip-mover {
+  transform-origin: left center;
+  will-change: transform;
+  backface-visibility: hidden;
+  box-shadow: 10px 0 28px rgba(0, 0, 0, 0.16), 1px 0 0 rgba(0, 0, 0, 0.06);
+}
+
+#reader-view .reader-flip-mover.is-lite {
+  box-shadow: none;
+}
+
+/* 拖動時瀏覽器只處理上下捲動，左右交給翻頁；Android Chrome 瀏覽器模式的左右「上一頁」手勢也關掉 */
+#reader-view .reader-reading-surface {
+  touch-action: pan-y pinch-zoom;
+}
+
+html:has(body.reader-page),
+body.reader-page {
+  overscroll-behavior-x: none;
+}
+
+/* 手機、平板（觸控裝置）只用左右滑＋章末連結換章，兩側浮動按鈕不畫（不是只透明）。電腦版保留。 */
+@media (hover: none) and (pointer: coarse) {
+  #reader-view .reader-floating-nav {
+    display: none !important;
+  }
+}
+
+/* 章末換章連結（#347）：「‹ 上一章｜下一章 ›」，跟在經文後面；字級跟著閱讀字體（em），
+   可點範圍至少 44px 高。 */
+#reader-view .reader-chapter-end-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-card);
+  font-size: 0.9em;
+}
+
+#reader-view .reader-chapter-end-link {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: 999px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-
-#reader-view .reader-swipe-hint__pill--prev {
-  left: calc(56px + env(safe-area-inset-left, 0px));
-}
-
-#reader-view .reader-swipe-hint__pill--next {
-  right: calc(56px + env(safe-area-inset-right, 0px));
-}
-
-#reader-view .reader-swipe-hint[data-direction="prev"] .reader-swipe-hint__pill--prev,
-#reader-view .reader-swipe-hint[data-direction="next"] .reader-swipe-hint__pill--next {
-  opacity: calc(var(--reader-swipe-progress, 0) * 0.6);
-}
-
-#reader-view .reader-swipe-hint[data-direction="prev"][data-armed] .reader-swipe-hint__pill--prev,
-#reader-view .reader-swipe-hint[data-direction="next"][data-armed] .reader-swipe-hint__pill--next {
-  opacity: 1;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--color-brand);
-  border-color: var(--color-brand);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #reader-view .reader-swipe-hint__pill {
-    transition: none;
-  }
+#reader-view .reader-chapter-end-link:active {
+  background: var(--color-brand-subtle);
+}
+
+#reader-view .reader-chapter-end-link:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+#reader-view .reader-chapter-end-sep {
+  color: var(--text-muted);
+}
+
+#reader-view .reader-chapter-end-link[hidden],
+#reader-view .reader-chapter-end-sep[hidden] {
+  display: none;
+}
+
+/* 換章播報：只給螢幕報讀器 */
+#reader-chapter-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Original Premium Bible navigation styles (Pill Slider & Frameless Grid) */

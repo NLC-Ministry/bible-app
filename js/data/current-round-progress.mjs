@@ -233,9 +233,9 @@ export function countDayReadingRecordsByDate(logs, scope = {}) {
 }
 
 // ── 照順序打卡（#331）───────────────────────────────────────────────────
-// 速讀系列（教會階段計畫、延後大區梯次）的目前這遍：只能勾「下一章」
-// （照讀經順序第一個還沒勾的章），只能取消「最後勾的那一章」。
-// 舊資料有缺口時，下一章就停在最早的缺口，自然引導先補完。
+// 速讀系列（教會階段計畫、延後大區梯次）的目前這遍：清單標出建議的「下一章」
+// （照讀經順序第一個還沒勾的章），並提示前面跳過、還沒勾的章。
+// 打卡不限順序（#363 打卡設計第二版）：任何一章都能勾、能取消，這裡只提供建議與提示。
 const SEQUENTIAL_CHECK_PLAN_KINDS = new Set([
   "church_campaign",
   "church_campaign_stage",
@@ -280,39 +280,31 @@ export function getRoundCheckState(days, round) {
   };
 }
 
-// 回傳 { ok: true } 或 { ok: false, reason: "not_next" | "not_last", target: {book, chapter} }。
-// 不在這遍清單裡的章不受限（例如閱讀器裡讀計畫外的章）。
-export function canToggleRoundChapter(checkState, book, chapter, willCheck) {
-  if (!checkState || !Array.isArray(checkState.order)) return { ok: true };
-  const index = checkState.order.findIndex(item =>
-    String(item.book) === String(book) && Number(item.chapter) === Number(chapter)
-  );
-  if (index < 0) return { ok: true };
-  const alreadyRead = Boolean(checkState.order[index][`isReadR${checkState.round}`]);
-  if (willCheck) {
-    if (alreadyRead || index === checkState.nextIndex) return { ok: true };
-    const target = checkState.next;
-    return { ok: false, reason: "not_next", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
-  }
-  if (!alreadyRead || index === checkState.lastReadIndex) return { ok: true };
-  const target = checkState.lastRead;
-  return { ok: false, reason: "not_last", target: target ? { book: target.book, chapter: Number(target.chapter) } : null };
+// 這一遍「前面跳過、還沒勾」的章：排在最後勾的那一章之前、卻還沒勾的章。
+// 會友常以為整遍讀完了、開始重讀，其實中間漏了幾章（重讀時章末的「✓ 已記錄」是舊紀錄）。
+export function getRoundGapChapters(checkState) {
+  if (!checkState || !Array.isArray(checkState.order) || checkState.lastReadIndex < 0) return [];
+  const readKey = `isReadR${checkState.round}`;
+  return checkState.order
+    .slice(0, checkState.lastReadIndex)
+    .filter(chapter => !chapter[readKey]);
 }
 
-// 給四個寫入點共用：這次打卡／取消可不可以。不是速讀計畫、不是目前這遍 → 不限。
-export function getSequentialCheckBlock(plan, book, chapter, round, willCheck) {
-  if (!isSequentialCheckPlan(plan)) return null;
-  const currentRound = Math.max(1, Math.floor(Number(plan.currentRound) || 1));
-  if (Number(round || currentRound) !== currentRound) return null;
-  const result = canToggleRoundChapter(getRoundCheckState(plan.days, currentRound), book, chapter, willCheck);
-  return result.ok ? null : result;
+// 這一遍所有還沒勾的章（照讀經順序）。
+export function getRoundUnreadChapters(checkState) {
+  if (!checkState || !Array.isArray(checkState.order)) return [];
+  const readKey = `isReadR${checkState.round}`;
+  return checkState.order.filter(chapter => !chapter[readKey]);
 }
 
-export function formatSequentialCheckMessage(block, copy = {}) {
-  if (!block) return "";
-  const label = block.target ? `${block.target.book} ${block.target.chapter}章` : "";
-  if (block.reason === "not_last") {
-    return String(copy.sequentialUncheckBlocked || "只能取消最後勾的那一章（{chapter}）").replace("{chapter}", label);
-  }
-  return String(copy.sequentialCheckBlocked || "請照順序打卡，先讀完 {chapter}").replace("{chapter}", label);
+// 「出埃及記 12章、15章、利未記 3章」：同一卷連著的只寫一次書名；超過 max 章就寫「…等 N 章」。
+export function formatChapterList(chapters, { max = 5 } = {}) {
+  const list = Array.isArray(chapters) ? chapters : [];
+  const shown = list.slice(0, max);
+  const parts = shown.map((chapter, index) => {
+    const sameBookAsPrevious = index > 0 && shown[index - 1].book === chapter.book;
+    return sameBookAsPrevious ? `${Number(chapter.chapter)}章` : `${chapter.book} ${Number(chapter.chapter)}章`;
+  });
+  const text = parts.join("、");
+  return list.length > max ? `${text}…等 ${list.length} 章` : text;
 }
