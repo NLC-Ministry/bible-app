@@ -2784,18 +2784,42 @@ export function initSpeechPreferencesControls() {
     rateLabel.textContent = `${num.toFixed(2)}x (${desc})`;
   }
 
-  // 1. Rate Slider
+  const ratePresetButtons = document.querySelectorAll(".speech-rate-preset[data-speech-rate]");
+
+  function updateRatePresets(val) {
+    const num = parseFloat(val);
+    ratePresetButtons.forEach(btn => {
+      const isActive = Math.abs(parseFloat(btn.dataset.speechRate) - num) < 0.001;
+      btn.classList.toggle("active", isActive);
+      btn.setAttribute("aria-pressed", String(isActive));
+    });
+  }
+
+  // 1. Rate Slider + 常用語速 presets (#364)
   if (rateSlider && rateLabel) {
     rateSlider.value = getSpeechSetting("rate", 1.0);
     updateRateLabel(rateSlider.value);
+    updateRatePresets(rateSlider.value);
     if (!rateSlider.dataset.bound) {
       rateSlider.dataset.bound = "true";
       rateSlider.addEventListener("input", (e) => {
         const val = parseFloat(e.target.value);
         setSpeechSetting("rate", val);
         updateRateLabel(val);
+        updateRatePresets(val);
       });
     }
+    ratePresetButtons.forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => {
+        const val = parseFloat(btn.dataset.speechRate);
+        rateSlider.value = String(val);
+        setSpeechSetting("rate", val);
+        updateRateLabel(val);
+        updateRatePresets(val);
+      });
+    });
   }
 
   // 2. Populate Voices
