@@ -8636,6 +8636,30 @@ input:checked + .slider:before {
   border-top: 1px solid var(--border-card);
 }
 
+/* #364: the whole dialog scrolls, title and 套用設定 included. With a fixed
+   header/footer, OS text zoom squeezed the body into a ~250px sliver that cut
+   off right at a divider and looked like the end of the dialog. The scroll-
+   attached shadows (covered by the local-attached fades at either end) show
+   there is more above/below. */
+.reader-settings-dialog {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(var(--bg-card) 30%, transparent) center top / 100% 2.5rem no-repeat local,
+    linear-gradient(transparent, var(--bg-card) 70%) center bottom / 100% 2.5rem no-repeat local,
+    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--text-primary) 18%, transparent), transparent) center top / 100% 0.75rem no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--text-primary) 18%, transparent), transparent) center bottom / 100% 0.75rem no-repeat scroll,
+    var(--bg-card);
+}
+
+.reader-settings-dialog .bottom-sheet-body {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+}
+
 .reader-settings-apply-btn {
   display: inline-flex;
   align-items: center;
@@ -8823,6 +8847,48 @@ body.reader-modal-open .main-content {
 
 .reader-nav-spacer {
   flex: 1 1 auto;
+}
+
+/* #364: under OS text zoom / display zoom the toolbar used to push 語音/搜尋/⋯
+   off the right edge (⋯ is the only way into 朗讀設定). Buttons never shrink;
+   the book/chapter chip gives up its width instead and ellipsizes. The
+   container query is in rem so it reacts to a narrower screen and to larger
+   text alike. */
+#reader-view .native-reader-toolbar {
+  container-type: inline-size;
+  gap: min(0.6rem, 8px);
+}
+
+#reader-view .native-reader-toolbar > * {
+  flex-shrink: 0;
+}
+
+/* flex-shrink now keeps the buttons on screen, so the old vw caps on the chip
+   only truncated the name while there was still room for it. */
+#reader-view .native-reader-toolbar > .reader-ref-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+/* Both open the same catalog as tapping the chip, so drop them first. */
+@container (max-width: 27rem) {
+  #reader-view .native-reader-toolbar > .reader-version-btn {
+    display: none;
+  }
+}
+
+/* Dropping the empty spacer also drops its gap, leaving more room for
+   "馬太福音 1" before it ellipsizes; margin-left:auto keeps the right group right. */
+@container (max-width: 22rem) {
+  #reader-view .native-reader-toolbar > #reader-nav-directory-btn,
+  #reader-view .native-reader-toolbar > .reader-nav-spacer {
+    display: none;
+  }
+
+  #reader-view .native-reader-toolbar > #reader-audio-btn {
+    margin-left: auto;
+  }
 }
 
 .reader-body-full,
@@ -9145,7 +9211,9 @@ body.reader-modal-open .main-content {
 }
 
 .reader-font-size-tick {
-  min-width: 44px;
+  /* Width comes from the 1fr grid columns; a 44px floor made the row wider
+     than the dialog under OS text zoom (#364). */
+  min-width: 0;
   min-height: 44px;
   border: 0;
   border-radius: 10px;
@@ -9163,6 +9231,35 @@ body.reader-modal-open .main-content {
 
 .reader-font-size-tick:focus-visible,
 .reader-font-size-slider:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  outline-offset: 2px;
+}
+
+/* 朗讀語速常用值 (#364): same look as the 文字大小 ticks above. */
+.speech-rate-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.speech-rate-preset {
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.speech-rate-preset.active {
+  background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  color: var(--color-brand);
+}
+
+.speech-rate-preset:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
   outline-offset: 2px;
 }
