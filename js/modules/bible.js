@@ -2575,16 +2575,26 @@ function clearBibleNavFilter() {
   navOverlayState.filterQuery = '';
   const input = document.getElementById("bible-nav-filter-input");
   if (input) input.value = "";
+  document.getElementById("bible-nav-filter-clear-btn")?.classList.add("hidden");
 }
 
 function bindBibleNavFilter() {
   const input = document.getElementById("bible-nav-filter-input");
   if (!input || input.dataset.bound) return;
   input.dataset.bound = "true";
+  const clearBtn = document.getElementById("bible-nav-filter-clear-btn");
   input.addEventListener("input", () => {
     navOverlayState.filterQuery = input.value;
+    if (clearBtn) clearBtn.classList.toggle("hidden", !input.value);
     if (navOverlayState.activeTab === 'book') renderBibleNavContent();
   });
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      clearBibleNavFilter();
+      if (navOverlayState.activeTab === 'book') renderBibleNavContent();
+      input.focus();
+    });
+  }
   input.addEventListener("keydown", (e) => {
     // 中文輸入法選字時的 Enter 不算送出。
     if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
@@ -2738,6 +2748,8 @@ function updateBibleNavLocale() {
     filterInput.placeholder = english ? "Filter books or enter a reference" : "篩選書卷或輸入出處";
     filterInput.setAttribute("aria-label", filterInput.placeholder);
   }
+  const filterClearBtn = document.getElementById("bible-nav-filter-clear-btn");
+  if (filterClearBtn) filterClearBtn.setAttribute("aria-label", english ? "Clear" : "清除");
   const gridBtn = document.getElementById("view-mode-grid");
   const listBtn = document.getElementById("view-mode-list");
   if (gridBtn) {

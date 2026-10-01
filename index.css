@@ -4913,6 +4913,14 @@ button.logout-btn:hover {
   display: none;
 }
 
+/* #367：閱讀器搜尋框與目錄篩選框都有 app 自己的 ✕，藏起瀏覽器內建的清除鈕，避免出現兩個 ✕。 */
+#global-search-input::-webkit-search-cancel-button,
+#bible-nav-filter-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 .plan-search-panel__clear {
   width: 34px;
   height: 34px;
