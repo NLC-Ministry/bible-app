@@ -81,6 +81,8 @@ const LAZY_MODULE_LOADERS = {
   home: () => import('./modules/home.js'),
   bible: () => import('./modules/bible.js'),
   plan: () => import('./modules/plan.js'),
+  // 計畫分頁的管理員計畫增刪改卡片，只有系統管理員會載入（#370）。
+  'plan-admin': () => import('./modules/plan-admin.js'),
   profile: () => import('./modules/profile.js'),
   admin: () => import('./modules/admin.js'),
   'team-registration': () => import('./modules/team-registration.js'),
@@ -503,6 +505,7 @@ async function ensurePlanFeatureModulesLoaded() {
   await loadModule('team-registration');
   if (state.currentUser && getUserRoleCode(state.currentUser) === 'admin') {
     await loadModule('campaign-rule-editor');
+    await loadModule('plan-admin');
   }
 }
 
