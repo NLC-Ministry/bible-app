@@ -908,16 +908,16 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
         <span class="stat-badge stat-badge--brand">${mode === "stats" ? "團隊統計" : "組員狀況"}</span>
       </div>
       ${summary}
-      <div class="glass-card-upgrade pilgrimage-card" id="team-pilgrimage-card" style="display: flex; flex-direction: column; margin: 0.8rem 0; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.8rem; background: var(--bg-card);">
+      <div class="glass-card-upgrade pilgrimage-card" style="display: flex; flex-direction: column; margin: 0.8rem 0; border: 1px solid var(--border-card); border-radius: 12px; padding: 0.8rem; background: var(--bg-card);">
         <div class="card-header-flex" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
           <h3 class="card-title" style="margin-bottom: 0; font-size: 0.95rem; font-weight: 500; display: flex; align-items: center; gap: 0.25rem; color: var(--text-primary);">
             團隊賽道地圖 (${Number(team.division)}人組)
           </h3>
-          <div id="team-pilgrimage-legend" class="text-[10px] space-x-2" style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--text-muted);"></div>
+          <div data-team-pilgrimage-legend class="text-[10px] space-x-2" style="display: flex; align-items: center; gap: 8px; font-size: 0.875rem; color: var(--text-muted);"></div>
         </div>
         <div class="trail-scroll-wrapper" style="overflow: auto; max-height: 380px; background: var(--bg-input); border-radius: 12px; border: 1px solid var(--border-card); padding: 0.5rem; position: relative;">
-          <div id="team-pilgrimage-trail-board" style="position: relative; transform-origin: top left; transition: transform 0.2s ease; display: inline-block;">
-            <canvas id="team-pilgrimage-canvas" style="display: block;"></canvas>
+          <div style="position: relative; transform-origin: top left; transition: transform 0.2s ease; display: inline-block;">
+            <canvas data-team-pilgrimage-canvas style="display: block;"></canvas>
           </div>
         </div>
       </div>
@@ -1021,7 +1021,10 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
             chapters_read: Number(readCount || 0)
           };
         });
-        renderFn(enrichedMembers, plan);
+        renderFn(enrichedMembers, plan, {
+          canvas: container.querySelector("[data-team-pilgrimage-canvas]"),
+          legend: container.querySelector("[data-team-pilgrimage-legend]")
+        });
       }
     }, 100);
     hydrate(container);
