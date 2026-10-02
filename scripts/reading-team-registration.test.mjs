@@ -551,8 +551,11 @@ describe("NLC and browser integration", () => {
     const planOptions = html.slice(html.indexOf('id="plan-options-dropdown"'), html.indexOf('</div>', html.indexOf('id="plan-options-dropdown"')));
     expect(planOptions).not.toContain("\u7267\u5340\u5c0f\u7d44\u72c0\u6cc1");
     expect(plan).not.toContain("view-reading-team-btn");
-    expect(plan).not.toContain("async function enterOrgStatsState");
-    expect(plan).not.toContain("setPlanState(PLAN_ROUTE.ORG_STATS)");
+    for (const source of [plan, read("js/modules/plan-stats.js")]) { // #370：統計畫面在 plan-stats.js
+      expect(source).not.toContain("view-reading-team-btn");
+      expect(source).not.toContain("async function enterOrgStatsState");
+      expect(source).not.toContain("setPlanState(PLAN_ROUTE.ORG_STATS)");
+    }
     expect(html).not.toContain('id="view-reading-team-stats-btn"');
     // Segmented control, not a hidden-affordance <select>: users who joined both
     // the 3-person and 6-person team must see both options at once, never a
@@ -564,7 +567,7 @@ describe("NLC and browser integration", () => {
     expect(html).not.toContain('id="members-team-view-select"');
     expect(plan).toContain("async function prepareReadingTeamSubview");
     expect(plan).toContain('prepareReadingTeamSubview("stats")');
-    expect(plan).toContain('prepareReadingTeamSubview("members")');
+    expect(read("js/modules/plan-stats.js")).toContain('prepareReadingTeamSubview("members")'); // #370：組員狀況在 plan-stats.js
     expect(plan).toContain('reading-team-');
     expect(plan).toContain('readingTeamDivision');
     expect(plan).toContain('readingTeamDefaultPlan');

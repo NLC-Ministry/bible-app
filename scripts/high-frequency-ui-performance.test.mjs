@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const plan = readFileSync("js/modules/plan.js", "utf8");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const plan = readFileSync("js/modules/plan-stats.js", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const repository = readFileSync("js/pwa/SupabaseRepository.js", "utf8");
 

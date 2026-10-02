@@ -5,7 +5,8 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8"
 
 const html = read("index.html");
 const admin = read("js/modules/admin.js");
-const plan = read("js/modules/plan.js");
+// #370：組織篩選的讀值點分在 plan.js 與 plan-stats.js（統計／組員狀況），合起來算。
+const plan = read("js/modules/plan.js") + "\n" + read("js/modules/plan-stats.js");
 
 describe("計劃管理: explicit refresh button", () => {
   it("adds a 更新 button next to the shared org filter in the unified plan context", () => {

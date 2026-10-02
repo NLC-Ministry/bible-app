@@ -22,7 +22,7 @@ describe("progress status consistency unit tests", () => {
     // applied the same way whether it's "me" or another member, and capped
     // at every day once a member has finished a full round (round 2+ /
     // isPlanCompleted) so finishing a round never reads as newly behind.
-    const code = readFileSync("js/modules/plan.js", "utf8");
+    const code = readFileSync("js/modules/plan-stats.js", "utf8"); // #370：排行表在 plan-stats.js
     expect(code).toContain("diff = completedDays - expectedDaysCount;");
     expect(code).toContain("memberIsCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;");
     expect(code).toContain("memberIsCompletedOnce = (u.current_round || 1) > 1;");
@@ -49,7 +49,7 @@ describe("progress status consistency unit tests", () => {
   });
 
   it("verifies round 2+ progress displays '第2遍進行中' when progress is 0%", () => {
-    const code = readFileSync("js/modules/plan.js", "utf8");
+    const code = readFileSync("js/modules/plan-stats.js", "utf8"); // #370：排行表在 plan-stats.js
     expect(code).toContain('statusStr = memberProgress > 0 ? `第${memberRound}遍完成${memberProgress}%` : `第${memberRound}遍進行中`;');
   });
 

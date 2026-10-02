@@ -8,7 +8,8 @@ const authority = read("supabase/migrations/0048_member_hub_role_uuid_authority.
 const state = read("js/state.js");
 const profile = read("js/modules/profile.js");
 const admin = read("js/modules/admin.js");
-const plan = read("js/modules/plan.js");
+// #370：統計、排行、組員狀況在 plan-stats.js，這裡的規則兩檔一起檢查。
+const plan = [read("js/modules/plan.js"), read("js/modules/plan-stats.js")].join("\n");
 const db = read("js/db.js");
 const dataEdge = read("supabase/functions/nlc-data/index.ts");
 const sessionEdge = read("supabase/functions/nlc-session/index.ts");
