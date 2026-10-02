@@ -3673,6 +3673,19 @@ const db = {
     return key ? messages[key] : (raw || "團隊資料處理失敗，請稍後再試。");
   },
 
+  // 會改變「我的團隊」的 RPC：成功後發 reading-team:changed，plan.js 的
+  // 「我的團隊」快取（#407）收到就清掉，畫面下一次讀到的一定是新狀態。
+  READING_TEAM_MUTATING_RPCS: new Set([
+    "create_reading_team",
+    "join_reading_team_by_code",
+    "leave_reading_team",
+    "remove_reading_team_member",
+    "disband_reading_team",
+    "rename_reading_team",
+    "transfer_reading_team_captain",
+    "carry_reading_teams_to_stage"
+  ]),
+
   async _callReadingTeamRpc(functionName, args) {
     if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "團隊報名需登入正式帳號後使用。" };
@@ -3680,6 +3693,9 @@ const db = {
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
       if (error) return { success: false, error, message: this._readingTeamErrorMessage(error) };
+      if (this.READING_TEAM_MUTATING_RPCS.has(functionName)) {
+        window.dispatchEvent(new CustomEvent("reading-team:changed", { detail: { rpc: functionName } }));
+      }
       return { success: true, data };
     } catch (error) {
       return { success: false, error, message: this._readingTeamErrorMessage(error) };
