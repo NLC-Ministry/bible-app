@@ -412,7 +412,7 @@ describe("plan stats RPCs are service_role-only and fail closed (#394, #397)", (
   const migrationsDir = new URL("../supabase/migrations/", import.meta.url);
   const read = suffix => {
     const file = readdirSync(migrationsDir).find(name => name.endsWith(suffix));
-    return file ? readFileSync(new URL(file, migrationsDir), "utf8") : "";
+    return file ? readFileSync(new URL(file, migrationsDir), "utf8").replace(/\r\n/g, "\n") : "";
   };
   const roster = read("_plan_stats_roster.sql");
   const ROSTER_SIGNATURE = "public.get_plan_stats_roster(text[], text, date, boolean, uuid[], uuid)";
