@@ -14291,6 +14291,13 @@ body.profile-subpage-open .main-content {
   background: var(--bg-card);
 }
 
+/* 每張卡只在一個分頁出現（#409）：邀請碼卡只在「我的計畫」、全域計畫管理只在
+   「探索計畫」。和各卡依組隊／角色切換的 .hidden 分開，兩者都要通過才顯示。 */
+#plan-list-subview:not([data-active-filter="mine"]) #plan-team-invite-shortcut,
+#plan-list-subview:not([data-active-filter="saved"]) #admin-plan-card {
+  display: none !important;
+}
+
 .plan-team-invite-shortcut__body {
   display: flex;
   align-items: center;
