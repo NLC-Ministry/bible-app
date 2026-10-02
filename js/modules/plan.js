@@ -1126,26 +1126,20 @@ function initPlanControls() {
 
       const joinedContainer = document.getElementById("joined-plans-list-container");
       const presetContainer = document.getElementById("preset-plans-list-container");
-      const sidebarCard = document.getElementById("plan-sidebar-info-card");
       const joinTeamContainer = document.getElementById("join-team-container");
 
-      if (filter === "mine") {
-        if (joinedContainer) joinedContainer.classList.remove("hidden");
-        if (presetContainer) presetContainer.classList.add("hidden");
-        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
-        if (sidebarCard) sidebarCard.classList.remove("hidden");
-        renderJoinedPlansList();
-      } else if (filter === "saved") {
+      if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
+      // 側欄與各卡依分頁顯示（#409）；清單渲染可能因資料未就緒提早 return，
+      // 所以切換當下先算一次，不靠清單渲染順帶更新。
+      updatePlanSidebarIntroCardVisibility();
+
+      if (filter === "saved") {
         if (joinedContainer) joinedContainer.classList.add("hidden");
         if (presetContainer) presetContainer.classList.remove("hidden");
-        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
-        if (sidebarCard) sidebarCard.classList.remove("hidden");
         renderPresetPlansList();
       } else {
         if (joinedContainer) joinedContainer.classList.remove("hidden");
         if (presetContainer) presetContainer.classList.add("hidden");
-        if (joinTeamContainer) joinTeamContainer.classList.add("hidden");
-        if (sidebarCard) sidebarCard.classList.add("hidden");
         renderJoinedPlansList();
       }
     });
@@ -1749,16 +1743,20 @@ function userHasNoPlanAtAll() {
   return !hasVisibleGroupMeeting;
 }
 
-// 「已結束」分頁維持原本整欄隱藏；「我的計畫」／「探索計畫」分頁的歡迎卡只在
-// 完全沒有任何計畫時才顯示，但「全域計畫管理」卡對系統管理員一律保留（見
-// plan-sidebar-visibility.mjs）。兩份清單（joined/preset）各自渲染時都會呼叫
-// 這裡，且各自從 DOM 讀目前作用中的分頁，所以不管先渲染哪一份都能算對。
+// 歡迎卡只在「我的計畫」、「全域計畫管理」只在「探索計畫」、「已結束」整欄隱藏
+// （見 plan-sidebar-visibility.mjs，#409）。邀請碼卡與管理卡的分頁條件由 CSS 讀
+// #plan-list-subview[data-active-filter]，和它們各自依組隊／角色切換的 hidden 分開。
+// 兩份清單（joined/preset）各自渲染時都會呼叫這裡，且各自從 DOM 讀目前作用中的
+// 分頁，所以不管先渲染哪一份都能算對。
 function updatePlanSidebarIntroCardVisibility() {
   const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
+  const filter = activePill ? activePill.getAttribute("data-filter") : "mine";
+  const listSubview = document.getElementById("plan-list-subview");
+  if (listSubview) listSubview.dataset.activeFilter = filter;
   applyPlanSidebarVisibility({
     sidebar: document.getElementById("plan-sidebar-info-card"),
     introCard: document.getElementById("plan-sidebar-intro-card"),
-    filter: activePill ? activePill.getAttribute("data-filter") : "mine",
+    filter,
     hasAnyPlan: !userHasNoPlanAtAll(),
     isSystemAdmin: getUserRoleCode(state.currentUser) === "admin"
   });
