@@ -18,6 +18,9 @@ const scheduleSweep = read("supabase/functions/daily-quiz-schedule-sweep/index.t
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
+// #370：會友端入口與作答畫面拆到 plan-quiz.js；plan.js 只留開關、日期與「有沒有指派給我」的 gate。
+const planQuiz = read("js/modules/plan-quiz.js");
+const planAll = plan + planQuiz;
 const admin = read("js/modules/admin.js");
 const html = read("index.html");
 const css = read("index.css");
@@ -117,16 +120,16 @@ describe("daily church quiz", () => {
     // 會友「進入小測驗/作答」的入口，所以 gate 只看 context.myQuiz，且
     // renderPublisherDailyQuiz 這個函式本身已經整個搬走、不在 plan.js 裡了。
     expect(plan).toContain("if (!context.myQuiz) {");
-    expect(plan).not.toContain("context.canPublish");
-    expect(plan).not.toContain("renderPublisherDailyQuiz");
-    expect(plan).toContain("renderDailyQuizEntry");
-    expect(plan).toContain('id="daily-quiz-entry-button"');
-    expect(plan).toContain("getDailyQuizReadingProgress");
-    expect(plan).toContain("if (!progress.isComplete)");
-    expect(plan).toContain("請先閱讀完今天的速讀進度，再進入小測驗");
+    expect(planAll).not.toContain("context.canPublish");
+    expect(planAll).not.toContain("renderPublisherDailyQuiz");
+    expect(planQuiz).toContain("renderDailyQuizEntry");
+    expect(planQuiz).toContain('id="daily-quiz-entry-button"');
+    expect(planQuiz).toContain("getDailyQuizReadingProgress");
+    expect(planQuiz).toContain("if (!progress.isComplete)");
+    expect(planQuiz).toContain("請先閱讀完今天的速讀進度，再進入小測驗");
     expect(plan).toContain("quizDate !== getDailyQuizTaiwanToday()");
-    expect(plan).toContain("if (options.open === true)");
-    expect(plan).toContain("renderAssignedDailyQuiz");
+    expect(planQuiz).toContain("if (options.open === true)");
+    expect(planQuiz).toContain("renderAssignedDailyQuiz");
     expect(css).toContain(".daily-quiz-entry-button {");
     expect(css).toContain("font-size: 14px;");
   });
@@ -135,7 +138,7 @@ describe("daily church quiz", () => {
     expect(admin).not.toContain("approvedVariants");
     expect(admin).not.toContain("data-quiz-version-choice");
     expect(admin).not.toContain("今日 AI 題目尚未完成審核");
-    expect(plan).not.toContain("data-quiz-version-choice");
+    expect(planAll).not.toContain("data-quiz-version-choice");
     expect(admin).not.toContain("每日生成、審核、發佈與作答");
   });
 
@@ -146,8 +149,8 @@ describe("daily church quiz", () => {
     expect(admin).toContain("parseQuizImportText(textarea.value)");
     expect(admin).toContain("ADMIN_QUIZ_CUSTOM_TYPE_LABELS");
     expect(admin).toContain("truefalse: '是非'");
-    expect(plan).not.toContain("quiz-import.mjs");
-    expect(plan).not.toContain("QUIZ_CUSTOM_TYPE_LABELS");
+    expect(planAll).not.toContain("quiz-import.mjs");
+    expect(planAll).not.toContain("QUIZ_CUSTOM_TYPE_LABELS");
   });
 
   it("#308: the old 自訂題目／審核／發佈 tabs are gone; plan management is calendar／rules／stats", () => {
@@ -196,8 +199,8 @@ describe("daily church quiz", () => {
     expect(admin).not.toContain("每日三版題目");
     expect(admin).not.toContain("發布小測驗");
     // 「發佈小測驗」的文案／流程已經整個搬去後台，打卡清單不該再出現它。
-    expect(plan).not.toContain("發佈小測驗");
-    expect(plan).not.toContain("發布小測驗");
+    expect(planAll).not.toContain("發佈小測驗");
+    expect(planAll).not.toContain("發布小測驗");
   });
 
   it("loads the organization dashboard without per-group member subqueries", () => {
@@ -298,8 +301,8 @@ describe("daily church quiz", () => {
     expect(db).not.toContain("scheduleDailyQuizPublish");
     expect(db).not.toContain("cancelDailyQuizSchedule");
     expect(admin).not.toContain("data-quiz-schedule-toggle");
-    expect(plan).toContain("assignedQuiz.answerCloseAt");
-    expect(plan).toContain('"作答已截止"');
+    expect(planQuiz).toContain("assignedQuiz.answerCloseAt");
+    expect(planQuiz).toContain('"作答已截止"');
   });
 
   it("no longer posts a home announcement when publishing (feature removed in 0196)", () => {

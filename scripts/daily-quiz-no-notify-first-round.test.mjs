@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 // 2026-09-29：①小測驗發佈不發通知 ②讀完一遍後每次小測驗都能作答，不看當天進度。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const migration = read("supabase/migrations/20260928175636_daily_quiz_publish_no_notification.sql");
-const plan = read("js/modules/plan.js");
+// #370：小測驗作答畫面拆到 plan-quiz.js（lazy chunk）。
+const planQuiz = read("js/modules/plan-quiz.js");
 
 describe("daily quiz publish sends no notification", () => {
   it("publish_daily_quiz no longer inserts into quiz_notifications", () => {
@@ -33,11 +34,11 @@ describe("daily quiz publish sends no notification", () => {
 
 describe("daily quiz reading gate after the first round", () => {
   const loadHelpers = () => {
-    const start = plan.indexOf("function hasCompletedDailyQuizFirstRound(");
-    const end = plan.indexOf("function openDailyQuizContent(");
+    const start = planQuiz.indexOf("function hasCompletedDailyQuizFirstRound(");
+    const end = planQuiz.indexOf("function openDailyQuizContent(");
     expect(start).toBeGreaterThanOrEqual(0);
     // eslint-disable-next-line no-new-func
-    return new Function(`${plan.slice(start, end)}; return { hasCompletedDailyQuizFirstRound, getDailyQuizReadingProgress };`)();
+    return new Function(`${planQuiz.slice(start, end)}; return { hasCompletedDailyQuizFirstRound, getDailyQuizReadingProgress };`)();
   };
   const today = "2026-09-29";
   const unreadDay = { isoDate: today, chapters: [{ round: 1, isReadR1: false }, { round: 1, isReadR1: false }] };
@@ -60,6 +61,6 @@ describe("daily quiz reading gate after the first round", () => {
   });
 
   it("tells finished readers they can answer directly", () => {
-    expect(plan).toContain("你已讀完一遍，可以直接作答");
+    expect(planQuiz).toContain("你已讀完一遍，可以直接作答");
   });
 });

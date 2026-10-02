@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const plan = readFileSync("js/modules/plan.js", "utf8");
+// #370：靈修畫面拆到 plan-devotion.js（lazy chunk）。
+const plan = readFileSync("js/modules/plan-devotion.js", "utf8");
 const css = readFileSync("index.css", "utf8");
 const iconManifest = JSON.parse(readFileSync("js/design/icon-manifest.json", "utf8"));
 
