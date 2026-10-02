@@ -43,8 +43,8 @@ describe("nlc-data: batch action (Edge Function)", () => {
     expect(fn).toContain('isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall")');
     expect(fn).toContain('applyFilters(query, spec.filters || [])');
     expect(fn).toContain('await applyForcedScope(query, table, "select", profile, supabaseAdmin)');
-    expect(fn).toContain("rangeFrom + 199");
-    expect(fn).toContain("Math.min(200, Math.max(1, Number(spec.limit)");
+    expect(fn).toContain("rangeFrom + MAX_ROWS_PER_REQUEST - 1");
+    expect(fn).toContain("Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(spec.limit)");
     expect(fn).toMatch(/spec\.returning === "single"/);
     expect(fn).toMatch(/spec\.returning === "maybeSingle"/);
   });

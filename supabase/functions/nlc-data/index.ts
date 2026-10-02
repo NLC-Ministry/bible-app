@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
+import {
+  PLAN_READING_LOG_DIGEST_RPC,
+  PLAN_STATS_ROSTER_RPC,
+  buildPlanReadingLogDigestArgs,
+  buildPlanStatsRosterArgs,
+} from "./plan-stats-scope.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
 // >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
@@ -149,6 +155,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json"
 };
+
+// 每個 select／batch 請求最多回幾筆（.range() 跨度與 .limit() 共用）。等於 PostgREST
+// 預設 max rows。以前是 200（#399）；前端分頁以實際筆數前進，新舊上限都相容。
+const MAX_ROWS_PER_REQUEST = 1000;
 
 const READ_TABLES = new Set([
   "great_regions",
@@ -429,10 +439,10 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
 const READING_STATS_RPC_FUNCTIONS = new Set([
   "get_my_plan_chapter_total"
 ]);
-// 計畫統計／組員總覽的精簡打卡紀錄（#394）。可見範圍跟 reading_logs select 一樣
-// 由 getVisibleProfileIds 決定，p_visible_ids、p_actor_id 一律由這裡覆寫。
-const PLAN_READING_LOG_DIGEST_RPC = "get_plan_reading_log_digest";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 計畫統計／組員總覽的精簡打卡紀錄（#394）和一次回傳的名單（#397）：
+// PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
+// 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
+// p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。
 // 管理頁「使用者基本資料」「權限管理」共用的名單（#395）。全教會範圍才放行；
 // 報名／隊伍明細只給 admin（使用者基本資料是 admin 限定）。參數一律由這裡注入。
 const ADMIN_USER_DIRECTORY_RPC = "get_admin_user_directory";
@@ -451,6 +461,7 @@ const RPC_FUNCTIONS = new Set([
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
   ...READING_STATS_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
+  PLAN_STATS_ROSTER_RPC,
   ADMIN_USER_DIRECTORY_RPC,
   ...DEVOTION_GROUP_FEATURE_RPC_FUNCTIONS,
   ...ISSUE_RPC_FUNCTIONS
@@ -860,10 +871,10 @@ async function runSelectPipeline(
   query = applyOrder(query, spec);
   if (spec.range && Number.isInteger(spec.range.from) && Number.isInteger(spec.range.to)) {
     const rangeFrom = Math.max(0, spec.range.from);
-    const rangeTo = Math.min(Math.max(rangeFrom, spec.range.to), rangeFrom + 199);
+    const rangeTo = Math.min(Math.max(rangeFrom, spec.range.to), rangeFrom + MAX_ROWS_PER_REQUEST - 1);
     query = query.range(rangeFrom, rangeTo);
   }
-  if (spec.limit) query = query.limit(Math.min(200, Math.max(1, Number(spec.limit) || 1)));
+  if (spec.limit) query = query.limit(Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(spec.limit) || 1)));
   if (spec.returning === "single") query = query.single();
   else if (spec.returning === "maybeSingle") query = query.maybeSingle();
 
@@ -982,13 +993,11 @@ Deno.serve(async (req: Request) => {
           p_scope_groups: splitScope(profile.managed_groups || profile.small_group),
         };
       } else if (functionName === PLAN_READING_LOG_DIGEST_RPC) {
-        const requestedPlanIds = Array.isArray(body.args?.p_plan_ids) ? body.args.p_plan_ids : [];
         const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-        rpcArgs = {
-          p_plan_ids: Array.from(new Set(requestedPlanIds.filter((id: unknown) => typeof id === "string" && UUID_PATTERN.test(id)))),
-          p_visible_ids: visibleIds === null ? null : (visibleIds.length ? visibleIds : [profile.id]),
-          p_actor_id: profile.id,
-        };
+        rpcArgs = buildPlanReadingLogDigestArgs(body.args, visibleIds, profile.id);
+      } else if (functionName === PLAN_STATS_ROSTER_RPC) {
+        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+        rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
       } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
         rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
       } else if (functionName === "publish_global_plan_rules"
@@ -1541,10 +1550,10 @@ Deno.serve(async (req: Request) => {
     query = applyOrder(query, body);
     if (body.range && Number.isInteger(body.range.from) && Number.isInteger(body.range.to)) {
       const rangeFrom = Math.max(0, body.range.from);
-      const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + 199);
+      const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + MAX_ROWS_PER_REQUEST - 1);
       query = query.range(rangeFrom, rangeTo);
     }
-    if (body.limit) query = query.limit(Math.min(200, Math.max(1, Number(body.limit) || 1)));
+    if (body.limit) query = query.limit(Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(body.limit) || 1)));
     if (body.returning === "single") query = query.single();
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
 

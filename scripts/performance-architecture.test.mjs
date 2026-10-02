@@ -16,8 +16,10 @@ describe("performance architecture contracts", () => {
       range: { from: 20, to: 39 }
     });
     expect(edge).toContain("query = query.range(rangeFrom, rangeTo)");
-    expect(edge).toContain("rangeFrom + 199");
-    expect(edge).toContain("Math.min(200");
+    expect(edge).toContain("const MAX_ROWS_PER_REQUEST = 1000;");
+    expect(edge).toContain("rangeFrom + MAX_ROWS_PER_REQUEST - 1");
+    expect(edge).toContain("Math.min(MAX_ROWS_PER_REQUEST");
+    expect(edge).not.toContain("rangeFrom + 199");
   });
 
   it("does not fetch every startup column for high-volume resources", () => {

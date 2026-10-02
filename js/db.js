@@ -1,5 +1,6 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
-import { fetchPlanReadingLogs } from './data/reading-log-batches.mjs';
+import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
+import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
@@ -97,8 +98,11 @@ function quotePostgrestValue(value) {
 }
 
 // Supabase/PostgREST caps rows per request (the project's configured
-// db.max_rows, commonly 1000; the nlc-data Edge Function additionally hard-
-// clamps any .range() span to 200 — see supabase/functions/nlc-data/index.ts).
+// db.max_rows, commonly 1000; the nlc-data Edge Function clamps any .range()
+// span to 1000 — 200 before #399 — see supabase/functions/nlc-data/index.ts).
+// Pages advance by the rows actually received and only stop on an empty page
+// or one shorter than the old 200 cap (js/data/pagination.mjs), so a 1000-row
+// request against a not-yet-redeployed nlc-data still fetches everything.
 // Any "fetch every row" query — e.g. the admin member directory — that
 // doesn't paginate silently truncates once real data passes that cap, so
 // counts/lists quietly stop growing instead of erroring. buildQuery must be
@@ -115,7 +119,8 @@ function quotePostgrestValue(value) {
 // without an `id` column must pass its own unique key (reading_team_members:
 // ["team_id", "user_id"]). scripts/paginated-stable-order.test.mjs enforces it.
 const READING_TEAM_MEMBERS_ORDER = ["team_id", "user_id"]; // composite PK, no id column
-async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = 200 } = {}) {
+async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = DEFAULT_PAGE_SIZE } = {}) {
+  const size = normalizePageSize(pageSize);
   const rows = [];
   let from = 0;
   while (true) {
@@ -123,12 +128,12 @@ async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = 200 } = {
     if (typeof query.order === "function") {
       for (const column of orderBy) query = query.order(column, { ascending: true });
     }
-    const { data, error } = await query.range(from, from + pageSize - 1);
+    const { data, error } = await query.range(from, from + size - 1);
     if (error) return { data: rows, error };
     const page = data || [];
     rows.push(...page);
-    if (page.length < pageSize) break;
-    from += pageSize;
+    if (isLastPage(page.length, size)) break;
+    from += page.length;
   }
   return { data: rows, error: null };
 }
@@ -1132,6 +1137,25 @@ const db = {
       return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null, locked_fields: cachedLockedFields };
     }
 
+    // #398: one nlc-session round trip at a time. A boot with an expired
+    // edge cache used to fire two in parallel (background reconciliation's
+    // force=true + loadUserData's force=false), each ~3.5s of Member Hub
+    // work. Later callers share the in-flight promise; a force=false caller
+    // may ride a force=true call (it's at least as fresh), but a force=true
+    // caller never rides a force=false one — it starts its own.
+    const inFlight = this._nlcSessionSyncInFlight;
+    if (inFlight && (inFlight.force || !force)) return inFlight.promise;
+    const entry = { force, promise: null };
+    entry.promise = this._requestNlcSession().finally(() => {
+      if (this._nlcSessionSyncInFlight === entry) this._nlcSessionSyncInFlight = null;
+    });
+    this._nlcSessionSyncInFlight = entry;
+    return entry.promise;
+  },
+
+  // The real nlc-session round trip behind syncNlcSessionWithSupabase().
+  // Call that instead — it dedupes concurrent callers.
+  async _requestNlcSession() {
     // `force` here only means "skip the local edge-session cache and hit
     // nlc-session for fresh member_context" — it must NOT also force a
     // Logto token refresh. getValidAccessToken(true) always attempts a
@@ -1305,6 +1329,15 @@ const db = {
 
   async getCurrentDbUser() {
     if (typeof auth !== "undefined" && auth.isLoggedIn()) {
+      // #398: during optimistic boot the identity was already restored from
+      // the recently-verified cached snapshot, and
+      // startBackgroundSessionReconciliation() is doing the real sync (and
+      // handles role/org changes and real session expiry). Don't make data
+      // loading wait ~3.5s for it. This id is not an authorization basis —
+      // nlc-data verifies the Logto token on every request.
+      if (state.optimisticBootPending && state.currentProfileId) {
+        return { id: state.currentProfileId, oidc: true };
+      }
       await this.syncNlcSessionWithSupabase();
       if (state.currentProfileId) return { id: state.currentProfileId, oidc: true };
     }
@@ -1486,9 +1519,9 @@ const db = {
       let user = null;
       const isOidcMode = typeof auth !== "undefined" && auth.isLoggedIn();
       if (isOidcMode) {
-        // 💡 效能優化：不要重複強制同步（force=false），直接使用 db.init() 剛拿到的最新快取
-        await this.syncNlcSessionWithSupabase(false);
-        user = state.currentProfileId ? { id: state.currentProfileId, oidc: true } : null;
+        // 💡 效能優化：不要重複強制同步（force=false），直接使用 db.init() 剛拿到的最新快取。
+        // #398：樂觀開機期間 getCurrentDbUser() 不等背景同步，直接用已還原的身分。
+        user = await this.getCurrentDbUser();
       }
 
       if (!user) {
@@ -2850,6 +2883,57 @@ const db = {
     this._mergedUsersCache = {};
   },
 
+  // 計畫統計名單的分頁路徑（#397 之前的做法）：get_plan_stats_roster 還沒部署、
+  // 本機用真的 Supabase client，或 RPC 失敗時使用。profiles 和 reading_plans 互不依賴，同時送出。
+  async _fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone = "", todayStr } = {}) {
+    const buildPlansQuery = () => {
+      let q = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, upgrade_prompt_handled");
+      if (filterPresetKey) {
+        const textConditions = planFilterAliases.flatMap(alias => [
+          `preset_key.eq.${quotePostgrestValue(alias)}`,
+          `name.eq.${quotePostgrestValue(alias)}`
+        ]);
+        const uuidConditions = planFilterAliases
+          .filter(isUuid)
+          .flatMap(alias => [
+            `global_plan_id.eq.${quotePostgrestValue(alias)}`,
+            `id.eq.${quotePostgrestValue(alias)}`
+          ]);
+        q = q.or([...textConditions, ...uuidConditions].join(","));
+      }
+      return q;
+    };
+    const [
+      { data: usersProfiles, error: profilesError },
+      { data: fetchedPlans, error: plansError }
+    ] = await Promise.all([
+      fetchAllRows(() => {
+        let q = state.supabase
+          .from("profiles")
+          .select("id, name, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)");
+        if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
+        return q;
+      }),
+      fetchAllRows(buildPlansQuery)
+    ]);
+    if (profilesError) throw profilesError;
+    if (plansError) throw plansError;
+    // 限定牧區時只留那些人的計畫，打卡紀錄就只抓這個牧區的（#369）。
+    const profileIdSet = pastoralZone ? new Set((usersProfiles || []).map(p => p.id)) : null;
+    const allPlans = profileIdSet
+      ? (fetchedPlans || []).filter(plan => profileIdSet.has(plan.user_id))
+      : fetchedPlans;
+
+    const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
+    // 打卡紀錄一次 RPC 拿精簡格式，失敗就再退回分頁查詢（#394）；靈修筆記同時抓。
+    const [{ data: allLogs, error: logsError }, { data: todayNotes }] = await Promise.all([
+      fetchPlanReadingLogs(state.supabase, planIds),
+      fetchAllRows(() => state.supabase.from("devotional_notes").select("user_id, content").eq("note_date", todayStr))
+    ]);
+    if (logsError) throw logsError;
+    return { usersProfiles, allPlans, allLogs, todayNotes };
+  },
+
   async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "" } = {}) {
     const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
@@ -2894,51 +2978,17 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await fetchAllRows(() => {
-          let q = state.supabase
-            .from("profiles")
-            .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups");
-          if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
-          return q;
-        });
-        if (profilesError) throw profilesError;
-
-        const buildPlansQuery = () => {
-          let q = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, upgrade_prompt_handled");
-          if (filterPresetKey) {
-            const textConditions = planFilterAliases.flatMap(alias => [
-              `preset_key.eq.${quotePostgrestValue(alias)}`,
-              `name.eq.${quotePostgrestValue(alias)}`
-            ]);
-            const uuidConditions = planFilterAliases
-              .filter(isUuid)
-              .flatMap(alias => [
-                `global_plan_id.eq.${quotePostgrestValue(alias)}`,
-                `id.eq.${quotePostgrestValue(alias)}`
-              ]);
-            q = q.or([...textConditions, ...uuidConditions].join(","));
-          }
-          return q;
-        };
-        const { data: fetchedPlans, error: plansError } = await fetchAllRows(buildPlansQuery);
-        if (plansError) throw plansError;
-        // 限定牧區時只留那些人的計畫，打卡紀錄就只抓這個牧區的（#369）。
-        const profileIdSet = pastoralZone ? new Set((usersProfiles || []).map(p => p.id)) : null;
-        const allPlans = profileIdSet
-          ? (fetchedPlans || []).filter(plan => profileIdSet.has(plan.user_id))
-          : fetchedPlans;
-
-        const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
-        // 一次 RPC 拿精簡紀錄，失敗就退回分頁查詢（#394）。
-        const { data: allLogs, error: logsError } = await fetchPlanReadingLogs(
-          state.supabase,
-          planIds
-        );
-        if (logsError) throw logsError;
-
-        // Fetch today's devotional notes (golden verses)
+        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
         const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        const { data: todayNotes } = await fetchAllRows(() => state.supabase.from("devotional_notes").select("user_id, content").eq("note_date", todayStr));
+        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
+        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
+        const roster = await fetchPlanStatsRoster(state.supabase, {
+          planAliases: filterPresetKey ? planFilterAliases : null,
+          pastoralZone,
+          noteDate: todayStr
+        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
+        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
+
         const notesByUser = {};
         if (todayNotes) {
           todayNotes.forEach(n => {
