@@ -17667,10 +17667,18 @@ textarea::placeholder {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
 }
 
-/* 計畫管理表格的按鈕不換行：表格本身在區塊內左右滑，按鈕字不要被擠成直排 */
-.admin-campaign-rules-btn,
-.admin-toggle-hidden-plan-btn {
-  white-space: nowrap;
+/* 全域計畫管理表格（#392）：名稱欄保留最小寬度，放不下時整張表在 .table-container
+   裡左右滑，不把名稱擠成一字一行；操作按鈕的字可在按鈕內換行，操作欄維持 80px */
+#admin-plan-card .data-table td:first-child > strong {
+  min-width: 6em;
+}
+
+@media (max-width: 480px) {
+  #admin-plan-card .data-table th,
+  #admin-plan-card .data-table td {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
 }
 
 /* 計畫詳情頂部分頁：字放不下時換行，不要擠進隔壁分頁 */

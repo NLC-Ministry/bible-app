@@ -31,7 +31,7 @@ export function getMemberOverallPlanProgress(member, totalChapters) {
 // 「最高連續」：某個計畫自己的最長連續打卡天數。
 // 不同計畫各算各的——只看歸屬這個計畫的 reading_logs（plan_id / presetKey），
 // 完全沒有歸屬的舊日誌當相容退路。preFiltered=true 表示 logs 已在查詢層被
-// 限定到這個計畫（例如別人的 allLogsCache），此時不再套 plan 比對。
+// 限定到這個計畫（例如排行裡別人的 logsByUserId），此時不再套 plan 比對。
 export function computePlanScopedStreak(logs, { planId = null, presetKey = null, preFiltered = false } = {}) {
   if (!Array.isArray(logs) || logs.length === 0) return 0;
 

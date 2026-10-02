@@ -2728,29 +2728,40 @@ const db = {
     }
   },
   async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false) {
+    const { users } = await this.fetchMergedUsersWithLogs(filterPresetKey, { ignorePlanFilter });
+    return users;
+  },
+
+  // 名單和那份名單的原始打卡紀錄存在同一個快取項目、依計畫 key 分開（#369）。
+  // 以前紀錄放在只有一份的 state.allLogsCache，快取命中時不會更新，切換計畫後
+  // 會出現「A 的名單配 B 的紀錄」。logsByUserId 是 Map(user_id → 該計畫的 logs)。
+  // maxAgeMs 預設 60 秒；成員排行傳 Infinity，沿用舊的「同一個計畫不重抓」行為，
+  // 要重抓就呼叫 invalidateMergedUsersCache()。
+  async fetchMergedUsersWithLogs(filterPresetKey = null, { ignorePlanFilter = false, maxAgeMs = 60000, pastoralZone = "" } = {}) {
     if (ignorePlanFilter) {
       filterPresetKey = false;
     } else if (!filterPresetKey && state.activePlan) {
       filterPresetKey = state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id;
     }
-    const cacheKey = filterPresetKey || 'all';
+    const cacheKey = (filterPresetKey || 'all') + (pastoralZone ? `|zone:${pastoralZone}` : '');
 
     // 1. Concurrent request deduplication
     if (this._mergedUsersPromise[cacheKey]) {
       return this._mergedUsersPromise[cacheKey];
     }
 
-    // 2. Cache expiration validation (60-second TTL)
+    // 2. Cache expiration validation
     const cachedEntry = this._mergedUsersCache[cacheKey];
-    const now = Date.now();
-    if (cachedEntry && (now - cachedEntry.timestamp < 60000)) {
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < maxAgeMs)) {
       return cachedEntry.data;
     }
 
     // 3. Create the actual load promise
     const loadPromise = (async () => {
       try {
-        const result = await this._executeFetchMergedUsersList(filterPresetKey);
+        const sink = { logsByUserId: new Map() };
+        const users = await this._executeFetchMergedUsersList(filterPresetKey, sink, { pastoralZone });
+        const result = { users, logsByUserId: sink.logsByUserId };
         this._mergedUsersCache[cacheKey] = {
           data: result,
           timestamp: Date.now()
@@ -2765,7 +2776,12 @@ const db = {
     return loadPromise;
   },
 
-  async _executeFetchMergedUsersList(filterPresetKey) {
+  // 清掉所有計畫的名單快取。進行中的請求不會取消，完成後照樣寫回快取。
+  invalidateMergedUsersCache() {
+    this._mergedUsersCache = {};
+  },
+
+  async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "" } = {}) {
     const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
@@ -2809,9 +2825,13 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await fetchAllRows(() => state.supabase
-          .from("profiles")
-          .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups"));
+        const { data: usersProfiles, error: profilesError } = await fetchAllRows(() => {
+          let q = state.supabase
+            .from("profiles")
+            .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups");
+          if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
+          return q;
+        });
         if (profilesError) throw profilesError;
 
         const buildPlansQuery = () => {
@@ -2831,8 +2851,13 @@ const db = {
           }
           return q;
         };
-        const { data: allPlans, error: plansError } = await fetchAllRows(buildPlansQuery);
+        const { data: fetchedPlans, error: plansError } = await fetchAllRows(buildPlansQuery);
         if (plansError) throw plansError;
+        // 限定牧區時只留那些人的計畫，打卡紀錄就只抓這個牧區的（#369）。
+        const profileIdSet = pastoralZone ? new Set((usersProfiles || []).map(p => p.id)) : null;
+        const allPlans = profileIdSet
+          ? (fetchedPlans || []).filter(plan => profileIdSet.has(plan.user_id))
+          : fetchedPlans;
 
         const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
         const { data: allLogs, error: logsError } = await fetchReadingLogsByPlanIds(
@@ -2840,7 +2865,6 @@ const db = {
           planIds
         );
         if (logsError) throw logsError;
-        state.allLogsCache = allLogs || [];
 
         // Fetch today's devotional notes (golden verses)
         const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
@@ -2889,6 +2913,7 @@ const db = {
               }
             });
           }
+          sink.logsByUserId = new Map(Object.entries(logsByUser));
 
           return usersProfiles.map(profile => {
             const userPlans = plansByUser[profile.id] || [];

@@ -4726,14 +4726,10 @@ export async function renderAdminPlanManagement() {
         refreshBtn.disabled = true;
         try {
           // Clicking "更新" must force a genuine reload, not just re-run the
-          // same render against whatever's cached. window._cachedAllUsersList
-          // is keyed by plan only (not by the org filter), so without
-          // clearing it here selectManagementPlan() silently reuses the
-          // stale list — the button only *looked* like it worked before if
-          // the org filter also happened to change and show a different
-          // slice of that same stale data.
-          window._cachedAllUsersList = null;
-          window._cachedAllUsersListKey = null;
+          // same render against whatever's cached: without clearing the
+          // merged-users cache here selectManagementPlan() silently reuses
+          // the stale list.
+          db.invalidateMergedUsersCache();
           const currentSelect = document.getElementById('admin-management-plan-select');
           if (currentSelect && currentSelect.value) {
             await selectManagementPlan(currentSelect.value, true);
