@@ -142,6 +142,6 @@ describe("我的測驗檢討與首頁撤掉（0213）", () => {
     const exam = read("js/modules/exam.js");
     expect(exam).toContain('import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";');
     expect(exam).not.toContain("function _paintResultMatchLines");
-    expect(read("js/modules/plan.js")).toContain("renderDailyQuizReviewHtml(attempt, questions)");
+    expect(read("js/modules/plan-quiz.js")).toContain("renderDailyQuizReviewHtml(attempt, questions)");
   });
 });
