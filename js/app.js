@@ -85,6 +85,10 @@ const LAZY_MODULE_LOADERS = {
   'plan-admin': () => import('./modules/plan-admin.js'),
   // 計畫分頁的統計、排行、組員狀況（含 Chart.js 載入）；plan.js 第一次要畫這些畫面時才載入（#370）。
   'plan-stats': () => import('./modules/plan-stats.js'),
+  // 計畫頁今日小測驗的作答畫面；當天確定有指派給自己的測驗才載入（#370）。
+  'plan-quiz': () => import('./modules/plan-quiz.js'),
+  // 每日靈修、小組聚會週計畫的會友端畫面；點進這兩種計畫才載入（#370）。
+  'plan-devotion': () => import('./modules/plan-devotion.js'),
   profile: () => import('./modules/profile.js'),
   admin: () => import('./modules/admin.js'),
   'team-registration': () => import('./modules/team-registration.js'),
@@ -452,6 +456,9 @@ async function loadModule(name) {
       moduleCache[name] = mod;
       if (name === 'plan' && typeof mod.registerPlanStatsLoader === 'function') {
         mod.registerPlanStatsLoader(() => loadModule('plan-stats'));
+      }
+      if (name === 'plan' && typeof mod.registerPlanChunkLoader === 'function') {
+        mod.registerPlanChunkLoader(chunk => loadModule(chunk));
       }
       if (typeof mod.init === 'function') {
         mod.init();
