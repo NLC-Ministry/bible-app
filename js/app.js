@@ -529,8 +529,7 @@ async function refreshCurrentAppView() {
       console.warn("Unable to check for an app shell update", error);
     }
   }
-  window._cachedAllUsersList = null;
-  window._cachedAllUsersListKey = null;
+  db.invalidateMergedUsersCache();
 
   const currentTab = appRouter.currentTab || "dashboard-view";
 

@@ -134,7 +134,7 @@ describe("participant overview current-round progress", () => {
     // 0% now reads as "in progress" rather than "complete 0%".
     expect(plan).toContain('statusStr = memberProgress > 0 ? `第${memberRound}遍完成${memberProgress}%` : `第${memberRound}遍進行中`');
     expect(plan).toContain("const visibleChapters = (selectedDay.chapters || []).filter");
-    expect(plan).toContain("window._cachedAllUsersList = null");
+    expect(plan).toContain("db.invalidateMergedUsersCache();");
     expect(utils).toContain("log.read_at || log.readAt");
     expect(utils).toContain("segmentScheduleDaysForRoundCount(");
   });

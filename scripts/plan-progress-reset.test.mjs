@@ -67,7 +67,7 @@ describe("plan progress reset", () => {
     expect(resetFlow).toContain("upgrade_prompt_handled: false");
     expect(resetFlow).toContain("removePlanReadingLogs(state.readingLogs, plan)");
     expect(resetFlow).toContain("resetPlanProgressState(plan)");
-    expect(resetFlow).toContain("window._cachedAllUsersList = null");
+    expect(resetFlow).toContain("db.invalidateMergedUsersCache();");
   });
 
   it("prunes associated stage badges from localStorage on plan reset", () => {
