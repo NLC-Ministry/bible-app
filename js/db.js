@@ -1,5 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
-import { fetchPlanReadingLogs } from './data/reading-log-batches.mjs';
+import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
@@ -2883,6 +2883,57 @@ const db = {
     this._mergedUsersCache = {};
   },
 
+  // 計畫統計名單的分頁路徑（#397 之前的做法）：get_plan_stats_roster 還沒部署、
+  // 本機用真的 Supabase client，或 RPC 失敗時使用。profiles 和 reading_plans 互不依賴，同時送出。
+  async _fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone = "", todayStr } = {}) {
+    const buildPlansQuery = () => {
+      let q = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, upgrade_prompt_handled");
+      if (filterPresetKey) {
+        const textConditions = planFilterAliases.flatMap(alias => [
+          `preset_key.eq.${quotePostgrestValue(alias)}`,
+          `name.eq.${quotePostgrestValue(alias)}`
+        ]);
+        const uuidConditions = planFilterAliases
+          .filter(isUuid)
+          .flatMap(alias => [
+            `global_plan_id.eq.${quotePostgrestValue(alias)}`,
+            `id.eq.${quotePostgrestValue(alias)}`
+          ]);
+        q = q.or([...textConditions, ...uuidConditions].join(","));
+      }
+      return q;
+    };
+    const [
+      { data: usersProfiles, error: profilesError },
+      { data: fetchedPlans, error: plansError }
+    ] = await Promise.all([
+      fetchAllRows(() => {
+        let q = state.supabase
+          .from("profiles")
+          .select("id, name, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label)");
+        if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
+        return q;
+      }),
+      fetchAllRows(buildPlansQuery)
+    ]);
+    if (profilesError) throw profilesError;
+    if (plansError) throw plansError;
+    // 限定牧區時只留那些人的計畫，打卡紀錄就只抓這個牧區的（#369）。
+    const profileIdSet = pastoralZone ? new Set((usersProfiles || []).map(p => p.id)) : null;
+    const allPlans = profileIdSet
+      ? (fetchedPlans || []).filter(plan => profileIdSet.has(plan.user_id))
+      : fetchedPlans;
+
+    const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
+    // 打卡紀錄一次 RPC 拿精簡格式，失敗就再退回分頁查詢（#394）；靈修筆記同時抓。
+    const [{ data: allLogs, error: logsError }, { data: todayNotes }] = await Promise.all([
+      fetchPlanReadingLogs(state.supabase, planIds),
+      fetchAllRows(() => state.supabase.from("devotional_notes").select("user_id, content").eq("note_date", todayStr))
+    ]);
+    if (logsError) throw logsError;
+    return { usersProfiles, allPlans, allLogs, todayNotes };
+  },
+
   async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "" } = {}) {
     const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
@@ -2927,51 +2978,17 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        const { data: usersProfiles, error: profilesError } = await fetchAllRows(() => {
-          let q = state.supabase
-            .from("profiles")
-            .select("id, name, email, great_region, pastoral_zone, small_group, role_id, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label), managed_regions, managed_zones, managed_groups");
-          if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
-          return q;
-        });
-        if (profilesError) throw profilesError;
-
-        const buildPlansQuery = () => {
-          let q = state.supabase.from("reading_plans").select("id, user_id, name, preset_key, global_plan_id, target_books, current_round, upgrade_prompt_handled");
-          if (filterPresetKey) {
-            const textConditions = planFilterAliases.flatMap(alias => [
-              `preset_key.eq.${quotePostgrestValue(alias)}`,
-              `name.eq.${quotePostgrestValue(alias)}`
-            ]);
-            const uuidConditions = planFilterAliases
-              .filter(isUuid)
-              .flatMap(alias => [
-                `global_plan_id.eq.${quotePostgrestValue(alias)}`,
-                `id.eq.${quotePostgrestValue(alias)}`
-              ]);
-            q = q.or([...textConditions, ...uuidConditions].join(","));
-          }
-          return q;
-        };
-        const { data: fetchedPlans, error: plansError } = await fetchAllRows(buildPlansQuery);
-        if (plansError) throw plansError;
-        // 限定牧區時只留那些人的計畫，打卡紀錄就只抓這個牧區的（#369）。
-        const profileIdSet = pastoralZone ? new Set((usersProfiles || []).map(p => p.id)) : null;
-        const allPlans = profileIdSet
-          ? (fetchedPlans || []).filter(plan => profileIdSet.has(plan.user_id))
-          : fetchedPlans;
-
-        const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
-        // 一次 RPC 拿精簡紀錄，失敗就退回分頁查詢（#394）。
-        const { data: allLogs, error: logsError } = await fetchPlanReadingLogs(
-          state.supabase,
-          planIds
-        );
-        if (logsError) throw logsError;
-
-        // Fetch today's devotional notes (golden verses)
+        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
         const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        const { data: todayNotes } = await fetchAllRows(() => state.supabase.from("devotional_notes").select("user_id, content").eq("note_date", todayStr));
+        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
+        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
+        const roster = await fetchPlanStatsRoster(state.supabase, {
+          planAliases: filterPresetKey ? planFilterAliases : null,
+          pastoralZone,
+          noteDate: todayStr
+        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
+        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
+
         const notesByUser = {};
         if (todayNotes) {
           todayNotes.forEach(n => {
