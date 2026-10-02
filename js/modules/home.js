@@ -400,8 +400,11 @@ export function updateDashboardView() {
   scheduleDashboardSecondaryWork();
 }
 
-async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
-  const canvas = document.getElementById("team-pilgrimage-canvas") || document.getElementById("pilgrimage-canvas");
+// target: the caller's own { canvas, legend }. A page-wide id lookup can land on
+// a hidden copy of the team block (the members overview renders one too), so
+// team views pass theirs in; without it only the dashboard's own canvas is used (#406).
+async function renderPilgrimageTrail(customMembers = null, customPlan = null, target = null) {
+  const canvas = target ? target.canvas : document.getElementById("pilgrimage-canvas");
   if (!canvas) return;
 
   const targetPlan = customPlan || state.activePlan || (Array.isArray(state.activePlans) ? state.activePlans[0] : null) || (Array.isArray(state.globalPlans) ? state.globalPlans[0] : null);
@@ -634,7 +637,7 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
     });
   });
 
-  const legendEl = document.getElementById("team-pilgrimage-legend") || document.getElementById("pilgrimage-legend");
+  const legendEl = target ? target.legend : document.getElementById("pilgrimage-legend");
   if (legendEl) {
     legendEl.innerHTML = `
       <span class="px-2 py-0.5 rounded-full flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card));"><span style="display:inline-block;width:6px;height:6px;background:${pal.myStroke};border-radius:50%;"></span>隊友軌跡</span>`;
