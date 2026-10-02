@@ -1,5 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
-import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
+import { fetchPlanReadingLogs } from './data/reading-log-batches.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
@@ -2860,7 +2860,8 @@ const db = {
           : fetchedPlans;
 
         const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
-        const { data: allLogs, error: logsError } = await fetchReadingLogsByPlanIds(
+        // 一次 RPC 拿精簡紀錄，失敗就退回分頁查詢（#394）。
+        const { data: allLogs, error: logsError } = await fetchPlanReadingLogs(
           state.supabase,
           planIds
         );
