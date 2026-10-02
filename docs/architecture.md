@@ -33,7 +33,8 @@ Tab views are **not** loaded eagerly at boot. `js/app.js` lazy-loads `js/modules
 
 `js/state.js` defines a single global `state` object (current user, org structure, active plans, reading logs, reader state, highlights, chart instances, admin filters) plus:
 - `CHURCH_PLAN_PRESETS` — the hardcoded quarterly plan definitions (books + monthly breakdown for 2026–2027).
-- `appRouter` — tab/view switcher (`switchTab`, `goBack`, `updateNavigationChrome`). Views are `.view-pane` sections toggled by `.active`; there is no URL routing.
+- `appRouter` — tab/view switcher (`switchTab`, `goBack`, `updateNavigationChrome`). Views are `.view-pane` sections toggled by `.active`.
+- **Hash routing (#370)**: `js/modules/hash-route.mjs` (URL format, pure functions) + `js/app-hash-routing.mjs` (wiring). The URL mirrors the current view — `#/bible`, `#/plans`, `#/plan/<globalPlanId>[/personal|stats|ranking]`, `#/profile[/<detail>]`, `#/admin[/<section>]`, no hash for home; the legacy `#my-exams` still opens the exams page. Boot opens the route (saved in sessionStorage across the Logto redirect); afterwards every `app:route-changed` event (fired by `updateNavigationChrome`, profile subpages, plan group subviews) rewrites the URL with **`replaceState` only** — no history entries are pushed, so the Android back-button order in `app.js`'s `popstate` handler is unchanged. A new view state that doesn't go through `updateNavigationChrome` must dispatch `app:route-changed` itself, or a reload won't land on it.
 - Theme management (light/dark/warm) persisted to `localStorage`.
 - `escapeHTML()` — use this for any user-supplied string rendered into innerHTML.
 

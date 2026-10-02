@@ -3153,6 +3153,21 @@ function renderAdminSectionNav() {
 window.renderAdminSectionNav = renderAdminSectionNav;
 window.setAdminSection = setAdminSection;
 
+// 網址 hash 路由（app-hash-routing.mjs，#370）：目前開著的後台功能。手機上還停在功能清單
+// （沒點進子頁）就不算，免得重新整理後直接跳進子頁。
+export function getAdminRouteSection() {
+  if (!activeAdminSection) return null;
+  if (isAdminSectionMobile() && !document.body.classList.contains('admin-section-open')) return null;
+  return activeAdminSection;
+}
+
+// 從網址開某個後台功能；這個人沒有這個功能（角色、功能開關）就停在清單。
+export function openAdminSectionRoute(id) {
+  if (!getAvailableAdminSections().some(section => section.id === id)) return false;
+  setAdminSection(id, { userInitiated: true, focusContent: true });
+  return true;
+}
+
 function getManagementPlanStatus(plan, today = new Date()) {
   const startValue = plan && (plan.startDate || plan.start_date);
   const endValue = plan && (plan.endDate || plan.end_date);
