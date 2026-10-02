@@ -1132,6 +1132,25 @@ const db = {
       return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null, locked_fields: cachedLockedFields };
     }
 
+    // #398: one nlc-session round trip at a time. A boot with an expired
+    // edge cache used to fire two in parallel (background reconciliation's
+    // force=true + loadUserData's force=false), each ~3.5s of Member Hub
+    // work. Later callers share the in-flight promise; a force=false caller
+    // may ride a force=true call (it's at least as fresh), but a force=true
+    // caller never rides a force=false one — it starts its own.
+    const inFlight = this._nlcSessionSyncInFlight;
+    if (inFlight && (inFlight.force || !force)) return inFlight.promise;
+    const entry = { force, promise: null };
+    entry.promise = this._requestNlcSession().finally(() => {
+      if (this._nlcSessionSyncInFlight === entry) this._nlcSessionSyncInFlight = null;
+    });
+    this._nlcSessionSyncInFlight = entry;
+    return entry.promise;
+  },
+
+  // The real nlc-session round trip behind syncNlcSessionWithSupabase().
+  // Call that instead — it dedupes concurrent callers.
+  async _requestNlcSession() {
     // `force` here only means "skip the local edge-session cache and hit
     // nlc-session for fresh member_context" — it must NOT also force a
     // Logto token refresh. getValidAccessToken(true) always attempts a
@@ -1305,6 +1324,15 @@ const db = {
 
   async getCurrentDbUser() {
     if (typeof auth !== "undefined" && auth.isLoggedIn()) {
+      // #398: during optimistic boot the identity was already restored from
+      // the recently-verified cached snapshot, and
+      // startBackgroundSessionReconciliation() is doing the real sync (and
+      // handles role/org changes and real session expiry). Don't make data
+      // loading wait ~3.5s for it. This id is not an authorization basis —
+      // nlc-data verifies the Logto token on every request.
+      if (state.optimisticBootPending && state.currentProfileId) {
+        return { id: state.currentProfileId, oidc: true };
+      }
       await this.syncNlcSessionWithSupabase();
       if (state.currentProfileId) return { id: state.currentProfileId, oidc: true };
     }
@@ -1486,9 +1514,9 @@ const db = {
       let user = null;
       const isOidcMode = typeof auth !== "undefined" && auth.isLoggedIn();
       if (isOidcMode) {
-        // 💡 效能優化：不要重複強制同步（force=false），直接使用 db.init() 剛拿到的最新快取
-        await this.syncNlcSessionWithSupabase(false);
-        user = state.currentProfileId ? { id: state.currentProfileId, oidc: true } : null;
+        // 💡 效能優化：不要重複強制同步（force=false），直接使用 db.init() 剛拿到的最新快取。
+        // #398：樂觀開機期間 getCurrentDbUser() 不等背景同步，直接用已還原的身分。
+        user = await this.getCurrentDbUser();
       }
 
       if (!user) {
