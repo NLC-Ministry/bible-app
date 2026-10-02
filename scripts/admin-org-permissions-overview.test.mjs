@@ -71,11 +71,18 @@ describe("admin org structure permissions overview (管理 → 權限管理)", (
     expect(saveHandler).toContain("renderAdminOrgPermissionsOverview()");
   });
 
-  it("is wired into the admin module's init() alongside the other admin renderers", () => {
+  it("loads when the 權限管理 section is first opened, not on admin init() (#395)", () => {
     const initStart = admin.indexOf("export function init()");
     const initEnd = admin.indexOf("\n}", initStart);
     const initBody = admin.slice(initStart, initEnd);
-    expect(initBody).toContain("renderAdminOrgPermissionsOverview()");
+    expect(initBody).not.toContain("renderAdminOrgPermissionsOverview()");
+    expect(initBody).not.toContain("renderAdminManagedScopes()");
+    expect(initBody).not.toContain("renderAdminUserDirectory()");
+    expect(admin).toContain("permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()]");
+    expect(admin).toContain("users: () => [renderAdminUserDirectory()]");
+    const setStart = admin.indexOf("function setAdminSection(id, options = {})");
+    const setBody = admin.slice(setStart, admin.indexOf("function renderAdminSectionNav()", setStart));
+    expect(setBody).toContain("loadAdminSectionDataOnce(section.id);");
   });
 
   it("hides the section from non-admin roles, matching the other admin-only panels", () => {

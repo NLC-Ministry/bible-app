@@ -429,6 +429,13 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
 const READING_STATS_RPC_FUNCTIONS = new Set([
   "get_my_plan_chapter_total"
 ]);
+// 計畫統計／組員總覽的精簡打卡紀錄（#394）。可見範圍跟 reading_logs select 一樣
+// 由 getVisibleProfileIds 決定，p_visible_ids、p_actor_id 一律由這裡覆寫。
+const PLAN_READING_LOG_DIGEST_RPC = "get_plan_reading_log_digest";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// 管理頁「使用者基本資料」「權限管理」共用的名單（#395）。全教會範圍才放行；
+// 報名／隊伍明細只給 admin（使用者基本資料是 admin 限定）。參數一律由這裡注入。
+const ADMIN_USER_DIRECTORY_RPC = "get_admin_user_directory";
 const RPC_FUNCTIONS = new Set([
   "increment_likes",
   "decrement_likes",
@@ -443,6 +450,8 @@ const RPC_FUNCTIONS = new Set([
   ...GROUP_MEETING_RPC_FUNCTIONS,
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
   ...READING_STATS_RPC_FUNCTIONS,
+  PLAN_READING_LOG_DIGEST_RPC,
+  ADMIN_USER_DIRECTORY_RPC,
   ...DEVOTION_GROUP_FEATURE_RPC_FUNCTIONS,
   ...ISSUE_RPC_FUNCTIONS
 ]);
@@ -927,6 +936,9 @@ Deno.serve(async (req: Request) => {
       if (ISSUE_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
         return jsonResponse({ error: "forbidden_rpc" }, 403);
       }
+      if (functionName === ADMIN_USER_DIRECTORY_RPC && !hasWholeChurchPlanScope(profile)) {
+        return jsonResponse({ error: "forbidden_rpc" }, 403);
+      }
       if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
         const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
           .from("app_feature_settings")
@@ -969,6 +981,16 @@ Deno.serve(async (req: Request) => {
           p_scope_zones: splitScope(profile.managed_zones || profile.pastoral_zone),
           p_scope_groups: splitScope(profile.managed_groups || profile.small_group),
         };
+      } else if (functionName === PLAN_READING_LOG_DIGEST_RPC) {
+        const requestedPlanIds = Array.isArray(body.args?.p_plan_ids) ? body.args.p_plan_ids : [];
+        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+        rpcArgs = {
+          p_plan_ids: Array.from(new Set(requestedPlanIds.filter((id: unknown) => typeof id === "string" && UUID_PATTERN.test(id)))),
+          p_visible_ids: visibleIds === null ? null : (visibleIds.length ? visibleIds : [profile.id]),
+          p_actor_id: profile.id,
+        };
+      } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
+        rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
       } else if (functionName === "publish_global_plan_rules"
         || TEAM_RPC_FUNCTIONS.has(functionName)
         || QUIZ_RPC_FUNCTIONS.has(functionName)

@@ -1,9 +1,16 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
-import { fetchReadingLogsByPlanIds } from './data/reading-log-batches.mjs';
+import { fetchPlanReadingLogs } from './data/reading-log-batches.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
+import {
+  ADMIN_USER_DIRECTORY_RPC,
+  adminUserDirectoryFromDigest,
+  buildPresetKeyToPlanId,
+  isAdminUserDirectoryDigest,
+  managedScopeProfilesFromDigest
+} from './data/admin-user-directory.mjs';
 import {
   applyLoginGateView,
   getLoginGateCopy,
@@ -367,6 +374,9 @@ function migrateLocalChurchCampaignToStages(plans, logs) {
 const db = {
   _mergedUsersCache: {},
   _mergedUsersPromise: {},
+  _adminUserDirectoryCache: null,
+  _adminUserDirectoryPromise: null,
+  _adminUserDirectoryGeneration: 0,
   _orgStructurePromise: null,
   _orgStructurePromiseKey: "",
   _orgStructureSnapshotKey: "",
@@ -2382,6 +2392,7 @@ const db = {
     if (!verifiedProfile || verifiedProfile.id !== user.id) {
       throw new Error("個人資料尚未成功儲存，請稍後再試。");
     }
+    this.invalidateAdminUserDirectoryCache();
 
     if (typeof auth !== "undefined" && auth.isLoggedIn()) {
       const cachedProfile = localStorage.getItem("nlc_supabase_profile");
@@ -2466,6 +2477,47 @@ const db = {
     }
   },
 
+  // 使用者基本資料與權限管理共用的名單（#395）：一次 RPC、存一份快取（含進行中的
+  // promise，同時呼叫只發一次）。失敗回 null 且不快取，呼叫端退回舊的分頁查詢，
+  // 所以 RPC 還沒部署、或本機開發用真的 Supabase client（這支只給 service_role）都照常運作。
+  async fetchAdminUserDirectoryDigest({ maxAgeMs = 60000 } = {}) {
+    if (this._adminUserDirectoryPromise) return this._adminUserDirectoryPromise;
+    const cached = this._adminUserDirectoryCache;
+    if (cached && Date.now() - cached.timestamp < maxAgeMs) return cached.data;
+
+    const generation = this._adminUserDirectoryGeneration;
+    const promise = (async () => {
+      if (!state.supabase || typeof state.supabase.rpc !== "function") return null;
+      try {
+        const { data, error } = await state.supabase.rpc(ADMIN_USER_DIRECTORY_RPC, {});
+        if (error || !isAdminUserDirectoryDigest(data)) {
+          if (error) console.warn("Admin user directory RPC failed; falling back to paged queries.", error);
+          return null;
+        }
+        // 請求途中被 invalidate（例如剛改了管理範圍）就不寫回，避免舊資料蓋掉。
+        if (generation === this._adminUserDirectoryGeneration) {
+          this._adminUserDirectoryCache = { data, timestamp: Date.now() };
+        }
+        return data;
+      } catch (err) {
+        console.warn("Admin user directory RPC threw; falling back to paged queries.", err);
+        return null;
+      }
+    })();
+    this._adminUserDirectoryPromise = promise;
+    promise.finally(() => {
+      if (this._adminUserDirectoryPromise === promise) this._adminUserDirectoryPromise = null;
+    });
+    return promise;
+  },
+
+  // 會改 profiles 的管理動作成功後呼叫，下一次讀取一定重抓。
+  invalidateAdminUserDirectoryCache() {
+    this._adminUserDirectoryCache = null;
+    this._adminUserDirectoryPromise = null;
+    this._adminUserDirectoryGeneration += 1;
+  },
+
   async fetchAdminUserProfiles() {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: [], error: new Error("admin_user_directory_requires_supabase") };
@@ -2473,6 +2525,15 @@ const db = {
     if (getUserRoleCode(state.currentUser) !== "admin") {
       return { data: [], error: new Error("admin_user_directory_admin_required") };
     }
+    const digest = await this.fetchAdminUserDirectoryDigest();
+    // e = false 表示伺服器沒給報名／隊伍明細（不是 admin），交給舊路徑照原本的權限處理。
+    if (digest && digest.e === true) {
+      return { data: adminUserDirectoryFromDigest(digest, buildPresetKeyToPlanId(state.globalPlans)), error: null };
+    }
+    return this._fetchAdminUserProfilesPaged();
+  },
+
+  async _fetchAdminUserProfilesPaged() {
     try {
       let profiles = [];
 
@@ -2498,10 +2559,7 @@ const db = {
         .from("reading_plans")
         .select("user_id, global_plan_id, preset_key"));
 
-      const presetKeyToPlanId = new Map();
-      (Array.isArray(state.globalPlans) ? state.globalPlans : []).forEach(plan => {
-        if (plan && plan.presetKey && plan.presetKey !== plan.id) presetKeyToPlanId.set(String(plan.presetKey), String(plan.id));
-      });
+      const presetKeyToPlanId = buildPresetKeyToPlanId(state.globalPlans);
       const joinedPlanIdsByUser = new Map();
       (enrollmentsResult || []).forEach(enrollment => {
         const planId = resolveEnrollmentPlanId(enrollment, presetKeyToPlanId);
@@ -2567,11 +2625,14 @@ const db = {
     }
     try {
       let profiles = [];
-      const { data, error } = await fetchAllRows(() => state.supabase
-        .from("profiles")
-        .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id, role_definition:role_definitions(id, code, label, scope_type)")
-        .eq("is_active", true)
-        .order("name", { ascending: true }));
+      const digest = await this.fetchAdminUserDirectoryDigest();
+      const { data, error } = digest
+        ? { data: managedScopeProfilesFromDigest(digest), error: null }
+        : await fetchAllRows(() => state.supabase
+          .from("profiles")
+          .select("id, name, email, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, role_id, role_definition:role_definitions(id, code, label, scope_type)")
+          .eq("is_active", true)
+          .order("name", { ascending: true }));
 
       if (error) {
         const { data: fbData, error: fbError } = await fetchAllRows(() => state.supabase
@@ -2592,17 +2653,17 @@ const db = {
         if (role === "great_zone_leader" && !profile.managed_regions && profile.great_region) {
           profile.managed_regions = profile.great_region.trim();
           pendingBackfills.push(
-            this.updateManagedScopes(profile.id, { managedRegions: [profile.great_region.trim()] })
+            this.updateManagedScopes(profile.id, { managedRegions: [profile.great_region.trim()] }, { invalidateDirectory: false })
           );
         } else if (role === "zone_leader" && !profile.managed_zones && profile.pastoral_zone) {
           profile.managed_zones = profile.pastoral_zone.trim();
           pendingBackfills.push(
-            this.updateManagedScopes(profile.id, { managedZones: [profile.pastoral_zone.trim()] })
+            this.updateManagedScopes(profile.id, { managedZones: [profile.pastoral_zone.trim()] }, { invalidateDirectory: false })
           );
         } else if (role === "group_leader" && !profile.managed_groups && profile.small_group) {
           profile.managed_groups = profile.small_group.trim();
           pendingBackfills.push(
-            this.updateManagedScopes(profile.id, { managedGroups: [profile.small_group.trim()] })
+            this.updateManagedScopes(profile.id, { managedGroups: [profile.small_group.trim()] }, { invalidateDirectory: false })
           );
         }
       });
@@ -2617,7 +2678,15 @@ const db = {
     }
   },
 
-  async updateManagedScopes(profileId, scopes = {}) {
+  // 寫完才清名單快取（#395），之後的讀取一定拿到新值。invalidateDirectory：上面的
+  // backfill 只是把畫面上已補好的值寫回，不必清快取重抓。
+  async updateManagedScopes(profileId, scopes = {}, { invalidateDirectory = true } = {}) {
+    const result = await this._writeManagedScopes(profileId, scopes);
+    if (invalidateDirectory && !result.error) this.invalidateAdminUserDirectoryCache();
+    return result;
+  },
+
+  async _writeManagedScopes(profileId, scopes = {}) {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: null, error: new Error("managed_scope_requires_supabase") };
     }
@@ -2860,7 +2929,8 @@ const db = {
           : fetchedPlans;
 
         const planIds = (allPlans || []).map(plan => plan.id).filter(Boolean);
-        const { data: allLogs, error: logsError } = await fetchReadingLogsByPlanIds(
+        // 一次 RPC 拿精簡紀錄，失敗就退回分頁查詢（#394）。
+        const { data: allLogs, error: logsError } = await fetchPlanReadingLogs(
           state.supabase,
           planIds
         );

@@ -813,7 +813,7 @@ export async function renderAdminUserDirectory() {
   if (result.error) {
     count.textContent = "0 人";
     list.innerHTML = '<div class="admin-user-directory__empty">目前無法載入使用者基本資料。</div>';
-    return;
+    return false;
   }
   adminUserDirectoryProfiles = result.data || [];
   filterControls.forEach(control => { control.disabled = false; });
@@ -972,7 +972,7 @@ export async function renderAdminManagedScopes() {
   if (result.error) {
     optionsRoot.innerHTML = '<div class="admin-managed-scopes__empty">無法載入管理範圍資料。</div>';
     setManagedScopeFeedback(result.error.message || "無法載入管理範圍資料。", true);
-    return;
+    return false;
   }
   managedScopeProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
   profileSelect.innerHTML = "";
@@ -1058,7 +1058,7 @@ export async function renderAdminOrgPermissionsOverview() {
   if (result.error) {
     tree.innerHTML = '<div class="admin-user-directory__empty">無法載入權限總覽。</div>';
     count.textContent = "";
-    return;
+    return false;
   }
   orgPermissionsProfiles = (result.data || []).filter(profile => getUserRoleCode(profile) !== "member");
 
@@ -2843,10 +2843,8 @@ export async function renderAdminLightningQuizStats() {
 
 export function init() {
   void renderAdminFeatureSettings();
-  void renderAdminUserDirectory();
-  void renderAdminOrgPermissionsOverview();
+  // 使用者基本資料、權限管理第一次進入子頁才載（loadAdminSectionDataOnce，#395）。
   renderAdminSectionNav();
-  void renderAdminManagedScopes();
   void renderAdminRegistrationStatistics();
   void renderAdminAnnouncements();
   void renderAdminLightningQuizQuestions();
@@ -3028,6 +3026,23 @@ function closeAdminSection() {
 }
 window.closeAdminSection = closeAdminSection;
 
+// 使用者基本資料、權限管理的名單很大，第一次進入子頁才載（#395），權限管理的
+// 兩個區塊共用 db 層同一份名單快取。載入失敗就清掉記號，下次進來再試。
+const adminSectionDataLoaded = new Set();
+const ADMIN_SECTION_DATA_LOADERS = {
+  users: () => [renderAdminUserDirectory()],
+  permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()]
+};
+
+function loadAdminSectionDataOnce(sectionId) {
+  const loader = ADMIN_SECTION_DATA_LOADERS[sectionId];
+  if (!loader || adminSectionDataLoaded.has(sectionId)) return;
+  adminSectionDataLoaded.add(sectionId);
+  Promise.all(loader()).then(results => {
+    if (results.includes(false)) adminSectionDataLoaded.delete(sectionId);
+  }, () => adminSectionDataLoaded.delete(sectionId));
+}
+
 function setAdminSection(id, options = {}) {
   const available = getAvailableAdminSections();
   if (available.length === 0) return;
@@ -3081,6 +3096,7 @@ function setAdminSection(id, options = {}) {
     // 依子分頁重新過濾「計畫篩選」下拉，並載入該子分頁資料（涵蓋原本的 loadActiveAdminPlanSubtab）
     if (options.loadData !== false) void syncManagementPlanSelectForSubtab();
   }
+  loadAdminSectionDataOnce(section.id);
   renderAdminSectionNav();
   if (options.focusContent === true) revealAdminSectionContent(section);
 }
@@ -4734,7 +4750,9 @@ export async function renderAdminPlanManagement() {
           if (currentSelect && currentSelect.value) {
             await selectManagementPlan(currentSelect.value, true);
           }
-          if (typeof renderAdminOrgPermissionsOverview === 'function') void renderAdminOrgPermissionsOverview();
+          // 名單快取也清掉；權限總覽還沒打開過就不用現在載（#395）。
+          db.invalidateAdminUserDirectoryCache();
+          if (adminSectionDataLoaded.has('permissions')) void renderAdminOrgPermissionsOverview();
           if (typeof showToast === 'function') showToast('資料已更新');
         } finally {
           refreshBtn.disabled = false;
