@@ -52,7 +52,10 @@ describe("reading log batched loading", () => {
 
   it("is used by the merged-user loader instead of one unbounded IN query", () => {
     const db = readFileSync(new URL("../js/db.js", import.meta.url), "utf8");
-    expect(db).toContain("fetchReadingLogsByPlanIds(");
+    // #394：先試精簡 RPC，失敗才退回分批查詢。
+    expect(db).toContain("fetchPlanReadingLogs(");
+    const batches = readFileSync(new URL("../js/data/reading-log-batches.mjs", import.meta.url), "utf8");
+    expect(batches).toContain("return fetchReadingLogsByPlanIds(client, uniquePlanIds, options);");
     expect(db).toContain("const planIds = (allPlans || [])");
     expect(db).not.toContain('logsQuery = logsQuery.in("plan_id", planIds)');
   });
