@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from "../js/data/pagination.mjs";
 
 // #351：分頁查詢（fetchAllRows）每一頁都要有唯一且固定的排序。
 // 每一頁是一次獨立的請求，沒有唯一排序時 PostgreSQL 可能每頁回傳不同順序
@@ -18,7 +19,8 @@ function loadFetchAllRows() {
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   const source = db.slice(start, end) + "return { data: rows, error: null };\n}";
-  return new Function(`${source}\nreturn { fetchAllRows, READING_TEAM_MEMBERS_ORDER };`)();
+  return new Function("DEFAULT_PAGE_SIZE", "isLastPage", "normalizePageSize",
+    `${source}\nreturn { fetchAllRows, READING_TEAM_MEMBERS_ORDER };`)(DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize);
 }
 
 function loadNlcQueryBuilder(callEdge) {

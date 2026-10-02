@@ -60,7 +60,8 @@ describe("reading_logs 分頁要有固定排序 (#348)", () => {
   it("不排序時，前後頁順序不同會重複或漏抓（重現 bug）", async () => {
     const rows = makeRows();
     const repository = new SupabaseRepository({ table: "reading_logs", clientProvider: (client => () => client)(makeClient(rows)) });
-    const { data } = await repository.fetch({ query: table => table.select("*").eq("user_id", "u") });
+    // 950 筆在預設每頁 1,000 筆（#399）時一頁就抓完，看不出錯位；用舊的每頁 200 筆重現。
+    const { data } = await repository.fetch({ query: table => table.select("*").eq("user_id", "u"), pageSize: 200 });
     expect(data).toHaveLength(rows.length);
     expect(uniqueIds(data)).toBeLessThan(rows.length);
   });

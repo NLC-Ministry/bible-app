@@ -1,5 +1,6 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchPlanReadingLogs } from './data/reading-log-batches.mjs';
+import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
@@ -97,8 +98,11 @@ function quotePostgrestValue(value) {
 }
 
 // Supabase/PostgREST caps rows per request (the project's configured
-// db.max_rows, commonly 1000; the nlc-data Edge Function additionally hard-
-// clamps any .range() span to 200 — see supabase/functions/nlc-data/index.ts).
+// db.max_rows, commonly 1000; the nlc-data Edge Function clamps any .range()
+// span to 1000 — 200 before #399 — see supabase/functions/nlc-data/index.ts).
+// Pages advance by the rows actually received and only stop on an empty page
+// or one shorter than the old 200 cap (js/data/pagination.mjs), so a 1000-row
+// request against a not-yet-redeployed nlc-data still fetches everything.
 // Any "fetch every row" query — e.g. the admin member directory — that
 // doesn't paginate silently truncates once real data passes that cap, so
 // counts/lists quietly stop growing instead of erroring. buildQuery must be
@@ -115,7 +119,8 @@ function quotePostgrestValue(value) {
 // without an `id` column must pass its own unique key (reading_team_members:
 // ["team_id", "user_id"]). scripts/paginated-stable-order.test.mjs enforces it.
 const READING_TEAM_MEMBERS_ORDER = ["team_id", "user_id"]; // composite PK, no id column
-async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = 200 } = {}) {
+async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = DEFAULT_PAGE_SIZE } = {}) {
+  const size = normalizePageSize(pageSize);
   const rows = [];
   let from = 0;
   while (true) {
@@ -123,12 +128,12 @@ async function fetchAllRows(buildQuery, { orderBy = ["id"], pageSize = 200 } = {
     if (typeof query.order === "function") {
       for (const column of orderBy) query = query.order(column, { ascending: true });
     }
-    const { data, error } = await query.range(from, from + pageSize - 1);
+    const { data, error } = await query.range(from, from + size - 1);
     if (error) return { data: rows, error };
     const page = data || [];
     rows.push(...page);
-    if (page.length < pageSize) break;
-    from += pageSize;
+    if (isLastPage(page.length, size)) break;
+    from += page.length;
   }
   return { data: rows, error: null };
 }
