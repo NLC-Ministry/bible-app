@@ -326,11 +326,44 @@ async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
   }
 }
 
+// 一次切到「團隊」會經過 switchPrimaryView → switchPage → showPlanGroupSubview →
+// prepareReadingTeamSubview，各自都要問「我的團隊」，以前每一關都打一次
+// get_my_reading_team（#407）。改成同一份答案共用：同時發出的共用同一個 Promise，
+// 成功的結果留 30 秒；本機做了任何團隊異動，db.js 會發 reading-team:changed 立刻清掉。
+// 別台裝置的隊友異動要等這 30 秒過去才看得到。
+const MY_READING_TEAM_FRESH_MS = 30000;
+const myReadingTeamCache = new Map();
+
+function getMyReadingTeamCached(plan) {
+  const planKey = plan && (plan.globalPlanId || plan.global_plan_id || plan.id);
+  const key = `${state.currentProfileId || state.currentUser?.id || ""}|${planKey || ""}`;
+  const cached = myReadingTeamCache.get(key);
+  if (cached && (cached.pending || Date.now() - cached.at < MY_READING_TEAM_FRESH_MS)) return cached.promise;
+
+  const entry = { pending: true, at: 0, promise: null };
+  const forget = () => { if (myReadingTeamCache.get(key) === entry) myReadingTeamCache.delete(key); };
+  entry.promise = Promise.resolve()
+    .then(() => db.getMyReadingTeam(plan))
+    .then(result => {
+      entry.pending = false;
+      entry.at = Date.now();
+      if (!result || !result.success) forget(); // 失敗不留，下一次重查
+      return result;
+    }, error => {
+      forget();
+      throw error;
+    });
+  myReadingTeamCache.set(key, entry);
+  return entry.promise;
+}
+
+window.addEventListener("reading-team:changed", () => myReadingTeamCache.clear());
+
 async function checkUserHasTeam() {
   if (!state.activePlan) return false;
   const supported = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
   if (!supported) return false;
-  const result = await db.getMyReadingTeam(state.activePlan);
+  const result = await getMyReadingTeamCached(state.activePlan);
   if (result && result.success) {
     const contexts = getJoinedReadingTeamContexts(result.context);
     return contexts.length > 0;
@@ -567,7 +600,7 @@ export async function prepareReadingTeamSubview(mode) {
     return true;
   }
 
-  const result = await db.getMyReadingTeam(state.activePlan);
+  const result = await getMyReadingTeamCached(state.activePlan);
   const contexts = result && result.success ? getJoinedReadingTeamContexts(result.context) : [];
 
   if (contexts.length === 0) {
