@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  assignCandidateIds, buildVerseIndex, CANDIDATE_COUNT, formatScripture, QUIZ_QUESTION_COUNT, selectQuestions, toBlindReviewItems,
+  type ChapterVerses
+} from "./quiz-quality.ts";
 
 const jsonHeaders = { "Content-Type": "application/json" };
 type BookInfo = { id: number; chapters: number };
@@ -77,7 +81,7 @@ function stripHtml(value: unknown) {
   return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function fetchChapterText(ref: ChapterRef) {
+async function fetchChapter(ref: ChapterRef): Promise<ChapterVerses> {
   const info = BOOKS[ref.book];
   if (!info) throw new Error(`unknown_bible_book:${ref.book}`);
   const errors: string[] = [];
@@ -85,11 +89,12 @@ async function fetchChapterText(ref: ChapterRef) {
     try {
       const response = await fetch(`https://bolls.life/get-chapter/${translation}/${info.id}/${ref.chapter}/`, { headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error(`${response.status}`);
-      const verses = await response.json();
-      if (!Array.isArray(verses) || verses.length === 0) throw new Error("empty_chapter");
-      const text = verses.map((verse: any, index: number) => `${Number(verse?.verse || index + 1)} ${stripHtml(verse?.text)}`).filter(Boolean).join("\n");
-      if (!/[\u3400-\u9fff]/.test(text)) throw new Error("non_chinese_chapter");
-      return `${ref.book} ${ref.chapter} 章\n${text}`;
+      const payload = await response.json();
+      if (!Array.isArray(payload) || payload.length === 0) throw new Error("empty_chapter");
+      const verses = payload.map((verse: any, index: number) => ({ verse: Number(verse?.verse || index + 1), text: stripHtml(verse?.text) }))
+        .filter((verse: { text: string }) => verse.text);
+      if (!verses.some((verse: { text: string }) => /[㐀-鿿]/.test(verse.text))) throw new Error("non_chinese_chapter");
+      return { book: ref.book, chapter: ref.chapter, verses };
     } catch (error) {
       errors.push(`${translation}:${String((error as Error)?.message || error)}`);
     }
@@ -108,9 +113,8 @@ function extractGeminiText(payload: any) {
   throw new Error(`gemini_${String(reason).toLowerCase()}`);
 }
 
-function validateQuestions(value: any) {
-  const questions = value?.questions;
-  if (!Array.isArray(questions) || questions.length !== 5) throw new Error("quiz_five_questions_required");
+function validateQuestions(questions: any[]) {
+  if (!Array.isArray(questions) || questions.length !== QUIZ_QUESTION_COUNT) throw new Error("quiz_five_questions_required");
   questions.forEach((question: any, index: number) => {
     if (!question || !Array.isArray(question.options) || question.options.length !== 4) throw new Error(`invalid_question_options:${index}`);
     if (!Number.isInteger(question.correctIndex) || question.correctIndex < 0 || question.correctIndex > 3) throw new Error(`invalid_correct_index:${index}`);
@@ -123,53 +127,112 @@ function validateQuestions(value: any) {
 
 function normalizeGeminiModel(value: unknown) {
   let model = String(value || "").trim();
-  model = model.replace(/^GEMINI_QUIZ_MODEL\s*=\s*/i, "").trim();
+  model = model.replace(/^GEMINI_QUIZ(?:_REVIEW)?_MODEL\s*=\s*/i, "").trim();
   if ((model.startsWith('"') && model.endsWith('"')) || (model.startsWith("'") && model.endsWith("'"))) {
     model = model.slice(1, -1).trim();
   }
   return model.replace(/^models\//i, "").trim();
 }
 
-async function generateVariant(apiKey: string, model: string, variant: string, scripture: string, refs: ChapterRef[]) {
+async function callGemini(apiKey: string, model: string, instruction: string, prompt: string, schema: unknown) {
   if (!/^[a-zA-Z0-9._-]+$/.test(model)) throw new Error("invalid_gemini_model");
-  const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : "人物、對話、動機與因果關係";
-  const referenceLabel = refs.map(ref => `${ref.book}${ref.chapter}章`).join("、");
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: "你是教會聖經小測驗編輯。只能根據提供的當日經文出題，不得補充經文外的傳統、推測或神學立場。使用繁體中文。每題只有一個正確答案，錯誤選項必須合理但可由經文明確排除。" }]
-      },
-      contents: [{
-        role: "user",
-        parts: [{ text: `請為 ${referenceLabel} 產生版本 ${variant} 的 5 題四選一小測驗。此版本著重：${angle}。每題附正確答案、簡短解說與精確經節出處。\n\n當日經文：\n${scripture}` }]
-      }],
-      generationConfig: {
-        maxOutputTokens: 3000,
-        responseMimeType: "application/json",
-        responseJsonSchema: {
-          type: "object", additionalProperties: false, required: ["questions"],
-          properties: { questions: {
-            type: "array", minItems: 5, maxItems: 5,
-            items: {
-              type: "object", additionalProperties: false,
-              required: ["id", "question", "options", "correctIndex", "explanation", "verseRef"],
-              properties: {
-                id: { type: "string" }, question: { type: "string" },
-                options: { type: "array", minItems: 4, maxItems: 4, items: { type: "string" } },
-                correctIndex: { type: "integer", minimum: 0, maximum: 3 },
-                explanation: { type: "string" }, verseRef: { type: "string" }
-              }
-            }
-          } }
-        }
-      }
+      systemInstruction: { parts: [{ text: instruction }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 24000, responseMimeType: "application/json", responseJsonSchema: schema }
     })
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`gemini_${response.status}:${payload?.error?.message || "request_failed"}`);
-  return validateQuestions(JSON.parse(extractGeminiText(payload)));
+  return JSON.parse(extractGeminiText(payload));
+}
+
+const GENERATOR_INSTRUCTION = [
+  "你是教會聖經小測驗的出題編輯。只能根據提供的當日經文出題，不得使用經文以外的傳統、推測或神學立場。使用繁體中文。",
+  "規則：",
+  "1. 每題四個選項，恰好一個正確。",
+  "2. evidence 依選項順序列出四個選項各自的舉證：verseRef 格式為「書名 章:節」或「書名 章:節-節」（同一章內），書名必須和經文標題完全相同；quote 是從當日經文逐字複製的一段連續文字（至少 4 個字，不可改寫、不可加省略號）；reason 用一句話說明這段經文如何證明此選項正確或錯誤。",
+  "3. 正確選項的 quote 必須直接證明它正確。",
+  "4. 每個錯誤選項的 quote 必須直接與它矛盾（例如經文寫的是另一個人、另一個數字、另一個地點或另一個先後順序）。不可以只因為「經文沒有提到」而判定錯誤；找不到能直接反駁的經文，就換一個錯誤選項。",
+  "5. 不可使用「以上皆是」「以上皆非」「無法確定」之類的選項；選項文字不可重複，也不可以兩個選項其實是同一件事的不同說法。",
+  "6. 不要問經文沒有明寫的動機、心情、意義或屬靈教訓；題目只能有一種合理的讀法。",
+  "7. explanation 用一兩句話說明正解，verseRef 填正解的出處（格式同上）。"
+].join("\n");
+
+const REVIEWER_INSTRUCTION = [
+  "你是聖經小測驗的審題員。只根據提供的當日經文判斷，不得使用經文以外的知識或傳統。",
+  "對每一題的每一個選項，依選項順序獨立判定：",
+  "correct：經文有明確文字證明此選項正確，且符合題意。",
+  "incorrect：經文有明確文字與此選項矛盾。",
+  "undeterminable：經文無法明確證明對或錯——包括經文沒有提到、題目有兩種以上合理讀法、或需要推測。只要有疑慮就判 undeterminable。",
+  "correct 與 incorrect 都要附 verseRef（「書名 章:節」或「書名 章:節-節」，書名和經文標題完全相同）與從經文逐字複製的 quote；undeterminable 時兩者留空字串。"
+].join("\n");
+
+const EVIDENCE_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["verseRef", "quote", "reason"],
+  properties: { verseRef: { type: "string" }, quote: { type: "string" }, reason: { type: "string" } }
+};
+
+const CANDIDATES_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["questions"],
+  properties: { questions: {
+    type: "array", minItems: CANDIDATE_COUNT, maxItems: CANDIDATE_COUNT,
+    items: {
+      type: "object", additionalProperties: false,
+      required: ["question", "options", "correctIndex", "explanation", "verseRef", "evidence"],
+      properties: {
+        question: { type: "string" },
+        options: { type: "array", minItems: 4, maxItems: 4, items: { type: "string" } },
+        correctIndex: { type: "integer", minimum: 0, maximum: 3 },
+        explanation: { type: "string" }, verseRef: { type: "string" },
+        evidence: { type: "array", minItems: 4, maxItems: 4, items: EVIDENCE_SCHEMA }
+      }
+    }
+  } }
+};
+
+const REVIEW_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["reviews"],
+  properties: { reviews: {
+    type: "array",
+    items: {
+      type: "object", additionalProperties: false, required: ["id", "judgments"],
+      properties: {
+        id: { type: "string" },
+        judgments: {
+          type: "array", minItems: 4, maxItems: 4,
+          items: {
+            type: "object", additionalProperties: false, required: ["verdict", "verseRef", "quote"],
+            properties: {
+              verdict: { type: "string", enum: ["correct", "incorrect", "undeterminable"] },
+              verseRef: { type: "string" }, quote: { type: "string" }
+            }
+          }
+        }
+      }
+    }
+  } }
+};
+
+// #414：出 CANDIDATE_COUNT 題候選 → 程式比對舉證 → 另一個模型盲審 → 取前 5 題通過的；
+// 不足 5 題就整版失敗，交給既有的 20:00 重試與後台標紅。
+async function generateVariant(apiKey: string, models: { generator: string; reviewer: string }, variant: string, chapters: ChapterVerses[], refs: ChapterRef[], invocationId: string) {
+  const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : "人物、對話與經文明寫的因果關係";
+  const referenceLabel = refs.map(ref => `${ref.book}${ref.chapter}章`).join("、");
+  const scripture = formatScripture(chapters);
+  const candidates = assignCandidateIds(await callGemini(apiKey, models.generator, GENERATOR_INSTRUCTION,
+    `請為 ${referenceLabel} 產生版本 ${variant} 的 ${CANDIDATE_COUNT} 題四選一候選題（之後會由審題員篩選）。此版本著重：${angle}。各題不要重複考同一件事。\n\n當日經文：\n${scripture}`,
+    CANDIDATES_SCHEMA));
+  const review = await callGemini(apiKey, models.reviewer, REVIEWER_INSTRUCTION,
+    `請審以下 ${candidates.length} 題四選一題目，每一題都要回覆，id 照抄。\n\n題目：\n${JSON.stringify(toBlindReviewItems(candidates))}\n\n當日經文：\n${scripture}`,
+    REVIEW_SCHEMA);
+  const { questions, acceptedCount, rejected } = selectQuestions(candidates, review?.reviews, buildVerseIndex(chapters));
+  console.info("daily_quiz_quality_check", JSON.stringify({ invocationId, variant, candidates: candidates.length, accepted: acceptedCount, rejected }));
+  if (questions.length < QUIZ_QUESTION_COUNT) throw new Error(`quiz_quality_insufficient:${acceptedCount}/${candidates.length}`);
+  return validateQuestions(questions);
 }
 
 Deno.serve(async req => {
@@ -189,6 +252,7 @@ Deno.serve(async req => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
   const model = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-3.1-flash-lite");
+  const reviewModel = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_REVIEW_MODEL") || "gemini-3.8-flash");
   if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
     console.error("daily_quiz_server_not_configured", JSON.stringify({ invocationId, supabaseUrl: Boolean(supabaseUrl), serviceRoleKey: Boolean(serviceRoleKey), geminiApiKey: Boolean(geminiApiKey) }));
     return respond({ error: "server_not_configured", invocationId }, 500);
@@ -201,7 +265,7 @@ Deno.serve(async req => {
       .map((value: unknown) => String(value || "").trim().toUpperCase())
       .filter((value: string) => ["A", "B"].includes(value))
   ));
-  console.info("daily_quiz_generation_started", JSON.stringify({ invocationId, source: String(body?.source || "unknown"), quizDate, requestedVariants, model }));
+  console.info("daily_quiz_generation_started", JSON.stringify({ invocationId, source: String(body?.source || "unknown"), quizDate, requestedVariants, model, reviewModel }));
   if (requestedVariants.length === 0) return respond({ error: "quiz_variants_required", date: quizDate, invocationId }, 400);
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: quizFeature, error: quizFeatureError } = await supabase.from("app_feature_settings")
@@ -238,8 +302,8 @@ Deno.serve(async req => {
   }
   if (chapterRefs.length === 0) return respond({ date: quizDate, planId: plan.id, status: "no_reading_chapters", requests: 0 });
 
-  let scripture: string;
-  try { scripture = (await Promise.all(chapterRefs.map(fetchChapterText))).join("\n\n"); }
+  let chapters: ChapterVerses[];
+  try { chapters = await Promise.all(chapterRefs.map(fetchChapter)); }
   catch (error) {
     const message = String((error as Error)?.message || error);
     console.error("daily_quiz_scripture_fetch_failed", JSON.stringify({ invocationId, error: message }));
@@ -269,8 +333,8 @@ Deno.serve(async req => {
     if (!reservation?.reserved) { results.push({ variant, status: "already_attempted" }); continue; }
     requests += 1;
     try {
-      console.info("daily_quiz_gemini_request_started", JSON.stringify({ invocationId, variant, model, chapterCount: chapterRefs.length }));
-      const questions = await generateVariant(geminiApiKey, model, variant, scripture, chapterRefs);
+      console.info("daily_quiz_gemini_request_started", JSON.stringify({ invocationId, variant, model, reviewModel, chapterCount: chapterRefs.length }));
+      const questions = await generateVariant(geminiApiKey, { generator: model, reviewer: reviewModel }, variant, chapters, chapterRefs, invocationId);
       const { error: completionError } = await supabase.rpc("complete_daily_quiz_generation", { p_quiz_id: reservation.quizId, p_questions: questions, p_model: model });
       if (completionError) throw completionError;
       results.push({ variant, status: "ready", questionCount: questions.length });

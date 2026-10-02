@@ -114,7 +114,7 @@ No migration needed.
 
 This scheduled function resolves the current church-campaign chapters in
 `Asia/Taipei`, fetches the scripture once, then generates variants A/B/C with
-exactly one Gemini API request per variant. Database reservation is
+one generator request plus one blind-review request per variant (see the quality gate below). Database reservation is
 atomic, so repeated scheduler invocations and duplicate button clicks cannot
 produce duplicate Gemini requests. A pastor or administrator may manually
 retry failed variants or replace generated-but-unapproved variants without a
@@ -128,9 +128,30 @@ GEMINI_QUIZ_MODEL=gemini-3.1-flash-lite
 QUIZ_GENERATION_CRON_SECRET=<random shared secret>
 ```
 
-Enter only the model ID as the `GEMINI_QUIZ_MODEL` value. Do not include
-quotes, a `models/` prefix, or `GEMINI_QUIZ_MODEL=` in the value. The function
-also normalizes these common formatting mistakes before calling Gemini.
+Optional:
+
+```bash
+GEMINI_QUIZ_REVIEW_MODEL=gemini-3.8-flash   # blind reviewer (#414); this is the default
+```
+
+Enter only the model ID as the `GEMINI_QUIZ_MODEL` / `GEMINI_QUIZ_REVIEW_MODEL`
+value. Do not include quotes, a `models/` prefix, or `GEMINI_QUIZ_MODEL=` in the
+value. The function also normalizes these common formatting mistakes before
+calling Gemini.
+
+Quality gate (#414): each variant is two Gemini requests, not one. The
+generator writes 8 candidate questions in which every option carries
+`evidence` (`verseRef`, a verbatim `quote`, `reason`); wrong options must be
+contradicted by scripture, not merely unmentioned. `quiz-quality.ts` then
+checks every quote really occurs in the cited verses of the day's chapters,
+and a second model judges each option blind (no answer given) as
+correct / incorrect / undeterminable. A candidate survives only if both pass
+and the reviewer finds exactly the intended answer. The first 5 survivors are
+stored (with `evidence`); fewer than 5 fails the variant with
+`quiz_quality_insufficient:<accepted>/<candidates>`, and the normal retry
+schedule takes over. `daily_quiz_quality_check` logs why each candidate was
+dropped. `evidence` is shown in the admin quiz calendar only;
+`quiz_questions_for_member` does not pass it to members.
 
 Deploy without Supabase JWT verification because pg_cron authenticates with
 the custom `x-cron-secret` header:

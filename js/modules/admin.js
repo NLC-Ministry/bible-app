@@ -24,6 +24,7 @@ import {
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
+import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
@@ -3645,13 +3646,14 @@ function renderAdminQuizCalendarHtml(calendar, selectedDate) {
 function renderAdminQuizDayQuestionsHtml(rawQuestions) {
   const questions = [];
   (Array.isArray(rawQuestions) ? rawQuestions : []).forEach(raw => {
-    try { questions.push(normalizeQuestion(raw)); } catch { /* 格式不認得的題目略過，不讓整頁壞掉 */ }
+    try { questions.push({ ...normalizeQuestion(raw), raw }); } catch { /* 格式不認得的題目略過，不讓整頁壞掉 */ }
   });
   if (!questions.length) return '';
   return `<ol class="admin-quiz-day-questions">${questions.map(question => `
     <li>
       <p class="admin-quiz-day-questions__stem"><span class="role-badge">${adminQuizEscape(QUESTION_TYPE_LABELS[question.type] || question.type)}</span> ${adminQuizEscape(question.payload?.stem || '')}</p>
       <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+      ${renderQuizEvidenceHtml(question.raw)}
     </li>`).join('')}</ol>`;
 }
 
