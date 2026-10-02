@@ -23,12 +23,10 @@ describe("計劃管理: explicit refresh button", () => {
     const btnEnd = admin.indexOf("if (typeof hydrateIcons === 'function') hydrateIcons(document.getElementById('admin-view'));", btnStart);
     const btnBlock = admin.slice(btnStart, btnEnd);
     // Regression for: clicking 更新 looked like it did nothing unless the org
-    // filter was also toggled. window._cachedAllUsersList is keyed by plan
-    // only, so selectManagementPlan() silently reused the stale list — the
-    // button must clear that cache and force a real refetch, not just re-run
-    // the same render against whatever's cached.
-    expect(btnBlock).toContain("window._cachedAllUsersList = null;");
-    expect(btnBlock).toContain("window._cachedAllUsersListKey = null;");
+    // filter was also toggled. selectManagementPlan() silently reused the
+    // cached list — the button must clear the merged-users cache (all of it,
+    // including the 60-second layer, #369) and force a real refetch.
+    expect(btnBlock).toContain("db.invalidateMergedUsersCache();");
     expect(btnBlock).toContain("await selectManagementPlan(currentSelect.value, true);");
     expect(btnBlock).toContain("renderAdminOrgPermissionsOverview()");
   });

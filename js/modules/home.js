@@ -473,9 +473,12 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null) {
       };
     });
   } else {
-    let allUsers = await db.fetchMergedUsersList();
     const myZone = state.currentUser.pastoral_zone || "";
-    groupMembers = myZone ? allUsers.filter(u => u.pastoral_zone === myZone) : [];
+    // 查詢時就只抓自己牧區的人與紀錄，不再抓整份名單再篩（#369）。
+    groupMembers = myZone
+      ? (await db.fetchMergedUsersWithLogs(null, { pastoralZone: myZone })).users
+        .filter(u => u.pastoral_zone === myZone)
+      : [];
     if (!groupMembers || groupMembers.length === 0) {
       groupMembers = [{ name: state.currentUser.name, chapters_read: myChaptersRead }];
     }

@@ -66,7 +66,7 @@ describe("computePlanScopedStreak — 不同計畫的最高連續獨立算", () 
     expect(computePlanScopedStreak(logs, { planId: "p" })).toBe(3);
   });
 
-  it("preFiltered trusts the caller (other users' already-scoped allLogsCache)", () => {
+  it("preFiltered trusts the caller (other users' already-scoped logsByUserId)", () => {
     const logs = [
       { plan_id: "someone-elses-enrollment", read_at: at("2026-09-01") },
       { plan_id: "someone-elses-enrollment", read_at: at("2026-09-02") }

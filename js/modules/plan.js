@@ -1013,8 +1013,7 @@ function initPlanControls() {
         rebuildPlanSchedule(plan);
         const firstReadingDay = (plan.days || []).find(day => (day.chapters || []).some(ch => Number(ch.round || 1) === 1));
         if (firstReadingDay) state.selectedPlanDay = firstReadingDay.dayNum;
-        window._cachedAllUsersList = null;
-        window._cachedAllUsersListKey = null;
+        db.invalidateMergedUsersCache();
 
         // 3. Save to localStorage (if local/demo mode)
         if (!state.isSupabaseMode) {
@@ -4358,8 +4357,7 @@ window.triggerPlanUpgradeFlow = async function() {
       Number(chapter.round || 1) === nextRound
     ));
     if (firstNextRoundDay) state.selectedPlanDay = firstNextRoundDay.dayNum;
-    window._cachedAllUsersList = null;
-    window._cachedAllUsersListKey = null;
+    db.invalidateMergedUsersCache();
 
     calculatePlanProgress();
     await renderPlanView();
@@ -6019,6 +6017,11 @@ function getOrgStatsContextPlan() {
   return (window.currentPlanViewState === PLAN_ROUTE.ORG_STATS && state.adminManagementPlan) || state.activePlan;
 }
 
+// db.fetchMergedUsersList / fetchMergedUsersWithLogs 依這個 key 分開快取。
+function getPlanStatsCacheKey(plan) {
+  return plan ? (plan.globalPlanId || plan.presetKey || plan.name || plan.id) : null;
+}
+
 async function renderPlanHistoryView() {
   if (!getOrgStatsContextPlan()) return;
 
@@ -6214,7 +6217,7 @@ async function renderOrgStatsTree() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList(contextPlan.globalPlanId || contextPlan.presetKey || contextPlan.name || contextPlan.id);
+    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan));
   } catch (e) {
     console.warn('Failed to fetch users for org stats tree', e);
   }
@@ -6275,7 +6278,7 @@ async function exportZoneCompletionCSV() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList(contextPlan.globalPlanId || contextPlan.presetKey || contextPlan.name || contextPlan.id);
+    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan));
   } catch (e) {
     console.warn('Failed to fetch users for zone export', e);
   }
@@ -6948,11 +6951,21 @@ async function renderPlanRankingView() {
 }
 
 async function renderGroupParticipantsRankingTable() {
-  if (!state.activePlan) return;
+  // 管理頁「組員總覽」看的是計畫篩選選的計畫，跟同頁的組織統計樹一致（#369）；
+  // 計畫分頁裡就是自己正在讀的計畫。
+  const statsPlan = getOrgStatsContextPlan();
+  if (!statsPlan) return;
+  // 只有看的是自己正在讀的計畫時，「我」那一列才用本機即時的打卡與進度；
+  // 否則跟其他人一樣用名單上的數字。
+  const isViewingOwnPlan = Boolean(state.activePlan) && (
+    statsPlan === state.activePlan
+    || (statsPlan.id && statsPlan.id === state.activePlan.id)
+    || (statsPlan.globalPlanId && statsPlan.globalPlanId === state.activePlan.globalPlanId)
+  );
 
   const rankingTitle = document.getElementById("ranking-title") || document.getElementById("members-ranking-title");
-  const currentPlanIdForStats = state.activePlan.id;
-  const currentPresetKeyForStats = state.activePlan.presetKey;
+  const currentPlanIdForStats = isViewingOwnPlan ? state.activePlan.id : null;
+  const currentPresetKeyForStats = isViewingOwnPlan ? state.activePlan.presetKey : null;
   const uniquePlanLogs = (logs) => {
     const unique = new Set();
     const planChapters = new Set();
@@ -6973,7 +6986,7 @@ async function renderGroupParticipantsRankingTable() {
     });
     return unique.size;
   };
-  const myPlanReadCount = uniquePlanLogs(state.readingLogs || []);
+  const myPlanReadCount = isViewingOwnPlan ? uniquePlanLogs(state.readingLogs || []) : 0;
   // 「最高連續」各計畫獨立算：只看歸屬這個計畫的打卡，不混用全域 state.currentUser.streak。
   const personalStreak = myPlanReadCount > 0
     ? computePlanScopedStreak(state.readingLogs || [], {
@@ -6986,12 +6999,12 @@ async function renderGroupParticipantsRankingTable() {
   // 教會原始日程（七日、不套任何使用者的 level 或個人休息日）。絕不能用
   // state.activePlan.days —— 那是「看榜這個人自己」的排程。
   const baselineScheduleDays = typeof window.getCanonicalStageScheduleDays === "function"
-    ? window.getCanonicalStageScheduleDays(state.activePlan)
-    : (state.activePlan.days || []);
+    ? window.getCanonicalStageScheduleDays(statsPlan)
+    : (statsPlan.days || []);
 
   const calculateCatchUpDays = (userLogs) => {
-    if (!state.activePlan || !baselineScheduleDays.length) return 0;
-    const statsStart = new Date(state.activePlan.startDate + "T00:00:00");
+    if (!baselineScheduleDays.length) return 0;
+    const statsStart = new Date(statsPlan.startDate + "T00:00:00");
     statsStart.setHours(0, 0, 0, 0);
     let catchUpDaysVal = 0;
     const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
@@ -7066,7 +7079,7 @@ async function renderGroupParticipantsRankingTable() {
     return daysCovered;
   };
 
-  const planStart = new Date(state.activePlan.startDate + "T00:00:00");
+  const planStart = new Date(statsPlan.startDate + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffTime = today.getTime() - planStart.getTime();
@@ -7097,17 +7110,13 @@ async function renderGroupParticipantsRankingTable() {
       : "";
 
     let allUsers = [];
+    // 名單和紀錄來自同一個快取項目，一定是同一個計畫的（#369）。
+    let logsByUserId = new Map();
     try {
-      const activeKey = state.activePlan
-        ? (state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id)
-        : null;
-      if (window._cachedAllUsersList && window._cachedAllUsersListKey === activeKey && window._cachedAllUsersList.length > 0) {
-        allUsers = window._cachedAllUsersList;
-      } else {
-        allUsers = await db.fetchMergedUsersList(activeKey);
-        window._cachedAllUsersList = allUsers;
-        window._cachedAllUsersListKey = activeKey;
-      }
+      const statsKey = getPlanStatsCacheKey(statsPlan);
+      const merged = await db.fetchMergedUsersWithLogs(statsKey, { maxAgeMs: Infinity });
+      allUsers = merged.users || [];
+      logsByUserId = merged.logsByUserId || new Map();
     } catch (e) {
       console.warn("Failed to fetch merged users, fallback to empty array", e);
     }
@@ -7252,19 +7261,18 @@ async function renderGroupParticipantsRankingTable() {
 
     groupMembers = groupMembers.map(u => {
       const isMe = u.name === state.currentUser.name;
-      const hasAnyPlanRead = isMe
+      const useMyLiveData = isMe && isViewingOwnPlan;
+      const memberLogs = logsByUserId.get(u.id) || [];
+      const hasAnyPlanRead = useMyLiveData
         ? myPlanReadCount > 0
         : ((u.chapters_read || 0) > 0 || ((u.plan_progress || 0) > 0 && Boolean(u.last_read)));
-      // 別人的 allLogsCache 已在查詢層限定到這個計畫（preset_key / global_plan_id），
+      // 別人的紀錄已在查詢層限定到這個計畫（preset_key / global_plan_id），
       // 所以 preFiltered；他們的 log.plan_id 是各自的 enrollment，不能拿來比對我的。
       const streak = !hasAnyPlanRead
         ? 0
-        : isMe
+        : useMyLiveData
           ? personalStreak
-          : computePlanScopedStreak(
-              (state.allLogsCache || []).filter(l => l.user_id === u.id),
-              { preFiltered: true }
-            );
+          : computePlanScopedStreak(memberLogs, { preFiltered: true });
 
       let completed = 0;
       let makeup = 0;
@@ -7272,7 +7280,7 @@ async function renderGroupParticipantsRankingTable() {
 
       if (hasAnyPlanRead) {
         let memberIsCompletedOnce;
-        if (isMe) {
+        if (useMyLiveData) {
           completed = myPlanReadCount;
           const myUserLogs = (state.readingLogs || []).filter(l =>
             l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey
@@ -7281,8 +7289,7 @@ async function renderGroupParticipantsRankingTable() {
           memberIsCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
         } else {
           completed = u.chapters_read || 0;
-          const otherUserLogs = (state.allLogsCache || []).filter(l => l.user_id === u.id);
-          makeup = calculateCatchUpDays(otherUserLogs);
+          makeup = calculateCatchUpDays(memberLogs);
           memberIsCompletedOnce = (u.current_round || 1) > 1;
         }
         // 讀完一遍後直接視為天數全滿，避免進入二三遍後被誤判落後。
@@ -7293,9 +7300,9 @@ async function renderGroupParticipantsRankingTable() {
         diff = completedDays - expectedDaysCount;
       }
 
-      const memberRound = Number(isMe ? state.activePlan.currentRound : u.current_round) || 1;
+      const memberRound = Number(useMyLiveData ? state.activePlan.currentRound : u.current_round) || 1;
       const memberProgress = Math.max(0, Math.min(100, Math.round(Number(
-        isMe ? state.activePlan.progress : u.plan_progress
+        useMyLiveData ? state.activePlan.progress : u.plan_progress
       ) || 0)));
       let statusStr = hasAnyPlanRead ? "在進度上" : "未開始";
       let statusColor = "var(--text-muted)";
@@ -7390,9 +7397,8 @@ window.displayParticipantsList = function (limit = 100) {
   }
 
   // Load previous ranks for trend comparison
-  const activeKey = state.activePlan
-    ? (state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id)
-    : null;
+  // 名次趨勢跟著列表顯示的計畫存（管理頁可能是所選的另一個計畫）。
+  const activeKey = getPlanStatsCacheKey(getOrgStatsContextPlan());
   const storageKey = `nlc_prev_ranks_${activeKey}`;
   let prevRanks = {};
   if (activeKey) {
@@ -7662,8 +7668,7 @@ async function renderPlanMembersView() {
   if (refreshBtn && !refreshBtn.dataset.listenerBound) {
     refreshBtn.dataset.listenerBound = "true";
     refreshBtn.addEventListener("click", async () => {
-      window._cachedAllUsersList = null;
-      window._cachedAllUsersListKey = null;
+      db.invalidateMergedUsersCache();
       if (typeof showToast === "function") showToast("更新排名中...");
       
       const membersTitleEl = document.getElementById("members-ranking-title");
