@@ -17,6 +17,7 @@ import {
   countScheduleDaysCoveredByChapters,
   countExpectedScheduleDays,
   countLateCompletedDays,
+  buildRound1ReadDateMap,
   isFirstRoundInProgress
 } from "../data/schedule-progress.mjs";
 import {
@@ -25,6 +26,7 @@ import {
   resetPlanProgressState
 } from "./plan-progress-reset.mjs";
 import { computePlanScopedStreak } from "./team-progress-metrics.mjs";
+import { computeOrgUnitStats as computePlanOrgUnitStats, logMatchesPlan as logMatchesPlanScope } from "../data/plan-stats-rules.mjs";
 import { formatTaiwanDate, prependTaiwanExportTime } from "./export-time.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
 import {
@@ -81,6 +83,12 @@ window.currentPlanViewState = window.currentPlanViewState || PLAN_ROUTE.LIST;
 // 效能重構 A2：Chart.js 改成第一次要畫圖時才動態載入，載入器放在
 // chart-loader.mjs 跟後台雲柱測驗趨勢圖共用。
 window.ensureChartLib = ensureChartLib;
+
+// 計畫增刪改卡片在 plan-admin.js（只有管理員會載入的 lazy chunk，#370）；它載入時登記 render 函式。
+let planAdminRenderer = null;
+export function registerPlanAdminRenderer(render) {
+  planAdminRenderer = typeof render === "function" ? render : null;
+}
 
 // 效能重構 B7：同一個 <canvas> 還在就只 chart.update()，不要每次 destroy + new Chart。
 // destroy+new 會丟掉整個圖、重跑動畫、增加 GC，也是「Canvas is already in use」錯誤來源。
@@ -1144,11 +1152,6 @@ function initPlanControls() {
       window.openPlanInlineReader(firstUnread.book, firstUnread.chapter, state.selectedPlanDay, firstUnread.round || 1);
     });
   }
-
-  // Initialize Global Plans Admin Controls
-  if (typeof initAdminPlanManagement === 'function') {
-    initAdminPlanManagement();
-  }
 }
 
 
@@ -1199,8 +1202,10 @@ async function renderPlanView() {
       adminCard.classList.toggle("hidden", !isSystemAdmin);
     }
 
-    if (isSystemAdmin && typeof renderAdminPlanManagement === 'function') {
-      renderAdminPlanManagement();
+    // 計畫增刪改卡片在 plan-admin.js（只有管理員會載入的 chunk）；還沒載入就先跳過，
+    // 載入時它會自己補畫一次。
+    if (isSystemAdmin && planAdminRenderer) {
+      planAdminRenderer();
     }
 
     if (state.activePlan && isPlanHidden(state.activePlan) && canManageHiddenPlans()) {
@@ -4514,433 +4519,6 @@ async function handleRoundCompletion(plan) {
   showCongratsModal(plan, currentRound);
 };
 
-function initAdminPlanManagement() {
-  const addBtn = document.getElementById("admin-add-plan-btn");
-  const cancelBtn = document.getElementById("admin-cancel-plan-btn");
-  const saveBtn = document.getElementById("admin-save-plan-btn");
-  const formContainer = document.getElementById("admin-plan-form-container");
-
-  if (!addBtn || !cancelBtn || !saveBtn || !formContainer) return;
-
-  // Render Bible books selection grids
-  const oldGrid = document.getElementById("admin-old-books-grid");
-  const newGrid = document.getElementById("admin-new-books-grid");
-
-  if (oldGrid && newGrid) {
-    oldGrid.innerHTML = "";
-    newGrid.innerHTML = "";
-    BIBLE_BOOKS.forEach(book => {
-      const label = document.createElement("label");
-      label.style = `
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 0.875rem;
-        cursor: pointer;
-        padding: 0.2rem 0.3rem;
-        border-radius: 4px;
-        background: white;
-        border: 1px solid var(--border-card);
-        user-select: none;
-      `;
-      label.innerHTML = `
-        <input type="checkbox" class="admin-book-checkbox" value="${book.name}" style="margin: 0; cursor: pointer;">
-        ${book.name}
-      `;
-      if (book.section === "old") {
-        oldGrid.appendChild(label);
-      } else {
-        newGrid.appendChild(label);
-      }
-    });
-  }
-
-  // Bind quick select buttons
-  const btnSelectAll = document.getElementById("admin-select-all-books");
-  if (btnSelectAll) {
-    btnSelectAll.onclick = () => {
-      document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = true);
-    };
-  }
-  const btnClear = document.getElementById("admin-clear-books");
-  if (btnClear) {
-    btnClear.onclick = () => {
-      document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
-    };
-  }
-  const btnSelectOld = document.getElementById("admin-select-old-books");
-  if (btnSelectOld) {
-    btnSelectOld.onclick = () => {
-      BIBLE_BOOKS.forEach(book => {
-        const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
-        if (cb) cb.checked = book.section === "old";
-      });
-    };
-  }
-  const btnSelectNew = document.getElementById("admin-select-new-books");
-  if (btnSelectNew) {
-    btnSelectNew.onclick = () => {
-      BIBLE_BOOKS.forEach(book => {
-        const cb = document.querySelector(`.admin-book-checkbox[value="${book.name}"]`);
-        if (cb) cb.checked = book.section === "new";
-      });
-    };
-  }
-
-  // Bind schedule time type radios change
-  const typeRadios = document.getElementsByName("admin-plan-time-type");
-  const dateInputs = document.getElementById("admin-plan-date-inputs");
-  const durationContainer = document.getElementById("admin-plan-duration-container");
-
-  const toggleTimeTypeFields = (type) => {
-    if (type === "flexible") {
-      if (dateInputs) dateInputs.style.display = "none";
-      if (durationContainer) durationContainer.style.display = "block";
-    } else {
-      if (dateInputs) dateInputs.style.display = "grid";
-      if (durationContainer) durationContainer.style.display = "none";
-    }
-  };
-
-  typeRadios.forEach(radio => {
-    radio.onchange = (e) => toggleTimeTypeFields(e.target.value);
-  });
-
-  // Toggle Form
-  addBtn.onclick = () => {
-    document.getElementById("admin-plan-form-title").textContent = "新增讀經計畫";
-    document.getElementById("admin-edit-plan-id").value = "";
-    document.getElementById("admin-plan-name").value = "";
-    document.getElementById("admin-plan-start-date").value = "";
-    document.getElementById("admin-plan-end-date").value = "";
-    const durationInput = document.getElementById("admin-plan-duration-days");
-    if (durationInput) durationInput.value = "";
-
-    // Set fixed as default
-    const fixedRadio = document.querySelector('input[name="admin-plan-time-type"][value="fixed"]');
-    if (fixedRadio) fixedRadio.checked = true;
-    toggleTimeTypeFields("fixed");
-
-    document.querySelectorAll(".admin-book-checkbox").forEach(cb => cb.checked = false);
-    formContainer.classList.remove("hidden");
-  };
-
-  cancelBtn.onclick = () => {
-    formContainer.classList.add("hidden");
-  };
-
-  // Save Plan
-  saveBtn.onclick = async () => {
-    const id = document.getElementById("admin-edit-plan-id").value;
-    const name = document.getElementById("admin-plan-name").value.trim();
-
-    // Determine time type selection
-    const checkedRadio = document.querySelector('input[name="admin-plan-time-type"]:checked');
-    const isFixed = checkedRadio ? checkedRadio.value === "fixed" : true;
-
-    let startDate = "";
-    let endDate = "";
-
-    if (isFixed) {
-      startDate = document.getElementById("admin-plan-start-date").value;
-      endDate = document.getElementById("admin-plan-end-date").value;
-
-      if (!startDate || !endDate) {
-        alert("請選擇計畫開始與結束日期！");
-        return;
-      }
-      if (new Date(startDate) > new Date(endDate)) {
-        alert("開始日期不可晚於結束日期！");
-        return;
-      }
-    } else {
-      const durationVal = document.getElementById("admin-plan-duration-days").value;
-      const durationDays = parseInt(durationVal);
-      if (!durationVal || isNaN(durationDays) || durationDays <= 0) {
-        alert("請輸入有效的計畫總天數！");
-        return;
-      }
-
-      // Generate start/end dates for the template starting today to satisfy database constraints
-      const getLocalDateString = (d) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-      };
-
-      const today = new Date();
-      startDate = getLocalDateString(today);
-      const end = new Date(today);
-      end.setDate(today.getDate() + durationDays - 1);
-      endDate = getLocalDateString(end);
-    }
-
-    const checkedBooks = [];
-    document.querySelectorAll(".admin-book-checkbox:checked").forEach(cb => {
-      checkedBooks.push(cb.value);
-    });
-
-    if (!name) {
-      alert("請輸入計畫名稱！");
-      return;
-    }
-    if (checkedBooks.length === 0) {
-      alert("請至少選取一個聖經書卷！");
-      return;
-    }
-
-    loader.show("正在儲存計畫...");
-    const success = await db.saveGlobalPlan({
-      id: id || null,
-      name,
-      startDate,
-      endDate,
-      books: checkedBooks,
-      isFixed: isFixed
-    });
-    loader.hide();
-
-    if (success) {
-      if (typeof showToast === "function") {
-        showToast("計畫儲存成功！已自動同步更新所有使用者的挑戰時間。");
-      } else {
-        alert("計畫儲存成功！");
-      }
-
-      // 💡 關鍵修復：儲存成功後，重新載入用戶的活動計畫資料，使主頁挑戰卡片的進度與時間即時重新計算
-      if (typeof db !== "undefined" && db.loadUserData) {
-        await db.loadUserData();
-      }
-      if (typeof updateDashboardView === "function") {
-        updateDashboardView();
-      }
-      if (typeof renderPlanScheduleTracker === "function") {
-        renderPlanScheduleTracker(true);
-      }
-
-      formContainer.classList.add("hidden");
-      renderAdminPlanManagement();
-      if (typeof renderPresetPlansList === 'function') {
-        renderPresetPlansList();
-      }
-    }
-  };
-}
-
-// 延後大區梯次：後台小面板（migration 0126–0128 + db.createRegionStageCohort）
-function wireRegionCohortPanel() {
-  const box = document.getElementById("admin-region-cohort");
-  if (!box || box.dataset.wired === "1") return;
-  box.dataset.wired = "1";
-
-  const regionSel = document.getElementById("cohort-region");
-  if (regionSel) {
-    const regions = (state.orgStructure && state.orgStructure.regions) || [];
-    regionSel.innerHTML = regions.length
-      ? regions.map(r => `<option value="${escapeHTML(r)}">${escapeHTML(r)}</option>`).join("")
-      : `<option value="">（尚無大區資料）</option>`;
-  }
-
-  const btn = document.getElementById("cohort-create-btn");
-  btn?.addEventListener("click", async () => {
-    const greatRegion = (document.getElementById("cohort-region")?.value || "").trim();
-    const sourceStageNo = Number(document.getElementById("cohort-stage")?.value || 0);
-    const startDate = document.getElementById("cohort-start")?.value || "";
-    const endDate = document.getElementById("cohort-end")?.value || "";
-    const isHidden = document.getElementById("cohort-hidden")?.checked !== false;
-    if (!greatRegion) { showToast("請選擇大區"); return; }
-    if (!startDate || !endDate) { showToast("請填起訖日期"); return; }
-    if (endDate <= startDate) { showToast("結束日要晚於開始日"); return; }
-    btn.disabled = true;
-    const res = await db.createRegionStageCohort({ greatRegion, sourceStageNo, startDate, endDate, isHidden });
-    btn.disabled = false;
-    if (!res.success) { showToast(res.message || "建立失敗"); return; }
-    showToast(res.data?.created ? `已建立「${res.data.name}」` : `已更新「${res.data?.name || "梯次"}」`);
-    if (typeof db.loadGlobalPlans === "function") await db.loadGlobalPlans();
-    renderAdminPlanManagement();
-    if (typeof renderPresetPlansList === "function") renderPresetPlansList();
-  });
-}
-
-async function renderAdminPlanManagement() {
-  const tableBody = document.getElementById("admin-plans-table-body");
-  if (!tableBody) return;
-
-  wireRegionCohortPanel();
-
-  if (firstPaint(tableBody)) tableBody.innerHTML = typeof ComponentSkeletonLoader !== "undefined"
-    ? `<tr><td colspan="3">${ComponentSkeletonLoader.getHtml("table-rows", { count: 3, cols: 3 })}</td></tr>`
-    : "";
-
-  try {
-    const plans = state.globalPlans || [];
-    tableBody.innerHTML = "";
-
-    if (plans.length === 0) {
-      tableBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">目前無任何計畫，請點擊上方「新增計畫」建立</td></tr>`;
-      return;
-    }
-
-    plans.forEach(plan => {
-      const tr = document.createElement("tr");
-
-      const bookListText = plan.books.join(", ");
-      const bookCount = plan.books.length;
-      const hidden = isPlanHidden(plan);
-      const isFixed = plan.isFixed !== false && plan.is_fixed !== false;
-      const isCampaign = plan.planKind === "church_campaign" || plan.id === window.CHURCH_CAMPAIGN_ID;
-      // 正式階段限定：cohort 階段在「大區延後梯次」專屬面板管理，這裡維持一般計畫列
-      // 的編輯 / 刪除操作，不套用階段列（隱藏刪除、鎖編輯規則）的處理。
-      const isCampaignStage = window.isCanonicalCampaignStagePlan(plan);
-      const campaignStageNo = Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0);
-
-      let timeColHtml = "";
-      if (isFixed) {
-        timeColHtml = `
-          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
-          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
-        `;
-      } else {
-        const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
-        timeColHtml = `
-          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> 彈性時間</span>
-          <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">共 ${duration} 天</span>
-        `;
-      }
-
-      tr.innerHTML = `
-        <td>
-          <strong style="display: block; margin-bottom: 0.15rem; font-size: 0.875rem; word-break: break-all;">${escapeHTML(plan.name)}${hidden ? ' <span class="text-warning" style="font-size:0.875rem; font-weight: 500;">已隱藏</span>' : ''}</strong>
-          <span title="${escapeHTML(bookListText)}" style="font-size: 0.875rem; color: var(--text-muted); cursor: help; text-decoration: underline dashed; text-underline-offset: 2px;">
-            共 ${bookCount} 卷書卷
-          </span>
-        </td>
-        <td>
-          ${timeColHtml}
-        </td>
-        <td style="text-align: center; vertical-align: middle;">
-          <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
-            ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.875rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
-            ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
-            <button class="primary-btn admin-campaign-rules-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
-            <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>
-            <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">刪除</button>
-          </div>
-        </td>
-      `;
-
-      const campaignRulesBtn = tr.querySelector(".admin-campaign-rules-btn");
-      if (isCampaign) {
-        campaignRulesBtn.onclick = () => window.openCampaignRuleEditor(plan);
-        tr.querySelector(".admin-edit-plan-btn").style.display = "none";
-        tr.querySelector(".admin-delete-plan-btn").style.display = "none";
-      } else if (isCampaignStage) {
-        campaignRulesBtn.remove();
-        tr.querySelector(".admin-edit-plan-btn").style.display = "none";
-        tr.querySelector(".admin-delete-plan-btn").style.display = "none";
-      } else {
-        campaignRulesBtn.remove();
-      }
-
-      // Bind edit event
-      tr.querySelector(".admin-edit-plan-btn").onclick = () => {
-        document.getElementById("admin-plan-form-title").textContent = "編輯讀經計畫";
-        document.getElementById("admin-edit-plan-id").value = plan.id;
-        document.getElementById("admin-plan-name").value = plan.name;
-
-        // Set radio button and fields visibility
-        const fixedRadio = document.querySelector('input[name="admin-plan-time-type"][value="fixed"]');
-        const flexRadio = document.querySelector('input[name="admin-plan-time-type"][value="flexible"]');
-        const dateInputs = document.getElementById("admin-plan-date-inputs");
-        const durationContainer = document.getElementById("admin-plan-duration-container");
-
-        if (isFixed) {
-          if (fixedRadio) fixedRadio.checked = true;
-          document.getElementById("admin-plan-start-date").value = plan.startDate;
-          document.getElementById("admin-plan-end-date").value = plan.endDate;
-          document.getElementById("admin-plan-duration-days").value = "";
-          if (dateInputs) dateInputs.style.display = "grid";
-          if (durationContainer) durationContainer.style.display = "none";
-        } else {
-          if (flexRadio) flexRadio.checked = true;
-          const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
-          document.getElementById("admin-plan-duration-days").value = duration;
-          document.getElementById("admin-plan-start-date").value = "";
-          document.getElementById("admin-plan-end-date").value = "";
-          if (dateInputs) dateInputs.style.display = "none";
-          if (durationContainer) durationContainer.style.display = "block";
-        }
-
-        // Check corresponding books
-        document.querySelectorAll(".admin-book-checkbox").forEach(cb => {
-          cb.checked = plan.books.includes(cb.value);
-        });
-
-        document.getElementById("admin-plan-form-container").classList.remove("hidden");
-        document.getElementById("admin-plan-form-container").scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      };
-
-      const toggleHiddenBtn = tr.querySelector(".admin-toggle-hidden-plan-btn");
-      if (toggleHiddenBtn) {
-        toggleHiddenBtn.onclick = async () => {
-          if (!hidden && typeof window.showConfirmDialog === "function") {
-            const confirmed = await window.showConfirmDialog({
-              title: "暫停開放這個階段？",
-              message: "一般使用者將不再看到或加入這個階段；既有資料不會在此操作中刪除。",
-              confirmText: "暫停開放",
-              cancelText: "取消",
-              isDestructive: true
-            });
-            if (!confirmed) return;
-          }
-
-          loader.show(hidden ? "正在開放階段…" : "正在暫停開放…");
-          const success = await db.setGlobalPlanHidden(plan, !hidden);
-          loader.hide();
-          if (!success) {
-            showToast("開放狀態未能儲存，請稍後再試。");
-            return;
-          }
-
-          showToast(hidden ? "此階段已開放給使用者。" : "此階段已暫停開放。");
-          renderAdminPlanManagement();
-          if (typeof renderPresetPlansList === "function") renderPresetPlansList();
-          if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
-        };
-      }
-
-      // Bind delete event
-      tr.querySelector(".admin-delete-plan-btn").onclick = async () => {
-        const confirmed = await window.showConfirmDialog({
-          title: "確定要刪除此計畫嗎？",
-          message: `您確定要刪除「${plan.name}」嗎？這將使其他會友無法再從列表「加入」此計畫，但已加入的會友仍可照常閱讀打卡。`,
-          confirmText: "確認刪除",
-          cancelText: "取消",
-          isDestructive: true
-        });
-        if (!confirmed) return;
-
-        loader.show("刪除計畫中...");
-        const success = await db.deleteGlobalPlan(plan.id);
-        loader.hide();
-        if (success) {
-          showToast("計畫已成功刪除！");
-          renderAdminPlanManagement();
-          if (typeof renderPresetPlansList === 'function') {
-            renderPresetPlansList();
-          }
-        }
-      };
-
-      tableBody.appendChild(tr);
-    });
-
-  } catch (err) {
-    console.error("Failed to render admin plans:", err);
-    tableBody.innerHTML = `<tr><td colspan="4" class="text-danger" style="text-align: center;">載入計畫失敗: ${err.message || err}</td></tr>`;
-  }
-}
 
 
 
@@ -5923,18 +5501,9 @@ async function renderPlanStatsView() {
 
     // 4. Makeup/Catch up days (🛡️ 進度救援)
     // 一律對「教會原始日程」算，只看第一遍的 log（第一遍之後 log 不再變，數值自然凍結）。
-    const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
-      if (!val) return "";
-      const date = val instanceof Date ? val : new Date(val);
-      if (Number.isNaN(date.getTime())) return "";
-      return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
-    });
-    const round1DateByChapter = new Map();
-    (state.readingLogs || []).forEach(l => {
-      if ((l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey) && (l.round || 1) === 1) {
-        round1DateByChapter.set(`${l.book}_${l.chapter}`, toLocalStr(l.read_at));
-      }
-    });
+    const round1DateByChapter = buildRound1ReadDateMap(state.readingLogs, l =>
+      l.plan_id === state.activePlan.id || l.presetKey === state.activePlan.presetKey
+    );
     const canonicalDays = typeof window.getCanonicalStageScheduleDays === "function"
       ? window.getCanonicalStageScheduleDays(state.activePlan)
       : (state.activePlan.days || []);
@@ -6034,39 +5603,7 @@ async function renderPlanHistoryView() {
 
 // 單一組織單位（大區／牧區／小組）範圍內的 6 項統計數字，供各層節點共用。
 function computeOrgUnitStats(users) {
-  const list = users || [];
-  const totalChapters = list.reduce((sum, u) => sum + (u.chapters_read || 0), 0);
-  const totalMembers = list.length;
-  const totalActive = list.filter(u => (u.chapters_read || 0) > 0 || Boolean(u.last_read)).length;
-  const totalCompleted = list.filter(u => (u.current_round || 1) > 1 || (u.plan_progress || 0) >= 100).length;
-
-  let expectedPct = 50;
-  const contextPlan = getOrgStatsContextPlan();
-  if (contextPlan) {
-    const start = new Date(contextPlan.startDate + "T00:00:00");
-    const end = new Date(contextPlan.endDate + "T00:00:00");
-    const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const elapsed = Math.max(0, Math.min(totalDays, Math.round((today - start) / (1000 * 60 * 60 * 24)) + 1));
-    expectedPct = Math.round((elapsed / totalDays) * 100) || 0;
-  }
-
-  let behindCount = 0;
-  let rereadCount = 0;
-  list.forEach(u => {
-    const currentRound = u.current_round !== undefined
-      ? u.current_round
-      : (u.chapters_read > 850 ? 3 : u.chapters_read > 500 ? 2 : 1);
-    if (currentRound >= 2) {
-      rereadCount++;
-      return;
-    }
-    if (u.plan_progress === 0) behindCount++;
-    else if (u.plan_progress < expectedPct - 5) behindCount++;
-  });
-
-  return { totalChapters, totalMembers, totalActive, totalCompleted, behindCount, rereadCount };
+  return computePlanOrgUnitStats(users, getOrgStatsContextPlan());
 }
 
 // 依目前登入者的管理權限（全教會／大區／牧區／小組）組出可查看的組織樹，
@@ -6312,18 +5849,7 @@ function bindOrgStatsExportButton() {
 }
 
 function logMatchesPlan(log, currentPlanId, currentPresetKey) {
-  // 嚴格以「這個計畫」為範圍：plan_id / global_plan_id / presetKey / preset_key 任一
-  // 對得上才算；四個都沒有的舊日誌才當「無歸屬」退路計入。不能用「沒有 plan_id
-  // 就算這個計畫」的寬鬆退路——那會把別的計畫（帶 global_plan_id 但沒有 camelCase
-  // plan_id）的打卡混進活躍度 / 累積章數（與 calculateAllPlansProgress 同一套規則）。
-  const ap = state.activePlan || {};
-  const planIds = [currentPlanId, ap.id, ap.globalPlanId, ap.global_plan_id].filter(Boolean).map(String);
-  const planKeys = [currentPresetKey, ap.presetKey, ap.preset_key].filter(Boolean).map(String);
-  const logPlanId = log.plan_id || log.global_plan_id;
-  const logKey = log.presetKey || log.preset_key;
-  return (logPlanId && planIds.includes(String(logPlanId))) ||
-    (logKey && planKeys.includes(String(logKey))) ||
-    (!log.plan_id && !log.global_plan_id && !log.presetKey && !log.preset_key);
+  return logMatchesPlanScope(log, currentPlanId, currentPresetKey, state.activePlan);
 }
 
 function renderPersonalHeatmap() {
@@ -7002,98 +6528,14 @@ async function renderGroupParticipantsRankingTable() {
     ? window.getCanonicalStageScheduleDays(statsPlan)
     : (statsPlan.days || []);
 
-  const calculateCatchUpDays = (userLogs) => {
-    if (!baselineScheduleDays.length) return 0;
-    const statsStart = new Date(statsPlan.startDate + "T00:00:00");
-    statsStart.setHours(0, 0, 0, 0);
-    let catchUpDaysVal = 0;
-    const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
-      if (!val) return "";
-      const date = val instanceof Date ? val : new Date(val);
-      if (Number.isNaN(date.getTime())) return "";
-      return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
-    });
+  // 補讀、完成天數、應讀天數都走 schedule-progress.mjs 的共用原語（跟個人報告、團隊名冊同一套）。
+  // 補讀只看第一遍的 log；呼叫端已經篩成這個計畫的 log。
+  const calculateCatchUpDays = (userLogs) =>
+    countLateCompletedDays(baselineScheduleDays, statsPlan.startDate, buildRound1ReadDateMap(userLogs));
 
-    // 💡 效能關鍵升級：建立 logMap (Key: book_chapter -> read_at)，將 O(N) 搜尋優化為 O(1)
-    const logMap = new Map();
-    if (Array.isArray(userLogs)) {
-      for (let i = 0; i < userLogs.length; i++) {
-        const l = userLogs[i];
-        if ((l.round || 1) === 1 && l.book && l.chapter !== undefined) {
-          logMap.set(`${l.book}_${l.chapter}`, l.read_at);
-        }
-      }
-    }
-
-    const days = baselineScheduleDays;
-    for (let index = 0; index < days.length; index++) {
-      const day = days[index];
-      const scheduledDate = new Date(statsStart);
-      scheduledDate.setDate(statsStart.getDate() + index);
-      const scheduledDateStr = scheduledDate.getFullYear() + '-' + String(scheduledDate.getMonth() + 1).padStart(2, '0') + '-' + String(scheduledDate.getDate()).padStart(2, '0');
-
-      let allChaptersCompleted = true;
-      let maxReadDateStr = "";
-
-      for (let c = 0; c < day.chapters.length; c++) {
-        const ch = day.chapters[c];
-        const readAt = logMap.get(`${ch.book}_${ch.chapter}`);
-        if (readAt === undefined) {
-          allChaptersCompleted = false;
-          break;
-        }
-        const logDateStr = toLocalStr(readAt);
-        if (!maxReadDateStr || logDateStr > maxReadDateStr) {
-          maxReadDateStr = logDateStr;
-        }
-      }
-
-      if (allChaptersCompleted && maxReadDateStr && maxReadDateStr > scheduledDateStr) {
-        catchUpDaysVal++;
-      }
-    }
-    return catchUpDaysVal;
-  };
-
-  // Everyone's days-completed is derived the same way, from their exact
-  // chapter total, by walking the shared schedule and counting whole days
-  // fully covered — never from a percent-of-total estimate. Two people who
-  // have both read exactly the same number of chapters against the same
-  // schedule always get the exact same days-completed figure this way; a
-  // progress% × totalDays estimate would round twice (plan_progress is
-  // already a server-rounded whole percent) and could put two identical
-  // 16-chapter readers on opposite sides of a day boundary — one reading as
-  // "今日未完成", the other as "在進度上" — for no real difference between
-  // them. This assumes chapters are read in schedule order, same as every
-  // other progress figure in this app.
-  const countExactDaysCoveredByChapters = (days, chaptersRead) => {
-    let cumulative = 0;
-    let daysCovered = 0;
-    for (const day of days) {
-      const dayChapterCount = day.chapters ? day.chapters.length : 0;
-      if (dayChapterCount === 0) continue;
-      if (cumulative + dayChapterCount > chaptersRead) break;
-      cumulative += dayChapterCount;
-      daysCovered++;
-    }
-    return daysCovered;
-  };
-
-  const planStart = new Date(statsPlan.startDate + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffTime = today.getTime() - planStart.getTime();
-  const diffDays = Math.max(0, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
-  const elapsedPlanDaysCount = Math.min(baselineScheduleDays.length, diffDays);
-  // Rest days (no chapters scheduled) don't increment daysCovered above, so
-  // the expected side must exclude them too — otherwise every rest day
-  // silently counts as a calendar day you were supposed to read, and a
-  // member perfectly on schedule reads as behind by however many rest days
-  // have passed.
-  const expectedDaysCount = baselineScheduleDays
-    .slice(0, elapsedPlanDaysCount)
-    .filter(day => day.chapters && day.chapters.length > 0)
-    .length;
+  // 休息日（沒排章節）兩邊都不算：完成天數依序蓋掉有章節的天，應讀天數也只數有章節的天，
+  // 否則照進度讀的人會被每個休息日誤判成落後一天。
+  const expectedDaysCount = countExpectedScheduleDays(baselineScheduleDays, statsPlan.startDate);
 
   const userZone = state.currentUser.managed_zones || state.currentUser.pastoral_zone
     || getLeadershipAssignmentNodeNames(state.currentUser, "牧區") || "";
@@ -7296,7 +6738,7 @@ async function renderGroupParticipantsRankingTable() {
         // 一律對「基準日程」比對，不受看榜者自己的 level 影響。
         const completedDays = memberIsCompletedOnce
           ? baselineScheduleDays.length
-          : countExactDaysCoveredByChapters(baselineScheduleDays, completed);
+          : countScheduleDaysCoveredByChapters(baselineScheduleDays, completed);
         diff = completedDays - expectedDaysCount;
       }
 
@@ -7782,19 +7224,10 @@ window.showPlanStatsModal = function () {
   todayZero.setHours(0, 0, 0, 0);
   const elapsedDays = Math.max(0, Math.min(totalDays, Math.round((todayZero - start) / (1000 * 60 * 60 * 24)) + 1));
 
-  const toLocalStr = window.toLocalYYYYMMDD || ((val) => {
-    if (!val) return "";
-    const date = val instanceof Date ? val : new Date(val);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
-  });
   // 補讀：一律對「教會原始日程」算，只看第一遍的 log（第一遍後 log 不變 → 數值凍結）。
-  const round1DateByChapter = new Map();
-  (state.readingLogs || []).forEach(l => {
-    if ((l.plan_id === plan.id || l.presetKey === plan.presetKey) && (l.round || 1) === 1) {
-      round1DateByChapter.set(`${l.book}_${l.chapter}`, toLocalStr(l.read_at));
-    }
-  });
+  const round1DateByChapter = buildRound1ReadDateMap(state.readingLogs, l =>
+    l.plan_id === plan.id || l.presetKey === plan.presetKey
+  );
   const canonicalDays = typeof window.getCanonicalStageScheduleDays === "function"
     ? window.getCanonicalStageScheduleDays(plan)
     : (plan.days || []);
@@ -9015,6 +8448,9 @@ if (typeof renderPlanView === 'function') {
   window.renderPlanView = renderPlanView;
 }
 export { renderPlanView, showDiscoverPlans };
+// 給 plan-admin.js（管理員專用 chunk）用。
+export { renderPresetPlansList, renderJoinedPlansList, renderPlanScheduleTracker };
+
 if (typeof updateStatsView === 'function') {
   window.updateStatsView = updateStatsView;
 }

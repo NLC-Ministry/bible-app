@@ -6,6 +6,8 @@ const read = path => readFileSync(resolve(path), "utf8");
 const migration = read("supabase/migrations/0056_lock_campaign_stages_until_admin_release.sql");
 const visibilityMigration = read("supabase/migrations/0057_show_locked_campaign_stages.sql");
 const planModule = read("js/modules/plan.js");
+// 計畫增刪改卡片（含開放／暫停按鈕）在管理員專用 chunk（#370）。
+const planAdminModule = read("js/modules/plan-admin.js");
 const db = read("js/db.js");
 const campaign = read("js/data/church_campaign.js");
 const edgeFunction = read("supabase/functions/nlc-data/index.ts");
@@ -33,9 +35,9 @@ describe("campaign stage release control", () => {
   });
 
   it("shows an administrator release button and verifies persistence", () => {
-    expect(planModule).toContain("admin-toggle-hidden-plan-btn");
-    expect(planModule).toContain("開放給使用者");
-    expect(planModule).toContain("暫停開放");
+    expect(planAdminModule).toContain("admin-toggle-hidden-plan-btn");
+    expect(planAdminModule).toContain("開放給使用者");
+    expect(planAdminModule).toContain("暫停開放");
     expect(db).toContain('.select("id, is_hidden")');
     expect(db).toContain("Global plan visibility update was not verified");
   });

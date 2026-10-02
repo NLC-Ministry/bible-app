@@ -78,6 +78,18 @@ export function countLateCompletedDays(baselineDays, startDate, chapterReadDateB
   return late;
 }
 
+// countLateCompletedDays 要的 chapterReadDateByKey：只收第一遍的 log，同一章後面的覆蓋前面的。
+// matchLog 用來只留某個計畫的 log；不給就全收（呼叫端已經篩好）。
+export function buildRound1ReadDateMap(logs, matchLog = null) {
+  const map = new Map();
+  for (const log of (logs || [])) {
+    if (!log || (log.round || 1) !== 1) continue;
+    if (matchLog && !matchLog(log)) continue;
+    map.set(`${log.book}_${log.chapter}`, toScheduleDateKey(log.read_at));
+  }
+  return map;
+}
+
 // 只有第一遍進行中才算落後 / 超前 / 補讀。
 export function isFirstRoundInProgress(plan) {
   if (!plan) return false;
