@@ -6,6 +6,8 @@ const admin = readFileSync("js/modules/admin.js", "utf8");
 const utils = readFileSync("js/utils.js", "utf8");
 const app = readFileSync("js/app.js", "utf8");
 const plan = readFileSync("js/modules/plan.js", "utf8");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const planStats = readFileSync("js/modules/plan-stats.js", "utf8");
 const profile = readFileSync("js/modules/profile.js", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const css = readFileSync("index.css", "utf8");
@@ -90,11 +92,11 @@ describe("management plan hub", () => {
   });
 
   it("applies organization filters to participants, statistics, and complete teams", () => {
-    expect(plan).toContain("state.currentUser.managed_regions || state.currentUser.great_region");
-    expect(plan).toContain("state.currentUser.managed_zones || state.currentUser.pastoral_zone");
-    expect(plan).toContain("state.currentUser.managed_groups || state.currentUser.small_group");
-    expect(plan).toContain('return "all_zones"');
-    expect(plan).toContain('return "all_groups"');
+    expect(planStats).toContain("state.currentUser.managed_regions || state.currentUser.great_region");
+    expect(planStats).toContain("state.currentUser.managed_zones || state.currentUser.pastoral_zone");
+    expect(planStats).toContain("state.currentUser.managed_groups || state.currentUser.small_group");
+    expect(planStats).toContain('return "all_zones"');
+    expect(planStats).toContain('return "all_groups"');
     // Regression: window.refreshAdminTeamRegistrationFilters() (re-renders
     // the 3人/6人 team panels) used to be wired only to #members-zone-selector,
     // a legacy `class="hidden" style="display:none"` element (index.html)
@@ -103,13 +105,13 @@ describe("management plan hub", () => {
     // renderPlanMembersView() — so changing the filter updated the
     // participant list but silently left the 3人/6人 team panels showing
     // stale data. Both listeners must call it.
-    const directListenerBlock = plan.slice(
-      plan.indexOf("[regionSelect, zoneSelect, groupSelect].forEach(el => {"),
-      plan.indexOf("const membersZoneSelector")
+    const directListenerBlock = planStats.slice(
+      planStats.indexOf("[regionSelect, zoneSelect, groupSelect].forEach(el => {"),
+      planStats.indexOf("const membersZoneSelector")
     );
     expect(directListenerBlock).toContain("await renderPlanMembersView();");
     expect(directListenerBlock).toContain("window.refreshAdminTeamRegistrationFilters");
-    expect(plan).toContain("window.refreshAdminTeamRegistrationFilters");
+    expect(planStats).toContain("window.refreshAdminTeamRegistrationFilters");
     expect(admin).toContain("teamMatchesManagementOrgFilter");
     expect(admin).toContain("members.some(member =>");
     expect(admin).toContain(".filter(team => teamMatchesManagementOrgFilter(team, activeOrgFilter))");

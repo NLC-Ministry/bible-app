@@ -8,6 +8,8 @@ import {
 
 const db = readFileSync("js/db.js", "utf8");
 const plan = readFileSync("js/modules/plan.js", "utf8");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const planStats = readFileSync("js/modules/plan-stats.js", "utf8");
 const utils = readFileSync("js/utils.js", "utf8");
 const firstRoundLogs = Array.from({ length: 50 }, (_, index) => ({
   book: "創世記",
@@ -130,9 +132,9 @@ describe("participant overview current-round progress", () => {
     expect(db).toContain("chapters_read: uniqueLogs.length");
     expect(db).toContain("getConfirmedReadingRound({");
     expect(plan).toContain("plan.upgradePromptHandled = true");
-    expect(plan).toContain('statusStr = "第一遍完成"');
+    expect(planStats).toContain('statusStr = "第一遍完成"');
     // 0% now reads as "in progress" rather than "complete 0%".
-    expect(plan).toContain('statusStr = memberProgress > 0 ? `第${memberRound}遍完成${memberProgress}%` : `第${memberRound}遍進行中`');
+    expect(planStats).toContain('statusStr = memberProgress > 0 ? `第${memberRound}遍完成${memberProgress}%` : `第${memberRound}遍進行中`');
     expect(plan).toContain("const visibleChapters = (selectedDay.chapters || []).filter");
     expect(plan).toContain("db.invalidateMergedUsersCache();");
     expect(utils).toContain("log.read_at || log.readAt");

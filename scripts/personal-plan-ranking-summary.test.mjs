@@ -5,7 +5,8 @@ const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.m
 const migration = read("supabase/migrations/0050_public_personal_plan_ranking_summary.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
-const plan = read("js/modules/plan.js");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const plan = read("js/modules/plan-stats.js");
 
 describe("public personal plan ranking summary", () => {
   it("ranks each authenticated caller against every active participant in the selected plan", () => {

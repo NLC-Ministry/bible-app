@@ -43,7 +43,8 @@ describe("static close button usage", () => {
   });
 });
 
-const plan = read("js/modules/plan.js");
+// #370：統計、排行、組員狀況在 plan-stats.js，這裡的規則兩檔一起檢查。
+const plan = [read("js/modules/plan.js"), read("js/modules/plan-stats.js")].join("\n");
 const teamRegistration = read("js/modules/team-registration.js");
 const onboardingHelper = read("js/modules/onboarding-helper.js");
 const teamCss = read("css/team-registration.css");

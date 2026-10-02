@@ -83,6 +83,8 @@ const LAZY_MODULE_LOADERS = {
   plan: () => import('./modules/plan.js'),
   // 計畫分頁的管理員計畫增刪改卡片，只有系統管理員會載入（#370）。
   'plan-admin': () => import('./modules/plan-admin.js'),
+  // 計畫分頁的統計、排行、組員狀況（含 Chart.js 載入）；plan.js 第一次要畫這些畫面時才載入（#370）。
+  'plan-stats': () => import('./modules/plan-stats.js'),
   profile: () => import('./modules/profile.js'),
   admin: () => import('./modules/admin.js'),
   'team-registration': () => import('./modules/team-registration.js'),
@@ -448,6 +450,9 @@ async function loadModule(name) {
     try {
       const mod = await loader();
       moduleCache[name] = mod;
+      if (name === 'plan' && typeof mod.registerPlanStatsLoader === 'function') {
+        mod.registerPlanStatsLoader(() => loadModule('plan-stats'));
+      }
       if (typeof mod.init === 'function') {
         mod.init();
       }
