@@ -523,7 +523,7 @@ function renderMyExamDetail(item) {
   if (!body) return;
   // 大測驗的逐題成績在獨立的測驗頁（exam.html），那裡已經有完整的檢討與連線。
   const go = practice => {
-    const returnTo = `${location.pathname}${location.search}#my-exams`;
+    const returnTo = `${location.pathname}${location.search}#/profile/exams`;
     const url = `exam.html?paper=${encodeURIComponent(item.paperId)}${practice ? "&attempt=practice" : ""}&return=${encodeURIComponent(returnTo)}`;
     try { location.assign(url); } catch (_) { location.href = url; }
   };
@@ -786,6 +786,7 @@ function openProfileDetail(key) {
   }
   if (key === "feature-settings") void renderFeatureSettingsSubpage();
   if (key === "personal-info") renderPersonalInfoSubpage();
+  window.dispatchEvent(new Event("app:route-changed"));
 }
 
 function closeProfileDetail() {
@@ -797,6 +798,7 @@ function closeProfileDetail() {
     page.setAttribute("aria-hidden", "true");
   }
   document.body.classList.remove("profile-subpage-open");
+  window.dispatchEvent(new Event("app:route-changed"));
 }
 window.openProfileDetail = openProfileDetail;
 window.closeProfileDetail = closeProfileDetail;
@@ -1221,10 +1223,7 @@ export function init() {
     };
   });
   wireHighlightsNotesControls();
-
-  if (location.hash === "#my-exams") {
-    openProfileDetail("exams");
-  }
+  // 從測驗頁回來的 #/profile/exams（舊的 #my-exams）由 app-hash-routing.mjs 開子頁。
 
 
 

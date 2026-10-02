@@ -359,6 +359,8 @@ const appRouter = {
   },
 
   updateNavigationChrome() {
+    // 畫面變了：讓 hash 路由把目前畫面寫回網址（app-hash-routing.mjs，下一個 microtask 才寫）。
+    window.dispatchEvent(new Event("app:route-changed"));
     const backBtn = document.getElementById("global-back-btn");
     const backLabel = document.getElementById("global-back-label");
     const brandLogo = document.getElementById("brand-logo");

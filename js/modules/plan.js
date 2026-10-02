@@ -328,6 +328,7 @@ async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
   } else if (target === GROUP_SUBVIEW.RANKING) {
     await renderPlanRankingView();
   }
+  window.dispatchEvent(new Event("app:route-changed"));
 }
 
 // 一次切到「團隊」會經過 switchPrimaryView → switchPage → showPlanGroupSubview →
