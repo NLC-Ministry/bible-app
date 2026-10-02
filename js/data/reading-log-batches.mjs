@@ -1,3 +1,5 @@
+import { isLastPage, normalizePageSize } from './pagination.mjs';
+
 export function chunkUniqueValues(values = [], batchSize = 40) {
   const normalizedBatchSize = Math.max(1, Number(batchSize) || 40);
   const uniqueValues = Array.from(new Set((Array.isArray(values) ? values : [])
@@ -12,13 +14,14 @@ export function chunkUniqueValues(values = [], batchSize = 40) {
 
 export async function fetchReadingLogsByPlanIds(client, planIds = [], options = {}) {
   const batchSize = Math.max(1, Number(options.batchSize) || 40);
-  const pageSize = Math.max(1, Math.min(200, Number(options.pageSize) || 200));
+  const pageSize = normalizePageSize(options.pageSize);
   const chunks = chunkUniqueValues(planIds, batchSize);
   if (!client || chunks.length === 0) return { data: [], error: null };
 
   const results = await Promise.all(chunks.map(async chunk => {
     const rows = [];
-    for (let from = 0; ; from += pageSize) {
+    // 以實際拿到的筆數前進，新舊 nlc-data 上限都完整（#399，見 pagination.mjs）。
+    for (let from = 0; ;) {
       const { data, error } = await client
         .from("reading_logs")
         .select("id, user_id, book, chapter, read_at, plan_id, round")
@@ -28,7 +31,8 @@ export async function fetchReadingLogsByPlanIds(client, planIds = [], options = 
       if (error) return { data: [], error };
       const page = Array.isArray(data) ? data : [];
       rows.push(...page);
-      if (page.length < pageSize) break;
+      if (isLastPage(page.length, pageSize)) break;
+      from += page.length;
     }
     return { data: rows, error: null };
   }));

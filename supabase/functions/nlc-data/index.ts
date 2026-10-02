@@ -150,6 +150,10 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
+// 每個 select／batch 請求最多回幾筆（.range() 跨度與 .limit() 共用）。等於 PostgREST
+// 預設 max rows。以前是 200（#399）；前端分頁以實際筆數前進，新舊上限都相容。
+const MAX_ROWS_PER_REQUEST = 1000;
+
 const READ_TABLES = new Set([
   "great_regions",
   "pastoral_zones",
@@ -860,10 +864,10 @@ async function runSelectPipeline(
   query = applyOrder(query, spec);
   if (spec.range && Number.isInteger(spec.range.from) && Number.isInteger(spec.range.to)) {
     const rangeFrom = Math.max(0, spec.range.from);
-    const rangeTo = Math.min(Math.max(rangeFrom, spec.range.to), rangeFrom + 199);
+    const rangeTo = Math.min(Math.max(rangeFrom, spec.range.to), rangeFrom + MAX_ROWS_PER_REQUEST - 1);
     query = query.range(rangeFrom, rangeTo);
   }
-  if (spec.limit) query = query.limit(Math.min(200, Math.max(1, Number(spec.limit) || 1)));
+  if (spec.limit) query = query.limit(Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(spec.limit) || 1)));
   if (spec.returning === "single") query = query.single();
   else if (spec.returning === "maybeSingle") query = query.maybeSingle();
 
@@ -1541,10 +1545,10 @@ Deno.serve(async (req: Request) => {
     query = applyOrder(query, body);
     if (body.range && Number.isInteger(body.range.from) && Number.isInteger(body.range.to)) {
       const rangeFrom = Math.max(0, body.range.from);
-      const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + 199);
+      const rangeTo = Math.min(Math.max(rangeFrom, body.range.to), rangeFrom + MAX_ROWS_PER_REQUEST - 1);
       query = query.range(rangeFrom, rangeTo);
     }
-    if (body.limit) query = query.limit(Math.min(200, Math.max(1, Number(body.limit) || 1)));
+    if (body.limit) query = query.limit(Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(body.limit) || 1)));
     if (body.returning === "single") query = query.single();
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
 
