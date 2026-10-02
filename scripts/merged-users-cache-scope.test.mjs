@@ -135,7 +135,7 @@ describe("merged users cache keeps users and logs of the same plan (#369)", () =
 describe("participants overview follows the selected management plan (#369)", () => {
   it("reads the plan from getOrgStatsContextPlan and users+logs from one cache entry", async () => {
     const { readFileSync } = await import("node:fs");
-    const plan = readFileSync(new URL("../js/modules/plan.js", import.meta.url), "utf8");
+    const plan = readFileSync(new URL("../js/modules/plan-stats.js", import.meta.url), "utf8");
     const start = plan.indexOf("async function renderGroupParticipantsRankingTable()");
     const fn = plan.slice(start, plan.indexOf("window.displayParticipantsList = function", start));
     expect(fn).toContain("const statsPlan = getOrgStatsContextPlan();");

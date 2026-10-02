@@ -9,6 +9,8 @@ const indexHtml = readFileSync("index.html", "utf8");
 const examHtml = readFileSync("exam.html", "utf8");
 const gradeHtml = readFileSync("grade.html", "utf8");
 const planModule = readFileSync("js/modules/plan.js", "utf8");
+// #370：統計、排行（含 Chart.js 圖表）搬到 plan-stats.js。
+const planStatsModule = readFileSync("js/modules/plan-stats.js", "utf8");
 const chartLoader = readFileSync("js/modules/chart-loader.mjs", "utf8");
 
 describe("startup performance contract", () => {
@@ -118,19 +120,19 @@ describe("Chart.js is off the critical path (A2)", () => {
     expect(chartLoader).toContain("export function ensureChartLib()");
     expect(chartLoader).toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js@\d+\.\d+\.\d+/);
     expect(chartLoader).not.toMatch(/cdn\.jsdelivr\.net\/npm\/chart\.js["']/);
-    expect(planModule).toContain('import { ensureChartLib } from "./chart-loader.mjs";');
+    expect(planStatsModule).toContain('import { ensureChartLib } from "./chart-loader.mjs";');
   });
 
   it("renderOrUpdateChart self-heals when Chart is not loaded yet", () => {
-    const fn = planModule.slice(planModule.indexOf("function renderOrUpdateChart("), planModule.indexOf("function renderOrUpdateChart(") + 700);
+    const fn = planStatsModule.slice(planStatsModule.indexOf("function renderOrUpdateChart("), planStatsModule.indexOf("function renderOrUpdateChart(") + 700);
     expect(fn).toContain('if (typeof Chart === "undefined") {');
     expect(fn).toContain("ensureChartLib()");
     expect(fn).toContain("renderOrUpdateChart(key, canvasEl, config)");
   });
 
   it("warms the Chart.js fetch when a chart-bearing sub-view opens", () => {
-    expect(planModule).toMatch(/async function renderPlanStatsView\(\)\s*\{\s*\n\s*ensureChartLib\(\)/);
-    expect(planModule).toMatch(/async function renderPlanRankingView\(\)\s*\{\s*\n\s*ensureChartLib\(\)/);
+    expect(planStatsModule).toMatch(/async function renderPlanStatsView\(\)\s*\{\s*\n\s*ensureChartLib\(\)/);
+    expect(planStatsModule).toMatch(/async function renderPlanRankingView\(\)\s*\{\s*\n\s*ensureChartLib\(\)/);
     // updateStatsView was removed 2026-09-16 (dead code — its "stats-view" tab
     // no longer exists in the tab bar; see plan.js's removal comment).
   });
@@ -196,7 +198,8 @@ describe("web fonts: no unused Light (300) face downloaded (C)", () => {
     expect(css).not.toMatch(/font-weight:\s*300\b/);
   });
 
-  it("plan.js chart tick labels no longer request the unloaded weight 300", () => {
+  it("plan.js / plan-stats.js chart tick labels no longer request the unloaded weight 300", () => {
     expect(planModule).not.toMatch(/weight:\s*['"]300['"]/);
+    expect(planStatsModule).not.toMatch(/weight:\s*['"]300['"]/);
   });
 });

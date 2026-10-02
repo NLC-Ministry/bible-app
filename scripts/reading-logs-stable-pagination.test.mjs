@@ -12,6 +12,8 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const read = path => readFileSync(join(root, path), "utf8");
 const db = read("js/db.js");
 const plan = read("js/modules/plan.js");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const planStats = read("js/modules/plan-stats.js");
 const nlcData = read("supabase/functions/nlc-data/index.ts");
 const migrationFile = readdirSync(join(root, "supabase/migrations"))
   .find(name => name.endsWith("_plan_chapter_total.sql"));
@@ -109,9 +111,9 @@ describe("累積閱讀章數由伺服器計算 (#348)", () => {
 
   it("個人統計先顯示本機數字，伺服器回來取較大的，舊請求不覆蓋新畫面", () => {
     expect(db).toContain('state.supabase.rpc("get_my_plan_chapter_total", { p_plan_id: planId })');
-    expect(plan).toContain("db.fetchPlanChapterTotal(totalPlanId)");
-    expect(plan).toContain("reportStatTotalChapters.textContent = Math.max(serverTotal, localTotal);");
-    expect(plan).toContain("totalRenderToken !== planChapterTotalRenderToken");
-    expect(plan).toContain("state.activePlan.id !== totalPlanId");
+    expect(planStats).toContain("db.fetchPlanChapterTotal(totalPlanId)");
+    expect(planStats).toContain("reportStatTotalChapters.textContent = Math.max(serverTotal, localTotal);");
+    expect(planStats).toContain("totalRenderToken !== planChapterTotalRenderToken");
+    expect(planStats).toContain("state.activePlan.id !== totalPlanId");
   });
 });

@@ -8,7 +8,8 @@ const pastoralMigration = read("supabase/migrations/0049_public_pastoral_zone_le
 const pastoralAverageMigration = read("supabase/migrations/0089_pastoral_zone_rank_by_average_chapters.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
-const plan = read("js/modules/plan.js");
+// #370：統計、排行、組員狀況搬到 plan-stats.js。
+const plan = read("js/modules/plan-stats.js");
 const html = read("index.html");
 const css = read("index.css");
 

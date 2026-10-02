@@ -15,7 +15,8 @@ describe("admin participant basic information", () => {
   it("shows escaped basic details in system settings and keeps plan statistics separate", () => {
     const html = read("index.html");
     const admin = read("js/modules/admin.js");
-    const plan = read("js/modules/plan.js");
+    // #370：統計、排行、組員狀況在 plan-stats.js，這裡的規則兩檔一起檢查。
+    const plan = [read("js/modules/plan.js"), read("js/modules/plan-stats.js")].join("\n");
     const css = read("css/admin-registration-statistics.css");
 
     expect(html).toContain("使用者基本資料");
