@@ -169,8 +169,11 @@ let homeEndTimer = null;
 
 // 首頁一直開著的話，活動結束那一刻自己重新整理一次（伺服器會回 hidden，卡片收起）。
 // 秒數由伺服器算（secondsUntilEnd），不依賴裝置時鐘或時區。
+// 沒給秒數（null／undefined／空字串）就不排：Number(null) 是 0，會變成每秒
+// 重查一次的無限迴圈（#402）。
 function scheduleHomeEndRefresh(secondsUntilEnd) {
   if (homeEndTimer) { clearTimeout(homeEndTimer); homeEndTimer = null; }
+  if (secondsUntilEnd === null || secondsUntilEnd === undefined || secondsUntilEnd === "") return;
   const seconds = Number(secondsUntilEnd);
   if (!Number.isFinite(seconds) || seconds < 0) return;
   homeEndTimer = setTimeout(() => {
