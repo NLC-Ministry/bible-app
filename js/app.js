@@ -25,6 +25,7 @@ import {
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
+import { isAppShellVisible, resolvePostLoadTab } from './boot-navigation.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
@@ -567,8 +568,11 @@ async function refreshCurrentAppView() {
   // tear down and rebuild the verse list (renderReaderText resets scrollTop to 0)
   // for no reason. Skip it so refocusing the app doesn't yank the reader back
   // to the top or interrupt an in-progress long-press selection.
-  if (currentTab !== "reader-view") {
-    await appRouter.switchTab(currentTab, {
+  // Read the tab now, not the one captured before the awaits above: the user
+  // may have switched tabs while data was loading (#388).
+  const tabAfterLoad = appRouter.currentTab || "dashboard-view";
+  if (tabAfterLoad !== "reader-view") {
+    await appRouter.switchTab(tabAfterLoad, {
       keepPlanDetail: true,
       restoreTabScroll: false
     });
@@ -1041,8 +1045,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (profileLost || planLost) {
       Promise.resolve(db.loadUserData && db.loadUserData(true)).then(() => {
         if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext();
-        if (currentTab && currentTab !== "reader-view" && window.appRouter) {
-          window.appRouter.switchTab(currentTab, { keepPlanDetail: true, restoreTabScroll: false });
+        // 用載完當下的分頁重畫，不是開始前記下的那頁：載入期間使用者可能已經換頁（#388）。
+        const tabAfterLoad = window.appRouter && window.appRouter.currentTab;
+        if (tabAfterLoad && tabAfterLoad !== "reader-view") {
+          window.appRouter.switchTab(tabAfterLoad, { keepPlanDetail: true, restoreTabScroll: false });
         }
       }).catch(() => {});
     }
@@ -1175,8 +1181,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       db.loadUserData(true)
     ]);
 
-    if (quickLaunchBible && !resumePlan) {
-      await appRouter.switchTab("reader-view");
+    const quickLaunchReader = quickLaunchBible && !resumePlan;
+    const quickLaunchSwitch = quickLaunchReader ? appRouter.switchTab("reader-view") : null;
+    // 分頁列在資料載入期間已經可以點。記下現在的導覽號碼（在快速啟動自己的
+    // switchTab 之後），載完再比對，使用者中途切過分頁就不要把他拉走（#388）。
+    const navGenBeforeDataLoad = navRenderGuard.current;
+    if (quickLaunchSwitch) {
+      await quickLaunchSwitch;
       window.__bootMark?.("first-tab-rendered");
       reportBootPerf();
     }
@@ -1198,16 +1209,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Update role-dependent UI now that profile data is loaded
     if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
 
-    if (quickLaunchBible && !resumePlan) {
-      // Reader was already rendered above without plan data (e.g. read-status
-      // checkboxes); refresh it now that plans/reading logs are in, same
-      // "re-render current tab after data arrives" pattern onAppForeground()
-      // already uses elsewhere in this file.
-      if (typeof window.renderReaderText === 'function' && appRouter.currentTab === "reader-view") {
+    const userNavigatedDuringLoad = navRenderGuard.current !== navGenBeforeDataLoad;
+    const postLoadTab = resolvePostLoadTab({
+      landingTab: quickLaunchReader ? "reader-view" : (resumePlan ? "plan-view" : "dashboard-view"),
+      navGenAtStart: navGenBeforeDataLoad,
+      navGenNow: navRenderGuard.current,
+      currentTab: appRouter.currentTab
+    });
+    if (postLoadTab === "reader-view" && appRouter.currentTab === "reader-view") {
+      // Reader was already rendered without plan data (e.g. read-status
+      // checkboxes); refresh just the text now that plans/reading logs are in
+      // — switchTab would reset the reader's scroll position.
+      if (typeof window.renderReaderText === 'function') {
         window.renderReaderText();
       }
+    } else if (userNavigatedDuringLoad) {
+      // The user's tab rendered before plans/profile arrived — redraw it in place.
+      await appRouter.switchTab(postLoadTab, { keepPlanDetail: true, restoreTabScroll: false });
     } else {
-      await appRouter.switchTab(resumePlan ? "plan-view" : "dashboard-view");
+      await appRouter.switchTab(postLoadTab);
+    }
+    if (!quickLaunchReader) {
       window.__bootMark?.("first-tab-rendered");
       reportBootPerf();
     }
@@ -1343,6 +1365,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // 初始化/切換首頁時 push 虛擬 Root 紀錄，用以攔截返回鍵
     function pushRootState() {
+      // 登入頁開著時不塞：iOS 會把當下畫面存成「上一頁」的左滑預覽，之後一直看到登入頁（#389）。
+      if (!isAppShellVisible(document)) return;
       if (!window.history.state || !window.history.state.isAppRoot) {
         window.history.pushState({ isAppRoot: true }, "");
       }
@@ -1442,6 +1466,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // 啟動時與路由切換時，確保 Root State 存在
     pushRootState();
+    // 啟動時停在登入頁、之後在同一頁完成登入（例如從 Member Hub 回來重同步）：
+    // 等 App 畫面真的畫出來（兩個 frame）再塞，預覽才會是 App 而不是登入頁。
+    window.addEventListener("app:shell-shown", () => {
+      requestAnimationFrame(() => requestAnimationFrame(pushRootState));
+    });
 
     // 攔截 switchTab 以在切換 Tab 時重新確認/鎖定 history 狀態。
     // 只有「還是最新一次」的切換才 push history，過期的切換完成時安靜跳過，
