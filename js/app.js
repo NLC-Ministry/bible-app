@@ -26,6 +26,7 @@ import {
 } from './login-onboarding-gate.mjs';
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { isAppShellVisible, resolvePostLoadTab } from './boot-navigation.mjs';
+import { createAppHashRouting, ROUTE_CHANGED_EVENT } from './app-hash-routing.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
@@ -334,7 +335,7 @@ async function renderNotificationsList() {
         document.getElementById("notification-popover")?.classList.add("hidden");
         // 同分頁導向，不開新視窗：安裝版 PWA / 手機 / 桌機行為一致，也不會被彈窗攔截。
         // 帶上 return，測驗頁關閉時用「上一頁」回到這裡（原分頁狀態由 bfcache 還原）。
-        const back = location.pathname + location.search;
+        const back = location.pathname + location.search + location.hash;
         location.assign(
           "exam.html?paper=" + encodeURIComponent(item.paperId) +
           "&return=" + encodeURIComponent(back)
@@ -979,8 +980,24 @@ const appVersionWatcher = new VersionWatcher({
 // the safety check the same way the banner's tap does.
 window.checkAppUpdate = () => appVersionWatcher.check({ force: true, ignoreSafety: true });
 
+// 網址 hash 路由（#370）：開機開到網址指定的畫面，之後把目前畫面寫回網址。
+const hashRouting = createAppHashRouting({
+  win: window,
+  doc: document,
+  appRouter,
+  state,
+  loadModule,
+  getLoadedModule: name => moduleCache[name] || null,
+  getRole: () => getUserRoleCode(state.currentUser),
+  toast: message => { if (typeof showToast === "function") showToast(message); }
+});
+window.addEventListener(ROUTE_CHANGED_EVENT, () => hashRouting.requestSync());
+document.addEventListener("click", event => hashRouting.handleLinkClick(event));
+
 document.addEventListener("DOMContentLoaded", async () => {
   window.__bootMark?.("dom-content-loaded");
+  // 在任何東西改網址之前讀出深連結（auth 的 callback 清網址會保留 hash，但保險起見先讀）。
+  const bootHashRoute = hashRouting.captureBootRoute();
   // Boot-time check: if the HTML we just got was a stale cached copy, fix it
   // now, before the user has done anything worth preserving.
   appVersionWatcher.check({ force: true }).catch(() => {});
@@ -1195,7 +1212,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       db.loadUserData(true)
     ]);
 
-    const quickLaunchReader = quickLaunchBible && !resumePlan;
+    // 網址指定了畫面（深連結、重新整理、更新後重新載入）就不快速啟動讀經，直接開那個畫面。
+    const quickLaunchReader = quickLaunchBible && !resumePlan && !bootHashRoute;
     const quickLaunchSwitch = quickLaunchReader ? appRouter.switchTab("reader-view") : null;
     // 分頁列在資料載入期間已經可以點。記下現在的導覽號碼（在快速啟動自己的
     // switchTab 之後），載完再比對，使用者中途切過分頁就不要把他拉走（#388）。
@@ -1230,6 +1248,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       navGenNow: navRenderGuard.current,
       currentTab: appRouter.currentTab
     });
+    const deferToBootRoute = !!bootHashRoute && !resumePlan && isAppShellVisible(document);
     if (postLoadTab === "reader-view" && appRouter.currentTab === "reader-view") {
       // Reader was already rendered without plan data (e.g. read-status
       // checkboxes); refresh just the text now that plans/reading logs are in
@@ -1240,7 +1259,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (userNavigatedDuringLoad) {
       // The user's tab rendered before plans/profile arrived — redraw it in place.
       await appRouter.switchTab(postLoadTab, { keepPlanDetail: true, restoreTabScroll: false });
-    } else {
+    } else if (!deferToBootRoute) {
+      await appRouter.switchTab(postLoadTab);
+    }
+    // 有深連結就在這裡開（不先畫一次首頁）；開不了（離線模式、出錯）就退回預設分頁。
+    const openedBootRoute = await hashRouting.finishBoot({
+      userNavigated: userNavigatedDuringLoad,
+      skipRoute: !!resumePlan
+    });
+    if (deferToBootRoute && !userNavigatedDuringLoad && !openedBootRoute) {
       await appRouter.switchTab(postLoadTab);
     }
     if (!quickLaunchReader) {
@@ -1382,12 +1409,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       // 登入頁開著時不塞：iOS 會把當下畫面存成「上一頁」的左滑預覽，之後一直看到登入頁（#389）。
       if (!isAppShellVisible(document)) return;
       if (!window.history.state || !window.history.state.isAppRoot) {
-        window.history.pushState({ isAppRoot: true }, "");
+        // 底下這一筆標成 base：之後 popstate 回到 state 是 null 的紀錄，就知道是新開的
+        // hash（網址列手打、點了 #/ 連結），不是返回鍵（#370）。
+        // 網址明確帶 location.href，hash 路由不依賴各瀏覽器對空字串網址的處理。
+        window.history.replaceState({ ...(window.history.state || {}), isAppBase: true }, "", window.location.href);
+        window.history.pushState({ isAppRoot: true }, "", window.location.href);
       }
     }
 
     // 監聽 popstate
     window.addEventListener("popstate", (event) => {
+      if (event.state === null && hashRouting.handleFreshNavigation()) return;
+      // 回到 root 紀錄不用做事，但網址可能是那一筆舊的，改回目前畫面。
+      if (event.state && event.state.isAppRoot) hashRouting.requestSync();
+
       // 1. 檢查當前是否有 Vanilla Modal 開啟
       const versionPicker = document.getElementById("bible-version-picker-modal");
       const isPickerOpen = versionPicker && !versionPicker.classList.contains("hidden");
