@@ -156,6 +156,53 @@ export function prepareSupabaseVendor(root, htmlSources) {
   };
 }
 
+// Tailwind 改成建置時產生（#418 第二階段）：原本 index.html 載入 cdn.tailwindcss.com，在瀏覽器端
+// 掃 DOM 即時產生 CSS。現在用與 CDN 同版本的 Tailwind CLI 依 tailwind.config.cjs 掃原始碼產生，
+// 輸出成獨立的 tailwind.<hash>.css、只給 index.html（read/exam/grade 原本就沒有 Tailwind，
+// 併進共用的 index.<hash>.css 會讓 .container/.flex/.border 之類的規則套到那些頁面）。
+export const TAILWIND_PLACEHOLDER = "<!-- build:tailwind-css -->";
+
+export function buildTailwindCss(root, esbuildCmd = "npx esbuild") {
+  const configPath = join(root, "tailwind.config.cjs");
+  if (!existsSync(configPath)) throw new Error("bundle: missing tailwind.config.cjs");
+  const tmp = mkdtempSync(join(tmpdir(), "bible-tailwind-"));
+  try {
+    const inFile = join(tmp, "in.css");
+    const rawFile = join(tmp, "raw.css");
+    const outFile = join(tmp, "out.css");
+    writeFileSync(inFile, "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n", "utf8");
+    try {
+      // cwd = root：tailwind.config.cjs 的 content 路徑是相對於專案根目錄。
+      execSync(`npx tailwindcss -c "${configPath}" -i "${inFile}" -o "${rawFile}"`, {
+        encoding: "utf8",
+        cwd: root,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (err) {
+      throw new Error(`bundle: tailwind CSS build failed: ${err.stderr || err.message}`);
+    }
+    const raw = readFileSync(rawFile, "utf8");
+    // 沒有工具類規則代表 content 設定或 CLI 壞了；寧可建置失敗，也不要上線一份沒有樣式的 App。
+    if (!/\.flex\s*\{/.test(raw)) throw new Error("bundle: tailwind CSS output has no utilities; check tailwind.config.cjs content globs");
+    // 和 index.css 一樣用 esbuild 壓縮（只去空白／註解，不改選擇器）；失敗就用未壓縮版。
+    try {
+      execSync(`${esbuildCmd} "${rawFile}" --minify --charset=utf8 --outfile="${outFile}"`, {
+        encoding: "utf8",
+        cwd: root,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      const minified = readFileSync(outFile, "utf8");
+      if (minified && minified.length > raw.length * 0.3) return minified;
+      console.warn("[bundle] tailwind CSS minify output looked wrong; keeping raw CSS.");
+    } catch (err) {
+      console.warn("[bundle] tailwind CSS minify failed; keeping raw CSS.", err.stderr || err.message);
+    }
+    return raw;
+  } finally {
+    rmDirRecursive(tmp);
+  }
+}
+
 export function emitBundle({ root, outDir }) {
   const indexPath = join(root, "index.html");
   if (!existsSync(indexPath)) throw new Error(`bundle: missing ${indexPath}`);
@@ -248,6 +295,9 @@ export function emitBundle({ root, outDir }) {
 
   const jsFile = `app.${contentHash(processedJs)}.js`;
   const cssFile = `index.${contentHash(cssContent)}.css`;
+  if (!html.includes(TAILWIND_PLACEHOLDER)) throw new Error(`bundle: index.html is missing the ${TAILWIND_PLACEHOLDER} placeholder`);
+  const tailwindCss = buildTailwindCss(root, esbuildCmd);
+  const tailwindFile = `tailwind.${contentHash(tailwindCss)}.css`;
   const readOptionalHtml = (name) => (existsSync(join(root, name)) ? readFileSync(join(root, name), "utf8") : "");
   const supabaseVendor = prepareSupabaseVendor(root, [
     ["index.html", html],
@@ -278,6 +328,8 @@ export function emitBundle({ root, outDir }) {
   }
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
   writeFileSync(join(outDir, "index.css"), cssContent, "utf8");
+  writeFileSync(join(outDir, tailwindFile), tailwindCss, "utf8");
+  writeFileSync(join(outDir, "tailwind.css"), tailwindCss, "utf8");
   if (supabaseVendor) writeFileSync(join(outDir, supabaseVendor.file), supabaseVendor.content, "utf8");
   console.log("DEBUG: Files written successfully!");
 
@@ -294,6 +346,10 @@ export function emitBundle({ root, outDir }) {
     seenStylesheet += 1;
     return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}" onerror="window.showAppStyleRecovery(this)">` : "";
   });
+  outHtml = outHtml.replace(
+    TAILWIND_PLACEHOLDER,
+    `<link rel="stylesheet" href="/${tailwindFile}" onerror="window.showAppStyleRecovery(this)">`
+  );
   // 一定要在 SCRIPT_RE 之後：換好的同網域標籤也是本機 <script src>，先換會被當成 app 的 script 吃掉。
   outHtml = withSupabaseVendor(outHtml);
   console.log("DEBUG: Writing index.html...");
@@ -343,6 +399,7 @@ export function emitBundle({ root, outDir }) {
     .replaceAll("__BUILD_VERSION__", buildVer)
     .replaceAll("__BUILD_JS_PATH__", `/${jsFile}`)
     .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`)
+    .replaceAll("__BUILD_TAILWIND_CSS_PATH__", `/${tailwindFile}`)
     .replaceAll("__BUILD_READ_JS_PATH__", readJsFile ? `/${readJsFile}` : "")
     .replaceAll("__BUILD_SUPABASE_JS_PATH__", supabaseVendor ? `/${supabaseVendor.file}` : "");
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
@@ -411,7 +468,7 @@ export function emitBundle({ root, outDir }) {
   }
   console.log("DEBUG: emitBundle complete!");
 
-  return { jsFile, cssFile, supabaseFile: supabaseVendor ? supabaseVendor.file : null };
+  return { jsFile, cssFile, tailwindFile, supabaseFile: supabaseVendor ? supabaseVendor.file : null };
 }
 
 import { resolve } from "node:path";

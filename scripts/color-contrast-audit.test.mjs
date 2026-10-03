@@ -3,7 +3,7 @@
 // Real, numeric WCAG 2.1 AA contrast-ratio verification for every
 // text/surface color pair this app actually renders — computed live from
 // index.css's :root / body.dark-theme / body.warm-theme blocks and
-// index.html's Tailwind color bridge, not from a frozen snapshot of hex
+// tailwind.config.cjs's Tailwind color bridge, not from a frozen snapshot of hex
 // values. Edit a token, re-run this file, get a real answer.
 //
 // Why this exists: shadcn's naming convention (bg-X + text-X-foreground)
@@ -25,7 +25,6 @@ import { contrastRatio, parseCssVarBlock, resolveColor } from "./lib/color-contr
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const css = readFileSync(join(root, "index.css"), "utf8");
-const html = readFileSync(join(root, "index.html"), "utf8");
 
 function firstBlockBody(source, selectorPattern) {
   const match = source.match(selectorPattern);
@@ -49,20 +48,21 @@ const THEMES = {
   warm: { ...rootVars, ...warmVars },
 };
 
-// index.html bridges these Tailwind/shadcn color names to the CSS vars
+// tailwind.config.cjs bridges these Tailwind/shadcn color names to the CSS vars
 // above (or, for two of them, to a literal expression) — read straight out
 // of the tailwind.config block so this test tracks that mapping, not a
 // hand-copied guess of what it currently says.
-const tailwindConfigBody = firstBlockBody(html, /colors:\s*\{/);
+const tailwindConfigSource = readFileSync(join(root, "tailwind.config.cjs"), "utf8");
+const tailwindConfigBody = firstBlockBody(tailwindConfigSource, /colors:\s*\{/);
 function tailwindColor(name) {
   const re = new RegExp(`(?:^|[\\s,])"?${name}"?\\s*:\\s*"([^"]+)"`);
   const match = tailwindConfigBody.match(re);
-  if (!match) throw new Error(`tailwind.config colors.${name} not found in index.html`);
+  if (!match) throw new Error(`tailwind.config colors.${name} not found in tailwind.config.cjs`);
   return match[1];
 }
 
 // [surfaceRawValue, textRawValue, label] — raw CSS value strings, exactly as
-// they appear in index.css / index.html's tailwind.config, resolved through
+// they appear in index.css / tailwind.config.cjs, resolved through
 // THEMES[theme] at assertion time.
 const PAIRS = [
   ["background", "foreground", "bg-background / text-foreground (page body text)"],
@@ -72,7 +72,7 @@ const PAIRS = [
   ["muted", "muted-foreground", "bg-muted / text-muted-foreground (CardDescription, captions)"],
   // Fixed: primary-foreground/destructive-foreground now both resolve to
   // var(--text-primary) instead of white/--color-danger-foreground — see
-  // the index.html tailwind.config comments at each mapping for the numbers.
+  // the tailwind.config.cjs comments at each mapping for the numbers.
   ["primary", "primary-foreground", "bg-primary / text-primary-foreground (default Button/Badge)"],
   ["destructive", "destructive-foreground", "bg-destructive / text-destructive-foreground (destructive Button/Badge)"],
 ];

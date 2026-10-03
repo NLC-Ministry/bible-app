@@ -190,9 +190,10 @@
         } catch (error) {
           pathname = "";
         }
-        if (/^\/index\.[0-9a-f]+\.css$/i.test(pathname)) {
+        const hashedStylesheet = /^\/(index|tailwind)\.[0-9a-f]+\.css$/i.exec(pathname);
+        if (hashedStylesheet) {
           stylesheet.dataset.stableFallbackAttempted = "true";
-          stylesheet.href = "/index.css?version=" + Date.now();
+          stylesheet.href = "/" + hashedStylesheet[1].toLowerCase() + ".css?version=" + Date.now();
           return;
         }
       }
@@ -219,6 +220,11 @@
   <link rel="stylesheet" href="index.css" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/team-registration.css" onerror="window.showAppStyleRecovery(this)">
+  <!-- Tailwind utilities (#418): scripts/bundle.mjs generates them at build time from
+       tailwind.config.cjs and replaces this placeholder with a stylesheet link to /tailwind.<hash>.css.
+       Keep it after the app stylesheets: the old Tailwind play-CDN <style> landed at the end of <head>,
+       so Tailwind utilities win ties against index.css. -->
+  <!-- build:tailwind-css -->
 
   <!-- Supabase JS Client library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0" crossorigin="anonymous"></script>
@@ -227,86 +233,6 @@
        stats/ranking chart needs to render. Kept off the first-paint critical path. -->
   <!-- html2canvas — loaded lazily by js/modules/home.js (ensureHtml2CanvasLib) the first
        time the user taps "分享" on the verse card. Never used on boot or in the data path. -->
-  <!-- Tailwind CSS CDN scoped (no preflight to prevent conflict with index.css) -->
-  <script>
-    (function() {
-      const _warn = console.warn;
-      console.warn = function(...args) {
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
-        _warn.apply(console, args);
-      };
-    })();
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      // Without this, Tailwind v3's CDN build defaults to darkMode: 'media'
-      // (prefers-color-scheme), so every dark: utility class in the app
-      // ignores the in-app theme picker and follows the OS setting instead —
-      // pick "dark" in-app on a light-OS device and every dark: style is
-      // silently dropped (and vice versa; warm-sepia has no dark: story at
-      // all, so it always fell to the light-mode value). js/state.js's
-      // setBodyThemeClass() already adds a plain "dark" class to <body>
-      // specifically for this — it just wasn't wired up until now.
-      darkMode: ["class", ".dark"],
-      corePlugins: {
-        preflight: false,
-      },
-      theme: {
-        extend: {
-          colors: {
-            primary: "var(--color-brand)",
-            /* Was #FFFFFF — measured 2.76:1 against --color-brand, fails AA.
-               --color-solid-fill-foreground is fixed (not theme-flipping,
-               see index.css) because --color-brand itself doesn't change
-               across light/dark/warm — measures 6.95:1 in every theme. */
-            "primary-foreground": "var(--color-solid-fill-foreground)",
-            background: "var(--bg-app)",
-            foreground: "var(--text-primary)",
-            card: "var(--bg-card)",
-            "card-foreground": "var(--text-primary)",
-            muted: "var(--bg-input)",
-            "muted-foreground": "var(--text-muted)",
-            /* Neutral hover surface for ghost/outline — not brand cyan */
-            accent: "color-mix(in srgb, var(--text-primary) 6%, var(--bg-card))",
-            "accent-foreground": "var(--text-primary)",
-            secondary: "color-mix(in srgb, var(--text-primary) 8%, var(--bg-card))",
-            "secondary-foreground": "var(--text-primary)",
-            destructive: "var(--color-danger)",
-            /* Was var(--color-danger-foreground) — that token is designed for
-               the *-subtle tint-background pattern (~4.45:1 there), not for
-               sitting on the solid --color-danger fill, where it only measured
-               1.47:1. --color-solid-fill-foreground is fixed (--color-danger
-               doesn't change across themes either) — measures 5.31:1 in
-               every theme. */
-            "destructive-foreground": "var(--color-solid-fill-foreground)",
-            border: "var(--border-default)",
-            input: "var(--border-card)",
-            ring: "var(--color-brand-ring)",
-          },
-          borderRadius: {
-            sm: "var(--radius-sm)",
-            md: "var(--radius-md)",
-            lg: "var(--radius-lg)",
-          },
-          boxShadow: {
-            sm: "var(--shadow-sm)",
-            md: "var(--shadow-md)",
-            lg: "var(--shadow-lg)",
-            "up-md": "var(--shadow-up-md)",
-            "up-lg": "var(--shadow-up-lg)",
-          },
-          zIndex: {
-            overlay: "var(--z-overlay)",
-            sheet: "var(--z-sheet)",
-            modal: "var(--z-modal)",
-            toast: "var(--z-toast)",
-          },
-        },
-      },
-    }
-  </script>
-  <script>window.__bootMark("tailwind-cdn-ready");</script>
 </head>
 
 <body class="light-theme">

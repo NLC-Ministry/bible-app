@@ -13,11 +13,14 @@ const READ_PAGE_PATH = "/read";
 const BUILD_READ_JS_PATH = "__BUILD_READ_JS_PATH__";
 // 同網域的 supabase-js（#418）：三個頁面開機都同步載入它，預先快取，離線開機也不缺。
 const BUILD_SUPABASE_JS_PATH = "__BUILD_SUPABASE_JS_PATH__";
+// 建置時產生的 Tailwind CSS（#418 第二階段，取代 cdn.tailwindcss.com）：index.html 開機必載，離線開機也不缺。
+const BUILD_TAILWIND_CSS_PATH = "__BUILD_TAILWIND_CSS_PATH__";
 const APP_SHELL = [
   "/",
   ...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : []),
   "/index.css",
   ...(BUILD_CSS_PATH.startsWith("/") ? [BUILD_CSS_PATH] : []),
+  ...(BUILD_TAILWIND_CSS_PATH.startsWith("/") ? [BUILD_TAILWIND_CSS_PATH] : []),
   ...(BUILD_SUPABASE_JS_PATH.startsWith("/") ? [BUILD_SUPABASE_JS_PATH] : []),
   READ_PAGE_PATH,
   ...(BUILD_READ_JS_PATH.startsWith("/") ? [BUILD_READ_JS_PATH] : []),

@@ -140,7 +140,7 @@ describe("emitBundle (integration, real repo)", () => {
   it("produces one hashed JS bundle + hashed CSS and a rewritten index.html", () => {
     const out = mkdtempSync(join(tmpdir(), "bundle-"));
     try {
-      const { jsFile, cssFile, supabaseFile } = emitBundle({ root, outDir: out });
+      const { jsFile, cssFile, tailwindFile, supabaseFile } = emitBundle({ root, outDir: out });
       // hashed filenames
       expect(jsFile).toMatch(/^app\.[0-9a-f]{8}\.js$/);
       expect(cssFile).toMatch(/^index\.[0-9a-f]{8}\.css$/);
@@ -182,6 +182,28 @@ describe("emitBundle (integration, real repo)", () => {
       }
       expect(serviceWorker).not.toContain("__BUILD_SUPABASE_JS_PATH__");
       expect(serviceWorker).toContain(`"/${supabaseFile}"`);
+
+      // Tailwind generated at build time (#418 phase 2): its own hashed file, index.html only,
+      // linked after the app stylesheet (the play-CDN <style> used to land at the end of <head>).
+      expect(tailwindFile).toMatch(/^tailwind\.[0-9a-f]{8}\.css$/);
+      const tailwindCss = rf(join(out, tailwindFile), "utf8");
+      expect(rf(join(out, "tailwind.css"), "utf8")).toBe(tailwindCss);
+      expect(tailwindCss).toMatch(/\.flex\{display:flex\}/);
+      // theme bridge from tailwind.config.cjs, dark: keyed off the .dark class, no preflight
+      expect(tailwindCss).toContain("var(--color-brand)");
+      expect(tailwindCss).toMatch(/\.dark\\:[^{]*:is\(\.dark \*\)\{/);
+      expect(tailwindCss).not.toContain("prefers-color-scheme");
+      expect(tailwindCss).not.toMatch(/(^|\})html\{line-height/);
+      expect(html).toContain(`<link rel="stylesheet" href="/${tailwindFile}" onerror="window.showAppStyleRecovery(this)">`);
+      expect(html.indexOf(`/${tailwindFile}`)).toBeGreaterThan(html.indexOf(`/${cssFile}`));
+      expect(html).not.toContain("cdn.tailwindcss.com");
+      expect(html).not.toContain("build:tailwind-css");
+      for (const page of ["exam.html", "grade.html", "read.html", "repair.html"]) {
+        const pageHtml = rf(join(out, page), "utf8");
+        expect(pageHtml, page).not.toContain("tailwind");
+      }
+      expect(serviceWorker).not.toContain("__BUILD_TAILWIND_CSS_PATH__");
+      expect(serviceWorker).toContain(`"/${tailwindFile}"`);
 
       // assets copied
       expect(existsSync(join(out, "manifest.json"))).toBe(true);
