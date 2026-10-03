@@ -43,7 +43,9 @@ describe("daily church quiz", () => {
     expect(generator).toContain('|| "gemini-3.1-flash-lite"');
     expect(generator).toContain('function normalizeGeminiModel');
     expect(generator).toContain('replace(/^models\\//i, "")');
-    expect(generator).toContain('replace(/^GEMINI_QUIZ_MODEL\\s*=\\s*/i, "")');
+    expect(generator).toContain('replace(/^GEMINI_QUIZ(?:_REVIEW)?_MODEL\\s*=\\s*/i, "")');
+    // #414：盲審用另一個（較強的）模型，可用環境變數覆寫。
+    expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_REVIEW_MODEL")');
     expect(generator).not.toContain('|| "gemini-2.5-flash');
   });
 
@@ -62,9 +64,12 @@ describe("daily church quiz", () => {
     expect(generator).toContain('responseMimeType: "application/json"');
     expect(generator).toContain("responseJsonSchema");
     expect(generator).not.toContain("responseFormat: { text:");
-    expect(generator).toContain("minItems: 5, maxItems: 5");
+    // #414：先出 CANDIDATE_COUNT 題候選，通過舉證比對與盲審的取前 5 題，最後仍要剛好 5 題。
+    expect(generator).toContain("minItems: CANDIDATE_COUNT, maxItems: CANDIDATE_COUNT");
     expect(generator).toContain("minItems: 4, maxItems: 4");
-    expect(generator).toContain("validateQuestions(JSON.parse(extractGeminiText(payload)))");
+    expect(generator).toContain("selectQuestions(candidates, review?.reviews, buildVerseIndex(chapters))");
+    expect(generator).toContain("return validateQuestions(questions);");
+    expect(generator).toContain("questions.length !== QUIZ_QUESTION_COUNT");
   });
 
   it("requires pastoral review and makes published versions immutable", () => {
