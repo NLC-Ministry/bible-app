@@ -126,6 +126,36 @@ export function assertParses(code) {
   }
 }
 
+// supabase-js 改由自己的網站提供（#418）：原始 HTML 仍寫固定版本的 jsdelivr 標籤（版本號只寫在那裡），
+// 建置時換成同網域、內容雜湊檔名的 vendor 檔。它仍是同步載入、留在關鍵路徑上——真的 Supabase
+// client 是 Logto session 失效時讀公開表的退路，不能延後或拿掉（見 vendor/README.md）。
+export const SUPABASE_CDN_TAG_RE = /<script\s+src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@(\d+\.\d+\.\d+)"[^>]*><\/script>/;
+
+export function prepareSupabaseVendor(root, htmlSources) {
+  const versions = new Set();
+  for (const [, source] of htmlSources) {
+    const match = String(source || "").match(SUPABASE_CDN_TAG_RE);
+    if (match) versions.add(match[1]);
+  }
+  if (versions.size === 0) return null;
+  if (versions.size > 1) {
+    throw new Error(`supabase-js versions differ between pages (${[...versions].join(", ")}); pin every HTML entry to the same version.`);
+  }
+  const [version] = versions;
+  const vendorPath = join(root, "vendor", "supabase-js", version, "supabase.js");
+  if (!existsSync(vendorPath)) {
+    throw new Error(`vendor/supabase-js/${version}/supabase.js is missing: the HTML pins supabase-js@${version}; add that version to vendor/ (see vendor/README.md).`);
+  }
+  const content = readFileSync(vendorPath, "utf8");
+  const file = `supabase.${contentHash(content)}.js`;
+  return {
+    version,
+    file,
+    content,
+    rewrite: (html) => html.replace(SUPABASE_CDN_TAG_RE, `<script src="/${file}"></script>`)
+  };
+}
+
 export function emitBundle({ root, outDir }) {
   const indexPath = join(root, "index.html");
   if (!existsSync(indexPath)) throw new Error(`bundle: missing ${indexPath}`);
@@ -218,6 +248,13 @@ export function emitBundle({ root, outDir }) {
 
   const jsFile = `app.${contentHash(processedJs)}.js`;
   const cssFile = `index.${contentHash(cssContent)}.css`;
+  const readOptionalHtml = (name) => (existsSync(join(root, name)) ? readFileSync(join(root, name), "utf8") : "");
+  const supabaseVendor = prepareSupabaseVendor(root, [
+    ["index.html", html],
+    ["exam.html", readOptionalHtml("exam.html")],
+    ["grade.html", readOptionalHtml("grade.html")]
+  ]);
+  const withSupabaseVendor = (source) => (supabaseVendor ? supabaseVendor.rewrite(source) : source);
 
   console.log("DEBUG: Removing and creating outDir: " + outDir);
   if (existsSync(outDir)) {
@@ -241,6 +278,7 @@ export function emitBundle({ root, outDir }) {
   }
   writeFileSync(join(outDir, cssFile), cssContent, "utf8");
   writeFileSync(join(outDir, "index.css"), cssContent, "utf8");
+  if (supabaseVendor) writeFileSync(join(outDir, supabaseVendor.file), supabaseVendor.content, "utf8");
   console.log("DEBUG: Files written successfully!");
 
   // Rewrite HTML
@@ -256,6 +294,8 @@ export function emitBundle({ root, outDir }) {
     seenStylesheet += 1;
     return seenStylesheet === 1 ? `<link rel="stylesheet" href="/${cssFile}" onerror="window.showAppStyleRecovery(this)">` : "";
   });
+  // 一定要在 SCRIPT_RE 之後：換好的同網域標籤也是本機 <script src>，先換會被當成 app 的 script 吃掉。
+  outHtml = withSupabaseVendor(outHtml);
   console.log("DEBUG: Writing index.html...");
   writeFileSync(join(outDir, "index.html"), outHtml, "utf8");
   console.log("DEBUG: index.html written!");
@@ -303,7 +343,8 @@ export function emitBundle({ root, outDir }) {
     .replaceAll("__BUILD_VERSION__", buildVer)
     .replaceAll("__BUILD_JS_PATH__", `/${jsFile}`)
     .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`)
-    .replaceAll("__BUILD_READ_JS_PATH__", readJsFile ? `/${readJsFile}` : "");
+    .replaceAll("__BUILD_READ_JS_PATH__", readJsFile ? `/${readJsFile}` : "")
+    .replaceAll("__BUILD_SUPABASE_JS_PATH__", supabaseVendor ? `/${supabaseVendor.file}` : "");
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
   // Probe for js/pwa/VersionWatcher.js: same build id baked into app.js, so a
   // running tab can tell it is stale. Generated every build — never hand-edited.
@@ -333,9 +374,9 @@ export function emitBundle({ root, outDir }) {
     }
     const examJsFile = `exam.${contentHash(examJs)}.js`;
     writeFileSync(join(outDir, examJsFile), examJs, "utf8");
-    const outExamHtml = readFileSync(examHtmlPath, "utf8")
+    const outExamHtml = withSupabaseVendor(readFileSync(examHtmlPath, "utf8")
       .replace(SCRIPT_RE, `<script type="module" src="/${examJsFile}"></script>`)
-      .replace(CSS_RE, `<link rel="stylesheet" href="/${cssFile}">`);
+      .replace(CSS_RE, `<link rel="stylesheet" href="/${cssFile}">`));
     writeFileSync(join(outDir, "exam.html"), outExamHtml, "utf8");
     console.log("DEBUG: exam.html + " + examJsFile + " written!");
   }
@@ -362,15 +403,15 @@ export function emitBundle({ root, outDir }) {
     }
     const gradeJsFile = `grade.${contentHash(gradeJs)}.js`;
     writeFileSync(join(outDir, gradeJsFile), gradeJs, "utf8");
-    const outGradeHtml = readFileSync(gradeHtmlPath, "utf8")
+    const outGradeHtml = withSupabaseVendor(readFileSync(gradeHtmlPath, "utf8")
       .replace(SCRIPT_RE, `<script type="module" src="/${gradeJsFile}"></script>`)
-      .replace(CSS_RE, `<link rel="stylesheet" href="/${cssFile}">`);
+      .replace(CSS_RE, `<link rel="stylesheet" href="/${cssFile}">`));
     writeFileSync(join(outDir, "grade.html"), outGradeHtml, "utf8");
     console.log("DEBUG: grade.html + " + gradeJsFile + " written!");
   }
   console.log("DEBUG: emitBundle complete!");
 
-  return { jsFile, cssFile };
+  return { jsFile, cssFile, supabaseFile: supabaseVendor ? supabaseVendor.file : null };
 }
 
 import { resolve } from "node:path";
