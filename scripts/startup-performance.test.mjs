@@ -95,6 +95,9 @@ describe("startup performance contract", () => {
 // org structure, role_definitions) when the Logto session is dead. Removing it
 // black-screened production for users with an expired session. The static
 // <script> in index.html / exam.html / grade.html is intentional; do not remove.
+// Since #418 the build rewrites that pinned CDN tag to a same-origin hashed copy of
+// vendor/supabase-js/<version>/supabase.js (still synchronous, still on the critical
+// path) — see scripts/bundle.test.mjs. The source tag stays the single place the version lives.
 describe("@supabase/supabase-js stays on the critical path (A1 reverted)", () => {
   it("every HTML entry point still loads the supabase CDN bundle synchronously, pinned to an exact version (A5)", () => {
     for (const html of [indexHtml, examHtml, gradeHtml]) {

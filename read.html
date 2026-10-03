@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>讀經｜新生命聖經速讀計畫</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#04A9D2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="新生命聖經速讀計畫">
+  <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <!-- 「快速啟動聖經」的獨立讀經頁（#416、#423）：版面、id、class 和主 App 讀經頁相同，
+       套用同一份 index.css；沒有任何外部資源，網路或登入出問題都打得開。 -->
+  <script id="read-fallback">
+    // 程式載不起來（檔案缺、網路斷在半路）時，不要停在「正在打開經文」：給重新載入和進完整 App 的路。
+    (function () {
+      var shown = false;
+      function show() {
+        if (shown) return;
+        var content = document.getElementById("bible-content");
+        if (!content || content.dataset.ready === "1") return;
+        shown = true;
+        content.innerHTML = '<div class="read-message"><p class="read-message__title">讀經頁打不開</p>' +
+          '<p class="read-message__detail">可能是網路不穩，請重新載入；或先進入完整 App。</p>' +
+          '<button type="button" class="read-button read-button--primary" onclick="location.reload()">重新載入</button>' +
+          '<a class="read-button" href="/?from=read">進入完整 App</a></div>';
+      }
+      window.addEventListener("error", function (event) {
+        var target = event.target;
+        if (target && target.tagName === "SCRIPT") setTimeout(show, 1500);
+      }, true);
+      setTimeout(show, 15000);
+    })();
+  </script>
+  <link rel="stylesheet" href="index.css">
+  <style>
+    /* 只放讀經頁和主 App 不同的地方：沒有主 App 的頂部標題列與底部分頁列。 */
+    .hidden, [hidden] { display: none !important; }
+    body.read-page .main-content { top: 0 !important; bottom: 0 !important; }
+    .read-back-link { text-decoration: none; gap: 2px; width: auto !important; padding: 0 8px 0 4px !important; }
+    .read-back-label { font-size: 15px; font-weight: 500; white-space: nowrap; }
+    .read-status { color: var(--text-muted, #737373); font-size: 16px; text-align: center; margin-top: 25vh; }
+    .read-message { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin-top: 18vh; padding: 0 16px; }
+    .read-message__title { font-size: 18px; font-weight: 500; margin: 0; }
+    .read-message__detail { font-size: 16px; color: var(--text-muted, #737373); margin: 0; max-width: 320px; line-height: 1.6; }
+    .read-button {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 200px; box-sizing: border-box;
+      padding: 0 20px; border-radius: 12px; border: 1px solid var(--border-card, #d4d4d4); background: var(--bg-card, #fff);
+      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
+    }
+    .read-button--primary { border: 0; background: var(--color-brand, #04A9D2); color: var(--color-solid-fill-foreground, #fff); }
+    .read-toast {
+      position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); transform: translateX(-50%);
+      z-index: 10000; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 12px;
+      background: var(--text-primary, #171717); color: var(--bg-app, #fafafa); font-size: 15px; font-weight: 500;
+      box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.15)); pointer-events: none;
+    }
+  </style>
+</head>
+
+<body class="light-theme reader-page read-page">
+  <main class="main-content">
+    <section id="reader-view" class="view-pane active">
+
+      <!-- 讀經工具列：和主 App 讀經頁同一套（#423）；返回改成「回計畫」進完整 App -->
+      <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar" data-swipe-ignore>
+        <a class="reader-icon-btn native-toolbar-btn reader-back-btn read-back-link" id="read-back-link" href="/?from=read"
+          title="回計畫" aria-label="回計畫">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span class="read-back-label">回計畫</span>
+        </a>
+        <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-nav-directory-btn" title="目錄" aria-label="目錄">
+          <span class="nlc-icon" data-icon="list"></span>
+        </button>
+        <button type="button" class="reader-ref-chip" id="reader-book-badge" title="選擇卷章節">
+          <span id="reader-nav-ref-label">讀經</span>
+          <span class="reader-version-inline" id="reader-version-inline">CUNP</span>
+        </button>
+        <button type="button" class="reader-pill-btn reader-version-btn" id="reader-nav-version-btn" title="聖經版本">
+          <span>CUNP</span>
+        </button>
+        <div class="reader-nav-spacer"></div>
+        <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-settings-trigger-btn" title="文字設定" aria-label="文字設定">
+          <span class="nlc-icon" data-icon="more"></span>
+        </button>
+      </div>
+
+      <div class="reader-floating-nav">
+        <button type="button" class="floating-nav-btn prev" id="floating-prev-btn" title="上一章" aria-label="上一章">
+          <span class="nlc-icon nlc-icon--lg nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="floating-nav-btn next" id="floating-next-btn" title="下一章" aria-label="下一章">
+          <span class="nlc-icon nlc-icon--lg" data-icon="chevronRight" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="sr-only" id="reader-chapter-announcer" aria-live="polite" aria-atomic="true"></div>
+
+      <article class="reader-body reader-body-full reader-reading-surface">
+        <div class="reader-header">
+          <h2 id="bible-title" class="bible-heading">經文載入中…</h2>
+        </div>
+        <div id="bible-content" class="bible-text-container" aria-live="polite">
+          <p class="read-status">正在打開經文…</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- 點選經文後的底部工具列（只有複製、分享） -->
+  <div id="selection-bottom-bar-root"></div>
+
+  <!-- 譯本選單：和主 App 同一套 -->
+  <div id="bible-version-picker-modal" class="version-picker-modal hidden" aria-hidden="true">
+    <div class="version-picker-backdrop" id="version-picker-backdrop"></div>
+    <div class="version-picker-card">
+      <div class="version-picker-header">
+        <h3 class="version-picker-title">選擇聖經譯本</h3>
+        <button type="button" class="version-picker-close" id="version-picker-close" aria-label="關閉選單">✕</button>
+      </div>
+      <div class="version-picker-body">
+        <div class="version-section-label">中文譯本</div>
+        <button type="button" class="version-option-btn" data-version="CUNP">
+          <span class="v-name">CUNP (新標點和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="RCUVTS">
+          <span class="v-name">RCUV (和合本修訂版)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="CUV">
+          <span class="v-name">CUV (官話和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="OCCB">
+          <span class="v-name">當代譯本（繁體・可離線下載）</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <div class="version-section-label" style="margin-top: 1.25rem;">英文譯本 (English)</div>
+        <button type="button" class="version-option-btn" data-version="ESV">
+          <span class="v-name">ESV (English Standard Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NIV">
+          <span class="v-name">NIV (New International Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NLT">
+          <span class="v-name">NLT (New Living Translation)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="WEB">
+          <span class="v-name">WEB (Public Domain・可離線下載)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文字設定：和主 App 同一套的文字大小（讀經頁沒有朗讀） -->
+  <div class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container reader-settings-dialog" id="typography-settings-sheet" role="dialog" aria-modal="true"
+      aria-label="閱讀設定">
+      <div class="bottom-sheet-header">
+        <h3>閱讀設定</h3>
+        <button type="button" id="typography-sheet-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
+          aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body" style="padding-bottom: 1.5rem;">
+        <div class="sheet-section reader-font-size-control">
+          <div class="reader-font-size-header">
+            <span class="sheet-section-title">文字大小</span>
+            <output id="reader-font-size-value">20px</output>
+          </div>
+          <div class="reader-font-size-ticks" aria-label="可選文字大小">
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="16">16</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="18">18</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="20">20</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="22">22</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="24">24</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 目錄面板由 js/modules/bible-nav-directory.mjs 建立（和主 App 同一份） -->
+
+  <script type="module" src="js/read-entry.js"></script>
+</body>
+
+</html>

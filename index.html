@@ -4,6 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- 快速啟動聖經（#416）：在任何資源載入前就轉到獨立讀經頁 /read。只轉「網址就是 /、
+       沒有任何查詢參數或 hash」的情況：登入回來（?code&state）、Member Hub 回來（?resume=plan）、
+       登入橋接、/repair、點通知（?from=notification）、回計畫（?from=read）、#/ 深連結都不轉。 -->
+  <script id="quick-launch-redirect">
+    (function () {
+      try {
+        if (localStorage.getItem("quick_launch_bible_enabled") !== "true") return;
+        if (location.pathname !== "/" && location.pathname !== "/index.html") return;
+        if (location.search || location.hash) return;
+        location.replace("/read");
+      } catch (e) { /* 讀不到設定就照常開完整 App */ }
+    })();
+  </script>
   <title>新生命聖經速讀計畫</title>
   <!-- PWA Manifest & Mobile Meta -->
   <link rel="manifest" href="manifest.json">
@@ -15,6 +28,150 @@
   <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
   <link rel="icon" href="assets/bible-reading-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <!-- 開機保底（#415）：一定要在任何外部 stylesheet／script 之前——前面有還沒載完的
+       stylesheet 時，inline script 會等它，外部資源卡住保底就跑不起來。 -->
+  <script id="boot-watchdog">
+    (function () {
+      // 多久沒有任何開機進展（__bootMark）就顯示保底畫面。要比開機路徑上單一請求的
+      // 逾時（net-timeout.mjs 的 15 秒）長，正常但慢的開機才有機會先自己走到下一步。
+      var STALL_MS = 20000;
+      // 外部 script 載入失敗後再等一下：Tailwind 這類失敗 App 仍能開，不必蓋上保底。
+      var SCRIPT_ERROR_GRACE_MS = 3000;
+      var lastMark = "html-start";
+      var lastError = "";
+      var timer = null;
+      var finished = false;
+      var overlay = null;
+      var readyPoll = null;
+
+      function isShown(el) { return !!el && !el.classList.contains("hidden"); }
+      function appReady() {
+        return isShown(document.querySelector(".app-layout")) || isShown(document.getElementById("login-gate"));
+      }
+      function finish() {
+        finished = true;
+        if (timer) clearTimeout(timer);
+        timer = null;
+      }
+      function arm(ms) {
+        if (finished || overlay) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(check, ms || STALL_MS);
+      }
+      function check() {
+        timer = null;
+        if (finished || overlay) return;
+        if (appReady()) { finish(); return; }
+        // 背景中的頁面計時器會被凍結或延後，回前景時重新計時，不要一回來就判定卡住。
+        if (document.visibilityState === "hidden") { arm(); return; }
+        show();
+      }
+
+      // 只拿掉查詢參數、保留 hash 畫面位置：登入回來時網址帶著一次性的 ?code&state，
+      // 原地重新整理會重送用過的登入碼，變成「登入驗證已過期」。
+      function reloadClean() {
+        if (location.search) location.replace(location.pathname + location.hash);
+        else location.reload();
+      }
+      function repair() {
+        location.replace("/repair?version=" + Date.now());
+      }
+      // 只清登入相關資料（token、登入流程暫存、同步快取），讀經進度、離線佇列、身分快照都不動。
+      // 這份清單要跟 js/auth.js 的 keys 一致（scripts/boot-watchdog.test.mjs 會檢查）。
+      var LOGIN_KEYS = [
+        "nlc_access_token", "nlc_id_token", "nlc_refresh_token", "nlc_token_expires_at",
+        "nlc_member_context", "nlc_supabase_access_token", "nlc_supabase_expires_at", "nlc_supabase_profile",
+        "nlc_edge_session_expires_at", "nlc_profile_locked_fields", "nlc_oidc_metadata",
+        "nlc_auth_state", "nlc_auth_verifier", "nlc_auth_nonce", "nlc_auth_flow_id",
+        "nlc_auth_continuation", "nlc_auth_continuation_version"
+      ];
+      function relogin() {
+        for (var i = 0; i < LOGIN_KEYS.length; i++) {
+          try { localStorage.removeItem(LOGIN_KEYS[i]); } catch (e) {}
+          try { sessionStorage.removeItem(LOGIN_KEYS[i]); } catch (e) {}
+        }
+        location.replace("/" + location.hash);
+      }
+
+      function button(label, primary, onClick) {
+        var el = document.createElement("button");
+        el.type = "button";
+        el.textContent = label;
+        el.style.cssText = "width:100%;max-width:320px;border-radius:12px;padding:12px 22px;font-size:16px;font-weight:500;" +
+          (primary ? "border:0;background:#04A9D2;color:#fff;" : "border:1px solid #d4d4d4;background:#fff;color:#171717;");
+        el.addEventListener("click", function () {
+          el.disabled = true;
+          onClick();
+        });
+        return el;
+      }
+      function show() {
+        if (overlay) return;
+        overlay = document.createElement("div");
+        overlay.id = "boot-watchdog-overlay";
+        overlay.setAttribute("role", "alert");
+        overlay.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:#fafafa;color:#171717;" +
+          "padding:env(safe-area-inset-top,24px) 24px env(safe-area-inset-bottom,24px);" +
+          "font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;display:flex;flex-direction:column;" +
+          "align-items:center;justify-content:center;text-align:center;gap:12px;";
+        var title = document.createElement("div");
+        title.style.cssText = "font-size:22px;font-weight:500;";
+        title.textContent = "畫面載入時間過長";
+        var desc = document.createElement("div");
+        desc.style.cssText = "max-width:360px;font-size:16px;line-height:1.6;color:#555;margin-bottom:8px;";
+        desc.textContent = "可能是網路不穩，或這支手機上的登入資料需要更新。請由上往下試試看，都不會刪除你的讀經進度。";
+        var detail = document.createElement("div");
+        detail.id = "boot-watchdog-detail";
+        detail.style.cssText = "max-width:360px;font-size:14px;line-height:1.5;color:#737373;margin-top:8px;word-break:break-all;";
+        detail.textContent = "停在：" + lastMark + (lastError ? "｜" + lastError : "");
+        overlay.appendChild(title);
+        overlay.appendChild(desc);
+        overlay.appendChild(button("重新載入", true, reloadClean));
+        overlay.appendChild(button("修復並重新載入", false, repair));
+        overlay.appendChild(button("重新登入", false, relogin));
+        overlay.appendChild(detail);
+        (document.body || document.documentElement).appendChild(overlay);
+        // 慢慢地還是開好了（例如請求逾時後退回登入卡）就自己收掉，不要蓋住能用的畫面。
+        readyPoll = setInterval(function () {
+          if (!appReady()) return;
+          clearInterval(readyPoll);
+          if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          finish();
+        }, 1000);
+      }
+
+      // 開機各節點的標記（app.js／db.js 呼叫）。同時做暫時性的耗時量測（見 app.js reportBootPerf()）。
+      window.__bootMark = function (name) {
+        try { performance.mark("boot:" + name); } catch (e) {}
+        lastMark = String(name);
+        if (finished) return;
+        if (appReady()) finish();
+        else arm();
+      };
+      window.__bootReportError = function (error) {
+        lastError = error && error.message ? String(error.message) : String(error);
+      };
+      window.addEventListener("error", function (event) {
+        if (finished) return;
+        var target = event.target;
+        if (target && target !== window && target.tagName === "SCRIPT") {
+          lastError = "無法載入 " + (target.src || "script");
+          arm(SCRIPT_ERROR_GRACE_MS);
+          return;
+        }
+        if (event.message) lastError = event.message;
+      }, true);
+      window.addEventListener("unhandledrejection", function (event) {
+        if (finished) return;
+        var reason = event.reason;
+        lastError = reason && reason.message ? String(reason.message) : String(reason);
+      });
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") arm();
+      });
+      arm();
+    })();
+  </script>
   <!-- Google Fonts: Inter & Outfit & Noto Sans TC -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,13 +213,8 @@
       }
       window.location.replace("/repair?version=" + Date.now());
     };
-    // ── 暫時性開機耗時量測（找「5 秒才顯示內容」瓶頸用，確認完可整批移除）──
-    // 每個 mark 的時間點都是相對於 navigation start，串起來就能看出 5 秒花在
-    // 哪一段：CDN script／core import chain／Logto 驗證／資料載入。見 app.js
-    // 裡的 reportBootPerf()。
-    window.__bootMark = function (name) {
-      try { performance.mark("boot:" + name); } catch (e) {}
-    };
+    // 開機耗時量測的 window.__bootMark 定義在最上面的 #boot-watchdog（#415），
+    // 它同時是開機保底判斷「有沒有進展」的依據。
   </script>
   <link rel="stylesheet" href="index.css" onerror="window.showAppStyleRecovery(this)">
   <link rel="stylesheet" href="css/admin-registration-statistics.css" onerror="window.showAppStyleRecovery(this)">
@@ -2682,7 +2834,7 @@
       <label class="offline-login-option" for="quick-launch-bible-enabled">
         <span class="app-settings-item__meta">
           <span class="app-settings-item__title">快速啟動聖經</span>
-          <span class="app-settings-item__subtitle">開啟 App 直接進入聖經閱讀，不等會員系統登入完成；登入會在背景進行。此裝置離線或會員系統維修時，也會直接使用最近 30 天內驗證過的身分繼續閱讀</span>
+          <span class="app-settings-item__subtitle">打開 App 直接進入讀經頁，不管登入或網路狀況都能讀；這裡讀的不會記入計畫進度，按「回計畫」進入完整 App。當代譯本、WEB 會自動下載離線經文；和合本會在讀經時先存好接下來幾章</span>
         </span>
         <input type="checkbox" id="quick-launch-bible-enabled">
       </label>

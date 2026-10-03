@@ -178,6 +178,42 @@
                                     ]
                     },
                     {
+                        "source":  "/read.html",
+                        "headers":  [
+                                        {
+                                            "key":  "Cache-Control",
+                                            "value":  "no-cache, must-revalidate, proxy-revalidate, max-age=0"
+                                        }
+                                    ]
+                    },
+                    {
+                        "source":  "/read",
+                        "headers":  [
+                                        {
+                                            "key":  "Cache-Control",
+                                            "value":  "no-cache, must-revalidate, proxy-revalidate, max-age=0"
+                                        }
+                                    ]
+                    },
+                    {
+                        "source":  "/read.(.*).js",
+                        "headers":  [
+                                        {
+                                            "key":  "Cache-Control",
+                                            "value":  "public, max-age=31536000, immutable"
+                                        }
+                                    ]
+                    },
+                    {
+                        "source":  "/supabase.(.*).js",
+                        "headers":  [
+                                        {
+                                            "key":  "Cache-Control",
+                                            "value":  "public, max-age=31536000, immutable"
+                                        }
+                                    ]
+                    },
+                    {
                         "source":  "/repair",
                         "headers":  [
                                         {

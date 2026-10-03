@@ -8,11 +8,19 @@ const cacheManager = new CacheManager({
 });
 const BUILD_JS_PATH = "__BUILD_JS_PATH__";
 const BUILD_CSS_PATH = "__BUILD_CSS_PATH__";
+// 快速啟動聖經的獨立讀經頁（#416）：預先快取，離線、登入失效時也打得開。
+const READ_PAGE_PATH = "/read";
+const BUILD_READ_JS_PATH = "__BUILD_READ_JS_PATH__";
+// 同網域的 supabase-js（#418）：三個頁面開機都同步載入它，預先快取，離線開機也不缺。
+const BUILD_SUPABASE_JS_PATH = "__BUILD_SUPABASE_JS_PATH__";
 const APP_SHELL = [
   "/",
   ...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : []),
   "/index.css",
   ...(BUILD_CSS_PATH.startsWith("/") ? [BUILD_CSS_PATH] : []),
+  ...(BUILD_SUPABASE_JS_PATH.startsWith("/") ? [BUILD_SUPABASE_JS_PATH] : []),
+  READ_PAGE_PATH,
+  ...(BUILD_READ_JS_PATH.startsWith("/") ? [BUILD_READ_JS_PATH] : []),
   "/manifest.json",
   "/assets/icon-192.png",
   "/assets/icon-512.png"
@@ -55,6 +63,10 @@ function shouldBypassCache(request) {
 
   return isRepairPage || isVersionProbe || isExamPage || isGradePage || isSupabaseApiRequest(request) || hostname.includes("logto") || hostname.includes("sso.newlife.org.tw") ||
     hasAuthBridgeSignal || hasOauthCallbackSignal || url.pathname.includes("/auth/") || url.pathname.includes("/functions/v1/nlc-");
+}
+
+function isReadPagePath(pathname) {
+  return pathname === READ_PAGE_PATH || pathname === "/read.html" || pathname === "/read/";
 }
 
 function isBibleRequest(request) {
@@ -102,7 +114,12 @@ self.addEventListener("fetch", event => {
   if (shouldBypassCache(request)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(cacheManager.networkFirst(request, { timeoutMs: 8000, fallbackUrl: "/" }));
+    // 讀經頁離線時退回快取的讀經頁自己，不要換成 SPA 外殼（#416）。
+    const isReadPage = isReadPagePath(new URL(request.url).pathname);
+    event.respondWith(cacheManager.networkFirst(request, {
+      timeoutMs: 8000,
+      fallbackUrl: isReadPage ? READ_PAGE_PATH : "/"
+    }));
     return;
   }
 
@@ -172,15 +189,22 @@ self.addEventListener("push", event => {
 self.addEventListener("notificationclick", event => {
   event.notification.close();
 
+  // 帶參數開完整 App：開了快速啟動的人，無參數的 "/" 會被轉到讀經頁 /read，看不到通知內容（#416）。
+  const notificationUrl = "/?from=notification";
   const clickPromise = self.clients.matchAll({ type: "window", includeUncontrolled: true })
     .then(windowClients => {
       for (const client of windowClients) {
         if ("focus" in client && typeof client.focus === "function") {
+          let onReadPage = false;
+          try { onReadPage = isReadPagePath(new URL(client.url).pathname); } catch (_) {}
+          if (onReadPage && typeof client.navigate === "function") {
+            return client.navigate(notificationUrl).then(target => (target || client).focus());
+          }
           return client.focus();
         }
       }
       if (self.clients.openWindow) {
-        return self.clients.openWindow("/");
+        return self.clients.openWindow(notificationUrl);
       }
     })
     .then(() => {

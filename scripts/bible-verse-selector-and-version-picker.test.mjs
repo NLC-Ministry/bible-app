@@ -7,6 +7,8 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8"
 const bibleData = read("js/data/bible_data.js");
 const verseCountsSrc = read("js/data/bible_verse_counts.js");
 const bible = read("js/modules/bible.js");
+// 目錄和 /read 共用這個模組（#423）。
+const directory = read("js/modules/bible-nav-directory.mjs");
 const state = read("js/state.js");
 const html = read("index.html");
 const css = read("index.css");
@@ -37,8 +39,9 @@ describe("bible book English-name keys line up between bible_data.js and bible_v
   });
 
   it("falls back to 30 verses only when a book/chapter genuinely has no data, not due to a key typo", () => {
-    expect(bible).toContain('BIBLE_VERSE_COUNTS[book.eng]');
-    expect(bible).toContain("let totalVerses = 30;");
+    expect(bible).toContain('getVerseCounts: () => (typeof BIBLE_VERSE_COUNTS !== "undefined" ? BIBLE_VERSE_COUNTS : null)');
+    expect(directory).toContain("verseCounts[book.eng]");
+    expect(directory).toContain("let totalVerses = 30;");
   });
 });
 
@@ -51,9 +54,9 @@ describe("mobile Bible version picker access", () => {
     // Previously #bible-nav-version-badge had no click handler at all, so on
     // phones (where .reader-version-btn is display:none) there was no way
     // left to open #bible-version-picker-modal.
-    expect(bible).toContain('document.getElementById("bible-nav-version-badge")');
-    expect(bible).toContain('versionBadge.addEventListener("click"');
-    expect(bible).toContain("window.openBibleVersionPicker();");
+    expect(directory).toContain('$("bible-nav-version-badge")?.addEventListener("click"');
+    expect(directory).toContain('if (typeof onVersionBadge === "function") onVersionBadge();');
+    expect(bible).toMatch(/onVersionBadge: \(\) => \{\s*if \(typeof window\.openBibleVersionPicker === "function"\) window\.openBibleVersionPicker\(\);/);
     expect(html).toContain('id="bible-nav-version-badge"');
   });
 
@@ -66,11 +69,13 @@ describe("mobile Bible version picker access", () => {
 describe("English Bible chapter selector labels", () => {
   it("uses English book, chapter, verse, testament, and navigation labels for English translations", () => {
     expect(bible).toContain('const ENGLISH_BIBLE_VERSIONS = new Set(["ESV", "NIV", "NLT", "WEB"])');
-    expect(bible).toContain('english ? "Select Book" : "選擇書卷"');
-    expect(bible).toMatch(/english\s*\?\s*\{ book: "Book", chapter: "Chapter", verse: "Verse" \}/);
-    expect(bible).toContain('usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經"');
+    expect(directory).toContain('isEnglish ? "Select Book" : "選擇書卷"');
+    expect(directory).toMatch(/isEnglish\s*\?\s*\{ book: "Book", chapter: "Chapter", verse: "Verse" \}/);
+    expect(directory).toContain('isEnglish ? "Old Testament" : "舊約聖經"');
+    expect(bible).toContain("getVersion: () => state.readerState?.version");
     expect(bible).toContain('usesEnglishReaderLabels() ? `Chapter ${i}` : `${i} 章`');
-    expect(bible).toContain('getReaderBookLabel(b)');
+    expect(directory).toContain("escapeText(bookLabel(b))");
+    expect(bible).toContain("return readerBookLabel(book, usesEnglishReaderLabels());");
   });
 
   it("refreshes selector labels immediately when the translation changes", () => {

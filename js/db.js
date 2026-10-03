@@ -4,6 +4,12 @@ import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/paginat
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
+import {
+  OFFLINE_IDENTITY_KEY,
+  buildOfflineIdentity,
+  parseOfflineIdentity,
+  resolveUsableOfflineIdentity
+} from './data/offline-identity.mjs';
 import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
 import {
   ADMIN_USER_DIRECTORY_RPC,
@@ -17,6 +23,7 @@ import {
   getLoginGateCopy,
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
+import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -388,19 +395,30 @@ const db = {
   _orgStructureRequestId: 0,
 
   // 保持登入並允許離線閱讀已不是可關閉的使用者偏好——是系統設計，一律套用。
+  // 快照記住是哪個 Logto 帳號（#417），見 js/data/offline-identity.mjs。
   storeOfflineIdentity(profile = null) {
     const sourceProfile = profile || (() => {
       try { return JSON.parse(localStorage.getItem("nlc_supabase_profile") || "null"); } catch { return null; }
     })();
-    if (!sourceProfile?.id) return;
-    localStorage.setItem("offline_trusted_identity", JSON.stringify({
-      schemaVersion: 1,
-      verifiedAt: new Date().toISOString(),
+    const identity = buildOfflineIdentity({
       profile: sourceProfile,
       lockedFields: (() => {
         try { return JSON.parse(localStorage.getItem("nlc_profile_locked_fields") || "[]"); } catch { return []; }
-      })()
-    }));
+      })(),
+      logtoSub: typeof auth !== "undefined" && typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null
+    });
+    if (!identity) return;
+    localStorage.setItem(OFFLINE_IDENTITY_KEY, JSON.stringify(identity));
+  },
+
+  // 目前可以用的身分快照：手機上有 token 時必須是同一個 Logto 帳號（#417）。
+  _readUsableOfflineIdentity() {
+    const hasTokens = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
+    const currentSub = hasTokens && typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null;
+    return resolveUsableOfflineIdentity(
+      parseOfflineIdentity(localStorage.getItem(OFFLINE_IDENTITY_KEY)),
+      { hasTokens, currentSub }
+    );
   },
 
   // Distinguishes "the network genuinely could not be reached" from any other
@@ -460,11 +478,8 @@ const db = {
   // "trust a recently-verified local identity" logic either way — only
   // the offline-specific chrome/lock differs.
   applyCachedIdentitySnapshot({ markAsOffline }) {
-    let identity = null;
-    try { identity = JSON.parse(localStorage.getItem("offline_trusted_identity") || "null"); } catch { return false; }
-    const verifiedAt = Date.parse(identity?.verifiedAt || "");
-    const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
-    if (!identity?.profile?.id || !Number.isFinite(verifiedAt) || Date.now() - verifiedAt > maxAgeMs) return false;
+    const identity = this._readUsableOfflineIdentity();
+    if (!identity) return false;
 
     if (markAsOffline) state.offlineMode = true;
     state.supabase = this.createNlcDataClient();
@@ -489,8 +504,7 @@ const db = {
   },
 
   loadOfflineSnapshot() {
-    let identity = null;
-    try { identity = JSON.parse(localStorage.getItem("offline_trusted_identity") || "null"); } catch { identity = null; }
+    const identity = this._readUsableOfflineIdentity();
     if (identity?.profile) this.applyNlcProfile(identity.profile, identity.lockedFields || []);
     try {
       const plans = JSON.parse(localStorage.getItem("active_reading_plans") || "[]");
@@ -609,26 +623,7 @@ const db = {
           }
         }
 
-        // ── Quick-launch Bible: don't wait even for THIS boot's OIDC code
-        // exchange. A normal boot always pays for auth.handleCallback() up
-        // front — cheap when there's no code/state in the URL, but a real
-        // Logto token-endpoint round trip when the user arrived via a fresh
-        // Member Hub SSO redirect. When the user opted in (偏好設定 →
-        // 快速啟動聖經) and this device has a recently-verified (<=30d)
-        // local identity, skip waiting on that exchange entirely: show the
-        // cached identity now, and let handleCallback() + the real session
-        // sync run in the background via startBackgroundSessionReconciliation.
-        // Same "display-only risk, writes still re-verified server-side"
-        // tradeoff already used by the optimistic-boot path below.
-        if (typeof auth !== "undefined"
-          && auth.isLoggedIn()
-          && localStorage.getItem("quick_launch_bible_enabled") === "true"
-          && this.applyCachedIdentitySnapshot({ markAsOffline: false })) {
-          window.__bootMark?.("quick-launch-shell-shown");
-          state.optimisticBootPending = true;
-          this.startBackgroundSessionReconciliation({ resolveCallbackFirst: true });
-          return true;
-        }
+        // 快速啟動聖經不再走這裡：開著時 index.html 一開頭就轉到獨立讀經頁 /read（#416）。
 
         // ── OIDC Callback: Handle Logto redirect ──
         if (typeof auth !== "undefined") {
@@ -709,7 +704,13 @@ const db = {
         }
 
         // Fallback: Standard Supabase email/Google session
-        const { data: { session } } = await state.supabase.auth.getSession();
+        // supabase-js 的 getSession() 內部也搶 navigator.locks，卡住時這裡會一直等＝白屏。
+        // 等太久就當作沒有 session，直接顯示登入卡（#415）。
+        const { data: { session } } = await withSoftTimeout(
+          state.supabase.auth.getSession(),
+          BOOT_FETCH_TIMEOUT_MS,
+          { data: { session: null } }
+        );
         this.updateAuthUI(session);
 
         // Setup session listener
@@ -778,10 +779,13 @@ const db = {
     const cfg = state.supabaseConfig || {};
     const callEdge = async (request) => {
       if (typeof auth === "undefined") throw new Error("NLC auth client is missing.");
+      // 讀取（select／batch）才加逾時：寫入被中斷時伺服器可能已經寫好，重送會變成重複資料（#415）。
+      const isReadRequest = !request.action || request.action === "select" || request.action === "batch";
       const send = async (forceRefresh = false) => {
         const accessToken = await auth.getValidAccessToken(forceRefresh);
         const startedAt = performance.now();
-        const response = await fetch(cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data", {
+        const url = cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data";
+        const init = {
           method: "POST",
           headers: {
             apikey: cfg.anonKey,
@@ -789,7 +793,10 @@ const db = {
             "Content-Type": "application/json"
           },
           body: JSON.stringify(request)
-        });
+        };
+        const response = isReadRequest
+          ? await fetchWithTimeout(url, init, DATA_READ_TIMEOUT_MS)
+          : await fetch(url, init);
         const headersAt = performance.now();
         const payload = await response.json().catch(() => ({}));
         const completedAt = performance.now();
@@ -819,7 +826,7 @@ const db = {
       }
 
       // ── 503 / Edge Runtime 暫時中斷：指数退避重試（最多 3 次）──
-      const mayRetry = !request.action || request.action === "select" || request.action === "batch";
+      const mayRetry = isReadRequest;
       const isServiceDegraded = mayRetry && !tokenRejected && (
         response.status === 503 ||
         payload?.code === "SUPABASE_EDGE_RUNTIME_SERVICE_DEGRADED" ||
@@ -1169,10 +1176,15 @@ const db = {
     // token actually needs refreshing.
     const accessToken = await auth.getValidAccessToken(false);
     const idToken = localStorage.getItem(auth.keys.idToken);
+    // 開機保底（index.html）以「多久沒有進展」判斷卡住：拿到 token 算一步，
+    // 這樣續期和 nlc-session 各自有完整的逾時時間，不會被加總誤判（#415）。
+    window.__bootMark?.("nlc-session-token-ready");
 
     const cfg = state.supabaseConfig || {};
     const functionUrl = cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-session";
-    const response = await fetch(functionUrl, {
+    // 逾時丟 TypeError：isNetworkUnreachableError() 當成連不上，走離線快照或「重試」，
+    // 不會變成「請重新登入」（#415）。
+    const response = await fetchWithTimeout(functionUrl, {
       method: "POST",
       headers: {
         apikey: cfg.anonKey,
@@ -1182,7 +1194,7 @@ const db = {
         access_token: accessToken,
         id_token: idToken
       })
-    });
+    }, BOOT_FETCH_TIMEOUT_MS);
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.edge_session) {
@@ -1252,45 +1264,12 @@ const db = {
   //    real write server-side regardless of what this shows, so a few
   //    seconds of a stale optimistic view is a display-only risk, not a
   //    security one.
-  async startBackgroundSessionReconciliation({ resolveCallbackFirst = false } = {}) {
+  async startBackgroundSessionReconciliation() {
     if (this._backgroundReconcilePending) return;
     this._backgroundReconcilePending = true;
     let succeeded = false;
     try {
       window.__bootMark?.("background-reconcile-start");
-      // Quick-launch path only: the real OIDC code exchange for THIS boot
-      // was never awaited up front, so finish it here before syncing —
-      // otherwise a fresh Member Hub SSO code would sit unused and expire.
-      if (resolveCallbackFirst && typeof auth !== "undefined" && typeof auth.handleCallback === "function") {
-        const hadWorkingSessionBefore = auth.isLoggedIn();
-        try {
-          await auth.handleCallback();
-        } catch (callbackErr) {
-          console.warn("[BackgroundReconcile] Background OIDC callback exchange failed:", callbackErr);
-        }
-        // auth.handleCallback() does NOT throw on a rejected/duplicate/
-        // expired code (e.g. a reload or a second tab re-submitting the
-        // same one-time code) — it fails via auth.js's _failCallback(),
-        // which synchronously clears tokens, resets state.currentUser, and
-        // flips the login gate on, all before returning normally. That's
-        // correct for a normal foreground login attempt, but here we
-        // already had a working cached session before this background
-        // exchange started (that's the whole premise of quick-launch) — a
-        // redundant/reused SSO code failing must not yank the user out of
-        // the reader they're already in. Re-apply the cached identity and
-        // stop here for THIS invocation instead of falling through to the
-        // hasTokens-gated check below, which would otherwise immediately
-        // re-show the gate since _failCallback() just cleared the tokens
-        // it depends on. Real re-validation still happens naturally on the
-        // next token-consuming call (proactive refresh, a data write's
-        // 401 retry, next foreground).
-        if (hadWorkingSessionBefore && !auth.isLoggedIn()) {
-          console.warn("[BackgroundReconcile] Background OIDC exchange failed on an already-cached session — keeping optimistic view.");
-          this.applyCachedIdentitySnapshot({ markAsOffline: false });
-          succeeded = true;
-          return;
-        }
-      }
       const sessionSync = await this.syncNlcSessionWithSupabase(true);
       const block = getUserOnboardingBlock(state.currentUser);
       const hasValidTokens = typeof auth !== "undefined" && auth.isLoggedIn();
@@ -1426,6 +1405,33 @@ const db = {
     window.__bootMark?.("login-gate-shown");
     if (buttonEl) buttonEl.dataset.loginGateMode = copy.mode;
     return copy;
+  },
+
+  // app.js 包住 db.init() 的 catch 會呼叫這裡：init 在打開畫面前出錯，主畫面和登入卡
+  // 都沒顯示（＝白屏）時，至少給一張能操作的登入卡（#415）。手機上還有 token 就用
+  // 「重試」模式——按下去是重新同步會員資料，不是清掉還有效的 token 重跑整個 Logto 登入。
+  showBootFailureGate() {
+    const loginGate = document.getElementById("login-gate");
+    const appLayout = document.querySelector(".app-layout");
+    const shellVisible = !!appLayout && !appLayout.classList.contains("hidden");
+    const gateVisible = !!loginGate && !loginGate.classList.contains("hidden");
+    if (shellVisible || gateVisible) return null;
+    const hasTokens = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
+    const block = hasTokens
+      ? { reason: "member_context_unavailable", requiredAction: "", requiredActionUrl: null }
+      : null;
+    const copy = applyLoginGateView({
+      block,
+      hasTokens,
+      loginGate,
+      appLayout,
+      titleEl: loginGate && loginGate.querySelector(".login-title"),
+      subtitleEl: document.getElementById("login-gate-subtitle"),
+      buttonEl: document.getElementById("btn-gate-nlc-login"),
+      refreshActionsEl: document.getElementById("login-gate-refresh-actions")
+    });
+    window.__bootMark?.("login-gate-shown");
+    return copy.mode;
   },
 
   bindLoginGateHubReturnSync() {

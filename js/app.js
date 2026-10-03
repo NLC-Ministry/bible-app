@@ -1144,6 +1144,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialSessionSyncSucceeded = await db.init() === true;
   } catch (err) {
     console.error('Failed to initialize database connection & auth:', err);
+    window.__bootReportError?.(err);
+    // 出錯時主畫面和登入卡都還沒打開＝白屏；至少顯示一張能操作的登入卡（#415）。
+    try {
+      db.showBootFailureGate();
+    } catch (gateErr) {
+      console.error('Failed to show the login gate after a boot failure:', gateErr);
+    }
   }
   window.__bootMark?.("db-init-done");
 
@@ -1180,14 +1187,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   // Load all user data in one shot. db.init() guarantees auth is resolved before we reach here.
   try {
-    // Render the initial view only after ALL data is ready — EXCEPT the
-    // quick-launch case just below, which deliberately does not wait: the
-    // Bible reader doesn't need plans/role data to render (chapter text is
-    // token/data-independent), and fetchRoleDefinitions()/loadUserData(true)
-    // are their own real network round trips, separate from and unaffected
-    // by db.init()'s own optimistic-boot shortcut. Gating first paint on
-    // them here was the actual remaining cause of a multi-second blank
-    // screen even when db.init() itself returned fast.
+    // Render the initial view only after ALL data is ready. (Quick-launch Bible
+    // no longer boots this app at all: index.html redirects a bare "/" to the
+    // standalone /read page before anything loads — #416.)
     const resumePlan = consumeBibleHubResume(window.location.search);
     if (resumePlan) {
       const cleaned = new URL(window.location.href);
@@ -1199,8 +1201,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         cleaned.pathname + (nextSearch ? `?${nextSearch}` : "") + cleaned.hash
       );
     }
-    const quickLaunchBible = localStorage.getItem("quick_launch_bible_enabled") === "true";
-
     // allSettled, not all: a stale/expired NLC session makes the data-layer shim
     // reject (getValidAccessToken throws). That must NOT abort the first render —
     // db.init() has already shown the login gate for a bad session, and for a
@@ -1212,17 +1212,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       db.loadUserData(true)
     ]);
 
-    // 網址指定了畫面（深連結、重新整理、更新後重新載入）就不快速啟動讀經，直接開那個畫面。
-    const quickLaunchReader = quickLaunchBible && !resumePlan && !bootHashRoute;
-    const quickLaunchSwitch = quickLaunchReader ? appRouter.switchTab("reader-view") : null;
-    // 分頁列在資料載入期間已經可以點。記下現在的導覽號碼（在快速啟動自己的
-    // switchTab 之後），載完再比對，使用者中途切過分頁就不要把他拉走（#388）。
+    // 分頁列在資料載入期間已經可以點。記下現在的導覽號碼，載完再比對，
+    // 使用者中途切過分頁就不要把他拉走（#388）。
     const navGenBeforeDataLoad = navRenderGuard.current;
-    if (quickLaunchSwitch) {
-      await quickLaunchSwitch;
-      window.__bootMark?.("first-tab-rendered");
-      reportBootPerf();
-    }
 
     const [roleResult, userDataResult] = await dataLoadPromise;
     window.__bootMark?.("initial-data-load-done");
@@ -1243,7 +1235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const userNavigatedDuringLoad = navRenderGuard.current !== navGenBeforeDataLoad;
     const postLoadTab = resolvePostLoadTab({
-      landingTab: quickLaunchReader ? "reader-view" : (resumePlan ? "plan-view" : "dashboard-view"),
+      landingTab: resumePlan ? "plan-view" : "dashboard-view",
       navGenAtStart: navGenBeforeDataLoad,
       navGenNow: navRenderGuard.current,
       currentTab: appRouter.currentTab
@@ -1270,10 +1262,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (deferToBootRoute && !userNavigatedDuringLoad && !openedBootRoute) {
       await appRouter.switchTab(postLoadTab);
     }
-    if (!quickLaunchReader) {
-      window.__bootMark?.("first-tab-rendered");
-      reportBootPerf();
-    }
+    window.__bootMark?.("first-tab-rendered");
+    reportBootPerf();
     refreshCareReminderBadge({ force: true });
     if (state.optimisticBootPending) {
       // Optimistic boot (see db.js init()): db.init() already returned true
