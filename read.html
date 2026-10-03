@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>讀經｜新生命聖經速讀計畫</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#04A9D2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="新生命聖經速讀計畫">
+  <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <!-- 「快速啟動聖經」的獨立讀經頁（#416）：沒有任何外部資源，網路或登入出問題都打得開。 -->
+  <script id="read-fallback">
+    // 程式載不起來（檔案缺、網路斷在半路）時，不要停在「正在打開經文」：給重新載入和進完整 App 的路。
+    (function () {
+      var shown = false;
+      function show() {
+        if (shown) return;
+        var content = document.getElementById("read-content");
+        if (!content || content.dataset.ready === "1") return;
+        shown = true;
+        content.innerHTML = '<div class="read-message"><p class="read-message__title">讀經頁打不開</p>' +
+          '<p class="read-message__detail">可能是網路不穩，請重新載入；或先進入完整 App。</p>' +
+          '<button type="button" class="read-button read-button--primary" onclick="location.reload()">重新載入</button>' +
+          '<a class="read-button" href="/?from=read">進入完整 App</a></div>';
+      }
+      window.addEventListener("error", function (event) {
+        var target = event.target;
+        if (target && target.tagName === "SCRIPT") setTimeout(show, 1500);
+      }, true);
+      setTimeout(show, 15000);
+    })();
+  </script>
+  <link rel="stylesheet" href="index.css">
+  <style>
+    .hidden, [hidden] { display: none !important; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg-app, #fafafa); color: var(--text-primary, #171717); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", sans-serif; }
+    .read-shell { max-width: 720px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+    .read-header {
+      position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px;
+      padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px;
+      background: var(--bg-app, #fafafa); border-bottom: 1px solid var(--border-card, #e5e5e5);
+    }
+    .read-back {
+      display: inline-flex; align-items: center; gap: 2px; padding: 8px 4px; min-height: 44px; box-sizing: border-box;
+      color: var(--color-brand, #04A9D2); font-size: 16px; font-weight: 500; text-decoration: none; white-space: nowrap;
+    }
+    .read-chevron { font-size: 22px; line-height: 1; }
+    .read-header__center { flex: 1; display: flex; justify-content: center; min-width: 0; }
+    .read-pill, .read-icon-btn {
+      min-height: 44px; border: 1px solid var(--border-card, #e5e5e5); border-radius: 999px;
+      background: var(--bg-card, #fff); color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500;
+      padding: 0 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+    .read-icon-btn { padding: 0 10px; min-width: 44px; flex: none; }
+    .read-icon-btn:disabled, .read-nav-btn:disabled { opacity: 0.4; cursor: default; }
+    .read-content { flex: 1; padding: 16px 16px 24px; font-size: var(--read-font-size, 20px); line-height: 1.8; }
+    .read-content .verse-text, .read-content .verse-num { font-size: var(--read-font-size, 20px); }
+    .read-content .bible-verse { cursor: default; -webkit-user-select: text; user-select: text; }
+    .read-content .bible-verse:hover { background: transparent; }
+    .read-chapter-title { font-size: 22px; font-weight: 500; margin: 8px 0 16px; }
+    .read-status { color: var(--text-muted, #737373); font-size: 16px; text-align: center; margin-top: 30vh; }
+    .read-message { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin-top: 20vh; }
+    .read-message__title { font-size: 18px; font-weight: 500; margin: 0; }
+    .read-message__detail { font-size: 16px; color: var(--text-muted, #737373); margin: 0; max-width: 320px; line-height: 1.6; }
+    .read-button {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 200px; box-sizing: border-box;
+      padding: 0 20px; border-radius: 12px; border: 1px solid var(--border-card, #d4d4d4); background: var(--bg-card, #fff);
+      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
+    }
+    .read-button--primary { border: 0; background: var(--color-brand, #04A9D2); color: var(--color-solid-fill-foreground, #fff); }
+    .read-chapter-nav {
+      position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 8px);
+      background: var(--bg-app, #fafafa); border-top: 1px solid var(--border-card, #e5e5e5);
+    }
+    .read-nav-btn {
+      flex: 1; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      border: 1px solid var(--border-card, #e5e5e5); border-radius: 12px; background: var(--bg-card, #fff);
+      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500; cursor: pointer;
+    }
+    .read-sheet {
+      position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.35);
+      display: flex; align-items: flex-end; justify-content: center;
+    }
+    .read-sheet__panel {
+      width: 100%; max-width: 720px; max-height: 80vh; overflow-y: auto; box-sizing: border-box;
+      background: var(--bg-card, #fff); color: var(--text-primary, #171717); border-radius: 16px 16px 0 0;
+      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    }
+    .read-sheet__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .read-sheet__title { font-size: 18px; font-weight: 500; margin: 0; }
+    .read-sheet__close { background: none; border: 0; color: var(--color-brand, #04A9D2); font: inherit; font-size: 16px; font-weight: 500; min-height: 44px; padding: 0 4px; cursor: pointer; }
+    .read-sheet__back { background: none; border: 0; color: var(--color-brand, #04A9D2); font: inherit; font-size: 16px; font-weight: 500; padding: 8px 0; min-height: 44px; cursor: pointer; }
+    .read-segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input, #f5f5f5); margin-bottom: 12px; }
+    .read-segmented__item { flex: 1; min-height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--text-muted, #737373); font: inherit; font-size: 16px; font-weight: 500; cursor: pointer; }
+    .read-segmented__item.is-active { background: var(--bg-card, #fff); color: var(--text-primary, #171717); box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08)); }
+    .read-grid { display: grid; gap: 8px; }
+    .read-grid--books { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+    .read-grid--chapters { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
+    .read-grid__item, .read-list__item {
+      min-height: 44px; border: 1px solid var(--border-card, #e5e5e5); border-radius: 10px; background: var(--bg-card, #fff);
+      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 400; cursor: pointer; padding: 0 8px;
+    }
+    .read-grid__item.is-active, .read-list__item.is-active { border-color: var(--color-brand, #04A9D2); color: var(--color-brand, #04A9D2); font-weight: 500; }
+    .read-list { display: flex; flex-direction: column; gap: 8px; }
+    .read-list__item { display: flex; align-items: baseline; gap: 10px; text-align: left; padding: 10px 14px; }
+    .read-list__label { font-weight: 500; min-width: 64px; }
+    .read-list__name { color: var(--text-muted, #737373); font-size: 14px; }
+  </style>
+</head>
+
+<body class="light-theme">
+  <div class="read-shell">
+    <header class="read-header">
+      <a class="read-back" href="/?from=read">
+        <span class="read-chevron" aria-hidden="true">‹</span>
+        回計畫
+      </a>
+      <div class="read-header__center">
+        <button type="button" class="read-pill" id="read-ref-btn" aria-label="選擇書卷與章節">讀經</button>
+      </div>
+      <button type="button" class="read-pill" id="read-version-btn" aria-label="選擇譯本">CUNP</button>
+    </header>
+
+    <main class="read-content" id="read-content" aria-live="polite">
+      <p class="read-status">正在打開經文…</p>
+    </main>
+
+    <nav class="read-chapter-nav" aria-label="換章">
+      <button type="button" class="read-nav-btn" id="read-prev">
+        <span class="read-chevron" aria-hidden="true">‹</span>
+        上一章
+      </button>
+      <button type="button" class="read-icon-btn" id="read-font-down" aria-label="字小一點">A−</button>
+      <button type="button" class="read-icon-btn" id="read-font-up" aria-label="字大一點">A+</button>
+      <button type="button" class="read-nav-btn" id="read-next">
+        下一章
+        <span class="read-chevron" aria-hidden="true">›</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="read-sheet hidden" id="read-sheet" role="dialog" aria-modal="true" aria-labelledby="read-sheet-title" aria-hidden="true">
+    <div class="read-sheet__panel">
+      <div class="read-sheet__header">
+        <h2 class="read-sheet__title" id="read-sheet-title"></h2>
+        <button type="button" class="read-sheet__close" id="read-sheet-close">
+          關閉
+        </button>
+      </div>
+      <div id="read-sheet-body"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/read-entry.js"></script>
+</body>
+
+</html>

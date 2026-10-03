@@ -24,7 +24,8 @@ describe("PWA shell recovery", () => {
     expect(sw).toContain('const BUILD_CSS_PATH = "__BUILD_CSS_PATH__"');
     expect(sw).toContain('"/index.css"');
     expect(sw).toContain('...(BUILD_JS_PATH.startsWith("/") ? [BUILD_JS_PATH] : [])');
-    expect(sw).toContain('fallbackUrl: "/"');
+    // 頁面請求離線時退回完整的 "/"；只有快速啟動的讀經頁 /read 退回它自己（#416）。
+    expect(sw).toContain('fallbackUrl: isReadPage ? READ_PAGE_PATH : "/"');
     expect(sw).not.toContain('fallbackUrl: "/index.html"');
   });
 

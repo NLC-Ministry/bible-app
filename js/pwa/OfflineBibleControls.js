@@ -9,6 +9,23 @@ function formatDate(value) {
   }
 }
 
+// 開啟「快速啟動聖經」時用（#416）：目前譯本有離線經文包又還沒下載，就開始下載。
+// 優先按設定頁那顆下載按鈕，進度直接顯示在同一頁的清單上；找不到按鈕才直接下載。
+// 回傳 unsupported（沒有經文包的譯本，例如和合本）／installed／offline／started。
+export async function ensureOfflineBiblePack(repository, translation, { doc = document, online = navigator.onLine !== false } = {}) {
+  const normalized = String(translation || "").toUpperCase();
+  if (!repository || !OFFLINE_BIBLE_CATALOG[normalized]) return "unsupported";
+  if (await repository.getInstalledPack(normalized)) return "installed";
+  if (!online) return "offline";
+  const button = doc.querySelector(`#offline-bible-settings [data-offline-bible-action="${normalized}"]`);
+  if (button && !button.disabled) {
+    button.click();
+    return "started";
+  }
+  repository.downloadPack(normalized).catch(error => console.error("Offline Bible download failed", error));
+  return "started";
+}
+
 export async function initOfflineBibleControls(repository) {
   const root = document.getElementById("offline-bible-settings");
   if (!root || !repository || root.dataset.bound === "true") return;
