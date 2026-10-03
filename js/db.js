@@ -4,6 +4,12 @@ import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/paginat
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
+import {
+  OFFLINE_IDENTITY_KEY,
+  buildOfflineIdentity,
+  parseOfflineIdentity,
+  resolveUsableOfflineIdentity
+} from './data/offline-identity.mjs';
 import { resolveEnrollmentPlanId } from './modules/admin-user-directory-filter.mjs';
 import {
   ADMIN_USER_DIRECTORY_RPC,
@@ -388,19 +394,30 @@ const db = {
   _orgStructureRequestId: 0,
 
   // 保持登入並允許離線閱讀已不是可關閉的使用者偏好——是系統設計，一律套用。
+  // 快照記住是哪個 Logto 帳號（#417），見 js/data/offline-identity.mjs。
   storeOfflineIdentity(profile = null) {
     const sourceProfile = profile || (() => {
       try { return JSON.parse(localStorage.getItem("nlc_supabase_profile") || "null"); } catch { return null; }
     })();
-    if (!sourceProfile?.id) return;
-    localStorage.setItem("offline_trusted_identity", JSON.stringify({
-      schemaVersion: 1,
-      verifiedAt: new Date().toISOString(),
+    const identity = buildOfflineIdentity({
       profile: sourceProfile,
       lockedFields: (() => {
         try { return JSON.parse(localStorage.getItem("nlc_profile_locked_fields") || "[]"); } catch { return []; }
-      })()
-    }));
+      })(),
+      logtoSub: typeof auth !== "undefined" && typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null
+    });
+    if (!identity) return;
+    localStorage.setItem(OFFLINE_IDENTITY_KEY, JSON.stringify(identity));
+  },
+
+  // 目前可以用的身分快照：手機上有 token 時必須是同一個 Logto 帳號（#417）。
+  _readUsableOfflineIdentity() {
+    const hasTokens = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
+    const currentSub = hasTokens && typeof auth.getLogtoSubject === "function" ? auth.getLogtoSubject() : null;
+    return resolveUsableOfflineIdentity(
+      parseOfflineIdentity(localStorage.getItem(OFFLINE_IDENTITY_KEY)),
+      { hasTokens, currentSub }
+    );
   },
 
   // Distinguishes "the network genuinely could not be reached" from any other
@@ -460,11 +477,8 @@ const db = {
   // "trust a recently-verified local identity" logic either way — only
   // the offline-specific chrome/lock differs.
   applyCachedIdentitySnapshot({ markAsOffline }) {
-    let identity = null;
-    try { identity = JSON.parse(localStorage.getItem("offline_trusted_identity") || "null"); } catch { return false; }
-    const verifiedAt = Date.parse(identity?.verifiedAt || "");
-    const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
-    if (!identity?.profile?.id || !Number.isFinite(verifiedAt) || Date.now() - verifiedAt > maxAgeMs) return false;
+    const identity = this._readUsableOfflineIdentity();
+    if (!identity) return false;
 
     if (markAsOffline) state.offlineMode = true;
     state.supabase = this.createNlcDataClient();
@@ -489,8 +503,7 @@ const db = {
   },
 
   loadOfflineSnapshot() {
-    let identity = null;
-    try { identity = JSON.parse(localStorage.getItem("offline_trusted_identity") || "null"); } catch { identity = null; }
+    const identity = this._readUsableOfflineIdentity();
     if (identity?.profile) this.applyNlcProfile(identity.profile, identity.lockedFields || []);
     try {
       const plans = JSON.parse(localStorage.getItem("active_reading_plans") || "[]");
