@@ -5,39 +5,41 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const html = readFileSync(join(root, "index.html"), "utf8");
+// Since #418 the Tailwind config lives in tailwind.config.cjs and is compiled at build time (scripts/bundle.mjs).
+const tailwindConfig = readFileSync(join(root, "tailwind.config.cjs"), "utf8");
 const fab = readFileSync(join(root, "components/issue-report/SupportFab.tsx"), "utf8");
 const reportDrawer = readFileSync(join(root, "components/issue-report/ReportDrawer.tsx"), "utf8");
 const uiDrawerPath = join(root, "components/ui/drawer.tsx");
 
-describe("Tailwind CDN design-token bridge", () => {
+describe("Tailwind design-token bridge (tailwind.config.cjs)", () => {
   it("maps shadcn semantic colors to Bible app CSS variables", () => {
-    expect(html).toContain("tailwind.config");
-    expect(html).toMatch(/primary:\s*["']var\(--color-brand\)["']/);
+    expect(html).not.toContain("cdn.tailwindcss.com");
+    expect(tailwindConfig).toMatch(/primary:\s*["']var\(--color-brand\)["']/);
     // Was "#FFFFFF" — measured 2.76:1 against --color-brand, fails WCAG AA
     // (see scripts/color-contrast-audit.test.mjs). --color-solid-fill-foreground
     // is a fixed dark color (not theme-flipping, unlike --text-primary) —
     // deliberately fixed because --color-brand itself doesn't change across
     // light/dark/warm theme. Measures 6.95:1 in every theme.
-    expect(html).toMatch(/["']primary-foreground["']\s*:\s*["']var\(--color-solid-fill-foreground\)["']/);
-    expect(html).toMatch(/background:\s*["']var\(--bg-app\)["']/);
-    expect(html).toMatch(/foreground:\s*["']var\(--text-primary\)["']/);
-    expect(html).toMatch(/card:\s*["']var\(--bg-card\)["']/);
-    expect(html).toMatch(/["']card-foreground["']\s*:\s*["']var\(--text-primary\)["']/);
-    expect(html).toMatch(/muted:\s*["']var\(--bg-input\)["']/);
-    expect(html).toMatch(/["']muted-foreground["']\s*:\s*["']var\(--text-muted\)["']/);
-    expect(html).toMatch(/accent:\s*["']color-mix\(in srgb, var\(--text-primary\) 6%, var\(--bg-card\)\)["']/);
-    expect(html).toMatch(/secondary:\s*["']color-mix\(in srgb, var\(--text-primary\) 8%, var\(--bg-card\)\)["']/);
-    expect(html).toMatch(/destructive:\s*["']var\(--color-danger\)["']/);
+    expect(tailwindConfig).toMatch(/["']primary-foreground["']\s*:\s*["']var\(--color-solid-fill-foreground\)["']/);
+    expect(tailwindConfig).toMatch(/background:\s*["']var\(--bg-app\)["']/);
+    expect(tailwindConfig).toMatch(/foreground:\s*["']var\(--text-primary\)["']/);
+    expect(tailwindConfig).toMatch(/card:\s*["']var\(--bg-card\)["']/);
+    expect(tailwindConfig).toMatch(/["']card-foreground["']\s*:\s*["']var\(--text-primary\)["']/);
+    expect(tailwindConfig).toMatch(/muted:\s*["']var\(--bg-input\)["']/);
+    expect(tailwindConfig).toMatch(/["']muted-foreground["']\s*:\s*["']var\(--text-muted\)["']/);
+    expect(tailwindConfig).toMatch(/accent:\s*["']color-mix\(in srgb, var\(--text-primary\) 6%, var\(--bg-card\)\)["']/);
+    expect(tailwindConfig).toMatch(/secondary:\s*["']color-mix\(in srgb, var\(--text-primary\) 8%, var\(--bg-card\)\)["']/);
+    expect(tailwindConfig).toMatch(/destructive:\s*["']var\(--color-danger\)["']/);
     // Was var(--color-danger-foreground) — that token is designed for the
     // *-subtle tint-background pattern (~4.45:1 there), not for sitting on
     // the solid --color-danger fill, where it only measured 1.47:1. Same
     // fixed dark token as primary-foreground above — measures 5.31:1 in
     // every theme.
-    expect(html).toMatch(/["']destructive-foreground["']\s*:\s*["']var\(--color-solid-fill-foreground\)["']/);
-    expect(html).toMatch(/border:\s*["']var\(--border-default\)["']/);
-    expect(html).toMatch(/input:\s*["']var\(--border-card\)["']/);
-    expect(html).toMatch(/ring:\s*["']var\(--color-brand-ring\)["']/);
-    expect(html).toContain("preflight: false");
+    expect(tailwindConfig).toMatch(/["']destructive-foreground["']\s*:\s*["']var\(--color-solid-fill-foreground\)["']/);
+    expect(tailwindConfig).toMatch(/border:\s*["']var\(--border-default\)["']/);
+    expect(tailwindConfig).toMatch(/input:\s*["']var\(--border-card\)["']/);
+    expect(tailwindConfig).toMatch(/ring:\s*["']var\(--color-brand-ring\)["']/);
+    expect(tailwindConfig).toContain("preflight: false");
   });
 });
 
