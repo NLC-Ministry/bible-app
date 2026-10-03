@@ -763,8 +763,10 @@ const auth = {
         const afterTok = localStorage.getItem(this.keys.accessToken);
         const afterExp = parseInt(localStorage.getItem(this.keys.expiresAt) || "0", 10);
         if (afterTok && afterExp > (startExpiresAt || 0) && Date.now() < afterExp - 90000) return true;
+        // 只清 token，保留身分快照（#417）：它只是顯示用的會員資料、不是憑證。刪掉它
+        // 只會讓重新登入回來一定要等 nlc-session 同步完才開畫面。快照記著是哪個
+        // Logto 帳號，換人登入時不會被拿來用（js/data/offline-identity.mjs）。
         this._clearStoredTokens();
-        localStorage.removeItem("offline_trusted_identity");
         return false;
       }
       // Discovery/network failures do not mean the account was rejected.
