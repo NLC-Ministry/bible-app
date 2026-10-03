@@ -14,6 +14,15 @@ import {
   detectAuthenticationEnvironment,
   shouldGateInteractiveAuth
 } from "./auth-environment.js";
+import {
+  BOOT_FETCH_TIMEOUT_MS,
+  TOKEN_HARD_TIMEOUT_MS,
+  TOKEN_LOCK_WAIT_MS,
+  TOKEN_SOFT_TIMEOUT_MS,
+  fetchWithTimeout,
+  requestLockWithTimeout,
+  withSoftTimeout
+} from "./net-timeout.mjs";
 
 const auth = {
   config: {
@@ -99,7 +108,7 @@ const auth = {
     let lastError = null;
     for (const url of candidates) {
       try {
-        const response = await fetch(url, { headers: { Accept: "application/json" } });
+        const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, BOOT_FETCH_TIMEOUT_MS);
         if (!response.ok) {
           lastError = new Error(`OIDC discovery failed: ${response.status} ${url}`);
           continue;
@@ -569,48 +578,31 @@ const auth = {
     const nonce = this._getFlowItem(this.keys.nonce);
     if (!nonce) return this._failCallback("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
 
+    // 登入成功後跳回原本那一頁（例如批改頁 /grade.html?paper=…&attempt=…），
+    // 而不是永遠停在首頁——continuation 在 startInteractiveLogin() 存的 returnTo
+    // 就是為了這一刻。換 token 前先讀出來：finally 會清掉登入流程暫存。
+    const continuation = parseAuthContinuation(this._getFlowItem(this.keys.continuation));
+    const returnTo = continuation && continuation.returnTo;
+
     loader.show("\u6b63\u5728\u5b8c\u6210\u6559\u6703\u7cfb\u7d71\u767b\u5165...");
     try {
-      const redirectUri = this._getRedirectUri();
-      const endpoints = await this._getEndpoints();
-      const tokenParams = {
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: redirectUri,
-        client_id: this.config.clientId,
-        code_verifier: verifier
-      };
-      if (this.config.platformResource) {
-        tokenParams.resource = this.config.platformResource;
+      // 換 token 用軟逾時（#415）：等太久就先顯示登入卡，但請求繼續跑——
+      // 登入碼只能用一次，中斷後重送一定失敗。晚到的成功結果照樣存 token，再重新進入。
+      const exchange = this._exchangeAuthorizationCode({ code, verifier, nonce });
+      const result = await withSoftTimeout(exchange, TOKEN_SOFT_TIMEOUT_MS, { timedOut: true });
+      if (result.timedOut) {
+        exchange.then((late) => {
+          if (!late || !late.ok) return;
+          const target = returnTo && returnTo !== "/" ? returnTo : "/" + window.location.hash;
+          window.location.replace(target);
+        }).catch(() => {});
+        return this._failCallback("\u6559\u6703\u7cfb\u7d71\u56de\u61c9\u8f03\u6162\uff0c\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u9032\u5165\uff1b\u4e5f\u53ef\u4ee5\u91cd\u65b0\u767b\u5165\u3002", { tokenExchange: "timed_out" });
+      }
+      if (result.error) throw result.error;
+      if (!result.ok) {
+        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", result.detail);
       }
 
-      const response = await fetch(endpoints.tokenEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(tokenParams)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(`Token exchange failed: ${response.status} ${response.statusText}${errorText ? " - " + errorText : ""}`);
-      }
-
-      const data = await response.json();
-      const idPayload = this._parseJwt(data.id_token || "");
-      if (!idPayload || idPayload.nonce !== nonce) {
-        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", {
-          missingIdToken: !data.id_token,
-          expectedNonce: !!nonce,
-          hasPayload: !!idPayload
-        });
-      }
-
-      this._saveTokens(data);
-      // \u767b\u5165\u6210\u529f\u5f8c\u8df3\u56de\u539f\u672c\u90a3\u4e00\u9801\uff08\u4f8b\u5982\u6279\u6539\u9801 /grade.html?paper=\u2026&attempt=\u2026\uff09\uff0c
-      // \u800c\u4e0d\u662f\u6c38\u9060\u505c\u5728\u9996\u9801\u2014\u2014continuation \u5728 startInteractiveLogin() \u5b58\u7684
-      // returnTo \u5c31\u662f\u70ba\u4e86\u9019\u4e00\u523b\uff0c\u5148\u524d\u9019\u88e1\u5f9e\u6c92\u8b80\u51fa\u4f86\u7528\u904e\u3002
-      const continuation = parseAuthContinuation(this._getFlowItem(this.keys.continuation));
-      const returnTo = continuation && continuation.returnTo;
       this._cleanCallbackUrl();
       this._applyTokenProfileFallback();
       this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
@@ -624,6 +616,49 @@ const auth = {
     } finally {
       this._clearFlowState();
       loader.hide();
+    }
+  },
+
+  // 用登入碼換 token。不論呼叫端等不等，這個 promise 都會跑完：成功就存 token。
+  // 回傳 { ok: true } / { ok: false, detail }（驗證失敗）/ { error }（網路或伺服器錯誤），不丟例外。
+  async _exchangeAuthorizationCode({ code, verifier, nonce }) {
+    try {
+      const endpoints = await this._getEndpoints();
+      const tokenParams = {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: this._getRedirectUri(),
+        client_id: this.config.clientId,
+        code_verifier: verifier
+      };
+      if (this.config.platformResource) {
+        tokenParams.resource = this.config.platformResource;
+      }
+
+      const response = await fetchWithTimeout(endpoints.tokenEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(tokenParams)
+      }, TOKEN_HARD_TIMEOUT_MS);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        return { error: new Error(`Token exchange failed: ${response.status} ${response.statusText}${errorText ? " - " + errorText : ""}`) };
+      }
+
+      const data = await response.json();
+      const idPayload = this._parseJwt(data.id_token || "");
+      if (!idPayload || idPayload.nonce !== nonce) {
+        return {
+          ok: false,
+          detail: { missingIdToken: !data.id_token, expectedNonce: !!nonce, hasPayload: !!idPayload }
+        };
+      }
+
+      this._saveTokens(data);
+      return { ok: true };
+    } catch (error) {
+      return { error };
     }
   },
 
@@ -671,7 +706,8 @@ const auth = {
     }, delay);
   },
 
-  _refreshPromise: null,
+  // 正在跑的續期本體；跑完才清掉（呼叫端的軟逾時不影響它）。
+  _refreshWork: null,
 
   // 實際打 Logto token 端點。進來前假設已拿到跨情境鎖（或環境沒有 navigator.locks）。
   // startExpiresAt = 呼叫端在搶鎖前看到的到期時間，用來判斷「等鎖期間有沒有別的情境已換好」。
@@ -702,11 +738,12 @@ const auth = {
         refreshParams.set("scope", this.config.scopes);
       }
 
-      const response = await fetch(endpoints.tokenEndpoint, {
+      // 呼叫端用軟逾時，這裡只設很長的硬上限：真的卡死的請求不能永遠佔著跨分頁鎖。
+      const response = await fetchWithTimeout(endpoints.tokenEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: refreshParams
-      });
+      }, TOKEN_HARD_TIMEOUT_MS);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
@@ -736,33 +773,38 @@ const auth = {
     }
   },
 
-  async refreshTokens() {
-    if (this._refreshPromise) {
-      return this._refreshPromise;
-    }
-
-    const startExpiresAt = parseInt(localStorage.getItem(this.keys.expiresAt) || "0", 10);
-    this._refreshPromise = (async () => {
-      // 跨「所有同源情境」序列化續期：Safari 分頁 + 加到主畫面的 PWA + 測驗滿版頁
-      // 不會各自拿 refresh token 去打 Logto、互相把對方輪替掉（登出的最大宗）。
-      const locks = (typeof navigator !== "undefined" && navigator.locks && navigator.locks.request)
-        ? navigator.locks : null;
-      if (locks) {
-        try {
-          return await locks.request("nlc-token-refresh", { mode: "exclusive" },
-            () => this._doRefreshOnce(startExpiresAt));
-        } catch (lockErr) {
-          console.warn("token-refresh lock unavailable; refreshing without it", lockErr);
-        }
+  async _runRefreshWork(startExpiresAt) {
+    // 跨「所有同源情境」序列化續期：Safari 分頁 + 加到主畫面的 PWA + 測驗滿版頁
+    // 不會各自拿 refresh token 去打 Logto、互相把對方輪替掉（登出的最大宗）。
+    const locks = (typeof navigator !== "undefined" && navigator.locks && navigator.locks.request)
+      ? navigator.locks : null;
+    if (locks) {
+      try {
+        const { acquired, value } = await requestLockWithTimeout(
+          locks, "nlc-token-refresh", TOKEN_LOCK_WAIT_MS, () => this._doRefreshOnce(startExpiresAt)
+        );
+        // 等不到鎖＝別的情境正在續期（或卡住了）。不要拿同一張 refresh token 去搶，
+        // 當成「暫時連不上」回 null；那邊換好的新 token 下次就讀得到（#415）。
+        return acquired ? value : null;
+      } catch (lockErr) {
+        console.warn("token-refresh lock unavailable; refreshing without it", lockErr);
       }
-      return await this._doRefreshOnce(startExpiresAt);
-    })();
-
-    try {
-      return await this._refreshPromise;
-    } finally {
-      this._refreshPromise = null;
     }
+    return this._doRefreshOnce(startExpiresAt);
+  },
+
+  // 呼叫端最多等 TOKEN_SOFT_TIMEOUT_MS；續期本體不中斷、跑完照樣存新 token（#415）。
+  // 本體還在跑時再呼叫，等的是同一個本體，不會再發一次請求。
+  async refreshTokens() {
+    if (!this._refreshWork) {
+      const startExpiresAt = parseInt(localStorage.getItem(this.keys.expiresAt) || "0", 10);
+      const work = this._runRefreshWork(startExpiresAt);
+      this._refreshWork = work;
+      work.then(() => {}, () => {}).then(() => {
+        if (this._refreshWork === work) this._refreshWork = null;
+      });
+    }
+    return withSoftTimeout(this._refreshWork, TOKEN_SOFT_TIMEOUT_MS, null);
   },
 
   isLoggedIn() {
@@ -790,7 +832,8 @@ const auth = {
       // 續期回 null＝網路 / 尖峰把 Logto 續期端點打爆（不是帳號被拒）。
       // 固定時段開放的大測驗，所有人 token 會同時到期、同時打續期端點，
       // 立刻放棄就會讓「送出當下」剛好失敗。短暫退避後再試 2 次。
-      for (let i = 0; refreshed === null && i < 2; i++) {
+      // 上一次續期還沒跑完（軟逾時先回來了）就不再重試：重試只會再等同一個請求。
+      for (let i = 0; refreshed === null && i < 2 && !this._refreshWork; i++) {
         await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
         refreshed = await this.refreshTokens();
       }

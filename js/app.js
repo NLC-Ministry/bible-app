@@ -1144,6 +1144,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialSessionSyncSucceeded = await db.init() === true;
   } catch (err) {
     console.error('Failed to initialize database connection & auth:', err);
+    window.__bootReportError?.(err);
+    // 出錯時主畫面和登入卡都還沒打開＝白屏；至少顯示一張能操作的登入卡（#415）。
+    try {
+      db.showBootFailureGate();
+    } catch (gateErr) {
+      console.error('Failed to show the login gate after a boot failure:', gateErr);
+    }
   }
   window.__bootMark?.("db-init-done");
 
