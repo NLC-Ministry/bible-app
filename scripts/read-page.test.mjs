@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// #416：快速啟動聖經的獨立讀經頁 /read。
+// #416、#423：快速啟動聖經的獨立讀經頁 /read——版面與操作和主 App 讀經頁一致。
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LAST_CHAPTER_KEY, mountReadApp } from "../js/read/read-app.mjs";
@@ -11,15 +11,17 @@ import { keepLoginFresh, needsBackgroundRefresh } from "../js/read/read-login-ke
 import { ensureOfflineBiblePack } from "../js/pwa/OfflineBibleControls.js";
 
 const BOOKS = [
-  { id: 1, name: "創世記", eng: "Genesis", chapters: 50, section: "old" },
-  { id: 2, name: "出埃及記", eng: "Exodus", chapters: 40, section: "old" },
-  { id: 40, name: "馬太福音", eng: "Matthew", chapters: 28, section: "new" },
-  { id: 66, name: "啟示錄", eng: "Revelation", chapters: 22, section: "new" }
+  { id: 1, name: "創世記", abbrev: "創", eng: "Genesis", chapters: 50, section: "old" },
+  { id: 2, name: "出埃及記", abbrev: "出", eng: "Exodus", chapters: 40, section: "old" },
+  { id: 40, name: "馬太福音", abbrev: "太", eng: "Matthew", chapters: 28, section: "new" },
+  { id: 66, name: "啟示錄", abbrev: "啟", eng: "Revelation", chapters: 22, section: "new" }
 ];
+const COUNTS = { Genesis: Array(50).fill(31), Exodus: Array(40).fill(22), Matthew: Array(28).fill(25), Revelation: Array(22).fill(20) };
 
 const readHtml = readFileSync("read.html", "utf8");
 const indexHtml = readFileSync("index.html", "utf8");
 const readEntry = readFileSync("js/read-entry.js", "utf8");
+const readApp = readFileSync("js/read/read-app.mjs", "utf8");
 const sw = readFileSync("sw.js", "utf8");
 const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
 const bibleJs = readFileSync("js/modules/bible.js", "utf8").replace(/\r\n/g, "\n");
@@ -27,31 +29,45 @@ const bibleJs = readFileSync("js/modules/bible.js", "utf8").replace(/\r\n/g, "\n
 function chapterFor(bookEng, chapter, version = "CUNP") {
   return { reference: `${bookEng} ${chapter}`, translation: version, verses: [
     { verse: 1, text: `${version} ${bookEng} ${chapter}:1` },
-    { verse: 2, text: "<b>不要當成 HTML</b>" }
+    { verse: 2, text: "<b>不要當成 HTML</b>" },
+    { verse: 3, text: "第三節" }
   ] };
 }
 
 function mountBody() {
+  document.body.className = "";
   const body = readHtml.slice(readHtml.indexOf("<body"), readHtml.indexOf("</body>"));
   document.body.innerHTML = body.replace(/^<body[^>]*>/, "").replace(/<script[\s\S]*?<\/script>/g, "");
 }
 
+// 測試裡關掉翻頁動畫（prefers-reduced-motion），換章直接發生。
+const reducedMotionWin = Object.assign(Object.create(window), {
+  matchMedia: () => ({ matches: true }),
+  innerWidth: 390,
+  innerHeight: 844
+});
+
 function mount(overrides = {}) {
   const fetchChapter = overrides.fetchChapter || vi.fn(async (eng, ch, version) => chapterFor(eng, ch, version));
+  const clipboard = overrides.clipboard || { writeText: vi.fn(async () => {}) };
   const app = mountReadApp({
     doc: document,
+    win: reducedMotionWin,
     storage: localStorage,
     books: BOOKS,
-    fetchChapter,
+    getVerseCounts: () => COUNTS,
     schedule: overrides.schedule || ((fn) => fn()),
+    clipboard,
+    share: overrides.share ?? null,
     ...overrides,
     fetchChapter
   });
-  return { app, fetchChapter };
+  return { app, fetchChapter, clipboard };
 }
 
 const $ = id => document.getElementById(id);
-const verseTexts = () => [...document.querySelectorAll("#read-content .verse-text")].map(el => el.textContent);
+const verseTexts = () => [...document.querySelectorAll("#bible-content .verse-text")].map(el => el.textContent);
+const verseEl = n => document.querySelector(`#bible-content .bible-verse[data-verse="${n}"]`);
 
 beforeEach(() => {
   localStorage.clear();
@@ -62,6 +78,34 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("same layout as the main reader (#423)", () => {
+  it("uses the main reader's structure, so index.css scrolls .reader-reading-surface (not the locked body)", () => {
+    const doc = new DOMParser().parseFromString(readHtml, "text/html");
+    expect(doc.body.classList.contains("reader-page")).toBe(true);
+    const surface = doc.querySelector("main.main-content > section#reader-view.view-pane.active article.reader-reading-surface");
+    expect(surface).not.toBeNull();
+    expect(surface.querySelector("#bible-content.bible-text-container")).not.toBeNull();
+    expect(doc.querySelector("#reader-top-navbar.native-reader-toolbar")).not.toBeNull();
+    expect(doc.querySelector(".reader-floating-nav #floating-prev-btn")).not.toBeNull();
+  });
+
+  it("the toolbar keeps the main reader's ids, plus a 回計畫 link into the full app", () => {
+    for (const id of ["reader-nav-directory-btn", "reader-book-badge", "reader-nav-ref-label", "reader-version-inline", "reader-nav-version-btn", "reader-settings-trigger-btn"]) {
+      expect(indexHtml, id).toContain(`id="${id}"`);
+      expect(readHtml, id).toContain(`id="${id}"`);
+    }
+    expect(readHtml).toMatch(/<a [^>]*id="read-back-link"[^>]*href="\/\?from=read"/);
+  });
+
+  it("the version picker is the same markup as the main reader's", () => {
+    const pick = html => {
+      const el = new DOMParser().parseFromString(html, "text/html").getElementById("bible-version-picker-modal");
+      return el.outerHTML.replace(/\s+/g, " ").replace(/> </g, "><");
+    };
+    expect(pick(readHtml)).toBe(pick(indexHtml));
+  });
+});
+
 describe("read page opens where the member left off", () => {
   it("opens the saved book, chapter, version and font size from the main app's reader preferences", async () => {
     localStorage.setItem("reader_state", JSON.stringify({ bookId: 2, chapter: 3 }));
@@ -70,9 +114,10 @@ describe("read page opens where the member left off", () => {
     const { app, fetchChapter } = mount();
     await app.ready;
     expect(fetchChapter).toHaveBeenCalledWith("Exodus", 3, "RCUVTS");
-    expect($("read-ref-btn").textContent).toBe("出埃及記 3");
-    expect($("read-version-btn").textContent).toBe("RCUV");
-    expect($("read-content").style.getPropertyValue("--read-font-size")).toBe("24px");
+    expect($("reader-nav-ref-label").textContent).toBe("出埃及記 3");
+    expect($("reader-version-inline").textContent).toBe("RCUV");
+    expect($("bible-title").textContent).toBe("出埃及記 3章");
+    expect($("bible-content").style.getPropertyValue("font-size")).toBe("24px");
     expect(verseTexts()[0]).toBe("RCUVTS Exodus 3:1");
   });
 
@@ -83,68 +128,138 @@ describe("read page opens where the member left off", () => {
     expect(fetchChapter).toHaveBeenCalledWith("Genesis", 1, "CUNP");
   });
 
-  it("renders verse text as text, never as HTML", async () => {
+  it("renders verses as the main reader's .bible-verse elements, text never as HTML", async () => {
     const { app } = mount();
     await app.ready;
+    expect(verseEl(1).getAttribute("role")).toBe("button");
     expect(verseTexts()[1]).toBe("<b>不要當成 HTML</b>");
-    expect(document.querySelector("#read-content b")).toBeNull();
+    expect(document.querySelector("#bible-content b")).toBeNull();
   });
 });
 
-describe("chapter navigation and pickers", () => {
-  it("next/previous cross book boundaries and save the position in the main app's format", async () => {
+describe("chapter navigation (floating arrows, chapter-end links, directory)", () => {
+  it("the floating next/previous arrows cross book boundaries and save the position in the main app's format", async () => {
     localStorage.setItem("reader_state", JSON.stringify({ bookId: 1, chapter: 50 }));
     const { app, fetchChapter } = mount();
     await app.ready;
-    $("read-next").click();
+    $("floating-next-btn").click();
     await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Exodus", 1, "CUNP"));
     expect(JSON.parse(localStorage.getItem("reader_state"))).toEqual({ bookId: 2, chapter: 1 });
-    $("read-prev").click();
+    $("floating-prev-btn").click();
     await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Genesis", 50, "CUNP"));
   });
 
   it("disables previous on the first chapter of the Bible and next on the last", async () => {
     const { app } = mount();
     await app.ready;
-    expect($("read-prev").disabled).toBe(true);
+    expect($("floating-prev-btn").disabled).toBe(true);
     await app.goTo(66, 22);
-    expect($("read-next").disabled).toBe(true);
+    expect($("floating-next-btn").disabled).toBe(true);
   });
 
-  it("picks a book from the New Testament tab, then a chapter", async () => {
+  it("puts the main reader's 上一章｜下一章 links at the chapter end, and they change chapter", async () => {
+    localStorage.setItem("reader_state", JSON.stringify({ bookId: 1, chapter: 2 }));
     const { app, fetchChapter } = mount();
     await app.ready;
-    $("read-ref-btn").click();
-    expect($("read-sheet").classList.contains("hidden")).toBe(false);
-    const newTab = [...document.querySelectorAll(".read-segmented__item")].find(b => b.textContent === "新約");
-    newTab.click();
-    document.querySelector('[data-book-id="40"]').click();
-    expect(document.querySelectorAll("[data-chapter]")).toHaveLength(28);
-    document.querySelector('[data-chapter="5"]').click();
+    const next = document.querySelector('#bible-content .reader-chapter-end-nav [data-chapter-nav="1"]');
+    expect(next.textContent).toBe("下一章");
+    next.click();
+    await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Genesis", 3, "CUNP"));
+  });
+
+  it("the shared directory opens from the toolbar and jumps to the chosen verse", async () => {
+    const { app, fetchChapter } = mount();
+    await app.ready;
+    $("reader-nav-directory-btn").click();
+    expect($("bible-nav-overlay").classList.contains("hidden")).toBe(false);
+    [...document.querySelectorAll(".grid-item-book")].find(el => el.textContent.includes("馬太福音")).click();
+    [...document.querySelectorAll(".chapter-nav-grid .grid-item-number")].find(el => el.textContent === "5").click();
+    [...document.querySelectorAll(".verse-nav-grid .grid-item-number")].find(el => el.textContent === "3").click();
     await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Matthew", 5, "CUNP"));
-    expect($("read-sheet").classList.contains("hidden")).toBe(true);
+    expect($("bible-nav-overlay").classList.contains("hidden")).toBe(true);
+    expect($("bible-title").textContent).toBe("馬太福音 5章");
   });
 
-  it("switching version saves it and reloads the chapter in that version", async () => {
-    const { app, fetchChapter } = mount();
-    await app.ready;
-    $("read-version-btn").click();
-    document.querySelector('[data-version="NIV"]').click();
-    await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Genesis", 1, "NIV"));
-    expect(localStorage.getItem("reader_bible_version")).toBe("NIV");
-    expect($("read-ref-btn").textContent).toBe("Genesis 1");
-  });
-
-  it("font size steps through the same sizes as the main reader and stops at the ends", async () => {
-    localStorage.setItem("reader_font_size", "22");
+  it("the reference chip also opens the directory, like the main reader", async () => {
     const { app } = mount();
     await app.ready;
-    $("read-font-up").click();
+    $("reader-book-badge").click();
+    expect($("bible-nav-overlay").classList.contains("hidden")).toBe(false);
+  });
+
+  it("switching version through the version picker saves it and reloads the chapter", async () => {
+    const { app, fetchChapter } = mount();
+    await app.ready;
+    $("reader-nav-version-btn").click();
+    expect($("bible-version-picker-modal").classList.contains("hidden")).toBe(false);
+    document.querySelector('#bible-version-picker-modal [data-version="NIV"]').click();
+    await vi.waitFor(() => expect(fetchChapter).toHaveBeenLastCalledWith("Genesis", 1, "NIV"));
+    expect(localStorage.getItem("reader_bible_version")).toBe("NIV");
+    expect($("reader-nav-ref-label").textContent).toBe("Genesis 1");
+    expect($("bible-version-picker-modal").classList.contains("hidden")).toBe(true);
+  });
+
+  it("text size uses the main reader's 16–24 ticks in the settings sheet", async () => {
+    const { app } = mount();
+    await app.ready;
+    $("reader-settings-trigger-btn").click();
+    expect($("typography-settings-backdrop").classList.contains("hidden")).toBe(false);
+    document.querySelector('.reader-font-size-tick[data-reader-font-size="24"]').click();
     expect(localStorage.getItem("reader_font_size")).toBe("24");
-    expect($("read-font-up").disabled).toBe(true);
-    for (let i = 0; i < 6; i++) $("read-font-down").click();
-    expect(localStorage.getItem("reader_font_size")).toBe("16");
-    expect($("read-font-down").disabled).toBe(true);
+    expect($("reader-font-size-value").textContent).toBe("24px");
+    expect(document.querySelector(".reader-font-size-tick.active").dataset.readerFontSize).toBe("24");
+  });
+
+  it("left/right swiping uses the main reader's swipe controller and page flip", () => {
+    expect(readApp).toContain("createReaderSwipeController({");
+    expect(readApp).toContain("createReaderPageFlip({");
+    expect(readApp).toContain('surface?.classList.add("reader-flip-scroll-locked")');
+  });
+});
+
+describe("select verses → copy / share (#423)", () => {
+  it("tapping verses selects them and shows a bar with only 複製 and 分享", async () => {
+    const { app } = mount();
+    await app.ready;
+    verseEl(1).click();
+    expect(verseEl(1).classList.contains("verse-selected")).toBe(true);
+    const tiles = [...document.querySelectorAll("#selection-bottom-bar-root .yv-tile .yv-tile-label")].map(el => el.textContent);
+    expect(tiles).toEqual(["複製", "分享"]);
+    verseEl(1).click();
+    expect(document.querySelector("#selection-bottom-bar-root .youversion-action-bar")).toBeNull();
+  });
+
+  it("copies in exactly the main reader's format", async () => {
+    // 提示 2.2 秒後才收掉：這裡不執行那個排程，才看得到提示。
+    const { app, clipboard } = mount({ schedule: (fn, ms) => (ms >= 2000 ? null : fn()) });
+    await app.ready;
+    verseEl(1).click();
+    verseEl(2).click();
+    document.querySelector('#selection-bottom-bar-root [data-action="copy"]').click();
+    await vi.waitFor(() => expect(clipboard.writeText).toHaveBeenCalled());
+    expect(clipboard.writeText.mock.calls[0][0]).toBe("【創世記 1:1-2】\n1 CUNP Genesis 1:1\n2 <b>不要當成 HTML</b>");
+    expect(document.querySelector(".read-toast").textContent).toBe("經文已複製到剪貼簿！");
+  });
+
+  it("shares through the system share sheet when available", async () => {
+    const share = vi.fn(async () => {});
+    const { app } = mount({ share });
+    await app.ready;
+    verseEl(3).click();
+    document.querySelector('#selection-bottom-bar-root [data-action="share"]').click();
+    await vi.waitFor(() => expect(share).toHaveBeenCalledWith({ title: "經文分享", text: "【創世記 1:3】\n3 第三節" }));
+  });
+
+  it("keeps the selection across chapters and labels chips with book abbreviations, like the main reader", async () => {
+    const { app } = mount();
+    await app.ready;
+    verseEl(1).click();
+    await app.goTo(2, 1);
+    verseEl(2).click();
+    const chips = [...document.querySelectorAll(".yv-chip-ref")].map(el => el.textContent);
+    expect(chips).toEqual(["創1:1", "出1:2"]);
+    document.querySelector('[data-action="clear-all"]').click();
+    expect(app.selection.size).toBe(0);
   });
 });
 
@@ -153,9 +268,9 @@ describe("never stuck on a blank or loading screen", () => {
     const fetchChapter = vi.fn(async () => ({ verses: [{ verse: 1, text: "（經文暫時未載入）" }], isPlaceholder: true }));
     const { app } = mount({ fetchChapter, isOnline: () => false });
     await app.ready;
-    expect($("read-content").textContent).toContain("這一章需要網路才能讀取");
-    expect([...$("read-content").querySelectorAll("button")].map(b => b.textContent)).toContain("重新載入");
-    expect($("read-content").dataset.ready).toBe("1");
+    expect($("bible-content").textContent).toContain("這一章需要網路才能讀取");
+    expect([...$("bible-content").querySelectorAll("button")].map(b => b.textContent)).toContain("重新載入");
+    expect($("bible-content").dataset.ready).toBe("1");
   });
 
   it("offline: the last chapter shown is still readable from its own saved copy (survives SW cache clears)", async () => {
@@ -175,7 +290,7 @@ describe("never stuck on a blank or loading screen", () => {
     const { app } = mount({ fetchChapter });
     await vi.advanceTimersByTimeAsync(12000);
     await app.ready;
-    expect($("read-content").textContent).toContain("經文暫時載入不了");
+    expect($("bible-content").textContent).toContain("經文暫時載入不了");
   });
 });
 

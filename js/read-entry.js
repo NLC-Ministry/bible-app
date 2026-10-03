@@ -5,6 +5,11 @@
 
 import "../config.js";
 import "./data/bible_data.js";
+import "./data/bible_verse_counts.js";
+import "./copy/zh-Hant.js";
+// 和主 App 同一套 Lucide 圖示（#423）。
+import "./design/icon-registry.js";
+import "./design/icons.js";
 import { IndexedDbClient } from "./pwa/IndexedDbClient.js";
 import { OFFLINE_BIBLE_CATALOG, OfflineBibleRepository } from "./pwa/OfflineBibleRepository.js";
 import { withSoftTimeout } from "./net-timeout.mjs";
@@ -48,6 +53,14 @@ mountReadApp({
   storage: localStorage,
   books: window.BIBLE_BOOKS,
   fetchChapter: (bookEng, chapter, version) => window.fetchBibleChapter(bookEng, chapter, version),
+  // 翻頁時預覽下一章：只看已經抓過（預抓、讀過）的記憶體快取，不另外發請求。
+  peekChapter: (bookEng, chapter, version) => {
+    const key = window.getBibleChapterCacheKey ? window.getBibleChapterCacheKey(bookEng, chapter, version) : `${version}_${bookEng}_${chapter}`;
+    return window._bibleChapterCache ? window._bibleChapterCache[key] : null;
+  },
+  getVerseCounts: () => window.BIBLE_VERSE_COUNTS || null,
+  hydrateIcons: typeof window.hydrateIcons === "function" ? window.hydrateIcons : null,
+  copy: (window.APP_COPY && window.APP_COPY.reader) || {},
   // 有離線經文包的譯本（當代譯本、WEB）整本可以下載，不用預抓；和合本系列沒有經文包，
   // 有網路時先把接下來幾章抓進 SW 快取，離線時才讀得到。
   shouldPrefetch: version => !OFFLINE_BIBLE_CATALOG[version],

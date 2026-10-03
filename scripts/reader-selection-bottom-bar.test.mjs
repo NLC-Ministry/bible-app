@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
+import { formatVerseSelectionText, groupVerseSelectionRuns } from "../js/modules/verse-selection-format.mjs";
+
 const bible = readFileSync("js/modules/bible.js", "utf8");
+const sharedFormat = readFileSync("js/modules/verse-selection-format.mjs", "utf8");
 const html = readFileSync("index.html", "utf8");
 const css = readFileSync("index.css", "utf8");
 
@@ -47,8 +50,9 @@ describe("reader verse selection — 統一點選多節模型", () => {
   it("chip 列：連續節合併成一顆（25:23-28），一顆 ✕ 移除整段；動作列 ✕ 一鍵全清", () => {
     const bar = bible.slice(bible.indexOf("function renderUnifiedSelectionBar()"), bible.indexOf("function closeVerseNoteEditor"));
     expect(bar).toContain('class="yv-selection-strip"');
-    // 連續節合併：相鄰號碼併進同一個 run，chip 上帶該段所有 key
-    expect(bar).toContain("v.verse === last.endVerse + 1");
+    // 連續節合併：相鄰號碼併進同一個 run，chip 上帶該段所有 key（規則與 /read 共用，#423）
+    expect(bar).toContain("groupVerseSelectionRuns(sorted, v => verseSelKey(v.bookId, v.chapter, v.verse))");
+    expect(sharedFormat).toContain("v.verse === last.endVerse + 1");
     expect(bar).toContain("r.startVerse === r.endVerse ? `${r.startVerse}` : `${r.startVerse}-${r.endVerse}`");
     expect(bar).toContain('data-remove-keys="${escapeHTML(r.keys.join(","))}"');
     expect(bar).toContain('removeVersesFromSelection(chip.getAttribute("data-remove-keys"))');
@@ -63,9 +67,11 @@ describe("reader verse selection — 統一點選多節模型", () => {
   });
 
   it("複製文字用完整書名，chip 才用縮寫（分開的兩套）", () => {
+    // 格式邏輯和 /read 共用（#423），bible.js 只轉呼叫。
     const fmt = bible.slice(bible.indexOf("function formatSelectionText()"), bible.indexOf("function copySelectionText"));
-    expect(fmt).toContain("`【${g.bookName} ${g.chapter}:${nums}】");
-    expect(fmt).not.toContain("abbrev");
+    expect(fmt).toContain("return formatVerseSelectionText(getSelectedVersesSorted());");
+    expect(sharedFormat).toContain("`【${g.bookName} ${g.chapter}:${nums}】");
+    expect(sharedFormat).not.toContain("abbrev");
   });
 
   it("點經文區外面不關閉工具列、不清選取（只收合色盤）", () => {
@@ -87,10 +93,24 @@ describe("reader verse selection — 統一點選多節模型", () => {
 
   it("複製/分享：同章連續節壓成 a-b、非連續用逗號；不同章/卷各自一個【參照】標題段", () => {
     expect(bible).toContain("function formatSelectionText()");
-    expect(bible).toContain("r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`");
     // 每段 = 【書 章:節】 + 換行 + 該段經文；段與段用換行相接（不是把所有參照塞進同一個【】）
-    expect(bible).toContain("return `【${g.bookName} ${g.chapter}:${nums}】\\n${body}`;");
-    expect(bible).not.toContain('.join("；")');
+    const text = formatVerseSelectionText([
+      { bookId: 43, bookName: "約翰福音", chapter: 3, verse: 16, text: "甲" },
+      { bookId: 43, bookName: "約翰福音", chapter: 3, verse: 17, text: "乙" },
+      { bookId: 43, bookName: "約翰福音", chapter: 3, verse: 19, text: "丙" },
+      { bookId: 45, bookName: "羅馬書", chapter: 8, verse: 28, text: "丁" }
+    ]);
+    expect(text).toBe("【約翰福音 3:16-17,19】\n16 甲\n17 乙\n19 丙\n【羅馬書 8:28】\n28 丁");
+    expect(sharedFormat).not.toContain('.join("；")');
+  });
+
+  it("選取 chip：同卷同章連續節合併成一顆，keys 帶齊整段", () => {
+    const runs = groupVerseSelectionRuns([
+      { bookId: 1, bookName: "創世記", chapter: 1, verse: 1 },
+      { bookId: 1, bookName: "創世記", chapter: 1, verse: 2 },
+      { bookId: 1, bookName: "創世記", chapter: 2, verse: 3 }
+    ], v => `${v.bookId}_${v.chapter}_${v.verse}`);
+    expect(runs.map(r => [r.chapter, r.startVerse, r.endVerse, r.keys.length])).toEqual([[1, 1, 2, 2], [2, 3, 3, 1]]);
   });
 
   it("朗讀起點：恰好一節且在本章 → 那一節；0/2+/在別章 → null（從第 1 節）", () => {

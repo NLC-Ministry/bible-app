@@ -204,13 +204,18 @@ describe("reader wiring (#362)", () => {
   it("puts reference lookup in the directory filter only", () => {
     expect(html).toContain('id="bible-nav-filter-input"');
     // 只有目錄篩選框處理 Enter（中文輸入法選字的 Enter 不算）。
-    expect(bible.match(/e\.isComposing \|\| e\.keyCode === 229/g)?.length).toBe(1);
-    expect(bible).toContain('language: getReaderReferenceLanguage()');
-    expect(bible).toContain('usesEnglishReaderLabels() ? "en" : "zh"');
+    // 目錄（含篩選框）和 /read 共用 bible-nav-directory.mjs（#423）。
+    const directory = readFileSync(new URL("../js/modules/bible-nav-directory.mjs", import.meta.url), "utf8");
+    expect(directory.match(/e\.isComposing \|\| e\.keyCode === 229/g)?.length).toBe(1);
+    expect(bible).not.toMatch(/e\.isComposing \|\| e\.keyCode === 229/);
+    expect(directory).toContain('language: english ? "en" : "zh"');
+    expect(bible).toContain("english: usesEnglishReaderLabels()");
   });
 
-  it("jumps through selectNavVerse and flashes every requested verse", () => {
-    expect(bible).toContain("selectNavVerse(verses.length ? verses[0] : null, verses)");
-    expect(bible).toContain("async function selectNavVerse(vNum, highlightVerses = null)");
+  it("jumps through the directory's selectVerse and flashes every requested verse", () => {
+    const directory = readFileSync(new URL("../js/modules/bible-nav-directory.mjs", import.meta.url), "utf8");
+    expect(directory).toContain("selectVerse(verses.length ? verses[0] : null, verses)");
+    expect(bible).toContain("onSelect: goToReaderVerse");
+    expect(bible).toContain("revealVerses(document.getElementById(\"bible-content\"), verse, highlightVerses);");
   });
 });

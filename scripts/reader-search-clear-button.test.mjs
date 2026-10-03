@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 const html = readFileSync("index.html", "utf8");
 const css = readFileSync("index.css", "utf8");
 const bible = readFileSync("js/modules/bible.js", "utf8");
+// 目錄（含篩選框）和 /read 共用這個模組（#423）。
+const directory = readFileSync("js/modules/bible-nav-directory.mjs", "utf8");
 
 describe("reader search boxes show a single ✕ (#367)", () => {
   it("hides the browser's built-in clear button on both reader search inputs", () => {
@@ -18,8 +20,9 @@ describe("reader search boxes show a single ✕ (#367)", () => {
   });
 
   it("shows the filter ✕ only with text and resets the filter when tapped", () => {
-    expect(bible).toContain('clearBtn.classList.toggle("hidden", !input.value)');
-    expect(bible).toContain('document.getElementById("bible-nav-filter-clear-btn")?.classList.add("hidden")');
-    expect(bible).toMatch(/clearBtn\.addEventListener\("click", \(\) => \{\s*clearBibleNavFilter\(\);/);
+    expect(bible).toContain("createBibleNavDirectory({");
+    expect(directory).toContain('clearBtn.classList.toggle("hidden", !input.value)');
+    expect(directory).toContain('$("bible-nav-filter-clear-btn")?.classList.add("hidden")');
+    expect(directory).toMatch(/clearBtn\.addEventListener\("click", \(\) => \{\s*clearFilter\(\);/);
   });
 });
