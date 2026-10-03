@@ -4,6 +4,7 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
 
@@ -1245,17 +1246,24 @@ export function init() {
   });
   syncPreferenceThemeState();
   window.addEventListener("app:themeChanged", syncPreferenceThemeState);
-  // 保持登入並允許離線閱讀已不是可關閉的使用者偏好，一律套用（見 db.js
-  // storeOfflineIdentity / tryRestoreOfflineSession）；這裡不再需要對應開關。
+  // 快速啟動聖經（#416）：開著時，index.html 一開頭就把無參數的 "/" 轉到獨立讀經頁 /read。
   const quickLaunchBibleToggle = document.getElementById("quick-launch-bible-enabled");
   if (quickLaunchBibleToggle && quickLaunchBibleToggle.dataset.bound !== "true") {
     quickLaunchBibleToggle.dataset.bound = "true";
     quickLaunchBibleToggle.checked = localStorage.getItem("quick_launch_bible_enabled") === "true";
-    quickLaunchBibleToggle.addEventListener("change", () => {
+    quickLaunchBibleToggle.addEventListener("change", async () => {
       if (quickLaunchBibleToggle.checked) {
-        window.db?.storeOfflineIdentity?.();
         localStorage.setItem("quick_launch_bible_enabled", "true");
-        window.showToast?.("已開啟快速啟動聖經，下次開啟 App 會直接進入讀經");
+        window.showToast?.("已開啟快速啟動聖經，下次打開 App 會直接進入讀經頁");
+        // 目前譯本有離線經文包（當代譯本、WEB）就順便下載，離線也能讀整本（#416）。
+        // 和合本系列沒有經文包，讀經頁會在有網路時先存好接下來幾章。
+        try {
+          const version = localStorage.getItem("reader_bible_version") || "CUNP";
+          const status = await ensureOfflineBiblePack(window.offlineBibleRepository, version);
+          if (status === "offline") window.showToast?.("連上網路後，到下方「離線聖經」下載整本經文");
+        } catch (error) {
+          console.warn("[QuickLaunch] offline pack check failed", error);
+        }
       } else {
         localStorage.setItem("quick_launch_bible_enabled", "false");
         window.showToast?.("已關閉快速啟動聖經");

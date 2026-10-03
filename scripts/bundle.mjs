@@ -267,11 +267,43 @@ export function emitBundle({ root, outDir }) {
   cpDirRecursive(join(root, "manifest.json"), join(outDir, "manifest.json"));
   const repairPage = join(root, "repair.html");
   if (existsSync(repairPage)) cpDirRecursive(repairPage, join(outDir, "repair.html"));
+  // ── 快速啟動聖經的獨立讀經頁（#416）：read.html + esbuild(js/read-entry.js) 打包成單一 bundle。
+  // 要在寫 sw.js 之前打包：SW 要預先快取 /read 和它的 bundle，離線也打得開。
+  let readJsFile = "";
+  const readHtmlPath = join(root, "read.html");
+  const readEntryPath = join(root, "js", "read-entry.js");
+  if (existsSync(readHtmlPath) && existsSync(readEntryPath)) {
+    console.log("DEBUG: Bundling read.html entry...");
+    const readTmpDir = mkdtempSync(join(tmpdir(), "bible-read-"));
+    const readTmpFile = join(readTmpDir, "read.bundle.js");
+    let readJs;
+    try {
+      execSync(
+        `${esbuildCmd} "${readEntryPath}" --bundle --minify --target=es2020 --format=esm --alias:@=. --outfile="${readTmpFile}"`,
+        { encoding: "utf8", cwd: root, stdio: ["ignore", "pipe", "pipe"] }
+      );
+      readJs = readFileSync(readTmpFile, "utf8").replace(/__BUILD_VERSION__/g, buildVer);
+    } catch (err) {
+      console.error("esbuild(read) failed stderr:", err.stderr || err.message);
+      throw new Error(`esbuild read entry failed: ${err.message}`);
+    } finally {
+      rmDirRecursive(readTmpDir);
+    }
+    readJsFile = `read.${contentHash(readJs)}.js`;
+    writeFileSync(join(outDir, readJsFile), readJs, "utf8");
+    const outReadHtml = readFileSync(readHtmlPath, "utf8")
+      .replace(SCRIPT_RE, `<script type="module" src="/${readJsFile}"></script>`)
+      .replace(CSS_RE, `<link rel="stylesheet" href="/${cssFile}">`);
+    writeFileSync(join(outDir, "read.html"), outReadHtml, "utf8");
+    console.log("DEBUG: read.html + " + readJsFile + " written!");
+  }
+
   console.log("DEBUG: Copying Service Worker and PWA runtime modules...");
   const serviceWorker = readFileSync(join(root, "sw.js"), "utf8")
     .replaceAll("__BUILD_VERSION__", buildVer)
     .replaceAll("__BUILD_JS_PATH__", `/${jsFile}`)
-    .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`);
+    .replaceAll("__BUILD_CSS_PATH__", `/${cssFile}`)
+    .replaceAll("__BUILD_READ_JS_PATH__", readJsFile ? `/${readJsFile}` : "");
   writeFileSync(join(outDir, "sw.js"), serviceWorker, "utf8");
   // Probe for js/pwa/VersionWatcher.js: same build id baked into app.js, so a
   // running tab can tell it is stale. Generated every build — never hand-edited.

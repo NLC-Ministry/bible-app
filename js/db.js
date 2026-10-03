@@ -623,26 +623,7 @@ const db = {
           }
         }
 
-        // ── Quick-launch Bible: don't wait even for THIS boot's OIDC code
-        // exchange. A normal boot always pays for auth.handleCallback() up
-        // front — cheap when there's no code/state in the URL, but a real
-        // Logto token-endpoint round trip when the user arrived via a fresh
-        // Member Hub SSO redirect. When the user opted in (偏好設定 →
-        // 快速啟動聖經) and this device has a recently-verified (<=30d)
-        // local identity, skip waiting on that exchange entirely: show the
-        // cached identity now, and let handleCallback() + the real session
-        // sync run in the background via startBackgroundSessionReconciliation.
-        // Same "display-only risk, writes still re-verified server-side"
-        // tradeoff already used by the optimistic-boot path below.
-        if (typeof auth !== "undefined"
-          && auth.isLoggedIn()
-          && localStorage.getItem("quick_launch_bible_enabled") === "true"
-          && this.applyCachedIdentitySnapshot({ markAsOffline: false })) {
-          window.__bootMark?.("quick-launch-shell-shown");
-          state.optimisticBootPending = true;
-          this.startBackgroundSessionReconciliation({ resolveCallbackFirst: true });
-          return true;
-        }
+        // 快速啟動聖經不再走這裡：開著時 index.html 一開頭就轉到獨立讀經頁 /read（#416）。
 
         // ── OIDC Callback: Handle Logto redirect ──
         if (typeof auth !== "undefined") {
@@ -1283,45 +1264,12 @@ const db = {
   //    real write server-side regardless of what this shows, so a few
   //    seconds of a stale optimistic view is a display-only risk, not a
   //    security one.
-  async startBackgroundSessionReconciliation({ resolveCallbackFirst = false } = {}) {
+  async startBackgroundSessionReconciliation() {
     if (this._backgroundReconcilePending) return;
     this._backgroundReconcilePending = true;
     let succeeded = false;
     try {
       window.__bootMark?.("background-reconcile-start");
-      // Quick-launch path only: the real OIDC code exchange for THIS boot
-      // was never awaited up front, so finish it here before syncing —
-      // otherwise a fresh Member Hub SSO code would sit unused and expire.
-      if (resolveCallbackFirst && typeof auth !== "undefined" && typeof auth.handleCallback === "function") {
-        const hadWorkingSessionBefore = auth.isLoggedIn();
-        try {
-          await auth.handleCallback();
-        } catch (callbackErr) {
-          console.warn("[BackgroundReconcile] Background OIDC callback exchange failed:", callbackErr);
-        }
-        // auth.handleCallback() does NOT throw on a rejected/duplicate/
-        // expired code (e.g. a reload or a second tab re-submitting the
-        // same one-time code) — it fails via auth.js's _failCallback(),
-        // which synchronously clears tokens, resets state.currentUser, and
-        // flips the login gate on, all before returning normally. That's
-        // correct for a normal foreground login attempt, but here we
-        // already had a working cached session before this background
-        // exchange started (that's the whole premise of quick-launch) — a
-        // redundant/reused SSO code failing must not yank the user out of
-        // the reader they're already in. Re-apply the cached identity and
-        // stop here for THIS invocation instead of falling through to the
-        // hasTokens-gated check below, which would otherwise immediately
-        // re-show the gate since _failCallback() just cleared the tokens
-        // it depends on. Real re-validation still happens naturally on the
-        // next token-consuming call (proactive refresh, a data write's
-        // 401 retry, next foreground).
-        if (hadWorkingSessionBefore && !auth.isLoggedIn()) {
-          console.warn("[BackgroundReconcile] Background OIDC exchange failed on an already-cached session — keeping optimistic view.");
-          this.applyCachedIdentitySnapshot({ markAsOffline: false });
-          succeeded = true;
-          return;
-        }
-      }
       const sessionSync = await this.syncNlcSessionWithSupabase(true);
       const block = getUserOnboardingBlock(state.currentUser);
       const hasValidTokens = typeof auth !== "undefined" && auth.isLoggedIn();
