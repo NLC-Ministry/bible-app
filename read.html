@@ -13,14 +13,15 @@
   <meta name="apple-mobile-web-app-title" content="新生命聖經速讀計畫">
   <link rel="icon" href="assets/bible-reading-icon.ico" sizes="any">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
-  <!-- 「快速啟動聖經」的獨立讀經頁（#416）：沒有任何外部資源，網路或登入出問題都打得開。 -->
+  <!-- 「快速啟動聖經」的獨立讀經頁（#416、#423）：版面、id、class 和主 App 讀經頁相同，
+       套用同一份 index.css；沒有任何外部資源，網路或登入出問題都打得開。 -->
   <script id="read-fallback">
     // 程式載不起來（檔案缺、網路斷在半路）時，不要停在「正在打開經文」：給重新載入和進完整 App 的路。
     (function () {
       var shown = false;
       function show() {
         if (shown) return;
-        var content = document.getElementById("read-content");
+        var content = document.getElementById("bible-content");
         if (!content || content.dataset.ready === "1") return;
         shown = true;
         content.innerHTML = '<div class="read-message"><p class="read-message__title">讀經頁打不開</p>' +
@@ -37,35 +38,13 @@
   </script>
   <link rel="stylesheet" href="index.css">
   <style>
+    /* 只放讀經頁和主 App 不同的地方：沒有主 App 的頂部標題列與底部分頁列。 */
     .hidden, [hidden] { display: none !important; }
-    html, body { margin: 0; min-height: 100%; background: var(--bg-app, #fafafa); color: var(--text-primary, #171717); }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", sans-serif; }
-    .read-shell { max-width: 720px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
-    .read-header {
-      position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px;
-      padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px;
-      background: var(--bg-app, #fafafa); border-bottom: 1px solid var(--border-card, #e5e5e5);
-    }
-    .read-back {
-      display: inline-flex; align-items: center; gap: 2px; padding: 8px 4px; min-height: 44px; box-sizing: border-box;
-      color: var(--color-brand, #04A9D2); font-size: 16px; font-weight: 500; text-decoration: none; white-space: nowrap;
-    }
-    .read-chevron { font-size: 22px; line-height: 1; }
-    .read-header__center { flex: 1; display: flex; justify-content: center; min-width: 0; }
-    .read-pill, .read-icon-btn {
-      min-height: 44px; border: 1px solid var(--border-card, #e5e5e5); border-radius: 999px;
-      background: var(--bg-card, #fff); color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500;
-      padding: 0 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-    }
-    .read-icon-btn { padding: 0 10px; min-width: 44px; flex: none; }
-    .read-icon-btn:disabled, .read-nav-btn:disabled { opacity: 0.4; cursor: default; }
-    .read-content { flex: 1; padding: 16px 16px 24px; font-size: var(--read-font-size, 20px); line-height: 1.8; }
-    .read-content .verse-text, .read-content .verse-num { font-size: var(--read-font-size, 20px); }
-    .read-content .bible-verse { cursor: default; -webkit-user-select: text; user-select: text; }
-    .read-content .bible-verse:hover { background: transparent; }
-    .read-chapter-title { font-size: 22px; font-weight: 500; margin: 8px 0 16px; }
-    .read-status { color: var(--text-muted, #737373); font-size: 16px; text-align: center; margin-top: 30vh; }
-    .read-message { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin-top: 20vh; }
+    body.read-page .main-content { top: 0 !important; bottom: 0 !important; }
+    .read-back-link { text-decoration: none; gap: 2px; width: auto !important; padding: 0 8px 0 4px !important; }
+    .read-back-label { font-size: 15px; font-weight: 500; white-space: nowrap; }
+    .read-status { color: var(--text-muted, #737373); font-size: 16px; text-align: center; margin-top: 25vh; }
+    .read-message { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin-top: 18vh; padding: 0 16px; }
     .read-message__title { font-size: 18px; font-weight: 500; margin: 0; }
     .read-message__detail { font-size: 16px; color: var(--text-muted, #737373); margin: 0; max-width: 320px; line-height: 1.6; }
     .read-button {
@@ -74,88 +53,142 @@
       color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500; text-decoration: none; cursor: pointer;
     }
     .read-button--primary { border: 0; background: var(--color-brand, #04A9D2); color: var(--color-solid-fill-foreground, #fff); }
-    .read-chapter-nav {
-      position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 8px);
-      background: var(--bg-app, #fafafa); border-top: 1px solid var(--border-card, #e5e5e5);
+    .read-toast {
+      position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px); transform: translateX(-50%);
+      z-index: 10000; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 12px;
+      background: var(--text-primary, #171717); color: var(--bg-app, #fafafa); font-size: 15px; font-weight: 500;
+      box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.15)); pointer-events: none;
     }
-    .read-nav-btn {
-      flex: 1; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-      border: 1px solid var(--border-card, #e5e5e5); border-radius: 12px; background: var(--bg-card, #fff);
-      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 500; cursor: pointer;
-    }
-    .read-sheet {
-      position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.35);
-      display: flex; align-items: flex-end; justify-content: center;
-    }
-    .read-sheet__panel {
-      width: 100%; max-width: 720px; max-height: 80vh; overflow-y: auto; box-sizing: border-box;
-      background: var(--bg-card, #fff); color: var(--text-primary, #171717); border-radius: 16px 16px 0 0;
-      padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
-    }
-    .read-sheet__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .read-sheet__title { font-size: 18px; font-weight: 500; margin: 0; }
-    .read-sheet__close { background: none; border: 0; color: var(--color-brand, #04A9D2); font: inherit; font-size: 16px; font-weight: 500; min-height: 44px; padding: 0 4px; cursor: pointer; }
-    .read-sheet__back { background: none; border: 0; color: var(--color-brand, #04A9D2); font: inherit; font-size: 16px; font-weight: 500; padding: 8px 0; min-height: 44px; cursor: pointer; }
-    .read-segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--bg-input, #f5f5f5); margin-bottom: 12px; }
-    .read-segmented__item { flex: 1; min-height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--text-muted, #737373); font: inherit; font-size: 16px; font-weight: 500; cursor: pointer; }
-    .read-segmented__item.is-active { background: var(--bg-card, #fff); color: var(--text-primary, #171717); box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08)); }
-    .read-grid { display: grid; gap: 8px; }
-    .read-grid--books { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
-    .read-grid--chapters { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
-    .read-grid__item, .read-list__item {
-      min-height: 44px; border: 1px solid var(--border-card, #e5e5e5); border-radius: 10px; background: var(--bg-card, #fff);
-      color: var(--text-primary, #171717); font: inherit; font-size: 16px; font-weight: 400; cursor: pointer; padding: 0 8px;
-    }
-    .read-grid__item.is-active, .read-list__item.is-active { border-color: var(--color-brand, #04A9D2); color: var(--color-brand, #04A9D2); font-weight: 500; }
-    .read-list { display: flex; flex-direction: column; gap: 8px; }
-    .read-list__item { display: flex; align-items: baseline; gap: 10px; text-align: left; padding: 10px 14px; }
-    .read-list__label { font-weight: 500; min-width: 64px; }
-    .read-list__name { color: var(--text-muted, #737373); font-size: 14px; }
   </style>
 </head>
 
-<body class="light-theme">
-  <div class="read-shell">
-    <header class="read-header">
-      <a class="read-back" href="/?from=read">
-        <span class="read-chevron" aria-hidden="true">‹</span>
-        回計畫
-      </a>
-      <div class="read-header__center">
-        <button type="button" class="read-pill" id="read-ref-btn" aria-label="選擇書卷與章節">讀經</button>
-      </div>
-      <button type="button" class="read-pill" id="read-version-btn" aria-label="選擇譯本">CUNP</button>
-    </header>
+<body class="light-theme reader-page read-page">
+  <main class="main-content">
+    <section id="reader-view" class="view-pane active">
 
-    <main class="read-content" id="read-content" aria-live="polite">
-      <p class="read-status">正在打開經文…</p>
-    </main>
-
-    <nav class="read-chapter-nav" aria-label="換章">
-      <button type="button" class="read-nav-btn" id="read-prev">
-        <span class="read-chevron" aria-hidden="true">‹</span>
-        上一章
-      </button>
-      <button type="button" class="read-icon-btn" id="read-font-down" aria-label="字小一點">A−</button>
-      <button type="button" class="read-icon-btn" id="read-font-up" aria-label="字大一點">A+</button>
-      <button type="button" class="read-nav-btn" id="read-next">
-        下一章
-        <span class="read-chevron" aria-hidden="true">›</span>
-      </button>
-    </nav>
-  </div>
-
-  <div class="read-sheet hidden" id="read-sheet" role="dialog" aria-modal="true" aria-labelledby="read-sheet-title" aria-hidden="true">
-    <div class="read-sheet__panel">
-      <div class="read-sheet__header">
-        <h2 class="read-sheet__title" id="read-sheet-title"></h2>
-        <button type="button" class="read-sheet__close" id="read-sheet-close">
-          關閉
+      <!-- 讀經工具列：和主 App 讀經頁同一套（#423）；返回改成「回計畫」進完整 App -->
+      <div class="reader-top-navbar native-reader-toolbar" id="reader-top-navbar" data-swipe-ignore>
+        <a class="reader-icon-btn native-toolbar-btn reader-back-btn read-back-link" id="read-back-link" href="/?from=read"
+          title="回計畫" aria-label="回計畫">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span class="read-back-label">回計畫</span>
+        </a>
+        <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-nav-directory-btn" title="目錄" aria-label="目錄">
+          <span class="nlc-icon" data-icon="list"></span>
+        </button>
+        <button type="button" class="reader-ref-chip" id="reader-book-badge" title="選擇卷章節">
+          <span id="reader-nav-ref-label">讀經</span>
+          <span class="reader-version-inline" id="reader-version-inline">CUNP</span>
+        </button>
+        <button type="button" class="reader-pill-btn reader-version-btn" id="reader-nav-version-btn" title="聖經版本">
+          <span>CUNP</span>
+        </button>
+        <div class="reader-nav-spacer"></div>
+        <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-settings-trigger-btn" title="文字設定" aria-label="文字設定">
+          <span class="nlc-icon" data-icon="more"></span>
         </button>
       </div>
-      <div id="read-sheet-body"></div>
+
+      <div class="reader-floating-nav">
+        <button type="button" class="floating-nav-btn prev" id="floating-prev-btn" title="上一章" aria-label="上一章">
+          <span class="nlc-icon nlc-icon--lg nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="floating-nav-btn next" id="floating-next-btn" title="下一章" aria-label="下一章">
+          <span class="nlc-icon nlc-icon--lg" data-icon="chevronRight" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="sr-only" id="reader-chapter-announcer" aria-live="polite" aria-atomic="true"></div>
+
+      <article class="reader-body reader-body-full reader-reading-surface">
+        <div class="reader-header">
+          <h2 id="bible-title" class="bible-heading">經文載入中…</h2>
+        </div>
+        <div id="bible-content" class="bible-text-container" aria-live="polite">
+          <p class="read-status">正在打開經文…</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- 點選經文後的底部工具列（只有複製、分享） -->
+  <div id="selection-bottom-bar-root"></div>
+
+  <!-- 譯本選單：和主 App 同一套 -->
+  <div id="bible-version-picker-modal" class="version-picker-modal hidden" aria-hidden="true">
+    <div class="version-picker-backdrop" id="version-picker-backdrop"></div>
+    <div class="version-picker-card">
+      <div class="version-picker-header">
+        <h3 class="version-picker-title">選擇聖經譯本</h3>
+        <button type="button" class="version-picker-close" id="version-picker-close" aria-label="關閉選單">✕</button>
+      </div>
+      <div class="version-picker-body">
+        <div class="version-section-label">中文譯本</div>
+        <button type="button" class="version-option-btn" data-version="CUNP">
+          <span class="v-name">CUNP (新標點和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="RCUVTS">
+          <span class="v-name">RCUV (和合本修訂版)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="CUV">
+          <span class="v-name">CUV (官話和合本)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="OCCB">
+          <span class="v-name">當代譯本（繁體・可離線下載）</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <div class="version-section-label" style="margin-top: 1.25rem;">英文譯本 (English)</div>
+        <button type="button" class="version-option-btn" data-version="ESV">
+          <span class="v-name">ESV (English Standard Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NIV">
+          <span class="v-name">NIV (New International Version)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="NLT">
+          <span class="v-name">NLT (New Living Translation)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+        <button type="button" class="version-option-btn" data-version="WEB">
+          <span class="v-name">WEB (Public Domain・可離線下載)</span>
+          <span class="v-check nlc-icon" data-icon="check"></span>
+        </button>
+      </div>
     </div>
   </div>
+
+  <!-- 文字設定：和主 App 同一套的文字大小（讀經頁沒有朗讀） -->
+  <div class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container reader-settings-dialog" id="typography-settings-sheet" role="dialog" aria-modal="true"
+      aria-label="閱讀設定">
+      <div class="bottom-sheet-header">
+        <h3>閱讀設定</h3>
+        <button type="button" id="typography-sheet-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
+          aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body" style="padding-bottom: 1.5rem;">
+        <div class="sheet-section reader-font-size-control">
+          <div class="reader-font-size-header">
+            <span class="sheet-section-title">文字大小</span>
+            <output id="reader-font-size-value">20px</output>
+          </div>
+          <div class="reader-font-size-ticks" aria-label="可選文字大小">
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="16">16</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="18">18</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="20">20</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="22">22</button>
+            <button type="button" class="reader-font-size-tick" data-reader-font-size="24">24</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 目錄面板由 js/modules/bible-nav-directory.mjs 建立（和主 App 同一份） -->
 
   <script type="module" src="js/read-entry.js"></script>
 </body>

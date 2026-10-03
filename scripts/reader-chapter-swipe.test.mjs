@@ -12,6 +12,7 @@ import {
   resolveSwipeAxis,
   swipeDirectionFromDelta
 } from "../js/modules/reader-chapter-nav.mjs";
+import { buildChapterEndNav } from "../js/modules/reader-verse-dom.mjs";
 
 const bible = readFileSync("js/modules/bible.js", "utf8");
 const html = readFileSync("index.html", "utf8");
@@ -281,10 +282,15 @@ describe("reader wiring (#314, #347)", () => {
 
   it("puts a 上一章｜下一章 link row at the chapter end, hiding the side that does not exist", () => {
     expect(bible).toContain("function buildChapterEndNav(bookId, chapter)");
-    expect(bible).toContain('makeLink(-1, copy.prevChapter || "上一章", hasPrev)');
-    expect(bible).toContain('makeLink(1, copy.nextChapter || "下一章", hasNext)');
-    expect(bible).toContain("button.hidden = !available;");
+    // 與 /read 共用 js/modules/reader-verse-dom.mjs（#423）
+    expect(bible).toContain("return buildSharedChapterEndNav({");
     expect(bible).toContain("container.appendChild(buildChapterEndNav(bookId, chapter));");
+    const doc = document;
+    const labels = nav => [...nav.querySelectorAll("[data-chapter-nav]")].map(b => `${b.dataset.chapterNav}:${b.textContent}:${b.hidden}`);
+    expect(labels(buildChapterEndNav({ doc, books: BOOKS, bookId: 1, chapter: 1 }))).toEqual(["-1:上一章:true", "1:下一章:false"]);
+    const middle = buildChapterEndNav({ doc, books: BOOKS, bookId: 1, chapter: 50 });
+    expect(labels(middle)).toEqual(["-1:上一章:false", "1:下一章:false"]);
+    expect(middle.querySelector(".reader-chapter-end-sep").hidden).toBe(false);
     expect(css).toMatch(/\.reader-chapter-end-link \{[^}]*min-height: 44px;/);
   });
 });

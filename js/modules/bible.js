@@ -3,7 +3,6 @@
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
-import { filterBibleBooks, parseBibleReference } from "./bible-reference-parser.mjs";
 import {
   buildFhlSearchUrl,
   FHL_SEARCH_LIMIT,
@@ -29,6 +28,15 @@ import {
 } from "../data/reader-auto-record.mjs";
 import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
 import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from "./reader-page-flip.mjs";
+import { formatVerseSelectionText, groupVerseSelectionRuns } from "./verse-selection-format.mjs";
+import { buildChapterEndNav as buildSharedChapterEndNav, createVerseElement, revealVerses } from "./reader-verse-dom.mjs";
+import {
+  createBibleNavDirectory,
+  isReaderReferenceResult,
+  parseReaderReferenceQuery,
+  readerBookAbbreviation,
+  readerBookLabel
+} from "./bible-nav-directory.mjs";
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -132,16 +140,13 @@ function usesEnglishReaderLabels(version = state.readerState?.version) {
   return ENGLISH_BIBLE_VERSIONS.has(String(version || "").toUpperCase());
 }
 
+// 書名標籤規則和目錄／ /read 共用（bible-nav-directory.mjs，#423）。
 function getReaderBookLabel(book) {
-  if (!book) return "";
-  return usesEnglishReaderLabels() ? book.eng : book.name;
+  return readerBookLabel(book, usesEnglishReaderLabels());
 }
 
 function getReaderBookAbbreviation(book) {
-  if (!book) return "";
-  if (!usesEnglishReaderLabels()) return book.abbrev;
-  const match = String(book.eng || "").match(/^(\d\s+)?([A-Za-z]+)/);
-  return match ? `${match[1] || ""}${match[2].slice(0, 4)}`.trim() : book.eng;
+  return readerBookAbbreviation(book, usesEnglishReaderLabels());
 }
 
 function getCurrentPlanReaderTask() {
@@ -799,9 +804,7 @@ export function initReaderControls() {
         
         const book = BIBLE_BOOKS.find(b => b.name === item.bookName || b.eng.toLowerCase() === item.bookEng.toLowerCase());
         if (book) {
-          navOverlayState.selectedBookId = book.id;
-          navOverlayState.selectedChapter = item.chapter;
-          selectNavVerse(item.verse);
+          goToReaderVerse({ bookId: book.id, chapter: item.chapter, verse: item.verse });
         }
       });
       
@@ -1637,26 +1640,9 @@ function toggleVerseSelection(entry) {
 
 // 複製／分享文字：依「書→章」分段；同章連續節壓成 a-b、非連續用逗號。
 // 不同章或不同卷 → 每段自己一個【參照】標題 + 該段經文，段與段直接換行相接。
+// 格式和 /read 讀經頁共用（js/modules/verse-selection-format.mjs，#423）。
 function formatSelectionText() {
-  const sorted = getSelectedVersesSorted();
-  if (sorted.length === 0) return "";
-  const groups = [];
-  sorted.forEach(v => {
-    const g = groups[groups.length - 1];
-    if (g && g.bookName === v.bookName && g.chapter === v.chapter) g.verses.push(v);
-    else groups.push({ bookName: v.bookName, chapter: v.chapter, verses: [v] });
-  });
-  return groups.map(g => {
-    const runs = [];
-    g.verses.forEach(v => {
-      const last = runs[runs.length - 1];
-      if (last && v.verse === last.end + 1) last.end = v.verse;
-      else runs.push({ start: v.verse, end: v.verse });
-    });
-    const nums = runs.map(r => (r.start === r.end ? `${r.start}` : `${r.start}-${r.end}`)).join(",");
-    const body = g.verses.map(v => `${v.verse} ${v.text}`).join("\n");
-    return `【${g.bookName} ${g.chapter}:${nums}】\n${body}`;
-  }).join("\n");
+  return formatVerseSelectionText(getSelectedVersesSorted());
 }
 
 function copySelectionText() {
@@ -1759,20 +1745,7 @@ function renderUnifiedSelectionBar() {
   const crossChapter = new Set(sorted.map(v => `${v.bookId}_${v.chapter}`)).size > 1;
 
   // 連續節（同卷同章、號碼相鄰）合併成一顆 chip：25:23-28；一顆 ✕ 移除整段
-  const chipRuns = [];
-  sorted.forEach(v => {
-    const last = chipRuns[chipRuns.length - 1];
-    if (last && last.bookId === v.bookId && last.chapter === v.chapter && v.verse === last.endVerse + 1) {
-      last.endVerse = v.verse;
-      last.keys.push(verseSelKey(v.bookId, v.chapter, v.verse));
-    } else {
-      chipRuns.push({
-        bookId: v.bookId, bookName: v.bookName, chapter: v.chapter,
-        startVerse: v.verse, endVerse: v.verse,
-        keys: [verseSelKey(v.bookId, v.chapter, v.verse)]
-      });
-    }
-  });
+  const chipRuns = groupVerseSelectionRuns(sorted, v => verseSelKey(v.bookId, v.chapter, v.verse));
   const chipsHtml = chipRuns.map(r => {
     const vpart = r.startVerse === r.endVerse ? `${r.startVerse}` : `${r.startVerse}-${r.endVerse}`;
     // chip 空間小：跨章用縮寫書名、不留空格（出25:30、太7:6-7）；複製文字仍是完整書名。
@@ -1923,68 +1896,21 @@ function renderUnifiedSelectionBar() {
 }
 
 // 一節經文的 DOM（沒有事件監聽）。閱讀器本身和翻頁動畫的預覽（#347）共用，兩邊版面才會一模一樣。
+// 經文元素與章末連結和 /read 讀經頁共用（js/modules/reader-verse-dom.mjs，#423）。
 function buildVerseElement(v, bookName, chapter) {
-  const verseDiv = document.createElement("div");
-  verseDiv.className = "bible-verse";
-  verseDiv.dataset.verse = String(v.verse);
-  verseDiv.id = `reader-verse-${v.verse}`;
-  verseDiv.tabIndex = 0;
-  verseDiv.setAttribute("role", "button");
-  verseDiv.setAttribute("aria-pressed", "false");
-  verseDiv.setAttribute("aria-label", `第 ${v.verse} 節，點一下選取或取消選取`);
-
-  const highlightKey = `${bookName}_${chapter}_${v.verse}`;
-  if (state.highlights[highlightKey]) {
-    verseDiv.style.setProperty("--verse-highlight-color", state.highlights[highlightKey]);
-    verseDiv.setAttribute("data-highlight", state.highlights[highlightKey]);
-  }
-
-  verseDiv.innerHTML = `<span class="verse-num">${v.verse}</span><span class="verse-text">${v.text}</span>`;
-  return verseDiv;
+  return createVerseElement(document, v, { highlightColor: state.highlights[`${bookName}_${chapter}_${v.verse}`] || "" });
 }
 
 // 章末換章連結（#347）：「‹ 上一章｜下一章 ›」，跟在經文後面、不浮動。
-// 沒有上一章（創 1）或下一章（啟 22）的那一側不顯示。
 function buildChapterEndNav(bookId, chapter) {
-  const copy = (window.APP_COPY && window.APP_COPY.reader) || {};
-  const hasPrev = Boolean(resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, -1));
-  const hasNext = Boolean(resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, 1));
-  const nav = document.createElement("nav");
-  nav.className = "reader-chapter-end-nav";
-  nav.setAttribute("aria-label", copy.chapterNavLabel || "換章");
-
-  const makeIcon = name => {
-    const icon = document.createElement("span");
-    icon.className = "nlc-icon nlc-icon--sm";
-    icon.dataset.icon = name;
-    icon.setAttribute("aria-hidden", "true");
-    return icon;
-  };
-  const makeLink = (direction, label, available) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "reader-chapter-end-link";
-    button.dataset.chapterNav = String(direction);
-    button.hidden = !available;
-    const text = document.createElement("span");
-    text.textContent = label;
-    if (direction < 0) button.append(makeIcon("chevronLeft"), text);
-    else button.append(text, makeIcon("chevronRight"));
-    return button;
-  };
-  const separator = document.createElement("span");
-  separator.className = "reader-chapter-end-sep";
-  separator.setAttribute("aria-hidden", "true");
-  separator.textContent = "｜";
-  separator.hidden = !(hasPrev && hasNext);
-
-  nav.append(
-    makeLink(-1, copy.prevChapter || "上一章", hasPrev),
-    separator,
-    makeLink(1, copy.nextChapter || "下一章", hasNext)
-  );
-  if (typeof hydrateIcons === "function") hydrateIcons(nav);
-  return nav;
+  return buildSharedChapterEndNav({
+    doc: document,
+    books: BIBLE_BOOKS,
+    bookId,
+    chapter,
+    copy: (window.APP_COPY && window.APP_COPY.reader) || {},
+    hydrateIcons: typeof hydrateIcons === "function" ? hydrateIcons : null
+  });
 }
 
 // 目前畫面上這一章的經文（點選經文時查文字用）。
@@ -2631,493 +2557,74 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-let navOverlayState = {
-  activeTab: 'book',
-  selectedBookId: 1,
-  selectedChapter: 1,
-  selectedVerse: 1,
-  viewMode: 'grid',
-  autoAdvance: true,
-  filterQuery: ''
-};
+// ── 聖經目錄：和 /read 讀經頁共用 js/modules/bible-nav-directory.mjs（#423）──
+let bibleNavDirectory = null;
 
-function clearBibleNavFilter() {
-  navOverlayState.filterQuery = '';
-  const input = document.getElementById("bible-nav-filter-input");
-  if (input) input.value = "";
-  document.getElementById("bible-nav-filter-clear-btn")?.classList.add("hidden");
-}
-
-function bindBibleNavFilter() {
-  const input = document.getElementById("bible-nav-filter-input");
-  if (!input || input.dataset.bound) return;
-  input.dataset.bound = "true";
-  const clearBtn = document.getElementById("bible-nav-filter-clear-btn");
-  input.addEventListener("input", () => {
-    navOverlayState.filterQuery = input.value;
-    if (clearBtn) clearBtn.classList.toggle("hidden", !input.value);
-    if (navOverlayState.activeTab === 'book') renderBibleNavContent();
+function getBibleNavDirectory() {
+  if (bibleNavDirectory) return bibleNavDirectory;
+  bibleNavDirectory = createBibleNavDirectory({
+    doc: document,
+    books: BIBLE_BOOKS,
+    getVerseCounts: () => (typeof BIBLE_VERSE_COUNTS !== "undefined" ? BIBLE_VERSE_COUNTS : null),
+    getVersion: () => state.readerState?.version,
+    getPosition: () => ({ bookId: state.readerState.bookId, chapter: state.readerState.chapter }),
+    onSelect: goToReaderVerse,
+    openLayer: openReaderLayer,
+    closeLayer: closeReaderLayer,
+    // .reader-version-btn (the top navbar's own version pill) is hidden on
+    // narrow phones (@media max-width:420px) for space — the badge inside the
+    // directory overlay is the mobile replacement entry point into the version
+    // picker, so it must open the same modal rather than sit dead/unbound.
+    onVersionBadge: () => {
+      if (typeof window.openBibleVersionPicker === "function") window.openBibleVersionPicker();
+    },
+    hydrateIcons: typeof hydrateIcons === "function" ? hydrateIcons : null
   });
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      clearBibleNavFilter();
-      if (navOverlayState.activeTab === 'book') renderBibleNavContent();
-      input.focus();
-    });
-  }
-  input.addEventListener("keydown", (e) => {
-    // 中文輸入法選字時的 Enter 不算送出。
-    if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
-    const query = input.value.trim();
-    if (!query) return;
-    const parsed = parseReaderReference(query);
-    if (parsed.kind === "reference") {
-      e.preventDefault();
-      jumpToReaderReference(parsed);
-      return;
-    }
-    if (isReaderReferenceResult(parsed)) return;
-    // 只有書卷：進 Enter 目標那一卷；篩到只剩一卷時也一樣。
-    const { books, target } = filterBibleBooks(query, { books: BIBLE_BOOKS, language: getReaderReferenceLanguage() });
-    const book = target || (books.length === 1 ? books[0] : null);
-    if (book) {
-      e.preventDefault();
-      selectNavBook(book.id);
-    }
-  });
+  return bibleNavDirectory;
 }
 
 window.openBibleNavOverlay = function() {
-  const overlay = document.getElementById("bible-nav-overlay");
-  if (!overlay) return;
-  
-  navOverlayState.selectedBookId = state.readerState.bookId;
-  navOverlayState.selectedChapter = state.readerState.chapter;
-  navOverlayState.selectedVerse = 1;
-  clearBibleNavFilter();
-  bindBibleNavFilter();
-
-  updateBibleNavLocale();
-  
-  openReaderLayer(overlay);
-  
-  const gridBtn = document.getElementById("view-mode-grid");
-  const listBtn = document.getElementById("view-mode-list");
-  if (gridBtn && listBtn) {
-    gridBtn.classList.toggle("active", navOverlayState.viewMode === 'grid');
-    listBtn.classList.toggle("active", navOverlayState.viewMode === 'list');
-  }
-
-  const tabs = document.querySelectorAll("#bible-nav-overlay .segmented-tab");
-  tabs.forEach(tab => {
-    if (!tab.dataset.bound) {
-      tab.dataset.bound = "true";
-      tab.addEventListener("click", () => {
-        window.switchNavTab(tab.dataset.tab);
-      });
-    }
-  });
-
-  if (gridBtn && !gridBtn.dataset.bound) {
-    gridBtn.dataset.bound = "true";
-    gridBtn.addEventListener("click", () => {
-      navOverlayState.viewMode = 'grid';
-      gridBtn.classList.add("active");
-      if (listBtn) listBtn.classList.remove("active");
-      renderBibleNavContent();
-    });
-  }
-  if (listBtn && !listBtn.dataset.bound) {
-    listBtn.dataset.bound = "true";
-    listBtn.addEventListener("click", () => {
-      navOverlayState.viewMode = 'list';
-      listBtn.classList.add("active");
-      if (gridBtn) gridBtn.classList.remove("active");
-      renderBibleNavContent();
-    });
-  }
-
-  const backBtn = document.getElementById("bible-nav-back-btn");
-  if (backBtn && !backBtn.dataset.bound) {
-    backBtn.dataset.bound = "true";
-    backBtn.addEventListener("click", () => {
-      if (navOverlayState.activeTab === 'verse') {
-        window.switchNavTab('chapter');
-      } else if (navOverlayState.activeTab === 'chapter') {
-        window.switchNavTab('book');
-      } else {
-        closeReaderLayer(overlay);
-      }
-    });
-  }
-
-  // .reader-version-btn (the top navbar's own version pill) is hidden on
-  // narrow phones (@media max-width:420px) for space — this badge inside the
-  // directory overlay is the mobile replacement entry point into the version
-  // picker, so it must open the same modal rather than sit dead/unbound.
-  const versionBadge = document.getElementById("bible-nav-version-badge");
-  if (versionBadge && !versionBadge.dataset.bound) {
-    versionBadge.dataset.bound = "true";
-    versionBadge.addEventListener("click", () => {
-      closeReaderLayer(overlay);
-      if (typeof window.openBibleVersionPicker === "function") {
-        window.openBibleVersionPicker();
-      }
-    });
-  }
-
-  window.switchNavTab('book');
+  getBibleNavDirectory().open();
 };
 
 window.switchNavTab = function(tabName) {
-  navOverlayState.activeTab = tabName;
-  if (tabName !== 'book') clearBibleNavFilter();
-  
-  document.querySelectorAll("#bible-nav-overlay .segmented-tab").forEach(tab => {
-    tab.classList.toggle("active", tab.dataset.tab === tabName);
-  });
-  
-  updateNavOverlayHeader();
-  renderBibleNavContent();
+  getBibleNavDirectory().switchTab(tabName);
 };
 
-function updateNavOverlayHeader() {
-  const titleEl = document.getElementById("bible-nav-title");
-  if (!titleEl) return;
-  
-  const book = BIBLE_BOOKS.find(b => b.id === navOverlayState.selectedBookId);
-  const english = usesEnglishReaderLabels();
-  const bookLabel = getReaderBookLabel(book);
-  if (navOverlayState.activeTab === 'book') {
-    titleEl.textContent = english ? "Select Book" : "選擇書卷";
-  } else if (navOverlayState.activeTab === 'chapter') {
-    titleEl.textContent = book ? bookLabel : (english ? "Select Chapter" : "選擇章節");
-  } else if (navOverlayState.activeTab === 'verse') {
-    titleEl.textContent = book
-      ? (english ? `${bookLabel} Chapter ${navOverlayState.selectedChapter}` : `${bookLabel} ${navOverlayState.selectedChapter}章`)
-      : (english ? "Select Verse" : "選擇節");
-  }
-}
+// 跳到某一章（某一節）：目錄選好、輸入出處、搜尋結果都走這裡。
+// verse 為 null 時只換章（renderReaderText 會捲回章首）；highlightVerses 為要一起閃底色的節（#362 範圍／頓號）。
+async function goToReaderVerse({ bookId, chapter, verse = null, highlightVerses = null }) {
+  state.readerState.bookId = bookId;
+  state.readerState.chapter = chapter;
 
-function updateBibleNavLocale() {
-  const overlay = document.getElementById("bible-nav-overlay");
-  if (!overlay) return;
-  const english = usesEnglishReaderLabels();
-  const backText = document.querySelector("#bible-nav-back-btn span:last-child");
-  if (backText) backText.textContent = english ? "Back" : "返回";
-  const tabLabels = english
-    ? { book: "Book", chapter: "Chapter", verse: "Verse" }
-    : { book: "卷", chapter: "章", verse: "節" };
-  overlay.querySelectorAll(".segmented-tab").forEach(tab => {
-    tab.textContent = tabLabels[tab.dataset.tab] || tab.textContent;
-  });
-  const viewLabel = document.getElementById("bible-nav-view-label");
-  if (viewLabel) viewLabel.textContent = english ? "View" : "檢視";
-  const filterInput = document.getElementById("bible-nav-filter-input");
-  if (filterInput) {
-    filterInput.placeholder = english ? "Filter books or enter a reference" : "篩選書卷或輸入出處";
-    filterInput.setAttribute("aria-label", filterInput.placeholder);
-  }
-  const filterClearBtn = document.getElementById("bible-nav-filter-clear-btn");
-  if (filterClearBtn) filterClearBtn.setAttribute("aria-label", english ? "Clear" : "清除");
-  const gridBtn = document.getElementById("view-mode-grid");
-  const listBtn = document.getElementById("view-mode-list");
-  if (gridBtn) {
-    gridBtn.title = english ? "Grid" : "網格";
-    gridBtn.setAttribute("aria-label", gridBtn.title);
-  }
-  if (listBtn) {
-    listBtn.title = english ? "List" : "清單";
-    listBtn.setAttribute("aria-label", listBtn.title);
-  }
-  updateNavOverlayHeader();
-}
-
-function renderBibleNavContent() {
-  const container = document.getElementById("bible-nav-content");
-  if (!container) return;
-  
-  container.innerHTML = "";
-  const book = BIBLE_BOOKS.find(b => b.id === navOverlayState.selectedBookId);
-  const filterWrap = document.getElementById("bible-nav-filter");
-  if (filterWrap) filterWrap.classList.toggle("hidden", navOverlayState.activeTab !== 'book');
-  
-  if (navOverlayState.activeTab === 'book') {
-    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "flex";
-
-    // #362：篩選書卷；輸入完整出處時最上方出現「前往」列。
-    const filterQuery = String(navOverlayState.filterQuery || "").trim();
-    const { books: visibleBooks, filtered } = filterBibleBooks(filterQuery, {
-      books: BIBLE_BOOKS,
-      language: getReaderReferenceLanguage()
-    });
-    if (filterQuery) {
-      const parsed = parseReaderReference(filterQuery);
-      if (isReaderReferenceResult(parsed)) {
-        const actions = document.createElement("div");
-        actions.className = "reference-jump-panel bible-nav-reference";
-        renderReaderReferenceActions(actions, parsed);
-        container.appendChild(actions);
-      }
-    }
-    if (filtered && !visibleBooks.length) {
-      if (!container.childElementCount) {
-        const empty = document.createElement("div");
-        empty.className = "bible-nav-empty";
-        empty.textContent = usesEnglishReaderLabels() ? "No matching books" : "找不到符合的書卷";
-        container.appendChild(empty);
-      }
-      return;
-    }
-    const hasOld = visibleBooks.some(b => b.section === 'old');
-    const hasNew = visibleBooks.some(b => b.section !== 'old');
-    
-    if (navOverlayState.viewMode === 'grid') {
-      const oldSection = document.createElement("div");
-      oldSection.className = "bible-nav-section-title";
-      oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
-      
-      const oldGrid = document.createElement("div");
-      oldGrid.className = "bible-nav-grid";
-      
-      const newSection = document.createElement("div");
-      newSection.className = "bible-nav-section-title";
-      newSection.textContent = usesEnglishReaderLabels() ? "New Testament" : "新約聖經";
-      
-      const newGrid = document.createElement("div");
-      newGrid.className = "bible-nav-grid";
-      
-      visibleBooks.forEach(b => {
-        const item = document.createElement("div");
-        item.className = "grid-item-book";
-        item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
-        item.innerHTML = `
-          <span class="abbrev-title">${escapeHTML(getReaderBookAbbreviation(b))}</span>
-          <span class="full-title">${escapeHTML(getReaderBookLabel(b))}</span>
-        `;
-        item.addEventListener("click", () => selectNavBook(b.id));
-        
-        if (b.section === 'old') {
-          oldGrid.appendChild(item);
-        } else {
-          newGrid.appendChild(item);
-        }
-      });
-      
-      if (hasOld) container.append(oldSection, oldGrid);
-      if (hasNew) container.append(newSection, newGrid);
-    } else {
-      const oldSection = document.createElement("div");
-      oldSection.className = "bible-nav-section-title";
-      oldSection.textContent = usesEnglishReaderLabels() ? "Old Testament" : "舊約聖經";
-      
-      const oldList = document.createElement("div");
-      oldList.className = "bible-nav-list";
-      
-      const newSection = document.createElement("div");
-      newSection.className = "bible-nav-section-title";
-      newSection.textContent = usesEnglishReaderLabels() ? "New Testament" : "新約聖經";
-      
-      const newList = document.createElement("div");
-      newList.className = "bible-nav-list";
-      
-      visibleBooks.forEach(b => {
-        const item = document.createElement("div");
-        item.className = "book-list-item-asym";
-        item.classList.toggle("active", b.id === navOverlayState.selectedBookId);
-        item.innerHTML = `
-          <div class="book-brand-box">${escapeHTML(getReaderBookAbbreviation(b))}</div>
-          <div class="book-names-box">
-            <span class="book-full-title">${escapeHTML(getReaderBookLabel(b))}</span>
-            ${usesEnglishReaderLabels() ? "" : `<span class="book-english-sub">${escapeHTML(b.eng)}</span>`}
-          </div>
-        `;
-        item.addEventListener("click", () => selectNavBook(b.id));
-        
-        if (b.section === 'old') {
-          oldList.appendChild(item);
-        } else {
-          newList.appendChild(item);
-        }
-      });
-      
-      if (hasOld) container.append(oldSection, oldList);
-      if (hasNew) container.append(newSection, newList);
-    }
-  } else if (navOverlayState.activeTab === 'chapter') {
-    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "none";
-    
-    const grid = document.createElement("div");
-    grid.className = "chapter-nav-grid";
-    
-    const totalChapters = book ? book.chapters : 50;
-    for (let c = 1; c <= totalChapters; c++) {
-      const item = document.createElement("div");
-      item.className = "grid-item-number";
-      item.classList.toggle("active", c === navOverlayState.selectedChapter);
-      item.textContent = c;
-      item.addEventListener("click", () => selectNavChapter(c));
-      grid.appendChild(item);
-    }
-    container.appendChild(grid);
-  } else if (navOverlayState.activeTab === 'verse') {
-    document.querySelector("#bible-nav-overlay .mode-selector-bar").style.display = "none";
-    
-    const grid = document.createElement("div");
-    grid.className = "verse-nav-grid";
-    
-    let totalVerses = 30;
-    if (book && typeof BIBLE_VERSE_COUNTS !== "undefined") {
-      const bookCounts = BIBLE_VERSE_COUNTS[book.eng];
-      if (bookCounts && bookCounts[navOverlayState.selectedChapter - 1]) {
-        totalVerses = bookCounts[navOverlayState.selectedChapter - 1];
-      }
-    }
-
-    for (let v = 1; v <= totalVerses; v++) {
-      const item = document.createElement("div");
-      item.className = "grid-item-number";
-      item.classList.toggle("active", v === navOverlayState.selectedVerse);
-      item.textContent = v;
-      item.addEventListener("click", () => selectNavVerse(v));
-      grid.appendChild(item);
-    }
-    container.appendChild(grid);
-  }
-}
-
-function selectNavBook(bookId) {
-  navOverlayState.selectedBookId = bookId;
-  navOverlayState.selectedChapter = 1;
-  window.switchNavTab('chapter');
-}
-
-function selectNavChapter(chNum) {
-  navOverlayState.selectedChapter = chNum;
-  window.switchNavTab('verse');
-}
-
-// vNum 為 null 時只換章（renderReaderText 會捲回章首）；highlightVerses 為要一起閃底色的節（#362 範圍／頓號）。
-async function selectNavVerse(vNum, highlightVerses = null) {
-  navOverlayState.selectedVerse = vNum || 1;
-  
-  closeReaderLayer(document.getElementById("bible-nav-overlay"));
-  
-  state.readerState.bookId = navOverlayState.selectedBookId;
-  state.readerState.chapter = navOverlayState.selectedChapter;
-  
   const bookSelect = document.getElementById("reader-book-select");
   if (bookSelect) {
-    bookSelect.value = String(navOverlayState.selectedBookId);
+    bookSelect.value = String(bookId);
     populateChapterSelector();
   }
   const chapterSelect = document.getElementById("reader-chapter-select");
   if (chapterSelect) {
-    chapterSelect.value = String(navOverlayState.selectedChapter);
+    chapterSelect.value = String(chapter);
   }
-  
+
   saveReaderPreferences();
   updatePillLabels();
-  
+
   try {
     await renderReaderText();
-    
-    const container = document.getElementById("bible-content");
-    if (container && vNum) {
-      const flashVerses = new Set(Array.isArray(highlightVerses) && highlightVerses.length ? highlightVerses : [vNum]);
-      setTimeout(() => {
-        const verses = container.querySelectorAll(".bible-verse");
-        for (let v of verses) {
-          const numEl = v.querySelector(".verse-num");
-          const verseNum = v.dataset.verse ? parseInt(v.dataset.verse) : (numEl ? parseInt(numEl.textContent) : NaN);
-          if (!flashVerses.has(verseNum)) continue;
-          if (verseNum === vNum) v.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          const oldBg = v.style.backgroundColor;
-          v.style.backgroundColor = 'var(--color-brand-subtle, rgba(4,169,210,0.22))';
-          setTimeout(() => {
-            v.style.backgroundColor = oldBg;
-          }, 1500);
-        }
-      }, 100);
-    }
+    revealVerses(document.getElementById("bible-content"), verse, highlightVerses);
   } catch (err) {
     console.error(err);
   }
 }
 
-// ── 輸入出處直接跳轉（#362）：搜尋框與目錄篩選共用 ──
-function getReaderReferenceLanguage() {
-  return usesEnglishReaderLabels() ? "en" : "zh";
-}
-
+// ── 輸入出處直接跳轉（#362）：搜尋框提示與目錄篩選共用同一個解析器 ──
 function parseReaderReference(query) {
-  return parseBibleReference(query, {
+  return parseReaderReferenceQuery(query, {
     books: BIBLE_BOOKS,
     verseCounts: typeof BIBLE_VERSE_COUNTS !== "undefined" ? BIBLE_VERSE_COUNTS : null,
-    language: getReaderReferenceLanguage()
+    english: usesEnglishReaderLabels()
   });
-}
-
-function isReaderReferenceResult(parsed) {
-  return Boolean(parsed) && (parsed.kind === "reference" || parsed.kind === "choices" || parsed.kind === "error");
-}
-
-function jumpToReaderReference(reference) {
-  if (!reference || reference.kind !== "reference" || !reference.book) return;
-  navOverlayState.selectedBookId = reference.book.id;
-  navOverlayState.selectedChapter = reference.chapter;
-  const verses = Array.isArray(reference.verses) ? reference.verses : [];
-  selectNavVerse(verses.length ? verses[0] : null, verses);
-}
-
-function createReferenceJumpCard(result, english) {
-  const card = document.createElement("button");
-  card.type = "button";
-  card.className = "reference-jump-card";
-  if (result.kind === "reference") {
-    card.innerHTML = `
-      <span class="nlc-icon reference-jump-card__icon" data-icon="bookOpen" aria-hidden="true"></span>
-      <span class="reference-jump-card__body">
-        <span class="reference-jump-card__eyebrow">${english ? "Go to" : "前往"}</span>
-        <span class="reference-jump-card__title">${escapeHTML(result.label)}</span>
-      </span>
-      <span class="nlc-icon reference-jump-card__chevron" data-icon="chevronRight" aria-hidden="true"></span>
-    `;
-    card.addEventListener("click", () => jumpToReaderReference(result));
-  } else {
-    card.disabled = true;
-    card.classList.add("reference-jump-card--disabled");
-    const bookLabel = result.book ? (english ? result.book.eng : result.book.name) : "";
-    card.innerHTML = `
-      <span class="nlc-icon reference-jump-card__icon" data-icon="bookOpen" aria-hidden="true"></span>
-      <span class="reference-jump-card__body">
-        ${bookLabel ? `<span class="reference-jump-card__eyebrow">${escapeHTML(bookLabel)}</span>` : ""}
-        <span class="reference-jump-card__hint">${escapeHTML(result.message || "")}</span>
-      </span>
-    `;
-  }
-  return card;
-}
-
-// 在 container 裡畫出「前往」卡片／多卷候選／錯誤說明（目錄篩選用）；回傳是否有畫東西。
-function renderReaderReferenceActions(container, parsed) {
-  if (!container) return false;
-  container.innerHTML = "";
-  if (!isReaderReferenceResult(parsed)) return false;
-  const english = getReaderReferenceLanguage() === "en";
-
-  if (parsed.kind === "choices") {
-    const note = document.createElement("div");
-    note.className = "reference-jump-note";
-    note.textContent = english ? "Which book did you mean?" : "要找的是哪一卷？";
-    container.appendChild(note);
-    parsed.choices.forEach(choice => container.appendChild(createReferenceJumpCard(choice, english)));
-  } else {
-    container.appendChild(createReferenceJumpCard(parsed, english));
-  }
-  if (typeof hydrateIcons === "function") hydrateIcons(container);
-  return true;
 }
 
 window.__BIBLE_SEARCH_CORPUS = window.__BIBLE_SEARCH_CORPUS || null;
