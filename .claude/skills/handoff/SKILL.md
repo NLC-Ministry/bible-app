@@ -7,7 +7,7 @@ description: Finish a task branch so any session can integrate it cheaply — sy
 
 The integrator reads your trailers instead of your diff, so everything it needs must be in them. Conflicts are yours to resolve — you know this change best.
 
-Work in your task worktree (`../bible-speed-reading_task-<issue>-<slug>`, branch `task/<issue>-<slug>`). Never push the branch.
+Work in your task worktree (your desktop-app session worktree, or `.worktrees/task-<issue>-<slug>` in the main folder; branch `task/<issue>-<slug>`). Never push the branch.
 
 ## 1. Sync with staging and resolve conflicts here
 ```bash
@@ -19,7 +19,10 @@ Resolve any conflict now (the branch is local-only, so rebase is fine). If `orig
 ## 2. Test once
 During development run only the related tests (`npx vitest run scripts/<file>.test.mjs`). Now run the full suite once: `npm test`. If one file times out, rerun it alone before calling it a failure (parallel sessions load the machine).
 
-## 3. Commit with trailers
+## 3. Stop your preview servers
+Stop every `npx serve dist` / preview server you started from this worktree. The integrator removes the worktree after merging, and a server left running keeps the folder locked.
+
+## 4. Commit with trailers
 `git status` first — no `dist/`, `config.js`, `.env*`, or icon-registry line-ending churn. The **last commit** of the branch ends with this block (one contiguous paragraph, `Key: value`, no blank lines inside):
 
 ```
@@ -40,5 +43,5 @@ Co-Authored-By: <model attribution line>
 - Changed something after handing off? Add a new commit with a fresh trailer block — the last commit wins.
 - `forceUpdateBuiltBefore` / Edge Function deploys / Vault secrets → say so in `Integrator-note`.
 
-## 4. Report
+## 5. Report
 Tell the user the branch name and that it is `ready`. Do not merge, push, open PRs, or run `supabase db push` — the PreToolUse guard blocks those without the integration lock. If you are also asked to integrate, switch to the `integrate` skill.
