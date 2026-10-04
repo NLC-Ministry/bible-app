@@ -13910,7 +13910,7 @@ body.profile-subpage-open .main-content {
 
 .profile-theme-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
   padding: 0.25rem 0;
 }
@@ -13948,6 +13948,8 @@ body.profile-subpage-open .main-content {
 
 .profile-theme-option__swatch--light { background: #ffffff; }
 .profile-theme-option__swatch--dark { background: #1e293b; }
+/* 暖色主題的 --bg-app（body.warm-theme） */
+.profile-theme-option__swatch--warm { background: #F4ECD8; }
 
 /* Plan cards: one card, clear hierarchy, stable action area */
 .plan-card {
