@@ -29,10 +29,11 @@ git merge-tree --write-tree --name-only origin/staging task/<x>
 Conflict → prefer handing it back: tell the user the task session must rebase and hand off again. Resolve it yourself only when it is small and obvious.
 
 ## 4. Merge in a temporary worktree
+Run from the main folder; the worktree always lives at `.worktrees/integrate` (never outside the project — see CLAUDE.md「Local folders」).
 ```bash
-git worktree add --detach ../bible-speed-reading_integrate origin/staging
-cmd //c mklink //J "<…>\bible-speed-reading_integrate\node_modules" "<main folder>\node_modules"
-cd ../bible-speed-reading_integrate
+git worktree add --detach .worktrees/integrate origin/staging
+cmd //c mklink //J ".worktrees\integrate\node_modules" "node_modules"
+cd .worktrees/integrate
 git merge --no-ff task/<x> -m "Merge branch 'task/<x>' into staging: <Release-note in English> (#<issue>)"
 ```
 Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone).
@@ -53,14 +54,14 @@ Rejected (someone pushed first) → `git fetch`, recreate the worktree from the 
 If a release PR (`staging` → `main`) is open, this push lands in it: update its description (step 8).
 
 ## 7. Clean up and release
-For each merged branch, and for the integrate worktree — **remove the node_modules junction first**, or `worktree remove` can delete the main folder's `node_modules` through it:
+For each merged branch's `.worktrees/task-*` worktree, and for `.worktrees/integrate` — `cd` back to the main folder first (a shell inside the worktree locks it), stop any preview server running from it, and **remove the node_modules junction first**, or `worktree remove` can delete the main folder's `node_modules` through it:
 ```bash
 cmd //c rmdir "<worktree>\node_modules"
 git worktree remove "<worktree>"
 git branch -d task/<x>
 node .claude/hooks/integration.mjs release
 ```
-Only remove a task worktree whose branch you merged. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app.
+Then confirm the folder is gone (`ls .worktrees`). Only remove a task worktree whose branch you merged. A task worktree under `.claude/worktrees/` belongs to a desktop-app session: don't remove it or its branch — tell the user that session can be archived. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app.
 
 ## 8. Release PR (staging → main) — only after the user says staging is verified
 ```bash
@@ -73,13 +74,13 @@ Build the body from `.github/pull_request_template.md` with those lines (commits
 
 ## 9. After the user says the release PR is merged
 Take the lock, then:
-1. **Production migrations** (only if the release included any): from a clean worktree of `origin/main`, `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
+1. **Production migrations** (only if the release included any): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
 2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds.
 3. **Merge `main` back into `staging`** so `main` never drifts ahead (each release adds a merge commit that only `main` has; a hotfix would otherwise stay missing on `staging`):
    ```bash
    git fetch origin
    git merge-base --is-ancestor origin/staging origin/main && git push origin origin/main:refs/heads/staging
    ```
-   Not an ancestor (staging moved on since the merge) → in a temporary detached worktree of `origin/staging`: `git merge --no-ff origin/main -m "Merge main back into staging after release #<PR>"`, `npm test`, `git push origin HEAD:staging`. Afterwards `git rev-list --count origin/staging..origin/main` must be `0`.
+   Not an ancestor (staging moved on since the merge) → in a temporary detached worktree of `origin/staging` at `.worktrees/integrate`: `git merge --no-ff origin/main -m "Merge main back into staging after release #<PR>"`, `npm test`, `git push origin HEAD:staging`. Afterwards `git rev-list --count origin/staging..origin/main` must be `0`.
 4. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`).
 5. Release the lock.
