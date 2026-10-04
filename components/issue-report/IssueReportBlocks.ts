@@ -459,8 +459,10 @@ const rpc = (fn: string, args: Record<string, unknown>) =>
   callNlc({ action: "rpc", function: fn, args });
 
 /**
- * Shrink a picked screenshot in-browser to WebP ≤ ~300 KB before upload.
- * Canvas re-encode also drops EXIF/GPS. Returns null on unsupported files.
+ * Shrink a picked screenshot in-browser to ≤ ~300 KB before upload: WebP where
+ * the browser can encode it, else JPEG (iOS WebKit silently returns PNG for
+ * image/webp — #444). Canvas re-encode also drops EXIF/GPS. Returns null on
+ * unsupported files.
  */
 export async function compressScreenshot(
   file: File
@@ -469,7 +471,7 @@ export async function compressScreenshot(
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) return null;
 
-  const encode = (maxSide: number, quality: number) => {
+  const encode = (mime: string, maxSide: number, quality: number) => {
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     const w = Math.max(1, Math.round(bitmap.width * scale));
     const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -478,27 +480,34 @@ export async function compressScreenshot(
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
+    // JPEG has no alpha: paint white first so transparent PNGs don't turn black.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL("image/webp", quality);
+    const dataUrl = canvas.toDataURL(mime, quality);
     return { dataUrl, w, h };
   };
 
   const CAP = 300 * 1024;
   const attempts: Array<[number, number]> = [[1600, 0.7], [1600, 0.55], [1400, 0.5], [1200, 0.42], [1000, 0.4]];
-  let best: { dataUrl: string; w: number; h: number } | null = null;
-  for (const [side, q] of attempts) {
-    const out = encode(side, q);
-    if (!out || !out.dataUrl.startsWith("data:image/webp")) continue;
-    best = out;
-    // rough byte size of a base64 payload
-    const bytes = Math.ceil((out.dataUrl.length - out.dataUrl.indexOf(",") - 1) * 0.75);
-    if (bytes <= CAP) break;
+  let best: { dataUrl: string; mime: string; w: number; h: number } | null = null;
+  for (const mime of ["image/webp", "image/jpeg"]) {
+    for (const [side, q] of attempts) {
+      const out = encode(mime, side, q);
+      // Browser can't encode this type (returned PNG instead) — try the next one.
+      if (!out || !out.dataUrl.startsWith(`data:${mime}`)) break;
+      best = { ...out, mime };
+      // rough byte size of a base64 payload
+      const bytes = Math.ceil((out.dataUrl.length - out.dataUrl.indexOf(",") - 1) * 0.75);
+      if (bytes <= CAP) break;
+    }
+    if (best) break;
   }
   bitmap.close?.();
   if (!best) return null;
   return {
     base64: best.dataUrl.replace(/^data:[^,]*,/, ""),
-    mime: "image/webp",
+    mime: best.mime,
     w: best.w,
     h: best.h
   };
