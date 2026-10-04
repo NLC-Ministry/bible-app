@@ -1935,8 +1935,8 @@
                js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
                renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
           <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
-            <!-- 雲柱測驗後台（#313）：三個分頁（排程／題目清單／統計），新增、編輯、試作、
-                 匯入、排程規則、題目內容都是彈出面板（第一次顯示時搬到 body 底下）。 -->
+            <!-- 雲柱測驗後台（#313）：三個分頁（排程／題目清單／統計）。新增／編輯、匯入、作答明細
+                 是下面的完整頁面；題目、試作、排程規則是彈出面板，放在 body 底下（#420）。 -->
             <section class="glass-card admin-announcements admin-lq" aria-labelledby="admin-lightning-quiz-title">
               <div class="admin-announcements__header admin-lq__header">
                 <div>
@@ -1968,16 +1968,6 @@
                 </div>
               </div>
             </section>
-
-            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-question-sheet" aria-hidden="true">
-              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-question-sheet-title">
-                <div class="bottom-sheet-header">
-                  <h3 id="admin-lightning-quiz-question-sheet-title">題目</h3>
-                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-                </div>
-                <div class="bottom-sheet-body" id="admin-lightning-quiz-question-sheet-body"></div>
-              </div>
-            </div>
 
             <!-- 完整頁面（#317）：內容長的畫面不放彈窗。打開時隱藏上面的雲柱測驗主畫面，
                  「← 返回雲柱測驗」回到原本的分頁；有打字還沒存會先確認。 -->
@@ -2019,31 +2009,6 @@
               </div>
               <div id="admin-lightning-quiz-results-body" class="admin-lq-subpage__body"></div>
             </section>
-
-            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-preview" aria-hidden="true">
-              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-preview-title">
-                <div class="bottom-sheet-header">
-                  <h3 id="admin-lightning-quiz-preview-title">試作（不會記錄作答）</h3>
-                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" id="admin-lightning-quiz-preview-close" aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-                </div>
-                <div class="bottom-sheet-body">
-                  <div id="admin-lightning-quiz-preview-host" class="glass-card lightning-quiz-card"></div>
-                </div>
-                <div class="admin-lq-sheet__footer">
-                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-rule" aria-hidden="true">
-              <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-rule-title">
-                <div class="bottom-sheet-header">
-                  <h3 id="admin-lightning-quiz-rule-title">排程規則</h3>
-                  <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-                </div>
-                <div class="bottom-sheet-body" id="admin-lightning-quiz-rule-body"></div>
-              </div>
-            </div>
           </div>
 
           <div id="admin-section-settings" class="card-col span-12 admin-section-panel hidden">
@@ -2405,6 +2370,46 @@
       &#x8F38;&#x5165;&#x95DC;&#x9375;&#x5B57;&#x958B;&#x59CB;&#x641C;&#x5C0B;</div>
     <div class="overlay-scroll-content" id="global-search-results"></div>
   </div>
+
+  <!-- 雲柱測驗後台的彈出面板（#313、#317）：題目、試作、排程規則。一開始就放在 body 底下，
+       不放在後台子頁裡、也不在打開時才搬過來——iPhone 上從後台捲動區塊搬出來的面板曾經
+       看得到卻點不到，點擊落到後面的頁面（#420）。 -->
+  <!-- lightning-quiz-sheets:start -->
+  <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-question-sheet" aria-hidden="true">
+    <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-question-sheet-title">
+      <div class="bottom-sheet-header">
+        <h3 id="admin-lightning-quiz-question-sheet-title">題目</h3>
+        <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body" id="admin-lightning-quiz-question-sheet-body"></div>
+    </div>
+  </div>
+
+  <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-preview" aria-hidden="true">
+    <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-preview-title">
+      <div class="bottom-sheet-header">
+        <h3 id="admin-lightning-quiz-preview-title">試作（不會記錄作答）</h3>
+        <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" id="admin-lightning-quiz-preview-close" aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body">
+        <div id="admin-lightning-quiz-preview-host" class="glass-card lightning-quiz-card"></div>
+      </div>
+      <div class="admin-lq-sheet__footer">
+        <button type="button" class="secondary-btn" id="admin-lightning-quiz-preview-restart">重新試作</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-rule" aria-hidden="true">
+    <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-rule-title">
+      <div class="bottom-sheet-header">
+        <h3 id="admin-lightning-quiz-rule-title">排程規則</h3>
+        <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body" id="admin-lightning-quiz-rule-body"></div>
+    </div>
+  </div>
+  <!-- lightning-quiz-sheets:end -->
 
   <!-- Typography & Speech Settings Dialog -->
   <div class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">
