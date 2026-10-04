@@ -167,6 +167,12 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({
       setComposerError("訊息太頻繁，請稍候再送。");
     } else if (res.error === "thread_full") {
       setComposerError("這則對話已達上限，如仍有問題請另開新回報。");
+    } else if (res.error === "too_large") {
+      setComposerError("截圖太大，請裁切後再傳。");
+    } else if (res.error === "bad_image" || res.error === "bad_mime") {
+      setComposerError("這張圖無法上傳，請換一張（PNG / JPG）。");
+    } else if (res.error === "upload_failed") {
+      setComposerError("截圖上傳失敗，請稍後再試。");
     } else {
       setComposerError("送出失敗，請再試一次。");
     }
