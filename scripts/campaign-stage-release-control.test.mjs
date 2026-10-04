@@ -53,9 +53,7 @@ describe("campaign stage release control", () => {
     expect(planModule).toContain("discoverableWhileLocked: window.isCampaignStageDiscoverableWhileLocked(plan)");
     expect(planModule).toContain("if (!exploreVisibility.visible) return false;");
     expect(planModule).toContain("const isLockedStage = window.isCampaignStageLocked(plan)");
-    // 鎖住的教會階段在探索清單卡片不顯示任何動作。每日靈修 / 小組聚會這類「只看
-    // 內容」的計畫已經整個搬到「我的計畫」（見 buildViewerOnlyPlanCard），不再
-    // 出現在探索清單，所以這裡不用再管它們的按鈕文案。
+    // 鎖住的教會階段在探索清單卡片不顯示任何動作。
     // 「不能加入」現在含三種：鎖住的階段、延後大區梯次但使用者未設定牧區、
     // 2026-10-01 起的階段但使用者未設定牧區。最後一種是唯一「補資料就能繼續」
     // 的狀況，卡片會給一顆前往會員中心的按鈕（showPastoralZoneCta），不是像

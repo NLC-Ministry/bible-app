@@ -138,8 +138,7 @@ describe("round check state: suggested next chapter and skipped chapters (#363)"
     expect(isSequentialCheckPlan({ planKind: "church_campaign_stage" })).toBe(true);
     expect(isSequentialCheckPlan({ plan_kind: "church_campaign_stage_cohort" })).toBe(true);
     expect(isSequentialCheckPlan({ planKind: "church_campaign" })).toBe(true);
-    expect(isSequentialCheckPlan({ planKind: "devotional" })).toBe(false);
-    expect(isSequentialCheckPlan({ planKind: "group_meeting" })).toBe(false);
+    expect(isSequentialCheckPlan({ planKind: "standard" })).toBe(false);
     expect(isSequentialCheckPlan({})).toBe(false);
   });
 

@@ -81,7 +81,7 @@ describe("buildHashRoute", () => {
 describe("planRouteKey / resolveRoutePlan", () => {
   const joined = { id: "enroll-1", globalPlanId: "global-1", presetKey: "preset-1" };
   const personal = { id: "enroll-2", globalPlanId: null, presetKey: "enroll-2" };
-  const devotional = { id: "global-9", globalPlanId: "global-9", planKind: "devotional" };
+  const unjoined = { id: "global-9", globalPlanId: "global-9", planKind: "standard" };
 
   it("prefers the shared global plan id so a link works for other members", () => {
     expect(planRouteKey(joined)).toBe("global-1");
@@ -90,7 +90,7 @@ describe("planRouteKey / resolveRoutePlan", () => {
   });
 
   it("finds a joined plan by global id, own id, or preset key", () => {
-    const ctx = { activePlans: [joined, personal], globalPlans: [devotional] };
+    const ctx = { activePlans: [joined, personal], globalPlans: [unjoined] };
     expect(resolveRoutePlan("global-1", ctx)).toEqual({ plan: joined, joined: true });
     expect(resolveRoutePlan("enroll-1", ctx)).toEqual({ plan: joined, joined: true });
     expect(resolveRoutePlan("preset-1", ctx)).toEqual({ plan: joined, joined: true });
@@ -98,8 +98,8 @@ describe("planRouteKey / resolveRoutePlan", () => {
   });
 
   it("falls back to a not-joined global plan, then to nothing", () => {
-    const ctx = { activePlans: [joined], globalPlans: [devotional] };
-    expect(resolveRoutePlan("global-9", ctx)).toEqual({ plan: devotional, joined: false });
+    const ctx = { activePlans: [joined], globalPlans: [unjoined] };
+    expect(resolveRoutePlan("global-9", ctx)).toEqual({ plan: unjoined, joined: false });
     expect(resolveRoutePlan("missing", ctx)).toEqual({ plan: null, joined: false });
     expect(resolveRoutePlan("", ctx)).toEqual({ plan: null, joined: false });
   });

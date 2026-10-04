@@ -51,11 +51,6 @@ let dateClickDebounceTimer = null;
 let viewMode = 'calendar'; // Today reading always shows calendar + chapter list
 let planSearchQuery = '';
 let planTeamInviteVisibilityRequestId = 0;
-// 計畫分頁的「系列」篩選（全部 / campaign / devotional / group_meeting / other）。
-// 只有「靈修」或「小組」任一系列有可見計畫時，那排 pill 才會顯示（審核未過 = 完全不出現）。
-let activePlanSeries = (() => {
-  try { return sessionStorage.getItem('plan_list_series') || 'all'; } catch (_e) { return 'all'; }
-})();
 
 export const PLAN_ROUTE = Object.freeze({
   LIST: "LIST",
@@ -91,9 +86,9 @@ async function renderPlanRankingView() {
 async function renderPlanMembersView() {
   return (await loadPlanStats()).renderPlanMembersView();
 }
-// 其他只有部分會友用得到的畫面也各自是 lazy chunk（#370）：plan-quiz（今日小測驗）、
-// plan-devotion（每日靈修、小組聚會週計畫）。app.js 登記載入函式，走同一套重試／舊版處理。
-const PLAN_CHUNKS = new Set(["plan-quiz", "plan-devotion"]);
+// 其他只有部分會友用得到的畫面也各自是 lazy chunk（#370）：plan-quiz（今日小測驗）。
+// app.js 登記載入函式，走同一套重試／舊版處理。
+const PLAN_CHUNKS = new Set(["plan-quiz"]);
 let planChunkLoader = null;
 export function registerPlanChunkLoader(load) {
   planChunkLoader = typeof load === "function" ? load : null;
@@ -773,23 +768,19 @@ async function updatePlanTeamInviteShortcutVisibility() {
   }
 }
 
-// 每日靈修／小組經營週計畫：純看內容，沒有「每週讀經安排」（章節怎麼分配）
-// 跟「重置此計畫進度」（打卡/遍數）的概念，這兩項只對一般讀經計畫有意義。
-// 「...」選單是所有計畫共用同一份 DOM，開啟前依目前這份計畫的種類決定要不要
-// 藏起來——不能只在進入計畫詳情時做一次，因為按鈕本身之前會在每次點開
-// 「...」時無條件重設回顯示，所以要在同一個地方（點開的當下）重新判斷。
+// 「...」選單是所有計畫共用同一份 DOM，開啟前依目前這份計畫決定要不要藏起來
+// ——不能只在進入計畫詳情時做一次，因為按鈕本身之前會在每次點開「...」時
+// 無條件重設回顯示，所以要在同一個地方（點開的當下）重新判斷。
 function refreshPlanOptionsMenuForKind(plan) {
-  const kind = (plan && (plan.planKind || plan.plan_kind)) || "";
-  const isViewerOnlyPlan = kind === "devotional" || kind === "group_meeting";
   // 計畫已結束（過了 endDate）→ 每週讀經安排／退出此計畫／重置此計畫進度都會
   // 動到已經定案的歷史紀錄，一律藏起來，只留「計畫詳情」可查看。
   const expired = typeof isPlanExpired === "function" && isPlanExpired(plan);
   const scheduleBtn = document.getElementById("edit-flexible-plan-schedule-btn");
   const deleteBtn = document.getElementById("delete-plan-btn");
   const resetBtn = document.getElementById("reset-plan-progress-btn");
-  if (scheduleBtn) scheduleBtn.style.display = (isViewerOnlyPlan || expired) ? "none" : "";
+  if (scheduleBtn) scheduleBtn.style.display = expired ? "none" : "";
   if (deleteBtn) deleteBtn.style.display = expired ? "none" : "";
-  if (resetBtn) resetBtn.style.display = (isViewerOnlyPlan || expired) ? "none" : "";
+  if (resetBtn) resetBtn.style.display = expired ? "none" : "";
 }
 
 function initPlanControls() {
@@ -1150,13 +1141,6 @@ function initPlanControls() {
     });
   });
 
-  // 系列篩選 pill（全部 / 速讀 / 靈修 / 小組 / 其他）—— 整排只在靈修或小組任一可見時才出現
-  document.querySelectorAll("#plan-list-series-pills .pill-btn--series").forEach(pill => {
-    pill.addEventListener("click", () => {
-      setActivePlanSeries(pill.getAttribute("data-series"));
-    });
-  });
-
   // Action button: Start Reading Today
   const startReadingBtn = document.getElementById("btn-start-reading-today");
   if (startReadingBtn) {
@@ -1386,78 +1370,6 @@ function getPlanSearchText(plan) {
 function matchesPlanSearch(plan) {
   if (!planSearchQuery) return true;
   return getPlanSearchText(plan).includes(planSearchQuery);
-}
-
-// ── 計畫「系列」分類 ────────────────────────────────────────────────
-function getPlanSeries(plan) {
-  const kind = plan && (plan.planKind || plan.plan_kind);
-  if (kind === "devotional") return "devotional";
-  if (kind === "group_meeting") return "group_meeting";
-  if (kind === "church_campaign" || kind === "church_campaign_stage" || kind === "church_campaign_stage_cohort") return "campaign";
-  return "other"; // 沒有 plan_kind 的一般自建讀經計畫
-}
-
-function matchesPlanSeries(plan) {
-  if (!activePlanSeries || activePlanSeries === "all") return true;
-  return getPlanSeries(plan) === activePlanSeries;
-}
-
-// 這個使用者「實際看得到」的計畫系列集合（含已加入 + 探索 + 靈修/小組 viewer-only）。
-// devotional / group_meeting 走各自的 visibility helper（內含 devotionGroupHidden 硬閘）。
-function getVisiblePlanSeriesSet() {
-  const set = new Set();
-  const consider = plan => {
-    if (!plan) return;
-    const series = getPlanSeries(plan);
-    if (series === "devotional") {
-      if (typeof isDevotionalPlanVisibleToUser === "function" && !isDevotionalPlanVisibleToUser(plan)) return;
-    } else if (series === "group_meeting") {
-      if (typeof isGroupMeetingPlanVisibleToUser === "function" && !isGroupMeetingPlanVisibleToUser(plan)) return;
-    }
-    set.add(series);
-  };
-  (state.activePlans || []).forEach(consider);
-  (state.globalPlans || []).forEach(consider);
-  return set;
-}
-
-// 依「有哪些系列看得到」決定：整排 pill 顯不顯示、個別 pill 顯不顯示。
-// 規則：靈修或小組任一可見 → 顯示整排；否則整排隱藏（不預先讓使用者知道有這功能）。
-function updateSeriesPillRowVisibility() {
-  const row = document.getElementById("plan-list-series-pills");
-  if (!row) return;
-  const seriesSet = getVisiblePlanSeriesSet();
-  const showRow = seriesSet.has("devotional") || seriesSet.has("group_meeting");
-  row.hidden = !showRow;
-  if (!showRow) {
-    if (activePlanSeries !== "all") setActivePlanSeries("all", { rerender: false });
-    return;
-  }
-  row.querySelectorAll(".pill-btn--series").forEach(btn => {
-    const series = btn.getAttribute("data-series");
-    btn.hidden = series !== "all" && !seriesSet.has(series);
-  });
-  // 目前選的系列 pill 被藏了（例如計畫結束了）→ 回到「全部」
-  const activeBtn = row.querySelector(`.pill-btn--series[data-series="${activePlanSeries}"]`);
-  if (activePlanSeries !== "all" && (!activeBtn || activeBtn.hidden)) {
-    setActivePlanSeries("all", { rerender: false });
-  }
-  row.querySelectorAll(".pill-btn--series").forEach(btn => {
-    btn.classList.toggle("active", btn.getAttribute("data-series") === activePlanSeries);
-  });
-}
-
-function setActivePlanSeries(series, { rerender = true } = {}) {
-  activePlanSeries = series || "all";
-  try { sessionStorage.setItem("plan_list_series", activePlanSeries); } catch (_e) {}
-  const row = document.getElementById("plan-list-series-pills");
-  row?.querySelectorAll(".pill-btn--series").forEach(btn => {
-    btn.classList.toggle("active", btn.getAttribute("data-series") === activePlanSeries);
-  });
-  if (rerender) {
-    renderJoinedPlansList();
-    renderPresetPlansList();
-  }
 }
 
 function getPlanStartCountdownText(plan) {
@@ -1733,19 +1645,9 @@ function bindPlanParticipationItemActions(card, plan, model) {
 }
 
 // 「每日陪你靈修」歡迎卡（計畫分頁側欄，靜態文案：邀請去探索計畫）：只有在
-// 使用者完全沒有任何計畫——一般讀經、每日靈修、小組聚會通通沒有——才顯示，
-// 已經有任何一種計畫的話，這句「歡迎加入」文案就顯得多餘/矛盾。
+// 使用者完全沒有任何計畫時才顯示，已經有計畫的話，這句「歡迎加入」文案就顯得多餘/矛盾。
 function userHasNoPlanAtAll() {
-  if ((state.activePlans || []).length > 0) return false;
-  const hasVisibleDevotional = (state.globalPlans || []).some(gp =>
-    (gp.planKind || gp.plan_kind) === "devotional" && isDevotionalPlanVisibleToUser(gp)
-  );
-  if (hasVisibleDevotional) return false;
-  const hasVisibleGroupMeeting = (state.globalPlans || []).some(gp =>
-    (gp.planKind || gp.plan_kind) === "group_meeting"
-    && typeof isGroupMeetingPlanVisibleToUser === "function" && isGroupMeetingPlanVisibleToUser(gp)
-  );
-  return !hasVisibleGroupMeeting;
+  return (state.activePlans || []).length === 0;
 }
 
 // 歡迎卡只在「我的計畫」、「全域計畫管理」只在「探索計畫」、「已結束」整欄隱藏
@@ -1767,65 +1669,6 @@ function updatePlanSidebarIntroCardVisibility() {
   });
 }
 
-function formatPlanDurationLabel(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "日期尚未公布";
-  const days = Math.max(1, Math.ceil((end - start) / 86400000) + 1);
-  return days >= 365 ? `${startDate} ～ ${endDate}` : `共 ${days} 天`;
-}
-
-// 每日靈修／小組聚會週計畫的卡片：只看內容，沒有「加入」，所以沒有進度條、
-// 沒有加入/建立團隊按鈕，只有一顆「預覽內容」。這種計畫本來會出現在「探索
-// 計畫」，現在改放進「我的計畫」（見下面 renderJoinedPlansList），這裡抽成
-// 共用函式，避免兩份清單各自維護一份、之後行為兜不起來。
-function buildViewerOnlyPlanCard(plan) {
-  const isDevotional = (plan.planKind || plan.plan_kind) === "devotional";
-  const isGroupMeeting = (plan.planKind || plan.plan_kind) === "group_meeting";
-  const devDevMode = isDevotional && window.isDevotionalPlanDevMode(plan);
-  const gmDevMode = isGroupMeeting && typeof window.isGroupMeetingPlanDevMode === "function" && window.isGroupMeetingPlanDevMode(plan);
-  const viewerDevMode = devDevMode || gmDevMode;
-  const scheduleLabel = isDevotional
-    ? `每日靈修・${formatPlanDurationLabel(plan.startDate, plan.endDate)}`
-    : "小組聚會・週計畫";
-  const description = plan.description || "";
-
-  const card = document.createElement("div");
-  card.className = "plan-card joined-plan-item-card" + (viewerDevMode ? " plan-card--dev" : "");
-  card.innerHTML = renderPlanCardShell({
-    plan,
-    variant: "available",
-    header: renderPlanCardHeader({
-      title: escapeHTML(plan.name)
-        + (viewerDevMode ? ' <span class="plan-card__dev-badge">開發中・只有你看得到</span>' : ""),
-      meta: `
-        <span class="nlc-icon nlc-icon--sm" data-icon="calendarThirty" aria-hidden="true"></span>
-        <span>${escapeHTML(scheduleLabel)}</span>
-      `,
-      description: description ? escapeHTML(description) : ""
-    }),
-    status: renderPlanCardStatusSummary([
-      viewerDevMode && {
-        icon: "lock",
-        label: "開放狀態",
-        value: "開發中，尚未對會友開放（只有你看得到）",
-        tone: "warning"
-      }
-    ])
-    // 沒有 actions：整張卡片可點擊直接進去，再放一顆「預覽內容」按鈕是多餘的。
-  });
-
-  card.onclick = () => {
-    if (isDevotional && typeof window.previewDevotionalPlanAsMember === "function") {
-      window.previewDevotionalPlanAsMember(plan.globalPlanId || plan.id);
-    } else if (isGroupMeeting && typeof window.previewGroupMeetingPlanAsMember === "function") {
-      window.previewGroupMeetingPlanAsMember(plan.globalPlanId || plan.id);
-    }
-  };
-
-  return card;
-}
-
 function renderJoinedPlansList() {
   try {
     const container = document.getElementById("joined-plans-list");
@@ -1841,7 +1684,6 @@ function renderJoinedPlansList() {
     const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
     const filter = activePill ? activePill.getAttribute("data-filter") : "mine";
     updatePlanSidebarIntroCardVisibility();
-    updateSeriesPillRowVisibility();
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1862,38 +1704,9 @@ function renderJoinedPlansList() {
 
     plansToRender = plansToRender.filter(plan => canManageHiddenPlans() || !isPlanHidden(plan));
     plansToRender = plansToRender.filter(matchesPlanSearch);
-    plansToRender = plansToRender.filter(matchesPlanSeries);
     plansToRender = sortJoinedPlansChronologically(plansToRender);
 
-    // 每日靈修／小組聚會週計畫「功能設定」（總開關＋個人偏好）還沒讀到 → 先讀，
-    // 讀到之後如果有變化（例如剛好在總開關開著、自己也開了）再重畫一次讓計畫
-    // 現身；isDevotionalPlanVisibleToUser/isGroupMeetingPlanVisibleToUser 讀的
-    // 是快取的 window.* 全域變數，第一次進來時可能還沒抓到，不能只算一次。
-    if (typeof window.devotionGroupFeaturesMasterEnabled !== "boolean"
-      && typeof ensureDevotionGroupPreferencesLoaded === "function") {
-      ensureDevotionGroupPreferencesLoaded().then(() => renderJoinedPlansList()).catch(() => {});
-    }
-
-    // 每日靈修／小組聚會週計畫沒有「加入」這回事，改成直接從 state.globalPlans
-    // 撈出「這個人看得到」的那幾份，跟已加入的一般計畫一起放在「我的計畫」──但
-    // 只在「進行中」分頁顯示，這種計畫沒有「已結束/已完成」的概念可以歸類。
-    const viewerOnlyPlans = filter === "mine"
-      ? (state.globalPlans || []).filter(gp => {
-          if (!gp) return false;
-          const kind = gp.planKind || gp.plan_kind;
-          if (kind !== "devotional" && kind !== "group_meeting") return false;
-          if (kind === "devotional" && !isDevotionalPlanVisibleToUser(gp)) return false;
-          if (kind === "group_meeting" && typeof isGroupMeetingPlanVisibleToUser === "function" && !isGroupMeetingPlanVisibleToUser(gp)) return false;
-          return matchesPlanSearch(gp) && matchesPlanSeries(gp);
-        })
-        // 每日靈修排在小組聚會上面（同類型維持原本 start_date 排序）
-        .sort((a, b) => {
-          const rank = gp => ((gp.planKind || gp.plan_kind) === "devotional" ? 0 : 1);
-          return rank(a) - rank(b);
-        })
-      : [];
-
-    if (plansToRender.length === 0 && viewerOnlyPlans.length === 0 && planSearchQuery) {
+    if (plansToRender.length === 0 && planSearchQuery) {
       container.innerHTML = `
         <div class="empty-state" style="text-align:center;padding:3rem 1rem;width:100%;">
           <p style="color:var(--text-secondary);margin:0 0 .5rem;font-weight:500;">找不到符合「${escapeHTML(planSearchQuery)}」的計畫</p>
@@ -1903,7 +1716,7 @@ function renderJoinedPlansList() {
       return;
     }
 
-    if (plansToRender.length === 0 && viewerOnlyPlans.length === 0) {
+    if (plansToRender.length === 0) {
       if (filter === "mine") {
         container.innerHTML = `
           <div class="empty-state" style="text-align: center; padding: 3rem 0;">
@@ -2067,10 +1880,6 @@ function renderJoinedPlansList() {
       }
 
       container.appendChild(card);
-    });
-
-    viewerOnlyPlans.forEach(plan => {
-      container.appendChild(buildViewerOnlyPlanCard(plan));
     });
   } catch (err) {
     console.error("Critical error inside renderJoinedPlansList:", err);
@@ -2482,7 +2291,6 @@ function renderPresetPlansList() {
   if (!container) return;
   container.innerHTML = "";
   updatePlanSidebarIntroCardVisibility();
-  updateSeriesPillRowVisibility();
 
   const legacyCategoryIdPrefix = "00000000-0000-0000-a000-";
   // 第一輪期末賽（第 2 階段）已拆成 4 個「月度期末賽」（c126 命名空間）。DB 裡
@@ -2572,10 +2380,6 @@ function renderPresetPlansList() {
     const isAlreadyJoined = joinedKeysValues.some(value => joinedKeys.has(value));
 
     if (isObsolete || isLegacy) return false;
-    // 每日靈修／小組聚會週計畫：只看內容、沒有「加入」，改到「我的計畫」清單顯示
-    // （見 renderJoinedPlansList 裡的 buildViewerOnlyPlanCard），探索清單不再重複出現。
-    const planKind = plan.planKind || plan.plan_kind;
-    if (planKind === "devotional" || planKind === "group_meeting") return false;
     // 已結束／尚未開放（隱藏、鎖住）的計畫：會友端不顯示，管理者預覽時標
     // 「會友看不到」——規則見 getExplorePlanVisibility（#372）。
     const exploreVisibility = getExplorePlanVisibility({
@@ -2588,7 +2392,6 @@ function renderPresetPlansList() {
     });
     if (!exploreVisibility.visible) return false;
     if (!matchesSearch) return false;
-    if (!matchesPlanSeries(plan)) return false;
     if (isAlreadyJoined) return false;
 
     // 延後大區梯次：非本大區就不顯示；本人沒設定大區則保留卡片但停用加入。
@@ -3508,126 +3311,6 @@ async function isDailyQuizFeatureEnabled() {
   return dailyQuizFeatureRequest;
 }
 
-// 每日靈修／小組聚會週計畫「功能設定」（migration 0156）：總開關（admin 專屬）
-// + 每人一份的個人偏好。get_my_devotion_group_preferences 一次回三個值，這裡
-// 快取到同一組全域變數，devotion/group-meeting 兩邊共用一支 request，不用各自
-// 打一次 API。window.dailyDevotionFeatureEnabled / groupMeetingPlanFeatureEnabled
-// 這兩個變數名稱是舊的（原本代表「全教會共用一個開關」），現在意思改成
-// 「目前登入者自己的偏好」——沿用名稱是為了不用逐一改所有既有讀取點。
-let devotionGroupPreferencesRequest = null;
-async function ensureDevotionGroupPreferencesLoaded() {
-  if (typeof window.devotionGroupFeaturesMasterEnabled === "boolean") {
-    return {
-      masterEnabled: window.devotionGroupFeaturesMasterEnabled,
-      dailyDevotion: window.dailyDevotionFeatureEnabled === true,
-      groupMeetingPlan: window.groupMeetingPlanFeatureEnabled === true
-    };
-  }
-  if (!devotionGroupPreferencesRequest) {
-    devotionGroupPreferencesRequest = Promise.all([
-      db.getMyDevotionGroupPreferences(),
-      db.getFeatureSetting ? db.getFeatureSetting("devotion_group_hidden", false) : Promise.resolve({ enabled: false })
-    ]).then(([res, hiddenRes]) => {
-      const data = (res && res.success && res.data) || {};
-      window.devotionGroupHidden = !!(hiddenRes && hiddenRes.enabled === true);
-      window.devotionGroupFeaturesMasterEnabled = data.masterEnabled === true;
-      window.dailyDevotionFeatureEnabled = data.dailyDevotion === true;
-      window.groupMeetingPlanFeatureEnabled = data.groupMeetingPlan === true;
-      return {
-        masterEnabled: window.devotionGroupFeaturesMasterEnabled,
-        dailyDevotion: window.dailyDevotionFeatureEnabled,
-        groupMeetingPlan: window.groupMeetingPlanFeatureEnabled
-      };
-    }).catch(() => ({ masterEnabled: false, dailyDevotion: false, groupMeetingPlan: false }))
-      .finally(() => { devotionGroupPreferencesRequest = null; });
-  }
-  return devotionGroupPreferencesRequest;
-}
-window.ensureDevotionGroupPreferencesLoaded = ensureDevotionGroupPreferencesLoaded;
-
-async function isDailyDevotionFeatureEnabled() {
-  const prefs = await ensureDevotionGroupPreferencesLoaded();
-  return prefs.dailyDevotion === true;
-}
-window.isDailyDevotionFeatureEnabled = isDailyDevotionFeatureEnabled;
-// 每日靈修計畫對「這個人」看不看得到：
-//  · 管理員 / 牧者：一律看得到（先建內容用）。
-//  · 一般會友：要「總開關開著」而且「自己在個人分頁功能設定裡開啟」才看得到，
-//    是每個人各自的偏好，不是全教會共用一個值。
-function isDevotionalPlanVisibleToUser(plan) {
-  if (!plan || (plan.planKind || plan.plan_kind) !== "devotional") return true; // 非靈修計畫不受此限
-  if (window.devotionGroupHidden === true) return false; // 政策審核期間：對所有人隱藏（含 admin/pastor）
-  const role = typeof getUserRoleCode === "function" ? getUserRoleCode(state.currentUser) : null;
-  if (role === "admin" || role === "pastor") return true;
-  if (window.devotionGroupFeaturesMasterEnabled !== true) return false;
-  return window.dailyDevotionFeatureEnabled === true;
-}
-window.isDevotionalPlanVisibleToUser = isDevotionalPlanVisibleToUser;
-// 總開關還沒開＝功能整個還沒對會友開放（只有管理員/牧者看得到，可以先建內容）。
-function isDevotionalPlanDevMode(plan) {
-  return (plan && (plan.planKind || plan.plan_kind) === "devotional")
-    && window.devotionGroupHidden !== true
-    && window.devotionGroupFeaturesMasterEnabled !== true;
-}
-window.isDevotionalPlanDevMode = isDevotionalPlanDevMode;
-
-// 管理員預覽：直接把某靈修計畫設為 activePlan 並切到「計畫」分頁的詳情
-// （enterPlanDetailState 的 devotional 分支會渲染 renderDevotionViewer）。
-function previewDevotionalPlanAsMember(globalPlanId) {
-  const gp = (state.globalPlans || []).find(p => String(p.id) === String(globalPlanId)
-    || String(p.globalPlanId) === String(globalPlanId));
-  if (!gp) return;
-  state.activePlan = gp;
-  state.planDetailOpen = true;
-  state.planActiveSubTab = "today";
-  const onPlanTab = typeof window.appRouter !== "undefined" && window.appRouter.currentTab === "plan-view";
-  if (onPlanTab && typeof setPlanState === "function") {
-    setPlanState(PLAN_ROUTE.DETAIL);
-  } else if (typeof window.appRouter !== "undefined" && typeof window.appRouter.switchTab === "function") {
-    window.appRouter.switchTab("plan-view", { keepPlanDetail: true });
-  }
-}
-window.previewDevotionalPlanAsMember = previewDevotionalPlanAsMember;
-
-// ── 小組聚會週計畫（plan_kind='group_meeting'，migration 0148）──────────────
-// 跟每日靈修共用同一支「功能設定」總開關 + 個人偏好（見上面
-// ensureDevotionGroupPreferencesLoaded，migration 0156）。
-async function isGroupMeetingFeatureEnabled() {
-  const prefs = await ensureDevotionGroupPreferencesLoaded();
-  return prefs.groupMeetingPlan === true;
-}
-window.isGroupMeetingFeatureEnabled = isGroupMeetingFeatureEnabled;
-function isGroupMeetingPlanVisibleToUser(plan) {
-  if (!plan || (plan.planKind || plan.plan_kind) !== "group_meeting") return true;
-  if (window.devotionGroupHidden === true) return false; // 政策審核期間：對所有人隱藏（含 admin/pastor）
-  const role = typeof getUserRoleCode === "function" ? getUserRoleCode(state.currentUser) : null;
-  if (role === "admin" || role === "pastor") return true;
-  if (window.devotionGroupFeaturesMasterEnabled !== true) return false;
-  return window.groupMeetingPlanFeatureEnabled === true;
-}
-window.isGroupMeetingPlanVisibleToUser = isGroupMeetingPlanVisibleToUser;
-function isGroupMeetingPlanDevMode(plan) {
-  return (plan && (plan.planKind || plan.plan_kind) === "group_meeting")
-    && window.devotionGroupHidden !== true
-    && window.devotionGroupFeaturesMasterEnabled !== true;
-}
-window.isGroupMeetingPlanDevMode = isGroupMeetingPlanDevMode;
-function previewGroupMeetingPlanAsMember(globalPlanId) {
-  const gp = (state.globalPlans || []).find(p => String(p.id) === String(globalPlanId)
-    || String(p.globalPlanId) === String(globalPlanId));
-  if (!gp) return;
-  state.activePlan = gp;
-  state.planDetailOpen = true;
-  state.planActiveSubTab = "today";
-  const onPlanTab = typeof window.appRouter !== "undefined" && window.appRouter.currentTab === "plan-view";
-  if (onPlanTab && typeof setPlanState === "function") {
-    setPlanState(PLAN_ROUTE.DETAIL);
-  } else if (typeof window.appRouter !== "undefined" && typeof window.appRouter.switchTab === "function") {
-    window.appRouter.switchTab("plan-view", { keepPlanDetail: true });
-  }
-}
-window.previewGroupMeetingPlanAsMember = previewGroupMeetingPlanAsMember;
-
 window.addEventListener("daily-quiz-feature-changed", event => {
   window.dailyQuizFeatureEnabled = event.detail?.enabled === true;
   if (!window.dailyQuizFeatureEnabled) {
@@ -3868,9 +3551,9 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
 // readChapterDirect removed 2026-09-16: zero callers anywhere in js/ —
 // superseded by openReaderPassage.
 
-// 靈修「打開閱讀器」：進入聖經讀經、整章顯示，直接跳到該經文的起始節。
+// 「打開閱讀器」：進入聖經讀經、整章顯示，直接跳到該經文的起始節。
 // ref = {book, chapterFrom, verseFrom, verseTo}
-export function openReaderPassage(ref) {
+function openReaderPassage(ref) {
   if (!ref || !ref.book) return;
   const book = BIBLE_BOOKS.find(b => b.name === ref.book);
   if (!book) return;
@@ -3883,22 +3566,6 @@ export function openReaderPassage(ref) {
   }
 }
 window.openReaderPassage = openReaderPassage;
-
-// 從「使徒行傳 4:23-31」/「使徒行傳 7:54-8:1」這種標籤，退而求其次解析出經文範圍。
-// 當批次匯入沒帶結構化 passageRefs 時，仍能讓「經文進度」列可點。
-export function parsePassageLabel(label) {
-  if (!label || typeof label !== "string") return null;
-  const m = label.trim().match(/^(.+?)\s*(\d+)\s*[:：]\s*(\d+)\s*(?:[-~–—]\s*(?:(\d+)\s*[:：]\s*)?(\d+))?\s*[a-z]?\s*$/i);
-  if (!m) return null;
-  const book = m[1].trim();
-  if (!(window.BIBLE_BOOKS || []).some(b => b.name === book)) return null;
-  const chapterFrom = Number(m[2]) || 1;
-  const verseFrom = Number(m[3]) || 1;
-  const chapterTo = m[4] ? Number(m[4]) : chapterFrom;
-  const verseTo = m[5] ? Number(m[5]) : verseFrom;
-  return { book, chapterFrom, verseFrom, chapterTo, verseTo };
-}
-window.parsePassageLabel = parsePassageLabel;
 
 // updatePlanCheckboxState removed 2026-09-16: zero callers anywhere in js/
 // (already just a redraw-fallback stub; scripts/plan-reader-immersive.test.mjs
@@ -5432,8 +5099,6 @@ function snapCalendarToMyProgress() {
 // on screen, so even if something had called it, the output was broken.
 
 async function enterPlanListState() {
-  exitDevotionViewer();
-  exitGroupMeetingViewer();
   window.currentPlanViewState = PLAN_ROUTE.LIST;
   state.planDetailOpen = false;
   state.planActiveSubTab = "today";
@@ -5449,29 +5114,7 @@ async function enterPlanDetailState() {
     await enterPlanListState();
     return;
   }
-  const activePlanKind = state.activePlan.planKind || state.activePlan.plan_kind;
-  // 每日靈修 / 小組聚會週計畫：純看內容，不打卡、不組隊、沒有「重複幾遍」的輪次概念。
-  // 也**不跑「會友資格」閘門**——那個閘門是給「加入讀經計畫」用的，純預覽內容
-  // 不該被 onboarding 缺項（缺小組 / 會籍待審…）擋掉，否則點了卡片沒反應。
-  if (activePlanKind === "devotional") {
-    window.currentPlanViewState = PLAN_ROUTE.DETAIL;
-    state.planDetailOpen = true;
-    state.planActiveSubTab = "today";
-    setOnlyPlanRouteVisible(PLAN_ROUTE.DETAIL);
-    await renderDevotionViewer(state.activePlan);
-    return;
-  }
-  if (activePlanKind === "group_meeting") {
-    window.currentPlanViewState = PLAN_ROUTE.DETAIL;
-    state.planDetailOpen = true;
-    state.planActiveSubTab = "today";
-    setOnlyPlanRouteVisible(PLAN_ROUTE.DETAIL);
-    await renderGroupMeetingViewer(state.activePlan);
-    return;
-  }
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
-  exitDevotionViewer();
-  exitGroupMeetingViewer();
   calculatePlanProgress();
   window.currentPlanViewState = PLAN_ROUTE.DETAIL;
   state.planDetailOpen = true;
@@ -5502,8 +5145,6 @@ async function enterGroupProgressState() {
     await enterPlanListState();
     return;
   }
-  exitDevotionViewer();
-  exitGroupMeetingViewer();
   window.currentPlanViewState = PLAN_ROUTE.GROUP;
   state.planDetailOpen = true;
 
@@ -5561,127 +5202,6 @@ async function showDiscoverPlans() {
   await setPlanState(PLAN_ROUTE.LIST);
   document.querySelector('#plan-list-status-pills .pill-btn[data-filter="saved"]')?.click();
 }
-
-// ── 每日靈修 viewer（會友端；plan_kind='devotional'）─────────────────────────
-// 畫面本體在 plan-devotion.js（lazy chunk，#370）。這裡先把容器和「載入中」顯示出來，
-// 下載完再轉呼叫；下載期間使用者已經離開（exit 會把 viewerEpoch 加一）就不畫。
-let planDevotionView = null;
-let devotionViewerEpoch = 0;
-let groupMeetingViewerEpoch = 0;
-function getActivePlanKind() {
-  return state.activePlan ? (state.activePlan.planKind || state.activePlan.plan_kind) : null;
-}
-async function loadPlanDevotionView() {
-  planDevotionView = await loadPlanChunk("plan-devotion");
-  return planDevotionView;
-}
-
-
-// 首頁「今日靈修」卡片一律要跳到「今天」那一天，即使使用者在 viewer 裡上次
-// 瀏覽到別天也一樣——所以進場前先把記憶的頁碼清掉，讓 renderDevotionViewer
-// 重新以「今天」為準（見下面 renderDevotionViewer 裡 devotionViewerDayIndex
-// == null 的分支）。
-function resetDevotionViewerDay() {
-  planDevotionView?.resetDevotionViewerDay();
-}
-window.resetDevotionViewerDay = resetDevotionViewerDay;
-
-// 靈修 viewer 用「獨立容器」#devotion-view-root（不碰 #plan-detail-subview，
-// 那是一般計畫詳情的大結構，被 innerHTML 洗掉就回不來了）。
-export function showDevotionViewerRoot() {
-  const detailView = document.getElementById("plan-detail-view");
-  const legacy = document.getElementById("plan-detail-subview");
-  let root = document.getElementById("devotion-view-root");
-  if (!root && detailView) {
-    root = document.createElement("div");
-    root.id = "devotion-view-root";
-    detailView.appendChild(root);
-  }
-  // #plan-detail-subview 在 index.html 帶 inline `display:flex`，光加 .hidden 蓋不掉。
-  if (legacy) { legacy.classList.add("hidden"); legacy.style.display = "none"; }
-  if (root) { root.classList.remove("hidden"); root.style.display = "block"; }
-  return root;
-}
-function exitDevotionViewer() {
-  devotionViewerEpoch += 1;
-  // 心得編輯視窗掛在 document.body，離開 viewer 時一併收掉，避免變成孤兒遮罩。
-  document.querySelectorAll(".devotion-note-modal").forEach(el => el.remove());
-  const root = document.getElementById("devotion-view-root");
-  if (root) { root.innerHTML = ""; root.classList.add("hidden"); root.style.display = "none"; }
-  const legacy = document.getElementById("plan-detail-subview");
-  if (legacy) {
-    legacy.classList.remove("hidden");
-    legacy.style.display = "flex"; // 還原 index.html 原本的 inline；之後 setOnlyPlanRouteVisible 會再依路由調整
-  }
-}
-window.exitDevotionViewer = exitDevotionViewer;
-
-async function renderDevotionViewer(plan) {
-  const host = showDevotionViewerRoot();
-  if (!host) return;
-  const epoch = devotionViewerEpoch;
-  host.innerHTML = '<div class="devotion-view"><p class="devotion-view__loading">正在載入每日靈修…</p></div>';
-  let view;
-  try {
-    view = await loadPlanDevotionView();
-  } catch (e) {
-    console.warn("[Plan] devotion chunk failed to load:", e);
-    if (epoch === devotionViewerEpoch) host.innerHTML = '<div class="devotion-view"><p class="devotion-view__loading">無法載入每日靈修，請稍後再試。</p></div>';
-    return;
-  }
-  // 下載期間離開了，或已經點進別種計畫：不畫。
-  if (epoch !== devotionViewerEpoch || getActivePlanKind() !== "devotional") return;
-  return view.renderDevotionViewer(plan);
-}
-window.renderDevotionViewer = renderDevotionViewer;
-
-// ── 小組聚會週計畫 viewer（會友端；plan_kind='group_meeting'）──────────────────
-function resetGroupMeetingViewerWeek() {
-  planDevotionView?.resetGroupMeetingViewerWeek();
-}
-window.resetGroupMeetingViewerWeek = resetGroupMeetingViewerWeek;
-
-export function showGroupMeetingViewerRoot() {
-  const detailView = document.getElementById("plan-detail-view");
-  const legacy = document.getElementById("plan-detail-subview");
-  const devRoot = document.getElementById("devotion-view-root");
-  let root = document.getElementById("group-meeting-view-root");
-  if (!root && detailView) {
-    root = document.createElement("div");
-    root.id = "group-meeting-view-root";
-    detailView.appendChild(root);
-  }
-  if (legacy) { legacy.classList.add("hidden"); legacy.style.display = "none"; }
-  if (devRoot) { devRoot.classList.add("hidden"); devRoot.style.display = "none"; }
-  if (root) { root.classList.remove("hidden"); root.style.display = "block"; }
-  return root;
-}
-function exitGroupMeetingViewer() {
-  groupMeetingViewerEpoch += 1;
-  const root = document.getElementById("group-meeting-view-root");
-  if (root) { root.innerHTML = ""; root.classList.add("hidden"); root.style.display = "none"; }
-  const legacy = document.getElementById("plan-detail-subview");
-  if (legacy) { legacy.classList.remove("hidden"); legacy.style.display = "flex"; }
-}
-window.exitGroupMeetingViewer = exitGroupMeetingViewer;
-
-async function renderGroupMeetingViewer(plan) {
-  const host = showGroupMeetingViewerRoot();
-  if (!host) return;
-  const epoch = groupMeetingViewerEpoch;
-  host.innerHTML = '<div class="group-meeting-view"><p class="group-meeting-view__loading">正在載入小組聚會計畫…</p></div>';
-  let view;
-  try {
-    view = await loadPlanDevotionView();
-  } catch (e) {
-    console.warn("[Plan] group meeting chunk failed to load:", e);
-    if (epoch === groupMeetingViewerEpoch) host.innerHTML = '<div class="group-meeting-view"><p class="group-meeting-view__loading">無法載入小組聚會計畫，請稍後再試。</p></div>';
-    return;
-  }
-  if (epoch !== groupMeetingViewerEpoch || getActivePlanKind() !== "group_meeting") return;
-  return view.renderGroupMeetingViewer(plan);
-}
-window.renderGroupMeetingViewer = renderGroupMeetingViewer;
 
 function planGoBack() {
   if (getCurrentPlanRoute() !== PLAN_ROUTE.LIST) setPlanState(PLAN_ROUTE.LIST);
