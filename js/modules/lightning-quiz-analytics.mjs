@@ -469,12 +469,3 @@ export const RANK_LABELS = Object.freeze(["第一名", "第二名", "第三名"]
 export function formatRankLabel(rank) {
   return RANK_LABELS[Number(rank) - 1] || `第 ${rank} 名`;
 }
-
-// 首頁「我的結果」：這週答對幾題（有題目的天數為分母）。
-export function summarizeMyWeek(days) {
-  const list = Array.isArray(days) ? days : [];
-  return {
-    total: list.length,
-    correct: list.filter(day => day?.mine?.result === "correct").length
-  };
-}

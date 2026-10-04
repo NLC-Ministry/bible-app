@@ -12233,19 +12233,11 @@ button.admin-lightning-quiz-calendar__day {
   color: var(--text-primary);
   white-space: nowrap;
 }
-.lq-ranking__empty,
-.lq-ranking__mine {
+.lq-ranking__empty {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text-secondary);
 }
-.lq-ranking__mine {
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-card);
-}
-.lq-ranking__mine strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.lq-ranking__mine--correct strong { color: var(--color-success-foreground); }
-.lq-ranking__mine--wrong strong { color: var(--color-danger-foreground); }
 .lq-ranking__footer {
   display: flex;
   align-items: center;
@@ -12255,7 +12247,6 @@ button.admin-lightning-quiz-calendar__day {
   font-size: 0.9375rem;
   color: var(--text-secondary);
 }
-.lq-ranking__footer strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
 .lq-ranking__history { color: var(--color-brand); }
 
 /* 後台週統計「首頁公布前三名」（#429） */
