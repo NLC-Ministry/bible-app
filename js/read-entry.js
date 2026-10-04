@@ -11,7 +11,7 @@ import "./copy/zh-Hant.js";
 import "./design/icon-registry.js";
 import "./design/icons.js";
 import { IndexedDbClient } from "./pwa/IndexedDbClient.js";
-import { OFFLINE_BIBLE_CATALOG, OfflineBibleRepository } from "./pwa/OfflineBibleRepository.js";
+import { OfflineBibleRepository } from "./pwa/OfflineBibleRepository.js";
 import { withSoftTimeout } from "./net-timeout.mjs";
 import { readAppTheme } from "./data/reader-preferences.mjs";
 import { mountReadApp } from "./read/read-app.mjs";
@@ -61,9 +61,6 @@ mountReadApp({
   getVerseCounts: () => window.BIBLE_VERSE_COUNTS || null,
   hydrateIcons: typeof window.hydrateIcons === "function" ? window.hydrateIcons : null,
   copy: (window.APP_COPY && window.APP_COPY.reader) || {},
-  // 有離線經文包的譯本（當代譯本、WEB）整本可以下載，不用預抓；和合本系列沒有經文包，
-  // 有網路時先把接下來幾章抓進 SW 快取，離線時才讀得到。
-  shouldPrefetch: version => !OFFLINE_BIBLE_CATALOG[version],
   isOnline: () => navigator.onLine !== false,
   onChapterShown: () => {
     if (keepAliveScheduled) return;

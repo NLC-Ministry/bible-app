@@ -26,7 +26,7 @@ import {
   readPlanLastOpened,
   selectAutoRecordPlanTask
 } from "../data/reader-auto-record.mjs";
-import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
+import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter, resolvePrefetchChapters } from "./reader-chapter-nav.mjs";
 import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from "./reader-page-flip.mjs";
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "./verse-selection-format.mjs";
 import { buildChapterEndNav as buildSharedChapterEndNav, createVerseElement, revealVerses } from "./reader-verse-dom.mjs";
@@ -2767,28 +2767,14 @@ export function updateReaderBottomActionBar() {
 }
 
 // 背景預載下一章與上一章，往左或往右滑都能馬上出現（#314）。
+// 預抓的章數和方向照共用規則（#440，同 /read）。fetchBibleChapter 自己會查記憶體快取、
+// 合併同章請求、先讀離線經文包，並把結果寫進翻頁預覽用的 window._bibleChapterCache。
 function triggerPredictivePrefetch() {
   const requestedVersion = String(state.readerState?.version || "CUNP").toUpperCase();
-  [1, -1].forEach(direction => {
-    const target = resolveAdjacentChapter(BIBLE_BOOKS, state.readerState.bookId, state.readerState.chapter, direction);
-    if (!target) return;
-
-    const cacheKey = window.getBibleChapterCacheKey
-      ? window.getBibleChapterCacheKey(target.book.eng, target.chapter, requestedVersion)
-      : `${requestedVersion}_${target.book.eng}_${target.chapter}`;
-    if (window._bibleChapterCache && window._bibleChapterCache[cacheKey]) {
-      return;
-    }
-
-    fetchBibleChapter(target.book.eng, target.chapter, requestedVersion)
-      .then(data => {
-        if (window._bibleChapterCache && data && !data.isPlaceholder) {
-          window._bibleChapterCache[cacheKey] = data;
-        }
-      })
-      .catch(err => {
-        console.warn(`⚠️ [背景預載失敗] 無法預載${direction > 0 ? "下" : "上"}一章: ${cacheKey}`, err);
-      });
+  resolvePrefetchChapters(BIBLE_BOOKS, state.readerState.bookId, state.readerState.chapter).forEach(target => {
+    fetchBibleChapter(target.book.eng, target.chapter, requestedVersion).catch(err => {
+      console.warn(`⚠️ [背景預載失敗] ${requestedVersion} ${target.book.eng} ${target.chapter}`, err);
+    });
   });
 }
 

@@ -294,23 +294,22 @@ describe("never stuck on a blank or loading screen", () => {
   });
 });
 
-describe("prefetch for versions without an offline pack", () => {
-  it("fetches the next 3 chapters (across books) after showing the chapter", async () => {
-    localStorage.setItem("reader_state", JSON.stringify({ bookId: 1, chapter: 49 }));
-    const { app, fetchChapter } = mount({ shouldPrefetch: () => true });
+describe("prefetch around the shown chapter (#440)", () => {
+  it("fetches the next 2 chapters and the previous one (across books) after showing the chapter", async () => {
+    localStorage.setItem("reader_state", JSON.stringify({ bookId: 1, chapter: 50 }));
+    const { app, fetchChapter } = mount();
     await app.ready;
     await vi.waitFor(() => expect(fetchChapter).toHaveBeenCalledTimes(4));
-    expect(fetchChapter.mock.calls.slice(1).map(c => `${c[0]} ${c[1]}`)).toEqual(["Genesis 50", "Exodus 1", "Exodus 2"]);
+    expect(fetchChapter.mock.calls.slice(1).map(c => `${c[0]} ${c[1]}`)).toEqual(["Exodus 1", "Exodus 2", "Genesis 49"]);
   });
 
-  it("does not prefetch versions that have an offline pack, or while offline", async () => {
-    const packed = mount({ shouldPrefetch: () => false });
-    await packed.app.ready;
-    expect(packed.fetchChapter).toHaveBeenCalledTimes(1);
-    mountBody();
-    const offline = mount({ shouldPrefetch: () => true, isOnline: () => false, fetchChapter: vi.fn(async (e, c, v) => chapterFor(e, c, v)) });
-    await offline.app.ready;
-    expect(offline.fetchChapter).toHaveBeenCalledTimes(1);
+  // 經文包譯本由 fetchBibleChapter 從本機讀；離線時它會退回快取。預抓結果也是翻頁預覽的來源，所以不擋。
+  it("prefetches offline-pack versions and while offline too, so the flip preview has the next chapter", async () => {
+    localStorage.setItem("reader_bible_version", "OCCB");
+    const { app, fetchChapter } = mount({ isOnline: () => false });
+    await app.ready;
+    await vi.waitFor(() => expect(fetchChapter).toHaveBeenCalledTimes(3));
+    expect(fetchChapter.mock.calls.slice(1).map(c => `${c[0]} ${c[1]} ${c[2]}`)).toEqual(["Genesis 2 OCCB", "Genesis 3 OCCB"]);
   });
 });
 

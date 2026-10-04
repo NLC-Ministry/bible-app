@@ -117,7 +117,8 @@ describe("Bible translation switching integrity", () => {
     expect(bible).toContain("function renderReaderLoadRetryState");
     expect(bible).toContain("data-reader-load-retry");
     expect(bible).toContain("重新讀取");
-    expect(bible).toContain("data && !data.isPlaceholder");
+    // 預抓不自己寫快取（#440）：只有 fetchBibleChapter 寫，而它只寫取到的經文，占位章直接回傳。
+    expect(bible).not.toMatch(/function triggerPredictivePrefetch\(\)[\s\S]{0,700}_bibleChapterCache\[/);
     expect(css).toContain(".reader-load-retry-state");
   });
 
