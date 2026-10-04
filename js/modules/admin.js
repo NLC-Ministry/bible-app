@@ -45,6 +45,9 @@ import {
   formatRate,
   formatWeekRange,
   formatWeekday,
+  formatRankLabel,
+  normalizeRankingExcluded,
+  pickDayWinners,
   rankAttempts,
   sortZoneRowsByRegion,
   summarizeByRegion,
@@ -2623,6 +2626,167 @@ function adminLightningQuizWeekOrgCells(row) {
     <td>${escapeHTML(formatRate(row.correctRate))}</td>`;
 }
 
+// ── 首頁公布前三名（#429）───────────────────────────────────────────────────
+// 週統計裡的一個區塊：依天列出答對的人（秒數由快到慢），管理員以天為單位排除，
+// 下面的人遞補；按「公布」後伺服器依排除名單重算前三名、存成固定紀錄，首頁顯示
+// 1～7 天。這裡算的前三名只是預覽，實際公布的名單以伺服器回傳為準。
+const ADMIN_LQ_RANKING_ROWS_SHOWN = 10;
+
+function formatAdminLightningQuizRankingStatus(publication) {
+  if (!publication) return '尚未公布。';
+  const until = `${formatWeekday(publication.displayUntil)} 23:59`;
+  if (publication.revoked) return '已撤下，首頁目前不顯示。';
+  if (publication.showing) return `首頁公布中，顯示到 ${until}。`;
+  return `公布期間已結束（顯示到 ${until}）。`;
+}
+
+function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
+  const candidates = Array.isArray(day.candidates) ? day.candidates : [];
+  const winners = pickDayWinners(candidates, [...dayExcluded]);
+  const winnerRank = new Map(winners.map(winner => [String(winner.userId), winner.rank]));
+  // 至少列到第三名那一列，排除過的人才看得到、也才能取消排除。
+  const lastWinnerIndex = winners.length
+    ? candidates.findIndex(candidate => String(candidate.userId) === String(winners[winners.length - 1].userId))
+    : -1;
+  const shownCount = expanded
+    ? candidates.length
+    : Math.max(ADMIN_LQ_RANKING_ROWS_SHOWN, lastWinnerIndex + 1);
+  const rows = candidates.slice(0, shownCount).map(candidate => {
+    const id = String(candidate.userId);
+    const isExcluded = dayExcluded.has(id);
+    const rank = winnerRank.get(id);
+    return `<li class="admin-lq-ranking__row${rank ? ' is-winner' : ''}${isExcluded ? ' is-excluded' : ''}">
+      <span class="admin-lq-ranking__rank">${isExcluded ? '已排除' : rank ? escapeHTML(formatRankLabel(rank)) : ''}</span>
+      <span class="admin-lq-ranking__name">${escapeHTML(candidate.name || '（未命名）')}</span>
+      <span class="admin-lq-ranking__zone">${escapeHTML(candidate.pastoralZone || UNASSIGNED_ZONE_LABEL)}</span>
+      <span class="admin-lq-ranking__time">${escapeHTML(formatElapsedSeconds(candidate.elapsedMs))} 秒</span>
+      <button type="button" class="pill-btn" data-lq-ranking-toggle data-date="${escapeHTML(day.riseDate)}" data-user="${escapeHTML(id)}">${isExcluded ? '取消排除' : '排除'}</button>
+    </li>`;
+  }).join('');
+  return `<div class="admin-lq-ranking__day">
+    <h6>${escapeHTML(formatWeekday(day.riseDate))}${day.ended ? '' : '（還沒結束）'}</h6>
+    ${candidates.length ? `<ol class="admin-lq-ranking__list">${rows}</ol>` : '<div class="admin-user-directory__empty">這天沒有人答對。</div>'}
+    ${candidates.length > shownCount ? `<button type="button" class="pill-btn" data-lq-ranking-more="${escapeHTML(day.riseDate)}">顯示全部（${escapeHTML(String(candidates.length))} 人）</button>` : ''}
+  </div>`;
+}
+
+async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
+  if (!host) return;
+  host.onclick = null;
+  host.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的答對名單…</div>';
+  const result = await db.adminGetLightningQuizWeekRanking(weekStart);
+  if (!isCurrent()) return;
+  if (!result.success) {
+    host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入答對名單失敗，請稍後再試。')}</div>`;
+    return;
+  }
+  const data = result.data || {};
+  const days = Array.isArray(data.days) ? data.days : [];
+  const publication = data.publication || null;
+  if (!days.length) {
+    host.innerHTML = '<div class="admin-user-directory__empty">這週沒有已排程的雲柱測驗。</div>';
+    return;
+  }
+  // 重新公布時從上次的排除名單接著調。
+  const excluded = {};
+  days.forEach(day => {
+    const saved = publication?.excluded?.[day.riseDate];
+    excluded[day.riseDate] = new Set(Array.isArray(saved) ? saved.map(String) : []);
+  });
+  const expanded = new Set();
+
+  const draw = () => {
+    const daysInput = host.querySelector('[data-lq-ranking-days]');
+    const displayDays = daysInput ? daysInput.value : String(publication?.displayDays || 1);
+    host.innerHTML = `
+      <p class="admin-lq-ranking__status">${escapeHTML(formatAdminLightningQuizRankingStatus(publication))}</p>
+      <p class="admin-daily-quiz-note">依作答秒數由快到慢列出答對的人。按「排除」把人移出名單，下面的人會遞補。名字照會員資料顯示；首頁不顯示個人名次。</p>
+      <div class="admin-lq-ranking__days">
+        ${days.map(day => adminLightningQuizRankingDayHtml(day, excluded[day.riseDate], expanded.has(day.riseDate))).join('')}
+      </div>
+      <div class="admin-lq-ranking__publish">
+        <label>公布天數
+          <input type="number" class="form-control" min="1" max="7" step="1" inputmode="numeric" value="${escapeHTML(displayDays)}" data-lq-ranking-days>
+        </label>
+        <button type="button" class="primary-btn" data-lq-ranking-publish ${data.allEnded ? '' : 'disabled'}>${publication ? '重新公布' : '公布到首頁'}</button>
+        ${publication && !publication.revoked ? '<button type="button" class="secondary-btn" data-lq-ranking-revoke>撤下</button>' : ''}
+      </div>
+      <p class="admin-daily-quiz-note">${data.allEnded
+        ? '公布天數從今天算起（1～7 天），1 天＝顯示到今天 23:59。重新公布會覆蓋首頁上的舊名單。'
+        : '這週還有題目沒結束，全部結束後才能公布。'}</p>
+    `;
+  };
+
+  const publish = async button => {
+    const displayDays = Number(host.querySelector('[data-lq-ranking-days]')?.value);
+    if (!Number.isInteger(displayDays) || displayDays < 1 || displayDays > 7) {
+      showToast('公布天數只能是 1～7 天。');
+      return;
+    }
+    const confirmed = await window.showConfirmDialog({
+      title: `把 ${formatWeekRange(data.weekStart)} 的前三名公布到首頁？`,
+      message: `全教會會友都會在首頁看到每天前三名的姓名、牧區與作答秒數，顯示 ${displayDays} 天。${publication ? '首頁上的舊名單會被覆蓋。' : ''}`,
+      confirmText: '公布',
+      cancelText: '取消'
+    });
+    if (!confirmed) return;
+    button.disabled = true;
+    const excludedPayload = normalizeRankingExcluded(days, Object.fromEntries(
+      Object.entries(excluded).map(([date, set]) => [date, [...set]])
+    ));
+    const published = await db.adminPublishLightningQuizWeekRanking(data.weekStart, excludedPayload, displayDays);
+    if (!published.success) {
+      button.disabled = false;
+      showToast(published.message || '公布失敗，請稍後再試。');
+      return;
+    }
+    showToast(`已公布，首頁顯示到 ${formatWeekday(published.data?.displayUntil)} 23:59。`);
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+  };
+
+  const revoke = async () => {
+    const confirmed = await window.showConfirmDialog({
+      title: '撤下首頁的前三名？',
+      message: '首頁會立即不顯示。排除名單會保留，之後可以再按「重新公布」。',
+      confirmText: '撤下',
+      cancelText: '取消',
+      isDestructive: true
+    });
+    if (!confirmed) return;
+    const revoked = await db.adminRevokeLightningQuizWeekRanking(data.weekStart);
+    if (!revoked.success) {
+      showToast(revoked.message || '撤下失敗，請稍後再試。');
+      return;
+    }
+    showToast('已撤下。');
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+  };
+
+  // 用 onclick（不是 addEventListener）：公布／撤下後同一個 host 會重畫，不能疊監聽。
+  host.onclick = event => {
+    const toggle = event.target.closest('[data-lq-ranking-toggle]');
+    if (toggle) {
+      const set = excluded[toggle.dataset.date];
+      if (!set) return;
+      if (set.has(toggle.dataset.user)) set.delete(toggle.dataset.user);
+      else set.add(toggle.dataset.user);
+      draw();
+      return;
+    }
+    const more = event.target.closest('[data-lq-ranking-more]');
+    if (more) {
+      expanded.add(more.dataset.lqRankingMore);
+      draw();
+      return;
+    }
+    const publishButton = event.target.closest('[data-lq-ranking-publish]');
+    if (publishButton) { void publish(publishButton); return; }
+    if (event.target.closest('[data-lq-ranking-revoke]')) void revoke();
+  };
+
+  draw();
+}
+
 // 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
 // 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
 const ADMIN_LIGHTNING_QUIZ_TOP_SHOWN = 5;
@@ -2675,6 +2839,11 @@ function renderAdminLightningQuizWeekPanel(panel) {
         <span>答對率 <strong>${escapeHTML(formatRate(summary.correctRate))}</strong></span>
         <span>答對平均用時 <strong>${summary.avgCorrectElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(summary.avgCorrectElapsedMs))} 秒`}</strong></span>
       </div>
+
+      <section class="admin-lightning-quiz-detail__section admin-lq-ranking" aria-label="首頁公布前三名">
+        <div class="admin-lightning-quiz-detail__section-head"><h5>首頁公布前三名</h5></div>
+        <div data-lq-week-ranking></div>
+      </section>
 
       <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
         <div class="admin-lightning-quiz-detail__section-head">
@@ -2731,6 +2900,7 @@ function renderAdminLightningQuizWeekPanel(panel) {
       </details>
     `;
     if (typeof hydrateIcons === 'function') hydrateIcons(body);
+    void renderAdminLightningQuizWeekRanking(body.querySelector('[data-lq-week-ranking]'), week.weekStart, () => seq === requestSeq);
 
     body.querySelector('[data-lq-leaderboard-toggle]')?.addEventListener('click', event => {
       body.querySelectorAll('[data-lq-leaderboard-more]').forEach(item => item.classList.remove('hidden'));

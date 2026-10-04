@@ -382,6 +382,13 @@
             <div id="lightning-quiz-host"></div>
           </div>
 
+          <!-- 首頁「雲柱測驗前三名」（#429）：管理員在後台週統計公布後顯示 1～7 天，
+               內容由 js/modules/lightning-quiz-ranking.mjs 透過 get_lightning_quiz_week_ranking() 帶入；
+               沒有公布中的名次時整塊隱藏。跟上面的作答卡片互不影響。 -->
+          <div class="glass-card card-col span-12 bento-card lightning-quiz-ranking-card hidden" id="lightning-quiz-ranking-card">
+            <div id="lightning-quiz-ranking-host"></div>
+          </div>
+
           <!-- Main Column: Personal Progress & Announcements -->
           <!-- 進行中的計畫 (Active Plan Summary) -->
           <div class="glass-card card-col span-8 bento-card active-plan-card">

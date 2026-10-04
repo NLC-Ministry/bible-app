@@ -6585,6 +6585,11 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_import_too_many: "一次最多匯入 60 題。",
     lightning_quiz_import_duplicate_date: "這次匯入有兩題排在同一天，請重新整理後再試。",
     lightning_quiz_import_invalid_item: "有題目的內容不完整，這次一題都沒有匯入。",
+    lightning_quiz_ranking_invalid_days: "公布天數只能是 1～7 天。",
+    lightning_quiz_ranking_invalid_excluded: "排除名單格式不正確，請重新整理後再試。",
+    lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
+    lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
+    lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -6726,6 +6731,32 @@ db.adminGetLightningQuizWeek = async function(weekStart) {
 db.adminGetLightningQuizResults = async function(questionId) {
   if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
   return this._callLightningQuizRpc("admin_get_lightning_quiz_results", { p_question_id: questionId });
+};
+
+// 每週前三名（#429）。首頁：最新一份還在公布期間的前三名＋自己這週的結果。
+db.getLightningQuizWeekRanking = async function() {
+  return this._callLightningQuizRpc("get_lightning_quiz_week_ranking", {});
+};
+
+// 後台：某週每一天的答對名單（依秒數）＋目前的公布狀態。
+db.adminGetLightningQuizWeekRanking = async function(weekStart) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_week_ranking", { p_week_start: weekStart });
+};
+
+// 後台：公布。excluded＝{ "YYYY-MM-DD": [userId, …] }；前三名由伺服器依排除名單重算。
+db.adminPublishLightningQuizWeekRanking = async function(weekStart, excluded, displayDays) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_publish_lightning_quiz_week_ranking", {
+    p_week_start: weekStart,
+    p_excluded: excluded || {},
+    p_display_days: displayDays
+  });
+};
+
+db.adminRevokeLightningQuizWeekRanking = async function(weekStart) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_revoke_lightning_quiz_week_ranking", { p_week_start: weekStart });
 };
 
 window.db = db;
