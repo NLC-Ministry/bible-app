@@ -4,6 +4,7 @@ import { DAILY_VERSES, pickDailyVerse } from "../data/daily_verses.mjs";
 import { DevotionalSharingController } from "./devotional-sharing-controller.mjs";
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
+import { refreshLightningQuizRankingCard } from "./lightning-quiz-ranking.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import { formatPlanEndDate, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 
@@ -192,6 +193,7 @@ export function updateDashboardView() {
   void refreshDevotionHomeCard();
   void refreshGroupMeetingHomeCard();
   void refreshLightningQuizHomeCard();
+  void refreshLightningQuizRankingCard();
 
 
 

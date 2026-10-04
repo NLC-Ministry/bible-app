@@ -42,6 +42,26 @@ const weeks = [
   { weekStart: "2026-09-21", weekEnd: "2026-09-27", questionCount: 2, participants: 2, allAnswered: 1, completedAttempts: 3, correctAttempts: 2, avgElapsedMs: 5000, totalEligible: 10 }
 ];
 
+// #429 首頁公布前三名：9/21 有 5 人答對、9/23 有 1 人
+const rankingData = {
+  weekStart: "2026-09-21",
+  weekEnd: "2026-09-27",
+  allEnded: true,
+  days: [
+    { questionId: "q1", riseDate: "2026-09-21", ended: true, candidates: [
+      { userId: "u1", name: "甲", pastoralZone: "中永和", elapsedMs: 5000 },
+      { userId: "u2", name: "乙", pastoralZone: "文山", elapsedMs: 6000 },
+      { userId: "u3", name: "丙", pastoralZone: "", elapsedMs: 7000 },
+      { userId: "u4", name: "丁", pastoralZone: "新莊2", elapsedMs: 8000 },
+      { userId: "u5", name: "戊", pastoralZone: "中山1", elapsedMs: 9000 }
+    ] },
+    { questionId: "q2", riseDate: "2026-09-23", ended: true, candidates: [
+      { userId: "u1", name: "甲", pastoralZone: "中永和", elapsedMs: 4000 }
+    ] }
+  ],
+  publication: null
+};
+
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // 用 index.html 裡真正的雲柱測驗區塊（作答明細是它裡面的完整頁面，#317）
@@ -66,8 +86,12 @@ beforeEach(async () => {
     adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days } })),
     adminGetLightningQuizResults: vi.fn(async () => ({ success: true, data: results })),
     adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: weekData })),
-    adminGetLightningQuizWeeks: vi.fn(async () => ({ success: true, data: { weeks } }))
+    adminGetLightningQuizWeeks: vi.fn(async () => ({ success: true, data: { weeks } })),
+    adminGetLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: rankingData })),
+    adminPublishLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { displayUntil: "2026-09-29" } })),
+    adminRevokeLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { revoked: true } }))
   });
+  dom.window.showConfirmDialog = vi.fn(async () => true);
   dom.window.HTMLElement.prototype.scrollIntoView = () => {};
   // 攔截 CSV 下載：記下 Blob 內容與檔名，不真的觸發瀏覽器下載
   vi.spyOn(URL, "createObjectURL").mockImplementation(blob => { downloads.push({ blob }); return "blob:test"; });
@@ -200,5 +224,81 @@ describe("雲柱測驗 作答明細", () => {
     trend.querySelector("[data-lq-trend-export]").click();
     expect(downloads[0].filename).toMatch(/^雲柱測驗_週趨勢_\d{4}-\d{2}-\d{2}\.csv$/);
     expect(await downloads[0].blob.text()).toContain('"2026-09-21","2","2","10","20.0%","1","2","3","66.7%","5.0"');
+  });
+});
+
+describe("雲柱測驗 首頁公布前三名（#429）", () => {
+  const winnersOf = (section, index) => [...section.querySelectorAll(".admin-lq-ranking__day")[index].querySelectorAll(".admin-lq-ranking__row")]
+    .map(row => `${row.querySelector(".admin-lq-ranking__rank").textContent}|${row.querySelector(".admin-lq-ranking__name").textContent}`);
+
+  it("lists each day's correct answers fastest first; excluding someone moves the next one up on that day only", async () => {
+    await renderAdminLightningQuizStats();
+    await flush();
+    const section = document.querySelector("[data-lq-week-ranking]");
+    expect(db.adminGetLightningQuizWeekRanking).toHaveBeenCalledWith("2026-09-21");
+    expect(section.textContent).toContain("尚未公布。");
+    expect(winnersOf(section, 0)).toEqual(["第一名|甲", "第二名|乙", "第三名|丙", "|丁", "|戊"]);
+
+    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u1"]').click();
+    expect(winnersOf(section, 0)).toEqual(["已排除|甲", "第一名|乙", "第二名|丙", "第三名|丁", "|戊"]);
+    // 以天為單位：9/23 的甲不受影響
+    expect(winnersOf(section, 1)).toEqual(["第一名|甲"]);
+
+    // 取消排除就回到原本的名次
+    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u1"]').click();
+    expect(winnersOf(section, 0)[0]).toBe("第一名|甲");
+  });
+
+  it("publishes the exclusions per day with the chosen number of days (default 1, limited to 1–7)", async () => {
+    await renderAdminLightningQuizStats();
+    await flush();
+    const section = document.querySelector("[data-lq-week-ranking]");
+    expect(section.querySelector("[data-lq-ranking-days]").value).toBe("1");
+
+    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u2"]').click();
+    section.querySelector("[data-lq-ranking-days]").value = "8";
+    section.querySelector("[data-lq-ranking-publish]").click();
+    await flush();
+    expect(db.adminPublishLightningQuizWeekRanking).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith("公布天數只能是 1～7 天。");
+
+    section.querySelector("[data-lq-ranking-days]").value = "3";
+    section.querySelector("[data-lq-ranking-publish]").click();
+    await flush();
+    await flush();
+    expect(window.showConfirmDialog).toHaveBeenCalled();
+    expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalledWith(
+      "2026-09-21",
+      { "2026-09-21": ["u2"], "2026-09-23": [] },
+      3
+    );
+  });
+
+  it("can't publish while a question this week hasn't ended", async () => {
+    db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: { ...rankingData, allEnded: false } });
+    await renderAdminLightningQuizStats();
+    await flush();
+    const section = document.querySelector("[data-lq-week-ranking]");
+    expect(section.querySelector("[data-lq-ranking-publish]").disabled).toBe(true);
+    expect(section.textContent).toContain("這週還有題目沒結束，全部結束後才能公布。");
+  });
+
+  it("re-publishing starts from the saved exclusions and can be revoked", async () => {
+    db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: {
+      ...rankingData,
+      publication: { excluded: { "2026-09-21": ["u1"] }, displayDays: 2, displayUntil: "2026-09-29", revoked: false, showing: true }
+    } });
+    await renderAdminLightningQuizStats();
+    await flush();
+    const section = document.querySelector("[data-lq-week-ranking]");
+    expect(section.textContent).toContain("首頁公布中，顯示到 9/29（二） 23:59。");
+    expect(winnersOf(section, 0)[0]).toBe("已排除|甲");
+    expect(section.querySelector("[data-lq-ranking-days]").value).toBe("2");
+    expect(section.querySelector("[data-lq-ranking-publish]").textContent).toBe("重新公布");
+
+    section.querySelector("[data-lq-ranking-revoke]").click();
+    await flush();
+    await flush();
+    expect(db.adminRevokeLightningQuizWeekRanking).toHaveBeenCalledWith("2026-09-21");
   });
 });

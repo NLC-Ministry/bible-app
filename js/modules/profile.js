@@ -4,6 +4,7 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
@@ -643,6 +644,25 @@ function renderMyLightningQuizDetail(item) {
 
 // 伺服器只回「已發布且時段已結束」的活動（這時候才附正解），所以時段內就算
 // 已經答完，也要等時段結束才會出現在這裡。
+// 首頁「雲柱測驗前三名」的「看題目與正解」（#429）留下的提示：開到雲柱分頁，
+// 清單範圍往前延伸到公布的那一週（公布期間可能已超過「最近一週」）。讀一次就清掉。
+let lightningHistoryFrom = null;
+
+function takeProfileExamsHint() {
+  try {
+    const raw = window.sessionStorage.getItem(PROFILE_EXAMS_HINT_KEY);
+    window.sessionStorage.removeItem(PROFILE_EXAMS_HINT_KEY);
+    const hint = raw ? JSON.parse(raw) : null;
+    if (!hint || typeof hint !== "object") return null;
+    return {
+      tab: ["exam", "daily", "lightning"].includes(hint.tab) ? hint.tab : null,
+      from: /^\d{4}-\d{2}-\d{2}$/.test(String(hint.from || "")) ? hint.from : null
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function renderMyLightningQuizResults() {
   const host = document.getElementById("profile-lightning-quiz-results");
   if (!host) return;
@@ -651,7 +671,9 @@ async function renderMyLightningQuizResults() {
     return;
   }
   if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理雲柱測驗紀錄…</div>';
-  const { from, to } = recentWeekRange();
+  const recent = recentWeekRange();
+  const from = lightningHistoryFrom && lightningHistoryFrom < recent.from ? lightningHistoryFrom : recent.from;
+  const to = recent.to;
   const result = await db.getMyLightningQuizHistory(from, to);
   if (!result.success) {
     host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入雲柱測驗紀錄。")}</div>`;
@@ -780,7 +802,13 @@ function openProfileDetail(key) {
   if (key === "badges" && typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
   }
-  if (key === "exams") { closeProfileExamsDetail(); refreshMyQuizzes(); }
+  if (key === "exams") {
+    const hint = takeProfileExamsHint();
+    lightningHistoryFrom = hint?.from || null;
+    closeProfileExamsDetail();
+    if (hint?.tab) setProfileExamsTab(hint.tab);
+    refreshMyQuizzes();
+  }
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();

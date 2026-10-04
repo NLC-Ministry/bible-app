@@ -12235,6 +12235,167 @@ button.admin-lightning-quiz-calendar__day {
   font-variant-numeric: tabular-nums;
 }
 
+/* 首頁「雲柱測驗前三名」（#429，js/modules/lightning-quiz-ranking.mjs）。
+   寬螢幕每天一欄（像公布用的表格），手機寬度自動變成一天一塊上下排。 */
+.lightning-quiz-ranking-card.hidden { display: none; }
+.lq-ranking {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.lq-ranking__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.lq-ranking__head .card-title { margin: 0; }
+.lq-ranking__icon { color: var(--color-brand); flex-shrink: 0; }
+.lq-ranking__range {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.lq-ranking__days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+}
+.lq-ranking__day {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md, 12px);
+}
+.lq-ranking__date {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.lq-ranking__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lq-ranking__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "rank name time" "rank zone time";
+  column-gap: 0.6rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.lq-ranking__rank {
+  grid-area: rank;
+  font-size: 0.875rem;
+  color: var(--color-brand);
+  font-weight: var(--type-weight-strong, 500);
+}
+.lq-ranking__name {
+  grid-area: name;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.lq-ranking__zone {
+  grid-area: zone;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.lq-ranking__time {
+  grid-area: time;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.lq-ranking__empty,
+.lq-ranking__mine {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.lq-ranking__mine {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-card);
+}
+.lq-ranking__mine strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.lq-ranking__mine--correct strong { color: var(--color-success-foreground); }
+.lq-ranking__mine--wrong strong { color: var(--color-danger-foreground); }
+.lq-ranking__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+.lq-ranking__footer strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.lq-ranking__history { color: var(--color-brand); }
+
+/* 後台週統計「首頁公布前三名」（#429） */
+.admin-lq-ranking__status {
+  margin: 0.25rem 0;
+  color: var(--text-primary);
+}
+.admin-lq-ranking__days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+.admin-lq-ranking__day {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.admin-lq-ranking__day h6 { margin: 0; font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); }
+.admin-lq-ranking__list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-lq-ranking__row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) minmax(0, 0.8fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-sm, 8px);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.admin-lq-ranking__row > span { overflow-wrap: anywhere; }
+.admin-lq-ranking__row.is-winner { background: color-mix(in srgb, var(--color-brand) 8%, var(--bg-card)); }
+.admin-lq-ranking__row.is-winner .admin-lq-ranking__rank { color: var(--color-brand); font-weight: var(--type-weight-strong, 500); }
+.admin-lq-ranking__row.is-excluded > span { color: var(--text-muted); }
+.admin-lq-ranking__row.is-excluded .admin-lq-ranking__name { text-decoration: line-through; }
+.admin-lq-ranking__time { white-space: nowrap; }
+.admin-lq-ranking__publish {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.admin-lq-ranking__publish label { display: grid; gap: 0.25rem; font-size: 0.875rem; }
+.admin-lq-ranking__publish input { width: 6rem; }
+@media (max-width: 480px) {
+  .admin-lq-ranking__row {
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  }
+  .admin-lq-ranking__zone { grid-column: 2; }
+  .admin-lq-ranking__row button { grid-column: 3; grid-row: 1 / span 2; }
+}
+
 /* 3. Border Beam Glow Animation */
 .bento-card::before {
   content: "";
