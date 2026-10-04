@@ -33,7 +33,10 @@ describe("PWA shell recovery", () => {
     expect(html).toContain('.hidden, [hidden] { display: none !important; }');
     expect(html).toContain('onerror="window.showAppStyleRecovery(this)"');
     expect(html).toContain("stableFallbackAttempted");
-    expect(html).toContain('stylesheet.href = "/index.css?version=" + Date.now()');
+    // A failed hashed stylesheet (index.<hash>.css, or the build-time tailwind.<hash>.css since #418)
+    // retries once from its stable, no-store name before showing the recovery UI.
+    expect(html).toContain("/^\\/(index|tailwind)\\.[0-9a-f]+\\.css$/i.exec(pathname)");
+    expect(html).toContain('stylesheet.href = "/" + hashedStylesheet[1].toLowerCase() + ".css?version=" + Date.now()');
     expect(html).toContain('id="app-style-recovery-button"');
     expect(html).toContain('id="login-gate-refresh-latest"');
     expect(html).toContain('href="/repair?source=login-gate"');
