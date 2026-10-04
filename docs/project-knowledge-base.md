@@ -22,7 +22,7 @@
 2. **四個獨立入口點**：`index.html`→`app.js`（主 SPA）、`exam.html`→`exam-entry.js`（大測驗獨立頁）、`grade.html`→`grade-entry.js`（線上批改獨立頁）、`repair.html`（快取修復用靜態頁）。三個「真」入口各自重複一段固定順序的核心檔案 side-effect import 鏈。
 3. **激進的快取破壞機制**：因為使用者主要透過手機 PWA 使用，app 對抗快取非常小心——核心檔案用手動 `?v=YYYYMMDD_label`、lazy tab 模組用建置時自動產生的 timestamp（`buildVersion`）。這個機制歷史上造成過至少一次「部署了但使用者端沒更新」的困惑，細節見 CLAUDE.md。
 4. **Migration 從不自動部署**：這是整個專案協作歷史中**出現頻率最高的提醒**——寫一個 `supabase/migrations/*.sql` 檔案、commit、push，**完全不會**讓正式資料庫改變。使用者必須手動 `supabase db push` 或貼到 Dashboard SQL editor 執行。整個專案歷史中有非常多次「回報 bug 還在」結果是「migration 檔案寫對了但沒部署」。
-5. **`plan_kind` 是計畫系統的核心分類欄位**：`global_plans.plan_kind` 決定一個計畫是一般計畫、教會季度挑戰階段（`church_campaign_stage` / `church_campaign_stage_cohort`）、每日靈修（`devotional`）、還是小組聚會週計畫（`group_meeting`）。這個欄位的值域隨著功能擴張持續增加，很多判斷邏輯要記得同時處理新舊 kind。
+5. **`plan_kind` 是計畫系統的核心分類欄位**：`global_plans.plan_kind` 決定一個計畫是一般計畫、教會季度挑戰階段（`church_campaign_stage` / `church_campaign_stage_cohort`）。每日靈修（`devotional`）與小組聚會週計畫（`group_meeting`）已在 2026-10 拆成獨立專案並從資料庫移除（#425）。這個欄位的值域隨著功能擴張持續增加，很多判斷邏輯要記得同時處理新舊 kind。
 
 ---
 
@@ -76,14 +76,9 @@
 - 統計可依「是否讀完該書卷至少一遍」過濾（`_user_read_book_once`），以及測驗可綁定對應的讀經計畫（`linked_plan_id`，只能在測試版草稿設定，發布後自然鎖住），讓團隊排行只反映「熱身賽本身」的隊伍，不被後續階段/延後梯次的隊籍變動污染。
 - 線上批改（`grade.html` 獨立頁）走「指派制」：後台把簡答題指派給特定批改人員，對方登入後只看到指派給自己的卷；曾在「批改頁 vs 純 CSV 匯出」兩個方案間來回過（Option A/B），最終定案指派制。批改序號後來固定化（`seq` 欄位，指派當下決定、改派保留），方便批改人員之間用「第幾份」互相溝通進度。
 
-### 2.6 每日靈修 / 小組聚會週計畫
+### 2.6 每日靈修 / 小組聚會週計畫（已拆出，#425）
 
-兩者是同一套架構的近親：`plan_kind='devotional'`（逐日）與 `plan_kind='group_meeting'`（逐週），都採用「內容鍵 = 序號（day_index/week_index）而非日曆日期」的設計，讓計畫的 `start_date` 平移時內容不用重新對應。兩者都可以開/關「開放未來日期」、都有 feature flag 控制對會友的可見性、都由後台逐筆表單編輯（靈修另有一套從 PDF 手冊文字批次匯入的 parser）。這兩個功能迭代非常密集，累積下來的重要教訓：
-
-- **獨立內容 viewer 絕對不能覆寫到既有的一般計畫詳情容器**——第一版曾直接把 viewer 掛在 `#plan-detail-subview` 裡並整個 `innerHTML=` 覆寫，導致「每日靈修把我原來的計畫蓋掉了」的事故。修法是永遠給新的內容型計畫獨立的掛載容器（`#devotion-view-root`/`#group-meeting-view-root`），只在切換時對既有容器做顯示/隱藏（`display:none`），絕不清空它的內容。
-- **`guardPlanEligibility()`（一般讀經計畫的入會資格閘門）不該套用在純內容瀏覽型的計畫上**——viewer 分支必須排在資格檢查之前執行，因為「看靈修內容」跟「加入讀經計畫」是完全不同的動作，不該被同一道閘門擋住。
-- **政策審核期間的「完全隱藏」需求**（`devotion_group_hidden` 旗標）——這跟平常的 feature flag 不同之處在於：連 admin/pastor 自己都要被隱藏（平常這兩個角色即使功能沒開放也看得到，方便先建內容）。這是一個「兩種不同強度的隱藏語意」要分清楚的例子。
-- 逐日/逐週編輯介面最終從「頁面內嵌區塊」改成獨立彈窗（掛在 `document.body`，理由跟下面「管理子分頁捲動」規範同源：內嵌在受限容器裡的編輯表單容易被裁切或滑不到）。
+2026-10-03 維護者定案：這兩個功能不跟速讀掛勾，改成獨立的新專案 `heryiyu/newlife-devotion-group`（內容、舊程式與設計都保存在那裡）。速讀專案的前端、`nlc-data`、`sync-devotion-video` 與資料表都已移除（migration `20261004015147_remove_devotion_group_meeting.sql`）。「分享今日金句」與牧區分享牆（`devotional_notes` 等）是速讀本身的功能，不受影響。
 
 ### 2.7 問題回報系統（唯一的 React island）
 
@@ -119,7 +114,7 @@
 
 - **寫一個 `supabase/migrations/*.sql` 檔案、commit、push，完全不會讓正式資料庫改變**。這是整個專案歷史中最常需要提醒的一件事。每次新增/修改 migration，都要在同一輪回覆裡明確告知「這支 migration 還需要手動部署」，並在診斷「修了但還是壞」之前，先確認相關 migration 是否真的已經部署。
 - **Vercel 環境變數（`SUPABASE_URL`/`NLC_CLIENT_ID` 等）一律要設成「Config」型別，不能設成「Secret」型別**。Secret 型別在 GitHub Actions 這種外部建置環境執行 `vercel pull` 時讀不到值（write-only 設計），會讓 `config.js` 靜默生成空值，正式站直接壞掉且建置不會報錯。這些值本來就會被打進公開的前端 bundle，用 Secret 型別完全沒有額外保護、只有壞處。
-- 很多後端功能除了 migration 之外，還需要**重新部署對應的 Edge Function**（`nlc-data`/`nlc-session`/`sync-devotion-video`/`issue-report-maintenance` 等）才會生效——只跑 migration 但沒重部署 Edge Function，新的 RPC 呼叫會被 allowlist 擋下（`forbidden_rpc`）或函式簽名不同步。純 `CREATE OR REPLACE`（簽名不變）通常不需要重部署 Edge Function；新增 RPC 或改變參數才需要。
+- 很多後端功能除了 migration 之外，還需要**重新部署對應的 Edge Function**（`nlc-data`/`nlc-session`/`issue-report-maintenance` 等）才會生效——只跑 migration 但沒重部署 Edge Function，新的 RPC 呼叫會被 allowlist 擋下（`forbidden_rpc`）或函式簽名不同步。純 `CREATE OR REPLACE`（簽名不變）通常不需要重部署 Edge Function；新增 RPC 或改變參數才需要。
 - **新的 SQL function 預設對 `PUBLIC` 可執行**，`anon` 角色會透過 `PUBLIC` 授權**遞移繼承**到執行權——單獨對 `anon` 下 `REVOKE` 是沒用的，因為權限來源是 `PUBLIC` 而非 `anon` 專屬授權。這個問題導致過 ~29 個函式在兩輪清理嘗試後依然對匿名可呼叫，直到第三輪改用 `has_function_privilege('anon', ..., 'EXECUTE')` 逐一檢查才真正抓乾淨。**現在的規則是：每一個新的 `CREATE FUNCTION`/`CREATE OR REPLACE FUNCTION` 都要在同一支 migration 裡明確 `REVOKE ALL ... FROM PUBLIC` 再 `GRANT EXECUTE` 給該給的角色**，不要等下一輪安全掃描來抓。若函式是 `SECURITY DEFINER` 且執行特權寫入（繞過 RLS），除非真的設計成給前端直接呼叫，否則預設只給 `service_role`，不要順手給 `authenticated`——這正是過去修過不只一次的「直接繞過 RPC 存取控制」漏洞形態。
 
 ### 3.3 安全規範

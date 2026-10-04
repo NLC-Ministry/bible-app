@@ -55,13 +55,7 @@ export function createAppHashRouting({ win, doc, appRouter, state, loadModule, g
       activePlans: state.activePlans,
       globalPlans: state.globalPlans
     });
-    const kind = plan && (plan.planKind || plan.plan_kind);
-    // 沒加入的計畫只有每日靈修／小組聚會可以直接看（跟「管理員預覽」同一條路），而且要對這個人開放。
-    const previewable = plan && !joined && (
-      (kind === "devotional" && win.isDevotionalPlanVisibleToUser?.(plan) === true)
-      || (kind === "group_meeting" && win.isGroupMeetingPlanVisibleToUser?.(plan) === true)
-    );
-    if (!plan || (!joined && !previewable)) {
+    if (!plan || !joined) {
       state.planDetailOpen = false;
       win.currentPlanViewState = "LIST";
       await appRouter.switchTab("plan-view", { keepPlanDetail: true });

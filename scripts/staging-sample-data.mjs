@@ -31,7 +31,6 @@ export const EXCLUDED_TABLES = [
   "reading_teams_events",
   "exam_grading_drafts",
   "exam_paper_testers",         // 測試機制，之後要移除（#260）
-  "devotion_video_sync_log",
   "devotional_notes", "devotional_comments", "devotional_likes",
   "small_home_teams", "small_home_team_members"
 ];
@@ -39,7 +38,7 @@ export const EXCLUDED_TABLES = [
 /** 含個人行為資料的表：check 對這些表的任何字串都零容忍。 */
 export const PERSONAL_TABLES = [
   "profiles", "reading_plans", "reading_logs", "highlights", "verse_notes",
-  "devotion_day_progress", "profile_feature_preferences", "exam_attempts", "exam_answers",
+  "exam_attempts", "exam_answers",
   "exam_grading_assignments", "exam_notifications", "quiz_attempts", "quiz_notifications",
   "lightning_quiz_attempts", "care_reminders", "reading_teams", "reading_team_members"
 ];
@@ -154,8 +153,6 @@ export function tableQueries(salt) {
     // 教會內容：原樣，只把人員欄位換掉
     q("app_feature_settings", [["updated_by", b.remap("t.updated_by")]]),
     q("global_plans", [["created_by", b.remap("t.created_by")], ["audience_regions", b.mapArray("t.audience_regions")]]),
-    q("plan_devotion_days", [["created_by", b.remap("t.created_by")], ["updated_by", b.remap("t.updated_by")]]),
-    q("plan_group_meeting_weeks", [["created_by", b.remap("t.created_by")], ["updated_by", b.remap("t.updated_by")]]),
     q("plan_rule_versions", [["changed_by", b.remap("t.changed_by")]]),
     q("church_announcements", [["created_by", b.remap("t.created_by")], ["audience_scope_name", b.mapList("t.audience_scope_name")]]),
     q("exam_papers", [
@@ -172,8 +169,6 @@ export function tableQueries(salt) {
     q("reading_logs", [["user_id", b.remap("t.user_id")]], b.inSampled("t.user_id")),
     q("highlights", [["user_id", b.remap("t.user_id")]], b.inSampled("t.user_id")),
     q("verse_notes", [["user_id", b.remap("t.user_id")], ["content", "'（測試筆記）'"]], b.inSampled("t.user_id")),
-    q("devotion_day_progress", [["user_id", b.remap("t.user_id")], ["note", b.mask("t.note", "（測試筆記）")]], b.inSampled("t.user_id")),
-    q("profile_feature_preferences", [["profile_id", b.remap("t.profile_id")]], b.inSampled("t.profile_id")),
     q("exam_attempts", [
       ["user_id", b.remap("t.user_id")],
       ["pledge_name", "'測試會友'"],

@@ -490,69 +490,6 @@ body.dark-theme {
   max-width: 100%;
 }
 
-/* 首頁「每日靈修」獨立卡片：刻意比「進行中的計畫」卡片簡化很多——不放進度條／
-   百分比，只有日期＋經文，有影片才多一個小提示；整排可點擊，直接進今天的內容。 */
-.devotion-home-card { padding: 0.9rem 1.1rem; }
-.devotion-home-row__dev-hint {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-warning-foreground, var(--color-warning));
-  margin: 0 0 0.5rem;
-}
-.devotion-home-row {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.devotion-home-row:active { transform: scale(0.98); }
-.devotion-home-row__icon {
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-brand-muted);
-  color: var(--color-brand);
-}
-.devotion-home-row__body { flex: 1; min-width: 0; }
-.devotion-home-row__title {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin: 0 0 0.15rem;
-}
-.devotion-home-row__passage {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.devotion-home-row__video-hint {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-brand);
-}
-.devotion-home-row__chevron { flex-shrink: 0; color: var(--text-secondary); }
-
-/* 首頁功能卡（每日靈修 / 小組聚會）：低調的品牌色外框 + 左側細色條，讓它們在
-   一排中性卡片裡多一點存在感，但不搶眼。用 color-mix + token，三個主題都自動跟。 */
-.glass-card.home-feature-card {
-  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, var(--border-card));
-  border-left: 3px solid color-mix(in srgb, var(--color-brand) 58%, var(--border-card));
-  background: color-mix(in srgb, var(--color-brand) 4%, var(--bg-card));
-}
-.home-feature-card + .home-feature-card { margin-top: 0.75rem; }
-
 /* Group stats progress segments */
 .progress-segment-track {
   display: flex;
@@ -4683,23 +4620,6 @@ button.logout-btn:hover {
   margin-bottom: 0;
 }
 
-/* 系列篩選（次要層級）：緊接在狀態 pill 下方，字級小一點、間距收緊 */
-.status-pills-row--series {
-  margin: 0.4rem 0 1rem;
-  padding: 0.2rem 0.5rem;
-}
-.status-pills-row--series[hidden] {
-  display: none;
-}
-.pill-btn--series {
-  padding: 0.3rem 0.85rem;
-  font-size: 0.875rem;
-  font-weight: var(--type-weight-medium, 500);
-}
-.pill-btn--series[hidden] {
-  display: none;
-}
-.pill-btn {
   padding: 0.45rem 1.1rem;
   border-radius: 20px;
   font-size: 0.875rem;
@@ -12235,6 +12155,167 @@ button.admin-lightning-quiz-calendar__day {
   font-variant-numeric: tabular-nums;
 }
 
+/* 首頁「雲柱測驗前三名」（#429，js/modules/lightning-quiz-ranking.mjs）。
+   寬螢幕每天一欄（像公布用的表格），手機寬度自動變成一天一塊上下排。 */
+.lightning-quiz-ranking-card.hidden { display: none; }
+.lq-ranking {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.lq-ranking__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.lq-ranking__head .card-title { margin: 0; }
+.lq-ranking__icon { color: var(--color-brand); flex-shrink: 0; }
+.lq-ranking__range {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.lq-ranking__days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+}
+.lq-ranking__day {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md, 12px);
+}
+.lq-ranking__date {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.lq-ranking__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lq-ranking__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "rank name time" "rank zone time";
+  column-gap: 0.6rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.lq-ranking__rank {
+  grid-area: rank;
+  font-size: 0.875rem;
+  color: var(--color-brand);
+  font-weight: var(--type-weight-strong, 500);
+}
+.lq-ranking__name {
+  grid-area: name;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.lq-ranking__zone {
+  grid-area: zone;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.lq-ranking__time {
+  grid-area: time;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.lq-ranking__empty,
+.lq-ranking__mine {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.lq-ranking__mine {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-card);
+}
+.lq-ranking__mine strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.lq-ranking__mine--correct strong { color: var(--color-success-foreground); }
+.lq-ranking__mine--wrong strong { color: var(--color-danger-foreground); }
+.lq-ranking__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+.lq-ranking__footer strong { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
+.lq-ranking__history { color: var(--color-brand); }
+
+/* 後台週統計「首頁公布前三名」（#429） */
+.admin-lq-ranking__status {
+  margin: 0.25rem 0;
+  color: var(--text-primary);
+}
+.admin-lq-ranking__days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+.admin-lq-ranking__day {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.admin-lq-ranking__day h6 { margin: 0; font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); }
+.admin-lq-ranking__list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-lq-ranking__row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) minmax(0, 0.8fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-sm, 8px);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.admin-lq-ranking__row > span { overflow-wrap: anywhere; }
+.admin-lq-ranking__row.is-winner { background: color-mix(in srgb, var(--color-brand) 8%, var(--bg-card)); }
+.admin-lq-ranking__row.is-winner .admin-lq-ranking__rank { color: var(--color-brand); font-weight: var(--type-weight-strong, 500); }
+.admin-lq-ranking__row.is-excluded > span { color: var(--text-muted); }
+.admin-lq-ranking__row.is-excluded .admin-lq-ranking__name { text-decoration: line-through; }
+.admin-lq-ranking__time { white-space: nowrap; }
+.admin-lq-ranking__publish {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.admin-lq-ranking__publish label { display: grid; gap: 0.25rem; font-size: 0.875rem; }
+.admin-lq-ranking__publish input { width: 6rem; }
+@media (max-width: 480px) {
+  .admin-lq-ranking__row {
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  }
+  .admin-lq-ranking__zone { grid-column: 2; }
+  .admin-lq-ranking__row button { grid-column: 3; grid-row: 1 / span 2; }
+}
+
 /* 3. Border Beam Glow Animation */
 .bento-card::before {
   content: "";
@@ -13259,16 +13340,6 @@ body.dark-theme #admin-reports-root .admin-report-view textarea {
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: 1.4;
-}
-
-/* 「功能設定」總開關下面的常駐說明文字（管理分頁跟個人分頁的功能設定子頁面
-   都會用到），跟 admin-feature-setting-feedback 同一套字級/顏色，但不是狀態
-   回饋，平常就顯示。 */
-.feature-settings-hint {
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  line-height: 1.4;
-  margin: 0.4rem 0 0;
 }
 
 .feature-switch {
@@ -16935,318 +17006,7 @@ textarea::placeholder {
 .exam-stats__readok { color: var(--color-success, #15803d); }
 .exam-stats__readno { color: var(--text-muted); }
 
-/* ── 每日靈修（devotional plan）——沿用計畫的日曆 + 打勾任務列樣式 ────────── */
-.devotion-view { display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem 0 2rem; }
-.devotion-view__loading, .devotion-view__muted { color: var(--text-muted); font-size: 0.9375rem; }
-.devotion-view__calendar { margin: 0; }
-.devotion-view__daylabel {
-  text-align: center; font-size: 0.9375rem; color: var(--text-secondary);
-  padding: 0.25rem 0;
-}
-.devotion-view__daylabel strong { color: var(--text-primary); }
-.devotion-view__date { color: var(--text-muted); }
-.devotion-view__theme {
-  margin: 0; text-align: center; color: var(--text-primary);
-  font-size: 1.125rem; font-weight: var(--type-weight-strong, 500); line-height: 1.5;
-}
-.devotion-view__actions { display: flex; justify-content: flex-end; }
-.devotion-view__share {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.3rem 0.75rem; border: 1px solid var(--border-card); border-radius: 999px;
-  background: var(--bg-card); color: var(--text-secondary);
-  font: inherit; font-size: 0.875rem; cursor: pointer;
-}
-.devotion-view__share:hover { border-color: var(--color-brand); color: var(--color-brand); }
-.devotion-view__share .nlc-icon { width: 1em; height: 1em; }
-/* 分享 / 複製彈窗（沿用 .devotion-note-modal 骨架） */
-.devotion-share-opts { display: flex; flex-direction: column; gap: 0.4rem; }
-.devotion-share-opt { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9375rem; color: var(--text-primary); cursor: pointer; }
-.devotion-share-opt.is-disabled { color: var(--text-muted); cursor: not-allowed; }
-.devotion-share-preview { width: 100%; resize: vertical; min-height: 9rem; line-height: 1.7; white-space: pre-wrap; }
-.devotion-view__block {
-  border: 1px solid var(--border-card); border-radius: var(--radius-md);
-  background: var(--bg-card); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.6rem;
-}
-.devotion-view__h {
-  margin: 0; font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); color: var(--color-brand);
-}
-/* 思想經文列：沿用 .plan-task-item，但標題允許換行、對齊頂端 */
-.devotion-view__block .plan-task-item .task-title { white-space: normal; line-height: 1.6; }
-.devotion-view__block .plan-task-item[data-devo-kind="think"] { align-items: flex-start; }
-.devotion-view__block .task-open-button--static { cursor: default; }
-.devotion-view__block .task-read-toggle[aria-pressed="true"] ~ .task-open-button .task-title,
-.devotion-view__block .task-read-toggle[aria-pressed="true"] ~ .task-open-button--static .task-title {
-  color: var(--text-muted);
-}
-
-/* 思想經文：整條可點（開心得編輯）；寫過的加一個淡標記 */
-.devotion-view__block .plan-task-item[data-devo-kind="think"] .task-open-button { cursor: pointer; }
-.devotion-think-note-flag {
-  display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.4rem;
-  border-radius: 999px; font-size: 0.875rem; white-space: nowrap;
-  color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 12%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--color-brand) 30%, var(--border-card));
-}
-
-/* 心得編輯彈窗 */
-.devotion-note-modal__panel {
-  max-width: 560px; width: 94%; max-height: 88vh;
-  display: flex; flex-direction: column; padding: 0; overflow: hidden;
-  border-radius: 20px; background: var(--bg-card); color: var(--text-primary);
-  border: 1px solid var(--border-card); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
-}
-.devotion-note-modal__head {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-card);
-}
-.devotion-note-modal__head h4 { flex: 1; margin: 0; font-size: 1rem; font-weight: var(--type-weight-strong, 500); }
-.devotion-note-modal__x {
-  background: none; border: none; font-size: 1.5rem; line-height: 1;
-  cursor: pointer; color: var(--text-secondary); padding: 0.1rem 0.4rem;
-}
-.devotion-note-modal__body { padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem; }
-.devotion-note-modal__prompt {
-  margin: 0; padding: 0.6rem 0.75rem; border-radius: var(--radius-md);
-  background: var(--bg-input); color: var(--text-primary); font-size: 0.9375rem; line-height: 1.6;
-}
-.devotion-note-modal__text { width: 100%; resize: vertical; min-height: 8rem; line-height: 1.7; }
-.devotion-note-modal__hint { margin: 0; font-size: 0.875rem; color: var(--text-muted); }
-.devotion-note-modal__msg { margin: 0; font-size: 0.875rem; min-height: 1.2em; }
-.devotion-note-modal__foot {
-  display: flex; gap: 0.5rem; padding: 0.85rem 1rem;
-  border-top: 1px solid var(--border-card); background: var(--bg-card);
-}
-.devotion-view__locked {
-  border: 1px dashed var(--border-card); border-radius: var(--radius-md);
-  padding: 1.75rem 1rem; text-align: center; color: var(--text-muted); display: flex;
-  flex-direction: column; align-items: center; gap: 0.5rem;
-}
-.devotion-view__locked p { margin: 0; font-size: 0.9375rem; }
-/* 靈修影片：只做縮圖預覽，點下去照樣是一般外部連結（開瀏覽器或喚起 YouTube
-   App 播放），這裡完全沒有內嵌播放器。縮圖抓不到（非 YouTube 連結）就沒有
-   .devotion-video-link__thumb-wrap，純文字也能正常點擊。 */
-.devotion-video-link {
-  display: flex; align-items: center; gap: 0.85rem;
-  text-decoration: none; color: inherit;
-  border: 1px solid var(--border-card); border-radius: var(--radius-md);
-  padding: 0.6rem; background: var(--bg-elevated, var(--bg-card));
-}
-.devotion-video-link:active { transform: scale(0.98); }
-.devotion-video-link__thumb-wrap {
-  position: relative; flex-shrink: 0; width: 6.5rem; aspect-ratio: 16 / 9;
-  border-radius: calc(var(--radius-md) - 4px); overflow: hidden; background: var(--bg-card);
-}
-.devotion-video-link__thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
-.devotion-video-link__play {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: #fff; background: rgba(0, 0, 0, 0.25);
-}
-.devotion-video-link__play svg { width: 1.75rem; height: 1.75rem; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); }
-.devotion-video-link__title { font-size: 0.9375rem; font-weight: 500; color: var(--text-primary); }
-
-/* ── 小組聚會週計畫 viewer（plan_kind='group_meeting'）—— 沿用靈修的區塊樣式 ── */
-.group-meeting-view { display: flex; flex-direction: column; gap: 1rem; padding: 0.25rem 0 2rem; }
-.group-meeting-view__loading, .group-meeting-view__muted { color: var(--text-muted); font-size: 0.9375rem; }
-.group-meeting-view__strip {
-  display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.25rem 0 0.5rem;
-  scroll-snap-type: x proximity;
-}
-.gm-week-chip {
-  flex: 0 0 auto; scroll-snap-align: center;
-  display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
-  min-width: 5.2rem; padding: 0.45rem 0.7rem; font: inherit; cursor: pointer;
-  border: 1px solid var(--border-card); border-radius: var(--radius-sm);
-  background: var(--bg-card); color: var(--text-secondary);
-}
-.gm-week-chip__n { font-size: 0.875rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.gm-week-chip__d { font-size: 0.875rem; color: var(--text-muted); white-space: nowrap; }
-.gm-week-chip.past { opacity: 0.65; }
-.gm-week-chip.this-week { border-color: var(--color-brand); }
-.gm-week-chip.active {
-  border-color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 12%, var(--bg-card));
-}
-.gm-week-chip.active .gm-week-chip__d { color: var(--text-secondary); }
-.gm-week-chip.locked { border-style: dashed; }
-.group-meeting-view__theme {
-  margin: 0; font-size: 0.9375rem; color: var(--color-brand); font-weight: var(--type-weight-strong, 500);
-}
-.group-meeting-view__weeklabel { text-align: center; font-size: 0.9375rem; color: var(--text-secondary); padding: 0.1rem 0; }
-.group-meeting-view__weeklabel strong { color: var(--text-primary); }
-.group-meeting-view__block {
-  border: 1px solid var(--border-card); border-radius: var(--radius-md);
-  background: var(--bg-card); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem;
-}
-.group-meeting-view__h {
-  margin: 0; font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); color: var(--color-brand);
-}
-/* 信息 / 奉獻經文列：主題與經文同一行「主題｜經文」，整列可點開段落 */
-.gm-passage-topic { font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.gm-passage-sep { margin: 0 0.4rem; color: var(--text-muted); }
-.gm-passage-ref { color: var(--text-secondary); }
-.group-meeting-view__block .plan-task-item .task-title { white-space: normal; line-height: 1.6; }
-.group-meeting-view__block .task-open-button--static { cursor: default; }
-.group-meeting-view__songs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
-.group-meeting-view__songs li { font-size: 0.9375rem; color: var(--text-primary); line-height: 1.5; }
-.group-meeting-view__songcode {
-  display: inline-block; min-width: 2.6rem; margin-right: 0.4rem;
-  font-family: 'Outfit', sans-serif; color: var(--color-brand); font-weight: var(--type-weight-strong, 500);
-}
-.group-meeting-view__note {
-  border: 1px dashed var(--border-card); border-radius: var(--radius-md);
-  padding: 0.75rem 1rem; font-size: 0.9375rem; color: var(--text-secondary);
-}
-.group-meeting-view__locked {
-  border: 1px dashed var(--border-card); border-radius: var(--radius-md);
-  padding: 1.75rem 1rem; text-align: center; color: var(--text-muted); display: flex;
-  flex-direction: column; align-items: center; gap: 0.5rem;
-}
-.group-meeting-view__locked p { margin: 0; font-size: 0.9375rem; }
-
-/* 靈修「經文進度」點開 → 站內只顯示該段經文，風格沿用讀經系統的 .bible-verse */
-.devotion-passage {
-  border: 1px solid var(--border-card); border-radius: var(--radius-md);
-  background: var(--bg-card); padding: 0.5rem 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.75rem;
-}
-.devotion-passage__bar {
-  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-  padding: 0.35rem 0; border-bottom: 1px solid var(--border-card);
-}
-.devotion-passage__back {
-  display: inline-flex; align-items: center; gap: 0.15rem;
-  border: none; background: transparent; color: var(--color-brand);
-  font-size: 0.9375rem; cursor: pointer; padding: 0.2rem 0.1rem;
-}
-.devotion-passage__ref {
-  flex: 1; min-width: 0; text-align: center;
-  font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary);
-}
-.devotion-passage__ver {
-  font-size: 0.875rem; color: var(--text-muted);
-  border: 1px solid var(--border-card); border-radius: 999px; padding: 0.1rem 0.55rem;
-}
-.devotion-passage__chap {
-  font-size: 0.875rem; color: var(--text-muted); font-weight: var(--type-weight-strong, 500);
-  padding: 0.6rem 0 0.2rem;
-}
-.devotion-passage__text { font-size: var(--reader-font-size, 19px); line-height: 1.9; }
-.devotion-passage__text .bible-verse {
-  display: block; width: 100%; margin: 0; padding: 0.6rem 0;
-  border-radius: 0; cursor: text;
-  -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
-}
-.devotion-passage__text .bible-verse + .bible-verse { border-top: 1px solid rgba(148, 163, 184, 0.14); }
-.devotion-passage__text .bible-verse:hover { background: transparent; }
-.devotion-passage__text .verse-num {
-  min-width: 2.2rem; display: inline-block; color: var(--primary-color);
-  opacity: 0.9; font-weight: var(--type-weight-strong);
-}
-.devotion-passage__text .verse-text { color: var(--text-primary); }
-.devotion-passage__full { align-self: flex-start; }
-
-/* 管理：每日靈修 */
-.admin-devotion { display: flex; flex-direction: column; gap: 1rem; }
-.admin-devotion__toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
-.admin-devotion__planname {
-  font-size: 1rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary);
-  align-self: center;
-}
-.admin-devotion__meta { font-size: 0.875rem; color: var(--text-muted); }
-.admin-devotion__future { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
-.admin-devotion__import summary { cursor: pointer; font-size: 0.9375rem; font-weight: var(--type-weight-strong, 500); }
-.admin-devotion__hint { font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; margin: 0.4rem 0; }
-.admin-devotion__sync-status {
-  font-size: 0.875rem; line-height: 1.5; margin: 0.2rem 0 0.4rem;
-  padding: 0.4rem 0.65rem; border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border-card); background: var(--bg-input); color: var(--text-secondary);
-}
-.admin-devotion__sync-status[data-tone="ok"] {
-  color: var(--color-success-foreground, var(--color-success));
-  border-color: color-mix(in srgb, var(--color-success) 35%, var(--border-card));
-  background: color-mix(in srgb, var(--color-success) 10%, var(--bg-card));
-}
-.admin-devotion__sync-status[data-tone="warn"] {
-  color: var(--color-warning-foreground, var(--color-warning));
-  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--border-card));
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card));
-}
-.admin-devotion__sync-status[data-tone="bad"] {
-  color: var(--color-danger-foreground, var(--color-danger));
-  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--border-card));
-  background: color-mix(in srgb, var(--color-danger) 10%, var(--bg-card));
-}
-.admin-devotion__list-wrap { overflow-x: auto; }
-.admin-devotion__table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
-.admin-devotion__table th, .admin-devotion__table td {
-  border-bottom: 1px solid var(--border-card); padding: 0.55rem 0.6rem; text-align: left; vertical-align: top;
-}
-.admin-devotion__table th { color: var(--text-secondary); font-weight: var(--type-weight-strong, 500); }
-.admin-devotion__date { font-size: 0.875rem; color: var(--text-muted); }
-.admin-devotion__pub { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
-
-/* 播放清單設定列 */
-.admin-devotion__playlist {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
-  padding: 0.75rem 0.85rem; border: 1px solid var(--border-card);
-  border-radius: var(--radius-md); background: var(--bg-input);
-}
-.admin-devotion__playlist label { font-size: 0.875rem; color: var(--text-secondary); font-weight: var(--type-weight-strong, 500); }
-.admin-devotion__playlist input { flex: 1 1 16rem; min-width: 12rem; }
-.admin-devotion__playlist .admin-devotion__hint { flex-basis: 100%; margin: 0; }
-
-/* 逐日編輯彈窗 */
-.admin-devotion-modal__panel {
-  max-width: 560px; width: 94%; max-height: 88vh;
-  display: flex; flex-direction: column;
-  padding: 0; border-radius: 20px; background: var(--bg-card); color: var(--text-primary);
-  border: 1px solid var(--border-card); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-}
-.admin-devotion-modal__head {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.85rem 1rem; border-bottom: 1px solid var(--border-card);
-}
-.admin-devotion-modal__head h4 { flex: 1; margin: 0; font-size: 1rem; font-weight: var(--type-weight-strong, 500); color: var(--text-primary); }
-.admin-devotion-modal__x {
-  background: none; border: none; font-size: 1.5rem; line-height: 1;
-  cursor: pointer; color: var(--text-secondary); padding: 0.1rem 0.4rem;
-}
-.admin-devotion-modal__body {
-  padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.7rem;
-}
-.admin-devotion-modal__body label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.875rem; color: var(--text-secondary); }
-.admin-devotion-modal__video {
-  display: flex; flex-direction: column; gap: 0.6rem;
-  padding: 0.8rem 0.85rem; border: 1px solid var(--border-card);
-  border-radius: var(--radius-md); background: var(--bg-input);
-}
-.admin-devotion-modal__video-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.admin-devotion-modal__foot {
-  display: flex; gap: 0.5rem; padding: 0.85rem 1rem;
-  border-top: 1px solid var(--border-card); background: var(--bg-card);
-}
-
-/* 候選影片清單 */
-.admin-devotion-candidates {
-  display: flex; flex-direction: column; gap: 0.4rem;
-  max-height: 15rem; overflow-y: auto;
-}
-.admin-devotion-candidate {
-  display: flex; flex-direction: column; gap: 0.15rem; text-align: left;
-  padding: 0.5rem 0.6rem; border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm, 8px); background: var(--bg-card);
-  cursor: pointer; font: inherit; color: var(--text-primary);
-}
-.admin-devotion-candidate:hover { border-color: var(--color-brand); }
-.admin-devotion-candidate.is-selected {
-  border-color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 12%, var(--bg-card));
-}
-.admin-devotion-candidate__title { font-size: 0.875rem; line-height: 1.4; }
-.admin-devotion-candidate__meta { font-size: 0.875rem; color: var(--text-muted); }
-
-/* 每日靈修「開發中、只有管理員看得到」標記 */
+/* 計畫卡「會友看不到」標記（只有管理者看得到的計畫） */
 .plan-card__dev-badge {
   display: inline-block;
   margin-left: 0.4rem;

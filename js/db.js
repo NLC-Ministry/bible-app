@@ -331,10 +331,6 @@ function mapGlobalPlanRecord(dbPlan) {
     examDate: campaignDefinition ? campaignDefinition.examDate : null,
     // 鎖住時是否仍出現在探索清單（月度期末賽 = true；第三階段之後 = 無此旗標 → 完全隱藏）
     discoverWhenLocked: Boolean(dbPlan.rules && dbPlan.rules.discoverWhenLocked),
-    // 每日靈修計畫（plan_kind='devotional'）：是否開放未來日期（migration 0145）。
-    devotionFutureOpen: Boolean(dbPlan.rules && dbPlan.rules.devotionFutureOpen),
-    // 小組聚會週計畫（plan_kind='group_meeting'）：是否開放未來週次（migration 0148）。
-    groupMeetingFutureOpen: Boolean(dbPlan.rules && dbPlan.rules.groupMeetingFutureOpen),
     ruleVersion: Number(dbPlan.rule_version || (campaignDefinition && campaignDefinition.version) || 1),
     publishedAt: dbPlan.published_at || null,
     campaignDefinition
@@ -5957,233 +5953,6 @@ const db = {
     }
   },
 
-  // ── 每日靈修（devotional plan, migration 0145 + nlc-data DEVOTION_RPC_FUNCTIONS）──
-  _devotionErrorMessage(error) {
-    const raw = (error && (error.message || error.error_description || error.msg)) || String(error || "");
-    const map = {
-      daily_devotion_feature_disabled: "每日靈修功能目前未開放。",
-      devotional_plan_not_found: "找不到這份靈修計畫。",
-      devotion_admin_required: "只有系統管理員 / 牧者可以編輯每日靈修。",
-      devotion_payload_invalid: "資料格式不正確，未寫入。",
-      devotion_playlist_id_invalid: "播放清單 ID 格式不正確（要以 PL 開頭）。",
-      devotion_progress_payload_invalid: "資料格式不正確，未寫入。",
-      no_playlist_configured: "這份計畫還沒設定 YouTube 播放清單。",
-      playlist_feed_failed: "讀取 YouTube 播放清單失敗，請稍後再試。",
-      playlist_feed_unreachable: "連不上 YouTube，請稍後再試。",
-      forbidden_rpc: "沒有權限執行此操作。"
-    };
-    const key = Object.keys(map).find(code => raw.includes(code));
-    return key ? map[key] : "目前無法載入每日靈修，請稍後再試。";
-  },
-  async _callDevotionRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "每日靈修需要登入正式帳號。" };
-    }
-    try {
-      const { data, error } = await state.supabase.rpc(functionName, args);
-      if (error) {
-        console.warn(`[Devotion] ${functionName} failed: ${JSON.stringify({ message: error.message, code: error.code })}`);
-        return { success: false, error, message: this._devotionErrorMessage(error) };
-      }
-      return { success: true, data };
-    } catch (error) {
-      console.warn(`[Devotion] ${functionName} failed: ${String(error)}`);
-      return { success: false, error, message: this._devotionErrorMessage(error) };
-    }
-  },
-  async getDevotionalPlan(globalPlanId) {
-    return this._callDevotionRpc("get_devotional_plan", { p_global_plan_id: globalPlanId });
-  },
-  async listDevotionDays(globalPlanId) {
-    return this._callDevotionRpc("list_devotion_days", { p_global_plan_id: globalPlanId });
-  },
-  async upsertDevotionDay(payload) {
-    return this._callDevotionRpc("upsert_devotion_day", { p_payload: payload || {} });
-  },
-  async deleteDevotionDay(id) {
-    return this._callDevotionRpc("delete_devotion_day", { p_id: id });
-  },
-  async bulkUpsertDevotionDays(globalPlanId, rows) {
-    return this._callDevotionRpc("bulk_upsert_devotion_days", {
-      p_global_plan_id: globalPlanId,
-      p_rows: Array.isArray(rows) ? rows : []
-    });
-  },
-  async setDevotionalPlanFutureOpen(globalPlanId, open) {
-    return this._callDevotionRpc("set_devotional_plan_future_open", {
-      p_global_plan_id: globalPlanId,
-      p_open: open === true
-    });
-  },
-  async setDevotionalPlanPlaylistId(globalPlanId, playlistId) {
-    return this._callDevotionRpc("set_devotional_plan_playlist_id", {
-      p_global_plan_id: globalPlanId,
-      p_playlist_id: String(playlistId || "").trim()
-    });
-  },
-  async setAllDevotionDaysPublished(globalPlanId, published = true) {
-    return this._callDevotionRpc("set_all_devotion_days_published", {
-      p_global_plan_id: globalPlanId,
-      p_published: published !== false
-    });
-  },
-  async getDevotionVideoSyncStatus(globalPlanId) {
-    return this._callDevotionRpc("get_devotion_video_sync_status", { p_global_plan_id: globalPlanId });
-  },
-  // 會友端：每日靈修的個人打勾 + 思想經文心得（migration 0158，一律 RPC）。
-  async listDevotionProgress(globalPlanId) {
-    return this._callDevotionRpc("list_devotion_progress", { p_global_plan_id: globalPlanId });
-  },
-  async upsertDevotionProgress({ globalPlanId, dayIndex, itemKind, itemIndex = 0, done = false, note = "" } = {}) {
-    return this._callDevotionRpc("upsert_devotion_progress", {
-      p_payload: {
-        globalPlanId,
-        dayIndex,
-        itemKind,
-        itemIndex,
-        done: done === true,
-        note: String(note || "")
-      }
-    });
-  },
-  // 讀取這份靈修計畫綁定的 YouTube 播放清單影片（伺服器端抓公開 RSS，免金鑰）。
-  // 走 nlc-data 的 devotion_fetch_playlist_videos action，不是 RPC。
-  async fetchDevotionPlaylistVideos(globalPlanId, playlistIdOverride) {
-    if (typeof auth === "undefined" || !auth.isLoggedIn()) {
-      return { success: false, message: "請先登入後再試。" };
-    }
-    try {
-      const cfg = state.supabaseConfig || {};
-      const accessToken = await auth.getValidAccessToken();
-      const response = await fetch(
-        cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
-        {
-          method: "POST",
-          headers: {
-            apikey: cfg.anonKey,
-            Authorization: "Bearer " + accessToken,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            action: "devotion_fetch_playlist_videos",
-            global_plan_id: globalPlanId,
-            playlist_id: String(playlistIdOverride || "").trim() || undefined
-          })
-        }
-      );
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        return { success: false, message: this._devotionErrorMessage(result.error || ""), code: result.error };
-      }
-      const videos = Array.isArray(result.data?.videos) ? result.data.videos : [];
-      return { success: true, data: { playlistId: result.data?.playlistId || "", videos } };
-    } catch (e) {
-      return { success: false, message: e.message || "抓取影片失敗" };
-    }
-  },
-
-  // ── 小組聚會週計畫（group_meeting plan，migration 0148）──────────────────
-  _groupMeetingErrorMessage(error) {
-    const raw = (error && (error.message || error.error || error.error_description || error.msg)) || String(error || "");
-    const map = {
-      group_meeting_feature_disabled: "小組聚會週計畫目前未開放。",
-      group_meeting_plan_not_found: "找不到這份小組聚會計畫。",
-      group_meeting_admin_required: "只有系統管理員 / 牧者可以編輯小組聚會內容。",
-      group_meeting_payload_invalid: "資料格式不正確，未寫入。",
-      forbidden_rpc: "沒有權限，或後端尚未更新（nlc-data 可能需要重新部署）。"
-    };
-    const key = Object.keys(map).find(code => raw.includes(code));
-    return key ? map[key] : "目前無法載入小組聚會計畫，請稍後再試。";
-  },
-  async _callGroupMeetingRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "小組聚會計畫需要登入正式帳號。" };
-    }
-    try {
-      const { data, error } = await state.supabase.rpc(functionName, args);
-      if (error) {
-        console.warn(`[GroupMeeting] ${functionName} failed: ${JSON.stringify({ message: error.message, code: error.code })}`);
-        return { success: false, error, message: this._groupMeetingErrorMessage(error) };
-      }
-      return { success: true, data };
-    } catch (error) {
-      console.warn(`[GroupMeeting] ${functionName} failed: ${String(error)}`);
-      return { success: false, error, message: this._groupMeetingErrorMessage(error) };
-    }
-  },
-  async getGroupMeetingPlan(globalPlanId) {
-    return this._callGroupMeetingRpc("get_group_meeting_plan", { p_global_plan_id: globalPlanId });
-  },
-  async listGroupMeetingWeeks(globalPlanId) {
-    return this._callGroupMeetingRpc("list_group_meeting_weeks", { p_global_plan_id: globalPlanId });
-  },
-  async upsertGroupMeetingWeek(payload) {
-    return this._callGroupMeetingRpc("upsert_group_meeting_week", { p_payload: payload || {} });
-  },
-  async deleteGroupMeetingWeek(id) {
-    return this._callGroupMeetingRpc("delete_group_meeting_week", { p_id: id });
-  },
-  // bulkUpsertGroupMeetingWeeks removed 2026-09-16: zero callers anywhere in
-  // js/. The group_meeting_plan feature itself is live and unaffected —
-  // upsertGroupMeetingWeek (single-row) is what the admin editor actually
-  // uses; this bulk-paste-import convenience variant's backend RPC exists
-  // but never got a UI wired to it, unlike its devotion-side sibling
-  // bulkUpsertDevotionDays (used at admin.js).
-  async setGroupMeetingPlanFutureOpen(globalPlanId, open) {
-    return this._callGroupMeetingRpc("set_group_meeting_plan_future_open", {
-      p_global_plan_id: globalPlanId,
-      p_open: open === true
-    });
-  },
-
-  // ── 每日靈修／小組聚會週計畫「功能設定」（migration 0156）──────────────────
-  // 總開關（admin 專屬）+ 每人一份的個人偏好。get_/set_my_* 一律只碰呼叫者
-  // 自己那筆，沒有「目標使用者」這個概念。
-  async _callDevotionGroupFeatureRpc(functionName, args = {}) {
-    if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "這個功能需要登入正式帳號。" };
-    }
-    try {
-      const { data, error } = await state.supabase.rpc(functionName, args);
-      if (error) {
-        console.warn(`[DevotionGroupFeature] ${functionName} failed: ${JSON.stringify({ message: error.message, code: error.code })}`);
-        const map = {
-          devotion_group_features_master_disabled: "這個功能目前還沒開放，請先請系統管理員開啟「功能設定」總開關。",
-          devotion_group_master_admin_required: "只有系統管理員可以切換這個總開關。",
-          invalid_feature_key: "資料格式不正確，未寫入。",
-          forbidden_rpc: "沒有權限，或後端尚未更新（nlc-data 可能需要重新部署）。"
-        };
-        const message = map[error.message] || "操作失敗，請稍後再試。";
-        return { success: false, error, message };
-      }
-      return { success: true, data };
-    } catch (error) {
-      console.warn(`[DevotionGroupFeature] ${functionName} failed: ${String(error)}`);
-      return { success: false, error, message: "操作失敗，請稍後再試。" };
-    }
-  },
-  async getMyDevotionGroupPreferences() {
-    return this._dedupRead("devotionGroupPrefs", () =>
-      this._callDevotionGroupFeatureRpc("get_my_devotion_group_preferences", {}));
-  },
-  async setMyDevotionGroupPreference(featureKey, enabled) {
-    return this._callDevotionGroupFeatureRpc("set_my_devotion_group_preference", {
-      p_feature_key: featureKey,
-      p_enabled: enabled === true
-    });
-  },
-  async setDevotionGroupFeaturesMaster(enabled) {
-    if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
-      return { success: false, message: "只有系統管理員可以切換這個總開關。" };
-    }
-    const result = await this._callDevotionGroupFeatureRpc("set_devotion_group_features_master", {
-      p_enabled: enabled === true
-    });
-    // devotion_group_features_master lives in app_feature_settings — bust the cache.
-    this._invalidateFeatureSettings();
-    return result;
-  },
-
   // 回報對話串（migration 0153）：未讀數字，餵鈴鐺 / 通知中心。
   async fetchIssueThreadUnread() {
     if (!state.isSupabaseMode || !state.supabase) {
@@ -6204,7 +5973,7 @@ const db = {
   // — a cold load asks for 3-4 different keys → 3-4 nlc-data POSTs. Fetch the
   // whole (tiny) allowlist in one `.in("key",[…])` and serve every key from a
   // short-lived per-load cache. Writes invalidate it; a 10 s TTL self-heals.
-  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan", "devotion_group_features_master", "devotion_group_hidden"],
+  FEATURE_SETTING_KEYS: ["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam"],
   _featureSettings: null,        // { map: {key:bool}, at: number } | null
   _featureSettingsInflight: null,
   _invalidateFeatureSettings() { this._featureSettings = null; },
@@ -6253,8 +6022,7 @@ const db = {
   },
 
   async updateFeatureSetting(key, enabled) {
-    // devotion_group_hidden 只讀：後台不再提供開關，正式環境維持隱藏，上線時用 migration 改（2026-09-27）。
-    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam", "daily_devotion", "group_meeting_plan"]);
+    const allowedKeys = new Set(["pastoral_sharing_wall", "daily_quiz", "speed_reading_exam"]);
     if (!allowedKeys.has(key)) return { error: new Error("unknown_feature_setting") };
     if (!state.currentUser || getUserRoleCode(state.currentUser) !== "admin") {
       return { error: new Error("admin_required") };
@@ -6585,6 +6353,11 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_import_too_many: "一次最多匯入 60 題。",
     lightning_quiz_import_duplicate_date: "這次匯入有兩題排在同一天，請重新整理後再試。",
     lightning_quiz_import_invalid_item: "有題目的內容不完整，這次一題都沒有匯入。",
+    lightning_quiz_ranking_invalid_days: "公布天數只能是 1～7 天。",
+    lightning_quiz_ranking_invalid_excluded: "排除名單格式不正確，請重新整理後再試。",
+    lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
+    lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
+    lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -6726,6 +6499,32 @@ db.adminGetLightningQuizWeek = async function(weekStart) {
 db.adminGetLightningQuizResults = async function(questionId) {
   if (!questionId) return { success: false, message: "找不到這筆統計資料。" };
   return this._callLightningQuizRpc("admin_get_lightning_quiz_results", { p_question_id: questionId });
+};
+
+// 每週前三名（#429）。首頁：最新一份還在公布期間的前三名＋自己這週的結果。
+db.getLightningQuizWeekRanking = async function() {
+  return this._callLightningQuizRpc("get_lightning_quiz_week_ranking", {});
+};
+
+// 後台：某週每一天的答對名單（依秒數）＋目前的公布狀態。
+db.adminGetLightningQuizWeekRanking = async function(weekStart) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_get_lightning_quiz_week_ranking", { p_week_start: weekStart });
+};
+
+// 後台：公布。excluded＝{ "YYYY-MM-DD": [userId, …] }；前三名由伺服器依排除名單重算。
+db.adminPublishLightningQuizWeekRanking = async function(weekStart, excluded, displayDays) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_publish_lightning_quiz_week_ranking", {
+    p_week_start: weekStart,
+    p_excluded: excluded || {},
+    p_display_days: displayDays
+  });
+};
+
+db.adminRevokeLightningQuizWeekRanking = async function(weekStart) {
+  if (!weekStart) return { success: false, message: "請選擇要看的週。" };
+  return this._callLightningQuizRpc("admin_revoke_lightning_quiz_week_ranking", { p_week_start: weekStart });
 };
 
 window.db = db;

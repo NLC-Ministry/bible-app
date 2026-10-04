@@ -4,6 +4,7 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
@@ -397,7 +398,6 @@ export async function renderProfileView() {
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();
   }
-  void updateFeatureSettingsRowVisibility();
 
   await renderCareReminders();
   if (state.profileDetailOpen === "exams") {
@@ -643,6 +643,25 @@ function renderMyLightningQuizDetail(item) {
 
 // 伺服器只回「已發布且時段已結束」的活動（這時候才附正解），所以時段內就算
 // 已經答完，也要等時段結束才會出現在這裡。
+// 首頁「雲柱測驗前三名」的「看題目與正解」（#429）留下的提示：開到雲柱分頁，
+// 清單範圍往前延伸到公布的那一週（公布期間可能已超過「最近一週」）。讀一次就清掉。
+let lightningHistoryFrom = null;
+
+function takeProfileExamsHint() {
+  try {
+    const raw = window.sessionStorage.getItem(PROFILE_EXAMS_HINT_KEY);
+    window.sessionStorage.removeItem(PROFILE_EXAMS_HINT_KEY);
+    const hint = raw ? JSON.parse(raw) : null;
+    if (!hint || typeof hint !== "object") return null;
+    return {
+      tab: ["exam", "daily", "lightning"].includes(hint.tab) ? hint.tab : null,
+      from: /^\d{4}-\d{2}-\d{2}$/.test(String(hint.from || "")) ? hint.from : null
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function renderMyLightningQuizResults() {
   const host = document.getElementById("profile-lightning-quiz-results");
   if (!host) return;
@@ -651,7 +670,9 @@ async function renderMyLightningQuizResults() {
     return;
   }
   if (firstPaint(host)) host.innerHTML = '<div class="profile-exams__loading">正在整理雲柱測驗紀錄…</div>';
-  const { from, to } = recentWeekRange();
+  const recent = recentWeekRange();
+  const from = lightningHistoryFrom && lightningHistoryFrom < recent.from ? lightningHistoryFrom : recent.from;
+  const to = recent.to;
   const result = await db.getMyLightningQuizHistory(from, to);
   if (!result.success) {
     host.innerHTML = `<div class="profile-exams__empty">${escapeHTML(result.message || "目前無法載入雲柱測驗紀錄。")}</div>`;
@@ -780,12 +801,17 @@ function openProfileDetail(key) {
   if (key === "badges" && typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
   }
-  if (key === "exams") { closeProfileExamsDetail(); refreshMyQuizzes(); }
+  if (key === "exams") {
+    const hint = takeProfileExamsHint();
+    lightningHistoryFrom = hint?.from || null;
+    closeProfileExamsDetail();
+    if (hint?.tab) setProfileExamsTab(hint.tab);
+    refreshMyQuizzes();
+  }
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();
   }
-  if (key === "feature-settings") void renderFeatureSettingsSubpage();
   if (key === "personal-info") renderPersonalInfoSubpage();
   window.dispatchEvent(new Event("app:route-changed"));
 }
@@ -803,120 +829,6 @@ function closeProfileDetail() {
 }
 window.openProfileDetail = openProfileDetail;
 window.closeProfileDetail = closeProfileDetail;
-
-// ── 功能設定（個人頁）：每日靈修／小組聚會週計畫，每個會友自己的偏好 ────────
-// 這一排要不要出現，只看「管理」分頁的總開關（devotion_group_features_master）
-// 開不開，跟角色無關——所有會友都看得到。子頁面裡才是真正的兩顆開關，各自
-// 只影響自己（見 supabase 端 set_my_devotion_group_preference，一定只碰呼叫
-// 者自己那一筆）。
-async function updateFeatureSettingsRowVisibility() {
-  const row = document.getElementById("profile-feature-settings-row");
-  if (!row) return;
-  if (typeof window.devotionGroupFeaturesMasterEnabled !== "boolean") {
-    if (typeof window.ensureDevotionGroupPreferencesLoaded === "function") {
-      await window.ensureDevotionGroupPreferencesLoaded();
-    } else if (typeof db !== "undefined" && typeof db.getFeatureSetting === "function") {
-      const result = await db.getFeatureSetting("devotion_group_features_master", false);
-      window.devotionGroupFeaturesMasterEnabled = !result.error && result.enabled === true;
-    }
-  }
-  row.classList.toggle("hidden", window.devotionGroupFeaturesMasterEnabled !== true);
-}
-
-async function renderFeatureSettingsSubpage() {
-  const devotionToggle = document.getElementById("profile-daily-devotion-feature-toggle");
-  const devotionStatus = document.getElementById("profile-daily-devotion-feature-status");
-  const devotionFeedback = document.getElementById("profile-daily-devotion-feature-feedback");
-  const groupToggle = document.getElementById("profile-group-meeting-feature-toggle");
-  const groupStatus = document.getElementById("profile-group-meeting-feature-status");
-  const groupFeedback = document.getElementById("profile-group-meeting-feature-feedback");
-  if (!devotionToggle || !groupToggle) return;
-
-  devotionToggle.disabled = true;
-  groupToggle.disabled = true;
-  devotionFeedback?.classList.add("hidden");
-  groupFeedback?.classList.add("hidden");
-
-  const result = await db.getMyDevotionGroupPreferences();
-  if (!result.success) {
-    if (devotionFeedback) {
-      devotionFeedback.textContent = result.message || "無法載入設定：從伺服器獲取功能設定失敗。";
-      devotionFeedback.classList.remove("hidden");
-    }
-    return;
-  }
-
-  const data = result.data || {};
-  let devotionEnabled = data.dailyDevotion === true;
-  let groupEnabled = data.groupMeetingPlan === true;
-  window.devotionGroupFeaturesMasterEnabled = data.masterEnabled === true;
-  window.dailyDevotionFeatureEnabled = devotionEnabled;
-  window.groupMeetingPlanFeatureEnabled = groupEnabled;
-
-  const paint = () => {
-    devotionToggle.setAttribute("aria-checked", devotionEnabled ? "true" : "false");
-    if (devotionStatus) devotionStatus.textContent = devotionEnabled
-      ? "已開啟：你在「計畫」看得到靈修計畫，可按日期閱讀每日靈修內容。"
-      : "已關閉：這是你自己的偏好，不影響其他會友。";
-    groupToggle.setAttribute("aria-checked", groupEnabled ? "true" : "false");
-    if (groupStatus) groupStatus.textContent = groupEnabled
-      ? "已開啟：你在「計畫」看得到小組聚會週計畫，可按週查看信息經文 / 奉獻經文 / 詩歌。"
-      : "已關閉：這是你自己的偏好，不影響其他會友。";
-  };
-  devotionToggle.disabled = false;
-  groupToggle.disabled = false;
-  paint();
-
-  if (!devotionToggle.dataset.featureSettingBound) {
-    devotionToggle.dataset.featureSettingBound = "true";
-    devotionToggle.addEventListener("click", async () => {
-      const nextEnabled = !devotionEnabled;
-      devotionToggle.disabled = true;
-      devotionFeedback?.classList.add("hidden");
-      const saveResult = await db.setMyDevotionGroupPreference("daily_devotion", nextEnabled);
-      if (!saveResult.success) {
-        devotionToggle.disabled = false;
-        if (devotionFeedback) {
-          devotionFeedback.textContent = saveResult.message || "更新設定失敗：無法將設定儲存至伺服器。";
-          devotionFeedback.classList.remove("hidden");
-        }
-        return;
-      }
-      devotionEnabled = nextEnabled;
-      window.dailyDevotionFeatureEnabled = nextEnabled;
-      devotionToggle.disabled = false;
-      paint();
-      if (typeof showToast === "function") {
-        showToast(nextEnabled ? "每日靈修功能已開啟！" : "每日靈修功能已關閉。");
-      }
-    });
-  }
-
-  if (!groupToggle.dataset.featureSettingBound) {
-    groupToggle.dataset.featureSettingBound = "true";
-    groupToggle.addEventListener("click", async () => {
-      const nextEnabled = !groupEnabled;
-      groupToggle.disabled = true;
-      groupFeedback?.classList.add("hidden");
-      const saveResult = await db.setMyDevotionGroupPreference("group_meeting_plan", nextEnabled);
-      if (!saveResult.success) {
-        groupToggle.disabled = false;
-        if (groupFeedback) {
-          groupFeedback.textContent = saveResult.message || "更新設定失敗：無法將設定儲存至伺服器。";
-          groupFeedback.classList.remove("hidden");
-        }
-        return;
-      }
-      groupEnabled = nextEnabled;
-      window.groupMeetingPlanFeatureEnabled = nextEnabled;
-      groupToggle.disabled = false;
-      paint();
-      if (typeof showToast === "function") {
-        showToast(nextEnabled ? "小組聚會週計畫功能已開啟！" : "小組聚會週計畫功能已關閉。");
-      }
-    });
-  }
-}
 
 function formatRelativeTime(isoString) {
   if (!isoString) return "";

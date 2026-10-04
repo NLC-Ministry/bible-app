@@ -45,6 +45,9 @@ import {
   formatRate,
   formatWeekRange,
   formatWeekday,
+  formatRankLabel,
+  normalizeRankingExcluded,
+  pickDayWinners,
   rankAttempts,
   sortZoneRowsByRegion,
   summarizeByRegion,
@@ -108,52 +111,6 @@ function updateExamFeatureControl(enabled, options = {}) {
     : "已關閉：隱藏「大測驗」分頁並停止作答；既有試卷、題目與成績都會保留。";
 }
 
-// 每日靈修／小組聚會週計畫「功能設定」總開關（migration 0156）。這是唯一放在
-// 這張卡片裡的一顆：關閉時「個人」分頁不會出現「功能設定」，且會清空所有
-// 會友已經自己開啟的個人偏好；開啟後不會幫任何人預設打開，要各自去「個人」
-// 分頁的「功能設定」子頁面自己開。實際的「每日靈修」「小組經營」兩顆開關在
-// 那個子頁面（js/modules/profile.js renderFeatureSettingsSubpage()），不在這裡。
-function updateDevotionMasterFeatureControl(enabled, options = {}) {
-  const toggle = document.getElementById("admin-devotion-master-toggle");
-  const status = document.getElementById("admin-devotion-master-status");
-  if (!toggle || !status) return;
-  toggle.setAttribute("aria-checked", enabled ? "true" : "false");
-  toggle.setAttribute("aria-label", enabled ? "功能設定已開啟" : "功能設定已關閉");
-  toggle.disabled = options.disabled === true;
-  status.textContent = enabled
-    ? "已開啟：「個人」分頁會出現「功能設定」，會友可以自己選擇要不要啟用每日靈修、小組經營。"
-    : "已關閉：「個人」分頁不會出現「功能設定」；所有會友已經自己開啟的個人偏好也會一併清空。";
-}
-
-// 政策審核期間的「完全隱藏」旗標（app_feature_settings.devotion_group_hidden）：
-// TRUE＝每日靈修 + 小組聚會對所有人隱藏（含系統管理員本人）。後台不提供開關
-// （2026-09-27）——正式環境維持 TRUE，內容改在 staging 編輯與測試（staging 設為
-// FALSE）；政策通過要上線時，用 migration 改成 FALSE 並隨上線 PR 發布。見 docs/staging.md。
-
-// 「每日靈修」計劃管理分頁：admin / pastor 一律看得到（功能對會友暫不開放時
-// 也要能先建內容）。參數保留以相容既有呼叫，但不再拿來 gate。
-function applyAdminDevotionVisibility(_enabled) {
-  const roleCode = state.currentUser && typeof getUserRoleCode === "function"
-    ? getUserRoleCode(state.currentUser) : null;
-  // 政策審核期間 devotion_group_hidden = TRUE → 連 admin/pastor 也隱藏。
-  const canSee = ["admin", "pastor"].includes(roleCode) && window.devotionGroupHidden !== true;
-  const panel = document.getElementById("admin-section-devotions");
-  if (!canSee && activeAdminSection === "devotions") setAdminSection("join-status");
-  if (!canSee && panel) panel.classList.add("hidden");
-  if (typeof renderAdminSectionNav === "function") renderAdminSectionNav();
-}
-
-// 「小組聚會」計劃管理分頁：admin / pastor 一律看得到（比照每日靈修）。
-function applyAdminGroupMeetingVisibility(_enabled) {
-  const roleCode = state.currentUser && typeof getUserRoleCode === "function"
-    ? getUserRoleCode(state.currentUser) : null;
-  const canSee = ["admin", "pastor"].includes(roleCode) && window.devotionGroupHidden !== true;
-  const panel = document.getElementById("admin-section-group-meeting");
-  if (!canSee && activeAdminSection === "group-meeting") setAdminSection("join-status");
-  if (!canSee && panel) panel.classList.add("hidden");
-  if (typeof renderAdminSectionNav === "function") renderAdminSectionNav();
-}
-
 // 「大測驗」計劃管理分頁：系統管理員 + speed_reading_exam 功能開啟時才顯示。
 function applyAdminExamVisibility(enabled) {
   // 系統管理員：完整後台（出題 / 發佈 / 批改 / 統計）。
@@ -182,26 +139,10 @@ export async function renderAdminFeatureSettings() {
   const isAdmin = state.currentUser && getUserRoleCode(state.currentUser) === "admin";
   card.classList.toggle("hidden", !isAdmin);
 
-  // 「計劃管理」分頁的每日靈修/小組聚會子分頁看不看得到依角色 + 政策審核「完全
-  // 隱藏」旗標。先套一次（依角色），旗標抓回來後再套一次。
-  applyAdminDevotionVisibility();
-  applyAdminGroupMeetingVisibility();
-  if (db.getFeatureSetting) {
-    db.getFeatureSetting("devotion_group_hidden", false).then((r) => {
-      window.devotionGroupHidden = !!(r && r.enabled === true);
-      applyAdminDevotionVisibility();
-      applyAdminGroupMeetingVisibility();
-    }).catch(() => {});
-  }
-
-  const masterToggle = document.getElementById("admin-devotion-master-toggle");
-  const masterFeedback = document.getElementById("admin-devotion-master-feedback");
-
   if (!isAdmin) {
-    const [quizResult, examResult, masterResult] = await Promise.all([
+    const [quizResult, examResult] = await Promise.all([
       db.getFeatureSetting("daily_quiz", false),
-      db.getFeatureSetting("speed_reading_exam", false),
-      db.getFeatureSetting("devotion_group_features_master", false)
+      db.getFeatureSetting("speed_reading_exam", false)
     ]);
     const quizEnabled = !quizResult.error && quizResult.enabled === true;
     window.dailyQuizFeatureEnabled = quizEnabled;
@@ -209,7 +150,6 @@ export async function renderAdminFeatureSettings() {
     const examEnabled = !examResult.error && examResult.enabled === true;
     window.speedReadingExamFeatureEnabled = examEnabled;
     applyAdminExamVisibility(examEnabled);
-    window.devotionGroupFeaturesMasterEnabled = !masterResult.error && masterResult.enabled === true;
     return;
   }
 
@@ -221,14 +161,11 @@ export async function renderAdminFeatureSettings() {
   updateDailyQuizFeatureControl(false, { disabled: true });
   if (examFeedback) { examFeedback.classList.add("hidden"); examFeedback.textContent = ""; }
   updateExamFeatureControl(false, { disabled: true });
-  if (masterFeedback) { masterFeedback.classList.add("hidden"); masterFeedback.textContent = ""; }
-  updateDevotionMasterFeatureControl(false, { disabled: true });
 
-  const [result, quizResult, examResult, masterResult] = await Promise.all([
+  const [result, quizResult, examResult] = await Promise.all([
     db.getFeatureSetting("pastoral_sharing_wall", false),
     db.getFeatureSetting("daily_quiz", false),
-    db.getFeatureSetting("speed_reading_exam", false),
-    db.getFeatureSetting("devotion_group_features_master", false)
+    db.getFeatureSetting("speed_reading_exam", false)
   ]);
   if (result.error) {
     updatePastoralWallControl(false, { disabled: true });
@@ -259,45 +196,6 @@ export async function renderAdminFeatureSettings() {
     updateExamFeatureControl(examEnabled);
     applyAdminExamVisibility(examEnabled);
   }
-  if (masterResult.error) {
-    updateDevotionMasterFeatureControl(false, { disabled: true });
-    if (masterFeedback) {
-      masterFeedback.textContent = "無法載入設定：從伺服器獲取功能設定失敗。";
-      masterFeedback.classList.remove("hidden");
-    }
-  } else {
-    const masterEnabled = masterResult.enabled === true;
-    window.devotionGroupFeaturesMasterEnabled = masterEnabled;
-    updateDevotionMasterFeatureControl(masterEnabled);
-  }
-
-  if (masterToggle && !masterToggle.dataset.featureSettingBound) {
-    masterToggle.dataset.featureSettingBound = "true";
-    masterToggle.addEventListener("click", async () => {
-      const currentEnabled = masterToggle.getAttribute("aria-checked") === "true";
-      const nextEnabled = !currentEnabled;
-      updateDevotionMasterFeatureControl(currentEnabled, { disabled: true });
-      masterFeedback?.classList.add("hidden");
-      const saveResult = await db.setDevotionGroupFeaturesMaster(nextEnabled);
-      if (!saveResult.success) {
-        updateDevotionMasterFeatureControl(currentEnabled);
-        if (masterFeedback) {
-          masterFeedback.textContent = saveResult.message || "更新設定失敗：無法將設定儲存至伺服器。";
-          masterFeedback.classList.remove("hidden");
-        }
-        return;
-      }
-      window.devotionGroupFeaturesMasterEnabled = nextEnabled;
-      updateDevotionMasterFeatureControl(nextEnabled);
-      if (typeof showToast === "function") {
-        const resetCount = saveResult.data && saveResult.data.resetCount;
-        showToast(nextEnabled
-          ? "功能設定已開啟。「個人」分頁會多出「功能設定」，會友可以自己選擇要不要啟用。"
-          : `功能設定已關閉。${Number.isFinite(resetCount) && resetCount > 0 ? `已一併清空 ${resetCount} 位會友自己開啟過的個人偏好。` : ""}`);
-      }
-    });
-  }
-
   if (examToggle && !examToggle.dataset.featureSettingBound) {
     examToggle.dataset.featureSettingBound = "true";
     examToggle.addEventListener("click", async () => {
@@ -2623,6 +2521,167 @@ function adminLightningQuizWeekOrgCells(row) {
     <td>${escapeHTML(formatRate(row.correctRate))}</td>`;
 }
 
+// ── 首頁公布前三名（#429）───────────────────────────────────────────────────
+// 週統計裡的一個區塊：依天列出答對的人（秒數由快到慢），管理員以天為單位排除，
+// 下面的人遞補；按「公布」後伺服器依排除名單重算前三名、存成固定紀錄，首頁顯示
+// 1～7 天。這裡算的前三名只是預覽，實際公布的名單以伺服器回傳為準。
+const ADMIN_LQ_RANKING_ROWS_SHOWN = 10;
+
+function formatAdminLightningQuizRankingStatus(publication) {
+  if (!publication) return '尚未公布。';
+  const until = `${formatWeekday(publication.displayUntil)} 23:59`;
+  if (publication.revoked) return '已撤下，首頁目前不顯示。';
+  if (publication.showing) return `首頁公布中，顯示到 ${until}。`;
+  return `公布期間已結束（顯示到 ${until}）。`;
+}
+
+function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
+  const candidates = Array.isArray(day.candidates) ? day.candidates : [];
+  const winners = pickDayWinners(candidates, [...dayExcluded]);
+  const winnerRank = new Map(winners.map(winner => [String(winner.userId), winner.rank]));
+  // 至少列到第三名那一列，排除過的人才看得到、也才能取消排除。
+  const lastWinnerIndex = winners.length
+    ? candidates.findIndex(candidate => String(candidate.userId) === String(winners[winners.length - 1].userId))
+    : -1;
+  const shownCount = expanded
+    ? candidates.length
+    : Math.max(ADMIN_LQ_RANKING_ROWS_SHOWN, lastWinnerIndex + 1);
+  const rows = candidates.slice(0, shownCount).map(candidate => {
+    const id = String(candidate.userId);
+    const isExcluded = dayExcluded.has(id);
+    const rank = winnerRank.get(id);
+    return `<li class="admin-lq-ranking__row${rank ? ' is-winner' : ''}${isExcluded ? ' is-excluded' : ''}">
+      <span class="admin-lq-ranking__rank">${isExcluded ? '已排除' : rank ? escapeHTML(formatRankLabel(rank)) : ''}</span>
+      <span class="admin-lq-ranking__name">${escapeHTML(candidate.name || '（未命名）')}</span>
+      <span class="admin-lq-ranking__zone">${escapeHTML(candidate.pastoralZone || UNASSIGNED_ZONE_LABEL)}</span>
+      <span class="admin-lq-ranking__time">${escapeHTML(formatElapsedSeconds(candidate.elapsedMs))} 秒</span>
+      <button type="button" class="pill-btn" data-lq-ranking-toggle data-date="${escapeHTML(day.riseDate)}" data-user="${escapeHTML(id)}">${isExcluded ? '取消排除' : '排除'}</button>
+    </li>`;
+  }).join('');
+  return `<div class="admin-lq-ranking__day">
+    <h6>${escapeHTML(formatWeekday(day.riseDate))}${day.ended ? '' : '（還沒結束）'}</h6>
+    ${candidates.length ? `<ol class="admin-lq-ranking__list">${rows}</ol>` : '<div class="admin-user-directory__empty">這天沒有人答對。</div>'}
+    ${candidates.length > shownCount ? `<button type="button" class="pill-btn" data-lq-ranking-more="${escapeHTML(day.riseDate)}">顯示全部（${escapeHTML(String(candidates.length))} 人）</button>` : ''}
+  </div>`;
+}
+
+async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
+  if (!host) return;
+  host.onclick = null;
+  host.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的答對名單…</div>';
+  const result = await db.adminGetLightningQuizWeekRanking(weekStart);
+  if (!isCurrent()) return;
+  if (!result.success) {
+    host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入答對名單失敗，請稍後再試。')}</div>`;
+    return;
+  }
+  const data = result.data || {};
+  const days = Array.isArray(data.days) ? data.days : [];
+  const publication = data.publication || null;
+  if (!days.length) {
+    host.innerHTML = '<div class="admin-user-directory__empty">這週沒有已排程的雲柱測驗。</div>';
+    return;
+  }
+  // 重新公布時從上次的排除名單接著調。
+  const excluded = {};
+  days.forEach(day => {
+    const saved = publication?.excluded?.[day.riseDate];
+    excluded[day.riseDate] = new Set(Array.isArray(saved) ? saved.map(String) : []);
+  });
+  const expanded = new Set();
+
+  const draw = () => {
+    const daysInput = host.querySelector('[data-lq-ranking-days]');
+    const displayDays = daysInput ? daysInput.value : String(publication?.displayDays || 1);
+    host.innerHTML = `
+      <p class="admin-lq-ranking__status">${escapeHTML(formatAdminLightningQuizRankingStatus(publication))}</p>
+      <p class="admin-daily-quiz-note">依作答秒數由快到慢列出答對的人。按「排除」把人移出名單，下面的人會遞補。名字照會員資料顯示；首頁不顯示個人名次。</p>
+      <div class="admin-lq-ranking__days">
+        ${days.map(day => adminLightningQuizRankingDayHtml(day, excluded[day.riseDate], expanded.has(day.riseDate))).join('')}
+      </div>
+      <div class="admin-lq-ranking__publish">
+        <label>公布天數
+          <input type="number" class="form-control" min="1" max="7" step="1" inputmode="numeric" value="${escapeHTML(displayDays)}" data-lq-ranking-days>
+        </label>
+        <button type="button" class="primary-btn" data-lq-ranking-publish ${data.allEnded ? '' : 'disabled'}>${publication ? '重新公布' : '公布到首頁'}</button>
+        ${publication && !publication.revoked ? '<button type="button" class="secondary-btn" data-lq-ranking-revoke>撤下</button>' : ''}
+      </div>
+      <p class="admin-daily-quiz-note">${data.allEnded
+        ? '公布天數從今天算起（1～7 天），1 天＝顯示到今天 23:59。重新公布會覆蓋首頁上的舊名單。'
+        : '這週還有題目沒結束，全部結束後才能公布。'}</p>
+    `;
+  };
+
+  const publish = async button => {
+    const displayDays = Number(host.querySelector('[data-lq-ranking-days]')?.value);
+    if (!Number.isInteger(displayDays) || displayDays < 1 || displayDays > 7) {
+      showToast('公布天數只能是 1～7 天。');
+      return;
+    }
+    const confirmed = await window.showConfirmDialog({
+      title: `把 ${formatWeekRange(data.weekStart)} 的前三名公布到首頁？`,
+      message: `全教會會友都會在首頁看到每天前三名的姓名、牧區與作答秒數，顯示 ${displayDays} 天。${publication ? '首頁上的舊名單會被覆蓋。' : ''}`,
+      confirmText: '公布',
+      cancelText: '取消'
+    });
+    if (!confirmed) return;
+    button.disabled = true;
+    const excludedPayload = normalizeRankingExcluded(days, Object.fromEntries(
+      Object.entries(excluded).map(([date, set]) => [date, [...set]])
+    ));
+    const published = await db.adminPublishLightningQuizWeekRanking(data.weekStart, excludedPayload, displayDays);
+    if (!published.success) {
+      button.disabled = false;
+      showToast(published.message || '公布失敗，請稍後再試。');
+      return;
+    }
+    showToast(`已公布，首頁顯示到 ${formatWeekday(published.data?.displayUntil)} 23:59。`);
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+  };
+
+  const revoke = async () => {
+    const confirmed = await window.showConfirmDialog({
+      title: '撤下首頁的前三名？',
+      message: '首頁會立即不顯示。排除名單會保留，之後可以再按「重新公布」。',
+      confirmText: '撤下',
+      cancelText: '取消',
+      isDestructive: true
+    });
+    if (!confirmed) return;
+    const revoked = await db.adminRevokeLightningQuizWeekRanking(data.weekStart);
+    if (!revoked.success) {
+      showToast(revoked.message || '撤下失敗，請稍後再試。');
+      return;
+    }
+    showToast('已撤下。');
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+  };
+
+  // 用 onclick（不是 addEventListener）：公布／撤下後同一個 host 會重畫，不能疊監聽。
+  host.onclick = event => {
+    const toggle = event.target.closest('[data-lq-ranking-toggle]');
+    if (toggle) {
+      const set = excluded[toggle.dataset.date];
+      if (!set) return;
+      if (set.has(toggle.dataset.user)) set.delete(toggle.dataset.user);
+      else set.add(toggle.dataset.user);
+      draw();
+      return;
+    }
+    const more = event.target.closest('[data-lq-ranking-more]');
+    if (more) {
+      expanded.add(more.dataset.lqRankingMore);
+      draw();
+      return;
+    }
+    const publishButton = event.target.closest('[data-lq-ranking-publish]');
+    if (publishButton) { void publish(publishButton); return; }
+    if (event.target.closest('[data-lq-ranking-revoke]')) void revoke();
+  };
+
+  draw();
+}
+
 // 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
 // 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
 const ADMIN_LIGHTNING_QUIZ_TOP_SHOWN = 5;
@@ -2675,6 +2734,11 @@ function renderAdminLightningQuizWeekPanel(panel) {
         <span>答對率 <strong>${escapeHTML(formatRate(summary.correctRate))}</strong></span>
         <span>答對平均用時 <strong>${summary.avgCorrectElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(summary.avgCorrectElapsedMs))} 秒`}</strong></span>
       </div>
+
+      <section class="admin-lightning-quiz-detail__section admin-lq-ranking" aria-label="首頁公布前三名">
+        <div class="admin-lightning-quiz-detail__section-head"><h5>首頁公布前三名</h5></div>
+        <div data-lq-week-ranking></div>
+      </section>
 
       <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
         <div class="admin-lightning-quiz-detail__section-head">
@@ -2731,6 +2795,7 @@ function renderAdminLightningQuizWeekPanel(panel) {
       </details>
     `;
     if (typeof hydrateIcons === 'function') hydrateIcons(body);
+    void renderAdminLightningQuizWeekRanking(body.querySelector('[data-lq-week-ranking]'), week.weekStart, () => seq === requestSeq);
 
     body.querySelector('[data-lq-leaderboard-toggle]')?.addEventListener('click', event => {
       body.querySelectorAll('[data-lq-leaderboard-more]').forEach(item => item.classList.remove('hidden'));
@@ -2954,8 +3019,6 @@ const ADMIN_SECTIONS = [
   { id: 'quizzes',       group: '測驗',       label: '小測驗',         icon: 'checkCircle',   panel: 'plans',  sub: 'quizzes', flag: 'quiz' },
   { id: 'exam',          group: '測驗',       label: '大測驗',         icon: 'pencil',        panel: 'plans',  sub: 'exam',    flag: 'exam' },
   { id: 'lightning-quiz', group: '測驗',      label: '雲柱測驗',       icon: 'cloud',         panel: 'system', sub: 'lightning-quiz' },
-  { id: 'devotions',     group: '內容管理',   label: '每日靈修',       icon: 'bookOpen',      panel: 'plans',  sub: 'devotions', flag: 'devotion' },
-  { id: 'group-meeting', group: '內容管理',   label: '小組聚會',       icon: 'peoples',       panel: 'plans',  sub: 'group-meeting', flag: 'groupMeeting' },
   { id: 'settings',      group: '設定',       label: '功能開放設定',   icon: 'setting',       panel: 'system', sub: 'settings' }
 ];
 
@@ -2969,13 +3032,6 @@ function isAdminSectionAvailable(section) {
       ? getUserRoleCode(state.currentUser) : null;
     const canSee = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'].includes(roleCode);
     return canSee && window.speedReadingExamFeatureEnabled === true;
-  }
-  if (section.flag === 'devotion' || section.flag === 'groupMeeting') {
-    // 每日靈修 / 小組聚會：admin / pastor 一律看得到管理頁——功能對會友「暫不開放」
-    // 時也要能先進來建內容。flag 只控制會友端顯示。
-    const roleCode = state.currentUser && typeof getUserRoleCode === 'function'
-      ? getUserRoleCode(state.currentUser) : null;
-    return ['admin', 'pastor'].includes(roleCode);
   }
   return true;
 }
@@ -3084,7 +3140,7 @@ function setAdminSection(id, options = {}) {
     const sharedOrgFilter = document.querySelector('.admin-plan-filter-card--org');
     if (sharedOrgFilter) {
       const hideSharedOrgFilter = section.sub === 'quizzes' || section.sub === 'exam'
-        || section.sub === 'devotions' || section.sub === 'group-meeting' || section.sub === 'statistics';
+        || section.sub === 'statistics';
       sharedOrgFilter.classList.toggle('hidden', hideSharedOrgFilter);
       sharedOrgFilter.style.display = hideSharedOrgFilter ? 'none' : 'flex';
     }
@@ -3916,22 +3972,6 @@ async function loadActiveAdminPlanSubtab(forceRefresh = false) {
     return;
   }
 
-  if (activeAdminPlanSubtab === 'devotions') {
-    const root = document.getElementById('admin-devotion-root');
-    if (root) {
-      try { await renderAdminDevotionPlan(root, forceRefresh); } catch (e) { console.warn('[Admin] renderAdminDevotionPlan error caught:', e); }
-    }
-    return;
-  }
-
-  if (activeAdminPlanSubtab === 'group-meeting') {
-    const root = document.getElementById('admin-group-meeting-root');
-    if (root) {
-      try { await renderAdminGroupMeetingPlan(root, forceRefresh); } catch (e) { console.warn('[Admin] renderAdminGroupMeetingPlan error caught:', e); }
-    }
-    return;
-  }
-
   if (activeAdminPlanSubtab === 'teams') {
     const results = await Promise.allSettled([
       renderAdminTeamPlacementLookup(state.adminManagementPlan, forceRefresh),
@@ -3947,742 +3987,16 @@ async function loadActiveAdminPlanSubtab(forceRefresh = false) {
   }
 }
 
-// ── 每日靈修（devotional plan）管理 ────────────────────────────────────────
-let adminDevotionSelectedPlanId = null;
-
-function getDevotionalPlans() {
-  return (Array.isArray(state.globalPlans) ? state.globalPlans : [])
-    .filter(p => p && (p.planKind === 'devotional' || p.plan_kind === 'devotional'));
-}
-
-// 貼上的文字 → [{dayIndex, passageLabel, passageRefs, reflections:[]}]
-// 直接吃「從 PDF 複製出來的原文」也吃整理過的格式。每一天的起點靠：
-//   ·「8/22（六） 徒1:1~5 標題」這種日期 + 經文標頭（day_index 由計畫起始日推算），或
-//   ·「第1天 ｜ 使徒行傳 1:1-5」／「1. 使徒行傳 1:1-5」這種明確編號。
-// 標頭之後到下一個標頭之間的文字，用「1. 2. 3.…」的題號切成一條條思想經文
-// （會避開 v.8、16:8、40天、參太3:2 這類數字，不誤切）。
-// 前面的簡介 / 目錄（沒有題號、也不是標頭）自然被略過。
-function parseDevotionBulkText(text, startDateStr) {
-  const src = String(text || '')
-    .replace(/\r\n/g, '\n')
-    .replace(/新生命小組教會\s*版權所有/g, ' ')   // 頁首/頁尾雜訊
-    .replace(/[ \t　]+/g, ' ');
-
-  const bookRe = '(?:徒|使徒行傳|羅|羅馬書|創|創世記|出|出埃及記|利|利未記|民|民數記|申|申命記)';
-  const headRe = new RegExp(
-    '(?:第\\s*(\\d+)\\s*天\\s*[｜|]|(\\d{1,2})\\/(\\d{1,2})\\s*(?:（[^）]{0,6}）)?|(?:^|\\s)(\\d{1,2})\\s*[.、]\\s*(?=' + bookRe + '))'
-    + '\\s*' + bookRe + '?\\s*(\\d+)\\s*[:：]\\s*(\\d+)\\s*[~～\\-–—]\\s*(\\d+)',
-    'g'
-  );
-
-  const bookFull = { '徒': '使徒行傳', '羅': '羅馬書', '創': '創世記', '出': '出埃及記', '利': '利未記', '民': '民數記', '申': '申命記' };
-  const normalizeLabel = (raw, c, v1, v2) => {
-    let m = raw.match(new RegExp('(' + bookRe + ')'));
-    let book = m ? (bookFull[m[1]] || m[1]) : '使徒行傳';
-    return { label: `${book} ${c}:${v1}-${v2}`, refs: [{ book, chapterFrom: Number(c), verseFrom: Number(v1), chapterTo: Number(c), verseTo: Number(v2) }] };
-  };
-
-  const start = startDateStr ? new Date(`${String(startDateStr).slice(0, 10)}T00:00:00`) : null;
-  const dayIndexFromDate = (mm, dd) => {
-    if (!start || !Number.isFinite(start.getTime())) return null;
-    let y = start.getFullYear();
-    let d = new Date(y, mm - 1, dd);
-    if (d < new Date(y, start.getMonth(), start.getDate())) d = new Date(y + 1, mm - 1, dd);
-    const diff = Math.round((d - new Date(y, start.getMonth(), start.getDate())) / 86400000);
-    return diff >= 0 ? diff + 1 : null;
-  };
-
-  // 收集所有標頭出現位置
-  const heads = [];
-  let mm;
-  while ((mm = headRe.exec(src)) !== null) {
-    const [, dNum, mo, day, nDot, chap, vs1, vs2] = mm;
-    let dayIndex = null;
-    if (dNum) dayIndex = Number(dNum);
-    else if (nDot) dayIndex = Number(nDot);
-    else if (mo && day) dayIndex = dayIndexFromDate(Number(mo), Number(day));
-    if (!Number.isFinite(dayIndex) || dayIndex < 1) continue;
-    heads.push({ at: mm.index, end: headRe.lastIndex, dayIndex, raw: mm[0], chap, vs1, vs2 });
-  }
-  if (!heads.length) return [];
-
-  const splitQuestions = (body) => {
-    // 在「題號」前切：1-2 位數 + . 或 、，前面不能是數字 / . / : / v（避開 v.8、16:8、3.2）
-    const parts = body.split(/(?<![0-9.:：vV])(?=(?:[1-9]|1[0-9])\s*[．.、]\s*\S)/);
-    return parts
-      .map(s => s.replace(/^\s*(?:[1-9]|1[0-9])\s*[．.、]\s*/, '')
-                 .replace(/^[-•*▪●·（(]?\s*\d*\s*[）).、]?\s*/, '')
-                 .replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/, '')
-                 .replace(/\s+/g, ' ').trim())
-      .filter(s => s.length > 1);
-  };
-
-  const rows = [];
-  heads.forEach((h, i) => {
-    const bodyRaw = src.slice(h.end, i + 1 < heads.length ? heads[i + 1].at : src.length).trim();
-    // body 開頭到第一個題號之間就是「當日主題 / 標題」（例：「等候所應許的」）。
-    const firstQ = bodyRaw.search(/(?<![0-9.:：vV])(?:[1-9]|1[0-9])\s*[．.、]\s*\S/);
-    const qText = firstQ >= 0 ? bodyRaw.slice(firstQ) : bodyRaw;
-    const title = (firstQ >= 0 ? bodyRaw.slice(0, firstQ) : "")
-      .replace(/[\s　]+/g, " ")
-      .replace(/^[｜|:：\-–—•·]+/, "")
-      .trim()
-      .slice(0, 60);
-    const reflections = splitQuestions(qText);
-    const { label, refs } = normalizeLabel(h.raw, h.chap, h.vs1, h.vs2);
-    rows.push({ dayIndex: h.dayIndex, title, passageLabel: label, passageRefs: refs, reflections });
-  });
-
-  // 同一天重複 → 後者覆蓋；依 dayIndex 排序
-  const byDay = new Map();
-  rows.forEach(r => byDay.set(r.dayIndex, r));
-  return [...byDay.values()].sort((a, b) => a.dayIndex - b.dayIndex);
-}
-
-async function renderAdminDevotionPlan(root, forceRefresh = false) {
-  if (!root) return;
-  const plans = getDevotionalPlans();
-  if (!plans.length) {
-    root.innerHTML = '<div class="admin-user-directory__empty" style="padding:1.5rem;text-align:center;">'
-      + '目前沒有靈修計畫。請先在 Supabase 執行 <code>supabase/seeds/seed_devotional_plan_acts_1.sql</code> 建立「使徒行傳靈修（一）」，再回到這裡編輯內容。</div>';
-    return;
-  }
-  if (!adminDevotionSelectedPlanId || !plans.some(p => String(p.id) === String(adminDevotionSelectedPlanId))) {
-    adminDevotionSelectedPlanId = String(plans[0].id);
-  }
-  const planId = adminDevotionSelectedPlanId;
-  const activePlan = plans.find(p => String(p.id) === String(planId)) || plans[0];
-
-  if (firstPaint(root)) root.innerHTML = '<div class="admin-user-directory__empty">正在載入每日靈修…</div>';
-  const res = await db.listDevotionDays(planId);
-  if (!res.success) {
-    root.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(res.message || '無法載入每日靈修內容。')}</div>`;
-    return;
-  }
-  const data = res.data || {};
-  const days = Array.isArray(data.days) ? data.days : [];
-  const draftCount = days.filter(d => !d.isPublished).length;
-
-  const rowHtml = days.map(d => `
-    <tr data-devotion-day-id="${escapeHTML(String(d.id))}" data-devotion-day-index="${d.dayIndex}">
-      <td>第 ${d.dayIndex} 天<br><span class="admin-devotion__date">${escapeHTML(d.displayDate || '')}</span></td>
-      <td>${escapeHTML(d.title || '（未填）')}</td>
-      <td>${escapeHTML(d.passageLabel || '（未填）')}</td>
-      <td style="text-align:center;">${Array.isArray(d.reflections) ? d.reflections.length : 0}</td>
-      <td style="text-align:center;">${d.videoUrl ? '✔' : '—'}</td>
-      <td style="text-align:center;">${d.isPublished
-        ? '<span class="stat-badge stat-badge--positive">已發佈</span>'
-        : '<span class="stat-badge stat-badge--neutral">草稿</span>'}</td>
-      <td style="text-align:right;white-space:nowrap;">
-        <button type="button" class="secondary-btn" data-devotion-edit>編輯</button>
-        <button type="button" class="danger-btn" data-devotion-delete>刪除</button>
-      </td>
-    </tr>`).join('');
-
-  root.innerHTML = `
-    <div class="admin-devotion">
-      <div class="admin-devotion__toolbar">
-        <div class="admin-devotion__planname">${escapeHTML(data.name || (activePlan && activePlan.name) || '每日靈修')}</div>
-        <div class="admin-devotion__meta">
-          ${escapeHTML(data.startDate || '')} ～ ${escapeHTML(data.endDate || '')}　｜　共 ${days.length} 天
-        </div>
-        <label class="admin-devotion__future">
-          <span>開放未來日期</span>
-          <button type="button" class="feature-switch" id="admin-devotion-future-toggle"
-            role="switch" aria-checked="${data.futureOpen ? 'true' : 'false'}"
-            aria-label="開放未來日期">
-            <span class="feature-switch__thumb" aria-hidden="true"></span>
-          </button>
-        </label>
-        <button type="button" class="secondary-btn" id="admin-devotion-preview">預覽會友畫面</button>
-        <button type="button" class="primary-btn" id="admin-devotion-publish-all"${draftCount ? '' : ' disabled'}>
-          ${draftCount ? `全部發佈（${draftCount} 天草稿）` : '全部已發佈'}
-        </button>
-      </div>
-      <p class="admin-devotion__hint">「全部發佈」會把所有天設為已發佈；未來日期仍由上方「開放未來日期」依當天日期一天天自動開鎖。</p>
-      <p class="admin-devotion__hint">「每日靈修」功能未開放時，會友和探索計畫都看不到這份計畫；要檢視會友端畫面請用上方「預覽會友畫面」。</p>
-
-      <div class="admin-devotion__playlist">
-        <label for="admin-devotion-playlist-input">YouTube 播放清單</label>
-        <input type="text" id="admin-devotion-playlist-input" class="form-control"
-          value="${escapeHTML(data.playlistId || '')}" placeholder="PL... 或整段播放清單網址">
-        <button type="button" class="secondary-btn" id="admin-devotion-playlist-save">儲存</button>
-        <span class="admin-devotion__hint" id="admin-devotion-playlist-status">
-          設定後，編輯每一天時可以「依日期抓候選」，從這個清單挑當天的靈修影片。
-        </span>
-      </div>
-
-      <p class="admin-devotion__sync-status" id="admin-devotion-sync-status">今天自動抓取：查詢中…</p>
-
-      <p class="admin-feature-setting-feedback hidden" id="admin-devotion-feedback" role="status"></p>
-
-      <details class="admin-devotion__import">
-        <summary>貼文字批次匯入</summary>
-        <p class="admin-devotion__hint">可以<strong>直接貼從靈修手冊 PDF 複製出來的原文</strong>——只要每一天有「8/22（六） 徒1:1~5 標題」這種日期＋經文標頭，或「第1天 ｜ 使徒行傳 1:1-5」，思想題用「1. 2. 3.」編號即可。前面的簡介 / 目錄會自動略過，v.8、參太3:2 這類數字不會被誤切。匯入不會自動發佈，逐日確認後再勾「發佈」。</p>
-        <textarea id="admin-devotion-bulk" class="form-control" rows="10" placeholder="使徒行傳（一）靈修（共32天）… 8/22（六） 徒1:1~5 等候所應許的 1.v.1-2在總括前書…？ 2.主耶穌復活後40天…？ 8/23（日） 徒1:6~11 耶穌被接升天 1. v.6-7門徒關心的…？"></textarea>
-        <div style="margin-top:.5rem;display:flex;gap:.5rem;">
-          <button type="button" class="secondary-btn" id="admin-devotion-bulk-preview">預覽</button>
-          <button type="button" class="primary-btn" id="admin-devotion-bulk-import" disabled>匯入</button>
-        </div>
-        <div id="admin-devotion-bulk-result" class="admin-devotion__hint"></div>
-      </details>
-
-      <div class="admin-devotion__list-wrap">
-        <table class="admin-devotion__table">
-          <thead><tr><th>天 / 日期</th><th>主題</th><th>經文進度</th><th>思想條數</th><th>影片</th><th>狀態</th><th></th></tr></thead>
-          <tbody>${rowHtml || '<tr><td colspan="7" class="admin-user-directory__empty">尚無內容，請用上方「批次匯入」或下方「新增一天」。</td></tr>'}</tbody>
-        </table>
-      </div>
-      <button type="button" class="secondary-btn" id="admin-devotion-add" style="margin-top:.75rem;">＋ 新增一天</button>
-    </div>`;
-
-  if (typeof hydrateIcons === 'function') hydrateIcons(root);
-
-  root.querySelector('#admin-devotion-preview')?.addEventListener('click', () => {
-    if (typeof window.previewDevotionalPlanAsMember === 'function') {
-      window.previewDevotionalPlanAsMember(planId);
-    } else if (typeof showToast === 'function') {
-      showToast('預覽功能載入中，請切到「計畫」分頁再試一次。');
-    }
-  });
-
-  // 每早自動抓取影片（sync-devotion-video）的今日狀態（migration 0161）
-  (async () => {
-    const el = root.querySelector('#admin-devotion-sync-status');
-    if (!el) return;
-    let r;
-    try { r = await db.getDevotionVideoSyncStatus(planId); } catch (_) { r = null; }
-    if (!r || !r.success) { el.textContent = '今天自動抓取：狀態查不到（排程 / 後端可能尚未部署）。'; el.dataset.tone = 'muted'; return; }
-    const d = r.data || {};
-    const map = {
-      updated: ['ok', `✓ 今天（${d.today || ''}）已自動填入影片${d.todayVideoTitle ? '：' + d.todayVideoTitle : ''}`],
-      already_set_or_missing_day: ['muted', '今天已有影片，或今天不在計畫日期範圍內。'],
-      no_new_video_today: ['warn', '今天還沒有可抓的影片（可能上片延後），排程明早會再試，也可以在下方逐日手動補。'],
-      failed: ['bad', `✗ 今天自動抓取失敗：${d.todayMessage || '原因不明，請看 Edge Function log'}`],
-      before_plan_start: ['muted', '計畫還沒開始。']
-    };
-    if (d.hasToday && map[d.todayStatus]) {
-      const [tone, text] = map[d.todayStatus];
-      el.textContent = '今天自動抓取：' + text;
-      el.dataset.tone = tone;
-    } else if (d.latestDate) {
-      el.textContent = `今天還沒有自動抓取紀錄。最近一次：${d.latestDate}（${d.latestStatus || '—'}）。`;
-      el.dataset.tone = 'muted';
-    } else {
-      el.textContent = '尚無自動抓取紀錄——排程可能還沒部署，或今天還沒執行（每早約 07:10）。';
-      el.dataset.tone = 'muted';
-    }
-  })();
-
-  const feedback = root.querySelector('#admin-devotion-feedback');
-  const showFeedback = (msg, isError = true) => {
-    if (!feedback) return;
-    feedback.textContent = msg;
-    feedback.classList.toggle('hidden', !msg);
-    feedback.style.color = isError ? 'var(--color-danger)' : 'var(--text-secondary)';
-  };
-
-  root.querySelector('#admin-devotion-publish-all')?.addEventListener('click', async () => {
-    if (!draftCount) return;
-    if (!confirm(`把這份計畫全部 ${days.length} 天設為「已發佈」？（未來日期仍由「開放未來日期」依日期自動開鎖）`)) return;
-    const btn = root.querySelector('#admin-devotion-publish-all');
-    if (btn) { btn.disabled = true; btn.textContent = '發佈中…'; }
-    const r = await db.setAllDevotionDaysPublished(planId, true);
-    if (!r.success) { showFeedback(r.message || '發佈失敗'); if (btn) btn.disabled = false; return; }
-    if (typeof showToast === 'function') showToast(`已發佈（更新 ${r.data?.changed ?? draftCount} 天）`);
-    renderAdminDevotionPlan(root, true);
-  });
-
-  const futureToggle = root.querySelector('#admin-devotion-future-toggle');
-  futureToggle?.addEventListener('click', async () => {
-    const cur = futureToggle.getAttribute('aria-checked') === 'true';
-    futureToggle.disabled = true;
-    const r = await db.setDevotionalPlanFutureOpen(planId, !cur);
-    futureToggle.disabled = false;
-    if (!r.success) { showFeedback(r.message || '切換失敗'); return; }
-    futureToggle.setAttribute('aria-checked', (!cur) ? 'true' : 'false');
-    // 讓 state.globalPlans 的 rules 也跟上（下次 render 才對）
-    const gp = (state.globalPlans || []).find(p => String(p.id) === String(planId));
-    if (gp) gp.devotionFutureOpen = !cur;
-    if (typeof showToast === 'function') showToast(!cur ? '已開放未來日期' : '未來日期已鎖回');
-  });
-
-  // YouTube 播放清單設定（給「依日期抓候選」用）
-  let currentDevotionPlaylistId = String(data.playlistId || '');
-  const extractPlaylistId = (raw) => {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    const m = s.match(/[?&]list=([A-Za-z0-9_-]+)/);
-    return m ? m[1] : s;
-  };
-  const playlistInput = root.querySelector('#admin-devotion-playlist-input');
-  const playlistStatus = root.querySelector('#admin-devotion-playlist-status');
-  root.querySelector('#admin-devotion-playlist-save')?.addEventListener('click', async () => {
-    const btn = root.querySelector('#admin-devotion-playlist-save');
-    const id = extractPlaylistId(playlistInput?.value);
-    if (btn) btn.disabled = true;
-    const r = await db.setDevotionalPlanPlaylistId(planId, id);
-    if (btn) btn.disabled = false;
-    if (!r.success) {
-      if (playlistStatus) { playlistStatus.textContent = r.message || '儲存失敗'; playlistStatus.style.color = 'var(--color-danger)'; }
-      return;
-    }
-    currentDevotionPlaylistId = r.data?.playlistId || id;
-    if (playlistInput) playlistInput.value = currentDevotionPlaylistId;
-    if (playlistStatus) {
-      playlistStatus.textContent = currentDevotionPlaylistId ? '已儲存播放清單。' : '已清除播放清單設定。';
-      playlistStatus.style.color = 'var(--text-secondary)';
-    }
-    if (typeof showToast === 'function') showToast('已儲存 YouTube 播放清單');
-  });
-
-  // 批次匯入
-  const bulkArea = root.querySelector('#admin-devotion-bulk');
-  const bulkPreviewBtn = root.querySelector('#admin-devotion-bulk-preview');
-  const bulkImportBtn = root.querySelector('#admin-devotion-bulk-import');
-  const bulkResult = root.querySelector('#admin-devotion-bulk-result');
-  let parsedRows = [];
-  bulkPreviewBtn?.addEventListener('click', () => {
-    parsedRows = parseDevotionBulkText(bulkArea.value, data.startDate);
-    if (!parsedRows.length) {
-      bulkResult.textContent = '解析不到任何一天。請確認每天有「M/D（週） 徒C:V~V 標題」或「第N天 ｜ 經文」的標頭，思想題用「1. 2. 3.」編號。';
-      bulkImportBtn.disabled = true;
-      return;
-    }
-    bulkResult.innerHTML = `解析到 <strong>${parsedRows.length}</strong> 天：`
-      + parsedRows.map(r => `第 ${r.dayIndex} 天（${r.title ? escapeHTML(r.title) + '｜' : ''}${escapeHTML(r.passageLabel)}・${r.reflections.length} 條）`).join('、');
-    bulkImportBtn.disabled = false;
-  });
-  bulkImportBtn?.addEventListener('click', async () => {
-    if (!parsedRows.length) return;
-    bulkImportBtn.disabled = true;
-    const r = await db.bulkUpsertDevotionDays(planId, parsedRows);
-    if (!r.success) { showFeedback(r.message || '匯入失敗'); bulkImportBtn.disabled = false; return; }
-    if (typeof showToast === 'function') showToast(`已匯入 / 更新 ${r.data?.upserted ?? parsedRows.length} 天`);
-    renderAdminDevotionPlan(root, true);
-  });
-
-  // 逐日編輯 / 刪除 / 新增 —— 跳出置中彈窗（掛在 document.body，不受管理子頁捲動容器限制）
-  let devotionEditorOverlay = null;
-  function onDevotionEditorKey(e) {
-    if (e.key === 'Escape') closeDevotionEditor();
-  }
-  const closeDevotionEditor = () => {
-    if (devotionEditorOverlay) { devotionEditorOverlay.remove(); devotionEditorOverlay = null; }
-    document.removeEventListener('keydown', onDevotionEditorKey);
-  };
-  const dateDiffDays = (a, b) => {
-    const da = new Date(String(a) + 'T00:00:00Z');
-    const db2 = new Date(String(b) + 'T00:00:00Z');
-    if (Number.isNaN(da.getTime()) || Number.isNaN(db2.getTime())) return null;
-    return Math.round((da - db2) / 86400000);
-  };
-  const addDaysISO = (iso, n) => {
-    const d0 = new Date(String(iso) + 'T00:00:00Z');
-    if (Number.isNaN(d0.getTime())) return '';
-    d0.setUTCDate(d0.getUTCDate() + n);
-    return d0.toISOString().slice(0, 10);
-  };
-
-  const openEditor = (day) => {
-    closeDevotionEditor();
-    const d = day || { dayIndex: (days.at(-1)?.dayIndex || 0) + 1, title: '', passageLabel: '', reflections: [], videoUrl: '', videoTitle: '', isPublished: false };
-    const dayDate = day ? (d.displayDate || '') : addDaysISO(data.startDate, (d.dayIndex || 1) - 1);
-
-    const overlay = document.createElement('div');
-    overlay.className = 'tts-guide-modal-overlay admin-devotion-modal';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDevotionEditor(); });
-    overlay.innerHTML = `
-      <div class="modal-panel admin-devotion-modal__panel">
-        <div class="admin-devotion-modal__head">
-          <button type="button" class="pill-btn" id="dv-back">← 返回</button>
-          <h4>${day ? '編輯第 ' + d.dayIndex + ' 天' : '新增一天'}${dayDate ? '　·　' + escapeHTML(dayDate) : ''}</h4>
-          <button type="button" class="admin-devotion-modal__x" id="dv-x" aria-label="關閉">&times;</button>
-        </div>
-        <div class="admin-devotion-modal__body">
-          <label>第幾天<input type="number" min="1" id="dv-day-index" class="form-control" value="${d.dayIndex}" ${day ? 'readonly' : ''}></label>
-          <label>當日主題<input type="text" id="dv-title" class="form-control" value="${escapeHTML(d.title || '')}" placeholder="等候所應許的"></label>
-          <label>經文進度<input type="text" id="dv-passage" class="form-control" value="${escapeHTML(d.passageLabel || '')}" placeholder="使徒行傳 1:1-5"></label>
-          <label>思想經文（一行一條）<textarea id="dv-reflections" class="form-control" rows="6">${escapeHTML((d.reflections || []).join('\n'))}</textarea></label>
-
-          <div class="admin-devotion-modal__video">
-            <label>靈修影片連結<input type="url" id="dv-video-url" class="form-control" value="${escapeHTML(d.videoUrl || '')}" placeholder="https://www.youtube.com/watch?v=..."></label>
-            <label>影片標題<input type="text" id="dv-video-title" class="form-control" value="${escapeHTML(d.videoTitle || '')}"></label>
-            <div class="admin-devotion-modal__video-actions">
-              <button type="button" class="secondary-btn" id="dv-fetch-candidates">依日期抓候選</button>
-              <button type="button" class="pill-btn" id="dv-refetch-title">重新抓標題</button>
-            </div>
-            <p class="admin-devotion__hint" id="dv-video-msg"></p>
-            <div id="dv-candidates" class="admin-devotion-candidates hidden"></div>
-          </div>
-
-          <label class="admin-devotion__pub"><input type="checkbox" id="dv-published" ${d.isPublished ? 'checked' : ''}> 發佈這一天（會友看得到）</label>
-        </div>
-        <div class="admin-devotion-modal__foot">
-          <button type="button" class="primary-btn" id="dv-save">儲存</button>
-          <button type="button" class="pill-btn" id="dv-cancel">取消</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    devotionEditorOverlay = overlay;
-    document.addEventListener('keydown', onDevotionEditorKey);
-    if (typeof hydrateIcons === 'function') hydrateIcons(overlay);
-
-    overlay.querySelector('#dv-back').addEventListener('click', closeDevotionEditor);
-    overlay.querySelector('#dv-x').addEventListener('click', closeDevotionEditor);
-    overlay.querySelector('#dv-cancel').addEventListener('click', closeDevotionEditor);
-
-    const videoMsg = overlay.querySelector('#dv-video-msg');
-    const setVideoMsg = (msg, isError = false) => {
-      if (!videoMsg) return;
-      videoMsg.textContent = msg || '';
-      videoMsg.style.color = isError ? 'var(--color-danger)' : 'var(--text-secondary)';
-    };
-
-    // 重新抓標題：YouTube oEmbed（有 CORS、免金鑰）
-    overlay.querySelector('#dv-refetch-title').addEventListener('click', async () => {
-      const url = overlay.querySelector('#dv-video-url').value.trim();
-      if (!url) { setVideoMsg('請先貼上影片連結。', true); return; }
-      const btn = overlay.querySelector('#dv-refetch-title');
-      btn.disabled = true;
-      setVideoMsg('讀取中…');
-      try {
-        const res = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(url));
-        if (!res.ok) throw new Error('oembed_' + res.status);
-        const j = await res.json();
-        if (j && j.title) {
-          overlay.querySelector('#dv-video-title').value = j.title;
-          setVideoMsg('已更新影片標題。');
-        } else {
-          setVideoMsg('這個連結抓不到標題。', true);
-        }
-      } catch (_) {
-        setVideoMsg('抓不到影片資訊（可能不是公開的 YouTube 連結）。', true);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    // 依日期抓候選：從計畫綁定的播放清單列影片，依與當天日期的接近度排序
-    overlay.querySelector('#dv-fetch-candidates').addEventListener('click', async () => {
-      const box = overlay.querySelector('#dv-candidates');
-      const btn = overlay.querySelector('#dv-fetch-candidates');
-      if (!currentDevotionPlaylistId) {
-        setVideoMsg('這份計畫還沒設定 YouTube 播放清單，請先在上方「YouTube 播放清單」欄位設定。', true);
-        return;
-      }
-      btn.disabled = true;
-      setVideoMsg('從播放清單抓取中…');
-      const r = await db.fetchDevotionPlaylistVideos(planId);
-      btn.disabled = false;
-      if (!r.success) { setVideoMsg(r.message || '抓取失敗。', true); return; }
-      const vids = (r.data.videos || []).slice();
-      if (!vids.length) { setVideoMsg('播放清單裡沒有影片。', true); box.classList.add('hidden'); return; }
-      if (dayDate) {
-        vids.sort((a, b) => {
-          const da = a.publishedDate ? Math.abs(dateDiffDays(a.publishedDate, dayDate)) : 1e9;
-          const db2 = b.publishedDate ? Math.abs(dateDiffDays(b.publishedDate, dayDate)) : 1e9;
-          return da - db2;
-        });
-      }
-      setVideoMsg(dayDate
-        ? ('依「' + dayDate + '」排序，最接近的排在最前面。清單只含最近約 15 部，更早的請直接貼連結。')
-        : '清單只含最近約 15 部。');
-      box.classList.remove('hidden');
-      box.innerHTML = vids.map(v => {
-        const diff = (dayDate && v.publishedDate) ? dateDiffDays(v.publishedDate, dayDate) : null;
-        const diffLabel = diff === null ? '' : (diff === 0 ? '同一天' : (diff > 0 ? ('晚 ' + diff + ' 天') : ('早 ' + (-diff) + ' 天')));
-        return '<button type="button" class="admin-devotion-candidate" data-url="' + escapeHTML(v.url) + '" data-title="' + escapeHTML(v.title) + '">'
-          + '<span class="admin-devotion-candidate__title">' + escapeHTML(v.title) + '</span>'
-          + '<span class="admin-devotion-candidate__meta">' + escapeHTML(v.publishedDate || '日期不明') + (diffLabel ? '　·　' + diffLabel : '') + '</span>'
-          + '</button>';
-      }).join('');
-      box.querySelectorAll('.admin-devotion-candidate').forEach(el => {
-        el.addEventListener('click', () => {
-          overlay.querySelector('#dv-video-url').value = el.dataset.url;
-          overlay.querySelector('#dv-video-title').value = el.dataset.title;
-          box.querySelectorAll('.admin-devotion-candidate').forEach(x => x.classList.remove('is-selected'));
-          el.classList.add('is-selected');
-          setVideoMsg('已填入：' + el.dataset.title);
-        });
-      });
-    });
-
-    overlay.querySelector('#dv-save').addEventListener('click', async () => {
-      const payload = {
-        globalPlanId: planId,
-        dayIndex: Number(overlay.querySelector('#dv-day-index').value),
-        title: overlay.querySelector('#dv-title').value.trim(),
-        passageLabel: overlay.querySelector('#dv-passage').value.trim(),
-        reflections: overlay.querySelector('#dv-reflections').value.split('\n').map(s => s.trim()).filter(Boolean),
-        videoUrl: overlay.querySelector('#dv-video-url').value.trim(),
-        videoTitle: overlay.querySelector('#dv-video-title').value.trim(),
-        isPublished: overlay.querySelector('#dv-published').checked
-      };
-      if (!payload.dayIndex || payload.dayIndex < 1) { setVideoMsg('「第幾天」要是 1 以上的數字', true); return; }
-      const saveBtn = overlay.querySelector('#dv-save');
-      saveBtn.disabled = true;
-      const r = await db.upsertDevotionDay(payload);
-      saveBtn.disabled = false;
-      if (!r.success) { setVideoMsg(r.message || '儲存失敗', true); return; }
-      if (typeof showToast === 'function') showToast('已儲存');
-      closeDevotionEditor();
-      renderAdminDevotionPlan(root, true);
-    });
-  };
-  root.querySelector('#admin-devotion-add')?.addEventListener('click', () => openEditor(null));
-  root.querySelectorAll('[data-devotion-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.closest('tr')?.dataset.devotionDayIndex);
-      openEditor(days.find(d => d.dayIndex === idx));
-    });
-  });
-  root.querySelectorAll('[data-devotion-delete]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.closest('tr')?.dataset.devotionDayId;
-      if (!id || !confirm('刪除這一天的靈修內容？')) return;
-      const r = await db.deleteDevotionDay(id);
-      if (!r.success) { showFeedback(r.message || '刪除失敗'); return; }
-      renderAdminDevotionPlan(root, true);
-    });
-  });
-}
-window.renderAdminDevotionPlan = renderAdminDevotionPlan;
-
-// ── 小組聚會週計畫（group_meeting plan）管理 ──────────────────────────────
-let adminGroupMeetingSelectedPlanId = null;
-function getGroupMeetingPlans() {
-  return (state.globalPlans || [])
-    .filter(p => p && (p.planKind === 'group_meeting' || p.plan_kind === 'group_meeting'));
-}
-function gmSongsToText(songs) {
-  return (Array.isArray(songs) ? songs : [])
-    .map(s => [s.code, s.title].filter(Boolean).join(' ')).join('\n');
-}
-function gmTextToSongs(text) {
-  return String(text || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
-    const m = l.match(/^(\S+)\s+(.+)$/);
-    return m ? { code: m[1], title: m[2] } : { code: l, title: '' };
-  });
-}
-function gmRefsFromLabel(label) {
-  try {
-    if (typeof window.parsePassageLabel === 'function') {
-      const r = window.parsePassageLabel(String(label || '').trim());
-      return r ? [r] : [];
-    }
-  } catch (_) {}
-  return [];
-}
-
-async function renderAdminGroupMeetingPlan(root, forceRefresh = false) {
-  if (!root) return;
-  const plans = getGroupMeetingPlans();
-  if (!plans.length) {
-    root.innerHTML = '<div class="admin-devotion__empty">目前沒有小組聚會計畫。請先在 Supabase 執行 '
-      + '<code>supabase/seeds/seed_group_meeting_plan_2026_h2.sql</code> 建立「小組聚會經營（2026 7-12月）」，再回到這裡編輯內容。</div>';
-    return;
-  }
-  if (!adminGroupMeetingSelectedPlanId || !plans.some(p => String(p.id) === String(adminGroupMeetingSelectedPlanId))) {
-    adminGroupMeetingSelectedPlanId = String(plans[0].id);
-  }
-  const planId = adminGroupMeetingSelectedPlanId;
-  const activePlan = plans.find(p => String(p.id) === String(planId)) || plans[0];
-
-  const res = await db.listGroupMeetingWeeks(planId);
-  if (!res.success) { root.innerHTML = `<div class="admin-devotion__empty">${escapeHTML(res.message || '載入失敗')}</div>`; return; }
-  const data = res.data || {};
-  const weeks = Array.isArray(data.weeks) ? data.weeks.slice().sort((a, b) => a.weekIndex - b.weekIndex) : [];
-  const gp = (state.globalPlans || []).find(p => String(p.id) === String(planId));
-  const futureOpen = data.futureOpen === true;
-
-  const rows = weeks.map(w => `
-    <tr data-gm-week-id="${escapeHTML(String(w.id))}" data-gm-week-index="${w.weekIndex}">
-      <td>第 ${w.weekIndex} 週<br><span class="admin-devotion__date">${escapeHTML(w.dateLabel || '')}</span></td>
-      <td>${escapeHTML(w.messagePassageLabel || '—')}</td>
-      <td>${escapeHTML(w.offeringPassageLabel || '—')}</td>
-      <td>${(Array.isArray(w.songs) ? w.songs.length : 0)} 首</td>
-      <td>${w.isPublished ? '已發佈' : '未發佈'}</td>
-      <td>
-        <button type="button" class="secondary-btn" data-gm-edit>編輯</button>
-        <button type="button" class="danger-btn" data-gm-delete>刪除</button>
-      </td>
-    </tr>`).join('');
-
-  root.innerHTML = `
-    <div class="admin-devotion">
-      <div class="admin-devotion__toolbar">
-        <div class="admin-devotion__planname">${escapeHTML(data.name || (activePlan && activePlan.name) || '小組聚會週計畫')}</div>
-        <div class="admin-devotion__meta">起始 ${escapeHTML(data.startDate || '')}　共 ${weeks.length} 週</div>
-        <label class="admin-devotion__future">
-          <span>開放未來週次</span>
-          <button type="button" class="feature-switch" id="admin-gm-future-toggle"
-            role="switch" aria-checked="${futureOpen ? 'true' : 'false'}">${futureOpen ? '已開放' : '未開放'}</button>
-        </label>
-        <button type="button" class="secondary-btn" id="admin-gm-preview">預覽會友畫面</button>
-      </div>
-      <p class="admin-devotion__hint">「小組聚會週計畫」功能未開放時，會友和探索計畫都看不到；要檢視會友端畫面請用「預覽會友畫面」。經文欄請填完整書名（例：馬太福音 26:17-29），系統會據此讓會友點開段落預覽。</p>
-      <p class="admin-feature-setting-feedback hidden" id="admin-gm-feedback" role="status"></p>
-      <div class="admin-devotion__list-wrap">
-        <table class="admin-devotion__table">
-          <thead><tr><th>週次</th><th>信息經文</th><th>奉獻經文</th><th>詩歌</th><th>狀態</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="6">尚無週次</td></tr>'}</tbody>
-        </table>
-      </div>
-      <button type="button" class="secondary-btn" id="admin-gm-add" style="margin-top:.75rem;">＋ 新增一週</button>
-    </div>`;
-
-  const showFeedback = (msg) => {
-    const el = root.querySelector('#admin-gm-feedback');
-    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
-  };
-
-  root.querySelector('#admin-gm-preview')?.addEventListener('click', () => {
-    if (typeof window.previewGroupMeetingPlanAsMember === 'function') window.previewGroupMeetingPlanAsMember(planId);
-  });
-  const futureToggle = root.querySelector('#admin-gm-future-toggle');
-  futureToggle?.addEventListener('click', async () => {
-    const cur = futureToggle.getAttribute('aria-checked') === 'true';
-    futureToggle.disabled = true;
-    const r = await db.setGroupMeetingPlanFutureOpen(planId, !cur);
-    futureToggle.disabled = false;
-    if (!r.success) { showFeedback(r.message || '切換失敗'); return; }
-    if (gp) gp.groupMeetingFutureOpen = !cur;
-    renderAdminGroupMeetingPlan(root, true);
-  });
-
-  // 逐週編輯 —— 跳出置中彈窗（掛在 document.body，不受管理子頁捲動容器限制）
-  let gmEditorOverlay = null;
-  function onGmEditorKey(e) { if (e.key === 'Escape') closeGmEditor(); }
-  const closeGmEditor = () => {
-    if (gmEditorOverlay) { gmEditorOverlay.remove(); gmEditorOverlay = null; }
-    document.removeEventListener('keydown', onGmEditorKey);
-  };
-  const openEditor = (week) => {
-    closeGmEditor();
-    const w = week || {
-      weekIndex: (weeks.at(-1)?.weekIndex || 0) + 1, dateLabel: '', monthTheme: '',
-      messageTopic: '', messagePassageLabel: '', offeringTopic: '', offeringPassageLabel: '',
-      songs: [], note: '', isPublished: false
-    };
-    const overlay = document.createElement('div');
-    overlay.className = 'tts-guide-modal-overlay admin-devotion-modal';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeGmEditor(); });
-    overlay.innerHTML = `
-      <div class="modal-panel admin-devotion-modal__panel">
-        <div class="admin-devotion-modal__head">
-          <button type="button" class="pill-btn" id="gm-back">← 返回</button>
-          <h4>${week ? '編輯第 ' + w.weekIndex + ' 週' : '新增一週'}${w.dateLabel ? '　·　' + escapeHTML(w.dateLabel) : ''}</h4>
-          <button type="button" class="admin-devotion-modal__x" id="gm-x" aria-label="關閉">&times;</button>
-        </div>
-        <div class="admin-devotion-modal__body">
-          <label>第幾週<input type="number" min="1" id="gm-week-index" class="form-control" value="${w.weekIndex}" ${week ? 'readonly' : ''}></label>
-          <label>日期標籤（顯示用）<input type="text" id="gm-date-label" class="form-control" value="${escapeHTML(w.dateLabel || '')}" placeholder="7/1–7/2"></label>
-          <label>月主題<input type="text" id="gm-month-theme" class="form-control" value="${escapeHTML(w.monthTheme || '')}" placeholder="耶穌被賣的那一夜"></label>
-          <label>信息經文小標<input type="text" id="gm-msg-topic" class="form-control" value="${escapeHTML(w.messageTopic || '')}" placeholder="設立主聖餐"></label>
-          <label>信息經文<input type="text" id="gm-msg-passage" class="form-control" value="${escapeHTML(w.messagePassageLabel || '')}" placeholder="馬太福音 26:17-29"></label>
-          <label>奉獻經文小標<input type="text" id="gm-off-topic" class="form-control" value="${escapeHTML(w.offeringTopic || '')}" placeholder="擘餅與分杯（可留空）"></label>
-          <label>奉獻經文<input type="text" id="gm-off-passage" class="form-control" value="${escapeHTML(w.offeringPassageLabel || '')}" placeholder="馬太福音 26:26-28（可留空）"></label>
-          <label>敬拜讚美詩歌（一行一首，「代碼 歌名」）<textarea id="gm-songs" class="form-control" rows="4">${escapeHTML(gmSongsToText(w.songs))}</textarea></label>
-          <label>備註<input type="text" id="gm-note" class="form-control" value="${escapeHTML(w.note || '')}" placeholder="Pastor Greg 特會（可留空）"></label>
-          <label class="admin-devotion__pub"><input type="checkbox" id="gm-published" ${w.isPublished ? 'checked' : ''}> 發佈這一週（會友看得到）</label>
-          <p class="admin-devotion__hint" id="gm-editor-msg"></p>
-        </div>
-        <div class="admin-devotion-modal__foot">
-          <button type="button" class="primary-btn" id="gm-save">儲存</button>
-          <button type="button" class="pill-btn" id="gm-cancel">取消</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    gmEditorOverlay = overlay;
-    document.addEventListener('keydown', onGmEditorKey);
-    if (typeof hydrateIcons === 'function') hydrateIcons(overlay);
-
-    overlay.querySelector('#gm-back').addEventListener('click', closeGmEditor);
-    overlay.querySelector('#gm-x').addEventListener('click', closeGmEditor);
-    overlay.querySelector('#gm-cancel').addEventListener('click', closeGmEditor);
-
-    const editorMsg = overlay.querySelector('#gm-editor-msg');
-    overlay.querySelector('#gm-save').addEventListener('click', async () => {
-      const msgLabel = overlay.querySelector('#gm-msg-passage').value.trim();
-      const offLabel = overlay.querySelector('#gm-off-passage').value.trim();
-      const payload = {
-        globalPlanId: planId,
-        weekIndex: Number(overlay.querySelector('#gm-week-index').value),
-        dateLabel: overlay.querySelector('#gm-date-label').value.trim(),
-        monthTheme: overlay.querySelector('#gm-month-theme').value.trim(),
-        messageTopic: overlay.querySelector('#gm-msg-topic').value.trim(),
-        messagePassageLabel: msgLabel,
-        messagePassageRefs: gmRefsFromLabel(msgLabel),
-        offeringTopic: overlay.querySelector('#gm-off-topic').value.trim(),
-        offeringPassageLabel: offLabel,
-        offeringPassageRefs: gmRefsFromLabel(offLabel),
-        songs: gmTextToSongs(overlay.querySelector('#gm-songs').value),
-        note: overlay.querySelector('#gm-note').value.trim(),
-        isPublished: overlay.querySelector('#gm-published').checked
-      };
-      if (!payload.weekIndex || payload.weekIndex < 1) {
-        if (editorMsg) { editorMsg.textContent = '「第幾週」要是 1 以上的數字'; editorMsg.style.color = 'var(--color-danger)'; }
-        return;
-      }
-      const saveBtn = overlay.querySelector('#gm-save');
-      saveBtn.disabled = true;
-      const r = await db.upsertGroupMeetingWeek(payload);
-      saveBtn.disabled = false;
-      if (!r.success) {
-        if (editorMsg) { editorMsg.textContent = r.message || '儲存失敗'; editorMsg.style.color = 'var(--color-danger)'; }
-        return;
-      }
-      if (typeof showToast === 'function') showToast('已儲存');
-      closeGmEditor();
-      renderAdminGroupMeetingPlan(root, true);
-    });
-  };
-  root.querySelector('#admin-gm-add')?.addEventListener('click', () => openEditor(null));
-  root.querySelectorAll('[data-gm-edit]').forEach(btn => btn.addEventListener('click', () => {
-    const idx = Number(btn.closest('tr')?.dataset.gmWeekIndex);
-    openEditor(weeks.find(w => w.weekIndex === idx));
-  }));
-  root.querySelectorAll('[data-gm-delete]').forEach(btn => btn.addEventListener('click', async () => {
-    const id = btn.closest('tr')?.dataset.gmWeekId;
-    if (!id || !confirm('刪除這一週的內容？')) return;
-    const r = await db.deleteGroupMeetingWeek(id);
-    if (!r.success) { showFeedback(r.message || '刪除失敗'); return; }
-    renderAdminGroupMeetingPlan(root, true);
-  }));
-}
-window.renderAdminGroupMeetingPlan = renderAdminGroupMeetingPlan;
-
-// 「計畫篩選」下拉：依目前計畫管理子分頁，只列該子分頁相關類型的計畫。
-//   devotions      → 只有每日靈修計畫，onchange 驅動 adminDevotionSelectedPlanId
-//   group-meeting  → 只有小組聚會計畫，onchange 驅動 adminGroupMeetingSelectedPlanId
-//   其餘（報名狀態/成員/統計/團隊）→ 排除每日靈修與小組聚會，onchange 走 selectManagementPlan
-function managementPlanKindOf(plan) {
-  return (plan && (plan.planKind || plan.plan_kind)) || '';
-}
-
+// 「計畫篩選」下拉：列出可管理的計畫，onchange 走 selectManagementPlan。
 async function syncManagementPlanSelectForSubtab() {
   const select = document.getElementById('admin-management-plan-select');
   if (!select) return;
-  const sub = activeAdminPlanSubtab;
-  const isDevotion = sub === 'devotions';
-  const isGroupMeeting = sub === 'group-meeting';
-  const all = getManagementPlans();
-  const plans = isDevotion
-    ? all.filter(p => managementPlanKindOf(p) === 'devotional')
-    : isGroupMeeting
-      ? all.filter(p => managementPlanKindOf(p) === 'group_meeting')
-      : all.filter(p => { const k = managementPlanKindOf(p); return k !== 'devotional' && k !== 'group_meeting'; });
+  const plans = getManagementPlans();
 
   const keyOf = p => String(p.globalPlanId || p.id || p.presetKey || p.name);
   select.innerHTML = '';
   if (plans.length === 0) {
-    select.options.add(new Option(
-      isDevotion ? '目前沒有每日靈修計畫' : isGroupMeeting ? '目前沒有小組聚會計畫' : '目前沒有可管理的計畫', ''));
+    select.options.add(new Option('目前沒有可管理的計畫', ''));
     select.disabled = true;
     select.onchange = null;
     return;
@@ -4692,27 +4006,6 @@ async function syncManagementPlanSelectForSubtab() {
     const statusLabel = plan.managementStatus === 'upcoming' ? '（提前報名）' : '';
     select.options.add(new Option(`${plan.name || '未命名計畫'}${statusLabel}`, keyOf(plan)));
   });
-
-  if (isDevotion || isGroupMeeting) {
-    const currentId = isDevotion ? adminDevotionSelectedPlanId : adminGroupMeetingSelectedPlanId;
-    const match = plans.find(p => keyOf(p) === String(currentId) || String(p.id) === String(currentId));
-    const chosen = match || plans.find(p => p.managementStatus === 'ongoing') || plans[0];
-    const chosenId = String(chosen.id || chosen.globalPlanId);
-    if (isDevotion) adminDevotionSelectedPlanId = chosenId; else adminGroupMeetingSelectedPlanId = chosenId;
-    select.value = keyOf(chosen);
-    select.onchange = () => {
-      const picked = plans.find(p => keyOf(p) === select.value);
-      if (!picked) return;
-      const pid = String(picked.id || picked.globalPlanId);
-      const rootId = isDevotion ? 'admin-devotion-root' : 'admin-group-meeting-root';
-      const render = isDevotion ? renderAdminDevotionPlan : renderAdminGroupMeetingPlan;
-      if (isDevotion) adminDevotionSelectedPlanId = pid; else adminGroupMeetingSelectedPlanId = pid;
-      const root = document.getElementById(rootId);
-      if (root) Promise.resolve(render(root, true)).catch(e => console.warn('[Admin] devotion/group re-render error:', e));
-    };
-    try { await loadActiveAdminPlanSubtab(false); } catch (e) { console.warn('[Admin] loadActiveAdminPlanSubtab error:', e); }
-    return;
-  }
 
   // 優先沿用「計畫篩選」上一次自己選的計畫（adminManagementPlan），只有從未選過時才預設帶入
   // 使用者自己目前在讀的計畫（activePlan）；兩者分開存放，選這裡的計畫不會影響使用者的首頁/繼續閱讀狀態。
@@ -4741,8 +4034,6 @@ export async function renderAdminPlanManagement() {
     }
     mountPlanManagementSections();
     applyAdminExamVisibility(window.speedReadingExamFeatureEnabled === true);
-    applyAdminDevotionVisibility(window.dailyDevotionFeatureEnabled === true);
-    applyAdminGroupMeetingVisibility(window.groupMeetingPlanFeatureEnabled === true);
 
     // 還原統一功能清單的選擇；不再經過舊 system/plans tab 包裝層。
     let savedSection = null;

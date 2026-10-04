@@ -438,3 +438,43 @@ export function buildWeeklyTrendCsv(series, exportedAt = new Date()) {
   return toCsv(headers, rows, exportedAt);
 }
 
+
+// ── 每週前三名（#429）─────────────────────────────────────────────────────────
+// 後台預覽用：admin_get_lightning_quiz_week_ranking 回傳的某一天答對名單（已依
+// 秒數由快到慢）扣掉排除的人，取前 limit 名。跟伺服器公布時的算法一樣
+// （admin_publish_lightning_quiz_week_ranking），名次依序 1、2、3，不並列。
+export function pickDayWinners(candidates, excludedIds, limit = 3) {
+  const excluded = new Set((Array.isArray(excludedIds) ? excludedIds : []).map(String));
+  return (Array.isArray(candidates) ? candidates : [])
+    .filter(candidate => !excluded.has(String(candidate.userId)))
+    .slice(0, limit)
+    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
+}
+
+// 排除名單只留這週真的有的日期與答對的人，送給伺服器前整理成
+// { "YYYY-MM-DD": [userId, …] }。
+export function normalizeRankingExcluded(days, excluded) {
+  const result = {};
+  (Array.isArray(days) ? days : []).forEach(day => {
+    const ids = new Set(((excluded || {})[day.riseDate] || []).map(String));
+    result[day.riseDate] = (Array.isArray(day.candidates) ? day.candidates : [])
+      .map(candidate => String(candidate.userId))
+      .filter(id => ids.has(id));
+  });
+  return result;
+}
+
+export const RANK_LABELS = Object.freeze(["第一名", "第二名", "第三名"]);
+
+export function formatRankLabel(rank) {
+  return RANK_LABELS[Number(rank) - 1] || `第 ${rank} 名`;
+}
+
+// 首頁「我的結果」：這週答對幾題（有題目的天數為分母）。
+export function summarizeMyWeek(days) {
+  const list = Array.isArray(days) ? days : [];
+  return {
+    total: list.length,
+    correct: list.filter(day => day?.mine?.result === "correct").length
+  };
+}
