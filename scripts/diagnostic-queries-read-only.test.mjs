@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,11 +35,8 @@ describe("scratch/", () => {
     expect(readFileSync(join(repoRoot, ".gitignore"), "utf8")).toMatch(/^scratch\/$/m);
   });
 
-  it("admin UI points at seeds that exist", () => {
+  it("admin UI does not point at scratch/", () => {
     const admin = readFileSync(join(repoRoot, "js/modules/admin.js"), "utf8");
-    const referenced = [...admin.matchAll(/supabase\/seeds\/([a-z0-9_]+\.sql)/g)].map(m => m[1]);
-    expect(referenced.length).toBeGreaterThan(0);
-    for (const seed of referenced) expect(existsSync(join(repoRoot, "supabase/seeds", seed)), seed).toBe(true);
     expect(admin).not.toMatch(/scratch\//);
   });
 });

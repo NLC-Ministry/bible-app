@@ -251,12 +251,11 @@ describe("joined plan options menu", () => {
     expect(schedule).toBeGreaterThan(details);
     expect(exit).toBeGreaterThan(schedule);
     expect(html).not.toContain('id="edit-flexible-plan-schedule-btn" style="display:none;"');
-    // 每日靈修／小組經營週計畫沒有「每週讀經安排」／「重設進度」的概念，這兩顆
-    // 按鈕只在點開「...」選單當下依這份計畫的種類決定要不要藏起來——不是在
-    // initPlanControls 跑一次就定案，見 refreshPlanOptionsMenuForKind()。
+    // 計畫已結束時「每週讀經安排」／「重設進度」要藏起來，在點開「...」選單當下
+    // 依這份計畫決定——不是在 initPlanControls 跑一次就定案，見 refreshPlanOptionsMenuForKind()。
     expect(planSource).toContain("function refreshPlanOptionsMenuForKind(plan)");
-    expect(planSource).toContain('scheduleBtn.style.display = (isViewerOnlyPlan || expired) ? "none" : ""');
-    expect(planSource).toContain('resetBtn.style.display = (isViewerOnlyPlan || expired) ? "none" : ""');
+    expect(planSource).toContain('scheduleBtn.style.display = expired ? "none" : ""');
+    expect(planSource).toContain('resetBtn.style.display = expired ? "none" : ""');
     expect(planSource).toContain("refreshPlanOptionsMenuForKind(state.activePlan)");
   });
 

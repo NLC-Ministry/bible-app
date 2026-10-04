@@ -88,8 +88,6 @@ const LAZY_MODULE_LOADERS = {
   'plan-stats': () => import('./modules/plan-stats.js'),
   // 計畫頁今日小測驗的作答畫面；當天確定有指派給自己的測驗才載入（#370）。
   'plan-quiz': () => import('./modules/plan-quiz.js'),
-  // 每日靈修、小組聚會週計畫的會友端畫面；點進這兩種計畫才載入（#370）。
-  'plan-devotion': () => import('./modules/plan-devotion.js'),
   profile: () => import('./modules/profile.js'),
   admin: () => import('./modules/admin.js'),
   'team-registration': () => import('./modules/team-registration.js'),
@@ -683,9 +681,8 @@ appRouter.switchTab = async function (tabId, options = {}) {
 
   try {
     // ── Pre-flight: leaving Plan tab — resync the shared state.activePlan
-    // pointer. Opening an ended plan's detail view or previewing an unjoined
-    // devotional/group-meeting plan overwrites this single pointer, and
-    // nothing else resets it; without this, Home keeps rendering whatever
+    // pointer. Opening an ended plan's detail view overwrites this single
+    // pointer, and nothing else resets it; without this, Home keeps rendering whatever
     // plan was last viewed instead of the user's actual current plan.
     if (previousTab === "plan-view" && tabId !== "plan-view" && typeof window.selectMostRecentActivePlan === "function") {
       state.activePlan = window.selectMostRecentActivePlan(state.activePlans);

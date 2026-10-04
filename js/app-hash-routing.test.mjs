@@ -39,8 +39,6 @@ function makeHarness({ href = "https://app.test/", loginGateOpen = false, role =
     PlanPageController: { groupSubview: null },
     syncActivePlanContext: vi.fn(),
     openProfileDetail: vi.fn(),
-    isDevotionalPlanVisibleToUser: () => true,
-    isGroupMeetingPlanVisibleToUser: () => false,
     ...winOverrides
   };
   const loginGate = { classList: makeClassList(loginGateOpen ? [] : ["hidden"]) };
@@ -101,16 +99,6 @@ describe("boot deep link", () => {
     expect(h.state.planActiveSubTab).toBe("ranking");
     expect(h.win.currentPlanViewState).toBe("GROUP");
     expect(h.win.PlanPageController.groupSubview).toBe("ranking");
-  });
-
-  it("previews a visible devotional plan the member has not joined", async () => {
-    const devotional = { id: "global-9", globalPlanId: "global-9", planKind: "devotional" };
-    const h = makeHarness({ href: "https://app.test/#/plan/global-9/stats", state: { globalPlans: [devotional] } });
-    h.routing.captureBootRoute();
-    await h.routing.finishBoot();
-    expect(h.state.activePlan).toBe(devotional);
-    expect(h.state.planActiveSubTab).toBe("today");
-    expect(h.toast).not.toHaveBeenCalled();
   });
 
   it("falls back to the plan list when the plan is unknown or not joined", async () => {

@@ -19,7 +19,6 @@ describe("db._dedupRead (js/db.js) — source", () => {
       ["fetchQuizNotifications", "quizNotifications"],
       ["fetchExamNotifications", "examNotifications"],
       ["fetchIssueThreadUnread", "issueThreadUnread"],
-      ["getMyDevotionGroupPreferences", "devotionGroupPrefs"],
       ["fetchCareReminders", "careReminders"],
     ]) {
       const idx = db.indexOf(`async ${method}(`);
@@ -110,7 +109,5 @@ describe("getFeatureSetting — one .in() query for the whole allowlist (js/db.j
     expect(db).toContain("_invalidateFeatureSettings() { this._featureSettings = null; }");
     const upd = db.slice(db.indexOf("async updateFeatureSetting("), db.indexOf("_maskAdminSender(rows)"));
     expect((upd.match(/this\._invalidateFeatureSettings\(\)/g) || []).length).toBe(2); // supabase + localStorage path
-    const master = db.slice(db.indexOf("async setDevotionGroupFeaturesMaster("), db.indexOf("async setDevotionGroupFeaturesMaster(") + 500);
-    expect(master).toContain("this._invalidateFeatureSettings()");
   });
 });

@@ -405,21 +405,6 @@
             </div>
           </div>
 
-          <!-- 每日靈修（獨立於上面「進行中的計畫」卡片，不共用 state.activePlan 的
-               進度式版面；沒有加入任何「每日靈修」計畫就整塊隱藏——見 js/modules/
-               home.js 的 refreshDevotionHomeCard()）。刻意簡化：只顯示日期＋經文，
-               有影片才多顯示一個小提示，不出現任何進度/百分比。放在速讀計畫卡片
-               下方、每日金句上方，避免跟金句卡並排搶成同一列。 -->
-          <div class="glass-card card-col span-12 bento-card devotion-home-card home-feature-card hidden" id="devotion-home-card">
-            <div id="devotion-home-content"></div>
-          </div>
-
-          <!-- 小組聚會週計畫（同上，plan_kind='group_meeting'；見 home.js 的
-               refreshGroupMeetingHomeCard()）。顯示本週的信息經文，點進去看整週。 -->
-          <div class="glass-card card-col span-12 bento-card devotion-home-card home-feature-card home-feature-card--gm hidden" id="group-meeting-home-card">
-            <div id="group-meeting-home-content"></div>
-          </div>
-
           <!-- 每日金句 (Verse of the Day) -->
           <div id="verse-card"
             class="card-col span-4 bento-card relative w-full min-h-[320px] rounded-2xl overflow-hidden cursor-default shadow-lg is-loading"
@@ -755,14 +740,6 @@
                 aria-label="搜尋計畫" aria-expanded="false" aria-controls="plan-search-panel">
                 <span class="nlc-icon nlc-icon--sm" data-icon="search" aria-hidden="true"></span>
               </button>
-            </div>
-            <!-- 系列篩選：只有「靈修」或「小組」任一系列有可見計畫時，整排才會由 plan.js 顯示出來 -->
-            <div class="status-pills-row status-pills-row--series" id="plan-list-series-pills" hidden>
-              <button class="pill-btn pill-btn--series active" data-series="all">全部</button>
-              <button class="pill-btn pill-btn--series" data-series="campaign" hidden>速讀</button>
-              <button class="pill-btn pill-btn--series" data-series="devotional" hidden>靈修</button>
-              <button class="pill-btn pill-btn--series" data-series="group_meeting" hidden>小組</button>
-              <button class="pill-btn pill-btn--series" data-series="other" hidden>其他</button>
             </div>
           </div>
 
@@ -1647,24 +1624,6 @@
                         <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
                       </span>
                     </button>
-                    <!-- 每日靈修／小組聚會週計畫，每個會友自己的偏好開關。只有「管理」
-                         分頁的「功能設定」總開關開著時才會出現（見 js/modules/profile.js
-                         updateFeatureSettingsRowVisibility()）——不是管理員專屬，所有
-                         會友都看得到。 -->
-                    <button type="button" class="app-settings-item w-full text-left hidden" id="profile-feature-settings-row" data-profile-open="feature-settings">
-                      <div class="app-settings-item__leading">
-                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
-                          <span class="nlc-icon nlc-icon--sm" data-icon="setting" aria-hidden="true"></span>
-                        </span>
-                        <div class="app-settings-item__meta">
-                          <span class="app-settings-item__title">功能設定</span>
-                          <span class="app-settings-item__subtitle">每日靈修、小組經營自由選擇要不要啟用</span>
-                        </div>
-                      </div>
-                      <span class="app-settings-item__chevron">
-                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
-                      </span>
-                    </button>
                   </div>
                 </div>
 
@@ -2125,22 +2084,6 @@
                 </button>
               </div>
               <p class="admin-feature-setting-feedback hidden" id="admin-exam-feature-feedback" role="status"></p>
-              <!-- 每日靈修／小組聚會週計畫的實際開關搬到「個人」分頁的「功能設定」
-                   子頁面，每個會友各自一份偏好；這裡只留一顆總開關，關閉時強制清空
-                   所有會友的個人偏好。見 js/modules/admin.js renderAdminFeatureSettings()、
-                   js/modules/profile.js renderFeatureSettingsSubpage()。 -->
-              <div class="admin-feature-setting-row">
-                <div class="admin-feature-setting-row__label">
-                  <strong>功能設定</strong>
-                  <span id="admin-devotion-master-status">讀取設定中…</span>
-                </div>
-                <button type="button" class="feature-switch" id="admin-devotion-master-toggle"
-                  role="switch" aria-checked="false" aria-label="開啟每日靈修與小組經營功能設定" disabled>
-                  <span class="feature-switch__thumb" aria-hidden="true"></span>
-                </button>
-              </div>
-              <p class="admin-feature-setting-feedback hidden" id="admin-devotion-master-feedback" role="status"></p>
-              <p class="feature-settings-hint">開啟後，「個人」分頁會多出「功能設定」，會友可以自己選擇是否啟用每日靈修、小組經營；關閉時會一併清空所有會友已經自己開啟的個人偏好，「個人」分頁也不會再顯示這一排。</p>
 
             </div>
           </div>
@@ -2302,22 +2245,6 @@
             <section class="admin-management-section" aria-labelledby="admin-exam-title">
               <div id="admin-exam-root" aria-live="polite">
                 <div class="admin-user-directory__empty">切換到此分頁後載入大測驗設定。</div>
-              </div>
-            </section>
-          </div>
-          <div id="admin-section-devotions" class="admin-section-panel hidden"
-            aria-labelledby="admin-devotions-title">
-            <section class="admin-management-section" aria-labelledby="admin-devotions-title">
-              <div id="admin-devotion-root" aria-live="polite">
-                <div class="admin-user-directory__empty">切換到此分頁後載入每日靈修內容。</div>
-              </div>
-            </section>
-          </div>
-          <div id="admin-section-group-meeting" class="admin-section-panel hidden"
-            aria-labelledby="admin-group-meeting-title">
-            <section class="admin-management-section" aria-labelledby="admin-group-meeting-title">
-              <div id="admin-group-meeting-root" aria-live="polite">
-                <div class="admin-user-directory__empty">切換到此分頁後載入小組聚會內容。</div>
               </div>
             </section>
           </div>
@@ -2826,44 +2753,6 @@
       </div>
     </div>
 
-    </div>
-  </div>
-
-  <div id="profile-tab-content-feature-settings" class="profile-subpage hidden" aria-hidden="true">
-    <header class="profile-subpage__header">
-      <button type="button" class="profile-subpage__back" data-profile-close aria-label="返回">
-        <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
-        <span>返回</span>
-      </button>
-      <span class="profile-subpage__title">功能設定</span>
-      <span class="profile-subpage__header-spacer"></span>
-    </header>
-    <div class="profile-subpage__body">
-      <p class="feature-settings-hint">這裡的開關只影響你自己，不會影響其他會友。</p>
-      <div class="app-settings-group">
-        <div class="admin-feature-setting-row">
-          <div class="admin-feature-setting-row__label">
-            <strong>每日靈修</strong>
-            <span id="profile-daily-devotion-feature-status">讀取設定中…</span>
-          </div>
-          <button type="button" class="feature-switch" id="profile-daily-devotion-feature-toggle"
-            role="switch" aria-checked="false" aria-label="開放每日靈修" disabled>
-            <span class="feature-switch__thumb" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="admin-feature-setting-feedback hidden" id="profile-daily-devotion-feature-feedback" role="status"></p>
-        <div class="admin-feature-setting-row">
-          <div class="admin-feature-setting-row__label">
-            <strong>小組聚會週計畫</strong>
-            <span id="profile-group-meeting-feature-status">讀取設定中…</span>
-          </div>
-          <button type="button" class="feature-switch" id="profile-group-meeting-feature-toggle"
-            role="switch" aria-checked="false" aria-label="開放小組聚會週計畫" disabled>
-            <span class="feature-switch__thumb" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="admin-feature-setting-feedback hidden" id="profile-group-meeting-feature-feedback" role="status"></p>
-      </div>
     </div>
   </div>
 

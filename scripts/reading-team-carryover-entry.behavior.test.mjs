@@ -53,7 +53,7 @@ describe("carry-over when joining the next plan", () => {
   });
 
   it("does not ask for non-stage plans", async () => {
-    await expect(window.offerReadingTeamCarryoverOnJoin({ ...OCT, planKind: "devotional" })).resolves.toBe("none");
+    await expect(window.offerReadingTeamCarryoverOnJoin({ ...OCT, planKind: "standard" })).resolves.toBe("none");
     expect(db.getReadingTeamCarryoverOffer).not.toHaveBeenCalled();
   });
 
