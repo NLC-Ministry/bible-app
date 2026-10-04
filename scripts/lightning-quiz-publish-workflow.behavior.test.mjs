@@ -103,18 +103,24 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),
     indexHtml.indexOf('<div id="admin-section-settings"')
   );
+  // 題目、試作、排程規則面板在 index.html 裡直接放在 body 底下（#420）
+  const sheetsHtml = indexHtml.slice(
+    indexHtml.indexOf("<!-- lightning-quiz-sheets:start -->"),
+    indexHtml.indexOf("<!-- lightning-quiz-sheets:end -->")
+  );
 
   beforeEach(() => {
     dbStub = {
       adminListLightningQuizQuestions: vi.fn(async () => ({ success: true, data: questions })),
       adminSetLightningQuizStatus: vi.fn(async () => ({ success: true, data: {} })),
+      adminDeleteLightningQuizQuestion: vi.fn(async () => ({ success: true, data: {} })),
       adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } })),
       adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } })),
       adminGetLightningQuizSettings: vi.fn(async () => ({ success: true, data: { weekdays: [1, 3, 5], timeStart: "07:00", timeEnd: "10:00" } })),
       adminImportLightningQuizQuestions: vi.fn(async items => ({ success: true, data: { imported: items.length } }))
     };
     vi.resetModules();
-    setupGlobals(`<section class="view-pane active">${sectionHtml.replace("admin-section-panel hidden", "admin-section-panel")}</section>`);
+    setupGlobals(`<section class="view-pane active">${sectionHtml.replace("admin-section-panel hidden", "admin-section-panel")}</section>${sheetsHtml}<div id="after-sheets"></div>`);
     vi.stubGlobal("localStorage", dom.window.localStorage);
   });
 
@@ -181,16 +187,75 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(document.getElementById("admin-lightning-quiz-time-start").value).toBe("00:00");
   });
 
-  it("scheduling from the panel asks for confirmation with the date and time, then calls the RPC", async () => {
+  const confirmRow = () => detail().querySelector("[data-lq-detail-confirm]");
+  const actionsRow = () => detail().querySelector(".admin-lq-detail__actions");
+
+  it("the sheets sit directly under body in index.html and opening them never moves them (#420)", async () => {
+    const page = new JSDOM(indexHtml).window.document;
+    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview", "admin-lightning-quiz-rule"]) {
+      expect(page.getElementById(id).parentElement).toBe(page.body);
+      expect(sectionHtml).not.toContain(`id="${id}"`);
+    }
+    await render();
+    const order = () => [...document.body.children].map(element => element.id).filter(Boolean);
+    const before = order();
+    document.getElementById("admin-lightning-quiz-rule-open").click();
+    expect(isOpen("admin-lightning-quiz-rule")).toBe(true);
+    openDetail("draft-1").querySelector('[data-lq-detail-action="try"]').click();
+    expect(isOpen("admin-lightning-quiz-preview")).toBe(true);
+    expect(order()).toEqual(before);
+  });
+
+  it("scheduling confirms inside the panel with the date and time, without a second dialog, then calls the RPC (#420)", async () => {
     const confirmDialog = vi.fn(async () => true);
     dom.window.showConfirmDialog = confirmDialog;
     await render();
     openDetail("draft-1").querySelector('[data-lightning-quiz-status="published"]').click();
+    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(confirmRow().textContent).toContain("確定要排程這一題嗎？");
+    expect(confirmRow().textContent).toContain("07:00–10:00");
+    expect(actionsRow().classList.contains("hidden")).toBe(true);
+    expect(db.adminSetLightningQuizStatus).not.toHaveBeenCalled();
+
+    confirmRow().querySelector("[data-lq-detail-confirm-ok]").click();
+    expect(confirmRow().querySelector("[data-lq-detail-confirm-ok]").disabled).toBe(true);
     await flush();
-    expect(confirmDialog.mock.calls[0][0].title).toBe("確定要排程這一題嗎？");
-    expect(confirmDialog.mock.calls[0][0].message).toContain("07:00–10:00");
     expect(db.adminSetLightningQuizStatus).toHaveBeenCalledWith("draft-1", "published");
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
+  });
+
+  it("取消 on the in-panel confirmation goes back to the buttons and changes nothing (#420)", async () => {
+    await render();
+    openDetail("sched-1").querySelector('[data-lightning-quiz-status="draft"]').click();
+    expect(confirmRow().textContent).toContain("確定要取消排程嗎？");
+    confirmRow().querySelector("[data-lq-detail-confirm-cancel]").click();
+    expect(confirmRow()).toBeNull();
+    expect(actionsRow().classList.contains("hidden")).toBe(false);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
+    expect(db.adminSetLightningQuizStatus).not.toHaveBeenCalled();
+  });
+
+  it("deleting confirms inside the panel; a failed request gives the buttons back (#420)", async () => {
+    const confirmDialog = vi.fn(async () => true);
+    dom.window.showConfirmDialog = confirmDialog;
+    db.adminDeleteLightningQuizQuestion.mockResolvedValueOnce({ success: false, message: "刪除失敗" });
+    await render();
+    openDetail("draft-1").querySelector("[data-lightning-quiz-delete]").click();
+    expect(confirmRow().textContent).toContain("此動作無法復原");
+    confirmRow().querySelector("[data-lq-detail-confirm-ok]").click();
+    await flush();
+    expect(db.adminDeleteLightningQuizQuestion).toHaveBeenCalledWith("draft-1");
+    expect(showToast).toHaveBeenCalledWith("刪除失敗");
+    expect(confirmRow()).toBeNull();
+    expect(actionsRow().classList.contains("hidden")).toBe(false);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
+
+    actionsRow().querySelector("[data-lightning-quiz-delete]").click();
+    confirmRow().querySelector("[data-lq-detail-confirm-ok]").click();
+    await flush();
+    expect(db.adminDeleteLightningQuizQuestion).toHaveBeenCalledTimes(2);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
+    expect(confirmDialog).not.toHaveBeenCalled();
   });
 
   it("sheets close with the close button or Escape, but not with a click outside (#317)", async () => {

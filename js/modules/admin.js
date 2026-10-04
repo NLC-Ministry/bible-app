@@ -1573,9 +1573,10 @@ function formatAdminLightningQuizDate(dateStr) {
 
 // ── 彈出面板（#313、#317）─────────────────────────────────────────────
 // 內容短的畫面（試作、題目內容、排程規則）是彈出面板（手機從下方滑出，桌機
-// 置中）。第一次打開時搬到 body 底下，避免被外層 glass-card 的 backdrop-filter
-// 變成定位容器。✕ 與 Esc 能關（點外面不關，避免誤觸），關掉後焦點回到原本按的
-// 按鈕。內容長的畫面（新增／編輯、匯入、作答明細）是下面的完整頁面。
+// 置中）。面板在 index.html 裡就放在 body 底下，打開時不搬移：iPhone 上從後台
+// 捲動區塊搬出來的面板曾經看得到卻點不到（#420）。✕ 與 Esc 能關（點外面不關，
+// 避免誤觸），關掉後焦點回到原本按的按鈕。內容長的畫面（新增／編輯、匯入、作答
+// 明細）是下面的完整頁面。
 const adminLightningQuizSheetOpeners = new Map();
 const adminLightningQuizSheetCloseHooks = {};
 
@@ -1593,7 +1594,6 @@ function closeAdminLightningQuizSheet(id) {
 function openAdminLightningQuizSheet(id) {
   const sheet = document.getElementById(id);
   if (!sheet) return null;
-  if (sheet.parentElement !== document.body) document.body.appendChild(sheet);
   if (!sheet.dataset.lqSheetBound) {
     sheet.dataset.lqSheetBound = 'true';
     sheet.addEventListener('click', event => {
@@ -1797,6 +1797,47 @@ function formatAdminLightningQuizWhen(question) {
   return `${formatAdminLightningQuizDate(question.riseDate)} ${(question.riseTimeStart || '').slice(0, 5)}–${(question.riseTimeEnd || '').slice(0, 5)}`;
 }
 
+// 題目面板裡的排程、取消排程、刪除在面板內原地確認：按鈕列換成確認列，不再疊一層
+// 確認框，畫面上永遠只有一層彈窗（#420）。回傳 { confirmed, restore }；確認後按鈕
+// 停用，請求失敗時呼叫 restore() 回到原本的按鈕列。
+function confirmInAdminLightningQuizDetail({ title, message, confirmText, cancelText = '返回', isDestructive = false }) {
+  const body = document.getElementById('admin-lightning-quiz-question-sheet-body');
+  const actions = body?.querySelector('.admin-lq-detail__actions');
+  if (!body || !actions) return Promise.resolve({ confirmed: false, restore: () => {} });
+  body.querySelector('[data-lq-detail-confirm]')?.remove();
+  const opener = document.activeElement;
+  const row = document.createElement('div');
+  row.className = 'admin-lq-detail__confirm';
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-labelledby', 'admin-lq-detail-confirm-title');
+  row.dataset.lqDetailConfirm = '';
+  row.innerHTML = `
+    <p class="admin-lq-detail__confirm-title" id="admin-lq-detail-confirm-title">${escapeHTML(title)}</p>
+    <p class="admin-lq-detail__confirm-message">${escapeHTML(message)}</p>
+    <div class="admin-lq-detail__confirm-actions">
+      <button type="button" class="secondary-btn" data-lq-detail-confirm-cancel>${escapeHTML(cancelText)}</button>
+      <button type="button" class="${isDestructive ? 'danger-btn' : 'primary-btn'}" data-lq-detail-confirm-ok>${escapeHTML(confirmText)}</button>
+    </div>`;
+  actions.classList.add('hidden');
+  actions.after(row);
+  const restore = () => {
+    row.remove();
+    actions.classList.remove('hidden');
+    if (opener?.isConnected) opener.focus?.();
+  };
+  return new Promise(resolve => {
+    row.querySelector('[data-lq-detail-confirm-cancel]').addEventListener('click', () => {
+      restore();
+      resolve({ confirmed: false, restore });
+    });
+    row.querySelector('[data-lq-detail-confirm-ok]').addEventListener('click', () => {
+      row.querySelectorAll('button').forEach(button => { button.disabled = true; });
+      resolve({ confirmed: true, restore });
+    });
+    row.querySelector('[data-lq-detail-confirm-cancel]').focus?.();
+  });
+}
+
 async function changeAdminLightningQuizStatus(question, nextStatus) {
   const dialog = nextStatus === 'published'
     ? {
@@ -1809,11 +1850,12 @@ async function changeAdminLightningQuizStatus(question, nextStatus) {
       message: '取消後回到「準備中」，會友看不到這一題。',
       confirmText: '取消排程'
     };
-  const confirmed = await window.showConfirmDialog({ cancelText: '返回', ...dialog });
+  const { confirmed, restore } = await confirmInAdminLightningQuizDetail(dialog);
   if (!confirmed) return;
 
   const result = await db.adminSetLightningQuizStatus(question.id, nextStatus);
   if (!result.success) {
+    restore();
     showToast(result.message || '更新狀態失敗，請稍後再試。');
     return;
   }
@@ -1824,7 +1866,7 @@ async function changeAdminLightningQuizStatus(question, nextStatus) {
 }
 
 async function deleteAdminLightningQuizQuestion(question) {
-  const confirmed = await window.showConfirmDialog({
+  const { confirmed, restore } = await confirmInAdminLightningQuizDetail({
     title: '確定要刪除這一題雲柱測驗嗎？',
     message: '此動作無法復原。',
     confirmText: '確認刪除',
@@ -1834,6 +1876,7 @@ async function deleteAdminLightningQuizQuestion(question) {
   if (!confirmed) return;
   const result = await db.adminDeleteLightningQuizQuestion(question.id);
   if (!result.success) {
+    restore();
     showToast(result.message || '刪除失敗，請稍後再試。');
     return;
   }

@@ -11818,6 +11818,32 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+/* 面板內原地確認（#420）：排程、取消排程、刪除時取代按鈕列，不再疊確認框 */
+.admin-lq-detail__confirm {
+  margin-top: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--bg-app);
+}
+.admin-lq-detail__confirm-title {
+  margin: 0;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.admin-lq-detail__confirm-message {
+  margin: 0.35rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.admin-lq-detail__confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
 .admin-lq-list__filter {
   margin-bottom: 0.75rem;
 }
