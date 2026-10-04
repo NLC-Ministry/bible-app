@@ -4,11 +4,11 @@ import { JSDOM } from "jsdom";
 import {
   formatRankLabel,
   normalizeRankingExcluded,
-  pickDayWinners,
-  summarizeMyWeek
+  pickDayWinners
 } from "../js/modules/lightning-quiz-analytics.mjs";
 
-// #429：雲柱測驗每週前三名公布到首頁（人工排除、可設公布天數、加個人結果、不公布個人名次）
+// #429：雲柱測驗每週前三名公布到首頁（人工排除、可設公布天數、不公布個人名次）
+// #436：首頁卡片只放前三名，個人作答結果到「我的測驗」看
 
 const candidates = [
   { userId: "u1", name: "甲", pastoralZone: "中永和", elapsedMs: 5000 },
@@ -48,17 +48,9 @@ describe("normalizeRankingExcluded", () => {
   });
 });
 
-describe("labels and my week summary", () => {
+describe("labels", () => {
   it("formats ranks like the published table", () => {
     expect([1, 2, 3].map(formatRankLabel)).toEqual(["第一名", "第二名", "第三名"]);
-  });
-
-  it("counts correct answers over the days that had a question", () => {
-    expect(summarizeMyWeek([
-      { mine: { result: "correct" } },
-      { mine: { result: "wrong" } },
-      { mine: { result: "not_participated" } }
-    ])).toEqual({ total: 3, correct: 1 });
   });
 });
 
@@ -117,7 +109,7 @@ afterEach(() => {
 });
 
 describe("首頁「雲柱測驗前三名」卡片", () => {
-  it("shows each day's top three, my result per day and my weekly total, without my rank", async () => {
+  it("shows only each day's top three — no personal result, weekly total, or rank", async () => {
     setupGlobals(vi.fn(async () => ({ success: true, data: published })));
     const { refreshLightningQuizRankingCard } = await import("../js/modules/lightning-quiz-ranking.mjs");
     await refreshLightningQuizRankingCard();
@@ -141,13 +133,10 @@ describe("首頁「雲柱測驗前三名」卡片", () => {
     expect(days[1].querySelector(".lq-ranking__name").innerHTML).toBe("&lt;b&gt;蔡雁羽&lt;/b&gt;");
     expect(days[2].querySelector(".lq-ranking__empty").textContent).toBe("這天沒有人答對。");
 
-    expect(days.map(day => day.querySelector(".lq-ranking__mine").textContent)).toEqual([
-      "我的結果：答對・70.3 秒",
-      "我的結果：答錯・12.0 秒",
-      "我的結果：未作答"
-    ]);
-    expect(card.querySelector(".lq-ranking__footer").textContent).toContain("這週你答對 1／3 題");
-    expect(card.textContent).not.toMatch(/你的名次|你是第|我的名次/);
+    // RPC 仍回傳 mine，但卡片不顯示（#436）
+    expect(card.querySelector(".lq-ranking__mine")).toBeNull();
+    expect(card.textContent).not.toMatch(/我的結果|這週你答對|70\.3|12\.0|你的名次|你是第|我的名次/);
+    expect(card.querySelector("[data-lq-ranking-history]").textContent).toBe("我的作答結果請到「我的測驗」查看");
   });
 
   it("the history link opens 我的測驗 on the lightning tab, reaching back to the published week", async () => {
@@ -192,7 +181,8 @@ describe("首頁「雲柱測驗前三名」卡片", () => {
 // ── 後端與串接 ──────────────────────────────────────────────────────────────
 
 describe("wiring", () => {
-  const migration = readFileSync("supabase/migrations/20261004015336_lightning_quiz_week_ranking.sql", "utf8");
+  // Windows 取出可能是 CRLF，比對多行字串前先統一換行
+  const migration = readFileSync("supabase/migrations/20261004015336_lightning_quiz_week_ranking.sql", "utf8").replace(/\r\n/g, "\n");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
   const db = readFileSync("js/db.js", "utf8");
   const home = readFileSync("js/modules/home.js", "utf8");

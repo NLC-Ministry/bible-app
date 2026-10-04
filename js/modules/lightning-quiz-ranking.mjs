@@ -1,36 +1,19 @@
 // js/modules/lightning-quiz-ranking.mjs
 // 首頁「本週雲柱測驗前三名」卡片（#429）。管理員在後台週統計確認名次並公布後，
-// get_lightning_quiz_week_ranking() 回傳最新一份還在公布期間的前三名（固定紀錄），
-// 加上目前登入者自己這週每一題的結果。不顯示個人名次。
+// get_lightning_quiz_week_ranking() 回傳最新一份還在公布期間的前三名（固定紀錄）。
+// 卡片只放前三名：RPC 雖然也回傳自己每天的結果（mine），但個人作答到「我的測驗」看（#436）。
 // 跟當天的作答卡片（lightning-quiz.mjs）是兩張獨立的卡，可以同時出現。
 
 import {
   formatElapsedSeconds,
   formatRankLabel,
   formatWeekRange,
-  formatWeekday,
-  summarizeMyWeek
+  formatWeekday
 } from "./lightning-quiz-analytics.mjs";
 
-// 「看題目與正解」帶去「我的測驗」的提示：開雲柱分頁，清單範圍往前延伸到這一週
+// 底部連結帶去「我的測驗」的提示：開雲柱分頁，清單範圍往前延伸到這一週
 // （公布期間可能已經超過「最近一週」）。profile.js 開「我的測驗」時讀一次就清掉。
 export const PROFILE_EXAMS_HINT_KEY = "profileExamsHint";
-
-const MY_RESULT_LABELS = {
-  correct: "答對",
-  wrong: "答錯",
-  incomplete: "未完成",
-  not_participated: "未作答"
-};
-
-function myResultHtml(mine) {
-  const result = mine?.result || "not_participated";
-  const label = MY_RESULT_LABELS[result] || MY_RESULT_LABELS.not_participated;
-  const time = (result === "correct" || result === "wrong") && mine?.elapsedMs != null
-    ? `・${escapeHTML(formatElapsedSeconds(mine.elapsedMs))} 秒`
-    : "";
-  return `<p class="lq-ranking__mine lq-ranking__mine--${escapeHTML(result)}">我的結果：<strong>${escapeHTML(label)}</strong>${time}</p>`;
-}
 
 function winnersHtml(winners) {
   if (!Array.isArray(winners) || !winners.length) {
@@ -48,7 +31,6 @@ function winnersHtml(winners) {
 
 export function renderRankingCardHtml(data) {
   const days = Array.isArray(data?.days) ? data.days : [];
-  const mine = summarizeMyWeek(days);
   return `<div class="lq-ranking">
     <div class="lq-ranking__head">
       <span class="nlc-icon lq-ranking__icon" data-icon="trophy" aria-hidden="true"></span>
@@ -59,12 +41,10 @@ export function renderRankingCardHtml(data) {
       ${days.map(day => `<section class="lq-ranking__day" aria-label="${escapeHTML(formatWeekday(day.riseDate))}">
         <h4 class="lq-ranking__date">${escapeHTML(formatWeekday(day.riseDate))}</h4>
         ${winnersHtml(day.winners)}
-        ${myResultHtml(day.mine)}
       </section>`).join("")}
     </div>
     <div class="lq-ranking__footer">
-      <span>這週你答對 <strong>${escapeHTML(String(mine.correct))}／${escapeHTML(String(mine.total))}</strong> 題</span>
-      <a href="#/profile/exams" class="lq-ranking__history" data-lq-ranking-history>看題目與正解</a>
+      <a href="#/profile/exams" class="lq-ranking__history" data-lq-ranking-history>我的作答結果請到「我的測驗」查看</a>
     </div>
   </div>`;
 }
