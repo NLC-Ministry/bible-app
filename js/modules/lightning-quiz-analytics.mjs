@@ -469,3 +469,54 @@ export const RANK_LABELS = Object.freeze(["第一名", "第二名", "第三名"]
 export function formatRankLabel(rank) {
   return RANK_LABELS[Number(rank) - 1] || `第 ${rank} 名`;
 }
+
+// ── 英雄榜兌換券（#445）──────────────────────────────────────────────────────
+
+export const VOUCHER_STATUS_LABELS = Object.freeze({
+  available: "可使用",
+  redeemed: "已兌換",
+  expired: "已過期",
+  void: "已作廢"
+});
+
+export const VOUCHER_REDEEMED_VIA_LABELS = Object.freeze({
+  self: "本人確認",
+  admin: "管理員標記"
+});
+
+function formatTaiwanDateTimeShort(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
+  }).format(date);
+}
+
+// 後台摘要：作廢的不算發出的券。
+export function summarizeVouchers(vouchers) {
+  const counts = { issued: 0, available: 0, redeemed: 0, expired: 0, void: 0 };
+  (Array.isArray(vouchers) ? vouchers : []).forEach(voucher => {
+    if (!(voucher?.status in counts)) return;
+    counts[voucher.status] += 1;
+    if (voucher.status !== "void") counts.issued += 1;
+  });
+  return counts;
+}
+
+export function buildVoucherCsv(vouchers, exportedAt = new Date()) {
+  const headers = ["日期", "名次", "姓名", "牧區", "兌換碼", "面額", "狀態", "有效期限", "兌換時間", "兌換方式", "標記者"];
+  const rows = (Array.isArray(vouchers) ? vouchers : []).map(voucher => [
+    voucher.riseDate || "",
+    formatRankLabel(voucher.rank),
+    voucher.name || "",
+    voucher.pastoralZone || "",
+    voucher.code || "",
+    voucher.amount ?? "",
+    VOUCHER_STATUS_LABELS[voucher.status] || voucher.status || "",
+    voucher.expiresOn || "",
+    formatTaiwanDateTimeShort(voucher.redeemedAt),
+    VOUCHER_REDEEMED_VIA_LABELS[voucher.redeemedVia] || "",
+    voucher.redeemedVia === "admin" ? (voucher.redeemedByName || "") : ""
+  ]);
+  return toCsv(headers, rows, exportedAt);
+}

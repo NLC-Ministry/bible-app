@@ -382,7 +382,7 @@
             <div id="lightning-quiz-host"></div>
           </div>
 
-          <!-- 首頁「雲柱測驗前三名」（#429）：管理員在後台週統計公布後顯示 1～7 天，
+          <!-- 首頁「英雄榜」雲柱測驗每天前三名（#429／#445）：管理員在後台週統計公布後顯示 1～7 天，
                內容由 js/modules/lightning-quiz-ranking.mjs 透過 get_lightning_quiz_week_ranking() 帶入；
                沒有公布中的名次時整塊隱藏。跟上面的作答卡片互不影響。 -->
           <div class="glass-card card-col span-12 bento-card lightning-quiz-ranking-card hidden" id="lightning-quiz-ranking-card">
@@ -1608,6 +1608,20 @@
                         <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
                       </span>
                     </button>
+                    <button type="button" class="app-settings-item w-full text-left" data-profile-open="vouchers">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="ticket" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">我的兌換券</span>
+                          <span class="app-settings-item__subtitle">雲柱測驗英雄榜得獎的抵用券與得獎證明</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+                      </span>
+                    </button>
                     <button type="button" class="app-settings-item w-full text-left" data-profile-open="badges">
                       <div class="app-settings-item__leading">
                         <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
@@ -2753,6 +2767,21 @@
         </button>
         <div id="profile-exams-detail-body"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="profile-tab-content-vouchers" class="profile-subpage hidden" aria-hidden="true">
+    <header class="profile-subpage__header">
+      <button type="button" class="profile-subpage__back" data-profile-close aria-label="返回">
+        <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+        <span>返回</span>
+      </button>
+      <span class="profile-subpage__title">我的兌換券</span>
+      <button type="button" class="profile-subpage__action" id="profile-vouchers-refresh">重新整理</button>
+    </header>
+    <div class="profile-subpage__body">
+      <p class="profile-exams__intro">雲柱測驗英雄榜每天前三名可到克勞斯兌換抵用券，公布後 30 天內有效。到店出示這張券，店員看過後再按「確認兌換」；兌換後就不能再使用。</p>
+      <div id="profile-vouchers-list" class="profile-exams__list" aria-live="polite"></div>
     </div>
   </div>
 

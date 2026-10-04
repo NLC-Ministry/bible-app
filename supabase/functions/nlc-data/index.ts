@@ -405,7 +405,12 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "get_lightning_quiz_week_ranking",
   "admin_get_lightning_quiz_week_ranking",
   "admin_publish_lightning_quiz_week_ranking",
-  "admin_revoke_lightning_quiz_week_ranking"
+  "admin_revoke_lightning_quiz_week_ranking",
+  // 英雄榜兌換券（#445）：會友端只碰呼叫者自己的券（SQL 端以注入的 p_actor_id 過濾）
+  "get_my_lightning_quiz_vouchers",
+  "redeem_my_lightning_quiz_voucher",
+  "admin_list_lightning_quiz_vouchers",
+  "admin_set_lightning_quiz_voucher_redeemed"
 ]);
 // 個人統計「累積閱讀章數」由伺服器算（#348）。只算呼叫者自己的紀錄，
 // 所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。

@@ -89,7 +89,9 @@ beforeEach(async () => {
     adminGetLightningQuizWeeks: vi.fn(async () => ({ success: true, data: { weeks } })),
     adminGetLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: rankingData })),
     adminPublishLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { displayUntil: "2026-09-29" } })),
-    adminRevokeLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { revoked: true } }))
+    adminRevokeLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { revoked: true } })),
+    adminListLightningQuizVouchers: vi.fn(async () => ({ success: true, data: { vouchers: [] } })),
+    adminSetLightningQuizVoucherRedeemed: vi.fn(async () => ({ success: true, data: {} }))
   });
   dom.window.showConfirmDialog = vi.fn(async () => true);
   dom.window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -300,5 +302,59 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
     await flush();
     await flush();
     expect(db.adminRevokeLightningQuizWeekRanking).toHaveBeenCalledWith("2026-09-21");
+  });
+});
+
+describe("雲柱測驗 英雄榜兌換券（#445）", () => {
+  const vouchers = [
+    { id: "v1", code: "ERAJP5", amount: 100, riseDate: "2026-09-21", rank: 1, name: "甲", pastoralZone: "中永和", expiresOn: "2026-10-30", status: "available" },
+    { id: "v2", code: "K7M2QX", amount: 100, riseDate: "2026-09-21", rank: 2, name: "乙", pastoralZone: "文山", expiresOn: "2026-10-30", status: "redeemed", redeemedAt: "2026-10-05T06:30:00Z", redeemedVia: "self" },
+    { id: "v3", code: "ZZZ222", amount: 100, riseDate: "2026-09-21", rank: 3, name: "丙", pastoralZone: "", expiresOn: "2026-10-30", status: "void" }
+  ];
+
+  it("lists this week's vouchers with counts; admin can mark or undo a redemption", async () => {
+    db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { vouchers } });
+    await renderAdminLightningQuizStats();
+    await flush();
+    const section = document.querySelector("[data-lq-week-vouchers]");
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith("2026-09-21");
+    expect(section.querySelector(".admin-lq-vouchers__summary").textContent.replace(/\s+/g, " ").trim())
+      .toBe("發出 2 張 已兌換 1 可使用 1 已過期 0 已作廢 1");
+    const rows = [...section.querySelectorAll(".admin-lq-vouchers__row")];
+    expect(rows[1].querySelector(".admin-lq-vouchers__note").textContent).toBe("10/5 14:30 兌換・本人確認");
+    // 作廢的券不能操作
+    expect(rows[2].querySelector("button")).toBeNull();
+
+    section.querySelector('[data-lq-voucher-redeem="v1"]').click();
+    await flush();
+    await flush();
+    expect(db.adminSetLightningQuizVoucherRedeemed).toHaveBeenCalledWith("v1", true);
+
+    section.querySelector('[data-lq-voucher-undo="v2"]').click();
+    await flush();
+    await flush();
+    expect(db.adminSetLightningQuizVoucherRedeemed).toHaveBeenCalledWith("v2", false);
+  });
+
+  it("exports the week's vouchers as CSV", async () => {
+    db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { vouchers } });
+    await renderAdminLightningQuizStats();
+    await flush();
+    document.querySelector("[data-lq-vouchers-export]").click();
+    const download = downloads[downloads.length - 1];
+    expect(download.filename).toBe("雲柱測驗_英雄榜兌換券_2026-09-21.csv");
+    expect(await download.blob.text()).toContain('"2026-09-21","第一名","甲","中永和","ERAJP5","100","可使用"');
+  });
+
+  it("reloads the voucher list after publishing", async () => {
+    await renderAdminLightningQuizStats();
+    await flush();
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(1);
+    document.querySelector("[data-lq-week-ranking] [data-lq-ranking-publish]").click();
+    await flush();
+    await flush();
+    expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalled();
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(2);
+    expect(window.showConfirmDialog.mock.calls[0][0].message).toContain("克勞斯 100 元抵用券");
   });
 });

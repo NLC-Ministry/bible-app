@@ -6480,6 +6480,10 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
     lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
     lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
+    lightning_quiz_voucher_not_found: "找不到這張兌換券，請重新整理後再試。",
+    lightning_quiz_voucher_already_redeemed: "這張兌換券已經兌換過了。",
+    lightning_quiz_voucher_expired: "這張兌換券已經過期了。",
+    lightning_quiz_voucher_void: "這張兌換券已作廢（重新公布時不在名單上）。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -6647,6 +6651,29 @@ db.adminPublishLightningQuizWeekRanking = async function(weekStart, excluded, di
 db.adminRevokeLightningQuizWeekRanking = async function(weekStart) {
   if (!weekStart) return { success: false, message: "請選擇要看的週。" };
   return this._callLightningQuizRpc("admin_revoke_lightning_quiz_week_ranking", { p_week_start: weekStart });
+};
+
+// 英雄榜兌換券（#445）。會友：自己的券、在店裡由本人確認兌換。
+db.getMyLightningQuizVouchers = async function() {
+  return this._callLightningQuizRpc("get_my_lightning_quiz_vouchers", {});
+};
+
+db.redeemMyLightningQuizVoucher = async function(voucherId) {
+  if (!voucherId) return { success: false, message: "找不到這張兌換券，請重新整理後再試。" };
+  return this._callLightningQuizRpc("redeem_my_lightning_quiz_voucher", { p_voucher_id: voucherId });
+};
+
+// 後台：某週的兌換清單（weekStart 留空＝全部週）；手動標記兌換／撤銷兌換。
+db.adminListLightningQuizVouchers = async function(weekStart) {
+  return this._callLightningQuizRpc("admin_list_lightning_quiz_vouchers", { p_week_start: weekStart || null });
+};
+
+db.adminSetLightningQuizVoucherRedeemed = async function(voucherId, redeemed) {
+  if (!voucherId) return { success: false, message: "找不到這張兌換券，請重新整理後再試。" };
+  return this._callLightningQuizRpc("admin_set_lightning_quiz_voucher_redeemed", {
+    p_voucher_id: voucherId,
+    p_redeemed: redeemed === true
+  });
 };
 
 window.db = db;
