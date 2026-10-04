@@ -3,7 +3,7 @@
 // 點選經文後複製／分享（格式共用 verse-selection-format.mjs）、譯本選單、文字大小。
 // 不碰登入、不記錄進度、沒有螢光筆／筆記／朗讀。所有外部依賴由 read-entry.js 注入，測試時換成假的。
 
-import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter } from "../modules/reader-chapter-nav.mjs";
+import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter, resolvePrefetchChapters } from "../modules/reader-chapter-nav.mjs";
 import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from "../modules/reader-page-flip.mjs";
 import { buildChapterEndNav, createVerseElement, revealVerses } from "../modules/reader-verse-dom.mjs";
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "../modules/verse-selection-format.mjs";
@@ -22,7 +22,6 @@ import {
 // 上次顯示的那一章另存一份：SW 的經文快取每次部署都會清掉，有這份就算離線也打得開上次讀的地方。
 export const LAST_CHAPTER_KEY = "read_last_chapter_v1";
 export const CHAPTER_TIMEOUT_MS = 12000;
-export const PREFETCH_COUNT = 3;
 const FLIP_PREVIEW_VERSES = 40; // 同主 App 的 READER_FLIP_PREVIEW_VERSES
 
 // 譯本的短標籤：同主 App（只有修訂版顯示成 RCUV）。
@@ -50,11 +49,9 @@ export function mountReadApp({
   fetchChapter,
   peekChapter = () => null,
   getVerseCounts = () => null,
-  shouldPrefetch = () => false,
   isOnline = () => true,
   schedule = (fn, ms) => setTimeout(fn, ms),
   chapterTimeoutMs = CHAPTER_TIMEOUT_MS,
-  prefetchCount = PREFETCH_COUNT,
   onChapterShown = () => {},
   hydrateIcons = null,
   copy = {},
@@ -309,17 +306,14 @@ export function mountReadApp({
     content.dataset.ready = "1";
   }
 
-  function prefetchAhead(seq) {
-    if (!shouldPrefetch(view.version) || !isOnline()) return;
-    const { version } = view;
+  // 預抓的章數和方向照共用規則（#440）。經文包譯本、離線時也抓：fetchChapter 會從本機或快取讀，
+  // 抓到的也是翻頁預覽（peekChapter）的來源。
+  function prefetchAround(seq) {
+    const { bookId, chapter, version } = view;
     schedule(async () => {
-      let cursor = { bookId: view.bookId, chapter: view.chapter };
-      for (let i = 0; i < prefetchCount; i++) {
+      for (const target of resolvePrefetchChapters(books, bookId, chapter)) {
         if (seq !== loadSeq) return; // 已經換章或換譯本，下一次會自己預抓
-        const next = resolveAdjacentChapter(books, cursor.bookId, cursor.chapter, 1);
-        if (!next) return;
-        try { await fetchChapter(next.book.eng, next.chapter, version); } catch { /* 預抓失敗不影響閱讀 */ }
-        cursor = { bookId: next.book.id, chapter: next.chapter };
+        try { await fetchChapter(target.book.eng, target.chapter, version); } catch { /* 預抓失敗不影響閱讀 */ }
       }
     }, 800);
   }
@@ -351,7 +345,7 @@ export function mountReadApp({
       renderVerses(book, chapter, result.verses);
       writeLastChapter(storage, { version, bookId: book.id, chapter, verses: result.verses });
       onChapterShown();
-      prefetchAhead(seq);
+      prefetchAround(seq);
       return;
     }
 
