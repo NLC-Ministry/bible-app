@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: [...configDefaults.exclude, "dist/**", ".worktrees/**"],
+    exclude: [...configDefaults.exclude, "dist/**", ".worktrees/**", ".claude/**"],
   },
   resolve: {
     alias: {
