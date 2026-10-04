@@ -23,6 +23,7 @@ import {
   prependTaiwanExportTime
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
+import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
@@ -3055,6 +3056,7 @@ const ADMIN_SECTIONS = [
   { id: 'registrations', group: '報名與回報', label: '報名註冊統計',   icon: 'journalText',   panel: 'system', sub: 'registrations' },
   { id: 'reports',       group: '報名與回報', label: '回報管理',       icon: 'inbox',         panel: 'system', sub: 'reports' },
   { id: 'announcements', group: '內容管理',   label: '公告管理',       icon: 'megaphone',     panel: 'system', sub: 'announcements' },
+  { id: 'commentary',    group: '內容管理',   label: '經文注釋',       icon: 'lightbulb',     panel: 'system', sub: 'commentary' },
   { id: 'join-status',   group: '計畫營運',   label: '加入計畫狀況',   icon: 'calendarCheck', panel: 'plans',  sub: 'join-status' },
   { id: 'members',       group: '計畫營運',   label: '組員總覽',       icon: 'peoples',       panel: 'plans',  sub: 'members' },
   { id: 'teams',         group: '計畫營運',   label: '組隊狀況',       icon: 'trophy',        panel: 'plans',  sub: 'teams' },
@@ -3131,7 +3133,15 @@ window.closeAdminSection = closeAdminSection;
 const adminSectionDataLoaded = new Set();
 const ADMIN_SECTION_DATA_LOADERS = {
   users: () => [renderAdminUserDirectory()],
-  permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()]
+  permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()],
+  commentary: () => [renderAdminCommentary({
+    db,
+    books: window.BIBLE_BOOKS,
+    escapeHTML,
+    showToast,
+    confirm: options => window.showConfirmDialog(options),
+    hydrateIcons: element => { if (typeof hydrateIcons === 'function') hydrateIcons(element); }
+  })]
 };
 
 function loadAdminSectionDataOnce(sectionId) {
