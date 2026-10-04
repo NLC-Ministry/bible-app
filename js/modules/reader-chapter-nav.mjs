@@ -82,6 +82,21 @@ export function resolveAdjacentChapter(books, bookId, chapter, direction) {
   return { book: neighbor, chapter: direction > 0 ? 1 : neighbor.chapters };
 }
 
+// 顯示一章後要預抓哪幾章（#440）：下兩章、上一章，依序回傳；跨書卷，到聖經頭尾就少回傳。
+// 主 App 和 /read 共用這條規則，抓取流程各自寫。
+export function resolvePrefetchChapters(books, bookId, chapter) {
+  const targets = [];
+  const next = resolveAdjacentChapter(books, bookId, chapter, 1);
+  if (next) {
+    targets.push(next);
+    const afterNext = resolveAdjacentChapter(books, next.book.id, next.chapter, 1);
+    if (afterNext) targets.push(afterNext);
+  }
+  const prev = resolveAdjacentChapter(books, bookId, chapter, -1);
+  if (prev) targets.push(prev);
+  return targets;
+}
+
 const INTERACTIVE_TARGET_SELECTOR = [
   "button", "a[href]", "input", "textarea", "select", "label",
   "[contenteditable]:not([contenteditable='false'])", "[role='slider']", "[role='progressbar']",

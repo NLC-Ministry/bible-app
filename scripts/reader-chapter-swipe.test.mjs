@@ -9,6 +9,7 @@ import {
   isInSwipeEdgeGuard,
   readerArrowKeyDirection,
   resolveAdjacentChapter,
+  resolvePrefetchChapters,
   resolveSwipeAxis,
   swipeDirectionFromDelta
 } from "../js/modules/reader-chapter-nav.mjs";
@@ -74,6 +75,16 @@ describe("reader chapter swipe helpers (#314)", () => {
     expect(resolveAdjacentChapter(BOOKS, 41, 1, -1)).toEqual({ book: BOOKS[2], chapter: 28 });
     expect(resolveAdjacentChapter(BOOKS, 1, 1, -1)).toBeNull();
     expect(resolveAdjacentChapter(BOOKS, 66, 22, 1)).toBeNull();
+  });
+
+  it("prefetches the next 2 chapters and the previous one, across books, skipping the ends (#440)", () => {
+    const refs = list => list.map(t => `${t.book.eng} ${t.chapter}`);
+    expect(refs(resolvePrefetchChapters(BOOKS, 1, 5))).toEqual(["Genesis 6", "Genesis 7", "Genesis 4"]);
+    expect(refs(resolvePrefetchChapters(BOOKS, 1, 50))).toEqual(["Exodus 1", "Exodus 2", "Genesis 49"]);
+    expect(refs(resolvePrefetchChapters(BOOKS, 41, 1))).toEqual(["Mark 2", "Mark 3", "Matthew 28"]);
+    expect(refs(resolvePrefetchChapters(BOOKS, 1, 1))).toEqual(["Genesis 2", "Genesis 3"]);
+    expect(refs(resolvePrefetchChapters(BOOKS, 66, 21))).toEqual(["Revelation 22", "Revelation 20"]);
+    expect(resolvePrefetchChapters(BOOKS, 999, 1)).toEqual([]);
   });
 
   it("handles arrow keys only when not typing and without modifiers", () => {
@@ -259,8 +270,8 @@ describe("reader wiring (#314, #347)", () => {
     expect(css).toMatch(/\.reader-flip-mover\.is-prev \{\s*transform-origin: right center;/);
   });
 
-  it("prefetches both the next and the previous chapter", () => {
-    expect(bible).toMatch(/function triggerPredictivePrefetch\(\)[\s\S]{0,300}\[1, -1\]\.forEach/);
+  it("prefetches with the shared rule, same as /read (#440)", () => {
+    expect(bible).toMatch(/function triggerPredictivePrefetch\(\)[\s\S]{0,300}resolvePrefetchChapters\(BIBLE_BOOKS,/);
   });
 
   it("repeats the swipe tip (max 3 times, once per session) until the member has swiped once", () => {
