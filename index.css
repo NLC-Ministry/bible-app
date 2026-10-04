@@ -4620,6 +4620,7 @@ button.logout-btn:hover {
   margin-bottom: 0;
 }
 
+.pill-btn {
   padding: 0.45rem 1.1rem;
   border-radius: 20px;
   font-size: 0.875rem;
