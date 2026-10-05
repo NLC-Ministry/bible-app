@@ -6,6 +6,7 @@
 // 小測驗、雲柱測驗共用；連連看畫線 paintMatchReviewLines 大測驗 exam.js 也共用。
 
 import { isAnswerCorrect } from "./quiz-question-types.mjs";
+import { questionImageHtml } from "./quiz-image.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -125,6 +126,7 @@ export function renderQuestionReviewHtml(question, { response = null, result, he
   return `<div class="exam-result__row${rowClass}">
     <p class="exam-result__q">${heading ? `${esc(heading)}：` : ""}<span class="${result === "correct" ? "exam-ok" : "exam-bad"}">${esc(label)}</span></p>
     ${payload.stem ? `<p class="exam-result__stem">${esc(payload.stem)}</p>` : ""}
+    ${questionImageHtml(payload)}
     ${reviewBodyHtml(question.type, payload, question.answerKey, response)}
     ${extraHtml}
   </div>`;

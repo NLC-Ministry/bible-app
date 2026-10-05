@@ -30,7 +30,7 @@ describe("lightningQuizStage", () => {
 
   it("copying keeps the content and times but clears the id and date", () => {
     const copy = copyLightningQuizQuestion({ id: "x", riseDate: "2026-09-28", riseTimeStart: "07:00:00", riseTimeEnd: "10:00:00", questionType: "single", payload: { stem: "s" }, answerKey: 1 });
-    expect(copy).toEqual({ id: null, riseDate: "", riseTimeStart: "07:00:00", riseTimeEnd: "10:00:00", questionType: "single", payload: { stem: "s" }, answerKey: 1 });
+    expect(copy).toEqual({ id: null, riseDate: "", riseTimeStart: "07:00:00", riseTimeEnd: "10:00:00", questionType: "single", payload: { stem: "s" }, answerKey: 1, explanation: "" });
   });
 });
 
