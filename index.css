@@ -11847,6 +11847,95 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   margin-top: 0.75rem;
   width: 100%;
 }
+
+/* 題目附圖（#449）：題幹下方整張圖，點一下全螢幕放大（js/modules/quiz-image.mjs） */
+.quiz-question-image {
+  margin: 0.5rem 0 0.75rem;
+}
+.quiz-question-image__open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.quiz-question-image__open img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.quiz-question-image__hint {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.quiz-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.92);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.quiz-image-viewer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+}
+.quiz-image-viewer__close {
+  min-height: 40px;
+  padding: 0 1.1rem;
+  border: 1px solid rgba(226, 232, 240, 0.5);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.quiz-image-viewer__scroll {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 0.75rem 1rem;
+}
+.quiz-image-viewer__scroll img {
+  display: block;
+  width: max(100%, 960px);
+  max-width: none;
+  height: auto;
+  margin: auto 0;
+  border-radius: var(--radius-sm);
+}
+.exam-result__ln--explanation,
+.admin-lq-detail__explanation {
+  white-space: pre-line;
+}
+.admin-lq-image-note {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.admin-lq-image-note img {
+  width: 96px;
+  height: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-card);
+}
 .lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
 .lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }
 .lightning-quiz-result__time {

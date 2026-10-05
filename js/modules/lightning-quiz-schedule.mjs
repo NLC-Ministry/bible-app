@@ -194,7 +194,7 @@ export function planLightningImport(items, { existingDates, settings, now }) {
   return { plan, errors };
 }
 
-// 複製成新題：沿用題型、題目、正解與時段，日期留空讓管理員重新選。
+// 複製成新題：沿用題型、題目（含附圖）、正解、詳解與時段，日期留空讓管理員重新選。
 export function copyLightningQuizQuestion(question) {
   return {
     id: null,
@@ -203,6 +203,7 @@ export function copyLightningQuizQuestion(question) {
     riseTimeEnd: question?.riseTimeEnd || "",
     questionType: question?.questionType,
     payload: question?.payload,
-    answerKey: question?.answerKey
+    answerKey: question?.answerKey,
+    explanation: question?.explanation || ""
   };
 }

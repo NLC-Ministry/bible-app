@@ -26,6 +26,7 @@ import { parseQuizImportText } from "./quiz-import.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
+import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
@@ -1488,21 +1489,37 @@ export async function renderAdminAnnouncements() {
 // UI，因為題型定義、payload/answerKey 形狀完全共用（quiz-question-types.mjs）。
 // 一次只編輯「一題」，所以不重用它的多題清單管理（新增/刪除/編號）那層。
 
+// 題目附圖（#449）沒有編輯介面（圖檔放在 assets/、用 SQL 加進 payload.image），
+// 這裡只顯示「此題附圖」，並把原本的 image 存在 fieldset 上，重新存檔時帶回去，
+// 不會因為表單只重組 stem/選項就把圖洗掉。
 function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
-  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-type="${type}">
+  const image = getQuestionImage(normalized.payload);
+  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-type="${type}" ${image ? `data-lq-image="${adminQuizEscape(JSON.stringify(normalized.payload.image))}"` : ''}>
     <label>題型<select class="form-control" data-field="type">
       ${Object.entries(ADMIN_QUIZ_CUSTOM_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select></label>
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
+    ${image ? `<div class="admin-lq-image-note"><img src="${adminQuizEscape(image.src)}" alt="${adminQuizEscape(image.alt)}"><span>此題附圖（${adminQuizEscape(image.src)}），存檔時會保留。</span></div>` : ''}
     <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
+    <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
 }
 
-// 讀取一題雲柱測驗題目；不需要 id/explanation
-// /verseRef（雲柱測驗一次只有一題，不需要跨題 id 前綴，也沒有解說欄位）。
+// 讀取一題雲柱測驗題目（不需要 id/verseRef：雲柱測驗一次只有一題）。
+// explanation 是獨立欄位、不放進 payload——payload 在作答時段內就會傳給會友。
 function collectAdminLightningQuizQuestion(fieldset) {
+  const question = collectAdminLightningQuizQuestionContent(fieldset);
+  const imageJson = fieldset.dataset.lqImage;
+  if (imageJson) {
+    try { question.payload.image = JSON.parse(imageJson); } catch (_) { /* 壞掉的就不帶 */ }
+  }
+  question.explanation = fieldset.querySelector('[data-field="explanation"]')?.value.trim() || '';
+  return question;
+}
+
+function collectAdminLightningQuizQuestionContent(fieldset) {
   const type = fieldset.querySelector('[data-field="type"]')?.value || 'single';
   const stem = fieldset.querySelector('[data-field="stem"]')?.value.trim() || '';
 
@@ -1746,7 +1763,8 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
   body.innerHTML = renderAdminLightningQuizQuestionFieldsetHtml(source ? {
     type: source.questionType,
     payload: source.payload,
-    answerKey: source.answerKey
+    answerKey: source.answerKey,
+    explanation: source.explanation
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
@@ -1911,6 +1929,7 @@ function openAdminLightningQuizDetail(question) {
   const locked = question.locked === true;
   const payload = question.payload || {};
   const options = Array.isArray(payload.options) ? payload.options : [];
+  installQuizImageViewer();
   if (title) title.textContent = formatAdminLightningQuizWhen(question);
   body.innerHTML = `
     <div class="announcement-item__tags">
@@ -1918,8 +1937,10 @@ function openAdminLightningQuizDetail(question) {
       ${adminLightningQuizStageBadge(stage)}
     </div>
     <p class="admin-lq-detail__stem">${escapeHTML(payload.stem || '')}</p>
+    ${questionImageHtml(payload)}
     ${options.length ? `<ol class="admin-lq-detail__options" type="A">${options.map(option => `<li>${escapeHTML(option)}</li>`).join('')}</ol>` : ''}
     <p class="admin-lq-detail__answer">正解：<strong>${escapeHTML(formatResponseForDisplay(question.questionType, payload, question.answerKey))}</strong></p>
+    ${question.explanation ? `<p class="admin-lq-detail__explanation">詳解：${escapeHTML(question.explanation)}</p>` : ''}
     ${locked ? '<p class="admin-daily-quiz-note">已經開始或有人作答，題目已鎖定；要沿用請按「複製成新題」。</p>' : ''}
     <div class="admin-lq-detail__actions">
       <button type="button" class="secondary-btn" data-lq-detail-action="try">試作</button>
@@ -2251,7 +2272,8 @@ export async function renderAdminLightningQuizQuestions() {
       riseTimeEnd: timeEnd,
       questionType: question.type,
       payload: question.payload,
-      answerKey: question.answerKey
+      answerKey: question.answerKey,
+      explanation: question.explanation
     });
     saveButton.disabled = false;
     if (!result.success) {

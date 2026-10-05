@@ -19,6 +19,7 @@ import {
   isAnswerCorrect,
   QUESTION_TYPE_LABELS
 } from "./quiz-question-types.mjs";
+import { installQuizImageViewer } from "./quiz-image.mjs";
 
 // 每個掛載點（首頁卡片、後台預覽）各自一份計時器與事件綁定，互不干擾。
 function createSession(host) {
@@ -117,6 +118,7 @@ function startTimer(session, startedAtIso) {
 // 會友續答時選項順序不變；預覽不給，每次隨機。
 function showAnswering(session, question, api, startedAtIso) {
   stopSession(session);
+  installQuizImageViewer();
   paint(session, renderQuestionView(question, api.shuffleSeed));
   startTimer(session, startedAtIso);
 
