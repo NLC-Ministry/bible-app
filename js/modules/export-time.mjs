@@ -1,6 +1,8 @@
 export const TAIWAN_TIME_ZONE = "Asia/Taipei";
 
-function taiwanDateTimeParts(value) {
+// 用 formatToParts 自己拼字串：zh-TW 的 .format() 輸出（日期與時間之間的空白字元）
+// 會隨 ICU 版本不同，Node 20 與 Node 24、各家瀏覽器都可能不一樣。
+export function taiwanDateTimeParts(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   const parts = new Intl.DateTimeFormat("en-CA", {

@@ -55,6 +55,7 @@ import {
   summarizeVouchers,
   VOUCHER_REDEEMED_VIA_LABELS,
   VOUCHER_STATUS_LABELS,
+  formatVoucherTime,
   summarizeByRegion,
   summarizeByZone,
   summarizeWeek,
@@ -2736,13 +2737,6 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
 // （例如店家事後回報）或撤銷誤按的兌換；作廢的券（重新公布時被排除）只顯示不能操作。
 const ADMIN_VOUCHER_STATUS_KIND = { available: 'success', redeemed: 'brand', expired: 'neutral', void: 'neutral' };
 
-function formatAdminVoucherTime(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('zh-TW', {
-    timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
-  }).format(date);
-}
-
 function adminVoucherRowHtml(voucher) {
   const status = voucher.status || 'available';
   const badge = `<span class="stat-badge stat-badge--${ADMIN_VOUCHER_STATUS_KIND[status] || 'neutral'}">${escapeHTML(VOUCHER_STATUS_LABELS[status] || status)}</span>`;
@@ -2753,7 +2747,7 @@ function adminVoucherRowHtml(voucher) {
   if (status === 'redeemed') {
     const via = VOUCHER_REDEEMED_VIA_LABELS[voucher.redeemedVia] || '';
     const by = voucher.redeemedVia === 'admin' && voucher.redeemedByName ? `（${voucher.redeemedByName}）` : '';
-    note = `${formatAdminVoucherTime(voucher.redeemedAt)} 兌換・${via}${by}`;
+    note = `${formatVoucherTime(voucher.redeemedAt)} 兌換・${via}${by}`;
   } else if (status === 'void') {
     note = '重新公布時不在名單上，已作廢';
   }
