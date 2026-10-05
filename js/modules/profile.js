@@ -5,6 +5,7 @@ import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
 import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
+import { bindMyVouchersPage, refreshMyLightningQuizVouchers } from "./lightning-quiz-vouchers.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
@@ -403,6 +404,9 @@ export async function renderProfileView() {
   if (state.profileDetailOpen === "exams") {
     await renderMyExamPapers();
   }
+  if (state.profileDetailOpen === "vouchers") {
+    await refreshMyLightningQuizVouchers();
+  }
   if (state.profileDetailOpen === "personal-info") {
     renderPersonalInfoSubpage();
   }
@@ -643,7 +647,7 @@ function renderMyLightningQuizDetail(item) {
 
 // 伺服器只回「已發布且時段已結束」的活動（這時候才附正解），所以時段內就算
 // 已經答完，也要等時段結束才會出現在這裡。
-// 首頁「雲柱測驗前三名」的底部「我的測驗」連結（#429／#436）留下的提示：開到雲柱分頁，
+// 首頁「英雄榜」的底部「我的測驗」連結（#429／#436）留下的提示：開到雲柱分頁，
 // 清單範圍往前延伸到公布的那一週（公布期間可能已超過「最近一週」）。讀一次就清掉。
 let lightningHistoryFrom = null;
 
@@ -808,6 +812,7 @@ function openProfileDetail(key) {
     if (hint?.tab) setProfileExamsTab(hint.tab);
     refreshMyQuizzes();
   }
+  if (key === "vouchers") void refreshMyLightningQuizVouchers();
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();
@@ -1196,6 +1201,7 @@ export function init() {
     refreshMyQuizzes();
   });
   bindProfileExamsNavigation();
+  bindMyVouchersPage();
 
   const btnShareApp = document.getElementById("btn-share-app");
   if (btnShareApp && btnShareApp.dataset.bound !== "true") {

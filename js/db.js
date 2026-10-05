@@ -24,6 +24,14 @@ import {
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
+import {
+  COMMENTARY_INDEX_CACHE_KEY,
+  buildCommentaryIndex,
+  commentaryChapterKey,
+  normalizeTopicTags,
+  parseCommentaryIndexCache,
+  serializeCommentaryIndex
+} from './data/passage-commentary.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -5953,6 +5961,120 @@ const db = {
     }
   },
 
+  // ── 經文注釋（#447，passage_commentary）──────────────────────────────
+  // 閱讀器換章只查這份索引（localStorage 6 小時），點開注釋才抓內容。
+  _commentaryIndexPromise: null,
+  _commentaryIndexFailedAt: 0,
+  _commentaryCache: new Map(),
+
+  async fetchPassageCommentaryIndex() {
+    if (!state.isSupabaseMode || !state.supabase) return new Set();
+    let cached = null;
+    try { cached = parseCommentaryIndexCache(localStorage.getItem(COMMENTARY_INDEX_CACHE_KEY)); } catch (_error) {}
+    if (cached) return cached;
+    // 剛失敗過（例如離線）就先不重試，免得每換一章都打一次。
+    if (Date.now() - this._commentaryIndexFailedAt < 5 * 60 * 1000) return new Set();
+    if (!this._commentaryIndexPromise) {
+      this._commentaryIndexPromise = (async () => {
+        const { data, error } = await fetchAllRows(() => state.supabase
+          .from("passage_commentary")
+          .select("id, book, chapter")
+          .eq("is_published", true));
+        if (error) {
+          console.warn("[db] fetchPassageCommentaryIndex failed:", error);
+          this._commentaryIndexFailedAt = Date.now();
+          return new Set();
+        }
+        this._commentaryIndexFailedAt = 0;
+        const index = buildCommentaryIndex(data);
+        try { localStorage.setItem(COMMENTARY_INDEX_CACHE_KEY, serializeCommentaryIndex(index)); } catch (_error) {}
+        return index;
+      })().finally(() => { this._commentaryIndexPromise = null; });
+    }
+    return this._commentaryIndexPromise;
+  },
+
+  // 回傳這一章的注釋（沒有就 null）；查詢失敗時丟錯，讓閱讀器顯示重試。
+  async fetchPassageCommentary(bookName, chapter) {
+    if (!state.isSupabaseMode || !state.supabase) return null;
+    const key = commentaryChapterKey(bookName, chapter);
+    if (this._commentaryCache.has(key)) return this._commentaryCache.get(key);
+    const { data, error } = await state.supabase
+      .from("passage_commentary")
+      .select("id, book, chapter, title, content, topic_tags, updated_at")
+      .eq("book", bookName)
+      .eq("chapter", Number(chapter))
+      .eq("is_published", true)
+      .maybeSingle();
+    if (error) throw error;
+    const row = data || null;
+    this._commentaryCache.set(key, row);
+    return row;
+  },
+
+  _invalidatePassageCommentaryCache() {
+    this._commentaryCache.clear();
+    this._commentaryIndexFailedAt = 0;
+    try { localStorage.removeItem(COMMENTARY_INDEX_CACHE_KEY); } catch (_error) {}
+  },
+
+  // 後台用：含未發布的全部注釋。失敗回 null。
+  async fetchAllPassageCommentaryForAdmin() {
+    if (!state.isSupabaseMode || !state.supabase) return [];
+    const { data, error } = await fetchAllRows(() => state.supabase
+      .from("passage_commentary")
+      .select("id, book, chapter, title, content, topic_tags, is_published, created_at, updated_at"));
+    if (error) {
+      console.error("[db] fetchAllPassageCommentaryForAdmin failed:", error);
+      return null;
+    }
+    return data || [];
+  },
+
+  async savePassageCommentary({ id = null, book, chapter, title = "", content, topicTags = [], isPublished = true }) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      showToast("離線模式無法編輯經文注釋。");
+      return false;
+    }
+    const payload = {
+      book,
+      chapter: Number(chapter),
+      title: String(title || "").trim(),
+      content: String(content || "").trim(),
+      topic_tags: normalizeTopicTags(topicTags),
+      is_published: isPublished !== false
+    };
+    let error;
+    if (id) {
+      ({ error } = await state.supabase.from("passage_commentary").update(payload).eq("id", id));
+    } else {
+      const user = await this.getCurrentDbUser();
+      ({ error } = await state.supabase
+        .from("passage_commentary")
+        .insert([{ ...payload, created_by: user ? user.id : null }]));
+    }
+    if (error) {
+      console.error("[db] savePassageCommentary failed:", error);
+      const duplicate = error.code === "23505" || /duplicate|unique/i.test(String(error.message || ""));
+      showToast(duplicate ? "這一章已經有注釋了，請在清單中編輯它。" : `儲存注釋失敗：${error.message || error}`);
+      return false;
+    }
+    this._invalidatePassageCommentaryCache();
+    return true;
+  },
+
+  async deletePassageCommentary(id) {
+    if (!state.isSupabaseMode || !state.supabase || !id) return false;
+    const { error } = await state.supabase.from("passage_commentary").delete().eq("id", id);
+    if (error) {
+      console.error("[db] deletePassageCommentary failed:", error);
+      showToast(`刪除注釋失敗：${error.message || error}`);
+      return false;
+    }
+    this._invalidatePassageCommentaryCache();
+    return true;
+  },
+
   // 回報對話串（migration 0153）：未讀數字，餵鈴鐺 / 通知中心。
   async fetchIssueThreadUnread() {
     if (!state.isSupabaseMode || !state.supabase) {
@@ -6358,6 +6480,10 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
     lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
     lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
+    lightning_quiz_voucher_not_found: "找不到這張兌換券，請重新整理後再試。",
+    lightning_quiz_voucher_already_redeemed: "這張兌換券已經兌換過了。",
+    lightning_quiz_voucher_expired: "這張兌換券已經過期了。",
+    lightning_quiz_voucher_void: "這張兌換券已作廢（重新公布時不在名單上）。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -6525,6 +6651,29 @@ db.adminPublishLightningQuizWeekRanking = async function(weekStart, excluded, di
 db.adminRevokeLightningQuizWeekRanking = async function(weekStart) {
   if (!weekStart) return { success: false, message: "請選擇要看的週。" };
   return this._callLightningQuizRpc("admin_revoke_lightning_quiz_week_ranking", { p_week_start: weekStart });
+};
+
+// 英雄榜兌換券（#445）。會友：自己的券、在店裡由本人確認兌換。
+db.getMyLightningQuizVouchers = async function() {
+  return this._callLightningQuizRpc("get_my_lightning_quiz_vouchers", {});
+};
+
+db.redeemMyLightningQuizVoucher = async function(voucherId) {
+  if (!voucherId) return { success: false, message: "找不到這張兌換券，請重新整理後再試。" };
+  return this._callLightningQuizRpc("redeem_my_lightning_quiz_voucher", { p_voucher_id: voucherId });
+};
+
+// 後台：某週的兌換清單（weekStart 留空＝全部週）；手動標記兌換／撤銷兌換。
+db.adminListLightningQuizVouchers = async function(weekStart) {
+  return this._callLightningQuizRpc("admin_list_lightning_quiz_vouchers", { p_week_start: weekStart || null });
+};
+
+db.adminSetLightningQuizVoucherRedeemed = async function(voucherId, redeemed) {
+  if (!voucherId) return { success: false, message: "找不到這張兌換券，請重新整理後再試。" };
+  return this._callLightningQuizRpc("admin_set_lightning_quiz_voucher_redeemed", {
+    p_voucher_id: voucherId,
+    p_redeemed: redeemed === true
+  });
 };
 
 window.db = db;

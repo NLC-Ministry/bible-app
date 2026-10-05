@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 640" role="img" aria-labelledby="t d">
+  <title id="t">以色列十二支派安營圖</title>
+  <desc id="d">西在左、東在右。會幕在中央；利未人圍在會幕四周：東邊是摩西、亞倫和亞倫的兒子，南邊哥轄子孫，西邊革順子孫，北邊米拉利子孫。外圈十二支派：東邊猶大營（以薩迦、猶大、西布倫），南邊流便營（西緬、流便、迦得），西邊以法蓮營（瑪拿西、以法蓮、便雅憫），北邊但營（亞設、但、拿弗他利）。</desc>
+  <style>
+    text { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif; fill: #292524; text-anchor: middle; dominant-baseline: central; }
+    .muted { fill: #57534e; }
+    .tribe { fill: #ffffff; stroke: #a8a29e; stroke-width: 2; }
+    .lead { fill: #d5eff6; stroke: #04A9D2; stroke-width: 3; }
+    .levite { fill: #ece2cc; stroke: #a8a29e; stroke-width: 2; }
+    .name { font-size: 22px; }
+    .small { font-size: 18px; }
+  </style>
+  <rect x="0" y="0" width="800" height="640" rx="18" fill="#fbfaf7"/>
+
+  <text x="400" y="40" font-size="30" font-weight="500">以色列十二支派安營圖</text>
+  <text x="760" y="40" font-size="20" class="muted">↑ 北</text>
+  <text x="80" y="40" font-size="20" class="muted">西 ← → 東</text>
+  <text x="400" y="74" font-size="16" class="muted">同一營三個支派的左右位置是示意</text>
+
+  <!-- 中央：會幕與院子 -->
+  <rect x="290" y="280" width="220" height="100" fill="#f3ecdf" stroke="#57534e" stroke-width="3"/>
+  <rect x="320" y="308" width="110" height="44" fill="#e2d3b5" stroke="#57534e" stroke-width="2"/>
+  <text x="375" y="330" class="name">會幕</text>
+
+  <!-- 利未人（民數記 3 章） -->
+  <rect x="290" y="226" width="220" height="44" rx="6" class="levite"/>
+  <text x="400" y="248" class="small">北・米拉利子孫</text>
+  <rect x="290" y="390" width="220" height="44" rx="6" class="levite"/>
+  <text x="400" y="412" class="small">南・哥轄子孫</text>
+  <rect x="176" y="280" width="104" height="100" rx="6" class="levite"/>
+  <text x="228" y="314" class="small">西・革順</text>
+  <text x="228" y="344" class="small">子孫</text>
+  <rect x="520" y="280" width="112" height="100" rx="6" class="levite"/>
+  <text x="576" y="306" class="small">東・摩西、</text>
+  <text x="576" y="330" class="small">亞倫和</text>
+  <text x="576" y="354" class="small">他的兒子</text>
+
+  <!-- 北：但營（民數記 2:25–31） -->
+  <text x="400" y="104" font-size="20" class="muted">北方・但營 157,600 人</text>
+  <rect x="180" y="128" width="140" height="58" rx="8" class="tribe"/><text x="250" y="157" class="name">亞設</text>
+  <rect x="330" y="128" width="140" height="58" rx="8" class="lead"/><text x="400" y="157" class="name">但</text>
+  <rect x="480" y="128" width="140" height="58" rx="8" class="tribe"/><text x="550" y="157" class="name">拿弗他利</text>
+
+  <!-- 南：流便營（民數記 2:10–16） -->
+  <rect x="180" y="474" width="140" height="58" rx="8" class="tribe"/><text x="250" y="503" class="name">西緬</text>
+  <rect x="330" y="474" width="140" height="58" rx="8" class="lead"/><text x="400" y="503" class="name">流便</text>
+  <rect x="480" y="474" width="140" height="58" rx="8" class="tribe"/><text x="550" y="503" class="name">迦得</text>
+  <text x="400" y="556" font-size="20" class="muted">南方・流便營 151,450 人</text>
+
+  <!-- 西：以法蓮營（民數記 2:18–24） -->
+  <rect x="40" y="216" width="116" height="60" rx="8" class="tribe"/><text x="98" y="246" class="name">瑪拿西</text>
+  <rect x="40" y="290" width="116" height="60" rx="8" class="lead"/><text x="98" y="320" class="name">以法蓮</text>
+  <rect x="40" y="364" width="116" height="60" rx="8" class="tribe"/><text x="98" y="394" class="name">便雅憫</text>
+  <text x="98" y="448" font-size="18" class="muted">西方・以法蓮營</text>
+  <text x="98" y="472" font-size="18" class="muted">108,100 人</text>
+
+  <!-- 東：猶大營（民數記 2:3–9） -->
+  <rect x="652" y="216" width="116" height="60" rx="8" class="tribe"/><text x="710" y="246" class="name">以薩迦</text>
+  <rect x="652" y="290" width="116" height="60" rx="8" class="lead"/><text x="710" y="320" class="name">猶大</text>
+  <rect x="652" y="364" width="116" height="60" rx="8" class="tribe"/><text x="710" y="394" class="name">西布倫</text>
+  <text x="710" y="448" font-size="18" class="muted">東方・猶大營</text>
+  <text x="710" y="472" font-size="18" class="muted">186,400 人</text>
+
+  <!-- 圖例 -->
+  <rect x="96" y="590" width="40" height="26" rx="5" class="lead"/>
+  <text x="238" y="603" font-size="19">領頭支派（立營旗）</text>
+  <rect x="420" y="590" width="40" height="26" rx="5" class="levite"/>
+  <text x="572" y="603" font-size="19">利未人（民數記 3 章）</text>
+</svg>

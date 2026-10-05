@@ -30,6 +30,7 @@ import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentCh
 import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from "./reader-page-flip.mjs";
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "./verse-selection-format.mjs";
 import { buildChapterEndNav as buildSharedChapterEndNav, createVerseElement, revealVerses } from "./reader-verse-dom.mjs";
+import { createReaderCommentaryController } from "./reader-commentary.mjs";
 import {
   createBibleNavDirectory,
   isReaderReferenceResult,
@@ -37,6 +38,18 @@ import {
   readerBookAbbreviation,
   readerBookLabel
 } from "./bible-nav-directory.mjs";
+
+// db / escapeHTML / hydrateIcons 是核心檔掛在 window 上的全域，呼叫時才取用。
+const readerCommentary = createReaderCommentaryController({
+  db: {
+    fetchPassageCommentaryIndex: () => db.fetchPassageCommentaryIndex(),
+    fetchPassageCommentary: (bookName, chapter) => db.fetchPassageCommentary(bookName, chapter)
+  },
+  openLayer: element => openReaderLayer(element),
+  closeLayer: element => closeReaderLayer(element),
+  escapeHTML: value => escapeHTML(value),
+  hydrateIcons: element => { if (typeof hydrateIcons === "function") hydrateIcons(element); }
+});
 
 export function openReaderLayer(element) {
   if (!element) return;
@@ -610,6 +623,7 @@ function announceReaderChapter(text) {
 
 export function initReaderControls() {
   releaseClosedReaderLayers();
+  readerCommentary.bind();
   const bookSelect = document.getElementById("reader-book-select");
   const chapterSelect = document.getElementById("reader-chapter-select");
   const testamentSelect = document.getElementById("reader-testament-select");
@@ -1374,6 +1388,7 @@ export async function renderReaderText(options = {}) {
   updatePillLabels();
   renderReaderPicker();
   loadVerseNotesForChapter(book.name, chapter);
+  readerCommentary.resetForChapter();
 
   setReaderScrollTop(0, "auto");
 
@@ -1493,6 +1508,8 @@ export async function renderReaderText(options = {}) {
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
   refreshVerseSelectionUI();   // 跨章：把仍在選取集合裡、屬於這一章的節重新標記並重建工具列
+  // 經文畫完才查注釋（#447），不跟經文搶網路。
+  void readerCommentary.refreshForChapter(book.name, chapter, `${book.name} ${chapter}章`);
   return true;
 }
 
@@ -2846,6 +2863,7 @@ export function init() {
 }
 
 window.renderReaderText = renderReaderText;
+window.closeReaderCommentarySheet = () => readerCommentary.close();
 window.saveReaderPreferences = saveReaderPreferences;
 window.populateBookSelector = populateBookSelector;
 window.populateChapterSelector = populateChapterSelector;

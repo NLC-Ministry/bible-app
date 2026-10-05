@@ -23,6 +23,7 @@ import {
   prependTaiwanExportTime
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
+import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
@@ -37,6 +38,7 @@ import {
   buildWeekMembersCsv,
   buildWeekRegionCsv,
   buildWeekZoneCsv,
+  buildVoucherCsv,
   buildWeeklyTrendCsv,
   buildWeeklyTrendSeries,
   buildZoneCsv,
@@ -50,6 +52,9 @@ import {
   pickDayWinners,
   rankAttempts,
   sortZoneRowsByRegion,
+  summarizeVouchers,
+  VOUCHER_REDEEMED_VIA_LABELS,
+  VOUCHER_STATUS_LABELS,
   summarizeByRegion,
   summarizeByZone,
   summarizeWeek,
@@ -2608,7 +2613,8 @@ function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
   </div>`;
 }
 
-async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
+// onPublished：公布／重新公布後通知週統計頁重畫兌換清單（#445）。
+async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, onPublished) {
   if (!host) return;
   host.onclick = null;
   host.innerHTML = '<div class="admin-user-directory__empty">正在載入這週的答對名單…</div>';
@@ -2663,7 +2669,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
     }
     const confirmed = await window.showConfirmDialog({
       title: `把 ${formatWeekRange(data.weekStart)} 的前三名公布到首頁？`,
-      message: `全教會會友都會在首頁看到每天前三名的姓名、牧區與作答秒數，顯示 ${displayDays} 天。${publication ? '首頁上的舊名單會被覆蓋。' : ''}`,
+      message: `全教會會友都會在首頁看到每天前三名的姓名、牧區與作答秒數，顯示 ${displayDays} 天。得獎者會自動拿到克勞斯 100 元抵用券（30 天內有效）。${publication ? '首頁上的舊名單會被覆蓋；不在新名單上、還沒兌換的券會作廢。' : ''}`,
       confirmText: '公布',
       cancelText: '取消'
     });
@@ -2678,14 +2684,15 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
       showToast(published.message || '公布失敗，請稍後再試。');
       return;
     }
-    showToast(`已公布，首頁顯示到 ${formatWeekday(published.data?.displayUntil)} 23:59。`);
-    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+    showToast(`已公布，首頁顯示到 ${formatWeekday(published.data?.displayUntil)} 23:59；得獎者的兌換券已發出。`);
+    if (typeof onPublished === 'function') onPublished();
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, onPublished);
   };
 
   const revoke = async () => {
     const confirmed = await window.showConfirmDialog({
       title: '撤下首頁的前三名？',
-      message: '首頁會立即不顯示。排除名單會保留，之後可以再按「重新公布」。',
+      message: '首頁會立即不顯示。排除名單會保留，之後可以再按「重新公布」。已發出的兌換券不受影響。',
       confirmText: '撤下',
       cancelText: '取消',
       isDestructive: true
@@ -2697,7 +2704,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
       return;
     }
     showToast('已撤下。');
-    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent);
+    void renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, onPublished);
   };
 
   // 用 onclick（不是 addEventListener）：公布／撤下後同一個 host 會重畫，不能疊監聽。
@@ -2723,6 +2730,99 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent) {
   };
 
   draw();
+}
+
+// 英雄榜兌換券（#445）：這週公布名單發出的券與兌換狀態。管理員可以手動標記兌換
+// （例如店家事後回報）或撤銷誤按的兌換；作廢的券（重新公布時被排除）只顯示不能操作。
+const ADMIN_VOUCHER_STATUS_KIND = { available: 'success', redeemed: 'brand', expired: 'neutral', void: 'neutral' };
+
+function formatAdminVoucherTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('zh-TW', {
+    timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(date);
+}
+
+function adminVoucherRowHtml(voucher) {
+  const status = voucher.status || 'available';
+  const badge = `<span class="stat-badge stat-badge--${ADMIN_VOUCHER_STATUS_KIND[status] || 'neutral'}">${escapeHTML(VOUCHER_STATUS_LABELS[status] || status)}</span>`;
+  let action = '';
+  if (status === 'redeemed') action = `<button type="button" class="pill-btn" data-lq-voucher-undo="${escapeHTML(String(voucher.id))}">撤銷兌換</button>`;
+  else if (status !== 'void') action = `<button type="button" class="pill-btn" data-lq-voucher-redeem="${escapeHTML(String(voucher.id))}">標記已兌換</button>`;
+  let note = `有效期限至 ${formatWeekday(voucher.expiresOn)}`;
+  if (status === 'redeemed') {
+    const via = VOUCHER_REDEEMED_VIA_LABELS[voucher.redeemedVia] || '';
+    const by = voucher.redeemedVia === 'admin' && voucher.redeemedByName ? `（${voucher.redeemedByName}）` : '';
+    note = `${formatAdminVoucherTime(voucher.redeemedAt)} 兌換・${via}${by}`;
+  } else if (status === 'void') {
+    note = '重新公布時不在名單上，已作廢';
+  }
+  return `<li class="admin-lq-vouchers__row${status === 'void' ? ' admin-lq-vouchers--void' : ''}">
+    <span>${escapeHTML(formatWeekday(voucher.riseDate))}${escapeHTML(formatRankLabel(voucher.rank))}</span>
+    <span class="admin-lq-vouchers__who">${escapeHTML(voucher.name || '（未命名）')}${voucher.pastoralZone ? `<span>${escapeHTML(voucher.pastoralZone)}</span>` : ''}</span>
+    <span class="admin-lq-vouchers__code">${escapeHTML(voucher.code || '')}</span>
+    ${badge}
+    ${action}
+    <span class="admin-lq-vouchers__note">${escapeHTML(note)}</span>
+  </li>`;
+}
+
+async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) {
+  if (!host) return;
+  if (!host.childElementCount) host.innerHTML = '<div class="admin-user-directory__empty">正在載入兌換券…</div>';
+  const result = await db.adminListLightningQuizVouchers(weekStart);
+  if (!isCurrent()) return;
+  if (!result.success) {
+    host.lqVouchers = [];
+    host.onclick = null;
+    host.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入兌換券失敗，請稍後再試。')}</div>`;
+    return;
+  }
+  const vouchers = Array.isArray(result.data?.vouchers) ? result.data.vouchers : [];
+  host.lqVouchers = vouchers;
+  if (!vouchers.length) {
+    host.onclick = null;
+    host.innerHTML = '<div class="admin-user-directory__empty">這週還沒有發出兌換券；公布前三名後會自動發給得獎者。</div>';
+    return;
+  }
+  const counts = summarizeVouchers(vouchers);
+  host.innerHTML = `
+    <div class="admin-lq-vouchers__summary">
+      <span>發出 <strong>${counts.issued}</strong> 張</span>
+      <span>已兌換 <strong>${counts.redeemed}</strong></span>
+      <span>可使用 <strong>${counts.available}</strong></span>
+      <span>已過期 <strong>${counts.expired}</strong></span>
+      ${counts.void ? `<span>已作廢 <strong>${counts.void}</strong></span>` : ''}
+    </div>
+    <p class="admin-daily-quiz-note">得獎者在店裡由本人按「確認兌換」。店家事後回報、或會友誤按時，可在這裡標記或撤銷。</p>
+    <ul class="admin-lq-vouchers__list">${vouchers.map(adminVoucherRowHtml).join('')}</ul>
+  `;
+
+  const setRedeemed = async (button, voucherId, redeemed) => {
+    const voucher = vouchers.find(v => String(v.id) === voucherId);
+    const label = voucher ? `${voucher.name || ''} ${formatWeekday(voucher.riseDate)}${formatRankLabel(voucher.rank)}（${voucher.code}）` : '這張券';
+    const confirmed = await window.showConfirmDialog(redeemed
+      ? { title: '標記為已兌換？', message: `${label} 會變成已兌換，會友就不能再使用。`, confirmText: '標記已兌換', cancelText: '取消' }
+      : { title: '撤銷這次兌換？', message: `${label} 會恢復成可使用（過了期限的會顯示已過期）。`, confirmText: '撤銷兌換', cancelText: '取消', isDestructive: true });
+    if (!confirmed) return;
+    button.disabled = true;
+    const saved = await db.adminSetLightningQuizVoucherRedeemed(voucherId, redeemed);
+    if (!saved.success) {
+      button.disabled = false;
+      showToast(saved.message || '更新失敗，請稍後再試。');
+      return;
+    }
+    showToast(redeemed ? '已標記為已兌換。' : '已撤銷兌換。');
+    void renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent);
+  };
+
+  // 用 onclick（不是 addEventListener）：重畫時同一個 host 不能疊監聽。
+  host.onclick = event => {
+    const redeem = event.target.closest('[data-lq-voucher-redeem]');
+    if (redeem) { void setRedeemed(redeem, redeem.dataset.lqVoucherRedeem, true); return; }
+    const undo = event.target.closest('[data-lq-voucher-undo]');
+    if (undo) void setRedeemed(undo, undo.dataset.lqVoucherUndo, false);
+  };
 }
 
 // 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
@@ -2783,6 +2883,14 @@ function renderAdminLightningQuizWeekPanel(panel) {
         <div data-lq-week-ranking></div>
       </section>
 
+      <section class="admin-lightning-quiz-detail__section admin-lq-vouchers" aria-label="英雄榜兌換券">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>英雄榜兌換券</h5>
+          <button type="button" class="pill-btn" data-lq-vouchers-export>匯出 CSV</button>
+        </div>
+        <div data-lq-week-vouchers></div>
+      </section>
+
       <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
         <div class="admin-lightning-quiz-detail__section-head">
           <h5>週排行榜（答對題數多的在前，同分比答對總用時）</h5>
@@ -2838,7 +2946,15 @@ function renderAdminLightningQuizWeekPanel(panel) {
       </details>
     `;
     if (typeof hydrateIcons === 'function') hydrateIcons(body);
-    void renderAdminLightningQuizWeekRanking(body.querySelector('[data-lq-week-ranking]'), week.weekStart, () => seq === requestSeq);
+    const vouchersHost = body.querySelector('[data-lq-week-vouchers]');
+    const isCurrentWeek = () => seq === requestSeq;
+    const refreshVouchers = () => renderAdminLightningQuizWeekVouchers(vouchersHost, week.weekStart, isCurrentWeek);
+    void renderAdminLightningQuizWeekRanking(body.querySelector('[data-lq-week-ranking]'), week.weekStart, isCurrentWeek, refreshVouchers);
+    void refreshVouchers();
+    body.querySelector('[data-lq-vouchers-export]')?.addEventListener('click', () => {
+      const list = vouchersHost?.lqVouchers || [];
+      downloadAdminLightningQuizCsv(list.length ? buildVoucherCsv(list) : '', `雲柱測驗_英雄榜兌換券_${week.weekStart}.csv`);
+    });
 
     body.querySelector('[data-lq-leaderboard-toggle]')?.addEventListener('click', event => {
       body.querySelectorAll('[data-lq-leaderboard-more]').forEach(item => item.classList.remove('hidden'));
@@ -3055,6 +3171,7 @@ const ADMIN_SECTIONS = [
   { id: 'registrations', group: '報名與回報', label: '報名註冊統計',   icon: 'journalText',   panel: 'system', sub: 'registrations' },
   { id: 'reports',       group: '報名與回報', label: '回報管理',       icon: 'inbox',         panel: 'system', sub: 'reports' },
   { id: 'announcements', group: '內容管理',   label: '公告管理',       icon: 'megaphone',     panel: 'system', sub: 'announcements' },
+  { id: 'commentary',    group: '內容管理',   label: '經文注釋',       icon: 'lightbulb',     panel: 'system', sub: 'commentary' },
   { id: 'join-status',   group: '計畫營運',   label: '加入計畫狀況',   icon: 'calendarCheck', panel: 'plans',  sub: 'join-status' },
   { id: 'members',       group: '計畫營運',   label: '組員總覽',       icon: 'peoples',       panel: 'plans',  sub: 'members' },
   { id: 'teams',         group: '計畫營運',   label: '組隊狀況',       icon: 'trophy',        panel: 'plans',  sub: 'teams' },
@@ -3131,7 +3248,15 @@ window.closeAdminSection = closeAdminSection;
 const adminSectionDataLoaded = new Set();
 const ADMIN_SECTION_DATA_LOADERS = {
   users: () => [renderAdminUserDirectory()],
-  permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()]
+  permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()],
+  commentary: () => [renderAdminCommentary({
+    db,
+    books: window.BIBLE_BOOKS,
+    escapeHTML,
+    showToast,
+    confirm: options => window.showConfirmDialog(options),
+    hydrateIcons: element => { if (typeof hydrateIcons === 'function') hydrateIcons(element); }
+  })]
 };
 
 function loadAdminSectionDataOnce(sectionId) {

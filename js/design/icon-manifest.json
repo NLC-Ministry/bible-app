@@ -38,6 +38,7 @@
   "bookOne": "BookText",
   "journalText": "BookText",
   "trophy": "Trophy",
+  "ticket": "Ticket",
   "barChart": "BarChart3",
   "personBox": "UserRound",
   "personBoxFill": "UserRound",
@@ -113,5 +114,6 @@
   "diamondFill": "Gem",
   "crown": "Crown",
   "crownFill": "Crown",
-  "info": "Info"
+  "info": "Info",
+  "lightbulb": "Lightbulb"
 }

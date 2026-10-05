@@ -1446,6 +1446,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
         }
 
+        // 閱讀器的經文注釋面板（#447）：返回鍵只關面板，留在閱讀器。
+        if (typeof window.closeReaderCommentarySheet === "function"
+          && window.closeReaderCommentarySheet()) {
+          pushRootState();
+          return;
+        }
+
         // 雲柱測驗後台（#317）：返回鍵先關它的彈窗、再關完整頁面，都沒有才離開後台區塊。
         if (typeof window.closeAdminLightningQuizLayer === "function"
           && window.closeAdminLightningQuizLayer()) {
