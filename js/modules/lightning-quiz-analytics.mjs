@@ -3,7 +3,7 @@
 // admin_get_lightning_quiz_week／_weeks（週統計，#311）的回傳彙總成作答總覽、
 // 牧區分析、大區分析、週排行、週趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
 
-import { prependTaiwanExportTime, formatTaiwanExportDateTime } from "./export-time.mjs";
+import { prependTaiwanExportTime, formatTaiwanExportDateTime, taiwanDateTimeParts } from "./export-time.mjs";
 
 export const UNASSIGNED_ZONE_LABEL = "未分配牧區";
 export const UNASSIGNED_REGION_LABEL = "未分配大區";
@@ -484,12 +484,15 @@ export const VOUCHER_REDEEMED_VIA_LABELS = Object.freeze({
   admin: "管理員標記"
 });
 
+// 個人頁與後台兌換券上的兌換時間，例如「10/5 14:30」。
+export function formatVoucherTime(value) {
+  const parts = value ? taiwanDateTimeParts(value) : null;
+  return parts ? `${Number(parts.month)}/${Number(parts.day)} ${parts.hour}:${parts.minute}` : "";
+}
+
 function formatTaiwanDateTimeShort(value) {
-  const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
-  }).format(date);
+  const parts = value ? taiwanDateTimeParts(value) : null;
+  return parts ? `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}` : "";
 }
 
 // 後台摘要：作廢的不算發出的券。
