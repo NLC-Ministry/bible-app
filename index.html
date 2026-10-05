@@ -650,6 +650,11 @@
             <span>CUNP</span>
           </button>
           <div class="reader-nav-spacer"></div>
+          <!-- 經文注釋（#447）：這一章有注釋才顯示，由 js/modules/reader-commentary.mjs 控制 -->
+          <button type="button" class="reader-icon-btn native-toolbar-btn reader-commentary-btn hidden" id="reader-commentary-btn"
+            title="經文注釋" aria-label="經文注釋" aria-haspopup="dialog" aria-controls="reader-commentary-backdrop" aria-hidden="true">
+            <span class="nlc-icon" data-icon="lightbulb"></span>
+          </button>
           <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-audio-btn"
             title="&#x8A9E;&#x97F3;" aria-label="&#x8A9E;&#x97F3;">
             <span class="nlc-icon" data-icon="volumeNotice"></span>
@@ -1931,6 +1936,55 @@
             </section>
           </div>
 
+          <!-- 經文注釋管理（#447）：第一次進入才由 js/modules/admin-commentary.mjs 載入清單。 -->
+          <div id="admin-section-commentary" class="card-col span-12 admin-section-panel hidden">
+            <section class="glass-card admin-announcements admin-commentary" aria-labelledby="admin-commentary-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">閱讀器內容管理</p>
+                  <h3 class="card-title" id="admin-commentary-title">經文注釋</h3>
+                  <p>每一章最多一則。會友在聖經閱讀器讀到有注釋的章節時，上方會出現燈泡按鈕，點開就能看到注釋和主題圖片。</p>
+                </div>
+                <button type="button" class="primary-btn" id="admin-commentary-create">新增注釋</button>
+              </div>
+              <div id="admin-commentary-editor" class="announcement-form-panel hidden">
+                <h4 class="announcement-form-panel__title" id="admin-commentary-form-title">新增注釋</h4>
+                <div class="admin-commentary-ref">
+                  <label>書卷
+                    <select id="admin-commentary-book" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                  <label>章
+                    <select id="admin-commentary-chapter" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                </div>
+                <label>小標題（選填）
+                  <input type="text" id="admin-commentary-heading" class="form-control announcement-form-panel__input" maxlength="60" placeholder="例如：會幕的設計">
+                </label>
+                <label>注釋內容
+                  <textarea id="admin-commentary-content" class="form-control announcement-form-panel__textarea" rows="8" placeholder="寫給會友看的經文解釋。空一行就是新的段落。"></textarea>
+                </label>
+                <fieldset class="admin-commentary-topics">
+                  <legend>主題圖片（勾選後，閱讀器會在注釋下方附上這些圖）</legend>
+                  <div id="admin-commentary-topic-list" class="admin-commentary-topic-list"></div>
+                </fieldset>
+                <label class="admin-commentary-publish">
+                  <input type="checkbox" id="admin-commentary-published" checked>
+                  <span>發布給會友看（取消勾選就是先存成草稿）</span>
+                </label>
+                <div class="announcement-form-panel__actions">
+                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-commentary-cancel">取消</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-commentary-save">儲存注釋</button>
+                </div>
+              </div>
+              <label class="admin-commentary-filter">篩選書卷
+                <select id="admin-commentary-filter" class="form-control announcement-form-panel__input"></select>
+              </label>
+              <div id="admin-commentary-list" class="announcements-list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入注釋…</div>
+              </div>
+            </section>
+          </div>
+
           <!-- 首頁「雲柱測驗」後台：題目 CRUD ＋ 統計與趨勢分析。內容由
                js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
                renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
@@ -2410,6 +2464,23 @@
     </div>
   </div>
   <!-- lightning-quiz-sheets:end -->
+
+  <!-- 經文注釋面板（#447）。跟其他閱讀器疊層一樣放在 .view-pane 外面（見 bible-study-dev-guidelines 第 2 節）。 -->
+  <div class="bottom-sheet-backdrop reader-commentary-backdrop hidden" id="reader-commentary-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container reader-commentary-sheet" role="dialog" aria-modal="true"
+      aria-labelledby="reader-commentary-heading">
+      <div class="bottom-sheet-drag-handle" aria-hidden="true"></div>
+      <div class="bottom-sheet-header">
+        <div class="reader-commentary-heading-group">
+          <h3 id="reader-commentary-heading">經文注釋</h3>
+          <p class="reader-commentary-subtitle" id="reader-commentary-subtitle"></p>
+        </div>
+        <button type="button" id="reader-commentary-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
+          aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body reader-commentary-body" id="reader-commentary-body"></div>
+    </div>
+  </div>
 
   <!-- Typography & Speech Settings Dialog -->
   <div class="bottom-sheet-backdrop reader-settings-dialog-backdrop hidden" id="typography-settings-backdrop" aria-hidden="true">

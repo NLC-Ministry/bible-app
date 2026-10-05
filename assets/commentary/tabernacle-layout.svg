@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 640" role="img" aria-labelledby="t d">
+  <title id="t">會幕平面圖</title>
+  <desc id="d">俯視圖，西在左、東在右。外院長 100 肘、寬 50 肘，院門朝東。會幕帳幕分成至聖所（約櫃）與聖所（香壇、北邊的陳設餅桌、南邊的金燈臺）；院子裡從帳幕往院門依序是洗濯盆與銅祭壇。</desc>
+  <style>
+    text { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif; fill: #292524; }
+    .muted { fill: #57534e; }
+    .num { font-size: 17px; font-weight: 500; fill: #ffffff; text-anchor: middle; dominant-baseline: central; }
+    .legend { font-size: 21px; dominant-baseline: central; }
+  </style>
+  <rect x="0" y="0" width="800" height="640" rx="18" fill="#fbfaf7"/>
+
+  <text x="400" y="44" font-size="30" font-weight="500" text-anchor="middle">會幕平面圖</text>
+  <text x="772" y="44" font-size="20" text-anchor="end" class="muted">↑ 北</text>
+  <text x="28" y="44" font-size="20" class="muted">西 ← → 東</text>
+
+  <!-- 外院 100 × 50 肘（1 肘 = 7.6 單位） -->
+  <rect x="20" y="72" width="760" height="380" fill="#f3ecdf" stroke="#57534e" stroke-width="3"/>
+  <text x="590" y="108" font-size="21" text-anchor="middle" class="muted">外院 100 × 50 肘</text>
+  <text x="590" y="136" font-size="18" text-anchor="middle" class="muted">（1 肘約 45 公分）</text>
+  <!-- 院門（東，寬 20 肘） -->
+  <line x1="780" y1="186" x2="780" y2="338" stroke="#04A9D2" stroke-width="9"/>
+
+  <!-- 帳幕：至聖所 10 × 10 肘、聖所 20 × 10 肘 -->
+  <rect x="172" y="224" width="76" height="76" fill="#e2d3b5" stroke="#57534e" stroke-width="3"/>
+  <rect x="248" y="224" width="152" height="76" fill="#ece2cc" stroke="#57534e" stroke-width="3"/>
+  <line x1="248" y1="224" x2="248" y2="300" stroke="#04A9D2" stroke-width="6"/>
+  <line x1="400" y1="224" x2="400" y2="300" stroke="#04A9D2" stroke-width="6"/>
+  <text x="210" y="212" font-size="21" text-anchor="middle">至聖所</text>
+  <text x="324" y="212" font-size="21" text-anchor="middle">聖所</text>
+
+  <!-- 1 約櫃 -->
+  <rect x="196" y="246" width="28" height="16" fill="#c9a227" stroke="#8a6d14" stroke-width="2"/>
+  <circle cx="210" cy="284" r="12" fill="#57534e"/><text x="210" y="284" class="num">1</text>
+  <!-- 2 香壇（幔子前） -->
+  <rect x="263" y="255" width="14" height="14" fill="#c9a227" stroke="#8a6d14" stroke-width="2"/>
+  <circle cx="270" cy="238" r="12" fill="#57534e"/><text x="270" y="238" class="num">2</text>
+  <!-- 3 陳設餅桌（北） -->
+  <rect x="327" y="232" width="28" height="14" fill="#c9a227" stroke="#8a6d14" stroke-width="2"/>
+  <circle cx="378" cy="239" r="12" fill="#57534e"/><text x="378" y="239" class="num">3</text>
+  <!-- 4 金燈臺（南） -->
+  <line x1="341" y1="270" x2="341" y2="292" stroke="#8a6d14" stroke-width="3"/>
+  <path d="M329 272 Q341 286 353 272 M333 270 Q341 280 349 270" fill="none" stroke="#8a6d14" stroke-width="2.5"/>
+  <circle cx="378" cy="282" r="12" fill="#57534e"/><text x="378" y="282" class="num">4</text>
+  <!-- 5 洗濯盆 -->
+  <circle cx="470" cy="262" r="16" fill="#cbd5e1" stroke="#64748b" stroke-width="2.5"/>
+  <circle cx="470" cy="300" r="12" fill="#57534e"/><text x="470" y="300" class="num">5</text>
+  <!-- 6 銅祭壇（5 × 5 肘） -->
+  <rect x="581" y="243" width="38" height="38" fill="#b4703d" stroke="#7c4a24" stroke-width="2.5"/>
+  <circle cx="600" cy="302" r="12" fill="#57534e"/><text x="600" y="302" class="num">6</text>
+  <!-- 7 院門 -->
+  <circle cx="752" cy="262" r="12" fill="#57534e"/><text x="752" y="262" class="num">7</text>
+
+  <!-- 圖例 -->
+  <g>
+    <circle cx="52" cy="496" r="12" fill="#57534e"/><text x="52" y="496" class="num">1</text>
+    <text x="74" y="496" class="legend">約櫃（至聖所內）</text>
+    <circle cx="52" cy="532" r="12" fill="#57534e"/><text x="52" y="532" class="num">2</text>
+    <text x="74" y="532" class="legend">香壇（幔子前）</text>
+    <circle cx="52" cy="568" r="12" fill="#57534e"/><text x="52" y="568" class="num">3</text>
+    <text x="74" y="568" class="legend">陳設餅桌（北邊）</text>
+    <circle cx="52" cy="604" r="12" fill="#57534e"/><text x="52" y="604" class="num">4</text>
+    <text x="74" y="604" class="legend">金燈臺（南邊）</text>
+
+    <circle cx="432" cy="496" r="12" fill="#57534e"/><text x="432" y="496" class="num">5</text>
+    <text x="454" y="496" class="legend">洗濯盆</text>
+    <circle cx="432" cy="532" r="12" fill="#57534e"/><text x="432" y="532" class="num">6</text>
+    <text x="454" y="532" class="legend">銅祭壇（燔祭壇）</text>
+    <circle cx="432" cy="568" r="12" fill="#57534e"/><text x="432" y="568" class="num">7</text>
+    <text x="454" y="568" class="legend">院門（朝東）</text>
+    <line x1="420" y1="604" x2="444" y2="604" stroke="#04A9D2" stroke-width="8"/>
+    <text x="454" y="604" class="legend">藍色紫色朱紅色的簾子、幔子</text>
+  </g>
+</svg>
