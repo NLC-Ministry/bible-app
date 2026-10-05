@@ -132,7 +132,7 @@ describe("後台兌換清單", () => {
 // ── 後端與串接 ──────────────────────────────────────────────────────────────
 
 describe("wiring", () => {
-  const migration = readFileSync("supabase/migrations/20261004165000_lightning_quiz_vouchers.sql", "utf8").replace(/\r\n/g, "\n");
+  const migration = readFileSync("supabase/migrations/20261005110447_lightning_quiz_vouchers.sql", "utf8").replace(/\r\n/g, "\n");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
   const db = readFileSync("js/db.js", "utf8");
   const html = readFileSync("index.html", "utf8").replace(/\r\n/g, "\n");
