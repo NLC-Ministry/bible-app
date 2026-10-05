@@ -14005,6 +14005,61 @@ body.profile-subpage-open .main-content {
 .profile-exams-row__score { color: var(--color-brand); font-weight: 500; font-size: 0.9375rem; }
 .profile-exams__list--rows { gap: 0.5rem; }
 
+/* 我的兌換券：雲柱測驗英雄榜的克勞斯抵用券（#445） */
+.lq-voucher__list { display: grid; gap: 0.75rem; }
+.lq-voucher {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border-card);
+  border-left: 4px solid var(--color-brand);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.lq-voucher--redeemed,
+.lq-voucher--expired { border-left-color: var(--border-card); }
+.lq-voucher__head { display: flex; align-items: flex-start; gap: 0.6rem; }
+.lq-voucher__icon { color: var(--color-brand); flex-shrink: 0; margin-top: 0.1rem; }
+.lq-voucher--redeemed .lq-voucher__icon,
+.lq-voucher--expired .lq-voucher__icon { color: var(--text-muted); }
+.lq-voucher__title { display: grid; gap: 0.15rem; flex: 1; min-width: 0; }
+.lq-voucher__title strong { font-weight: 500; font-size: 1rem; color: var(--text-primary); }
+.lq-voucher__title span { font-size: 0.875rem; color: var(--text-secondary); }
+.lq-voucher__fields {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-card);
+}
+.lq-voucher__fields dt { font-size: 0.875rem; color: var(--text-muted); }
+.lq-voucher__fields dd { margin: 0.15rem 0 0; color: var(--text-primary); font-size: 1rem; overflow-wrap: anywhere; }
+.lq-voucher__fields dd span { margin-left: 0.4rem; font-size: 0.875rem; color: var(--text-secondary); }
+.lq-voucher__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.25rem !important; letter-spacing: 0.12em; font-weight: 500; }
+.lq-voucher__meta { margin: 0; font-size: 0.875rem; color: var(--text-secondary); }
+.lq-voucher__redeem { width: 100%; }
+
+/* 後台週統計「英雄榜兌換券」（#445） */
+.admin-lq-vouchers__summary { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.25rem 0 0.5rem; color: var(--text-secondary); font-size: 0.875rem; }
+.admin-lq-vouchers__summary strong { color: var(--text-primary); font-weight: 500; }
+.admin-lq-vouchers__list { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.admin-lq-vouchers__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.admin-lq-vouchers__who { flex: 1 1 12rem; min-width: 0; color: var(--text-primary); }
+.admin-lq-vouchers__who span { margin-left: 0.4rem; color: var(--text-secondary); font-size: 0.875rem; }
+.admin-lq-vouchers__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.08em; color: var(--text-primary); }
+.admin-lq-vouchers__note { flex-basis: 100%; font-size: 0.875rem; color: var(--text-muted); }
+.admin-lq-vouchers--void { opacity: 0.6; }
+
 .profile-exams-detail__back {
   display: inline-flex;
   align-items: center;

@@ -1,5 +1,5 @@
 // js/modules/lightning-quiz-ranking.mjs
-// 首頁「本週雲柱測驗前三名」卡片（#429）。管理員在後台週統計確認名次並公布後，
+// 首頁「英雄榜」卡片：本週雲柱測驗每天前三名（#429；#445 改名英雄榜、加兌換券連結）。管理員在後台週統計確認名次並公布後，
 // get_lightning_quiz_week_ranking() 回傳最新一份還在公布期間的前三名（固定紀錄）。
 // 卡片只放前三名：RPC 雖然也回傳自己每天的結果（mine），但個人作答到「我的測驗」看（#436）。
 // 跟當天的作答卡片（lightning-quiz.mjs）是兩張獨立的卡，可以同時出現。
@@ -34,7 +34,7 @@ export function renderRankingCardHtml(data) {
   return `<div class="lq-ranking">
     <div class="lq-ranking__head">
       <span class="nlc-icon lq-ranking__icon" data-icon="trophy" aria-hidden="true"></span>
-      <h3 class="card-title">雲柱測驗前三名</h3>
+      <h3 class="card-title">英雄榜</h3>
       <span class="lq-ranking__range">${escapeHTML(formatWeekRange(data?.weekStart))}</span>
     </div>
     <div class="lq-ranking__days">
@@ -45,6 +45,7 @@ export function renderRankingCardHtml(data) {
     </div>
     <div class="lq-ranking__footer">
       <a href="#/profile/exams" class="lq-ranking__history" data-lq-ranking-history>我的作答結果請到「我的測驗」查看</a>
+      <a href="#/profile/vouchers" class="lq-ranking__history" data-lq-ranking-vouchers>得獎者可憑「我的兌換券」到克勞斯兌換抵用券</a>
     </div>
   </div>`;
 }
