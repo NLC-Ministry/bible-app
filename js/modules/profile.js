@@ -4,6 +4,7 @@ import { isLocalhostGoogleLoginAllowed, showToast } from "./utils.js";
 import { showModal, hideModal } from "./modal-manager.mjs";
 import { normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLines } from "./quiz-review.mjs";
+import { installQuizImageViewer } from "./quiz-image.mjs";
 import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { bindMyVouchersPage, refreshMyLightningQuizVouchers } from "./lightning-quiz-vouchers.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
@@ -631,12 +632,18 @@ function renderMyLightningQuizDetail(item) {
     const question = normalizeQuestion({ id: item.questionId, type: item.questionType, payload: item.payload, answerKey: item.answerKey });
     const answered = item.result === "correct" || item.result === "wrong";
     const seconds = answered && Number.isFinite(Number(item.elapsedMs)) ? `${(Number(item.elapsedMs) / 1000).toFixed(1)} 秒` : "";
+    // 詳解（#449）：伺服器只在時段結束後跟正解一起回傳
+    const explanation = typeof item.explanation === "string" ? item.explanation.trim() : "";
     reviewHtml = renderQuestionReviewHtml(question, {
       response: answered ? item.response : null,
       result: item.result,
       heading: QUESTION_TYPE_LABELS[item.questionType] || "",
-      extraHtml: seconds ? `<p class="exam-result__ln"><span class="exam-result__k">作答時間：</span>${escapeHTML(seconds)}</p>` : ""
+      extraHtml: [
+        seconds ? `<p class="exam-result__ln"><span class="exam-result__k">作答時間：</span>${escapeHTML(seconds)}</p>` : "",
+        explanation ? `<p class="exam-result__ln exam-result__ln--explanation"><span class="exam-result__k">解說：</span>${escapeHTML(explanation)}</p>` : ""
+      ].join("")
     });
+    installQuizImageViewer();
   } catch (_) {
     reviewHtml = '<div class="profile-exams__empty">這一題的格式無法顯示。</div>';
   }

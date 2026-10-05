@@ -1,5 +1,7 @@
 // 小測驗／大測驗共用的「題型一～五」定義：資料形狀、渲染、DOM 綁定、正確性比對。
 // 純函式模組，不依賴 window/state，方便兩邊呼叫也方便單元測試。
+
+import { questionImageHtml } from "./quiz-image.mjs";
 //
 // 題目正規化後的形狀（跟 exam_questions.payload / answer_key 同一套慣例）：
 //   { id, type, payload: {...}, answerKey, explanation, verseRef }
@@ -314,6 +316,7 @@ export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}
 
   return `<fieldset class="daily-quiz-question" data-question-id="${escapeHtml(id)}" data-question-type="${escapeHtml(type)}">
     <legend>${legend}</legend>
+    ${questionImageHtml(payload)}
     ${body}
   </fieldset>`;
 }

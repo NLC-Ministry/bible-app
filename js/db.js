@@ -6551,8 +6551,8 @@ db.adminListLightningQuizQuestions = async function(fromDate, toDate) {
   });
 };
 
-// 新增一律是草稿。已鎖定的活動儲存時會另存成新草稿（回傳 forked: true），
-// 原活動與統計不動。
+// 新增一律是草稿；開始後鎖定（詳解也一起鎖）。
+// explanation 沒給（undefined）＝不動原本的詳解；空字串＝清掉。
 db.adminUpsertLightningQuizQuestion = async function(question) {
   const q = question || {};
   return this._callLightningQuizRpc("admin_upsert_lightning_quiz_question", {
@@ -6562,7 +6562,8 @@ db.adminUpsertLightningQuizQuestion = async function(question) {
     p_rise_time_end: q.riseTimeEnd || null,
     p_question_type: q.questionType || null,
     p_payload: q.payload || null,
-    p_answer_key: q.answerKey ?? null
+    p_answer_key: q.answerKey ?? null,
+    p_explanation: typeof q.explanation === "string" ? q.explanation : null
   });
 };
 
