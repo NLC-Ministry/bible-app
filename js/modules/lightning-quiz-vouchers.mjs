@@ -4,20 +4,13 @@
 // 兌換流程：在店裡出示這張券，店員看過後由本人按「確認兌換」，券就變成已兌換、不能再用。
 // 這一頁也是得獎證明：首頁英雄榜撤下後，得獎紀錄還留在這裡。
 
-import { formatRankLabel, formatWeekday } from "./lightning-quiz-analytics.mjs";
+import { formatRankLabel, formatVoucherTime, formatWeekday } from "./lightning-quiz-analytics.mjs";
 
 const STATUS_BADGES = {
   available: '<span class="stat-badge stat-badge--success">可使用</span>',
   redeemed: '<span class="stat-badge stat-badge--neutral">已兌換</span>',
   expired: '<span class="stat-badge stat-badge--neutral">已過期</span>'
 };
-
-export function formatVoucherTime(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false
-  }).format(date);
-}
 
 // 可使用的放上面（快到期的在前）；已兌換／已過期的放下面（新的在前）。作廢的伺服器不會回傳。
 export function splitVouchers(vouchers) {
