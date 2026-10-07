@@ -24,6 +24,7 @@ import {
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
+import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
@@ -3192,6 +3193,8 @@ const ADMIN_SECTIONS = [
   { id: 'members',       group: '計畫營運',   label: '組員總覽',       icon: 'peoples',       panel: 'plans',  sub: 'members' },
   { id: 'teams',         group: '計畫營運',   label: '組隊狀況',       icon: 'trophy',        panel: 'plans',  sub: 'teams' },
   { id: 'statistics',    group: '計畫營運',   label: '計畫統計',       icon: 'barChart',      panel: 'plans',  sub: 'statistics' },
+  // 讀經使用率（#452）：放在計畫營運，但 panel: 'system' → 只有系統管理員看得到
+  { id: 'reading-activity', group: '計畫營運', label: '讀經使用率',     icon: 'trendingUp',    panel: 'system', sub: 'reading-activity' },
   { id: 'quizzes',       group: '測驗',       label: '小測驗',         icon: 'checkCircle',   panel: 'plans',  sub: 'quizzes', flag: 'quiz' },
   { id: 'exam',          group: '測驗',       label: '大測驗',         icon: 'pencil',        panel: 'plans',  sub: 'exam',    flag: 'exam' },
   { id: 'lightning-quiz', group: '測驗',      label: '雲柱測驗',       icon: 'cloud',         panel: 'system', sub: 'lightning-quiz' },
@@ -3272,7 +3275,8 @@ const ADMIN_SECTION_DATA_LOADERS = {
     showToast,
     confirm: options => window.showConfirmDialog(options),
     hydrateIcons: element => { if (typeof hydrateIcons === 'function') hydrateIcons(element); }
-  })]
+  })],
+  'reading-activity': () => [renderAdminReadingActivity({ db, escapeHTML, ensureChartLib })]
 };
 
 function loadAdminSectionDataOnce(sectionId) {

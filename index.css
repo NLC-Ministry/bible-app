@@ -12418,6 +12418,96 @@ button.admin-lightning-quiz-calendar__day {
   height: 220px;
 }
 
+/* 讀經使用率（#452／#453／#454）：趨勢圖、L7、星期 × 小時熱度圖 */
+.admin-reading-activity__block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-card);
+  min-width: 0;
+}
+.admin-reading-activity__block h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.admin-reading-activity__canvas {
+  height: 260px;
+}
+.admin-reading-activity__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+.admin-reading-activity__metrics dt {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.admin-reading-activity__metrics dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+.admin-reading-activity__table summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+.admin-reading-activity__hint,
+.admin-reading-activity__note {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.75rem;
+}
+.admin-reading-activity__note {
+  margin: 1.25rem 0 0;
+}
+.admin-reading-activity__heatmap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.admin-reading-activity__heatmap-toolbar .admin-reading-activity__hint {
+  margin: 0;
+}
+.admin-reading-activity__heatmap-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.admin-reading-activity__heatmap {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 0.875rem;
+}
+.admin-reading-activity__heatmap th {
+  color: var(--text-secondary);
+  font-weight: var(--type-weight-regular, 400);
+  text-align: center;
+  padding: 0 0.15rem;
+}
+.admin-reading-activity__heatmap td {
+  padding: 0;
+}
+.admin-reading-activity__cell {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-brand) var(--heat, 0%), transparent);
+  cursor: pointer;
+}
+.admin-reading-activity__cell:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
 .admin-lightning-quiz-leaderboard {
   margin-top: 1rem;
   padding-top: 1rem;

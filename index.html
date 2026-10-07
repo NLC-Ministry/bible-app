@@ -2079,6 +2079,39 @@
             </section>
           </div>
 
+          <div id="admin-section-reading-activity" class="card-col span-12 admin-section-panel hidden">
+            <!-- 讀經使用率（#452 DAU／WAU／MAU、#453 L7、#454 星期 × 小時熱度圖），只給系統管理員 -->
+            <section class="glass-card admin-announcements admin-reading-activity" aria-labelledby="admin-reading-activity-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">計畫營運</p>
+                  <h3 class="card-title" id="admin-reading-activity-title">讀經使用率</h3>
+                  <p>以讀經打卡計算：當天（台灣時間）有打卡任何一章，就算當天有讀經。</p>
+                </div>
+              </div>
+              <div class="admin-lightning-quiz-trend__toolbar">
+                <label>起<input type="date" class="form-control" id="admin-reading-activity-from"></label>
+                <label>迄<input type="date" class="form-control" id="admin-reading-activity-to"></label>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>每天讀經人數</h4>
+                <div id="admin-reading-activity-trend" aria-live="polite"></div>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>一週讀經天數（L7）</h4>
+                <div id="admin-reading-activity-l7" aria-live="polite"></div>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>讀經時段（星期 × 小時）</h4>
+                <div id="admin-reading-activity-heatmap" aria-live="polite"></div>
+              </div>
+              <p class="admin-reading-activity__note">
+                數字會偏低，適合看趨勢、不是精確的使用人數：重讀同一章會把原本的打卡時間改成最新一次，取消打卡會刪除紀錄，所以越早的日期越少、時段也會往後偏。
+                今天的數字還在累積。
+              </p>
+            </section>
+          </div>
+
           <div id="admin-section-settings" class="card-col span-12 admin-section-panel hidden">
           <div class="card-col span-12">
             <div class="glass-card admin-feature-settings-card">

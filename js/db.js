@@ -6677,4 +6677,43 @@ db.adminSetLightningQuizVoucherRedeemed = async function(voucherId, redeemed) {
   });
 };
 
+// ── 管理面板「讀經使用率」（#452／#453／#454）：只給系統管理員，SQL 端檢查 ──
+db._readingActivityErrorMessage = function(error) {
+  const raw = String(error && (error.message || error.error) || error || "");
+  if (raw.includes("reading_activity_admin_required")) return "只有系統管理員可以查看讀經使用率。";
+  if (raw.includes("reading_activity_range_too_long")) return "日期區間最長 180 天，請縮短後再試。";
+  if (raw.includes("reading_activity_invalid_range")) return "日期區間不正確，請重新選擇。";
+  if (raw.includes("profile_required")) return "找不到你的會員資料，請重新登入後再試。";
+  return "讀經使用率載入失敗，請稍後再試。";
+};
+
+db._callReadingActivityRpc = async function(functionName, args) {
+  if (!state.isSupabaseMode || !state.supabase) {
+    return { success: false, message: "讀經使用率需要登入正式帳號。" };
+  }
+  try {
+    const { data, error } = await state.supabase.rpc(functionName, args);
+    if (error) {
+      console.warn(`[ReadingActivity] ${functionName} failed: ${error.message || error}`);
+      return { success: false, message: this._readingActivityErrorMessage(error) };
+    }
+    return { success: true, data };
+  } catch (error) {
+    console.warn(`[ReadingActivity] ${functionName} failed: ${error && error.message || error}`);
+    return { success: false, message: this._readingActivityErrorMessage(error) };
+  }
+};
+
+db.getReadingActivity = async function(from, to) {
+  return this._callReadingActivityRpc("admin_get_reading_activity", { p_from: from, p_to: to });
+};
+
+db.getReadingActivityL7 = async function(endDate) {
+  return this._callReadingActivityRpc("admin_get_reading_activity_l7", { p_end: endDate });
+};
+
+db.getReadingHourHeatmap = async function(from, to) {
+  return this._callReadingActivityRpc("admin_get_reading_hour_heatmap", { p_from: from, p_to: to });
+};
+
 window.db = db;
