@@ -4,11 +4,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import {
   addDays,
   buildActivitySeries,
-  buildHeatmap,
+  buildHourProfile,
   buildL7View,
   defaultRange,
   formatPct,
-  heatLevel,
   renderAdminReadingActivity,
   summarizeActivity,
   taipeiDateString,
@@ -76,30 +75,33 @@ describe("L7 (#453)", () => {
   });
 });
 
-describe("hour heatmap (#454)", () => {
+describe("reading hours (#454)", () => {
   const data = {
-    dayCounts: { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 0 },
+    dayCounts: { 1: 2, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1 },
     cells: [
       { dow: 1, hour: 6, sumUsers: 9, sumChapters: 30 },
-      { dow: 2, hour: 21, sumUsers: 3, sumChapters: 12 }
+      { dow: 2, hour: 6, sumUsers: 3, sumChapters: 6 },
+      { dow: 6, hour: 21, sumUsers: 4, sumChapters: 12 },
+      { dow: 7, hour: 9, sumUsers: 2, sumChapters: 2 }
     ]
   };
 
-  it("averages each cell over how many times that weekday appears in the range, always 7 × 24 cells", () => {
-    const { rows, max } = buildHeatmap(data, "users");
-    expect(rows).toHaveLength(7);
-    expect(rows.every(row => row.cells.length === 24)).toBe(true);
-    expect(rows[0].cells[6].value).toBe(4.5); // 9 人次 ÷ 2 個星期一
-    expect(rows[1].cells[21].value).toBe(3);
-    expect(rows[6].cells[0].value).toBe(0); // 區間裡沒有星期日也不會除以 0
-    expect(max).toBe(4.5);
-    expect(buildHeatmap(data, "chapters").rows[0].cells[6].value).toBe(15);
+  it("averages each hour over the days in the chosen filter, always 24 hours", () => {
+    const all = buildHourProfile(data);
+    expect(all.hours).toHaveLength(24);
+    expect(all.dayCount).toBe(8);
+    expect(all.hours[6].value).toBe(1.5); // (9 + 3) ÷ 8 天
+    const weekday = buildHourProfile(data, { days: "weekday" });
+    expect(weekday.dayCount).toBe(6);
+    expect(weekday.hours[6].value).toBe(2); // (9 + 3) ÷ 6 個平日
+    expect(weekday.hours[21].value).toBe(0); // 週末的不算進平日
+    const weekend = buildHourProfile(data, { days: "weekend", metric: "chapters" });
+    expect(weekend.hours[21].value).toBe(6); // 12 章 ÷ 2 個週末日
   });
 
-  it("leaves empty cells uncolored and keeps the faintest non-empty cell visible", () => {
-    expect(heatLevel(0, 10)).toBe(0);
-    expect(heatLevel(10, 10)).toBe(100);
-    expect(heatLevel(0.1, 10)).toBeGreaterThanOrEqual(15);
+  it("lists the top three hours by value, skipping empty hours", () => {
+    expect(buildHourProfile(data).top.map(item => item.hour)).toEqual([6, 21, 9]);
+    expect(buildHourProfile({ cells: [], dayCounts: {} }).top).toEqual([]);
   });
 });
 
@@ -140,19 +142,21 @@ describe("renderAdminReadingActivity", () => {
     expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("每天讀經人數（DAU）");
     expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("近 30 天讀過的人（MAU）");
     expect(doc.querySelector("#admin-reading-activity-l7").textContent).toContain("最多只會到 3 天");
-    expect(doc.querySelectorAll(".admin-reading-activity__cell")).toHaveLength(168);
+    expect(doc.querySelectorAll("#admin-reading-activity-heatmap tbody tr")).toHaveLength(24);
     vi.unstubAllGlobals();
   });
 
-  it("switches the heatmap between people and chapters, and shows a tapped cell's number", async () => {
+  it("names the busiest hours in text and switches between all days, weekdays, weekends, people and chapters", async () => {
     const { doc, run } = setup();
     await run();
-    const monday6 = () => doc.querySelectorAll("#admin-reading-activity-heatmap tbody tr")[0].querySelectorAll("button")[6];
-    expect(monday6().dataset.heatmapText).toContain("平均每天 2 人");
-    doc.querySelector('[data-heatmap-metric="chapters"]').click();
-    expect(monday6().dataset.heatmapText).toContain("平均每天 5 章");
-    monday6().click();
-    expect(doc.querySelector("[data-heatmap-readout]").textContent).toContain("星期一 6:00");
+    const top = () => doc.querySelector(".admin-reading-activity__top").textContent;
+    expect(top()).toContain("6 時（平均每天 2 人）");
+    doc.querySelector('[data-hour-metric="chapters"]').click();
+    expect(top()).toContain("6 時（平均每天 5 章）");
+    doc.querySelector('[data-hour-days="weekend"]').click();
+    expect(top()).toContain("沒有讀經紀錄");
+    expect(doc.querySelector('[data-hour-days="weekend"]').getAttribute("aria-selected")).toBe("true");
+    expect(doc.querySelector('[data-hour-metric="chapters"]').getAttribute("aria-selected")).toBe("true");
     vi.unstubAllGlobals();
   });
 

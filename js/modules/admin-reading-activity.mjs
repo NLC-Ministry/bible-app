@@ -1,13 +1,12 @@
 // 後台「讀經使用率」：只給系統管理員（ADMIN_SECTIONS 的 panel: 'system'，SQL 端也檢查 role = admin）。
 //   #452 DAU／WAU／MAU 逐日趨勢＋黏著度（DAU ÷ MAU）
 //   #453 L7 分布：本週（週一～週日，還沒過完就算到迄日）vs 上週
-//   #454 星期 × 小時熱度圖（平均每天的人數／章數）
+//   #454 讀經時段：24 小時長條圖（全部／平日／週末，平均每天的人數／章數）
 // 活躍＝當天（台灣時間）有 plan_id 不是 NULL 的打卡；定義與限制寫在各 migration 的檔頭。
 // admin.js 第一次打開這個區段時呼叫 renderAdminReadingActivity()。
 
 export const MAX_RANGE_DAYS = 180;
 export const DEFAULT_RANGE_DAYS = 30;
-const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 
 const taipeiDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Taipei",
@@ -110,31 +109,32 @@ export function buildL7View(data) {
   return { current: buildL7Week(data?.current), previous: buildL7Week(data?.previous) };
 }
 
-// ── #454 星期 × 小時熱度圖 ───────────────────────────────────────────────────
-// metric：'users'（平均每天不重複人數）或 'chapters'（平均每天章數）
-export function buildHeatmap(data, metric = "users") {
-  const dayCounts = data?.dayCounts || {};
-  const key = metric === "chapters" ? "sumChapters" : "sumUsers";
-  const sums = new Map((data?.cells || []).map(cell => [`${cell.dow}-${cell.hour}`, Number(cell[key]) || 0]));
-  let max = 0;
-  const rows = WEEKDAY_LABELS.map((label, index) => {
-    const dow = index + 1;
-    const dayCount = Number(dayCounts[String(dow)]) || 0;
-    const cells = Array.from({ length: 24 }, (_, hour) => {
-      const sum = sums.get(`${dow}-${hour}`) || 0;
-      const value = dayCount > 0 ? Math.round((sum / dayCount) * 10) / 10 : 0;
-      if (value > max) max = value;
-      return { hour, value };
-    });
-    return { dow, label, dayCount, cells };
-  });
-  return { rows, max };
-}
+// ── #454 讀經時段（24 小時長條圖）────────────────────────────────────────────
+// 伺服器回傳每個「星期幾 × 小時」的加總和各星期幾的天數；這裡依「全部／平日／週末」
+// 合併成 24 個小時，值＝加總 ÷ 選到的天數＝平均每天的人數（或章數）。
+// 用長條長度表示多寡，不靠顏色深淺（維護者 2026-10-07：顏色對色弱不友善）。
+export const HOUR_DAY_FILTERS = {
+  all: [1, 2, 3, 4, 5, 6, 7],
+  weekday: [1, 2, 3, 4, 5],
+  weekend: [6, 7]
+};
 
-// 0 不上色；其他依比例 15%～100%，最淡的格子也看得出來
-export function heatLevel(value, max) {
-  if (!(value > 0) || !(max > 0)) return 0;
-  return Math.round((0.15 + 0.85 * (value / max)) * 100);
+export function buildHourProfile(data, { metric = "users", days = "all" } = {}) {
+  const dows = HOUR_DAY_FILTERS[days] || HOUR_DAY_FILTERS.all;
+  const key = metric === "chapters" ? "sumChapters" : "sumUsers";
+  const dayCount = dows.reduce((sum, dow) => sum + (Number(data?.dayCounts?.[String(dow)]) || 0), 0);
+  const sums = new Array(24).fill(0);
+  (data?.cells || []).forEach(cell => {
+    if (dows.includes(Number(cell.dow))) sums[Number(cell.hour)] += Number(cell[key]) || 0;
+  });
+  const hours = sums.map((sum, hour) => ({
+    hour,
+    value: dayCount > 0 ? Math.round((sum / dayCount) * 10) / 10 : 0
+  }));
+  const top = [...hours].filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value || a.hour - b.hour)
+    .slice(0, 3);
+  return { dayCount, hours, top };
 }
 
 // ── 畫面 ─────────────────────────────────────────────────────────────────────
@@ -175,8 +175,10 @@ export function renderAdminReadingActivity({
 
   let charts = [];
   let requestId = 0;
-  let heatmapData = null;
-  let heatmapMetric = "users";
+  let hourData = null;
+  let hourMetric = "users";
+  let hourDays = "all";
+  let hourChart = null;
 
   const empty = text => `<div class="admin-user-directory__empty">${escapeHTML(text)}</div>`;
   const destroyCharts = () => {
@@ -191,8 +193,10 @@ export function renderAdminReadingActivity({
       canvas.closest("figure")?.remove();
       return;
     }
-    if (!canvas.isConnected || typeof Chart === "undefined") return; // 載入圖表期間又換了區間
-    charts.push(new Chart(canvas.getContext("2d"), config));
+    if (!canvas.isConnected || typeof Chart === "undefined") return null; // 載入圖表期間又換了區間
+    const chart = new Chart(canvas.getContext("2d"), config);
+    charts.push(chart);
+    return chart;
   }
 
   function renderTrend(series) {
@@ -337,43 +341,89 @@ export function renderAdminReadingActivity({
     });
   }
 
-  function renderHeatmap() {
-    if (!heatmapData) return;
-    const { rows, max } = buildHeatmap(heatmapData, heatmapMetric);
-    const unit = heatmapMetric === "chapters" ? "章" : "人";
-    const hours = Array.from({ length: 24 }, (_, hour) => hour);
+  function segmented(name, label, options, current) {
+    return `<div class="capsule-segmented-control segment-track" role="tablist" aria-label="${label}">
+      ${options.map(([value, text]) => `<button type="button" class="segment-toggle-btn${value === current ? " active" : ""}"
+        role="tab" aria-selected="${value === current}" data-hour-${name}="${value}">${text}</button>`).join("")}
+    </div>`;
+  }
+
+  function renderHours() {
+    if (!hourData) return;
+    if (hourChart) {
+      try { hourChart.destroy(); } catch (_) {}
+      charts = charts.filter(chart => chart !== hourChart);
+      hourChart = null;
+    }
+    const { dayCount, hours, top } = buildHourProfile(hourData, { metric: hourMetric, days: hourDays });
+    const unit = hourMetric === "chapters" ? "章" : "人";
+    const hourLabel = hour => `${hour} 時`;
+    const topText = top.length
+      ? `最多${hourMetric === "chapters" ? "章數" : "人讀"}的時段：${top.map(item => `${hourLabel(item.hour)}（平均每天 ${item.value} ${unit}）`).join("、")}`
+      : "這段期間沒有讀經紀錄。";
     el.heatmap.innerHTML = `
-      <div class="admin-reading-activity__heatmap-toolbar">
-        <div class="capsule-segmented-control segment-track" role="tablist" aria-label="熱度圖數值">
-          <button type="button" class="segment-toggle-btn${heatmapMetric === "users" ? " active" : ""}" role="tab" aria-selected="${heatmapMetric === "users"}" data-heatmap-metric="users">人數</button>
-          <button type="button" class="segment-toggle-btn${heatmapMetric === "chapters" ? " active" : ""}" role="tab" aria-selected="${heatmapMetric === "chapters"}" data-heatmap-metric="chapters">章數</button>
-        </div>
-        <p class="admin-reading-activity__hint" data-heatmap-readout>點格子看數字。顏色越深＝平均每天越多${unit}（最深 ${escapeHTML(String(max))} ${unit}）。</p>
+      <div class="admin-reading-activity__hour-toolbar">
+        ${segmented("days", "星期", [["all", "全部"], ["weekday", "平日"], ["weekend", "週末"]], hourDays)}
+        ${segmented("metric", "數值", [["users", "人數"], ["chapters", "章數"]], hourMetric)}
       </div>
-      <div class="admin-reading-activity__heatmap-scroll">
-        <table class="admin-reading-activity__heatmap">
-          <thead><tr><th scope="col"></th>${hours.map(hour => `<th scope="col">${hour}</th>`).join("")}</tr></thead>
-          <tbody>${rows.map(row => `<tr>
-            <th scope="row">${escapeHTML(row.label)}</th>
-            ${row.cells.map(cell => {
-              const text = `星期${row.label} ${cell.hour}:00–${cell.hour}:59，平均每天 ${cell.value} ${unit}（${row.dayCount} 天）`;
-              return `<td><button type="button" class="admin-reading-activity__cell" style="--heat:${heatLevel(cell.value, max)}%"
-                data-heatmap-text="${escapeHTML(text)}" aria-label="${escapeHTML(text)}" title="${escapeHTML(text)}"></button></td>`;
-            }).join("")}
-          </tr>`).join("")}</tbody>
-        </table>
-      </div>`;
-    el.heatmap.querySelectorAll("[data-heatmap-metric]").forEach(button => {
+      <p class="admin-reading-activity__top">${escapeHTML(topText)}</p>
+      <p class="admin-reading-activity__hint">長條＝該小時平均每天讀經的${hourMetric === "chapters" ? "章數" : "人數"}（共 ${escapeHTML(String(dayCount))} 天）。</p>
+      <figure class="admin-lightning-quiz-trend__chart">
+        <div class="admin-lightning-quiz-trend__canvas admin-reading-activity__canvas"><canvas data-reading-activity-chart="hours" role="img"
+          aria-label="${escapeHTML(topText)}"></canvas></div>
+      </figure>
+      <details class="admin-reading-activity__table">
+        <summary>各時段數字</summary>
+        <div class="admin-lightning-quiz-stats-table-wrap">
+          <table class="admin-lightning-quiz-stats-table">
+            <thead><tr><th>時段</th><th>平均每天${hourMetric === "chapters" ? "章數" : "人數"}</th></tr></thead>
+            <tbody>${hours.map(item => `<tr><td>${item.hour}:00–${item.hour}:59</td><td>${escapeHTML(String(item.value))}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </details>`;
+    el.heatmap.querySelectorAll("[data-hour-days]").forEach(button => {
       button.addEventListener("click", () => {
-        if (button.dataset.heatmapMetric === heatmapMetric) return;
-        heatmapMetric = button.dataset.heatmapMetric;
-        renderHeatmap();
+        if (button.dataset.hourDays === hourDays) return;
+        hourDays = button.dataset.hourDays;
+        renderHours();
       });
     });
-    const readout = el.heatmap.querySelector("[data-heatmap-readout]");
-    el.heatmap.querySelectorAll("[data-heatmap-text]").forEach(cell => {
-      cell.addEventListener("click", () => { readout.textContent = cell.dataset.heatmapText; });
+    el.heatmap.querySelectorAll("[data-hour-metric]").forEach(button => {
+      button.addEventListener("click", () => {
+        if (button.dataset.hourMetric === hourMetric) return;
+        hourMetric = button.dataset.hourMetric;
+        renderHours();
+      });
     });
+    const colors = chartColors();
+    return drawChart(el.heatmap.querySelector('[data-reading-activity-chart="hours"]'), {
+      type: "bar",
+      data: {
+        labels: hours.map(item => String(item.hour)),
+        datasets: [{
+          label: `平均每天${hourMetric === "chapters" ? "章數" : "人數"}`,
+          data: hours.map(item => item.value),
+          backgroundColor: colors.brand
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => `${items[0]?.label}:00–${items[0]?.label}:59`,
+              label: context => `平均每天 ${context.formattedValue} ${unit}`
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: "時（0～23）" } },
+          y: { beginAtZero: true }
+        }
+      }
+    }).then(chart => { if (chart) hourChart = chart; });
   }
 
   async function load() {
@@ -401,10 +451,10 @@ export function renderAdminReadingActivity({
     if (l7.success) draws.push(renderL7(buildL7View(l7.data)));
     else el.l7.innerHTML = empty(l7.message);
     if (heatmap.success) {
-      heatmapData = heatmap.data;
-      renderHeatmap();
+      hourData = heatmap.data;
+      draws.push(renderHours());
     } else {
-      heatmapData = null;
+      hourData = null;
       el.heatmap.innerHTML = empty(heatmap.message);
     }
     await Promise.all(draws);
