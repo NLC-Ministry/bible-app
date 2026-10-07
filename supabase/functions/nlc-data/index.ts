@@ -417,6 +417,13 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
 const READING_STATS_RPC_FUNCTIONS = new Set([
   "get_my_plan_chapter_total"
 ]);
+// 管理面板「讀經使用率」（#452 DAU／WAU／MAU、#453 L7、#454 星期 × 小時熱度圖）。
+// SQL 端自己檢查呼叫者是系統管理員（role = admin），這裡只注入 p_actor_id。
+const READING_ACTIVITY_RPC_FUNCTIONS = new Set([
+  "admin_get_reading_activity",
+  "admin_get_reading_activity_l7",
+  "admin_get_reading_hour_heatmap"
+]);
 // 計畫統計／組員總覽的精簡打卡紀錄（#394）和一次回傳的名單（#397）：
 // PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
 // 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
@@ -436,6 +443,7 @@ const RPC_FUNCTIONS = new Set([
   ...EXAM_RPC_FUNCTIONS,
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
   ...READING_STATS_RPC_FUNCTIONS,
+  ...READING_ACTIVITY_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
   ADMIN_USER_DIRECTORY_RPC,
@@ -992,6 +1000,7 @@ Deno.serve(async (req: Request) => {
         || ISSUE_RPC_FUNCTIONS.has(functionName)
         || LIGHTNING_QUIZ_RPC_FUNCTIONS.has(functionName)
         || READING_STATS_RPC_FUNCTIONS.has(functionName)
+        || READING_ACTIVITY_RPC_FUNCTIONS.has(functionName)
         || functionName === "get_admin_registration_statistics"
         || functionName === "create_region_stage_cohort") {
         rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };
