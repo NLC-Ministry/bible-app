@@ -6,6 +6,7 @@ import {
   buildActivitySeries,
   buildHourProfile,
   buildL7View,
+  chartColors,
   defaultRange,
   formatPct,
   renderAdminReadingActivity,
@@ -207,6 +208,31 @@ describe("reading activity wiring", () => {
       expect(sql).toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO authenticated, service_role;`);
       expect(sql).toContain("l.plan_id IS NOT NULL");
       expect(sql).toContain("'Asia/Taipei'");
+    }
+  });
+});
+
+describe("chart colors follow the theme (#456)", () => {
+  it("reads theme tokens from body, where the dark and warm themes define them", () => {
+    const dom = new JSDOM(`<style>
+      :root { --color-brand: #04A9D2; --color-success-foreground: #1F8F52; --color-warning: #FE7615; --chart-muted: #C2C2C2; }
+      body.dark-theme { --color-success-foreground: #7AEAA0; --chart-muted: #5C5C5C; }
+    </style><body class="dark-theme"></body>`);
+    vi.stubGlobal("document", dom.window.document);
+    vi.stubGlobal("getComputedStyle", element => dom.window.getComputedStyle(element));
+    try {
+      expect(chartColors()).toEqual({ brand: "#04A9D2", success: "#7AEAA0", warning: "#FE7615", muted: "#5C5C5C" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("defines a solid muted chart color in every theme", () => {
+    const css = read("index.css");
+    for (const selector of [":root", "body.dark-theme", "body.warm-theme"]) {
+      const start = css.indexOf(`${selector} {`);
+      const block = css.slice(start, css.indexOf("}", start));
+      expect(block, selector).toMatch(/--chart-muted:\s*#[0-9A-Fa-f]{6};/);
     }
   });
 });

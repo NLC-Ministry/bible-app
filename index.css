@@ -93,6 +93,12 @@
   --rank-gold: #f59e0b;
   --rank-bronze: #cd7f32;
 
+  /* Chart fill for a comparison series (e.g. last week) beside the brand
+     color. Solid, not the translucent text colors, so bars read as a calm
+     neutral on every theme's card surface. Values are Tailwind CSS palette
+     grays (neutral-400 / neutral-500 / stone-400), not hand-picked. */
+  --chart-muted: #A3A3A3;
+
   --bg-app: #FAFAFA;
   --bg-header: rgba(255, 255, 255, 0.92);
   --bg-card: #FFFFFF;
@@ -228,6 +234,7 @@ body.dark-theme {
   --color-brand-border: color-mix(in srgb, #04A9D2 30%, transparent);
   /* #cd7f32 (light/warm) measures too low contrast on a dark card. */
   --rank-bronze: #E0A872;
+  --chart-muted: #737373;
   --color-brand-ring: color-mix(in srgb, #04A9D2 20%, transparent);
 
   --primary-color: var(--color-brand);
@@ -7574,6 +7581,7 @@ body.warm-theme {
   --bg-app: #F4ECD8;
   --bg-header: rgba(244, 236, 216, 0.95);
   --bg-card: #FDF6E3;
+  --chart-muted: #A8A29E;
   --bg-input: #FDF6E3;
   --border-card: rgba(139, 115, 85, 0.25);
   --border-default: rgba(139, 115, 85, 0.25);
