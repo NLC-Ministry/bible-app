@@ -137,7 +137,8 @@ describe("renderAdminReadingActivity", () => {
     expect(db.getReadingActivityL7).toHaveBeenCalledWith("2026-10-07");
     expect(db.getReadingHourHeatmap).toHaveBeenCalledWith("2026-09-08", "2026-10-07");
     expect(doc.querySelector("#admin-reading-activity-trend canvas")).toBeNull();
-    expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("平均 DAU");
+    expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("每天讀經人數（DAU）");
+    expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("近 30 天讀過的人（MAU）");
     expect(doc.querySelector("#admin-reading-activity-l7").textContent).toContain("最多只會到 3 天");
     expect(doc.querySelectorAll(".admin-reading-activity__cell")).toHaveLength(168);
     vi.unstubAllGlobals();
@@ -159,7 +160,7 @@ describe("renderAdminReadingActivity", () => {
     const { doc, db, run } = setup({ getReadingActivityL7: vi.fn(async () => ({ success: false, message: "只有系統管理員可以查看讀經使用率。" })) });
     await run();
     expect(doc.querySelector("#admin-reading-activity-l7").textContent).toContain("只有系統管理員");
-    expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("平均 DAU");
+    expect(doc.querySelector("#admin-reading-activity-trend").textContent).toContain("每天讀經人數（DAU）");
 
     const from = doc.getElementById("admin-reading-activity-from");
     from.value = "2026-01-01";

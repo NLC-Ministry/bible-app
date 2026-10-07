@@ -144,8 +144,9 @@ function chartColors() {
   const brand = read("--color-brand", "#04A9D2");
   return {
     brand,
-    success: read("--color-success-foreground", brand),
-    warning: read("--color-warning", brand),
+    // 備用色也要三種不同顏色，主題色讀不到時線才分得出來
+    success: read("--color-success-foreground", "#1F8F52"),
+    warning: read("--color-warning", "#FE7615"),
     muted: read("--text-secondary", "#8A8A8A")
   };
 }
@@ -200,22 +201,32 @@ export function renderAdminReadingActivity({
       return;
     }
     const summary = summarizeActivity(series);
+    const latest = escapeHTML(summary.latest.label);
+    const metric = (title, value, note) => `<div>
+        <dt>${title}</dt>
+        <dd>${escapeHTML(String(value))}</dd>
+        <dd class="admin-reading-activity__metric-note">${note}</dd>
+      </div>`;
     el.trend.innerHTML = `
       <dl class="admin-reading-activity__metrics">
-        <div><dt>平均 DAU</dt><dd>${escapeHTML(String(summary.avgDau))}</dd></div>
-        <div><dt>WAU（${escapeHTML(summary.latest.label)}）</dt><dd>${escapeHTML(String(summary.latest.wau))}</dd></div>
-        <div><dt>MAU（${escapeHTML(summary.latest.label)}）</dt><dd>${escapeHTML(String(summary.latest.mau))}</dd></div>
-        <div><dt>平均黏著度</dt><dd>${escapeHTML(formatPct(summary.avgStickiness))}</dd></div>
+        ${metric("每天讀經人數（DAU）", summary.avgDau, "區間內平均每天有幾人讀經")}
+        ${metric("近 7 天讀過的人（WAU）", summary.latest.wau, `到 ${latest} 為止，7 天內至少讀過一天`)}
+        ${metric("近 30 天讀過的人（MAU）", summary.latest.mau, `到 ${latest} 為止，30 天內至少讀過一天`)}
+        ${metric("天天讀的比例（黏著度）", formatPct(summary.avgStickiness), "每天讀經人數 ÷ 近 30 天讀過的人，取平均")}
       </dl>
       <figure class="admin-lightning-quiz-trend__chart">
-        <figcaption>每天讀經人數（DAU）、近 7 天（WAU）、近 30 天（MAU）</figcaption>
-        <div class="admin-lightning-quiz-trend__canvas admin-reading-activity__canvas"><canvas data-reading-activity-chart="trend"></canvas></div>
+        <figcaption>每天讀經人數（DAU）：看每天的起伏</figcaption>
+        <div class="admin-lightning-quiz-trend__canvas admin-reading-activity__canvas"><canvas data-reading-activity-chart="daily"></canvas></div>
+      </figure>
+      <figure class="admin-lightning-quiz-trend__chart">
+        <figcaption>近 7 天／近 30 天讀過的人（WAU／MAU）：看整體規模有沒有成長</figcaption>
+        <div class="admin-lightning-quiz-trend__canvas admin-reading-activity__canvas"><canvas data-reading-activity-chart="reach"></canvas></div>
       </figure>
       <details class="admin-reading-activity__table">
         <summary>逐日數字</summary>
         <div class="admin-lightning-quiz-stats-table-wrap">
           <table class="admin-lightning-quiz-stats-table">
-            <thead><tr><th>日期</th><th>DAU</th><th>WAU</th><th>MAU</th><th>黏著度</th></tr></thead>
+            <thead><tr><th>日期</th><th>每天讀經人數</th><th>近 7 天讀過</th><th>近 30 天讀過</th><th>天天讀的比例</th></tr></thead>
             <tbody>${[...series].reverse().map(point => `<tr>
               <td>${escapeHTML(point.date)}</td>
               <td>${escapeHTML(String(point.dau))}</td>
@@ -227,6 +238,7 @@ export function renderAdminReadingActivity({
         </div>
       </details>`;
     const colors = chartColors();
+    const labels = series.map(point => point.label);
     const dataset = (label, key, color) => ({
       label,
       data: series.map(point => point[key]),
@@ -235,34 +247,37 @@ export function renderAdminReadingActivity({
       pointRadius: series.length > 60 ? 0 : 2,
       tension: 0.25
     });
-    return drawChart(el.trend.querySelector('[data-reading-activity-chart="trend"]'), {
-      type: "line",
-      data: {
-        labels: series.map(point => point.label),
-        datasets: [
-          dataset("DAU", "dau", colors.brand),
-          dataset("WAU", "wau", colors.success),
-          dataset("MAU", "mau", colors.warning)
-        ]
+    const lineOptions = (showLegend, footer) => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: showLegend, position: "bottom" },
+        tooltip: { callbacks: { label: context => `${context.dataset.label}：${context.formattedValue} 人`, footer } }
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { position: "bottom" },
-          tooltip: {
-            callbacks: {
-              footer: items => {
-                const point = series[items[0]?.dataIndex];
-                return point ? `黏著度 ${formatPct(point.stickiness)}` : "";
-              }
-            }
-          }
-        },
-        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-      }
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     });
+    return Promise.all([
+      drawChart(el.trend.querySelector('[data-reading-activity-chart="daily"]'), {
+        type: "line",
+        data: { labels, datasets: [dataset("每天讀經人數", "dau", colors.brand)] },
+        options: lineOptions(false, items => {
+          const point = series[items[0]?.dataIndex];
+          return point ? `天天讀的比例 ${formatPct(point.stickiness)}` : "";
+        })
+      }),
+      drawChart(el.trend.querySelector('[data-reading-activity-chart="reach"]'), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            dataset("近 7 天讀過的人", "wau", colors.success),
+            dataset("近 30 天讀過的人", "mau", colors.warning)
+          ]
+        },
+        options: lineOptions(true)
+      })
+    ]);
   }
 
   function renderL7(view) {

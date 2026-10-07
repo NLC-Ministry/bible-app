@@ -12450,6 +12450,15 @@ button.admin-lightning-quiz-calendar__day {
   font-weight: var(--type-weight-strong, 500);
   color: var(--text-primary);
 }
+.admin-reading-activity__metrics dd.admin-reading-activity__metric-note {
+  margin-top: 0.15rem;
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-regular, 400);
+  color: var(--text-secondary);
+}
+.admin-reading-activity__block figure + figure {
+  margin-top: 1.25rem;
+}
 .admin-reading-activity__table summary {
   cursor: pointer;
   font-size: 0.875rem;
