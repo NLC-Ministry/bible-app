@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const sql = readFileSync(join(root, "supabase", "migrations", "0169_exam_pr_values.sql"), "utf8");
+const sql = currentMigrationSql("0169_exam_pr_values.sql");
 const ui = readFileSync(join(root, "js", "modules", "exam.js"), "utf8");
 
 describe("0169: _exam_pr 百分等級函式", () => {
@@ -21,7 +22,7 @@ describe("0169: _exam_pr 百分等級函式", () => {
 
 describe("0169: _exam_team_avg_pop 沿用 carry 鏈去重", () => {
   it("固定分母、carry 鏈收斂、只納入有人作答的隊", () => {
-    expect(sql).toContain("CREATE OR REPLACE FUNCTION public._exam_team_avg_pop(p_paper_id UUID, p_division INTEGER)");
+    expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\._exam_team_avg_pop\(p_paper_id UUID, p_division INTEGER\)/i);
     expect(sql).toContain("WITH RECURSIVE team_root(id, anchor) AS (");
     expect(sql).toContain("DISTINCT ON (tr.anchor, rt.division)");
     expect(sql).toContain("/ p_division, 1) avg_total");
@@ -58,8 +59,9 @@ describe("0169: exam_get_stats — 後台 PR + 團隊大區/牧區", () => {
     expect(fn).toContain("'prVisible',pr_visible");
   });
 
+  // #302 起排除試作（NOT a.is_test）
   it("PR 母體一律全教會（不受 scoped 影響）", () => {
-    expect(fn).toMatch(/church_scores:=ARRAY\(SELECT a\.total_score FROM public\.exam_attempts a\s*\n?\s*WHERE a\.paper_id=pr\.id AND a\.attempt_kind='official' AND a\.status='graded'/);
+    expect(fn).toMatch(/church_scores:=ARRAY\(SELECT a\.total_score FROM public\.exam_attempts a\s*\n?\s*WHERE a\.paper_id=pr\.id AND a\.attempt_kind='official' AND NOT a\.is_test AND a\.status='graded'/);
     expect(fn).toContain("region_avgs:=ARRAY(SELECT ROUND(AVG(a.total_score)::numeric,1)");
     expect(fn).toContain("team3_avgs:=public._exam_team_avg_pop(pr.id,3)");
     expect(fn).toContain("team6_avgs:=public._exam_team_avg_pop(pr.id,6)");

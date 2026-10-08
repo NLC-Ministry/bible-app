@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 describe("admin member team placement lookup tests", () => {
   it("verifies migration 0064 creates get_admin_member_team_placements stored procedure", () => {
-    const migration = readFileSync("supabase/migrations/0064_get_admin_member_team_placements.sql", "utf8");
+    const migration = currentMigrationSql("0064_get_admin_member_team_placements.sql");
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.get_admin_member_team_placements(");
-    expect(migration).toContain("RETURNS JSONB");
+    expect(migration).toMatch(/RETURNS JSONB/i);
     expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.get_admin_member_team_placements");
   });
 
@@ -95,8 +96,8 @@ describe("admin member team placement lookup tests", () => {
     expect(rpcArgsBlock).not.toContain("get_admin_member_team_placements");
     expect(rpcArgsBlock).toContain("TEAM_RPC_FUNCTIONS.has(functionName)");
 
-    const migration = readFileSync("supabase/migrations/0064_get_admin_member_team_placements.sql", "utf8");
-    expect(migration).toContain("p_actor_id UUID DEFAULT NULL");
+    const migration = currentMigrationSql("0064_get_admin_member_team_placements.sql");
+    expect(migration).toMatch(/p_actor_id UUID DEFAULT NULL/i);
     expect(migration).toContain("actor_id := public.resolve_reading_team_actor(p_actor_id);");
   });
 
@@ -113,7 +114,7 @@ describe("admin member team placement lookup tests", () => {
     //    scope" as "show everyone" — so any leader never explicitly given a
     //    managed_* value saw the whole church here instead of just their
     //    own scope.
-    const fixMigration = readFileSync("supabase/migrations/0071_fix_get_admin_member_team_placements.sql", "utf8");
+    const fixMigration = currentMigrationSql("0071_fix_get_admin_member_team_placements.sql");
     expect(fixMigration).toContain("'isJoined', (membership.user_id IS NOT NULL),");
     expect(fixMigration).not.toContain("membership.id");
     expect(fixMigration).toContain("COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, '')");
@@ -133,7 +134,7 @@ describe("admin member team placement lookup tests", () => {
     // bypass so an empty array naturally matches nothing (fail closed),
     // consistent with every other scoped RPC in this schema (see
     // public.values_overlap, which already returns FALSE for an empty scope).
-    const fix = readFileSync("supabase/migrations/0081_fix_team_placements_empty_scope_leak.sql", "utf8");
+    const fix = currentMigrationSql("0081_fix_team_placements_empty_scope_leak.sql");
     expect(fix).toContain("CREATE OR REPLACE FUNCTION public.get_admin_member_team_placements(");
     expect(fix).not.toContain("CARDINALITY(managed_regions_arr) = 0");
     expect(fix).not.toContain("CARDINALITY(managed_zones_arr) = 0");

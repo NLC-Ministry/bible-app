@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0196_daily_quiz_simplify_review_announcement_stats.sql");
+const sql = currentMigrationSql("0196_daily_quiz_simplify_review_announcement_stats.sql");
 const admin = read("js/modules/admin.js");
 const profile = read("js/modules/profile.js");
 const db = read("js/db.js");
@@ -46,7 +47,8 @@ describe("0196: quiz_publication_schedules.post_announcement column and RPC para
     const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.run_daily_quiz_schedule_sweep"),
       sql.indexOf("REVOKE ALL ON FUNCTION public.run_daily_quiz_schedule_sweep"));
     expect(fn).not.toContain("post_announcement");
-    expect(fn).toContain("p_answer_close_at := schedule_row.answer_close_at");
+    // #308 起 sweep 只跑自動發佈，不再讀 quiz_publication_schedules
+    expect(fn).toContain("auto_result := public.run_daily_quiz_auto_publish();");
   });
 
   it("drops the leaderboard reveal RPC and its private PR-population helpers", () => {
@@ -118,10 +120,11 @@ describe("0196: member's own results drop PR, gain their own answer time", () =>
 });
 
 describe("0196: publish permissions and admin/大測驗 coexistence unchanged", () => {
-  it("group-scope publish still requires admin/pastor/zone/group leader roles (unchanged)", () => {
+  // 0196 當時小組長以上都能發佈；#306 起只剩系統管理員（自動發佈帶開規則的管理員）
+  it("publish is admin-only since #306", () => {
     const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.publish_daily_quiz"),
       sql.indexOf("REVOKE ALL ON FUNCTION public.publish_daily_quiz"));
-    expect(fn).toContain("actor_role NOT IN ('admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader')");
+    expect(fn).toMatch(/IF actor_role IS DISTINCT FROM 'admin' THEN\s+RAISE EXCEPTION 'quiz_publish_admin_only';/);
   });
 
   it("exam_papers (大測驗) tables/functions are untouched by this migration", () => {

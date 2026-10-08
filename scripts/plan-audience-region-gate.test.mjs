@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const db = readFileSync(join(root, "js", "db.js"), "utf8");
 const plan = readFileSync(join(root, "js", "modules", "plan.js"), "utf8");
-const migration = readFileSync(join(root, "supabase", "migrations", "0127_region_cohort_stage_gates.sql"), "utf8");
+const migration = currentMigrationSql("0127_region_cohort_stage_gates.sql");
 
 describe("plan-join error messages (js/db.js)", () => {
   it("still maps the raw server codes assert_campaign_stage_open can raise", () => {

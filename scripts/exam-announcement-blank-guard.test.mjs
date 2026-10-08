@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0201_exam_announcement_blank_guard.sql");
 const db = read("js/db.js");
 const exam = read("js/modules/exam.js");
 const admin = read("js/modules/admin.js");
@@ -12,39 +12,20 @@ const admin = read("js/modules/admin.js");
 // 卡片還在顯示卻是空的。exam_push_to_live 同步時也會把空白內容覆蓋到「已經
 // 發佈給會友看」的正式版公告上，沒有任何警告。
 
-describe("0201: exam_save_announcement 不准把已發佈的公告存成空白", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_save_announcement"),
-    sql.indexOf("COMMENT ON FUNCTION public.exam_save_announcement"));
+// 0201 的兩道空白防呆後來都拿掉了：#298 起首頁卡片文字沒填會自動產生、announcement_published
+// 欄位在 #303 刪除，所以不再擋存空白；exam_push_to_live 在 #260 隨單一試卷刪除。
+describe("exam_save_announcement：只有 admin/pastor、結束（closed）後鎖定", () => {
+  const fn = latestFunctionDefinition("exam_save_announcement").text;
 
-  it("先查目前的 announcement_published，再决定要不要擋", () => {
-    expect(fn).toContain("SELECT * INTO pr FROM public.exam_papers WHERE id = p_paper_id;");
-    expect(fn).toContain("IF NOT FOUND THEN RAISE EXCEPTION 'exam_paper_not_found'; END IF;");
-    expect(fn).toContain("IF pr.announcement_published AND (btrim(new_headline) = '' OR btrim(new_body) = '') THEN");
-    expect(fn).toContain("RAISE EXCEPTION 'exam_announcement_would_blank_published';");
+  it("權限與鎖定時機", () => {
+    expect(fn).toContain("IF public._exam_actor_role(actor_id) NOT IN ('admin', 'pastor') THEN");
+    expect(fn).toContain("WHERE id = p_paper_id AND status <> 'closed'");
+    expect(fn).toContain("RAISE EXCEPTION 'exam_announcement_locked'");
   });
 
-  it("未發佈狀態下仍然可以自由存草稿（含空白），不受這個新檢查影響", () => {
-    // 條件式本身就只在 pr.announcement_published 為真時才擋，這裡再次確認
-    // 條件式沒有被寫成「一律擋空白」。
-    expect(fn).not.toContain("IF (btrim(new_headline) = '' OR btrim(new_body) = '') THEN");
-  });
-});
-
-describe("0201: exam_push_to_live 不准帶空白公告去覆蓋已發佈的正式版公告", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_push_to_live"),
-    sql.indexOf("COMMENT ON FUNCTION public.exam_push_to_live"));
-
-  it("在既有的兩個防呆之後，多一個「會不會把正式版公告覆蓋成空白」的檢查", () => {
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_live_has_attempts'");
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_live_not_closed'");
-    expect(fn).toContain("IF dst.announcement_published AND (");
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_would_blank_announcement';");
-  });
-
-  it("檢查的是來源（測試版）內容是否空白，目標（正式版）是否已發佈", () => {
-    const guard = fn.slice(fn.indexOf("IF dst.announcement_published AND ("), fn.indexOf("RAISE EXCEPTION 'exam_push_would_blank_announcement';"));
-    expect(guard).toContain("src.announcement ->> 'headline'");
-    expect(guard).toContain("src.announcement ->> 'body'");
+  it("空白防呆已拿掉（卡片文字會自動產生），exam_push_to_live 已刪", () => {
+    expect(fn).not.toContain("exam_announcement_would_blank_published");
+    expect(() => latestFunctionDefinition("exam_push_to_live")).toThrow(/dropped/);
   });
 });
 

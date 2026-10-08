@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const context = {
@@ -162,7 +163,7 @@ describe("versioned church Bible campaign", () => {
 
 describe("campaign data contract and statistics scope", () => {
   const migration = readFileSync(join(root, "supabase", "migrations", "0016_versioned_church_campaign.sql"), "utf8");
-  const stageMigration = readFileSync(join(root, "supabase", "migrations", "0017_church_campaign_stage_plans.sql"), "utf8");
+  const stageMigration = currentMigrationSql("0017_church_campaign_stage_plans.sql");
   const cleanupSql = readFileSync(join(root, "supabase", "migrations", "0026_production_cleanup_obsolete_plans_badges.sql"), "utf8");
   const edge = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
   const db = readFileSync(join(root, "js", "db.js"), "utf8");

@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const exists = path => existsSync(new URL(`../${path}`, import.meta.url));
-const migration = read("supabase/migrations/0019_reading_team_registration.sql");
+const migration = currentMigrationSql("0019_reading_team_registration.sql");
 const forwardMigration = read("supabase/migrations/0021_enforce_reading_team_uuid_links.sql");
-const dualDivisionMigration = read("supabase/migrations/0022_allow_both_team_divisions.sql");
+const dualDivisionMigration = currentMigrationSql("0022_allow_both_team_divisions.sql");
 const peerReminderMigration = read("supabase/migrations/0023_reading_team_peer_reminders.sql");
 const rosterStatsMigration = read("supabase/migrations/0024_reading_team_member_roster_stats.sql");
 const productionCleanup = read("supabase/migrations/0026_production_cleanup_obsolete_plans_badges.sql");
@@ -118,11 +119,11 @@ describe("reading competition team schema", () => {
       .toBeLessThan(productionCleanup.indexOf("DELETE FROM public.global_plans"));
   });
 
-  it("locks concurrent joins and freezes a completed roster", () => {
+  // 0019 原本還讓 leave/disband 在 ready 時丟 ready_team_roster_locked；0042 改成「只有隊長能退出、
+  // 退出即解散整隊」，那個鎖就拿掉了，所以這裡只驗加入端。
+  it("locks concurrent joins and refuses a full team", () => {
     expect(migration).toMatch(/join_reading_team_by_code[\s\S]*FOR UPDATE/);
-    expect(migration).toContain("current_count >= selected_team.division");
-    expect(migration).toContain("status = 'ready'");
-    expect(migration).toContain("ready_team_roster_locked");
+    expect(migration).toContain("IF current_count >= selected_team.division OR selected_team.status = 'ready' THEN\n    RAISE EXCEPTION 'reading_team_full';");
   });
 
   it("uses a non-recursive membership helper for row-level visibility", () => {
@@ -682,7 +683,7 @@ describe("NLC and browser integration", () => {
     // separator, and the group_leader branch compared a team member's
     // pastoral_zone against the actor's managed_groups/small_group instead
     // of the member's own small_group.
-    const fixMigration = read("supabase/migrations/0070_fix_values_overlap_and_team_overview_scope.sql");
+    const fixMigration = currentMigrationSql("0070_fix_values_overlap_and_team_overview_scope.sql");
     expect(fixMigration).toContain("CREATE OR REPLACE FUNCTION public.values_overlap(left_values TEXT, right_values TEXT)");
     expect(fixMigration).toContain("RETURNS BOOLEAN");
     expect(fixMigration).toContain("GRANT EXECUTE ON FUNCTION public.values_overlap(TEXT, TEXT) TO authenticated, service_role;");
@@ -714,7 +715,7 @@ describe("NLC and browser integration", () => {
     // manual delete via the Supabase dashboard), after which the team was
     // stuck reporting "full" (reading_team_full) to every future
     // invite-code join no matter how many members it actually had.
-    const fixMigration = read("supabase/migrations/0072_self_heal_stale_reading_team_status.sql");
+    const fixMigration = currentMigrationSql("0072_self_heal_stale_reading_team_status.sql");
     expect(fixMigration).toContain("CREATE OR REPLACE FUNCTION public.join_reading_team_by_code(");
     const healStart = fixMigration.indexOf("IF selected_team.status = 'ready' AND current_count < selected_team.division THEN");
     expect(healStart, "self-heal branch").toBeGreaterThan(-1);
@@ -737,7 +738,7 @@ describe("NLC and browser integration", () => {
     // filtering by 牧區 could ever show results. Both the RPC and its
     // client-side fallback (_getReadingTeamRegistrationOverviewFallback)
     // must expose all three fields.
-    const fixMigration = read("supabase/migrations/0074_team_overview_members_full_scope.sql");
+    const fixMigration = currentMigrationSql("0074_team_overview_members_full_scope.sql");
     // This migration file is checked out with CRLF line endings, so a plain
     // toContain() on a \n-joined multi-line literal never matches even
     // though the content is present — match line-ending-agnostically instead.

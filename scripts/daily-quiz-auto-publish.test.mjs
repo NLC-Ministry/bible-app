@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #306（小測驗 Q1，屬於 #305）：每天 00:00 自動發佈、AI 提前一天出題、
 // 發佈只剩系統管理員、拿掉「僅系統管理員（測試用）」範圍。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const migration = read("supabase/migrations/20260928064718_daily_quiz_auto_publish.sql");
+const migration = currentMigrationSql("20260928064718_daily_quiz_auto_publish.sql");
 const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 const nlcData = read("supabase/functions/nlc-data/index.ts");
@@ -37,11 +38,12 @@ describe("tables", () => {
 describe("auto publish", () => {
   const auto = () => fnBody("run_daily_quiz_auto_publish");
 
-  it("publishes today's A version to all groups, closing at 23:59:59 Taipei", () => {
+  // 20260928085701（日曆）起：那天有自訂題目就發自訂題目，否則發 A 版
+  it("publishes today's A version (or that day's custom questions) to all groups, closing at 23:59:59 Taipei", () => {
     expect(auto()).toContain("today DATE := (p_now AT TIME ZONE 'Asia/Taipei')::date;");
     expect(auto()).toContain("+ TIME '23:59:59') AT TIME ZONE 'Asia/Taipei')");
     expect(auto()).toContain("p_scope_type := 'all',");
-    expect(auto()).toContain("p_variant := 'A',");
+    expect(auto()).toContain("p_variant := CASE WHEN custom_questions IS NULL THEN 'A' END,");
     expect(auto()).toContain("p_actor_id := rule.enabled_by,");
   });
 
@@ -67,8 +69,9 @@ describe("auto publish", () => {
 });
 
 describe("publishing is admin-only; the admin test scope is gone", () => {
-  it("publish_daily_quiz and schedule_daily_quiz_publish reject non-admins and scope 'admin'", () => {
-    for (const name of ["publish_daily_quiz", "schedule_daily_quiz_publish"]) {
+  // schedule_daily_quiz_publish 在 #308 整支刪掉（見 daily-church-quiz.test.mjs）
+  it("publish_daily_quiz rejects non-admins and scope 'admin'", () => {
+    for (const name of ["publish_daily_quiz"]) {
       const body = fnBody(name);
       expect(body, name).toContain("IF actor_role IS DISTINCT FROM 'admin' THEN\n    RAISE EXCEPTION 'quiz_publish_admin_only';");
       expect(body, name).toContain("IF COALESCE(p_scope_type, '') NOT IN ('group', 'zone', 'region', 'all') THEN");

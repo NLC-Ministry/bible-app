@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0197_exam_time_accuracy_participation.sql");
+const sql = currentMigrationSql("0197_exam_time_accuracy_participation.sql");
 const exam = read("js/modules/exam.js");
 
 describe("0197: exam_get_my_result gains timeSeconds + accuracyRate", () => {

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const migration = readFileSync(join(root, "supabase", "migrations", "0166_get_org_structure_tree.sql"), "utf8");
+const migration = currentMigrationSql("0166_get_org_structure_tree.sql");
 const edge = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
 const db = readFileSync(join(root, "js", "db.js"), "utf8");
 
@@ -18,13 +19,16 @@ describe("migration 0166: get_org_structure_tree", () => {
   });
 
   it("filters by the role + scope PASSED IN (never re-derives role) so it matches applyForcedScope", () => {
-    expect(migration).toMatch(/p_role_code\s+TEXT\s+DEFAULT 'member'/);
-    expect(migration).toMatch(/p_scope_regions TEXT\[\]/);
-    expect(migration).toContain("v_whole_church BOOLEAN := p_role_code IN ('admin', 'pastor')");
-    expect(migration).toContain("profile.id = p_actor_id"); // a plain member always sees at least their own row
-    expect(migration).toContain("p_role_code = 'great_zone_leader' AND profile.great_region  = ANY(p_scope_regions)");
-    expect(migration).toContain("p_role_code = 'zone_leader'        AND profile.pastoral_zone = ANY(p_scope_zones)");
-    expect(migration).toContain("p_role_code = 'group_leader'       AND profile.small_group   = ANY(p_scope_groups)");
+    expect(migration).toMatch(/p_role_code\s+TEXT\s+DEFAULT 'member'/i);
+    expect(migration).toMatch(/p_scope_regions TEXT\[\]/i);
+    // 0175 起只有 service_role（nlc-data）傳進來的角色／範圍才採信，其他呼叫者一律當成自己＋member
+    expect(migration).toContain("IF auth.role() = 'service_role' THEN");
+    expect(migration).toContain("resolved_role_code     := 'member';");
+    expect(migration).toContain("v_whole_church := resolved_role_code IN ('admin', 'pastor');");
+    expect(migration).toContain("profile.id = resolved_actor_id"); // a plain member always sees at least their own row
+    expect(migration).toContain("resolved_role_code = 'great_zone_leader' AND profile.great_region  = ANY(resolved_scope_regions)");
+    expect(migration).toContain("resolved_role_code = 'zone_leader'        AND profile.pastoral_zone = ANY(resolved_scope_zones)");
+    expect(migration).toContain("resolved_role_code = 'group_leader'       AND profile.small_group   = ANY(resolved_scope_groups)");
   });
 
   it("latest definition (#263): leader rows only count active members", () => {

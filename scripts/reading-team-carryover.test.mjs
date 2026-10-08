@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(path, "utf8");
-const migration = read("supabase/migrations/0058_carry_reading_team_to_next_stage.sql");
-const migrationSkip = read("supabase/migrations/0154_carryover_skip_conflicting_members.sql");
+const migration = currentMigrationSql("0058_carry_reading_team_to_next_stage.sql");
+const migrationSkip = currentMigrationSql("0154_carryover_skip_conflicting_members.sql");
 const plan = read("js/modules/plan.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const teamUi = read("js/modules/team-registration.js");
-const migrationByDate = read("supabase/migrations/20260928101011_carryover_next_plan_by_date.sql");
+const migrationByDate = currentMigrationSql("20260928101011_carryover_next_plan_by_date.sql");
 const migrationDivision = read("supabase/migrations/20260928120418_carryover_single_division.sql");
 const migrationTaoyuan = read("supabase/migrations/20260928101019_taoyuan_first_round_final_exodus.sql");
 const migrationTaoyuanLevNumDeut = read("supabase/migrations/20260928155627_taoyuan_first_round_final_lev_num_deut.sql");
@@ -21,22 +22,22 @@ const sliceFunction = (sql, name) => {
 };
 
 describe("reading team stage carryover", () => {
+  // 0058 用「階段號 − 1」找上一階段；#321 改成同活動、同大區裡開始日期最近的前一個計畫
   it("offers carryover only to captains of the immediately previous stage", () => {
-    expect(migration).toContain("source_stage_no := target_stage_no - 1");
+    expect(migration).toContain("public.previous_campaign_stage_plan_id(");
     expect(migration).toContain("source_team.captain_id = actor_id");
     expect(migration).toContain("own_membership.member_role = 'captain'");
     expect(migration).toContain("target_stage_not_open");
     expect(migration).toContain("is_hidden = FALSE");
   });
 
-  it("copies the complete roster and plan enrollment in one idempotent operation (original 0058 shape)", () => {
+  // 0058 原本是「有人衝突就整隊失敗」（team_carryover_member_conflict），0154 改成只排除衝突者，見下面
+  it("copies the complete roster and plan enrollment in one idempotent operation", () => {
     expect(migration).toContain("carried_from_team_id");
     expect(migration).toContain("idx_reading_teams_one_carryover_per_stage");
     expect(migration).toContain("pg_advisory_xact_lock");
     expect(migration).toMatch(/INSERT INTO public\.reading_team_members[\s\S]*FROM public\.reading_team_members source_member/);
     expect(migration).toMatch(/INSERT INTO public\.reading_plans[\s\S]*ON CONFLICT \(user_id, global_plan_id\)/);
-    // 0058's original all-or-nothing behavior — superseded by 0154 below.
-    expect(migration).toContain("team_carryover_member_conflict");
   });
 
   it("exposes the offer and confirmation RPCs through both data paths", () => {
@@ -76,9 +77,12 @@ describe("reading team stage carryover", () => {
     expect(migrationSkip).toContain("team_carryover_captain_required");
     // Carries forward migration 0137's dynamic patch (cohort stages + region guard)
     // instead of silently reverting it with this CREATE OR REPLACE.
+    // （#321 起來源計畫的梯次／大區檢查搬進 previous_campaign_stage_plan_id）
     expect(migrationSkip).toContain("public.is_campaign_stage_kind(plan_kind)");
-    expect(migrationSkip).toContain("public.is_campaign_stage_kind(source_plan.plan_kind)");
-    expect(migrationSkip).toContain("source_plan.audience_regions IS NOT DISTINCT FROM target_plan.audience_regions");
+    expect(migrationSkip).toContain("public.previous_campaign_stage_plan_id(");
+    const previous = latestFunctionDefinition("previous_campaign_stage_plan_id").text;
+    expect(previous).toContain("public.is_campaign_stage_kind(source_plan.plan_kind)");
+    expect(previous).toContain("source_plan.audience_regions IS NOT DISTINCT FROM target_plan.audience_regions");
   });
 
   it("its reading_plans INSERT does not name the dropped `level` column (P0 regression)", () => {

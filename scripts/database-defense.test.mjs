@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const migration = readFileSync(join(root, "supabase", "migrations", "0010_database_defense.sql"), "utf8");
+const migration = currentMigrationSql("0010_database_defense.sql");
 const edge = readFileSync(join(root, "supabase", "functions", "nlc-data", "index.ts"), "utf8");
 const db = readFileSync(join(root, "js", "db.js"), "utf8");
 const home = readFileSync(join(root, "js", "modules", "home.js"), "utf8");

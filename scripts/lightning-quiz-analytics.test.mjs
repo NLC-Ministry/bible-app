@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import {
   buildOverviewCsv,
   buildRegionCsv,
@@ -139,7 +140,7 @@ describe("CSV builders", () => {
 });
 
 describe("wiring", () => {
-  const migration = readFileSync("supabase/migrations/0210_lightning_quiz_results_analytics.sql", "utf8");
+  const migration = currentMigrationSql("0210_lightning_quiz_results_analytics.sql");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 
   it("the new RPC is admin-gated and never PUBLIC-executable", () => {
