@@ -2566,7 +2566,7 @@ async function renderAdminLightningQuizTrendPanel(panel) {
     const participationCanvas = body.querySelector('[data-lq-trend-chart="participationRate"]');
     const correctCanvas = body.querySelector('[data-lq-trend-chart="correctRate"]');
     if (!participationCanvas?.isConnected || !correctCanvas?.isConnected) return; // 載入圖表期間區間又被改了
-    const rootStyle = getComputedStyle(document.documentElement);
+    const rootStyle = getComputedStyle(document.body); // 主題 token 在 body 上（#456）
     const brand = rootStyle.getPropertyValue('--color-brand').trim() || '#04A9D2';
     const success = rootStyle.getPropertyValue('--color-success-foreground').trim() || brand;
     adminLightningQuizTrendCharts = [
