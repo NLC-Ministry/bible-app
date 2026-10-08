@@ -7,6 +7,7 @@ import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
 import { refreshLightningQuizRankingCard } from "./lightning-quiz-ranking.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import { formatPlanEndDate, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
+import { isPlanCheckInClosed } from "../data/plan-checkin-window.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -1756,7 +1757,7 @@ window.startReadingCurrentChapter = function () {
     console.warn("[Home] calculatePlanProgress error in startReadingCurrentChapter:", e);
   }
 
-  if (state.activePlan && typeof isPlanExpired === "function" && isPlanExpired(state.activePlan)) {
+  if (state.activePlan && isPlanCheckInClosed(state.activePlan)) {
     showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }

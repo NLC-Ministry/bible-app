@@ -3,6 +3,7 @@ import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-b
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
+import { PLAN_CHECKIN_CLOSED_CODE, isPlanCheckInClosed, normalizeGraceDays } from './data/plan-checkin-window.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import {
   OFFLINE_IDENTITY_KEY,
@@ -321,6 +322,7 @@ function mapGlobalPlanRecord(dbPlan) {
     isHidden: Boolean(dbPlan.is_hidden),
     isFixed: dbPlan.is_fixed !== false,
     is_fixed: dbPlan.is_fixed !== false,
+    graceDays: normalizeGraceDays(dbPlan.grace_days),
     planKind: isCampaignMaster ? "church_campaign"
       : (isCampaignStage ? "church_campaign_stage"
       : (isCohortStage ? "church_campaign_stage_cohort" : (dbPlan.plan_kind || "standard"))),
@@ -1548,7 +1550,7 @@ const db = {
         // 重度使用者可能 >200）維持獨立。
         const [[globalPlansResult, profileResult, plansResult], logsResult, highlightsResult] = await Promise.all([
           this.batchSelect([
-            state.supabase.from("global_plans").select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
+            state.supabase.from("global_plans").select("id, name, description, start_date, end_date, grace_days, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
             state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
             state.supabase.from("reading_plans").select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
           ]),
@@ -1752,6 +1754,7 @@ const db = {
                 planObj.isFixed = isFixed;
                 planObj.is_fixed = isFixed;
                 planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
+                planObj.graceDays = normalizeGraceDays(linkedGlobalPlan?.graceDays);
                 planObj.planKind = linkedGlobalPlan?.planKind || (campaignStageNo >= 1 ? "church_campaign_stage" : "standard");
                 planObj.stageNo = linkedGlobalPlan?.stageNo || campaignStageNo || null;
                 // cohort：獎名 / 輪次 / 母 campaign 沿用來源正式階段（發獎 + 詳情頁獎章用）。
@@ -2251,6 +2254,12 @@ const db = {
       const progressError = new Error("此階段尚未正式開放，無法記錄已讀");
       progressError.code = "PLAN_PROGRESS_LOCKED";
       throw progressError;
+    }
+    // #412 截止＋寬限期過後：新增與取消都不行（伺服器觸發器也會擋，這裡先擋省一趟）。
+    if (targetPlan && isPlanCheckInClosed(targetPlan)) {
+      const closedError = new Error(PLAN_CHECKIN_CLOSED_CODE);
+      closedError.code = PLAN_CHECKIN_CLOSED_CODE;
+      throw closedError;
     }
     const planId = targetPlan ? targetPlan.id : null;
     const presetKey = targetPlan ? targetPlan.presetKey : null;
@@ -5227,6 +5236,8 @@ const db = {
       localStorage.setItem("selected_plan_key", presetKey);
     }
 
+    if (newPlanObj) newPlanObj.graceDays = normalizeGraceDays(preset.graceDays);
+
     if (newPlanObj && preset.planKind) {
       Object.assign(newPlanObj, {
         globalPlanId: newPlanObj.globalPlanId || preset.globalPlanId || preset.id || null,
@@ -5395,7 +5406,7 @@ const db = {
       try {
         const { data, error } = await fetchAllRows(() => state.supabase
           .from("global_plans")
-          .select("id, name, description, start_date, end_date, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions")
+          .select("id, name, description, start_date, end_date, grace_days, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions")
           .order("start_date", { ascending: true }));
 
         if (error) {
@@ -5643,6 +5654,26 @@ const db = {
     this._userDataPromise = null; // 💡 關鍵修復：清除資料加載快取以使快取失效
     await this.loadGlobalPlans();
     return true;
+  },
+
+  // #412 截止後寬限天數：只改 global_plans 這一欄。正式階段／大區梯次的日期由階段規則
+  // 同步、不能走 saveGlobalPlan 的整列編輯，所以寬限天數獨立存。
+  async saveGlobalPlanGraceDays(planId, graceDays) {
+    const days = normalizeGraceDays(graceDays);
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { success: false, error: new Error("只有連線到資料庫時才能設定寬限天數。") };
+    }
+    const { error } = await state.supabase
+      .from("global_plans")
+      .update({ grace_days: days })
+      .eq("id", planId);
+    if (error) return { success: false, error };
+    this._userDataPromise = null;
+    await this.loadGlobalPlans();
+    (state.activePlans || []).forEach(plan => {
+      if (plan.globalPlanId === planId) plan.graceDays = days;
+    });
+    return { success: true, graceDays: days };
   },
 
   // 延後大區梯次：為某大區建立 / 更新某階段的平行梯次計畫（migration 0128 + 0140）。

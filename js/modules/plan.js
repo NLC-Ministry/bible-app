@@ -36,7 +36,8 @@ import {
   isSequentialCheckPlan
 } from "../data/current-round-progress.mjs";
 import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
-import { getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
+import { getPlanCheckInStatusNotice, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
+import { isPlanCheckInClosed, isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
 import { getExplorePlanVisibility } from "./explore-plan-visibility.mjs";
 
 // Reading plans tab view controller
@@ -1410,7 +1411,8 @@ async function openJoinedPlanProgress(plan) {
   if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(plan);
   state.selectedPlanDay = null;
   localStorage.setItem("selected_plan_key", getPlanStorageKey(plan));
-  if (isPlanExpired(plan)) showToast(getPlanEndedNotice(plan.endDate));
+  const checkInNotice = getPlanCheckInStatusNotice(plan);
+  if (checkInNotice) showToast(checkInNotice);
   if (typeof window.setPlanState === "function") {
     await window.setPlanState(PLAN_ROUTE.DETAIL);
   } else {
@@ -3441,7 +3443,8 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
     return;
   }
 
-  if (state.activePlan && isPlanExpired(state.activePlan)) {
+  // #412：截止日之後還有寬限期可以補打卡／取消，過了寬限期才擋。
+  if (state.activePlan && isPlanCheckInClosed(state.activePlan)) {
     showToast(getPlanEndedNotice(state.activePlan.endDate));
     if (checkboxEl) {
       checkboxEl.checked = isCurrentlyRead;
@@ -3542,7 +3545,10 @@ window.toggleYouVersionChapter = function (checkboxEl, book, chapter, taskRound 
       applyLocalReadState(chapterObj, isCurrentlyRead);
       calculatePlanProgress();
       renderPlanScheduleTracker(true);
-      showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
+      // #412：伺服器以截止＋寬限期拒絕（例如頁面開著跨過寬限期最後一天）不是網路問題，別叫人重試。
+      showToast(isPlanCheckInClosedError(error) && state.activePlan
+        ? getPlanEndedNotice(state.activePlan.endDate)
+        : ((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試"));
       // ── Re-sync dashboard after rollback via event bus ──
       window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan" } }));
     });
@@ -3880,7 +3886,7 @@ async function handleRoundCompletion(plan) {
 
 window.openPlanChapterInReader = function (bookName, chapter, dayNum, round = null) {
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
-  if (state.activePlan && isPlanExpired(state.activePlan)) {
+  if (state.activePlan && isPlanCheckInClosed(state.activePlan)) {
     showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }
@@ -3939,7 +3945,7 @@ function getInlineReaderTaskDecision(task) {
     hasTask: true,
     alreadyRead: isInlineReaderTaskRead(task),
     offline: Boolean(state.offlineMode),
-    expired: isPlanExpired(task.plan),
+    expired: isPlanCheckInClosed(task.plan),
     locked: isPlanProgressLocked(task.plan, { hidden: window.isPlanHidden?.(task.plan) }),
     isOldRound: task.round < Number(task.plan.currentRound || 1)
   });
@@ -4095,7 +4101,7 @@ function initInlineReaderBottomDwell() {
 
 window.openPlanInlineReader = async function (bookName, chapter, dayNum, round = null) {
   if (typeof window.guardPlanEligibility === "function" && window.guardPlanEligibility()) return;
-  if (state.activePlan && isPlanExpired(state.activePlan)) {
+  if (state.activePlan && isPlanCheckInClosed(state.activePlan)) {
     showToast(getPlanEndedNotice(state.activePlan.endDate));
     return;
   }
@@ -5175,9 +5181,8 @@ async function setPlanState(newState) {
 
   const normalized = String(newState || "").toUpperCase();
   if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL" || normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
-    if (state.activePlan && isPlanExpired(state.activePlan)) {
-      showToast(getPlanEndedNotice(state.activePlan.endDate));
-    }
+    const checkInNotice = state.activePlan && getPlanCheckInStatusNotice(state.activePlan);
+    if (checkInNotice) showToast(checkInNotice);
   }
 
 
