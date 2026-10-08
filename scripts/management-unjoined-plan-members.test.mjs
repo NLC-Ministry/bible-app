@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
@@ -58,14 +59,16 @@ describe("management plan unjoined members", () => {
   });
 
   it("enforces manager scope and excludes people who already joined", () => {
-    const migration = read("supabase/migrations/0045_plan_join_encouragement.sql");
+    const migration = currentMigrationSql("0045_plan_join_encouragement.sql");
     const edge = read("supabase/functions/nlc-data/index.ts");
 
-    expect(migration).toContain("actor_profile.role NOT IN ('admin', 'great_zone_leader', 'zone_leader')");
+    // 角色改用 role_code()；牧者（#343 起）與小組長也能管理，範圍各用自己的 managed_* 欄
+    expect(migration).toContain("IF actor_role NOT IN ('admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader') THEN\n    RAISE EXCEPTION 'plan_management_scope_required';");
     expect(migration).toContain("AND NOT EXISTS");
     expect(migration).toContain("FROM public.reading_plans");
-    expect(migration).toContain("actor_profile.managed_regions");
-    expect(migration).toContain("actor_profile.managed_zones");
+    expect(migration).toContain("(actor_role = 'great_zone_leader' AND public.values_overlap(candidate.great_region, COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, '')))");
+    expect(migration).toContain("(actor_role = 'zone_leader' AND public.values_overlap(candidate.pastoral_zone, COALESCE(NULLIF(actor_profile.managed_zones, ''), actor_profile.pastoral_zone, '')))");
+    expect(migration).toContain("(actor_role = 'group_leader' AND public.values_overlap(candidate.small_group, COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, '')))");
     expect(migration).toContain("INSERT INTO public.care_reminders");
     expect(migration).toContain("'plan-invite:' || target_plan.id::TEXT");
     expect(migration).not.toContain("actor_profile.role = 'group_leader'");

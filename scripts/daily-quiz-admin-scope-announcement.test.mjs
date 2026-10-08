@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const sql = read("supabase/migrations/0195_daily_quiz_admin_scope_and_scoped_announcement.sql");
+const sql = currentMigrationSql("0195_daily_quiz_admin_scope_and_scoped_announcement.sql");
 const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 
@@ -27,27 +28,15 @@ describe("0195: quiz_publications 'admin' scope", () => {
   });
 });
 
-describe("0195: publish_daily_quiz 'admin' branch", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.publish_daily_quiz"),
-    sql.indexOf("REVOKE ALL ON FUNCTION public.publish_daily_quiz"));
+// 0195 的「僅系統管理員（測試用）」發佈分支與「同時發首頁公告」在 #306／#308 拿掉了：
+// 現在只剩自動發佈（見 daily-quiz-auto-publish.test.mjs），範圍只有 group/zone/region/all。
+describe("publish_daily_quiz: the 0195 admin branch is gone (#308)", () => {
+  const fn = latestFunctionDefinition("publish_daily_quiz").text;
 
-  it("only admin/pastor may publish to the admin scope (not zone/group leaders)", () => {
-    expect(fn).toContain("IF p_scope_type = 'admin' THEN");
-    expect(fn).toContain("IF actor_role NOT IN ('admin', 'pastor') THEN\n      RAISE EXCEPTION 'quiz_publish_scope_required';");
-    expect(fn).toContain("'group', 'zone', 'region', 'all', 'admin'");
-  });
-
-  it("targets every active admin profile directly, bypassing the small_group model entirely", () => {
-    expect(fn).toContain("p_global_plan_id, p_quiz_date, selected_quiz_id, NULL, 'admin', actor_id, actor_role, p_answer_close_at");
-    expect(fn).toContain("ON CONFLICT (global_plan_id, quiz_date) WHERE scope_type = 'admin' DO UPDATE");
-    expect(fn).toContain("public.role_code(profile.role_id) = 'admin'");
-    expect(fn).toContain("每日小測驗（測試發布）已發布，完成後即可查看結果。");
-  });
-
-  it("no longer requires scope='all' to also post an announcement, and forwards the same scope to it", () => {
-    expect(fn).not.toContain("quiz_announcement_requires_church_wide");
-    expect(fn).toContain("PERFORM public.schedule_announcement(");
-    expect(fn).toContain("p_scope_type,\n      p_scope_name\n    );");
+  it("no longer accepts the admin scope or posts a home announcement", () => {
+    expect(fn).not.toContain("IF p_scope_type = 'admin' THEN");
+    expect(fn).toContain("IF COALESCE(p_scope_type, '') NOT IN ('group', 'zone', 'region', 'all') THEN");
+    expect(fn).not.toContain("schedule_announcement");
   });
 });
 
@@ -82,15 +71,11 @@ describe("0195: church_announcements audience scope", () => {
   });
 });
 
-describe("0195: get_daily_quiz_dashboard recognizes admin-scope publications as myQuiz", () => {
-  it("matches group publications via profile_belongs_to_quiz_group, admin publications via actor_role", () => {
-    const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.get_daily_quiz_dashboard"),
-      sql.indexOf("COMMENT ON FUNCTION public.get_daily_quiz_dashboard"));
-    expect(fn).toContain("(publication.scope_type = 'group' AND public.profile_belongs_to_quiz_group(actor_id, publication.small_group_id))");
-    expect(fn).toContain("(publication.scope_type = 'admin' AND actor_role = 'admin')");
-    // managedGroups (the per-group admin roster view) stays group-only — admin
-    // test publications are personal, not mixed into any real group's stats.
-    expect(fn).toContain("AND publication.scope_type = 'group'");
+describe("get_daily_quiz_dashboard: myQuiz comes from the member's own group publication", () => {
+  it("matches group publications via profile_belongs_to_quiz_group only (admin scope removed in #308)", () => {
+    const fn = latestFunctionDefinition("get_daily_quiz_dashboard").text;
+    expect(fn).toMatch(/AND publication\.scope_type = 'group'\s+AND public\.profile_belongs_to_quiz_group\(actor_id, publication\.small_group_id\)/);
+    expect(fn).not.toContain("actor_role = 'admin'");
   });
 });
 

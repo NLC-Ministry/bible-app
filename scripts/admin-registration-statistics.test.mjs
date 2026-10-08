@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
-const migration = readFileSync("supabase/migrations/0052_admin_registration_statistics.sql", "utf8");
-const summaryMigration = readFileSync("supabase/migrations/0055_admin_registration_summary.sql", "utf8");
-const teamCountsMigration = readFileSync("supabase/migrations/0080_admin_registration_team_counts.sql", "utf8");
+const migration = currentMigrationSql("0052_admin_registration_statistics.sql");
+const summaryMigration = currentMigrationSql("0055_admin_registration_summary.sql");
+const teamCountsMigration = currentMigrationSql("0080_admin_registration_team_counts.sql");
 // 最新定義：#263 刪掉示範帳號欄位時改寫的版本
 const latestMigration = readFileSync("supabase/migrations/20260929093001_drop_profiles_is_demo.sql", "utf8");
 const orgSortOrderMigration = readFileSync("supabase/migrations/0133_org_display_sort_order.sql", "utf8");

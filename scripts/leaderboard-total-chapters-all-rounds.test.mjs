@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-const migration = read("supabase/migrations/0076_leaderboard_ranks_by_true_total_chapters.sql");
-const personalRankingMigration = read("supabase/migrations/0050_public_personal_plan_ranking_summary.sql");
+const migration = currentMigrationSql("0076_leaderboard_ranks_by_true_total_chapters.sql");
+const personalRankingMigration = currentMigrationSql("0050_public_personal_plan_ranking_summary.sql");
 
 // Explicit product decision (user-confirmed): re-reading a full round is real
 // effort and must count towards a "total chapters read" ranking. Every
@@ -27,11 +28,11 @@ describe("leaderboards rank by true total chapters read across all rounds", () =
     const body = migration.slice(fnStart, fnEnd);
     expect(body).not.toMatch(ROUND_FILTER_PATTERN);
     expect(body).toContain("COUNT(*)::INTEGER AS chapters_read");
-    // Preserves the role_code() + senior_pastor patch from migrations 0048/0033
-    // (a dynamic-patch function — see SKILL.md — so this must be re-asserted
-    // explicitly rather than assumed from the original 0033 file text).
+    // Preserves the role_code() patch from migrations 0048/0033 (a dynamic-patch
+    // function — see SKILL.md — so this must be re-asserted explicitly rather than
+    // assumed from the original 0033 file text); 0079 renamed senior_pastor → pastor.
     expect(body).toContain("public.role_code(role_id)");
-    expect(body).toContain("actor_role NOT IN ('admin', 'senior_pastor')");
+    expect(body).toContain("actor_role NOT IN ('admin', 'pastor')");
   });
 
   it("get_pastoral_zone_leaderboard no longer filters chapters_read by current round", () => {

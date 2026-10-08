@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #298（大測驗 R1，屬於 #297）：排程後首頁卡片自動出現、題目可改到開放作答、
 // 只有開放前能取消排程、首頁卡片文字沒填時自動產生。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/20260928031148_exam_schedule_shows_home_card.sql");
+const migration = currentMigrationSql("20260928031148_exam_schedule_shows_home_card.sql");
 const exam = read("js/modules/exam.js");
 const home = read("js/modules/home.js");
 const db = read("js/db.js");
@@ -107,7 +108,8 @@ describe("migration: unschedule only before opening", () => {
 describe("migration: rehearsal attempts while preparing or scheduled, cleared at opening", () => {
   it("attempts started before opening are rehearsal", () => {
     expect(fnBody("exam_start_attempt")).toContain(
-      "public._exam_paper_stage(pr.status, pr.open_at, pr.results_published_at) IN ('preparing', 'scheduled'),"
+      // 20260929084154（#339）把判斷抽成 is_rehearsal 變數
+      "is_rehearsal := public._exam_paper_stage(pr.status, pr.open_at, pr.results_published_at) IN ('preparing', 'scheduled');"
     );
   });
 

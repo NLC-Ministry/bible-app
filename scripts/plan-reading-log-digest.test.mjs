@@ -5,6 +5,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it, vi } from "vitest";
+import { latestFunctionDefinition } from "./migration-sql.mjs";
 import {
   expandPlanStatsRoster,
   expandReadingLogDigest,
@@ -418,8 +419,9 @@ describe("plan stats RPCs are service_role-only and fail closed (#394, #397)", (
   const ROSTER_SIGNATURE = "public.get_plan_stats_roster(text[], text, date, boolean, uuid[], uuid)";
   const DIGEST_SIGNATURE = "public.get_plan_reading_log_digest(uuid[], boolean, uuid[], uuid)";
 
-  it("the original #394 digest migration keeps every row and orders by id", () => {
-    const digest = read("_plan_reading_log_digest.sql");
+  // #394 的原版在 20261002022500；#397（_plan_stats_roster）改寫成 4 參數版，這裡驗現在的版本
+  it("the digest keeps every row and orders by id", () => {
+    const digest = latestFunctionDefinition("get_plan_reading_log_digest").text;
     expect(digest).toContain("json_agg(json_build_array(log.book, log.chapter, log.round, log.read_at) ORDER BY log.id)");
     expect(digest).not.toMatch(/DISTINCT|AT TIME ZONE/);
   });

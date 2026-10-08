@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const migration = readFileSync(join(root, "supabase", "migrations", "0028_protect_hub_owned_org_placement.sql"), "utf8");
+const migration = currentMigrationSql("0028_protect_hub_owned_org_placement.sql");
 const db = readFileSync(join(root, "js", "db.js"), "utf8");
 
 describe("hub-owned org placement migration", () => {

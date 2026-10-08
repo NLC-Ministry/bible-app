@@ -1,39 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0199_exam_announcement_test_owned.sql");
 const exam = read("js/modules/exam.js");
 
-// 架構不變（測試版／正式版仍是兩份獨立的 exam_papers），但公告「內容編輯」
-// 整個拉回測試版處理，正式版只保留「發佈/撤下」動作，內容一律由「同步到
-// 正式版」帶過去（每次同步都覆蓋，不是只有第一次）。
-describe("0199: exam_push_to_live 每次同步都覆蓋正式版的公告內容", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_push_to_live"),
-    sql.indexOf("COMMENT ON FUNCTION public.exam_push_to_live"));
-
-  it("UPDATE 既有正式版那個分支現在會覆蓋 announcement", () => {
-    const updateBranch = fn.slice(fn.indexOf("UPDATE public.exam_papers SET"), fn.indexOf("WHERE id = dst.id"));
-    expect(updateBranch).toContain("announcement = src.announcement,");
-  });
-
-  it("announcement_published／announced_at／announced_by 不受同步影響，維持正式版自己的發佈狀態", () => {
-    // 只檢查實際 SET 的欄位清單（到 published_by = NULL 為止），後面那句提到
-    // 這幾個名字的只是解釋為什麼不動它們的註解，不是真的 SET 到它們。
-    const updateBranch = fn.slice(fn.indexOf("UPDATE public.exam_papers SET"), fn.indexOf("published_by = NULL") + "published_by = NULL".length);
-    expect(updateBranch).not.toContain("announcement_published");
-    expect(updateBranch).not.toContain("announced_at");
-    expect(updateBranch).not.toContain("announced_by");
-  });
-
-  it("既有防呆（有作答不能推／測驗進行中不能推）原封不動，連帶保護公告內容不能在正式測驗進行中被改", () => {
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_live_has_attempts'");
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_live_not_closed'");
-  });
-
-  it("第一次建立正式版時仍然照樣帶入測試版當下的公告內容（INSERT 分支不變）", () => {
-    const insertBranch = fn.slice(fn.indexOf("INSERT INTO public.exam_papers"), fn.indexOf("did_create := TRUE;"));
-    expect(insertBranch).toContain("src.announcement, FALSE, src.linked_plan_id, src.id, actor_id");
+// 0199 當時測試版／正式版是兩份試卷，公告內容由 exam_push_to_live 每次同步覆蓋。
+// #258 改成單一試卷、#260（20260927051721）把 exam_push_to_live 連同 mode 一起刪掉，
+// 公告內容就在唯一那份試卷上編輯。
+describe("exam_push_to_live 已隨單一試卷刪除（#258／#260）", () => {
+  it("沒有「同步到正式版」這一步了", () => {
+    expect(() => latestFunctionDefinition("exam_push_to_live")).toThrow(/dropped in 20260927051721/);
   });
 });
 

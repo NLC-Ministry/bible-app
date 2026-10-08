@@ -1,45 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0198_exam_test_announcement_preview.sql");
 const exam = read("js/modules/exam.js");
 const home = read("js/modules/home.js");
 
-// 架構維持不變（測試版／正式版仍是兩份獨立的 exam_papers），但測試版現在也
-// 能編輯並發佈自己的預告文，方便管理員在推上正式版之前，先在首頁預覽卡片
-// 實際會長什麼樣子。可見性安全性靠既有的 exam_home_exams/exam_home_banner
-// 的 (mode='live' OR is_staff) 判斷把關，不是這次改動的範圍。
-describe("0198: exam_publish_announcement 不再限定 mode='live'", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_publish_announcement"),
-    sql.indexOf("COMMENT ON FUNCTION public.exam_publish_announcement"));
-
-  it("拿掉了 0131 加的 mode<>'live' 擋板", () => {
-    expect(fn).not.toContain("exam_announcement_live_only");
-    expect(fn).not.toContain("pr.mode <> 'live'");
+// 0198 當時測試版／正式版是兩份試卷，測試版也能發佈預告文先在首頁預覽，外流靠
+// (mode='live' OR is_staff) 把關。之後：#260 刪掉 mode（單一試卷）、#303 刪掉
+// exam_publish_announcement（排程後首頁卡片自動出現）。現在的把關是「草稿卷不進會友清單」。
+describe("0198 之後：草稿卷不會出現在會友的首頁或「我的測驗」", () => {
+  it("exam_publish_announcement 已刪（#303）", () => {
+    expect(() => latestFunctionDefinition("exam_publish_announcement")).toThrow(/dropped/);
   });
 
-  it("其他驗證（已關閉鎖定／已發佈過／標題內容必填／開放時間有效）維持不變", () => {
-    expect(fn).toContain("IF pr.status = 'closed' THEN RAISE EXCEPTION 'exam_announcement_locked'; END IF;");
-    expect(fn).toContain("IF pr.announcement_published THEN RAISE EXCEPTION 'exam_announcement_already_published'; END IF;");
-    expect(fn).toContain("exam_announcement_incomplete");
-    expect(fn).toContain("exam_window_invalid");
-  });
-});
-
-describe("0198: 測試版的預告文只有 admin/pastor 自己看得到，不會外流", () => {
-  it("exam_home_exams／exam_home_banner 的既有 (mode='live' OR is_staff) 判斷沒被動過", () => {
-    // 這兩支不在這份 migration 裡改，直接檢查上一版定義還在（沒被覆寫成別的樣子）。
-    const homeExams = readFileSync(new URL("../supabase/migrations/0123_exam_member_paper_lists.sql", import.meta.url), "utf8");
-    expect(homeExams).toContain("AND (pr.mode = 'live' OR is_staff)");
-    const homeBanner = readFileSync(new URL("../supabase/migrations/0124_exam_practice_grace_period.sql", import.meta.url), "utf8");
-    expect(homeBanner).toContain("pr.announcement_published=TRUE AND(pr.mode='live' OR is_staff)");
-  });
-
-  it("exam_my_papers 維持 mode='live' 專用，測試版不進「我的測驗」歷史列表", () => {
-    const homeExams = readFileSync(new URL("../supabase/migrations/0123_exam_member_paper_lists.sql", import.meta.url), "utf8");
-    const myPapersFn = homeExams.slice(homeExams.indexOf("CREATE OR REPLACE FUNCTION public.exam_my_papers"));
-    expect(myPapersFn).toContain("WHERE pr.mode = 'live'");
+  it("首頁清單／單卡／我的測驗都只列 published、closed 的卷", () => {
+    for (const name of ["exam_home_exams", "exam_home_banner", "exam_my_papers"]) {
+      const fn = latestFunctionDefinition(name).text;
+      expect(fn, name).toContain("WHERE pr.status IN ('published', 'closed')");
+      expect(fn, name).not.toContain("pr.mode");
+    }
   });
 });
 

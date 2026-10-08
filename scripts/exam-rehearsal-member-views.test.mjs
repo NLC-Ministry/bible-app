@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #258 後續：管理員在草稿卷上演練作答後，只要預告文已發佈，首頁卡片就顯示
 // 「已完成作答」。演練作答（is_test）不能出現在會友端的個人紀錄；作答頁的結果
 // 畫面改成標明「演練作答」，並提供只清自己演練的「重新演練」。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/20260927082256_exam_rehearsal_not_in_member_views.sql");
+const migration = currentMigrationSql("20260927082256_exam_rehearsal_not_in_member_views.sql");
 const exam = read("js/modules/exam.js");
 const db = read("js/db.js");
 const nlcData = read("supabase/functions/nlc-data/index.ts");
@@ -37,10 +38,11 @@ describe("會友端的個人紀錄不含演練作答", () => {
 describe("exam_reset_my_rehearsal", () => {
   const block = fnBlock("exam_reset_my_rehearsal", false);
 
-  it("只給 admin/pastor、只限草稿卷、只刪自己的演練作答", () => {
+  // 「只限草稿卷」在 #298 放寬成「開放作答前（準備中、已排程）」，錯誤碼沿用 exam_rehearsal_draft_only
+  it("只給 admin/pastor、只限開放作答前的卷、只刪自己的演練作答", () => {
     expect(block).toContain("resolve_quiz_actor(p_actor_id)");
     expect(block).toContain("NOT IN ('admin', 'pastor')");
-    expect(block).toContain("IF pr.status <> 'draft' THEN RAISE EXCEPTION 'exam_rehearsal_draft_only'; END IF;");
+    expect(block).toMatch(/_exam_paper_stage\(pr\.status, pr\.open_at, pr\.results_published_at\) NOT IN \('preparing', 'scheduled'\) THEN\s+RAISE EXCEPTION 'exam_rehearsal_draft_only';/);
     expect(block).toContain("WHERE paper_id = pr.id AND user_id = actor_id AND is_test;");
   });
 

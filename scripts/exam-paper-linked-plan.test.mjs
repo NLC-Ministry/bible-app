@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8").replace(/\r\n/g, "\n");
-const sql = read("supabase", "migrations", "0170_exam_paper_linked_plan.sql");
+const sql = currentMigrationSql("0170_exam_paper_linked_plan.sql");
 const ui = read("js", "modules", "exam.js");
 const db = read("js", "db.js");
 const ef = read("supabase", "functions", "nlc-data", "index.ts");
@@ -26,7 +27,7 @@ describe("0170: exam_papers.linked_plan_id 欄位", () => {
   });
 });
 
-describe("0170: exam_upsert_paper — 只有測試版草稿能設定 linked_plan_id", () => {
+describe("0170: exam_upsert_paper — linked_plan_id 只能在開放作答前設定", () => {
   const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_upsert_paper"), sql.indexOf("-- ── 2."));
 
   it("用 JSONB `?` 判斷 payload 有沒有帶這個 key，沒帶就不動舊值", () => {
@@ -35,8 +36,10 @@ describe("0170: exam_upsert_paper — 只有測試版草稿能設定 linked_plan
     expect(fn).toContain("linked_plan_id = CASE WHEN v_has_plan THEN v_plan_id ELSE linked_plan_id END");
   });
 
-  it("UPDATE 分支跟其他欄位一樣鎖 status='draft'，沒有另開後門", () => {
-    expect(fn).toContain("WHERE id = v_paper_id AND status = 'draft'");
+  // 0170 時是「只有測試版草稿能改」；#298 起改成用階段判斷：準備中、已排程（開放作答前）都能改，
+  // 開放作答後一律不能改——仍然沒有另開「任何狀態都能改」的後門。
+  it("開放作答後就不能再改（跟其他欄位同一道階段檢查，沒有另開後門）", () => {
+    expect(fn).toContain("IF stage NOT IN ('preparing', 'scheduled') THEN RAISE EXCEPTION 'exam_paper_not_editable'; END IF;");
   });
 
   it("新增時直接帶入 linked_plan_id（可為 NULL＝獨立測驗卷）", () => {
@@ -49,20 +52,11 @@ describe("0170: exam_upsert_paper — 只有測試版草稿能設定 linked_plan
   });
 });
 
-describe("0170: exam_push_to_live — 推正式版時把 linked_plan_id 一併帶過去", () => {
-  const fn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.exam_push_to_live"), sql.indexOf("-- ── 3."));
-
-  it("新建正式版（INSERT）帶 linked_plan_id", () => {
-    expect(fn).toContain("duration_minutes, total_points, pledge, sections, section_targets,\n      announcement, announcement_published, linked_plan_id, pushed_from_id, created_by");
-    expect(fn).toContain("src.announcement, FALSE, src.linked_plan_id, src.id, actor_id");
-  });
-
-  it("重推已存在的正式版（UPDATE）也同步 linked_plan_id", () => {
-    expect(fn).toContain("linked_plan_id = src.linked_plan_id,");
-  });
-
-  it("正式版已有人作答就擋住不能再推——這就是為什麼這個設定發布後會自然鎖住", () => {
-    expect(fn).toContain("RAISE EXCEPTION 'exam_push_live_has_attempts';");
+// 0170 時推正式版（exam_push_to_live）會把 linked_plan_id 帶過去；#258／#260 改成單一試卷，
+// 這支函式已刪，linked_plan_id 就設在唯一那份試卷上。
+describe("exam_push_to_live 已刪（#260）", () => {
+  it("沒有推正式版這一步了", () => {
+    expect(() => latestFunctionDefinition("exam_push_to_live")).toThrow(/dropped/);
   });
 });
 

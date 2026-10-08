@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = process.cwd();
 
 describe("rename reading team feature", () => {
   it("provides a secure database migration with permission and uniqueness checks", () => {
-    const migrationPath = join(root, "supabase", "migrations", "0062_rename_reading_team.sql");
-    expect(existsSync(migrationPath)).toBe(true);
-
-    const sql = readFileSync(migrationPath, "utf8");
+    const sql = currentMigrationSql("0062_rename_reading_team.sql");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.rename_reading_team(");
     expect(sql).toContain("p_team_id UUID");
     expect(sql).toContain("p_name TEXT");

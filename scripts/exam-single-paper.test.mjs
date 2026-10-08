@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #258（大測驗 C1）：單一試卷 + 草稿演練。決定見 #257。
 // 核心規則：演練作答只存在於草稿卷上——發佈時清除，有正式作答就不能撤回成草稿，
 // 所以統計／排行榜／匯出不需要另外排除 is_test。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/20260926155616_exam_single_paper_rehearsal.sql");
+const migration = currentMigrationSql("20260926155616_exam_single_paper_rehearsal.sql");
 const exam = read("js/modules/exam.js");
 const db = read("js/db.js");
 const nlcData = read("supabase/functions/nlc-data/index.ts");
@@ -16,17 +17,20 @@ const fnBody = name => {
   return migration.slice(start, migration.indexOf("$$;", migration.indexOf("AS $$", start)));
 };
 
-describe("migration: rehearsal attempts live only on drafts", () => {
-  it("marks attempts on a draft (or a legacy test paper) as rehearsal", () => {
-    expect(fnBody("exam_start_attempt")).toContain("(pr.status = 'draft' OR pr.mode = 'test')");
+// 這支 migration（#257）當時還保留舊的 mode='test' 卷；#260 刪掉 mode，#298 改成用階段
+// （_exam_paper_stage：preparing／scheduled／open…）判斷，下面驗的是現在的版本。
+describe("migration: rehearsal attempts live only before opening", () => {
+  it("marks attempts on a preparing or scheduled paper as rehearsal (#298)", () => {
+    expect(fnBody("exam_start_attempt")).toContain("_exam_paper_stage(pr.status, pr.open_at, pr.results_published_at) IN ('preparing', 'scheduled');");
   });
 
-  it("keeps members out of drafts and legacy test papers (the 0113 guard)", () => {
+  it("keeps members out until the paper is open (the 0113 guard)", () => {
     expect(fnBody("exam_start_attempt")).toContain(
-      "IF pr.mode = 'test' OR pr.status <> 'published' OR now_ts < pr.open_at OR now_ts >= pr.close_at THEN"
+      "IF pr.status <> 'published' OR now_ts < pr.open_at OR now_ts >= pr.close_at THEN"
     );
     const state = fnBody("exam_get_for_attempt");
-    expect(state).toContain("open_state := CASE WHEN is_staff THEN 'open' ELSE 'not_open' END;   -- 管理員演練");
+    expect(state).toContain("IF pr.status = 'draft' OR (pr.status = 'published' AND now_ts < pr.open_at) THEN");
+    expect(state).toContain("open_state := CASE WHEN is_staff THEN 'open' ELSE 'not_open' END;");
     expect(state).not.toContain("_exam_can_access_test");
   });
 
@@ -36,21 +40,21 @@ describe("migration: rehearsal attempts live only on drafts", () => {
     expect(publish.indexOf("DELETE FROM public.exam_attempts")).toBeLessThan(publish.indexOf("SET status = 'published'"));
   });
 
-  it("refuses to revert a paper with real attempts, and forces drafts through exam_publish", () => {
+  // 原本是「有真實作答就不能退回草稿」；#298 起只有「已排程、還沒開放」能取消排程，
+  // 開放後就不能回頭——還沒開放代表一定沒有真實作答，保護不變。
+  it("only unschedules before opening, and forces drafts through exam_publish", () => {
     const status = fnBody("exam_set_status");
-    expect(status).toContain("RAISE EXCEPTION 'exam_revert_has_attempts'");
-    expect(status).toContain("WHERE paper_id = pr.id AND NOT is_test");
+    expect(status).toContain("IF p_status = 'draft' AND pr.status <> 'draft' AND stage <> 'scheduled' THEN\n    RAISE EXCEPTION 'exam_already_open';");
     expect(status).toContain("RAISE EXCEPTION 'exam_use_publish'");
   });
 
-  it("only lets drafts (or legacy test papers) clear their attempts", () => {
-    expect(fnBody("exam_reset_attempts")).toContain("IF pr.status <> 'draft' AND pr.mode <> 'test' THEN RAISE EXCEPTION 'exam_reset_live_forbidden'");
+  it("only lets papers that are not yet open clear their attempts", () => {
+    expect(fnBody("exam_reset_attempts")).toContain("_exam_paper_stage(pr.status, pr.open_at, pr.results_published_at) NOT IN ('preparing', 'scheduled') THEN\n    RAISE EXCEPTION 'exam_reset_live_forbidden';");
   });
 
-  it("creates every new paper as live and never changes mode", () => {
+  it("no longer has a mode column to set (#260)", () => {
     const upsert = fnBody("exam_upsert_paper");
-    expect(upsert).toContain("'live',                                   -- 不再有測試版");
-    expect(upsert).not.toMatch(/mode = COALESCE/);
+    expect(upsert).not.toContain("mode");
   });
 
   it("takes client access away from the removed features, keeping service_role", () => {

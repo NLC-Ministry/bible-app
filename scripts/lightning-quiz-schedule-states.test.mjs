@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { copyLightningQuizQuestion, lightningQuizStage } from "../js/modules/lightning-quiz-schedule.mjs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #309：雲柱測驗狀態只剩 準備中 → 已排程 → 作答中 → 已結束
 const read = path => readFileSync(path, "utf8");
-const migration = read("supabase/migrations/20260927121803_lightning_quiz_schedule_states.sql");
+const migration = currentMigrationSql("20260927121803_lightning_quiz_schedule_states.sql");
 const fnBlock = name => {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   expect(start, name).toBeGreaterThanOrEqual(0);

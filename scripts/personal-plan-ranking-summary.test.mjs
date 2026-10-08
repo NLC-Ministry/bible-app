@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/0050_public_personal_plan_ranking_summary.sql");
+const migration = currentMigrationSql("0050_public_personal_plan_ranking_summary.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 // #370：統計、排行、組員狀況搬到 plan-stats.js。

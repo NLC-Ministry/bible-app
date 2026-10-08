@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const sql = read("supabase/migrations/0211_lightning_quiz_publish_workflow.sql");
+const sql = currentMigrationSql("0211_lightning_quiz_publish_workflow.sql");
 
 function functionBody(name) {
   const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
@@ -53,27 +54,29 @@ describe("雲柱測驗 每題各自發布（0211）", () => {
     expect(history).toContain("'incomplete'");
   });
 
-  it("新增一律是草稿；已鎖定的活動儲存時另存成新草稿，原活動不動", () => {
+  // 0211 的「鎖定後儲存就另存新草稿（fork）」在 #309（20260927121803）拿掉：鎖定後直接擋，
+  // 要沿用就在後台「複製成新題」。
+  it("新增一律是草稿；已鎖定的活動不能再改", () => {
     const upsert = functionBody("admin_upsert_lightning_quiz_question");
     expect(upsert).not.toContain("p_is_active");
     expect(upsert).toContain("'draft', actor_id");
-    expect(upsert).toContain("IF public._lightning_quiz_is_locked(p_id) THEN");
-    expect(upsert).toContain("'draft', p_id, actor_id");
-    expect(upsert).toContain("'forked', TRUE");
+    expect(upsert).toContain("IF public._lightning_quiz_is_locked(p_id) THEN\n    RAISE EXCEPTION 'lightning_quiz_locked';");
+    expect(upsert).not.toContain("'forked', TRUE");
     expect(upsert).toContain("'unchanged', TRUE");
   });
 
-  it("發布時自動下架同一天原本已發布的活動；鎖定後不能取消發布", () => {
+  // #309：同一天已有排程的題目時直接擋（原本會把舊的自動下架；archived 狀態已拿掉）
+  it("同一天只能有一題已排程；鎖定後不能取消排程", () => {
     const status = functionBody("admin_set_lightning_quiz_status");
-    expect(status).toMatch(/SET status = 'archived'\s+WHERE rise_date = q\.rise_date AND status = 'published' AND id <> q\.id/);
+    expect(status).toMatch(/WHERE rise_date = q\.rise_date AND status = 'published' AND id <> q\.id\) THEN\s+RAISE EXCEPTION 'lightning_quiz_date_taken';/);
+    expect(status).not.toContain("'archived'");
     expect(status).toMatch(/p_status = 'draft' AND q\.status = 'published'[\s\S]*_lightning_quiz_is_locked\(q\.id\)[\s\S]*lightning_quiz_locked/);
     expect(status).toContain("lightning_quiz_invalid_status_transition");
   });
 
-  it("清除作答不動活動狀態（不能拿清除來繞過鎖定）", () => {
-    const clear = functionBody("admin_clear_lightning_quiz_attempts");
-    expect(clear).toContain("DELETE FROM public.lightning_quiz_attempts WHERE question_id = p_question_id");
-    expect(clear).not.toMatch(/UPDATE public\.lightning_quiz_questions/);
+  // #309：「清除作答」會刪掉會友的正式作答，整支刪掉（測試改在 staging 做）
+  it("沒有「清除作答」可以繞過鎖定", () => {
+    expect(() => latestFunctionDefinition("admin_clear_lightning_quiz_attempts")).toThrow(/dropped/);
   });
 });
 
