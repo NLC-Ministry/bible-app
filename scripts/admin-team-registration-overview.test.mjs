@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { currentMigrationSql } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const migration = currentMigrationSql("0044_remove_group_leader_plan_management.sql");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
@@ -36,6 +36,16 @@ describe("admin team registration overview", () => {
     expect(visibleScope).not.toContain("member_role = 'captain'");
     expect(migration).toContain("actor_profile.managed_regions");
     expect(migration).toContain("actor_profile.managed_zones");
+  });
+
+  it("matches each leader's scope against the member field of the same level (#460)", () => {
+    const { text } = latestFunctionDefinition("get_reading_team_registration_overview");
+    expect(text).toContain("actor_role = 'great_zone_leader' AND public.values_overlap(md.great_region, COALESCE(NULLIF(actor_profile.managed_regions, ''), actor_profile.great_region, ''))");
+    expect(text).toContain("actor_role = 'zone_leader' AND public.values_overlap(md.pastoral_zone, COALESCE(NULLIF(actor_profile.managed_zones, ''), actor_profile.pastoral_zone, ''))");
+    expect(text).toContain("actor_role = 'group_leader' AND public.values_overlap(md.small_group, COALESCE(NULLIF(actor_profile.managed_groups, ''), actor_profile.small_group, ''))");
+    // 0137 以動態改寫換成述詞；重新定義時要保留，不能退回舊的字面值。
+    expect(text).toContain("public.is_campaign_stage_kind(gp.plan_kind)");
+    expect(text).not.toContain("gp.plan_kind = 'church_campaign_stage'");
   });
 
   it("loads the overview directly instead of guessing plan ids in the browser", () => {
