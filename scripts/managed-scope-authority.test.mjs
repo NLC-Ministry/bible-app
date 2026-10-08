@@ -21,15 +21,12 @@ describe("managed scope authority", () => {
     expect(migration).toContain("COALESCE(NULLIF(profile.managed_groups, ''), profile.small_group)");
   });
 
-  // #458 發現的回歸：0054 的「未知組織名稱拒存」與「只留角色對應的範圍欄」在 0065 加 p_actor_id 時被整段
-  // 拿掉，之後 0067/0068/0174 都沿用沒有檢查的版本。測試原本只驗 0054 舊檔，所以一直沒抓到。
-  // 用 it.fails 標記為已知缺口；補回 migration 後這兩個測試會「意外通過」而報錯，屆時改回 it。
   it("allows only administrators to save organization scopes", () => {
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.set_profile_managed_scopes");
     expect(migration).toContain("actor_role IS DISTINCT FROM 'admin'");
   });
 
-  it.fails("rejects organization scope names that do not exist (lost in 0065)", () => {
+  it("rejects organization scope names that do not exist (restored in #459 after 0065 dropped it)", () => {
     expect(migration).toContain("managed_scope_unknown_region");
     expect(migration).toContain("managed_scope_unknown_zone");
     expect(migration).toContain("managed_scope_unknown_group");
@@ -38,7 +35,7 @@ describe("managed scope authority", () => {
     expect(migration).toContain("FROM public.small_groups");
   });
 
-  it.fails("keeps only the scope column matching the Member Hub role (lost in 0065)", () => {
+  it("keeps only the scope column matching the Member Hub role (restored in #459 after 0065 dropped it)", () => {
     expect(migration).toContain("target_role = 'great_zone_leader'");
     expect(migration).toContain("target_role = 'zone_leader'");
     expect(migration).toContain("target_role = 'group_leader'");
