@@ -19,6 +19,8 @@ import {
   getBibleSearchPlan
 } from "./bible-search-sources.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
+import { isPlanCheckInClosed, isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
+import { getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 import {
   AUTO_RECORD_REASONS,
   getAutoRecordDecision,
@@ -210,7 +212,7 @@ function resolveReaderAutoRecordTask() {
     chapterNum: state.readerState.chapter,
     activePlanId: planIdOf(state.activePlan),
     lastOpened: readPlanLastOpened(),
-    isUsable: plan => !isPlanExpired(plan)
+    isUsable: plan => !isPlanCheckInClosed(plan)
       && !isPlanProgressLocked(plan, { hidden: window.isPlanHidden?.(plan) })
   });
   return found ? { book, chapter: found.chapter, day: found.day, round: found.round, plan: found.plan } : null;
@@ -233,7 +235,7 @@ function getReaderTaskDecision(taskContext) {
     hasTask: true,
     alreadyRead: isCurrentPlanReaderTaskRead(taskContext),
     offline: Boolean(state.offlineMode),
-    expired: Boolean(plan && isPlanExpired(plan)),
+    expired: Boolean(plan && isPlanCheckInClosed(plan)),
     locked: isPlanProgressLocked(taskContext.plan, { hidden: window.isPlanHidden?.(taskContext.plan) }),
     isOldRound: round < Number(plan.currentRound || 1)
   });
@@ -987,7 +989,7 @@ export function initReaderControls() {
         return;
       }
 
-      if (state.activePlan && isPlanExpired(state.activePlan)) {
+      if (state.activePlan && isPlanCheckInClosed(state.activePlan)) {
         showToast(getPlanEndedNotice(state.activePlan.endDate));
         return;
       }
@@ -1038,7 +1040,9 @@ export function initReaderControls() {
               updateDashboardView();
             }
           }
-          showToast((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試");
+          showToast(isPlanCheckInClosedError(error) && state.activePlan
+            ? getPlanEndedNotice(state.activePlan.endDate)
+            : ((window.APP_COPY && window.APP_COPY.plan.syncFail) || "進度沒同步成功，等一下再試試"));
         });
     });
   }

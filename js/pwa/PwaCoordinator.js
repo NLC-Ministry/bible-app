@@ -3,6 +3,7 @@ import { OfflineQueueRepository } from "./OfflineQueueRepository.js";
 import { OfflineSyncManager } from "./OfflineSyncManager.js";
 import { ServiceWorkerRegistrar } from "./ServiceWorkerRegistrar.js";
 import { cleanupRetiredOfflineOperations } from "../production-cleanup.mjs";
+import { isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
 
 const READING_OPERATION = "SET_CHAPTER_READ_STATE";
 const QUIZ_ANSWER_OPERATION = "SUBMIT_DAILY_QUIZ_ANSWER";
@@ -44,7 +45,7 @@ export class PwaCoordinator {
       queueRepository: this.queueRepository,
       registration,
       handlers: {
-        [READING_OPERATION]: payload => this.syncReadingOperation(payload),
+        [READING_OPERATION]: payload => this.syncReadingOperation(payload).catch(error => this.rejectClosedPlanSync(error)),
         [QUIZ_ANSWER_OPERATION]: payload => this.syncQuizAnswerOperation(payload),
         [QUIZ_FINALIZE_OPERATION]: payload => this.syncQuizFinalizeOperation(payload)
       }
@@ -269,6 +270,16 @@ export class PwaCoordinator {
       throw error;
     }
     window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan", source: "offline-sync" } }));
+  }
+
+  // #412：補送時計畫已過截止＋寬限期，伺服器拒絕——這筆永遠不會成功。
+  // 標成 4xx 讓佇列當永久失敗丟掉（不要一直重試卡住），並告訴使用者。
+  rejectClosedPlanSync(error) {
+    if (isPlanCheckInClosedError(error)) {
+      error.status = 400;
+      window.showToast?.("有一筆離線時的打卡沒有補上：計畫已過補打卡期限。");
+    }
+    throw error;
   }
 
   isNetworkFailure(error) {
