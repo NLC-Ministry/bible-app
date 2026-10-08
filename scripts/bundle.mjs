@@ -160,9 +160,17 @@ export function prepareSupabaseVendor(root, htmlSources) {
 // 掃 DOM 即時產生 CSS。現在用與 CDN 同版本的 Tailwind CLI 依 tailwind.config.cjs 掃原始碼產生，
 // 輸出成獨立的 tailwind.<hash>.css、只給 index.html（read/exam/grade 原本就沒有 Tailwind，
 // 併進共用的 index.<hash>.css 會讓 .container/.flex/.border 之類的規則套到那些頁面）。
+// 直接執行 node_modules/.bin 裡的工具，不透過 npx（#457）：每次 npx 在 Windows 上要先花數秒
+// 解析套件，一次建置呼叫好幾次，本機建置／bundle 測試因此慢到超時。找不到時才退回 npx。
+const BIN_DIR = fileURLToPath(new URL("../node_modules/.bin/", import.meta.url));
+export function localBin(name, { binDir = BIN_DIR, platform = process.platform } = {}) {
+  const bin = join(binDir, platform === "win32" ? `${name}.cmd` : name);
+  return existsSync(bin) ? `"${bin}"` : `npx ${name}`;
+}
+
 export const TAILWIND_PLACEHOLDER = "<!-- build:tailwind-css -->";
 
-export function buildTailwindCss(root, esbuildCmd = "npx esbuild") {
+export function buildTailwindCss(root, esbuildCmd = localBin("esbuild")) {
   const configPath = join(root, "tailwind.config.cjs");
   if (!existsSync(configPath)) throw new Error("bundle: missing tailwind.config.cjs");
   const tmp = mkdtempSync(join(tmpdir(), "bible-tailwind-"));
@@ -173,7 +181,7 @@ export function buildTailwindCss(root, esbuildCmd = "npx esbuild") {
     writeFileSync(inFile, "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n", "utf8");
     try {
       // cwd = root：tailwind.config.cjs 的 content 路徑是相對於專案根目錄。
-      execSync(`npx tailwindcss -c "${configPath}" -i "${inFile}" -o "${rawFile}"`, {
+      execSync(`${localBin("tailwindcss")} -c "${configPath}" -i "${inFile}" -o "${rawFile}"`, {
         encoding: "utf8",
         cwd: root,
         stdio: ["ignore", "pipe", "pipe"],
@@ -221,7 +229,7 @@ export function emitBundle({ root, outDir }) {
   if (!existsSync(entryPoint)) throw new Error(`bundle: missing entrypoint ${entryPoint}`);
 
   console.log(`⚡ [esbuild] Bundling ${entryPoint}...`);
-  const esbuildCmd = "npx esbuild";
+  const esbuildCmd = localBin("esbuild");
   const tmpOutDir = mkdtempSync(join(tmpdir(), "bible-esbuild-"));
 
   let bundleJs;
