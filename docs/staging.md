@@ -48,6 +48,8 @@
 - **不要直接 push 到 `main`**。免費的私人 repo 不能設定分支保護，所以改成在部署時把關：不是從 `staging`（或 `hotfix/*`）的 PR merge 進來的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
 - **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，由整合者把 `main` 併回 `staging`（跟一般上線後一樣，見下方第 5 步）。
 - migration 跟著分支走：整合者合併進 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
+- **Dependabot 安全更新的 PR**（#461，只開安全更新、不開一般升版）：PR 開在 `staging`，CI 會跑測試與資安掃描但**不部署**（拿不到 Vercel 金鑰）。不要在 GitHub 上按 merge——由整合者跟 `task/*` 一樣處理：在暫時的工作樹 `git merge --no-ff origin/dependabot/...`、跑一次 `npm test`、push `staging`，PR 會自動變成已合併。
+- **CI 的資安掃描**（#461，都在 `build` job）：`npm audit --omit=dev` 有 high 以上就擋；開發工具的漏洞只寫在 CI 摘要。gitleaks 只掃這次新推的 commit，誤判寫進 `.gitleaks.toml` 的 allowlist 並註明原因。
 
 ## 上線到正式環境（審核機制）
 
