@@ -7,8 +7,20 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const yaml = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
 
 describe("CI/CD workflow", () => {
-  it("runs deploy only after build-and-test succeeds", () => {
-    expect(yaml).toMatch(/deploy:\s*\n(?:[ \t]+.+\n)*[ \t]+needs:\s*build-and-test/);
+  it("runs deploy only after every test shard and the build succeed", () => {
+    // ci.yml 是 CRLF；JS 的 . 不吃 \r，所以中間的行用 [^\n]*
+    expect(yaml).toMatch(/deploy:\s*\n(?:[ \t]+[^\n]*\n)*[ \t]+needs:\s*\[test, build\]/);
+  });
+
+  it("splits the unit tests into shards that together cover the whole suite (#457)", () => {
+    const test = yaml.slice(yaml.indexOf("  test:"), yaml.indexOf("  build:"));
+    expect(test).toMatch(/shard:\s*\[1, 2, 3\]/);
+    expect(test).toContain("npx vitest run --shard=${{ matrix.shard }}/3");
+  });
+
+  it("caches the pinned Vercel CLI instead of reinstalling it every deploy (#457)", () => {
+    expect(yaml).toContain("key: vercel-cli-59.1.3-${{ runner.os }}");
+    expect(yaml).toContain("if: steps.vercel-cli-cache.outputs.cache-hit != 'true'");
   });
 
   it("pins Vercel CLI instead of using @latest", () => {
