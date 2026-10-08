@@ -132,7 +132,21 @@ Optional:
 
 ```bash
 GEMINI_QUIZ_REVIEW_MODEL=gemini-3.8-flash   # blind reviewer (#414); this is the default
+QUIZ_GENERATION_BUDGET_SECONDS=140           # whole-invocation time budget (#465); keep it below the platform wall-clock limit
 ```
+
+Reliability (#465): every Gemini call has a timeout (the remaining budget) and
+retries 429/5xx/timeouts with 2s/5s/10s backoff (`gemini-call.ts`). The
+generator gets 3 attempts; the reviewer gets 2 on `GEMINI_QUIZ_REVIEW_MODEL` and
+then 2 on `GEMINI_QUIZ_MODEL` as a fallback reviewer. When the budget runs out
+the row is written as failed before the platform kills the function. Failures
+are stored as `<step>:<code>[:<model>][ — <Google's message>]`, e.g.
+`review:503:gemini-3.8-flash — This model is currently experiencing high demand.`;
+the admin calendar translates them into Chinese. Progress is written to
+`daily_quizzes.generation_stage` (`queued → scripture → drafting → reviewing →
+saving`); a `generating` row with no update for 5 minutes counts as stuck — the
+calendar shows it as failed (`generation_timeout`) and 請 AI 出題 / the 20:00
+retry can take it over.
 
 Enter only the model ID as the `GEMINI_QUIZ_MODEL` / `GEMINI_QUIZ_REVIEW_MODEL`
 value. Do not include quotes, a `models/` prefix, or `GEMINI_QUIZ_MODEL=` in the

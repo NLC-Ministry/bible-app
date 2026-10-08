@@ -93,6 +93,14 @@ export function toBlindReviewItems(candidates: CandidateQuestion[]) {
   return candidates.map(question => ({ id: question.id, question: text(question.question), options: (question.options || []).map(text) }));
 }
 
+// #466：錯誤選項引用的就是正解那段經文（或其中一段）時，是「經文明說是甲，所以不是乙」，
+// 理由裡就算寫了「沒有提到乙」也不是靠經文沉默來判錯。
+function sharesAnswerQuote(quote: unknown, answerQuote: string) {
+  const own = normalizeForMatch(quote);
+  if (!own || !answerQuote) return false;
+  return own.includes(answerQuote) || answerQuote.includes(own);
+}
+
 export function checkCandidateEvidence(question: CandidateQuestion, index: VerseIndex): string[] {
   const problems: string[] = [];
   const options = Array.isArray(question?.options) ? question.options.map(text) : [];
@@ -104,10 +112,13 @@ export function checkCandidateEvidence(question: CandidateQuestion, index: Verse
   if (!versesForRef(question.verseRef, index)) problems.push("verse_ref_out_of_range");
   const evidence = Array.isArray(question.evidence) ? question.evidence : [];
   if (evidence.length !== 4) return [...problems, "evidence_missing"];
+  const answerQuote = normalizeForMatch(evidence[question.correctIndex]?.quote);
   evidence.forEach((item, i) => {
     if (!quoteMatchesRef(item?.quote, item?.verseRef, index)) problems.push(`quote_not_found:${i}`);
     if (!text(item?.reason)) problems.push(`reason_missing:${i}`);
-    else if (i !== question.correctIndex && ABSENCE_REASON.test(text(item.reason))) problems.push(`absence_refutation:${i}`);
+    else if (i !== question.correctIndex && ABSENCE_REASON.test(text(item.reason)) && !sharesAnswerQuote(item?.quote, answerQuote)) {
+      problems.push(`absence_refutation:${i}`);
+    }
   });
   return problems;
 }
