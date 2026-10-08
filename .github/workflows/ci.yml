@@ -21,8 +21,13 @@ env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
-  build-and-test:
+  # 測試分 3 片同時跑（#457）：私有 repo 的 runner 只有 2 核心，283 個測試檔大部分時間花在
+  # 各自載入程式、建立 jsdom 環境，單機要排隊兩分多鐘。分片不改測試寫法，只是多用幾台機器。
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,8 +39,68 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests (shard ${{ matrix.shard }}/3)
+        run: npx vitest run --shard=${{ matrix.shard }}/3
+
+  # 建置＋基本資安掃描（#461）。掃描放在這裡而不是另開 job：這個 job 本來就裝好套件，
+  # 而且比測試分片早很多跑完，不多開機器、也不拉長 CI 總時間。
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks 要拿得到這次推送之前的 commit 才能只掃新的；整個歷史約 14 MB
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 正式執行會用到的套件有 high/critical 漏洞就擋下
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      # 開發工具（建置時才用、不會跑在使用者瀏覽器）的漏洞只報告不擋（#461 定案）
+      - name: Report all dependency advisories
+        run: |
+          npm audit > npm-audit.txt 2>&1 || true
+          {
+            echo "## npm audit（含開發工具，只報告不擋）"
+            echo '```'
+            tail -n 40 npm-audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 只掃這次新推上來的 commit。版本與 SHA-256 固定，不跑未驗證的下載。
+      - name: Scan new commits for leaked secrets (gitleaks)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            RANGE="${PR_BASE}..${PR_HEAD}"
+          elif [ -n "$PUSH_BEFORE" ] && ! echo "$PUSH_BEFORE" | grep -qE '^0+$' && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            RANGE="${PUSH_BEFORE}..${PUSH_AFTER}"
+          else
+            # 新分支或找不到前一個 commit：只掃最新這一筆
+            RANGE="-1 ${PUSH_AFTER}"
+          fi
+          echo "gitleaks range: $RANGE"
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --config .gitleaks.toml --log-opts="$RANGE" .
 
       - name: Build and verify bundled output
         run: |
@@ -48,8 +113,10 @@ jobs:
           SUPABASE_ANON_KEY: placeholder-anon-key
 
   deploy:
-    needs: build-and-test
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    # 所有測試分片和建置都通過才部署
+    needs: [test, build]
+    # Dependabot 的 PR 拿不到 Actions secrets（Vercel token），部署一定失敗，直接跳過（#461）
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,8 +147,20 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      # Vercel CLI 裝在固定目錄並快取（#457），不用每次重新下載（約 20 秒）；改版本時連 key 一起改
+      - name: Cache Vercel CLI
+        id: vercel-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.vercel-cli
+          key: vercel-cli-59.1.3-${{ runner.os }}
+
       - name: Install Vercel CLI
-        run: npm install --global vercel@59.1.3
+        if: steps.vercel-cli-cache.outputs.cache-hit != 'true'
+        run: npm install --global --prefix ~/.vercel-cli vercel@59.1.3
+
+      - name: Add Vercel CLI to PATH
+        run: echo "$HOME/.vercel-cli/bin" >> "$GITHUB_PATH"
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }}

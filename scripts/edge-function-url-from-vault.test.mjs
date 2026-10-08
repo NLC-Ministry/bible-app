@@ -2,14 +2,12 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // 0212 把 Edge Function 網址改成從 Vault `project_url` 讀取。寫死網址會讓
 // staging 分支的排程／trigger 去呼叫正式環境（issue #252）。
 const migrationsDirectory = fileURLToPath(new URL("../supabase/migrations/", import.meta.url));
-const migration = readFileSync(
-  new URL("../supabase/migrations/0212_edge_function_url_from_vault.sql", import.meta.url),
-  "utf8"
-);
+const migration = currentMigrationSql("0212_edge_function_url_from_vault.sql");
 
 // 0212 之前寫死網址的舊檔，已被 0212 取代，保留原樣。
 const LEGACY_HARDCODED_URL_MIGRATIONS = new Set([
@@ -23,11 +21,11 @@ const LEGACY_HARDCODED_URL_MIGRATIONS = new Set([
   "0189_daily_quiz_scheduled_publish.sql"
 ]);
 
+// 0212 也改過 request_daily_quiz_regeneration（#308 刪除）與 invoke_devotion_video_sync
+// （#425 拆出靈修後刪除）；函式已不存在，這裡只驗還在的。
 const REDEFINED_FUNCTIONS = [
   ["notify_issue_report_sheet_sync", "issue-report-sheet-sync"],
   ["invoke_daily_church_quiz_generation", "generate-daily-quizzes"],
-  ["request_daily_quiz_regeneration", "generate-daily-quizzes"],
-  ["invoke_devotion_video_sync", "sync-devotion-video"],
   ["invoke_issue_report_maintenance", "issue-report-maintenance"],
   ["invoke_daily_quiz_schedule_sweep", "daily-quiz-schedule-sweep"]
 ];

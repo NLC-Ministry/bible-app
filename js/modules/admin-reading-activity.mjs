@@ -138,8 +138,9 @@ export function buildHourProfile(data, { metric = "users", days = "all" } = {}) 
 }
 
 // ── 畫面 ─────────────────────────────────────────────────────────────────────
-function chartColors() {
-  const style = getComputedStyle(document.documentElement);
+export function chartColors() {
+  // 暗色／暖色主題的 token 定義在 body 上，從 <html> 讀只會拿到亮色值（#456）
+  const style = getComputedStyle(document.body);
   const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
   const brand = read("--color-brand", "#04A9D2");
   return {
@@ -147,7 +148,7 @@ function chartColors() {
     // 備用色也要三種不同顏色，主題色讀不到時線才分得出來
     success: read("--color-success-foreground", "#1F8F52"),
     warning: read("--color-warning", "#FE7615"),
-    muted: read("--text-secondary", "#8A8A8A")
+    muted: read("--chart-muted", "#8A8A8A")
   };
 }
 

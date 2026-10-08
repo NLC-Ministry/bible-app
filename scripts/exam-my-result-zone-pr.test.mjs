@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const sql = readFileSync(join(root, "supabase", "migrations", "0194_exam_my_result_zone_pr.sql"), "utf8");
+const sql = currentMigrationSql("0194_exam_my_result_zone_pr.sql");
 const ui = readFileSync(join(root, "js", "modules", "exam.js"), "utf8");
 
 describe("0194: exam_get_my_result — 加牧區 PR 與平均分數", () => {

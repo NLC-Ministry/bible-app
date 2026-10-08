@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const schema = read("supabase/migrations/0084_daily_church_quizzes.sql");
+const schema = currentMigrationSql("0084_daily_church_quizzes.sql");
 const cron = read("supabase/migrations/0085_schedule_daily_church_quizzes.sql");
-const regeneration = read("supabase/migrations/0086_manual_daily_quiz_regeneration.sql");
-const dashboardOptimization = read("supabase/migrations/0087_optimize_daily_quiz_dashboard.sql");
+const regeneration = currentMigrationSql("0086_manual_daily_quiz_regeneration.sql");
+const dashboardOptimization = currentMigrationSql("0087_optimize_daily_quiz_dashboard.sql");
 const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
-const publishFlow = read("supabase/migrations/0090_quiz_publish_flow_redesign.sql");
-const publishOptimization = read("supabase/migrations/0091_optimize_quiz_publication.sql");
+const publishFlow = currentMigrationSql("0090_quiz_publish_flow_redesign.sql");
+const publishOptimization = currentMigrationSql("0091_optimize_quiz_publication.sql");
 const reservationFix = read("supabase/migrations/0092_fix_daily_quiz_generation_reservation.sql");
-const scheduledPublish = read("supabase/migrations/0189_daily_quiz_scheduled_publish.sql");
-const homeAnnouncement = read("supabase/migrations/0190_daily_quiz_home_announcement.sql");
+const scheduledPublish = currentMigrationSql("0189_daily_quiz_scheduled_publish.sql");
+const homeAnnouncement = currentMigrationSql("0190_daily_quiz_home_announcement.sql");
 const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}\n${scheduledPublish}\n${homeAnnouncement}`;
 const generator = read("supabase/functions/generate-daily-quizzes/index.ts");
 const scheduleSweep = read("supabase/functions/daily-quiz-schedule-sweep/index.ts");
@@ -72,21 +73,19 @@ describe("daily church quiz", () => {
     expect(generator).toContain("questions.length !== QUIZ_QUESTION_COUNT");
   });
 
-  it("requires pastoral review and makes published versions immutable", () => {
-    expect(schema).toContain("actor_role NOT IN ('admin', 'pastor')");
-    expect(schema).toContain("quiz_approval_required");
-    expect(schema).toContain("quiz_already_published");
+  // 人工審核在 0196 拿掉、發佈在 #308 改成只有自動發佈（service_role／系統管理員）——
+  // 發佈權限見 daily-quiz-auto-publish.test.mjs；這裡只剩「已核准的題目不能再被改」。
+  it("keeps approved quiz versions immutable", () => {
     expect(schema).toContain("review_status = 'approved'");
     expect(regeneration).toContain("quiz_approval_locked");
     expect(regeneration).toContain("OLD.review_status = 'approved'");
-    expect(regeneration).toContain("quiz_already_approved");
   });
 
+  // 發佈時的站內通知（quiz_notifications）在 20260928175636 拿掉，見 daily-quiz-no-notify-first-round.test.mjs
   it("publishes through organization groups with one assignment per day", () => {
     expect(schema).toContain("UNIQUE (global_plan_id, quiz_date, small_group_id)");
     expect(schema).toContain("public.can_manage_quiz_group(actor_id, g.id)");
     expect(schema).toContain("ON CONFLICT (global_plan_id, quiz_date, small_group_id) DO NOTHING");
-    expect(schema).toContain("quiz_notifications(publication_id, recipient_id, message)");
   });
 
   it("exposes only assigned quizzes and stores server-scored attempts", () => {
@@ -208,10 +207,9 @@ describe("daily church quiz", () => {
     expect(planAll).not.toContain("發布小測驗");
   });
 
+  // #308 起 dashboard 只回會友自己的 myQuiz，不再算各小組名單（0087 的 MATERIALIZED 優化跟著消失）
   it("loads the organization dashboard without per-group member subqueries", () => {
     expect(dashboardOptimization).toContain("CREATE OR REPLACE FUNCTION public.get_daily_quiz_dashboard");
-    expect(dashboardOptimization).toContain("member_matches AS MATERIALIZED");
-    expect(dashboardOptimization).toContain("published_members AS");
     expect(dashboardOptimization).toContain("idx_quiz_publications_plan_date_group");
     expect(dashboardOptimization).not.toContain("SELECT COUNT(*) FROM public.profiles member WHERE public.profile_belongs_to_quiz_group");
   });
@@ -249,36 +247,31 @@ describe("daily church quiz", () => {
   it("deploys the redesigned publish RPC under a unique, safely repeatable migration", () => {
     expect(publishFlow).toContain("DROP FUNCTION IF EXISTS public.publish_daily_quiz(UUID, DATE, UUID[], BOOLEAN, UUID)");
     expect(publishFlow).toContain("CREATE OR REPLACE FUNCTION public.publish_daily_quiz(");
-    expect(publishFlow).toContain("p_scope_type TEXT");
-    expect(publishFlow).toContain("p_variant TEXT DEFAULT NULL");
-    expect(publishFlow).toContain("p_custom_questions JSONB DEFAULT NULL");
+    expect(publishFlow).toMatch(/p_scope_type TEXT/i);
+    expect(publishFlow).toMatch(/p_variant TEXT DEFAULT NULL/i);
+    expect(publishFlow).toMatch(/p_custom_questions JSONB DEFAULT NULL/i);
   });
 
-  it("publishes groups and notifications with set-based statements", () => {
+  it("publishes groups with set-based statements", () => {
     expect(publishOptimization).toContain("FROM UNNEST(target_group_ids)");
     expect(publishOptimization).toContain("GET DIAGNOSTICS published_count = ROW_COUNT");
-    expect(publishOptimization).toContain("INSERT INTO public.quiz_notifications");
-    expect(publishOptimization).toContain("profile.small_group_id = publication.small_group_id");
     expect(publishOptimization).not.toContain("FOREACH target_group_id");
     expect(publishOptimization).toContain("NOTIFY pgrst, 'reload schema'");
     expect(db).toContain("JSON.stringify(errorDetails)");
   });
 
-  it("supports scheduled auto-publish gated on already-ready questions, plus an optional answer deadline", () => {
-    // 排程本身：新表 + 就緒檢查（跟 publish_daily_quiz 前半段同一套規則，
-    // 這就是「先審核/確認過才能排程」的實際檢查點）+ 取消 + 每 5 分鐘掃描。
-    expect(scheduledPublish).toContain("CREATE TABLE IF NOT EXISTS public.quiz_publication_schedules");
-    expect(scheduledPublish).toContain("WHERE status = 'pending'");
-    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.schedule_daily_quiz_publish(");
-    expect(scheduledPublish).toContain("PERFORM public.validate_daily_quiz_questions(p_custom_questions, 2, 10);");
-    expect(scheduledPublish).toContain("RAISE EXCEPTION 'quiz_not_ready'");
-    expect(scheduledPublish).toContain("RAISE EXCEPTION 'quiz_schedule_publish_time_required'");
-    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.cancel_daily_quiz_schedule(");
-    expect(scheduledPublish).toContain("CREATE OR REPLACE FUNCTION public.run_daily_quiz_schedule_sweep()");
-    expect(scheduledPublish).toContain("EXCEPTION WHEN OTHERS THEN");
+  it("sweeps every 5 minutes for auto-publish and enforces the answer deadline (manual scheduling removed in #308)", () => {
+    // 0189 的手動「排程發佈」（schedule/cancel + quiz_publication_schedules 表）在 #308 刪掉；
+    // 每 5 分鐘的 sweep 留著，改成只跑自動發佈。
+    expect(() => latestFunctionDefinition("schedule_daily_quiz_publish")).toThrow(/dropped/);
+    expect(() => latestFunctionDefinition("cancel_daily_quiz_schedule")).toThrow(/dropped/);
+    expect(read("supabase/migrations/20260929043341_daily_quiz_drop_legacy_publish.sql")).toContain("DROP TABLE IF EXISTS public.quiz_publication_schedules;");
+    const sweep = latestFunctionDefinition("run_daily_quiz_schedule_sweep").text;
+    expect(sweep).toContain("auto_result := public.run_daily_quiz_auto_publish();");
+    expect(sweep).toContain("EXCEPTION WHEN OTHERS THEN");
     expect(scheduledPublish).toContain("cron.schedule(\n    'daily-quiz-schedule-sweep',\n    '*/5 * * * *',");
     // 每支新函式都要在同一支 migration 裡 REVOKE ALL FROM PUBLIC（CLAUDE.md 規則）。
-    for (const fn of ["schedule_daily_quiz_publish", "cancel_daily_quiz_schedule", "run_daily_quiz_schedule_sweep", "invoke_daily_quiz_schedule_sweep"]) {
+    for (const fn of ["run_daily_quiz_schedule_sweep", "invoke_daily_quiz_schedule_sweep"]) {
       expect(scheduledPublish).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${fn}\\(`));
     }
     // run_daily_quiz_schedule_sweep 刻意不進 nlc-data 的 allowlist——只有排程
@@ -290,11 +283,10 @@ describe("daily church quiz", () => {
 
     // 作答截止：quiz_publications 新欄位 + 三支送出答案的 RPC 都要擋。
     expect(scheduledPublish).toContain("ADD COLUMN IF NOT EXISTS answer_close_at TIMESTAMPTZ");
-    expect(scheduledPublish).toContain("p_answer_close_at TIMESTAMPTZ DEFAULT NULL");
+    expect(latestFunctionDefinition("publish_daily_quiz").text).toMatch(/p_answer_close_at timestamp with time zone DEFAULT NULL/i);
     const answerWindowChecks = scheduledPublish.split("RAISE EXCEPTION 'quiz_answer_window_closed';").length - 1;
     expect(answerWindowChecks).toBe(3); // daily_quiz_submit_answer / daily_quiz_finalize_attempt / submit_daily_quiz
     expect(scheduledPublish).toContain("'answerCloseAt', publication_row.answer_close_at");
-    expect(scheduledPublish).toContain("'pendingSchedule', pending_schedule");
 
     // Edge Function + config.toml：跟其他 cron job 同一套 verify_jwt=false + 共用密鑰模式。
     expect(scheduleSweep).toContain('Deno.env.get("DAILY_QUIZ_SCHEDULE_SWEEP_SECRET")');
@@ -312,8 +304,8 @@ describe("daily church quiz", () => {
 
   it("no longer posts a home announcement when publishing (feature removed in 0196)", () => {
     // 0190 加的「同時發佈到首頁公告」、0195 的範圍綁定，整個在 0196 拿掉了——
-    // 小測驗本身給每個收件人的站內提醒（quiz_notifications）完全不受影響，
-    // 照常發送；被拿掉的只有 church_announcements 首頁公告這條路。
+    // 被拿掉的是 church_announcements 首頁公告這條路（發佈時的站內提醒
+    // quiz_notifications 後來也在 20260928175636 拿掉了）。
     expect(homeAnnouncement).toContain("post_announcement BOOLEAN NOT NULL DEFAULT FALSE");
     expect(db).not.toContain("postAnnouncement");
     expect(db).not.toContain("p_post_announcement");

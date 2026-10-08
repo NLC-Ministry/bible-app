@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-const migration = read("supabase/migrations/0054_managed_scope_authority.sql");
-const nullWriteFix = read("supabase/migrations/0068_fix_managed_scope_null_write.sql");
+const migration = currentMigrationSql("0054_managed_scope_authority.sql");
+const nullWriteFix = currentMigrationSql("0068_fix_managed_scope_null_write.sql");
 const sessionEdge = read("supabase/functions/nlc-session/index.ts");
 const dataEdge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
@@ -20,9 +21,12 @@ describe("managed scope authority", () => {
     expect(migration).toContain("COALESCE(NULLIF(profile.managed_groups, ''), profile.small_group)");
   });
 
-  it("allows only administrators to save known organization scope names", () => {
+  it("allows only administrators to save organization scopes", () => {
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.set_profile_managed_scopes");
     expect(migration).toContain("actor_role IS DISTINCT FROM 'admin'");
+  });
+
+  it("rejects organization scope names that do not exist (restored in #459 after 0065 dropped it)", () => {
     expect(migration).toContain("managed_scope_unknown_region");
     expect(migration).toContain("managed_scope_unknown_zone");
     expect(migration).toContain("managed_scope_unknown_group");
@@ -31,7 +35,7 @@ describe("managed scope authority", () => {
     expect(migration).toContain("FROM public.small_groups");
   });
 
-  it("keeps only the scope column matching the Member Hub role", () => {
+  it("keeps only the scope column matching the Member Hub role (restored in #459 after 0065 dropped it)", () => {
     expect(migration).toContain("target_role = 'great_zone_leader'");
     expect(migration).toContain("target_role = 'zone_leader'");
     expect(migration).toContain("target_role = 'group_leader'");

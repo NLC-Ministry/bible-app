@@ -24,6 +24,7 @@ import {
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
+import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
@@ -817,10 +818,7 @@ function renderManagedScopeProfile(profile) {
     <span>牧養歸屬<strong>${escapeHTML(placement)}</strong></span>
     <span>目前有效範圍<strong>${escapeHTML(effectiveScope)}</strong></span>`;
 
-  const optionNames = Array.from(new Set([
-    ...config.options.map(option => String(option?.name || option?.id || "").trim()),
-    ...defaultScopes
-  ].filter(Boolean))).sort((left, right) => left.localeCompare(right, "zh-Hant"));
+  const { optionNames, selected: selectedScopes, dropped } = buildManagedScopeChoices(config.options, defaultScopes);
 
   if (!config.field) {
     const message = config.role === "admin" || config.role === "pastor"
@@ -830,8 +828,11 @@ function renderManagedScopeProfile(profile) {
   } else if (optionNames.length === 0) {
     optionsRoot.innerHTML = `<div class="admin-managed-scopes__empty">目前沒有可選擇的${config.label}資料。</div>`;
   } else {
-    const selected = new Set(defaultScopes);
-    optionsRoot.innerHTML = optionNames.map(name => `
+    const selected = new Set(selectedScopes);
+    const droppedNote = dropped.length
+      ? `<div class="admin-managed-scopes__empty">「${escapeHTML(dropped.join("、"))}」不在${config.label}名單中，未勾選；儲存後會移除。</div>`
+      : "";
+    optionsRoot.innerHTML = droppedNote + optionNames.map(name => `
       <label class="admin-managed-scopes__option">
         <input type="checkbox" value="${escapeHTML(name)}" ${selected.has(name) ? "checked" : ""}>
         <span>${escapeHTML(name)}</span>
@@ -840,7 +841,7 @@ function renderManagedScopeProfile(profile) {
   optionsRoot.dataset.scopeField = config.payloadField || "";
   selectAll.disabled = !config.field || optionNames.length === 0;
   clear.disabled = !config.field;
-  save.disabled = !config.field;
+  save.disabled = !config.field || optionNames.length === 0;
 }
 
 function getSelectedManagedScopeProfile() {
@@ -905,7 +906,7 @@ export async function renderAdminManagedScopes() {
     const updateResult = await db.updateManagedScopes(profile.id, payload);
     save.disabled = false;
     if (updateResult.error) {
-      setManagedScopeFeedback(updateResult.error.message || "儲存失敗。", true);
+      setManagedScopeFeedback(managedScopeErrorMessage(updateResult.error), true);
       return;
     }
     profile.managed_regions = (updateResult.data?.managedRegions || []).join(",");
@@ -2566,7 +2567,7 @@ async function renderAdminLightningQuizTrendPanel(panel) {
     const participationCanvas = body.querySelector('[data-lq-trend-chart="participationRate"]');
     const correctCanvas = body.querySelector('[data-lq-trend-chart="correctRate"]');
     if (!participationCanvas?.isConnected || !correctCanvas?.isConnected) return; // 載入圖表期間區間又被改了
-    const rootStyle = getComputedStyle(document.documentElement);
+    const rootStyle = getComputedStyle(document.body); // 主題 token 在 body 上（#456）
     const brand = rootStyle.getPropertyValue('--color-brand').trim() || '#04A9D2';
     const success = rootStyle.getPropertyValue('--color-success-foreground').trim() || brand;
     adminLightningQuizTrendCharts = [

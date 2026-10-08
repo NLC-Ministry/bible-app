@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
-const migration = readFileSync("supabase/migrations/0044_remove_group_leader_plan_management.sql", "utf8");
+const migration = currentMigrationSql("0044_remove_group_leader_plan_management.sql");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
@@ -11,7 +12,7 @@ const html = readFileSync("index.html", "utf8");
 describe("admin team registration overview", () => {
   it("returns plans, teams, captain pastoral zones, and complete rosters in one RPC", () => {
     expect(migration).toContain("get_reading_team_registration_overview");
-    expect(migration).toMatch(/JOIN public\.global_plans AS plan ON plan\.id = team\.global_plan_id/);
+    expect(migration).toMatch(/FROM public\.global_plans gp\s+LEFT JOIN scoped_teams st ON st\.global_plan_id = gp\.id/);
     expect(migration).toContain("'captainPastoralZone'");
     expect(migration).toContain("'pastoralZone'");
     expect(migration).toContain("'members'");
@@ -27,14 +28,12 @@ describe("admin team registration overview", () => {
   });
 
   it("shows a complete team when any member is inside the manager scope", () => {
-    expect(migration).toContain("visible_team_ids AS");
-    expect(migration).toContain("SELECT DISTINCT member.team_id");
-    expect(migration).toContain("JOIN public.reading_teams AS team ON team.id = visible.team_id");
-    const visibleScope = migration.slice(
-      migration.indexOf("visible_team_ids AS"),
-      migration.indexOf("), team_rollup AS")
-    );
-    expect(visibleScope).not.toContain("member.member_role = 'captain'");
+    // 範圍篩的是「隊」（任一隊員符合就整隊入選），名單本身（team_details.members）不篩
+    expect(migration).toContain("scoped_teams AS (\n    SELECT DISTINCT td.*\n    FROM team_details td\n    JOIN member_details md ON md.team_id = td.team_id");
+    const roster = migration.slice(migration.indexOf("team_details AS ("), migration.indexOf("scoped_teams AS ("));
+    expect(roster).not.toMatch(/managed_|values_overlap/);
+    const visibleScope = migration.slice(migration.indexOf("scoped_teams AS ("), migration.indexOf("plan_aggregates AS ("));
+    expect(visibleScope).not.toContain("member_role = 'captain'");
     expect(migration).toContain("actor_profile.managed_regions");
     expect(migration).toContain("actor_profile.managed_zones");
   });

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/0038_reading_team_leaderboards.sql");
-const focusMigration = read("supabase/migrations/0039_focus_reading_team_leaderboards_on_my_team.sql");
-const pastoralMigration = read("supabase/migrations/0049_public_pastoral_zone_leaderboard.sql");
-const pastoralAverageMigration = read("supabase/migrations/0089_pastoral_zone_rank_by_average_chapters.sql");
+const migration = currentMigrationSql("0038_reading_team_leaderboards.sql");
+const focusMigration = currentMigrationSql("0039_focus_reading_team_leaderboards_on_my_team.sql");
+const pastoralMigration = currentMigrationSql("0049_public_pastoral_zone_leaderboard.sql");
+const pastoralAverageMigration = currentMigrationSql("0089_pastoral_zone_rank_by_average_chapters.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 // #370：統計、排行、組員狀況搬到 plan-stats.js。
@@ -14,9 +15,10 @@ const html = read("index.html");
 const css = read("index.css");
 
 describe("reading team leaderboards", () => {
-  it("ranks 3-person and 6-person teams independently by current-round chapters", () => {
+  // 0038 原本只算本遍章數；0076 刻意改成跨遍數的總章數（見 leaderboard-total-chapters-all-rounds.test.mjs）
+  it("ranks 3-person and 6-person teams independently by total chapters across rounds", () => {
     expect(migration).toContain("get_reading_team_leaderboards");
-    expect(migration).toMatch(/FILTER \([\s\S]*reading_log\.round = COALESCE\(plan\.current_round, 1\)/);
+    expect(migration).not.toMatch(/reading_log\.round = COALESCE\(plan\.current_round, 1\)/);
     expect(migration).toMatch(/RANK\(\)[\s\S]*PARTITION BY division[\s\S]*ORDER BY chapters_read DESC, last_read_at ASC NULLS LAST/);
     expect(migration).toContain("'division3'");
     expect(migration).toContain("'division6'");

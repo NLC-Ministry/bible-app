@@ -1,12 +1,13 @@
 import { describe,expect,it } from "vitest";
 import fs from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // 0129 首次導入「固定分母」；0167 把 teamRanking 隊籍來源從
 // exam_attempts.reading_team_id（作答時幾乎沒帶到 → 排行永遠 0 隊）改成即時查
 // reading_team_members；0168 再用 carried_from_team_id 收斂 carry 鏈去重
 // （同一支隊被 carry 到每個階段各一筆 → 重複列 + 隊數暴增）；0169 是含 PR 值的
 // 最終版 exam_get_stats。斷言以最新的 0169 為準。
-const sql=fs.readFileSync(new URL("../supabase/migrations/0169_exam_pr_values.sql",import.meta.url),"utf8");
+const sql=currentMigrationSql("0169_exam_pr_values.sql");
 const ui=fs.readFileSync(new URL("../js/modules/exam.js",import.meta.url),"utf8");
 
 describe("測驗團隊固定分母",()=>{
@@ -31,9 +32,9 @@ describe("測驗團隊排行：隊籍即時查 reading_team_members",()=>{
   });
   it("系統管理員/牧者列出參與梯次底下每支隊（含 0 人作答）；範圍主管只看有人作答的隊",()=>{
     expect(sql).toContain("scope_all:=(role_c IN('admin','pastor'))");
-    expect(sql).toMatch(/v_plans[\s\S]*reading_team_members rtm[\s\S]*a\.id=ANY\(scoped\)/);
-    expect(sql).toContain("HAVING(scope_all AND lt.global_plan_id=ANY(v_plans))");
-    expect(sql).toContain("OR COUNT(a.id)FILTER(WHERE a.status IN('submitted','graded'))>0");
+    // 0169 用「有人作答的梯次」(v_plans) 圈隊；0170 改成直接用試卷綁定的計畫（linked_plan_id）
+    expect(sql).toContain("AND pr.linked_plan_id IS NOT NULL\n          AND rt.global_plan_id=pr.linked_plan_id");
+    expect(sql).toContain("HAVING scope_all OR COUNT(a.id)FILTER(WHERE a.status IN('submitted','graded'))>0");
   });
   it("未完成成員按 0 分：總分只加 graded 的，分母仍固定 division",()=>{
     expect(sql).toContain("COALESCE(SUM(a.total_score)FILTER(WHERE a.status='graded'),0)::numeric/lt.division");

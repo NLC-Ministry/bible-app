@@ -7,8 +7,58 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const yaml = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
 
 describe("CI/CD workflow", () => {
-  it("runs deploy only after build-and-test succeeds", () => {
-    expect(yaml).toMatch(/deploy:\s*\n(?:[ \t]+.+\n)*[ \t]+needs:\s*build-and-test/);
+  it("runs deploy only after every test shard and the build succeed", () => {
+    // ci.yml 是 CRLF；JS 的 . 不吃 \r，所以中間的行用 [^\n]*
+    expect(yaml).toMatch(/deploy:\s*\n(?:[ \t]+[^\n]*\n)*[ \t]+needs:\s*\[test, build\]/);
+  });
+
+  it("splits the unit tests into shards that together cover the whole suite (#457)", () => {
+    const test = yaml.slice(yaml.indexOf("  test:"), yaml.indexOf("  build:"));
+    expect(test).toMatch(/shard:\s*\[1, 2, 3\]/);
+    expect(test).toContain("npx vitest run --shard=${{ matrix.shard }}/3");
+  });
+
+  it("caches the pinned Vercel CLI instead of reinstalling it every deploy (#457)", () => {
+    expect(yaml).toContain("key: vercel-cli-59.1.3-${{ runner.os }}");
+    expect(yaml).toContain("if: steps.vercel-cli-cache.outputs.cache-hit != 'true'");
+  });
+
+  describe("security scans live in the build job, not a new job (#461)", () => {
+    const build = yaml.slice(yaml.indexOf("\n  build:"), yaml.indexOf("\n  deploy:"));
+
+    it("blocks on high production advisories and only reports dev-tool ones", () => {
+      expect(build).toContain("run: npm audit --omit=dev --audit-level=high");
+      expect(build).toContain("npm audit > npm-audit.txt 2>&1 || true");
+      expect(build).toContain('>> "$GITHUB_STEP_SUMMARY"');
+      // 擋的那一步不能被 || true 吃掉
+      expect(build).not.toMatch(/npm audit --omit=dev --audit-level=high[^\n]*\|\| true/);
+    });
+
+    it("runs a pinned, checksum-verified gitleaks on the newly pushed commits only", () => {
+      expect(build).toContain('GITLEAKS_VERSION: "8.30.1"');
+      expect(build).toMatch(/GITLEAKS_SHA256: "[0-9a-f]{64}"/);
+      expect(build).toContain('sha256sum -c -');
+      expect(build.indexOf("sha256sum -c -")).toBeLessThan(build.indexOf("tar -xzf"));
+      expect(build).toContain('RANGE="${PR_BASE}..${PR_HEAD}"');
+      expect(build).toContain('RANGE="${PUSH_BEFORE}..${PUSH_AFTER}"');
+      expect(build).toContain('--redact');
+      expect(build).toContain("--config .gitleaks.toml");
+      expect(build).toContain("fetch-depth: 0");
+    });
+
+    it("keeps the event values out of the shell script (passed via env)", () => {
+      const script = build.slice(build.indexOf("curl -sSfL"));
+      expect(script).not.toContain("${{");
+    });
+
+    it("the gitleaks config extends the default rules", () => {
+      const config = readFileSync(join(root, ".gitleaks.toml"), "utf8");
+      expect(config).toMatch(/\[extend\]\s*\r?\nuseDefault = true/);
+    });
+  });
+
+  it("skips deploy for Dependabot PRs, which get no Actions secrets (#461)", () => {
+    expect(yaml).toContain("github.actor != 'dependabot[bot]'");
   });
 
   it("pins Vercel CLI instead of using @latest", () => {

@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 // 原本規劃另一支 exam_stats_first_round_filter.sql，從未實際部署過就被
 // 0170_exam_paper_linked_plan.sql 的 exam_get_stats 整個取代，拆兩支徒增
 // 「先跑一支再跑另一支把它蓋掉」的困惑，所以刪掉、內容併過來這一支。
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8").replace(/\r\n/g, "\n");
-const sql = read("supabase", "migrations", "0170_exam_paper_linked_plan.sql");
+const sql = currentMigrationSql("0170_exam_paper_linked_plan.sql");
 const ui = read("js", "modules", "exam.js");
 const db = read("js", "db.js");
 
@@ -34,9 +35,9 @@ describe("0170: exam_get_stats — 5 參數簽章 + 過濾旗標", () => {
     expect(sql).toContain("DROP FUNCTION IF EXISTS public.exam_get_stats(UUID, UUID);");
     expect(sql).toContain("CREATE OR REPLACE FUNCTION public.exam_get_stats(");
     expect(sql).not.toMatch(/\nCREATE FUNCTION public\.exam_get_stats\(/);
-    expect(sql).toContain("p_require_first_round BOOLEAN DEFAULT FALSE");
-    expect(sql).toContain("p_reading_book TEXT DEFAULT NULL");
-    expect(sql).toContain("p_book_chapters INTEGER DEFAULT NULL");
+    expect(sql).toMatch(/p_require_first_round BOOLEAN DEFAULT FALSE/i);
+    expect(sql).toMatch(/p_reading_book TEXT DEFAULT NULL/i);
+    expect(sql).toMatch(/p_book_chapters INTEGER DEFAULT NULL/i);
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.exam_get_stats(UUID,UUID,BOOLEAN,TEXT,INTEGER) TO authenticated");
   });
 
@@ -144,7 +145,8 @@ describe("0170: teamRanking 缺口拆三類（notRead / notTested / emptySlots�
   const fn = sql.slice(sql.indexOf("'teamRanking',COALESCE(("), sql.indexOf("'byQuestion',"));
 
   it("JOIN 放寬到未過濾 scoped，才看得出誰只是沒考試", () => {
-    expect(fn).toContain("LEFT JOIN public.exam_attempts a\n            ON a.user_id=m.user_id AND a.paper_id=pr.id AND a.attempt_kind='official' AND a.id=ANY(scoped)");
+    // #302 起再排除試作（NOT a.is_test）
+    expect(fn).toContain("LEFT JOIN public.exam_attempts a\n            ON a.user_id=m.user_id AND a.paper_id=pr.id AND a.attempt_kind='official' AND NOT a.is_test AND a.id=ANY(scoped)");
   });
 
   it("分數/完成/submitted 仍只算 scoped_stats（開關開時＝有讀完）", () => {

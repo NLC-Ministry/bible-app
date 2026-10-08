@@ -5,7 +5,7 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertChunksDoNotImportEntry, resolveMinVersion, readReleasePolicy, prepareSupabaseVendor } from "./bundle.mjs";
+import { resolveLocalAssets, concatScripts, contentHash, emitBundle, assertParses, assertChunksDoNotImportEntry, resolveMinVersion, readReleasePolicy, prepareSupabaseVendor, localBin } from "./bundle.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -68,6 +68,30 @@ describe("assertParses", () => {
   });
   it("throws a descriptive error for a syntax error", () => {
     expect(() => assertParses("var a = ;")).toThrow(/failed syntax check/);
+  });
+});
+
+describe("localBin (#457: no npx in the build)", () => {
+  it("points at node_modules/.bin, with the .cmd shim on Windows", () => {
+    const binDir = mkdtempSync(join(tmpdir(), "bin-"));
+    try {
+      writeFileSync(join(binDir, "esbuild"), "");
+      writeFileSync(join(binDir, "esbuild.cmd"), "");
+      expect(localBin("esbuild", { binDir, platform: "linux" })).toBe(`"${join(binDir, "esbuild")}"`);
+      expect(localBin("esbuild", { binDir, platform: "win32" })).toBe(`"${join(binDir, "esbuild.cmd")}"`);
+    } finally {
+      rmSync(binDir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to npx when the binary is not installed", () => {
+    expect(localBin("esbuild", { binDir: join(tmpdir(), "no-such-bin-dir") })).toBe("npx esbuild");
+  });
+
+  it("the build never shells out through npx directly", () => {
+    const source = readFileSync(join(root, "scripts/bundle.mjs"), "utf8");
+    expect(source).not.toMatch(/execSync\(`npx /);
+    expect(source).not.toMatch(/= "npx /);
   });
 });
 

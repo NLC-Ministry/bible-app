@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { gradeDailyQuizTrial, mountDailyQuizTrial } from "../js/modules/daily-quiz-trial.mjs";
 import { normalizeQuestion } from "../js/modules/quiz-question-types.mjs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #307（小測驗 Q2，屬於 #305）：後台 7 天日曆、每天的設定、前端試作。
 // jsdom 環境的 URL 不是 Node 的 URL，readFileSync 認不得，所以用相對於專案根目錄的路徑
 const read = path => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
-const migration = read("supabase/migrations/20260928085701_daily_quiz_calendar.sql");
+const migration = currentMigrationSql("20260928085701_daily_quiz_calendar.sql");
 const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 const nlcData = read("supabase/functions/nlc-data/index.ts");

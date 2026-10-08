@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -7,8 +8,8 @@ const html = read("index.html");
 const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
-const migration = read("supabase/migrations/0073_get_joined_plan_members.sql");
-const joinedPlanMembersDedupeFix = read("supabase/migrations/0203_fix_get_joined_plan_members_duplicate_rows.sql");
+const migration = currentMigrationSql("0073_get_joined_plan_members.sql");
+const joinedPlanMembersDedupeFix = currentMigrationSql("0203_fix_get_joined_plan_members_duplicate_rows.sql");
 
 describe("plan management: unified section architecture", () => {
   it("uses the shared plan context followed by direct unified destinations", () => {
@@ -161,9 +162,10 @@ describe("plan management: unified section architecture", () => {
 describe("plan management: 已加入計畫 (get_joined_plan_members)", () => {
   it("defines get_joined_plan_members mirroring get_unjoined_plan_members with an inverted join and full management-role + values_overlap scoping", () => {
     expect(migration).toContain("CREATE OR REPLACE FUNCTION public.get_joined_plan_members(");
-    expect(migration).toContain("JOIN public.reading_plans AS joined_plan");
+    // 0203 起改成每人只取一筆 reading_plans（原本 JOIN 會讓重複計畫列變成重複人）
+    expect(migration).toContain("FROM public.reading_plans AS rp\n    WHERE rp.user_id = candidate.id");
     expect(migration).toContain("actor_role := public.role_code(actor_profile.role_id);");
-    expect(migration).toContain("IN ('admin', 'senior_pastor', 'great_zone_leader', 'zone_leader', 'group_leader')");
+    expect(migration).toContain("IN ('admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader')");
     expect(migration).toContain("public.values_overlap(candidate.great_region,");
     expect(migration).toContain("public.values_overlap(candidate.pastoral_zone,");
     expect(migration).toContain("public.values_overlap(candidate.small_group,");
