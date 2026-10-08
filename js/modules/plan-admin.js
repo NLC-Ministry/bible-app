@@ -294,6 +294,7 @@ async function renderAdminPlanManagement() {
         timeColHtml = `
           <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap;"><span class="nlc-icon" data-icon="calendarThirty" aria-hidden="true"></span> ${plan.startDate}</span>
           <span style="font-size: 0.875rem; font-weight: 500; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">~ ${plan.endDate}</span>
+          ${!isCampaign && plan.graceDays > 0 ? `<span style="font-size: 0.875rem; display: block; white-space: nowrap; margin-left: 0.6rem; color: var(--text-muted);">截止後寬限 ${plan.graceDays} 天</span>` : ""}
         `;
       } else {
         const duration = Math.ceil((new Date(plan.endDate) - new Date(plan.startDate)) / (1000 * 60 * 60 * 24)) + 1;
@@ -317,7 +318,8 @@ async function renderAdminPlanManagement() {
           <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
             ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.875rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
             ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
-            <button class="primary-btn admin-campaign-rules-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
+            ${isFixed && !isCampaign ? `<button class="secondary-btn admin-plan-grace-days-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">寬限天數</button>` : ""}
+            <button class="primary-btn admin-campaign-rules-btn"style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
             <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>
             <button class="danger-btn admin-delete-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">刪除</button>
           </div>
@@ -401,6 +403,35 @@ async function renderAdminPlanManagement() {
           renderAdminPlanManagement();
           if (typeof renderPresetPlansList === "function") renderPresetPlansList();
           if (typeof renderJoinedPlansList === "function") renderJoinedPlansList();
+        };
+      }
+
+      // #412 截止後寬限天數：寬限期內仍可補打卡／取消，過了就由伺服器鎖定。
+      const graceDaysBtn = tr.querySelector(".admin-plan-grace-days-btn");
+      if (graceDaysBtn) {
+        graceDaysBtn.onclick = async () => {
+          const value = await window.showPromptDialog({
+            title: `「${plan.name}」截止後寬限天數`,
+            message: `截止日（${plan.endDate}）之後再開放幾天補打卡（0–30）。0 ＝ 截止日隔天起不能打卡。`,
+            defaultValue: String(plan.graceDays || 0),
+            placeholder: "0",
+            confirmText: "儲存"
+          });
+          if (value === null) return;
+          const days = Number(String(value).trim());
+          if (!Number.isInteger(days) || days < 0 || days > 30) {
+            showToast("請輸入 0 到 30 的整數。");
+            return;
+          }
+          loader.show("正在儲存寬限天數…");
+          const result = await db.saveGlobalPlanGraceDays(plan.id, days);
+          loader.hide();
+          if (!result.success) {
+            showToast("寬限天數未能儲存：" + ((result.error && result.error.message) || "請稍後再試"));
+            return;
+          }
+          showToast(days > 0 ? `已設定截止後寬限 ${days} 天。` : "已取消寬限期，截止日隔天起不能打卡。");
+          renderAdminPlanManagement();
         };
       }
 
