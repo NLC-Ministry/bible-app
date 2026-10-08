@@ -117,7 +117,7 @@ describe("migration: calendar and per-day settings (#307)", () => {
 });
 
 describe("days outside the plan (#307 補充)", () => {
-  const outside = read("supabase/migrations/20260928094106_daily_quiz_calendar_outside_plan.sql");
+  const outside = currentMigrationSql("20260928094106_daily_quiz_calendar_outside_plan.sql");
 
   it("the calendar marks days outside the plan's dates instead of 等待出題", () => {
     expect(outside).toContain("WHEN plan_start IS NOT NULL AND (d < plan_start OR d > plan_end) THEN 'outside_plan'");

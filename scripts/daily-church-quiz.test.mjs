@@ -10,7 +10,7 @@ const dashboardOptimization = currentMigrationSql("0087_optimize_daily_quiz_dash
 const featureFlag = read("supabase/migrations/0088_daily_quiz_feature_flag.sql");
 const publishFlow = currentMigrationSql("0090_quiz_publish_flow_redesign.sql");
 const publishOptimization = currentMigrationSql("0091_optimize_quiz_publication.sql");
-const reservationFix = read("supabase/migrations/0092_fix_daily_quiz_generation_reservation.sql");
+const reservationFix = currentMigrationSql("0092_fix_daily_quiz_generation_reservation.sql");
 const scheduledPublish = currentMigrationSql("0189_daily_quiz_scheduled_publish.sql");
 const homeAnnouncement = currentMigrationSql("0190_daily_quiz_home_announcement.sql");
 const quizSql = `${schema}\n${regeneration}\n${dashboardOptimization}\n${featureFlag}\n${publishFlow}\n${publishOptimization}\n${reservationFix}\n${scheduledPublish}\n${homeAnnouncement}`;
@@ -68,8 +68,8 @@ describe("daily church quiz", () => {
     // #414：先出 CANDIDATE_COUNT 題候選，通過舉證比對與盲審的取前 5 題，最後仍要剛好 5 題。
     expect(generator).toContain("minItems: CANDIDATE_COUNT, maxItems: CANDIDATE_COUNT");
     expect(generator).toContain("minItems: 4, maxItems: 4");
-    expect(generator).toContain("selectQuestions(candidates, review?.reviews, buildVerseIndex(chapters))");
-    expect(generator).toContain("return validateQuestions(questions);");
+    expect(generator).toContain("selectQuestions(candidates, (review.value as any)?.reviews, buildVerseIndex(chapters))");
+    expect(generator).toContain("questions: validateQuestions(questions)");
     expect(generator).toContain("questions.length !== QUIZ_QUESTION_COUNT");
   });
 

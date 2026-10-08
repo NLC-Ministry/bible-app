@@ -82,8 +82,15 @@ describe("daily quiz quality gate", () => {
 
   it("rejects wrong options refuted only by scripture being silent", () => {
     const question = goodQuestion();
-    question.evidence[1] = { ...question.evidence[1], reason: "經文沒有提到八十歲。" };
+    question.evidence[1] = { verseRef: "創世記 12:5", quote: "他們就到了迦南地", reason: "經文沒有提到八十歲。" };
     expect(checkCandidateEvidence(question, index)).toEqual(["absence_refutation:1"]);
+  });
+
+  it("#466: a wrong option refuted by the answer's own verse passes even if the reason says 沒有提到", () => {
+    const question = goodQuestion();
+    question.evidence[1] = { ...question.evidence[1], reason: "經文明說七十五歲，沒有提到八十歲。" };
+    question.evidence[2] = { verseRef: "創世記 12:4", quote: "亞伯蘭出哈蘭的時候年七十五歲", reason: "經文明說七十五歲，所以不是一百歲。" };
+    expect(checkCandidateEvidence(question, index)).toEqual([]);
   });
 
   it("rejects ambiguous and duplicate options", () => {

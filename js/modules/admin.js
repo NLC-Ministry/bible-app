@@ -28,6 +28,9 @@ import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-mana
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
+import {
+  QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
+} from "./quiz-generation-status.mjs";
 import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
@@ -3840,6 +3843,10 @@ const ADMIN_QUIZ_DAY_STATUS = {
 };
 
 const ADMIN_QUIZ_WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+// 伺服器時間 − 本機時間（#465：算「已等幾秒」用，避免手機時鐘不準）
+let adminQuizClockOffsetMs = 0;
+const ADMIN_QUIZ_POLL_MS = 3000;
+const ADMIN_QUIZ_POLL_LIMIT_MS = 8 * 60 * 1000;
 
 function adminQuizDayLabel(iso) {
   const [year, month, day] = String(iso || '').split('-').map(Number);
@@ -3854,6 +3861,7 @@ function adminQuizDaySummary(day, today) {
     return day.status === 'ended' && day.averageScore != null ? `${rate}・平均 ${day.averageScore}` : rate;
   }
   if (day.status === 'scheduled') return day.source === 'custom' ? '自訂題目' : 'AI 題目';
+  if (day.status === 'generating') return QUIZ_GENERATION_STAGES.find(stage => stage.key === (day.aiStage || 'queued'))?.label || '';
   if (day.needsAttention) return '還沒有題目';
   if (day.status === 'waiting' && day.date > today) return '前一天中午出題';
   return '';
@@ -3909,7 +3917,8 @@ function renderAdminQuizDayDetailHtml(day, today) {
   const actions = [];
   if (hasQuestions) actions.push('<button type="button" class="secondary-btn" data-quiz-day-act="trial">試作</button>');
   if (editable) {
-    if (day.source !== 'custom') {
+    // 出題中不給「請 AI 出題」（伺服器也會擋 quiz_generating）；卡住 5 分鐘後狀態會變失敗，按鈕就回來
+    if (day.source !== 'custom' && day.status !== 'generating') {
       actions.push(`<button type="button" class="secondary-btn" data-quiz-day-act="swap">${hasQuestions ? '換一版' : '請 AI 出題'}</button>`);
     }
     actions.push(`<button type="button" class="secondary-btn" data-quiz-day-act="custom">${day.source === 'custom' ? '修改自訂題目' : '改成自訂題目'}</button>`);
@@ -3927,7 +3936,8 @@ function renderAdminQuizDayDetailHtml(day, today) {
       </div>
     </div>
     ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能再修改。</p>` : ''}
-    ${day.status === 'failed' ? `<p class="admin-daily-quiz-note admin-quiz-day-alert">AI 出題失敗${day.aiError ? `（${adminQuizEscape(day.aiError)}）` : ''}。可以按「請 AI 出題」再試一次，或改成自訂題目。</p>` : ''}
+    ${day.status === 'generating' ? `<div data-quiz-generation-slot>${renderQuizGenerationProgressHtml(day, quizGenerationElapsedSeconds(day, adminQuizClockOffsetMs))}</div>` : ''}
+    ${day.status === 'failed' ? renderQuizGenerationErrorHtml(day.aiError) : ''}
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
     ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
     ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
@@ -3967,6 +3977,8 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
   }
   const calendar = result.data || {};
   const days = Array.isArray(calendar.days) ? calendar.days : [];
+  const serverNow = Date.parse(calendar.serverNow || '');
+  if (Number.isFinite(serverNow)) adminQuizClockOffsetMs = serverNow - Date.now();
   const current = days.some(day => day.date === selectedDate) ? selectedDate
     : (days.some(day => day.date === root.dataset.quizSelectedDay) ? root.dataset.quizSelectedDay : days[0]?.date);
   root.dataset.quizSelectedDay = current || '';
@@ -3984,10 +3996,41 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
     });
     host.innerHTML = renderAdminQuizDayDetailHtml(day, calendar.today);
     bindAdminQuizDayDetail(root, host, day);
+    if (day.status === 'generating') watchAdminQuizGeneration(root, host, day);
   };
   panel.querySelectorAll('[data-quiz-day]').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.quizDay)));
   panel.querySelector('[data-quiz-goto-rules]')?.addEventListener('click', () => switchAdminQuizTab(root, 'rules'));
   if (current) showDetail(current);
+}
+
+// #465：出題中每 3 秒查一次這一天的狀態，每秒更新「已等幾秒」；出好或失敗就重畫整個日曆。
+// 換到別天、離開頁面（進度區塊不在畫面上）就停。
+function watchAdminQuizGeneration(root, host, day) {
+  const slot = host.querySelector('[data-quiz-generation-slot]');
+  if (!slot) return;
+  const plan = state.adminManagementPlan;
+  const pollingSince = Date.now();
+  let current = day;
+  const draw = () => {
+    slot.innerHTML = renderQuizGenerationProgressHtml(current, quizGenerationElapsedSeconds(current, adminQuizClockOffsetMs));
+  };
+  const clock = setInterval(() => (slot.isConnected ? draw() : clearInterval(clock)), 1000);
+  const poll = async () => {
+    if (!slot.isConnected) { clearInterval(clock); return; }
+    const result = await db.getDailyQuizCalendar(plan, day.date, 1);
+    if (!slot.isConnected) { clearInterval(clock); return; }
+    const next = result.success && Array.isArray(result.data?.days) ? result.data.days[0] : null;
+    if (next && next.date === day.date && next.status !== 'generating') {
+      clearInterval(clock);
+      showToast(next.status === 'failed' ? 'AI 出題失敗，請看下方說明。' : 'AI 已出好題目。');
+      await renderAdminQuizCalendar(root, day.date);
+      return;
+    }
+    if (next) { current = next; draw(); }
+    if (Date.now() - pollingSince > ADMIN_QUIZ_POLL_LIMIT_MS) { clearInterval(clock); return; }
+    setTimeout(poll, ADMIN_QUIZ_POLL_MS);
+  };
+  setTimeout(poll, ADMIN_QUIZ_POLL_MS);
 }
 
 function bindAdminQuizDayDetail(root, host, day) {
@@ -4019,8 +4062,8 @@ function bindAdminQuizDayDetail(root, host, day) {
       return;
     }
     if (act === 'swap') {
-      if (!await confirmDialog('請 AI 重新出題？', `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題大約要半分鐘。`, '重新出題')) return;
-      await run(button, () => db.swapDailyQuizVersion(plan, day.date), '已請 AI 重新出題，稍後重新整理就會看到新題目。');
+      if (!await confirmDialog('請 AI 重新出題？', `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`, '重新出題')) return;
+      await run(button, () => db.swapDailyQuizVersion(plan, day.date), '已請 AI 出題，下面會顯示進度。');
       return;
     }
     if (act === 'use-ai') {
