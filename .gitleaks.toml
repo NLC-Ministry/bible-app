@@ -1,0 +1,19 @@
+# gitleaks 設定（#461）：沿用預設規則，只排除這個 repo 已知的誤判。
+# CI 只掃每次新推上來的 commit（見 .github/workflows/ci.yml 的 build job）。
+# 2026-10-08 全歷史掃描的 52 筆全是下面三類，沒有真的外洩。
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "計畫預設組合的代號（presetKey／preset_key／firstStagePresetKey），是 kebab 名稱不是金鑰"
+regexTarget = "match"
+regexes = ['''(?i)preset_?key''']
+
+[[allowlists]]
+description = "Supabase publishable key：公開金鑰，本來就會出現在前端"
+regexes = ['''^sb_publishable_''']
+
+[[allowlists]]
+description = "scripts/backup-production.test.mjs 的假密碼"
+regexes = ['''^abcdefABCDEF0123456789abcdefABCD$''']
