@@ -431,6 +431,18 @@ const READING_ACTIVITY_RPC_FUNCTIONS = new Set([
 // PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
 // 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
 // p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。
+// 經文注釋審核（#471）：審核者只能審被指派的書卷，指派／總覽／重新送審／最終發布只限
+// 系統管理員——都由 SQL 端依注入的 p_actor_id 檢查（沒有指派就拒絕），這裡只注入 p_actor_id。
+const COMMENTARY_REVIEW_RPC_FUNCTIONS = new Set([
+  "get_my_commentary_reviews",
+  "review_commentary",
+  "get_commentary_review_overview",
+  "set_commentary_reviewers",
+  "resubmit_commentary",
+  "publish_approved_commentary",
+  "get_commentary_review_notifications",
+  "mark_commentary_review_notifications_read"
+]);
 // 管理頁「使用者基本資料」「權限管理」共用的名單（#395）。全教會範圍才放行；
 // 報名／隊伍明細只給 admin（使用者基本資料是 admin 限定）。參數一律由這裡注入。
 const ADMIN_USER_DIRECTORY_RPC = "get_admin_user_directory";
@@ -447,6 +459,7 @@ const RPC_FUNCTIONS = new Set([
   ...LIGHTNING_QUIZ_RPC_FUNCTIONS,
   ...READING_STATS_RPC_FUNCTIONS,
   ...READING_ACTIVITY_RPC_FUNCTIONS,
+  ...COMMENTARY_REVIEW_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
   ADMIN_USER_DIRECTORY_RPC,
@@ -1005,6 +1018,7 @@ Deno.serve(async (req: Request) => {
         || LIGHTNING_QUIZ_RPC_FUNCTIONS.has(functionName)
         || READING_STATS_RPC_FUNCTIONS.has(functionName)
         || READING_ACTIVITY_RPC_FUNCTIONS.has(functionName)
+        || COMMENTARY_REVIEW_RPC_FUNCTIONS.has(functionName)
         || functionName === "get_admin_registration_statistics"
         || functionName === "create_region_stage_cohort") {
         rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };

@@ -558,6 +558,7 @@ describe("admin commentary page with notes and terms together (#475)", () => {
       saveCommentaryTerm: vi.fn(async () => true),
       deletePassageCommentary: vi.fn(async () => true),
       deleteCommentaryTerm: vi.fn(async () => true),
+      fetchCommentaryReviewOverview: vi.fn(async () => ({ success: true, books: [] })),
       ...overrides
     };
     const showToast = vi.fn();
