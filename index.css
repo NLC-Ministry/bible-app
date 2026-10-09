@@ -3936,6 +3936,218 @@ body:not(.dark-theme) .settings-row-btn:hover {
   gap: 0.75rem;
 }
 
+/* 審核進度（#471）：每卷一張卡，指派審核者、整卷發布。 */
+.admin-commentary-review {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-commentary-review__head p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+.admin-commentary-review__books {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admin-commentary-review__book {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.admin-commentary-review__book-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-review__counts,
+.admin-commentary-review__reviewers {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-commentary-review__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-commentary-review__add label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-assign {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admin-commentary-assign label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-assign__results {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.admin-commentary-assign__result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-commentary-assign__result:hover,
+.admin-commentary-assign__result:focus-visible {
+  border-color: var(--color-brand);
+}
+
+.admin-commentary-assign__zone {
+  color: var(--text-secondary);
+}
+
+.admin-commentary-assign__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-commentary-assign__hint,
+.admin-commentary-review-hint,
+.admin-commentary-review-note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review-note {
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--color-warning, #d97706);
+  background: var(--color-brand-subtle);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-primary);
+}
+
+/* 個人頁「我的審核」（#471）：英文原文可展開，譯文直接改。 */
+.commentary-review-page {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.commentary-review-page__book {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-page__list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.commentary-review-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.commentary-review-card label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.commentary-review-card__ref {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+.commentary-review-card__note {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--color-warning, #d97706);
+  background: var(--color-brand-subtle);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-card__source summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--color-brand);
+}
+
+.commentary-review-card__source p {
+  margin: 0.4rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.commentary-review-card__content {
+  line-height: 1.7;
+}
+
+.commentary-review-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .admin-commentary-topics {
   margin: 0;
   padding: 0;

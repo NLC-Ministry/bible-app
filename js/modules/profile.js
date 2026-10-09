@@ -7,9 +7,21 @@ import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLin
 import { installQuizImageViewer } from "./quiz-image.mjs";
 import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { bindMyVouchersPage, refreshMyLightningQuizVouchers } from "./lightning-quiz-vouchers.mjs";
+import { createCommentaryReviewPage } from "./commentary-review.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
+
+// 個人頁「我的審核」（#471）。db／escapeHTML／hydrateIcons 是核心檔掛在 window 上的全域，呼叫時才取用。
+const commentaryReviewPage = createCommentaryReviewPage({
+  db: {
+    fetchMyCommentaryReviews: () => db.fetchMyCommentaryReviews(),
+    reviewCommentary: args => db.reviewCommentary(args)
+  },
+  escapeHTML: value => escapeHTML(value),
+  showToast: message => showToast(message),
+  hydrateIcons: element => { if (typeof hydrateIcons === "function") hydrateIcons(element); }
+});
 
 async function copyAppShareUrl() {
   if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
@@ -407,6 +419,11 @@ export async function renderProfileView() {
   }
   if (state.profileDetailOpen === "vouchers") {
     await refreshMyLightningQuizVouchers();
+  }
+  // 有被指派審核經文注釋的人，選單才出現「我的審核」（#471）。不擋個人頁的其他內容。
+  if (state.currentUser && state.currentUser.id) void commentaryReviewPage.refreshEntry();
+  if (state.profileDetailOpen === "commentary-review") {
+    await commentaryReviewPage.refresh();
   }
   if (state.profileDetailOpen === "personal-info") {
     renderPersonalInfoSubpage();
@@ -820,6 +837,7 @@ function openProfileDetail(key) {
     refreshMyQuizzes();
   }
   if (key === "vouchers") void refreshMyLightningQuizVouchers();
+  if (key === "commentary-review") void commentaryReviewPage.refresh();
   if (key === "highlights-notes") {
     hnNotesCache = null;
     void renderHighlightsNotesView();
@@ -1209,6 +1227,7 @@ export function init() {
   });
   bindProfileExamsNavigation();
   bindMyVouchersPage();
+  commentaryReviewPage.bind();
 
   const btnShareApp = document.getElementById("btn-share-app");
   if (btnShareApp && btnShareApp.dataset.bound !== "true") {

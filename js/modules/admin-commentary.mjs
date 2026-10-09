@@ -4,6 +4,8 @@
 // - 詞條（commentary_terms）：詞、其他寫法、短解釋，範圍三選一——整卷、整章（只套用在經文出現
 //   這個詞的節）、指定節（直接掛在那幾節）。
 // 兩種都可以勾主題圖片、寫出處、存成草稿。資料仍是兩張表，清單混在一起依經文位置排序。
+// 匯入的注釋走審核流程（#471）：上方「審核進度」指派審核者、整卷發布；清單標出待審／退回／
+// 通過待發布，通過的可以單則發布，退回的修改後「儲存並重新送審」。
 // admin.js 第一次打開這個區塊時呼叫 renderAdminCommentary()。
 
 import {
@@ -16,11 +18,19 @@ import {
   normalizeVerseRange,
   parseTermAliases
 } from "../data/passage-commentary.mjs";
+import { REVIEW_STATUS_LABELS, isInReview } from "../data/commentary-review.mjs";
+import { createAdminCommentaryReview } from "./admin-commentary-review.mjs";
 
 const EXCERPT_LENGTH = 90;
 export const COMMENTARY_KINDS = Object.freeze(["note", "term"]);
 export const TERM_SCOPES = Object.freeze(["book", "chapter", "verses"]);
 const KIND_LABELS = Object.freeze({ note: "注釋", term: "詞條" });
+
+// 清單的狀態篩選：已發布、草稿，以及審核流程中的三種（只有注釋會有）。
+export function commentaryItemStatus({ kind, row }) {
+  if (kind === "note" && isInReview(row)) return row.review_status;
+  return row.is_published === false ? "draft" : "published";
+}
 
 // 聖經順序 → 章 → 整章注釋在前 → 起始節 → 結束節。
 export function sortCommentaryRows(rows, books) {
@@ -35,9 +45,11 @@ export function sortCommentaryRows(rows, books) {
 }
 
 // 同一章、同一個範圍（整章或同樣的起訖節）已經有一則注釋時回傳它（資料庫也有唯一索引）。
+// 匯入的研讀注釋（有 source_ref，#471）不算：同一節可以有多則。
 export function findCommentaryForChapter(rows, book, chapter, excludeId = null, verseStart = null, verseEnd = null) {
   const range = normalizeVerseRange(verseStart, verseEnd);
   return (rows || []).find(row => {
+    if (row.source_ref) return false;
     if (row.book !== book || Number(row.chapter) !== Number(chapter) || String(row.id) === String(excludeId)) return false;
     const rowRange = normalizeVerseRange(row.verse_start, row.verse_end);
     if (!range || !rowRange) return !range && !rowRange;
@@ -124,6 +136,9 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     save: getElement("admin-commentary-save"),
     filter: getElement("admin-commentary-filter"),
     kindFilter: getElement("admin-commentary-kind-filter"),
+    statusFilter: getElement("admin-commentary-status-filter"),
+    publishField: getElement("admin-commentary-publish-field"),
+    reviewHint: getElement("admin-commentary-review-hint"),
     list: getElement("admin-commentary-list")
   };
   if (Object.values(el).some(node => !node) || !Array.isArray(books) || books.length === 0) return Promise.resolve(false);
@@ -134,6 +149,13 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
   let kind = "note";
   let scope = "book";
   let kindFilter = "all";
+  let editingRow = null;
+
+  const review = createAdminCommentaryReview({
+    db, books, escapeHTML, showToast, confirm, hydrateIcons, getElement,
+    onChanged: () => { void reload({ withReview: false }); }
+  });
+  review.bind();
 
   el.book.innerHTML = books.map(book => `<option value="${escapeHTML(book.name)}">${escapeHTML(book.name)}</option>`).join("");
   el.filter.innerHTML = `<option value="">全部書卷</option>${el.book.innerHTML}`;
@@ -190,8 +212,23 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     return Array.from(el.topics.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value);
   }
 
+  // 審核流程中的注釋：發布由審核流程決定（隱藏發布勾選），退回／已通過的存檔＝重新送審。
+  function applyReviewMode(row) {
+    const inReview = kind === "note" && isInReview(row);
+    el.publishField.classList.toggle("hidden", inReview);
+    el.reviewHint.classList.toggle("hidden", !inReview);
+    el.reviewHint.textContent = !inReview ? ""
+      : row.review_status === "pending"
+        ? "這則在等審核者審核，存檔不會發布。"
+        : row.review_status === "returned"
+          ? `審核者退回：${row.review_note || "（沒有意見）"}。修改後按「儲存並重新送審」。`
+          : "這則已審核通過，等你在清單按「發布」。修改內容後會重新送審。";
+    el.save.textContent = inReview && row.review_status !== "pending" ? "儲存並重新送審" : "儲存";
+  }
+
   function closeEditor() {
     editing = null;
+    editingRow = null;
     el.editor.classList.add("hidden");
     [el.termName, el.termAliases, el.heading, el.content, el.verseStart, el.verseEnd, el.source].forEach(input => { input.value = ""; });
     el.published.checked = true;
@@ -200,11 +237,13 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     setLocationLocked(false);
     setScope("book");
     setKind("note");
+    applyReviewMode(null);
   }
 
   function openEditor(item = null) {
     const row = item ? item.row : null;
     editing = item ? { kind: item.kind, id: row.id } : null;
+    editingRow = row;
     setKind(item ? item.kind : (kindFilter === "term" ? "term" : "note"));
     // 既有資料不換類型（底下是不同的表）。
     el.kind.querySelectorAll("button").forEach(button => { button.disabled = Boolean(item); });
@@ -223,6 +262,7 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     el.topics.querySelectorAll('input[type="checkbox"]').forEach(input => { input.checked = tags.has(input.value); });
     // 已存在的注釋不換章、不換節：要搬到別處請刪掉重建，避免撞到另一則注釋。詞條可以改範圍。
     setLocationLocked(Boolean(item && item.kind === "note"));
+    applyReviewMode(item && item.kind === "note" ? row : null);
     el.formTitle.textContent = !item ? "新增"
       : item.kind === "term" ? `編輯詞條：${row.term}` : `編輯注釋：${commentaryReferenceLabel(row)}`;
     el.editor.classList.remove("hidden");
@@ -243,10 +283,15 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
       body = row.definition;
     } else {
       const scopeText = normalizeVerseRange(row.verse_start, row.verse_end) ? "節注釋" : "整章";
-      tags = `${draft}${badge("注釋")}${badge(scopeText)}${topicBadges}`;
+      const reviewBadge = isInReview(row) ? `<span class="stat-badge stat-badge--warning">${escapeHTML(REVIEW_STATUS_LABELS[row.review_status])}</span>` : "";
+      tags = `${isInReview(row) ? "" : draft}${reviewBadge}${badge("注釋")}${badge(scopeText)}${topicBadges}`;
       titleHTML = `${escapeHTML(commentaryReferenceLabel(row))}${row.title ? `・${escapeHTML(row.title)}` : ""}`;
       body = row.content;
     }
+    const returnedNote = itemKind === "note" && row.review_status === "returned" && row.review_note
+      ? `<p class="admin-commentary-review-note">退回意見：${escapeHTML(row.review_note)}</p>` : "";
+    const publishButton = itemKind === "note" && row.review_status === "approved"
+      ? '<button type="button" class="pill-btn admin-commentary-publish-btn" data-commentary-publish>發布</button>' : "";
     const noun = KIND_LABELS[itemKind];
     return `
       <article class="announcement-item" data-admin-commentary-id="${escapeHTML(String(row.id))}" data-admin-commentary-kind="${itemKind}">
@@ -259,18 +304,22 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
             </div>
           </div>
           <div class="announcement-item__meta">
+            ${publishButton}
             <button type="button" class="circular-action-btn announcement-item__edit" data-commentary-edit title="編輯${noun}" aria-label="編輯${noun}"><span class="nlc-icon nlc-icon--sm" data-icon="pencil" aria-hidden="true"></span></button>
             <button type="button" class="circular-action-btn btn-danger-soft announcement-item__delete" data-commentary-delete title="刪除${noun}" aria-label="刪除${noun}"><span class="nlc-icon nlc-icon--sm" data-icon="trash" aria-hidden="true"></span></button>
           </div>
         </div>
+        ${returnedNote}
         <p class="announcement-item__body">${escapeHTML(excerpt(body))}</p>
       </article>`;
   }
 
   function renderList() {
     const filterBook = el.filter.value;
+    const statusFilter = el.statusFilter.value;
     const visible = sortCommentaryItems(notes, terms, books)
-      .filter(item => (!filterBook || item.row.book === filterBook) && (kindFilter === "all" || item.kind === kindFilter));
+      .filter(item => (!filterBook || item.row.book === filterBook) && (kindFilter === "all" || item.kind === kindFilter))
+      .filter(item => !statusFilter || commentaryItemStatus(item) === statusFilter);
     if (!visible.length) {
       const empty = notes.length + terms.length === 0
         ? "目前還沒有經文注釋或詞條，請按「新增」。"
@@ -282,7 +331,8 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     if (typeof hydrateIcons === "function") hydrateIcons(el.list);
   }
 
-  async function reload() {
+  async function reload({ withReview = true } = {}) {
+    if (withReview) void review.reload();
     const [noteRows, termRows] = await Promise.all([db.fetchAllPassageCommentaryForAdmin(), db.fetchAllCommentaryTermsForAdmin()]);
     if (noteRows === null || termRows === null) {
       el.list.innerHTML = '<div class="admin-user-directory__empty">清單載入失敗，請重新整理後再試。</div>';
@@ -314,7 +364,8 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
       showToast(range ? "這幾節已經有一則同範圍的注釋了，請在清單中編輯它。" : "這一章已經有整章注釋了，請在清單中編輯它。");
       return false;
     }
-    return db.savePassageCommentary({
+    const inReview = Boolean(editing && isInReview(editingRow));
+    const saved = await db.savePassageCommentary({
       id: editing ? editing.id : null,
       book,
       chapter,
@@ -324,8 +375,12 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
       content,
       topicTags: selectedTopics(),
       source: el.source.value,
-      isPublished: el.published.checked
+      isPublished: inReview ? null : el.published.checked
     });
+    if (!saved || !inReview || editingRow.review_status === "pending") return saved;
+    const resubmitted = await db.resubmitCommentary({ id: editing.id });
+    if (!resubmitted.success) showToast(resubmitted.message || "已存檔，但重新送審失敗。");
+    return resubmitted.success;
   }
 
   async function saveTerm(definition) {
@@ -369,6 +424,7 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
   el.cancel.onclick = closeEditor;
   el.book.onchange = () => fillChapters(1);
   el.filter.onchange = renderList;
+  el.statusFilter.onchange = renderList;
   el.kind.onclick = event => {
     const button = event.target.closest?.("[data-commentary-kind]");
     if (button && !button.disabled) setKind(button.dataset.commentaryKind);
@@ -408,6 +464,19 @@ export function renderAdminCommentary({ db, books, verseCounts = null, escapeHTM
     if (!row) return;
     if (event.target.closest("[data-commentary-edit]")) {
       openEditor({ kind: itemKind, row });
+      return;
+    }
+    const publishButton = event.target.closest("[data-commentary-publish]");
+    if (publishButton && itemKind === "note") {
+      publishButton.disabled = true;
+      const result = await db.publishApprovedCommentary({ ids: [row.id] });
+      publishButton.disabled = false;
+      if (!result.success) {
+        showToast(result.message || "發布失敗。");
+        return;
+      }
+      showToast(result.published ? "已發布，會友現在看得到這則注釋。" : "這則已經不是「通過待發布」，請重新整理。");
+      await reload();
       return;
     }
     if (!event.target.closest("[data-commentary-delete]")) return;

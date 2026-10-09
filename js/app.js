@@ -27,6 +27,7 @@ import {
 import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { isAppShellVisible, resolvePostLoadTab } from './boot-navigation.mjs';
 import { createAppHashRouting, ROUTE_CHANGED_EVENT } from './app-hash-routing.mjs';
+import { commentaryReviewNotificationTarget } from './data/commentary-review.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
@@ -192,7 +193,7 @@ async function refreshCareReminderBadge(options = {}) {
   careReminderBadgeLastRefresh = now;
 
   try {
-    const [careResult, quizResult, examResult, issueResult] = await Promise.all([
+    const [careResult, quizResult, examResult, issueResult, reviewResult] = await Promise.all([
       db.fetchCareReminders(),
       typeof db.fetchQuizNotifications === "function"
         ? db.fetchQuizNotifications()
@@ -202,7 +203,10 @@ async function refreshCareReminderBadge(options = {}) {
         : Promise.resolve({ data: [], error: null }),
       typeof db.fetchIssueThreadUnread === "function"
         ? db.fetchIssueThreadUnread()
-        : Promise.resolve({ total: 0, error: null })
+        : Promise.resolve({ total: 0, error: null }),
+      typeof db.fetchCommentaryReviewNotifications === "function"
+        ? db.fetchCommentaryReviewNotifications()
+        : Promise.resolve({ data: [], error: null })
     ]);
     if (!careResult.error || !quizResult.error || !examResult.error) {
       const issueUnread = Math.max(0, Number(issueResult && issueResult.total) || 0);
@@ -210,6 +214,8 @@ async function refreshCareReminderBadge(options = {}) {
         ...(careResult.data || []),
         ...(quizResult.data || []),
         ...(examResult.data || []),
+        // 經文注釋審核（#471）：被指派、待審、通過待發布、退回。
+        ...((reviewResult && reviewResult.data) || []),
         // 回報有新回覆：以「未讀」佔位項灌進鈴鐺數字。
         ...Array.from({ length: issueUnread }, (_unused, i) => ({ id: `issue-thread-${i}`, status: "unread" }))
       ]);
@@ -239,7 +245,7 @@ async function renderNotificationsList() {
   container.innerHTML = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.875rem;"><span class="nlc-icon nlc-icon--sm" data-icon="loading" aria-hidden="true"></span> 載入中...</div>`;
   if (typeof hydrateIcons === "function") hydrateIcons(container);
 
-  const [careResult, quizResult, examResult, issueResult] = await Promise.all([
+  const [careResult, quizResult, examResult, issueResult, reviewResult] = await Promise.all([
     db.fetchAllNotifications(),
     typeof db.fetchQuizNotifications === "function"
       ? db.fetchQuizNotifications()
@@ -249,9 +255,17 @@ async function renderNotificationsList() {
       : Promise.resolve({ data: [], error: null }),
     typeof db.fetchIssueThreadUnread === "function"
       ? db.fetchIssueThreadUnread()
-      : Promise.resolve({ total: 0, error: null })
+      : Promise.resolve({ total: 0, error: null }),
+    typeof db.fetchCommentaryReviewNotifications === "function"
+      ? db.fetchCommentaryReviewNotifications()
+      : Promise.resolve({ data: [], error: null })
   ]);
-  const notifications = [...(careResult.data || []), ...(quizResult.data || []), ...(examResult.data || [])]
+  const notifications = [
+    ...(careResult.data || []),
+    ...(quizResult.data || []),
+    ...(examResult.data || []),
+    ...((reviewResult && reviewResult.data) || [])
+  ]
     .sort((left, right) => String(right.createdAt || right.created_at || right.sent_on || "")
       .localeCompare(String(left.createdAt || left.created_at || left.sent_on || "")))
     .slice(0, 20);
@@ -292,6 +306,7 @@ async function renderNotificationsList() {
     const senderRoleRaw = getUserRoleCode(sender);
     const isQuizNotification = item.type === "quiz";
     const isExamNotification = item.type === "exam";
+    const isCommentaryReviewNotification = item.type === "commentary-review";
     const isTeamReminder = String(item.plan_key || "").startsWith("reading-team:");
     const senderRole = isTeamReminder
       ? "隊友"
@@ -300,7 +315,9 @@ async function renderNotificationsList() {
     const displaySenderRole = isExamNotification ? "大測驗" : (isQuizNotification ? "小測驗發佈者" : senderRole);
     // 系統管理員發出的通知：只顯示「系統管理員」，不打出本名
     const isAdminSender = senderRoleRaw === "admin";
-    const senderLabel = isAdminSender ? "來自系統管理員" : `來自${displaySenderRole} ${safeEscapeHTML(senderName)}`;
+    const senderLabel = isCommentaryReviewNotification
+      ? "經文注釋審核"
+      : (isAdminSender ? "來自系統管理員" : `來自${displaySenderRole} ${safeEscapeHTML(senderName)}`);
     const dateStr = item.sent_on || "";
 
     div.innerHTML = `
@@ -320,7 +337,9 @@ async function renderNotificationsList() {
       }
       if (item.status === 'unread') {
         div.classList.remove("notification-item--unread");
-        if (isExamNotification && typeof db.acknowledgeExamNotification === "function") {
+        if (isCommentaryReviewNotification && typeof db.acknowledgeCommentaryReviewNotification === "function") {
+          await db.acknowledgeCommentaryReviewNotification(item.id);
+        } else if (isExamNotification && typeof db.acknowledgeExamNotification === "function") {
           await db.acknowledgeExamNotification(item.id);
         } else if (isQuizNotification && typeof db.acknowledgeQuizNotification === "function") {
           await db.acknowledgeQuizNotification(item.id);
@@ -328,6 +347,18 @@ async function renderNotificationsList() {
           await db.acknowledgeCareReminder(item.id);
         }
         await refreshCareReminderBadge({ force: true });
+      }
+      if (isCommentaryReviewNotification) {
+        document.getElementById("notification-popover")?.classList.add("hidden");
+        // 被指派／待審 → 個人頁「我的審核」；通過待發布／退回 → 後台「經文注釋」。
+        if (commentaryReviewNotificationTarget(item.kind) === "admin") {
+          try { sessionStorage.setItem("selected_admin_section", "commentary"); } catch (_error) {}
+          await appRouter.switchTab("admin-view");
+          if (typeof window.openAdminSection === "function") window.openAdminSection("commentary");
+        } else {
+          window.location.hash = "#/profile/commentary-review";
+        }
+        return;
       }
       if (isExamNotification && item.paperId) {
         document.getElementById("notification-popover")?.classList.add("hidden");
@@ -409,6 +440,9 @@ function initNotificationSystem() {
         db.acknowledgeAllCareReminders(),
         typeof db.acknowledgeQuizNotification === "function"
           ? db.acknowledgeQuizNotification(null)
+          : Promise.resolve({ error: null }),
+        typeof db.acknowledgeCommentaryReviewNotification === "function"
+          ? db.acknowledgeCommentaryReviewNotification(null)
           : Promise.resolve({ error: null })
       ]);
       const error = careAck.error || quizAck.error;
