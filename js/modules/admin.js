@@ -24,7 +24,6 @@ import {
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
-import { renderAdminCommentaryTerms } from "./admin-commentary-terms.mjs";
 import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
@@ -3194,7 +3193,6 @@ const ADMIN_SECTIONS = [
   { id: 'reports',       group: '報名與回報', label: '回報管理',       icon: 'inbox',         panel: 'system', sub: 'reports' },
   { id: 'announcements', group: '內容管理',   label: '公告管理',       icon: 'megaphone',     panel: 'system', sub: 'announcements' },
   { id: 'commentary',    group: '內容管理',   label: '經文注釋',       icon: 'lightbulb',     panel: 'system', sub: 'commentary' },
-  { id: 'commentary-terms', group: '內容管理', label: '經文詞條',       icon: 'bookOpen',      panel: 'system', sub: 'commentary-terms' },
   { id: 'join-status',   group: '計畫營運',   label: '加入計畫狀況',   icon: 'calendarCheck', panel: 'plans',  sub: 'join-status' },
   { id: 'members',       group: '計畫營運',   label: '組員總覽',       icon: 'peoples',       panel: 'plans',  sub: 'members' },
   { id: 'teams',         group: '計畫營運',   label: '組隊狀況',       icon: 'trophy',        panel: 'plans',  sub: 'teams' },
@@ -3275,15 +3273,6 @@ const ADMIN_SECTION_DATA_LOADERS = {
   users: () => [renderAdminUserDirectory()],
   permissions: () => [renderAdminOrgPermissionsOverview(), renderAdminManagedScopes()],
   commentary: () => [renderAdminCommentary({
-    db,
-    books: window.BIBLE_BOOKS,
-    verseCounts: window.BIBLE_VERSE_COUNTS || null,
-    escapeHTML,
-    showToast,
-    confirm: options => window.showConfirmDialog(options),
-    hydrateIcons: element => { if (typeof hydrateIcons === 'function') hydrateIcons(element); }
-  })],
-  'commentary-terms': () => [renderAdminCommentaryTerms({
     db,
     books: window.BIBLE_BOOKS,
     verseCounts: window.BIBLE_VERSE_COUNTS || null,

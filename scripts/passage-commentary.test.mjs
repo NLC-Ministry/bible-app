@@ -27,8 +27,15 @@ import {
 } from "../js/data/passage-commentary.mjs";
 import { COMMENTARY_INDEX_RETRY_MS, createCommentaryRepository } from "../js/data/commentary-repository.mjs";
 import { createReaderCommentaryController } from "../js/modules/reader-commentary.mjs";
-import { findCommentaryForChapter, sortCommentaryRows, verseCountFor } from "../js/modules/admin-commentary.mjs";
-import { sortTermRows, termScopeLabel, termScopeOf } from "../js/modules/admin-commentary-terms.mjs";
+import {
+  findCommentaryForChapter,
+  renderAdminCommentary,
+  sortCommentaryItems,
+  sortCommentaryRows,
+  termScopeLabel,
+  termScopeOf,
+  verseCountFor
+} from "../js/modules/admin-commentary.mjs";
 import { createReadCommentaryDb, readUsableAccessToken } from "../js/read/read-commentary-client.mjs";
 
 const read = path => readFileSync(path, "utf8").replace(/\r\n/g, "\n"); // jsdom 的 URL 不是 Node 的 URL，fs 不收
@@ -506,18 +513,150 @@ describe("admin commentary helpers (#447, #470)", () => {
     expect(verseCountFor(null, books, "出埃及記", 2)).toBe(0);
   });
 
-  it("labels and sorts term scopes", () => {
+  it("labels term scopes", () => {
     expect(termScopeOf({ chapter: null })).toBe("book");
     expect(termScopeOf({ chapter: 26 })).toBe("chapter");
     expect(termScopeOf({ chapter: 26, verse_start: 1, verse_end: 1 })).toBe("verses");
     expect(termScopeLabel({ book: "出埃及記", chapter: null })).toBe("出埃及記（整卷）");
     expect(termScopeLabel({ book: "出埃及記", chapter: 26, verse_start: 1, verse_end: 5 })).toBe("出埃及記 26:1-5");
-    const rows = [
-      { id: 1, book: "出埃及記", chapter: 26, term: "幔子" },
-      { id: 2, book: "出埃及記", chapter: null, term: "會幕" },
-      { id: 3, book: "創世記", chapter: null, term: "伊甸" }
+  });
+
+  it("mixes notes and terms in Bible order: whole-book terms first, then by chapter and verse, notes before terms (#475)", () => {
+    const notes = [
+      { id: "n26", book: "出埃及記", chapter: 26 },
+      { id: "n26v3", book: "出埃及記", chapter: 26, verse_start: 3, verse_end: 5 },
+      { id: "g1", book: "創世記", chapter: 1 }
     ];
-    expect(sortTermRows(rows, books).map(row => row.id)).toEqual([3, 2, 1]);
+    const terms = [
+      { id: "t26", book: "出埃及記", chapter: 26, term: "幔子" },
+      { id: "tbook", book: "出埃及記", chapter: null, term: "會幕" },
+      { id: "tv3", book: "出埃及記", chapter: 26, verse_start: 3, verse_end: 5, term: "鈕扣" }
+    ];
+    expect(sortCommentaryItems(notes, terms, books).map(item => `${item.kind}:${item.row.id}`)).toEqual([
+      "note:g1", "term:tbook", "note:n26", "term:t26", "note:n26v3", "term:tv3"
+    ]);
+  });
+});
+
+// #475：注釋與詞條同一頁。把 index.html 的區塊掛進 jsdom，用假的 db 操作。
+describe("admin commentary page with notes and terms together (#475)", () => {
+  const html = read("index.html");
+  const books = [{ name: "創世記", eng: "Genesis", chapters: 50 }, { name: "出埃及記", eng: "Exodus", chapters: 40 }];
+
+  function mountAdmin(overrides = {}) {
+    const start = html.indexOf('<div id="admin-section-commentary"');
+    const end = html.indexOf("<!-- 首頁「雲柱測驗」後台", start);
+    document.body.innerHTML = html.slice(start, end);
+    const db = {
+      fetchAllPassageCommentaryForAdmin: vi.fn(async () => [
+        { id: "n1", book: "出埃及記", chapter: 26, verse_start: 3, verse_end: 5, title: "兩組幔子", content: "說明", topic_tags: [] }
+      ]),
+      fetchAllCommentaryTermsForAdmin: vi.fn(async () => [
+        { id: "t1", book: "出埃及記", chapter: null, term: "幔子", aliases: ["帳幕"], definition: "布簾", topic_tags: [] }
+      ]),
+      savePassageCommentary: vi.fn(async () => true),
+      saveCommentaryTerm: vi.fn(async () => true),
+      deletePassageCommentary: vi.fn(async () => true),
+      deleteCommentaryTerm: vi.fn(async () => true),
+      ...overrides
+    };
+    const showToast = vi.fn();
+    const confirm = vi.fn(async () => true);
+    const ready = renderAdminCommentary({ db, books, verseCounts: { Exodus: Array(40).fill(35) }, escapeHTML, showToast, confirm });
+    return { db, showToast, confirm, ready };
+  }
+
+  const $ = id => document.getElementById(id);
+  const visibleKinds = () => [...document.querySelectorAll("[data-admin-commentary-kind]")].map(card => card.dataset.adminCommentaryKind);
+
+  it("there is no separate 經文詞條 page any more", () => {
+    const admin = read("js/modules/admin.js");
+    expect(admin).not.toContain("commentary-terms");
+    expect(html).not.toContain('id="admin-section-commentary-terms"');
+    expect(existsSync("js/modules/admin-commentary-terms.mjs")).toBe(false);
+  });
+
+  it("lists notes and terms together and filters by type", async () => {
+    const { ready } = mountAdmin();
+    expect(await ready).toBe(true);
+    expect(visibleKinds()).toEqual(["term", "note"]);
+    expect($("admin-commentary-list").textContent).toContain("幔子（帳幕）");
+    expect($("admin-commentary-list").textContent).toContain("出埃及記 26:3-5・兩組幔子");
+
+    $("admin-commentary-kind-filter").querySelector('[data-kind-filter="note"]').click();
+    expect(visibleKinds()).toEqual(["note"]);
+    $("admin-commentary-kind-filter").querySelector('[data-kind-filter="term"]').click();
+    expect(visibleKinds()).toEqual(["term"]);
+  });
+
+  it("switches the editor fields with the type and saves a term to the terms table", async () => {
+    const { db, ready } = mountAdmin();
+    await ready;
+    $("admin-commentary-create").click();
+    expect($("admin-commentary-term-fields").classList.contains("hidden")).toBe(true);
+    expect($("admin-commentary-heading-field").classList.contains("hidden")).toBe(false);
+
+    $("admin-commentary-kind").querySelector('[data-commentary-kind="term"]').click();
+    expect($("admin-commentary-term-fields").classList.contains("hidden")).toBe(false);
+    expect($("admin-commentary-heading-field").classList.contains("hidden")).toBe(true);
+    expect($("admin-commentary-chapter-field").classList.contains("hidden")).toBe(true); // 整卷不用選章
+    expect($("admin-commentary-content-label").textContent).toBe("解釋");
+
+    $("admin-commentary-scope").querySelector('[data-term-scope="verses"]').click();
+    expect($("admin-commentary-verse-field").classList.contains("hidden")).toBe(false);
+    $("admin-commentary-book").value = "出埃及記";
+    $("admin-commentary-book").onchange();
+    $("admin-commentary-chapter").value = "26";
+    $("admin-commentary-verse-start").value = "3";
+    $("admin-commentary-term-name").value = "鈕扣";
+    $("admin-commentary-term-aliases").value = "扣子、鈕扣";
+    $("admin-commentary-content").value = "藍色的扣環";
+    await $("admin-commentary-save").onclick();
+
+    expect(db.savePassageCommentary).not.toHaveBeenCalled();
+    expect(db.saveCommentaryTerm).toHaveBeenCalledWith(expect.objectContaining({
+      id: null, term: "鈕扣", aliases: ["扣子", "鈕扣"], definition: "藍色的扣環",
+      book: "出埃及記", scope: "verses", chapter: 26, verseStart: 3, verseEnd: 3
+    }));
+    expect($("admin-commentary-editor").classList.contains("hidden")).toBe(true);
+  });
+
+  it("saves a note to the notes table and still blocks a second whole-chapter note", async () => {
+    const { db, showToast, ready } = mountAdmin({
+      fetchAllPassageCommentaryForAdmin: vi.fn(async () => [{ id: "c", book: "出埃及記", chapter: 26, content: "整章" }])
+    });
+    await ready;
+    $("admin-commentary-create").click();
+    $("admin-commentary-book").value = "出埃及記";
+    $("admin-commentary-book").onchange();
+    $("admin-commentary-chapter").value = "26";
+    $("admin-commentary-content").value = "又一則整章";
+    await $("admin-commentary-save").onclick();
+    expect(db.savePassageCommentary).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith("這一章已經有整章注釋了，請在清單中編輯它。");
+
+    $("admin-commentary-verse-start").value = "2";
+    await $("admin-commentary-save").onclick();
+    expect(db.savePassageCommentary).toHaveBeenCalledWith(expect.objectContaining({ book: "出埃及記", chapter: 26, verseStart: 2, verseEnd: 2, content: "又一則整章" }));
+    expect(db.saveCommentaryTerm).not.toHaveBeenCalled();
+  });
+
+  it("editing keeps the type fixed, and deleting goes to the right table", async () => {
+    const { db, confirm, ready } = mountAdmin();
+    await ready;
+    document.querySelector('[data-admin-commentary-kind="note"] [data-commentary-edit]').click();
+    expect([...$("admin-commentary-kind").querySelectorAll("button")].every(button => button.disabled)).toBe(true);
+    expect($("admin-commentary-book").disabled).toBe(true);
+    expect($("admin-commentary-heading").value).toBe("兩組幔子");
+
+    document.querySelector('[data-admin-commentary-kind="term"] [data-commentary-edit]').click();
+    expect($("admin-commentary-term-name").value).toBe("幔子");
+    expect($("admin-commentary-book").disabled).toBe(false); // 詞條可以改範圍
+
+    document.querySelector('[data-admin-commentary-kind="term"] [data-commentary-delete]').click();
+    await vi.waitFor(() => expect(db.deleteCommentaryTerm).toHaveBeenCalledWith("t1"));
+    expect(confirm.mock.calls[0][0].title).toBe("確定要刪除詞條「幔子」嗎？");
+    expect(db.deletePassageCommentary).not.toHaveBeenCalled();
   });
 });
 
@@ -587,9 +726,9 @@ describe("passage commentary wiring (#447, #470)", () => {
     expect(readHtml).toContain('id="reader-commentary-btn"');
   });
 
-  it("adds the terms page to the admin menu", () => {
-    expect(admin).toContain("{ id: 'commentary-terms', group: '內容管理'");
-    expect(admin).toContain("'commentary-terms': () => [renderAdminCommentaryTerms({");
-    expect(html).toContain('id="admin-section-commentary-terms"');
+  it("keeps a single 經文注釋 admin page for notes and terms (#475)", () => {
+    expect(admin).toContain("{ id: 'commentary',    group: '內容管理'");
+    expect(admin).toContain("commentary: () => [renderAdminCommentary({");
+    expect(html).toContain('id="admin-section-commentary"');
   });
 });
