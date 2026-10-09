@@ -63,6 +63,8 @@ export type FallbackOptions = {
   backoffMs?: number[];
   // 剩下的時間少於這個值就不再開新的一次呼叫（留給後面的步驟與寫入失敗）
   minAttemptMs?: number;
+  // #467：單次呼叫最多等多久；模型卡住時不會吃光整個預算，備用模型才有時間接手
+  maxAttemptMs?: number;
   onRetry?: (info: { model: string; attempt: number; code: string; message: string; waitMs: number }) => void;
 };
 
@@ -83,7 +85,8 @@ export async function callWithFallback(options: FallbackOptions): Promise<{ valu
         throw new GenerationError(options.step, "timeout", `budget exhausted after ${last.code}: ${last.message}`, last.model || model);
       }
       try {
-        return { value: await options.call(model, remaining - 5000), model };
+        const timeoutMs = Math.min(remaining - 5000, options.maxAttemptMs ?? Number.POSITIVE_INFINITY);
+        return { value: await options.call(model, timeoutMs), model };
       } catch (error) {
         const failure = error instanceof GeminiCallError ? error : new GeminiCallError("error", String((error as Error)?.message || error), false);
         last = { model, code: failure.code, message: failure.message };

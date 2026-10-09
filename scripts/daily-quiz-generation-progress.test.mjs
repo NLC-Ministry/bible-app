@@ -107,6 +107,22 @@ describe("callWithFallback (#465)", () => {
     expect(timeout).toBe(95000);
   });
 
+  it("#467: caps each attempt so a hanging reviewer still leaves time for the fallback model", async () => {
+    const clock = fakeClock();
+    const timeouts = [];
+    const result = await callWithFallback({
+      step: "review", models: ["gemini-3.8-flash", "gemini-3.1-flash-lite"], attemptsPerModel: 1, deadline: 129000,
+      maxAttemptMs: 40000, now: clock.now, sleep: clock.sleep,
+      call: async (model, ms) => {
+        timeouts.push(ms);
+        if (model === "gemini-3.8-flash") { clock.advance(ms); throw new GeminiCallError("timeout", "no response", true); }
+        return { reviews: [] };
+      }
+    });
+    expect(timeouts).toEqual([40000, 40000]);
+    expect(result.model).toBe("gemini-3.1-flash-lite");
+  });
+
   it("formats errors as step:code[:model][ — detail]", () => {
     expect(formatGenerationError("quality", "insufficient", "3/8 passed")).toBe("quality:insufficient — 3/8 passed");
     expect(formatGenerationError("draft", "timeout", "", "lite")).toBe("draft:timeout:lite");
@@ -225,6 +241,13 @@ describe("Edge Function wiring (#465)", () => {
   it("the reviewer falls back to the generator model", () => {
     expect(generator).toContain('step: "review", models: [models.reviewer, models.generator], attemptsPerModel: 2');
     expect(generator).toContain('step: "draft", models: [models.generator], attemptsPerModel: 3');
+  });
+
+  it("#467: per-call caps, flash-lite reviewer by default, short reviewer quotes", () => {
+    expect(generator).toContain("attemptsPerModel: 3, maxAttemptMs: 60000, deadline,");
+    expect(generator).toContain("attemptsPerModel: 2, maxAttemptMs: 40000, deadline,");
+    expect(generator).toContain('Deno.env.get("GEMINI_QUIZ_REVIEW_MODEL") || "gemini-3.1-flash-lite")');
+    expect(generator).toContain("quote 只要能證明對錯的最短連續片段（4～15 個字）");
   });
 
   it("an early exit fails the queued swap row instead of leaving it waiting", () => {
