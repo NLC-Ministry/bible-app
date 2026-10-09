@@ -187,7 +187,8 @@ const REVIEWER_INSTRUCTION = [
   "correct：經文有明確文字證明此選項正確，且符合題意。",
   "incorrect：經文有明確文字與此選項矛盾。題目問的是經文明寫的唯一答案（誰、幾、哪裡、哪一個先發生）時，經文寫明答案是別的，就足以判此選項 incorrect，quote 可以就是寫明答案的那段經文。",
   "undeterminable：經文無法明確證明對或錯——包括經文完全沒有談到題目問的事、題目有兩種以上合理讀法、或需要推測。經文已經寫明唯一答案時，不要因為「經文沒有另外提到這個錯誤選項」就判 undeterminable。",
-  "correct 與 incorrect 都要附 verseRef（「書名 章:節」或「書名 章:節-節」，書名和經文標題完全相同）與從經文逐字複製的 quote；undeterminable 時兩者留空字串。"
+  "correct 與 incorrect 都要附 verseRef（「書名 章:節」或「書名 章:節-節」，書名和經文標題完全相同）與從經文逐字複製的 quote；undeterminable 時兩者留空字串。",
+  "quote 只要能證明對錯的最短連續片段（4～15 個字），不要整節照抄；同一題的多個選項可以引用同一段。只輸出判定結果，不要寫說明。"
 ].join("\n");
 
 const EVIDENCE_SCHEMA = {
@@ -249,6 +250,7 @@ function retryLogger(context: GenerationContext, step: GenerationStep) {
 // #414：出 CANDIDATE_COUNT 題候選 → 程式比對舉證 → 另一個模型盲審 → 取前 5 題通過的；
 // 不足 5 題就整版失敗，交給既有的 20:00 重試與後台標紅。
 // #465：每次呼叫都有逾時與重試；審題模型一直失敗（例如持續 503）就改用出題模型代審。
+// #467：單次呼叫有上限（出題 60 秒、審題 40 秒），模型不回應時備用模型還有時間接手。
 async function generateVariant(context: GenerationContext, chapters: ChapterVerses[], refs: ChapterRef[], reportStage: StageReporter) {
   const { apiKey, models, deadline, invocationId, variant } = context;
   const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : "人物、對話與經文明寫的因果關係";
@@ -257,7 +259,7 @@ async function generateVariant(context: GenerationContext, chapters: ChapterVers
 
   await reportStage("drafting");
   const draft = await callWithFallback({
-    step: "draft", models: [models.generator], attemptsPerModel: 3, deadline,
+    step: "draft", models: [models.generator], attemptsPerModel: 3, maxAttemptMs: 60000, deadline,
     call: (model, timeoutMs) => callGeminiOnce(apiKey, model, GENERATOR_INSTRUCTION,
       `請為 ${referenceLabel} 產生版本 ${variant} 的 ${CANDIDATE_COUNT} 題四選一候選題（之後會由審題員篩選）。此版本著重：${angle}。各題不要重複考同一件事。\n\n當日經文：\n${scripture}`,
       CANDIDATES_SCHEMA, timeoutMs),
@@ -267,7 +269,7 @@ async function generateVariant(context: GenerationContext, chapters: ChapterVers
 
   await reportStage("reviewing");
   const review = await callWithFallback({
-    step: "review", models: [models.reviewer, models.generator], attemptsPerModel: 2, deadline,
+    step: "review", models: [models.reviewer, models.generator], attemptsPerModel: 2, maxAttemptMs: 40000, deadline,
     call: (model, timeoutMs) => callGeminiOnce(apiKey, model, REVIEWER_INSTRUCTION,
       `請審以下 ${candidates.length} 題四選一題目，每一題都要回覆，id 照抄。\n\n題目：\n${JSON.stringify(toBlindReviewItems(candidates))}\n\n當日經文：\n${scripture}`,
       REVIEW_SCHEMA, timeoutMs),
@@ -320,7 +322,7 @@ Deno.serve(async req => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY") || "";
   const model = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_MODEL") || "gemini-3.1-flash-lite");
-  const reviewModel = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_REVIEW_MODEL") || "gemini-3.8-flash");
+  const reviewModel = normalizeGeminiModel(Deno.env.get("GEMINI_QUIZ_REVIEW_MODEL") || "gemini-3.1-flash-lite");
   if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
     console.error("daily_quiz_server_not_configured", JSON.stringify({ invocationId, supabaseUrl: Boolean(supabaseUrl), serviceRoleKey: Boolean(serviceRoleKey), geminiApiKey: Boolean(geminiApiKey) }));
     return respond({ error: "server_not_configured", invocationId }, 500);
