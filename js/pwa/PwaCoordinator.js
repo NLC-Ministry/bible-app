@@ -4,6 +4,7 @@ import { OfflineSyncManager } from "./OfflineSyncManager.js";
 import { ServiceWorkerRegistrar } from "./ServiceWorkerRegistrar.js";
 import { cleanupRetiredOfflineOperations } from "../production-cleanup.mjs";
 import { isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
+import { readingLogCacheKeys } from "../data/reading-log-scope.mjs";
 
 const READING_OPERATION = "SET_CHAPTER_READ_STATE";
 const QUIZ_ANSWER_OPERATION = "SUBMIT_DAILY_QUIZ_ANSWER";
@@ -199,7 +200,7 @@ export class PwaCoordinator {
     window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan", source: "offline-sync" } }));
   }
 
-  async persistCheckedReadingLog(dataClient, repository, row, cacheKey) {
+  async persistCheckedReadingLog(dataClient, repository, row, cacheKeys) {
     const throwResultError = result => {
       if (!result?.error) return result;
       const error = new Error(result.error.message || result.error.error || String(result.error));
@@ -209,7 +210,7 @@ export class PwaCoordinator {
     };
     try {
       const result = repository
-        ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+        ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: cacheKeys })
         : await dataClient.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
       return throwResultError(result);
     } catch (upsertError) {
@@ -223,10 +224,10 @@ export class PwaCoordinator {
       const existingRow = Array.isArray(existingResult?.data) ? existingResult.data[0] : existingResult?.data;
       const result = existingRow?.id
         ? (repository
-          ? await repository.update({ read_at: row.read_at }, query => query.eq("id", existingRow.id), { invalidate: [cacheKey] })
+          ? await repository.update({ read_at: row.read_at }, query => query.eq("id", existingRow.id), { invalidate: cacheKeys })
           : await dataClient.from("reading_logs").update({ read_at: row.read_at }).eq("id", existingRow.id))
         : (repository
-          ? await repository.insert(row, { invalidate: [cacheKey] })
+          ? await repository.insert(row, { invalidate: cacheKeys })
           : await dataClient.from("reading_logs").insert(row));
       return throwResultError(result);
     }
@@ -242,7 +243,7 @@ export class PwaCoordinator {
     }
 
     const repository = window.readingLogRepository || null;
-    const cacheKey = `reading_logs:${user.id}`;
+    const cacheKeys = readingLogCacheKeys(user.id, payload.planId);
     const row = {
       user_id: user.id,
       plan_id: payload.planId,
@@ -253,7 +254,7 @@ export class PwaCoordinator {
     };
     let result;
     if (payload.isChecked) {
-      result = await this.persistCheckedReadingLog(dataClient, repository, row, cacheKey);
+      result = await this.persistCheckedReadingLog(dataClient, repository, row, cacheKeys);
     } else {
       const applyFilters = query => {
         query = query.eq("user_id", user.id).eq("book", payload.book)
@@ -261,7 +262,7 @@ export class PwaCoordinator {
         return payload.planId ? query.eq("plan_id", payload.planId) : query.is("plan_id", null);
       };
       result = repository
-        ? await repository.delete(applyFilters, { invalidate: [cacheKey] })
+        ? await repository.delete(applyFilters, { invalidate: cacheKeys })
         : await applyFilters(dataClient.from("reading_logs").delete());
     }
     if (result?.error) {

@@ -20,7 +20,8 @@
 ### 3. IndexedDB：比對快照、待同步操作與 Supabase
 
 1. Application → IndexedDB → `newlife-bible`。
-2. `server_cache` 的 key 應為 `reading_logs:<目前 profile UUID>`；檢查 `updatedAt` 與 `data`。登入另一帳號時 key 必須不同。
+2. `server_cache` 的 key 應為 `reading_logs:<目前 profile UUID>:open`（開機範圍：還能打卡的計畫＋無歸屬紀錄）；點進已結束計畫後會多一份 `reading_logs:<目前 profile UUID>:plan:<計畫 UUID>`（#474）。檢查 `updatedAt` 與 `data`。登入另一帳號時 key 必須不同。
+   - 已結束計畫開機只拿摘要（RPC `get_my_reading_log_digest`），所以 Network 開機只會看到還能打卡的計畫的 `reading_logs` 查詢；Console 的 `state.readingLogScope`／`state.readingLogDigest` 是目前載入範圍與摘要。`readingLogScope.mode === "all"` 代表摘要拿不到、退回整包抓。
 3. `offline_operations` 在線上正常寫入後應為空；若有 `pending`，查看 `lastError`、`attempts`、`nextAttemptAt`。`failed` 且錯誤為 401/403 代表權限問題，不應自動重試。
 4. 到 Supabase Table Editor 以相同 `user_id + plan_id + book + chapter + round` 查詢。Supabase 是最終真相；若資料不同，重新載入後 `server_cache` 應被 Supabase 結果完整覆蓋。
 

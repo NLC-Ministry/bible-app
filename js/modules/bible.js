@@ -21,6 +21,7 @@ import {
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { isPlanCheckInClosed, isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
 import { getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
+import { isLogInOpenScope } from "../data/reading-log-scope.mjs";
 import {
   AUTO_RECORD_REASONS,
   getAutoRecordDecision,
@@ -1423,7 +1424,9 @@ export async function renderReaderText(options = {}) {
   }
   
   if (markReadBtn) {
-    const isRead = state.readingLogs.some(l => l.book === book.name && l.chapter === chapter);
+    // #474：只看還能打卡的計畫＋無歸屬紀錄（點進已結束計畫按需載入的紀錄不算）。
+    const isRead = state.readingLogs.some(l => l.book === book.name && l.chapter === chapter
+      && isLogInOpenScope(state.readingLogScope, l));
     markReadBtn.classList.toggle("checked", isRead);
   }
 
