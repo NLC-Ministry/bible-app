@@ -1,6 +1,7 @@
 // /read 獨立讀經頁的畫面（#416、#423）：版面、操作和主 App 讀經頁一致——
 // 目錄（共用 bible-nav-directory.mjs）、左右滑動換章＋翻頁動畫、浮動上一章／下一章、章末連結、
-// 點選經文後複製／分享（格式共用 verse-selection-format.mjs）、譯本選單、文字大小。
+// 點選經文後複製／分享（格式共用 verse-selection-format.mjs）、譯本選單、文字大小、
+// 經文注釋（#470，共用 reader-commentary.mjs；只有已登入、token 還沒過期時才查得到）。
 // 不碰登入、不記錄進度、沒有螢光筆／筆記／朗讀。所有外部依賴由 read-entry.js 注入，測試時換成假的。
 
 import { createReaderSwipeController, readerArrowKeyDirection, resolveAdjacentChapter, resolvePrefetchChapters } from "../modules/reader-chapter-nav.mjs";
@@ -8,6 +9,7 @@ import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from
 import { buildChapterEndNav, createVerseElement, revealVerses } from "../modules/reader-verse-dom.mjs";
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "../modules/verse-selection-format.mjs";
 import { createBibleNavDirectory, isEnglishBibleVersion, readerBookLabel } from "../modules/bible-nav-directory.mjs";
+import { createReaderCommentaryController } from "../modules/reader-commentary.mjs";
 import { withSoftTimeout } from "../net-timeout.mjs";
 import {
   READER_FONT_SIZES,
@@ -54,6 +56,7 @@ export function mountReadApp({
   chapterTimeoutMs = CHAPTER_TIMEOUT_MS,
   onChapterShown = () => {},
   hydrateIcons = null,
+  commentaryDb = null,
   copy = {},
   clipboard = win?.navigator?.clipboard || null,
   share = win?.navigator?.share ? (data => win.navigator.share(data)) : null
@@ -110,6 +113,20 @@ export function mountReadApp({
     doc.body.appendChild(el);
     schedule(() => el.remove(), 2200);
   }
+
+  // ── 經文注釋（#470）：整章注釋按鈕、節旁 icon、工具列「注釋」，跟主 App 同一套 ──
+  const commentary = commentaryDb ? createReaderCommentaryController({
+    db: commentaryDb,
+    openLayer,
+    closeLayer,
+    escapeHTML: value => escapeText(value),
+    hydrateIcons: hydrate,
+    getElement: $,
+    getVerseContainer: () => content,
+    schedule: callback => schedule(callback, 250),
+    onChange: () => { if (selection.size > 0) renderSelectionBar(); }
+  }) : null;
+  commentary?.bind();
 
   // ── 工具列與字級 ──
   function updateChrome() {
@@ -172,6 +189,10 @@ export function mountReadApp({
     const sorted = selectedSorted();
     if (!sorted.length) { selectionRoot.innerHTML = ""; return; }
     const crossChapter = new Set(sorted.map(v => `${v.bookId}_${v.chapter}`)).size > 1;
+    const commentaryVerses = commentary ? commentary.versesWithCommentary(sorted
+      .filter(v => v.bookId === renderedChapter.bookId && v.chapter === renderedChapter.chapter)
+      .map(v => v.verse)) : [];
+    selectionRoot.dataset.commentaryVerses = commentaryVerses.join(",");
     const runs = groupVerseSelectionRuns(sorted, v => selKey(v.bookId, v.chapter, v.verse));
     const chips = runs.map(r => {
       const vpart = r.startVerse === r.endVerse ? `${r.startVerse}` : `${r.startVerse}-${r.endVerse}`;
@@ -196,6 +217,10 @@ export function mountReadApp({
             <span class="nlc-icon" data-icon="copy" aria-hidden="true"></span>
             <span class="yv-tile-label">複製</span>
           </button>
+          ${commentaryVerses.length ? `<button type="button" class="yv-tile" data-action="commentary" aria-haspopup="dialog">
+            <span class="nlc-icon" data-icon="lightbulb" aria-hidden="true"></span>
+            <span class="yv-tile-label">注釋</span>
+          </button>` : ""}
           <button type="button" class="yv-tile" data-action="share">
             <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
             <span class="yv-tile-label">分享</span>
@@ -258,6 +283,10 @@ export function mountReadApp({
     if (target.dataset.action === "clear-all") clearSelection();
     if (target.dataset.action === "copy") copySelection();
     if (target.dataset.action === "share") shareSelection();
+    if (target.dataset.action === "commentary" && commentary) {
+      const verses = String(selectionRoot.dataset.commentaryVerses || "").split(",").map(Number).filter(Boolean);
+      commentary.openVerses(verses);
+    }
   });
 
   function renderVerses(book, chapter, verses) {
@@ -278,6 +307,8 @@ export function mountReadApp({
     applySelectionClasses();
     const announcer = $("reader-chapter-announcer");
     if (announcer) announcer.textContent = String(copy.chapterChanged || "已切換到 {chapter}").replace("{chapter}", headingText(book, chapter));
+    // 經文畫完才查注釋，不跟經文搶網路。
+    commentary?.refreshForChapter(book.name, chapter, `${book.name} ${chapter}章`, renderedChapter.textByVerse);
   }
 
   function renderMessage(title, detail, { retry = false } = {}) {
@@ -323,6 +354,7 @@ export function mountReadApp({
     const book = findBook(view.bookId);
     const { chapter, version } = view;
     updateChrome();
+    commentary?.resetForChapter();
     writeReaderPosition(storage, { bookId: book.id, chapter });
     titleEl.textContent = headingText(book, chapter);
     content.dataset.ready = "";
@@ -565,6 +597,7 @@ export function mountReadApp({
     directory,
     toggleVerse,
     clearSelection,
+    commentary,
     copySelection,
     shareSelection,
     selection,

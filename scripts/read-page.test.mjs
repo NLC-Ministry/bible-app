@@ -358,6 +358,54 @@ describe("background login keep-alive on /read", () => {
   });
 });
 
+describe("verse commentary on /read (#470)", () => {
+  function commentaryDb() {
+    return {
+      fetchIndex: vi.fn(async () => new Set(["創世記|1"])),
+      fetchChapter: vi.fn(async () => ({
+        rows: [{ id: "n2", chapter: 1, verse_start: 2, verse_end: 2, content: "第二節說明" }],
+        terms: []
+      })),
+      fetchTermDetails: vi.fn(async () => new Map())
+    };
+  }
+
+  it("shows the verse icon after the chapter renders; the icon opens the sheet without selecting the verse", async () => {
+    const db = commentaryDb();
+    const { app } = mount({ commentaryDb: db });
+    await app.ready;
+    await vi.waitFor(() => expect(document.querySelector('#bible-content [data-verse-commentary="2"]')).not.toBeNull());
+    expect(db.fetchChapter).toHaveBeenCalledWith("創世記", 1);
+    expect($("reader-commentary-btn").classList.contains("hidden")).toBe(true); // 沒有整章注釋
+
+    document.querySelector('[data-verse-commentary="2"]').click();
+    await vi.waitFor(() => expect($("reader-commentary-body").textContent).toContain("第二節說明"));
+    expect($("reader-commentary-backdrop").classList.contains("hidden")).toBe(false);
+    expect(app.selection.size).toBe(0);
+  });
+
+  it("adds 注釋 to the selection toolbar only when a selected verse has commentary", async () => {
+    const { app } = mount({ commentaryDb: commentaryDb() });
+    await app.ready;
+    await vi.waitFor(() => expect(document.querySelector("[data-verse-commentary]")).not.toBeNull());
+    app.toggleVerse(1);
+    expect(document.querySelector('#selection-bottom-bar-root [data-action="commentary"]')).toBeNull();
+    app.toggleVerse(2);
+    const tile = document.querySelector('#selection-bottom-bar-root [data-action="commentary"]');
+    expect(tile).not.toBeNull();
+    tile.click();
+    await vi.waitFor(() => expect($("reader-commentary-subtitle").textContent).toBe("創世記 1:2"));
+  });
+
+  it("works without commentary (signed out): no icons, no 注釋 tile", async () => {
+    const { app } = mount();
+    await app.ready;
+    app.toggleVerse(1);
+    expect(document.querySelector("[data-verse-commentary]")).toBeNull();
+    expect(document.querySelector('#selection-bottom-bar-root [data-action="commentary"]')).toBeNull();
+  });
+});
+
 describe("/read loads nothing login-related before showing scripture", () => {
   it("the entry never statically imports auth, db, state or Supabase", () => {
     const staticImports = [...readEntry.matchAll(/^import\s+(?:[^"']*from\s+)?["']([^"']+)["']/gm)].map(m => m[1]);

@@ -1953,7 +1953,7 @@
                 <div>
                   <p class="admin-registration-statistics__eyebrow">閱讀器內容管理</p>
                   <h3 class="card-title" id="admin-commentary-title">經文注釋</h3>
-                  <p>每一章最多一則。會友在聖經閱讀器讀到有注釋的章節時，上方會出現燈泡按鈕，點開就能看到注釋和主題圖片。</p>
+                  <p>節留空＝整章注釋（每章最多一則），閱讀器上方會出現燈泡按鈕；填了節＝節注釋，那幾節右邊會出現注釋圖示，點選經文後工具列也會多一個「注釋」。</p>
                 </div>
                 <button type="button" class="primary-btn" id="admin-commentary-create">新增注釋</button>
               </div>
@@ -1967,6 +1967,14 @@
                     <select id="admin-commentary-chapter" class="form-control announcement-form-panel__input"></select>
                   </label>
                 </div>
+                <div class="admin-commentary-verses">
+                  <label>起始節（選填）
+                    <input type="number" id="admin-commentary-verse-start" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="整章">
+                  </label>
+                  <label>結束節（選填）
+                    <input type="number" id="admin-commentary-verse-end" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="同起始節">
+                  </label>
+                </div>
                 <label>小標題（選填）
                   <input type="text" id="admin-commentary-heading" class="form-control announcement-form-panel__input" maxlength="60" placeholder="例如：會幕的設計">
                 </label>
@@ -1977,6 +1985,9 @@
                   <legend>主題圖片（勾選後，閱讀器會在注釋下方附上這些圖）</legend>
                   <div id="admin-commentary-topic-list" class="admin-commentary-topic-list"></div>
                 </fieldset>
+                <label>出處（選填，例如引用的資料與授權）
+                  <input type="text" id="admin-commentary-source" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：Tyndale Open Study Notes（CC BY-SA 4.0）">
+                </label>
                 <label class="admin-commentary-publish">
                   <input type="checkbox" id="admin-commentary-published" checked>
                   <span>發布給會友看（取消勾選就是先存成草稿）</span>
@@ -1991,6 +2002,77 @@
               </label>
               <div id="admin-commentary-list" class="announcements-list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入注釋…</div>
+              </div>
+            </section>
+          </div>
+
+          <!-- 經文詞條管理（#470）：第一次進入才由 js/modules/admin-commentary-terms.mjs 載入清單。 -->
+          <div id="admin-section-commentary-terms" class="card-col span-12 admin-section-panel hidden">
+            <section class="glass-card admin-announcements admin-commentary" aria-labelledby="admin-term-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">閱讀器內容管理</p>
+                  <h3 class="card-title" id="admin-term-title">經文詞條</h3>
+                  <p>人名、地名、名詞的短解釋。整卷或整章的詞條只出現在經文真的提到這個詞的節（每章只在第一次出現的那節放圖示）；指定節的詞條直接掛在那幾節。</p>
+                </div>
+                <button type="button" class="primary-btn" id="admin-term-create">新增詞條</button>
+              </div>
+              <div id="admin-term-editor" class="announcement-form-panel hidden">
+                <h4 class="announcement-form-panel__title" id="admin-term-form-title">新增詞條</h4>
+                <label>詞
+                  <input type="text" id="admin-term-name" class="form-control announcement-form-panel__input" maxlength="40" placeholder="例如：會幕">
+                </label>
+                <label>其他寫法（選填，用頓號或逗號分隔；其他譯本的用字也可以寫在這裡）
+                  <input type="text" id="admin-term-aliases" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：帳幕、tabernacle">
+                </label>
+                <label>解釋
+                  <textarea id="admin-term-definition" class="form-control announcement-form-panel__textarea" rows="5" placeholder="寫給會友看的短解釋。空一行就是新的段落。"></textarea>
+                </label>
+                <div class="admin-term-scope-field">
+                  <span class="admin-term-scope-label" id="admin-term-scope-label">適用範圍</span>
+                  <div class="capsule-segmented-control segment-track" id="admin-term-scope" role="group" aria-labelledby="admin-term-scope-label">
+                    <button type="button" class="segment-toggle-btn active" data-term-scope="book" aria-pressed="true">整卷</button>
+                    <button type="button" class="segment-toggle-btn" data-term-scope="chapter" aria-pressed="false">整章</button>
+                    <button type="button" class="segment-toggle-btn" data-term-scope="verses" aria-pressed="false">指定節</button>
+                  </div>
+                </div>
+                <div class="admin-commentary-ref">
+                  <label>書卷
+                    <select id="admin-term-book" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                  <label id="admin-term-chapter-field" class="hidden">章
+                    <select id="admin-term-chapter" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                </div>
+                <div class="admin-commentary-verses hidden" id="admin-term-verse-field">
+                  <label>起始節
+                    <input type="number" id="admin-term-verse-start" class="form-control announcement-form-panel__input" min="1" inputmode="numeric">
+                  </label>
+                  <label>結束節（選填）
+                    <input type="number" id="admin-term-verse-end" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="同起始節">
+                  </label>
+                </div>
+                <fieldset class="admin-commentary-topics">
+                  <legend>主題圖片（勾選後，詞彙卡片下方會附上這些圖）</legend>
+                  <div id="admin-term-topic-list" class="admin-commentary-topic-list"></div>
+                </fieldset>
+                <label>出處（選填，例如引用的資料與授權）
+                  <input type="text" id="admin-term-source" class="form-control announcement-form-panel__input" maxlength="200">
+                </label>
+                <label class="admin-commentary-publish">
+                  <input type="checkbox" id="admin-term-published" checked>
+                  <span>發布給會友看（取消勾選就是先存成草稿）</span>
+                </label>
+                <div class="announcement-form-panel__actions">
+                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-term-cancel">取消</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-term-save">儲存詞條</button>
+                </div>
+              </div>
+              <label class="admin-commentary-filter">篩選書卷
+                <select id="admin-term-filter" class="form-control announcement-form-panel__input"></select>
+              </label>
+              <div id="admin-term-list" class="announcements-list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入詞條…</div>
               </div>
             </section>
           </div>

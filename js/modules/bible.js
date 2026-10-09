@@ -42,15 +42,20 @@ import {
 } from "./bible-nav-directory.mjs";
 
 // db / escapeHTML / hydrateIcons 是核心檔掛在 window 上的全域，呼叫時才取用。
+// 整章注釋（工具列燈泡）、節旁 icon、點選經文後工具列的「注釋」都由它管（#447、#470）。
 const readerCommentary = createReaderCommentaryController({
   db: {
-    fetchPassageCommentaryIndex: () => db.fetchPassageCommentaryIndex(),
-    fetchPassageCommentary: (bookName, chapter) => db.fetchPassageCommentary(bookName, chapter)
+    fetchIndex: () => db.fetchCommentaryIndex(),
+    fetchChapter: (bookName, chapter) => db.fetchChapterCommentary(bookName, chapter),
+    fetchTermDetails: ids => db.fetchCommentaryTermDetails(ids)
   },
   openLayer: element => openReaderLayer(element),
   closeLayer: element => closeReaderLayer(element),
   escapeHTML: value => escapeHTML(value),
-  hydrateIcons: element => { if (typeof hydrateIcons === "function") hydrateIcons(element); }
+  hydrateIcons: element => { if (typeof hydrateIcons === "function") hydrateIcons(element); },
+  getVerseContainer: () => document.getElementById("bible-content"),
+  // 注釋比選取晚到：已經有選取時重建工具列，「注釋」才會出現。
+  onChange: () => { if (verseSelection.size > 0) renderUnifiedSelectionBar(); }
 });
 
 export function openReaderLayer(element) {
@@ -1512,8 +1517,8 @@ export async function renderReaderText(options = {}) {
   bindReaderEndObserver();
   scheduleReaderBottomDwellCheck();
   refreshVerseSelectionUI();   // 跨章：把仍在選取集合裡、屬於這一章的節重新標記並重建工具列
-  // 經文畫完才查注釋（#447），不跟經文搶網路。
-  void readerCommentary.refreshForChapter(book.name, chapter, `${book.name} ${chapter}章`);
+  // 經文畫完才查注釋（#447、#470），不跟經文搶網路。經文文字用來比對整卷／整章詞條。
+  void readerCommentary.refreshForChapter(book.name, chapter, `${book.name} ${chapter}章`, renderedReaderChapter.textByVerse);
   return true;
 }
 
@@ -1751,7 +1756,7 @@ function setVerseNoteBadge(verseDiv, hasNote) {
 
 /**
  * 統一「點選多節經文」工具列：上方顯示已選經文 chip（可跨章、可逐節移除），
- * 下方動作列（全清 ✕／複製／標記／筆記（僅單節）／分享）。
+ * 下方動作列（全清 ✕／複製／標記／筆記（僅單節）／注釋（選到有注釋的節才有，#470）／分享）。
  * 點經文區外面不關閉、不清選取（B 案）；只有全清 ✕、chip ✕、或把節全部取消才關閉。
  */
 function renderUnifiedSelectionBar() {
@@ -1777,6 +1782,11 @@ function renderUnifiedSelectionBar() {
       <span class="nlc-icon" data-icon="close" aria-hidden="true"></span>
     </button>`;
   }).join("");
+
+  // 「注釋」只在選取的節（目前這一章）裡有注釋或詞彙時才出現（#470）。
+  const commentaryVerses = readerCommentary.versesWithCommentary(sorted
+    .filter(v => v.bookId === currentReaderBookId() && v.chapter === currentReaderChapter())
+    .map(v => v.verse));
 
   const colorSet = new Set(sorted.map(v => state.highlights?.[`${v.bookName}_${v.chapter}_${v.verse}`] || ""));
   const commonColor = colorSet.size === 1 ? [...colorSet][0] : "";
@@ -1811,6 +1821,10 @@ function renderUnifiedSelectionBar() {
             <span class="nlc-icon" data-icon="journalText" aria-hidden="true"></span>
             <span class="yv-tile-label">筆記</span>
           </button>
+          ${commentaryVerses.length ? `<button type="button" class="yv-tile" data-action="commentary" aria-haspopup="dialog">
+            <span class="nlc-icon" data-icon="lightbulb" aria-hidden="true"></span>
+            <span class="yv-tile-label">注釋</span>
+          </button>` : ""}
           <button type="button" class="yv-tile" data-action="share">
             <span class="nlc-icon" data-icon="share" aria-hidden="true"></span>
             <span class="yv-tile-label">分享</span>
@@ -1879,6 +1893,10 @@ function renderUnifiedSelectionBar() {
   barDiv.querySelector('[data-action="clear-all"]')?.addEventListener("click", e => { e.stopPropagation(); clearAllVerseSelection(); });
   barDiv.querySelector('[data-action="copy"]')?.addEventListener("click", e => { e.stopPropagation(); copySelectionText(); });
   barDiv.querySelector('[data-action="share"]')?.addEventListener("click", e => { e.stopPropagation(); shareSelectionText(); });
+  barDiv.querySelector('[data-action="commentary"]')?.addEventListener("click", e => {
+    e.stopPropagation();
+    void readerCommentary.openVerses(commentaryVerses);
+  });
   highlightToggle?.addEventListener("click", e => {
     e.stopPropagation();
     setHighlightPaletteOpen(highlightPalette?.classList.contains("hidden"));
