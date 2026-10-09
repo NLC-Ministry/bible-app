@@ -3907,20 +3907,33 @@ body:not(.dark-theme) .settings-row-btn:hover {
   gap: 0.75rem;
 }
 
-.admin-term-scope-field {
+/* 類型（注釋／詞條）、詞條範圍的 segmented（#475）。 */
+.admin-commentary-choice {
   display: grid;
   gap: 0.4rem;
   justify-items: start;
 }
 
-.admin-term-scope-label {
+.admin-commentary-choice__label {
   font-size: 0.875rem;
   color: var(--text-primary);
 }
 
-.admin-term-aliases {
+.admin-commentary-fieldset {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-commentary-aliases {
   font-weight: 400;
   color: var(--text-secondary);
+}
+
+.admin-commentary-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
 }
 
 .admin-commentary-topics {
