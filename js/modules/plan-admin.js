@@ -25,21 +25,10 @@ function initAdminPlanManagement() {
     newGrid.innerHTML = "";
     BIBLE_BOOKS.forEach(book => {
       const label = document.createElement("label");
-      label.style = `
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 0.875rem;
-        cursor: pointer;
-        padding: 0.2rem 0.3rem;
-        border-radius: 4px;
-        background: white;
-        border: 1px solid var(--border-card);
-        user-select: none;
-      `;
+      label.className = "admin-book-option";
       label.innerHTML = `
-        <input type="checkbox" class="admin-book-checkbox" value="${book.name}" style="margin: 0; cursor: pointer;">
-        ${book.name}
+        <input type="checkbox" class="admin-book-checkbox" value="${book.name}">
+        <span class="admin-book-option__name">${book.name}</span>
       `;
       if (book.section === "old") {
         oldGrid.appendChild(label);
