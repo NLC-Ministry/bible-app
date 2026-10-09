@@ -45,9 +45,11 @@ export function sortCommentaryRows(rows, books) {
 }
 
 // 同一章、同一個範圍（整章或同樣的起訖節）已經有一則注釋時回傳它（資料庫也有唯一索引）。
+// 匯入的研讀注釋（有 source_ref，#471）不算：同一節可以有多則。
 export function findCommentaryForChapter(rows, book, chapter, excludeId = null, verseStart = null, verseEnd = null) {
   const range = normalizeVerseRange(verseStart, verseEnd);
   return (rows || []).find(row => {
+    if (row.source_ref) return false;
     if (row.book !== book || Number(row.chapter) !== Number(chapter) || String(row.id) === String(excludeId)) return false;
     const rowRange = normalizeVerseRange(row.verse_start, row.verse_end);
     if (!range || !rowRange) return !range && !rowRange;

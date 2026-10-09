@@ -41,6 +41,13 @@ ALTER TABLE public.passage_commentary DROP CONSTRAINT IF EXISTS passage_commenta
 ALTER TABLE public.passage_commentary ADD CONSTRAINT passage_commentary_review_unpublished_check
   CHECK (review_status IS NULL OR review_status = 'published' OR is_published = FALSE);
 
+-- #470 的「同一章同一個節範圍只能一則」只管後台手寫的注釋：匯入的研讀注釋常有同一節的
+-- 多則（例如 1:1 的注釋和「1:1–7:38 總覽」都掛在 1:1），用 source_ref 區分。
+DROP INDEX IF EXISTS public.passage_commentary_verse_note_key;
+CREATE UNIQUE INDEX IF NOT EXISTS passage_commentary_verse_note_key
+  ON public.passage_commentary (book, chapter, verse_start, verse_end)
+  WHERE verse_start IS NOT NULL AND source_ref IS NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS passage_commentary_source_ref_key
   ON public.passage_commentary (source_ref)
   WHERE source_ref IS NOT NULL;

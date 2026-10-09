@@ -161,7 +161,8 @@ describe("resolveChapterCommentary (#470)", () => {
     expect(result.chapterRow.id).toBe("c");
     expect([...result.entries.keys()]).toEqual([2, 3]);
     expect(result.entries.get(2).notes.map(note => note.id)).toEqual(["n2"]);
-    expect(result.iconVerses).toEqual([2, 3]);
+    // icon 只放在注釋的起始節，其他節從工具列的「注釋」看得到（#471）。
+    expect(result.iconVerses).toEqual([2]);
   });
 
   it("puts a whole-book term's icon only on its first mention in the chapter, but every mention has content", () => {

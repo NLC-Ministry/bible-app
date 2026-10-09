@@ -206,7 +206,8 @@ export function markTermsHTML(text, needles, escapeHTML) {
 
 // 把一章的注釋和詞條對到節上（#470）。
 // - 整章注釋（沒有節範圍）→ chapterRow，由工具列的燈泡打開。
-// - 節注釋、指定節的詞條 → 那幾節都有內容，也都顯示節旁 icon。
+// - 節注釋 → 範圍內每一節都有內容，但 icon 只放在起始節（研讀注釋常一則涵蓋十幾節，#471）。
+// - 指定節的詞條 → 那幾節都有內容，也都顯示節旁 icon。
 // - 整卷／整章的詞條 → 只套用在經文出現這個詞（或其他寫法）的節；icon 只放在這章第一次
 //   出現的那一節，其他節點選後從工具列的「注釋」一樣看得到，閱讀畫面才不會滿是 icon。
 export function resolveChapterCommentary({ rows = [], terms = [], chapter, textByVerse = new Map() } = {}) {
@@ -231,10 +232,9 @@ export function resolveChapterCommentary({ rows = [], terms = [], chapter, textB
       if (!chapterRow) chapterRow = row;
       continue;
     }
-    for (const verse of versesIn(range)) {
-      entryFor(verse).notes.push(row);
-      iconVerses.add(verse);
-    }
+    const covered = versesIn(range);
+    for (const verse of covered) entryFor(verse).notes.push(row);
+    if (covered.length) iconVerses.add(covered[0]);
   }
 
   for (const term of terms || []) {

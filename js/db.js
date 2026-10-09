@@ -6037,7 +6037,7 @@ const db = {
     if (!state.isSupabaseMode || !state.supabase) return [];
     const { data, error } = await fetchAllRows(() => state.supabase
       .from("passage_commentary")
-      .select("id, book, chapter, verse_start, verse_end, title, content, topic_tags, source, is_published, review_status, review_note, source_text, created_at, updated_at"));
+      .select("id, book, chapter, verse_start, verse_end, title, content, topic_tags, source, is_published, review_status, review_note, source_text, source_ref, created_at, updated_at"));
     if (error) {
       console.error("[db] fetchAllPassageCommentaryForAdmin failed:", error);
       return null;
