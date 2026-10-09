@@ -84,6 +84,11 @@
           <span>CUNP</span>
         </button>
         <div class="reader-nav-spacer"></div>
+        <!-- 經文注釋（#447、#470）：這一章有整章注釋才顯示，由 js/modules/reader-commentary.mjs 控制 -->
+        <button type="button" class="reader-icon-btn native-toolbar-btn reader-commentary-btn hidden" id="reader-commentary-btn"
+          title="經文注釋" aria-label="經文注釋" aria-haspopup="dialog" aria-controls="reader-commentary-backdrop" aria-hidden="true">
+          <span class="nlc-icon" data-icon="lightbulb"></span>
+        </button>
         <button type="button" class="reader-icon-btn native-toolbar-btn" id="reader-settings-trigger-btn" title="文字設定" aria-label="文字設定">
           <span class="nlc-icon" data-icon="more"></span>
         </button>
@@ -111,8 +116,25 @@
     </section>
   </main>
 
-  <!-- 點選經文後的底部工具列（只有複製、分享） -->
+  <!-- 點選經文後的底部工具列（複製、分享；選到有注釋的節時多一個「注釋」） -->
   <div id="selection-bottom-bar-root"></div>
+
+  <!-- 經文注釋面板（#447、#470）：和主 App 同一套，放在 .view-pane 外面。 -->
+  <div class="bottom-sheet-backdrop reader-commentary-backdrop hidden" id="reader-commentary-backdrop" aria-hidden="true">
+    <div class="bottom-sheet-container reader-commentary-sheet" role="dialog" aria-modal="true"
+      aria-labelledby="reader-commentary-heading">
+      <div class="bottom-sheet-drag-handle" aria-hidden="true"></div>
+      <div class="bottom-sheet-header">
+        <div class="reader-commentary-heading-group">
+          <h3 id="reader-commentary-heading">經文注釋</h3>
+          <p class="reader-commentary-subtitle" id="reader-commentary-subtitle"></p>
+        </div>
+        <button type="button" id="reader-commentary-close-btn" class="bottom-sheet-close-x dialog-close-button icon-button icon-button--subtle"
+          aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
+      </div>
+      <div class="bottom-sheet-body reader-commentary-body" id="reader-commentary-body"></div>
+    </div>
+  </div>
 
   <!-- 譯本選單：和主 App 同一套 -->
   <div id="bible-version-picker-modal" class="version-picker-modal hidden" aria-hidden="true">

@@ -16,6 +16,7 @@ import { withSoftTimeout } from "./net-timeout.mjs";
 import { readAppTheme } from "./data/reader-preferences.mjs";
 import { mountReadApp } from "./read/read-app.mjs";
 import { keepLoginFresh } from "./read/read-login-keepalive.mjs";
+import { createReadCommentaryDb } from "./read/read-commentary-client.mjs";
 
 // iOS 偶爾會讓 IndexedDB 開不起來：本機查不到就等最多 1.5 秒，然後改上網抓，不讓畫面卡住。
 const OFFLINE_LOOKUP_TIMEOUT_MS = 1500;
@@ -60,6 +61,8 @@ mountReadApp({
   },
   getVerseCounts: () => window.BIBLE_VERSE_COUNTS || null,
   hydrateIcons: typeof window.hydrateIcons === "function" ? window.hydrateIcons : null,
+  // 經文注釋（#470）：經文顯示完才查，只用還沒過期的登入 token，不觸發登入。
+  commentaryDb: createReadCommentaryDb({ storage: localStorage, config: window.SUPABASE_CONFIG }),
   copy: (window.APP_COPY && window.APP_COPY.reader) || {},
   isOnline: () => navigator.onLine !== false,
   onChapterShown: () => {

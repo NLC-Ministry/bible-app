@@ -199,13 +199,16 @@ const READ_TABLES = new Set([
   "reading_teams",
   "reading_team_members",
   "verse_notes",
-  "passage_commentary"
+  "passage_commentary",
+  "commentary_terms",
+  // 檢視表（#470）：只列已發布內容的 (book, chapter)，閱讀器換章前查。
+  "commentary_chapter_index"
 ]);
 const USER_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "highlights"]);
 const ADMIN_WRITE_TABLES = new Set(["great_regions", "pastoral_zones", "small_groups", "global_plans", "church_announcements", "profiles", "app_feature_settings"]);
 // Unlike ADMIN_WRITE_TABLES (admin or any plan manager), only system admins
 // may write these.
-const ADMIN_ONLY_WRITE_TABLES = new Set(["passage_commentary"]);
+const ADMIN_ONLY_WRITE_TABLES = new Set(["passage_commentary", "commentary_terms"]);
 const OWN_WRITE_TABLES = new Set(["reading_plans", "reading_logs", "devotional_notes", "devotional_likes", "devotional_comments", "care_reminders", "highlights", "verse_notes"]);
 // care_reminders: the generic OWN_WRITE_TABLES path below has no per-action
 // distinction, so being in that set would let ANY authenticated member
@@ -674,7 +677,7 @@ function forceUserPayload(table: string, payload: any, profileId: string, action
     });
     return Array.isArray(payload) ? rows : rows[0];
   }
-  if (table === "passage_commentary") {
+  if (table === "passage_commentary" || table === "commentary_terms") {
     const rows = normalizeRows(payload).map(row => {
       const copy = { ...row };
       if (action === "update") delete copy.created_by;
@@ -807,6 +810,7 @@ async function applyForcedScope(query: any, table: string, action: string, profi
   if (table === "global_plans" && action === "select" && !canManagePlans(profile)) return { query: query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage") };
   if (table === "church_announcements" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
   if (table === "passage_commentary" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
+  if (table === "commentary_terms" && action === "select" && !isAdmin(profile)) return { query: query.eq("is_published", true) };
   if (table === "care_reminders" && action === "select") return { query: query.eq("recipient_id", profile.id) };
   if (table === "care_reminders" && action === "update") return { query: query.eq("recipient_id", profile.id) };
   // verse_notes are private reflections, never shared with pastors/admins the
