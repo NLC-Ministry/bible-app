@@ -3935,6 +3935,47 @@ body:not(.dark-theme) .settings-row-btn:hover {
   border-color: var(--color-brand);
 }
 
+/* #469：新增計畫的書卷勾選格。顏色全走主題 token，深色／暖褐主題才看得到字。 */
+.admin-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.75rem, 1fr));
+  gap: 0.25rem;
+}
+
+.admin-book-option {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border-card);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-book-option input {
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.admin-book-option__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-book-option:has(input:checked) {
+  border-color: var(--color-brand);
+  background: var(--color-brand-subtle);
+}
+
 .admin-commentary-topic img {
   display: block;
   width: 100%;
