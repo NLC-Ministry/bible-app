@@ -4,7 +4,7 @@
 //   重跑不會蓋掉審過的內容）。
 // 授權：TOSN 是 CC BY-SA 4.0，翻譯是衍生著作，必須標示改編自 TOSN 並註明做了什麼改動。
 
-export const TOSN_ATTRIBUTION = "改編自 Tyndale Open Study Notes（© 2022 Tyndale House Publishers，CC BY-SA 4.0，原著免費提供於 tyndaleopenresources.com），由新生命教會譯為繁體中文，經文用詞對照和合本。";
+export const TOSN_ATTRIBUTION = "改編自 Tyndale Open Study Notes（© 2022 Tyndale House Publishers，CC BY-SA 4.0，原著免費提供於 tyndaleopenresources.com），由新生命教會譯為繁體中文，經文與用詞對照和合本並略作調整。";
 
 // TOSN 的書卷代碼，順序同 js/data/bible_data.js 的 BIBLE_BOOKS（創世記 → 啟示錄）。
 export const TOSN_BOOK_CODES = Object.freeze([
