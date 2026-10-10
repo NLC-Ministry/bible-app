@@ -10448,6 +10448,15 @@ body.reader-page {
   }
 }
 
+/* 有浮動按鈕時（上面那條的反面），經文左右讓出按鈕寬（46px）再加一點間距，
+   節旁注釋燈泡（#470）才不會落在「下一章」按鈕底下被蓋住（#543）。 */
+@media not all and (hover: none) and (pointer: coarse) {
+  #reader-view .bible-text-container {
+    padding-left: 64px !important;
+    padding-right: 64px !important;
+  }
+}
+
 /* 章末換章連結（#347）：「‹ 上一章｜下一章 ›」，跟在經文後面；字級跟著閱讀字體（em），
    可點範圍至少 44px 高。 */
 #reader-view .reader-chapter-end-nav {
