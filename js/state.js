@@ -97,6 +97,10 @@ const state = {
   activePlans: [], // Array of multiple joined plans
   adminManagementPlan: null, // Plan currently selected in 系統管理 → 計畫篩選; kept separate from activePlan so browsing plans as admin never changes the member's own active plan (home dashboard, resume-reading, etc.)
   readingLogs: [], // Array of { book: string, chapter: number, read_at: string, plan_id?: string, presetKey?: string }
+  // #474 打卡紀錄按需載入：readingLogs 涵蓋哪些計畫（js/data/reading-log-scope.mjs），
+  // 以及逐筆紀錄還沒載入的已關閉計畫的已讀章節摘要。null ＝ 全部紀錄都在 readingLogs。
+  readingLogScope: null,
+  readingLogDigest: null,
   readerState: {
     bookId: 1, // Genesis
     chapter: 1,

@@ -4,6 +4,38 @@ import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/paginat
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { PLAN_CHECKIN_CLOSED_CODE, isPlanCheckInClosed, normalizeGraceDays } from './data/plan-checkin-window.mjs';
+import {
+  READING_LOG_DIGEST_RPC,
+  READING_LOG_SELECT,
+  addLoadedPlanToScope,
+  applyOpenReadingLogFilter,
+  collectReadDateKeys,
+  createPlanReadingLogLoader,
+  createReadingLogScope,
+  digestRoundLogs,
+  filterOpenScopeLogs,
+  getLazilyLoadedPlanIds,
+  isPlanReadingLogsLoaded,
+  legacyReadingLogCacheKey,
+  loadBootReadingLogs,
+  mergeOpenScopeReadingLogs,
+  mergePlanReadingLogs,
+  parseReadingLogScope,
+  parseStoredReadingLogDigest,
+  readingLogCacheKeys,
+  readingLogOpenCacheKey,
+  readingLogPlanCacheKey,
+  removePlanFromDigest
+} from './data/reading-log-scope.mjs';
+import {
+  buildPersonalPlanFields,
+  buildPersonalPlanInsert,
+  canCreatePersonalPlan,
+  isPersonalPlan,
+  normalizePersonalPlanName,
+  personalPlanErrorMessage,
+  validatePersonalPlanName
+} from './data/personal-plans.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import {
   OFFLINE_IDENTITY_KEY,
@@ -103,6 +135,13 @@ function getPresetKeyByName(name) {
     String(preset.name || "").trim() === target
   );
   return match ? match[0] : null;
+}
+
+const OWN_READING_PLAN_COLUMNS = "id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at";
+
+function isMissingPersonalPlanColumn(error) {
+  if (!error) return false;
+  return String(error.code || "") === "42703" || /is_personal/.test(String(error.message || ""));
 }
 
 function isUuid(value) {
@@ -515,8 +554,11 @@ const db = {
     try {
       const plans = JSON.parse(localStorage.getItem("active_reading_plans") || "[]");
       const logs = JSON.parse(localStorage.getItem("reading_logs") || "[]");
+      const { digest, scope } = this.restoreReadingLogOfflineSnapshot();
       state.activePlans = Array.isArray(plans) ? plans : [];
       state.readingLogs = Array.isArray(logs) ? logs : [];
+      state.readingLogScope = scope;
+      state.readingLogDigest = digest;
       state.activePlan = selectMostRecentActivePlan(state.activePlans);
       if (typeof calculateAllPlansProgress === "function") calculateAllPlansProgress();
       this["calculateStreak"]();
@@ -524,6 +566,8 @@ const db = {
       console.warn("Offline reading snapshot could not be restored", error);
       state.activePlans = [];
       state.readingLogs = [];
+      state.readingLogScope = null;
+      state.readingLogDigest = null;
       state.activePlan = null;
     }
     return true;
@@ -1490,15 +1534,10 @@ const db = {
 
   // Load User Data (either Supabase or LocalStorage fallbacks)
   _userDataPromise: null,
-  applyReadingLogsSnapshot(rawLogs, { notify = false, source = "initial" } = {}) {
-    const uniqueMap = {};
-    (rawLogs || []).forEach(log => {
-      const round = log.round || 1;
-      const planKey = log.plan_id || "";
-      const key = `${log.book}_${log.chapter}_${planKey}_${round}`;
-      if (!uniqueMap[key] || new Date(log.read_at) > new Date(uniqueMap[key].read_at)) uniqueMap[key] = log;
-    });
-    state.readingLogs = Object.values(uniqueMap);
+  // scope（#474）：開機範圍的資料只換掉 open 計畫＋無歸屬紀錄，按需載入過的已關閉計畫
+  // 紀錄留著；沒給 scope ＝ 整包換掉（原本的行為）。
+  applyReadingLogsSnapshot(rawLogs, { notify = false, source = "initial", scope = null, keepOtherPlans = false } = {}) {
+    state.readingLogs = mergeOpenScopeReadingLogs(state.readingLogs, rawLogs, scope, { keepOtherPlans });
     if (state.currentUser) state.currentUser.chapters_read = state.readingLogs.length;
     if (notify) {
       window.dispatchEvent(new CustomEvent("app:dataRefresh", {
@@ -1506,6 +1545,122 @@ const db = {
       }));
     }
     return state.readingLogs;
+  },
+
+  // ── 打卡紀錄按需載入（#474）──────────────────────────────────────────────
+  // 開機（拿到計畫清單之後）：還能打卡的計畫＋無歸屬紀錄抓逐筆，已關閉計畫只拿摘要；
+  // 摘要拿不到就把已關閉計畫照舊抓逐筆（scope 退回 all）。規則見 js/data/reading-log-scope.mjs。
+  // 分頁一定要有唯一且固定的排序（#348）。沒排序時，小組長以上經過 nlc-data forced
+  // scope 的查詢在不同連線上會走不同索引、回傳順序不同，前後頁接不起來 → 有的紀錄抓
+  // 兩次、有的沒抓到，累積章數每次重整都不一樣。
+  // window.readingLogRepository 只在 js/app.js 跑過才有；沒有時也要分頁（fetchAllRows）——
+  // 讀完一遍就是 1,189 章，超過 PostgREST 預設的 1000 列，不分頁會悄悄截斷。
+  loadBootReadingLogs(user, enrollments, globalPlanRows) {
+    const repository = window.readingLogRepository || null;
+    const buildQuery = (table, applyFilter) => applyFilter(
+      table.select(READING_LOG_SELECT).eq("user_id", user.id)
+    ).order("id", { ascending: true });
+    const fetchLogs = ({ cacheKey, applyFilter, onData }) => repository
+      ? repository.fetch({ cacheKey, query: table => buildQuery(table, applyFilter), onData })
+      : fetchAllRows(() => buildQuery(state.supabase.from("reading_logs"), applyFilter));
+    return loadBootReadingLogs({
+      enrollments,
+      globalPlanRows,
+      fetchOpenLogs: openPlanIds => fetchLogs({
+        cacheKey: readingLogOpenCacheKey(user.id),
+        applyFilter: query => applyOpenReadingLogFilter(query, openPlanIds),
+        // SWR 快取先到時只換掉開機範圍、其他計畫的紀錄先留著：這時摘要和計畫清單
+        // 還沒套上，不能讓已關閉計畫的進度暫時歸零（獎章會把 0 寫回本機快取）。
+        onData: (rows, meta) => this.applyReadingLogsSnapshot(rows, {
+          notify: true,
+          source: meta.source,
+          scope: createReadingLogScope({ mode: "open", openPlanIds }),
+          keepOtherPlans: true
+        })
+      }),
+      fetchDigest: closedPlanIds => this.fetchReadingLogDigest(closedPlanIds),
+      fetchClosedLogs: closedPlanIds => fetchLogs({
+        cacheKey: null,
+        applyFilter: query => query.in("plan_id", closedPlanIds)
+      })
+    });
+  },
+
+  // 已關閉計畫的已讀章節摘要（get_my_reading_log_digest，nlc-data 注入 p_actor_id）。
+  // dev 模式的真 Supabase client 沒有權限（只給 service_role）→ 回錯誤，呼叫端走退路。
+  async fetchReadingLogDigest(planIds) {
+    if (!state.isSupabaseMode || !state.supabase || typeof state.supabase.rpc !== "function") {
+      return { data: null, error: { message: "reading_log_digest_unavailable" } };
+    }
+    return state.supabase.rpc(READING_LOG_DIGEST_RPC, { p_plan_ids: planIds });
+  },
+
+  // 點進已結束計畫的詳情／統計時才抓那個計畫的逐筆紀錄（日曆、日期相關統計要用）。
+  // 回傳 Promise<boolean>：有載入新資料 → 呼叫端重畫。已載入、還能打卡的計畫、
+  // 本機模式 → false，不發請求。
+  _planReadingLogLoader: null,
+  ensurePlanReadingLogs(plan) {
+    const planId = plan && plan.id;
+    if (!planId || !state.isSupabaseMode || !state.supabase || state.offlineMode) return Promise.resolve(false);
+    if (!this._planReadingLogLoader) {
+      this._planReadingLogLoader = createPlanReadingLogLoader({
+        isLoaded: id => isPlanReadingLogsLoaded(state.readingLogScope, id),
+        fetchPlanLogs: async id => {
+          const user = await this.getCurrentDbUser();
+          if (!user || !user.id) return { data: null, error: { message: "no_user" } };
+          const query = table => table.select(READING_LOG_SELECT)
+            .eq("user_id", user.id).eq("plan_id", id).order("id", { ascending: true });
+          const repository = window.readingLogRepository || null;
+          // 已關閉計畫的紀錄不會再變，SWR 快取一份，第二次點進去不必再等網路。
+          return repository
+            ? repository.fetch({ cacheKey: readingLogPlanCacheKey(user.id, id), query })
+            : fetchAllRows(() => query(state.supabase.from("reading_logs")));
+        },
+        applyPlanLogs: (id, rows) => this.applyPlanReadingLogs(id, rows)
+      });
+    }
+    return this._planReadingLogLoader(planId);
+  },
+
+  applyPlanReadingLogs(planId, rows) {
+    state.readingLogs = mergePlanReadingLogs(state.readingLogs, rows, planId);
+    state.readingLogScope = addLoadedPlanToScope(state.readingLogScope, planId);
+    // 已完成的遍要照實際打卡日期鋪日程（摘要沒有日期）→ 有逐筆紀錄後重排一次。
+    const plan = (state.activePlans || []).find(item => item && String(item.id) === String(planId));
+    if (plan && typeof rebuildPlanSchedule === "function") rebuildPlanSchedule(plan);
+    if (typeof calculateAllPlansProgress === "function") calculateAllPlansProgress();
+    this.invalidateMergedUsersCache();
+    window.dispatchEvent(new CustomEvent("app:dataRefresh", {
+      detail: { scope: "plan", source: "plan-reading-logs" }
+    }));
+  },
+
+  // 離線快照（#474）：只存還能打卡的計畫＋無歸屬紀錄，另外存摘要和 scope——
+  // 不存摘要的話，離線時已結束計畫的進度歸零，獎章會熄。
+  saveReadingLogOfflineSnapshot() {
+    const scope = state.readingLogScope || createReadingLogScope();
+    safeStorageSet("reading_logs", filterOpenScopeLogs(state.readingLogs, scope), 300);
+    if (scope.mode === "open" && state.readingLogDigest) {
+      safeStorageSet("reading_log_digest", state.readingLogDigest, 300);
+      safeStorageSet("reading_log_scope", { mode: "open", openPlanIds: scope.openPlanIds }, 300);
+    } else {
+      try {
+        localStorage.removeItem("reading_log_digest");
+        localStorage.removeItem("reading_log_scope");
+      } catch (_) {}
+    }
+  },
+
+  restoreReadingLogOfflineSnapshot() {
+    let digest = null;
+    let scope = createReadingLogScope();
+    try {
+      digest = parseStoredReadingLogDigest(JSON.parse(localStorage.getItem("reading_log_digest") || "null"));
+      scope = parseReadingLogScope(JSON.parse(localStorage.getItem("reading_log_scope") || "null"));
+    } catch (_) {}
+    // 舊快照（#474 之前）沒有摘要：裡面就是全部紀錄。
+    if (!digest || scope.mode !== "open") return { digest: null, scope: createReadingLogScope() };
+    return { digest, scope };
   },
 
   // skipReadingLogs: for standalone pages (exam.html/grade.html) that only
@@ -1541,40 +1696,45 @@ const db = {
       }
 
       if (user) {
-        // 💡 效能優化：平行化載入 global_plans, profiles, reading_logs, reading_plans。
+        // 💡 效能優化：平行化載入 global_plans, profiles, reading_plans、highlights。
         // global_plans + profiles + reading_plans 併成 nlc-data 的一個 batch 請求
         // （一次 Logto 驗證、一次往返）。三張都不會超過 supabase-js 無 limit 時的
         // 1000 列預設：global_plans 目前 <100 列（教會活動計畫，每季增幾筆）、
         // profiles 這裡是 .eq(id) 單列、reading_plans 是 user-scoped 個位數。
-        // reading_logs（走 repository 快取 + SWR onData）、highlights（fetchAllRows，
-        // 重度使用者可能 >200）維持獨立。
-        const [[globalPlansResult, profileResult, plansResult], logsResult, highlightsResult] = await Promise.all([
+        // highlights（fetchAllRows，重度使用者可能 >200）維持獨立。
+        // reading_logs 是第二段（#474）：要先知道哪些計畫還能打卡，才查得出開機要的逐筆紀錄。
+        const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult] = await Promise.all([
           this.batchSelect([
             state.supabase.from("global_plans").select("id, name, description, start_date, end_date, grace_days, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
             state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
-            state.supabase.from("reading_plans").select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
+            state.supabase.from("reading_plans").select(`${OWN_READING_PLAN_COLUMNS}, is_personal`).eq("user_id", user.id).order("created_at", { ascending: false })
           ]),
-          skipReadingLogs
-            ? Promise.resolve({ data: [], error: null })
-            : (window.readingLogRepository
-              ? window.readingLogRepository.fetch({
-                cacheKey: `reading_logs:${user.id}`,
-                // 分頁一定要有唯一且固定的排序（#348）。沒排序時，小組長以上經過
-                // nlc-data forced scope 的查詢在不同連線上會走不同索引、回傳順序不同，
-                // 前後頁接不起來 → 有的紀錄抓兩次、有的沒抓到，累積章數每次重整都不一樣。
-                query: table => table.select("book, chapter, read_at, plan_id, round").eq("user_id", user.id).order("id", { ascending: true }),
-                onData: (rows, meta) => this.applyReadingLogsSnapshot(rows, { notify: true, source: meta.source })
-              })
-              // window.readingLogRepository only exists when js/app.js has run (it's
-              // created at app.js:1025) — pages that reach here without it (there
-              // shouldn't be any now that exam/grade pass skipReadingLogs, but keep
-              // this safe as a fallback) must stay paginated: one finished round is
-              // 1,189 chapters, well past PostgREST's 1000-row default, and an
-              // unpaginated fetch here silently truncates chapters_read *and* gets
-              // written into the offline localStorage snapshot.
-              : fetchAllRows(() => state.supabase.from("reading_logs").select("book, chapter, read_at, plan_id, round").eq("user_id", user.id).order("id", { ascending: true }))),
           skipReadingLogs ? Promise.resolve({ data: [], error: null }) : this.fetchAllHighlights()
         ]);
+        // #473：is_personal 的 migration 還沒上的環境（前端先部署）查這個欄位會失敗；
+        // 退回不含它的查詢，計畫清單照常載入，只是還不會有個人計畫。
+        const plansResult = isMissingPersonalPlanColumn(firstPlansResult.error)
+          ? await state.supabase.from("reading_plans").select(OWN_READING_PLAN_COLUMNS).eq("user_id", user.id).order("created_at", { ascending: false })
+          : firstPlansResult;
+
+        // 計畫清單沒拿到就不查打卡紀錄（不知道哪些計畫還能打卡），保留既有紀錄，
+        // 跟原本「查詢失敗時保留既有的 state.readingLogs」一樣。
+        if (!skipReadingLogs && !plansResult.error && !state.readingLogDigest) {
+          // 開機前先用上一次的離線快照當起點：網路失敗只拿到 SWR 快取的開機範圍紀錄時，
+          // 已關閉計畫的進度還有摘要撐著，獎章不會熄。
+          const restored = this.restoreReadingLogOfflineSnapshot();
+          state.readingLogDigest = restored.digest;
+          state.readingLogScope = restored.scope;
+        }
+        const bootLogs = skipReadingLogs || plansResult.error
+          ? null
+          : await this.loadBootReadingLogs(
+            user,
+            plansResult.data || [],
+            globalPlansResult.error ? [] : (globalPlansResult.data || [])
+          );
+        const logsResult = bootLogs ? bootLogs.logsResult : { data: [], error: null };
+        const logsLoaded = Boolean(bootLogs && !logsResult.error);
 
         // Only message/code — never the raw error object. A PostgrestError
         // can echo back query/row context that shouldn't reach the browser
@@ -1686,9 +1846,23 @@ const db = {
         // skipReadingLogs：logsResult 是空 stub，不是「查了、剛好沒有」，所以
         // 不要呼叫 applyReadingLogsSnapshot（會把 state.readingLogs/chapters_read
         // 洗成空/0）——直接維持呼叫前的既有值，跟完全沒查過一樣。
-        const rawLogs = logsResult.data || [];
-        if (!skipReadingLogs && !logsResult.error) {
-          this.applyReadingLogsSnapshot(rawLogs);
+        // #474：按需載入過、而且還是已關閉的計畫，逐筆紀錄留著（重新整理不必再抓）。
+        // 只留「真的按需載入過」的（不在上一次 open 範圍裡）——上次還能打卡、這次關閉的
+        // 計畫，逐筆紀錄不一定在記憶體裡（例如從離線快照接手），一律改看摘要。
+        if (logsLoaded) {
+          const nextScope = bootLogs.scope.mode === "open"
+            ? createReadingLogScope({
+              mode: "open",
+              openPlanIds: bootLogs.scope.openPlanIds,
+              loadedPlanIds: getLazilyLoadedPlanIds(state.readingLogScope)
+                .filter(id => bootLogs.closedPlanIds.includes(id))
+            })
+            : bootLogs.scope;
+          state.readingLogScope = nextScope;
+          state.readingLogDigest = bootLogs.digest;
+          this.applyReadingLogsSnapshot(logsResult.data || [], { scope: nextScope });
+          // #474 之前整包紀錄的 IndexedDB 快取用不到了，順手清掉。
+          window.readingLogRepository?.deleteCache(legacyReadingLogCacheKey(user.id)).catch(() => {});
         }
 
         // 3. Load Active Reading Plans
@@ -1707,9 +1881,14 @@ const db = {
             plans.forEach(dbPlan => {
               try {
                 const globalPlanId = dbPlan.global_plan_id || null;
-                const key = dbPlan.preset_key
-                  || (globalPlanId ? globalPlanId : null)
-                  || getPresetKeyByName(dbPlan.name);
+                // 個人計畫（#473）只看 is_personal 標記：不掛教會計畫，名字是使用者自己取的，
+                // 不能拿名字去對應教會計畫（同名就會被當成那個計畫）。key 用自己的 id。
+                const isPersonal = dbPlan.is_personal === true;
+                const key = isPersonal
+                  ? dbPlan.id
+                  : (dbPlan.preset_key
+                    || (globalPlanId ? globalPlanId : null)
+                    || getPresetKeyByName(dbPlan.name));
                 const presetStageMatch = String(dbPlan.preset_key || "").match(/^church_stage_(\d{2})$/);
                 const idStageMatch = String(globalPlanId || "").match(/^00000000-0000-0000-c026-(\d{12})$/);
                 const campaignStageNo = Number(presetStageMatch && presetStageMatch[1]
@@ -1726,13 +1905,18 @@ const db = {
 
                 const isFixed = dbPlan.is_fixed !== false;
                 const storedRound = Number(dbPlan.current_round || 1);
-                const planLogs = rawLogs.filter(log => log.plan_id === dbPlan.id);
+                // 逐筆紀錄還沒載入的已關閉計畫（#474）：用摘要裡的遍數確認。
+                const planLogs = isPlanReadingLogsLoaded(state.readingLogScope, dbPlan.id)
+                  ? (state.readingLogs || []).filter(log => log.plan_id === dbPlan.id)
+                  : digestRoundLogs(state.readingLogDigest, dbPlan.id);
                 const confirmedRound = getConfirmedReadingRound({
                   currentRound: storedRound,
                   upgradePromptHandled: dbPlan.upgrade_prompt_handled,
                   logs: planLogs
                 });
-                const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
+                const linkedGlobalPlan = isPersonal
+                  ? null
+                  : (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
                 // 延後大區梯次是普通固定日期計畫：排程靠 target_books。enrollment 自己
                 // 沒帶書卷時，退回對應 global_plan 的 books（來源正式階段的經卷）。
                 const effectiveBooks = (Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0)
@@ -1751,6 +1935,7 @@ const db = {
                 planObj.id = dbPlan.id;
                 planObj.currentRoundStartedAt = dbPlan.current_round_started_at || null;
                 planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯
+                planObj.isPersonal = isPersonal;
                 planObj.isFixed = isFixed;
                 planObj.is_fixed = isFixed;
                 planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
@@ -1788,9 +1973,9 @@ const db = {
         // skipReadingLogs loads never reach this point with real reading-log
         // data (logsResult.data is the empty stub above), so never let a
         // lite load overwrite a real cached snapshot with that emptiness.
-        if (!skipReadingLogs && !plansResult.error && !logsResult.error) {
+        if (logsLoaded) {
           safeStorageSet("active_reading_plans", state.activePlans, 300);
-          safeStorageSet("reading_logs", state.readingLogs, 300);
+          this.saveReadingLogOfflineSnapshot();
           localStorage.setItem("offline_snapshot_synced_at", new Date().toISOString());
         }
 
@@ -1838,6 +2023,8 @@ const db = {
           member_context_sync_error: ""
         };
         state.readingLogs = [];
+        state.readingLogScope = null;
+        state.readingLogDigest = null;
         state.activePlans = [];
         state.activePlan = null;
         if (typeof updateAdminNavVisibility === 'function') {
@@ -2307,7 +2494,7 @@ const db = {
           read_at: todayISO,
           round: Number(round)
         };
-        const cacheKey = `reading_logs:${user.id}`;
+        const cacheKeys = readingLogCacheKeys(user.id, planId);
         const repository = window.readingLogRepository || null;
         const throwWriteError = result => {
           if (!result?.error) return result;
@@ -2317,10 +2504,10 @@ const db = {
           throw error;
         };
         const insertReadingLog = () => repository
-          ? repository.insert(row, { invalidate: [cacheKey] })
+          ? repository.insert(row, { invalidate: cacheKeys })
           : state.supabase.from("reading_logs").insert(row);
         const updateReadingLog = id => repository
-          ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: [cacheKey] })
+          ? repository.update({ read_at: todayISO }, query => query.eq("id", id), { invalidate: cacheKeys })
           : state.supabase.from("reading_logs").update({ read_at: todayISO }).eq("id", id);
         const compatiblePlanWrite = async () => {
           const existingResult = await state.supabase.from("reading_logs").select("id")
@@ -2335,7 +2522,7 @@ const db = {
         if (planId) {
           try {
             writeResult = repository
-              ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: [cacheKey] })
+              ? await repository.upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" }, { invalidate: cacheKeys })
               : await state.supabase.from("reading_logs").upsert(row, { onConflict: "user_id,plan_id,book,chapter,round" });
             throwWriteError(writeResult);
           } catch (upsertError) {
@@ -2347,7 +2534,7 @@ const db = {
         } else {
           const deleteResult = repository
             ? await repository.delete(query => query.eq("user_id", user.id).eq("book", book)
-              .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: [cacheKey] })
+              .eq("chapter", chapter).eq("round", round).is("plan_id", null), { invalidate: cacheKeys })
             : await state.supabase.from("reading_logs").delete()
               .eq("user_id", user.id).eq("book", book).eq("chapter", chapter)
               .eq("round", round).is("plan_id", null);
@@ -2367,9 +2554,8 @@ const db = {
             query = query.eq("user_id", user.id).eq("book", book).eq("chapter", chapter).eq("round", round);
             return planId ? query.or(`plan_id.eq.${planId},plan_id.is.null`) : query.is("plan_id", null);
           };
-          const cacheKey = `reading_logs:${user.id}`;
           const deleteResult = window.readingLogRepository
-            ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: [cacheKey] })
+            ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: readingLogCacheKeys(user.id, planId) })
             : await applyDeleteFilters(state.supabase.from("reading_logs").delete());
           if (deleteResult && deleteResult.error) {
             throw new Error(deleteResult.error.message || deleteResult.error.error || String(deleteResult.error));
@@ -2465,8 +2651,10 @@ const db = {
   },
 
   // Calculate streak based on reading logs
+  // 首頁連續天數跨所有計畫算：已載入紀錄的日期 ∪ 已關閉計畫摘要的打卡日期（#474）。
   calculateStreak() {
-    if (state.readingLogs.length === 0) {
+    const digestDates = (state.readingLogDigest && state.readingLogDigest.readDates) || [];
+    if (state.readingLogs.length === 0 && digestDates.length === 0) {
       state.currentUser.streak = 0;
       return;
     }
@@ -2481,7 +2669,7 @@ const db = {
       return `${year}-${month}-${day}`;
     };
 
-    const dates = [...new Set(state.readingLogs.map(log => toLocalYYYYMMDD(log.read_at)))].filter(Boolean).sort().reverse();
+    const dates = collectReadDateKeys(state.readingLogs, state.readingLogDigest, toLocalYYYYMMDD);
 
     if (dates.length === 0) {
       state.currentUser.streak = 0;
@@ -3637,6 +3825,8 @@ const db = {
   },
 
   _readingTeamPlanId(plan) {
+    // 個人計畫（#473）不屬於任何教會計畫：沒有排行、團隊可查。
+    if (isPersonalPlan(plan)) return null;
     const value = plan && (plan.globalPlanId || plan.global_plan_id || plan.id);
     return isUuid(value) ? String(value) : null;
   },
@@ -5370,6 +5560,7 @@ const db = {
 
     state.activePlans = state.activePlans.filter(p => p.id !== planId && p.presetKey !== presetKey);
     state.readingLogs = state.readingLogs.filter(l => l.plan_id !== planId && l.presetKey !== presetKey);
+    state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);
 
     if (!state.isSupabaseMode) {
       localStorage.setItem("active_reading_plans", JSON.stringify(state.activePlans));
@@ -5396,6 +5587,113 @@ const db = {
     renderPlanView();
     updateDashboardView();
     showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
+  },
+
+  // ── 個人計畫（#473）── 規則見 js/data/personal-plans.mjs；伺服器觸發器才是真正的把關。
+  // 有沒有打卡紀錄：逐筆已載入就看逐筆；已結束計畫開機只有摘要（#474）就看摘要。
+  personalPlanHasReadingLogs(plan) {
+    if (!plan || !plan.id) return false;
+    if (isPlanReadingLogsLoaded(state.readingLogScope, plan.id)) {
+      return (state.readingLogs || []).some(log => log && String(log.plan_id) === String(plan.id));
+    }
+    return digestRoundLogs(state.readingLogDigest, plan.id).length > 0;
+  },
+
+  canEditPersonalPlanSchedule(plan) {
+    return isPersonalPlan(plan) && !this.personalPlanHasReadingLogs(plan);
+  },
+
+  canCreatePersonalPlan() {
+    return canCreatePersonalPlan(state.activePlans);
+  },
+
+  async createPersonalPlan(input) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "請先登入後再新增個人計畫。" };
+    }
+    if (!canCreatePersonalPlan(state.activePlans)) {
+      return { success: false, message: personalPlanErrorMessage({ message: "personal_plan_limit_reached" }) };
+    }
+    const built = buildPersonalPlanFields(input);
+    if (!built.ok) return { success: false, message: built.message };
+    try {
+      const user = await this.getCurrentDbUser();
+      if (!user) return { success: false, message: "目前找不到你的會員資料，請重新登入後再試。" };
+      const { data, error } = await state.supabase
+        .from("reading_plans")
+        .insert(buildPersonalPlanInsert(user.id, built.fields))
+        .select("id")
+        .single();
+      if (error) return { success: false, message: personalPlanErrorMessage(error, "新增個人計畫失敗，請稍後再試。"), error };
+      // 計畫物件（日程、進度、打卡範圍）跟開機同一條路建，不在這裡另組一份。
+      await this.loadUserData(true);
+      const plan = (state.activePlans || []).find(item => data && item.id === data.id) || null;
+      return { success: true, plan };
+    } catch (error) {
+      console.error("[PersonalPlan] create failed:", error && error.message);
+      return { success: false, message: personalPlanErrorMessage(error, "新增個人計畫失敗，請稍後再試。"), error };
+    }
+  },
+
+  // 改名隨時可以；書卷與日期只在還沒打卡前可以改（input 帶了也會被忽略）。
+  async updatePersonalPlan(plan, input) {
+    if (!isPersonalPlan(plan) || !plan.id || !state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "只能修改自己的個人計畫。" };
+    }
+    const editSchedule = this.canEditPersonalPlanSchedule(plan);
+    let fields;
+    if (editSchedule) {
+      const built = buildPersonalPlanFields(input);
+      if (!built.ok) return { success: false, message: built.message };
+      fields = built.fields;
+    } else {
+      const nameError = validatePersonalPlanName(input && input.name);
+      if (nameError) return { success: false, message: nameError };
+      fields = { name: normalizePersonalPlanName(input.name) };
+    }
+    // is_personal 一併送出（值不變）：nlc-data 看到它才不會拿名稱去比退役計畫名單。
+    const payload = { ...fields, is_personal: true };
+    try {
+      const { error } = await state.supabase.from("reading_plans").update(payload).eq("id", plan.id);
+      if (error) return { success: false, message: personalPlanErrorMessage(error), error };
+      await this.loadUserData(true);
+      const updated = (state.activePlans || []).find(item => item.id === plan.id) || null;
+      if (updated && state.activePlan && state.activePlan.id === plan.id) {
+        state.activePlan = updated;
+        if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(updated);
+      }
+      return { success: true, plan: updated, scheduleEdited: editSchedule };
+    } catch (error) {
+      console.error("[PersonalPlan] update failed:", error && error.message);
+      return { success: false, message: personalPlanErrorMessage(error), error };
+    }
+  },
+
+  // 個人計畫刪除後，打卡紀錄隨外鍵（ON DELETE CASCADE）一起刪掉。已結束的也能刪。
+  async deletePersonalPlan(plan) {
+    if (!isPersonalPlan(plan) || !plan.id || !state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "只能刪除自己的個人計畫。" };
+    }
+    try {
+      const { error } = await state.supabase.from("reading_plans").delete().eq("id", plan.id);
+      if (error) return { success: false, message: "刪除個人計畫失敗，請稍後再試。", error };
+    } catch (error) {
+      console.error("[PersonalPlan] delete failed:", error && error.message);
+      return { success: false, message: "刪除個人計畫失敗，請稍後再試。", error };
+    }
+    const planId = String(plan.id);
+    state.activePlans = (state.activePlans || []).filter(item => String(item.id) !== planId);
+    state.readingLogs = (state.readingLogs || []).filter(log => String(log.plan_id) !== planId);
+    state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);
+    if (!state.activePlan || String(state.activePlan.id) === planId) {
+      state.activePlan = null;
+      localStorage.removeItem("selected_plan_key");
+      if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(null);
+    }
+    calculateAllPlansProgress();
+    this.saveLocalUserStats();
+    this._userDataPromise = null;
+    return { success: true };
   },
 
   async loadGlobalPlans() {

@@ -78,11 +78,13 @@ describe("reading_logs 分頁要有固定排序 (#348)", () => {
     expect(uniqueIds(data)).toBe(rows.length);
   });
 
-  it("db.js 兩條 reading_logs 載入路徑都照 id 排序", () => {
-    const select = 'select("book, chapter, read_at, plan_id, round").eq("user_id", user.id)';
-    const occurrences = db.split(select).length - 1;
-    expect(occurrences).toBe(2);
-    expect(db.split(`${select}.order("id", { ascending: true })`).length - 1).toBe(2);
+  it("db.js 每一條 reading_logs 載入路徑都照 id 排序（開機範圍、按需載入的計畫，#474）", () => {
+    const chunks = db.split("select(READING_LOG_SELECT)").slice(1);
+    expect(chunks).toHaveLength(2);
+    chunks.forEach(chunk => {
+      expect(chunk.slice(0, 200)).toContain('.order("id", { ascending: true })');
+    });
+    expect(db).not.toContain('select("book, chapter, read_at, plan_id, round")');
   });
 });
 
@@ -103,7 +105,7 @@ describe("累積閱讀章數由伺服器計算 (#348)", () => {
   });
 
   it("nlc-data 開放這支 RPC 並注入 p_actor_id", () => {
-    expect(nlcData).toMatch(/const READING_STATS_RPC_FUNCTIONS = new Set\(\[\s*"get_my_plan_chapter_total"\s*\]\)/);
+    expect(nlcData).toMatch(/const READING_STATS_RPC_FUNCTIONS = new Set\(\[\s*"get_my_plan_chapter_total",/);
     expect(nlcData).toContain("...READING_STATS_RPC_FUNCTIONS");
     expect(nlcData).toContain("|| READING_STATS_RPC_FUNCTIONS.has(functionName)");
     expect(nlcData).toContain("rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };");

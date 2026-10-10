@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import {
   addDays,
   buildActivitySeries,
@@ -16,10 +17,6 @@ import {
 } from "../js/modules/admin-reading-activity.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = suffix => {
-  const file = readdirSync(new URL("../supabase/migrations/", import.meta.url)).find(name => name.endsWith(suffix));
-  return read(`supabase/migrations/${file}`);
-};
 
 describe("reading activity dates", () => {
   it("uses the Taiwan date, not the UTC date", () => {
@@ -197,12 +194,12 @@ describe("reading activity wiring", () => {
   });
 
   it("checks role = admin in SQL, revokes anon, and counts only plan reading logs in Taiwan time", () => {
-    for (const [suffix, signature] of [
-      ["_reading_activity_dau_wau_mau.sql", "admin_get_reading_activity(date, date, uuid)"],
-      ["_reading_activity_l7.sql", "admin_get_reading_activity_l7(date, uuid)"],
-      ["_reading_hour_heatmap.sql", "admin_get_reading_hour_heatmap(date, date, uuid)"]
+    // 三支後來被 #473（排除個人計畫）改寫過：驗現在的定義（#458）。
+    for (const [sql, signature] of [
+      [currentMigrationSql("20261007110629_reading_activity_dau_wau_mau.sql"), "admin_get_reading_activity(date, date, uuid)"],
+      [currentMigrationSql("20261007110640_reading_activity_l7.sql"), "admin_get_reading_activity_l7(date, uuid)"],
+      [currentMigrationSql("20261007110649_reading_hour_heatmap.sql"), "admin_get_reading_hour_heatmap(date, date, uuid)"]
     ]) {
-      const sql = migration(suffix);
       expect(sql).toContain("IS DISTINCT FROM 'admin'");
       expect(sql).toContain(`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC, anon, authenticated;`);
       expect(sql).toContain(`GRANT EXECUTE ON FUNCTION public.${signature} TO authenticated, service_role;`);

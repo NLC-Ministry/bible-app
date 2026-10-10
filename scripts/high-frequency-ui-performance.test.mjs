@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const plan = readFileSync("js/modules/plan-stats.js", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const repository = readFileSync("js/pwa/SupabaseRepository.js", "utf8");
+const readingLogScope = readFileSync("js/data/reading-log-scope.mjs", "utf8");
 
 describe("high-frequency UI performance", () => {
   it("filters the already processed participant list without refetching on every keystroke", () => {
@@ -22,7 +23,11 @@ describe("high-frequency UI performance", () => {
   it("uses stale-while-revalidate only for a user-scoped reading-log cache key", () => {
     expect(repository).toContain("this.publish(cached.data");
     expect(repository).toContain("const data = await this.fetchAllPages(query, pageSize)");
-    expect(db).toContain("`reading_logs:${user.id}`");
+    // #474：開機範圍一份、每個按需載入的計畫各一份，都帶 user id。
+    expect(db).toContain("cacheKey: readingLogOpenCacheKey(user.id)");
+    expect(db).toContain("cacheKey: readingLogPlanCacheKey(user.id, id)");
+    expect(readingLogScope).toContain("return `reading_logs:${userId}:open`;");
+    expect(readingLogScope).toContain("return `reading_logs:${userId}:plan:${planId}`;");
     expect(db).not.toContain('cacheKey: "reading_logs"');
   });
 
