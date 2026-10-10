@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // 從 Tyndale Open Study Notes 的 StudyNotes.xml 取出某一卷，寫成 content/commentary/tosn/<英文書名>.json。
 // 已經翻好的中文（zh、title）會保留，只更新英文原文與範圍。
 //
