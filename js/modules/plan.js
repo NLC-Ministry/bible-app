@@ -15,6 +15,7 @@ import { createReaderBottomDwellController, observeReaderEndSentinel } from "./r
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { canCreatePersonalPlan, isPersonalPlan, personalPlanErrorMessage } from "../data/personal-plans.mjs";
 import { openPersonalPlanDialog } from "./personal-plan-dialog.mjs";
+import { applyDeletePlanButtonKind } from "./plan-options-menu.mjs";
 import {
   countLateCompletedDays,
   buildRound1ReadDateMap,
@@ -888,8 +889,7 @@ function refreshPlanOptionsMenuForKind(plan) {
   if (scheduleBtn) scheduleBtn.style.display = expired ? "none" : "";
   if (deleteBtn) {
     deleteBtn.style.display = expired && !personal ? "none" : "";
-    const label = deleteBtn.querySelector("span:last-child");
-    if (label) label.textContent = personal ? "刪除此計畫" : "退出此計畫";
+    applyDeletePlanButtonKind(deleteBtn, personal, typeof renderIcon === "function" ? renderIcon : null);
   }
   if (resetBtn) resetBtn.style.display = expired ? "none" : "";
   if (editPersonalBtn) editPersonalBtn.style.display = personal ? "" : "none";
