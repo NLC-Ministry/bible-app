@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { buildRequest } from "../js/data-client/query-builder.mjs";
 
 const db = readFileSync("js/db.js", "utf8");
+const readingLogScope = readFileSync("js/data/reading-log-scope.mjs", "utf8");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
 const indexes = readFileSync("supabase/migrations/0051_performance_indexes.sql", "utf8");
@@ -25,7 +26,8 @@ describe("performance architecture contracts", () => {
   it("does not fetch every startup column for high-volume resources", () => {
     expect(db).not.toContain('from("global_plans").select("*").order("start_date"');
     expect(db).not.toContain('from("reading_plans").select("*").eq("user_id", user.id)');
-    expect(db).toContain('select("book, chapter, read_at, plan_id, round")');
+    expect(db).toContain("select(READING_LOG_SELECT)");
+    expect(readingLogScope).toContain('export const READING_LOG_SELECT = "book, chapter, read_at, plan_id, round";');
   });
 
   it("filters permission scope in PostgreSQL instead of downloading all profiles", () => {

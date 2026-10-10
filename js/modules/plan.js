@@ -38,6 +38,7 @@ import {
 import { AUTO_RECORD_REASONS, getAutoRecordDecision, recordPlanOpened } from "../data/reader-auto-record.mjs";
 import { getPlanCheckInStatusNotice, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 import { isPlanCheckInClosed, isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
+import { readingLogCacheKeys, removePlanFromDigest } from "../data/reading-log-scope.mjs";
 import { getExplorePlanVisibility } from "./explore-plan-visibility.mjs";
 
 // Reading plans tab view controller
@@ -1012,10 +1013,9 @@ function initPlanControls() {
         if (state.isSupabaseMode && state.supabase) {
           const user = await db.getCurrentDbUser();
           if (!user || !user.id || !planId) throw new Error("找不到可重置的讀經計畫資料");
-          const cacheKey = `reading_logs:${user.id}`;
           const applyDeleteFilters = query => query.eq("user_id", user.id).eq("plan_id", planId);
           const deleteResult = window.readingLogRepository
-            ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: [cacheKey] })
+            ? await window.readingLogRepository.delete(applyDeleteFilters, { invalidate: readingLogCacheKeys(user.id, planId) })
             : await applyDeleteFilters(state.supabase.from("reading_logs").delete());
           if (deleteResult && deleteResult.error) {
             throw new Error(deleteResult.error.message || deleteResult.error.error || String(deleteResult.error));
@@ -1034,6 +1034,7 @@ function initPlanControls() {
 
         // 2. Only update memory after the server reset succeeds.
         state.readingLogs = removePlanReadingLogs(state.readingLogs, plan);
+        state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);
         resetPlanProgressState(plan);
         rebuildPlanSchedule(plan);
         const firstReadingDay = (plan.days || []).find(day => (day.chapters || []).some(ch => Number(ch.round || 1) === 1));
@@ -5176,6 +5177,18 @@ async function enterGroupProgressState() {
   }
 }
 
+// #474：已結束計畫開機只有摘要（夠算進度、獎章），日曆與日期相關統計要逐筆紀錄——
+// 點進詳情／統計時才抓。抓到新資料後，還停在同一個計畫的詳情就重畫一次。
+function requestActivePlanReadingLogs() {
+  const plan = state.activePlan;
+  if (!plan || typeof db === "undefined" || typeof db.ensurePlanReadingLogs !== "function") return;
+  db.ensurePlanReadingLogs(plan).then(loaded => {
+    if (!loaded || state.activePlan !== plan || !state.planDetailOpen) return;
+    if (typeof appRouter !== "undefined" && appRouter.currentTab !== "plan-view") return;
+    return renderPlanView();
+  }).catch(error => console.warn("[Plan] Loading reading logs for an ended plan failed", error));
+}
+
 async function setPlanState(newState) {
   ensurePlanRouteShell();
 
@@ -5183,6 +5196,7 @@ async function setPlanState(newState) {
   if (normalized === PLAN_ROUTE.DETAIL || normalized === "DETAIL" || normalized === PLAN_ROUTE.GROUP || normalized === "GROUP") {
     const checkInNotice = state.activePlan && getPlanCheckInStatusNotice(state.activePlan);
     if (checkInNotice) showToast(checkInNotice);
+    requestActivePlanReadingLogs();
   }
 
 

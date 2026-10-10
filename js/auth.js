@@ -308,6 +308,8 @@ const auth = {
       member_context_required_action_url: ""
     };
     state.readingLogs = [];
+    state.readingLogScope = null;
+    state.readingLogDigest = null;
     state.activePlans = [];
     state.activePlan = null;
     state.currentProfileId = null;
@@ -907,6 +909,8 @@ const auth = {
     // Explicitly clear user data cache only on intentional logout
     localStorage.removeItem("active_reading_plans");
     localStorage.removeItem("reading_logs");
+    localStorage.removeItem("reading_log_digest");
+    localStorage.removeItem("reading_log_scope");
     localStorage.removeItem("selected_plan_key");
     localStorage.removeItem("offline_trusted_identity");
     // 螢光筆是本機優先合併（見 db.js loadUserData）——不清掉的話，同一台裝置

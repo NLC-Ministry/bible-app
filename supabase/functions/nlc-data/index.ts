@@ -415,10 +415,11 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_list_lightning_quiz_vouchers",
   "admin_set_lightning_quiz_voucher_redeemed"
 ]);
-// 個人統計「累積閱讀章數」由伺服器算（#348）。只算呼叫者自己的紀錄，
-// 所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。
+// 個人統計「累積閱讀章數」由伺服器算（#348）；已關閉計畫的已讀章節摘要（#474）。
+// 只算呼叫者自己的紀錄，所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。
 const READING_STATS_RPC_FUNCTIONS = new Set([
-  "get_my_plan_chapter_total"
+  "get_my_plan_chapter_total",
+  "get_my_reading_log_digest"
 ]);
 // 管理面板「讀經使用率」（#452 DAU／WAU／MAU、#453 L7、#454 星期 × 小時熱度圖）。
 // SQL 端自己檢查呼叫者是系統管理員（role = admin），這裡只注入 p_actor_id。

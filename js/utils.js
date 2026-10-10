@@ -3,6 +3,7 @@ import {
 } from "./member-journey.mjs";
 import { isCampaignStageKind, isCanonicalCampaignStageKind } from "./data/campaign-stage-kinds.mjs";
 import { segmentScheduleDaysForRoundCount, toLocalDateKey } from "./data/current-round-progress.mjs";
+import { digestChapterKeys, digestRoundLogs, isPlanReadingLogsLoaded } from "./data/reading-log-scope.mjs";
 
 // ============================================================
 // utils.js — Shared utilities used across all view controllers
@@ -2307,8 +2308,16 @@ function calculateAllPlansProgress() {
 
   visibleActivePlans.forEach(plan => {
     if (!plan) return;
+    // #474：逐筆紀錄還沒載入的已關閉計畫，用伺服器摘要（每遍讀過哪些章）比對。
+    // 獎章、鐵獎、已結束清單開機就會讀這些計畫的 progress／currentRound。
+    const usesDigest = !isPlanReadingLogsLoaded(state.readingLogScope, plan.id);
     // 💡 數據一致性修正：直接從打卡日誌計算實際讀過的最大遍數
     let maxReadRound = plan.currentRound || 1;
+    if (usesDigest) {
+      digestRoundLogs(state.readingLogDigest, plan.id).forEach(l => {
+        maxReadRound = Math.max(maxReadRound, l.round);
+      });
+    }
     if (state.readingLogs) {
       state.readingLogs.forEach(l => {
         const logPlanId = l.plan_id || null;
@@ -2368,6 +2377,9 @@ function calculateAllPlansProgress() {
           logSet.add(`__unattributed___${r}_${b}_${c}`);
         }
       }
+    }
+    if (usesDigest) {
+      digestChapterKeys(state.readingLogDigest, plan.id).forEach(key => logSet.add(`${plan.id}_${key}`));
     }
 
     let completed = 0;
