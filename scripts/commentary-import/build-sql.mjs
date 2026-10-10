@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // 把翻好的 content/commentary/tosn/<書>.json 轉成匯入 SQL（待審、未發布）。還有沒翻的就停下來。
 //
 //   node scripts/commentary-import/build-sql.mjs content/commentary/tosn/leviticus.json > 匯入.sql
