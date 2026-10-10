@@ -56,6 +56,8 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
   const isSupportedPlan = plan => {
     if (!plan) return false;
+    // 個人計畫（#473）沒有團隊；下面的名稱保底辨識也不能套在使用者自己取的名字上。
+    if (plan.isPersonal === true) return false;
     if (!/^[0-9a-f-]{36}$/i.test(getPlanId(plan))) return false;
     // 主判斷：正式階段 or 大區延後梯次（唯一定義在 data/campaign-stage-kinds.mjs）。
     if (isCampaignStageKind(plan)) return true;

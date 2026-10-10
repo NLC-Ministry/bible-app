@@ -45,6 +45,8 @@ export function isRetiredPlanReference(value) {
 
 export function isRetiredPlanRecord(record) {
   if (!record || typeof record !== "object") return false;
+  // 個人計畫（#473）的名字是使用者自己取的，剛好跟退役計畫同名也不是退役計畫。
+  const isPersonal = record.isPersonal === true || record.is_personal === true;
   return [
     record.id,
     record.plan_id,
@@ -52,7 +54,7 @@ export function isRetiredPlanRecord(record) {
     record.global_plan_id,
     record.presetKey,
     record.preset_key,
-    record.name
+    isPersonal ? null : record.name
   ].some(isRetiredPlanReference);
 }
 

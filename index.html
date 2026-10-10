@@ -329,6 +329,10 @@
                 <span class="menu-icon"><span class="nlc-icon" data-icon="book"
                     aria-hidden="true"></span></span><span>計畫詳情</span>
               </button>
+              <button class="options-dropdown-item" id="edit-personal-plan-btn" style="display: none;">
+                <span class="menu-icon"><span class="nlc-icon" data-icon="pencil"
+                    aria-hidden="true"></span></span><span>編輯個人計畫</span>
+              </button>
               <button class="options-dropdown-item" id="edit-flexible-plan-schedule-btn">
                 <span class="menu-icon"><span class="nlc-icon" data-icon="calendarThirty"
                     aria-hidden="true"></span></span><span>每週讀經安排</span>
@@ -751,6 +755,11 @@
               <button class="circular-action-btn" id="btn-toggle-plan-search" type="button" title="搜尋計畫"
                 aria-label="搜尋計畫" aria-expanded="false" aria-controls="plan-search-panel">
                 <span class="nlc-icon nlc-icon--sm" data-icon="search" aria-hidden="true"></span>
+              </button>
+              <!-- #473：新增個人計畫。達上限時 plan.js 改成 aria-disabled 並說明原因 -->
+              <button class="circular-action-btn" id="btn-add-personal-plan" type="button" title="新增個人計畫"
+                aria-label="新增個人計畫">
+                <span class="nlc-icon nlc-icon--sm" data-icon="plus" aria-hidden="true"></span>
               </button>
             </div>
           </div>

@@ -13,6 +13,8 @@ import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
 import { applyPlanSidebarVisibility } from "./plan-sidebar-visibility.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
+import { canCreatePersonalPlan, isPersonalPlan, personalPlanErrorMessage } from "../data/personal-plans.mjs";
+import { openPersonalPlanDialog } from "./personal-plan-dialog.mjs";
 import {
   countLateCompletedDays,
   buildRound1ReadDateMap,
@@ -276,6 +278,8 @@ const GROUP_SUBVIEW = Object.freeze({ PERSONAL: "personal", STATS: "stats", RANK
 async function showPlanGroupSubview(view = GROUP_SUBVIEW.STATS) {
   const allowedViews = Object.values(GROUP_SUBVIEW);
   let target = allowedViews.includes(view) ? view : GROUP_SUBVIEW.STATS;
+  // 個人計畫（#473）沒有團體統計與排名，只有本人的個人統計。
+  if (isPersonalPlan(state.activePlan)) target = GROUP_SUBVIEW.PERSONAL;
 
   const isTeamPlan = typeof window.isReadingTeamPlan === "function" && window.isReadingTeamPlan(state.activePlan);
   if (isTeamPlan && target === GROUP_SUBVIEW.STATS) {
@@ -451,6 +455,7 @@ window.PlanPageController = {
     if (isTeamPlan) {
       hasTeam = await checkUserHasTeam();
     }
+    const isPersonal = isPersonalPlan(state.activePlan);
     const statsTab = document.getElementById("plan-primary-tab-stats");
     if (statsTab) {
       if (isTeamPlan) {
@@ -458,8 +463,15 @@ window.PlanPageController = {
         forceHidden(statsTab, !hasTeam);
       } else {
         statsTab.textContent = "團體統計";
-        forceHidden(statsTab, false);
+        forceHidden(statsTab, isPersonal);
       }
+    }
+    // 個人計畫（#473）不進排行榜：排名分頁整個藏起來。
+    const rankingTab = document.getElementById("plan-primary-tab-ranking");
+    if (rankingTab) forceHidden(rankingTab, isPersonal);
+    if (isPersonal && target === PLAN_PAGE.GROUP) {
+      options.primaryView = GROUP_SUBVIEW.PERSONAL;
+      this.groupSubview = GROUP_SUBVIEW.PERSONAL;
     }
 
     if (isTeamPlan && !hasTeam) {
@@ -494,7 +506,10 @@ window.PlanPageController = {
       if (typeof renderPlanScheduleTracker === "function") await renderPlanScheduleTracker();
     } else {
       const planKey = state.activePlan.id || state.activePlan.globalPlanId || state.activePlan.presetKey;
-      if (this.groupLoadedForPlanKey !== planKey || options.forceReload) {
+      // 個人計畫只有本人的個人統計，不必載團體名單。
+      if (isPersonal) {
+        this.groupLoadedForPlanKey = planKey;
+      } else if (this.groupLoadedForPlanKey !== planKey || options.forceReload) {
         this.groupLoadPromise = fetchGroupRankings(planKey).finally(() => { this.groupLoadPromise = null; });
         await this.groupLoadPromise;
         this.groupLoadedForPlanKey = planKey;
@@ -770,6 +785,93 @@ async function updatePlanTeamInviteShortcutVisibility() {
   }
 }
 
+// ── 個人計畫（#473）── 規則在 js/data/personal-plans.mjs，存取在 db.*PersonalPlan。
+const PERSONAL_PLAN_LIMIT_MESSAGE = personalPlanErrorMessage({ message: "personal_plan_limit_reached" });
+
+function updatePersonalPlanButtonState() {
+  const button = document.getElementById("btn-add-personal-plan");
+  if (!button) return;
+  forceHidden(button, !state.isSupabaseMode);
+  // 達上限不用 disabled：按了要跳出原因，螢幕閱讀器也讀得到。
+  const full = !canCreatePersonalPlan(state.activePlans);
+  button.setAttribute("aria-disabled", full ? "true" : "false");
+  button.classList.toggle("is-disabled", full);
+  button.title = full ? PERSONAL_PLAN_LIMIT_MESSAGE : "新增個人計畫";
+}
+
+async function createPersonalPlanFromDialog() {
+  if (typeof db === "undefined" || typeof db.createPersonalPlan !== "function") return;
+  if (!canCreatePersonalPlan(state.activePlans)) {
+    showToast(PERSONAL_PLAN_LIMIT_MESSAGE);
+    return;
+  }
+  const input = await openPersonalPlanDialog();
+  if (!input) return;
+  loader.show("正在建立個人計畫...");
+  let result;
+  try {
+    result = await db.createPersonalPlan(input);
+  } finally {
+    loader.hide();
+  }
+  if (!result || !result.success) {
+    showToast((result && result.message) || "新增個人計畫失敗，請稍後再試。");
+    updatePersonalPlanButtonState();
+    return;
+  }
+  showToast("個人計畫已建立。");
+  if (result.plan) {
+    await openJoinedPlanProgress(result.plan);
+  } else {
+    await renderPlanView();
+  }
+}
+
+async function editPersonalPlan(plan) {
+  if (!isPersonalPlan(plan) || typeof db === "undefined" || typeof db.updatePersonalPlan !== "function") return;
+  const scheduleLocked = !db.canEditPersonalPlanSchedule(plan);
+  const input = await openPersonalPlanDialog({ plan, scheduleLocked });
+  if (!input) return;
+  loader.show("正在儲存個人計畫...");
+  let result;
+  try {
+    result = await db.updatePersonalPlan(plan, input);
+  } finally {
+    loader.hide();
+  }
+  if (!result || !result.success) {
+    showToast((result && result.message) || "儲存個人計畫失敗，請稍後再試。");
+    return;
+  }
+  showToast("個人計畫已更新。");
+  await renderPlanView();
+}
+
+async function deletePersonalPlanWithConfirm(plan) {
+  const confirmed = await window.showConfirmDialog({
+    title: `確定要刪除「${plan.name}」嗎？`,
+    message: "刪除後，這個個人計畫和它的打卡紀錄都會一併移除，無法復原。",
+    confirmText: "確定刪除",
+    cancelText: "保留計畫",
+    isDestructive: true
+  });
+  if (!confirmed) return;
+  loader.show("正在刪除個人計畫...");
+  let result;
+  try {
+    result = await db.deletePersonalPlan(plan);
+  } finally {
+    loader.hide();
+  }
+  if (!result || !result.success) {
+    showToast((result && result.message) || "刪除個人計畫失敗，請稍後再試。");
+    return;
+  }
+  showToast("個人計畫已刪除。");
+  await setPlanState(PLAN_ROUTE.LIST);
+  if (typeof updateDashboardView === "function") updateDashboardView();
+}
+
 // 「...」選單是所有計畫共用同一份 DOM，開啟前依目前這份計畫決定要不要藏起來
 // ——不能只在進入計畫詳情時做一次，因為按鈕本身之前會在每次點開「...」時
 // 無條件重設回顯示，所以要在同一個地方（點開的當下）重新判斷。
@@ -780,9 +882,17 @@ function refreshPlanOptionsMenuForKind(plan) {
   const scheduleBtn = document.getElementById("edit-flexible-plan-schedule-btn");
   const deleteBtn = document.getElementById("delete-plan-btn");
   const resetBtn = document.getElementById("reset-plan-progress-btn");
+  // 個人計畫（#473）是本人的：隨時可以編輯（改名）、已結束也能刪除。
+  const personal = isPersonalPlan(plan);
+  const editPersonalBtn = document.getElementById("edit-personal-plan-btn");
   if (scheduleBtn) scheduleBtn.style.display = expired ? "none" : "";
-  if (deleteBtn) deleteBtn.style.display = expired ? "none" : "";
+  if (deleteBtn) {
+    deleteBtn.style.display = expired && !personal ? "none" : "";
+    const label = deleteBtn.querySelector("span:last-child");
+    if (label) label.textContent = personal ? "刪除此計畫" : "退出此計畫";
+  }
   if (resetBtn) resetBtn.style.display = expired ? "none" : "";
+  if (editPersonalBtn) editPersonalBtn.style.display = personal ? "" : "none";
 }
 
 function initPlanControls() {
@@ -958,12 +1068,37 @@ function initPlanControls() {
     });
   }
 
+  const editPersonalPlanButton = document.getElementById("edit-personal-plan-btn");
+  if (editPersonalPlanButton && !editPersonalPlanButton.dataset.listenerBound) {
+    editPersonalPlanButton.dataset.listenerBound = "true";
+    editPersonalPlanButton.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const dropdown = document.getElementById("plan-options-dropdown");
+      if (dropdown) dropdown.classList.add("hidden");
+      await editPersonalPlan(state.activePlan);
+    });
+  }
+
+  const addPersonalPlanButton = document.getElementById("btn-add-personal-plan");
+  if (addPersonalPlanButton && !addPersonalPlanButton.dataset.listenerBound) {
+    addPersonalPlanButton.dataset.listenerBound = "true";
+    addPersonalPlanButton.addEventListener("click", event => {
+      event.preventDefault();
+      void createPersonalPlanFromDialog();
+    });
+  }
+
   // Abandon Plan Button inside options dropdown
   const deleteBtn = document.getElementById("delete-plan-btn");
   if (deleteBtn) {
     deleteBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (!state.activePlan) return;
+      if (isPersonalPlan(state.activePlan)) {
+        await deletePersonalPlanWithConfirm(state.activePlan);
+        return;
+      }
       if (isPlanExpired(state.activePlan)) {
         showToast("此計畫已結束，僅供查看紀錄與統計，無法再退出。");
         return;
@@ -1687,6 +1822,7 @@ function renderJoinedPlansList() {
     const activePill = document.querySelector("#plan-list-status-pills .pill-btn.active");
     const filter = activePill ? activePill.getAttribute("data-filter") : "mine";
     updatePlanSidebarIntroCardVisibility();
+    updatePersonalPlanButtonState();
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1788,6 +1924,7 @@ function renderJoinedPlansList() {
             meta: dateMeta
           }),
           status: renderPlanCardBadgeRow([
+            isPersonalPlan(plan) && renderPlanCardBadge({ icon: "user", label: "個人計畫", tone: "neutral" }),
             isCampaignStage && renderPlanCardBadge({
               icon: "award",
               label: campaignAwardValue,
@@ -1834,6 +1971,7 @@ function renderJoinedPlansList() {
             meta: dateMeta
           }),
           status: progressHero + renderPlanCardBadgeRow([
+            isPersonalPlan(plan) && renderPlanCardBadge({ icon: "user", label: "個人計畫", tone: "neutral" }),
             isCampaignStage && renderPlanCardBadge({
               icon: "award",
               label: campaignAwardValue,

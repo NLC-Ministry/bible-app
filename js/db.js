@@ -27,6 +27,15 @@ import {
   readingLogPlanCacheKey,
   removePlanFromDigest
 } from './data/reading-log-scope.mjs';
+import {
+  buildPersonalPlanFields,
+  buildPersonalPlanInsert,
+  canCreatePersonalPlan,
+  isPersonalPlan,
+  normalizePersonalPlanName,
+  personalPlanErrorMessage,
+  validatePersonalPlanName
+} from './data/personal-plans.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
 import {
   OFFLINE_IDENTITY_KEY,
@@ -126,6 +135,13 @@ function getPresetKeyByName(name) {
     String(preset.name || "").trim() === target
   );
   return match ? match[0] : null;
+}
+
+const OWN_READING_PLAN_COLUMNS = "id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at";
+
+function isMissingPersonalPlanColumn(error) {
+  if (!error) return false;
+  return String(error.code || "") === "42703" || /is_personal/.test(String(error.message || ""));
 }
 
 function isUuid(value) {
@@ -1687,14 +1703,19 @@ const db = {
         // profiles 這裡是 .eq(id) 單列、reading_plans 是 user-scoped 個位數。
         // highlights（fetchAllRows，重度使用者可能 >200）維持獨立。
         // reading_logs 是第二段（#474）：要先知道哪些計畫還能打卡，才查得出開機要的逐筆紀錄。
-        const [[globalPlansResult, profileResult, plansResult], highlightsResult] = await Promise.all([
+        const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult] = await Promise.all([
           this.batchSelect([
             state.supabase.from("global_plans").select("id, name, description, start_date, end_date, grace_days, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
             state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
-            state.supabase.from("reading_plans").select("id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, current_round_started_at, is_fixed, reading_days_per_week, rest_weekdays, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
+            state.supabase.from("reading_plans").select(`${OWN_READING_PLAN_COLUMNS}, is_personal`).eq("user_id", user.id).order("created_at", { ascending: false })
           ]),
           skipReadingLogs ? Promise.resolve({ data: [], error: null }) : this.fetchAllHighlights()
         ]);
+        // #473：is_personal 的 migration 還沒上的環境（前端先部署）查這個欄位會失敗；
+        // 退回不含它的查詢，計畫清單照常載入，只是還不會有個人計畫。
+        const plansResult = isMissingPersonalPlanColumn(firstPlansResult.error)
+          ? await state.supabase.from("reading_plans").select(OWN_READING_PLAN_COLUMNS).eq("user_id", user.id).order("created_at", { ascending: false })
+          : firstPlansResult;
 
         // 計畫清單沒拿到就不查打卡紀錄（不知道哪些計畫還能打卡），保留既有紀錄，
         // 跟原本「查詢失敗時保留既有的 state.readingLogs」一樣。
@@ -1860,9 +1881,14 @@ const db = {
             plans.forEach(dbPlan => {
               try {
                 const globalPlanId = dbPlan.global_plan_id || null;
-                const key = dbPlan.preset_key
-                  || (globalPlanId ? globalPlanId : null)
-                  || getPresetKeyByName(dbPlan.name);
+                // 個人計畫（#473）只看 is_personal 標記：不掛教會計畫，名字是使用者自己取的，
+                // 不能拿名字去對應教會計畫（同名就會被當成那個計畫）。key 用自己的 id。
+                const isPersonal = dbPlan.is_personal === true;
+                const key = isPersonal
+                  ? dbPlan.id
+                  : (dbPlan.preset_key
+                    || (globalPlanId ? globalPlanId : null)
+                    || getPresetKeyByName(dbPlan.name));
                 const presetStageMatch = String(dbPlan.preset_key || "").match(/^church_stage_(\d{2})$/);
                 const idStageMatch = String(globalPlanId || "").match(/^00000000-0000-0000-c026-(\d{12})$/);
                 const campaignStageNo = Number(presetStageMatch && presetStageMatch[1]
@@ -1888,7 +1914,9 @@ const db = {
                   upgradePromptHandled: dbPlan.upgrade_prompt_handled,
                   logs: planLogs
                 });
-                const linkedGlobalPlan = (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
+                const linkedGlobalPlan = isPersonal
+                  ? null
+                  : (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
                 // 延後大區梯次是普通固定日期計畫：排程靠 target_books。enrollment 自己
                 // 沒帶書卷時，退回對應 global_plan 的 books（來源正式階段的經卷）。
                 const effectiveBooks = (Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0)
@@ -1907,6 +1935,7 @@ const db = {
                 planObj.id = dbPlan.id;
                 planObj.currentRoundStartedAt = dbPlan.current_round_started_at || null;
                 planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯
+                planObj.isPersonal = isPersonal;
                 planObj.isFixed = isFixed;
                 planObj.is_fixed = isFixed;
                 planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
@@ -3796,6 +3825,8 @@ const db = {
   },
 
   _readingTeamPlanId(plan) {
+    // 個人計畫（#473）不屬於任何教會計畫：沒有排行、團隊可查。
+    if (isPersonalPlan(plan)) return null;
     const value = plan && (plan.globalPlanId || plan.global_plan_id || plan.id);
     return isUuid(value) ? String(value) : null;
   },
@@ -5556,6 +5587,113 @@ const db = {
     renderPlanView();
     updateDashboardView();
     showToast("已成功退出該讀經計畫並清除相關計畫讀經打卡紀錄。");
+  },
+
+  // ── 個人計畫（#473）── 規則見 js/data/personal-plans.mjs；伺服器觸發器才是真正的把關。
+  // 有沒有打卡紀錄：逐筆已載入就看逐筆；已結束計畫開機只有摘要（#474）就看摘要。
+  personalPlanHasReadingLogs(plan) {
+    if (!plan || !plan.id) return false;
+    if (isPlanReadingLogsLoaded(state.readingLogScope, plan.id)) {
+      return (state.readingLogs || []).some(log => log && String(log.plan_id) === String(plan.id));
+    }
+    return digestRoundLogs(state.readingLogDigest, plan.id).length > 0;
+  },
+
+  canEditPersonalPlanSchedule(plan) {
+    return isPersonalPlan(plan) && !this.personalPlanHasReadingLogs(plan);
+  },
+
+  canCreatePersonalPlan() {
+    return canCreatePersonalPlan(state.activePlans);
+  },
+
+  async createPersonalPlan(input) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "請先登入後再新增個人計畫。" };
+    }
+    if (!canCreatePersonalPlan(state.activePlans)) {
+      return { success: false, message: personalPlanErrorMessage({ message: "personal_plan_limit_reached" }) };
+    }
+    const built = buildPersonalPlanFields(input);
+    if (!built.ok) return { success: false, message: built.message };
+    try {
+      const user = await this.getCurrentDbUser();
+      if (!user) return { success: false, message: "目前找不到你的會員資料，請重新登入後再試。" };
+      const { data, error } = await state.supabase
+        .from("reading_plans")
+        .insert(buildPersonalPlanInsert(user.id, built.fields))
+        .select("id")
+        .single();
+      if (error) return { success: false, message: personalPlanErrorMessage(error, "新增個人計畫失敗，請稍後再試。"), error };
+      // 計畫物件（日程、進度、打卡範圍）跟開機同一條路建，不在這裡另組一份。
+      await this.loadUserData(true);
+      const plan = (state.activePlans || []).find(item => data && item.id === data.id) || null;
+      return { success: true, plan };
+    } catch (error) {
+      console.error("[PersonalPlan] create failed:", error && error.message);
+      return { success: false, message: personalPlanErrorMessage(error, "新增個人計畫失敗，請稍後再試。"), error };
+    }
+  },
+
+  // 改名隨時可以；書卷與日期只在還沒打卡前可以改（input 帶了也會被忽略）。
+  async updatePersonalPlan(plan, input) {
+    if (!isPersonalPlan(plan) || !plan.id || !state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "只能修改自己的個人計畫。" };
+    }
+    const editSchedule = this.canEditPersonalPlanSchedule(plan);
+    let fields;
+    if (editSchedule) {
+      const built = buildPersonalPlanFields(input);
+      if (!built.ok) return { success: false, message: built.message };
+      fields = built.fields;
+    } else {
+      const nameError = validatePersonalPlanName(input && input.name);
+      if (nameError) return { success: false, message: nameError };
+      fields = { name: normalizePersonalPlanName(input.name) };
+    }
+    // is_personal 一併送出（值不變）：nlc-data 看到它才不會拿名稱去比退役計畫名單。
+    const payload = { ...fields, is_personal: true };
+    try {
+      const { error } = await state.supabase.from("reading_plans").update(payload).eq("id", plan.id);
+      if (error) return { success: false, message: personalPlanErrorMessage(error), error };
+      await this.loadUserData(true);
+      const updated = (state.activePlans || []).find(item => item.id === plan.id) || null;
+      if (updated && state.activePlan && state.activePlan.id === plan.id) {
+        state.activePlan = updated;
+        if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(updated);
+      }
+      return { success: true, plan: updated, scheduleEdited: editSchedule };
+    } catch (error) {
+      console.error("[PersonalPlan] update failed:", error && error.message);
+      return { success: false, message: personalPlanErrorMessage(error), error };
+    }
+  },
+
+  // 個人計畫刪除後，打卡紀錄隨外鍵（ON DELETE CASCADE）一起刪掉。已結束的也能刪。
+  async deletePersonalPlan(plan) {
+    if (!isPersonalPlan(plan) || !plan.id || !state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "只能刪除自己的個人計畫。" };
+    }
+    try {
+      const { error } = await state.supabase.from("reading_plans").delete().eq("id", plan.id);
+      if (error) return { success: false, message: "刪除個人計畫失敗，請稍後再試。", error };
+    } catch (error) {
+      console.error("[PersonalPlan] delete failed:", error && error.message);
+      return { success: false, message: "刪除個人計畫失敗，請稍後再試。", error };
+    }
+    const planId = String(plan.id);
+    state.activePlans = (state.activePlans || []).filter(item => String(item.id) !== planId);
+    state.readingLogs = (state.readingLogs || []).filter(log => String(log.plan_id) !== planId);
+    state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);
+    if (!state.activePlan || String(state.activePlan.id) === planId) {
+      state.activePlan = null;
+      localStorage.removeItem("selected_plan_key");
+      if (typeof window.syncActivePlanContext === "function") window.syncActivePlanContext(null);
+    }
+    calculateAllPlansProgress();
+    this.saveLocalUserStats();
+    this._userDataPromise = null;
+    return { success: true };
   },
 
   async loadGlobalPlans() {

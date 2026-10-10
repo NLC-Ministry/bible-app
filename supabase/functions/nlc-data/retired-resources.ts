@@ -51,7 +51,8 @@ export function isRetiredPlanRequest(body: any) {
       isRetiredValue("id", row.id)
       || isRetiredValue("global_plan_id", row.global_plan_id)
       || isRetiredValue("preset_key", row.preset_key)
-      || isRetiredValue("name", row.name)
+      // 個人計畫（#473）的名字是使用者自己取的，不拿來比退役名單。
+      || (row.is_personal !== true && isRetiredValue("name", row.name))
     )
   );
 }

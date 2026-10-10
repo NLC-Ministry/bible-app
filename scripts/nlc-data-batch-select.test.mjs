@@ -94,7 +94,7 @@ describe("db.batchSelect (js/db.js)", () => {
 describe("db.batchSelect — switched call sites (js/db.js)", () => {
   it("loadUserData batches global_plans + profiles + reading_plans (all under the 1000-row default)", () => {
     const fn = db.slice(db.indexOf("async loadUserData(force"), db.indexOf("async loadOrgStructure()"));
-    expect(fn).toMatch(/const \[\[globalPlansResult, profileResult, plansResult\], highlightsResult\]/);
+    expect(fn).toMatch(/const \[\[globalPlansResult, profileResult, firstPlansResult\], highlightsResult\]/);
     expect(fn).toMatch(/this\.batchSelect\(\[\s*[\s\S]*?from\("global_plans"\)[\s\S]*?from\("profiles"\)[\s\S]*?from\("reading_plans"\)[\s\S]*?\]\)/);
     // global_plans no longer wrapped in fetchAllRows here
     expect(fn).not.toContain("fetchAllRows(() => state.supabase.from(\"global_plans\")");

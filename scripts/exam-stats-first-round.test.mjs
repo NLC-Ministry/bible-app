@@ -20,7 +20,12 @@ describe("0170: _user_read_book_once — 讀過該書卷一遍的判定", () => 
     expect(sql).toContain("p_book = ANY(rp.target_books)");
     expect(sql).toContain("rp.current_round >= 2");
     expect(sql).toContain("COUNT(DISTINCT l.chapter) FROM public.reading_logs l");
-    expect(sql).toContain("COALESCE(l.round, 1) = 1) >= p_chapters");
+    expect(sql).toMatch(/COALESCE\(l\.round, 1\) = 1\s[\s\S]*?\) >= p_chapters/);
+  });
+
+  it("個人計畫（#473）的計畫與打卡都不算「讀過一遍」", () => {
+    expect(sql).toContain("AND NOT rp.is_personal -- #473");
+    expect(sql).toContain("AND NOT EXISTS (SELECT 1 FROM public.reading_plans own WHERE own.id = l.plan_id AND own.is_personal) -- #473");
   });
 
   it("SECURITY DEFINER、pinned search_path、只給 authenticated / service_role", () => {

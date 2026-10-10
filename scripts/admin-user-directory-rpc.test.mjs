@@ -1,6 +1,7 @@
 // #395：使用者基本資料、權限管理改用 get_admin_user_directory 一次回傳＋共用快取。
 // 新路徑（RPC）和舊路徑（分頁查詢）轉出來的結果必須逐筆相同。
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import { JSDOM } from "jsdom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -270,9 +271,8 @@ describe("admin user directory shared cache (#395)", () => {
 });
 
 describe("get_admin_user_directory is service_role-only and gated by nlc-data (#395)", () => {
-  const migrationsDir = new URL("../supabase/migrations/", import.meta.url);
-  const migrationFile = readdirSync(migrationsDir).find(name => name.endsWith("_admin_user_directory.sql"));
-  const migration = migrationFile ? readFileSync(new URL(migrationFile, migrationsDir), "utf8") : "";
+  // 函式後來被 #473（排除個人計畫）改寫過：驗現在的定義（#458）。
+  const migration = currentMigrationSql("20261002023615_admin_user_directory.sql");
   const nlcData = readFileSync(new URL("../supabase/functions/nlc-data/index.ts", import.meta.url), "utf8");
 
   it("migration orders like the old queries and only grants service_role", () => {
