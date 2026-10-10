@@ -23,6 +23,7 @@ import {
   prependTaiwanExportTime
 } from "./export-time.mjs";
 import { parseQuizImportText } from "./quiz-import.mjs";
+import { csvCell } from "./csv-cell.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
@@ -372,7 +373,7 @@ export function convertUserDirectoryToCSV(profiles, exportedAt = new Date()) {
 
   return prependTaiwanExportTime([
     headers.join(","),
-    ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ...rows.map(row => row.map(csvCell).join(","))
   ].join("\n"), exportedAt);
 }
 
@@ -424,7 +425,7 @@ export function convertOrgStructureToCSV(orgStructure = state.orgStructure, expo
   if (rows.length === 0) return "";
   return prependTaiwanExportTime([
     headers.join(","),
-    ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ...rows.map(row => row.map(csvCell).join(","))
   ].join("\n"), exportedAt);
 }
 
@@ -1136,7 +1137,7 @@ export function convertAdminRegistrationStatisticsToCSV(context, exportedAt = ne
   const greatRegions = Array.isArray(context && context.greatRegions) ? context.greatRegions : [];
   const pastoralZones = Array.isArray(context && context.pastoralZones) ? context.pastoralZones : [];
   const summary = getAdminRegistrationStatisticsSummary(context);
-  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+  const esc = csvCell;
   const formatRows = rows => rows.map(row => [
     esc(sanitizeRegistrationStatisticsText(row.label)),
     esc(Number(row.signupCount || 0)),
@@ -3750,7 +3751,7 @@ export function convertDailyQuizRosterToCSV(roster, exportedAt = new Date()) {
   ]);
   return prependTaiwanExportTime([
     headers.join(','),
-    ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+    ...rows.map(row => row.map(csvCell).join(','))
   ].join('\n'), exportedAt);
 }
 
@@ -4323,7 +4324,7 @@ function formatTeamPlanDate(value) {
 
 export function convertTeamRegistrationStatusToCSV(plans, division, exportedAt = new Date()) {
   if (!Array.isArray(plans) || plans.length === 0) return "";
-  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+  const esc = csvCell;
   const memberHeaders = [];
   for (let i = 2; i <= Number(division); i++) memberHeaders.push(`隊員${i}`);
   const lines = [];
@@ -4394,7 +4395,7 @@ window.exportTeamRegistrationStatusCSV = exportTeamRegistrationStatusCSV;
 
 export function convertTeamMemberRosterToCSV(plans, division, exportedAt = new Date()) {
   if (!Array.isArray(plans) || plans.length === 0) return "";
-  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+  const esc = csvCell;
   const lines = [];
   let totalMembers = 0;
 

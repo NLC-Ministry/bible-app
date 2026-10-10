@@ -1,3 +1,5 @@
+import { csvCell } from "./csv-cell.mjs";
+
 export const TAIWAN_TIME_ZONE = "Asia/Taipei";
 
 // 用 formatToParts 自己拼字串：zh-TW 的 .format() 輸出（日期與時間之間的空白字元）
@@ -44,15 +46,11 @@ export function formatTaiwanDate(value = new Date()) {
   return parts ? `${parts.year}-${parts.month}-${parts.day}` : "";
 }
 
-function escapeCsvValue(value) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
 export function prependTaiwanExportTime(csvContent, exportedAt = new Date()) {
   if (!csvContent) return "";
   const exportTime = formatTaiwanExportDateTime(exportedAt);
   return [
-    [escapeCsvValue("匯出時間（台灣時間）"), escapeCsvValue(exportTime)].join(","),
+    [csvCell("匯出時間（台灣時間）"), csvCell(exportTime)].join(","),
     csvContent
   ].join("\n");
 }

@@ -5,6 +5,7 @@ import { Loader2, ChevronLeft, ImagePlus, Send, Trash2, Shield } from "lucide-re
 import { AdminReportTable } from "./AdminReportTable.tsx";
 import { ThreadPipeline, compressScreenshot, type ThreadImage } from "./IssueReportBlocks.ts";
 import { groupMessages, dayKey, dayLabel, clockTime, formatWhen, statusBadgeClass, CATEGORY_BADGE_CLASS } from "./ReportDrawer.tsx";
+import { csvCell } from "../../js/modules/csv-cell.mjs";
 
 interface IssueReport {
   id: string;
@@ -49,7 +50,7 @@ export function convertToCSV(data: IssueReport[]): string {
     STATUS_MAP[item.status] || item.status || "待處理",
     (item as any).messageCount ?? "",
     (item as any).lastMessageAt || "",
-    (item.description || "").replace(/"/g, '""'),
+    item.description || "",
     item.url || "",
     item.profiles?.name || "訪客/離線",
     item.profiles?.pastoral_zone || "",
@@ -58,7 +59,7 @@ export function convertToCSV(data: IssueReport[]): string {
   
   return [
     headers.join(","),
-    ...rows.map(row => row.map(val => `"${val}"`).join(","))
+    ...rows.map(row => row.map(csvCell).join(","))
   ].join("\n");
 }
 
