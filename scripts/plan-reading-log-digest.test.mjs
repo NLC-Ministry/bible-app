@@ -2,10 +2,10 @@
 // #397：名單（profiles＋報名＋打卡＋今天的靈修）再改成 get_plan_stats_roster 一次回傳。
 // 規則仍然在前端，所以新路徑（RPC）和舊路徑（分頁查詢）還原出來的
 // users、logsByUserId、userPlanIdCache 必須逐筆相同（除了下游沒用到的 log id）。
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { describe, expect, it, vi } from "vitest";
-import { latestFunctionDefinition } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 import {
   expandPlanStatsRoster,
   expandReadingLogDigest,
@@ -410,12 +410,8 @@ describe("nlc-data injects the plan stats scope and overrides client values (#39
 });
 
 describe("plan stats RPCs are service_role-only and fail closed (#394, #397)", () => {
-  const migrationsDir = new URL("../supabase/migrations/", import.meta.url);
-  const read = suffix => {
-    const file = readdirSync(migrationsDir).find(name => name.endsWith(suffix));
-    return file ? readFileSync(new URL(file, migrationsDir), "utf8").replace(/\r\n/g, "\n") : "";
-  };
-  const roster = read("_plan_stats_roster.sql");
+  // get_plan_stats_roster 後來被 #473（排除個人計畫）改寫過：驗現在的定義（#458）。
+  const roster = currentMigrationSql("20261002052232_plan_stats_roster.sql");
   const ROSTER_SIGNATURE = "public.get_plan_stats_roster(text[], text, date, boolean, uuid[], uuid)";
   const DIGEST_SIGNATURE = "public.get_plan_reading_log_digest(uuid[], boolean, uuid[], uuid)";
 

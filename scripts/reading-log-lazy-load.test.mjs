@@ -28,11 +28,11 @@ describe("#474 開機載入", () => {
   const loadUserData = between(db, "async loadUserData(force", "async loadOrgStructure()");
 
   it("第一段的 batch 不再平行抓 reading_logs；拿到計畫清單後才查開機範圍", () => {
-    const firstPhase = between(loadUserData, "const [[globalPlansResult, profileResult, plansResult], highlightsResult]", "]);");
+    const firstPhase = between(loadUserData, "const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult]", "]);");
     expect(firstPhase).not.toContain("reading_logs");
     expect(firstPhase).not.toContain("readingLogRepository");
     const bootCall = loadUserData.indexOf("await this.loadBootReadingLogs(");
-    expect(bootCall).toBeGreaterThan(loadUserData.indexOf("const [[globalPlansResult, profileResult, plansResult], highlightsResult]"));
+    expect(bootCall).toBeGreaterThan(loadUserData.indexOf("const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult]"));
     expect(loadUserData).toContain("plansResult.data || []");
   });
 

@@ -4224,6 +4224,137 @@ body:not(.dark-theme) .settings-row-btn:hover {
   background: var(--color-brand-subtle);
 }
 
+/* #473：個人計畫新增／編輯表單（js/modules/personal-plan-dialog.mjs） */
+.personal-plan-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.personal-plan-dialog__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+}
+
+.personal-plan-dialog__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.personal-plan-dialog__intro,
+.personal-plan-dialog__section-label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.personal-plan-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.personal-plan-dialog__field[hidden],
+.personal-plan-dialog__dates[hidden] {
+  display: none;
+}
+
+.personal-plan-dialog__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.personal-plan-dialog__fieldset legend {
+  margin-bottom: 0.45rem;
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.personal-plan-dialog__fieldset:disabled {
+  opacity: 0.55;
+}
+
+.personal-plan-dialog__segments {
+  align-self: flex-start;
+}
+
+.personal-plan-dialog__segments .segment-toggle-btn {
+  padding: 0.35rem 0.9rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+}
+
+.personal-plan-dialog__dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.6rem;
+}
+
+.personal-plan-dialog__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.personal-plan-dialog__quick .secondary-btn {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.875rem;
+}
+
+.personal-plan-dialog__locked {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: var(--color-warning-subtle);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.personal-plan-dialog__error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-danger);
+}
+
+.personal-plan-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+#btn-add-personal-plan.is-disabled {
+  opacity: 0.45;
+}
+
 .admin-commentary-topic img {
   display: block;
   width: 100%;
