@@ -3265,6 +3265,8 @@ function closeAdminSection() {
   }
 }
 window.closeAdminSection = closeAdminSection;
+// 從其他地方（例如通知鈴，#471）直接打開某個後台子頁。
+window.openAdminSection = id => setAdminSection(id, { userInitiated: true, focusContent: true });
 
 // 使用者基本資料、權限管理的名單很大，第一次進入子頁才載（#395），權限管理的
 // 兩個區塊共用 db 層同一份名單快取。載入失敗就清掉記號，下次進來再試。
@@ -3275,6 +3277,7 @@ const ADMIN_SECTION_DATA_LOADERS = {
   commentary: () => [renderAdminCommentary({
     db,
     books: window.BIBLE_BOOKS,
+    verseCounts: window.BIBLE_VERSE_COUNTS || null,
     escapeHTML,
     showToast,
     confirm: options => window.showConfirmDialog(options),

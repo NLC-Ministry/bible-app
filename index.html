@@ -1604,6 +1604,21 @@
                         <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
                       </span>
                     </button>
+                    <!-- 我的審核（#471）：被指派審核經文注釋的人才顯示，由 js/modules/commentary-review.mjs 控制 -->
+                    <button type="button" class="app-settings-item w-full text-left hidden" id="profile-commentary-review-entry" data-profile-open="commentary-review">
+                      <div class="app-settings-item__leading">
+                        <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
+                          <span class="nlc-icon nlc-icon--sm" data-icon="lightbulb" aria-hidden="true"></span>
+                        </span>
+                        <div class="app-settings-item__meta">
+                          <span class="app-settings-item__title">我的審核</span>
+                          <span class="app-settings-item__subtitle">審核被指派書卷的經文注釋譯文</span>
+                        </div>
+                      </div>
+                      <span class="app-settings-item__chevron">
+                        <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
+                      </span>
+                    </button>
                     <button type="button" class="app-settings-item w-full text-left" data-profile-open="vouchers">
                       <div class="app-settings-item__leading">
                         <span class="app-settings-icon-wrap app-settings-icon-wrap--neutral">
@@ -1946,49 +1961,103 @@
             </section>
           </div>
 
-          <!-- 經文注釋管理（#447）：第一次進入才由 js/modules/admin-commentary.mjs 載入清單。 -->
+          <!-- 經文注釋管理（#447、#470、#475）：注釋與詞條同一頁，第一次進入才由 js/modules/admin-commentary.mjs 載入清單。 -->
           <div id="admin-section-commentary" class="card-col span-12 admin-section-panel hidden">
             <section class="glass-card admin-announcements admin-commentary" aria-labelledby="admin-commentary-title">
               <div class="admin-announcements__header">
                 <div>
                   <p class="admin-registration-statistics__eyebrow">閱讀器內容管理</p>
                   <h3 class="card-title" id="admin-commentary-title">經文注釋</h3>
-                  <p>每一章最多一則。會友在聖經閱讀器讀到有注釋的章節時，上方會出現燈泡按鈕，點開就能看到注釋和主題圖片。</p>
+                  <p>注釋：節留空＝整章注釋（每章最多一則，閱讀器上方的燈泡打開）；填了節，那幾節右邊會出現注釋圖示。詞條：人名、地名、名詞的短解釋，整卷或整章的詞條只出現在經文真的提到這個詞的節。點選經文後，工具列也會多一個「注釋」。</p>
                 </div>
-                <button type="button" class="primary-btn" id="admin-commentary-create">新增注釋</button>
+                <button type="button" class="primary-btn" id="admin-commentary-create">新增</button>
               </div>
+              <!-- 審核進度（#471）：由 js/modules/admin-commentary-review.mjs 畫 -->
+              <div id="admin-commentary-review" class="admin-commentary-review" aria-live="polite"></div>
               <div id="admin-commentary-editor" class="announcement-form-panel hidden">
-                <h4 class="announcement-form-panel__title" id="admin-commentary-form-title">新增注釋</h4>
+                <h4 class="announcement-form-panel__title" id="admin-commentary-form-title">新增</h4>
+                <div class="admin-commentary-choice">
+                  <span class="admin-commentary-choice__label" id="admin-commentary-kind-label">類型</span>
+                  <div class="capsule-segmented-control segment-track" id="admin-commentary-kind" role="group" aria-labelledby="admin-commentary-kind-label">
+                    <button type="button" class="segment-toggle-btn active" data-commentary-kind="note" aria-pressed="true">注釋</button>
+                    <button type="button" class="segment-toggle-btn" data-commentary-kind="term" aria-pressed="false">詞條</button>
+                  </div>
+                </div>
+                <div id="admin-commentary-term-fields" class="admin-commentary-fieldset hidden">
+                  <label>詞
+                    <input type="text" id="admin-commentary-term-name" class="form-control announcement-form-panel__input" maxlength="40" placeholder="例如：會幕">
+                  </label>
+                  <label>其他寫法（選填，用頓號或逗號分隔；其他譯本的用字也可以寫在這裡）
+                    <input type="text" id="admin-commentary-term-aliases" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：帳幕、tabernacle">
+                  </label>
+                  <div class="admin-commentary-choice">
+                    <span class="admin-commentary-choice__label" id="admin-commentary-scope-label">適用範圍</span>
+                    <div class="capsule-segmented-control segment-track" id="admin-commentary-scope" role="group" aria-labelledby="admin-commentary-scope-label">
+                      <button type="button" class="segment-toggle-btn active" data-term-scope="book" aria-pressed="true">整卷</button>
+                      <button type="button" class="segment-toggle-btn" data-term-scope="chapter" aria-pressed="false">整章</button>
+                      <button type="button" class="segment-toggle-btn" data-term-scope="verses" aria-pressed="false">指定節</button>
+                    </div>
+                  </div>
+                </div>
                 <div class="admin-commentary-ref">
                   <label>書卷
                     <select id="admin-commentary-book" class="form-control announcement-form-panel__input"></select>
                   </label>
-                  <label>章
+                  <label id="admin-commentary-chapter-field">章
                     <select id="admin-commentary-chapter" class="form-control announcement-form-panel__input"></select>
                   </label>
                 </div>
-                <label>小標題（選填）
+                <div class="admin-commentary-verses" id="admin-commentary-verse-field">
+                  <label><span id="admin-commentary-verse-start-label">起始節（選填）</span>
+                    <input type="number" id="admin-commentary-verse-start" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="整章">
+                  </label>
+                  <label>結束節（選填）
+                    <input type="number" id="admin-commentary-verse-end" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="同起始節">
+                  </label>
+                </div>
+                <label id="admin-commentary-heading-field">小標題（選填）
                   <input type="text" id="admin-commentary-heading" class="form-control announcement-form-panel__input" maxlength="60" placeholder="例如：會幕的設計">
                 </label>
-                <label>注釋內容
+                <label><span id="admin-commentary-content-label">注釋內容</span>
                   <textarea id="admin-commentary-content" class="form-control announcement-form-panel__textarea" rows="8" placeholder="寫給會友看的經文解釋。空一行就是新的段落。"></textarea>
                 </label>
                 <fieldset class="admin-commentary-topics">
-                  <legend>主題圖片（勾選後，閱讀器會在注釋下方附上這些圖）</legend>
+                  <legend>主題圖片（勾選後，閱讀器會在內容下方附上這些圖）</legend>
                   <div id="admin-commentary-topic-list" class="admin-commentary-topic-list"></div>
                 </fieldset>
-                <label class="admin-commentary-publish">
+                <label>出處（選填，例如引用的資料與授權）
+                  <input type="text" id="admin-commentary-source" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：Tyndale Open Study Notes（CC BY-SA 4.0）">
+                </label>
+                <label class="admin-commentary-publish" id="admin-commentary-publish-field">
                   <input type="checkbox" id="admin-commentary-published" checked>
                   <span>發布給會友看（取消勾選就是先存成草稿）</span>
                 </label>
+                <p class="admin-commentary-review-hint hidden" id="admin-commentary-review-hint"></p>
                 <div class="announcement-form-panel__actions">
                   <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-commentary-cancel">取消</button>
-                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-commentary-save">儲存注釋</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-commentary-save">儲存</button>
                 </div>
               </div>
-              <label class="admin-commentary-filter">篩選書卷
-                <select id="admin-commentary-filter" class="form-control announcement-form-panel__input"></select>
-              </label>
+              <div class="admin-commentary-filters">
+                <label class="admin-commentary-filter">篩選書卷
+                  <select id="admin-commentary-filter" class="form-control announcement-form-panel__input"></select>
+                </label>
+                <label class="admin-commentary-filter">狀態
+                  <select id="admin-commentary-status-filter" class="form-control announcement-form-panel__input">
+                    <option value="">全部狀態</option>
+                    <option value="published">已發布</option>
+                    <option value="draft">草稿</option>
+                    <option value="pending">待審</option>
+                    <option value="returned">退回</option>
+                    <option value="approved">通過待發布</option>
+                  </select>
+                </label>
+                <div class="capsule-segmented-control segment-track" id="admin-commentary-kind-filter" role="group" aria-label="篩選類型">
+                  <button type="button" class="segment-toggle-btn active" data-kind-filter="all" aria-pressed="true">全部</button>
+                  <button type="button" class="segment-toggle-btn" data-kind-filter="note" aria-pressed="false">注釋</button>
+                  <button type="button" class="segment-toggle-btn" data-kind-filter="term" aria-pressed="false">詞條</button>
+                </div>
+              </div>
               <div id="admin-commentary-list" class="announcements-list" aria-live="polite">
                 <div class="admin-user-directory__empty">正在載入注釋…</div>
               </div>
@@ -2811,6 +2880,25 @@
     <div class="profile-subpage__body">
       <p class="profile-exams__intro">雲柱測驗英雄榜每天前三名可到克勞斯兌換抵用券，公布後 30 天內有效。到店出示這張券，店員看過後再按「確認兌換」；兌換後就不能再使用。</p>
       <div id="profile-vouchers-list" class="profile-exams__list" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div id="profile-tab-content-commentary-review" class="profile-subpage hidden" aria-hidden="true">
+    <header class="profile-subpage__header">
+      <button type="button" class="profile-subpage__back" data-profile-close aria-label="返回">
+        <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+        <span>返回</span>
+      </button>
+      <span class="profile-subpage__title">我的審核</span>
+      <button type="button" class="profile-subpage__action" id="profile-commentary-review-refresh">重新整理</button>
+    </header>
+    <div class="profile-subpage__body commentary-review-page">
+      <p class="profile-exams__intro">對照英文原文檢查譯文，人名、地名與用詞以和合本為準；有需要可以直接修改譯文。按「通過」後，等系統管理員最終發布，會友才看得到；有問題就按「退回」並寫下意見。</p>
+      <label class="commentary-review-page__book hidden">書卷
+        <select id="profile-commentary-review-book" class="form-control"></select>
+      </label>
+      <div class="capsule-segmented-control segment-track" id="profile-commentary-review-tabs" role="group" aria-label="審核狀態"></div>
+      <div id="profile-commentary-review-list" class="commentary-review-page__list" aria-live="polite"></div>
     </div>
   </div>
 

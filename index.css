@@ -3900,6 +3900,254 @@ body:not(.dark-theme) .settings-row-btn:hover {
   gap: 0.75rem;
 }
 
+/* 節範圍（#470）：起始節、結束節兩格並排。 */
+.admin-commentary-verses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+/* 類型（注釋／詞條）、詞條範圍的 segmented（#475）。 */
+.admin-commentary-choice {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.admin-commentary-choice__label {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-fieldset {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-commentary-aliases {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+/* 審核進度（#471）：每卷一張卡，指派審核者、整卷發布。 */
+.admin-commentary-review {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-commentary-review__head p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+.admin-commentary-review__books {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admin-commentary-review__book {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.admin-commentary-review__book-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-review__counts,
+.admin-commentary-review__reviewers {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-commentary-review__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-commentary-review__add label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-assign {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.admin-commentary-assign label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.admin-commentary-assign__results {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.admin-commentary-assign__result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-commentary-assign__result:hover,
+.admin-commentary-assign__result:focus-visible {
+  border-color: var(--color-brand);
+}
+
+.admin-commentary-assign__zone {
+  color: var(--text-secondary);
+}
+
+.admin-commentary-assign__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-commentary-assign__hint,
+.admin-commentary-review-hint,
+.admin-commentary-review-note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.admin-commentary-review-note {
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--color-warning, #d97706);
+  background: var(--color-brand-subtle);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-primary);
+}
+
+/* 個人頁「我的審核」（#471）：英文原文可展開，譯文直接改。 */
+.commentary-review-page {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.commentary-review-page__book {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-page__list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.commentary-review-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.commentary-review-card label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.commentary-review-card__ref {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+.commentary-review-card__note {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--color-warning, #d97706);
+  background: var(--color-brand-subtle);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.commentary-review-card__source summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--color-brand);
+}
+
+.commentary-review-card__source p {
+  margin: 0.4rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.commentary-review-card__content {
+  line-height: 1.7;
+}
+
+.commentary-review-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .admin-commentary-topics {
   margin: 0;
   padding: 0;
@@ -8843,6 +9091,86 @@ input:checked + .slider:before {
   margin: 0;
 }
 
+/* 節注釋＋詞彙（#470）：先引用經文（詞彙位置只在這裡標出來），再列說明與詞彙卡片。 */
+.reader-commentary-source {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.reader-commentary-quotes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reader-commentary-quote {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  border-left: 3px solid var(--color-brand);
+  border-radius: 0 10px 10px 0;
+  background: var(--color-brand-subtle);
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.reader-commentary-quote__num {
+  margin-right: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--color-brand);
+}
+
+.reader-commentary-mark {
+  padding: 0 0.1em;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-brand) 28%, transparent);
+  color: inherit;
+}
+
+.reader-commentary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reader-commentary-section__title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-secondary);
+}
+
+.reader-commentary-note,
+.reader-commentary-term {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.reader-commentary-note:last-child,
+.reader-commentary-term:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.reader-commentary-note__ref {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-brand);
+}
+
+.reader-commentary-note__title,
+.reader-commentary-term__name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
 @keyframes readerSettingsDialogIn {
   from { opacity: 0; transform: translateY(0.75rem) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -10117,6 +10445,15 @@ body.reader-page {
 @media (hover: none) and (pointer: coarse) {
   #reader-view .reader-floating-nav {
     display: none !important;
+  }
+}
+
+/* 有浮動按鈕時（上面那條的反面），經文左右讓出按鈕寬（46px）再加一點間距，
+   節旁注釋燈泡（#470）才不會落在「下一章」按鈕底下被蓋住（#543）。 */
+@media not all and (hover: none) and (pointer: coarse) {
+  #reader-view .bible-text-container {
+    padding-left: 64px !important;
+    padding-right: 64px !important;
   }
 }
 
@@ -16648,6 +16985,59 @@ select,
 .verse-note-badge svg {
   width: 0.72rem;
   height: 0.72rem;
+}
+
+/* ─── 節旁注釋 icon（#470）───
+   只有編了內容的節才有；佔經文右側一欄，不蓋到字，點它不會選取這一節。 */
+.bible-verse.has-commentary {
+  padding-right: 2.5rem;
+}
+
+/* 閱讀器（主 App 與 /read 都是 #reader-view）把經文內距寫成 !important，這裡要更明確才蓋得過。 */
+#reader-view .bible-verse.has-commentary {
+  padding-right: 2.5rem !important;
+}
+
+.verse-commentary-btn {
+  position: absolute;
+  top: 0.15rem;
+  right: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-brand);
+  cursor: pointer;
+}
+
+.verse-commentary-btn .nlc-icon,
+.verse-commentary-btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.verse-commentary-btn:hover,
+.verse-commentary-btn:focus-visible {
+  background: var(--color-brand-subtle);
+}
+
+.verse-commentary-btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+#reader-view .verse-commentary-btn {
+  top: 0.45rem;
+}
+
+.bible-verse.has-commentary .verse-note-badge {
+  top: 2.6rem;
+  right: 0.65rem;
 }
 
 /* ─── Verse Note Editor (full-screen annotation editor) ───

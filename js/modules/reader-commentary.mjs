@@ -1,9 +1,18 @@
-// 閱讀器「經文注釋」（#447）：工具列按鈕＋底部面板。
-// 只在聖經閱讀器（bible.js）使用；計畫裡的內嵌閱讀器不載入注釋。
-// 換章時不擋經文：經文畫完後才在閒置時查「這章有沒有注釋」（多半直接命中
-// localStorage 索引），使用者點開面板才抓內容與圖片。
+// 閱讀器「經文注釋」（#447、#470）：主 App 聖經閱讀器（bible.js）和 /read 讀經頁共用。
+// - 整章注釋：工具列的燈泡按鈕，這章有整章注釋才顯示。
+// - 節注釋＋詞彙：有內容的節右邊一顆注釋 icon；點選經文後工具列的「注釋」（呼叫端用
+//   versesWithCommentary() 決定要不要顯示）。兩個入口都打開同一個底部面板。
+// 經文本身不加任何標記（不畫底線），滑動和點節選取不受影響。
+// 換章時不擋經文：經文畫完後才在閒置時查索引（多半直接命中 localStorage），
+// 索引說這章有內容才抓那一章；詞條解釋等打開面板才抓。
 
-import { buildCommentaryBodyHTML, commentaryChapterKey } from "../data/passage-commentary.mjs";
+import {
+  buildCommentaryBodyHTML,
+  buildVerseCommentaryHTML,
+  formatVerseRuns,
+  indexMayHaveCommentary,
+  resolveChapterCommentary
+} from "../data/passage-commentary.mjs";
 
 const IDS = Object.freeze({
   button: "reader-commentary-btn",
@@ -12,6 +21,8 @@ const IDS = Object.freeze({
   body: "reader-commentary-body",
   close: "reader-commentary-close-btn"
 });
+
+export const VERSE_COMMENTARY_BUTTON_CLASS = "verse-commentary-btn";
 
 function defaultSchedule(callback) {
   if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
@@ -28,11 +39,14 @@ export function createReaderCommentaryController({
   escapeHTML,
   hydrateIcons = null,
   getElement = id => document.getElementById(id),
-  schedule = defaultSchedule
+  getVerseContainer = () => getElement("bible-content"),
+  schedule = defaultSchedule,
+  onChange = () => {}
 }) {
   let chapterToken = 0;
   let openToken = 0;
-  let current = null; // { book, chapter, label }
+  let current = null; // { book, chapter, label, textByVerse, chapterRow, entries, iconVerses }
+  let reopen = null;
   let bound = false;
 
   function setButtonVisible(visible) {
@@ -54,33 +68,83 @@ export function createReaderCommentaryController({
     return true;
   }
 
-  // 換章一開始呼叫：馬上藏起按鈕、關掉面板，避免顯示上一章的注釋。
+  function clearVerseButtons() {
+    const container = getVerseContainer();
+    if (!container) return;
+    container.querySelectorAll(`.${VERSE_COMMENTARY_BUTTON_CLASS}`).forEach(button => button.remove());
+    container.querySelectorAll(".bible-verse.has-commentary").forEach(verse => verse.classList.remove("has-commentary"));
+  }
+
+  // 依目前這章的結果放節旁 icon。呼叫端重畫經文後也可以再呼叫一次。
+  function decorateVerses() {
+    clearVerseButtons();
+    const container = getVerseContainer();
+    if (!container || !current) return;
+    const doc = container.ownerDocument;
+    for (const verse of current.iconVerses) {
+      const verseDiv = container.querySelector(`.bible-verse[data-verse="${verse}"]`);
+      if (!verseDiv) continue;
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = VERSE_COMMENTARY_BUTTON_CLASS;
+      button.dataset.verseCommentary = String(verse);
+      button.title = "經文注釋";
+      button.setAttribute("aria-label", `第 ${verse} 節的注釋`);
+      button.setAttribute("aria-haspopup", "dialog");
+      const icon = doc.createElement("span");
+      icon.className = "nlc-icon";
+      icon.dataset.icon = "lightbulb";
+      icon.setAttribute("aria-hidden", "true");
+      button.appendChild(icon);
+      verseDiv.classList.add("has-commentary");
+      verseDiv.appendChild(button);
+      if (typeof hydrateIcons === "function") hydrateIcons(verseDiv);
+    }
+  }
+
+  // 換章一開始呼叫：馬上藏起按鈕和節旁 icon、關掉面板，避免顯示上一章的注釋。
   function resetForChapter() {
     chapterToken += 1;
     current = null;
     setButtonVisible(false);
+    clearVerseButtons();
     close();
   }
 
-  // 經文畫完才呼叫。回傳 promise 方便測試；呼叫端不需要 await。
-  function refreshForChapter(book, chapter, label = "") {
+  // 經文畫完才呼叫。textByVerse：Map(節 → 經文)，用來比對詞條。
+  // 回傳 promise（有沒有任何注釋）方便測試；呼叫端不需要 await。
+  function refreshForChapter(book, chapter, label = "", textByVerse = new Map()) {
     const token = ++chapterToken;
     current = null;
     return new Promise(resolve => {
       schedule(async () => {
-        let hasCommentary = false;
+        let resolved = null;
         try {
-          const index = await db.fetchPassageCommentaryIndex();
-          hasCommentary = Boolean(index && index.has(commentaryChapterKey(book, chapter)));
+          const index = await db.fetchIndex();
+          if (token === chapterToken && indexMayHaveCommentary(index, book, chapter)) {
+            const data = await db.fetchChapter(book, chapter);
+            resolved = resolveChapterCommentary({ rows: data?.rows, terms: data?.terms, chapter, textByVerse });
+          }
         } catch (_error) {
-          hasCommentary = false;
+          resolved = null;
         }
         if (token !== chapterToken) return resolve(false);
-        current = hasCommentary ? { book, chapter, label } : null;
-        setButtonVisible(hasCommentary);
-        resolve(hasCommentary);
+        const hasAny = Boolean(resolved && (resolved.chapterRow || resolved.entries.size));
+        current = hasAny ? { book, chapter: Number(chapter), label, textByVerse, ...resolved } : null;
+        setButtonVisible(Boolean(current?.chapterRow));
+        decorateVerses();
+        onChange();
+        resolve(hasAny);
       });
     });
+  }
+
+  // 傳入的節裡有注釋或詞彙的那幾節（排序過）；給工具列決定要不要顯示「注釋」。
+  function versesWithCommentary(verses) {
+    if (!current) return [];
+    return Array.from(new Set((verses || []).map(Number)))
+      .filter(verse => current.entries.has(verse))
+      .sort((a, b) => a - b);
   }
 
   function renderState(body, message, withRetry) {
@@ -91,33 +155,73 @@ export function createReaderCommentaryController({
       </div>`;
   }
 
-  async function open() {
-    if (!current) return false;
-    const target = current;
-    const token = ++openToken;
+  function showPanel(subtitleText) {
     const backdrop = getElement(IDS.backdrop);
     const body = getElement(IDS.body);
+    if (!backdrop || !body) return null;
     const subtitle = getElement(IDS.subtitle);
-    if (!backdrop || !body) return false;
-    if (subtitle) subtitle.textContent = target.label || `${target.book} ${target.chapter} 章`;
-    body.innerHTML = '<div class="reader-commentary-state" aria-busy="true"><p>注釋載入中…</p></div>';
+    if (subtitle) subtitle.textContent = subtitleText;
     body.scrollTop = 0;
-    openLayer(backdrop);
+    if (!isOpen()) openLayer(backdrop);
+    return body;
+  }
 
-    let row;
-    try {
-      row = await db.fetchPassageCommentary(target.book, target.chapter);
-    } catch (_error) {
-      if (token !== openToken) return false;
-      renderState(body, "注釋暫時無法載入，請稍後再試。", true);
+  // 整章注釋（工具列燈泡）。內容在換章時已經抓好。
+  function open() {
+    if (!current?.chapterRow) return false;
+    openToken += 1;
+    reopen = open;
+    const body = showPanel(current.label || `${current.book} ${current.chapter} 章`);
+    if (!body) return false;
+    body.innerHTML = buildCommentaryBodyHTML(current.chapterRow, escapeHTML);
+    if (typeof hydrateIcons === "function") hydrateIcons(body);
+    return true;
+  }
+
+  // 節注釋＋詞彙（節旁 icon、工具列「注釋」）。
+  async function openVerses(verses) {
+    const target = current;
+    const list = versesWithCommentary(verses);
+    if (!target || !list.length) return false;
+    const token = ++openToken;
+    reopen = () => openVerses(list);
+    const body = showPanel(`${target.book} ${target.chapter}:${formatVerseRuns(list)}`);
+    if (!body) return false;
+    body.innerHTML = '<div class="reader-commentary-state" aria-busy="true"><p>注釋載入中…</p></div>';
+
+    const notes = new Map();
+    const termMeta = new Map();
+    for (const verse of list) {
+      const entry = target.entries.get(verse);
+      entry.notes.forEach(note => { if (!notes.has(String(note.id))) notes.set(String(note.id), note); });
+      entry.terms.forEach(term => { if (!termMeta.has(String(term.id))) termMeta.set(String(term.id), term); });
+    }
+
+    let details = new Map();
+    if (termMeta.size) {
+      try {
+        details = await db.fetchTermDetails(Array.from(termMeta.keys()));
+      } catch (_error) {
+        if (token !== openToken) return false;
+        renderState(body, "注釋暫時無法載入，請稍後再試。", true);
+        return false;
+      }
+    }
+    if (token !== openToken || target !== current) return false;
+
+    const terms = Array.from(termMeta.values())
+      .map(term => ({ ...term, ...(details.get(String(term.id)) || {}) }))
+      .filter(term => String(term.definition || "").trim());
+    if (!notes.size && !terms.length) {
+      renderState(body, "這幾節的注釋已經下架了。", false);
       return false;
     }
-    if (token !== openToken) return false;
-    if (!row) {
-      renderState(body, "這一章的注釋已經下架了。", false);
-      return false;
-    }
-    body.innerHTML = buildCommentaryBodyHTML(row, escapeHTML);
+    body.innerHTML = buildVerseCommentaryHTML({
+      chapter: target.chapter,
+      verses: list.map(verse => ({ verse, text: target.textByVerse.get(verse), terms: target.entries.get(verse).terms })),
+      notes: Array.from(notes.values()),
+      terms
+    }, escapeHTML);
     if (typeof hydrateIcons === "function") hydrateIcons(body);
     return true;
   }
@@ -128,11 +232,11 @@ export function createReaderCommentaryController({
     const backdrop = getElement(IDS.backdrop);
     const closeButton = getElement(IDS.close);
     const body = getElement(IDS.body);
-    if (!button || !backdrop) return;
+    if (!backdrop) return;
     bound = true;
-    button.addEventListener("click", event => {
+    button?.addEventListener("click", event => {
       event.stopPropagation();
-      void open();
+      open();
     });
     closeButton?.addEventListener("click", () => close());
     backdrop.addEventListener("click", event => {
@@ -140,7 +244,7 @@ export function createReaderCommentaryController({
     });
     body?.addEventListener("click", event => {
       if (event.target.closest?.("[data-commentary-retry]")) {
-        void open();
+        if (typeof reopen === "function") void reopen();
         return;
       }
       const frame = event.target.closest?.("[data-commentary-zoom]");
@@ -148,10 +252,29 @@ export function createReaderCommentaryController({
       const zoomed = frame.classList.toggle("is-zoomed");
       frame.setAttribute("aria-pressed", zoomed ? "true" : "false");
     });
-    backdrop.ownerDocument?.addEventListener("keydown", event => {
+    const doc = backdrop.ownerDocument;
+    // 節旁 icon：在捕捉階段攔下，經文容器自己的點擊（切換選取這一節）就不會觸發。
+    doc?.addEventListener("click", event => {
+      const verseButton = event.target.closest?.(`.${VERSE_COMMENTARY_BUTTON_CLASS}[data-verse-commentary]`);
+      if (!verseButton || !getVerseContainer()?.contains(verseButton)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void openVerses([Number(verseButton.dataset.verseCommentary)]);
+    }, true);
+    doc?.addEventListener("keydown", event => {
       if (event.key === "Escape") close();
     });
   }
 
-  return { bind, resetForChapter, refreshForChapter, open, close, isOpen };
+  return {
+    bind,
+    resetForChapter,
+    refreshForChapter,
+    decorateVerses,
+    versesWithCommentary,
+    open,
+    openVerses,
+    close,
+    isOpen
+  };
 }

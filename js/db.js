@@ -27,12 +27,12 @@ import {
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
   COMMENTARY_INDEX_CACHE_KEY,
-  buildCommentaryIndex,
-  commentaryChapterKey,
   normalizeTopicTags,
-  parseCommentaryIndexCache,
-  serializeCommentaryIndex
+  normalizeVerseRange,
+  parseTermAliases
 } from './data/passage-commentary.mjs';
+import { createCommentaryRepository } from './data/commentary-repository.mjs';
+import { commentaryReviewErrorMessage, toBellNotification } from './data/commentary-review.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
   snapshot: () => networkMetrics.snapshot(),
@@ -5992,69 +5992,52 @@ const db = {
     }
   },
 
-  // ── 經文注釋（#447，passage_commentary）──────────────────────────────
-  // 閱讀器換章只查這份索引（localStorage 6 小時），點開注釋才抓內容。
-  _commentaryIndexPromise: null,
-  _commentaryIndexFailedAt: 0,
-  _commentaryCache: new Map(),
+  // ── 經文注釋（#447、#470：passage_commentary、commentary_terms）────────
+  // 閱讀器的查詢與快取規則在 js/data/commentary-repository.mjs（和 /read 讀經頁共用）：
+  // 換章先查索引（localStorage 6 小時），這章有內容才抓那一章，詞條解釋等打開面板才抓。
+  _commentaryRepository: null,
 
-  async fetchPassageCommentaryIndex() {
-    if (!state.isSupabaseMode || !state.supabase) return new Set();
-    let cached = null;
-    try { cached = parseCommentaryIndexCache(localStorage.getItem(COMMENTARY_INDEX_CACHE_KEY)); } catch (_error) {}
-    if (cached) return cached;
-    // 剛失敗過（例如離線）就先不重試，免得每換一章都打一次。
-    if (Date.now() - this._commentaryIndexFailedAt < 5 * 60 * 1000) return new Set();
-    if (!this._commentaryIndexPromise) {
-      this._commentaryIndexPromise = (async () => {
-        const { data, error } = await fetchAllRows(() => state.supabase
-          .from("passage_commentary")
-          .select("id, book, chapter")
-          .eq("is_published", true));
-        if (error) {
-          console.warn("[db] fetchPassageCommentaryIndex failed:", error);
-          this._commentaryIndexFailedAt = Date.now();
-          return new Set();
-        }
-        this._commentaryIndexFailedAt = 0;
-        const index = buildCommentaryIndex(data);
-        try { localStorage.setItem(COMMENTARY_INDEX_CACHE_KEY, serializeCommentaryIndex(index)); } catch (_error) {}
-        return index;
-      })().finally(() => { this._commentaryIndexPromise = null; });
+  _getCommentaryRepository() {
+    if (!this._commentaryRepository) {
+      this._commentaryRepository = createCommentaryRepository({
+        from: table => state.supabase.from(table),
+        storage: typeof localStorage !== "undefined" ? localStorage : null
+      });
     }
-    return this._commentaryIndexPromise;
+    return this._commentaryRepository;
   },
 
-  // 回傳這一章的注釋（沒有就 null）；查詢失敗時丟錯，讓閱讀器顯示重試。
-  async fetchPassageCommentary(bookName, chapter) {
-    if (!state.isSupabaseMode || !state.supabase) return null;
-    const key = commentaryChapterKey(bookName, chapter);
-    if (this._commentaryCache.has(key)) return this._commentaryCache.get(key);
-    const { data, error } = await state.supabase
-      .from("passage_commentary")
-      .select("id, book, chapter, title, content, topic_tags, updated_at")
-      .eq("book", bookName)
-      .eq("chapter", Number(chapter))
-      .eq("is_published", true)
-      .maybeSingle();
-    if (error) throw error;
-    const row = data || null;
-    this._commentaryCache.set(key, row);
-    return row;
+  async fetchCommentaryIndex() {
+    if (!state.isSupabaseMode || !state.supabase) return new Set();
+    return this._getCommentaryRepository().fetchIndex();
+  },
+
+  // { rows, terms }：這一章的注釋全文＋這卷書的詞條清單。查詢失敗時丟錯。
+  async fetchChapterCommentary(bookName, chapter) {
+    if (!state.isSupabaseMode || !state.supabase) return { rows: [], terms: [] };
+    return this._getCommentaryRepository().fetchChapter(bookName, chapter);
+  },
+
+  // Map(id → 詞條全文)。查詢失敗時丟錯，讓面板顯示重試。
+  async fetchCommentaryTermDetails(ids) {
+    if (!state.isSupabaseMode || !state.supabase) return new Map();
+    return this._getCommentaryRepository().fetchTermDetails(ids);
   },
 
   _invalidatePassageCommentaryCache() {
-    this._commentaryCache.clear();
-    this._commentaryIndexFailedAt = 0;
+    if (this._commentaryRepository) {
+      this._commentaryRepository.invalidate();
+      return;
+    }
     try { localStorage.removeItem(COMMENTARY_INDEX_CACHE_KEY); } catch (_error) {}
   },
 
-  // 後台用：含未發布的全部注釋。失敗回 null。
+  // 後台用：含未發布的全部注釋（整章＋節注釋）。失敗回 null。
   async fetchAllPassageCommentaryForAdmin() {
     if (!state.isSupabaseMode || !state.supabase) return [];
     const { data, error } = await fetchAllRows(() => state.supabase
       .from("passage_commentary")
-      .select("id, book, chapter, title, content, topic_tags, is_published, created_at, updated_at"));
+      .select("id, book, chapter, verse_start, verse_end, title, content, topic_tags, source, is_published, review_status, review_note, source_text, source_ref, created_at, updated_at"));
     if (error) {
       console.error("[db] fetchAllPassageCommentaryForAdmin failed:", error);
       return null;
@@ -6062,19 +6045,25 @@ const db = {
     return data || [];
   },
 
-  async savePassageCommentary({ id = null, book, chapter, title = "", content, topicTags = [], isPublished = true }) {
+  // verseStart 空白＝整章注釋（一章一則）；有值＝節注釋（verseEnd 空白＝單一節）。
+  // isPublished 傳 null＝不動發布狀態（審核中的注釋由審核流程決定，#471）。
+  async savePassageCommentary({ id = null, book, chapter, verseStart = null, verseEnd = null, title = "", content, topicTags = [], source = "", isPublished = true }) {
     if (!state.isSupabaseMode || !state.supabase) {
       showToast("離線模式無法編輯經文注釋。");
       return false;
     }
+    const range = normalizeVerseRange(verseStart, verseEnd);
     const payload = {
       book,
       chapter: Number(chapter),
+      verse_start: range ? range.start : null,
+      verse_end: range ? range.end : null,
       title: String(title || "").trim(),
       content: String(content || "").trim(),
       topic_tags: normalizeTopicTags(topicTags),
-      is_published: isPublished !== false
+      source: String(source || "").trim()
     };
+    if (isPublished !== null) payload.is_published = isPublished !== false;
     let error;
     if (id) {
       ({ error } = await state.supabase.from("passage_commentary").update(payload).eq("id", id));
@@ -6087,7 +6076,8 @@ const db = {
     if (error) {
       console.error("[db] savePassageCommentary failed:", error);
       const duplicate = error.code === "23505" || /duplicate|unique/i.test(String(error.message || ""));
-      showToast(duplicate ? "這一章已經有注釋了，請在清單中編輯它。" : `儲存注釋失敗：${error.message || error}`);
+      const duplicateMessage = range ? "這幾節已經有一則同範圍的注釋了，請在清單中編輯它。" : "這一章已經有整章注釋了，請在清單中編輯它。";
+      showToast(duplicate ? duplicateMessage : `儲存注釋失敗：${error.message || error}`);
       return false;
     }
     this._invalidatePassageCommentaryCache();
@@ -6104,6 +6094,151 @@ const db = {
     }
     this._invalidatePassageCommentaryCache();
     return true;
+  },
+
+  // 後台用：含未發布的全部詞條。失敗回 null。
+  async fetchAllCommentaryTermsForAdmin() {
+    if (!state.isSupabaseMode || !state.supabase) return [];
+    const { data, error } = await fetchAllRows(() => state.supabase
+      .from("commentary_terms")
+      .select("id, term, aliases, definition, topic_tags, book, chapter, verse_start, verse_end, source, is_published, created_at, updated_at"));
+    if (error) {
+      console.error("[db] fetchAllCommentaryTermsForAdmin failed:", error);
+      return null;
+    }
+    return data || [];
+  },
+
+  // scope："book"（整卷）、"chapter"（整章）、"verses"（指定節）。
+  async saveCommentaryTerm({ id = null, term, aliases = [], definition, topicTags = [], book, scope = "book", chapter = null, verseStart = null, verseEnd = null, source = "", isPublished = true }) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      showToast("離線模式無法編輯詞條。");
+      return false;
+    }
+    const name = String(term || "").trim();
+    const range = scope === "verses" ? normalizeVerseRange(verseStart, verseEnd) : null;
+    const chapterNumber = scope === "book" ? null : Number(chapter) || null;
+    const payload = {
+      term: name,
+      aliases: parseTermAliases(aliases).filter(alias => alias.toLowerCase() !== name.toLowerCase()),
+      definition: String(definition || "").trim(),
+      topic_tags: normalizeTopicTags(topicTags),
+      book,
+      chapter: chapterNumber,
+      verse_start: range && chapterNumber ? range.start : null,
+      verse_end: range && chapterNumber ? range.end : null,
+      source: String(source || "").trim(),
+      is_published: isPublished !== false
+    };
+    let error;
+    if (id) {
+      ({ error } = await state.supabase.from("commentary_terms").update(payload).eq("id", id));
+    } else {
+      const user = await this.getCurrentDbUser();
+      ({ error } = await state.supabase
+        .from("commentary_terms")
+        .insert([{ ...payload, created_by: user ? user.id : null }]));
+    }
+    if (error) {
+      console.error("[db] saveCommentaryTerm failed:", error);
+      showToast(`儲存詞條失敗：${error.message || error}`);
+      return false;
+    }
+    this._invalidatePassageCommentaryCache();
+    return true;
+  },
+
+  async deleteCommentaryTerm(id) {
+    if (!state.isSupabaseMode || !state.supabase || !id) return false;
+    const { error } = await state.supabase.from("commentary_terms").delete().eq("id", id);
+    if (error) {
+      console.error("[db] deleteCommentaryTerm failed:", error);
+      showToast(`刪除詞條失敗：${error.message || error}`);
+      return false;
+    }
+    this._invalidatePassageCommentaryCache();
+    return true;
+  },
+
+  // ── 經文注釋審核（#471）：全部走 RPC，SQL 端檢查管理員或被指派的審核者 ──────────
+  async _callCommentaryReviewRpc(functionName, args = {}) {
+    if (!state.isSupabaseMode || !state.supabase) {
+      return { success: false, message: "經文注釋審核需要登入正式帳號。" };
+    }
+    try {
+      const { data, error } = await state.supabase.rpc(functionName, args);
+      if (error) {
+        console.warn(`[CommentaryReview] ${functionName} failed: ${JSON.stringify(error)}`);
+        return { success: false, error, message: commentaryReviewErrorMessage(error) };
+      }
+      return { success: true, data };
+    } catch (error) {
+      console.warn(`[CommentaryReview] ${functionName} failed: ${String(error)}`);
+      return { success: false, error, message: commentaryReviewErrorMessage(error) };
+    }
+  },
+
+  // { isAdmin, books, items }：指派給我的書卷，與那些書卷裡還在流程中的注釋。
+  async fetchMyCommentaryReviews() {
+    const result = await this._callCommentaryReviewRpc("get_my_commentary_reviews");
+    if (!result.success) return { ...result, isAdmin: false, books: [], items: [] };
+    const data = result.data || {};
+    return {
+      success: true,
+      isAdmin: data.is_admin === true,
+      books: Array.isArray(data.books) ? data.books : [],
+      items: Array.isArray(data.items) ? data.items : []
+    };
+  },
+
+  // decision："approve"（通過）或 "return"（退回，note 必填）。title／content 是審核者改過的譯文。
+  async reviewCommentary({ id, decision, title = null, content = null, note = "" }) {
+    return this._callCommentaryReviewRpc("review_commentary", {
+      p_id: id, p_decision: decision, p_title: title, p_content: content, p_note: note || ""
+    });
+  },
+
+  async fetchCommentaryReviewOverview() {
+    const result = await this._callCommentaryReviewRpc("get_commentary_review_overview");
+    return result.success ? { success: true, books: Array.isArray(result.data) ? result.data : [] } : { ...result, books: [] };
+  },
+
+  async setCommentaryReviewers(book, profileIds) {
+    const result = await this._callCommentaryReviewRpc("set_commentary_reviewers", {
+      p_book: book, p_profile_ids: Array.from(new Set((profileIds || []).map(String)))
+    });
+    return result.success ? { success: true, books: Array.isArray(result.data) ? result.data : [] } : result;
+  },
+
+  async resubmitCommentary({ id, title = null, content = null }) {
+    return this._callCommentaryReviewRpc("resubmit_commentary", { p_id: id, p_title: title, p_content: content });
+  },
+
+  // 只發布「通過待發布」的：ids 發布那幾則，book 發布整卷。
+  async publishApprovedCommentary({ ids = null, book = null } = {}) {
+    const result = await this._callCommentaryReviewRpc("publish_approved_commentary", {
+      p_ids: Array.isArray(ids) && ids.length ? ids : null,
+      p_book: book || null
+    });
+    if (result.success) this._invalidatePassageCommentaryCache();
+    return result.success ? { success: true, published: Number(result.data?.published) || 0 } : result;
+  },
+
+  // 通知鈴（合併進 care／quiz／exam 通知）。
+  async fetchCommentaryReviewNotifications() {
+    return this._dedupRead("commentaryReviewNotifications", async () => {
+      const result = await this._callCommentaryReviewRpc("get_commentary_review_notifications");
+      return result.success
+        ? { data: (Array.isArray(result.data) ? result.data : []).map(toBellNotification), error: null }
+        : { data: [], error: result.error || new Error(result.message) };
+    });
+  },
+
+  async acknowledgeCommentaryReviewNotification(notificationId = null) {
+    const result = await this._callCommentaryReviewRpc("mark_commentary_review_notifications_read", {
+      p_notification_id: notificationId || null
+    });
+    return { error: result.success ? null : (result.error || new Error(result.message)) };
   },
 
   // 回報對話串（migration 0153）：未讀數字，餵鈴鐺 / 通知中心。
