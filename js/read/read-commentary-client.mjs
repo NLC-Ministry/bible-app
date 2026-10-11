@@ -5,6 +5,7 @@
 // 查詢只在經文顯示完之後才發（reader-commentary.mjs 排在閒置時間）。
 
 import { createCommentaryRepository } from "../data/commentary-repository.mjs";
+import { fetchNlcTracked } from "../diagnostics/report-diagnostics.mjs";
 
 export const ACCESS_TOKEN_KEY = "nlc_access_token";
 export const TOKEN_EXPIRES_AT_KEY = "nlc_token_expires_at";
@@ -52,12 +53,12 @@ export function createReadCommentaryDb({ storage, config, fetchImpl = (...args) 
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
     try {
-      const response = await fetchImpl(`${baseUrl}/functions/v1/nlc-data`, {
+      const response = await fetchNlcTracked(`${baseUrl}/functions/v1/nlc-data`, {
         method: "POST",
         headers: { apikey: anonKey, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(request),
         signal: controller?.signal
-      });
+      }, request, fetchImpl);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) return { data: null, error: payload || { message: `http_${response.status}` } };
       return { data: payload.data ?? null, error: null };

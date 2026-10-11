@@ -1,4 +1,5 @@
 // components/issue-report/IssueReportBlocks.ts
+import { collectReportDiagnostics, fetchNlcTracked } from "../../js/diagnostics/report-diagnostics.mjs";
 
 /**
  * ValidateReportBlock: Handles sanitization and basic check constraints for inputs
@@ -142,6 +143,7 @@ export class SubmitReportBlock {
     url?: string;
     user_agent?: string;
     user_id?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<{ success: boolean; source: "online" | "offline"; error?: string; reportId?: string }> {
     if (this.isOnline()) {
       try {
@@ -203,6 +205,13 @@ export class ReportPipeline {
       const url = typeof window !== "undefined" ? window.location.href : "";
       const user_agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
       const user_id = state?.currentUser?.id || null;
+      // 診斷資訊（#548）：收集失敗就照常送出，不擋回報
+      let diagnostics: Record<string, unknown> | null = null;
+      try {
+        diagnostics = await collectReportDiagnostics();
+      } catch (_e) {
+        diagnostics = null;
+      }
 
       // 3. Submit
       const result = await SubmitReportBlock.submit({
@@ -210,7 +219,8 @@ export class ReportPipeline {
         description: validation.sanitizedDescription || description,
         url,
         user_agent,
-        user_id
+        user_id,
+        ...(diagnostics ? { metadata: { diagnostics } } : {})
       });
 
       return result;
@@ -247,21 +257,22 @@ export class FetchMyReportsPipeline {
 
       if (accessToken && supabaseUrl) {
         const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
-        const response = await fetch(functionUrl, {
+        const request = {
+          table: "issue_reports",
+          action: "select",
+          select: "id, created_at, category, description, status, metadata",
+          filters: [{ type: "eq", column: "user_id", value: currentUser.id }],
+          order: { column: "created_at", ascending: false }
+        };
+        const response = await fetchNlcTracked(functionUrl, {
           method: "POST",
           headers: {
             "apikey": supabaseAnonKey,
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            table: "issue_reports",
-            action: "select",
-            select: "id, created_at, category, description, status, metadata",
-            filters: [{ type: "eq", column: "user_id", value: currentUser.id }],
-            order: { column: "created_at", ascending: false }
-          })
-        });
+          body: JSON.stringify(request)
+        }, request);
 
         if (response.ok) {
           const payload = await response.json().catch(() => ({}));
@@ -329,15 +340,16 @@ export class MarkReplySeenPipeline {
 
       if (accessToken && supabaseUrl) {
         const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
-        const response = await fetch(functionUrl, {
+        const request = { action: "mark_issue_report_reply_seen", report_id: reportId };
+        const response = await fetchNlcTracked(functionUrl, {
           method: "POST",
           headers: {
             "apikey": supabaseAnonKey,
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ action: "mark_issue_report_reply_seen", report_id: reportId })
-        });
+          body: JSON.stringify(request)
+        }, request);
         return { success: response.ok };
       }
 
@@ -438,7 +450,7 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
   const token = await getAccessToken();
   if (!token) return { success: false, error: "not_logged_in" };
   try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/nlc-data`, {
+    const resp = await fetchNlcTracked(`${supabaseUrl}/functions/v1/nlc-data`, {
       method: "POST",
       headers: {
         "apikey": anonKey,
@@ -446,7 +458,7 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
-    });
+    }, payload);
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok) return { success: false, error: json?.error || `HTTP ${resp.status}` };
     return { success: true, data: json?.data };
@@ -457,6 +469,22 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
 
 const rpc = (fn: string, args: Record<string, unknown>) =>
   callNlc({ action: "rpc", function: fn, args });
+
+/** 管理端「診斷資訊」區塊展開時才讀這筆回報的 metadata.diagnostics（#548）；舊回報沒有就回 null。 */
+export async function fetchReportDiagnostics(reportId: string): Promise<{ success: boolean; data?: Record<string, any> | null; error?: string }> {
+  if (!reportId) return { success: false, error: "missing_report_id" };
+  const res = await callNlc({
+    table: "issue_reports",
+    action: "select",
+    select: "metadata",
+    filters: [{ type: "eq", column: "id", value: reportId }],
+    limit: 1
+  });
+  if (!res.success) return { success: false, error: res.error };
+  const row = Array.isArray(res.data) ? res.data[0] : res.data;
+  const diagnostics = row?.metadata?.diagnostics;
+  return { success: true, data: diagnostics && typeof diagnostics === "object" ? diagnostics : null };
+}
 
 /**
  * Shrink a picked screenshot in-browser to ≤ ~300 KB before upload: WebP where

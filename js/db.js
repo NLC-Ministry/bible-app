@@ -1,4 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
+import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
 import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
@@ -844,9 +845,9 @@ const db = {
           },
           body: JSON.stringify(request)
         };
-        const response = isReadRequest
-          ? await fetchWithTimeout(url, init, DATA_READ_TIMEOUT_MS)
-          : await fetch(url, init);
+        const response = await fetchNlcTracked(url, init, request, isReadRequest
+          ? (input, options) => fetchWithTimeout(input, options, DATA_READ_TIMEOUT_MS)
+          : (input, options) => fetch(input, options));
         const headersAt = performance.now();
         const payload = await response.json().catch(() => ({}));
         const completedAt = performance.now();
@@ -6809,7 +6810,7 @@ const db = {
         }
         const cfg = state.supabaseConfig || {};
         const accessToken = await auth.getValidAccessToken();
-        const response = await fetch(
+        const response = await fetchNlcTracked(
           cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
           {
             method: "POST",
@@ -6827,7 +6828,8 @@ const db = {
                 plan_key: String(planKey || "")
               }
             })
-          }
+          },
+          { action: "send_care_reminder" }
         );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -6863,7 +6865,7 @@ const db = {
     try {
       const cfg = state.supabaseConfig || {};
       const accessToken = await auth.getValidAccessToken();
-      const response = await fetch(
+      const response = await fetchNlcTracked(
         cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
         {
           method: "POST",
@@ -6881,7 +6883,8 @@ const db = {
               summary: summary || {}
             }
           })
-        }
+        },
+        { action: "sync_registration_stats_sheet" }
       );
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
