@@ -8,7 +8,7 @@ import { currentMigrationSql, functionStatements, latestFunctionDefinition, migr
 // 舊檔的斷言永遠會過，正式資料庫實際跑的版本卻沒人驗。這裡擋住這種情況：
 // 要驗函式就用 currentMigrationSql()／latestFunctionDefinition()（scripts/migration-sql.mjs）。
 const root = fileURLToPath(new URL("../", import.meta.url));
-const SKIP_DIRS = new Set(["node_modules", ".git", ".worktrees", ".claude", "dist"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", ".worktrees", ".claude", "dist", "dist-admin"]);
 
 // 刻意讀原始檔、而且提到的函式之後被改寫過的少數情況：檔名 → { migration: 理由 }。
 const ALLOWED_RAW_READS = {

@@ -18,6 +18,7 @@ interface IssueReport {
   status: string;
   metadata?: Record<string, any>;
   profiles?: {
+    id?: string;
     name?: string;
     pastoral_zone?: string;
     small_group?: string;
@@ -95,7 +96,7 @@ export const AdminReportView: React.FC = () => {
         status: row.status,
         metadata: {},
         profiles: row.reporter
-          ? { name: row.reporter.name, pastoral_zone: row.reporter.pastoralZone, small_group: row.reporter.smallGroup }
+          ? { id: row.reporter.id, name: row.reporter.name, pastoral_zone: row.reporter.pastoralZone, small_group: row.reporter.smallGroup }
           : null,
         // extra fields the table reads via (report as any)
         ...( { unreadFromMember: !!row.unreadFromMember, messageCount: row.messageCount, lastMessageAt: row.lastMessageAt } as any )

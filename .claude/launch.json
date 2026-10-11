@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "dist", "-l", "3100"],
       "port": 3100
+    },
+    {
+      "name": "bible-study-admin",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "dist-admin", "-l", "4174"],
+      "port": 4174
     }
   ]
 }

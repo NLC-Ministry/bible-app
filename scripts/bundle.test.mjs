@@ -236,6 +236,10 @@ describe("emitBundle (integration, real repo)", () => {
       expect(existsSync(join(out, "js", "pwa", "CacheManager.js"))).toBe(true);
       expect(existsSync(join(out, "js", "pwa", "SupabaseRepository.js"))).toBe(true);
       expect(readdirSync(join(out, "assets")).length).toBeGreaterThan(0);
+      // 後台（#555）只在自己的網域：會友 App 的輸出沒有後台頁面（/admin 拿不到後台）
+      expect(existsSync(join(out, "admin.html"))).toBe(false);
+      expect(existsSync(join(out, "admin"))).toBe(false);
+      expect(readdirSync(out).some((file) => /^admin\.[A-Z0-9]+\.(js|css)$/i.test(file))).toBe(false);
       // lazy view modules are content-hashed chunks, not raw copies
       expect(existsSync(join(out, "modules"))).toBe(false);
       expect(existsSync(join(out, "data"))).toBe(false);

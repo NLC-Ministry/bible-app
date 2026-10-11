@@ -28,5 +28,5 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["components", "lib"]
+  "include": ["components", "lib", "admin"]
 }
