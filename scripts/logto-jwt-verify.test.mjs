@@ -12,6 +12,7 @@ const block = (src) => {
 };
 const nlcDataSrc = read("nlc-data");
 const nlcSessionSrc = read("nlc-session");
+const adminApiSrc = read("admin-api");
 const code = transformSync(
   `${block(nlcDataSrc)}\nreturn { LOGTO_JWT_MODE, verifyLogtoJwt, recordLogtoJwt, pickSessionUserinfo };`,
   { loader: "ts" }
@@ -54,9 +55,16 @@ const forge = (claims) => {
 };
 
 describe("both functions embed the same verification code", () => {
-  it("nlc-data and nlc-session blocks are identical", () => {
+  it("nlc-data, nlc-session and admin-api blocks are identical", () => {
     expect(block(nlcDataSrc)).toBeTruthy();
     expect(block(nlcDataSrc)).toBe(block(nlcSessionSrc));
+    expect(block(nlcDataSrc)).toBe(block(adminApiSrc));
+  });
+  it("admin-api always requires a verified token, whatever NLC_JWT_VERIFY_MODE says", () => {
+    const serve = adminApiSrc.slice(adminApiSrc.indexOf("Deno.serve("));
+    expect(serve).toContain("const result = await verifyLogtoJwt(");
+    expect(serve).toContain("return result;");
+    expect(serve).not.toContain("LOGTO_JWT_MODE");
   });
   it("nlc-data verifies before trusting the Logto JWT payload", () => {
     const fn = nlcDataSrc.slice(nlcDataSrc.indexOf("async function resolveProfile"));
