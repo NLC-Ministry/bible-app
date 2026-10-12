@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
-// >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
+// >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
 // base64 解開 payload 就信任裡面的 sub / email——任何人都能自己簽一張假 token 冒用別人。
 // 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
