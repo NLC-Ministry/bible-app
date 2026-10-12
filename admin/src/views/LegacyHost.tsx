@@ -1,5 +1,5 @@
 // 照搬的舊管理區塊（#550）：上面一排區塊分頁（AreaTabs，系統區還有新寫的稽核紀錄），下面是 /legacy 的 iframe
-// （App 管理分頁的同一份畫面）。內容、系統兩區共用同一個 iframe，換區只是叫它打開另一個區塊。
+// （App 管理分頁的同一份畫面）。營運、內容、系統三區共用同一個 iframe，換區只是叫它打開另一個區塊。
 //
 // iframe 第一次進來才載入，之後切到別區只是藏起來，回來不用重新開機（舊程式要先載一輪資料）。
 // iframe 和外殼之間的通道、匯出前的稽核都在 legacy.ts；這裡只管畫面狀態。
@@ -8,7 +8,7 @@ import { RotateCw } from "lucide-react";
 import { describeAdminError, type AdminApi } from "../api.ts";
 import { downloadBlob } from "../download.ts";
 import { IFRAME_ACTIVITY_EVENT } from "../idle.ts";
-import { LEGACY_PATH, findLegacySection, startLegacyHost, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
+import { LEGACY_PATH, findLegacySection, startLegacyHost, unavailableHint, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
 import type { ResolvedTheme } from "../theme.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
 
@@ -36,7 +36,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
   const latest = useRef({ section, theme, getToken, getIdToken, onLoginRequired });
   latest.current = { section, theme, getToken, getIdToken, onLoginRequired };
   const [frame, setFrame] = useState<FrameState>({ name: "booting" });
-  // iframe 回報的「目前這一區開不開得了」（小測驗、大測驗要功能開關打開）
+  // iframe 回報的「目前這一區開不開得了」（小測驗、大測驗要功能開關打開；其他區看會友 App 的角色）
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -106,7 +106,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
       {frame.name !== "failed" && unavailable === section && (
         <div className="adm-message">
           <h2>{current?.label || "這一區"}目前沒有開放</h2>
-          <p>小測驗、大測驗要先在「功能開放設定」打開；如果剛打開，請按重新載入。</p>
+          <p>{unavailableHint(section)}</p>
           <button type="button" className="adm-button" onClick={reload}>
             <RotateCw className="adm-icon" aria-hidden="true" />重新載入
           </button>
@@ -117,7 +117,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
         ref={frameRef}
         className="adm-legacy__frame"
         src={LEGACY_PATH}
-        title={`${current?.label || ""}管理`}
+        title={current?.label.endsWith("管理") ? current.label : `${current?.label || ""}管理`}
         hidden={frame.name === "failed" || unavailable === section}
       />
     </div>

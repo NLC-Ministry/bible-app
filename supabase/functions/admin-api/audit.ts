@@ -192,6 +192,13 @@ export const AUDIT_LEGACY_SECTION_LABEL: Readonly<Record<string, string>> = {
   quizzes: "小測驗",
   exam: "大測驗",
   "lightning-quiz": "雲柱測驗",
+  plans: "計畫管理",
+  "join-status": "加入計畫狀況",
+  members: "組員總覽",
+  teams: "組隊狀況",
+  statistics: "計畫統計",
+  "reading-activity": "讀經使用率",
+  registrations: "報名註冊統計",
   settings: "功能開放設定"
 };
 

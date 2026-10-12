@@ -7,13 +7,14 @@
 //   · 匯出：iframe 攔下所有下載交過來 → 先經 admin-api 記稽核 → 記成功才存檔（記不成就不下載）
 //   · 換區、主題、iframe 裡的操作（延後閒置登出）
 //
-// 區塊 id 就是 App 管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id。同一份清單另外兩處：
+// 區塊 id 就是 App 管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id；計畫管理（plans）是 App 讀經計畫分頁
+// 側欄的卡片，iframe 把它搬進一個區塊面板（admin-legacy/sections.mjs 的 LEGACY_HOSTED_CARDS）。同一份清單另外兩處：
 // admin-legacy/sections.mjs（iframe）、admin-api policy.ts 的 LEGACY_EXPORT_SECTIONS；
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
 
 import type { ResolvedTheme } from "./theme.ts";
 
-export type LegacyArea = "content" | "system";
+export type LegacyArea = "operations" | "content" | "system";
 
 export type LegacySection = {
   id: string;
@@ -28,10 +29,17 @@ export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "quizzes", area: "content", label: "小測驗", capability: "content.manage" },
   { id: "exam", area: "content", label: "大測驗", capability: "content.manage" },
   { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" },
+  { id: "plans", area: "operations", label: "計畫管理", capability: "operations.manage" },
+  { id: "join-status", area: "operations", label: "加入計畫狀況", capability: "operations.manage" },
+  { id: "members", area: "operations", label: "組員總覽", capability: "operations.manage" },
+  { id: "teams", area: "operations", label: "組隊狀況", capability: "operations.manage" },
+  { id: "statistics", area: "operations", label: "計畫統計", capability: "operations.manage" },
+  { id: "reading-activity", area: "operations", label: "讀經使用率", capability: "operations.manage" },
+  { id: "registrations", area: "operations", label: "報名註冊統計", capability: "operations.manage" },
   { id: "settings", area: "system", label: "功能開放設定", capability: "settings.manage" }
 ];
 
-export const LEGACY_AREAS: readonly LegacyArea[] = ["content", "system"];
+export const LEGACY_AREAS: readonly LegacyArea[] = ["operations", "content", "system"];
 
 export function isLegacyArea(value: unknown): value is LegacyArea {
   return typeof value === "string" && (LEGACY_AREAS as readonly string[]).includes(value);
@@ -43,6 +51,12 @@ export function legacySectionsOf(area: LegacyArea): LegacySection[] {
 
 export function findLegacySection(id: unknown): LegacySection | null {
   return LEGACY_SECTIONS.find((section) => section.id === id) || null;
+}
+
+/** iframe 回報這一區開不了的時候給的說明 */
+export function unavailableHint(id: string): string {
+  if (id === "quizzes" || id === "exam") return "小測驗、大測驗要先在「功能開放設定」打開；如果剛打開，請按重新載入。";
+  return "這個帳號在會友 App 的角色看不到這一區；如果剛調整過角色，請按重新載入。";
 }
 
 // ── 通道 ──────────────────────────────────────────────────────────────────

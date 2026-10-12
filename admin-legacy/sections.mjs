@@ -8,5 +8,24 @@ export const LEGACY_SECTION_IDS = Object.freeze([
   "quizzes",
   "exam",
   "lightning-quiz",
+  "plans",
+  "join-status",
+  "members",
+  "teams",
+  "statistics",
+  "reading-activity",
+  "registrations",
   "settings"
 ]);
+
+// 不在 App 管理分頁、在 App 別的分頁的管理卡片：iframe 開機時建一個同樣格式的區塊面板
+// （admin-section-<id>），把這張卡片（DOM id）搬進去。
+//   plans：讀經計畫分頁側欄的「全域計畫管理」（js/modules/plan-admin.js，含大區延後梯次、編輯活動規則）
+export const LEGACY_HOSTED_CARDS = Object.freeze({
+  plans: "admin-plan-card"
+});
+
+/** 這一區在 index.html 一定要有的元素 id（建置時檢查）：一般是管理分頁的區塊面板，搬進來的就是那張卡片。 */
+export function legacyMarkupId(id) {
+  return Object.hasOwn(LEGACY_HOSTED_CARDS, id) ? LEGACY_HOSTED_CARDS[id] : `admin-section-${id}`;
+}

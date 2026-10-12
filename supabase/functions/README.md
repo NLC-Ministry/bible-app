@@ -75,7 +75,7 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 
 - **驗證**：內嵌同一段 `logto-jwt-verify` 區塊，**一律**要驗過簽章／發行者／到期，不看 `NLC_JWT_VERIFY_MODE`。
 - **後台應用程式**：token 的 `client_id` 宣告（`ADMIN_API_CLIENT_CLAIM` 可改）要在 `ADMIN_API_ALLOWED_CLIENT_IDS` 裡。**沒設定就全部拒絕**（回 `admin_client_not_configured`）。#554 拿到 client id 前，staging 可以暫時設成會友 App 現有的 client id 方便開發；正式站一定要設後台專用的。
-- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`content.manage`、`settings.manage`、`audit.read`、`export`）。
+- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`operations.manage`、`content.manage`、`settings.manage`、`audit.read`、`export`）。
 - **限流**：計數在 `admin_api_rate_limits`（搜尋每分鐘 60 次、查看（含使用者名單、管理範圍總覽）每分鐘 120 次、完整個資每小時 30 次、回覆／改狀態／刪截圖／改管理範圍每分鐘 30 次、刪回報每小時 20 次、匯出每小時 20 次），超過回 429 並記 denied。請求本文超過 1 MB 回 413。
 - **稽核**：`user_summary` 記 `view_user`、`reveal_pii` 記 `reveal_pii`、打開回報對話記 `view_report`（自動更新 `refresh: true` 不記）、`report.set_status`／`report.reply`／`report.note`／`report.attachment_delete`／`report.delete`（刪除前的內容快照）、`set_profile_managed_scopes`（前後差異、修改原因）、`export`（種類、篩選、筆數）——都在同一個交易內；client 不對、沒有能力、超過限流記 denied（來源 `admin-api`）。
 - **稽核紀錄**（#550）：`audit_list`（期間 1／7／30／90／365 天＋動作、結果、來源、操作者、對象；keyset 以紀錄編號由新到舊；第一頁帶總數與選項）、`audit_event`（單筆完整內容）要 `audit.read`，**看不記稽核**；`audit_export`（最多 5000 筆，CSV）另外要 `export`，記 `export`（kind `audit`）。來源篩選前端用 `legacy` 代表 `nlc-data`。動作的中文名稱在 `audit.ts`（由 run 補到每一筆），新增會寫稽核的動作要一起加。

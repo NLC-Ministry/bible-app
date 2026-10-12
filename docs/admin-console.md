@@ -35,24 +35,25 @@
 - **匯出一律由伺服器產生**（`report_export` 需要 `support.read`＋`export`；含完整 email 的 `directory_export` 需要 `accounts.read`＋`export`＋`support.pii`；`org_export` 需要 `accounts.read`＋`export`；`audit_export` 需要 `audit.read`＋`export`、最多 5000 筆；都記 `export` 稽核，欄位和 App 的匯出相同）；前端只存檔，不自己組 CSV。照搬區塊的匯出是例外（舊程式在瀏覽器組檔），但下載前一定先成功呼叫 `legacy_export_audit` 記稽核，記不到就不下載（見下面）。
 - **截圖**：回覆可附 1 張（瀏覽器先壓到約 300 KB，伺服器上限 500 KB，PNG／JPEG／WebP）。顯示用 5 分鐘有效的簽名網址，存檔路徑不送到前端。
 - **個資預設遮罩**：按「顯示」才呼叫 `reveal_pii`（伺服器記稽核，需要 `support.pii` 能力）。可以附上查看理由，會記進 `view_user`／`reveal_pii` 稽核。
-- **導覽依能力**：`bootstrap` 回的能力清單決定左側顯示哪幾區（`admin/src/nav.ts`）；伺服器端 `admin-api` 仍會再擋一次。客服（回報收件匣、查詢使用者）、帳號與權限（使用者名單、管理範圍）、內容（照搬，要 `content.manage`）、系統（稽核紀錄要 `audit.read`、照搬的功能開放設定要 `settings.manage`，有其中一個就顯示這一區，分頁各自再看能力）已搬好；營運 #550 最後搬過來，搬好之前只放說明和回 App 管理分頁的連結。
+- **導覽依能力**：`bootstrap` 回的能力清單決定左側顯示哪幾區（`admin/src/nav.ts`）；伺服器端 `admin-api` 仍會再擋一次。客服（回報收件匣、查詢使用者）、帳號與權限（使用者名單、管理範圍）、營運（照搬，要 `operations.manage`）、內容（照搬，要 `content.manage`）、系統（稽核紀錄要 `audit.read`、照搬的功能開放設定要 `settings.manage`，有其中一個就顯示這一區，分頁各自再看能力）。#550 之後五區都已搬好，App 管理分頁的功能後台都有（App 的管理分頁由 #551 拿掉）。
 - **稽核紀錄**（`#/system`）：看 `audit.admin_events`（#549）。條件：期間（24 小時／7／30／90 天／1 年）、動作、操作者、結果、來源（後台／舊管理畫面＝App 管理分頁與照搬區塊經 nlc-data 補記，前端用 `legacy` 代稱）、對象；操作者與對象放在網址（`#/system/audit?actor=…&target=…`），使用者頁有連結過來。動作的中文名稱由 admin-api 補上（`supabase/functions/admin-api/audit.ts`，新增會寫稽核的動作要一起加，`scripts/admin-api-audit.test.mjs` 會擋）。**看清單不記稽核**（只有系統管理員有 `audit.read`；每次換條件都記的話清單會被自己的查看洗掉），匯出要記。
 - **新增 admin-api action**：先照 `supabase/functions/admin-api/policy.ts` 的規則加進 `ADMIN_ACTIONS`，前端再加進 `admin/src/api.ts` 的 `AdminAction`，並決定要不要快取（顯示個資、會改資料的不要）。
 - **會友 App 的網域不提供後台**、後台網域也不提供會友 App：`dist/` 不會有後台檔案，`dist-admin/` 只有後台（`scripts/bundle.test.mjs`、`scripts/admin-console.test.mjs`）。照搬區塊雖然用了 App 管理分頁的程式，但只有管理畫面，沒有會友 App 的閱讀器、登入流程與 Service Worker。
 
 ## 照搬的舊管理區塊（#550）
 
-維護者決定（2026-10-12）：重寫的只有使用者名單、權限管理、回報收件匣與所有「伺服器產生」的匯出；其他管理區塊（目前是「內容」區：公告、經文注釋、小測驗、大測驗、雲柱測驗；「系統」區的功能開放設定）**照搬、程式不動**。內容、系統兩區共用同一個 iframe，換區只是叫它打開另一個區塊；系統區上方分頁同時有新寫的稽核紀錄與照搬的功能開放設定（`tabs.ts`）。
+維護者決定（2026-10-12）：重寫的只有使用者名單、權限管理、回報收件匣與所有「伺服器產生」的匯出；其他管理區塊**照搬、程式不動**：「營運」區（計畫管理、加入計畫狀況、組員總覽、組隊狀況、計畫統計、讀經使用率、報名註冊統計）、「內容」區（公告、經文注釋、小測驗、大測驗、雲柱測驗）、「系統」區的功能開放設定。三區共用同一個 iframe，換區只是叫它打開另一個區塊；系統區上方分頁同時有新寫的稽核紀錄與照搬的功能開放設定（`tabs.ts`）。
 
 - **畫面與程式都是 App 管理分頁那一份**：建置時從 `index.html` 抽出 `<body>`（拿掉 `<script>` 與行內事件處理器，DOM id 原樣保留），iframe 載入 `js/modules/admin.js`、`plan.js` 等同一份程式，打開哪一區交給 `openAdminSectionRoute()`。改 App 管理分頁的區塊，後台跟著改；之後 #551 拿掉 App 管理分頁時，再把這份畫面搬進 `admin-legacy/`。
+- **計畫管理不在 App 管理分頁**：它是讀經計畫分頁側欄的「全域計畫管理」卡片（`#admin-plan-card`，程式在 `js/modules/plan-admin.js`，含大區延後梯次與教會活動規則編輯器）。iframe 開機時建一個同格式的區塊面板 `admin-section-plans`，把卡片搬進去（`admin-legacy/sections.mjs` 的 `LEGACY_HOSTED_CARDS`）；打開時同 App 只給系統管理員、這時才載入 `plan-admin.js`。直接從計畫管理開機時，舊程式「還原上次選的功能」改記公告，免得退回第一個區塊（使用者基本資料）去載整份名單。
 - **iframe 和外殼是同網域**（`/legacy`），只有外殼能嵌（`frame-ancestors 'self'`、`X-Frame-Options: SAMEORIGIN`；直接打開 `/legacy` 只會看到「請從管理後台開啟」）。兩邊只靠 `MessageChannel` 溝通（`admin/src/legacy.ts` ↔ `admin-legacy/bridge.mjs`）：iframe 要 token、匯出前記稽核、回報目前這一區開不開得了、操作中（外殼延後閒置登出）；外殼送換區與主題。
 - **CSP（`/legacy…`）**：腳本只允許自家與 Chart.js 固定版本的完整網址（`https://cdn.jsdelivr.net/npm/chart.js@4.5.1`，和 `js/modules/chart-loader.mjs` 同一個）；**不允許行內腳本與行內事件處理器**（App 管理區塊的按鈕都用 `addEventListener`，`index.html` 裡殘留的 `onclick=` 建置時拿掉）；樣式允許 `'unsafe-inline'`（舊畫面大量使用 style 屬性，照搬不改）；連線只允許自家與兩個 Supabase 專案；`form-action 'none'`。改 Chart.js 版本要一起改 `vercel.admin.json` 與 `scripts/build-admin.mjs` 的 `CHART_JS_URL`（建置會檢查）。
 - **登入**：iframe 不登入、token 只在記憶體。它用的 `window.auth` 是 `admin-legacy/legacy-auth.mjs`，要用時向外殼要後台的 access token（與 id token；nlc-session 拿不到 Logto UserInfo 時用它確認身分，同會友 App）；外殼的登入過期就由外殼重新導向 SSO。資料照舊走 `nlc-session`／`nlc-data`／`exam-write`（三支函式的 CORS 白名單已加後台兩個網域），所以後台的 Logto scope 要有 `member:read.basic`（nlc-session 照舊同步會員中心資料），權限檢查與 #549 的稽核都在 nlc-data。注意：若之後在 Supabase 設了 `NLC_LOGTO_CLIENT_ID`，id token 的備援只收會友 App 發的，後台就只能靠 UserInfo。
 - **不落地**：iframe 的 `localStorage`／`sessionStorage` 換成記憶體版、拿掉 IndexedDB，關掉分頁就沒了；不註冊 Service Worker。
 - **匯出**：舊程式的下載（`<a download>` + Blob）全部被 `export-guard.mjs` 攔下，交給外殼 → `admin-api` 的 `legacy_export_audit`（需要 `export`＋該區的能力，記一筆 `export` 稽核：區塊、檔名、格式、筆數、大小）→ 成功才存檔；失敗就不下載並提示原因。認不得內容的下載一律不放行。
-- **能力**：區塊 → 能力的對照有三份：`admin-legacy/sections.mjs`（iframe）、`admin/src/legacy.ts`（外殼，含分頁名稱）、`policy.ts` 的 `LEGACY_EXPORT_SECTIONS`（admin-api），`scripts/admin-legacy.test.mjs` 檢查三邊與 App 的 `ADMIN_SECTIONS` 一致。
+- **能力**：區塊 → 能力的對照有三份：`admin-legacy/sections.mjs`（iframe）、`admin/src/legacy.ts`（外殼，含分頁名稱）、`policy.ts` 的 `LEGACY_EXPORT_SECTIONS`（admin-api），`scripts/admin-legacy.test.mjs` 檢查三邊與 App 的 `ADMIN_SECTIONS` 一致（計畫管理例外，檢查的是 `#admin-plan-card`）；稽核紀錄裡的區塊名稱在 `supabase/functions/admin-api/audit.ts` 的 `AUDIT_LEGACY_SECTION_LABEL`（`scripts/admin-api-audit.test.mjs` 比對）。`operations.manage`、`content.manage`、`settings.manage` 都只有系統管理員有：App 管理分頁的加入計畫狀況、組員總覽、組隊狀況、計畫統計、小測驗、大測驗也開給牧者與各層小組長（看自己管理範圍的資料），但組長不進後台（維護者 2026-10-11 定案），他們的部分留在 App，由 #551 併進個人頁新的「牧養」頁。
 - **只載入一次**：iframe 第一次進到照搬的區才建立，切到別區只是藏起來，回來不用再開機一次（舊程式開機要先載一輪資料）。iframe 固定高度、裡面自己捲（舊畫面的彈窗是 `position: fixed`）。
-- **小測驗／大測驗**要功能開關打開才看得到（同 App）；沒開時外殼顯示說明。
+- **小測驗／大測驗**要功能開關打開才看得到（同 App）；沒開時外殼顯示說明。其他區塊開不了只會是會友 App 的角色看不到（外殼的說明見 `legacy.ts` 的 `unavailableHint()`）。
 
 ## 設定（一次性，維護者操作）
 

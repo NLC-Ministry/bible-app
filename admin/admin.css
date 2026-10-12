@@ -169,7 +169,6 @@ button, input, select { font: inherit; color: inherit; }
 }
 .adm-nav__link:hover { background: var(--color-brand-subtle); color: var(--text-primary); }
 .adm-nav__link--active { background: var(--color-brand-subtle); color: var(--text-primary); font-weight: var(--type-weight-strong); }
-.adm-nav__soon { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .adm-main { flex: 1; min-width: 0; padding: 20px 24px; }
 
 /* ── 登入前／訊息 ─────────────────────────────────────────────────────── */

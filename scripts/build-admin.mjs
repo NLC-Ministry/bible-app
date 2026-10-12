@@ -27,7 +27,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildTailwindCss, contentHash, cpDirRecursive, resolveLocalAssets } from "./bundle.mjs";
-import { LEGACY_SECTION_IDS } from "../admin-legacy/sections.mjs";
+import { LEGACY_SECTION_IDS, legacyMarkupId } from "../admin-legacy/sections.mjs";
 
 export const ADMIN_OUT_DIR = "dist-admin";
 const PRODUCTION_REF = "ztozevcqkfrohgjmngcj";
@@ -285,7 +285,7 @@ export async function buildLegacy({ root, outDir, legacyConfig, sectionIds }) {
   writeFileSync(join(outDir, cssFile), css, "utf8");
 
   const markup = extractLegacyMarkup(indexHtml);
-  const missing = [...LEGACY_REQUIRED_IDS, ...sectionIds.map((id) => `admin-section-${id}`)]
+  const missing = [...LEGACY_REQUIRED_IDS, ...sectionIds.map(legacyMarkupId)]
     .filter((id) => !markup.includes(`id="${id}"`));
   if (missing.length) throw new Error(`build-admin: index.html is missing ${missing.join(", ")} (the legacy management pages need them)`);
   const template = readFileSync(join(root, "admin-legacy", "legacy.html"), "utf8");

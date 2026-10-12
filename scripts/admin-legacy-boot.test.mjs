@@ -27,8 +27,13 @@ const TABLES = {
   profiles: () => [PROFILE],
   role_definitions: () => [ADMIN_ROLE],
   app_feature_settings: () => [{ key: "daily_quiz", enabled: true }, { key: "speed_reading_exam", enabled: true }],
-  church_announcements: () => [{ id: "an-1", title: "<img src=x onerror=alert(1)>十月提醒", body: "這週讀完創世記", is_pinned: true, created_at: new Date().toISOString(), is_active: true }]
+  church_announcements: () => [{ id: "an-1", title: "<img src=x onerror=alert(1)>十月提醒", body: "這週讀完創世記", is_pinned: true, created_at: new Date().toISOString(), is_active: true }],
+  global_plans: () => [{ id: "bbbbbbbb-0000-4000-8000-000000000001", name: "<b>秋季</b>速讀", start_date: "2026-10-01", end_date: "2026-12-31", target_books: ["創世記", "出埃及記"], is_fixed: true, is_hidden: false, plan_kind: "standard", grace_days: 0 }]
 };
+
+const LEGACY_CONFIG = { supabaseUrl: SUPABASE, anonKey: "boot-anon", memberHubUrl: "https://member.newlife.org.tw", issuer: "https://sso.newlife.org.tw/oidc", resource: "https://platform.newlife.org.tw" };
+// 使用者基本資料（整份名單）才會查的欄位
+const USER_DIRECTORY_MARKER = "small_group, is_active, member_context_synced_at";
 
 function tableData(query) {
   const rows = TABLES[query.table] ? TABLES[query.table]() : [];
@@ -120,12 +125,7 @@ describe("legacy iframe boots in a browser-like environment", () => {
     const out = mkdtempSync(join(tmpdir(), "admin-legacy-boot-"));
     let legacy = null;
     try {
-      const { jsFile } = await buildLegacy({
-        root,
-        outDir: out,
-        legacyConfig: { supabaseUrl: SUPABASE, anonKey: "boot-anon", memberHubUrl: "https://member.newlife.org.tw", issuer: "https://sso.newlife.org.tw/oidc", resource: "https://platform.newlife.org.tw" },
-        sectionIds: LEGACY_SECTION_IDS
-      });
+      const { jsFile } = await buildLegacy({ root, outDir: out, legacyConfig: LEGACY_CONFIG, sectionIds: LEGACY_SECTION_IDS });
       legacy = await bootLegacy(readFileSync(join(out, jsFile), "utf8"), readFileSync(join(out, "legacy.html"), "utf8"), "announcements");
       const { win, messages, requests, errors, waitFor, port } = legacy;
 
@@ -160,7 +160,58 @@ describe("legacy iframe boots in a browser-like environment", () => {
       link.click();
       expect(await waitFor((m) => m.type === "export", "the export")).toMatchObject({ filename: "exam_第一次.csv", format: "csv", rows: 1, section: "exam" });
 
+      // 營運區：計畫管理是讀經計畫分頁的卡片，搬進一個區塊面板
+      port.postMessage({ type: "open", section: "plans" });
+      expect(await waitFor((m) => m.type === "section" && m.section === "plans", "plans")).toMatchObject({ available: true });
+      const doc = win.document;
+      const plansPanel = doc.getElementById("admin-section-plans");
+      const card = doc.getElementById("admin-plan-card");
+      expect(plansPanel.parentElement.id).toBe("admin-section-content");
+      expect(plansPanel.contains(card)).toBe(true);
+      expect(plansPanel.classList.contains("hidden")).toBe(false);
+      expect(card.classList.contains("hidden")).toBe(false);
+      expect(doc.getElementById("admin-section-exam").classList.contains("hidden")).toBe(true);
+      expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(true);
+      // 計畫列表與書卷勾選由 plan-admin.js 畫；計畫名稱當文字
+      const plansBody = doc.getElementById("admin-plans-table-body");
+      expect(plansBody.textContent).toContain("<b>秋季</b>速讀");
+      expect(plansBody.querySelector("b")).toBeNull();
+      expect(doc.querySelectorAll(".admin-book-checkbox").length).toBe(66);
+
+      // 換到管理分頁的計畫類區塊：計畫管理藏起來、計畫篩選列出現
+      port.postMessage({ type: "open", section: "join-status" });
+      expect(await waitFor((m) => m.type === "section" && m.section === "join-status", "join-status")).toMatchObject({ available: true });
+      expect(plansPanel.classList.contains("hidden")).toBe(true);
+      expect(doc.getElementById("admin-section-join-status").classList.contains("hidden")).toBe(false);
+      expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(false);
+
+      port.postMessage({ type: "open", section: "registrations" });
+      expect(await waitFor((m) => m.type === "section" && m.section === "registrations", "registrations")).toMatchObject({ available: true });
+      expect(doc.getElementById("admin-section-registrations").classList.contains("hidden")).toBe(false);
+      expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(true);
+
+      // 沒打開使用者基本資料就不載整份名單
+      expect(JSON.stringify(requests)).not.toContain(USER_DIRECTORY_MARKER);
       // 已知的雜訊以外沒有錯誤
+      expect(errors.filter((line) => !line.includes("[campaign]"))).toEqual([]);
+    } finally {
+      legacy?.close();
+      rmSync(out, { recursive: true, force: true });
+    }
+  }, 90000);
+
+  it("boots straight into the hosted plan card without loading the whole user list", async () => {
+    const out = mkdtempSync(join(tmpdir(), "admin-legacy-boot-"));
+    let legacy = null;
+    try {
+      const { jsFile } = await buildLegacy({ root, outDir: out, legacyConfig: LEGACY_CONFIG, sectionIds: LEGACY_SECTION_IDS });
+      legacy = await bootLegacy(readFileSync(join(out, jsFile), "utf8"), readFileSync(join(out, "legacy.html"), "utf8"), "plans");
+      const { win, requests, errors, waitFor } = legacy;
+      expect(await waitFor((m) => m.type === "section" || m.type === "error", "the first section")).toEqual({ type: "section", section: "plans", available: true });
+      expect(win.document.getElementById("admin-section-plans").classList.contains("hidden")).toBe(false);
+      expect(win.document.getElementById("admin-section-users").classList.contains("hidden")).toBe(true);
+      expect(win.document.getElementById("admin-plans-table-body").textContent).toContain("<b>秋季</b>速讀");
+      expect(JSON.stringify(requests)).not.toContain(USER_DIRECTORY_MARKER);
       expect(errors.filter((line) => !line.includes("[campaign]"))).toEqual([]);
     } finally {
       legacy?.close();

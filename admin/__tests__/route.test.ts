@@ -41,8 +41,19 @@ describe("parseRoute / formatRoute", () => {
     expect(route.view === "user" && route.reason.length).toBe(200);
   });
 
-  it("parses the other areas", () => {
-    expect(parseRoute("#/operations")).toEqual({ view: "area", area: "operations" });
+  it("parses the operations area: the legacy plan/statistics sections, the plan card first (#550)", () => {
+    expect(parseRoute("#/operations")).toEqual({ view: "legacy", area: "operations", section: "plans" });
+    for (const section of ["plans", "join-status", "members", "teams", "statistics", "reading-activity", "registrations"]) {
+      const route = parseRoute(`#/operations/${section}`);
+      expect(route).toEqual({ view: "legacy", area: "operations", section });
+      expect(formatRoute(route)).toBe(`#/operations/${section}`);
+      expect(areaOf(route)).toBe("operations");
+    }
+    expect(parseRoute("#/operations/announcements")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/operations/users")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/operations/plans/extra")).toEqual({ view: "not_found" });
+    // 營運區搬好之後沒有「還在搬」的佔位頁了
+    expect(parseRoute("#/nowhere/x")).toEqual({ view: "not_found" });
   });
 
   it("parses the system area: audit log with actor/target filters, and the copied settings page (#550)", () => {
@@ -89,13 +100,15 @@ describe("parseRoute / formatRoute", () => {
 describe("navigation by capability", () => {
   it("shows nothing without console access and support only with support.read", () => {
     expect(visibleNavItems([])).toEqual([]);
-    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations"]);
+    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual([]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
     expect(canUse(["console.access"], "accounts")).toBe(false);
     expect(canUse(["console.access", "accounts.read"], "accounts")).toBe(true);
     expect(canUse(["console.access"], "content")).toBe(false);
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
+    expect(canUse(["console.access"], "operations")).toBe(false);
+    expect(canUse(["console.access", "operations.manage"], "operations")).toBe(true);
     // 系統區：稽核紀錄或功能開放設定有一個就看得到
     expect(canUse(["console.access"], "system")).toBe(false);
     expect(canUse(["console.access", "audit.read"], "system")).toBe(true);

@@ -14,6 +14,7 @@ import {
   MAX_LEGACY_EXPORT_BYTES,
   safeExportFilename,
   startLegacyHost,
+  unavailableHint,
   type LegacyHostOptions
 } from "../src/legacy.ts";
 
@@ -231,6 +232,52 @@ async function go(hash: string) {
 }
 
 const CONTENT_CAPS = ["console.access", "support.read", "export", "content.manage"];
+const OPERATIONS_CAPS = ["console.access", "support.read", "export", "operations.manage"];
+
+describe("operations area", () => {
+  it("shows the plan card first, then the App's plan and statistics sections, in the same iframe", async () => {
+    const { el, fetchImpl } = await mount("#/operations", OPERATIONS_CAPS);
+    const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
+    expect(frame.getAttribute("src")).toBe("/legacy");
+    expect(frame.title).toBe("計畫管理");
+    const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
+    expect(tabs.map((a) => a.textContent)).toEqual(["計畫管理", "加入計畫狀況", "組員總覽", "組隊狀況", "計畫統計", "讀經使用率", "報名註冊統計"]);
+    expect(tabs[0].getAttribute("aria-current")).toBe("page");
+    expect(tabs[3].getAttribute("href")).toBe("#/operations/teams");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("營運");
+    // 照搬區只打開後台的 bootstrap，資料由 iframe 走 nlc-data
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
+    await go("#/operations/teams");
+    expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
+    expect(frame.title).toBe("組隊狀況管理");
+  });
+
+  it("shares one iframe with the content area", async () => {
+    const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "content.manage"]);
+    const frame = el.querySelector("iframe.adm-legacy__frame");
+    await go("#/operations/statistics");
+    expect(el.querySelectorAll("iframe.adm-legacy__frame")).toHaveLength(1);
+    expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
+    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("計畫統計");
+    expect([...el.querySelectorAll(".adm-legacy__tabs a")].map((a) => a.textContent)).not.toContain("大測驗");
+  });
+
+  it("is hidden from the menu and blocked without operations.manage; no more \"moving\" placeholders", async () => {
+    const { el } = await mount("#/operations/teams", ["console.access", "support.read", "content.manage"]);
+    expect(el.querySelector("iframe")).toBeNull();
+    expect(el.textContent).toContain("沒有權限");
+    const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
+    expect(links).toEqual(["客服", "內容"]);
+    expect(el.textContent).not.toContain("搬移中");
+  });
+
+  it("explains why a section is not available", () => {
+    expect(unavailableHint("exam")).toContain("功能開放設定");
+    expect(unavailableHint("quizzes")).toContain("功能開放設定");
+    expect(unavailableHint("join-status")).toContain("角色");
+    expect(unavailableHint("plans")).toContain("角色");
+  });
+});
 
 describe("content area", () => {
   it("shows the legacy page in an iframe with one tab per section", async () => {
