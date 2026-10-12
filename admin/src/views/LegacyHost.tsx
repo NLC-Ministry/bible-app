@@ -1,4 +1,5 @@
-// 照搬的舊管理區塊（#550）：上面一排區塊分頁，下面是 /legacy 的 iframe（App 管理分頁的同一份畫面）。
+// 照搬的舊管理區塊（#550）：上面一排區塊分頁（AreaTabs，系統區還有新寫的稽核紀錄），下面是 /legacy 的 iframe
+// （App 管理分頁的同一份畫面）。內容、系統兩區共用同一個 iframe，換區只是叫它打開另一個區塊。
 //
 // iframe 第一次進來才載入，之後切到別區只是藏起來，回來不用重新開機（舊程式要先載一輪資料）。
 // iframe 和外殼之間的通道、匯出前的稽核都在 legacy.ts；這裡只管畫面狀態。
@@ -7,9 +8,9 @@ import { RotateCw } from "lucide-react";
 import { describeAdminError, type AdminApi } from "../api.ts";
 import { downloadBlob } from "../download.ts";
 import { IFRAME_ACTIVITY_EVENT } from "../idle.ts";
-import { LEGACY_PATH, legacySectionsOf, startLegacyHost, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
-import { formatRoute } from "../route.ts";
+import { LEGACY_PATH, findLegacySection, startLegacyHost, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
 import type { ResolvedTheme } from "../theme.ts";
+import { AreaTabs } from "./AreaTabs.tsx";
 
 type FrameState =
   | { name: "booting" }
@@ -22,13 +23,14 @@ type Props = {
   visible: boolean;
   area: LegacyArea;
   section: string;
+  capabilities: readonly string[];
   theme: ResolvedTheme;
   getToken: () => string | null;
   getIdToken: () => string | null;
   onLoginRequired: () => void;
 };
 
-export function LegacyHost({ api, win, visible, area, section, theme, getToken, getIdToken, onLoginRequired }: Props) {
+export function LegacyHost({ api, win, visible, area, section, capabilities, theme, getToken, getIdToken, onLoginRequired }: Props) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const hostRef = useRef<Host | null>(null);
   const latest = useRef({ section, theme, getToken, getIdToken, onLoginRequired });
@@ -87,23 +89,11 @@ export function LegacyHost({ api, win, visible, area, section, theme, getToken, 
     setReloadKey((key) => key + 1);
   };
 
-  const sections = legacySectionsOf(area);
-  const current = sections.find((item) => item.id === section);
+  const current = findLegacySection(section);
 
   return (
     <div className="adm-legacy" hidden={!visible}>
-      <nav className="adm-tabs adm-legacy__tabs" aria-label="管理區塊">
-        {sections.map((item) => (
-          <a
-            key={item.id}
-            className={`adm-tab${item.id === section ? " adm-tab--active" : ""}`}
-            href={formatRoute({ view: "legacy", area, section: item.id })}
-            aria-current={item.id === section ? "page" : undefined}
-          >
-            {item.label}
-          </a>
-        ))}
-      </nav>
+      <AreaTabs area={area} current={section} capabilities={capabilities} className="adm-legacy__tabs" />
       {frame.name === "failed" && (
         <div className="adm-message">
           <h2>管理畫面載入失敗</h2>

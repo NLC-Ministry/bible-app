@@ -163,6 +163,14 @@ export function UserDetail({ api, userId, tab, reason, capabilities }: Props) {
           {account.is_active === false && <Badge tone="warning">已停用</Badge>}
         </div>
         {reason && <p className="adm-muted adm-small">查看理由：{reason}</p>}
+        {capabilities.includes("audit.read") && (
+          <p className="adm-small">
+            <a className="adm-link" href={formatRoute({ view: "audit", actorId: null, targetId: userId })}>管理員對這個人做過的操作（稽核紀錄）</a>
+            {account.role_code !== "member" && (
+              <> ・ <a className="adm-link" href={formatRoute({ view: "audit", actorId: userId, targetId: null })}>這個人做過的管理操作</a></>
+            )}
+          </p>
+        )}
       </header>
 
       <nav className="adm-tabs" aria-label="使用者資料分頁">

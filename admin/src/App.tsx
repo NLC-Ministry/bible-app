@@ -6,6 +6,7 @@ import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
 import { startIdleWatch } from "./idle.ts";
+import { findLegacySection } from "./legacy.ts";
 import { memberAppAdminUrl } from "./links.ts";
 import { NAV_ITEMS, canUse, visibleNavItems, type NavItem } from "./nav.ts";
 import { areaOf, parseRoute, type AdminRoute } from "./route.ts";
@@ -22,6 +23,7 @@ import {
 import type { Bootstrap } from "./types.ts";
 import { Badge, ErrorNotice, Spinner } from "./ui.tsx";
 import { AccountsArea } from "./views/AccountsArea.tsx";
+import { AuditLog } from "./views/AuditLog.tsx";
 import { LegacyHost } from "./views/LegacyHost.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
 
@@ -130,7 +132,9 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
 
   const capabilities = phase.name === "ready" ? phase.boot.capabilities : [];
   const navItems = useMemo(() => visibleNavItems(capabilities), [capabilities]);
-  const legacyActive = route.view === "legacy" && canUse(capabilities, route.area);
+  // 照搬區塊：這一區看得到、而且有這個區塊自己的能力（系統區的功能開放設定要 settings.manage）
+  const legacyActive = route.view === "legacy" && canUse(capabilities, route.area)
+    && capabilities.includes(findLegacySection(route.section)?.capability ?? "");
   useEffect(() => {
     if (legacyActive && route.view === "legacy") setLegacyRoute(route);
   }, [legacyActive, route]);
@@ -155,8 +159,10 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <SupportArea api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else if (route.view === "accounts") {
     content = <AccountsArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} doc={win.document} />;
+  } else if (route.view === "audit") {
+    content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else if (route.view === "legacy") {
-    content = null;
+    content = legacyActive ? null : <Message title="沒有權限" body="你的帳號沒有這個區塊的後台權限。" />;
   } else {
     const item = NAV_ITEMS.find((nav) => nav.area === route.area);
     content = (
@@ -221,6 +227,7 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
               visible={legacyActive}
               area={legacyRoute.area}
               section={legacyRoute.section}
+              capabilities={capabilities}
               theme={resolvedTheme}
               getToken={() => auth.getToken()}
               getIdToken={() => auth.getIdToken()}

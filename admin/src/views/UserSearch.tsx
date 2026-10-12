@@ -1,9 +1,9 @@
 // 使用者查詢：搜尋框＋結果清單（#555）。
 // 停止輸入 250ms 才送；新的搜尋會取消還在路上的舊搜尋（AbortController），結果不會被舊回應蓋掉。
-// 搜尋字的規則和 admin-api 共用 policy.ts 的 validateSearchQuery，不合規則就不送。
+// 搜尋字的規則和 admin-api 共用 search-query.ts 的 validateSearchQuery，不合規則就不送。
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { validateSearchQuery } from "../../../supabase/functions/admin-api/policy.ts";
+import { validateSearchQuery } from "../../../supabase/functions/admin-api/search-query.ts";
 import { isAbortError, type AdminApi } from "../api.ts";
 import { formatRoute } from "../route.ts";
 import { formatDateTime, text } from "../format.ts";

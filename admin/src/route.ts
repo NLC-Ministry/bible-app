@@ -7,7 +7,9 @@
 //   #/accounts                               使用者名單（#550）
 //   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
 //   #/content[/<區塊>]                       照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
-//   #/operations、#/system                   其他區（#550 陸續搬過來）
+//   #/system[/audit][?actor=<uuid>&target=<uuid>]  稽核紀錄（#550；actor／target 是篩選條件，可以從別頁連過來）
+//   #/system/settings                        功能開放設定（照搬）
+//   #/operations                             營運（#550 陸續搬過來）
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
 
@@ -28,6 +30,7 @@ export type AdminRoute =
   | { view: "user"; userId: string; tab: UserTab; reason: string }
   | { view: "accounts"; tab: AccountTab; profileId: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
+  | { view: "audit"; actorId: string | null; targetId: string | null }
   | { view: "area"; area: Exclude<Area, "support" | "accounts" | LegacyArea> }
   | { view: "not_found" };
 
@@ -68,6 +71,10 @@ export function parseRoute(hash: string): AdminRoute {
     if (rest[0] === "scopes" && isUuid(rest[1]) && rest.length === 2) return { view: "accounts", tab: "scopes", profileId: rest[1].toLowerCase() };
     return { view: "not_found" };
   }
+  if (area === "system" && (rest.length === 0 || (rest[0] === "audit" && rest.length === 1))) {
+    const pick = (key: string) => (isUuid(query.get(key)) ? String(query.get(key)).toLowerCase() : null);
+    return { view: "audit", actorId: pick("actor"), targetId: pick("target") };
+  }
   if (isLegacyArea(area)) {
     const sections = legacySectionsOf(area);
     if (rest.length === 0) return { view: "legacy", area, section: sections[0].id };
@@ -93,6 +100,13 @@ export function formatRoute(route: AdminRoute): string {
       return route.profileId ? `#/accounts/scopes/${route.profileId}` : "#/accounts/scopes";
     case "legacy":
       return `#/${route.area}/${route.section}`;
+    case "audit": {
+      const query = new URLSearchParams();
+      if (route.actorId) query.set("actor", route.actorId);
+      if (route.targetId) query.set("target", route.targetId);
+      const text = query.toString();
+      return text ? `#/system/audit?${text}` : "#/system/audit";
+    }
     case "area":
       return `#/${route.area}`;
     case "user": {
@@ -106,6 +120,7 @@ export function formatRoute(route: AdminRoute): string {
 
 export function areaOf(route: AdminRoute): Area {
   if (route.view === "area" || route.view === "legacy") return route.area;
+  if (route.view === "audit") return "system";
   if (route.view === "accounts") return "accounts";
   return "support";
 }

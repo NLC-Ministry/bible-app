@@ -209,3 +209,46 @@ export type ScopeSetResult = {
   managed_zones: string[];
   managed_groups: string[];
 };
+
+// ── 稽核紀錄（#550 第四組）──────────────────────────────────────────────────
+// supabase/migrations/20261012102522_admin_api_audit.sql；label 由 admin-api 補上（audit.ts）
+export type AuditPerson = { id: string; name: string | null };
+
+export type AuditEvent = {
+  id: number;
+  occurred_at: string;
+  source: string;
+  source_label: string;
+  action: string;
+  label: string;
+  resource: string | null;
+  result: "ok" | "denied" | "error" | string;
+  reason: string | null;
+  request_id: string | null;
+  actor: AuditPerson | null;
+  actor_role: string | null;
+  actor_role_label: string | null;
+  target_user: AuditPerson | null;
+  target_id: string | null;
+  changes: unknown;
+  detail: unknown;
+  // 清單裡太大的變更內容／補充資訊不放，點開再用 audit_event 抓
+  changes_omitted: boolean;
+  detail_omitted: boolean;
+};
+
+export type AuditFacets = {
+  actions: { action: string; label: string; count: number }[];
+  actors: { id: string; name: string | null; count: number }[];
+};
+
+export type AuditPage = {
+  items: AuditEvent[];
+  next_cursor: number | null;
+  // 第一頁才有
+  total: number | null;
+  facets: AuditFacets | null;
+  since: string;
+  actor: AuditPerson | null;
+  target: AuditPerson | null;
+};

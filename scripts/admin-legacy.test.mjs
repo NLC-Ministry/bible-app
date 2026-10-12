@@ -49,13 +49,16 @@ describe("one list of legacy sections everywhere", () => {
     for (const section of LEGACY_SECTIONS) {
       expect(LEGACY_EXPORT_SECTIONS[section.id], section.id).toBe(section.capability);
       expect(CAPABILITIES, section.id).toContain(section.capability);
+      // 這一區的導覽要這個能力（內容區直接要；系統區有其中一個就顯示）
       const nav = NAV_ITEMS.find((item) => item.area === section.area);
-      expect(nav?.requires, section.id).toEqual([section.capability]);
+      expect([...(nav?.requires || []), ...(nav?.anyOf || [])], section.id).toContain(section.capability);
       expect(nav?.ready, section.id).toBe(true);
     }
-    expect(capabilitiesForRole("admin")).toContain("content.manage");
-    for (const role of ["pastor", "great_zone_leader", "zone_leader", "group_leader", "member"]) {
-      expect(capabilitiesForRole(role)).not.toContain("content.manage");
+    for (const capability of ["content.manage", "settings.manage"]) {
+      expect(capabilitiesForRole("admin")).toContain(capability);
+      for (const role of ["pastor", "great_zone_leader", "zone_leader", "group_leader", "member"]) {
+        expect(capabilitiesForRole(role)).not.toContain(capability);
+      }
     }
   });
 

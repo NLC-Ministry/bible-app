@@ -15,7 +15,9 @@ export type AdminAction =
   // 帳號與權限（#550）
   | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export"
   // 照搬的舊管理區塊：下載前記一筆匯出稽核（#550）
-  | "legacy_export_audit";
+  | "legacy_export_audit"
+  // 稽核紀錄（#550）
+  | "audit_list" | "audit_event" | "audit_export";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -37,7 +39,9 @@ export const CACHE_TTL_MS = 60_000;
 const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   "user_search", "user_summary", "user_section", "user_timeline",
   "report_diagnostics", // 診斷資訊是回報當下的快照，不會變
-  "directory_list", "scope_overview" // 改管理範圍後 invalidate
+  "directory_list", "scope_overview", // 改管理範圍後 invalidate
+  "audit_list", // 切到功能開放設定再回來不重抓；重新整理鈕用 fresh
+  "audit_event" // 稽核紀錄不會改
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -222,6 +226,14 @@ export function describeAdminError(err: unknown): string {
     case "managed_scope_unknown_group": return "有小組名稱不在組織名單中，請重新整理後再選一次。";
     case "invalid_section": return "認不得這個管理區塊，請重新整理後再試。";
     case "invalid_export": return "認不得要下載的檔案，請重新整理後再試。";
+    case "invalid_days":
+    case "invalid_result":
+    case "invalid_source":
+    case "invalid_action_filter":
+    case "invalid_cursor": return "稽核紀錄的篩選條件不正確，請清除篩選再試。";
+    case "invalid_user_id": return "不正確的使用者編號，請重新整理後再試。";
+    case "invalid_event_id":
+    case "audit_event_not_found": return "找不到這筆稽核紀錄（可能已超過保存期限被清除）。";
     case "admin_api_failed": return "後台服務發生錯誤，請稍後再試。";
     default:
       if (err.status === 400) return `請求格式不正確（${err.code}）。`;
