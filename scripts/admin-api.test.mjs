@@ -38,7 +38,7 @@ describe("capability table (deny by default)", () => {
 
   it("makes every action declare known capabilities, a rate limit and a service_role-only SQL function", () => {
     expect(Object.keys(ADMIN_ACTIONS).sort()).toEqual([
-      "bootstrap",
+      "audit_event", "audit_export", "audit_list", "bootstrap",
       "directory_export", "directory_list", "legacy_export_audit", "org_export",
       "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
       "reveal_pii", "scope_overview", "scope_set", "user_search", "user_section", "user_summary", "user_timeline"

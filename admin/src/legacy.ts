@@ -13,7 +13,7 @@
 
 import type { ResolvedTheme } from "./theme.ts";
 
-export type LegacyArea = "content";
+export type LegacyArea = "content" | "system";
 
 export type LegacySection = {
   id: string;
@@ -27,10 +27,11 @@ export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "commentary", area: "content", label: "經文注釋", capability: "content.manage" },
   { id: "quizzes", area: "content", label: "小測驗", capability: "content.manage" },
   { id: "exam", area: "content", label: "大測驗", capability: "content.manage" },
-  { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" }
+  { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" },
+  { id: "settings", area: "system", label: "功能開放設定", capability: "settings.manage" }
 ];
 
-export const LEGACY_AREAS: readonly LegacyArea[] = ["content"];
+export const LEGACY_AREAS: readonly LegacyArea[] = ["content", "system"];
 
 export function isLegacyArea(value: unknown): value is LegacyArea {
   return typeof value === "string" && (LEGACY_AREAS as readonly string[]).includes(value);

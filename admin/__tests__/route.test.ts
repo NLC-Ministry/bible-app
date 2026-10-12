@@ -1,6 +1,6 @@
 // 後台網址格式（#555）：可以直接用網址連到某個人。
 import { describe, it, expect } from "vitest";
-import { formatRoute, parseRoute } from "../src/route.ts";
+import { areaOf, formatRoute, parseRoute } from "../src/route.ts";
 import { canUse, visibleNavItems } from "../src/nav.ts";
 import { describeItem, cursorAfter, usableCursor } from "../src/items.ts";
 
@@ -42,7 +42,22 @@ describe("parseRoute / formatRoute", () => {
   });
 
   it("parses the other areas", () => {
-    expect(parseRoute("#/system")).toEqual({ view: "area", area: "system" });
+    expect(parseRoute("#/operations")).toEqual({ view: "area", area: "operations" });
+  });
+
+  it("parses the system area: audit log with actor/target filters, and the copied settings page (#550)", () => {
+    expect(parseRoute("#/system")).toEqual({ view: "audit", actorId: null, targetId: null });
+    expect(parseRoute("#/system/audit")).toEqual({ view: "audit", actorId: null, targetId: null });
+    const route = parseRoute(`#/system/audit?target=${ID.toUpperCase()}&actor=${ID}`);
+    expect(route).toEqual({ view: "audit", actorId: ID, targetId: ID });
+    expect(formatRoute(route)).toBe(`#/system/audit?actor=${ID}&target=${ID}`);
+    expect(formatRoute({ view: "audit", actorId: null, targetId: null })).toBe("#/system/audit");
+    // 不是 uuid 的條件直接忽略
+    expect(parseRoute("#/system/audit?target=x';drop")).toEqual({ view: "audit", actorId: null, targetId: null });
+    expect(parseRoute("#/system/settings")).toEqual({ view: "legacy", area: "system", section: "settings" });
+    expect(parseRoute("#/system/audit/extra")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/system/announcements")).toEqual({ view: "not_found" });
+    expect(areaOf(parseRoute("#/system/audit"))).toBe("system");
   });
 
   it("parses the accounts area (#550)", () => {
@@ -74,13 +89,18 @@ describe("parseRoute / formatRoute", () => {
 describe("navigation by capability", () => {
   it("shows nothing without console access and support only with support.read", () => {
     expect(visibleNavItems([])).toEqual([]);
-    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations", "system"]);
+    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations"]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
     expect(canUse(["console.access"], "accounts")).toBe(false);
     expect(canUse(["console.access", "accounts.read"], "accounts")).toBe(true);
     expect(canUse(["console.access"], "content")).toBe(false);
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
+    // 系統區：稽核紀錄或功能開放設定有一個就看得到
+    expect(canUse(["console.access"], "system")).toBe(false);
+    expect(canUse(["console.access", "audit.read"], "system")).toBe(true);
+    expect(canUse(["console.access", "settings.manage"], "system")).toBe(true);
+    expect(canUse(["audit.read"], "system")).toBe(false);
   });
 });
 

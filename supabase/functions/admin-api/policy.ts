@@ -13,7 +13,11 @@ import {
   validateReportImage
 } from "./reports.ts";
 import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
+import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
+import { validateSearchQuery } from "./search-query.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
+
+export { validateSearchQuery };
 
 export const CAPABILITIES = [
   "console.access", // 進得了後台（bootstrap）
@@ -23,7 +27,8 @@ export const CAPABILITIES = [
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
-  "audit.read",     // 稽核紀錄（之後的 action 用）
+  "settings.manage", // 照搬的功能開放設定（#550）
+  "audit.read",     // 看、匯出稽核紀錄（#550）
   "export"          // 匯出
 ] as const;
 export type Capability = typeof CAPABILITIES[number];
@@ -63,21 +68,11 @@ export type ActionSpec = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CJK_RE = /[㐀-鿿豈-﫿]/;
 const MAX_REASON_CHARS = 200;
 const MAX_CURSOR_ID_CHARS = 100;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
-}
-
-/** 搜尋字串：去頭尾空白後至少 1 個中日韓文字或 2 個英數字，最多 100 字。 */
-export function validateSearchQuery(value: unknown): { ok: true; query: string } | { ok: false; error: string } {
-  const query = typeof value === "string" ? value.trim() : "";
-  if (query.length > 100) return { ok: false, error: "query_too_long" };
-  const alnum = query.replace(/[^A-Za-z0-9]/g, "").length;
-  if (!CJK_RE.test(query) && alnum < 2) return { ok: false, error: "query_too_short" };
-  return { ok: true, query };
 }
 
 function optionalReason(value: unknown): { ok: true; reason: string | null } | { ok: false; error: string } {
@@ -116,6 +111,15 @@ const MAX_REPLY_CHARS = 500;
 
 const actorArgs = (ctx: ActionContext) => ({ p_actor_id: ctx.actorId, p_actor_role: ctx.actorRole });
 
+// 稽核紀錄的條件 → SQL 參數（清單的 p_actor_id 是「篩選的操作者」；匯出的 p_actor_id 是匯出的人，篩選的另外叫 p_filter_actor_id）
+const auditFilterArgs = (filters: AuditFilters) => ({
+  p_days: filters.days,
+  p_action: filters.action,
+  p_result: filters.result,
+  p_source: filters.source,
+  p_target_user_id: filters.targetUserId
+});
+
 // ── 照搬的舊管理區塊（#550）──────────────────────────────────────────────────
 // 區塊 id → 需要的能力。舊區塊的資料仍走 nlc-data（那邊自己檢查角色、寫稽核）；
 // admin-api 只管它們的匯出：檔案由舊程式在瀏覽器產生，下載前先記一筆，記不成就不下載。
@@ -125,7 +129,8 @@ export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Obje
   commentary: "content.manage",
   quizzes: "content.manage",
   exam: "content.manage",
-  "lightning-quiz": "content.manage"
+  "lightning-quiz": "content.manage",
+  settings: "settings.manage"
 });
 export const LEGACY_EXPORT_FORMATS = ["csv", "txt"] as const;
 const MAX_LEGACY_FILENAME_CHARS = 200;
@@ -425,6 +430,53 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       const status = optionalReportFilter(params.status);
       if (!status.ok) return status;
       return { ok: true, args: { ...actorArgs(ctx), p_status: status.status, p_request_id: ctx.requestId } };
+    }
+  },
+
+  // ── 稽核紀錄（#550 第四組）────────────────────────────────────────────────
+  // 看清單不記稽核（見 migration 說明）；動作的中文名稱由 run 補上（audit.ts）
+  audit_list: {
+    capabilities: ["audit.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_audit_list",
+    run: runAuditList,
+    buildArgs: (params) => {
+      const filters = auditFilters(params);
+      if (!filters.ok) return filters;
+      let cursor: number | null = null;
+      if (params.cursor !== undefined && params.cursor !== null) {
+        const id = auditEventId(params.cursor);
+        if (!id.ok) return { ok: false, error: "invalid_cursor" };
+        cursor = id.value;
+      }
+      const limit = optionalLimit(params.limit, 50);
+      if (!limit.ok) return limit;
+      return { ok: true, args: {
+        ...auditFilterArgs(filters.value), p_actor_id: filters.value.actorId, p_cursor_id: cursor, p_limit: limit.limit
+      } };
+    }
+  },
+  audit_event: {
+    capabilities: ["audit.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_audit_event",
+    run: runAuditEvent,
+    buildArgs: (params) => {
+      const id = auditEventId(params.id);
+      return id.ok ? { ok: true, args: { p_id: id.value } } : id;
+    }
+  },
+  audit_export: {
+    capabilities: ["audit.read", "export"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_audit_export",
+    run: runAuditExport,
+    buildArgs: (params, ctx) => {
+      const filters = auditFilters(params);
+      if (!filters.ok) return filters;
+      return { ok: true, args: {
+        ...actorArgs(ctx), ...auditFilterArgs(filters.value), p_filter_actor_id: filters.value.actorId, p_request_id: ctx.requestId
+      } };
     }
   }
 });

@@ -7,5 +7,6 @@ export const LEGACY_SECTION_IDS = Object.freeze([
   "commentary",
   "quizzes",
   "exam",
-  "lightning-quiz"
+  "lightning-quiz",
+  "settings"
 ]);
