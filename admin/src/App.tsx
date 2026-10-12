@@ -7,8 +7,7 @@ import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
 import { startIdleWatch } from "./idle.ts";
 import { findLegacySection } from "./legacy.ts";
-import { memberAppAdminUrl } from "./links.ts";
-import { NAV_ITEMS, canUse, visibleNavItems, type NavItem } from "./nav.ts";
+import { canUse, visibleNavItems, type NavItem } from "./nav.ts";
 import { areaOf, parseRoute, type AdminRoute } from "./route.ts";
 import {
   THEMES,
@@ -161,15 +160,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <AccountsArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} doc={win.document} />;
   } else if (route.view === "audit") {
     content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
-  } else if (route.view === "legacy") {
-    content = legacyActive ? null : <Message title="沒有權限" body="你的帳號沒有這個區塊的後台權限。" />;
   } else {
-    const item = NAV_ITEMS.find((nav) => nav.area === route.area);
-    content = (
-      <Message title={item?.label || ""} body={`${item?.description || ""}——這一區還在從 App 搬過來（#550），搬好之前請先用 App 的管理分頁。`}>
-        <a className="adm-button" href={memberAppAdminUrl(environment)} target="_blank" rel="noopener noreferrer">開啟 App 管理分頁</a>
-      </Message>
-    );
+    content = legacyActive ? null : <Message title="沒有權限" body="你的帳號沒有這個區塊的後台權限。" />;
   }
 
   return (
@@ -211,7 +203,6 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
                   <a className={`adm-nav__link${current ? " adm-nav__link--active" : ""}`} href={`#/${item.area}`} aria-current={current ? "page" : undefined}>
                     <Icon className="adm-icon" aria-hidden="true" />
                     <span>{item.label}</span>
-                    {!item.ready && <span className="adm-nav__soon">搬移中</span>}
                   </a>
                 </li>
               );

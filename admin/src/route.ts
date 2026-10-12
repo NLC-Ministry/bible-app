@@ -6,10 +6,9 @@
 //   #/support/user/<uuid>[/<tab>][?reason=…] 某個人（可以直接用網址連過來；reason 是查看理由，會記進稽核）
 //   #/accounts                               使用者名單（#550）
 //   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
-//   #/content[/<區塊>]                       照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
+//   #/operations[/<區塊>]、#/content[/<區塊>] 照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
 //   #/system[/audit][?actor=<uuid>&target=<uuid>]  稽核紀錄（#550；actor／target 是篩選條件，可以從別頁連過來）
 //   #/system/settings                        功能開放設定（照搬）
-//   #/operations                             營運（#550 陸續搬過來）
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
 
@@ -31,7 +30,6 @@ export type AdminRoute =
   | { view: "accounts"; tab: AccountTab; profileId: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
   | { view: "audit"; actorId: string | null; targetId: string | null }
-  | { view: "area"; area: Exclude<Area, "support" | "accounts" | LegacyArea> }
   | { view: "not_found" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,9 +79,6 @@ export function parseRoute(hash: string): AdminRoute {
     if (rest.length === 1 && sections.some((section) => section.id === rest[0])) return { view: "legacy", area, section: rest[0] };
     return { view: "not_found" };
   }
-  if ((AREAS as readonly string[]).includes(area) && rest.length === 0) {
-    return { view: "area", area: area as Exclude<Area, "support" | "accounts" | LegacyArea> };
-  }
   return { view: "not_found" };
 }
 
@@ -107,8 +102,6 @@ export function formatRoute(route: AdminRoute): string {
       const text = query.toString();
       return text ? `#/system/audit?${text}` : "#/system/audit";
     }
-    case "area":
-      return `#/${route.area}`;
     case "user": {
       const tab = route.tab === "overview" ? "" : `/${route.tab}`;
       const reason = cleanReason(route.reason);
@@ -119,7 +112,7 @@ export function formatRoute(route: AdminRoute): string {
 }
 
 export function areaOf(route: AdminRoute): Area {
-  if (route.view === "area" || route.view === "legacy") return route.area;
+  if (route.view === "legacy") return route.area;
   if (route.view === "audit") return "system";
   if (route.view === "accounts") return "accounts";
   return "support";

@@ -12,7 +12,7 @@ import {
   resolveLegacyConfig,
   stripInlineHandlers
 } from "./build-admin.mjs";
-import { LEGACY_SECTION_IDS } from "../admin-legacy/sections.mjs";
+import { LEGACY_HOSTED_CARDS, LEGACY_SECTION_IDS, legacyMarkupId } from "../admin-legacy/sections.mjs";
 import { countCsvRecords, dataUrlToBlob, installExportGuard } from "../admin-legacy/export-guard.mjs";
 import { createBridge, forwardActivity, waitForBridge } from "../admin-legacy/bridge.mjs";
 import { createMemoryStorage, installMemoryStorage } from "../admin-legacy/memory-storage.mjs";
@@ -42,19 +42,34 @@ describe("one list of legacy sections everywhere", () => {
     expect(appSectionIds.length).toBeGreaterThan(10);
     expect([...LEGACY_SECTION_IDS]).toEqual(LEGACY_SECTIONS.map((section) => section.id));
     expect(Object.keys(LEGACY_EXPORT_SECTIONS)).toEqual([...LEGACY_SECTION_IDS]);
-    for (const id of LEGACY_SECTION_IDS) expect(appSectionIds, id).toContain(id);
+    for (const id of LEGACY_SECTION_IDS) {
+      // 搬進來的卡片不是管理分頁的區塊；其他一定是
+      if (Object.hasOwn(LEGACY_HOSTED_CARDS, id)) expect(appSectionIds, id).not.toContain(id);
+      else expect(appSectionIds, id).toContain(id);
+    }
+    for (const id of Object.keys(LEGACY_HOSTED_CARDS)) expect(LEGACY_SECTION_IDS, id).toContain(id);
+  });
+
+  it("hosts the plan card the App shows only to the system administrator (#550)", () => {
+    expect(LEGACY_HOSTED_CARDS).toEqual({ plans: "admin-plan-card" });
+    // App 端：讀經計畫分頁只對 admin 角色打開這張卡、只對 admin 載入 plan-admin.js
+    expect(read("js/modules/plan.js")).toMatch(/const isSystemAdmin = getUserRoleCode\(state\.currentUser\) === "admin";\s+const adminCard = document\.getElementById\("admin-plan-card"\);/);
+    expect(read("js/app.js")).toMatch(/getUserRoleCode\(state\.currentUser\) === 'admin'\) \{\s+await loadModule\('campaign-rule-editor'\);\s+await loadModule\('plan-admin'\);/);
+    // iframe 端：同樣只給 admin 打開，程式就是 plan-admin.js
+    const entry = read("admin-legacy/legacy-entry.js");
+    expect(entry).toContain('window.getUserRoleCode(window.state.currentUser) === "admin"');
+    expect(entry).toContain('import("../js/modules/plan-admin.js")');
   });
 
   it("needs the same capability in the console and in admin-api, and only the admin has it", () => {
     for (const section of LEGACY_SECTIONS) {
       expect(LEGACY_EXPORT_SECTIONS[section.id], section.id).toBe(section.capability);
       expect(CAPABILITIES, section.id).toContain(section.capability);
-      // 這一區的導覽要這個能力（內容區直接要；系統區有其中一個就顯示）
+      // 這一區的導覽要這個能力（營運、內容區直接要；系統區有其中一個就顯示）
       const nav = NAV_ITEMS.find((item) => item.area === section.area);
       expect([...(nav?.requires || []), ...(nav?.anyOf || [])], section.id).toContain(section.capability);
-      expect(nav?.ready, section.id).toBe(true);
     }
-    for (const capability of ["content.manage", "settings.manage"]) {
+    for (const capability of ["operations.manage", "content.manage", "settings.manage"]) {
       expect(capabilitiesForRole("admin")).toContain(capability);
       for (const role of ["pastor", "great_zone_leader", "zone_leader", "group_leader", "member"]) {
         expect(capabilitiesForRole(role)).not.toContain(capability);
@@ -64,7 +79,9 @@ describe("one list of legacy sections everywhere", () => {
 
   it("finds every section's panel in index.html (the markup the iframe copies)", () => {
     const markup = extractLegacyMarkup(read("index.html"));
-    for (const id of LEGACY_SECTION_IDS) expect(markup, id).toContain(`id="admin-section-${id}"`);
+    for (const id of LEGACY_SECTION_IDS) expect(markup, id).toContain(`id="${legacyMarkupId(id)}"`);
+    expect(legacyMarkupId("plans")).toBe("admin-plan-card");
+    expect(legacyMarkupId("join-status")).toBe("admin-section-join-status");
   });
 });
 

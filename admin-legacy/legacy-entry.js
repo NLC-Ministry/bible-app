@@ -24,7 +24,7 @@ import * as adminModule from "../js/modules/admin.js";
 import "../js/modules/campaign-rule-editor.js";
 import { forwardActivity, waitForBridge } from "./bridge.mjs";
 import { countCsvRecords, installExportGuard } from "./export-guard.mjs";
-import { LEGACY_SECTION_IDS } from "./sections.mjs";
+import { LEGACY_HOSTED_CARDS, LEGACY_SECTION_IDS } from "./sections.mjs";
 
 const THEMES = ["light", "dark", "warm"];
 const statusEl = document.getElementById("adm-legacy-status");
@@ -83,13 +83,63 @@ async function handleExport({ blob, filename }) {
   if (!reply || reply.ok !== true) toast(`沒有匯出：${reply?.message || "記錄稽核失敗，請稍後再試。"}`);
 }
 
-function openSection(id) {
+// 搬進來的卡片（LEGACY_HOSTED_CARDS）：包成和管理分頁一樣的區塊面板，換區時 admin.js 的
+// setAdminSection() 會連它一起藏起來
+function mountHostedCards() {
+  const content = document.getElementById("admin-section-content");
+  for (const [id, cardId] of Object.entries(LEGACY_HOSTED_CARDS)) {
+    const card = document.getElementById(cardId);
+    if (!content || !card) continue;
+    const panel = document.createElement("div");
+    panel.id = `admin-section-${id}`;
+    panel.className = "card-col span-12 admin-section-panel hidden";
+    panel.style.display = "none";
+    panel.appendChild(card);
+    content.appendChild(panel);
+  }
+}
+
+// 計畫管理卡片在 App 只給系統管理員（plan.js renderPlanView），程式在 plan-admin.js（App 也是管理員才載入）
+async function openHostedSection(id) {
+  const isAdmin = typeof window.getUserRoleCode === "function" && window.getUserRoleCode(window.state.currentUser) === "admin";
+  const panel = document.getElementById(`admin-section-${id}`);
+  const card = document.getElementById(LEGACY_HOSTED_CARDS[id]);
+  if (!isAdmin || !panel || !card) return false;
+  document.querySelectorAll("#admin-section-content > .admin-section-panel").forEach((other) => {
+    const active = other === panel;
+    other.classList.toggle("hidden", !active);
+    other.style.display = active ? "flex" : "none";
+  });
+  // 管理分頁的「計畫篩選」列只屬於加入計畫狀況、組員總覽這幾區
+  const planContext = document.getElementById("admin-plan-context");
+  if (planContext) {
+    planContext.classList.add("hidden");
+    planContext.style.display = "none";
+  }
+  card.classList.remove("hidden");
+  if (id === "plans") await loadLazy("plan-admin", () => import("../js/modules/plan-admin.js"));
+  return true;
+}
+
+async function openSection(id) {
   if (!booted) {
     pendingSection = id;
     return;
   }
   currentSection = id;
-  const available = LEGACY_SECTION_IDS.includes(id) && adminModule.openAdminSectionRoute(id) === true;
+  let available = false;
+  if (Object.hasOwn(LEGACY_HOSTED_CARDS, id)) {
+    try {
+      available = await openHostedSection(id);
+    } catch (err) {
+      console.error("[admin-legacy] hosted section failed", err);
+      toast("這一區載入失敗，請重新整理。");
+    }
+  } else {
+    available = LEGACY_SECTION_IDS.includes(id) && adminModule.openAdminSectionRoute(id) === true;
+  }
+  // 等待中又換了區：只回報最後那一區
+  if (currentSection !== id) return;
   if (typeof window.hydrateIcons === "function") window.hydrateIcons(document.getElementById("admin-view"));
   bridge.post("section", { section: id, available });
 }
@@ -137,11 +187,14 @@ async function mountAdminView(section) {
     : Promise.reject(new Error(`unknown plan chunk: ${name}`))));
   planModule.init();
   adminModule.init();
+  mountHostedCards();
   // init() 裡的功能開關是背景載入；小測驗／大測驗要等開關讀回來才知道開不開，這裡等它
   await adminModule.renderAdminFeatureSettings();
-  // 先記住要開的區，renderAdminPlanManagement() 還原「上次選的功能」時就直接是它
+  // 先記住要開的區，renderAdminPlanManagement() 還原「上次選的功能」時就直接是它。
+  // 搬進來的卡片不在管理分頁的清單裡，admin.js 會退回清單第一個（使用者基本資料，要載全部名單），
+  // 改記公告（init() 本來就會載）
   try {
-    window.sessionStorage.setItem("selected_admin_section", section);
+    window.sessionStorage.setItem("selected_admin_section", Object.hasOwn(LEGACY_HOSTED_CARDS, section) ? "announcements" : section);
   } catch (_err) {
     // 記憶體版 storage 不會失敗
   }
@@ -163,7 +216,7 @@ async function boot() {
   installExportGuard(window, (file) => { void handleExport(file); });
   applyTheme(bridge.init.theme);
   bridge.onMessage((message) => {
-    if (message.type === "open" && typeof message.section === "string") openSection(message.section);
+    if (message.type === "open" && typeof message.section === "string") void openSection(message.section);
     else if (message.type === "theme") applyTheme(message.theme);
   });
 
@@ -180,7 +233,7 @@ async function boot() {
   setStatus("");
   booted = true;
   bridge.post("ready");
-  openSection(pendingSection || bridge.init.section);
+  void openSection(pendingSection || bridge.init.section);
 }
 
 void boot();

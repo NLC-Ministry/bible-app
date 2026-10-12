@@ -26,6 +26,7 @@ export const CAPABILITIES = [
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
+  "operations.manage", // 照搬的營運區塊：計畫管理、加入計畫狀況、組員總覽、組隊狀況、計畫統計、讀經使用率、報名註冊統計（#550）
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
@@ -130,6 +131,13 @@ export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Obje
   quizzes: "content.manage",
   exam: "content.manage",
   "lightning-quiz": "content.manage",
+  plans: "operations.manage",
+  "join-status": "operations.manage",
+  members: "operations.manage",
+  teams: "operations.manage",
+  statistics: "operations.manage",
+  "reading-activity": "operations.manage",
+  registrations: "operations.manage",
   settings: "settings.manage"
 });
 export const LEGACY_EXPORT_FORMATS = ["csv", "txt"] as const;
