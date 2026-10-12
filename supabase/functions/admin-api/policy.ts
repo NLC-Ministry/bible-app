@@ -3,13 +3,24 @@
 // 能力式、預設拒絕：每個 action 宣告需要的能力，角色 → 能力對照表沒列到的角色什麼都沒有。
 // 新增 action 一定要寫進 ADMIN_ACTIONS（沒列到的 action 一律 400 unknown_action），
 // 測試會掃過整張表確認每個 action 都宣告了能力、限流與對應的 SQL 函式。
+// 會改資料的 action，稽核寫在 SQL 函式裡、和資料變動同一個交易（#550）。
+import {
+  runReportDelete,
+  runReportDropAttachment,
+  runReportExport,
+  runReportPost,
+  runReportThread,
+  validateReportImage
+} from "./reports.ts";
+import type { ActionContext, ActionRunner } from "./types.ts";
 
 export const CAPABILITIES = [
   "console.access", // 進得了後台（bootstrap）
-  "support.read",   // 使用者查詢
+  "support.read",   // 使用者查詢、回報收件匣
   "support.pii",    // 顯示完整 email／電話
+  "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "audit.read",     // 稽核紀錄（之後的 action 用）
-  "export"          // 匯出（之後的 action 用）
+  "export"          // 匯出
 ] as const;
 export type Capability = typeof CAPABILITIES[number];
 
@@ -25,16 +36,24 @@ export function capabilitiesForRole(roleCode: unknown): Capability[] {
 
 export const USER_SECTIONS = ["reading_logs", "team_events", "tests", "vouchers", "reports"] as const;
 
+export const REPORT_STATUSES = ["pending", "processing", "resolved", "ignored"] as const;
+// 收件匣篩選多一個 open（待處理＋處理中）
+export const REPORT_FILTERS = ["open", ...REPORT_STATUSES] as const;
+
 export type RateLimit = { bucket: string; limit: number; windowSeconds: number };
-export type ActionContext = { actorId: string; actorRole: string; requestId: string };
+export type { ActionContext };
 export type ArgsResult = { ok: true; args: Record<string, unknown> } | { ok: false; error: string };
 export type ActionSpec = {
   capabilities: readonly Capability[];
   rateLimit: RateLimit;
+  // 這個 action 的主要 SQL 函式（只給 service_role）；有 run 時由 run 呼叫
   rpc: string;
   buildArgs: (params: Record<string, unknown>, ctx: ActionContext) => ArgsResult;
-  // 回 null 代表找不到（→ 404）
+  // 回 null 代表找不到（→ 404，錯誤碼 notFoundError，預設 user_not_found）
   notFoundOnNull?: boolean;
+  notFoundError?: string;
+  // 需要 SQL 以外步驟（Storage、CSV）時用；沒有就是「呼叫 rpc、回傳結果」
+  run?: ActionRunner;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,7 +97,18 @@ function optionalLimit(value: unknown, fallback: number): { ok: true; limit: num
   return { ok: true, limit: value as number };
 }
 
+function optionalReportFilter(value: unknown): { ok: true; status: string | null } | { ok: false; error: string } {
+  if (value === undefined || value === null || value === "" || value === "all") return { ok: true, status: null };
+  if (typeof value !== "string" || !(REPORT_FILTERS as readonly string[]).includes(value)) return { ok: false, error: "invalid_status" };
+  return { ok: true, status: value };
+}
+
 const READ_LIMIT: RateLimit = { bucket: "read", limit: 120, windowSeconds: 60 };
+const WRITE_LIMIT: RateLimit = { bucket: "write", limit: 30, windowSeconds: 60 };
+const EXPORT_LIMIT: RateLimit = { bucket: "export", limit: 20, windowSeconds: 3600 };
+const MAX_REPLY_CHARS = 500;
+
+const actorArgs = (ctx: ActionContext) => ({ p_actor_id: ctx.actorId, p_actor_role: ctx.actorRole });
 
 export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze({
   bootstrap: {
@@ -158,6 +188,117 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
         p_actor_id: ctx.actorId, p_actor_role: ctx.actorRole, p_user_id: params.user_id,
         p_reason: reason.reason, p_request_id: ctx.requestId
       } };
+    }
+  },
+
+  // ── 回報收件匣（#550 第一組）──────────────────────────────────────────────
+  report_list: {
+    capabilities: ["support.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_report_list",
+    buildArgs: (params) => {
+      const status = optionalReportFilter(params.status);
+      if (!status.ok) return status;
+      const cursor = optionalCursor(params.cursor);
+      if (!cursor.ok) return cursor;
+      if (cursor.id !== null && !isUuid(cursor.id)) return { ok: false, error: "invalid_cursor" };
+      const limit = optionalLimit(params.limit, 30);
+      if (!limit.ok) return limit;
+      return { ok: true, args: {
+        p_status: status.status, p_unread_only: params.unread_only === true,
+        p_cursor_at: cursor.at, p_cursor_id: cursor.id, p_limit: limit.limit
+      } };
+    }
+  },
+  report_thread: {
+    capabilities: ["support.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_report_thread",
+    run: runReportThread,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      const reason = optionalReason(params.reason);
+      if (!reason.ok) return reason;
+      // refresh＝畫面自動更新：不重複記 view_report
+      return { ok: true, args: {
+        ...actorArgs(ctx), p_report_id: params.report_id, p_audit: params.refresh !== true,
+        p_reason: reason.reason, p_request_id: ctx.requestId
+      } };
+    }
+  },
+  report_diagnostics: {
+    capabilities: ["support.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_report_diagnostics",
+    notFoundOnNull: true,
+    notFoundError: "report_not_found",
+    buildArgs: (params) => isUuid(params.report_id)
+      ? { ok: true, args: { p_report_id: params.report_id } }
+      : { ok: false, error: "invalid_report_id" }
+  },
+  report_set_status: {
+    capabilities: ["support.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_report_set_status",
+    notFoundOnNull: true,
+    notFoundError: "report_not_found",
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      if (typeof params.status !== "string" || !(REPORT_STATUSES as readonly string[]).includes(params.status)) {
+        return { ok: false, error: "invalid_status" };
+      }
+      return { ok: true, args: { ...actorArgs(ctx), p_report_id: params.report_id, p_status: params.status, p_request_id: ctx.requestId } };
+    }
+  },
+  report_post: {
+    capabilities: ["support.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_report_post",
+    run: runReportPost,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      if (params.body !== undefined && typeof params.body !== "string") return { ok: false, error: "invalid_body" };
+      const body = typeof params.body === "string" ? params.body : "";
+      if (body.trim().length > MAX_REPLY_CHARS) return { ok: false, error: "body_too_long" };
+      const image = validateReportImage(params.image);
+      if (!image.ok) return image;
+      if (!body.trim() && !image.image) return { ok: false, error: "empty_message" };
+      return { ok: true, args: {
+        ...actorArgs(ctx), p_report_id: params.report_id, p_body: body,
+        p_is_internal: params.is_internal === true, p_has_attachment: !!image.image, p_request_id: ctx.requestId
+      } };
+    }
+  },
+  report_attachment_delete: {
+    capabilities: ["support.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_report_drop_attachment",
+    run: runReportDropAttachment,
+    buildArgs: (params, ctx) => isUuid(params.message_id)
+      ? { ok: true, args: { ...actorArgs(ctx), p_message_id: params.message_id, p_audit: true, p_request_id: ctx.requestId } }
+      : { ok: false, error: "invalid_message_id" }
+  },
+  report_delete: {
+    capabilities: ["support.write"],
+    rateLimit: { bucket: "delete", limit: 20, windowSeconds: 3600 },
+    rpc: "admin_api_report_delete",
+    run: runReportDelete,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      const reason = optionalReason(params.reason);
+      if (!reason.ok) return reason;
+      return { ok: true, args: { ...actorArgs(ctx), p_report_id: params.report_id, p_reason: reason.reason, p_request_id: ctx.requestId } };
+    }
+  },
+  report_export: {
+    capabilities: ["support.read", "export"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_report_export",
+    run: runReportExport,
+    buildArgs: (params, ctx) => {
+      const status = optionalReportFilter(params.status);
+      if (!status.ok) return status;
+      return { ok: true, args: { ...actorArgs(ctx), p_status: status.status, p_request_id: ctx.requestId } };
     }
   }
 });

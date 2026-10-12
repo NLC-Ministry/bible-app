@@ -20,6 +20,8 @@ import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
 
 const migrationFile = migrationFiles().find(file => file.endsWith("_admin_api_support.sql"));
 const sql = readMigration(migrationFile);
+// admin-api 呼叫的函式分散在 #547 之後的幾支 *_admin_api_*.sql（#550 起每組一支）
+const allAdminSql = migrationFiles().filter(file => /_admin_api_/.test(file)).map(readMigration).join("\n");
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -35,13 +37,17 @@ describe("capability table (deny by default)", () => {
   });
 
   it("makes every action declare known capabilities, a rate limit and a service_role-only SQL function", () => {
-    expect(Object.keys(ADMIN_ACTIONS).sort()).toEqual(["bootstrap", "reveal_pii", "user_search", "user_section", "user_summary", "user_timeline"]);
+    expect(Object.keys(ADMIN_ACTIONS).sort()).toEqual([
+      "bootstrap",
+      "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
+      "reveal_pii", "user_search", "user_section", "user_summary", "user_timeline"
+    ]);
     for (const [name, spec] of Object.entries(ADMIN_ACTIONS)) {
       expect(spec.capabilities.length, name).toBeGreaterThan(0);
       for (const cap of spec.capabilities) expect(CAPABILITIES, name).toContain(cap);
       expect(spec.rateLimit.limit, name).toBeGreaterThan(0);
       expect(spec.rateLimit.windowSeconds, name).toBeGreaterThan(0);
-      expect(sql, name).toContain(`CREATE OR REPLACE FUNCTION public.${spec.rpc}(`);
+      expect(allAdminSql, name).toContain(`CREATE OR REPLACE FUNCTION public.${spec.rpc}(`);
     }
     expect(ADMIN_ACTIONS.reveal_pii.capabilities).toEqual(["support.pii"]);
     expect(ADMIN_ACTIONS.user_search.rateLimit).toMatchObject({ limit: 60, windowSeconds: 60 });
