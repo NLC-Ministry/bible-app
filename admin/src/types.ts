@@ -4,8 +4,11 @@ export type Bootstrap = {
   me: { id: string; name: string | null; email: string | null; role_code: string; role_label: string | null } | null;
   capabilities: string[];
   feature_settings: { key: string; enabled: boolean; description: string | null }[];
-  org: { id: string; name: string; zones: { id: string; name: string; groups: { id: string; name: string }[] }[] }[];
+  org: OrgTreeNode[];
 };
+
+/** 組織名單（依 sort_order 排好）：大區 → 牧區 → 小組 */
+export type OrgTreeNode = { id: string; name: string; zones: { id: string; name: string; groups: { id: string; name: string }[] }[] };
 
 export type SearchResult = {
   id: string;
@@ -142,4 +145,67 @@ export type ReportThread = {
   messages: ReportMessage[];
 };
 
-export type ReportExport = { filename: string; csv: string; rows: number; total: number; truncated: boolean };
+/** admin-api 產生的 CSV（伺服器端已記稽核；前端只負責下載）。 */
+export type CsvExport = { filename: string; csv: string; rows: number; total: number; truncated: boolean; plan_name?: string | null };
+export type ReportExport = CsvExport;
+
+// ── 帳號與權限（#550）──────────────────────────────────────────────────────
+// supabase/migrations/20261012053123_admin_api_accounts.sql
+export type DirectoryTeam = { name: string | null; role: string | null };
+
+export type DirectoryItem = {
+  id: string;
+  name: string | null;
+  email_masked: string | null;
+  great_region: string | null;
+  pastoral_zone: string | null;
+  small_group: string | null;
+  is_active: boolean | null;
+  sync_status: string | null;
+  synced_at: string | null;
+  role_code: string;
+  role_label: string | null;
+  /** 逗號分隔（profiles 原樣） */
+  managed_regions: string;
+  managed_zones: string;
+  managed_groups: string;
+  joined: boolean;
+  teams: DirectoryTeam[];
+};
+
+export type PlanOption = { id: string; name: string | null; start_date: string | null; end_date: string | null; plan_kind: string | null };
+
+export type DirectoryPage = {
+  items: DirectoryItem[];
+  total: number;
+  next_offset: number | null;
+  /** 這頁用的計畫（沒指定時伺服器挑的預設計畫） */
+  plan_id: string | null;
+  /** 只有第一頁有 */
+  plans: PlanOption[] | null;
+  all_count: number | null;
+};
+
+export type ScopeLeader = {
+  id: string;
+  name: string | null;
+  email_masked: string | null;
+  role_code: string;
+  role_label: string | null;
+  great_region: string | null;
+  pastoral_zone: string | null;
+  small_group: string | null;
+  managed_regions: string[];
+  managed_zones: string[];
+  managed_groups: string[];
+};
+
+export type ScopeOverview = { leaders: ScopeLeader[] };
+
+export type ScopeSetResult = {
+  profile_id: string;
+  role_code: string;
+  managed_regions: string[];
+  managed_zones: string[];
+  managed_groups: string[];
+};

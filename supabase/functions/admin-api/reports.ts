@@ -4,7 +4,8 @@
 // Storage（截圖上傳、簽名網址、刪檔）和 CSV。Storage 失敗的處理比照 nlc-data 的 issue_thread_*：
 // 上傳失敗就把佔位訊息清掉（不記稽核，那不是管理員的操作），刪檔失敗只寫 log（資料列已經刪了）。
 import { reportsCsv, taipeiDate, type ReportExportRow } from "./exports.ts";
-import type { ActionRunner, RpcResult, RunOutcome } from "./types.ts";
+import { sqlFailure } from "./run-helpers.ts";
+import type { ActionRunner } from "./types.ts";
 
 export const ISSUE_SHOTS_BUCKET = "issue-report-shots";
 export const SIGNED_URL_SECONDS = 300;
@@ -38,12 +39,6 @@ export function decodeBase64(value: string): Uint8Array | null {
   } catch (_err) {
     return null;
   }
-}
-
-function sqlFailure(stage: string, error: RpcResult["error"]): RunOutcome {
-  // SQL 端的參數檢查（ERRCODE 22023）照原訊息回 400，例如 empty_message、thread_full
-  if (error?.code === "22023") return { ok: false, status: 400, error: error.message || "invalid_params" };
-  return { ok: false, status: 500, error: "admin_api_failed", stage, detail: error };
 }
 
 /** 對話：SQL 回附件路徑 → 換成 5 分鐘有效的簽名網址，路徑本身不回給前端。 */
