@@ -99,7 +99,8 @@ async function mount(initialHash: string) {
     init: vi.fn(async () => ({ status: "signed_in" as const })),
     login: vi.fn(async () => {}),
     logout: vi.fn(async () => {}),
-    getToken: () => "token-in-memory"
+    getToken: () => "token-in-memory",
+    getIdToken: () => null
   };
   const api = createAdminApi({ url: "https://api.test/admin-api", getToken: auth.getToken, fetchImpl });
   container = document.createElement("div");
@@ -239,7 +240,7 @@ describe("access", () => {
       requests.push(JSON.parse(String(init.body)).action);
       return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
     });
-    const auth: AdminAuth = { init: async () => ({ status: "signed_in" }), login: vi.fn(async () => {}), logout: vi.fn(async () => {}), getToken: () => "t" };
+    const auth: AdminAuth = { init: async () => ({ status: "signed_in" }), login: vi.fn(async () => {}), logout: vi.fn(async () => {}), getToken: () => "t", getIdToken: () => null };
     const api = createAdminApi({ url: "https://api.test/admin-api", getToken: auth.getToken, fetchImpl });
     container = document.createElement("div");
     document.body.appendChild(container);

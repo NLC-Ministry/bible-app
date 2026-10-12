@@ -156,8 +156,9 @@ export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Prom
 
   const spec = getAdminAction(body.action);
   if (!spec) return respond(400, { error: "unknown_action" });
-  if (!hasCapabilities(granted, spec.capabilities)) {
-    await recordDenied("missing_capability", { required: spec.capabilities });
+  const required = [...spec.capabilities, ...(spec.paramCapabilities?.(params) || [])];
+  if (!hasCapabilities(granted, required)) {
+    await recordDenied("missing_capability", { required });
     return respond(403, { error: "forbidden" });
   }
 

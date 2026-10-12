@@ -112,7 +112,10 @@ function pickSessionUserinfo(
 const CORS_FIXED_ORIGINS = [
   "https://bible.newlife.org.tw",
   "https://bible-speed-reading.vercel.app",
-  "https://bible-speed-reading-staging.vercel.app"
+  "https://bible-speed-reading-staging.vercel.app",
+  // 後台（#550）：照搬的舊管理區塊在後台網域的 iframe 裡，照舊呼叫 nlc-session／nlc-data／exam-write
+  "https://bible-speed-reading-admin.vercel.app",
+  "https://bible-speed-reading-admin-staging.vercel.app"
 ];
 // Vercel 的 PR 預覽網址：尾巴是本專案的 Vercel 團隊，別人建的專案不會有
 const CORS_PREVIEW_ORIGIN_RE = /^https:\/\/bible-speed-reading-[a-z0-9]+-a0970927705-1204s-projects\.vercel\.app$/;

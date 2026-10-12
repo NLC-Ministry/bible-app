@@ -134,7 +134,8 @@ async function mount(initialHash: string, respond = makeRespond()) {
     init: vi.fn(async () => ({ status: "signed_in" as const })),
     login: vi.fn(async () => {}),
     logout: vi.fn(async () => {}),
-    getToken: () => "token-in-memory"
+    getToken: () => "token-in-memory",
+    getIdToken: () => null
   };
   container = document.createElement("div");
   document.body.appendChild(container);

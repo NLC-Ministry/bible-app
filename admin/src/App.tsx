@@ -16,11 +16,13 @@ import {
   readThemePreference,
   resolveTheme,
   saveThemePreference,
+  type ResolvedTheme,
   type ThemePreference
 } from "./theme.ts";
 import type { Bootstrap } from "./types.ts";
 import { Badge, ErrorNotice, Spinner } from "./ui.tsx";
 import { AccountsArea } from "./views/AccountsArea.tsx";
+import { LegacyHost } from "./views/LegacyHost.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
 
 type Phase =
@@ -62,6 +64,9 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   const [navOpen, setNavOpen] = useState(false);
   const [idleWarning, setIdleWarning] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>(() => readThemePreference(safeLocalStorage(win)));
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+  // 最近一次打開的照搬區塊：iframe 第一次進來才建立，之後切到別區只藏起來（#550）
+  const [legacyRoute, setLegacyRoute] = useState<Extract<AdminRoute, { view: "legacy" }> | null>(null);
 
   // 登入 → bootstrap
   useEffect(() => {
@@ -112,7 +117,11 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   // 主題：存偏好、跟著系統深淺色變
   useEffect(() => {
     const media = typeof win.matchMedia === "function" ? win.matchMedia("(prefers-color-scheme: dark)") : null;
-    const apply = () => applyTheme(win.document.documentElement, resolveTheme(theme, !!media?.matches));
+    const apply = () => {
+      const resolved = resolveTheme(theme, !!media?.matches);
+      applyTheme(win.document.documentElement, resolved);
+      setResolvedTheme(resolved);
+    };
     apply();
     if (theme !== "system" || !media) return undefined;
     media.addEventListener?.("change", apply);
@@ -121,6 +130,10 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
 
   const capabilities = phase.name === "ready" ? phase.boot.capabilities : [];
   const navItems = useMemo(() => visibleNavItems(capabilities), [capabilities]);
+  const legacyActive = route.view === "legacy" && canUse(capabilities, route.area);
+  useEffect(() => {
+    if (legacyActive && route.view === "legacy") setLegacyRoute(route);
+  }, [legacyActive, route]);
 
   if (phase.name !== "ready") {
     return <Gate phase={phase} auth={auth} />;
@@ -142,6 +155,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <SupportArea api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else if (route.view === "accounts") {
     content = <AccountsArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} doc={win.document} />;
+  } else if (route.view === "legacy") {
+    content = null;
   } else {
     const item = NAV_ITEMS.find((nav) => nav.area === route.area);
     content = (
@@ -152,7 +167,7 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   }
 
   return (
-    <div className="adm-app">
+    <div className={`adm-app${legacyActive ? " adm-app--legacy" : ""}`}>
       <header className="adm-topbar">
         <button
           type="button"
@@ -197,7 +212,22 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
             })}
           </ul>
         </nav>
-        <main className="adm-main">{content}</main>
+        <main className="adm-main">
+          {content}
+          {legacyRoute && (
+            <LegacyHost
+              api={api}
+              win={win}
+              visible={legacyActive}
+              area={legacyRoute.area}
+              section={legacyRoute.section}
+              theme={resolvedTheme}
+              getToken={() => auth.getToken()}
+              getIdToken={() => auth.getIdToken()}
+              onLoginRequired={() => { auth.login(win.location.hash).catch(() => {}); }}
+            />
+          )}
+        </main>
       </div>
     </div>
   );

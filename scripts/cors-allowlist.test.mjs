@@ -31,12 +31,15 @@ describe("cors-allowlist block", () => {
     }
   });
 
-  it("allows production, staging, this team's previews and local dev", () => {
+  it("allows production, staging, the back-office console, this team's previews and local dev", () => {
     const { corsAllowOrigin } = load();
     for (const origin of [
       "https://bible.newlife.org.tw",
       "https://bible-speed-reading.vercel.app",
       "https://bible-speed-reading-staging.vercel.app",
+      // 後台照搬的舊管理區塊（#550）在後台網域的 iframe 裡
+      "https://bible-speed-reading-admin.vercel.app",
+      "https://bible-speed-reading-admin-staging.vercel.app",
       "https://bible-speed-reading-8smlvhqd7-a0970927705-1204s-projects.vercel.app",
       "http://localhost:3100",
       "http://127.0.0.1:5173",

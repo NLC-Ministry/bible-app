@@ -448,6 +448,17 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-scope-options__section > legend { padding: 0; font-size: 13px; color: var(--text-secondary); }
 .adm-scope-options__option { padding: 2px 0; }
 
+/* ── 照搬的舊管理區塊（#550）：iframe 填滿主畫面剩下的高度、裡面自己捲 ─────────────
+   不讓 iframe 跟著內容長高：舊畫面的彈窗是 position: fixed，iframe 一長，彈窗會跑到看不到的地方。 */
+.adm-app--legacy { height: 100vh; height: 100dvh; min-height: 0; }
+.adm-app--legacy .adm-body { min-height: 0; overflow: hidden; }
+.adm-app--legacy .adm-nav { overflow-y: auto; }
+.adm-app--legacy .adm-main { display: flex; flex-direction: column; min-height: 0; padding-bottom: 0; }
+.adm-legacy { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.adm-legacy[hidden], .adm-legacy__frame[hidden] { display: none; }
+.adm-legacy__tabs { flex: none; }
+.adm-legacy__frame { flex: 1; width: 100%; min-height: 320px; border: 0; background: var(--bg-app); }
+
 /* ── 手機：導覽收起、搜尋與某個人一次只顯示一邊 ─────────────────────── */
 @media (max-width: 767px) {
   .adm-menu-button { display: inline-flex; }

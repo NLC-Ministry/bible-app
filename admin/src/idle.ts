@@ -4,7 +4,9 @@
 export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 export const IDLE_WARNING_MS = 60 * 1000;
 const CHECK_EVERY_MS = 15 * 1000;
-const ACTIVITY_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
+// adm:activity：照搬區塊（iframe）裡的操作，外殼收到通知後自己發這個事件（iframe 的事件傳不到外面）
+export const IFRAME_ACTIVITY_EVENT = "adm:activity";
+const ACTIVITY_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll", IFRAME_ACTIVITY_EVENT] as const;
 
 type EventTargetLike = Pick<EventTarget, "addEventListener" | "removeEventListener">;
 type DocumentLike = EventTargetLike & { visibilityState?: string };
