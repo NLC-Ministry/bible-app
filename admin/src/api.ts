@@ -4,10 +4,14 @@
 // · 記憶體快取 60 秒：同一個人切換區塊、回到剛看過的頁面不重抓。只放記憶體，重新整理就沒了。
 //   快取鍵不含查看理由：同一個人 60 秒內換個理由重開不會再記一筆查看。
 // · 同一個請求還在路上時再要一次，共用同一個（沒帶 AbortSignal 的才共用）。
-// · 顯示個資（reveal_pii）、bootstrap 不快取。
+// · 顯示個資（reveal_pii）、bootstrap、會改資料的、回報清單與對話（會一直變）不快取。
 // · 401 → onUnauthorized（重新導向 SSO）；其他錯誤丟 AdminApiError，畫面用 describeAdminError 轉成中文。
 
-export type AdminAction = "bootstrap" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii";
+export type AdminAction =
+  | "bootstrap" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii"
+  // 回報收件匣（#550）
+  | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_post"
+  | "report_attachment_delete" | "report_delete" | "report_export";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -26,7 +30,10 @@ export class AdminApiError extends Error {
 }
 
 export const CACHE_TTL_MS = 60_000;
-const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>(["user_search", "user_summary", "user_section", "user_timeline"]);
+const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
+  "user_search", "user_summary", "user_section", "user_timeline",
+  "report_diagnostics" // 診斷資訊是回報當下的快照，不會變
+]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -45,6 +52,8 @@ export type CallOptions = { signal?: AbortSignal; fresh?: boolean };
 export type AdminApi = {
   call<T = unknown>(action: AdminAction, params?: Record<string, unknown>, options?: CallOptions): Promise<T>;
   peek<T = unknown>(action: AdminAction, params?: Record<string, unknown>): T | undefined;
+  /** 改了資料之後，丟掉這幾種 action 的快取（例如改回報狀態 → 某人頁面的回報區塊要重抓）。 */
+  invalidate(actions: readonly AdminAction[]): void;
   clear(): void;
 };
 
@@ -150,6 +159,12 @@ export function createAdminApi(options: AdminApiOptions): AdminApi {
       const hit = cache.get(cacheKey(action, params));
       return hit && now() - hit.at < ttl ? hit.data as T : undefined;
     },
+    invalidate(actions: readonly AdminAction[]) {
+      const prefixes = actions.map((action) => `${action}:`);
+      for (const key of [...cache.keys()]) {
+        if (prefixes.some((prefix) => key.startsWith(prefix))) cache.delete(key);
+      }
+    },
     clear() {
       cache.clear();
       inflight.clear();
@@ -179,6 +194,16 @@ export function describeAdminError(err: unknown): string {
     case "query_too_short": return "請輸入至少 1 個中文字或 2 個英文字母／數字。";
     case "query_too_long": return "搜尋字太長（最多 100 字）。";
     case "reason_too_long": return "查看理由最多 200 字。";
+    case "report_not_found": return "找不到這張回報（可能已經被刪除）。";
+    case "message_not_found": return "找不到這則訊息（可能已經被刪除）。";
+    case "thread_full": return "這串對話已經有 200 則，不能再回覆。";
+    case "empty_message": return "請輸入回覆內容或附上截圖。";
+    case "body_too_long": return "回覆最多 500 字。";
+    case "bad_mime": return "截圖只接受 PNG、JPEG、WebP。";
+    case "bad_image": return "這張截圖無法處理，請換一張。";
+    case "too_large": return "截圖太大（最多 500 KB）。";
+    case "payload_too_large": return "送出的資料太大。";
+    case "invalid_status": return "不正確的處理狀態。";
     case "admin_api_failed": return "後台服務發生錯誤，請稍後再試。";
     default:
       if (err.status === 400) return `請求格式不正確（${err.code}）。`;

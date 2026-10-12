@@ -7,6 +7,7 @@ import { ThreadPipeline, compressScreenshot, fetchReportDiagnostics, type Thread
 import { groupMessages, dayKey, dayLabel, clockTime, formatWhen, statusBadgeClass, CATEGORY_BADGE_CLASS } from "./ReportDrawer.tsx";
 import { csvCell } from "../../js/modules/csv-cell.mjs";
 import { fetchNlcTracked } from "../../js/diagnostics/report-diagnostics.mjs";
+import { diagnosticsSummaryRows, taipeiTime } from "../../lib/issue-report/report-diagnostics-summary.ts";
 
 interface IssueReport {
   id: string;
@@ -207,33 +208,8 @@ export const AdminReportView: React.FC = () => {
 const CAT_LABEL: Record<string, string> = { bug: "Bug 錯誤", ui: "UI 建議", data: "資料問題", other: "其他" };
 const ST_LABEL: Record<string, string> = { pending: "待處理", processing: "處理中", resolved: "已解決", ignored: "已存檔" };
 
-function taipeiTime(iso?: string, withDate = true): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return withDate
-    ? d.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })
-    : d.toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
-}
-
-/** 回報診斷資訊（#548）的摘要列：[標籤, 值]。 */
-export function diagnosticsSummaryRows(d: Record<string, any>): Array<[string, string]> {
-  const source = d?.data_source || {};
-  const queue = d?.offline_queue || {};
-  const rows: Array<[string, string]> = [
-    ["版本", d?.build_id || "—"],
-    ["送出時間", taipeiTime(d?.submitted_at)],
-    ["開啟方式", d?.standalone ? "主畫面 App" : "瀏覽器"],
-    ["網路", d?.online === false ? "離線" : "線上"],
-    ["頁面", d?.route || "—"],
-    ["作用中計畫", d?.active_plan_id || "—"],
-    ["資料來源", `${source.reading_data_source || "—"}${source.reading_data_stale === "true" ? "（舊資料）" : ""}`],
-    ["資料讀取錯誤", source.repository_error || "無"],
-    ["離線佇列", queue.available ? `待送 ${queue.pending ?? 0}／失敗 ${queue.failed ?? 0}` : "讀不到"]
-  ];
-  if (queue.last_error) rows.push(["佇列最後錯誤", String(queue.last_error)]);
-  return rows;
-}
+// taipeiTime／diagnosticsSummaryRows 搬到獨立模組，後台（admin/）也用同一份（#550）
+export { diagnosticsSummaryRows } from "../../lib/issue-report/report-diagnostics-summary.ts";
 
 export const ReportDiagnosticsPanel: React.FC<{ reportId: string }> = ({ reportId }) => {
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");

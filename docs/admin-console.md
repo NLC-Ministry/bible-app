@@ -14,7 +14,7 @@
 ## 檔案
 
 - `admin/admin.html` → `admin/admin-entry.tsx`：入口。React＋TypeScript，不載入會友 App 的核心鏈（`state.js`、`db.js` 等全域）。
-- `admin/src/`：`auth.ts`（登入）、`api.ts`（admin-api 呼叫與快取）、`idle.ts`（閒置登出）、`route.ts`（網址）、`nav.ts`（導覽與能力）、`App.tsx`（外殼）、`views/`（客服：搜尋、某個人）。
+- `admin/src/`：`auth.ts`（登入）、`api.ts`（admin-api 呼叫與快取）、`idle.ts`（閒置登出）、`route.ts`（網址）、`nav.ts`（導覽與能力）、`App.tsx`（外殼）、`download.ts`（把伺服器產生的 CSV 存檔）、`views/`（客服：回報收件匣 `ReportInbox.tsx`／對話 `ReportThread.tsx`、搜尋、某個人）。截圖壓縮與診斷摘要和會友 App 共用 `lib/issue-report/`（純函式，不碰會友 App 的全域；後台不能 import `components/issue-report/`）。
 - `admin/admin.css`：全部樣式。色票和 `index.css` 同一套 token，三種主題（`<html data-theme>`），值由 `scripts/admin-console.test.mjs` 比對。
 - `scripts/build-admin.mjs`：建置到 `dist-admin/`（只有 `index.html`、`admin.<hash>.js`、`admin.<hash>.css`、`favicon.svg`、`robots.txt`）。
 - `vercel.admin.json`：後台專案的 Vercel 設定（建置指令、輸出目錄、安全標頭）。CI 部署後台時把它複製成 `vercel.json`。
@@ -26,9 +26,12 @@
 - **不寫行內腳本、行內 style、`dangerouslySetInnerHTML`**。React 的 `style={…}` 也不用（測試會擋）；會友輸入的內容一律當文字顯示。
 - **token 只放記憶體**，沒有 refresh token（scope 不含 `offline_access`）。過期或重新整理就重新導向 SSO（Logto 已登入時不用再輸入密碼）。sessionStorage 只放 PKCE 這一趟的一次性資料與「剛登出」旗標；localStorage 只放主題偏好；不用 IndexedDB、cookie、Service Worker。
 - **閒置 30 分鐘自動登出**，並結束 Logto 的登入狀態（只清記憶體的話，重新整理又會無聲登回來）。登出前 1 分鐘提醒。
-- **請求預算**：開後台只打 1 個 admin-api 請求（`bootstrap`），打開某人只打 1 個（`user_summary`，裡面已有各區塊最新 5 筆與總數）；「載入更多」才打 `user_section`，切到時間軸才打 `user_timeline`。記憶體快取 60 秒，同一個人切換區塊不重抓。測試：`admin/__tests__/request-budget.test.tsx`。
+- **請求預算**：開後台＝`bootstrap`＋預設頁（回報收件匣）的 1 個 `report_list`（第一頁順便帶各狀態筆數）；打開一張回報只打 1 個 `report_thread`，之後畫面在前景時每 20 秒自動更新（`refresh: true`，不重複記稽核）；診斷資訊展開才打 `report_diagnostics`。收件匣清單放在客服區那一層，切到「查詢使用者」再回來不重抓。打開某人只打 1 個（`user_summary`，裡面已有各區塊最新 5 筆與總數）；「載入更多」才打 `user_section`，切到時間軸才打 `user_timeline`。記憶體快取 60 秒，同一個人切換區塊不重抓。測試：`admin/__tests__/request-budget.test.tsx`、`report-inbox.test.tsx`。
+- **會改資料的動作要 `support.write`**（回覆、內部備註、改狀態、刪截圖、刪回報），沒有這個能力的帳號看不到輸入框和按鈕；伺服器端在同一個交易內寫稽核。刪回報要再確認一次，可填原因（記進稽核）。
+- **匯出一律由伺服器產生**（`report_export`，需要 `support.read`＋`export`，記 `export` 稽核）；前端只存檔，不自己組 CSV。之後搬過來、還沒改寫的舊區塊若暫時在前端組 CSV，下載前必須先成功呼叫 admin-api 記稽核，記不到就不下載。
+- **截圖**：回覆可附 1 張（瀏覽器先壓到約 300 KB，伺服器上限 500 KB，PNG／JPEG／WebP）。顯示用 5 分鐘有效的簽名網址，存檔路徑不送到前端。
 - **個資預設遮罩**：按「顯示」才呼叫 `reveal_pii`（伺服器記稽核，需要 `support.pii` 能力）。可以附上查看理由，會記進 `view_user`／`reveal_pii` 稽核。
-- **導覽依能力**：`bootstrap` 回的能力清單決定左側顯示哪幾區（`admin/src/nav.ts`）；伺服器端 `admin-api` 仍會再擋一次。客服以外的四區要等 #550 搬過來，現在只放說明和回 App 管理分頁的連結。
+- **導覽依能力**：`bootstrap` 回的能力清單決定左側顯示哪幾區（`admin/src/nav.ts`）；伺服器端 `admin-api` 仍會再擋一次。客服（回報收件匣、查詢使用者）已搬好；其他四區 #550 陸續搬過來，搬好之前只放說明和回 App 管理分頁的連結。
 - **新增 admin-api action**：先照 `supabase/functions/admin-api/policy.ts` 的規則加進 `ADMIN_ACTIONS`，前端再加進 `admin/src/api.ts` 的 `AdminAction`，並決定要不要快取（顯示個資、會改資料的不要）。
 - **會友 App 的網域不提供後台**、後台網域也不提供會友 App：`dist/` 不會有後台檔案，`dist-admin/` 只有後台（`scripts/bundle.test.mjs`、`scripts/admin-console.test.mjs`）。
 

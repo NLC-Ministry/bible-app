@@ -2,7 +2,8 @@
 // 相依全部從參數注入，scripts/admin-api.test.mjs 用假的相依跑真的流程。
 //
 // 順序：來源網域 → token 簽章 → 身分（sub → profile，角色讀資料庫）→ 後台應用程式（client 宣告）
-//       → 帳號啟用、角色有能力 → action 存在、能力足夠 → 限流 → 參數 → 一支 SQL 函式。
+//       → 帳號啟用、角色有能力 → action 存在、能力足夠 → 限流 → 參數 → 一支 SQL 函式
+//       （回報截圖、匯出這類要多做一步的 action 走 spec.run，見 reports.ts）。
 // 拒絕（client 不對、沒有能力、超過限流）都記一筆 denied 稽核；回應一律 Cache-Control: no-store。
 import {
   adminAllowOrigin,
@@ -14,13 +15,16 @@ import {
   parseList,
   resolveRequestId
 } from "./policy.ts";
+import type { RpcResult, StorageDeps } from "./types.ts";
 
+export type { RpcResult, StorageDeps };
 export type TokenCheck = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
-export type RpcResult = { data: unknown; error: { message?: string; code?: string } | null };
 export type AdminApiDeps = {
   env: (key: string) => string | undefined;
   verifyToken: (token: string) => Promise<TokenCheck>;
   rpc: (fn: string, args: Record<string, unknown>) => Promise<RpcResult>;
+  // 回報截圖（#550）；沒給的話，需要 Storage 的 action 會回 500
+  storage?: StorageDeps;
   log?: (line: string) => void;
   now?: () => number;
   randomId?: () => string;
@@ -29,6 +33,8 @@ export type AdminApiDeps = {
 type Actor = { id: string; name?: string; role_code: string; role_label?: string | null; is_active?: boolean };
 
 const CORS_ALLOW_HEADERS = "authorization, content-type, x-request-id";
+// 請求本體上限：回覆附的截圖最大 512 KB，base64 後約 700 KB
+export const MAX_BODY_BYTES = 1_000_000;
 
 export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Promise<Response> {
   const now = deps.now || (() => Date.now());
@@ -78,6 +84,8 @@ export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Prom
   if (origin && !allowedOrigin) return respond(403, { error: "origin_not_allowed" });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: baseHeaders });
   if (req.method !== "POST") return respond(405, { error: "method_not_allowed" });
+
+  if (Number(req.headers.get("content-length") || 0) > MAX_BODY_BYTES) return respond(413, { error: "payload_too_large" });
 
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return respond(401, { error: "missing_authorization" });
@@ -167,8 +175,16 @@ export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Prom
     return respond(429, { error: "rate_limited", retry_after: retryAfter }, { "Retry-After": String(retryAfter) });
   }
 
-  const built = spec.buildArgs(params, { actorId: actor.id, actorRole: actor.role_code, requestId });
+  const ctx = { actorId: actor.id, actorRole: actor.role_code, requestId };
+  const built = spec.buildArgs(params, ctx);
   if (!built.ok) return respond(400, { error: built.error });
+
+  if (spec.run) {
+    const outcome = await spec.run({ args: built.args, params, ctx, rpc: deps.rpc, storage: deps.storage || null, log: deps.log });
+    if (outcome.ok) return respond(200, { data: outcome.data });
+    if (outcome.status === 500) return failure(outcome.stage || spec.rpc, outcome.detail || { message: outcome.error });
+    return respond(outcome.status, { error: outcome.error });
+  }
 
   const result = await deps.rpc(spec.rpc, built.args);
   if (result.error) {
@@ -177,7 +193,7 @@ export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Prom
     return failure(spec.rpc, result.error);
   }
   if (spec.notFoundOnNull && (result.data === null || result.data === undefined)) {
-    return respond(404, { error: "user_not_found" });
+    return respond(404, { error: spec.notFoundError || "user_not_found" });
   }
   const data = spec.rpc === "admin_api_bootstrap" && result.data && typeof result.data === "object"
     ? { ...(result.data as Record<string, unknown>), capabilities: granted }

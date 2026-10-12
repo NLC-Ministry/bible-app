@@ -72,12 +72,12 @@ export const REPORT_CATEGORY_LABEL: Record<string, string> = {
   other: "其他"
 };
 
+// 和會友在 App 回報抽屜看到的字一樣（ignored＝已存檔）
 export const REPORT_STATUS_LABEL: Record<string, string> = {
   pending: "待處理",
   processing: "處理中",
   resolved: "已解決",
-  ignored: "已忽略",
-  closed: "已關閉"
+  ignored: "已存檔"
 };
 
 export const PROVIDER_LABEL: Record<string, string> = {

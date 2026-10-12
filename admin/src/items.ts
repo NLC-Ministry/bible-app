@@ -1,5 +1,6 @@
 // 各區塊／時間軸的一筆紀錄 → 標題＋細節（#555）。純函式；畫面用 React 文字節點顯示，一律跳脫。
 
+import { formatRoute, isUuid } from "./route.ts";
 import type { Cursor, SectionItem } from "./types.ts";
 import {
   REPORT_CATEGORY_LABEL,
@@ -12,7 +13,8 @@ import {
   text
 } from "./format.ts";
 
-export type ItemView = { title: string; details: string[]; when: string };
+/** href：點了打開的後台頁（目前只有回報 → 收件匣裡那張對話，#550）。 */
+export type ItemView = { title: string; details: string[]; when: string; href?: string };
 
 const MEMBER_ROLE_LABEL: Record<string, string> = { captain: "隊長", member: "隊員" };
 const EXAM_STATUS_LABEL: Record<string, string> = { in_progress: "作答中", submitted: "已交卷", graded: "已批改" };
@@ -89,7 +91,8 @@ export function describeItem(item: SectionItem): ItemView {
       return {
         title: `回報：${label(REPORT_CATEGORY_LABEL, item.category)}・${label(REPORT_STATUS_LABEL, item.status)}`,
         details: compact([text(item.description, "")]),
-        when
+        when,
+        ...(isUuid(item.id) ? { href: formatRoute({ view: "inbox", reportId: item.id.toLowerCase() }) } : {})
       };
     default:
       return { title: text((item as SectionItem).section), details: [], when };

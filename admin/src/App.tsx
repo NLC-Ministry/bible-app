@@ -137,8 +137,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <Message title="找不到這個頁面" body="網址可能打錯了，請從左側選單重新進入。" />;
   } else if (!canUse(capabilities, area)) {
     content = <Message title="沒有權限" body="你的帳號沒有這一區的後台權限。" />;
-  } else if (route.view === "search" || route.view === "user") {
-    content = <SupportArea api={api} route={route} capabilities={capabilities} />;
+  } else if (route.view === "inbox" || route.view === "search" || route.view === "user") {
+    content = <SupportArea api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else {
     const item = NAV_ITEMS.find((nav) => nav.area === route.area);
     content = (

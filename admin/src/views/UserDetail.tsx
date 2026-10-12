@@ -342,7 +342,9 @@ function ItemList({ state, total, emptyText, onMore, showSection = false }: {
                 <li key={`${item.section}-${item.id}`} className="adm-item">
                   <div className="adm-item__head">
                     {showSection && <Badge>{label(SECTION_LABEL, item.section)}</Badge>}
-                    <span className="adm-item__title">{view.title}</span>
+                    {view.href
+                      ? <a className="adm-item__title adm-link" href={view.href}>{view.title}</a>
+                      : <span className="adm-item__title">{view.title}</span>}
                     <time className="adm-muted adm-small">{view.when}</time>
                   </div>
                   {view.details.length > 0 && <p className="adm-muted adm-small">{view.details.join("・")}</p>}

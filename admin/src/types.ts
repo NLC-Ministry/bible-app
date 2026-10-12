@@ -84,3 +84,62 @@ export type RevealedPii = {
   phone: string | null;
   identities: { provider: string; email: string | null; is_primary: boolean | null }[];
 };
+
+// ── 回報收件匣（#550）──────────────────────────────────────────────────────
+export type ReportReporter = {
+  id: string;
+  name: string | null;
+  great_region?: string | null;
+  pastoral_zone: string | null;
+  small_group: string | null;
+};
+
+export type ReportListItem = {
+  id: string;
+  category: string;
+  status: string;
+  description: string;
+  created_at: string;
+  last_message_at: string | null;
+  sort_at: string;
+  unread: boolean;
+  message_count: number;
+  reporter: ReportReporter | null;
+};
+
+export type ReportCounts = Record<"all" | "open" | "pending" | "processing" | "resolved" | "ignored" | "unread", number>;
+
+export type ReportPage = { items: ReportListItem[]; next_cursor: Cursor | null; counts: ReportCounts | null };
+
+export type ReportMessage = {
+  id: string;
+  author_role: "member" | "admin";
+  author_name: string | null;
+  is_internal: boolean;
+  body: string;
+  created_at: string;
+  has_attachment: boolean;
+  attachment_url: string | null;
+  attachment_w: number | null;
+  attachment_h: number | null;
+};
+
+export type ReportThread = {
+  report: {
+    id: string;
+    category: string;
+    status: string;
+    description: string;
+    url: string | null;
+    created_at: string;
+    last_message_at: string | null;
+    closed_at: string | null;
+    admin_last_read_at: string | null;
+    member_last_read_at: string | null;
+    has_diagnostics: boolean;
+    reporter: ReportReporter | null;
+  };
+  messages: ReportMessage[];
+};
+
+export type ReportExport = { filename: string; csv: string; rows: number; total: number; truncated: boolean };

@@ -7,10 +7,20 @@ import { describeItem, cursorAfter, usableCursor } from "../src/items.ts";
 const ID = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
 
 describe("parseRoute / formatRoute", () => {
-  it("defaults to user search", () => {
-    expect(parseRoute("")).toEqual({ view: "search" });
-    expect(parseRoute("#/")).toEqual({ view: "search" });
-    expect(parseRoute("#/support")).toEqual({ view: "search" });
+  it("defaults to the report inbox; user search has its own address (#550)", () => {
+    expect(parseRoute("")).toEqual({ view: "inbox", reportId: null });
+    expect(parseRoute("#/")).toEqual({ view: "inbox", reportId: null });
+    expect(parseRoute("#/support")).toEqual({ view: "inbox", reportId: null });
+    expect(parseRoute("#/support/users")).toEqual({ view: "search" });
+    expect(formatRoute({ view: "search" })).toBe("#/support/users");
+  });
+
+  it("opens a report directly", () => {
+    const route = parseRoute(`#/support/report/${ID.toUpperCase()}`);
+    expect(route).toEqual({ view: "inbox", reportId: ID });
+    expect(formatRoute(route)).toBe(`#/support/report/${ID}`);
+    expect(parseRoute("#/support/report/not-a-uuid")).toEqual({ view: "not_found" });
+    expect(parseRoute(`#/support/report/${ID}/extra`)).toEqual({ view: "not_found" });
   });
 
   it("opens a person directly, with tab and view reason", () => {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// 請求預算（#555）：用假的 admin-api 數請求。開後台 ≤ 1 個、打開某人 ≤ 1 個；
-// 同一個人 60 秒內切換區塊不重抓；搜尋停止輸入 250ms 才送、只送最後一次。
+// 請求預算（#555、#550）：用假的 admin-api 數請求。開後台＝bootstrap＋預設頁（回報收件匣）的 1 個清單、
+// 打開某人 ≤ 1 個；同一個人 60 秒內切換區塊不重抓；搜尋停止輸入 250ms 才送、只送最後一次。
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -55,6 +55,8 @@ function respond(action: string, params: any) {
       return { items: [log("l0", "2026-09-30T00:00:00Z", 99)], next_cursor: null };
     case "user_timeline":
       return { items: [log("t1", "2026-10-09T00:00:00Z", 7)], next_cursor: null };
+    case "report_list":
+      return { items: [], next_cursor: null, counts: { all: 0, open: 0, pending: 0, processing: 0, resolved: 0, ignored: 0, unread: 0 } };
     case "reveal_pii":
       return { email: "wang@example.com", phone: "0912345678", identities: [{ provider: "logto", email: "wang@example.com", is_primary: true }] };
     default:
@@ -118,9 +120,9 @@ async function typeInto(input: HTMLInputElement, value: string) {
 }
 
 describe("admin console request budget", () => {
-  it("opening the console makes exactly one admin-api request (bootstrap)", async () => {
+  it("opening the console makes bootstrap + one inbox page, nothing else", async () => {
     const { requests, el } = await mount("#/support");
-    expect(actions(requests)).toEqual(["bootstrap"]);
+    expect(actions(requests)).toEqual(["bootstrap", "report_list"]);
     expect(el.textContent).toContain("王管理");
     expect(el.textContent).toContain("測試站");
     const nav = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
@@ -128,7 +130,7 @@ describe("admin console request budget", () => {
   });
 
   it("opening a person makes exactly one request; switching sections within 60 s makes none", async () => {
-    const { requests, el } = await mount("#/support");
+    const { requests, el } = await mount("#/support/users");
     await go(`#/support/user/${USER}?reason=${encodeURIComponent("因回報 #1")}`);
     expect(actions(requests)).toEqual(["bootstrap", "user_summary"]);
     expect(requests[1].params).toEqual({ user_id: USER, reason: "因回報 #1" });
@@ -197,7 +199,7 @@ describe("personal data is masked until revealed", () => {
 
 describe("search", () => {
   it("waits 250 ms after typing stops and sends only the latest query", async () => {
-    const { requests, el } = await mount("#/support");
+    const { requests, el } = await mount("#/support/users");
     const input = el.querySelector<HTMLInputElement>("#adm-search-input")!;
     await typeInto(input, "王");
     await flush(100);
@@ -212,7 +214,7 @@ describe("search", () => {
   });
 
   it("does not send queries the API would reject", async () => {
-    const { requests, el } = await mount("#/support");
+    const { requests, el } = await mount("#/support/users");
     await typeInto(el.querySelector<HTMLInputElement>("#adm-search-input")!, "a");
     await flush(300);
     expect(actions(requests)).toEqual(["bootstrap"]);
@@ -220,7 +222,7 @@ describe("search", () => {
   });
 
   it("carries the view reason into the person link", async () => {
-    const { el } = await mount("#/support");
+    const { el } = await mount("#/support/users");
     await typeInto(el.querySelector<HTMLInputElement>("#adm-reason-input")!, "因回報 #7");
     await typeInto(el.querySelector<HTMLInputElement>("#adm-search-input")!, "王小");
     await flush(300);

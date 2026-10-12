@@ -1,5 +1,6 @@
 // 後台專用 API（#547）：只服務後台（#555），和會友 App 用的 nlc-data 分開。
-// 全部唯讀；一個 action 對一支 SQL 函式（supabase/migrations/20261011110008_admin_api_support.sql）。
+// 一個 action 對一支 SQL 函式（supabase/migrations/*_admin_api_*.sql）；會改資料的函式在同一個交易內記稽核。
+// 回報截圖（#550）另外經過 Storage（reports.ts）。
 // 權限表與參數規則在 policy.ts、請求流程在 handler.ts；這支只接上 Deno、Logto 驗證與 Supabase client。
 //
 // 必要的 secret（見 supabase/functions/README.md）：
@@ -135,5 +136,23 @@ Deno.serve((req: Request) => handleAdminRequest(req, {
     const { data, error } = await supabaseAdmin.rpc(fn, args);
     return { data, error };
   },
+  storage: supabaseAdmin ? {
+    upload: async (bucket, path, bytes, contentType) => {
+      const { error } = await supabaseAdmin.storage.from(bucket).upload(path, bytes, { contentType, upsert: true });
+      return { error: error ? error.message : null };
+    },
+    remove: async (bucket, paths) => {
+      const { error } = await supabaseAdmin.storage.from(bucket).remove(paths);
+      return { error: error ? error.message : null };
+    },
+    signedUrls: async (bucket, paths, expiresInSeconds) => {
+      const { data } = await supabaseAdmin.storage.from(bucket).createSignedUrls(paths, expiresInSeconds);
+      const urls: Record<string, string> = {};
+      for (const item of data || []) {
+        if (item && !item.error && item.path && item.signedUrl) urls[item.path] = item.signedUrl;
+      }
+      return urls;
+    }
+  } : undefined,
   log: (line) => console.log(line)
 }));
