@@ -182,7 +182,8 @@ describe("報名與註冊統計 → Google 試算表同步", () => {
   it("adds an admin-only action to nlc-data that forwards to the Apps Script webhook with a shared secret, never the caller's token", () => {
     expect(edge).toContain('"sync_registration_stats_sheet"');
     expect(edge).toContain('if (action === "sync_registration_stats_sheet")');
-    expect(edge).toContain("if (!isAdmin(profile)) return jsonResponse({ error: \"forbidden\" }, 403);");
+    // 非管理員先記一筆 denied 稽核（#549）再拒絕
+    expect(edge).toMatch(/if \(!isAdmin\(profile\)\) \{\s+await sheetAudit\("denied"\);\s+return jsonResponse\(\{ error: "forbidden" \}, 403\);/);
     expect(edge).toContain('Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL")');
     expect(edge).toContain('Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET")');
     expect(edge).toContain("secret: sheetSecret");

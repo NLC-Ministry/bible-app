@@ -6,6 +6,17 @@ import {
   buildPlanReadingLogDigestArgs,
   buildPlanStatsRosterArgs,
 } from "./plan-stats-scope.ts";
+import {
+  AUDITED_ADMIN_RPCS,
+  buildRpcAuditEvent,
+  buildTableWriteAuditEvent,
+  classifyFailure,
+  diffFields,
+  isAuditedTableWrite,
+  resolveRequestId,
+  singleRowKey,
+  type AdminAuditEvent,
+} from "./admin-audit.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
 // >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
@@ -883,6 +894,50 @@ async function applyForcedScope(query: any, table: string, action: string, profi
   return { query };
 }
 
+// ── 稽核補記（#549）──────────────────────────────────────────────────────────
+// 管理寫入成功後補記一筆到 audit.admin_events（經 public.record_admin_audit_event，
+// 只有 service role 能呼叫）。盡力而為：稽核失敗只記 log，不影響原本的請求。
+async function recordAdminAudit(supabaseAdmin: any, event: AdminAuditEvent) {
+  try {
+    const { error } = await supabaseAdmin.rpc("record_admin_audit_event", event);
+    if (error) console.warn(JSON.stringify({ event: "admin_audit_record_failed", action: event.p_action, code: error.code, message: error.message }));
+  } catch (err) {
+    console.warn(JSON.stringify({ event: "admin_audit_record_failed", action: event.p_action, message: err instanceof Error ? err.message : String(err) }));
+  }
+}
+
+async function fetchManagedScopes(supabaseAdmin: any, profileId: string) {
+  try {
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("managed_regions, managed_zones, managed_groups")
+      .eq("id", profileId)
+      .maybeSingle();
+    return data || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+// 單列 update／delete 先讀出修改前的值（update 只讀 payload 有的欄位）；批次操作不讀，只記條件和筆數
+async function fetchAuditBefore(supabaseAdmin: any, table: string, action: string, filters: unknown, payload: unknown) {
+  if (action !== "update" && action !== "delete") return null;
+  const key = singleRowKey(table, filters);
+  if (!key) return null;
+  let columns = "*";
+  if (action === "update") {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+    columns = Object.keys(payload).filter((name) => /^[a-z_][a-z0-9_]*$/.test(name)).join(",");
+    if (!columns) return null;
+  }
+  try {
+    const { data } = await supabaseAdmin.from(table).select(columns).eq(key.column, key.value).maybeSingle();
+    return data || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
 // Run one read-only query spec through the SAME allowlist + forced-scope + option
 // pipeline as the single-query `action:"select"` path near the bottom of
 // Deno.serve. Kept deliberately in sync with that block; if you change one, change
@@ -938,6 +993,8 @@ Deno.serve(async (req: Request) => {
   };
 
   const requestStartedAt = performance.now();
+  // 請求 id：前端帶 x-request-id（#548），沒帶就產生一個；寫進稽核紀錄（#549）
+  const requestId = resolveRequestId(req.headers.get("x-request-id"), () => crypto.randomUUID());
   const jsonResponse = (body: unknown, status = 200) => {
     const serialized = JSON.stringify(body);
     return new Response(serialized, {
@@ -982,20 +1039,27 @@ Deno.serve(async (req: Request) => {
     if (action === "rpc") {
       const functionName = typeof body.function === "string" ? body.function : "";
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
-      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+      // 權限不足的管理 RPC 記為 denied（#549），供異常偵測
+      const denyAdminRpc = async () => {
+        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+          fn: functionName, args: body.args, actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
+        }));
         return jsonResponse({ error: "forbidden_rpc" }, 403);
+      };
+      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+        return await denyAdminRpc();
       }
       if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (ISSUE_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (functionName === ADMIN_USER_DIRECTORY_RPC && !hasWholeChurchPlanScope(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
         const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
@@ -1009,7 +1073,7 @@ Deno.serve(async (req: Request) => {
       }
       if (EXAM_RPC_FUNCTIONS.has(functionName)) {
         if (EXAM_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-          return jsonResponse({ error: "forbidden_rpc" }, 403);
+          return await denyAdminRpc();
         }
         const { data: examFeature, error: examFeatureError } = await supabaseAdmin
           .from("app_feature_settings")
@@ -1062,7 +1126,24 @@ Deno.serve(async (req: Request) => {
       } else {
         rpcArgs = (body.args || {});
       }
+      // 管理範圍：補記修改前後的值（只有這支，其他管理 RPC 記參數就夠）
+      const auditRpc = AUDITED_ADMIN_RPCS.has(functionName);
+      const scopeTargetId = auditRpc && functionName === "set_profile_managed_scopes" ? String((rpcArgs as any).p_profile_id || "") : "";
+      const scopeBefore = scopeTargetId ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
+      if (auditRpc) {
+        const scopeAfter = scopeTargetId && !error ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
+        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+          fn: functionName,
+          args: rpcArgs,
+          actor: profile,
+          roleCode: getProfileRoleCode(profile),
+          requestId,
+          result: error ? classifyFailure(error) : "ok",
+          error,
+          changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : null
+        }));
+      }
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
       // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
       // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
@@ -1412,7 +1493,15 @@ Deno.serve(async (req: Request) => {
     // shared secret before forwarding — the Apps Script side never sees a
     // Supabase/Logto token, just this one shared secret.
     if (action === "sync_registration_stats_sheet") {
-      if (!isAdmin(profile)) return jsonResponse({ error: "forbidden" }, 403);
+      const sheetAudit = (result: "ok" | "denied" | "error") => recordAdminAudit(supabaseAdmin, {
+        p_action: "sync_registration_stats_sheet", p_result: result, p_actor_id: profile.id,
+        p_actor_role: getProfileRoleCode(profile), p_resource: "export", p_target_user_id: null, p_target_id: null,
+        p_changes: null, p_reason: null, p_request_id: requestId, p_detail: null
+      });
+      if (!isAdmin(profile)) {
+        await sheetAudit("denied");
+        return jsonResponse({ error: "forbidden" }, 403);
+      }
 
       const sheetUrl = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
       const sheetSecret = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
@@ -1463,6 +1552,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "sheet_webhook_unreachable" }, 502);
       }
 
+      await sheetAudit("ok");
       return jsonResponse({ data: { ok: true } });
     }
 
@@ -1472,6 +1562,11 @@ Deno.serve(async (req: Request) => {
     if (["insert", "update", "upsert"].includes(action)
       && table === "profiles"
       && Object.prototype.hasOwnProperty.call(body.payload || {}, "role_id")) {
+      await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+        table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: null,
+        actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied",
+        error: { code: "role_assignment_managed_by_member_hub" }
+      }));
       return jsonResponse({ error: "role_assignment_managed_by_member_hub" }, 403);
     }
     const canReportInsert = action === "insert" && table === "issue_reports";
@@ -1488,7 +1583,18 @@ Deno.serve(async (req: Request) => {
       ((ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && (isAdmin(profile) || canManagePlans(profile)))
       || (ADMIN_ONLY_WRITE_TABLES.has(table) && isAdmin(profile))
     );
-    if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
+    if (!canRead && !canOwnWrite && !canAdminWrite) {
+      if (isAuditedTableWrite(table, action)) {
+        await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+          table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: null,
+          actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
+        }));
+      }
+      return jsonResponse({ error: "forbidden" }, 403);
+    }
+    // 管理用資料表的寫入（#549）：單列修改／刪除先讀出修改前的值，寫入後補記一筆
+    const auditWrite = canAdminWrite && !canOwnWrite && isAuditedTableWrite(table, action);
+    const auditBefore = auditWrite ? await fetchAuditBefore(supabaseAdmin, table, action, body.filters, body.payload) : null;
 
 
     const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
@@ -1527,6 +1633,15 @@ Deno.serve(async (req: Request) => {
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
 
     const { data, error } = await query;
+    if (auditWrite) {
+      await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+        table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: auditBefore,
+        actor: profile, roleCode: getProfileRoleCode(profile), requestId,
+        result: error ? classifyFailure(error) : "ok",
+        rowCount: Array.isArray(data) ? data.length : null,
+        error
+      }));
+    }
     if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
 
     let responseData = data;
