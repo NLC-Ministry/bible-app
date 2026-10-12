@@ -17,6 +17,7 @@ import {
   singleRowKey,
   type AdminAuditEvent,
 } from "./admin-audit.ts";
+import { buildRequestLogLine, requestLogTarget, sanitizeReportInsertPayload } from "./request-diagnostics.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
 // >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
@@ -995,15 +996,20 @@ Deno.serve(async (req: Request) => {
   const requestStartedAt = performance.now();
   // 請求 id：前端帶 x-request-id（#548），沒帶就產生一個；寫進稽核紀錄（#549）
   const requestId = resolveRequestId(req.headers.get("x-request-id"), () => crypto.randomUUID());
+  const requestContext = { action: "", target: "" };
   const jsonResponse = (body: unknown, status = 200) => {
     const serialized = JSON.stringify(body);
+    const elapsedMs = performance.now() - requestStartedAt;
+    // 每個請求一行結構化 log（#548）：回報診斷資訊裡的 request_id 對得到這一行
+    console.log(buildRequestLogLine({ requestId, ...requestContext, status, ms: elapsedMs }));
     return new Response(serialized, {
       status,
       headers: {
         ...localCorsHeaders,
         "Content-Length": String(new TextEncoder().encode(serialized).byteLength),
-        "Server-Timing": `edge;dur=${(performance.now() - requestStartedAt).toFixed(1)}`,
-        "Access-Control-Expose-Headers": "Content-Length, Server-Timing"
+        "Server-Timing": `edge;dur=${elapsedMs.toFixed(1)}`,
+        "x-request-id": requestId,
+        "Access-Control-Expose-Headers": "Content-Length, Server-Timing, x-request-id"
       }
     });
   };
@@ -1023,6 +1029,8 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
+    requestContext.action = String(action).slice(0, 60);
+    requestContext.target = requestLogTarget(body);
     if (!["save_profile", "rpc", "batch", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet", "issue_thread_get", "issue_thread_post", "issue_thread_attachment_delete"].includes(action) && (!table || typeof table !== "string")) {
       return jsonResponse({ error: "missing_table" }, 400);
     }
@@ -1591,6 +1599,10 @@ Deno.serve(async (req: Request) => {
         }));
       }
       return jsonResponse({ error: "forbidden" }, 403);
+    }
+    // 新增回報：metadata 只留前端附的診斷資訊（#548），其他鍵一律丟掉
+    if (table === "issue_reports" && action === "insert") {
+      body.payload = sanitizeReportInsertPayload(body.payload);
     }
     // 管理用資料表的寫入（#549）：單列修改／刪除先讀出修改前的值，寫入後補記一筆
     const auditWrite = canAdminWrite && !canOwnWrite && isAuditedTableWrite(table, action);

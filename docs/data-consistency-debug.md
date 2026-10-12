@@ -2,6 +2,14 @@
 
 本專案以 Supabase 為伺服器真相來源。IndexedDB 的 `server_cache` 只保存依使用者 ID 隔離的讀取快照；`offline_operations` 只保存尚未送出的讀經操作。Service Worker 絕不處理 Supabase、REST、Auth、Functions、Storage 或 Realtime 請求。
 
+## 先看回報附的診斷資訊（#548）
+
+會友從 App 送出的回報會自動附 `metadata.diagnostics`，通常不必再到對方裝置開 F12：
+
+1. 管理端打開那筆回報的對話，展開原始回報下方的「診斷資訊」。看得到版本（build id）、是否以主畫面 App 開啟、線上／離線、頁面、作用中的計畫、`readingDataSource`／`readingDataStale`／`repositoryError`、離線佇列的待送／失敗筆數與最後錯誤、最近 5 個 `nlc-data` 請求、最近 10 筆前端錯誤（window error、unhandledrejection、console.error）。
+2. 最近請求的每一列都有 `request_id`。到 Supabase Dashboard → Edge Functions → `nlc-data` → Logs 搜這個 id，會找到一行 `{"event":"nlc_data_request","request_id":…,"action":…,"target":…,"status":…,"ms":…}`；同一個 id 也寫在稽核紀錄（`audit.admin_events.request_id`）與回應標頭 `x-request-id`。
+3. 收集端在 `js/diagnostics/report-diagnostics.mjs`：不收 token、cookie、localStorage；錯誤訊息先遮掉 `Bearer …`、`eyJ…`、網址裡的 token／code 與 email；整包壓在 8 KB 內（超過先丟最舊的錯誤）。`nlc-data` 新增回報時 metadata 只留 `diagnostics`（16 KB 以內）。較早送出的回報沒有這份資料。
+
 ## F12 三步檢查
 
 ### 1. Network：確認寫入真的成功

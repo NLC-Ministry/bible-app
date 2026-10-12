@@ -163,7 +163,9 @@ describe("boot failure falls back to an actionable login card", () => {
   it("the nlc-session sync and nlc-data reads have timeouts; nlc-data writes do not", () => {
     expect(dbSource).toMatch(/fetchWithTimeout\(functionUrl, \{[\s\S]*?\}, BOOT_FETCH_TIMEOUT_MS\)/);
     expect(dbSource).toContain('const isReadRequest = !request.action || request.action === "select" || request.action === "batch";');
-    expect(dbSource).toContain("? await fetchWithTimeout(url, init, DATA_READ_TIMEOUT_MS)");
-    expect(dbSource).toContain(": await fetch(url, init);");
+    // 請求經 fetchNlcTracked 帶 x-request-id（#548）；讀取的 fetch 有逾時、寫入的沒有
+    expect(dbSource).toContain("const response = await fetchNlcTracked(url, init, request, isReadRequest");
+    expect(dbSource).toContain("? (input, options) => fetchWithTimeout(input, options, DATA_READ_TIMEOUT_MS)");
+    expect(dbSource).toContain(": (input, options) => fetch(input, options));");
   });
 });

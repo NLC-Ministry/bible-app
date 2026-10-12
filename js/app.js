@@ -36,8 +36,11 @@ import { OfflineBibleRepository } from './pwa/OfflineBibleRepository.js';
 import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
+import { installConsoleErrorCapture } from './diagnostics/report-diagnostics.mjs';
 
 window.__bootMark?.("core-imports-done");
+// 回報時附上最近的 console.error（#548）；window error／unhandledrejection 由 index.html 收
+installConsoleErrorCapture();
 
 // ── 暫時性開機耗時量測（找「5 秒才顯示內容」瓶頸用，確認完可整批移除）──
 // 收集 index.html/app.js/db.js 裡所有 boot:* mark，算出每段耗時，印到
