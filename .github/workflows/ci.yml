@@ -112,6 +112,17 @@ jobs:
           SUPABASE_URL: https://placeholder.supabase.co
           SUPABASE_ANON_KEY: placeholder-anon-key
 
+      # 後台（#555）另一個入口；這裡只確認建得起來、沒有混進會友 App 的檔案，設定用假值
+      - name: Build and verify admin console
+        run: |
+          node scripts/build-admin.mjs
+          test -f dist-admin/index.html || { echo "no dist-admin/index.html"; exit 1; }
+          test -n "$(ls dist-admin/admin.*.js 2>/dev/null)" || { echo "no hashed admin bundle"; exit 1; }
+          test ! -e dist/admin.html || { echo "member app dist must not ship the admin console"; exit 1; }
+        env:
+          ADMIN_LOGTO_CLIENT_ID: ci-placeholder-client
+          ADMIN_API_URL: https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api
+
   deploy:
     # 所有測試分片和建置都通過才部署
     needs: [test, build]
@@ -230,3 +241,71 @@ jobs:
                 body,
               });
             }
+
+  # 後台（#555）：同一個 repo、另一個 Vercel 專案（secret VERCEL_ADMIN_PROJECT_ID），網域和會友 App 分開：
+  # 正式站 bible-speed-reading-admin.vercel.app（production）、staging 綁 bible-speed-reading-admin-staging.vercel.app。
+  # 會友 App 部署成功才部署（main 的上線審核已在 deploy 過關）；PR 不部署後台。
+  # 後台的 Vercel 專案還沒建好（secret 沒設）就跳過，不讓整個 CI 失敗。設定步驟見 docs/admin-console.md。
+  deploy-admin:
+    needs: [deploy]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+    steps:
+      - name: Check admin Vercel project is configured
+        id: configured
+        run: |
+          if [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "## 後台部署：跳過（還沒設定 secret VERCEL_ADMIN_PROJECT_ID）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.configured.outputs.enabled == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.configured.outputs.enabled == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Cache Vercel CLI
+        if: steps.configured.outputs.enabled == 'true'
+        id: vercel-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.vercel-cli
+          key: vercel-cli-59.1.3-${{ runner.os }}
+
+      - name: Install Vercel CLI
+        if: steps.configured.outputs.enabled == 'true' && steps.vercel-cli-cache.outputs.cache-hit != 'true'
+        run: npm install --global --prefix ~/.vercel-cli vercel@59.1.3
+
+      - name: Deploy admin console
+        if: steps.configured.outputs.enabled == 'true'
+        run: |
+          export PATH="$HOME/.vercel-cli/bin:$PATH"
+          # 這個 job 的 checkout 只部署後台：換成後台的 Vercel 設定（建置指令、輸出目錄、強制 CSP）
+          cp vercel.admin.json vercel.json
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            vercel pull --yes --environment=production
+            vercel build --prod
+            URL=$(vercel deploy --prebuilt --prod)
+          else
+            vercel pull --yes --environment=preview
+            vercel build
+            URL=$(vercel deploy --prebuilt)
+            vercel alias set "$URL" bible-speed-reading-admin-staging.vercel.app
+          fi
+          {
+            echo "## 後台部署"
+            echo "- **URL**: $URL"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "- **正式站**: https://bible-speed-reading-admin.vercel.app"
+            else
+              echo "- **Staging**: https://bible-speed-reading-admin-staging.vercel.app"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
