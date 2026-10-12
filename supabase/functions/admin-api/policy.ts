@@ -12,6 +12,7 @@ import {
   runReportThread,
   validateReportImage
 } from "./reports.ts";
+import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export const CAPABILITIES = [
@@ -19,6 +20,8 @@ export const CAPABILITIES = [
   "support.read",   // 使用者查詢、回報收件匣
   "support.pii",    // 顯示完整 email／電話
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
+  "accounts.read",  // 使用者名單、管理範圍總覽（#550）
+  "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
   "audit.read",     // 稽核紀錄（之後的 action 用）
   "export"          // 匯出
 ] as const;
@@ -289,6 +292,66 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       if (!reason.ok) return reason;
       return { ok: true, args: { ...actorArgs(ctx), p_report_id: params.report_id, p_reason: reason.reason, p_request_id: ctx.requestId } };
     }
+  },
+  directory_list: {
+    capabilities: ["accounts.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_directory_list",
+    buildArgs: (params, ctx) => {
+      const filters = directoryFilters(params);
+      if (!filters.ok) return filters;
+      const offset = optionalOffset(params.offset);
+      if (!offset.ok) return offset;
+      const limit = optionalLimit(params.limit, 50);
+      if (!limit.ok) return limit;
+      return { ok: true, args: { p_actor_id: ctx.actorId, ...filters.filters, p_offset: offset.offset, p_limit: limit.limit } };
+    }
+  },
+  // 名單匯出含完整 email：要 support.pii
+  directory_export: {
+    capabilities: ["accounts.read", "export", "support.pii"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_directory_export",
+    run: runDirectoryExport,
+    buildArgs: (params, ctx) => {
+      const filters = directoryFilters(params);
+      if (!filters.ok) return filters;
+      return { ok: true, args: { ...actorArgs(ctx), ...filters.filters, p_request_id: ctx.requestId } };
+    }
+  },
+  scope_overview: {
+    capabilities: ["accounts.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_scope_overview",
+    buildArgs: () => ({ ok: true, args: {} })
+  },
+  scope_set: {
+    capabilities: ["accounts.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_scope_set",
+    notFoundOnNull: true,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.profile_id)) return { ok: false, error: "invalid_user_id" };
+      const regions = orgValues(params.regions);
+      if (!regions.ok) return regions;
+      const zones = orgValues(params.zones);
+      if (!zones.ok) return zones;
+      const groups = orgValues(params.groups);
+      if (!groups.ok) return groups;
+      const reason = optionalReason(params.reason);
+      if (!reason.ok) return reason;
+      return { ok: true, args: {
+        ...actorArgs(ctx), p_profile_id: params.profile_id, p_regions: regions.values, p_zones: zones.values, p_groups: groups.values,
+        p_reason: reason.reason, p_request_id: ctx.requestId
+      } };
+    }
+  },
+  org_export: {
+    capabilities: ["accounts.read", "export"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_org_export",
+    run: runOrgExport,
+    buildArgs: (_params, ctx) => ({ ok: true, args: { ...actorArgs(ctx), p_request_id: ctx.requestId } })
   },
   report_export: {
     capabilities: ["support.read", "export"],

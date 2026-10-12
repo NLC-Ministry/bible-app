@@ -20,6 +20,7 @@ import {
 } from "./theme.ts";
 import type { Bootstrap } from "./types.ts";
 import { Badge, ErrorNotice, Spinner } from "./ui.tsx";
+import { AccountsArea } from "./views/AccountsArea.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
 
 type Phase =
@@ -139,6 +140,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <Message title="沒有權限" body="你的帳號沒有這一區的後台權限。" />;
   } else if (route.view === "inbox" || route.view === "search" || route.view === "user") {
     content = <SupportArea api={api} route={route} capabilities={capabilities} doc={win.document} />;
+  } else if (route.view === "accounts") {
+    content = <AccountsArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} doc={win.document} />;
   } else {
     const item = NAV_ITEMS.find((nav) => nav.area === route.area);
     content = (

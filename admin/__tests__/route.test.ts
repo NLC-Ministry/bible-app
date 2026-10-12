@@ -44,14 +44,27 @@ describe("parseRoute / formatRoute", () => {
   it("parses the other areas", () => {
     expect(parseRoute("#/system")).toEqual({ view: "area", area: "system" });
   });
+
+  it("parses the accounts area (#550)", () => {
+    expect(parseRoute("#/accounts")).toEqual({ view: "accounts", tab: "users", profileId: null });
+    expect(parseRoute("#/accounts/scopes")).toEqual({ view: "accounts", tab: "scopes", profileId: null });
+    const route = parseRoute(`#/accounts/scopes/${ID.toUpperCase()}`);
+    expect(route).toEqual({ view: "accounts", tab: "scopes", profileId: ID });
+    expect(formatRoute(route)).toBe(`#/accounts/scopes/${ID}`);
+    expect(formatRoute({ view: "accounts", tab: "users", profileId: ID })).toBe("#/accounts");
+    expect(parseRoute("#/accounts/scopes/not-a-uuid")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/accounts/users")).toEqual({ view: "not_found" });
+  });
 });
 
 describe("navigation by capability", () => {
   it("shows nothing without console access and support only with support.read", () => {
     expect(visibleNavItems([])).toEqual([]);
-    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["accounts", "operations", "content", "system"]);
+    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations", "content", "system"]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
+    expect(canUse(["console.access"], "accounts")).toBe(false);
+    expect(canUse(["console.access", "accounts.read"], "accounts")).toBe(true);
   });
 });
 

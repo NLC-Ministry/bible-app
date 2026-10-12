@@ -11,7 +11,9 @@ export type AdminAction =
   | "bootstrap" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii"
   // 回報收件匣（#550）
   | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_post"
-  | "report_attachment_delete" | "report_delete" | "report_export";
+  | "report_attachment_delete" | "report_delete" | "report_export"
+  // 帳號與權限（#550）
+  | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -32,7 +34,8 @@ export class AdminApiError extends Error {
 export const CACHE_TTL_MS = 60_000;
 const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   "user_search", "user_summary", "user_section", "user_timeline",
-  "report_diagnostics" // 診斷資訊是回報當下的快照，不會變
+  "report_diagnostics", // 診斷資訊是回報當下的快照，不會變
+  "directory_list", "scope_overview" // 改管理範圍後 invalidate
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -204,6 +207,17 @@ export function describeAdminError(err: unknown): string {
     case "too_large": return "截圖太大（最多 500 KB）。";
     case "payload_too_large": return "送出的資料太大。";
     case "invalid_status": return "不正確的處理狀態。";
+    case "invalid_org_filter": return "大區／牧區／小組的篩選條件不正確，請清除篩選再試。";
+    case "invalid_plan_id":
+    case "invalid_plan_filter": return "計畫的篩選條件不正確，請清除篩選再試。";
+    case "invalid_incomplete":
+    case "invalid_offset": return "名單的篩選條件不正確，請重新整理後再試。";
+    case "plan_not_found": return "找不到這個計畫（可能已經被刪除），請重新整理。";
+    case "scope_not_applicable": return "這個角色不用設定管理範圍（系統管理員、牧者是全教會，其他角色只有本人）。";
+    // 和 App 管理分頁同一句（js/modules/admin-managed-scope-options.mjs）
+    case "managed_scope_unknown_region": return "有大區名稱不在組織名單中，請重新整理後再選一次。";
+    case "managed_scope_unknown_zone": return "有牧區名稱不在組織名單中，請重新整理後再選一次。";
+    case "managed_scope_unknown_group": return "有小組名稱不在組織名單中，請重新整理後再選一次。";
     case "admin_api_failed": return "後台服務發生錯誤，請稍後再試。";
     default:
       if (err.status === 400) return `請求格式不正確（${err.code}）。`;

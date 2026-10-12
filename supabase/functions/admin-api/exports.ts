@@ -93,3 +93,54 @@ export function reportsCsv(rows: readonly ReportExportRow[]): string {
     row.reporter_group || ""
   ]));
 }
+
+// ── 帳號與權限（#550 第二組）─────────────────────────────────────────────────
+// 欄位、預設字與 App 管理分頁的 convertUserDirectoryToCSV／convertOrgStructureToCSV 相同，
+// 開頭一樣多一列「匯出時間（台灣時間）」，管理員拿兩邊的檔案比對時不會對不上。
+
+/** CSV 最前面加一列匯出時間（同 js/modules/export-time.mjs 的 prependTaiwanExportTime）。 */
+// 時間前面的零寬空白：Excel 才不會把它轉成日期序號、在窄欄顯示成 ####（同 App）
+export function withExportTime(csv: string, now: Date): string {
+  return `${csvCell("匯出時間（台灣時間）")},${csvCell(`​${taipeiDateTime(now.toISOString())}`)}\r\n${csv}`;
+}
+
+export type DirectoryTeam = { name?: string | null; role?: string | null };
+export type DirectoryExportRow = {
+  name?: string | null;
+  email?: string | null;
+  great_region?: string | null;
+  pastoral_zone?: string | null;
+  small_group?: string | null;
+  role_code?: string | null;
+  role_label?: string | null;
+  is_active?: boolean | null;
+  teams?: DirectoryTeam[] | null;
+};
+
+export const DIRECTORY_EXPORT_HEADERS = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "組隊狀態", "帳號狀態"] as const;
+
+/** 隊名（隊長加「[隊長] 」），同 App 的 formatProfilePlanTeams。 */
+export function formatTeams(teams: readonly DirectoryTeam[] | null | undefined): string {
+  return (Array.isArray(teams) ? teams : [])
+    .map((team) => `${team?.role === "captain" || team?.role === "leader" ? "[隊長] " : ""}${String(team?.name || "").trim() || "未命名隊伍"}`)
+    .join("、");
+}
+
+export function directoryCsv(rows: readonly DirectoryExportRow[]): string {
+  return toCsv(DIRECTORY_EXPORT_HEADERS, rows.map((row) => [
+    row.great_region || "未設定",
+    row.pastoral_zone || "未設定牧區",
+    row.small_group || "未設定",
+    row.name || "未設定",
+    row.email || "",
+    row.role_label || (row.role_code && row.role_code !== "member" ? row.role_code : "一般會友"),
+    formatTeams(row.teams) || "未加入團隊 (個人速讀中)",
+    row.is_active === false ? "已停用" : "啟用中"
+  ]));
+}
+
+export const ORG_EXPORT_HEADERS = ["大區", "牧區", "小組"] as const;
+
+export function orgCsv(rows: readonly (readonly unknown[])[]): string {
+  return toCsv(ORG_EXPORT_HEADERS, rows.map((row) => [row[0] ?? "", row[1] ?? "", row[2] ?? ""]));
+}

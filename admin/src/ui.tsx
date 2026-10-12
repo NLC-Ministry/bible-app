@@ -50,3 +50,29 @@ export function Field({ name, children }: { name: string; children: React.ReactN
 export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "brand" | "danger" | "warning"; children: React.ReactNode }) {
   return <span className={`adm-badge adm-badge--${tone}`}>{children}</span>;
 }
+
+/** 三個以內的選項用分段按鈕，不用下拉（選項一眼看得到）。 */
+export function Segmented<T extends string>({ label, options, value, onChange, disabled = false }: {
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="adm-segmented" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`adm-segmented__option${option.value === value ? " adm-segmented__option--active" : ""}`}
+          aria-pressed={option.value === value}
+          disabled={disabled}
+          onClick={() => { if (option.value !== value) onChange(option.value); }}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
