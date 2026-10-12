@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "build": "node scripts/generate-icon-registry.mjs && node build-config.js && node scripts/bundle.mjs",
+    "build:admin": "node scripts/build-admin.mjs",
     "start": "npx serve .",
     "dev": "npx serve .",
     "test": "vitest run",

@@ -28,7 +28,7 @@ Several Claude sessions work on this repo at once. To keep them out of each othe
 
 新生命聖經速讀計畫 (NewLife Bible Speed Reading) — a Traditional-Chinese PWA for a church's quarterly Bible-reading challenges; a satellite app of the NewLife Member Hub using NLC (紟道) Logto SSO. Vanilla JS/HTML/CSS, no framework — except the issue-report feature (`components/issue-report/*.tsx`), a React + TypeScript island. Supabase backend (Postgres + Edge Functions), hosted on Vercel.
 
-**Before changing entry points, load order, `js/db.js`, auth, tab modules, or backend tables/Edge Functions, read `docs/architecture.md`.** Size warning: `js/db.js` (~6,100 lines) and `js/modules/plan.js` (~10,300 lines; also holds all stats/leaderboard charts — there is no `stats.js` or `js/views/`).
+**Before changing entry points, load order, `js/db.js`, auth, tab modules, or backend tables/Edge Functions, read `docs/architecture.md`.** The back-office console (`admin/`, its own Vercel project and domain, enforced CSP) has its own rules — read `docs/admin-console.md` before changing it. Size warning: `js/db.js` (~6,100 lines) and `js/modules/plan.js` (~10,300 lines; also holds all stats/leaderboard charts — there is no `stats.js` or `js/views/`).
 
 ## Commands
 

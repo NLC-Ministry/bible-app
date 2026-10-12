@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare, Filter, Copy, Check } from "lucide-react";
+import { Download, Trash2, Loader2, AlertCircle, RefreshCw, MessageSquare, Filter, Copy, Check, UserSearch } from "lucide-react";
+import { adminConsoleUserUrl } from "../../js/admin-console-link.mjs";
 
 interface IssueReport {
   id: string;
@@ -12,6 +13,7 @@ interface IssueReport {
   status: string;
   metadata?: Record<string, any>;
   profiles?: {
+    id?: string;
     name?: string;
     pastoral_zone?: string;
     small_group?: string;
@@ -291,6 +293,22 @@ export const AdminReportTable: React.FC<AdminReportTableProps> = ({
                           <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-primary border-2 border-card" />
                         )}
                       </motion.button>
+                      {(() => {
+                        // #555：到後台直接打開回報者（查看理由帶這張回報，會記進後台稽核）
+                        const href = adminConsoleUserUrl(report.profiles?.id, { reason: `因回報 ${report.id}` });
+                        return href ? (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex rounded-lg p-2 border border-border bg-card text-primary hover:bg-accent transition-colors"
+                            title="在後台查看此使用者"
+                            aria-label="在後台查看此使用者"
+                          >
+                            <UserSearch className="h-4 w-4" />
+                          </a>
+                        ) : null;
+                      })()}
                       <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setDeleteTargetId(report.id)}

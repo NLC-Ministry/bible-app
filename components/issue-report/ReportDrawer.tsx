@@ -421,7 +421,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({
                   <span className={reportErrorClassName}>{errors.description.message}</span>
                 )}
                 <span className={reportHelperClassName}>
-                  送出時系統會自動包含當前的網頁 URL 與瀏覽器版本資訊。
+                  送出時會一併附上裝置與錯誤資訊，協助我們排查問題。
                 </span>
               </div>
 

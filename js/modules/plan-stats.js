@@ -12,6 +12,7 @@ import {
 import { computePlanScopedStreak } from "./team-progress-metrics.mjs";
 import { computeOrgUnitStats as computePlanOrgUnitStats } from "../data/plan-stats-rules.mjs";
 import { formatTaiwanDate, prependTaiwanExportTime } from "./export-time.mjs";
+import { csvCell } from "./csv-cell.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
 import {
   PLAN_ROUTE,
@@ -509,7 +510,7 @@ function convertZoneCompletionToCSV(rows, exportedAt = new Date()) {
   });
   return prependTaiwanExportTime([
     headers.join(","),
-    ...csvRows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ...csvRows.map(row => row.map(csvCell).join(","))
   ].join("\n"), exportedAt);
 }
 
@@ -1747,7 +1748,7 @@ window.displayParticipantsList = function (limit = 100) {
 
 function convertParticipantsOverviewToCSV(members, titleText, exportedAt = new Date()) {
   if (!Array.isArray(members) || members.length === 0) return "";
-  const esc = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+  const esc = csvCell;
   const lines = [];
   if (titleText) lines.push([esc("範圍"), esc(titleText)].join(","));
   if (state.activePlan && state.activePlan.name) lines.push([esc("計畫"), esc(state.activePlan.name)].join(","));

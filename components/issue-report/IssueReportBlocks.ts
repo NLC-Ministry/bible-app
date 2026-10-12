@@ -1,4 +1,5 @@
 // components/issue-report/IssueReportBlocks.ts
+import { collectReportDiagnostics, fetchNlcTracked } from "../../js/diagnostics/report-diagnostics.mjs";
 
 /**
  * ValidateReportBlock: Handles sanitization and basic check constraints for inputs
@@ -142,6 +143,7 @@ export class SubmitReportBlock {
     url?: string;
     user_agent?: string;
     user_id?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<{ success: boolean; source: "online" | "offline"; error?: string; reportId?: string }> {
     if (this.isOnline()) {
       try {
@@ -203,6 +205,13 @@ export class ReportPipeline {
       const url = typeof window !== "undefined" ? window.location.href : "";
       const user_agent = typeof navigator !== "undefined" ? navigator.userAgent : "";
       const user_id = state?.currentUser?.id || null;
+      // 診斷資訊（#548）：收集失敗就照常送出，不擋回報
+      let diagnostics: Record<string, unknown> | null = null;
+      try {
+        diagnostics = await collectReportDiagnostics();
+      } catch (_e) {
+        diagnostics = null;
+      }
 
       // 3. Submit
       const result = await SubmitReportBlock.submit({
@@ -210,7 +219,8 @@ export class ReportPipeline {
         description: validation.sanitizedDescription || description,
         url,
         user_agent,
-        user_id
+        user_id,
+        ...(diagnostics ? { metadata: { diagnostics } } : {})
       });
 
       return result;
@@ -247,21 +257,22 @@ export class FetchMyReportsPipeline {
 
       if (accessToken && supabaseUrl) {
         const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
-        const response = await fetch(functionUrl, {
+        const request = {
+          table: "issue_reports",
+          action: "select",
+          select: "id, created_at, category, description, status, metadata",
+          filters: [{ type: "eq", column: "user_id", value: currentUser.id }],
+          order: { column: "created_at", ascending: false }
+        };
+        const response = await fetchNlcTracked(functionUrl, {
           method: "POST",
           headers: {
             "apikey": supabaseAnonKey,
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            table: "issue_reports",
-            action: "select",
-            select: "id, created_at, category, description, status, metadata",
-            filters: [{ type: "eq", column: "user_id", value: currentUser.id }],
-            order: { column: "created_at", ascending: false }
-          })
-        });
+          body: JSON.stringify(request)
+        }, request);
 
         if (response.ok) {
           const payload = await response.json().catch(() => ({}));
@@ -329,15 +340,16 @@ export class MarkReplySeenPipeline {
 
       if (accessToken && supabaseUrl) {
         const functionUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/nlc-data`;
-        const response = await fetch(functionUrl, {
+        const request = { action: "mark_issue_report_reply_seen", report_id: reportId };
+        const response = await fetchNlcTracked(functionUrl, {
           method: "POST",
           headers: {
             "apikey": supabaseAnonKey,
             "Authorization": `Bearer ${accessToken}`,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ action: "mark_issue_report_reply_seen", report_id: reportId })
-        });
+          body: JSON.stringify(request)
+        }, request);
         return { success: response.ok };
       }
 
@@ -438,7 +450,7 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
   const token = await getAccessToken();
   if (!token) return { success: false, error: "not_logged_in" };
   try {
-    const resp = await fetch(`${supabaseUrl}/functions/v1/nlc-data`, {
+    const resp = await fetchNlcTracked(`${supabaseUrl}/functions/v1/nlc-data`, {
       method: "POST",
       headers: {
         "apikey": anonKey,
@@ -446,7 +458,7 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
-    });
+    }, payload);
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok) return { success: false, error: json?.error || `HTTP ${resp.status}` };
     return { success: true, data: json?.data };
@@ -458,60 +470,24 @@ export async function callNlc(payload: Record<string, unknown>): Promise<{ succe
 const rpc = (fn: string, args: Record<string, unknown>) =>
   callNlc({ action: "rpc", function: fn, args });
 
-/**
- * Shrink a picked screenshot in-browser to ≤ ~300 KB before upload: WebP where
- * the browser can encode it, else JPEG (iOS WebKit silently returns PNG for
- * image/webp — #444). Canvas re-encode also drops EXIF/GPS. Returns null on
- * unsupported files.
- */
-export async function compressScreenshot(
-  file: File
-): Promise<{ base64: string; mime: string; w: number; h: number } | null> {
-  if (!file || !/^image\/(png|jpe?g|webp)$/i.test(file.type)) return null;
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return null;
-
-  const encode = (mime: string, maxSide: number, quality: number) => {
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * scale));
-    const h = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    // JPEG has no alpha: paint white first so transparent PNGs don't turn black.
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    const dataUrl = canvas.toDataURL(mime, quality);
-    return { dataUrl, w, h };
-  };
-
-  const CAP = 300 * 1024;
-  const attempts: Array<[number, number]> = [[1600, 0.7], [1600, 0.55], [1400, 0.5], [1200, 0.42], [1000, 0.4]];
-  let best: { dataUrl: string; mime: string; w: number; h: number } | null = null;
-  for (const mime of ["image/webp", "image/jpeg"]) {
-    for (const [side, q] of attempts) {
-      const out = encode(mime, side, q);
-      // Browser can't encode this type (returned PNG instead) — try the next one.
-      if (!out || !out.dataUrl.startsWith(`data:${mime}`)) break;
-      best = { ...out, mime };
-      // rough byte size of a base64 payload
-      const bytes = Math.ceil((out.dataUrl.length - out.dataUrl.indexOf(",") - 1) * 0.75);
-      if (bytes <= CAP) break;
-    }
-    if (best) break;
-  }
-  bitmap.close?.();
-  if (!best) return null;
-  return {
-    base64: best.dataUrl.replace(/^data:[^,]*,/, ""),
-    mime: best.mime,
-    w: best.w,
-    h: best.h
-  };
+/** 管理端「診斷資訊」區塊展開時才讀這筆回報的 metadata.diagnostics（#548）；舊回報沒有就回 null。 */
+export async function fetchReportDiagnostics(reportId: string): Promise<{ success: boolean; data?: Record<string, any> | null; error?: string }> {
+  if (!reportId) return { success: false, error: "missing_report_id" };
+  const res = await callNlc({
+    table: "issue_reports",
+    action: "select",
+    select: "metadata",
+    filters: [{ type: "eq", column: "id", value: reportId }],
+    limit: 1
+  });
+  if (!res.success) return { success: false, error: res.error };
+  const row = Array.isArray(res.data) ? res.data[0] : res.data;
+  const diagnostics = row?.metadata?.diagnostics;
+  return { success: true, data: diagnostics && typeof diagnostics === "object" ? diagnostics : null };
 }
+
+// 截圖壓縮搬到獨立模組，後台（admin/）也用同一支（#550）
+export { compressScreenshot } from "../../lib/issue-report/compress-screenshot.ts";
 
 export interface ThreadImage { base64: string; mime: string; w: number; h: number; }
 

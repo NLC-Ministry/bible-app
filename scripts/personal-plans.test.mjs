@@ -91,7 +91,9 @@ const SCOPED_TO_CHURCH_PLAN = [
   "cleanup_removed_church_campaign_stages",
   "publish_global_plan_rules",
   "enforce_reading_log_stage_open",
-  "enforce_reading_log_stage_progress_open"
+  "enforce_reading_log_stage_progress_open",
+  // 後台使用者名單（#550）：「是否加入」只看 global_plan_id／教會階段 preset_key 對得上所選計畫的
+  "admin_api_directory_rows"
 ];
 // 只看呼叫者自己的資料，或只讀呼叫端給的計畫 id（來自已排除個人計畫的名單）。
 const OWN_OR_GIVEN_PLANS = [
@@ -100,6 +102,12 @@ const OWN_OR_GIVEN_PLANS = [
   "get_plan_reading_log_digest",
   "enforce_reading_log_plan_owner",
   "enforce_personal_plan_rules"
+];
+// 後台客服查單一會友（#547）：只看 p_user_id 這一個人，個人計畫也要列出來——不是排行或統計。
+const ONE_PERSON_SUPPORT_VIEW = [
+  "admin_api_user_summary",
+  "admin_api_user_timeline",
+  "_admin_api_section_items"
 ];
 
 function functionsTouchingReadingTables() {
@@ -116,9 +124,18 @@ function functionsTouchingReadingTables() {
 
 describe("#473 個人計畫不進排行榜、團隊、教會統計", () => {
   it("每支碰到 reading_plans／reading_logs 的函式都有分類", () => {
-    const classified = new Set([...PERSONAL_EXCLUDED, ...SCOPED_TO_CHURCH_PLAN, ...OWN_OR_GIVEN_PLANS]);
+    const classified = new Set([...PERSONAL_EXCLUDED, ...SCOPED_TO_CHURCH_PLAN, ...OWN_OR_GIVEN_PLANS, ...ONE_PERSON_SUPPORT_VIEW]);
     const unclassified = functionsTouchingReadingTables().filter(name => !classified.has(name));
     expect(unclassified).toEqual([]);
+  });
+
+  it.each(ONE_PERSON_SUPPORT_VIEW)("%s 只查 p_user_id 這一個人", name => {
+    const text = latestFunctionDefinition(name).text;
+    for (const table of ["reading_logs", "reading_plans"]) {
+      if (!new RegExp(`FROM public\\.${table} AS (\\w+)`).test(text)) continue;
+      const alias = text.match(new RegExp(`FROM public\\.${table} AS (\\w+)`))[1];
+      expect(text).toContain(`${alias}.user_id = p_user_id`);
+    }
   });
 
   it.each(PERSONAL_EXCLUDED)("%s 明確排除個人計畫", name => {
