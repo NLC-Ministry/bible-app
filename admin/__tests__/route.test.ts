@@ -55,16 +55,32 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute("#/accounts/scopes/not-a-uuid")).toEqual({ view: "not_found" });
     expect(parseRoute("#/accounts/users")).toEqual({ view: "not_found" });
   });
+
+  it("parses the content area: the legacy sections moved over as-is (#550)", () => {
+    expect(parseRoute("#/content")).toEqual({ view: "legacy", area: "content", section: "announcements" });
+    for (const section of ["announcements", "commentary", "quizzes", "exam", "lightning-quiz"]) {
+      const route = parseRoute(`#/content/${section}`);
+      expect(route).toEqual({ view: "legacy", area: "content", section });
+      expect(formatRoute(route)).toBe(`#/content/${section}`);
+    }
+    // 其他區的舊區塊、App 管理分頁沒有的 id 都不收
+    expect(parseRoute("#/content/settings")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/content/users")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/content/exam/extra")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/content/__proto__")).toEqual({ view: "not_found" });
+  });
 });
 
 describe("navigation by capability", () => {
   it("shows nothing without console access and support only with support.read", () => {
     expect(visibleNavItems([])).toEqual([]);
-    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations", "content", "system"]);
+    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["operations", "system"]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
     expect(canUse(["console.access"], "accounts")).toBe(false);
     expect(canUse(["console.access", "accounts.read"], "accounts")).toBe(true);
+    expect(canUse(["console.access"], "content")).toBe(false);
+    expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
   });
 });
 

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:f
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
-import { assertCspAllowsConfig, buildAdmin, cspDirective, readAdminCsp, resolveAdminConfig } from "./build-admin.mjs";
+import { assertCspAllowsConfig, buildAdmin, cspDirective, listInlineHandlers, readAdminCsp, resolveAdminConfig } from "./build-admin.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const adminCfg = JSON.parse(readFileSync(join(root, "vercel.admin.json"), "utf8"));
@@ -28,6 +28,9 @@ function walk(dir) {
 
 describe("admin console Vercel project (vercel.admin.json)", () => {
   const global = headersFor(adminCfg, "/(.*)");
+  // CSP 與 X-Frame-Options 分兩份：外殼（/legacy 以外）與照搬的舊管理區塊 iframe（/legacy…，#550）
+  const consoleOnly = headersFor(adminCfg, "/((?!legacy).*)");
+  const legacyOnly = headersFor(adminCfg, "/legacy(.*)");
 
   it("builds only the admin console into its own output directory", () => {
     expect(adminCfg.buildCommand).toBe("node scripts/build-admin.mjs");
@@ -37,9 +40,24 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
     expect(memberCfg.outputDirectory).toBe("dist");
   });
 
+  it("splits the CSP between the console and the legacy iframe by path", () => {
+    expect(global["Content-Security-Policy"]).toBeUndefined();
+    const consoleRe = new RegExp(`^${"/((?!legacy).*)"}$`);
+    const legacyRe = new RegExp(`^${"/legacy(.*)"}$`);
+    for (const path of ["/", "/index.html", "/admin.ABC123.js", "/admin.ABC123.css", "/favicon.svg", "/robots.txt"]) {
+      expect(consoleRe.test(path), path).toBe(true);
+      expect(legacyRe.test(path), path).toBe(false);
+    }
+    for (const path of ["/legacy", "/legacy.html", "/legacy.ABC123.js", "/legacy.abc123.css"]) {
+      expect(consoleRe.test(path), path).toBe(false);
+      expect(legacyRe.test(path), path).toBe(true);
+    }
+  });
+
   it("enforces the CSP directly (no report-only phase)", () => {
-    const csp = directives(global["Content-Security-Policy"]);
+    const csp = directives(consoleOnly["Content-Security-Policy"]);
     expect(global["Content-Security-Policy-Report-Only"]).toBeUndefined();
+    expect(consoleOnly["Content-Security-Policy-Report-Only"]).toBeUndefined();
     expect(csp["default-src"]).toEqual(["'none'"]);
     expect(csp["script-src"]).toEqual(["'self'"]);
     expect(csp["style-src"]).toEqual(["'self'"]);
@@ -49,6 +67,8 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
       "https://sso.newlife.org.tw"
     ]);
     expect(csp["img-src"]).toEqual(["'self'", "data:", "https://ztozevcqkfrohgjmngcj.supabase.co", "https://dbtjsljrytzonjvclgrd.supabase.co"]);
+    // 只嵌自己網域的舊管理區塊（/legacy）；外殼本身不能被任何人嵌
+    expect(csp["frame-src"]).toEqual(["'self'"]);
     expect(csp["frame-ancestors"]).toEqual(["'none'"]);
     expect(csp["base-uri"]).toEqual(["'none'"]);
     expect(csp["form-action"]).toEqual(["'self'"]);
@@ -58,6 +78,32 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
       expect(values).not.toContain("'unsafe-eval'");
       expect(values.some((value) => value.includes("*"))).toBe(false);
     }
+    expect(consoleOnly["X-Frame-Options"]).toBe("DENY");
+  });
+
+  it("gives the legacy iframe its own CSP: no inline script, only the console may embed it", () => {
+    const csp = directives(legacyOnly["Content-Security-Policy"]);
+    expect(csp["default-src"]).toEqual(["'none'"]);
+    // Chart.js 固定版本的完整網址（統計圖），其他腳本都只能來自自己網域
+    expect(csp["script-src"]).toEqual(["'self'", "https://cdn.jsdelivr.net/npm/chart.js@4.5.1"]);
+    // 舊畫面大量使用 style 屬性（照搬、程式不動）：只放寬樣式，腳本仍不允許行內
+    expect(csp["style-src"]).toEqual(["'self'", "'unsafe-inline'"]);
+    expect(csp["connect-src"]).toEqual(["'self'", "https://ztozevcqkfrohgjmngcj.supabase.co", "https://dbtjsljrytzonjvclgrd.supabase.co"]);
+    expect(csp["frame-ancestors"]).toEqual(["'self'"]);
+    expect(csp["form-action"]).toEqual(["'none'"]);
+    expect(csp["base-uri"]).toEqual(["'none'"]);
+    expect(csp["object-src"]).toEqual(["'none'"]);
+    expect(csp["frame-src"]).toBeUndefined();
+    for (const [name, values] of Object.entries(csp)) {
+      expect(values, name).not.toContain("'unsafe-eval'");
+      if (name !== "style-src") expect(values, name).not.toContain("'unsafe-inline'");
+      expect(values.some((value) => value.includes("*")), name).toBe(false);
+    }
+    expect(legacyOnly["X-Frame-Options"]).toBe("SAMEORIGIN");
+    for (const source of ["/legacy", "/legacy.html"]) {
+      expect(headersFor(adminCfg, source)["Cache-Control"]).toMatch(/^no-store/);
+    }
+    expect(headersFor(adminCfg, "/legacy.(.*).js")["Cache-Control"]).toContain("immutable");
   });
 
   it("keeps it out of search engines and never caches the HTML", () => {
@@ -70,7 +116,7 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
 
   it("sets the same hardening headers as the member app, with a stricter referrer policy", () => {
     expect(global["X-Content-Type-Options"]).toBe("nosniff");
-    expect(global["X-Frame-Options"]).toBe("DENY");
+    expect(consoleOnly["X-Frame-Options"]).toBe("DENY");
     expect(global["Strict-Transport-Security"]).toMatch(/max-age=\d{8,}/);
     expect(global["Referrer-Policy"]).toBe("no-referrer");
     expect(global["Cross-Origin-Opener-Policy"]).toBe("same-origin");
@@ -96,7 +142,7 @@ describe("resolveAdminConfig", () => {
         issuer: "https://sso.newlife.org.tw/oidc",
         clientId: "c",
         resource: "https://platform.newlife.org.tw",
-        scopes: "openid profile email",
+        scopes: "openid profile email member:read.basic",
         apiUrl: STAGING_API,
         environment: "staging"
       });
@@ -123,15 +169,18 @@ describe("resolveAdminConfig", () => {
 });
 
 describe("buildAdmin (real repo)", () => {
-  it("emits only the admin console, with no inline script or style and the config baked in", async () => {
+  it("emits the admin console and the legacy iframe page, with no inline script and the config baked in", async () => {
     const out = mkdtempSync(join(tmpdir(), "admin-build-"));
     try {
-      const { jsFile, cssFile } = await buildAdmin({
+      const { jsFile, cssFile, legacy } = await buildAdmin({
         root,
         outDir: out,
-        env: { ADMIN_LOGTO_CLIENT_ID: "test-admin-client", ADMIN_API_URL: STAGING_API }
+        env: { ADMIN_LOGTO_CLIENT_ID: "test-admin-client", ADMIN_API_URL: STAGING_API, SUPABASE_ANON_KEY: "test-anon-key" }
       });
-      expect(readdirSync(out).sort()).toEqual([cssFile, jsFile, "favicon.svg", "index.html", "robots.txt"].sort());
+      expect(readdirSync(out).sort()).toEqual([
+        cssFile, jsFile, "favicon.svg", "index.html", "robots.txt",
+        legacy.jsFile, legacy.cssFile, "legacy.html", "assets"
+      ].sort());
       const html = readFileSync(join(out, "index.html"), "utf8");
       expect(html).toContain(`<script type="module" src="/${jsFile}"></script>`);
       expect(html).toContain(`<link rel="stylesheet" href="/${cssFile}">`);
@@ -148,6 +197,24 @@ describe("buildAdmin (real repo)", () => {
         expect(js, marker).not.toContain(marker);
       }
       expect(js).not.toContain("__ADMIN_CONFIG__");
+
+      // 照搬的舊管理區塊（#550）：App 管理分頁的畫面，但沒有任何行內腳本或事件處理器
+      const legacyHtml = readFileSync(join(out, "legacy.html"), "utf8");
+      expect(legacyHtml).toContain(`<script type="module" src="/${legacy.jsFile}"></script>`);
+      expect(legacyHtml).toContain(`<link rel="stylesheet" href="/${legacy.cssFile}">`);
+      expect(legacyHtml).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/i);
+      expect(listInlineHandlers(legacyHtml)).toEqual([]);
+      expect(legacyHtml).not.toMatch(/build:legacy-/);
+      for (const id of ["admin-view", "admin-section-content", "admin-section-announcements", "admin-section-exam", "adm-legacy-status"]) {
+        expect(legacyHtml, id).toContain(`id="${id}"`);
+      }
+      const legacyJs = readFileSync(join(out, legacy.jsFile), "utf8");
+      expect(legacyJs).toContain("https://dbtjsljrytzonjvclgrd.supabase.co");
+      expect(legacyJs).toContain("test-anon-key");
+      expect(legacyJs).not.toContain("__ADMIN_LEGACY_CONFIG__");
+      // 後台網域不註冊 Service Worker；離線聖經包不複製
+      expect(legacyJs).not.toMatch(/serviceWorker\.register/);
+      expect(readdirSync(join(out, "assets"))).not.toContain("bible-packs");
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

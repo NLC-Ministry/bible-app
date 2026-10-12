@@ -6,9 +6,12 @@
 //   #/support/user/<uuid>[/<tab>][?reason=…] 某個人（可以直接用網址連過來；reason 是查看理由，會記進稽核）
 //   #/accounts                               使用者名單（#550）
 //   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
-//   #/operations、#/content、#/system         其他區（#550 陸續搬過來）
+//   #/content[/<區塊>]                       照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
+//   #/operations、#/system                   其他區（#550 陸續搬過來）
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
+
+import { isLegacyArea, legacySectionsOf, type LegacyArea } from "./legacy.ts";
 
 export const USER_TABS = ["overview", "reading_logs", "team_events", "tests", "vouchers", "reports", "timeline"] as const;
 export type UserTab = typeof USER_TABS[number];
@@ -24,7 +27,8 @@ export type AdminRoute =
   | { view: "search" }
   | { view: "user"; userId: string; tab: UserTab; reason: string }
   | { view: "accounts"; tab: AccountTab; profileId: string | null }
-  | { view: "area"; area: Exclude<Area, "support" | "accounts"> }
+  | { view: "legacy"; area: LegacyArea; section: string }
+  | { view: "area"; area: Exclude<Area, "support" | "accounts" | LegacyArea> }
   | { view: "not_found" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -64,8 +68,14 @@ export function parseRoute(hash: string): AdminRoute {
     if (rest[0] === "scopes" && isUuid(rest[1]) && rest.length === 2) return { view: "accounts", tab: "scopes", profileId: rest[1].toLowerCase() };
     return { view: "not_found" };
   }
+  if (isLegacyArea(area)) {
+    const sections = legacySectionsOf(area);
+    if (rest.length === 0) return { view: "legacy", area, section: sections[0].id };
+    if (rest.length === 1 && sections.some((section) => section.id === rest[0])) return { view: "legacy", area, section: rest[0] };
+    return { view: "not_found" };
+  }
   if ((AREAS as readonly string[]).includes(area) && rest.length === 0) {
-    return { view: "area", area: area as Exclude<Area, "support" | "accounts"> };
+    return { view: "area", area: area as Exclude<Area, "support" | "accounts" | LegacyArea> };
   }
   return { view: "not_found" };
 }
@@ -81,6 +91,8 @@ export function formatRoute(route: AdminRoute): string {
     case "accounts":
       if (route.tab === "users") return "#/accounts";
       return route.profileId ? `#/accounts/scopes/${route.profileId}` : "#/accounts/scopes";
+    case "legacy":
+      return `#/${route.area}/${route.section}`;
     case "area":
       return `#/${route.area}`;
     case "user": {
@@ -93,7 +105,7 @@ export function formatRoute(route: AdminRoute): string {
 }
 
 export function areaOf(route: AdminRoute): Area {
-  if (route.view === "area") return route.area;
+  if (route.view === "area" || route.view === "legacy") return route.area;
   if (route.view === "accounts") return "accounts";
   return "support";
 }

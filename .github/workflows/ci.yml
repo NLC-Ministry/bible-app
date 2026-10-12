@@ -118,10 +118,13 @@ jobs:
           node scripts/build-admin.mjs
           test -f dist-admin/index.html || { echo "no dist-admin/index.html"; exit 1; }
           test -n "$(ls dist-admin/admin.*.js 2>/dev/null)" || { echo "no hashed admin bundle"; exit 1; }
+          test -f dist-admin/legacy.html || { echo "no dist-admin/legacy.html (#550 legacy management pages)"; exit 1; }
+          test -n "$(ls dist-admin/legacy.*.js 2>/dev/null)" || { echo "no hashed legacy bundle"; exit 1; }
           test ! -e dist/admin.html || { echo "member app dist must not ship the admin console"; exit 1; }
         env:
           ADMIN_LOGTO_CLIENT_ID: ci-placeholder-client
           ADMIN_API_URL: https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api
+          SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
   deploy:
     # 所有測試分片和建置都通過才部署

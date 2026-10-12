@@ -13,7 +13,9 @@ export type AdminAction =
   | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_post"
   | "report_attachment_delete" | "report_delete" | "report_export"
   // 帳號與權限（#550）
-  | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export";
+  | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export"
+  // 照搬的舊管理區塊：下載前記一筆匯出稽核（#550）
+  | "legacy_export_audit";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -218,6 +220,8 @@ export function describeAdminError(err: unknown): string {
     case "managed_scope_unknown_region": return "有大區名稱不在組織名單中，請重新整理後再選一次。";
     case "managed_scope_unknown_zone": return "有牧區名稱不在組織名單中，請重新整理後再選一次。";
     case "managed_scope_unknown_group": return "有小組名稱不在組織名單中，請重新整理後再選一次。";
+    case "invalid_section": return "認不得這個管理區塊，請重新整理後再試。";
+    case "invalid_export": return "認不得要下載的檔案，請重新整理後再試。";
     case "admin_api_failed": return "後台服務發生錯誤，請稍後再試。";
     default:
       if (err.status === 400) return `請求格式不正確（${err.code}）。`;

@@ -38,6 +38,8 @@ export type AdminAuth = {
   login(returnHash?: string): Promise<void>;
   logout(reason: SignOutReason): Promise<void>;
   getToken(): string | null;
+  /** 照搬區塊（iframe）同步會員資料時當備援（nlc-session 拿不到 Logto UserInfo 時用它確認身分）；同樣只在記憶體 */
+  getIdToken(): string | null;
 };
 
 export const FLOW_KEY = "admin_oidc_flow";
@@ -225,6 +227,10 @@ export function createAdminAuth(deps: AdminAuthDeps): AdminAuth {
     getToken(): string | null {
       if (!session || now() >= session.expiresAt - EXPIRY_MARGIN_MS) return null;
       return session.accessToken;
+    },
+    getIdToken(): string | null {
+      if (!session || now() >= session.expiresAt - EXPIRY_MARGIN_MS) return null;
+      return session.idToken;
     }
   };
 }

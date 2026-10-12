@@ -22,6 +22,7 @@ export const CAPABILITIES = [
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
+  "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "audit.read",     // 稽核紀錄（之後的 action 用）
   "export"          // 匯出
 ] as const;
@@ -48,6 +49,8 @@ export type { ActionContext };
 export type ArgsResult = { ok: true; args: Record<string, unknown> } | { ok: false; error: string };
 export type ActionSpec = {
   capabilities: readonly Capability[];
+  // 依參數再多要的能力（例如匯出哪一區）；參數不認得就回 []，交給 buildArgs 回 400
+  paramCapabilities?: (params: Record<string, unknown>) => readonly Capability[];
   rateLimit: RateLimit;
   // 這個 action 的主要 SQL 函式（只給 service_role）；有 run 時由 run 呼叫
   rpc: string;
@@ -112,6 +115,55 @@ const EXPORT_LIMIT: RateLimit = { bucket: "export", limit: 20, windowSeconds: 36
 const MAX_REPLY_CHARS = 500;
 
 const actorArgs = (ctx: ActionContext) => ({ p_actor_id: ctx.actorId, p_actor_role: ctx.actorRole });
+
+// ── 照搬的舊管理區塊（#550）──────────────────────────────────────────────────
+// 區塊 id → 需要的能力。舊區塊的資料仍走 nlc-data（那邊自己檢查角色、寫稽核）；
+// admin-api 只管它們的匯出：檔案由舊程式在瀏覽器產生，下載前先記一筆，記不成就不下載。
+// 同一份清單另外兩處：admin-legacy/sections.mjs、admin/src/legacy.ts（scripts/admin-legacy.test.mjs 比對）。
+export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Object.freeze({
+  announcements: "content.manage",
+  commentary: "content.manage",
+  quizzes: "content.manage",
+  exam: "content.manage",
+  "lightning-quiz": "content.manage"
+});
+export const LEGACY_EXPORT_FORMATS = ["csv", "txt"] as const;
+const MAX_LEGACY_FILENAME_CHARS = 200;
+const MAX_LEGACY_EXPORT_BYTES = 50 * 1024 * 1024;
+const MAX_LEGACY_EXPORT_ROWS = 10_000_000;
+
+export function legacySectionCapability(section: unknown): Capability | null {
+  const key = typeof section === "string" ? section : "";
+  return Object.prototype.hasOwnProperty.call(LEGACY_EXPORT_SECTIONS, key) ? LEGACY_EXPORT_SECTIONS[key] : null;
+}
+
+function buildLegacyExportArgs(params: Record<string, unknown>, ctx: ActionContext): ArgsResult {
+  const section = typeof params.section === "string" ? params.section : "";
+  if (!legacySectionCapability(section)) return { ok: false, error: "invalid_section" };
+  const filename = typeof params.filename === "string" ? params.filename.trim() : "";
+  if (!filename || filename.length > MAX_LEGACY_FILENAME_CHARS || /[\u0000-\u001f\u007f]/.test(filename)) {
+    return { ok: false, error: "invalid_export" };
+  }
+  if (!(LEGACY_EXPORT_FORMATS as readonly unknown[]).includes(params.format)) return { ok: false, error: "invalid_export" };
+  const rows = params.rows ?? null;
+  if (rows !== null && !(Number.isInteger(rows) && (rows as number) >= 0 && (rows as number) <= MAX_LEGACY_EXPORT_ROWS)) {
+    return { ok: false, error: "invalid_export" };
+  }
+  const bytes = params.bytes;
+  if (!Number.isInteger(bytes) || (bytes as number) < 0 || (bytes as number) > MAX_LEGACY_EXPORT_BYTES) {
+    return { ok: false, error: "invalid_export" };
+  }
+  return { ok: true, args: {
+    p_action: "export",
+    p_result: "ok",
+    ...actorArgs(ctx),
+    p_resource: `legacy:${section}`,
+    p_target_user_id: null,
+    p_reason: null,
+    p_request_id: ctx.requestId,
+    p_detail: { kind: "legacy", section, filename, format: params.format, rows, bytes }
+  } };
+}
 
 export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze({
   bootstrap: {
@@ -352,6 +404,17 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     rpc: "admin_api_org_export",
     run: runOrgExport,
     buildArgs: (_params, ctx) => ({ ok: true, args: { ...actorArgs(ctx), p_request_id: ctx.requestId } })
+  },
+  // 照搬區塊的匯出（#550）：只記稽核（admin_api_record_event 回稽核編號），記成功前端才存檔
+  legacy_export_audit: {
+    capabilities: ["export"],
+    paramCapabilities: (params) => {
+      const capability = legacySectionCapability(params.section);
+      return capability ? [capability] : [];
+    },
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_record_event",
+    buildArgs: buildLegacyExportArgs
   },
   report_export: {
     capabilities: ["support.read", "export"],

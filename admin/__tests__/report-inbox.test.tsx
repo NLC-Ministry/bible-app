@@ -117,7 +117,8 @@ async function mount(initialHash: string, respond = makeRespond()) {
     init: vi.fn(async () => ({ status: "signed_in" as const })),
     login: vi.fn(async () => {}),
     logout: vi.fn(async () => {}),
-    getToken: () => "token-in-memory"
+    getToken: () => "token-in-memory",
+    getIdToken: () => null
   };
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -184,7 +185,7 @@ describe("inbox request budget", () => {
       return new Response(JSON.stringify({ data: respond(action, params).data, request_id: "srv" }), { status: 200 });
     });
     const api = createAdminApi({ url: "https://api.test/admin-api", getToken: () => "t", fetchImpl });
-    const auth: AdminAuth = { init: vi.fn(async () => ({ status: "signed_in" as const })), login: vi.fn(async () => {}), logout: vi.fn(async () => {}), getToken: () => "t" };
+    const auth: AdminAuth = { init: vi.fn(async () => ({ status: "signed_in" as const })), login: vi.fn(async () => {}), logout: vi.fn(async () => {}), getToken: () => "t", getIdToken: () => null };
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
