@@ -103,10 +103,47 @@ function pickSessionUserinfo(
 // <<< logto-jwt-verify
 
 
+// >>> cors-allowlist（nlc-data、nlc-session、exam-write 三支 index.ts 內此區塊逐字相同；scripts/cors-allowlist.test.mjs 會比對）
+// 只對白名單內的網站回 Access-Control-Allow-Origin（#553）。以前直接把請求帶來的 origin 原樣
+// 回傳，任何網站都能在瀏覽器裡讀到回應。白名單外的來源不給這個標頭，瀏覽器就會擋下回應。
+// 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
+//   APP_ALLOWED_ORIGINS（選填，逗號分隔的完整 origin）：臨時再加的網域。
+//   APP_ORIGIN（舊設定，選填）：也算在白名單內。
+const CORS_FIXED_ORIGINS = [
+  "https://bible.newlife.org.tw",
+  "https://bible-speed-reading.vercel.app",
+  "https://bible-speed-reading-staging.vercel.app"
+];
+// Vercel 的 PR 預覽網址：尾巴是本專案的 Vercel 團隊，別人建的專案不會有
+const CORS_PREVIEW_ORIGIN_RE = /^https:\/\/bible-speed-reading-[a-z0-9]+-a0970927705-1204s-projects\.vercel\.app$/;
+// 本機開發（npx serve dist 等）
+const CORS_LOCAL_ORIGIN_RE = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
+const CORS_ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-request-id";
+function corsAllowedOrigins(): Set<string> {
+  const extra = [Deno.env.get("APP_ORIGIN") || "", ...String(Deno.env.get("APP_ALLOWED_ORIGINS") || "").split(",")]
+    .map((value) => value.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  return new Set([...CORS_FIXED_ORIGINS, ...extra]);
+}
+function corsAllowOrigin(origin: string | null): string | null {
+  if (!origin) return null;
+  if (corsAllowedOrigins().has(origin)) return origin;
+  if (CORS_PREVIEW_ORIGIN_RE.test(origin) || CORS_LOCAL_ORIGIN_RE.test(origin)) return origin;
+  return null;
+}
+function corsHeadersFor(req: Request): Record<string, string> {
+  const allowed = corsAllowOrigin(req.headers.get("origin"));
+  return {
+    ...(allowed ? { "Access-Control-Allow-Origin": allowed } : {}),
+    "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin"
+  };
+}
+// <<< cors-allowlist
+
+// 來源相關的 CORS 標頭由 corsHeadersFor(req) 依白名單決定（見上方 cors-allowlist 區塊）
 const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json"
 };
 
@@ -606,10 +643,9 @@ async function resolveLocalOrgLinks(
 }
 
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get("origin") || "*";
   const localCorsHeaders = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": origin
+    ...corsHeadersFor(req)
   };
 
   const jsonResponse = (body: unknown, status = 200) => {

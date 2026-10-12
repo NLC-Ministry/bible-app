@@ -58,6 +58,12 @@ The app uses a deliberately limited offline model:
 - `bible-api.com`, `bolls.life` and `bible.fhl.net` (1–2 character keyword search, #366): Network First with runtime cache fallback.
 - Non-GET and sensitive API traffic: bypass Service Worker handling.
 
+## Security headers (#553)
+
+`vercel.json`'s first rule (`/(.*)`) sets the site-wide headers: `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` (device permissions the app never uses are off; sharing and clipboard stay on), HSTS, `X-Frame-Options: DENY`, and an **enforced** CSP that only carries `frame-ancestors 'none'`.
+
+The full CSP runs as `Content-Security-Policy-Report-Only` while we observe it: scripts are allowed from `'self'`, the two CDNs, and the **sha256 hash of each inline `<script>`** in the HTML entry points; styles still allow inline (hundreds of `style=""` attributes). Violations only show up in the browser Console — there is no collection endpoint. After editing any inline `<script>`, run `node scripts/security-headers.mjs` and paste the hashes into `script-src`; `scripts/security-headers.test.mjs` fails until you do. Inline event handlers (`onclick=`, `onerror=` on `<link>`) are expected violations until they are converted to `addEventListener`, which is a prerequisite for switching the policy to enforced (separate issue).
+
 ## Versioning
 
 Change the `VERSION` constant in `sw.js` whenever cache contents or routing behavior changes. Activation deletes only caches beginning with `newlife-bible-`; never delete unrelated origin caches.

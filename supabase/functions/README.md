@@ -44,6 +44,18 @@ NLC_PLATFORM_API_URL=https://platform.newlife.org.tw/platform/v1
 APP_ORIGIN=https://bible.newlife.org.tw
 ```
 
+### CORS 白名單（#553）
+
+`nlc-data`、`nlc-session`、`exam-write` 內嵌同一段 `cors-allowlist` 區塊（`scripts/cors-allowlist.test.mjs`
+會比對三份逐字相同），只對下列來源回 `Access-Control-Allow-Origin`，其他網站的瀏覽器請求讀不到回應：
+
+- 正式站 `https://bible.newlife.org.tw`、`https://bible-speed-reading.vercel.app`
+- staging `https://bible-speed-reading-staging.vercel.app` 與本專案 Vercel 團隊的 PR 預覽網址
+- 本機 `http://localhost:<port>`、`http://127.0.0.1:<port>`
+- `APP_ORIGIN`，以及選填的 `APP_ALLOWED_ORIGINS`（逗號分隔的完整 origin，臨時加網域用，不用重新部署）
+
+後台網域不在這裡：後台只呼叫 `admin-api`，它有自己的白名單（#547、#555）。
+
 Supabase provides these default secrets automatically:
 
 ```bash

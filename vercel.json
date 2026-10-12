@@ -29,6 +29,39 @@
                  ],
     "headers":  [
                     {
+                        "source":  "/(.*)",
+                        "headers":  [
+                                        {
+                                            "key":  "X-Content-Type-Options",
+                                            "value":  "nosniff"
+                                        },
+                                        {
+                                            "key":  "Referrer-Policy",
+                                            "value":  "strict-origin-when-cross-origin"
+                                        },
+                                        {
+                                            "key":  "Permissions-Policy",
+                                            "value":  "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), browsing-topics=()"
+                                        },
+                                        {
+                                            "key":  "Strict-Transport-Security",
+                                            "value":  "max-age=63072000; includeSubDomains"
+                                        },
+                                        {
+                                            "key":  "X-Frame-Options",
+                                            "value":  "DENY"
+                                        },
+                                        {
+                                            "key":  "Content-Security-Policy",
+                                            "value":  "frame-ancestors 'none'"
+                                        },
+                                        {
+                                            "key":  "Content-Security-Policy-Report-Only",
+                                            "value":  "default-src 'self'; script-src 'self' 'sha256-2cZn3PN2UXvMemcmttIlMH2/IrdfVgVxydLlx6MlS9Q=' 'sha256-t86Gve8YQnF0WVcIfx0EKTHflLX2m898tK5Sd1He24I=' 'sha256-lz/wOkz3rvCvumoQjedH5/RjObW4T3cIFoGTp35okE0=' 'sha256-KT3pNbvztocB63XFAKBLTmIuUDWvaY8uDE/crYlWBT4=' 'sha256-y/ruiHoHs1QmIIZCKGhDjiJR2FVqNS/kpkQW3JmGkrU=' 'sha256-zM3eW/IXuD9s+NbcKhsx/HZwedEvmkOgcrRtOZMESHk=' 'sha256-OCwcaix5H+D33YGd8/VRcDz7EL4hb8wwT016qrZ9djM=' 'sha256-oUGVMJI5gjdAZL3vwqpfqQi1OcPNK/Lr166/YV9b4FY=' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://sso.newlife.org.tw https://member.newlife.org.tw https://platform.newlife.org.tw https://bible-api.com https://bolls.life https://bible.fhl.net https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; worker-src 'self'; manifest-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+                                        }
+                                    ]
+                    },
+                    {
                         "source":  "/app.js",
                         "headers":  [
                                         {
