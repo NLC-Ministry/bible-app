@@ -31,9 +31,13 @@ html.adm-legacy body * {
   text-align: center;
 }
 
+/* index.css 把 .app-layout 鎖成一個螢幕高（height:100dvh＋overflow:hidden）；
+   iframe 裡由文件自己捲動，要全部蓋回來，不然內容被裁在一個畫面高、捲不到下方（#562）。 */
 html.adm-legacy .app-layout {
   display: block;
+  height: auto;
   min-height: 0;
+  overflow: visible;
 }
 
 html.adm-legacy .main-header,

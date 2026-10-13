@@ -89,6 +89,23 @@ describe("one list of legacy sections everywhere", () => {
   });
 });
 
+describe("legacy page scrolling (#562)", () => {
+  const declarations = (css, selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const blocks = [...css.matchAll(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`, "g"))];
+    return new Set(blocks.flatMap((m) => [...m[1].matchAll(/([a-z-]+)\s*:/g)].map((d) => d[1])));
+  };
+
+  it("undoes every property index.css uses to lock .app-layout to one screen", () => {
+    const locked = [...declarations(read("index.css"), ".app-layout")].filter((p) => ["height", "overflow"].includes(p));
+    expect(locked.sort()).toEqual(["height", "overflow"]);
+    const legacy = read("admin-legacy/legacy.css");
+    const overridden = declarations(legacy, "html.adm-legacy .app-layout");
+    for (const property of locked) expect(overridden, property).toContain(property);
+    expect(legacy).toMatch(/html\.adm-legacy \.app-layout\s*\{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/);
+  });
+});
+
 describe("legacy page build helpers", () => {
   it("copies the body without scripts or inline event handlers, keeping ids, classes and styles", () => {
     const html = `<html><head><script>bad()</script></head><body class="x">
