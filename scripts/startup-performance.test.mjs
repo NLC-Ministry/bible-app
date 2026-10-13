@@ -31,7 +31,7 @@ describe("startup performance contract", () => {
   });
 
   it("schedules the issue report UI before PWA initialization can delay it", () => {
-    const reportSchedule = app.lastIndexOf("scheduleIssueReportUiLoad({ includeAdmin: false })");
+    const reportSchedule = app.lastIndexOf("scheduleIssueReportUiLoad()");
     const pwaInitialization = app.indexOf("await initializePwa()");
 
     expect(reportSchedule).toBeGreaterThan(-1);
@@ -46,21 +46,20 @@ describe("startup performance contract", () => {
     expect(app).not.toContain("import './modules/campaign-rule-editor.js");
     expect(app).not.toContain("import './modules/team-registration.js");
     expect(app).toContain("ensurePlanFeatureModulesLoaded");
-    expect(app).toContain("ensureAdminFeatureModulesLoaded");
   });
 
-  it("renders plan management before loading secondary admin bundles", () => {
+  // #551：管理分頁只載入組長用的 pastoral.js；系統管理（admin.js、plan-admin.js、
+  // campaign-rule-editor.js、回報管理）在管理後台，會友 App 一支都不載入。
+  it("the 管理 tab loads only the leader view, never the system-admin bundles", () => {
     const adminBranch = app.slice(
       app.indexOf('} else if (tabId === "admin-view")'),
       app.indexOf("// ── 6. updateNavigationChrome", app.indexOf('} else if (tabId === "admin-view")'))
     );
-    const planRender = adminBranch.indexOf("await mod.renderAdminPlanManagement()");
-    const secondaryLoad = adminBranch.indexOf("void Promise.all([");
-
-    expect(planRender).toBeGreaterThan(-1);
-    expect(secondaryLoad).toBeGreaterThan(planRender);
-    expect(adminBranch).not.toContain("await loadIssueReportUi({ includeAdmin: true })");
-    expect(adminBranch).not.toContain("await ensureAdminFeatureModulesLoaded()");
+    expect(adminBranch).toContain("await loadModule('pastoral')");
+    expect(adminBranch).toContain("await pastoral.renderPastoralView()");
+    expect(adminBranch).not.toMatch(/loadModule\('(admin|plan-admin|campaign-rule-editor)'\)|includeAdmin/);
+    expect(app).not.toMatch(/import\(['"][^'"]*modules\/(admin|plan-admin|campaign-rule-editor)\.js['"]\)/);
+    expect(app).toContain("pastoral: () => import('./modules/pastoral.js')");
   });
 
   it("does not block first dashboard render on care reminder fetches", () => {

@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const migration = currentMigrationSql("0044_remove_group_leader_plan_management.sql");
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
 const css = readFileSync("index.css", "utf8");
-const html = readFileSync("index.html", "utf8");
+const html = readLegacyIndexHtml();
 
 describe("admin team registration overview", () => {
   it("returns plans, teams, captain pastoral zones, and complete rosters in one RPC", () => {

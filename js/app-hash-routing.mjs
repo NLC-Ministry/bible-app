@@ -5,6 +5,7 @@
 //   所以重新整理、VersionWatcher 重新載入都會停在同一個畫面。
 // - 不 push 任何紀錄：返回鍵仍然走 app.js 的 popstate，順序跟以前一樣。
 import { isAppShellVisible } from "./boot-navigation.mjs";
+import { adminConsoleSectionUrl } from "./admin-console-link.mjs";
 import {
   buildHashRoute,
   createHashRouteSync,
@@ -39,7 +40,7 @@ export function createAppHashRouting({ win, doc, appRouter, state, loadModule, g
       planViewState: win.currentPlanViewState,
       groupSubview: win.PlanPageController?.groupSubview || state.planActiveSubTab,
       profileDetailOpen: state.profileDetailOpen,
-      adminSection: getLoadedModule("admin")?.getAdminRouteSection?.() || null
+      adminSection: getLoadedModule("pastoral")?.getPastoralRouteTab?.() || null
     })
   });
 
@@ -78,15 +79,23 @@ export function createAppHashRouting({ win, doc, appRouter, state, loadModule, g
     if (route.tab === "plan-view") {
       await applyPlanRoute(route);
     } else if (route.tab === "admin-view") {
-      if (!MANAGEMENT_ROLES.includes(getRole() || "member")) {
+      const role = getRole() || "member";
+      // 系統管理功能在管理後台（#551）：舊的 #/admin/<系統管理區塊> 讓系統管理員直接開到後台那一區
+      const consoleUrl = route.adminSection ? adminConsoleSectionUrl(route.adminSection, { hostname: win.location.hostname }) : null;
+      if (consoleUrl && role === "admin") {
+        win.location.assign(consoleUrl);
+        return true;
+      }
+      if (!MANAGEMENT_ROLES.includes(role)) {
         await appRouter.switchTab("dashboard-view");
         return true;
       }
-      await appRouter.switchTab("admin-view");
-      if (route.adminSection) {
-        const admin = await loadModule("admin");
-        admin?.openAdminSectionRoute?.(route.adminSection);
+      // 管理分頁的四個分頁（總覽／名單／團隊／測驗）；舊的組長區塊名稱對到新分頁
+      if (route.adminSection && !consoleUrl) {
+        const pastoral = await loadModule("pastoral");
+        pastoral?.openPastoralTab?.(route.adminSection);
       }
+      await appRouter.switchTab("admin-view");
     } else if (route.tab === "profile-view") {
       await appRouter.switchTab("profile-view");
       if (route.profileDetail && typeof win.openProfileDetail === "function") {

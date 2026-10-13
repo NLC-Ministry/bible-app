@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const migration = currentMigrationSql("0052_admin_registration_statistics.sql");
 const summaryMigration = currentMigrationSql("0055_admin_registration_summary.sql");
@@ -11,7 +12,7 @@ const orgSortOrderMigration = readFileSync("supabase/migrations/0133_org_display
 const edge = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 const db = readFileSync("js/db.js", "utf8");
 const admin = readFileSync("js/modules/admin.js", "utf8");
-const html = readFileSync("index.html", "utf8");
+const html = readLegacyIndexHtml();
 const css = readFileSync("css/admin-registration-statistics.css", "utf8");
 
 describe("admin registration statistics", () => {

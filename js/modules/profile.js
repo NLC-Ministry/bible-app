@@ -9,6 +9,7 @@ import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { bindMyVouchersPage, refreshMyLightningQuizVouchers } from "./lightning-quiz-vouchers.mjs";
 import { createCommentaryReviewPage } from "./commentary-review.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
+import { adminConsoleBase } from "../admin-console-link.mjs";
 
 export const APP_SHARE_URL = "https://bible.newlife.org.tw/";
 
@@ -398,6 +399,17 @@ export function wireCheckAppUpdate({
   });
 }
 
+// 系統管理員：個人頁一列「開啟管理後台」（#551，系統管理功能都在後台）
+function renderAdminConsoleEntry() {
+  const group = document.getElementById("profile-admin-console-group");
+  const link = document.getElementById("profile-admin-console-entry");
+  if (!group || !link) return;
+  const isAdmin = Boolean(state.currentUser) && typeof getUserRoleCode === "function"
+    && getUserRoleCode(state.currentUser) === "admin";
+  group.classList.toggle("hidden", !isAdmin);
+  if (isAdmin) link.href = `${adminConsoleBase(window.location.hostname)}/`;
+}
+
 export async function renderProfileView() {
   if (typeof window.renderBadgeWall === "function") {
     window.renderBadgeWall("badges-grid");
@@ -412,6 +424,7 @@ export async function renderProfileView() {
   if (typeof updateAdminNavVisibility === 'function') {
     updateAdminNavVisibility();
   }
+  renderAdminConsoleEntry();
 
   await renderCareReminders();
   if (state.profileDetailOpen === "exams") {

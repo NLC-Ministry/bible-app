@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
 describe("management plan unjoined members", () => {
   it("places the list immediately below the region and zone selectors", () => {
-    const html = read("index.html");
+    const html = readLegacyIndexHtml();
     const filterIndex = html.indexOf('id="admin-management-plan-select"');
     const unjoinedIndex = html.indexOf('id="admin-unjoined-plan-members"');
     const orgFilterIndex = html.indexOf('id="members-admin-group-select"');
@@ -44,7 +45,7 @@ describe("management plan unjoined members", () => {
   });
 
   it("bulk-reminds only visible people who have not been reminded today", () => {
-    const html = read("index.html");
+    const html = readLegacyIndexHtml();
     const admin = read("js/modules/admin.js");
     const bulkInvite = read("js/modules/admin-bulk-plan-invite.mjs");
     expect(html).toContain('id="admin-unjoined-plan-invite-all"');

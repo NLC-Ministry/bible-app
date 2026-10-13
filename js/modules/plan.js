@@ -1335,6 +1335,8 @@ async function renderPlanView() {
       await setPlanState(PLAN_ROUTE.LIST);
     }
 
+    // 「全域計畫管理」卡只在管理後台的照搬頁裡有（admin-legacy/admin-view.html，#551）；
+    // App 的 index.html 沒有這張卡，下面兩段在 App 不會做任何事。
     // System administrator controls use the UUID-backed role definition.
     const isSystemAdmin = getUserRoleCode(state.currentUser) === "admin";
     const adminCard = document.getElementById("admin-plan-card");
@@ -1788,9 +1790,8 @@ function userHasNoPlanAtAll() {
   return (state.activePlans || []).length === 0;
 }
 
-// 歡迎卡只在「我的計畫」、「全域計畫管理」只在「探索計畫」、「已結束」整欄隱藏
-// （見 plan-sidebar-visibility.mjs，#409）。邀請碼卡與管理卡的分頁條件由 CSS 讀
-// #plan-list-subview[data-active-filter]，和它們各自依組隊／角色切換的 hidden 分開。
+// 歡迎卡只在「我的計畫」、其他分頁整欄隱藏（見 plan-sidebar-visibility.mjs，#409）。
+// 邀請碼卡的分頁條件由 CSS 讀 #plan-list-subview[data-active-filter]，和它依組隊切換的 hidden 分開。
 // 兩份清單（joined/preset）各自渲染時都會呼叫這裡，且各自從 DOM 讀目前作用中的
 // 分頁，所以不管先渲染哪一份都能算對。
 function updatePlanSidebarIntroCardVisibility() {
@@ -1802,8 +1803,7 @@ function updatePlanSidebarIntroCardVisibility() {
     sidebar: document.getElementById("plan-sidebar-info-card"),
     introCard: document.getElementById("plan-sidebar-intro-card"),
     filter,
-    hasAnyPlan: !userHasNoPlanAtAll(),
-    isSystemAdmin: getUserRoleCode(state.currentUser) === "admin"
+    hasAnyPlan: !userHasNoPlanAtAll()
   });
 }
 

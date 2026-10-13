@@ -16,7 +16,9 @@
 //
 // 「照搬」的舊管理區塊（#550）是同網域的另一頁 dist-admin/legacy（後台外殼用 iframe 開）：
 //   · admin-legacy/legacy-entry.js 打包成 legacy.<hash>.js：會友 App 管理分頁的同一份程式
-//   · 畫面是建置時從 index.html 抽出的 <body>（拿掉 <script> 與行內事件處理器），保留所有 DOM id
+//   · 畫面是建置時從 index.html 抽出的 <body>（拿掉 <script> 與行內事件處理器），保留所有 DOM id；
+//     App 的管理分頁（admin-view:start～end 兩個註解之間，#551 起是組長用的新畫面）換成
+//     admin-legacy/admin-view.html（舊管理分頁＋計畫管理卡片，原樣搬過去的）
 //   · 樣式：index.css 與另外兩支管理樣式、Tailwind、admin-legacy/legacy.css 合成 legacy.<hash>.css
 //   · 需要的環境變數：SUPABASE_ANON_KEY（必填；本機可省略）、SUPABASE_URL（沒設就從 admin-api 網址推）、
 //     NLC_MEMBER_HUB_URL（選填）
@@ -28,6 +30,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildTailwindCss, contentHash, cpDirRecursive, resolveLocalAssets } from "./bundle.mjs";
 import { LEGACY_SECTION_IDS, legacyMarkupId } from "../admin-legacy/sections.mjs";
+import { composeLegacyIndexHtml, readLegacyAdminView } from "./lib/legacy-markup.mjs";
 
 export const ADMIN_OUT_DIR = "dist-admin";
 const PRODUCTION_REF = "ztozevcqkfrohgjmngcj";
@@ -238,6 +241,11 @@ export function extractLegacyMarkup(indexHtml) {
 
 export const LEGACY_REQUIRED_IDS = ["admin-view", "admin-section-nav", "admin-section-content", "admin-plan-context"];
 
+/** iframe 頁的畫面（#551）：index.html 的管理分頁換成照搬的舊管理分頁，取 <body>，拿掉 script 與 inline 事件（CSP）。 */
+export function composeLegacyMarkup(indexHtml, legacyAdminViewHtml) {
+  return extractLegacyMarkup(composeLegacyIndexHtml(indexHtml, legacyAdminViewHtml));
+}
+
 async function minifyCss(css) {
   try {
     const result = await transform(css, { loader: "css", minify: true, charset: "utf8", logLevel: "silent" });
@@ -284,10 +292,10 @@ export async function buildLegacy({ root, outDir, legacyConfig, sectionIds }) {
   const cssFile = `legacy.${contentHash(css)}.css`;
   writeFileSync(join(outDir, cssFile), css, "utf8");
 
-  const markup = extractLegacyMarkup(indexHtml);
+  const markup = composeLegacyMarkup(indexHtml, readLegacyAdminView(root));
   const missing = [...LEGACY_REQUIRED_IDS, ...sectionIds.map(legacyMarkupId)]
     .filter((id) => !markup.includes(`id="${id}"`));
-  if (missing.length) throw new Error(`build-admin: index.html is missing ${missing.join(", ")} (the legacy management pages need them)`);
+  if (missing.length) throw new Error(`build-admin: the legacy markup (index.html + admin-legacy/admin-view.html) is missing ${missing.join(", ")}`);
   const template = readFileSync(join(root, "admin-legacy", "legacy.html"), "utf8");
   for (const placeholder of [LEGACY_CSS_PLACEHOLDER, LEGACY_MARKUP_PLACEHOLDER, LEGACY_JS_PLACEHOLDER]) {
     if (!template.includes(placeholder)) throw new Error(`build-admin: admin-legacy/legacy.html is missing ${placeholder}`);

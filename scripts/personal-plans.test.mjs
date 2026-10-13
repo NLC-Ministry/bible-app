@@ -93,7 +93,9 @@ const SCOPED_TO_CHURCH_PLAN = [
   "enforce_reading_log_stage_open",
   "enforce_reading_log_stage_progress_open",
   // 後台使用者名單（#550）：「是否加入」只看 global_plan_id／教會階段 preset_key 對得上所選計畫的
-  "admin_api_directory_rows"
+  "admin_api_directory_rows",
+  // App 管理分頁（#551）：報名只認 global_plan_id／preset_key 對得上的，另外明寫 NOT is_personal
+  "get_pastoral_overview"
 ];
 // 只看呼叫者自己的資料，或只讀呼叫端給的計畫 id（來自已排除個人計畫的名單）。
 const OWN_OR_GIVEN_PLANS = [
