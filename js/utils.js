@@ -4,6 +4,8 @@ import {
 import { isCampaignStageKind, isCanonicalCampaignStageKind } from "./data/campaign-stage-kinds.mjs";
 import { segmentScheduleDaysForRoundCount, toLocalDateKey } from "./data/current-round-progress.mjs";
 import { digestChapterKeys, digestRoundLogs, isPlanReadingLogsLoaded } from "./data/reading-log-scope.mjs";
+// 書卷展開與平均分配和伺服器的「教會原始日程」共用（#564）
+import { distributeChaptersAcrossDays, expandPlanBooksToChapters } from "../supabase/functions/_shared/progress/plan-schedule.mjs";
 
 // ============================================================
 // utils.js — Shared utilities used across all view controllers
@@ -1713,29 +1715,6 @@ function toFirstRoundChapters(chapters) {
   return chapters.map(ch => ({ ...ch, round: 1 }));
 }
 
-function distributeChaptersAcrossDays(chapters, readingDays) {
-  if (typeof readingDays !== 'number' || isNaN(readingDays) || readingDays <= 0) {
-    return [];
-  }
-  const dailyChapters = Array.from({ length: readingDays }, () => []);
-  const chsPerDay = Math.floor(chapters.length / readingDays);
-  let remainder = chapters.length % readingDays;
-  let chIdx = 0;
-
-  for (let d = 0; d < readingDays; d++) {
-    const todayCount = chsPerDay + (remainder > 0 ? 1 : 0);
-    remainder--;
-    for (let c = 0; c < todayCount; c++) {
-      if (chIdx < chapters.length) {
-        dailyChapters[d].push(chapters[chIdx]);
-        chIdx++;
-      }
-    }
-  }
-
-  return dailyChapters;
-}
-
 function normalizePlanScheduleSettings(isFixed, readingDaysPerWeek = 7, restWeekdays = []) {
 
   const normalizedRestDays = Array.from(new Set((Array.isArray(restWeekdays) ? restWeekdays : [])
@@ -2020,25 +1999,7 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
     let totalChaptersCount = 0;
 
     preset.months.forEach(mSpec => {
-      const allChapters = [];
-      mSpec.books.forEach(bookName => {
-        if (bookName === "詩篇 1-110") {
-          for (let i = 1; i <= 110; i++) {
-            allChapters.push({ book: "詩篇", chapter: i });
-          }
-        } else if (bookName === "詩篇 111-150") {
-          for (let i = 111; i <= 150; i++) {
-            allChapters.push({ book: "詩篇", chapter: i });
-          }
-        } else {
-          const book = BIBLE_BOOKS.find(b => b.name === bookName);
-          if (book) {
-            for (let i = 1; i <= book.chapters; i++) {
-              allChapters.push({ book: book.name, chapter: i });
-            }
-          }
-        }
-      });
+      const allChapters = expandPlanBooksToChapters(mSpec.books, BIBLE_BOOKS);
 
       const expandedChapters = toFirstRoundChapters(allChapters);
       totalChaptersCount += expandedChapters.length;
@@ -2107,26 +2068,8 @@ function generatePlanObject(name, startDate, endDate, selectedBooks, presetKey =
   }
 
   // 3. Custom plans (non-preset): distribute the selected books across the date range.
-  const allChapters = [];
   const booksToUse = (preset && preset.months ? preset.months.flatMap(m => m.books) : selectedBooks) || [];
-  booksToUse.forEach(bookName => {
-    if (bookName === "詩篇 1-110") {
-      for (let i = 1; i <= 110; i++) {
-        allChapters.push({ book: "詩篇", chapter: i });
-      }
-    } else if (bookName === "詩篇 111-150") {
-      for (let i = 111; i <= 150; i++) {
-        allChapters.push({ book: "詩篇", chapter: i });
-      }
-    } else {
-      const book = BIBLE_BOOKS.find(b => b.name === bookName);
-      if (book) {
-        for (let i = 1; i <= book.chapters; i++) {
-          allChapters.push({ book: book.name, chapter: i });
-        }
-      }
-    }
-  });
+  const allChapters = expandPlanBooksToChapters(booksToUse, BIBLE_BOOKS);
 
   // 讀到第幾遍就把 1..N 遍鋪在同一條日曆上（level 已廢，用 current_round 驅動）。
   const maxRounds = Math.max(1, Number(scheduleSettings && scheduleSettings.currentRound) || 1);
