@@ -36,7 +36,8 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
     expect(adminCfg.buildCommand).toBe("node scripts/build-admin.mjs");
     expect(adminCfg.outputDirectory).toBe("dist-admin");
     expect(adminCfg.git).toEqual({ deploymentEnabled: false });
-    expect(adminCfg.rewrites).toBeUndefined();
+    // 只有首頁那一條（#560），不准任何把其他路徑導回殼的萬用改寫
+    expect(adminCfg.rewrites).toEqual([{ source: "/", destination: "/index" }]);
     expect(memberCfg.outputDirectory).toBe("dist");
   });
 
@@ -104,6 +105,14 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
       expect(headersFor(adminCfg, source)["Cache-Control"]).toMatch(/^no-store/);
     }
     expect(headersFor(adminCfg, "/legacy.(.*).js")["Cache-Control"]).toContain("immutable");
+  });
+
+  // cleanUrls 會把 index.html 註冊成 /index，"/" 沒有改寫就是 404（會友 App 0432f87a、後台 #560 都踩過）
+  it("serves the home page: with cleanUrls, both configs rewrite / to /index", () => {
+    for (const cfg of [adminCfg, memberCfg]) {
+      expect(cfg.cleanUrls).toBe(true);
+      expect(cfg.rewrites).toContainEqual({ source: "/", destination: "/index" });
+    }
   });
 
   it("keeps it out of search engines and never caches the HTML", () => {
