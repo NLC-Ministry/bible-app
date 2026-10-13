@@ -81,6 +81,7 @@ import {
   planLightningImport
 } from "./lightning-quiz-schedule.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
+import { listManagementPlans } from "./management-plans.mjs";
 import { renderExamPanel } from "./exam.js";
 
 function updatePastoralWallControl(enabled, options = {}) {
@@ -3421,56 +3422,14 @@ export function openAdminSectionRoute(id) {
   return true;
 }
 
-function getManagementPlanStatus(plan, today = new Date()) {
-  const startValue = plan && (plan.startDate || plan.start_date);
-  const endValue = plan && (plan.endDate || plan.end_date);
-  const startDate = startValue ? new Date(`${String(startValue).slice(0, 10)}T00:00:00`) : null;
-  const endDate = endValue ? new Date(`${String(endValue).slice(0, 10)}T23:59:59`) : null;
-  if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 'unknown';
-  if (today < startDate) return 'upcoming';
-  if (today > endDate) return 'completed';
-  return 'ongoing';
-}
-
+// 計畫篩選清單的規則在 management-plans.mjs，App 管理分頁（pastoral.js，#551）共用同一份。
 function getManagementPlans() {
-  const seen = new Set();
-  const plans = [...(state.activePlans || []), ...(state.globalPlans || [])].reduce((result, sourcePlan) => {
-    const key = String(sourcePlan.globalPlanId || sourcePlan.id || sourcePlan.presetKey || sourcePlan.name || '');
-    if (!key || seen.has(key) || sourcePlan.planKind === 'church_campaign') return result;
-    seen.add(key);
-
-    let plan = sourcePlan;
-    if ((!Array.isArray(plan.days) || plan.days.length === 0) && typeof generatePlanObject === 'function') {
-      const books = plan.books || plan.target_books || [];
-      if (books.length > 0) {
-        plan = generatePlanObject(plan.name, plan.startDate || plan.start_date, plan.endDate || plan.end_date, books, plan.presetKey || plan.id, plan.isFixed !== false && plan.is_fixed !== false);
-        plan.globalPlanId = sourcePlan.globalPlanId || sourcePlan.id;
-        plan.id = sourcePlan.id || plan.id;
-        plan.name = sourcePlan.name || plan.name;
-        plan.planKind = sourcePlan.planKind;
-        plan.stageNo = sourcePlan.stageNo;
-      }
-    }
-    const status = getManagementPlanStatus(plan);
-    const hidden = typeof isPlanHidden === 'function' && isPlanHidden(plan);
-    // A future fixed plan can accept enrollments before its official start date.
-    // Once it is released (not hidden), leaders must be able to inspect its join
-    // status too. Keep unreleased future stages out of this people-facing report.
-    const isOpenEarlyEnrollment = status === 'upcoming' && !hidden;
-    if ((status === 'ongoing' || status === 'completed' || isOpenEarlyEnrollment)
-      && !(hidden && !canManageHiddenPlans())) {
-      result.push({ ...plan, managementStatus: status });
-    }
-    return result;
-  }, []);
-
-  const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 };
-  return plans.sort((left, right) => {
-    const statusDifference = (statusPriority[left.managementStatus] ?? 3) - (statusPriority[right.managementStatus] ?? 3);
-    if (statusDifference !== 0) return statusDifference;
-    const leftEnd = String(left.endDate || left.end_date || '');
-    const rightEnd = String(right.endDate || right.end_date || '');
-    return rightEnd.localeCompare(leftEnd);
+  return listManagementPlans({
+    activePlans: state.activePlans,
+    globalPlans: state.globalPlans,
+    generatePlanObject: typeof generatePlanObject === 'function' ? generatePlanObject : null,
+    isPlanHidden: typeof isPlanHidden === 'function' ? isPlanHidden : null,
+    canManageHiddenPlans: typeof canManageHiddenPlans === 'function' ? canManageHiddenPlans : null
   });
 }
 

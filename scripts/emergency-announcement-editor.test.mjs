@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import { join } from "node:path";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const root = new URL("..", import.meta.url).pathname.replace(/^\/(?:[A-Za-z]:)/, value => value.slice(1));
-const html = fs.readFileSync(join(root, "index.html"), "utf8");
+const html = readLegacyIndexHtml(root);
 const home = fs.readFileSync(join(root, "js/modules/home.js"), "utf8");
 const admin = fs.readFileSync(join(root, "js/modules/admin.js"), "utf8");
 const db = fs.readFileSync(join(root, "js/db.js"), "utf8");

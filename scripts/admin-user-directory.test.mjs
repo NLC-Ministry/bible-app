@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
 describe("read-only admin user directory", () => {
   it("renders a user management section with only non-destructive static controls", () => {
-    const html = read("index.html");
+    const html = readLegacyIndexHtml();
     const start = html.indexOf('id="admin-user-directory-col"');
     const end = html.indexOf('id="admin-managed-scopes-col"');
     const section = html.slice(start, end);

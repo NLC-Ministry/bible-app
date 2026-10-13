@@ -7,8 +7,8 @@
 //   · 匯出：iframe 攔下所有下載交過來 → 先經 admin-api 記稽核 → 記成功才存檔（記不成就不下載）
 //   · 換區、主題、iframe 裡的操作（延後閒置登出）
 //
-// 區塊 id 就是 App 管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id；計畫管理（plans）是 App 讀經計畫分頁
-// 側欄的卡片，iframe 把它搬進一個區塊面板（admin-legacy/sections.mjs 的 LEGACY_HOSTED_CARDS）。同一份清單另外兩處：
+// 區塊 id 就是舊管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id；計畫管理（plans）是原本讀經計畫分頁
+// 側欄的卡片（#551 起在 admin-legacy/admin-view.html），iframe 把它搬進一個區塊面板（LEGACY_HOSTED_CARDS）。同一份清單另外兩處：
 // admin-legacy/sections.mjs（iframe）、admin-api policy.ts 的 LEGACY_EXPORT_SECTIONS；
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
 

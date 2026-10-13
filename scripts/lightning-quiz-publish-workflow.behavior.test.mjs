@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 let dom;
 let dbStub;
@@ -98,7 +99,7 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     ...Array.from({ length: 12 }, (_, index) => ({ ...base, id: `ended-${index + 1}`, riseDate: shift(-2 - index), status: "published", locked: true }))
   ];
   // 用 index.html 裡真正的雲柱測驗區塊，不另外手寫假的 DOM
-  const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const indexHtml = readLegacyIndexHtml();
   const sectionHtml = indexHtml.slice(
     indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),
     indexHtml.indexOf('<div id="admin-section-settings"')

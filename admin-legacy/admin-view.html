@@ -1,0 +1,777 @@
+<!--
+  後台「照搬」區塊的畫面（#551）：原本會友 App index.html 的管理分頁（#admin-view）與計畫分頁的
+  全域計畫管理卡片（#admin-plan-card），原樣搬到這裡。App 的管理分頁改成組長用的四分頁（#551），
+  這些畫面只剩後台 iframe 用：scripts/build-admin.mjs 從 index.html 抽出 <body> 後，把
+  admin-view:start 到 admin-view:end 兩個註解之間換成這個檔案（composeLegacyMarkup）。
+  程式（js/modules/admin.js、plan-admin.js…）照舊，DOM id 不能改。
+-->
+      <!-- VIEW 6: ADMIN CONSOLE -->
+      <section id="admin-view" class="view-pane hidden">
+        <!-- 統一管理架構：一份功能清單 + 一個內容區。
+             手機（< 960px）：清單是首頁，點一項把內容區當全螢幕子頁打開，返回鍵
+             走頂 bar 的 #global-back-btn（updateNavigationChrome / goBack 處理）。
+             桌機（≥ 960px）：雙欄，內容常駐右側。 -->
+        <nav id="admin-section-nav" class="admin-section-nav" aria-label="管理功能"></nav>
+        <div id="admin-section-content" class="admin-section-content">
+
+          <div id="admin-section-users" class="card-col span-12 admin-section-panel">
+          <div class="card-col span-12 hidden" id="admin-user-directory-col">
+            <section class="glass-card admin-user-directory" id="admin-user-directory" aria-label="使用者基本資料">
+              <div class="admin-user-directory__body">
+                <div class="admin-user-directory__toolbar">
+                  <label class="admin-registration-statistics__filter admin-user-directory__search" for="admin-user-directory-search">
+                    <span>搜尋使用者</span>
+                    <input type="search" id="admin-user-directory-search" class="form-control"
+                      placeholder="搜尋姓名、信箱、角色或牧養歸屬" autocomplete="off">
+                  </label>
+                  <div class="admin-user-directory__actions">
+                  <button type="button" id="admin-user-directory-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap; flex-shrink:0;" title="依當前篩選結果匯出 CSV 名單">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                    <span>匯出</span>
+                  </button>
+                  <span class="admin-user-directory__count" id="admin-user-directory-count" style="white-space:nowrap;">讀取中…</span>
+                  </div>
+                </div>
+              <details class="admin-user-directory__panel" id="admin-user-directory-filters-panel" open>
+                <summary class="admin-user-directory__panel-summary">
+                  <span class="admin-user-directory__panel-title">篩選條件</span>
+                  <span class="admin-user-directory__panel-meta" id="admin-user-directory-filters-summary">未套用</span>
+                </summary>
+                <div class="admin-user-directory__panel-body">
+              <fieldset class="admin-user-directory__org-filters">
+                <legend>組織架構篩選</legend>
+                <div class="admin-user-directory__org-filter">
+                  <span>大區</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-region">
+                    <summary class="form-control"><span id="admin-user-directory-filter-region-summary">全部大區</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-region-options"></div>
+                  </details>
+                </div>
+                <div class="admin-user-directory__org-filter">
+                  <span>牧區</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-zone">
+                    <summary class="form-control"><span id="admin-user-directory-filter-zone-summary">全部牧區</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-zone-options"></div>
+                  </details>
+                </div>
+                <div class="admin-user-directory__org-filter">
+                  <span>小組</span>
+                  <details class="admin-user-directory__org-picker" id="admin-user-directory-filter-group">
+                    <summary class="form-control"><span id="admin-user-directory-filter-group-summary">全部小組</span></summary>
+                    <div class="admin-user-directory__org-options" id="admin-user-directory-filter-group-options"></div>
+                  </details>
+                </div>
+              </fieldset>
+              <fieldset class="admin-user-directory__org-filters admin-user-directory__plan-filters">
+                <legend>計畫篩選</legend>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan">
+                  <span>讀經計畫</span>
+                  <select id="admin-user-directory-filter-plan" class="form-control"></select>
+                </label>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan-participation">
+                  <span>計畫參與</span>
+                  <select id="admin-user-directory-filter-plan-participation" class="form-control">
+                    <option value="all">全部</option>
+                    <option value="joined">已加入此計畫</option>
+                    <option value="not_joined">未加入此計畫</option>
+                  </select>
+                </label>
+                <label class="admin-user-directory__org-filter" for="admin-user-directory-filter-plan-team">
+                  <span>團隊</span>
+                  <select id="admin-user-directory-filter-plan-team" class="form-control">
+                    <option value="all">全部</option>
+                    <option value="joined">已組隊</option>
+                    <option value="not_joined">未組隊（個人速讀中）</option>
+                  </select>
+                </label>
+              </fieldset>
+              <fieldset class="admin-user-directory__filters">
+                <legend>其他條件</legend>
+                <label>
+                  <input type="checkbox" id="admin-user-directory-filter-incomplete">
+                  <span>未填會員資料（沒有牧區或沒有名稱）</span>
+                </label>
+              </fieldset>
+                </div>
+              </details>
+              <details class="admin-user-directory__panel" id="admin-user-directory-results-panel" open>
+                <summary class="admin-user-directory__panel-summary">
+                  <span class="admin-user-directory__panel-title">查詢結果</span>
+                  <span class="admin-user-directory__panel-meta" id="admin-user-directory-results-summary">讀取中…</span>
+                </summary>
+                <div class="admin-user-directory__panel-body">
+              <div id="admin-user-directory-list" class="admin-user-directory__list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入使用者資料…</div>
+              </div>
+                </div>
+              </details>
+              </div>
+            </section>
+          </div>
+          </div>
+
+          <div id="admin-section-permissions" class="card-col span-12 admin-section-panel hidden">
+          <div class="card-col span-12 hidden" id="admin-org-permissions-col">
+            <details class="glass-card admin-org-permissions" id="admin-org-permissions-disclosure" aria-labelledby="admin-org-permissions-title" open>
+              <summary class="admin-org-permissions__summary">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
+                  <h3 class="card-title" id="admin-org-permissions-title">組織架構權限總覽</h3>
+                  <p>依大區／牧區／小組列出目前負責的人員；點選姓名可直接跳到下方「管理範圍設定」編輯。</p>
+                </div>
+                <span class="admin-org-permissions__count" id="admin-org-permissions-count">讀取中…</span>
+              </summary>
+              <div id="admin-org-permissions-tree" class="admin-org-permissions__tree" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入組織架構…</div>
+              </div>
+            </details>
+          </div>
+          <div class="card-col span-12 hidden" id="admin-managed-scopes-col">
+            <section class="glass-card admin-managed-scopes" aria-labelledby="admin-managed-scopes-title">
+              <div class="admin-registration-statistics__header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">權限管理</p>
+                  <h3 class="card-title" id="admin-managed-scopes-title">管理範圍設定</h3>
+                  <p>角色由會員中心同步；此處只列出具有管理職責的人員，不包含一般會友，並可設定多個大區、牧區或小組。</p>
+                </div>
+                <button type="button" id="admin-export-org-structure-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; flex-shrink:0;" title="匯出大區/牧區/小組組織架構 CSV">
+                  <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                  <span>匯出組織架構 CSV</span>
+                </button>
+              </div>
+              <label class="admin-registration-statistics__filter" for="admin-managed-scopes-profile">
+                <span>選擇人員</span>
+                <select id="admin-managed-scopes-profile" class="form-control"></select>
+              </label>
+              <div id="admin-managed-scopes-summary" class="admin-managed-scopes__summary"></div>
+              <div id="admin-managed-scopes-options" class="admin-managed-scopes__options"></div>
+              <div class="admin-managed-scopes__actions">
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-select-all">全選</button>
+                <button type="button" class="secondary-btn" id="admin-managed-scopes-clear">清除委派範圍</button>
+                <button type="button" class="primary-btn" id="admin-managed-scopes-save">儲存管理範圍</button>
+              </div>
+              <p class="admin-managed-scopes__help">
+                未設定時會使用此人的會員中心歸屬；系統管理員與教會牧者固定為全教會範圍。
+                儲存時只保留符合目前角色層級的欄位，避免日後換角色時套用過期權限。
+              </p>
+              <p class="admin-feature-setting-feedback hidden" id="admin-managed-scopes-feedback" role="status"></p>
+            </section>
+          </div>
+          </div>
+
+          <div id="admin-section-registrations" class="card-col span-12 admin-section-panel hidden">
+          <div class="card-col span-12 hidden" id="admin-registration-statistics-col">
+            <section class="glass-card admin-registration-statistics" aria-labelledby="admin-registration-statistics-title">
+              <div class="admin-registration-statistics__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">報名註冊統計</p>
+                  <h3 class="card-title" id="admin-registration-statistics-title">報名與註冊統計</h3>
+                  <p>比較有效帳號的註冊人數，以及加入所選讀經計畫的報名人數。</p>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:0.5rem; flex-shrink:0;">
+                  <button type="button" class="secondary-btn" id="admin-registration-statistics-sheet-sync" disabled title="依目前顯示的資料，覆寫到「速讀報名統計」Google 試算表的「最新速讀狀況」分頁">
+                    <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+                    更新到 Google 試算表
+                  </button>
+                  <button type="button" class="secondary-btn" id="admin-registration-statistics-export" disabled>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="save" aria-hidden="true"></span>
+                    匯出 CSV
+                  </button>
+                </div>
+              </div>
+              <label class="admin-registration-statistics__filter" for="admin-registration-statistics-plan">
+                <span>讀經計畫</span>
+                <select id="admin-registration-statistics-plan" class="form-control"></select>
+              </label>
+              <div id="admin-registration-statistics-content" aria-live="polite">
+                <div class="admin-registration-statistics__empty">讀取統計資料中…</div>
+              </div>
+            </section>
+          </div>
+          </div>
+
+          <div id="admin-section-reports" class="card-col span-12 admin-section-panel hidden">
+          <div class="card-col span-12" id="admin-reports-root">
+            <!-- Rendered dynamically by React -->
+          </div>
+          </div>
+
+          <div id="admin-section-announcements" class="card-col span-12 admin-section-panel hidden">
+            <section class="glass-card admin-announcements" aria-labelledby="admin-announcements-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">首頁內容管理</p>
+                  <h3 class="card-title" id="admin-announcements-title">公告管理</h3>
+                  <p>在此新增或編輯一般公告與緊急公告；首頁只呈現會友實際看到的樣式。</p>
+                </div>
+                <button type="button" class="primary-btn" id="admin-announcement-create">新增公告</button>
+              </div>
+              <div id="admin-announcement-editor" class="announcement-form-panel hidden">
+                <h4 class="announcement-form-panel__title" id="admin-announcement-form-title">新增公告</h4>
+                <label>公告類型
+                  <select id="admin-announcement-type" class="form-control announcement-form-panel__input">
+                    <option value="general">一般公告</option>
+                    <option value="urgent">重要／緊急公告</option>
+                  </select>
+                </label>
+                <label>公告標題
+                  <input type="text" id="admin-announcement-title" class="form-control announcement-form-panel__input" placeholder="公告標題">
+                </label>
+                <label>公告內容
+                  <textarea id="admin-announcement-content" class="form-control announcement-form-panel__textarea" placeholder="請輸入要提醒會友的公告內容…" rows="5"></textarea>
+                </label>
+                <label id="admin-announcement-expiry-field" class="hidden">顯示到期時間
+                  <input type="datetime-local" id="admin-announcement-expires-at" class="form-control announcement-form-panel__input">
+                  <small>到期後會自動從首頁隱藏，但仍保留在公告管理中。</small>
+                </label>
+                <div class="announcement-form-panel__actions">
+                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-announcement-cancel">取消</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-announcement-save">發布公告</button>
+                </div>
+              </div>
+              <div id="admin-announcements-list" class="announcements-list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入公告…</div>
+              </div>
+            </section>
+          </div>
+
+          <!-- 經文注釋管理（#447、#470、#475）：注釋與詞條同一頁，第一次進入才由 js/modules/admin-commentary.mjs 載入清單。 -->
+          <div id="admin-section-commentary" class="card-col span-12 admin-section-panel hidden">
+            <section class="glass-card admin-announcements admin-commentary" aria-labelledby="admin-commentary-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">閱讀器內容管理</p>
+                  <h3 class="card-title" id="admin-commentary-title">經文注釋</h3>
+                  <p>注釋：節留空＝整章注釋（每章最多一則，閱讀器上方的燈泡打開）；填了節，那幾節右邊會出現注釋圖示。詞條：人名、地名、名詞的短解釋，整卷或整章的詞條只出現在經文真的提到這個詞的節。點選經文後，工具列也會多一個「注釋」。</p>
+                </div>
+                <button type="button" class="primary-btn" id="admin-commentary-create">新增</button>
+              </div>
+              <!-- 審核進度（#471）：由 js/modules/admin-commentary-review.mjs 畫 -->
+              <div id="admin-commentary-review" class="admin-commentary-review" aria-live="polite"></div>
+              <div id="admin-commentary-editor" class="announcement-form-panel hidden">
+                <h4 class="announcement-form-panel__title" id="admin-commentary-form-title">新增</h4>
+                <div class="admin-commentary-choice">
+                  <span class="admin-commentary-choice__label" id="admin-commentary-kind-label">類型</span>
+                  <div class="capsule-segmented-control segment-track" id="admin-commentary-kind" role="group" aria-labelledby="admin-commentary-kind-label">
+                    <button type="button" class="segment-toggle-btn active" data-commentary-kind="note" aria-pressed="true">注釋</button>
+                    <button type="button" class="segment-toggle-btn" data-commentary-kind="term" aria-pressed="false">詞條</button>
+                  </div>
+                </div>
+                <div id="admin-commentary-term-fields" class="admin-commentary-fieldset hidden">
+                  <label>詞
+                    <input type="text" id="admin-commentary-term-name" class="form-control announcement-form-panel__input" maxlength="40" placeholder="例如：會幕">
+                  </label>
+                  <label>其他寫法（選填，用頓號或逗號分隔；其他譯本的用字也可以寫在這裡）
+                    <input type="text" id="admin-commentary-term-aliases" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：帳幕、tabernacle">
+                  </label>
+                  <div class="admin-commentary-choice">
+                    <span class="admin-commentary-choice__label" id="admin-commentary-scope-label">適用範圍</span>
+                    <div class="capsule-segmented-control segment-track" id="admin-commentary-scope" role="group" aria-labelledby="admin-commentary-scope-label">
+                      <button type="button" class="segment-toggle-btn active" data-term-scope="book" aria-pressed="true">整卷</button>
+                      <button type="button" class="segment-toggle-btn" data-term-scope="chapter" aria-pressed="false">整章</button>
+                      <button type="button" class="segment-toggle-btn" data-term-scope="verses" aria-pressed="false">指定節</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="admin-commentary-ref">
+                  <label>書卷
+                    <select id="admin-commentary-book" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                  <label id="admin-commentary-chapter-field">章
+                    <select id="admin-commentary-chapter" class="form-control announcement-form-panel__input"></select>
+                  </label>
+                </div>
+                <div class="admin-commentary-verses" id="admin-commentary-verse-field">
+                  <label><span id="admin-commentary-verse-start-label">起始節（選填）</span>
+                    <input type="number" id="admin-commentary-verse-start" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="整章">
+                  </label>
+                  <label>結束節（選填）
+                    <input type="number" id="admin-commentary-verse-end" class="form-control announcement-form-panel__input" min="1" inputmode="numeric" placeholder="同起始節">
+                  </label>
+                </div>
+                <label id="admin-commentary-heading-field">小標題（選填）
+                  <input type="text" id="admin-commentary-heading" class="form-control announcement-form-panel__input" maxlength="60" placeholder="例如：會幕的設計">
+                </label>
+                <label><span id="admin-commentary-content-label">注釋內容</span>
+                  <textarea id="admin-commentary-content" class="form-control announcement-form-panel__textarea" rows="8" placeholder="寫給會友看的經文解釋。空一行就是新的段落。"></textarea>
+                </label>
+                <fieldset class="admin-commentary-topics">
+                  <legend>主題圖片（勾選後，閱讀器會在內容下方附上這些圖）</legend>
+                  <div id="admin-commentary-topic-list" class="admin-commentary-topic-list"></div>
+                </fieldset>
+                <label>出處（選填，例如引用的資料與授權）
+                  <input type="text" id="admin-commentary-source" class="form-control announcement-form-panel__input" maxlength="200" placeholder="例如：Tyndale Open Study Notes（CC BY-SA 4.0）">
+                </label>
+                <label class="admin-commentary-publish" id="admin-commentary-publish-field">
+                  <input type="checkbox" id="admin-commentary-published" checked>
+                  <span>發布給會友看（取消勾選就是先存成草稿）</span>
+                </label>
+                <p class="admin-commentary-review-hint hidden" id="admin-commentary-review-hint"></p>
+                <div class="announcement-form-panel__actions">
+                  <button type="button" class="pill-btn announcement-form-panel__cancel" id="admin-commentary-cancel">取消</button>
+                  <button type="button" class="primary-btn announcement-form-panel__submit" id="admin-commentary-save">儲存</button>
+                </div>
+              </div>
+              <div class="admin-commentary-filters">
+                <label class="admin-commentary-filter">篩選書卷
+                  <select id="admin-commentary-filter" class="form-control announcement-form-panel__input"></select>
+                </label>
+                <label class="admin-commentary-filter">狀態
+                  <select id="admin-commentary-status-filter" class="form-control announcement-form-panel__input">
+                    <option value="">全部狀態</option>
+                    <option value="published">已發布</option>
+                    <option value="draft">草稿</option>
+                    <option value="pending">待審</option>
+                    <option value="returned">退回</option>
+                    <option value="approved">通過待發布</option>
+                  </select>
+                </label>
+                <div class="capsule-segmented-control segment-track" id="admin-commentary-kind-filter" role="group" aria-label="篩選類型">
+                  <button type="button" class="segment-toggle-btn active" data-kind-filter="all" aria-pressed="true">全部</button>
+                  <button type="button" class="segment-toggle-btn" data-kind-filter="note" aria-pressed="false">注釋</button>
+                  <button type="button" class="segment-toggle-btn" data-kind-filter="term" aria-pressed="false">詞條</button>
+                </div>
+              </div>
+              <div id="admin-commentary-list" class="announcements-list" aria-live="polite">
+                <div class="admin-user-directory__empty">正在載入注釋…</div>
+              </div>
+            </section>
+          </div>
+
+          <!-- 首頁「雲柱測驗」後台：題目 CRUD ＋ 統計與趨勢分析。內容由
+               js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
+               renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
+          <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
+            <!-- 雲柱測驗後台（#313）：三個分頁（排程／題目清單／統計）。新增／編輯、匯入、作答明細
+                 是下面的完整頁面；題目、試作、排程規則是彈出面板，放在 body 底下（#420）。 -->
+            <section class="glass-card admin-announcements admin-lq" aria-labelledby="admin-lightning-quiz-title">
+              <div class="admin-announcements__header admin-lq__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">首頁互動功能</p>
+                  <h3 class="card-title" id="admin-lightning-quiz-title">雲柱測驗</h3>
+                </div>
+                <div class="admin-lq__header-actions">
+                  <button type="button" class="primary-btn" id="admin-lightning-quiz-create">＋ 新增題目</button>
+                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-import-open">匯入題目</button>
+                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-rule-open">⚙ 排程規則</button>
+                </div>
+              </div>
+              <div class="capsule-segmented-control segment-track admin-lq__tabs" role="tablist" aria-label="雲柱測驗">
+                <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-tab="schedule">排程</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="list">題目清單</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="stats">統計</button>
+              </div>
+              <div data-lq-tab-panel="schedule">
+                <div id="admin-lightning-quiz-planner" class="admin-lightning-quiz-planner"></div>
+              </div>
+              <div data-lq-tab-panel="list" class="hidden">
+                <div id="admin-lightning-quiz-list" class="admin-lq-list" aria-live="polite">
+                  <div class="admin-user-directory__empty">正在載入題目…</div>
+                </div>
+              </div>
+              <div data-lq-tab-panel="stats" class="hidden">
+                <div id="admin-lightning-quiz-stats-body">
+                  <div class="admin-user-directory__empty">正在載入統計…</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 完整頁面（#317）：內容長的畫面不放彈窗。打開時隱藏上面的雲柱測驗主畫面，
+                 「← 返回雲柱測驗」回到原本的分頁；有打字還沒存會先確認。 -->
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-editor" aria-labelledby="admin-lightning-quiz-form-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
+                <h3 class="card-title" id="admin-lightning-quiz-form-title">新增題目</h3>
+              </div>
+              <div class="admin-lightning-quiz-schedule-row">
+                <label>日期
+                  <input type="date" id="admin-lightning-quiz-rise-date" class="form-control announcement-form-panel__input">
+                </label>
+                <label>開始時間
+                  <input type="time" id="admin-lightning-quiz-time-start" class="form-control announcement-form-panel__input">
+                </label>
+                <label>結束時間
+                  <input type="time" id="admin-lightning-quiz-time-end" class="form-control announcement-form-panel__input">
+                </label>
+              </div>
+              <div id="admin-lightning-quiz-question-body"></div>
+              <div class="admin-lq-subpage__footer">
+                <button type="button" class="pill-btn" id="admin-lightning-quiz-cancel">取消</button>
+                <button type="button" class="primary-btn" id="admin-lightning-quiz-save">儲存題目</button>
+              </div>
+            </section>
+
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-import" aria-labelledby="admin-lightning-quiz-import-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
+                <h3 class="card-title" id="admin-lightning-quiz-import-title">匯入題目</h3>
+              </div>
+              <div id="admin-lightning-quiz-import-body" class="admin-lq-subpage__body"></div>
+            </section>
+
+            <section class="glass-card admin-lq-subpage hidden" id="admin-lightning-quiz-results" aria-labelledby="admin-lightning-quiz-results-title">
+              <div class="admin-lq-subpage__head">
+                <button type="button" class="pill-btn admin-lq-subpage__back" data-lq-subpage-back>← 返回雲柱測驗</button>
+                <h3 class="card-title" id="admin-lightning-quiz-results-title">作答明細</h3>
+              </div>
+              <div id="admin-lightning-quiz-results-body" class="admin-lq-subpage__body"></div>
+            </section>
+          </div>
+
+          <div id="admin-section-reading-activity" class="card-col span-12 admin-section-panel hidden">
+            <!-- 讀經使用率（#452 DAU／WAU／MAU、#453 L7、#454 星期 × 小時熱度圖），只給系統管理員 -->
+            <section class="glass-card admin-announcements admin-reading-activity" aria-labelledby="admin-reading-activity-title">
+              <div class="admin-announcements__header">
+                <div>
+                  <p class="admin-registration-statistics__eyebrow">計畫營運</p>
+                  <h3 class="card-title" id="admin-reading-activity-title">讀經使用率</h3>
+                  <p>以讀經打卡計算：當天（台灣時間）有打卡任何一章，就算當天有讀經。</p>
+                </div>
+              </div>
+              <div class="admin-lightning-quiz-trend__toolbar">
+                <label>起<input type="date" class="form-control" id="admin-reading-activity-from"></label>
+                <label>迄<input type="date" class="form-control" id="admin-reading-activity-to"></label>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>每天讀經人數</h4>
+                <div id="admin-reading-activity-trend" aria-live="polite"></div>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>一週讀經天數（L7）</h4>
+                <div id="admin-reading-activity-l7" aria-live="polite"></div>
+              </div>
+              <div class="admin-reading-activity__block">
+                <h4>讀經時段（幾點讀經）</h4>
+                <div id="admin-reading-activity-heatmap" aria-live="polite"></div>
+              </div>
+              <p class="admin-reading-activity__note">
+                數字會偏低，適合看趨勢、不是精確的使用人數：重讀同一章會把原本的打卡時間改成最新一次，取消打卡會刪除紀錄，所以越早的日期越少、時段也會往後偏。
+                今天的數字還在累積。
+              </p>
+            </section>
+          </div>
+
+          <div id="admin-section-settings" class="card-col span-12 admin-section-panel hidden">
+          <div class="card-col span-12">
+            <div class="glass-card admin-feature-settings-card">
+              <div class="admin-feature-settings-card__copy">
+                <span class="admin-feature-settings-card__icon" aria-hidden="true">
+                  <span class="nlc-icon nlc-icon--md" data-icon="setting"></span>
+                </span>
+                <div>
+                  <h3 class="card-title">功能開放設定</h3>
+                  <p>可暫時關閉尚未開放的功能；既有資料都會保留。</p>
+                </div>
+              </div>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>牧區靈修分享牆</strong>
+                  <span id="admin-pastoral-wall-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-pastoral-wall-toggle"
+                  role="switch" aria-checked="false" aria-label="開放牧區靈修分享牆" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-pastoral-wall-feedback" role="status"></p>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>每日小測驗</strong>
+                  <span id="admin-daily-quiz-feature-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-daily-quiz-feature-toggle"
+                  role="switch" aria-checked="false" aria-label="開放每日小測驗" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-daily-quiz-feature-feedback" role="status"></p>
+              <div class="admin-feature-setting-row">
+                <div class="admin-feature-setting-row__label">
+                  <strong>大測驗（速讀測驗）</strong>
+                  <span id="admin-exam-feature-status">讀取設定中…</span>
+                </div>
+                <button type="button" class="feature-switch" id="admin-exam-feature-toggle"
+                  role="switch" aria-checked="false" aria-label="開放大測驗（速讀測驗）" disabled>
+                  <span class="feature-switch__thumb" aria-hidden="true"></span>
+                </button>
+              </div>
+              <p class="admin-feature-setting-feedback hidden" id="admin-exam-feature-feedback" role="status"></p>
+
+            </div>
+          </div>
+          </div>
+
+          <div id="admin-plan-context" class="admin-plan-context hidden">
+          <section class="glass-card admin-plan-filter-card" aria-labelledby="admin-plan-filter-title">
+            <label id="admin-plan-filter-title" for="admin-management-plan-select">計畫篩選</label>
+            <select id="admin-management-plan-select" class="form-control"></select>
+          </section>
+
+          <section class="glass-card admin-plan-filter-card admin-plan-filter-card--org" aria-label="計畫管理篩選">
+            <details class="admin-plan-filter-disclosure" id="admin-plan-filter-disclosure">
+              <summary class="admin-plan-filter-summary">
+                <span class="nlc-icon" data-icon="people" aria-hidden="true"></span>
+                <span id="admin-plan-filter-summary-text">查看範圍：全部</span>
+                <span class="nlc-icon admin-plan-filter-chevron" data-icon="chevronRight" aria-hidden="true"></span>
+              </summary>
+              <div id="admin-plan-org-filter-slot"></div>
+            </details>
+            <button type="button" id="admin-plan-refresh-btn" class="secondary-btn admin-plan-refresh-btn" title="重新載入計劃管理資料">
+              <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
+              <span>更新</span>
+            </button>
+          </section>
+          </div>
+
+          <div id="admin-section-join-status" class="admin-section-panel hidden">
+            <section class="admin-management-section">
+              <section id="admin-joined-plan-section" class="admin-unjoined-plan-card" aria-labelledby="admin-joined-plan-title">
+                <div class="admin-unjoined-plan-card__header" style="cursor: pointer; user-select: none;">
+                  <div>
+                    <h2 id="admin-joined-plan-title" class="admin-management-section__title" style="display: flex; align-items: center; gap: 0.4rem;">
+                      已加入計畫
+                      <span id="admin-joined-toggle-arrow" class="admin-unjoined-toggle-arrow" style="font-size: 0.875rem; color: var(--text-muted); transition: transform 0.2s ease; transform: rotate(0deg); display: inline-block;">▼</span>
+                    </h2>
+                    <p class="admin-unjoined-plan-desc" style="margin: 0.35rem 0 0; color: var(--text-muted); font-size: 0.875rem; line-height: 1.5;">顯示目前管理範圍內，已加入所選計畫的人員。</p>
+                  </div>
+                  <div class="admin-unjoined-plan-card__actions">
+                    <span id="admin-joined-plan-count" class="admin-unjoined-plan-count">0 人</span>
+                  </div>
+                </div>
+                <div id="admin-joined-plan-members" class="admin-unjoined-plan-members" aria-live="polite"></div>
+              </section>
+            </section>
+            <!-- #admin-unjoined-plan-section (尚未加入計畫) is moved in here by mountPlanManagementSections() -->
+          </div>
+
+          <div id="admin-section-members" class="admin-section-panel hidden"
+            aria-labelledby="admin-participants-title">
+            <section class="admin-management-section" aria-labelledby="admin-participants-title">
+              <h2 id="admin-participants-title" class="admin-management-section__title">參與者總覽</h2>
+              <div id="admin-plan-participants-slot"></div>
+            </section>
+          </div>
+
+          <div id="admin-section-teams" class="admin-section-panel hidden">
+            <section class="admin-management-section" id="admin-team-placements-card-wrap" aria-labelledby="admin-team-placements-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-placements-disclosure" open>
+                <summary id="admin-team-placements-toggle" aria-controls="admin-team-placements-panel">
+                  <span class="card-title" id="admin-team-placements-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    尚未加入團隊
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-placements-panel" style="padding-top: 0.75rem;">
+                  <div class="admin-team-placements-controls" style="margin-bottom: 0.75rem;">
+                    <input type="search" id="admin-team-placement-search" class="form-control" placeholder="搜尋會友姓名、Email、牧區或小組..." autocomplete="off">
+                  </div>
+                  <div id="admin-team-placements-content" aria-live="polite">
+                    <div class="admin-user-directory__empty">讀取尚未加入團隊的人員中…</div>
+                  </div>
+                </div>
+              </details>
+            </section>
+
+            <section class="admin-management-section" id="admin-team-status-card-wrap"
+              aria-labelledby="admin-team-3-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure" open>
+                <summary id="admin-team-status-toggle" aria-controls="admin-team-status-panel">
+                  <span class="card-title" id="admin-team-3-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    3 人團隊報名狀況
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-status-panel">
+                  <div style="display:flex; justify-content:flex-end; margin-bottom:0.6rem;">
+                    <button type="button" id="admin-team-roster-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap;" title="匯出 3 人團隊組員總攬（每位組員一列，含牧養歸屬）">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="users" aria-hidden="true"></span>
+                      <span>匯出組員總攬</span>
+                    </button>
+                    <button type="button" id="admin-team-status-export-btn" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap;" title="匯出 3 人團隊報名狀況（含計畫資訊與完整名單）">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                      <span>匯出</span>
+                    </button>
+                  </div>
+                  <div id="admin-team-status-content"></div>
+                </div>
+              </details>
+            </section>
+
+            <section class="admin-management-section" aria-labelledby="admin-team-6-title">
+              <details class="glass-card admin-team-status-disclosure" id="admin-team-status-disclosure-6" open>
+                <summary id="admin-team-status-toggle-6" aria-controls="admin-team-status-panel-6">
+                  <span class="card-title" id="admin-team-6-title">
+                    <span class="nlc-icon nlc-icon--md" data-icon="users" aria-hidden="true"></span>
+                    6 人團隊報名狀況
+                  </span>
+                  <span class="admin-team-status-summary-action">
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--open">收起</span>
+                    <span class="admin-team-status-toggle-label admin-team-status-toggle-label--closed">展開</span>
+                    <span class="nlc-icon nlc-icon--sm" data-icon="chevron-down" aria-hidden="true"></span>
+                  </span>
+                </summary>
+                <div id="admin-team-status-panel-6">
+                  <div style="display:flex; justify-content:flex-end; margin-bottom:0.6rem;">
+                    <button type="button" id="admin-team-roster-export-btn-6" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap;" title="匯出 6 人團隊組員總攬（每位組員一列，含牧養歸屬）">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="users" aria-hidden="true"></span>
+                      <span>匯出組員總攬</span>
+                    </button>
+                    <button type="button" id="admin-team-status-export-btn-6" class="secondary-btn" style="padding:0.4rem 0.75rem; font-size:0.875rem; display:inline-flex; align-items:center; gap:0.35rem; white-space:nowrap;" title="匯出 6 人團隊報名狀況（含計畫資訊與完整名單）">
+                      <span class="nlc-icon nlc-icon--sm" data-icon="download" aria-hidden="true"></span>
+                      <span>匯出</span>
+                    </button>
+                  </div>
+                  <div id="admin-team-status-content-6"></div>
+                </div>
+              </details>
+            </section>
+          </div>
+
+          <div id="admin-section-statistics" class="admin-section-panel hidden"
+            aria-labelledby="admin-statistics-title">
+            <section class="admin-management-section" aria-labelledby="admin-statistics-title">
+              <h2 id="admin-statistics-title" class="admin-management-section__title">各種統計</h2>
+              <div id="admin-plan-statistics-slot"></div>
+            </section>
+          </div>
+          <div id="admin-section-quizzes" class="admin-section-panel hidden"
+            aria-labelledby="admin-quizzes-title">
+            <section class="admin-management-section" aria-labelledby="admin-quizzes-title">
+              <div id="admin-daily-quiz-root" aria-live="polite">
+                <div class="admin-user-directory__empty">切換到此分頁後載入今日小測驗。</div>
+              </div>
+            </section>
+          </div>
+          <div id="admin-section-exam" class="admin-section-panel hidden"
+            aria-labelledby="admin-exam-title">
+            <section class="admin-management-section" aria-labelledby="admin-exam-title">
+              <div id="admin-exam-root" aria-live="polite">
+                <div class="admin-user-directory__empty">切換到此分頁後載入大測驗設定。</div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+            <!-- 全域讀經計畫管理 (管理員專屬) -->
+            <div class="glass-card admin-only-plan-card hidden" id="admin-plan-card"
+              style="height: auto; background: var(--bg-card); border: 1px solid var(--border-card);">
+              <h3 class="card-title"
+                style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="nlc-icon nlc-icon--md" data-icon="calendar" aria-hidden="true"
+                    style="color: var(--primary-color);"></span>
+                  全域計畫管理
+                </span>
+                <button class="primary-btn" id="admin-add-plan-btn"
+                  style="font-size: 0.875rem; padding: 0.35rem 0.75rem;"><span class="btn-with-icon"><span
+                      class="nlc-icon" data-icon="plus" aria-hidden="true"></span><span>新增</span></span></button>
+              </h3>
+
+              <!-- 表單與列表 -->
+              <div id="admin-plan-form-container" class="hidden"
+                style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.8rem;">
+                <h4 id="admin-plan-form-title"
+                  style="margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">新增讀經計畫
+                </h4>
+                <input type="hidden" id="admin-edit-plan-id">
+                <input type="text" id="admin-plan-name" class="form-control" placeholder="計畫名稱"
+                  style="padding: 0.4rem;">
+                <div class="form-group" style="display: flex; gap: 1rem; align-items: center; font-size: 0.875rem; color: var(--text-primary);">
+                  <span style="font-weight: 500;">排程類型：</span>
+                  <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
+                    <input type="radio" name="admin-plan-time-type" value="fixed" checked style="cursor: pointer; margin: 0;">
+                    固定時間
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 0.25rem; cursor: pointer; margin: 0;">
+                    <input type="radio" name="admin-plan-time-type" value="flexible" style="cursor: pointer; margin: 0;">
+                    非固定時間
+                  </label>
+                </div>
+                <div id="admin-plan-date-inputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                  <input type="date" id="admin-plan-start-date" class="form-control"
+                    style="padding: 0.4rem;">
+                  <input type="date" id="admin-plan-end-date" class="form-control"
+                    style="padding: 0.4rem;">
+                </div>
+                <div id="admin-plan-duration-container" style="display: none;">
+                  <input type="number" id="admin-plan-duration-days" class="form-control" placeholder="計畫總天數 (例如 90)"
+                    style="padding: 0.4rem; width: 100%;" min="1">
+                </div>
+                <div class="form-group">
+                  <div style="display: flex; gap: 0.2rem; margin-bottom: 0.4rem; justify-content: space-between;">
+                    <button type="button" class="pill-btn" id="admin-select-all-books"
+                      style="font-size: 0.875rem; padding: 0.2rem 0.5rem;">全選</button>
+                    <button type="button" class="pill-btn" id="admin-select-old-books"
+                      style="font-size: 0.875rem; padding: 0.2rem 0.5rem;">舊約</button>
+                    <button type="button" class="pill-btn" id="admin-select-new-books"
+                      style="font-size: 0.875rem; padding: 0.2rem 0.5rem;">新約</button>
+                    <button type="button" class="pill-btn" id="admin-clear-books"
+                      style="font-size: 0.875rem; padding: 0.2rem 0.5rem;">清除</button>
+                  </div>
+                  <div
+                    style="background: var(--bg-input); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 0.5rem; max-height: 150px; overflow-y: auto; font-size: 0.875rem;">
+                    <div id="admin-old-books-grid" class="admin-book-grid"></div>
+                    <div id="admin-new-books-grid" class="admin-book-grid" style="margin-top: 0.4rem;"></div>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
+                  <button type="button" class="pill-btn" id="admin-cancel-plan-btn">取消</button>
+                  <button type="button" class="primary-btn" id="admin-save-plan-btn"
+                    style="font-size: 0.875rem; padding: 0.35rem 0.75rem;">儲存</button>
+                </div>
+              </div>
+
+              <details id="admin-region-cohort" style="margin-bottom: 0.75rem; border: 1px solid var(--border-card); border-radius: 6px; padding: 0.5rem 0.75rem;">
+                <summary style="cursor: pointer; font-size: 0.9375rem;">大區延後梯次</summary>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0.5rem 0;">
+                  某個大區整條計畫延後開跑時，為他們建立某階段的平行梯次計畫（只有該大區看得到、加得到）。同一大區同一階段重複送出＝更新日期／開放狀態。
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.5rem; font-size: 0.875rem;">
+                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">大區
+                    <select id="cohort-region" class="form-control"></select></label>
+                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">來源階段
+                    <select id="cohort-stage" class="form-control">
+                      <option value="1">第 1 階段</option><option value="2">第 2 階段</option>
+                      <option value="3">第 3 階段</option><option value="4">第 4 階段</option>
+                      <option value="5">第 5 階段</option><option value="6">第 6 階段</option>
+                      <option value="7">第 7 階段</option><option value="8">第 8 階段</option>
+                      <option value="9">第 9 階段</option><option value="10">第 10 階段</option>
+                    </select></label>
+                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">起始日
+                    <input type="date" id="cohort-start" class="form-control"></label>
+                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">結束日
+                    <input type="date" id="cohort-end" class="form-control"></label>
+                  <label style="display: flex; align-items: center; gap: 0.35rem; align-self: end;">
+                    <input type="checkbox" id="cohort-hidden" checked> 先隱藏（之後再開放）</label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                  <button type="button" class="primary-btn" id="cohort-create-btn"
+                    style="font-size: 0.875rem; padding: 0.35rem 0.75rem;">建立 / 更新梯次</button>
+                </div>
+              </details>
+
+              <div class="table-container"
+                style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-card); border-radius: 6px;">
+                <table class="data-table" style="font-size: 0.875rem;">
+                  <thead>
+                    <tr>
+                      <th>名稱</th>
+                      <th>時間</th>
+                      <th style="text-align: center; width: 80px;">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-plans-table-body"></tbody>
+                </table>
+              </div>
+            </div>

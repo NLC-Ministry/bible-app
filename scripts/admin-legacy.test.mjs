@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import {
   assertLegacyCspAllows,
+  composeLegacyMarkup,
   extractLegacyMarkup,
   listInlineHandlers,
   readLegacyCsp,
@@ -33,6 +34,8 @@ const root = new URL("..", import.meta.url);
 const rootPath = decodeURIComponent(root.pathname).replace(/^\/([A-Za-z]:)/, "$1");
 const STAGING_API = "https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api";
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
+// iframe 實際拿到的畫面：App 的 index.html，管理分頁那段換成照搬的舊管理分頁（#551）
+const legacyMarkup = () => composeLegacyMarkup(read("index.html"), read("admin-legacy/admin-view.html"));
 
 describe("one list of legacy sections everywhere", () => {
   const adminJs = read("js/modules/admin.js");
@@ -50,11 +53,12 @@ describe("one list of legacy sections everywhere", () => {
     for (const id of Object.keys(LEGACY_HOSTED_CARDS)) expect(LEGACY_SECTION_IDS, id).toContain(id);
   });
 
-  it("hosts the plan card the App shows only to the system administrator (#550)", () => {
+  it("hosts the plan card, which only the console has now (#550, #551)", () => {
     expect(LEGACY_HOSTED_CARDS).toEqual({ plans: "admin-plan-card" });
-    // App 端：讀經計畫分頁只對 admin 角色打開這張卡、只對 admin 載入 plan-admin.js
-    expect(read("js/modules/plan.js")).toMatch(/const isSystemAdmin = getUserRoleCode\(state\.currentUser\) === "admin";\s+const adminCard = document\.getElementById\("admin-plan-card"\);/);
-    expect(read("js/app.js")).toMatch(/getUserRoleCode\(state\.currentUser\) === 'admin'\) \{\s+await loadModule\('campaign-rule-editor'\);\s+await loadModule\('plan-admin'\);/);
+    // App 端（#551）：計畫分頁沒有這張卡，也不載入 plan-admin.js／campaign-rule-editor.js
+    expect(read("index.html")).not.toContain('id="admin-plan-card"');
+    expect(read("js/app.js")).not.toMatch(/import\(['"][^'"]*(admin|plan-admin|campaign-rule-editor)\.js['"]\)|loadModule\(['"](admin|plan-admin|campaign-rule-editor)['"]\)/);
+    expect(read("admin-legacy/admin-view.html")).toContain('id="admin-plan-card"');
     // iframe 端：同樣只給 admin 打開，程式就是 plan-admin.js
     const entry = read("admin-legacy/legacy-entry.js");
     expect(entry).toContain('window.getUserRoleCode(window.state.currentUser) === "admin"');
@@ -77,8 +81,8 @@ describe("one list of legacy sections everywhere", () => {
     }
   });
 
-  it("finds every section's panel in index.html (the markup the iframe copies)", () => {
-    const markup = extractLegacyMarkup(read("index.html"));
+  it("finds every section's panel in the markup the iframe copies", () => {
+    const markup = legacyMarkup();
     for (const id of LEGACY_SECTION_IDS) expect(markup, id).toContain(`id="${legacyMarkupId(id)}"`);
     expect(legacyMarkupId("plans")).toBe("admin-plan-card");
     expect(legacyMarkupId("join-status")).toBe("admin-section-join-status");
@@ -106,11 +110,29 @@ describe("legacy page build helpers", () => {
     expect(stripInlineHandlers('<a href="#" ONCLICK="x()">y</a>')).toBe('<a href="#" >y</a>');
   });
 
-  it("real index.html: nothing the CSP would block is left", () => {
-    const markup = extractLegacyMarkup(read("index.html"));
+  it("real index.html + admin-view.html: nothing the CSP would block is left", () => {
+    const markup = legacyMarkup();
     expect(listInlineHandlers(markup)).toEqual([]);
     expect(markup).not.toMatch(/<script/i);
     expect(markup).toContain('id="admin-section-content"');
+    // App 的新管理分頁（#551）不會跟著進 iframe，id 不重複
+    expect(markup).not.toContain('id="pastoral-root"');
+    expect(markup.match(/id="admin-view"/g)).toHaveLength(1);
+  });
+
+  it("swaps exactly the marked admin-view region for the legacy one (#551)", () => {
+    const index = `<html><body><main>
+      <!-- admin-view:start --><section id="admin-view">new</section><!-- admin-view:end -->
+      <div id="after"></div></main><script src="/app.js"></script></body></html>`;
+    const legacy = `<!-- legacy --><section id="admin-view"><button onclick="x()">old</button></section><script>bad()</script>`;
+    const markup = composeLegacyMarkup(index, legacy);
+    expect(markup).toContain('<section id="admin-view"><button >old</button></section>');
+    expect(markup).not.toContain(">new<");
+    expect(markup).not.toMatch(/<script|onclick|admin-view:(start|end)/);
+    expect(markup).toContain('<div id="after"></div>');
+    expect(() => composeLegacyMarkup("<body><main></main></body>", legacy)).toThrow(/exactly once/);
+    const twice = index.replace("<div id=\"after\"></div>", "<!-- admin-view:start --><!-- admin-view:end -->");
+    expect(() => composeLegacyMarkup(twice, legacy)).toThrow(/exactly once/);
   });
 
   it("derives the Supabase URL from ADMIN_API_URL and requires the anon key outside local builds", () => {

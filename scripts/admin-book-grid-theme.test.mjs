@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 // #469：新增計畫的書卷勾選格寫死白底，深色主題下白底白字看不到書名。
 const read = path => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 const planAdmin = read("js/modules/plan-admin.js");
 const css = read("index.css");
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 
 function rule(selector) {
   const start = css.indexOf(`${selector} {`);

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 const css = read("index.css");
 const db = read("js/db.js");
 const home = read("js/modules/home.js");

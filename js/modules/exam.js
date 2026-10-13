@@ -683,6 +683,27 @@ function examLockReason(stage, area) {
 }
 
 // ── 統計報表（整體 / 大區 / 牧區 / 小組 / 逐題正確率 / 名單）──
+// App 管理分頁（#551）的「測驗」分頁：組長和系統管理員都只看統計，範圍由 exam_get_stats 依角色過濾
+// （出題、排程、批改在管理後台）。內容和 renderExamPanel 給組長看的統計相同。
+export async function renderExamStatsPanel(host) {
+  if (!host) return;
+  host.innerHTML = '<div class="admin-user-directory__empty">載入大測驗統計…</div>';
+  const feature = await db.getFeatureSetting("speed_reading_exam", false);
+  if (feature.error || feature.enabled !== true) {
+    host.innerHTML = '<div class="admin-user-directory__empty">大測驗目前沒有開放。</div>';
+    return;
+  }
+  const bannerRes = await db.getExamHomeBanner();
+  const pid = bannerRes && bannerRes.data && bannerRes.data.paperId;
+  if (!pid) {
+    host.innerHTML = '<div class="admin-user-directory__empty">目前沒有可檢視統計的測驗。</div>';
+    return;
+  }
+  host.innerHTML = `<p class="exam-admin__meta">${esc(bannerRes.data.title || "大測驗")}　—　統計</p>
+    <div data-exam-stats></div>`;
+  await renderExamStats(host.querySelector("[data-exam-stats]"), pid, true);
+}
+
 async function renderExamStats(host, paperId, hasShort = true, paperTitle = null) {
   host.innerHTML = '<div class="admin-user-directory__empty">載入統計…</div>';
   let book = parseExamReadingBook(paperTitle);

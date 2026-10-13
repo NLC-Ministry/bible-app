@@ -11,7 +11,7 @@
 //   #/plan/<key>             計畫詳情（今日進度）
 //   #/plan/<key>/<view>      計畫的個人／團體統計／排行（view = personal | stats | ranking）
 //   #/profile[/<detail>]     個人頁（detail = exams、badges…）
-//   #/admin[/<section>]      管理（section = users、lightning-quiz…）
+//   #/admin[/<section>]      管理（section = roster、teams、quizzes；舊的系統管理區塊名稱導到管理後台，#551）
 //   #my-exams                舊連結，等同 #/profile/exams
 
 const TAB_BY_SEGMENT = Object.freeze({

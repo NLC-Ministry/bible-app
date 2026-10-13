@@ -1,7 +1,7 @@
 // 後台「照搬」區塊的 iframe 入口（#550）：admin-legacy/legacy.html → scripts/build-admin.mjs → dist-admin/legacy。
 //
-// 載入會友 App 管理分頁的同一份程式（js/modules/admin.js、plan.js…）與同一份畫面（build 時從
-// index.html 抽出 <body>），只換掉登入與儲存：
+// 載入舊管理分頁的程式（js/modules/admin.js、plan.js…；#551 起會友 App 不再載入）與畫面（build 時
+// 取 index.html，管理分頁那段換成 admin-legacy/admin-view.html，再抽出 <body>），只換掉登入與儲存：
 //   · token 跟後台外殼要（admin-legacy/legacy-auth.mjs），資料照舊走 nlc-session／nlc-data
 //   · localStorage／sessionStorage 只在記憶體（admin-legacy/memory-storage.mjs）
 //   · 所有下載先經後台外殼記稽核才存檔（admin-legacy/export-guard.mjs）
@@ -99,7 +99,7 @@ function mountHostedCards() {
   }
 }
 
-// 計畫管理卡片在 App 只給系統管理員（plan.js renderPlanView），程式在 plan-admin.js（App 也是管理員才載入）
+// 計畫管理卡片只給系統管理員，程式在 plan-admin.js（只有這裡會載入，#551）
 async function openHostedSection(id) {
   const isAdmin = typeof window.getUserRoleCode === "function" && window.getUserRoleCode(window.state.currentUser) === "admin";
   const panel = document.getElementById(`admin-section-${id}`);

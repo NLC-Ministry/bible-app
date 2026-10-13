@@ -47,3 +47,17 @@ export function buildPlanStatsRosterArgs(rawArgs: any, visibleIds: string[] | nu
     p_actor_id: actorId,
   };
 }
+
+// App 管理分頁（#551）的統計：範圍一樣只看 getVisibleProfileIds，計畫只收 uuid 與短字串。
+export const PASTORAL_OVERVIEW_RPC = "get_pastoral_overview";
+
+export function buildPastoralOverviewArgs(rawArgs: any, visibleIds: string[] | null, actorId: string) {
+  const planId = rawArgs?.p_global_plan_id;
+  const presetKey = rawArgs?.p_preset_key;
+  return {
+    p_global_plan_id: typeof planId === "string" && UUID_PATTERN.test(planId) ? planId : null,
+    p_preset_key: typeof presetKey === "string" && presetKey.length > 0 && presetKey.length <= MAX_TEXT_LENGTH ? presetKey : null,
+    ...resolvePlanStatsScope(visibleIds, actorId),
+    p_actor_id: actorId,
+  };
+}
