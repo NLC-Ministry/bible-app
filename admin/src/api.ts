@@ -17,7 +17,9 @@ export type AdminAction =
   // 照搬的舊管理區塊：下載前記一筆匯出稽核（#550）
   | "legacy_export_audit"
   // 稽核紀錄（#550）
-  | "audit_list" | "audit_event" | "audit_export";
+  | "audit_list" | "audit_event" | "audit_export"
+  // 計畫總覽（只有數字）與名單（#564）
+  | "plan_summary" | "plan_roster";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -41,7 +43,9 @@ const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   "report_diagnostics", // 診斷資訊是回報當下的快照，不會變
   "directory_list", "scope_overview", // 改管理範圍後 invalidate
   "audit_list", // 切到功能開放設定再回來不重抓；重新整理鈕用 fresh
-  "audit_event" // 稽核紀錄不會改
+  "audit_event", // 稽核紀錄不會改
+  // 計畫：重新整理鈕用 fresh。名單 60 秒內重開不再記一筆查看；meta.consistent 是 false 時畫面要 invalidate
+  "plan_summary", "plan_roster"
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;

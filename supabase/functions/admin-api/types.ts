@@ -24,10 +24,10 @@ export type RunInput = {
 
 /**
  * 需要多個步驟（SQL＋Storage、產生 CSV）的 action 用。失敗時 status 決定回應：
- * 400／404 照 error 回給前端；500 只回 admin_api_failed，細節寫 log。
+ * 400／403／404 照 error 回給前端（403＝SQL 重查角色不是管理員）；500 只回 admin_api_failed，細節寫 log。
  */
 export type RunOutcome =
   | { ok: true; data: unknown }
-  | { ok: false; status: 400 | 404 | 500; error: string; stage?: string; detail?: { message?: string; code?: string } | null };
+  | { ok: false; status: 400 | 403 | 404 | 500; error: string; stage?: string; detail?: { message?: string; code?: string } | null };
 
 export type ActionRunner = (input: RunInput) => Promise<RunOutcome>;

@@ -20,6 +20,7 @@ import {
   type AdminAuditEvent,
 } from "./admin-audit.ts";
 import { buildRequestLogLine, requestLogTarget, sanitizeReportInsertPayload } from "./request-diagnostics.ts";
+import { PLAN_REPORT_ACTIONS, PLAN_REPORT_PLAN_COLUMNS, runPlanReport } from "./plan-report.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
@@ -28,15 +29,15 @@ import * as jose from "https://esm.sh/jose@5.9.6";
 // 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
 //
 // NLC_JWT_VERIFY_MODE（Edge Function secret）：
-//   report（預設）：nlc-data 驗證失敗只記錄、照舊放行，用來確認正式流量都驗得過；
+//   enforce（預設）：兩邊驗證失敗都拒絕。沒設或設成不認得的值也是 enforce（#564：漏設 secret 不能變成放行）。
+//   report：         nlc-data 驗證失敗只記錄、照舊放行（當初上線前觀察正式流量用）；
 //                   nlc-session 的 id_token 一律要驗過才採用（見 pickSessionUserinfo）。
-//   enforce：        兩邊驗證失敗都拒絕。確認 report 期間沒有正常使用者被判失敗後再切。
 //   off：            緊急開關，完全回到舊行為（只解 payload）。
-// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 期間的 log 會印出實際的 aud）。
+// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 模式的 log 會印出實際的 aud）。
 // NLC_LOGTO_CLIENT_ID（選填）：id_token 的 aud 要等於它才算過。
 const LOGTO_JWT_MODE: "off" | "report" | "enforce" = (() => {
-  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "report").trim().toLowerCase();
-  return m === "off" || m === "enforce" ? m : "report";
+  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "enforce").trim().toLowerCase();
+  return m === "off" || m === "report" ? m : "enforce";
 })();
 const LOGTO_JWT_CLOCK_TOLERANCE_SEC = 60;
 let logtoJwks: any = null;
@@ -1040,7 +1041,7 @@ Deno.serve(async (req: Request) => {
     const action = body.action || "select";
     requestContext.action = String(action).slice(0, 60);
     requestContext.target = requestLogTarget(body);
-    if (!["save_profile", "rpc", "batch", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet", "issue_thread_get", "issue_thread_post", "issue_thread_attachment_delete"].includes(action) && (!table || typeof table !== "string")) {
+    if (!["save_profile", "rpc", "batch", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet", "issue_thread_get", "issue_thread_post", "issue_thread_attachment_delete", ...PLAN_REPORT_ACTIONS].includes(action) && (!table || typeof table !== "string")) {
       return jsonResponse({ error: "missing_table" }, 400);
     }
 
@@ -1051,6 +1052,33 @@ Deno.serve(async (req: Request) => {
 
     if (isRetiredPlanRequest(body)) {
       return jsonResponse({ error: "resource_not_found", resource: "reading_plan" }, 404);
+    }
+
+    // 組長版的計畫總覽（只有數字）與名單（#564）：規則同後台，範圍只看 getVisibleProfileIds。
+    // 名單有姓名、單位、進度：打開一次補記一筆 view_plan_roster。
+    if (PLAN_REPORT_ACTIONS.has(action)) {
+      if (!canManagePlans(profile)) return jsonResponse({ error: "forbidden" }, 403);
+      const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+      const result = await runPlanReport(action, body.args, visibleIds, profile.id, {
+        fetchPlanRow: (planId) => supabaseAdmin.from("global_plans").select(PLAN_REPORT_PLAN_COLUMNS).eq("id", planId).maybeSingle(),
+        rpc: (fn, args) => supabaseAdmin.rpc(fn, args)
+      });
+      if (action === "plan_roster" && result.status === 200) {
+        await recordAdminAudit(supabaseAdmin, {
+          p_action: "view_plan_roster",
+          p_result: "ok",
+          p_actor_id: profile.id,
+          p_actor_role: getProfileRoleCode(profile),
+          p_resource: "global_plans",
+          p_target_user_id: null,
+          p_target_id: result.planId || null,
+          p_changes: null,
+          p_reason: null,
+          p_request_id: requestId,
+          p_detail: { people: result.people ?? 0, scope: visibleIds === null ? "church" : "managed" }
+        });
+      }
+      return jsonResponse(result.body, result.status);
     }
 
     if (action === "rpc") {

@@ -119,7 +119,8 @@ describe("verifyLogtoJwt", () => {
 });
 
 describe("modes", () => {
-  it.each([["report", "report"], ["enforce", "enforce"], ["off", "off"], ["ENFORCE", "enforce"], ["bogus", "report"], [undefined, "report"]])(
+  // null＝沒設 secret（undefined 會被 load() 的預設參數換掉）。沒設、空字串、設錯都要是 enforce（#564）
+  it.each([["report", "report"], ["enforce", "enforce"], ["off", "off"], ["ENFORCE", "enforce"], ["bogus", "enforce"], ["", "enforce"], [null, "enforce"]])(
     "NLC_JWT_VERIFY_MODE=%s → %s", (raw, expected) => {
       expect(load(raw).LOGTO_JWT_MODE).toBe(expected);
     }

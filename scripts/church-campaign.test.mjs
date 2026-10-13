@@ -22,7 +22,10 @@ const context = {
 context.window.window = context.window;
 vm.createContext(context);
 vm.runInContext(readFileSync(join(root, "js", "data", "bible_data.js"), "utf8"), context);
-vm.runInContext(readFileSync(join(root, "js", "data", "church_campaign.js"), "utf8"), context);
+// church_campaign.js 是 ES module（本體在 supabase/functions/_shared/progress/church-campaign.mjs，#564），
+// 用 import 載入；它把函式掛到全域的 window，這裡讓 window 就是上面那個 context.window。
+globalThis.window = context.window;
+await import("../js/data/church_campaign.js");
 
 const campaign = context.window.CHURCH_CAMPAIGN;
 const books = context.window.BIBLE_BOOKS;

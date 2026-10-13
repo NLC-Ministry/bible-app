@@ -38,6 +38,7 @@ import {
   validatePersonalPlanName
 } from './data/personal-plans.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
+import { globalPlanScheduleFields, resolveGlobalPlanCampaign } from '../supabase/functions/_shared/progress/plan-schedule.mjs';
 import {
   OFFLINE_IDENTITY_KEY,
   buildOfflineIdentity,
@@ -291,56 +292,23 @@ function getPlanFilterAliases(filterValue) {
 }
 
 function mapGlobalPlanRecord(dbPlan) {
-  const isCampaignMaster = dbPlan.plan_kind === "church_campaign"
-    || dbPlan.id === window.CHURCH_CAMPAIGN_ID;
-  const isCampaignStage = dbPlan.plan_kind === "church_campaign_stage";
+  // 哪種計畫、掛哪份活動定義、起訖／書卷／預設代號：規則和伺服器共用（#564，plan-schedule.mjs）。
   // 延後大區梯次（church_campaign_stage_cohort）：**只沿用獎勵，其他都獨立**。
   // 它是一個普通的固定日期計畫（自己的名稱 / 起訖 / 經卷），排程走一般路徑；
   // 唯一跟正式階段共用的是「完成給哪個獎」——靠 stageNo / awardName 帶著，
   // 不掛 campaignDefinition，不進 campaign 排程機制。
-  const isCohortStage = dbPlan.plan_kind === "church_campaign_stage_cohort";
-  let campaignDefinition = null;
-  let cohortStageNo = null;
-  let cohortSourceStage = null;
-
-  if (isCampaignMaster) {
-    const stored = dbPlan.rules && Array.isArray(dbPlan.rules.stages) && Array.isArray(dbPlan.rules.segments)
-      ? dbPlan.rules
-      : window.CHURCH_CAMPAIGN;
-    campaignDefinition = window.cloneChurchCampaign(stored);
-  } else if (isCampaignStage) {
-    // 正式階段的 id 尾 12 碼就是階段序（…c026-00000000000N）。
-    const storedStageNo = Number(dbPlan.rules && dbPlan.rules.stageNo)
-      || Number(String(dbPlan.id || "").slice(-12));
-    const stored = dbPlan.rules && Array.isArray(dbPlan.rules.stages) && Array.isArray(dbPlan.rules.segments)
-      ? dbPlan.rules
-      : window.getChurchCampaignStageDefinition(storedStageNo);
-    if (stored) campaignDefinition = window.cloneChurchCampaign(stored);
-  } else if (isCohortStage) {
-    // cohort 是隨機 UUID，階段序只能靠 rules 裡的 stageNo / cohortSourceStageNo。
-    const rulesStageNo = Number(
-      dbPlan.rules && (dbPlan.rules.stageNo ?? dbPlan.rules.cohortSourceStageNo ?? dbPlan.rules.cohortStageNo)
+  // 總表沒存規則時退回 window.CHURCH_CAMPAIGN（本機模式可能被管理員存的版本換掉）。
+  const resolved = resolveGlobalPlanCampaign(dbPlan, { masterDefinition: window.CHURCH_CAMPAIGN });
+  const { isCampaignMaster, isCampaignStage, isCohortStage, campaignDefinition, cohortStageNo, cohortSourceStage } = resolved;
+  if (isCohortStage && !cohortStageNo) {
+    console.error(
+      `[cohort] global_plan ${dbPlan.id} 找不到來源階段序（rules 缺 stageNo / cohortSourceStageNo）；` +
+      `發獎會失效。rules keys=${dbPlan.rules ? Object.keys(dbPlan.rules).join(",") : "(none)"}`
     );
-    cohortStageNo = Number.isFinite(rulesStageNo) && rulesStageNo > 0 ? rulesStageNo : null;
-    cohortSourceStage = cohortStageNo && typeof window.getChurchCampaignStageDefinition === "function"
-      ? window.getChurchCampaignStageDefinition(cohortStageNo)
-      : null;
-    if (!cohortStageNo) {
-      console.error(
-        `[cohort] global_plan ${dbPlan.id} 找不到來源階段序（rules 缺 stageNo / cohortSourceStageNo）；` +
-        `發獎會失效。rules keys=${dbPlan.rules ? Object.keys(dbPlan.rules).join(",") : "(none)"}`
-      );
-    }
   }
 
   const useCampaignSchedule = Boolean(campaignDefinition);
-  const campaignBooks = campaignDefinition
-    ? Array.from(new Set(campaignDefinition.segments.flatMap(segment => segment.readings.map(reading => reading.book))))
-    : [];
-  // cohort 沒有 campaignDefinition：經卷用 DB 這一列的 target_books，缺的話退回來源階段的書卷。
-  const cohortBooks = (cohortSourceStage && Array.isArray(cohortSourceStage.books) && cohortSourceStage.books.length)
-    ? cohortSourceStage.books.slice()
-    : [];
+  const scheduleFields = globalPlanScheduleFields(dbPlan, resolved);
   return {
     id: dbPlan.id,
     globalPlanId: dbPlan.id,
@@ -349,14 +317,10 @@ function mapGlobalPlanRecord(dbPlan) {
       : (cohortSourceStage && cohortSourceStage.parentCampaignId) || null,
     name: isCampaignMaster ? "教會階段規則設定" : (useCampaignSchedule ? campaignDefinition.name : dbPlan.name),
     description: useCampaignSchedule ? campaignDefinition.description : dbPlan.description,
-    startDate: useCampaignSchedule ? campaignDefinition.startDate : dbPlan.start_date,
-    endDate: useCampaignSchedule ? campaignDefinition.endDate : dbPlan.end_date,
-    books: Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0
-      ? dbPlan.target_books
-      : (isCohortStage ? cohortBooks : campaignBooks),
-    presetKey: isCohortStage
-      ? ((dbPlan.rules && dbPlan.rules.presetKey) || dbPlan.id)
-      : (campaignDefinition && campaignDefinition.presetKey ? campaignDefinition.presetKey : dbPlan.id),
+    startDate: scheduleFields.startDate,
+    endDate: scheduleFields.endDate,
+    books: scheduleFields.books,
+    presetKey: scheduleFields.presetKey,
     audienceRegions: Array.isArray(dbPlan.audience_regions) && dbPlan.audience_regions.length
       ? dbPlan.audience_regions.slice() : null,
     isHidden: Boolean(dbPlan.is_hidden),
