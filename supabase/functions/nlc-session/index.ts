@@ -7,15 +7,15 @@ import * as jose from "https://esm.sh/jose@5.9.6";
 // 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
 //
 // NLC_JWT_VERIFY_MODE（Edge Function secret）：
-//   report（預設）：nlc-data 驗證失敗只記錄、照舊放行，用來確認正式流量都驗得過；
+//   enforce（預設）：兩邊驗證失敗都拒絕。沒設或設成不認得的值也是 enforce（#564：漏設 secret 不能變成放行）。
+//   report：         nlc-data 驗證失敗只記錄、照舊放行（當初上線前觀察正式流量用）；
 //                   nlc-session 的 id_token 一律要驗過才採用（見 pickSessionUserinfo）。
-//   enforce：        兩邊驗證失敗都拒絕。確認 report 期間沒有正常使用者被判失敗後再切。
 //   off：            緊急開關，完全回到舊行為（只解 payload）。
-// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 期間的 log 會印出實際的 aud）。
+// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 模式的 log 會印出實際的 aud）。
 // NLC_LOGTO_CLIENT_ID（選填）：id_token 的 aud 要等於它才算過。
 const LOGTO_JWT_MODE: "off" | "report" | "enforce" = (() => {
-  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "report").trim().toLowerCase();
-  return m === "off" || m === "enforce" ? m : "report";
+  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "enforce").trim().toLowerCase();
+  return m === "off" || m === "report" ? m : "enforce";
 })();
 const LOGTO_JWT_CLOCK_TOLERANCE_SEC = 60;
 let logtoJwks: any = null;

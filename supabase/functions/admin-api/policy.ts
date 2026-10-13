@@ -15,6 +15,7 @@ import {
 import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
 import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
 import { validateSearchQuery } from "./search-query.ts";
+import { runPlanRoster, runPlanSummary } from "./plans.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export { validateSearchQuery };
@@ -30,6 +31,7 @@ export const CAPABILITIES = [
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
+  "plans.read",     // 計畫總覽（只有數字）與名單（#564）
   "export"          // 匯出
 ] as const;
 export type Capability = typeof CAPABILITIES[number];
@@ -148,6 +150,15 @@ const MAX_LEGACY_EXPORT_ROWS = 10_000_000;
 export function legacySectionCapability(section: unknown): Capability | null {
   const key = typeof section === "string" ? section : "";
   return Object.prototype.hasOwnProperty.call(LEGACY_EXPORT_SECTIONS, key) ? LEGACY_EXPORT_SECTIONS[key] : null;
+}
+
+// 計畫總覽／名單（#564）：計畫只收 uuid；範圍不收（SQL 依操作者決定），總覽的單位篩選在 run 裡檢查。
+// p_preset_key 由 run 從計畫本身推出來（plans.ts），不收前端的。
+function buildPlanArgs(params: Record<string, unknown>, ctx: ActionContext, audit: boolean): ArgsResult {
+  if (!isUuid(params.global_plan_id)) return { ok: false, error: "invalid_plan_id" };
+  return { ok: true, args: {
+    ...actorArgs(ctx), p_global_plan_id: params.global_plan_id, p_audit: audit, p_request_id: ctx.requestId
+  } };
 }
 
 function buildLegacyExportArgs(params: Record<string, unknown>, ctx: ActionContext): ArgsResult {
@@ -439,6 +450,23 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       if (!status.ok) return status;
       return { ok: true, args: { ...actorArgs(ctx), p_status: status.status, p_request_id: ctx.requestId } };
     }
+  },
+
+  // ── 計畫（#564）──────────────────────────────────────────────────────────
+  // 總覽只有數字、不記稽核；打開名單（姓名、單位、進度）在 SQL 記 view_plan_roster
+  plan_summary: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_plan_people",
+    run: runPlanSummary,
+    buildArgs: (params, ctx) => buildPlanArgs(params, ctx, false)
+  },
+  plan_roster: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_plan_people",
+    run: runPlanRoster,
+    buildArgs: (params, ctx) => buildPlanArgs(params, ctx, true)
   },
 
   // ── 稽核紀錄（#550 第四組）────────────────────────────────────────────────

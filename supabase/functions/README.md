@@ -20,8 +20,8 @@ Current flow:
 
 | `NLC_JWT_VERIFY_MODE` | `nlc-data`（每個請求） | `nlc-session`（登入綁帳號） |
 |---|---|---|
-| `report`（預設） | 驗證失敗**只記錄、照舊放行** | **一律擋**：未驗過的 `id_token` 不採用 |
-| `enforce` | 驗證失敗回 401（拿不到 JWKS 回 503） | 同上 |
+| `enforce`（預設） | 驗證失敗回 401（拿不到 JWKS 回 503） | **一律擋**：未驗過的 `id_token` 不採用 |
+| `report` | 驗證失敗**只記錄、照舊放行** | 同上 |
 | `off` | 緊急開關：完全回到舊行為 | 同左 |
 
 上線步驟：
@@ -34,6 +34,9 @@ Current flow:
 3. 從 log 的 `aud` 確認 access token 的 audience，選填 `NLC_LOGTO_AUDIENCE`（通常是
    `https://platform.newlife.org.tw`）；`id_token` 的 audience 是 Logto app 的 client id，選填 `NLC_LOGTO_CLIENT_ID`。
 4. 確認無誤後 `supabase secrets set NLC_JWT_VERIFY_MODE=enforce`（不用重新部署）。
+
+正式站與 staging 都已切到 `enforce`。#564 起程式碼的預設也是 `enforce`：沒設 secret、空字串或設錯值都當 `enforce`，
+漏設不會變成放行；要觀察或緊急放行才明確設 `report`／`off`。
 
 Required Supabase Edge Function secrets:
 
@@ -57,6 +60,18 @@ APP_ORIGIN=https://bible.newlife.org.tw
 
 後台自己重寫的區塊只呼叫 `admin-api`，它有自己的白名單（#547、#555）。
 
+### 共用程式碼（`_shared/`，#564）
+
+計畫進度的規則（落後幾天、最後打卡、需要關心）與「教會原始日程」放在 `supabase/functions/_shared/progress/*.mjs`，
+**會友 App、`admin-api`、`nlc-data` 執行同一份**（App 由 `js/data/*`、`js/modules/pastoral-metrics.mjs` 轉出）。
+這些檔案只能 import 彼此（不能有 `npm:`、網址、`window`），`scripts/edge-function-deploy-graph.test.mjs` 會擋。
+
+- **部署一律用 CLI**（`npx supabase functions deploy <name> --project-ref <ref>`）：CLI 會跟著相對路徑的 import
+  把 `../_shared/...` 一起上傳／打包。只上傳函式自己資料夾的方式（Dashboard 編輯器等）會 `Module not found`
+  ——打包失敗時線上照跑舊版，不會半套上線。
+- 改了 `_shared/progress` 的任何檔案，**`admin-api` 與 `nlc-data` 都要重新部署**，App 也要重新 build。
+- 既有的內嵌區塊（`logto-jwt-verify`、`cors-allowlist`、`exam-write-token`）維持內嵌，不搬。
+
 Supabase provides these default secrets automatically:
 
 ```bash
@@ -71,14 +86,15 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 
 ## 後台專用 API（`admin-api`，#547）
 
-只服務後台（#555），和會友 App 的 `nlc-data` 分開。每個 action 對一支 `admin_api_*` SQL 函式（只授權 service_role，`supabase/migrations/20261011110008_admin_api_support.sql`、`20261012045233_admin_api_reports.sql`、`20261012053123_admin_api_accounts.sql`、`20261012102522_admin_api_audit.sql`）；會改資料的 action 在同一支函式、同一個交易內寫稽核。要同時動 Storage 的（回覆附截圖、刪截圖／回報、匯出 CSV）在 `policy.ts` 用 `run` 串起來，實作在 `reports.ts`、`accounts.ts`、`audit.ts`、`exports.ts`。
+只服務後台（#555），和會友 App 的 `nlc-data` 分開。每個 action 對一支 `admin_api_*` SQL 函式（只授權 service_role，`supabase/migrations/20261011110008_admin_api_support.sql`、`20261012045233_admin_api_reports.sql`、`20261012053123_admin_api_accounts.sql`、`20261012102522_admin_api_audit.sql`、`20261013114704_admin_api_plan_progress.sql`）；會改資料的 action 在同一支函式、同一個交易內寫稽核。要同時動 Storage 的（回覆附截圖、刪截圖／回報、匯出 CSV）在 `policy.ts` 用 `run` 串起來，實作在 `reports.ts`、`accounts.ts`、`audit.ts`、`exports.ts`。
 
 - **驗證**：內嵌同一段 `logto-jwt-verify` 區塊，**一律**要驗過簽章／發行者／到期，不看 `NLC_JWT_VERIFY_MODE`。
 - **後台應用程式**：token 的 `client_id` 宣告（`ADMIN_API_CLIENT_CLAIM` 可改）要在 `ADMIN_API_ALLOWED_CLIENT_IDS` 裡。**沒設定就全部拒絕**（回 `admin_client_not_configured`）。#554 拿到 client id 前，staging 可以暫時設成會友 App 現有的 client id 方便開發；正式站一定要設後台專用的。
-- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`operations.manage`、`content.manage`、`settings.manage`、`audit.read`、`export`）。
+- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`operations.manage`、`content.manage`、`settings.manage`、`audit.read`、`export`、`plans.read`）。
 - **限流**：計數在 `admin_api_rate_limits`（搜尋每分鐘 60 次、查看（含使用者名單、管理範圍總覽）每分鐘 120 次、完整個資每小時 30 次、回覆／改狀態／刪截圖／改管理範圍每分鐘 30 次、刪回報每小時 20 次、匯出每小時 20 次），超過回 429 並記 denied。請求本文超過 1 MB 回 413。
 - **稽核**：`user_summary` 記 `view_user`、`reveal_pii` 記 `reveal_pii`、打開回報對話記 `view_report`（自動更新 `refresh: true` 不記）、`report.set_status`／`report.reply`／`report.note`／`report.attachment_delete`／`report.delete`（刪除前的內容快照）、`set_profile_managed_scopes`（前後差異、修改原因）、`export`（種類、篩選、筆數）——都在同一個交易內；client 不對、沒有能力、超過限流記 denied（來源 `admin-api`）。
 - **稽核紀錄**（#550）：`audit_list`（期間 1／7／30／90／365 天＋動作、結果、來源、操作者、對象；keyset 以紀錄編號由新到舊；第一頁帶總數與選項）、`audit_event`（單筆完整內容）要 `audit.read`，**看不記稽核**；`audit_export`（最多 5000 筆，CSV）另外要 `export`，記 `export`（kind `audit`）。來源篩選前端用 `legacy` 代表 `nlc-data`。動作的中文名稱在 `audit.ts`（由 run 補到每一筆），新增會寫稽核的動作要一起加。
+- **計畫總覽／名單**（#564，`plans.ts`，要 `plans.read`）：`plan_summary`（只有數字：漏斗、進度與最後打卡兩個條件各格人數、需要關心分原因、單位比較、今天的日程；**不記稽核**）、`plan_roster`（範圍內每人一列、一次載完、不帶 email；SQL 在同一個交易記 `view_plan_roster`）。範圍一律全教會：`admin_api_plan_info`／`admin_api_plan_people` 先在 SQL 依操作者重查是不是系統管理員（不是就 42501 → 403）。每個人的狀態由 `_shared/progress` 算（和 App 同一份規則）；SQL 另外回 `meta`（範圍內人數、報名人數），對不上時回應的 `meta.consistent` 是 false，後台要警告、不快取。`nlc-data` 也有同名的組長版（`nlc-data/plan-report.ts`）：要能管理計畫（`canManagePlans`），範圍只看 `getVisibleProfileIds`（前端傳的範圍一律不看），經 `get_pastoral_overview` 取資料；打開名單由 `nlc-data` 記 `view_plan_roster`。
 - **照搬區塊的匯出**（#550）：`legacy_export_audit` 只記一筆 `export` 稽核（`resource` 是 `legacy:<區塊>`，detail 有檔名、格式、筆數、大小；用既有的 `admin_api_record_event`，不用新 migration），需要 `export`＋該區塊的能力（`LEGACY_EXPORT_SECTIONS`），和其他匯出共用限流。後台外殼記成功才存檔。
 - **匯出**：CSV 由伺服器產生（防公式注入，規則同 `js/modules/csv-cell.mjs`；時間用台北時區），前端只負責存檔。使用者名單（`directory_export`，含完整 email，另外要 `support.pii`，上限 10000 人）、組織架構（`org_export`）的欄位與開頭的匯出時間列和 App 管理分頁的匯出相同（`scripts/admin-api-accounts.test.mjs` 比對）。
 - **CORS**：只允許 `https://bible-speed-reading-admin.vercel.app`、`https://bible-speed-reading-admin-staging.vercel.app`，加上選填的 `ADMIN_API_ALLOWED_ORIGINS`（逗號分隔）；`ADMIN_API_ALLOW_LOCALHOST=true`（只在 staging 設）才放行本機。其他來源回 403。回應一律 `Cache-Control: no-store`，並回 `x-request-id`；每個請求一行 `admin_api_request` log。
@@ -120,8 +136,8 @@ select vault.create_secret('https://dbtjsljrytzonjvclgrd.supabase.co', 'project_
 - `nlc-data` 在 `exam_get_for_attempt` 回傳作答中的 attempt 時，附上
   `attempt.writeToken` = HMAC-SHA256(`EXAM_WRITE_SECRET`, attemptId + 主人 user_id)，
   無狀態，不存 DB。簽章程式碼**內嵌**在兩支函式的 `index.ts`（`>>> exam-write-token`
-  區塊，兩份逐字相同，測試會比對）——不放 `_shared/`，因為部署只打包函式自己的資料夾，
-  跨資料夾 import 會 `Module not found`。
+  區塊，兩份逐字相同，測試會比對）。當初（2026-09-23）放 `_shared/` 部署時遇到 `Module not found` 才改內嵌；
+  用 CLI 部署其實會帶上 `_shared/`（見上方「共用程式碼」），這段維持內嵌、不搬。
 - `exam-write` 驗證憑證後，以 service role 呼叫 `exam_save_progress` /
   `exam_submit_attempt`（`p_actor_id` = attempt 主人）。只有這兩支，截止時間 /
   狀態 / 功能開關照 DB 原本的規則。

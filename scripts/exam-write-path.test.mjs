@@ -27,13 +27,15 @@ describe("edge function bundling", () => {
     expect(nlcBlock).toBe(writeBlock);
   });
 
-  it("no edge function imports from outside its own folder (deploy only bundles that folder)", () => {
+  // 跨資料夾只准 import supabase/functions/_shared/（CLI 部署會一起上傳，見 edge-function-deploy-graph.test.mjs）。
+  // 只上傳函式自己資料夾的部署方式（Dashboard 編輯器等）會 Module not found——2026-09-23 這段區塊因此改成內嵌。
+  it("no edge function imports from another function's folder (only _shared/ is shared)", () => {
     const dir = new URL("../supabase/functions/", import.meta.url);
     readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(new URL(`${d.name}/index.ts`, dir)))
       .forEach((d) => {
         const src = readFileSync(new URL(`${d.name}/index.ts`, dir), "utf8");
-        expect(src, `${d.name}/index.ts`).not.toMatch(/from\s+["']\.\.\//);
+        expect(src, `${d.name}/index.ts`).not.toMatch(/from\s+["']\.\.\/(?!_shared\/)/);
       });
   });
 });

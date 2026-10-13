@@ -1,9 +1,7 @@
 // #327 — 桃園版第一輪期末賽（church_r1final_taoyuan_*）算進四卷小徽章與鐵獎。
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import vm from "node:vm";
 
-const campaignSource = readFileSync(new URL("../js/data/church_campaign.js", import.meta.url), "utf8");
 const utilsSource = readFileSync(new URL("../js/utils.js", import.meta.url), "utf8");
 
 function extractRange(source, fromSig, toSig) {
@@ -35,7 +33,7 @@ describe("桃園版第一輪期末賽算進鐵獎（#327）", () => {
   let window;
   let api;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     store = new Map();
     localStorage = {
       getItem: key => (store.has(key) ? store.get(key) : null),
@@ -43,11 +41,13 @@ describe("桃園版第一輪期末賽算進鐵獎（#327）", () => {
       removeItem: key => store.delete(key)
     };
     state = { activePlans: [], globalPlans: [] };
-    const context = { window: {}, console, JSON, Date, Math, Number, String, Object, Array, Set, Map };
-    context.window.window = context.window;
-    vm.createContext(context);
-    vm.runInContext(campaignSource, context);
-    window = context.window;
+    // 每個測試重新載入 church_campaign.js（本體在 _shared/progress/church-campaign.mjs，#564），
+    // CHURCH_CAMPAIGN 才是新的一份；它把函式掛到全域的 window。
+    vi.resetModules();
+    globalThis.window = {};
+    globalThis.window.window = globalThis.window;
+    await import("../js/data/church_campaign.js");
+    window = globalThis.window;
     window.CHURCH_PLAN_PRESETS = Object.fromEntries(CHURCH.map(key => [key, {}]));
     // eslint-disable-next-line no-new-func
     api = new Function("state", "localStorage", "window",
@@ -58,6 +58,7 @@ describe("桃園版第一輪期末賽算進鐵獎（#327）", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    delete globalThis.window;
   });
 
   it("桃園設定：合成日 2027-02-02 放在 finalSynthesisDate 旁邊，全教會維持 2027-01-02", () => {
