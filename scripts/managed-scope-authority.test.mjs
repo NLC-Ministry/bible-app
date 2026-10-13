@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -10,7 +11,7 @@ const sessionEdge = read("supabase/functions/nlc-session/index.ts");
 const dataEdge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const admin = read("js/modules/admin.js");
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 
 describe("managed scope authority", () => {
   it("keeps role identity separate from delegated multi-value scope", () => {

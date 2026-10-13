@@ -15,6 +15,7 @@ import {
   taipeiDateString,
   validateRange
 } from "../js/modules/admin-reading-activity.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -177,7 +178,7 @@ describe("renderAdminReadingActivity", () => {
 describe("reading activity wiring", () => {
   const nlcData = read("supabase/functions/nlc-data/index.ts");
   const admin = read("js/modules/admin.js");
-  const indexHtml = read("index.html");
+  const indexHtml = readLegacyIndexHtml();
 
   it("is a system-administrator-only admin section", () => {
     expect(admin).toMatch(/\{ id: 'reading-activity',[^}]*panel: 'system'/);

@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
-const html = readFileSync("index.html", "utf8");
+const html = readLegacyIndexHtml();
 const admin = readFileSync("js/modules/admin.js", "utf8");
 const utils = readFileSync("js/utils.js", "utf8");
-const app = readFileSync("js/app.js", "utf8");
+// #551：會友 App 不再載入 admin.js；舊管理分頁只在後台的照搬頁（admin-legacy/legacy-entry.js）開。
+const legacyEntry = readFileSync("admin-legacy/legacy-entry.js", "utf8");
+// 計畫清單的篩選與排序搬到 management-plans.mjs，App 的管理分頁（pastoral.js）也用同一份。
+const managementPlans = readFileSync("js/modules/management-plans.mjs", "utf8");
 const plan = readFileSync("js/modules/plan.js", "utf8");
 // #370：統計、排行、組員狀況搬到 plan-stats.js。
 const planStats = readFileSync("js/modules/plan-stats.js", "utf8");
@@ -70,11 +74,12 @@ describe("management plan hub", () => {
     expect(admin).not.toContain("const stageOnePlan =");
     expect(admin).not.toContain("const isStageOneBootstrap =");
     expect(admin).toContain("!managementPlanSelectionInitialized");
-    expect(admin).toContain("const isOpenEarlyEnrollment = status === 'upcoming' && !hidden");
-    expect(admin).toContain("status === 'ongoing' || status === 'completed' || isOpenEarlyEnrollment");
+    expect(managementPlans).toContain("const isOpenEarlyEnrollment = status === 'upcoming' && !hidden");
+    expect(managementPlans).toContain("status === 'ongoing' || status === 'completed' || isOpenEarlyEnrollment");
     expect(admin).toContain("plan.managementStatus === 'upcoming' ? '（提前報名）' : ''");
-    expect(admin).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");
-    expect(admin).toContain("sourcePlan.planKind === 'church_campaign'");
+    expect(managementPlans).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");
+    expect(managementPlans).toContain("sourcePlan.planKind === 'church_campaign'");
+    expect(admin).toContain('import { listManagementPlans } from "./management-plans.mjs";');
   });
 
   it("keeps the plan filter in the document flow", () => {
@@ -88,7 +93,7 @@ describe("management plan hub", () => {
     expect(admin).toContain("renderAdminTeamRegistrationStatus(false, 6, 'admin-team-status-content-6')");
     expect(admin).toContain("participantSlot.appendChild(memberList)");
     expect(admin).toContain("statisticsSlot.appendChild(statsSection)");
-    expect(app).toContain("renderAdminPlanManagement");
+    expect(legacyEntry).toContain("await adminModule.renderAdminPlanManagement();");
   });
 
   it("applies organization filters to participants, statistics, and complete teams", () => {

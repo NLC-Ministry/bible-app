@@ -20,3 +20,24 @@ export function adminConsoleUserUrl(userId, { reason = "", hostname = globalThis
   const query = trimmed ? `?${new URLSearchParams({ reason: trimmed })}` : "";
   return `${adminConsoleBase(hostname)}/#/support/user/${userId.toLowerCase()}${query}`;
 }
+
+// 舊的 App 管理分頁區塊（#/admin/<區塊>）→ 後台的位置（#551：系統管理功能都在後台）。
+// 組長區塊（加入計畫狀況、組員、組隊、統計、小測驗、大測驗）留在 App 的管理分頁，不在這裡。
+export const ADMIN_CONSOLE_SECTION_ROUTES = Object.freeze({
+  users: "#/accounts",
+  permissions: "#/accounts/scopes",
+  reports: "#/support",
+  registrations: "#/operations/registrations",
+  "reading-activity": "#/operations/reading-activity",
+  plans: "#/operations/plans",
+  announcements: "#/content/announcements",
+  commentary: "#/content/commentary",
+  "lightning-quiz": "#/content/lightning-quiz",
+  settings: "#/system/settings"
+});
+
+/** 後台某個區塊的網址；不是後台的區塊回 null。 */
+export function adminConsoleSectionUrl(section, { hostname = globalThis.location?.hostname } = {}) {
+  const route = Object.hasOwn(ADMIN_CONSOLE_SECTION_ROUTES, String(section || "")) ? ADMIN_CONSOLE_SECTION_ROUTES[section] : null;
+  return route ? `${adminConsoleBase(hostname)}/${route}` : null;
+}

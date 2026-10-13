@@ -13,11 +13,12 @@ import {
 import { createCommentaryReviewPage, reviewCardHtml } from "../js/modules/commentary-review.mjs";
 import { createAdminCommentaryReview, reviewProgressText, searchMembers } from "../js/modules/admin-commentary-review.mjs";
 import { commentaryItemStatus, renderAdminCommentary } from "../js/modules/admin-commentary.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(path, "utf8").replace(/\r\n/g, "\n");
 const escapeHTML = value => String(value ?? "")
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 const $ = id => document.getElementById(id);
 
 const ITEMS = [

@@ -1,8 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
 import {
+  PASTORAL_OVERVIEW_RPC,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  buildPastoralOverviewArgs,
   buildPlanReadingLogDigestArgs,
   buildPlanStatsRosterArgs,
 } from "./plan-stats-scope.ts";
@@ -302,7 +304,9 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "get_joined_plan_members",
   "send_plan_join_invitation",
-  "get_admin_member_team_placements"
+  "get_admin_member_team_placements",
+  // App 管理分頁的統計（#551）；範圍參數在下面依登入者覆寫
+  PASTORAL_OVERVIEW_RPC
 ]);
 const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics",
@@ -483,7 +487,8 @@ const READING_ACTIVITY_RPC_FUNCTIONS = new Set([
 // 計畫統計／組員總覽的精簡打卡紀錄（#394）和一次回傳的名單（#397）：
 // PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
 // 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
-// p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。
+// p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。App 管理分頁的統計 PASTORAL_OVERVIEW_RPC（#551）同一套，
+// 而且只給 canManagePlans 的角色。
 // 經文注釋審核（#471）：審核者只能審被指派的書卷，指派／總覽／重新送審／最終發布只限
 // 系統管理員——都由 SQL 端依注入的 p_actor_id 檢查（沒有指派就拒絕），這裡只注入 p_actor_id。
 const COMMENTARY_REVIEW_RPC_FUNCTIONS = new Set([
@@ -515,6 +520,7 @@ const RPC_FUNCTIONS = new Set([
   ...COMMENTARY_REVIEW_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  PASTORAL_OVERVIEW_RPC,
   ADMIN_USER_DIRECTORY_RPC,
   ...ISSUE_RPC_FUNCTIONS
 ]);
@@ -1120,6 +1126,9 @@ Deno.serve(async (req: Request) => {
       } else if (functionName === PLAN_STATS_ROSTER_RPC) {
         const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
         rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
+      } else if (functionName === PASTORAL_OVERVIEW_RPC) {
+        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+        rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);
       } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
         rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
       } else if (functionName === "publish_global_plan_rules"

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 const admin = read("js/modules/admin.js");
 // #370：組織篩選的讀值點分在 plan.js 與 plan-stats.js（統計／組員狀況），合起來算。
 const plan = read("js/modules/plan.js") + "\n" + read("js/modules/plan-stats.js");

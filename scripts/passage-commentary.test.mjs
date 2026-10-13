@@ -37,6 +37,7 @@ import {
   verseCountFor
 } from "../js/modules/admin-commentary.mjs";
 import { createReadCommentaryDb, readUsableAccessToken } from "../js/read/read-commentary-client.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(path, "utf8").replace(/\r\n/g, "\n"); // jsdom 的 URL 不是 Node 的 URL，fs 不收
 const escapeHTML = value => String(value ?? "")
@@ -541,7 +542,7 @@ describe("admin commentary helpers (#447, #470)", () => {
 
 // #475：注釋與詞條同一頁。把 index.html 的區塊掛進 jsdom，用假的 db 操作。
 describe("admin commentary page with notes and terms together (#475)", () => {
-  const html = read("index.html");
+  const html = readLegacyIndexHtml();
   const books = [{ name: "創世記", eng: "Genesis", chapters: 50 }, { name: "出埃及記", eng: "Exodus", chapters: 40 }];
 
   function mountAdmin(overrides = {}) {
@@ -667,7 +668,7 @@ describe("passage commentary wiring (#447, #470)", () => {
   const edge = read("supabase/functions/nlc-data/index.ts");
   const bible = read("js/modules/bible.js");
   const plan = read("js/modules/plan.js");
-  const html = read("index.html");
+  const html = readLegacyIndexHtml();
   const readHtml = read("read.html");
   const app = read("js/app.js");
   const admin = read("js/modules/admin.js");

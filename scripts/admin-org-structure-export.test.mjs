@@ -2,10 +2,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { convertOrgStructureToCSV } from "../js/modules/admin.js";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 describe("Admin Org Structure CSV Export Tests", () => {
   it("verifies index.html contains export org structure button", () => {
-    const html = readFileSync("index.html", "utf8");
+    const html = readLegacyIndexHtml();
     expect(html).toContain('id="admin-export-org-structure-btn"');
     expect(html).toContain("匯出組織架構 CSV");
   });
