@@ -111,6 +111,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   "report.attachment_delete": "刪除回報截圖",
   "report.delete": "刪除回報",
   set_profile_managed_scopes: "設定管理範圍",
+  view_plan_roster: "打開計畫名單",
 
   // admin-api 擋下的請求（action 名稱）
   unknown: "不明的後台操作",
@@ -133,6 +134,8 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   scope_set: "設定管理範圍",
   org_export: "匯出組織架構",
   legacy_export_audit: "匯出（照搬的管理區塊）",
+  plan_summary: "看計畫總覽",
+  plan_roster: "看計畫名單",
   audit_list: "看稽核紀錄",
   audit_event: "看稽核紀錄明細",
   audit_export: "匯出稽核紀錄",

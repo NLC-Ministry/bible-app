@@ -69,7 +69,8 @@ export function daysBetweenKeys(fromKey, toKey) {
   return Math.round((to - from) / DAY_MS);
 }
 
-// 一個計畫的比對尺：baselineDays 由呼叫端用 window.getCanonicalStageScheduleDays(plan) 算好傳入。
+// 一個計畫的比對尺：baselineDays 由呼叫端算好傳入（App 用 window.getCanonicalStageScheduleDays(plan)，
+// 伺服器用 plan-schedule.mjs 的 buildGlobalPlanBaseline）。
 // today 是伺服器回的台北日期；應讀天數算到 today（含）。
 export function buildPlanContext({ plan, baselineDays, bibleBooks = [], today }) {
   const days = Array.isArray(baselineDays) ? baselineDays : [];

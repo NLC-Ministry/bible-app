@@ -1,0 +1,169 @@
+// 計畫總覽與名單（#564）：SQL 回的「每人一列」事實 + global_plans 一列 → 用和會友 App 同一份規則
+// （plan-progress.mjs）算出每個人的狀態，再組成兩種回應：
+//   · 總覽（plan_summary）：只有數字——漏斗、兩個條件各格人數、需要關心（分原因）、單位比較、今天的日程。
+//     不含任何人的名字。
+//   · 名單（plan_roster）：範圍內每人一列，展開需要的欄位都在裡面（前端展開一列不再發請求）；不帶 email。
+// admin-api（全教會）與 nlc-data（組長，範圍由伺服器依身分決定）共用。
+//
+// 不漏：SQL 另外數的人數（meta）和這裡算出來的對不上時，meta.consistent＝false，前端要警告、不快取。
+import { BIBLE_BOOK_CHAPTERS } from "./bible-chapters.mjs";
+import { buildGlobalPlanBaseline } from "./plan-schedule.mjs";
+import {
+  CHECKIN_BUCKETS,
+  PROGRESS_BUCKETS,
+  SCOPE_LEVELS,
+  buildPlanContext,
+  buildScopeOptions,
+  compareUnits,
+  countBuckets,
+  countCareReasons,
+  describePeople,
+  filterByScope,
+  normalizeScope,
+  pickUnitLevel,
+  summarizeFunnel
+} from "./plan-progress.mjs";
+
+export { CHECKIN_BUCKETS, PROGRESS_BUCKETS };
+
+const MAX_UNIT_NAME_CHARS = 100;
+
+// 總覽的範圍篩選（只是在授權範圍內再縮小，例如展開某個大區）：{ greatRegion, pastoralZone, smallGroup }
+export function parseScopeFilter(value) {
+  if (value === undefined || value === null) return { ok: true, scope: {} };
+  if (typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "invalid_org_filter" };
+  const scope = {};
+  for (const level of SCOPE_LEVELS) {
+    const raw = value[level];
+    if (raw === undefined || raw === null || raw === "") continue;
+    if (typeof raw !== "string" || raw.length > MAX_UNIT_NAME_CHARS) return { ok: false, error: "invalid_org_filter" };
+    scope[level] = raw;
+  }
+  return { ok: true, scope };
+}
+
+// global_plans 一列 → 比對尺與計畫欄位；SQL 要的 preset key 也從這裡來（和 App 的 plan.presetKey 相同）
+export function resolvePlanForReport(planRow, { bibleBooks = BIBLE_BOOK_CHAPTERS } = {}) {
+  return buildGlobalPlanBaseline(planRow, { bibleBooks });
+}
+
+function reconcile(sqlMeta, people) {
+  const meta = sqlMeta && typeof sqlMeta === "object" ? sqlMeta : {};
+  const inScope = Number.isInteger(meta.inScope) ? meta.inScope : null;
+  const enrolled = Number.isInteger(meta.enrolled) ? meta.enrolled : null;
+  const rows = people.length;
+  const rowsEnrolled = people.filter((person) => person.enrolled).length;
+  return { inScope, enrolled, rows, rowsEnrolled, consistent: inScope === rows && enrolled === rowsEnrolled };
+}
+
+// SQL 的 { today, people, meta } + 比對尺 → 每個人都判斷好的報表
+export function preparePlanReport({ resolved, overview, bibleBooks = BIBLE_BOOK_CHAPTERS }) {
+  const { plan, baselineDays } = resolved;
+  const data = overview && typeof overview === "object" ? overview : {};
+  const today = typeof data.today === "string" ? data.today.slice(0, 10) : "";
+  const ctx = buildPlanContext({ plan, baselineDays, bibleBooks, today });
+  const rows = (Array.isArray(data.people) ? data.people : []).filter((row) => row && typeof row === "object" && typeof row.id === "string");
+  const people = describePeople(rows, ctx);
+  return { plan, ctx, people, meta: reconcile(data.meta, people) };
+}
+
+function planInfo(report) {
+  const { plan } = report;
+  return {
+    id: plan.id,
+    name: plan.name,
+    planKind: plan.planKind,
+    startDate: plan.startDate,
+    endDate: plan.endDate,
+    books: Array.isArray(plan.books) ? plan.books : [],
+    presetKey: plan.presetKey
+  };
+}
+
+// 一天的章節 → [{ book, from, to }]（同一卷連續的章合併）
+function chapterRanges(chapters) {
+  const ranges = [];
+  for (const ch of Array.isArray(chapters) ? chapters : []) {
+    const last = ranges[ranges.length - 1];
+    if (last && last.book === ch.book && last.to + 1 === ch.chapter) last.to = ch.chapter;
+    else ranges.push({ book: ch.book, from: ch.chapter, to: ch.chapter });
+  }
+  return ranges;
+}
+
+// 狀態列：第幾天、今天應讀哪些章、到今天應讀幾天
+function scheduleInfo(ctx) {
+  const days = ctx.baselineDays;
+  const index = ctx.daysSinceStart;
+  const inRange = ctx.started && index !== null && index < days.length;
+  return {
+    totalDays: days.length,
+    totalChapters: days.reduce((sum, day) => sum + (Array.isArray(day.chapters) ? day.chapters.length : 0), 0),
+    dayNumber: inRange ? index + 1 : null,
+    started: ctx.started,
+    ended: ctx.started && index !== null && index >= days.length,
+    expectedDays: ctx.expectedDays,
+    today: inRange ? chapterRanges(days[index].chapters) : []
+  };
+}
+
+export function buildPlanSummary(report, scope = {}) {
+  const optionsFor = buildScopeOptions(report.people);
+  const normalized = normalizeScope(scope, optionsFor);
+  const people = filterByScope(report.people, normalized);
+  const level = pickUnitLevel(people);
+  return {
+    plan: planInfo(report),
+    today: report.ctx.todayKey,
+    schedule: scheduleInfo(report.ctx),
+    scope: normalized,
+    scopeOptions: optionsFor(normalized),
+    funnel: summarizeFunnel(people),
+    buckets: countBuckets(people),
+    care: countCareReasons(people),
+    units: { level, rows: compareUnits(people, level) },
+    meta: report.meta
+  };
+}
+
+function rosterRow(person) {
+  return {
+    id: person.id,
+    name: person.name,
+    greatRegion: person.greatRegion,
+    pastoralZone: person.pastoralZone,
+    smallGroup: person.smallGroup,
+    enrolled: person.enrolled,
+    status: person.status,
+    statusLabel: person.statusLabel,
+    progressBucket: person.progressBucket,
+    checkinBucket: person.checkinBucket,
+    round: person.round,
+    progress: person.progress,
+    chapters: person.chapters,
+    byRound: person.byRound,
+    behindDays: person.behindDays,
+    lastReadAt: person.lastReadAt,
+    daysSinceRead: person.daysSinceRead,
+    readDays7: person.readDays7,
+    care: person.care,
+    careReasons: person.careReasons,
+    teams: person.teams,
+    quiz: person.quiz
+  };
+}
+
+// 名單預設照落後天數多→少（維護者 2026-10-13），同天數再照姓名
+export function buildPlanRoster(report) {
+  const people = report.people
+    .map(rosterRow)
+    .sort((a, b) => b.behindDays - a.behindDays || a.name.localeCompare(b.name, "zh-Hant") || a.id.localeCompare(b.id));
+  return {
+    plan: planInfo(report),
+    today: report.ctx.todayKey,
+    progressBuckets: PROGRESS_BUCKETS,
+    checkinBuckets: CHECKIN_BUCKETS,
+    people,
+    meta: report.meta
+  };
+}

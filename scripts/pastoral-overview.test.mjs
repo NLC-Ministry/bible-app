@@ -15,6 +15,7 @@ const ACTOR = "11111111-1111-1111-1111-111111111111";
 const OTHER = "22222222-2222-2222-2222-222222222222";
 const PLAN = "00000000-0000-0000-c026-000000000001";
 const SIGNATURE = "public.get_pastoral_overview(uuid, text, boolean, uuid[], uuid)";
+const INNER_SIGNATURE = "public.plan_progress_people(uuid, text, boolean, uuid[], uuid)";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 describe("nlc-data injects the scope for get_pastoral_overview", () => {
@@ -71,15 +72,30 @@ describe("nlc-data injects the scope for get_pastoral_overview", () => {
   });
 });
 
+// #564 起主體搬到 plan_progress_people（不授權任何角色），get_pastoral_overview 只是轉呼叫的包裝。
 describe("get_pastoral_overview migration", () => {
-  const fn = latestFunctionDefinition("get_pastoral_overview").text;
-  const file = read("supabase/migrations/20261013043007_pastoral_overview.sql");
+  const fn = latestFunctionDefinition("plan_progress_people").text;
+  const wrapper = latestFunctionDefinition("get_pastoral_overview");
+  const file = read("supabase/migrations/20261013114704_admin_api_plan_progress.sql");
 
-  it("is SECURITY DEFINER with an empty search_path and only service_role can run it", () => {
-    expect(fn).toMatch(/SECURITY DEFINER\s+SET search_path TO ''/);
+  it("the wrapper is SECURITY DEFINER with an empty search_path, only service_role can run it, and it passes every argument through", () => {
+    expect(wrapper.file).toBe("20261013114704_admin_api_plan_progress.sql");
+    expect(wrapper.text).toMatch(/SECURITY DEFINER\s+SET search_path TO ''/);
+    expect(wrapper.text).toContain("SELECT public.plan_progress_people(p_global_plan_id, p_preset_key, p_whole_church, p_visible_ids, p_actor_id);");
     expect(file).toContain(`REVOKE ALL ON FUNCTION ${SIGNATURE} FROM PUBLIC, anon, authenticated;`);
     expect(file).toContain(`GRANT EXECUTE ON FUNCTION ${SIGNATURE} TO service_role;`);
     expect(file).not.toMatch(/GRANT[^;]*get_pastoral_overview[^;]*\b(anon|authenticated)\b/);
+  });
+
+  it("the inner function is granted to nobody, not even service_role (scope always comes from a wrapper)", () => {
+    expect(fn).toMatch(/SECURITY DEFINER\s+SET search_path TO ''/);
+    expect(file).toContain(`REVOKE ALL ON FUNCTION ${INNER_SIGNATURE} FROM PUBLIC, anon, authenticated, service_role;`);
+    expect(file).not.toMatch(/GRANT[^;]*plan_progress_people/);
+  });
+
+  it("returns an independent count for reconciliation (meta)", () => {
+    expect(fn).toContain("'inScope', (SELECT COUNT(*)::int FROM roster WHERE EXISTS (SELECT 1 FROM global_plan))");
+    expect(fn).toContain("'enrolled', (SELECT COUNT(*)::int FROM enrollment)");
   });
 
   it("fails closed: no actor, no plan, or no whole-church flag and no ids returns nobody", () => {
