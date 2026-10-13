@@ -69,9 +69,15 @@ describe("one list of legacy sections everywhere", () => {
     for (const section of LEGACY_SECTIONS) {
       expect(LEGACY_EXPORT_SECTIONS[section.id], section.id).toBe(section.capability);
       expect(CAPABILITIES, section.id).toContain(section.capability);
-      // 這一區的導覽要這個能力（營運、內容區直接要；系統區有其中一個就顯示）
+      // 這一區的導覽要這個能力（營運、內容區直接要；系統區有其中一個就顯示）。
+      // 計畫區（#565）的導覽要 plans.read，「計畫設定」分頁另外要 operations.manage（分頁、外殼都會檢查）
       const nav = NAV_ITEMS.find((item) => item.area === section.area);
-      expect([...(nav?.requires || []), ...(nav?.anyOf || [])], section.id).toContain(section.capability);
+      if (section.area === "plans") {
+        expect(nav?.requires, section.id).toEqual(["plans.read"]);
+        expect(section.capability, section.id).toBe("operations.manage");
+      } else {
+        expect([...(nav?.requires || []), ...(nav?.anyOf || [])], section.id).toContain(section.capability);
+      }
     }
     for (const capability of ["operations.manage", "content.manage", "settings.manage"]) {
       expect(capabilitiesForRole("admin")).toContain(capability);
@@ -85,7 +91,9 @@ describe("one list of legacy sections everywhere", () => {
     const markup = legacyMarkup();
     for (const id of LEGACY_SECTION_IDS) expect(markup, id).toContain(`id="${legacyMarkupId(id)}"`);
     expect(legacyMarkupId("plans")).toBe("admin-plan-card");
-    expect(legacyMarkupId("join-status")).toBe("admin-section-join-status");
+    expect(legacyMarkupId("teams")).toBe("admin-section-teams");
+    // #565：加入計畫狀況、組員總覽、計畫統計由計畫區取代
+    for (const id of ["join-status", "members", "statistics"]) expect(LEGACY_SECTION_IDS, id).not.toContain(id);
   });
 });
 

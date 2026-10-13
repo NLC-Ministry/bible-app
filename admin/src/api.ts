@@ -18,8 +18,8 @@ export type AdminAction =
   | "legacy_export_audit"
   // 稽核紀錄（#550）
   | "audit_list" | "audit_event" | "audit_export"
-  // 計畫總覽（只有數字）與名單（#564）
-  | "plan_summary" | "plan_roster";
+  // 計畫總覽（只有數字）與名單（#564）；計畫區的計畫選單、測驗作答、名單匯出、關心提醒（#565）
+  | "plan_summary" | "plan_roster" | "plan_options" | "plan_quiz" | "plan_roster_export" | "care_remind";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -45,7 +45,7 @@ const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   "audit_list", // 切到功能開放設定再回來不重抓；重新整理鈕用 fresh
   "audit_event", // 稽核紀錄不會改
   // 計畫：重新整理鈕用 fresh。名單 60 秒內重開不再記一筆查看；meta.consistent 是 false 時畫面要 invalidate
-  "plan_summary", "plan_roster"
+  "plan_summary", "plan_roster", "plan_options", "plan_quiz"
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -223,6 +223,13 @@ export function describeAdminError(err: unknown): string {
     case "invalid_incomplete":
     case "invalid_offset": return "名單的篩選條件不正確，請重新整理後再試。";
     case "plan_not_found": return "找不到這個計畫（可能已經被刪除），請重新整理。";
+    case "invalid_roster_filter":
+    case "invalid_roster_sort": return "名單的篩選條件不正確，請按「報名者」重設後再試。";
+    case "care_reminder_already_sent": return "今天已經提醒過這個人了，同一天只能送一則（送出後不能修改）。";
+    case "invalid_recipient": return "不能提醒自己，或這位使用者的編號不正確。";
+    case "recipient_not_found": return "找不到這位使用者（可能已停用），請重新整理。";
+    case "invalid_reason": return "請選擇提醒的原因。";
+    case "invalid_message": return "提醒內容要 1–300 字。";
     case "scope_not_applicable": return "這個角色不用設定管理範圍（系統管理員、牧者是全教會，其他角色只有本人）。";
     // 和 App 管理分頁同一句（js/modules/admin-managed-scope-options.mjs）
     case "managed_scope_unknown_region": return "有大區名稱不在組織名單中，請重新整理後再選一次。";

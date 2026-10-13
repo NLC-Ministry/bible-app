@@ -15,7 +15,7 @@ import {
 import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
 import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
 import { validateSearchQuery } from "./search-query.ts";
-import { runPlanRoster, runPlanSummary } from "./plans.ts";
+import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export { validateSearchQuery };
@@ -27,11 +27,12 @@ export const CAPABILITIES = [
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
-  "operations.manage", // 照搬的營運區塊：計畫管理、加入計畫狀況、組員總覽、組隊狀況、計畫統計、讀經使用率、報名註冊統計（#550）
+  "operations.manage", // 照搬的營運區塊：組隊狀況、讀經使用率、報名註冊統計，以及計畫區的「計畫設定」（#550、#565）
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
-  "plans.read",     // 計畫總覽（只有數字）與名單（#564）
+  "plans.read",     // 計畫總覽（只有數字）與名單（#564）、測驗作答（#565）
+  "plans.remind",   // 從計畫名單送關心提醒給會友（#565）
   "export"          // 匯出
 ] as const;
 export type Capability = typeof CAPABILITIES[number];
@@ -134,10 +135,7 @@ export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Obje
   exam: "content.manage",
   "lightning-quiz": "content.manage",
   plans: "operations.manage",
-  "join-status": "operations.manage",
-  members: "operations.manage",
   teams: "operations.manage",
-  statistics: "operations.manage",
   "reading-activity": "operations.manage",
   registrations: "operations.manage",
   settings: "settings.manage"
@@ -158,6 +156,22 @@ function buildPlanArgs(params: Record<string, unknown>, ctx: ActionContext, audi
   if (!isUuid(params.global_plan_id)) return { ok: false, error: "invalid_plan_id" };
   return { ok: true, args: {
     ...actorArgs(ctx), p_global_plan_id: params.global_plan_id, p_audit: audit, p_request_id: ctx.requestId
+  } };
+}
+
+// 關心提醒（#565）：原因與 App 的關心對話框相同；內容 1–300 字（SQL 再檢查一次）
+export const CARE_REMINDER_REASONS = ["behind", "inactive", "care", "encouragement"] as const;
+const MAX_CARE_MESSAGE_CHARS = 300;
+
+function buildCareRemindArgs(params: Record<string, unknown>, ctx: ActionContext): ArgsResult {
+  if (!isUuid(params.global_plan_id)) return { ok: false, error: "invalid_plan_id" };
+  if (!isUuid(params.recipient_id)) return { ok: false, error: "invalid_recipient" };
+  if (!(CARE_REMINDER_REASONS as readonly unknown[]).includes(params.reason)) return { ok: false, error: "invalid_reason" };
+  const message = typeof params.message === "string" ? params.message.trim() : "";
+  if (!message || message.length > MAX_CARE_MESSAGE_CHARS) return { ok: false, error: "invalid_message" };
+  return { ok: true, args: {
+    ...actorArgs(ctx), p_recipient_id: params.recipient_id, p_global_plan_id: params.global_plan_id,
+    p_reason: params.reason, p_message: message, p_request_id: ctx.requestId
   } };
 }
 
@@ -467,6 +481,40 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     rpc: "admin_api_plan_people",
     run: runPlanRoster,
     buildArgs: (params, ctx) => buildPlanArgs(params, ctx, true)
+  },
+  // #565：選計畫的清單（隱藏的、教會活動不列）與預設計畫
+  plan_options: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_plan_options",
+    buildArgs: (_params, ctx) => ({ ok: true, args: { p_actor_id: ctx.actorId } })
+  },
+  // 測驗作答：只有數字，不記稽核；打開分頁才載
+  plan_quiz: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_plan_quiz",
+    run: runPlanQuiz,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.global_plan_id)) return { ok: false, error: "invalid_plan_id" };
+      return { ok: true, args: { p_actor_id: ctx.actorId, p_global_plan_id: params.global_plan_id } };
+    }
+  },
+  // 名單匯出：條件、排序在 run 裡用和畫面同一份規則檢查（plans.ts）；不帶 email；記一筆 export
+  plan_roster_export: {
+    capabilities: ["plans.read", "export"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_plan_people",
+    run: runPlanRosterExport,
+    buildArgs: (params, ctx) => buildPlanArgs(params, ctx, false)
+  },
+  // 關心提醒：一人一天一則、送出後不能改（SQL 擋）；稽核在 SQL 同一個交易
+  care_remind: {
+    capabilities: ["plans.remind"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_care_remind",
+    run: runCareRemind,
+    buildArgs: buildCareRemindArgs
   },
 
   // ── 稽核紀錄（#550 第四組）────────────────────────────────────────────────

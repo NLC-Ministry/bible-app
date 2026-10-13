@@ -6,28 +6,35 @@
 //   #/support/user/<uuid>[/<tab>][?reason=…] 某個人（可以直接用網址連過來；reason 是查看理由，會記進稽核）
 //   #/accounts                               使用者名單（#550）
 //   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
+//   #/plans[/roster|teams|quiz][?plan=<uuid>] 計畫區（#565；沒指定計畫就用上次選的、再來是伺服器挑的預設計畫）
+//   #/plans/settings                         計畫設定（照搬的「全域計畫管理」卡片）
 //   #/operations[/<區塊>]、#/content[/<區塊>] 照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
 //   #/system[/audit][?actor=<uuid>&target=<uuid>]  稽核紀錄（#550；actor／target 是篩選條件，可以從別頁連過來）
 //   #/system/settings                        功能開放設定（照搬）
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
+// 搬到計畫區的舊營運區塊（#565），舊書籤導到新位置：計畫管理 → 計畫設定、加入計畫狀況／組員總覽 → 名單、計畫統計 → 總覽。
 
 import { isLegacyArea, legacySectionsOf, type LegacyArea } from "./legacy.ts";
 
 export const USER_TABS = ["overview", "reading_logs", "team_events", "tests", "vouchers", "reports", "timeline"] as const;
 export type UserTab = typeof USER_TABS[number];
 
-export const AREAS = ["support", "accounts", "operations", "content", "system"] as const;
+export const AREAS = ["support", "accounts", "plans", "operations", "content", "system"] as const;
 export type Area = typeof AREAS[number];
 
 export const ACCOUNT_TABS = ["users", "scopes"] as const;
 export type AccountTab = typeof ACCOUNT_TABS[number];
+
+export const PLAN_TABS = ["overview", "roster", "teams", "quiz"] as const;
+export type PlanTab = typeof PLAN_TABS[number];
 
 export type AdminRoute =
   | { view: "inbox"; reportId: string | null }
   | { view: "search" }
   | { view: "user"; userId: string; tab: UserTab; reason: string }
   | { view: "accounts"; tab: AccountTab; profileId: string | null }
+  | { view: "plans"; tab: PlanTab; planId: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
   | { view: "audit"; actorId: string | null; targetId: string | null }
   | { view: "not_found" };
@@ -38,6 +45,13 @@ const MAX_REASON_CHARS = 200;
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
+
+const MOVED_OPERATIONS_SECTIONS: Readonly<Record<string, AdminRoute>> = Object.freeze({
+  plans: { view: "legacy", area: "plans", section: "plans" },
+  "join-status": { view: "plans", tab: "roster", planId: null },
+  members: { view: "plans", tab: "roster", planId: null },
+  statistics: { view: "plans", tab: "overview", planId: null }
+});
 
 export function cleanReason(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_REASON_CHARS) : "";
@@ -69,6 +83,16 @@ export function parseRoute(hash: string): AdminRoute {
     if (rest[0] === "scopes" && isUuid(rest[1]) && rest.length === 2) return { view: "accounts", tab: "scopes", profileId: rest[1].toLowerCase() };
     return { view: "not_found" };
   }
+  if (area === "plans") {
+    if (rest.length === 1 && rest[0] === "settings") return { view: "legacy", area: "plans", section: "plans" };
+    const tab = (rest[0] || "overview") as PlanTab;
+    if (rest.length > 1 || !(PLAN_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
+    const plan = query.get("plan");
+    return { view: "plans", tab, planId: isUuid(plan) ? plan.toLowerCase() : null };
+  }
+  if (area === "operations" && rest.length === 1 && Object.prototype.hasOwnProperty.call(MOVED_OPERATIONS_SECTIONS, rest[0])) {
+    return MOVED_OPERATIONS_SECTIONS[rest[0]];
+  }
   if (area === "system" && (rest.length === 0 || (rest[0] === "audit" && rest.length === 1))) {
     const pick = (key: string) => (isUuid(query.get(key)) ? String(query.get(key)).toLowerCase() : null);
     return { view: "audit", actorId: pick("actor"), targetId: pick("target") };
@@ -93,8 +117,12 @@ export function formatRoute(route: AdminRoute): string {
     case "accounts":
       if (route.tab === "users") return "#/accounts";
       return route.profileId ? `#/accounts/scopes/${route.profileId}` : "#/accounts/scopes";
+    case "plans": {
+      const tab = route.tab === "overview" ? "" : `/${route.tab}`;
+      return `#/plans${tab}${route.planId ? `?plan=${route.planId}` : ""}`;
+    }
     case "legacy":
-      return `#/${route.area}/${route.section}`;
+      return route.area === "plans" ? "#/plans/settings" : `#/${route.area}/${route.section}`;
     case "audit": {
       const query = new URLSearchParams();
       if (route.actorId) query.set("actor", route.actorId);
@@ -115,5 +143,6 @@ export function areaOf(route: AdminRoute): Area {
   if (route.view === "legacy") return route.area;
   if (route.view === "audit") return "system";
   if (route.view === "accounts") return "accounts";
+  if (route.view === "plans") return "plans";
   return "support";
 }

@@ -179,10 +179,10 @@ describe("legacy iframe boots in a browser-like environment", () => {
       expect(doc.querySelectorAll(".admin-book-checkbox").length).toBe(66);
 
       // 換到管理分頁的計畫類區塊：計畫管理藏起來、計畫篩選列出現
-      port.postMessage({ type: "open", section: "join-status" });
-      expect(await waitFor((m) => m.type === "section" && m.section === "join-status", "join-status")).toMatchObject({ available: true });
+      port.postMessage({ type: "open", section: "teams" });
+      expect(await waitFor((m) => m.type === "section" && m.section === "teams", "teams")).toMatchObject({ available: true });
       expect(plansPanel.classList.contains("hidden")).toBe(true);
-      expect(doc.getElementById("admin-section-join-status").classList.contains("hidden")).toBe(false);
+      expect(doc.getElementById("admin-section-teams").classList.contains("hidden")).toBe(false);
       expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(false);
 
       port.postMessage({ type: "open", section: "registrations" });

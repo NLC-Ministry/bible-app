@@ -317,7 +317,13 @@ describe("admin console source rules", () => {
 
   it("shares only dependency-free rule files with admin-api, never its server code", () => {
     // policy.ts 一 import 就把整個 admin-api（runner、CSV、SQL 參數）打包進後台
-    const allowed = new Set(["supabase/functions/admin-api/search-query.ts"]);
+    // 計畫區（#565）的名單篩選、排序和伺服器同一份：_shared/progress 只互相 import、不碰瀏覽器與伺服器
+    // （scripts/edge-function-deploy-graph.test.mjs 檢查）
+    const allowed = new Set([
+      "supabase/functions/admin-api/search-query.ts",
+      "supabase/functions/_shared/progress/plan-report.mjs",
+      "supabase/functions/_shared/progress/plan-progress.mjs"
+    ]);
     for (const file of files.filter((f) => /\.tsx?$/.test(f))) {
       const imports = [...read(file).matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]);
       for (const spec of imports.filter((s) => s.includes("supabase/functions/"))) {

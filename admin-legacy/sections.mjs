@@ -2,6 +2,7 @@
 // 打開時直接交給 admin.js 的 openAdminSectionRoute()，畫面與程式都是 App 那一份。
 // 後台外殼（admin/src/legacy.ts）與 admin-api（policy.ts 的 LEGACY_EXPORT_SECTIONS）各有一份同樣的清單，
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
+// #565：加入計畫狀況、組員總覽、計畫統計由後台「計畫」區的總覽／名單取代，不再照搬；計畫管理（plans）是計畫區的「計畫設定」。
 export const LEGACY_SECTION_IDS = Object.freeze([
   "announcements",
   "commentary",
@@ -9,10 +10,7 @@ export const LEGACY_SECTION_IDS = Object.freeze([
   "exam",
   "lightning-quiz",
   "plans",
-  "join-status",
-  "members",
   "teams",
-  "statistics",
   "reading-activity",
   "registrations",
   "settings"
