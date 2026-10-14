@@ -53,6 +53,16 @@ Rejected (someone pushed first) → `git fetch`, recreate the worktree from the 
 
 If a release PR (`staging` → `main`) is open, this push lands in it: update its description (step 8).
 
+### 6a. Admin console issues → update the tracking issue #576
+If a merged branch's issue belongs to the admin console redesign (a row in #576, or its title starts with 後台／admin-api, or it references #546／#572), update that issue's row in #576 right after the push (or after opening the PR into staging):
+```bash
+gh issue view 576 --json body -q .body > <scratchpad>/576.md
+# edit the row "| #<issue> | …": 狀態 → 🟡, 進測試站的 PR → #<PR>; leave the 驗收 box alone (only the maintainer ticks it)
+# no row yet → add one (⬜ rows stay in issue order); new migrations → add them to 「上正式站要做的事」 step 1, other Integrator-note items to the matching step
+gh issue edit 576 --body-file <scratchpad>/576.md
+```
+Edit only the lines you mean to change and diff the file before `gh issue edit` — the maintainer ticks boxes in that body.
+
 ## 7. Clean up and release
 For each merged branch's `.worktrees/task-*` worktree, and for `.worktrees/integrate` — `cd` back to the main folder first (a shell inside the worktree locks it), stop any preview server running from it, and **remove the node_modules junction first**, or `worktree remove` can delete the main folder's `node_modules` through it:
 ```bash
@@ -82,5 +92,5 @@ Take the lock, then:
    git merge-base --is-ancestor origin/staging origin/main && git push origin origin/main:refs/heads/staging
    ```
    Not an ancestor (staging moved on since the merge) → in a temporary detached worktree of `origin/staging` at `.worktrees/integrate`: `git merge --no-ff origin/main -m "Merge main back into staging after release #<PR>"`, `npm test`, `git push origin HEAD:staging`. Afterwards `git rev-list --count origin/staging..origin/main` must be `0`.
-4. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`).
+4. **Close the shipped issues** with one plain-Chinese line each (`Closes #N` doesn't auto-close: GitHub's default branch is `staging`). Admin console issues: also set their #576 rows to ✅ (same edit as step 6a); close #576 itself once every row is ✅. #576's rule: the admin redesign goes to production only when every row is 🟡 and ticked by the maintainer.
 5. Release the lock.
