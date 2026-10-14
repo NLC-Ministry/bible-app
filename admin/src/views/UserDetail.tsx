@@ -3,10 +3,11 @@
 // 請求預算：打開只呼叫 1 次 user_summary（除錯檢查＋「會友 App 現在應該顯示」＋各區筆數，伺服器記一筆查看）；
 // 各區摺疊、右邊先顯示筆數，點開才呼叫 user_section（第一頁伺服器記一筆 view_user_section），「載入更多」再往下抓；
 // 時間軸點開才呼叫 user_timeline。筆數是 0 的區塊點開不打請求。
-// 帳號、經文筆記（只有筆數與最後更新時間，內容屬於個人靈修，不顯示）、徽章（伺服器沒有資料）不打請求。
+// 帳號、經文筆記（只有筆數與最後更新時間，內容屬於個人靈修，不顯示）不打請求。
+// 不列徽章（看讀經紀錄就知道）、不分手動／自動打卡（除錯用不到）：維護者 2026-10-14 決定。
 // 個資預設遮罩，按「顯示」才呼叫 reveal_pii（伺服器記稽核），換人或重新整理就消失。
 // 查看理由：從回報、名單打開時帶在網址上；頁面上可以改，之後點開的區塊、顯示個資都用改過的理由。
-// 第一階段只讀：修正動作（補發徽章、刪除沒有歸屬的打卡…）之後個別評估。
+// 第一階段只讀：修正動作（刪除沒有歸屬的打卡…）之後個別評估。
 import React, { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, HelpCircle, RefreshCw, XCircle } from "lucide-react";
 import type { AdminApi, AdminAction } from "../api.ts";
@@ -21,20 +22,19 @@ export const SECTION_PAGE_SIZE = 20;
 export const TIMELINE_PAGE_SIZE = 30;
 
 type ListKey = SectionName | "timeline";
-type PanelKey = ListKey | "account" | "badges" | "notes";
+type PanelKey = ListKey | "account" | "notes";
 type ListState = { items: SectionItem[]; cursor: Cursor | null; loading: boolean; error: unknown; loaded: boolean };
 
 const EMPTY_LIST: ListState = { items: [], cursor: null, loading: false, error: null, loaded: false };
 
 // 區塊順序同 #567 定案
 const PANELS: readonly PanelKey[] = [
-  "account", "plans", "badges", "vouchers", "reading_logs", "tests", "teams", "team_events", "notes", "reports", "notifications", "timeline"
+  "account", "plans", "vouchers", "reading_logs", "tests", "teams", "team_events", "notes", "reports", "notifications", "timeline"
 ];
 
 const PANEL_LABEL: Record<PanelKey, string> = {
   ...(SECTION_LABEL as Record<SectionName, string>),
   account: "帳號",
-  badges: "徽章",
   notes: "經文筆記",
   timeline: "時間軸"
 };
@@ -48,7 +48,7 @@ const CHECK_STATUS: Record<CheckStatus, { label: string; tone: "neutral" | "bran
 
 const PLAN_STATE_LABEL: Record<AppPlanView["plan"]["state"], string> = { upcoming: "還沒開始", running: "進行中", ended: "已結束" };
 
-const isListKey = (key: PanelKey): key is ListKey => key !== "account" && key !== "badges" && key !== "notes";
+const isListKey = (key: PanelKey): key is ListKey => key !== "account" && key !== "notes";
 
 type Props = {
   api: AdminApi;
@@ -159,7 +159,7 @@ export function UserDetail({ api, userId, reason: routeReason, capabilities, bac
     && (account.has_email || account.has_phone || summary.identities.length > 0);
   const counts = summary.counts || ({} as UserSummary["counts"]);
   const countOf = (key: PanelKey): number | null => {
-    if (key === "account" || key === "badges" || key === "timeline") return null;
+    if (key === "account" || key === "timeline") return null;
     if (key === "notes") return (Number(summary.notes?.verse_notes) || 0) + (Number(summary.notes?.devotional_notes) || 0);
     return Number(counts[key]) || 0;
   };
@@ -249,11 +249,6 @@ export function UserDetail({ api, userId, reason: routeReason, capabilities, bac
                       ) : null}
                     />
                   )}
-                  {key === "badges" && (
-                    <p className="adm-muted">
-                      徽章只存在會友手機裡的 App（瀏覽器的儲存空間），伺服器沒有這份資料，後台看不到。需要時請會友截圖徽章頁。
-                    </p>
-                  )}
                   {key === "notes" && (
                     <dl className="adm-fields">
                       <Field name="經文筆記">{Number(summary.notes?.verse_notes) || 0} 則</Field>
@@ -261,9 +256,6 @@ export function UserDetail({ api, userId, reason: routeReason, capabilities, bac
                       <Field name="最後更新">{formatDateTime(summary.notes?.last_updated_at)}</Field>
                       <Field name="內容">屬於個人靈修，後台不顯示。</Field>
                     </dl>
-                  )}
-                  {key === "reading_logs" && (
-                    <p className="adm-muted adm-small">打卡紀錄沒有記下是手動打卡還是讀到底自動打卡，這裡分不出來。</p>
                   )}
                   {isListKey(key) && (
                     count === 0
@@ -291,7 +283,6 @@ export function UserDetail({ api, userId, reason: routeReason, capabilities, bac
 /** 區塊標題右邊：筆數；兌換券多列各狀態；沒有筆數的區塊給一句說明 */
 function panelMeta(key: PanelKey, count: number | null, summary: UserSummary): string {
   if (key === "account") return `${summary.identities.length} 種登入方式`;
-  if (key === "badges") return "後台看不到";
   if (key === "timeline") return "全部紀錄依時間排";
   if (key === "notes") return `${count ?? 0} 則（不顯示內容）`;
   if (key === "vouchers" && count) {

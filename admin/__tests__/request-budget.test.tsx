@@ -162,6 +162,10 @@ describe("admin console request budget", () => {
     expect(el.textContent).toContain("3 筆（未兌換 1・已兌換 1・已過期 1）");
     expect(el.textContent).toContain("7 則（不顯示內容）");
     expect(el.textContent).not.toContain("創世記");
+    // 不列徽章、不分手動／自動打卡（維護者 2026-10-14）
+    expect([...el.querySelectorAll(".adm-panel__label")].map((label) => label.textContent)).toEqual([
+      "帳號", "計畫報名", "兌換券", "打卡紀錄", "測驗", "團隊", "團隊異動", "經文筆記", "回報", "通知", "時間軸"
+    ]);
 
     // 換人再回來：新的人 1 個請求，回來的人 0 個
     await go(`#/people/user/${OTHER}`);
@@ -201,15 +205,13 @@ describe("admin console request budget", () => {
     });
     expect(el.textContent).toContain("創世記 99 章");
 
-    // 收起再打開、筆數 0 的區塊、帳號／徽章／經文筆記：都不打請求
+    // 收起再打開、筆數 0 的區塊、帳號／經文筆記：都不打請求
     await togglePanel(el, "打卡紀錄");
     await togglePanel(el, "打卡紀錄");
     expect(el.textContent).toContain("創世記 99 章");
     await togglePanel(el, "測驗");
     expect(el.textContent).toContain("沒有測驗。");
     await togglePanel(el, "帳號");
-    await togglePanel(el, "徽章");
-    expect(el.textContent).toContain("伺服器沒有這份資料");
     await togglePanel(el, "經文筆記");
     expect(el.textContent).toContain("屬於個人靈修，後台不顯示。");
     expect(requests).toHaveLength(4);

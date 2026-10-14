@@ -41,11 +41,11 @@
 - **「人」區**（#567，原本的「客服 → 查詢使用者」與「帳號與權限」合一；網址 `#/people`、`#/people/user/<id>[?reason=]`、`#/people/scopes[/<id>]`，舊網址 `#/support/users`、`#/support/user/<id>[/<舊分頁>]`、`#/accounts…` 導到新頁，會友 App 舊版的連結仍然有效）：看名單、管理範圍要 `accounts.read`，個人頁要 `support.read`，改管理範圍要 `accounts.write`（沒有的話勾選框停用、沒有儲存鈕）。名單在伺服器端篩選、分頁（一次 50 人、email 遮罩；搜尋也找其他登入方式的 email），用「排序鍵＋id」游標往下接（`directory_list` 的 `cursor`＝上一頁最後一人的 `sort_key`），資料變動中翻頁也不跳過或重複；不像 App 一次把全部的人和完整 email 載進瀏覽器。**角色由會員中心同步，後台不改角色**；只改大區長／區長／小組長的管理範圍（`set_profile_managed_scopes`，名稱要在組織名單裡），可填修改原因，稽核記前後差異。
 - **匯出一律由伺服器產生**（`report_export` 需要 `support.read`＋`export`；含完整 email 的 `directory_export` 需要 `accounts.read`＋`export`＋`support.pii`；`org_export` 需要 `accounts.read`＋`export`；`audit_export` 需要 `audit.read`＋`export`、最多 5000 筆；都記 `export` 稽核，欄位和 App 的匯出相同）；前端只存檔，不自己組 CSV。照搬區塊的匯出是例外（舊程式在瀏覽器組檔），但下載前一定先成功呼叫 `legacy_export_audit` 記稽核，記不到就不下載（見下面）。
 - **截圖**：回覆可附 1 張（瀏覽器先壓到約 300 KB，伺服器上限 500 KB，PNG／JPEG／WebP）。顯示用 5 分鐘有效的簽名網址，存檔路徑不送到前端。
-- **個人頁**（#567，`admin/src/views/UserDetail.tsx`、`supabase/functions/admin-api/people.ts`；第一階段只讀，補發徽章、刪除沒有歸屬的打卡等修正之後個別評估）：照「需要時才調閱」——打開只拿除錯檢查＋各區筆數（記 `view_user`）；各區摺疊、右邊先顯示筆數，點開才調閱（第一頁記 `view_user_section`，`detail.section` 是哪一區，時間軸是 `timeline`）。
+- **個人頁**（#567，`admin/src/views/UserDetail.tsx`、`supabase/functions/admin-api/people.ts`；第一階段只讀，刪除沒有歸屬的打卡等修正之後個別評估）：照「需要時才調閱」——打開只拿除錯檢查＋各區筆數（記 `view_user`）；各區摺疊、右邊先顯示筆數，點開才調閱（第一頁記 `view_user_section`，`detail.section` 是哪一區，時間軸是 `timeline`）。
   - **除錯檢查**只列真的發生過的事故：重複報名、沒有歸屬計畫的打卡（章數會多算）、App 累積章數和計畫書卷內章數不一致、登入身分（同一個會員中心 id 或同 email 對到別的帳號）、同計畫同組別在兩隊、寬限期截止後還有寫入、App 版本。事實由 SQL 查（`admin_api_user_summary` 的 `facts`），判斷與文字在 `people.ts`（`buildPersonReport`），前端只顯示。
   - **App 版本**只能從這個人最近一次回報的診斷資訊（`build_id`）知道，和 admin-api 讀會友 App 的 `/version.json` 比（正式站 `bible.newlife.org.tw`、其他專案用 staging；可用 `ADMIN_API_MEMBER_APP_URL` 覆蓋）；讀不到就是「無法判斷」，不影響其他檢查。
   - **會友 App 現在應該顯示**：伺服器對這一個人跑 `plan_progress_people`（`ARRAY[這個人]`），再用和計畫名單同一份規則（`_shared/progress/plan-report.mjs`）算出「第 N 遍・%・落後 N 天」，拿來和會友的截圖對照；前端不要再算。
-  - **徽章後台看不到**：徽章只存在會友手機裡 App 的瀏覽器儲存空間，伺服器沒有資料。打卡紀錄沒有記下是手動還是讀到底自動打卡。
+  - **不列徽章、不分手動／自動打卡**（維護者 2026-10-14）：徽章只存在會友手機的 App 裡，看讀經紀錄就知道；打卡來源不影響任何計算，除錯也用不到（讀了沒記錄＝沒有那筆可看、打卡不見＝取消勾選刪掉了），所以 `reading_logs` 不加來源欄位。
   - **經文筆記只給筆數與最後更新時間，不給內容**（屬於個人靈修）。
   - 查看理由：從回報、名單、隊伍頁打開時帶在網址上；頁面上可以改，之後點開的區塊、顯示個資都用改過的理由。
 - **個資預設遮罩**：按「顯示」才呼叫 `reveal_pii`（伺服器記稽核，需要 `support.pii` 能力）。可以附上查看理由，會記進 `view_user`／`view_user_section`／`reveal_pii` 稽核。
