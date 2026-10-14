@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react";
 import type { AdminApi } from "../api.ts";
-import { formatRoute, USER_TABS, type UserTab } from "../route.ts";
+import { formatRoute, isUuid, USER_TABS, type UserTab } from "../route.ts";
 import { PROVIDER_LABEL, SECTION_LABEL, formatDate, formatDateTime, label, text } from "../format.ts";
 import { cursorAfter, describeItem, usableCursor } from "../items.ts";
 import type { Cursor, Page, PlanSummary, RevealedPii, SectionItem, SectionName, UserSummary } from "../types.ts";
@@ -150,6 +150,7 @@ export function UserDetail({ api, userId, tab, reason, capabilities }: Props) {
   }
 
   const { account } = summary;
+  const canTeams = capabilities.includes("plans.read");
   const canReveal = capabilities.includes("support.pii")
     && (account.has_email || account.has_phone || summary.identities.length > 0);
 
@@ -207,6 +208,7 @@ export function UserDetail({ api, userId, tab, reason, capabilities }: Props) {
             </button>
           ) : null}
           revealError={revealError}
+          canTeams={canTeams}
         />
       )}
 
@@ -216,6 +218,7 @@ export function UserDetail({ api, userId, tab, reason, capabilities }: Props) {
           total={Number(summary.counts?.[tab as SectionName]) || 0}
           emptyText={`沒有${TAB_LABEL[tab]}。`}
           onMore={() => loadMore(tab as SectionName)}
+          teamLinks={canTeams}
         />
       )}
 
@@ -226,6 +229,7 @@ export function UserDetail({ api, userId, tab, reason, capabilities }: Props) {
               total={null}
               emptyText="沒有任何紀錄。"
               showSection
+              teamLinks={canTeams}
               onMore={() => loadTimeline(timeline.cursor)}
             />
           : <Spinner label="載入時間軸…" />
@@ -242,11 +246,12 @@ function BackLink() {
   );
 }
 
-function Overview({ summary, revealed, revealControl, revealError }: {
+function Overview({ summary, revealed, revealControl, revealError, canTeams }: {
   summary: UserSummary;
   revealed: RevealedPii | null;
   revealControl: React.ReactNode;
   revealError: unknown;
+  canTeams: boolean;
 }) {
   const { account, org, member_hub: hub } = summary;
   return (
@@ -297,13 +302,13 @@ function Overview({ summary, revealed, revealControl, revealError }: {
       <Card title={`參加的計畫（${summary.plans.length}）`}>
         {summary.plans.length === 0
           ? <p className="adm-muted">沒有參加任何計畫。</p>
-          : <ul className="adm-plan-list">{summary.plans.map((plan) => <PlanRow key={plan.plan_id} plan={plan} />)}</ul>}
+          : <ul className="adm-plan-list">{summary.plans.map((plan) => <PlanRow key={plan.plan_id} plan={plan} canTeams={canTeams} />)}</ul>}
       </Card>
     </div>
   );
 }
 
-function PlanRow({ plan }: { plan: PlanSummary }) {
+function PlanRow({ plan, canTeams }: { plan: PlanSummary; canTeams: boolean }) {
   const start = plan.church_start_date || plan.start_date;
   const end = plan.church_end_date || plan.end_date;
   return (
@@ -321,7 +326,15 @@ function PlanRow({ plan }: { plan: PlanSummary }) {
         {plan.grace_days ? <Field name="打卡寬限">{plan.grace_days} 天</Field> : null}
         {plan.teams.length > 0 && (
           <Field name="團隊">
-            {plan.teams.map((team) => `${text(team.name)}${team.is_captain ? "（隊長）" : ""}`).join("、")}
+            {plan.teams.map((team, index) => (
+              <span key={team.team_id}>
+                {index > 0 && "、"}
+                {canTeams && isUuid(team.team_id)
+                  ? <a className="adm-link" href={formatRoute({ view: "plans", tab: "teams", planId: plan.global_plan_id, teamId: team.team_id })}>{text(team.name)}</a>
+                  : text(team.name)}
+                {team.is_captain ? "（隊長）" : ""}
+              </span>
+            ))}
           </Field>
         )}
       </dl>
@@ -329,12 +342,14 @@ function PlanRow({ plan }: { plan: PlanSummary }) {
   );
 }
 
-function ItemList({ state, total, emptyText, onMore, showSection = false }: {
+function ItemList({ state, total, emptyText, onMore, showSection = false, teamLinks = false }: {
   state: ListState | null;
   total: number | null;
   emptyText: string;
   onMore: () => void;
   showSection?: boolean;
+  /** 有 plans.read：團隊異動可以點進隊伍頁（#566） */
+  teamLinks?: boolean;
 }) {
   if (!state) return null;
   return (
@@ -345,7 +360,7 @@ function ItemList({ state, total, emptyText, onMore, showSection = false }: {
         : (
           <ol className="adm-item-list">
             {state.items.map((item) => {
-              const view = describeItem(item);
+              const view = describeItem(item, { teamLinks });
               return (
                 <li key={`${item.section}-${item.id}`} className="adm-item">
                   <div className="adm-item__head">

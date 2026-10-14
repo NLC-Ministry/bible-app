@@ -16,6 +16,7 @@ import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrg
 import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
 import { validateSearchQuery } from "./search-query.ts";
 import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
+import { runTeamDetail, runTeamHistory, runTeamLineage, runTeamList, runTeamSearch } from "./teams.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export { validateSearchQuery };
@@ -31,7 +32,7 @@ export const CAPABILITIES = [
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
-  "plans.read",     // 計畫總覽（只有數字）與名單（#564）、測驗作答（#565）
+  "plans.read",     // 計畫總覽（只有數字）與名單（#564）、測驗作答（#565）、隊伍清單與除錯（#566）
   "plans.remind",   // 從計畫名單送關心提醒給會友（#565）
   "export"          // 匯出
 ] as const;
@@ -515,6 +516,59 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     rpc: "admin_api_care_remind",
     run: runCareRemind,
     buildArgs: buildCareRemindArgs
+  },
+
+  // ── 隊伍除錯（#566，第一階段只讀）──────────────────────────────────────────
+  // 清單：打開團隊分頁一次拿齊（每隊＋除錯檢查），SQL 記 view_plan_teams
+  team_list: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_team_list",
+    run: runTeamList,
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.global_plan_id)) return { ok: false, error: "invalid_plan_id" };
+      return { ok: true, args: { ...actorArgs(ctx), p_global_plan_id: params.global_plan_id, p_request_id: ctx.requestId } };
+    }
+  },
+  // 隊伍頁：1 個請求拿齊基本資料、除錯檢查、成員、會友 App 應該顯示；SQL 記 view_team
+  team_detail: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_team_detail",
+    run: runTeamDetail,
+    buildArgs: (params, ctx) => isUuid(params.team_id)
+      ? { ok: true, args: { ...actorArgs(ctx), p_team_id: params.team_id, p_request_id: ctx.requestId } }
+      : { ok: false, error: "invalid_team_id" }
+  },
+  // 異動歷程、跨階段對應：隊伍頁點開才調閱（同一支隊的細節，查看已由 team_detail 記過）
+  team_history: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_team_history",
+    run: runTeamHistory,
+    buildArgs: (params, ctx) => isUuid(params.team_id)
+      ? { ok: true, args: { p_actor_id: ctx.actorId, p_team_id: params.team_id } }
+      : { ok: false, error: "invalid_team_id" }
+  },
+  team_lineage: {
+    capabilities: ["plans.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_team_lineage",
+    run: runTeamLineage,
+    buildArgs: (params, ctx) => isUuid(params.team_id)
+      ? { ok: true, args: { p_actor_id: ctx.actorId, p_team_id: params.team_id } }
+      : { ok: false, error: "invalid_team_id" }
+  },
+  // 用隊名或邀請碼找隊伍（搜尋字規則同 user_search）
+  team_search: {
+    capabilities: ["plans.read"],
+    rateLimit: { bucket: "search", limit: 60, windowSeconds: 60 },
+    rpc: "admin_api_team_search",
+    run: runTeamSearch,
+    buildArgs: (params, ctx) => {
+      const q = validateSearchQuery(params.q);
+      return q.ok ? { ok: true, args: { p_actor_id: ctx.actorId, p_query: q.query } } : q;
+    }
   },
 
   // ── 稽核紀錄（#550 第四組）────────────────────────────────────────────────

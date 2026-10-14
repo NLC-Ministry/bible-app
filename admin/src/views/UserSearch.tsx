@@ -1,12 +1,14 @@
 // 使用者查詢：搜尋框＋結果清單（#555）。
 // 停止輸入 250ms 才送；新的搜尋會取消還在路上的舊搜尋（AbortController），結果不會被舊回應蓋掉。
 // 搜尋字的規則和 admin-api 共用 search-query.ts 的 validateSearchQuery，不合規則就不送。
+// 有計畫權限（plans.read）時同一個字也找隊伍（隊名或邀請碼，#566），結果列在使用者下面、點了打開隊伍頁。
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { validateSearchQuery } from "../../../supabase/functions/admin-api/search-query.ts";
 import { isAbortError, type AdminApi } from "../api.ts";
 import { formatRoute } from "../route.ts";
 import { formatDateTime, text } from "../format.ts";
+import type { TeamSearchResult } from "../teams.ts";
 import type { SearchResult } from "../types.ts";
 import { Badge, ErrorNotice, Spinner } from "../ui.tsx";
 
@@ -19,10 +21,13 @@ type Props = {
   state: SearchState;
   onChange: (next: SearchState) => void;
   selectedUserId: string | null;
+  /** 有 plans.read 才一起找隊伍 */
+  canTeams?: boolean;
 };
 
-export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
+export function UserSearch({ api, state, onChange, selectedUserId, canTeams = false }: Props) {
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [teams, setTeams] = useState<TeamSearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -33,6 +38,7 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
   useEffect(() => {
     // 字一改就取消還在路上的舊搜尋，舊結果不會在新搜尋送出前閃回來
     controllerRef.current?.abort();
+    setTeams(null);
     if (!validation || !validation.ok) {
       setResults(null);
       setLoading(false);
@@ -40,8 +46,10 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
       return undefined;
     }
     const query = validation.query;
+    const cachedTeams = canTeams ? api.peek<TeamSearchResult[]>("team_search", { q: query }) : undefined;
+    if (cachedTeams) setTeams(cachedTeams);
     const cached = api.peek<SearchResult[]>("user_search", { q: query });
-    if (cached) {
+    if (cached && (!canTeams || cachedTeams)) {
       setResults(cached);
       setLoading(false);
       setError(null);
@@ -51,6 +59,18 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
     const timer = setTimeout(() => {
       const controller = new AbortController();
       controllerRef.current = controller;
+      // 隊伍搜尋失敗不影響使用者結果，只是不列隊伍
+      if (canTeams && !cachedTeams) {
+        api.call<TeamSearchResult[]>("team_search", { q: query }, { signal: controller.signal })
+          .then((data) => { if (!controller.signal.aborted) setTeams(Array.isArray(data) ? data : []); })
+          .catch(() => { if (!controller.signal.aborted) setTeams([]); });
+      }
+      if (cached) {
+        setResults(cached);
+        setError(null);
+        setLoading(false);
+        return;
+      }
       api.call<SearchResult[]>("user_search", { q: query }, { signal: controller.signal })
         .then((data) => {
           if (controller.signal.aborted) return;
@@ -67,7 +87,7 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // validation 由 trimmed 決定，只看 trimmed 就好
-  }, [api, trimmed]);
+  }, [api, trimmed, canTeams]);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -83,7 +103,7 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
             type="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder="姓名或 email"
+            placeholder={canTeams ? "姓名、email、隊名或邀請碼" : "姓名或 email"}
             value={state.query}
             maxLength={100}
             onChange={(event) => onChange({ ...state, query: event.target.value })}
@@ -137,6 +157,25 @@ export function UserSearch({ api, state, onChange, selectedUserId }: Props) {
         )}
         {results && results.length >= 20 && (
           <p className="adm-muted adm-small">只列出前 20 筆，請輸入更完整的姓名或 email。</p>
+        )}
+        {!loading && teams && teams.length > 0 && (
+          <>
+            <h3 className="adm-label">隊伍</h3>
+            <ul className="adm-result-list">
+              {teams.map((team) => (
+                <li key={team.id}>
+                  <a className="adm-result" href={formatRoute({ view: "plans", tab: "teams", planId: team.plan.id, teamId: team.id })}>
+                    <span className="adm-result__name">
+                      {text(team.name, "未命名隊伍")}
+                      {team.matched_code && <Badge tone="brand">邀請碼相符</Badge>}
+                    </span>
+                    <span className="adm-result__meta">{text(team.plan.name, "未命名計畫")}</span>
+                    <span className="adm-result__meta">隊長 {text(team.captain_name, "（未填姓名）")}・{team.member_count}／{team.division} 人</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </div>

@@ -57,7 +57,14 @@ describe("edge function deploy graph", () => {
     expect(adminApi).toContain("_shared/progress/plan-report.mjs");
     expect(adminApi).toContain("_shared/progress/plan-progress.mjs");
     expect(adminApi).toContain("_shared/progress/church-campaign.mjs");
-    expect(shared("nlc-data")).toEqual(adminApi);
+    // nlc-data 用到的每一份規則 admin-api 都帶同一份；admin-api 多的只有隊伍除錯（#566）用的
+    const nlcData = shared("nlc-data");
+    expect(adminApi.filter((file) => nlcData.includes(file))).toEqual(nlcData);
+    expect(adminApi.filter((file) => !nlcData.includes(file))).toEqual([
+      "_shared/progress/campaign-stage-kinds.mjs",
+      "_shared/progress/team-progress.mjs",
+      "_shared/progress/team-report.mjs"
+    ]);
   });
 
   it("the shared progress modules import nothing but each other (no npm:, URLs or browser globals)", () => {

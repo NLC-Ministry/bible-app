@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import {
   getMemberOverallPlanProgress,
-  getTeamOverallPlanProgress
+  getTeamOverallPlanProgress,
+  isTeamFull
 } from "../js/modules/team-progress-metrics.mjs";
-import { isCampaignStageKind } from "../js/data/campaign-stage-kinds.mjs";
+import { isCampaignStageEnded, isCampaignStageKind } from "../js/data/campaign-stage-kinds.mjs";
 import {
   countScheduleDaysCoveredByChapters,
   countExpectedScheduleDays,
@@ -82,6 +83,8 @@ describe("reading team member removal refresh", () => {
       getMemberOverallPlanProgress,
       getTeamOverallPlanProgress,
       isCampaignStageKind,
+      isCampaignStageEnded,
+      isTeamFull,
       countScheduleDaysCoveredByChapters,
       countExpectedScheduleDays,
       countLateCompletedDays
@@ -119,8 +122,12 @@ describe("reading team member removal refresh", () => {
 
   it("團隊未滿就露出邀請碼：isReady 只看實際人數，不看可能卡住的 team.status", () => {
     // 曾滿員 → 有人退出 → team.status 可能卡在 'ready'，但只要人數未滿就要顯示邀請碼補人
-    expect(teamUi).toContain("const isReady = Number(team.memberCount) >= Number(team.capacity);");
-    expect(teamUi).not.toContain('const isReady = team.status === "ready" || Number(team.memberCount) === Number(team.capacity);');
+    // 規則搬到共用的 isTeamFull（#566：後台隊伍頁的「邀請碼看不看得到」用同一份）
+    expect(teamUi).toContain("const isReady = isTeamFull(team.memberCount, team.capacity);");
+    expect(teamUi).not.toContain('team.status === "ready"');
     expect(teamUi).toContain('${!isReady ? `<div class="reading-team-invite">');
+    expect(isTeamFull(2, 3)).toBe(false);
+    expect(isTeamFull(3, 3)).toBe(true);
+    expect(isTeamFull("6", 6)).toBe(true);
   });
 });

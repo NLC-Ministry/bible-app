@@ -51,7 +51,7 @@ export function SupportArea({ api, route, capabilities, doc }: Props) {
         : (
           <div className={`adm-support${route.view === "user" ? " adm-support--user-open" : ""}`}>
             <div className="adm-support__search">
-              <UserSearch api={api} state={search} onChange={setSearch} selectedUserId={route.view === "user" ? route.userId : null} />
+              <UserSearch api={api} state={search} onChange={setSearch} selectedUserId={route.view === "user" ? route.userId : null} canTeams={capabilities.includes("plans.read")} />
             </div>
             <div className="adm-support__detail">
               {route.view === "user"
