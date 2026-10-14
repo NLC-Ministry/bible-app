@@ -1,7 +1,7 @@
 // 後台外殼（#555）：登入 → bootstrap（開後台只打這 1 個 admin-api 請求）→ 依能力清單顯示左側導覽。
 // 相依（登入、admin-api、window）全部從參數注入，測試用假的跑真的元件。
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, BookOpen, Headset, LogOut, Menu, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, BookOpenCheck, Headset, LogOut, Menu, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
 import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
@@ -24,6 +24,7 @@ import { Badge, ErrorNotice, Spinner } from "./ui.tsx";
 import { AccountsArea } from "./views/AccountsArea.tsx";
 import { AuditLog } from "./views/AuditLog.tsx";
 import { LegacyHost } from "./views/LegacyHost.tsx";
+import { INITIAL_PLAN_UI, PlanArea, type PlanUiState } from "./views/PlanArea.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
 
 type Phase =
@@ -46,6 +47,7 @@ export type AdminAppProps = {
 const NAV_ICON: Record<NavItem["icon"], LucideIcon> = {
   headset: Headset,
   shield: ShieldCheck,
+  plan: BookOpenCheck,
   activity: Activity,
   book: BookOpen,
   settings: Settings
@@ -68,6 +70,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
   // 最近一次打開的照搬區塊：iframe 第一次進來才建立，之後切到別區只藏起來（#550）
   const [legacyRoute, setLegacyRoute] = useState<Extract<AdminRoute, { view: "legacy" }> | null>(null);
+  // 計畫區選的計畫、名單條件（#565）：切到計畫設定（照搬）或別區再回來還在
+  const [planUi, setPlanUi] = useState<PlanUiState>(INITIAL_PLAN_UI);
 
   // 登入 → bootstrap
   useEffect(() => {
@@ -158,6 +162,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <SupportArea api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else if (route.view === "accounts") {
     content = <AccountsArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} doc={win.document} />;
+  } else if (route.view === "plans") {
+    content = <PlanArea api={api} route={route} capabilities={capabilities} ui={planUi} setUi={setPlanUi} doc={win.document} />;
   } else if (route.view === "audit") {
     content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else {

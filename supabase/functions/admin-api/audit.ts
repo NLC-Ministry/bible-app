@@ -112,6 +112,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   "report.delete": "刪除回報",
   set_profile_managed_scopes: "設定管理範圍",
   view_plan_roster: "打開計畫名單",
+  "care_reminder.send": "送關心提醒",
 
   // admin-api 擋下的請求（action 名稱）
   unknown: "不明的後台操作",
@@ -136,6 +137,10 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   legacy_export_audit: "匯出（照搬的管理區塊）",
   plan_summary: "看計畫總覽",
   plan_roster: "看計畫名單",
+  plan_options: "看計畫清單",
+  plan_quiz: "看計畫的測驗作答",
+  plan_roster_export: "匯出計畫名單",
+  care_remind: "送關心提醒",
   audit_list: "看稽核紀錄",
   audit_event: "看稽核紀錄明細",
   audit_export: "匯出稽核紀錄",
@@ -185,17 +190,20 @@ export const AUDIT_EXPORT_KIND_LABEL: Readonly<Record<string, string>> = {
   user_directory: "使用者名單",
   org_structure: "組織架構",
   audit: "稽核紀錄",
+  plan_roster: "計畫名單",
   legacy: "照搬的管理區塊"
 };
 
-// 照搬區塊的 id → 名稱（同 admin/src/legacy.ts；admin-api 單獨部署，不能 import 前端檔）
+// 照搬區塊的 id → 名稱（同 admin/src/legacy.ts；admin-api 單獨部署，不能 import 前端檔）。
+// #565 移除的區塊（加入計畫狀況、組員總覽、計畫統計）名稱留著，之前的匯出紀錄才看得懂（RETIRED_LEGACY_SECTIONS）。
+export const RETIRED_LEGACY_SECTIONS = ["join-status", "members", "statistics"] as const;
 export const AUDIT_LEGACY_SECTION_LABEL: Readonly<Record<string, string>> = {
   announcements: "公告",
   commentary: "經文注釋",
   quizzes: "小測驗",
   exam: "大測驗",
   "lightning-quiz": "雲柱測驗",
-  plans: "計畫管理",
+  plans: "計畫設定",
   "join-status": "加入計畫狀況",
   members: "組員總覽",
   teams: "組隊狀況",

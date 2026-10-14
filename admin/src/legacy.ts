@@ -8,13 +8,14 @@
 //   · 換區、主題、iframe 裡的操作（延後閒置登出）
 //
 // 區塊 id 就是舊管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id；計畫管理（plans）是原本讀經計畫分頁
-// 側欄的卡片（#551 起在 admin-legacy/admin-view.html），iframe 把它搬進一個區塊面板（LEGACY_HOSTED_CARDS）。同一份清單另外兩處：
+// 側欄的卡片（#551 起在 admin-legacy/admin-view.html），iframe 把它搬進一個區塊面板（LEGACY_HOSTED_CARDS）。
+// #565 起它是「計畫」區的「計畫設定」分頁；加入計畫狀況、組員總覽、計畫統計由計畫區的總覽／名單取代，已移除。同一份清單另外兩處：
 // admin-legacy/sections.mjs（iframe）、admin-api policy.ts 的 LEGACY_EXPORT_SECTIONS；
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
 
 import type { ResolvedTheme } from "./theme.ts";
 
-export type LegacyArea = "operations" | "content" | "system";
+export type LegacyArea = "plans" | "operations" | "content" | "system";
 
 export type LegacySection = {
   id: string;
@@ -29,17 +30,15 @@ export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "quizzes", area: "content", label: "小測驗", capability: "content.manage" },
   { id: "exam", area: "content", label: "大測驗", capability: "content.manage" },
   { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" },
-  { id: "plans", area: "operations", label: "計畫管理", capability: "operations.manage" },
-  { id: "join-status", area: "operations", label: "加入計畫狀況", capability: "operations.manage" },
-  { id: "members", area: "operations", label: "組員總覽", capability: "operations.manage" },
+  { id: "plans", area: "plans", label: "計畫設定", capability: "operations.manage" },
+  // 隊伍清單與除錯搬進計畫區之前（#566）先留在營運區
   { id: "teams", area: "operations", label: "組隊狀況", capability: "operations.manage" },
-  { id: "statistics", area: "operations", label: "計畫統計", capability: "operations.manage" },
   { id: "reading-activity", area: "operations", label: "讀經使用率", capability: "operations.manage" },
   { id: "registrations", area: "operations", label: "報名註冊統計", capability: "operations.manage" },
   { id: "settings", area: "system", label: "功能開放設定", capability: "settings.manage" }
 ];
 
-export const LEGACY_AREAS: readonly LegacyArea[] = ["operations", "content", "system"];
+export const LEGACY_AREAS: readonly LegacyArea[] = ["plans", "operations", "content", "system"];
 
 export function isLegacyArea(value: unknown): value is LegacyArea {
   return typeof value === "string" && (LEGACY_AREAS as readonly string[]).includes(value);

@@ -41,9 +41,9 @@ describe("parseRoute / formatRoute", () => {
     expect(route.view === "user" && route.reason.length).toBe(200);
   });
 
-  it("parses the operations area: the legacy plan/statistics sections, the plan card first (#550)", () => {
-    expect(parseRoute("#/operations")).toEqual({ view: "legacy", area: "operations", section: "plans" });
-    for (const section of ["plans", "join-status", "members", "teams", "statistics", "reading-activity", "registrations"]) {
+  it("parses the operations area: the copied sections left after #565", () => {
+    expect(parseRoute("#/operations")).toEqual({ view: "legacy", area: "operations", section: "teams" });
+    for (const section of ["teams", "reading-activity", "registrations"]) {
       const route = parseRoute(`#/operations/${section}`);
       expect(route).toEqual({ view: "legacy", area: "operations", section });
       expect(formatRoute(route)).toBe(`#/operations/${section}`);
@@ -51,9 +51,36 @@ describe("parseRoute / formatRoute", () => {
     }
     expect(parseRoute("#/operations/announcements")).toEqual({ view: "not_found" });
     expect(parseRoute("#/operations/users")).toEqual({ view: "not_found" });
-    expect(parseRoute("#/operations/plans/extra")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/operations/teams/extra")).toEqual({ view: "not_found" });
     // 營運區搬好之後沒有「還在搬」的佔位頁了
     expect(parseRoute("#/nowhere/x")).toEqual({ view: "not_found" });
+  });
+
+  it("parses the plan area: four native tabs, an optional plan, and the copied settings tab (#565)", () => {
+    const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
+    expect(parseRoute("#/plans")).toEqual({ view: "plans", tab: "overview", planId: null });
+    for (const tab of ["roster", "teams", "quiz"]) {
+      const route = parseRoute(`#/plans/${tab}?plan=${PLAN.toUpperCase()}`);
+      expect(route).toEqual({ view: "plans", tab, planId: PLAN });
+      expect(formatRoute(route)).toBe(`#/plans/${tab}?plan=${PLAN}`);
+      expect(areaOf(route)).toBe("plans");
+    }
+    expect(formatRoute({ view: "plans", tab: "overview", planId: null })).toBe("#/plans");
+    expect(parseRoute("#/plans?plan=nope")).toEqual({ view: "plans", tab: "overview", planId: null });
+    const settings = parseRoute("#/plans/settings");
+    expect(settings).toEqual({ view: "legacy", area: "plans", section: "plans" });
+    expect(formatRoute(settings)).toBe("#/plans/settings");
+    expect(areaOf(settings)).toBe("plans");
+    for (const bad of ["#/plans/people", "#/plans/roster/extra", "#/plans/plans", "#/plans/settings/x"]) {
+      expect(parseRoute(bad), bad).toEqual({ view: "not_found" });
+    }
+  });
+
+  it("sends old operations bookmarks to their new place in the plan area (#565)", () => {
+    expect(parseRoute("#/operations/plans")).toEqual({ view: "legacy", area: "plans", section: "plans" });
+    expect(parseRoute("#/operations/join-status")).toEqual({ view: "plans", tab: "roster", planId: null });
+    expect(parseRoute("#/operations/members")).toEqual({ view: "plans", tab: "roster", planId: null });
+    expect(parseRoute("#/operations/statistics")).toEqual({ view: "plans", tab: "overview", planId: null });
   });
 
   it("parses the system area: audit log with actor/target filters, and the copied settings page (#550)", () => {
@@ -109,6 +136,8 @@ describe("navigation by capability", () => {
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
     expect(canUse(["console.access"], "operations")).toBe(false);
     expect(canUse(["console.access", "operations.manage"], "operations")).toBe(true);
+    expect(canUse(["console.access", "operations.manage"], "plans")).toBe(false);
+    expect(canUse(["console.access", "plans.read"], "plans")).toBe(true);
     // 系統區：稽核紀錄或功能開放設定有一個就看得到
     expect(canUse(["console.access"], "system")).toBe(false);
     expect(canUse(["console.access", "audit.read"], "system")).toBe(true);

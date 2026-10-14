@@ -10,6 +10,7 @@ import {
   AUDIT_ACTION_LABEL,
   AUDIT_LEGACY_SECTION_LABEL,
   AUDIT_TABLE_LABEL,
+  RETIRED_LEGACY_SECTIONS,
   auditActionLabel,
   auditCsv,
   auditEventLabel,
@@ -136,7 +137,11 @@ describe("action names in Chinese", () => {
     expect(auditEventLabel({ action: "export", detail: { kind: "audit" } })).toBe("匯出稽核紀錄");
     expect(auditEventLabel({ action: "export", detail: null })).toBe("匯出");
     // 照搬區塊名稱和外殼同一份
-    expect(Object.keys(AUDIT_LEGACY_SECTION_LABEL).sort()).toEqual(Object.keys(LEGACY_EXPORT_SECTIONS).sort());
+    // 移除的區塊（#565）留名稱給舊紀錄用，其他和現在的清單一模一樣
+    expect(Object.keys(AUDIT_LEGACY_SECTION_LABEL).sort()).toEqual([...Object.keys(LEGACY_EXPORT_SECTIONS), ...RETIRED_LEGACY_SECTIONS].sort());
+    for (const id of RETIRED_LEGACY_SECTIONS) expect(Object.keys(LEGACY_EXPORT_SECTIONS), id).not.toContain(id);
+    expect(auditEventLabel({ action: "export", detail: { kind: "legacy", section: "statistics" } })).toBe("匯出計畫統計");
+    expect(auditEventLabel({ action: "export", detail: { kind: "plan_roster" } })).toBe("匯出計畫名單");
     for (const section of LEGACY_SECTIONS) expect(AUDIT_LEGACY_SECTION_LABEL[section.id], section.id).toBe(section.label);
   });
 });

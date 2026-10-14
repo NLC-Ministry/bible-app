@@ -29,7 +29,7 @@ export const ADMIN_CONSOLE_SECTION_ROUTES = Object.freeze({
   reports: "#/support",
   registrations: "#/operations/registrations",
   "reading-activity": "#/operations/reading-activity",
-  plans: "#/operations/plans",
+  plans: "#/plans/settings", // #565：計畫區的「計畫設定」
   announcements: "#/content/announcements",
   commentary: "#/content/commentary",
   "lightning-quiz": "#/content/lightning-quiz",

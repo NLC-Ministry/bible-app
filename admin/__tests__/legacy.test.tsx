@@ -235,30 +235,51 @@ const CONTENT_CAPS = ["console.access", "support.read", "export", "content.manag
 const OPERATIONS_CAPS = ["console.access", "support.read", "export", "operations.manage"];
 
 describe("operations area", () => {
-  it("shows the plan card first, then the App's plan and statistics sections, in the same iframe", async () => {
+  it("keeps only the sections the plan area has not replaced yet, in the same iframe (#565)", async () => {
     const { el, fetchImpl } = await mount("#/operations", OPERATIONS_CAPS);
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame.getAttribute("src")).toBe("/legacy");
-    expect(frame.title).toBe("計畫管理");
+    expect(frame.title).toBe("組隊狀況管理");
     const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["計畫管理", "加入計畫狀況", "組員總覽", "組隊狀況", "計畫統計", "讀經使用率", "報名註冊統計"]);
+    expect(tabs.map((a) => a.textContent)).toEqual(["組隊狀況", "讀經使用率", "報名註冊統計"]);
     expect(tabs[0].getAttribute("aria-current")).toBe("page");
-    expect(tabs[3].getAttribute("href")).toBe("#/operations/teams");
+    expect(tabs[2].getAttribute("href")).toBe("#/operations/registrations");
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("營運");
     // 照搬區只打開後台的 bootstrap，資料由 iframe 走 nlc-data
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
-    await go("#/operations/teams");
+    await go("#/operations/registrations");
     expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
-    expect(frame.title).toBe("組隊狀況管理");
+    expect(frame.title).toBe("報名註冊統計管理");
+  });
+
+  it("opens the plan card as the plan area's settings tab, next to the native tabs (#565)", async () => {
+    const { el, fetchImpl } = await mount("#/plans/settings", [...OPERATIONS_CAPS, "plans.read"]);
+    const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
+    expect(frame.title).toBe("計畫設定管理");
+    const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
+    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定"]);
+    expect(tabs[4].getAttribute("aria-current")).toBe("page");
+    expect(tabs[1].getAttribute("href")).toBe("#/plans/roster");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
+    // 舊書籤 #/operations/plans 也到這裡
+    await go("#/operations/plans");
+    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("計畫設定");
+  });
+
+  it("hides the settings tab without operations.manage", async () => {
+    const { el } = await mount("#/plans/settings", ["console.access", "plans.read"]);
+    expect(el.querySelector("iframe")).toBeNull();
+    expect(el.textContent).toContain("沒有權限");
   });
 
   it("shares one iframe with the content area", async () => {
     const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "content.manage"]);
     const frame = el.querySelector("iframe.adm-legacy__frame");
-    await go("#/operations/statistics");
+    await go("#/operations/reading-activity");
     expect(el.querySelectorAll("iframe.adm-legacy__frame")).toHaveLength(1);
     expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
-    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("計畫統計");
+    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("讀經使用率");
     expect([...el.querySelectorAll(".adm-legacy__tabs a")].map((a) => a.textContent)).not.toContain("大測驗");
   });
 

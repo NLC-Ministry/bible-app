@@ -493,6 +493,112 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-diff thead th { color: var(--text-muted); font-size: 13px; font-weight: var(--type-weight-regular); }
 .adm-diff tbody th { font-weight: var(--type-weight-regular); white-space: nowrap; }
 
+/* ── 計畫區（#565）：總覽、名單、團隊、測驗作答 ───────────────────────────
+   長條用 SVG 屬性畫寬度（CSP 不允許行內 style）；顏色一律用主題 token。 */
+.adm-plan-area { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.adm-plan-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.adm-plan-head > h2 { margin-right: auto; }
+.adm-plan-head__pick { max-width: min(100%, 26rem); }
+.adm-plan-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
+  padding: 8px 12px; border: 1px solid var(--border-card); border-radius: var(--radius-md); background: var(--bg-card);
+  font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.adm-plan-status__strong { font-weight: var(--type-weight-strong); }
+.adm-plan-status__check { display: inline-flex; align-items: center; gap: 4px; color: var(--color-success-foreground); }
+.adm-plan-status__check--bad { color: var(--color-danger-foreground); }
+.adm-plan-overview, .adm-plan-quiz { display: flex; flex-direction: column; gap: 16px; }
+/* 需要關心＋單位比較：表格比較寬，給它三分之二；不夠寬就上下排 */
+.adm-plan-overview__pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 1099px) { .adm-plan-overview__pair { grid-template-columns: minmax(0, 1fr); } }
+.adm-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.adm-bar { display: block; width: 100%; height: 8px; border-radius: 999px; overflow: hidden; }
+.adm-bar__track { fill: var(--border-default); }
+.adm-bar__fill { fill: var(--color-brand); }
+
+.adm-funnel { display: flex; flex-direction: column; gap: 4px; }
+.adm-funnel__row {
+  display: grid; grid-template-columns: 7rem minmax(0, 1fr) 11rem; align-items: center; gap: 12px;
+  padding: 8px 10px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.adm-funnel__row:hover { background: var(--color-brand-subtle); }
+.adm-funnel__label { font-weight: var(--type-weight-strong); }
+.adm-funnel__value { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.adm-funnel__value strong { font-weight: var(--type-weight-strong); }
+.adm-funnel__value small { color: var(--text-muted); font-size: 12px; }
+
+.adm-chips--flush { margin-top: 0; }
+.adm-chip--warning { border-color: color-mix(in srgb, var(--color-warning) 40%, transparent); background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card)); color: var(--text-primary); }
+.adm-chip--danger { border-color: color-mix(in srgb, var(--color-danger) 40%, transparent); color: var(--color-danger-foreground); }
+
+.adm-table-wrap { overflow-x: auto; }
+.adm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.adm-table th, .adm-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-default); text-align: left; vertical-align: middle; }
+.adm-table thead th { color: var(--text-muted); font-size: 13px; font-weight: var(--type-weight-regular); white-space: nowrap; }
+.adm-table tbody th { font-weight: var(--type-weight-strong); white-space: nowrap; }
+.adm-table .adm-num { text-align: right; }
+.adm-table td.adm-num .adm-bar { width: 4.5rem; margin: 2px 0 0 auto; height: 4px; }
+.adm-table__child th { padding-left: 30px; font-weight: var(--type-weight-regular); color: var(--text-secondary); }
+.adm-table__toggle { display: inline-flex; align-items: center; gap: 4px; color: var(--text-primary); text-decoration: none; font-weight: var(--type-weight-strong); }
+
+.adm-roster { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.adm-roster__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.adm-roster__search { flex: 1 1 220px; }
+.adm-roster__shortcut {
+  margin: 0; padding: 8px 12px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--bg-card)); font-size: 14px;
+}
+.adm-roster__condition { display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: start; gap: 8px 12px; }
+.adm-roster__condition-label { display: flex; flex-direction: column; padding-top: 4px; font-size: 14px; font-weight: var(--type-weight-strong); }
+.adm-roster__condition-label small { color: var(--text-muted); font-size: 12px; font-weight: var(--type-weight-regular); }
+.adm-roster__sentence { font-size: 15px; font-variant-numeric: tabular-nums; }
+.adm-roster__sentence strong { font-weight: var(--type-weight-strong); }
+.adm-roster__list { border: 1px solid var(--border-card); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
+.adm-roster__list > ul { list-style: none; margin: 0; padding: 0; }
+.adm-roster__head, .adm-roster__summary {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) 6.5rem 9.5rem; align-items: center; gap: 4px 12px; padding: 10px 14px;
+}
+.adm-roster__head { font-size: 13px; color: var(--text-muted); border-bottom: 1px solid var(--border-default); }
+.adm-roster__row { border-top: 1px solid var(--border-default); }
+.adm-roster__row:first-child { border-top: 0; }
+.adm-roster__summary { width: 100%; border: 0; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.adm-roster__summary:hover { background: var(--color-brand-subtle); }
+.adm-roster__caret { color: var(--text-muted); }
+.adm-roster__who { display: flex; flex-direction: column; min-width: 0; }
+.adm-roster__name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-weight: var(--type-weight-strong); overflow-wrap: anywhere; }
+.adm-roster__late { color: var(--color-danger-foreground); font-size: 13px; font-weight: var(--type-weight-regular); }
+.adm-roster__unit { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.adm-roster__status { display: flex; justify-content: flex-start; }
+.adm-roster__detail { display: flex; flex-direction: column; gap: 10px; padding: 2px 14px 14px 42px; }
+.adm-roster__detail > .adm-bar { max-width: 22rem; }
+.adm-roster__more { align-self: center; }
+.adm-roster__sent { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.adm-care-form { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 36rem; }
+.adm-care-form .adm-select { max-width: 14rem; }
+.adm-care-form__message { min-height: 4.5rem; resize: vertical; }
+
+.adm-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px; }
+.adm-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px;
+  border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-card);
+  color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.adm-tile:hover { border-color: var(--color-brand-border); background: var(--color-brand-subtle); }
+.adm-tile--static { cursor: default; }
+.adm-tile--static:hover { border-color: var(--border-default); background: var(--bg-card); }
+.adm-tile > span { color: var(--text-secondary); font-size: 13px; }
+.adm-tile > strong { font-size: 22px; font-weight: var(--type-weight-strong); font-variant-numeric: tabular-nums; }
+.adm-tile > small { color: var(--text-muted); font-size: 12px; }
+
+.adm-columns { display: block; width: 100%; height: 120px; }
+.adm-columns__bar { fill: var(--color-brand); }
+.adm-columns__labels { display: flex; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.adm-columns__labels > span { flex: 1; text-align: center; white-space: nowrap; }
+.adm-weeks li { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 7rem; align-items: center; gap: 10px; font-size: 14px; }
+.adm-weeks__label { color: var(--text-secondary); white-space: nowrap; }
+
 /* ── 照搬的舊管理區塊（#550）：iframe 填滿主畫面剩下的高度、裡面自己捲 ─────────────
    不讓 iframe 跟著內容長高：舊畫面的彈窗是 position: fixed，iframe 一長，彈窗會跑到看不到的地方。 */
 .adm-app--legacy { height: 100vh; height: 100dvh; min-height: 0; }
@@ -537,4 +643,16 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
   .adm-audit__badges { grid-column: 3; grid-row: 1; }
   .adm-audit__label, .adm-audit__actor, .adm-audit__target { grid-column: 2 / 4; }
   .adm-audit__detail { padding-left: 14px; }
+  .adm-funnel__row { grid-template-columns: 5.5rem minmax(0, 1fr); }
+  .adm-funnel__value { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
+  .adm-roster__toolbar .adm-segmented { flex: 1 1 100%; }
+  .adm-roster__condition { grid-template-columns: minmax(0, 1fr); }
+  .adm-roster__condition-label { flex-direction: row; align-items: baseline; gap: 8px; }
+  .adm-roster__head { display: none; }
+  .adm-roster__summary { grid-template-columns: 16px minmax(0, 1fr) auto; }
+  .adm-roster__chapters { grid-column: 3; grid-row: 1; }
+  .adm-roster__status { grid-column: 2 / 4; }
+  .adm-roster__detail { padding-left: 14px; }
+  .adm-weeks li { grid-template-columns: 5rem minmax(0, 1fr); }
+  .adm-weeks li > .adm-num { grid-column: 1 / -1; text-align: left; }
 }
