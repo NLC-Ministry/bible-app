@@ -3,7 +3,7 @@
 // 以回滾交易驗過；這裡守住 migration 內容與 Edge Function 的流程。
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { migrationFiles, readMigration } from "./migration-sql.mjs";
+import { currentMigrationSql, migrationFiles, readMigration } from "./migration-sql.mjs";
 import {
   ADMIN_ACTIONS,
   CAPABILITIES,
@@ -18,8 +18,9 @@ import {
 } from "../supabase/functions/admin-api/policy.ts";
 import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
 
-const migrationFile = migrationFiles().find(file => file.endsWith("_admin_api_support.sql"));
-const sql = readMigration(migrationFile);
+// 函式取現在的定義（#567 改寫了 user_summary／user_section／user_timeline）
+const sql = currentMigrationSql("20261011110008_admin_api_support.sql");
+const migrationFile = migrationFiles().find(file => file.includes("_admin_api_support."));
 // admin-api 呼叫的函式分散在 #547 之後的幾支 *_admin_api_*.sql（#550 起每組一支）
 const allAdminSql = migrationFiles().filter(file => /_admin_api_/.test(file)).map(readMigration).join("\n");
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -85,17 +86,22 @@ describe("parameters", () => {
 
   it("validates sections, cursors and limits", () => {
     const build = ADMIN_ACTIONS.user_section.buildArgs;
-    expect(build({ user_id: USER_ID, section: "reading_logs" }, ctx)).toEqual({ ok: true, args: {
-      p_user_id: USER_ID, p_section: "reading_logs", p_cursor_at: null, p_cursor_id: null, p_limit: 20
+    expect(build({ user_id: USER_ID, section: "reading_logs", reason: " 因回報 #3 " }, ctx)).toEqual({ ok: true, args: {
+      p_actor_id: ADMIN_ID, p_actor_role: "admin",
+      p_user_id: USER_ID, p_section: "reading_logs", p_cursor_at: null, p_cursor_id: null, p_limit: 20,
+      p_reason: "因回報 #3", p_request_id: ctx.requestId
     } });
+    expect(build({ user_id: USER_ID, section: "notifications", reason: 3 }, ctx)).toEqual({ ok: false, error: "invalid_reason" });
     expect(build({ user_id: USER_ID, section: "profiles" }, ctx)).toEqual({ ok: false, error: "invalid_section" });
     expect(build({ user_id: USER_ID, section: "tests", cursor: { at: "2026-10-01T00:00:00Z" } }, ctx)).toEqual({ ok: false, error: "invalid_cursor" });
     expect(build({ user_id: USER_ID, section: "tests", cursor: { at: "yesterday-ish", id: "1" } }, ctx)).toEqual({ ok: false, error: "invalid_cursor" });
     expect(build({ user_id: USER_ID, section: "tests", limit: 51 }, ctx)).toEqual({ ok: false, error: "invalid_limit" });
     expect(ADMIN_ACTIONS.user_timeline.buildArgs({ user_id: USER_ID, cursor: { at: "2026-10-01T00:00:00Z", id: "abc" }, limit: 10 }, ctx)).toEqual({ ok: true, args: {
-      p_user_id: USER_ID, p_cursor_at: "2026-10-01T00:00:00Z", p_cursor_id: "abc", p_limit: 10
+      p_actor_id: ADMIN_ID, p_actor_role: "admin",
+      p_user_id: USER_ID, p_cursor_at: "2026-10-01T00:00:00Z", p_cursor_id: "abc", p_limit: 10,
+      p_reason: null, p_request_id: ctx.requestId
     } });
-    expect([...USER_SECTIONS]).toEqual(["reading_logs", "team_events", "tests", "vouchers", "reports"]);
+    expect([...USER_SECTIONS]).toEqual(["plans", "reading_logs", "teams", "team_events", "tests", "vouchers", "reports", "notifications"]);
   });
 });
 

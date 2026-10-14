@@ -51,7 +51,7 @@ function setup({ search = "", hash = "", tokenResponse }: { search?: string; has
 
 /** 跑一次完整登入：init → 導去 Logto → 帶 code 回來 → 換 token */
 async function signIn(options: { expiresIn?: number; hash?: string } = {}) {
-  const first = setup({ hash: options.hash ?? "#/support/user/11111111-1111-4111-8111-111111111111?reason=x" });
+  const first = setup({ hash: options.hash ?? "#/people/user/11111111-1111-4111-8111-111111111111?reason=x" });
   expect(await first.auth.init()).toEqual({ status: "redirecting" });
   const authorizeUrl = new URL(first.location.assign.mock.calls[0][0]);
   const flow = JSON.parse(first.storage.getItem(FLOW_KEY)!);
@@ -90,8 +90,8 @@ describe("login redirect", () => {
   });
 
   it("remembers only an in-app return route", async () => {
-    const { flow } = await signIn({ hash: "#/support/user/11111111-1111-4111-8111-111111111111?reason=x" });
-    expect(flow.returnHash).toBe("#/support/user/11111111-1111-4111-8111-111111111111?reason=x");
+    const { flow } = await signIn({ hash: "#/people/user/11111111-1111-4111-8111-111111111111?reason=x" });
+    expect(flow.returnHash).toBe("#/people/user/11111111-1111-4111-8111-111111111111?reason=x");
     expect(safeReturnHash("https://evil.test")).toBe("");
     expect(safeReturnHash("#javascript:alert(1)")).toBe("");
     expect(safeReturnHash("#/support")).toBe("#/support");
@@ -114,7 +114,7 @@ describe("callback", () => {
     expect(second.storage.getItem(FLOW_KEY)).toBeNull();
     expect([...second.storage.data.values()].join(" ")).not.toContain("access-jwt");
     // code 從網址拿掉，回到原本要去的頁面
-    expect(second.history.replaceState).toHaveBeenCalledWith(null, "", "/#/support/user/11111111-1111-4111-8111-111111111111?reason=x");
+    expect(second.history.replaceState).toHaveBeenCalledWith(null, "", "/#/people/user/11111111-1111-4111-8111-111111111111?reason=x");
   });
 
   it("treats the token as expired 30 s early and then returns null (no refresh token)", async () => {

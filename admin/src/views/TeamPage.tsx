@@ -132,7 +132,7 @@ export function TeamPage({ api, teamId, backPlanId, capabilities }: {
   };
   const planId = detail.data?.plan.id || backPlanId;
   const canPerson = capabilities.includes("support.read");
-  const personHref = (userId: string) => formatRoute({ view: "user", userId, tab: "overview", reason: `從隊伍頁查看（${detail.data?.team.name || ""}）` });
+  const personHref = (userId: string) => formatRoute({ view: "user", userId, reason: `從隊伍頁查看（${detail.data?.team.name || ""}）` });
 
   return (
     <div className="adm-plan-area adm-team-page">

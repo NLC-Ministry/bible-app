@@ -1,7 +1,7 @@
 // 回報收件匣（#550 第一組）：左邊清單、右邊對話；手機一次只顯示一邊。
 //
 // 請求預算：打開收件匣 1 個 report_list（第一頁順便帶各狀態筆數）；切篩選、按「重新整理」、
-// 「載入更多」才再打。清單狀態放在客服區那一層，切到「查詢使用者」再回來不重抓。
+// 「載入更多」才再打。清單狀態放在 App 那一層（#567），從回報打開某人再回來不重抓。
 // 會友寫的內容一律當文字顯示（React 預設跳脫），不用 innerHTML。
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Download, RefreshCw } from "lucide-react";

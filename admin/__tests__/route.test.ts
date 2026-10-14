@@ -2,17 +2,15 @@
 import { describe, it, expect } from "vitest";
 import { areaOf, formatRoute, parseRoute } from "../src/route.ts";
 import { canUse, visibleNavItems } from "../src/nav.ts";
-import { describeItem, cursorAfter, usableCursor } from "../src/items.ts";
+import { describeItem, usableCursor, voucherState } from "../src/items.ts";
 
 const ID = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
 
 describe("parseRoute / formatRoute", () => {
-  it("defaults to the report inbox; user search has its own address (#550)", () => {
+  it("defaults to the report inbox", () => {
     expect(parseRoute("")).toEqual({ view: "inbox", reportId: null });
     expect(parseRoute("#/")).toEqual({ view: "inbox", reportId: null });
     expect(parseRoute("#/support")).toEqual({ view: "inbox", reportId: null });
-    expect(parseRoute("#/support/users")).toEqual({ view: "search" });
-    expect(formatRoute({ view: "search" })).toBe("#/support/users");
   });
 
   it("opens a report directly", () => {
@@ -23,21 +21,33 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute(`#/support/report/${ID}/extra`)).toEqual({ view: "not_found" });
   });
 
-  it("opens a person directly, with tab and view reason", () => {
-    const route = parseRoute(`#/support/user/${ID.toUpperCase()}/tests?reason=${encodeURIComponent("因回報 #12")}`);
-    expect(route).toEqual({ view: "user", userId: ID, tab: "tests", reason: "因回報 #12" });
+  it("opens a person directly in the people area, with a view reason (#567)", () => {
+    const route = parseRoute(`#/people/user/${ID.toUpperCase()}?reason=${encodeURIComponent("因回報 #12")}`);
+    expect(route).toEqual({ view: "user", userId: ID, reason: "因回報 #12" });
     expect(parseRoute(formatRoute(route))).toEqual(route);
-    expect(formatRoute({ view: "user", userId: ID, tab: "overview", reason: "" })).toBe(`#/support/user/${ID}`);
+    expect(formatRoute({ view: "user", userId: ID, reason: "" })).toBe(`#/people/user/${ID}`);
+    expect(areaOf(route)).toBe("people");
+  });
+
+  it("keeps old person, search and accounts addresses working (#567)", () => {
+    // 會友 App 舊版、稽核紀錄裡貼過的連結
+    expect(parseRoute(`#/support/user/${ID}?reason=x`)).toEqual({ view: "user", userId: ID, reason: "x" });
+    expect(parseRoute(`#/support/user/${ID}/tests`)).toEqual({ view: "user", userId: ID, reason: "" });
+    expect(parseRoute("#/support/users")).toEqual({ view: "people", tab: "directory", profileId: null });
+    expect(parseRoute("#/accounts")).toEqual({ view: "people", tab: "directory", profileId: null });
+    expect(parseRoute(`#/accounts/scopes/${ID}`)).toEqual({ view: "people", tab: "scopes", profileId: ID });
   });
 
   it("rejects malformed ids and tabs", () => {
     expect(parseRoute("#/support/user/not-a-uuid")).toEqual({ view: "not_found" });
     expect(parseRoute(`#/support/user/${ID}/secrets`)).toEqual({ view: "not_found" });
+    expect(parseRoute(`#/people/user/${ID}/tests`)).toEqual({ view: "not_found" });
+    expect(parseRoute("#/people/user/not-a-uuid")).toEqual({ view: "not_found" });
     expect(parseRoute("#/nowhere")).toEqual({ view: "not_found" });
   });
 
   it("caps the reason at 200 characters", () => {
-    const route = parseRoute(`#/support/user/${ID}?reason=${"a".repeat(300)}`);
+    const route = parseRoute(`#/people/user/${ID}?reason=${"a".repeat(300)}`);
     expect(route.view === "user" && route.reason.length).toBe(200);
   });
 
@@ -98,14 +108,16 @@ describe("parseRoute / formatRoute", () => {
     expect(areaOf(parseRoute("#/system/audit"))).toBe("system");
   });
 
-  it("parses the accounts area (#550)", () => {
-    expect(parseRoute("#/accounts")).toEqual({ view: "accounts", tab: "users", profileId: null });
-    expect(parseRoute("#/accounts/scopes")).toEqual({ view: "accounts", tab: "scopes", profileId: null });
-    const route = parseRoute(`#/accounts/scopes/${ID.toUpperCase()}`);
-    expect(route).toEqual({ view: "accounts", tab: "scopes", profileId: ID });
-    expect(formatRoute(route)).toBe(`#/accounts/scopes/${ID}`);
-    expect(formatRoute({ view: "accounts", tab: "users", profileId: ID })).toBe("#/accounts");
-    expect(parseRoute("#/accounts/scopes/not-a-uuid")).toEqual({ view: "not_found" });
+  it("parses the people area: directory and scopes (#567)", () => {
+    expect(parseRoute("#/people")).toEqual({ view: "people", tab: "directory", profileId: null });
+    expect(parseRoute("#/people/scopes")).toEqual({ view: "people", tab: "scopes", profileId: null });
+    const route = parseRoute(`#/people/scopes/${ID.toUpperCase()}`);
+    expect(route).toEqual({ view: "people", tab: "scopes", profileId: ID });
+    expect(formatRoute(route)).toBe(`#/people/scopes/${ID}`);
+    expect(formatRoute({ view: "people", tab: "directory", profileId: ID })).toBe("#/people");
+    expect(areaOf(route)).toBe("people");
+    expect(parseRoute("#/people/scopes/not-a-uuid")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/people/users")).toEqual({ view: "not_found" });
     expect(parseRoute("#/accounts/users")).toEqual({ view: "not_found" });
   });
 
@@ -130,8 +142,11 @@ describe("navigation by capability", () => {
     expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual([]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
-    expect(canUse(["console.access"], "accounts")).toBe(false);
-    expect(canUse(["console.access", "accounts.read"], "accounts")).toBe(true);
+    // 人區：名單（accounts.read）或個人頁（support.read）有一個就看得到
+    expect(canUse(["console.access"], "people")).toBe(false);
+    expect(canUse(["console.access", "accounts.read"], "people")).toBe(true);
+    expect(canUse(["console.access", "support.read"], "people")).toBe(true);
+    expect(canUse(["accounts.read"], "people")).toBe(false);
     expect(canUse(["console.access"], "content")).toBe(false);
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
     expect(canUse(["console.access"], "operations")).toBe(false);
@@ -156,9 +171,36 @@ describe("describeItem", () => {
       .toEqual(["<img src=x onerror=alert(1)>"]);
   });
 
+  it("renders plan enrollments, teams and notifications (#567)", () => {
+    const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ac";
+    const plan = describeItem({
+      section: "plans", id: "p1", at: "2026-10-01T00:00:00Z", global_plan_id: PLAN, name: "第四季", is_personal: false,
+      church_start_date: "2026-10-01", church_end_date: "2026-12-31", current_round: 2, logged_chapters: 40, last_read_at: null,
+      teams: [{ team_id: ID, name: "晨光隊", is_captain: true }]
+    }, { teamLinks: true });
+    expect(plan).toMatchObject({
+      title: "第四季", details: ["2026/10/01 – 2026/12/31", "目前第 2 遍", "打卡 40 章", "還沒打卡", "團隊：晨光隊（隊長）"],
+      href: `#/plans/roster?plan=${PLAN}`
+    });
+    expect(describeItem({ section: "plans", id: "p2", at: null, global_plan_id: PLAN, name: "我的計畫", is_personal: true }, { teamLinks: true }))
+      .not.toHaveProperty("href");
+    expect(describeItem({ section: "teams", id: ID, at: null, team_id: ID, team_name: "晨光隊", global_plan_id: PLAN, plan_name: "第四季", division: 3, size: 2, member_role: "captain", status: "forming" }, { teamLinks: true }))
+      .toMatchObject({ title: "晨光隊", details: ["第四季", "組別 3 人", "目前 2 人", "隊長", "組隊中（未滿）"], href: `#/plans/teams/${ID}?plan=${PLAN}` });
+    expect(describeItem({ section: "teams", id: ID, at: null, team_id: ID, team_name: "晨光隊" })).not.toHaveProperty("href");
+    expect(describeItem({ section: "notifications", kind: "care", id: "n1", at: null, sender_name: "王組長", reason: "behind", message: "加油", read_at: null }))
+      .toMatchObject({ title: "關心提醒：王組長・進度落後", details: ["加油", "未讀"] });
+  });
+
+  it("tells expired vouchers apart only when it knows today's date", () => {
+    const voucher = { section: "vouchers" as const, id: "v", at: null, expires_on: "2026-10-10", redeemed_at: null, voided_at: null };
+    expect(voucherState(voucher, "2026-10-11")).toBe("已過期");
+    expect(voucherState(voucher, "2026-10-10")).toBe("未兌換");
+    expect(voucherState(voucher, null)).toBe("未兌換");
+    expect(voucherState({ ...voucher, voided_at: "2026-10-01T00:00:00Z" }, "2026-10-11")).toBe("已作廢");
+  });
+
   it("only builds cursors it can send back", () => {
-    expect(cursorAfter([{ section: "tests", id: "a", at: "2026-10-01T00:00:00Z" }])).toEqual({ at: "2026-10-01T00:00:00Z", id: "a" });
-    expect(cursorAfter([{ section: "tests", id: "a", at: null }])).toBeNull();
+    expect(usableCursor({ at: "2026-10-01T00:00:00Z", id: "a" })).toEqual({ at: "2026-10-01T00:00:00Z", id: "a" });
     expect(usableCursor({ at: null, id: "a" })).toBeNull();
     expect(usableCursor(null)).toBeNull();
   });

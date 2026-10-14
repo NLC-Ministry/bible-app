@@ -26,8 +26,8 @@ describe("adminConsoleUserUrl", () => {
 
   it("opens the person directly with the view reason", () => {
     expect(adminConsoleUserUrl(ID.toUpperCase(), { reason: "因回報 abc", hostname: "bible.newlife.org.tw" }))
-      .toBe(`https://bible-speed-reading-admin.vercel.app/#/support/user/${ID}?${new URLSearchParams({ reason: "因回報 abc" })}`);
-    expect(adminConsoleUserUrl(ID, { hostname: "localhost" })).toBe(`https://bible-speed-reading-admin-staging.vercel.app/#/support/user/${ID}`);
+      .toBe(`https://bible-speed-reading-admin.vercel.app/#/people/user/${ID}?${new URLSearchParams({ reason: "因回報 abc" })}`);
+    expect(adminConsoleUserUrl(ID, { hostname: "localhost" })).toBe(`https://bible-speed-reading-admin-staging.vercel.app/#/people/user/${ID}`);
   });
 
   it("returns null for anything that is not a user id", () => {
@@ -75,7 +75,7 @@ describe("old #/admin/<section> links after the 管理 tab split (#551)", () => 
     }
     expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES["lightning-quiz"])).toEqual({ view: "legacy", area: "content", section: "lightning-quiz" });
     expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.settings)).toEqual({ view: "legacy", area: "system", section: "settings" });
-    expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.permissions)).toMatchObject({ view: "accounts", tab: "scopes" });
+    expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.permissions)).toMatchObject({ view: "people", tab: "scopes" });
   });
 
   it("builds the URL on the right console, and nothing for leader sections", () => {

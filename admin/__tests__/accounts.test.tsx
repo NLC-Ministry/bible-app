@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// 帳號與權限（#550 第二組）：請求預算、名單篩選與匯出、管理範圍總覽與儲存。
+// 「人」區（#550 第二組；#567 從「帳號與權限」改名、名單改游標分頁）：請求預算、名單篩選與匯出、管理範圍總覽與儲存。
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -31,11 +31,12 @@ const ORG = [
 const ALL_CAPS = ["console.access", "support.read", "support.pii", "export", "accounts.read", "accounts.write"];
 
 function dirItem(id: string, extra: Record<string, unknown> = {}) {
-  return {
+  const item = {
     id, name: "王小明", email_masked: "wa***@example.com", great_region: "北區", pastoral_zone: "一牧區", small_group: "喜樂小組",
     is_active: true, sync_status: "success", synced_at: "2026-10-10T02:00:00Z", role_code: "member", role_label: null,
     managed_regions: "", managed_zones: "", managed_groups: "", joined: false, teams: [], ...extra
-  };
+  } as Record<string, any>;
+  return { ...item, sort_key: [1, item.great_region, 1, item.pastoral_zone, item.name, id] };
 }
 
 const PAGE1 = [
@@ -66,15 +67,15 @@ function makeRespond(capabilities = ALL_CAPS, overrides: Partial<Record<string, 
       case "bootstrap":
         return { data: { me: { id: "admin-1", name: "王管理", email: null, role_code: "admin", role_label: "系統管理員" }, feature_settings: [], org: ORG, capabilities } };
       case "directory_list": {
-        const offset = params.offset || 0;
+        const first = !params.cursor;
         return { data: {
-          items: offset === 0 ? PAGE1 : [dirItem(D, { name: "趙會友" })],
+          items: first ? PAGE1 : [dirItem(D, { name: "趙會友" })],
           total: 4,
-          next_offset: offset === 0 ? 3 : null,
+          next_cursor: first ? PAGE1[2].sort_key : null,
           plan_id: params.plan_id || PLAN1,
-          plans: offset === 0 ? [{ id: PLAN1, name: "第四季速讀", start_date: "2026-10-01", end_date: "2026-12-31", plan_kind: "standard" },
+          plans: first ? [{ id: PLAN1, name: "第四季速讀", start_date: "2026-10-01", end_date: "2026-12-31", plan_kind: "standard" },
             { id: PLAN2, name: "第五季速讀", start_date: "2027-01-01", end_date: null, plan_kind: "standard" }] : null,
-          all_count: offset === 0 ? 312 : null
+          all_count: first ? 312 : null
         } };
       }
       case "directory_export":
@@ -166,39 +167,40 @@ async function setValue(input: HTMLSelectElement | HTMLInputElement, value: stri
   });
 }
 
-describe("使用者名單", () => {
+describe("名單與查詢", () => {
   it("opens with one directory_list, keeps the server's default plan, and keeps its state across tabs", async () => {
-    const { requests, el } = await mount("#/accounts");
+    const { requests, el } = await mount("#/people");
     expect(actions(requests)).toEqual(["bootstrap", "directory_list"]);
-    expect(requests[1].params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, offset: 0, limit: 50 });
+    expect(requests[1].params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, limit: 50 });
 
     expect(el.querySelector(".adm-directory__count")?.textContent).toBe("4 人");
     expect(el.querySelector<HTMLSelectElement>(".adm-filters select")!.value).toBe(PLAN1);
     const rows = el.querySelectorAll(".adm-dir__row");
     expect(rows).toHaveLength(3);
-    // 名字連到客服的某人頁；會友寫的隊名當文字
-    expect(rows[0].querySelector("a")!.getAttribute("href")).toBe(`#/support/user/${A}?reason=${encodeURIComponent("從使用者名單查看").replace(/%20/g, "+")}`);
+    // 名字連到個人頁；會友寫的隊名當文字
+    expect(rows[0].querySelector("a")!.getAttribute("href")).toBe(`#/people/user/${A}?${new URLSearchParams({ reason: "從名單查看" })}`);
     expect(rows[0].textContent).toContain("[隊長] <b>晨光隊</b>");
     expect(rows[0].querySelector("b")).toBeNull();
     // 區長沒另外設定 → 沿用本人牧區，連到管理範圍
     const scopeLink = [...rows[1].querySelectorAll("a")].find((a) => a.textContent === "一牧區")!;
-    expect(scopeLink.getAttribute("href")).toBe(`#/accounts/scopes/${B}`);
+    expect(scopeLink.getAttribute("href")).toBe(`#/people/scopes/${B}`);
     expect(rows[2].textContent).toContain("未填會員資料");
 
     await click(button(el, "已加入此計畫"));
     expect(actions(requests)).toEqual(["bootstrap", "directory_list", "directory_list"]);
-    expect(requests[2].params).toMatchObject({ plan_id: PLAN1, participation: "joined", offset: 0 });
+    expect(requests[2].params).toMatchObject({ plan_id: PLAN1, participation: "joined" });
+    expect(requests[2].params).not.toHaveProperty("cursor");
     expect(el.querySelector(".adm-directory__count")?.textContent).toBe("4 / 312 人");
 
-    await go("#/accounts/scopes");
+    await go("#/people/scopes");
     expect(actions(requests).slice(3)).toEqual(["scope_overview"]);
-    await go("#/accounts");
+    await go("#/people");
     expect(requests).toHaveLength(4);
     expect(button(el, "已加入此計畫").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("waits until typing stops and sends only the last text", async () => {
-    const { requests, el } = await mount("#/accounts");
+    const { requests, el } = await mount("#/people");
     const input = el.querySelector<HTMLInputElement>("#adm-directory-q")!;
     await setValue(input, "王");
     await flush(100);
@@ -211,7 +213,7 @@ describe("使用者名單", () => {
   });
 
   it("cascades org filters and drops choices the new parents no longer offer", async () => {
-    const { requests, el } = await mount("#/accounts");
+    const { requests, el } = await mount("#/people");
     const regions = el.querySelector("#adm-picker-regions")!;
     await click(checkbox(regions, "北區"));
     expect(requests.at(-1)!.params).toMatchObject({ regions: ["北區"], zones: [], groups: [] });
@@ -234,19 +236,19 @@ describe("使用者名單", () => {
     const before = requests.length;
     await click(button(el, "清除全部條件"));
     expect(requests).toHaveLength(before + 1);
-    expect(requests.at(-1)!.params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, plan_id: PLAN1, offset: 0, limit: 50 });
+    expect(requests.at(-1)!.params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, plan_id: PLAN1, limit: 50 });
   });
 
-  it("loads the next page from next_offset", async () => {
-    const { requests, el } = await mount("#/accounts");
+  it("loads the next page after the last person's sort key (#567: no OFFSET, nobody skipped or repeated)", async () => {
+    const { requests, el } = await mount("#/people");
     await click(button(el, "載入更多（還有 1 人）"));
-    expect(requests.at(-1)!.params).toMatchObject({ offset: 3, plan_id: PLAN1 });
+    expect(requests.at(-1)!.params).toMatchObject({ cursor: [1, "北區", 1, null, null, C], plan_id: PLAN1, limit: 50 });
     expect(el.querySelectorAll(".adm-dir__row")).toHaveLength(4);
     expect(button(el, "載入更多")).toBeUndefined();
   });
 
   it("exports with the same filters (server-generated, needs support.pii)", async () => {
-    const { requests, el } = await mount("#/accounts");
+    const { requests, el } = await mount("#/people");
     (URL as any).createObjectURL = vi.fn(() => "blob:test");
     (URL as any).revokeObjectURL = vi.fn();
     const downloads: string[] = [];
@@ -261,21 +263,28 @@ describe("使用者名單", () => {
 
     await act(async () => { root?.unmount(); });
     container?.remove();
-    const noPii = await mount("#/accounts", makeRespond(ALL_CAPS.filter((cap) => cap !== "support.pii")));
+    const noPii = await mount("#/people", makeRespond(ALL_CAPS.filter((cap) => cap !== "support.pii")));
     expect(button(noPii.el, "匯出 CSV")).toBeUndefined();
   });
 
-  it("hides the area without accounts.read", async () => {
-    const { requests, el } = await mount("#/accounts", makeRespond(["console.access", "support.read"]));
-    expect(el.textContent).toContain("沒有權限");
+  it("without accounts.read the list and scopes stay closed (the person page needs only support.read)", async () => {
+    const { requests, el } = await mount("#/people", makeRespond(["console.access", "support.read"]));
+    expect(el.textContent).toContain("你的帳號沒有名單與管理範圍的後台權限。");
+    expect(el.querySelector(".adm-support-tabs")).toBeNull();
     expect(actions(requests)).toEqual(["bootstrap"]);
-    expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("帳號與權限");
+    expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).toContain("人");
+
+    await act(async () => { root?.unmount(); });
+    container?.remove();
+    const none = await mount("#/people", makeRespond(["console.access"]));
+    expect(none.el.textContent).toContain("沒有權限");
+    expect([...none.el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("人");
   });
 });
 
 describe("管理範圍", () => {
   it("shows who covers each unit from one scope_overview, and opens a person without another request", async () => {
-    const { requests, el } = await mount("#/accounts/scopes");
+    const { requests, el } = await mount("#/people/scopes");
     expect(actions(requests)).toEqual(["bootstrap", "scope_overview"]);
     // 大區：南區；牧區：二、三；小組：恩典、信心
     expect(el.textContent).toContain("5 個單位尚未指派");
@@ -291,7 +300,7 @@ describe("管理範圍", () => {
   });
 
   it("saves only the role's field with the reason, then updates in place", async () => {
-    const { requests, el } = await mount(`#/accounts/scopes/${B}`);
+    const { requests, el } = await mount(`#/people/scopes/${B}`);
     await click(checkbox(el.querySelector(".adm-scope-options")!, "二牧區"));
     await setValue(el.querySelector<HTMLInputElement>("#adm-scope-reason")!, "接手二牧區");
     await click(button(el, "儲存管理範圍"));
@@ -306,7 +315,7 @@ describe("管理範圍", () => {
   });
 
   it("lists names missing from the org list and lets the admin remove them", async () => {
-    const { el } = await mount(`#/accounts/scopes/${L2}`);
+    const { el } = await mount(`#/people/scopes/${L2}`);
     expect(el.textContent).toContain("「舊大區」不在大區名單中");
     expect(checkbox(el.querySelector(".adm-scope-options")!, "北區").checked).toBe(true);
     expect(button(el, "儲存管理範圍").disabled).toBe(false);
@@ -314,7 +323,7 @@ describe("管理範圍", () => {
 
   it("shows server errors in Chinese", async () => {
     const respond = makeRespond(ALL_CAPS, { scope_set: () => ({ status: 400, error: "managed_scope_unknown_zone" }) });
-    const { el } = await mount(`#/accounts/scopes/${B}`, respond);
+    const { el } = await mount(`#/people/scopes/${B}`, respond);
     await click(checkbox(el.querySelector(".adm-scope-options")!, "三牧區"));
     await click(button(el, "儲存管理範圍"));
     expect(el.textContent).toContain("有牧區名稱不在組織名單中，請重新整理後再選一次。");
@@ -322,19 +331,19 @@ describe("管理範圍", () => {
   });
 
   it("is read-only without accounts.write; whole-church roles and non-leaders have nothing to set", async () => {
-    const { el } = await mount(`#/accounts/scopes/${L4}`, makeRespond(ALL_CAPS.filter((cap) => cap !== "accounts.write")));
+    const { el } = await mount(`#/people/scopes/${L4}`, makeRespond(ALL_CAPS.filter((cap) => cap !== "accounts.write")));
     expect(el.textContent).toContain("你只能查看，不能修改管理範圍。");
     expect(checkbox(el.querySelector(".adm-scope-options")!, "平安小組").disabled).toBe(true);
     expect(button(el, "儲存管理範圍")).toBeUndefined();
 
-    await go(`#/accounts/scopes/${L3}`);
+    await go(`#/people/scopes/${L3}`);
     expect(el.textContent).toContain("這個角色固定擁有全教會範圍");
-    await go(`#/accounts/scopes/${A}`);
+    await go(`#/people/scopes/${A}`);
     expect(el.textContent).toContain("這位不在負責人名單裡");
   });
 
   it("exports the org structure from the server", async () => {
-    const { requests, el } = await mount("#/accounts/scopes");
+    const { requests, el } = await mount("#/people/scopes");
     (URL as any).createObjectURL = vi.fn(() => "blob:test");
     (URL as any).revokeObjectURL = vi.fn();
     const downloads: string[] = [];

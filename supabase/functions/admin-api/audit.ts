@@ -102,6 +102,7 @@ const TABLE_VERB: Readonly<Record<string, string>> = {
 export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   // admin-api 的 SQL 函式寫的
   view_user: "查看使用者",
+  view_user_section: "查看使用者的紀錄（點開某一區）",
   reveal_pii: "顯示完整個資",
   export: "匯出",
   view_report: "查看回報",

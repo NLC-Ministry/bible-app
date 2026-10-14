@@ -6,10 +6,12 @@
 // 必要的 secret（見 supabase/functions/README.md）：
 //   ADMIN_API_ALLOWED_CLIENT_IDS  後台 Logto 應用程式的 client id（逗號分隔）。沒設定 → 全部拒絕。
 // 選填：ADMIN_API_CLIENT_CLAIM（預設 client_id）、ADMIN_API_ALLOWED_ORIGINS、ADMIN_API_ALLOW_LOCALHOST、
+//       ADMIN_API_MEMBER_APP_URL（會友 App 網址，預設依 Supabase 專案判斷正式站／staging）、
 //       ADMIN_API_AUDIENCE（沒設就用 NLC_LOGTO_AUDIENCE）、NLC_LOGTO_ISSUER。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
 import { handleAdminRequest } from "./handler.ts";
+import { memberAppOrigin, parseAppVersion } from "./policy.ts";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -117,6 +119,21 @@ const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const supabaseAdmin = supabaseUrl && serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
+// 會友 App 目前的版本（#567）：讀它的 /version.json，2 秒逾時、記憶 60 秒（同一個執行個體連續打開幾個人不重抓）
+const memberAppVersionUrl = `${memberAppOrigin(supabaseUrl, Deno.env.get("ADMIN_API_MEMBER_APP_URL"))}/version.json`;
+let appVersionCache: { at: number; value: { version: string; minVersion: string | null } | null } | null = null;
+async function fetchAppVersion() {
+  if (appVersionCache && Date.now() - appVersionCache.at < 60_000) return appVersionCache.value;
+  let value: { version: string; minVersion: string | null } | null = null;
+  try {
+    const response = await fetch(memberAppVersionUrl, { cache: "no-store", signal: AbortSignal.timeout(2000) });
+    if (response.ok) value = parseAppVersion(await response.json());
+  } catch (_err) {
+    value = null;
+  }
+  appVersionCache = { at: Date.now(), value };
+  return value;
+}
 const logtoIssuer = (Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc").replace(/\/+$/, "");
 
 Deno.serve((req: Request) => handleAdminRequest(req, {
@@ -154,5 +171,6 @@ Deno.serve((req: Request) => handleAdminRequest(req, {
       return urls;
     }
   } : undefined,
+  appVersion: fetchAppVersion,
   log: (line) => console.log(line)
 }));

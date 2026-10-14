@@ -3,7 +3,7 @@
 // SQL 的實際行為（篩選結果與直接計數一致、分頁不重複、管理範圍沿用 set_profile_managed_scopes 的檢查、
 // 稽核同交易、授權只給 service_role）已在 staging 以回滾交易驗過；這裡守住參數、能力與 CSV。
 import { describe, expect, it, vi } from "vitest";
-import { readMigration, migrationFiles } from "./migration-sql.mjs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import { ADMIN_ACTIONS } from "../supabase/functions/admin-api/policy.ts";
 import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
 import { directoryCsv, formatTeams, orgCsv, withExportTime } from "../supabase/functions/admin-api/exports.ts";
@@ -13,6 +13,7 @@ import { convertUserDirectoryToCSV } from "../js/modules/admin.js";
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const PROFILE_ID = "22222222-2222-4222-8222-222222222222";
 const PLAN_ID = "00000000-0000-0000-c126-000000202610";
+const CURSOR = [1, "大區 A", 2, "牧區 A-1", "王小明", "22222222-2222-4222-8222-222222222222"];
 const ADMIN_CLIENT = "admin-spa-client";
 const ctx = { actorId: ADMIN_ID, actorRole: "admin", requestId: "req-12345678" };
 
@@ -74,15 +75,15 @@ describe("directory filters", () => {
   it("defaults and normalizes", () => {
     expect(build("directory_list", {})).toEqual({ ok: true, args: {
       p_actor_id: ADMIN_ID, p_q: null, p_regions: [], p_zones: [], p_groups: [], p_plan_id: null,
-      p_participation: "all", p_team: "all", p_incomplete: false, p_offset: 0, p_limit: 50
+      p_participation: "all", p_team: "all", p_incomplete: false, p_cursor: null, p_limit: 50
     } });
     const args = build("directory_list", {
       q: "  王 ", regions: [" 大區 A ", "大區 A", "__unassigned__", ""], plan_id: PLAN_ID,
-      participation: "not_joined", team: "joined", incomplete: true, offset: 50, limit: 20
+      participation: "not_joined", team: "joined", incomplete: true, cursor: CURSOR, limit: 20
     });
     expect(args).toMatchObject({ ok: true, args: {
       p_q: "王", p_regions: ["大區 A", "__unassigned__"], p_plan_id: PLAN_ID,
-      p_participation: "not_joined", p_team: "joined", p_incomplete: true, p_offset: 50, p_limit: 20
+      p_participation: "not_joined", p_team: "joined", p_incomplete: true, p_cursor: CURSOR, p_limit: 20
     } });
   });
 
@@ -95,7 +96,11 @@ describe("directory filters", () => {
     expect(directoryFilters({ plan_id: "plan-1" })).toEqual({ ok: false, error: "invalid_plan_id" });
     expect(directoryFilters({ participation: "maybe" })).toEqual({ ok: false, error: "invalid_plan_filter" });
     expect(directoryFilters({ incomplete: "yes" })).toEqual({ ok: false, error: "invalid_incomplete" });
-    expect(build("directory_list", { offset: -1 })).toEqual({ ok: false, error: "invalid_offset" });
+    // 游標＝上一頁最後一人的排序鍵（#567）
+    for (const cursor of [5, [1, "大區"], [1, "大區", 2, "牧區", "王", "not-a-uuid"], ["1", "大區", 2, "牧區", "王", PLAN_ID], [1, "大區", 2.5, "牧區", "王", PLAN_ID]]) {
+      expect(build("directory_list", { cursor }), JSON.stringify(cursor)).toEqual({ ok: false, error: "invalid_cursor" });
+    }
+    expect(build("directory_list", { cursor: [null, null, null, null, null, PLAN_ID] })).toMatchObject({ ok: true });
     expect(build("directory_list", { limit: 500 })).toEqual({ ok: false, error: "invalid_limit" });
   });
 
@@ -180,8 +185,8 @@ describe("exports", () => {
 });
 
 describe("migration", () => {
-  const file = migrationFiles().find((name) => name.endsWith("_admin_api_accounts.sql"));
-  const sql = readMigration(file);
+  // 函式取現在的定義（#567 改寫了 directory_rows／directory_list）
+  const sql = currentMigrationSql("20261012053123_admin_api_accounts.sql");
   const fns = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(/g)].map((m) => m[1]);
 
   it("grants every function to service_role only", () => {

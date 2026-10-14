@@ -1,11 +1,16 @@
-// 使用者名單（#550 第二組）：取代 App 管理分頁的「使用者基本資料」。
+// 名單與查詢（#550 第二組的使用者名單；#567 和「查詢使用者」合一）：取代 App 管理分頁的「使用者基本資料」。
 //
 // 和 App 不同：App 一次載入全部的人（含完整 email）在瀏覽器裡篩；這裡篩選在伺服器做，
-// 一次 50 人、email 遮罩，「載入更多」再抓下一頁。匯出（含完整 email）由 admin-api 產生並記稽核。
-// 請求預算：打開名單 1 個 directory_list（第一頁順便帶計畫選項）；改條件 1 個（搜尋字停 300ms 才送）。
-// 名單狀態放在帳號區那一層，切到「管理範圍」再回來不重抓。
+// 一次 50 人、email 遮罩，「載入更多」再抓下一頁（排序鍵＋id 游標，資料變動中翻頁也不跳過或重複）。
+// 匯出（含完整 email）由 admin-api 產生並記稽核。
+// 搜尋框也找 email（含其他登入方式的 email）；有計畫權限（plans.read）時同一個字也找隊伍（隊名或邀請碼，#566），
+// 符合的隊伍列在名單上面、點了打開隊伍頁。
+// 請求預算：打開名單 1 個 directory_list（第一頁順便帶計畫選項）；改條件 1 個；改搜尋字停 300ms 才送，
+// 有 plans.read 時多 1 個 team_search（同一個字不重找）。
+// 名單狀態放在「人」區那一層（App），打開某人、切到「管理範圍」再回來不重抓。
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Download, FilterX, RefreshCw, Search } from "lucide-react";
+import { validateSearchQuery } from "../../../supabase/functions/admin-api/search-query.ts";
 import { isAbortError, type AdminApi } from "../api.ts";
 import {
   DIRECTORY_PAGE_SIZE,
@@ -31,7 +36,8 @@ import { downloadCsv } from "../download.ts";
 import { formatDateTime, text } from "../format.ts";
 import { formatRoute } from "../route.ts";
 import { isWholeChurch, scopeLevel, scopeText } from "../scopes.ts";
-import type { CsvExport, DirectoryItem, DirectoryPage, OrgTreeNode, PlanOption } from "../types.ts";
+import type { TeamSearchResult } from "../teams.ts";
+import type { CsvExport, DirectoryCursor, DirectoryItem, DirectoryPage, OrgTreeNode, PlanOption } from "../types.ts";
 import { Badge, ErrorNotice, Segmented, Spinner } from "../ui.tsx";
 
 export const SEARCH_DEBOUNCE_MS = 300;
@@ -41,8 +47,11 @@ export type DirectoryState = {
   items: DirectoryItem[];
   total: number | null;
   allCount: number | null;
-  nextOffset: number | null;
+  nextCursor: DirectoryCursor | null;
   plans: PlanOption[] | null;
+  /** 符合搜尋字的隊伍（teamsQuery 是找的那個字；沒找＝null） */
+  teams: TeamSearchResult[] | null;
+  teamsQuery: string;
   loaded: boolean;
   loading: boolean;
   error: unknown;
@@ -53,8 +62,10 @@ export const INITIAL_DIRECTORY: DirectoryState = {
   items: [],
   total: null,
   allCount: null,
-  nextOffset: null,
+  nextCursor: null,
   plans: null,
+  teams: null,
+  teamsQuery: "",
   loaded: false,
   loading: false,
   error: null
@@ -73,6 +84,8 @@ const PLAN_FILTER_OPTIONS = (labels: Record<PlanFilter, string>) => PARTICIPATIO
 
 export function UserDirectory({ api, org, capabilities, state, setState, doc }: Props) {
   const abortRef = useRef<AbortController | null>(null);
+  const teamAbortRef = useRef<AbortController | null>(null);
+  const teamQueryRef = useRef<string>(state.teamsQuery);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<unknown>(null);
@@ -97,14 +110,38 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
     };
   }, [openPicker, doc]);
 
-  const load = useCallback((filters: DirectoryFilters, offset: number, fresh = false) => {
+  const canTeams = capabilities.includes("plans.read");
+
+  // 搜尋字找隊伍：字沒變不重找；失敗不影響名單，只是不列隊伍
+  const loadTeams = useCallback((q: string) => {
+    const validation = canTeams && q.trim() ? validateSearchQuery(q.trim()) : null;
+    const query = validation && validation.ok ? validation.query : "";
+    if (query === teamQueryRef.current) return;
+    teamQueryRef.current = query;
+    teamAbortRef.current?.abort();
+    setState((prev) => ({ ...prev, teams: null, teamsQuery: query }));
+    if (!query) return;
+    const controller = new AbortController();
+    teamAbortRef.current = controller;
+    const done = (teams: TeamSearchResult[]) => {
+      if (!controller.signal.aborted) setState((prev) => (prev.teamsQuery === query ? { ...prev, teams } : prev));
+    };
+    api.call<TeamSearchResult[]>("team_search", { q: query }, { signal: controller.signal })
+      .then((data) => done(Array.isArray(data) ? data : []))
+      .catch(() => done([]));
+  }, [api, canTeams, setState]);
+
+  const load = useCallback((filters: DirectoryFilters, cursor: DirectoryCursor | null, fresh = false) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setState((prev) => ({ ...prev, filters, loading: true, error: null }));
-    api.call<DirectoryPage>("directory_list", { ...directoryParams(filters), offset, limit: DIRECTORY_PAGE_SIZE }, { signal: controller.signal, fresh })
+    if (!cursor) loadTeams(filters.q);
+    const params: Record<string, unknown> = { ...directoryParams(filters), limit: DIRECTORY_PAGE_SIZE };
+    if (cursor) params.cursor = cursor;
+    api.call<DirectoryPage>("directory_list", params, { signal: controller.signal, fresh })
       .then((page) => {
         if (controller.signal.aborted) return;
         const items = Array.isArray(page?.items) ? page.items : [];
@@ -112,10 +149,10 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
           ...prev,
           // 沒指定計畫時記下伺服器挑的預設計畫，之後的條件與匯出都用同一個
           filters: prev.filters.planId || !page?.plan_id ? prev.filters : { ...prev.filters, planId: page.plan_id },
-          items: offset > 0 ? [...prev.items, ...items] : items,
+          items: cursor ? [...prev.items, ...items] : items,
           total: typeof page?.total === "number" ? page.total : prev.total,
           allCount: typeof page?.all_count === "number" ? page.all_count : prev.allCount,
-          nextOffset: typeof page?.next_offset === "number" ? page.next_offset : null,
+          nextCursor: Array.isArray(page?.next_cursor) && page.next_cursor.length === 6 ? page.next_cursor : null,
           plans: Array.isArray(page?.plans) ? page.plans : prev.plans,
           loaded: true,
           loading: false,
@@ -126,25 +163,26 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
         if (isAbortError(err) || controller.signal.aborted) return;
         setState((prev) => ({ ...prev, loading: false, error: err }));
       });
-  }, [api, setState]);
+  }, [api, setState, loadTeams]);
 
   // 第一次打開才抓（失敗時等管理員按重試）
   useEffect(() => {
-    if (!state.loaded && !state.loading && state.error === null) load(state.filters, 0);
+    if (!state.loaded && !state.loading && state.error === null) load(state.filters, null);
   }, [state.loaded, state.loading, state.error, state.filters, load]);
 
   useEffect(() => () => {
     abortRef.current?.abort();
+    teamAbortRef.current?.abort();
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
-  const apply = (patch: Partial<DirectoryFilters>) => load({ ...state.filters, ...patch }, 0);
+  const apply = (patch: Partial<DirectoryFilters>) => load({ ...state.filters, ...patch }, null);
 
   const onQueryChange = (q: string) => {
     const next = { ...state.filters, q };
     setState((prev) => ({ ...prev, filters: { ...prev.filters, q } }));
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => load(next, 0), SEARCH_DEBOUNCE_MS);
+    timerRef.current = setTimeout(() => load(next, null), SEARCH_DEBOUNCE_MS);
   };
 
   const onOrgChange = (key: keyof OrgFilter, values: string[]) => {
@@ -152,8 +190,8 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
     apply(pruned);
   };
 
-  const clearFilters = () => load({ ...EMPTY_FILTERS, planId: state.filters.planId }, 0);
-  const refresh = () => load(state.filters, 0, true);
+  const clearFilters = () => load({ ...EMPTY_FILTERS, planId: state.filters.planId }, null);
+  const refresh = () => load(state.filters, null, true);
 
   const options = orgFilterOptions(org, state.filters);
   const plans = state.plans || [];
@@ -192,7 +230,7 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
             type="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder="姓名、email、角色、牧區、小組、隊名"
+            placeholder={canTeams ? "姓名、email、角色、牧區、小組、隊名或邀請碼" : "姓名、email、角色、牧區、小組、隊名"}
             value={state.filters.q}
             maxLength={100}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -268,6 +306,8 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
         <ErrorNotice error={state.error} action={<button type="button" className="adm-button" onClick={refresh}>重試</button>} />
       )}
 
+      {state.teams && state.teams.length > 0 && <TeamMatches teams={state.teams} />}
+
       {state.loaded && state.items.length === 0 && !state.loading && state.error === null && (
         <p className="adm-muted adm-empty">沒有符合條件的使用者。</p>
       )}
@@ -282,12 +322,34 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
         </div>
       )}
       {state.loading && <Spinner label="載入名單…" />}
-      {!state.loading && state.nextOffset !== null && state.error === null && (
-        <button type="button" className="adm-button adm-directory__more" onClick={() => load(state.filters, state.nextOffset ?? 0)}>
+      {!state.loading && state.nextCursor !== null && state.error === null && (
+        <button type="button" className="adm-button adm-directory__more" onClick={() => load(state.filters, state.nextCursor)}>
           載入更多（還有 {Math.max(0, (state.total ?? 0) - state.items.length)} 人）
         </button>
       )}
     </div>
+  );
+}
+
+function TeamMatches({ teams }: { teams: readonly TeamSearchResult[] }) {
+  return (
+    <section className="adm-team-matches" aria-label="符合的隊伍">
+      <h3 className="adm-label">符合的隊伍</h3>
+      <ul className="adm-result-list">
+        {teams.map((team) => (
+          <li key={team.id}>
+            <a className="adm-result" href={formatRoute({ view: "plans", tab: "teams", planId: team.plan.id, teamId: team.id })}>
+              <span className="adm-result__name">
+                {text(team.name, "未命名隊伍")}
+                {team.matched_code && <Badge tone="brand">邀請碼相符</Badge>}
+              </span>
+              <span className="adm-result__meta">{text(team.plan.name, "未命名計畫")}</span>
+              <span className="adm-result__meta">隊長 {text(team.captain_name, "（未填姓名）")}・{team.member_count}／{team.division} 人</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -339,7 +401,7 @@ function DirectoryRow({ item, canOpenUser, hasPlan }: { item: DirectoryItem; can
       <div className="adm-dir__cell adm-dir__who">
         <span className="adm-result__name">
           {canOpenUser
-            ? <a className="adm-link" href={formatRoute({ view: "user", userId: item.id, tab: "overview", reason: "從使用者名單查看" })}>{name}</a>
+            ? <a className="adm-link" href={formatRoute({ view: "user", userId: item.id, reason: "從名單查看" })}>{name}</a>
             : name}
           {item.role_code !== "member" && <Badge tone="brand">{text(item.role_label, item.role_code)}</Badge>}
           {item.is_active === false && <Badge tone="warning">已停用</Badge>}
@@ -363,7 +425,7 @@ function DirectoryRow({ item, canOpenUser, hasPlan }: { item: DirectoryItem; can
           <span>
             管理範圍：
             {scopeLevel(item.role_code)
-              ? <a className="adm-link" href={formatRoute({ view: "accounts", tab: "scopes", profileId: item.id })}>{scopeText(item)}</a>
+              ? <a className="adm-link" href={formatRoute({ view: "people", tab: "scopes", profileId: item.id })}>{scopeText(item)}</a>
               : scopeText(item)}
           </span>
         )}

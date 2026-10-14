@@ -20,6 +20,8 @@ export type RunInput = {
   rpc: RpcFn;
   storage: StorageDeps | null;
   log?: (line: string) => void;
+  /** 會友 App 目前的版本（/version.json，#567 個人頁的「App 是最新版」）；拿不到回 null。 */
+  appVersion?: () => Promise<{ version: string; minVersion: string | null } | null>;
 };
 
 /**

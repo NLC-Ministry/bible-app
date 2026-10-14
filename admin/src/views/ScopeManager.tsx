@@ -85,7 +85,7 @@ export function ScopeManager({ api, org, profileId, capabilities, state, setStat
         />
       </div>
       <div className="adm-support__detail">
-        <a className="adm-back" href={formatRoute({ view: "accounts", tab: "scopes", profileId: null })}>
+        <a className="adm-back" href={formatRoute({ view: "people", tab: "scopes", profileId: null })}>
           <ChevronLeft className="adm-icon" aria-hidden="true" />回到權限總覽
         </a>
         {leaders === null
@@ -100,7 +100,7 @@ export function ScopeManager({ api, org, profileId, capabilities, state, setStat
                 <p className="adm-muted adm-empty">
                   這位不在負責人名單裡（一般會友或帳號已停用），不用設定管理範圍。
                   {capabilities.includes("support.read") && (
-                    <> <a className="adm-link" href={formatRoute({ view: "user", userId: profileId, tab: "overview", reason: "從管理範圍查看" })}>查看這位使用者</a></>
+                    <> <a className="adm-link" href={formatRoute({ view: "user", userId: profileId, reason: "從管理範圍查看" })}>查看這位使用者</a></>
                   )}
                 </p>
               )}
@@ -137,7 +137,7 @@ function PersonPicker({ leaders, profileId }: { leaders: readonly ScopeLeader[];
         value={known ? profileId ?? "" : ""}
         onChange={(event) => {
           const view = event.currentTarget.ownerDocument.defaultView;
-          if (view) view.location.hash = formatRoute({ view: "accounts", tab: "scopes", profileId: event.target.value || null });
+          if (view) view.location.hash = formatRoute({ view: "people", tab: "scopes", profileId: event.target.value || null });
         }}
       >
         <option value="">選擇一位負責人…</option>
@@ -182,7 +182,7 @@ function Overview({ api, org, leaders, loading, error, profileId, canExport, onR
             <a
               key={person.id}
               className={`adm-person-chip${person.id === profileId ? " adm-person-chip--active" : ""}`}
-              href={formatRoute({ view: "accounts", tab: "scopes", profileId: person.id })}
+              href={formatRoute({ view: "people", tab: "scopes", profileId: person.id })}
               aria-current={person.id === profileId ? "page" : undefined}
             >
               {text(person.name, "（未填姓名）")}
@@ -319,7 +319,7 @@ function ScopeEditor({ api, org, leader, canWrite, canOpenUser, onSaved }: {
   return (
     <div className="adm-detail">
       <Card title={text(leader.name, "（未填姓名）")} actions={canOpenUser
-        ? <a className="adm-link adm-small" href={formatRoute({ view: "user", userId: leader.id, tab: "overview", reason: "從管理範圍查看" })}>查看這位使用者</a>
+        ? <a className="adm-link adm-small" href={formatRoute({ view: "user", userId: leader.id, reason: "從管理範圍查看" })}>查看這位使用者</a>
         : undefined}
       >
         <dl className="adm-fields">
