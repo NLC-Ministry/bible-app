@@ -21,7 +21,8 @@ import {
   filterByScope,
   normalizeScope,
   pickUnitLevel,
-  summarizeFunnel
+  summarizeFunnel,
+  unitName
 } from "./plan-progress.mjs";
 
 export { CHECKIN_BUCKETS, PROGRESS_BUCKETS };
@@ -107,6 +108,45 @@ function scheduleInfo(ctx) {
   };
 }
 
+// 團隊：報名者有沒有隊、隊伍數、還沒滿的隊（#565；隊伍清單與除錯在 #566）
+export function summarizeTeams(people) {
+  const enrolled = (Array.isArray(people) ? people : []).filter((person) => person.enrolled);
+  const teams = new Map();
+  for (const person of enrolled) {
+    for (const team of person.teams || []) {
+      if (team.id && !teams.has(team.id)) teams.set(team.id, team);
+    }
+  }
+  const list = [...teams.values()];
+  const withTeam = enrolled.filter((person) => (person.teams || []).length > 0).length;
+  return {
+    enrolled: enrolled.length,
+    withTeam,
+    withoutTeam: enrolled.length - withTeam,
+    teams: list.length,
+    unfilled: list.filter((team) => team.division > 0 && team.size < team.division).length
+  };
+}
+
+function unitRowsWithTeams(people, level) {
+  return compareUnits(people, level).map((row) => ({
+    ...row,
+    withTeam: people.filter((person) => person.enrolled && unitName(person[level]) === row.name && (person.teams || []).length > 0).length
+  }));
+}
+
+// 下一層：比較的是大區時，每個大區再附各牧區（後台點大區展開，不另外發請求）
+function unitChildren(people, level) {
+  const index = SCOPE_LEVELS.indexOf(level);
+  const childLevel = index >= 0 ? SCOPE_LEVELS[index + 1] : null;
+  if (!childLevel || level !== "greatRegion") return { level: null, rows: {} };
+  const rows = {};
+  for (const name of new Set(people.map((person) => unitName(person[level])))) {
+    rows[name] = unitRowsWithTeams(people.filter((person) => unitName(person[level]) === name), childLevel);
+  }
+  return { level: childLevel, rows };
+}
+
 export function buildPlanSummary(report, scope = {}) {
   const optionsFor = buildScopeOptions(report.people);
   const normalized = normalizeScope(scope, optionsFor);
@@ -121,7 +161,8 @@ export function buildPlanSummary(report, scope = {}) {
     funnel: summarizeFunnel(people),
     buckets: countBuckets(people),
     care: countCareReasons(people),
-    units: { level, rows: compareUnits(people, level) },
+    teams: summarizeTeams(people),
+    units: { level, rows: level ? unitRowsWithTeams(people, level) : [], children: unitChildren(people, level) },
     meta: report.meta
   };
 }
@@ -166,4 +207,113 @@ export function buildPlanRoster(report) {
     people,
     meta: report.meta
   };
+}
+
+// ── 名單篩選（#565）：後台畫面與伺服器匯出用同一份 ─────────────────────────────
+// 「進度」「最後打卡」兩個條件：同一條件內勾幾個＝聯集，條件之間（再加團隊）＝交集。
+// 每個人在每個條件剛好落在一格，所以同一條件各格人數相加＝總數，可以對帳。
+// 「需要關心」（全部／只看落後／只看沒打卡）「近 7 天有讀」是捷徑：打開時不看進度／打卡兩個條件，
+// 從總覽的漏斗、需要關心點進來的人數才會和總覽一模一樣（同一份 careReasons、activeThisWeek）。
+export const ROSTER_TEAM_FILTERS = Object.freeze(["any", "yes", "no"]);
+export const ROSTER_SORTS = Object.freeze(["behind", "chapters_desc", "chapters_asc"]);
+export const ROSTER_SHORTCUTS = Object.freeze(["", "care", "care_behind", "care_checkin", "active7"]);
+const MAX_ROSTER_QUERY_CHARS = 50;
+const PROGRESS_IDS = PROGRESS_BUCKETS.map((bucket) => bucket.id);
+const CHECKIN_IDS = CHECKIN_BUCKETS.map((bucket) => bucket.id);
+
+/** 預設：報名者（進度扣掉未報名）、最後打卡不限、團隊不限 */
+export function defaultRosterFilters() {
+  return {
+    shortcut: "",
+    progress: PROGRESS_IDS.filter((id) => id !== "not_enrolled"),
+    checkin: [...CHECKIN_IDS],
+    team: "any",
+    q: ""
+  };
+}
+
+function pickIds(value, allowed) {
+  if (value === undefined || value === null) return [...allowed];
+  if (!Array.isArray(value) || value.some((id) => typeof id !== "string" || !allowed.includes(id))) return null;
+  return allowed.filter((id) => value.includes(id));
+}
+
+/** 名單上方的三個快速按鈕：報名者（預設）／需要關心／全部（含未報名） */
+export function presetRosterFilters(preset) {
+  const base = defaultRosterFilters();
+  if (preset === "care") return { ...base, shortcut: "care" };
+  if (preset === "all") return { ...base, progress: [...PROGRESS_IDS] };
+  return base;
+}
+
+// 總覽點漏斗某一層／需要關心某個數字 → 名單條件。人數一定和總覽那個數字相同（scripts/plan-area.test.mjs 對帳）
+const FUNNEL_DRILLS = Object.freeze({
+  inScope: () => presetRosterFilters("all"),
+  enrolled: () => defaultRosterFilters(),
+  active7: () => ({ ...defaultRosterFilters(), shortcut: "active7" }),
+  onTrack: () => ({ ...defaultRosterFilters(), progress: ["on_track", "completed"] }),
+  completedOnce: () => ({ ...defaultRosterFilters(), progress: ["completed"] }),
+  care: () => ({ ...defaultRosterFilters(), shortcut: "care" }),
+  careBehind: () => ({ ...defaultRosterFilters(), shortcut: "care_behind" }),
+  careCheckin: () => ({ ...defaultRosterFilters(), shortcut: "care_checkin" })
+});
+export const FUNNEL_DRILL_KEYS = Object.freeze(Object.keys(FUNNEL_DRILLS));
+
+export function drillRosterFilters(key) {
+  const make = Object.prototype.hasOwnProperty.call(FUNNEL_DRILLS, key) ? FUNNEL_DRILLS[key] : FUNNEL_DRILLS.enrolled;
+  return make();
+}
+
+/** 前端送來的條件 → 檢查過的條件；格式不對回 { ok: false } */
+export function parseRosterFilters(value) {
+  if (value === undefined || value === null) return { ok: true, filters: defaultRosterFilters() };
+  if (typeof value !== "object" || Array.isArray(value)) return { ok: false, error: "invalid_roster_filter" };
+  const shortcut = value.shortcut === undefined || value.shortcut === null ? "" : value.shortcut;
+  const team = value.team === undefined || value.team === null ? "any" : value.team;
+  const q = value.q === undefined || value.q === null ? "" : value.q;
+  const progress = pickIds(value.progress, PROGRESS_IDS);
+  const checkin = pickIds(value.checkin, CHECKIN_IDS);
+  if (!ROSTER_SHORTCUTS.includes(shortcut) || !ROSTER_TEAM_FILTERS.includes(team) || !progress || !checkin
+    || typeof q !== "string" || q.length > MAX_ROSTER_QUERY_CHARS) {
+    return { ok: false, error: "invalid_roster_filter" };
+  }
+  return { ok: true, filters: { shortcut, progress, checkin, team, q: q.trim() } };
+}
+
+export function rosterRowMatches(row, filters) {
+  const reasons = Array.isArray(row.careReasons) ? row.careReasons : [];
+  if (filters.shortcut === "care") {
+    if (!row.care) return false;
+  } else if (filters.shortcut === "care_behind") {
+    if (!reasons.some((reason) => reason.type === "behind")) return false;
+  } else if (filters.shortcut === "care_checkin") {
+    if (!reasons.some((reason) => reason.type === "no_checkin" || reason.type === "never_read")) return false;
+  } else if (filters.shortcut === "active7") {
+    if (!row.enrolled || !(row.readDays7 > 0)) return false;
+  } else if (!filters.progress.includes(row.progressBucket) || !filters.checkin.includes(row.checkinBucket)) {
+    return false;
+  }
+  const hasTeam = Array.isArray(row.teams) && row.teams.length > 0;
+  if (filters.team === "yes" && !hasTeam) return false;
+  if (filters.team === "no" && (hasTeam || !row.enrolled)) return false;
+  if (filters.q) {
+    const text = [row.name, row.greatRegion, row.pastoralZone, row.smallGroup].join(" ");
+    if (!text.includes(filters.q)) return false;
+  }
+  return true;
+}
+
+export function filterPlanRoster(rows, filters) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => rosterRowMatches(row, filters));
+}
+
+// 預設落後天數多→少（維護者 2026-10-13：章數會被延後梯次、中途報名、讀第二遍弄失真）
+export function sortPlanRoster(rows, sort = "behind") {
+  const byName = (a, b) => a.name.localeCompare(b.name, "zh-Hant") || a.id.localeCompare(b.id);
+  const compare = sort === "chapters_desc"
+    ? (a, b) => b.chapters - a.chapters || byName(a, b)
+    : sort === "chapters_asc"
+      ? (a, b) => a.chapters - b.chapters || byName(a, b)
+      : (a, b) => b.behindDays - a.behindDays || byName(a, b);
+  return [...(Array.isArray(rows) ? rows : [])].sort(compare);
 }

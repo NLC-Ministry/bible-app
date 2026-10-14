@@ -79,7 +79,9 @@ describe("old #/admin/<section> links after the 管理 tab split (#551)", () => 
   });
 
   it("builds the URL on the right console, and nothing for leader sections", () => {
-    expect(adminConsoleSectionUrl("plans", { hostname: "bible.newlife.org.tw" })).toBe("https://bible-speed-reading-admin.vercel.app/#/operations/plans");
+    // #565：計畫管理在後台計畫區的「計畫設定」
+    expect(adminConsoleSectionUrl("plans", { hostname: "bible.newlife.org.tw" })).toBe("https://bible-speed-reading-admin.vercel.app/#/plans/settings");
+    expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.plans)).toEqual({ view: "legacy", area: "plans", section: "plans" });
     expect(adminConsoleSectionUrl("reports", { hostname: "localhost" })).toBe("https://bible-speed-reading-admin-staging.vercel.app/#/support");
     expect(adminConsoleSectionUrl("teams", { hostname: "localhost" })).toBeNull();
     expect(adminConsoleSectionUrl("__proto__", { hostname: "localhost" })).toBeNull();
