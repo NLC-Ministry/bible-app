@@ -288,7 +288,7 @@ describe("operations area", () => {
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.textContent).toContain("沒有權限");
     const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
-    expect(links).toEqual(["客服", "內容"]);
+    expect(links).toEqual(["客服", "人", "內容"]); // 有 support.read 就看得到人區（個人頁，#567）
     expect(el.textContent).not.toContain("搬移中");
   });
 

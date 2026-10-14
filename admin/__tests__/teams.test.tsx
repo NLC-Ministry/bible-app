@@ -115,7 +115,7 @@ async function mount(initialHash: string, caps = CAPS) {
       case "team_detail": data = detailOf(params.team_id === TEAM_STUCK ? STUCK : OK); break;
       case "team_history": data = HISTORY; break;
       case "team_lineage": data = LINEAGE; break;
-      case "user_search": data = []; break;
+      case "directory_list": data = { items: [], total: 0, next_cursor: null, plan_id: null, plans: [], all_count: 0 }; break;
       case "team_search":
         data = [{ id: TEAM_STUCK, name: "南風隊", division: 3, status: "ready", member_count: 2, captain_name: "丙", matched_code: true,
           plan: { id: PLAN, name: PLAN_ROW.name, plan_kind: PLAN_ROW.plan_kind, start_date: PLAN_ROW.start_date, end_date: PLAN_ROW.end_date } }];
@@ -224,35 +224,42 @@ describe("team page", () => {
 });
 
 describe("finding a team", () => {
-  it("the user search also finds teams (with plans.read), linking to the team page with its plan", async () => {
-    const { requests, el } = await mount("#/support/users");
-    const input = el.querySelector<HTMLInputElement>("#adm-search-input")!;
-    expect(input.placeholder).toContain("邀請碼");
+  const typeQuery = async (el: HTMLElement, value: string) => {
+    const input = el.querySelector<HTMLInputElement>("#adm-directory-q")!;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      setter.call(input, "ABCDEF1234");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await flush(300);
+    await flush(350);
     await flush();
-    expect(actions(requests).slice(1).sort()).toEqual(["team_search", "user_search"]);
-    const link = [...el.querySelectorAll<HTMLAnchorElement>(".adm-result")].find((a) => a.textContent?.includes("南風隊"));
+  };
+
+  it("the people search also finds teams (with plans.read), linking to the team page with its plan (#567)", async () => {
+    const { requests, el } = await mount("#/people", [...CAPS, "accounts.read"]);
+    expect(el.querySelector<HTMLInputElement>("#adm-directory-q")!.placeholder).toContain("邀請碼");
+    await typeQuery(el, "ABCDEF1234");
+    expect(actions(requests).slice(2).sort()).toEqual(["directory_list", "team_search"]);
+    expect(requests.find((r) => r.action === "team_search")!.params).toEqual({ q: "ABCDEF1234" });
+    const link = [...el.querySelectorAll<HTMLAnchorElement>(".adm-team-matches .adm-result")].find((a) => a.textContent?.includes("南風隊"));
     expect(link?.getAttribute("href")).toBe(`#/plans/teams/${TEAM_STUCK}?plan=${PLAN}`);
     expect(link?.textContent).toContain("邀請碼相符");
     expect(link?.textContent).toContain(PLAN_ROW.name);
+
+    // 改別的條件、搜尋字沒變：不重找隊伍
+    const before = requests.length;
+    await act(async () => { el.querySelector<HTMLInputElement>(".adm-filters__footer input[type=checkbox]")!.click(); });
+    await flush();
+    expect(actions(requests).slice(before)).toEqual(["directory_list"]);
+    // 太短的字不找隊伍
+    await typeQuery(el, "a");
+    expect(actions(requests).slice(before + 1)).toEqual(["directory_list"]);
+    expect(el.querySelector(".adm-team-matches")).toBeNull();
   });
 
   it("without plans.read the search stays people-only", async () => {
-    const { requests, el } = await mount("#/support/users", ["console.access", "support.read"]);
-    const input = el.querySelector<HTMLInputElement>("#adm-search-input")!;
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      setter.call(input, "南風");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await flush(300);
-    await flush();
-    expect(actions(requests).slice(1)).toEqual(["user_search"]);
+    const { requests, el } = await mount("#/people", ["console.access", "support.read", "accounts.read"]);
+    await typeQuery(el, "南風");
+    expect(actions(requests).slice(1)).toEqual(["directory_list", "directory_list"]);
   });
 
   it("a team event on the personal page links to the team page only with plans.read and a living team", () => {

@@ -346,7 +346,7 @@ function AuditRow({ event, open, full, canOpenUser, onToggle, onRetry }: {
               <a className="adm-link" href={formatRoute({ view: "audit", actorId: null, targetId: event.target_user.id })}>只看對 {personName(event.target_user)} 的紀錄</a>
             )}
             {event.target_user && canOpenUser && (
-              <a className="adm-link" href={formatRoute({ view: "user", userId: event.target_user.id, tab: "overview", reason: "" })}>打開 {personName(event.target_user)}</a>
+              <a className="adm-link" href={formatRoute({ view: "user", userId: event.target_user.id, reason: "" })}>打開 {personName(event.target_user)}</a>
             )}
           </div>
         </div>

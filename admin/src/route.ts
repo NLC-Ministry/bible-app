@@ -2,10 +2,9 @@
 //
 //   #/support                                回報收件匣（#550）
 //   #/support/report/<uuid>                  收件匣＋打開這張回報
-//   #/support/users                          使用者查詢
-//   #/support/user/<uuid>[/<tab>][?reason=…] 某個人（可以直接用網址連過來；reason 是查看理由，會記進稽核）
-//   #/accounts                               使用者名單（#550）
-//   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
+//   #/people                                 「人」區：名單與查詢（#567，原本的使用者查詢＋使用者名單）
+//   #/people/user/<uuid>[?reason=…]          某個人（可以直接用網址連過來；reason 是查看理由，會記進稽核）
+//   #/people/scopes[/<uuid>]                 管理範圍（權限總覽＋編輯某個人）
 //   #/plans[/roster|teams|quiz][?plan=<uuid>] 計畫區（#565；沒指定計畫就用上次選的、再來是伺服器挑的預設計畫）
 //   #/plans/teams/<uuid>[?plan=<uuid>]       隊伍頁（#566；隊伍自己知道屬於哪個計畫，plan 只是回清單時用）
 //   #/plans/settings                         計畫設定（照搬的「全域計畫管理」卡片）
@@ -15,26 +14,27 @@
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
 // 搬到計畫區的舊營運區塊（#565），舊書籤導到新位置：計畫管理 → 計畫設定、加入計畫狀況／組員總覽 → 名單、計畫統計 → 總覽。
+// 「人」區的舊網址（#567）也導到新位置：#/support/users、#/accounts → 名單；#/support/user/<uuid>[/<舊分頁>] → 個人頁
+// （個人頁不再分頁，舊分頁名稱略過）；#/accounts/scopes[/<uuid>] → 管理範圍。會友 App 的舊連結因此仍然有效。
 
 import { isLegacyArea, legacySectionsOf, type LegacyArea } from "./legacy.ts";
 
-export const USER_TABS = ["overview", "reading_logs", "team_events", "tests", "vouchers", "reports", "timeline"] as const;
-export type UserTab = typeof USER_TABS[number];
+// 舊個人頁的分頁（#555）：只為了認得舊網址
+const OLD_USER_TABS: readonly string[] = ["overview", "reading_logs", "team_events", "tests", "vouchers", "reports", "timeline"];
 
-export const AREAS = ["support", "accounts", "plans", "operations", "content", "system"] as const;
+export const AREAS = ["support", "people", "plans", "operations", "content", "system"] as const;
 export type Area = typeof AREAS[number];
 
-export const ACCOUNT_TABS = ["users", "scopes"] as const;
-export type AccountTab = typeof ACCOUNT_TABS[number];
+export const PEOPLE_TABS = ["directory", "scopes"] as const;
+export type PeopleTab = typeof PEOPLE_TABS[number];
 
 export const PLAN_TABS = ["overview", "roster", "teams", "quiz"] as const;
 export type PlanTab = typeof PLAN_TABS[number];
 
 export type AdminRoute =
   | { view: "inbox"; reportId: string | null }
-  | { view: "search" }
-  | { view: "user"; userId: string; tab: UserTab; reason: string }
-  | { view: "accounts"; tab: AccountTab; profileId: string | null }
+  | { view: "user"; userId: string; reason: string }
+  | { view: "people"; tab: PeopleTab; profileId: string | null }
   | { view: "plans"; tab: PlanTab; planId: string | null; teamId?: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
   | { view: "audit"; actorId: string | null; targetId: string | null }
@@ -45,6 +45,20 @@ const MAX_REASON_CHARS = 200;
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
+}
+
+const DIRECTORY: AdminRoute = { view: "people", tab: "directory", profileId: null };
+
+function userRoute(id: string, query: URLSearchParams): AdminRoute {
+  return { view: "user", userId: id.toLowerCase(), reason: cleanReason(query.get("reason")) };
+}
+
+/** #/people/scopes[/<uuid>] 與舊的 #/accounts/scopes[/<uuid>] */
+function scopesRoute(rest: readonly string[]): AdminRoute | null {
+  if (rest[0] !== "scopes") return null;
+  if (rest.length === 1) return { view: "people", tab: "scopes", profileId: null };
+  if (rest.length === 2 && isUuid(rest[1])) return { view: "people", tab: "scopes", profileId: rest[1].toLowerCase() };
+  return null;
 }
 
 const MOVED_OPERATIONS_SECTIONS: Readonly<Record<string, AdminRoute>> = Object.freeze({
@@ -70,19 +84,22 @@ export function parseRoute(hash: string): AdminRoute {
   if (area === "support") {
     if (rest.length === 0) return { view: "inbox", reportId: null };
     if (rest[0] === "report" && isUuid(rest[1]) && rest.length === 2) return { view: "inbox", reportId: rest[1].toLowerCase() };
-    if (rest[0] === "users" && rest.length === 1) return { view: "search" };
-    if (rest[0] === "user" && isUuid(rest[1]) && rest.length <= 3) {
-      const tab = (rest[2] || "overview") as UserTab;
-      if (!(USER_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
-      return { view: "user", userId: rest[1].toLowerCase(), tab, reason: cleanReason(query.get("reason")) };
+    // 舊網址（#567 前）
+    if (rest[0] === "users" && rest.length === 1) return DIRECTORY;
+    if (rest[0] === "user" && isUuid(rest[1]) && (rest.length === 2 || (rest.length === 3 && OLD_USER_TABS.includes(rest[2])))) {
+      return userRoute(rest[1], query);
     }
     return { view: "not_found" };
   }
+  if (area === "people") {
+    if (rest.length === 0) return DIRECTORY;
+    if (rest[0] === "user" && isUuid(rest[1]) && rest.length === 2) return userRoute(rest[1], query);
+    return scopesRoute(rest) ?? { view: "not_found" };
+  }
   if (area === "accounts") {
-    if (rest.length === 0) return { view: "accounts", tab: "users", profileId: null };
-    if (rest[0] === "scopes" && rest.length === 1) return { view: "accounts", tab: "scopes", profileId: null };
-    if (rest[0] === "scopes" && isUuid(rest[1]) && rest.length === 2) return { view: "accounts", tab: "scopes", profileId: rest[1].toLowerCase() };
-    return { view: "not_found" };
+    // 舊網址（#567 前）
+    if (rest.length === 0) return DIRECTORY;
+    return scopesRoute(rest) ?? { view: "not_found" };
   }
   if (area === "plans") {
     if (rest.length === 1 && rest[0] === "settings") return { view: "legacy", area: "plans", section: "plans" };
@@ -113,13 +130,11 @@ export function formatRoute(route: AdminRoute): string {
   switch (route.view) {
     case "inbox":
       return route.reportId ? `#/support/report/${route.reportId}` : "#/support";
-    case "search":
-      return "#/support/users";
     case "not_found":
       return "#/support";
-    case "accounts":
-      if (route.tab === "users") return "#/accounts";
-      return route.profileId ? `#/accounts/scopes/${route.profileId}` : "#/accounts/scopes";
+    case "people":
+      if (route.tab === "directory") return "#/people";
+      return route.profileId ? `#/people/scopes/${route.profileId}` : "#/people/scopes";
     case "plans": {
       const tab = route.teamId ? `/teams/${route.teamId}` : route.tab === "overview" ? "" : `/${route.tab}`;
       return `#/plans${tab}${route.planId ? `?plan=${route.planId}` : ""}`;
@@ -134,10 +149,9 @@ export function formatRoute(route: AdminRoute): string {
       return text ? `#/system/audit?${text}` : "#/system/audit";
     }
     case "user": {
-      const tab = route.tab === "overview" ? "" : `/${route.tab}`;
       const reason = cleanReason(route.reason);
       const query = reason ? `?${new URLSearchParams({ reason })}` : "";
-      return `#/support/user/${route.userId}${tab}${query}`;
+      return `#/people/user/${route.userId}${query}`;
     }
   }
 }
@@ -145,7 +159,7 @@ export function formatRoute(route: AdminRoute): string {
 export function areaOf(route: AdminRoute): Area {
   if (route.view === "legacy") return route.area;
   if (route.view === "audit") return "system";
-  if (route.view === "accounts") return "accounts";
+  if (route.view === "people" || route.view === "user") return "people";
   if (route.view === "plans") return "plans";
   return "support";
 }

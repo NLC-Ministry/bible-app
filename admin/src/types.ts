@@ -10,20 +10,8 @@ export type Bootstrap = {
 /** 組織名單（依 sort_order 排好）：大區 → 牧區 → 小組 */
 export type OrgTreeNode = { id: string; name: string; zones: { id: string; name: string; groups: { id: string; name: string }[] }[] };
 
-export type SearchResult = {
-  id: string;
-  name: string | null;
-  email_masked: string | null;
-  great_region: string | null;
-  pastoral_zone: string | null;
-  small_group: string | null;
-  role_code: string;
-  role_label: string | null;
-  is_active: boolean | null;
-  last_seen_at: string | null;
-};
-
-export type SectionName = "reading_logs" | "team_events" | "tests" | "vouchers" | "reports";
+// 個人頁點開才調閱的區塊（#567；和 admin-api policy.ts 的 USER_SECTIONS 同一份）
+export type SectionName = "plans" | "reading_logs" | "teams" | "team_events" | "tests" | "vouchers" | "reports" | "notifications";
 
 export type SectionItem = { section: SectionName; id: string; at: string | null; [key: string]: unknown };
 
@@ -31,24 +19,48 @@ export type Cursor = { at: string; id: string };
 
 export type Page = { items: SectionItem[]; next_cursor: Cursor | null };
 
-export type PlanSummary = {
-  plan_id: string;
-  global_plan_id: string | null;
-  name: string | null;
-  plan_kind: string | null;
-  is_personal: boolean | null;
-  start_date: string | null;
-  end_date: string | null;
-  church_start_date: string | null;
-  church_end_date: string | null;
-  current_round: number | null;
-  grace_days: number | null;
-  joined_at: string | null;
-  round1_chapters: number;
-  current_round_chapters: number;
-  logged_chapters: number;
+// ── 個人頁（#567）：supabase/functions/admin-api/people.ts 的 buildPersonReport ─────────────
+export type CheckStatus = "ok" | "warn" | "fail" | "unknown";
+export type CheckLink = { kind: "user" | "team"; id: string; label: string; plan_id?: string | null };
+export type PersonCheck = {
+  id: string;
+  label: string;
+  status: CheckStatus;
+  summary: string;
+  details: string[];
+  impact?: string;
+  fix?: string;
+  links?: CheckLink[];
+};
+
+/** 「會友 App 現在應該顯示」：和計畫名單、App 同一份規則算出來的（#564） */
+export type AppPlanView = {
+  plan: {
+    id: string;
+    name: string;
+    start_date: string | null;
+    end_date: string | null;
+    state: "upcoming" | "running" | "ended";
+    books: string[];
+    total_days: number;
+    expected_days: number;
+  };
+  /** false：帳號停用，App 進不去、名單也不會列 */
+  shown: boolean;
+  account_active: boolean;
+  enrolled: boolean;
+  status: string | null;
+  status_label: string | null;
+  round: number;
+  progress: number;
+  chapters: number;
+  behind_days: number;
   last_read_at: string | null;
-  teams: { team_id: string; name: string | null; status: string | null; division: string | null; member_role: string | null; is_captain: boolean }[];
+  days_since_read: number | null;
+  read_days_7: number;
+  care: boolean;
+  care_reasons: string[];
+  teams: { id: string; name: string | null; division: number | null; status: string | null; size: number; captain: boolean }[];
 };
 
 export type UserSummary = {
@@ -65,6 +77,9 @@ export type UserSummary = {
     created_at: string | null;
     last_seen_at: string | null;
     has_member_hub_id: boolean;
+    managed_regions?: string | null;
+    managed_zones?: string | null;
+    managed_groups?: string | null;
   };
   identities: { provider: string; email_masked: string | null; is_primary: boolean | null; created_at: string | null; last_seen_at: string | null }[];
   org: { great_region: string | null; pastoral_zone: string | null; small_group: string | null };
@@ -77,9 +92,14 @@ export type UserSummary = {
     required_action: string | null;
     leadership_display_label: string | null;
   };
-  plans: PlanSummary[];
   counts: Record<SectionName, number>;
-  latest: Record<SectionName, SectionItem[]>;
+  voucher_states: { unredeemed: number; redeemed: number; expired: number; voided: number };
+  /** 經文筆記只有筆數與最後更新時間，沒有內容（屬於個人靈修） */
+  notes: { verse_notes: number; devotional_notes: number; last_updated_at: string | null };
+  checks: PersonCheck[];
+  app_plans: AppPlanView[];
+  /** 教會時區的今天（YYYY-MM-DD） */
+  today: string | null;
 };
 
 export type RevealedPii = {
@@ -171,14 +191,19 @@ export type DirectoryItem = {
   managed_groups: string;
   joined: boolean;
   teams: DirectoryTeam[];
+  /** 排序鍵（大區順序、大區、牧區順序、牧區、姓名、id）；下一頁從最後一人的排序鍵之後接（#567） */
+  sort_key: DirectoryCursor;
 };
+
+export type DirectoryCursor = [number | null, string | null, number | null, string | null, string | null, string];
 
 export type PlanOption = { id: string; name: string | null; start_date: string | null; end_date: string | null; plan_kind: string | null };
 
 export type DirectoryPage = {
   items: DirectoryItem[];
   total: number;
-  next_offset: number | null;
+  /** 沒有下一頁是 null（#567 改成游標：資料變動中翻頁也不跳過或重複） */
+  next_cursor: DirectoryCursor | null;
   /** 這頁用的計畫（沒指定時伺服器挑的預設計畫） */
   plan_id: string | null;
   /** 只有第一頁有 */

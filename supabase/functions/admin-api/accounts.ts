@@ -11,7 +11,6 @@ export const ORG_UNASSIGNED = "__unassigned__";
 const MAX_ORG_VALUES = 200;
 const MAX_ORG_VALUE_CHARS = 100;
 const MAX_QUERY_CHARS = 100;
-const MAX_OFFSET = 100000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type DirectoryFilters = {
@@ -74,10 +73,21 @@ export function directoryFilters(params: Record<string, unknown>): { ok: true; f
   };
 }
 
-export function optionalOffset(value: unknown): { ok: true; offset: number } | { ok: false; error: string } {
-  if (value === undefined || value === null) return { ok: true, offset: 0 };
-  if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > MAX_OFFSET) return { ok: false, error: "invalid_offset" };
-  return { ok: true, offset: value as number };
+/**
+ * 名單的游標（#567）：上一頁最後一人的排序鍵 [大區排序, 大區, 牧區排序, 牧區, 姓名, id]，原樣是 admin_api_directory_list
+ * 回的 next_cursor。排序欄位可以是 null；id 一定要有。沒給＝第一頁。
+ */
+export function directoryCursor(value: unknown): { ok: true; cursor: unknown[] | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) return { ok: true, cursor: null };
+  if (!Array.isArray(value) || value.length !== 6) return { ok: false, error: "invalid_cursor" };
+  const [region, regionName, zone, zoneName, name, id] = value;
+  const intOrNull = (item: unknown) => item === null || (Number.isInteger(item) && Math.abs(item as number) <= 2147483647);
+  const textOrNull = (item: unknown) => item === null || (typeof item === "string" && item.length <= 200);
+  if (!intOrNull(region) || !intOrNull(zone) || !textOrNull(regionName) || !textOrNull(zoneName) || !textOrNull(name)) {
+    return { ok: false, error: "invalid_cursor" };
+  }
+  if (typeof id !== "string" || !UUID_RE.test(id)) return { ok: false, error: "invalid_cursor" };
+  return { ok: true, cursor: value };
 }
 
 export const runDirectoryExport: ActionRunner = async ({ args, rpc }) => {

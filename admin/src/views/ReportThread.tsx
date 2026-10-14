@@ -151,7 +151,7 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
           {reporter && (
             <a
               className="adm-button adm-button--ghost"
-              href={formatRoute({ view: "user", userId: reporter.id, tab: "overview", reason: `因回報 ${report.id.slice(0, 8)}` })}
+              href={formatRoute({ view: "user", userId: reporter.id, reason: `因回報 ${report.id.slice(0, 8)}` })}
             >
               <UserRound className="adm-icon" aria-hidden="true" />查看這位會友
             </a>

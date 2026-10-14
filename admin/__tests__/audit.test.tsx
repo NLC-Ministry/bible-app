@@ -179,7 +179,7 @@ describe("稽核紀錄", () => {
     expect(detail.querySelector("img")).toBeNull();
     expect(detail.textContent).toContain("adm-req-103");
     const links = [...detail.querySelectorAll<HTMLAnchorElement>("a")].map((a) => a.getAttribute("href"));
-    expect(links).toEqual([`#/system/audit?actor=${ADMIN}`, `#/system/audit?target=${MEMBER}`, `#/support/user/${MEMBER}`]);
+    expect(links).toEqual([`#/system/audit?actor=${ADMIN}`, `#/system/audit?target=${MEMBER}`, `#/people/user/${MEMBER}`]);
 
     // 補充資訊是 JSON 文字
     await click(list[1].querySelector<HTMLButtonElement>(".adm-audit__summary")!);

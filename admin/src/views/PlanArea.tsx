@@ -639,7 +639,7 @@ function RosterItem({ api, row, planId, planName, open, onToggle, capabilities, 
               <CareReminder api={api} row={row} planId={planId} sentMessage={sentMessage} onSent={onSent} />
             )}
             {capabilities.includes("support.read") && (
-              <a className="adm-link" href={formatRoute({ view: "user", userId: row.id, tab: "overview", reason: `從計畫名單查看（${planName}）` })}>
+              <a className="adm-link" href={formatRoute({ view: "user", userId: row.id, reason: `從計畫名單查看（${planName}）` })}>
                 完整個人資料 →
               </a>
             )}

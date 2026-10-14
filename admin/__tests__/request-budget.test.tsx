@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// 請求預算（#555、#550）：用假的 admin-api 數請求。開後台＝bootstrap＋預設頁（回報收件匣）的 1 個清單、
-// 打開某人 ≤ 1 個；同一個人 60 秒內切換區塊不重抓；搜尋停止輸入 250ms 才送、只送最後一次。
+// 請求預算（#555、#550、#567）：用假的 admin-api 數請求。開後台＝bootstrap＋預設頁（回報收件匣）的 1 個清單、
+// 打開某人 1 個（除錯檢查＋各區筆數）；各區點開才調閱、筆數 0 的不打；同一個人 60 秒內重開不重抓。
+// 名單的搜尋（停 300ms 才送）在 accounts.test.tsx，隊伍搜尋在 teams.test.tsx。
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,6 +18,8 @@ const log = (id: string, at: string, chapter: number) => ({
   section: "reading_logs", id, at, plan_id: "p1", plan_name: "第四季速讀", book: "創世記", chapter, round: 1
 });
 
+const REPORT = { section: "reports", id: "r1", at: "2026-10-05T00:00:00Z", category: "bug", status: "pending", description: "<b>看不到進度</b>" };
+
 function summaryFor(userId: string, name: string) {
   return {
     account: {
@@ -27,18 +30,23 @@ function summaryFor(userId: string, name: string) {
     identities: [{ provider: "logto", email_masked: "wa***@example.com", is_primary: true, created_at: null, last_seen_at: null }],
     org: { great_region: "北區", pastoral_zone: "一牧區", small_group: "喜樂小組" },
     member_hub: { synced_at: null, sync_status: "ok", sync_error: null, membership_lifecycle_state: null, placement_state: null, required_action: null, leadership_display_label: null },
-    plans: [{
-      plan_id: "p1", global_plan_id: "g1", name: "第四季速讀", plan_kind: "speed_reading", is_personal: false,
-      start_date: "2026-10-01", end_date: "2026-12-31", church_start_date: "2026-10-01", church_end_date: "2026-12-31",
-      current_round: 1, grace_days: 0, joined_at: null, round1_chapters: 42, current_round_chapters: 42, logged_chapters: 42,
-      last_read_at: "2026-10-10T00:00:00Z", teams: []
+    counts: { plans: 1, reading_logs: 42, teams: 0, team_events: 0, tests: 0, vouchers: 3, reports: 1, notifications: 0 },
+    voucher_states: { unredeemed: 1, redeemed: 1, expired: 1, voided: 0 },
+    notes: { verse_notes: 7, devotional_notes: 0, last_updated_at: "2026-10-02T00:00:00Z" },
+    checks: [
+      { id: "duplicate_enrollment", label: "沒有重複報名", status: "ok", summary: "每個計畫只報名一次。", details: [] },
+      {
+        id: "orphan_logs", label: "打卡都有歸屬計畫", status: "fail", summary: "5 筆打卡（5 章）沒有歸屬任何計畫。",
+        details: ["書卷：出埃及記"], impact: "累積章數會多算 5 章。", fix: "之後評估", links: [{ kind: "user", id: OTHER, label: "李大華" }]
+      },
+      { id: "app_version", label: "App 是最新版", status: "unknown", summary: "這個人沒有回報過，不知道 App 版本。", details: [] }
+    ],
+    app_plans: [{
+      plan: { id: "11111111-1111-4111-8111-111111111111", name: "第四季速讀", start_date: "2026-10-01", end_date: "2026-12-31", state: "running", books: [], total_days: 92, expected_days: 10 },
+      shown: true, account_active: true, enrolled: true, status: "behind", status_label: "落後 3天", round: 1, progress: 38, chapters: 42,
+      behind_days: 3, last_read_at: "2026-10-07T00:00:00Z", days_since_read: 3, read_days_7: 2, care: true, care_reasons: ["3 天沒打卡"], teams: []
     }],
-    counts: { reading_logs: 42, team_events: 0, tests: 0, vouchers: 0, reports: 1 },
-    latest: {
-      reading_logs: [5, 4, 3, 2, 1].map((n) => log(`l${n}`, `2026-10-0${n}T00:00:00Z`, n)),
-      team_events: [], tests: [], vouchers: [],
-      reports: [{ section: "reports", id: "r1", at: "2026-10-05T00:00:00Z", category: "bug", status: "pending", description: "<b>看不到進度</b>" }]
-    }
+    today: "2026-10-10"
   };
 }
 
@@ -47,11 +55,13 @@ function respond(action: string, params: any) {
     case "bootstrap":
       return { me: { id: "admin-1", name: "王管理", email: null, role_code: "admin", role_label: "系統管理員" }, feature_settings: [], org: [],
         capabilities: ["console.access", "support.read", "support.pii", "audit.read", "export"] };
-    case "user_search":
-      return [{ id: USER, name: `王小明（${params.q}）`, email_masked: "wa***@example.com", great_region: "北區", pastoral_zone: "一牧區", small_group: null, role_code: "member", role_label: null, is_active: true, last_seen_at: null }];
     case "user_summary":
       return summaryFor(params.user_id, params.user_id === USER ? "王小明" : "李大華");
     case "user_section":
+      if (params.section === "reports") return { items: [REPORT], next_cursor: null };
+      if (params.section === "reading_logs" && !params.cursor) {
+        return { items: [5, 4, 3, 2, 1].map((n) => log(`l${n}`, `2026-10-0${n}T00:00:00Z`, n)), next_cursor: { at: "2026-10-01T00:00:00Z", id: "l1" } };
+      }
       return { items: [log("l0", "2026-09-30T00:00:00Z", 99)], next_cursor: null };
     case "user_timeline":
       return { items: [log("t1", "2026-10-09T00:00:00Z", 7)], next_cursor: null };
@@ -113,6 +123,16 @@ async function mount(initialHash: string) {
 
 const actions = (requests: { action: string }[]) => requests.map((r) => r.action);
 
+/** 點個人頁某一區的標題（展開或收起） */
+async function togglePanel(el: HTMLElement, name: string) {
+  const button = [...el.querySelectorAll<HTMLButtonElement>(".adm-panel__toggle")].find((b) => b.querySelector(".adm-panel__label")?.textContent === name);
+  if (!button) throw new Error(`no panel ${name}`);
+  await act(async () => { button.click(); });
+  await flush();
+}
+
+const PERSON = `#/people/user/${USER}?reason=${encodeURIComponent("因回報 #1")}`;
+
 async function typeInto(input: HTMLInputElement, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
@@ -130,52 +150,85 @@ describe("admin console request budget", () => {
     expect(nav[0]).toContain("客服");
   });
 
-  it("opening a person makes exactly one request; switching sections within 60 s makes none", async () => {
-    const { requests, el } = await mount("#/support/users");
-    await go(`#/support/user/${USER}?reason=${encodeURIComponent("因回報 #1")}`);
-    expect(actions(requests)).toEqual(["bootstrap", "user_summary"]);
-    expect(requests[1].params).toEqual({ user_id: USER, reason: "因回報 #1" });
+  it("opening a person makes exactly one request (checks + counts); reopening within 60 s makes none", async () => {
+    const { requests, el } = await mount("#/support");
+    await go(PERSON);
+    expect(actions(requests)).toEqual(["bootstrap", "report_list", "user_summary"]);
+    expect(requests[2].params).toEqual({ user_id: USER, reason: "因回報 #1" });
     expect(el.textContent).toContain("王小明");
-    expect(el.textContent).toContain("查看理由：因回報 #1");
-
-    for (const tab of ["reading_logs", "reports", "tests", "vouchers", "team_events", ""]) {
-      await go(`#/support/user/${USER}${tab ? `/${tab}` : ""}`);
-    }
-    expect(actions(requests)).toEqual(["bootstrap", "user_summary"]);
+    expect(el.querySelector<HTMLInputElement>("#adm-person-reason")!.value).toBe("因回報 #1");
+    // 各區先顯示筆數，內容還沒調閱
+    expect(el.textContent).toContain("打卡紀錄42 筆");
+    expect(el.textContent).toContain("3 筆（未兌換 1・已兌換 1・已過期 1）");
+    expect(el.textContent).toContain("7 則（不顯示內容）");
+    expect(el.textContent).not.toContain("創世記");
 
     // 換人再回來：新的人 1 個請求，回來的人 0 個
-    await go(`#/support/user/${OTHER}`);
-    await go(`#/support/user/${USER}/reading_logs`);
-    expect(actions(requests)).toEqual(["bootstrap", "user_summary", "user_summary"]);
-    expect(el.textContent).toContain("創世記 5 章");
+    await go(`#/people/user/${OTHER}`);
+    await go(`#/people/user/${USER}`);
+    expect(actions(requests)).toEqual(["bootstrap", "report_list", "user_summary", "user_summary"]);
   });
 
-  it("a direct link to a person costs bootstrap + one summary", async () => {
-    const { requests } = await mount(`#/support/user/${USER}`);
-    expect(actions(requests)).toEqual(["bootstrap", "user_summary"]);
-  });
-
-  it("loads more of a section with a cursor, and the timeline only when opened", async () => {
+  it("a direct link to a person costs bootstrap + one summary; old /support/user links still work", async () => {
     const { requests, el } = await mount(`#/support/user/${USER}/reading_logs`);
+    expect(actions(requests)).toEqual(["bootstrap", "user_summary"]);
+    expect(el.textContent).toContain("王小明");
+  });
+
+  it("shows the checks and what the member's App should show", async () => {
+    const { el } = await mount(PERSON);
+    const checks = [...el.querySelectorAll(".adm-check")];
+    expect(checks.map((check) => check.className)).toEqual(["adm-check adm-check--ok", "adm-check adm-check--fail", "adm-check adm-check--unknown"]);
+    expect(checks[1].textContent).toContain("5 筆打卡（5 章）沒有歸屬任何計畫。");
+    expect(checks[1].textContent).toContain("累積章數會多算 5 章。");
+    expect(checks[1].querySelector("a")!.getAttribute("href")).toBe(`#/people/user/${OTHER}?${new URLSearchParams({ reason: "從王小明的除錯檢查查看" })}`);
+    expect(el.textContent).toContain("除錯檢查（1 項要看）");
+    expect(el.textContent).toContain("第 1 遍・38%・落後 3天");
+    expect(el.textContent).toContain("3 天沒打卡");
+  });
+
+  it("loads a section only when opened, with the reason; more with a cursor; zero-count and local sections cost nothing", async () => {
+    const { requests, el } = await mount(PERSON);
+    await togglePanel(el, "打卡紀錄");
+    expect(requests[2]).toEqual({ action: "user_section", params: { user_id: USER, section: "reading_logs", limit: 20, reason: "因回報 #1" } });
     expect(el.textContent).toContain("共 42 筆，已顯示 5 筆");
     const more = [...el.querySelectorAll("button")].find((b) => b.textContent === "載入更多")!;
     await act(async () => { more.click(); });
     await flush();
-    expect(requests[2]).toEqual({
+    expect(requests[3]).toEqual({
       action: "user_section",
-      params: { user_id: USER, section: "reading_logs", cursor: { at: "2026-10-01T00:00:00Z", id: "l1" }, limit: 20 }
+      params: { user_id: USER, section: "reading_logs", cursor: { at: "2026-10-01T00:00:00Z", id: "l1" }, limit: 20, reason: "因回報 #1" }
     });
     expect(el.textContent).toContain("創世記 99 章");
 
-    await go(`#/support/user/${USER}/timeline`);
-    expect(actions(requests)).toEqual(["bootstrap", "user_summary", "user_section", "user_timeline"]);
-    await go(`#/support/user/${USER}/reading_logs`);
+    // 收起再打開、筆數 0 的區塊、帳號／徽章／經文筆記：都不打請求
+    await togglePanel(el, "打卡紀錄");
+    await togglePanel(el, "打卡紀錄");
     expect(el.textContent).toContain("創世記 99 章");
+    await togglePanel(el, "測驗");
+    expect(el.textContent).toContain("沒有測驗。");
+    await togglePanel(el, "帳號");
+    await togglePanel(el, "徽章");
+    expect(el.textContent).toContain("伺服器沒有這份資料");
+    await togglePanel(el, "經文筆記");
+    expect(el.textContent).toContain("屬於個人靈修，後台不顯示。");
     expect(requests).toHaveLength(4);
+
+    await togglePanel(el, "時間軸");
+    expect(requests[4]).toEqual({ action: "user_timeline", params: { user_id: USER, limit: 30, reason: "因回報 #1" } });
+    expect(el.textContent).toContain("創世記 7 章");
+  });
+
+  it("an edited reason is used for sections opened afterwards", async () => {
+    const { requests, el } = await mount(PERSON);
+    await typeInto(el.querySelector<HTMLInputElement>("#adm-person-reason")!, "會友來電");
+    await togglePanel(el, "回報");
+    expect(requests.at(-1)).toEqual({ action: "user_section", params: { user_id: USER, section: "reports", limit: 20, reason: "會友來電" } });
   });
 
   it("member-entered text renders as text, never as HTML", async () => {
-    const { el } = await mount(`#/support/user/${USER}/reports`);
+    const { el } = await mount(PERSON);
+    await togglePanel(el, "回報");
     expect(el.textContent).toContain("<b>看不到進度</b>");
     expect(el.querySelector(".adm-items b")).toBeNull();
   });
@@ -183,10 +236,11 @@ describe("admin console request budget", () => {
 
 describe("personal data is masked until revealed", () => {
   it("shows masked email/phone and calls reveal_pii (audited) only on demand", async () => {
-    const { requests, el } = await mount(`#/support/user/${USER}?reason=${encodeURIComponent("因回報 #1")}`);
+    const { requests, el } = await mount(PERSON);
+    await togglePanel(el, "帳號");
     expect(el.textContent).toContain("wa***@example.com");
     expect(el.textContent).not.toContain("wang@example.com");
-    const show = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("顯示"))!;
+    const show = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("顯示 email"))!;
     await act(async () => { show.click(); });
     await flush();
     expect(requests.at(-1)).toEqual({ action: "reveal_pii", params: { user_id: USER, reason: "因回報 #1" } });
@@ -195,40 +249,6 @@ describe("personal data is masked until revealed", () => {
     const hide = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes("隱藏"))!;
     await act(async () => { hide.click(); });
     expect(el.textContent).not.toContain("wang@example.com");
-  });
-});
-
-describe("search", () => {
-  it("waits 250 ms after typing stops and sends only the latest query", async () => {
-    const { requests, el } = await mount("#/support/users");
-    const input = el.querySelector<HTMLInputElement>("#adm-search-input")!;
-    await typeInto(input, "王");
-    await flush(100);
-    await typeInto(input, "王小");
-    await flush(100);
-    expect(actions(requests)).toEqual(["bootstrap"]);
-    await flush(300);
-    expect(requests.slice(1)).toEqual([{ action: "user_search", params: { q: "王小" } }]);
-    expect(el.textContent).toContain("王小明（王小）");
-    const link = el.querySelector<HTMLAnchorElement>(".adm-result")!;
-    expect(link.getAttribute("href")).toBe(`#/support/user/${USER}`);
-  });
-
-  it("does not send queries the API would reject", async () => {
-    const { requests, el } = await mount("#/support/users");
-    await typeInto(el.querySelector<HTMLInputElement>("#adm-search-input")!, "a");
-    await flush(300);
-    expect(actions(requests)).toEqual(["bootstrap"]);
-    expect(el.textContent).toContain("請輸入至少 1 個中文字或 2 個英文字母");
-  });
-
-  it("carries the view reason into the person link", async () => {
-    const { el } = await mount("#/support/users");
-    await typeInto(el.querySelector<HTMLInputElement>("#adm-reason-input")!, "因回報 #7");
-    await typeInto(el.querySelector<HTMLInputElement>("#adm-search-input")!, "王小");
-    await flush(300);
-    expect(el.querySelector<HTMLAnchorElement>(".adm-result")!.getAttribute("href"))
-      .toBe(`#/support/user/${USER}?${new URLSearchParams({ reason: "因回報 #7" })}`);
   });
 });
 

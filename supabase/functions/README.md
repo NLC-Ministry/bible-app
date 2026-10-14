@@ -99,6 +99,7 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 - **照搬區塊的匯出**（#550）：`legacy_export_audit` 只記一筆 `export` 稽核（`resource` 是 `legacy:<區塊>`，detail 有檔名、格式、筆數、大小；用既有的 `admin_api_record_event`，不用新 migration），需要 `export`＋該區塊的能力（`LEGACY_EXPORT_SECTIONS`），和其他匯出共用限流。後台外殼記成功才存檔。
 - **匯出**：CSV 由伺服器產生（防公式注入，規則同 `js/modules/csv-cell.mjs`；時間用台北時區），前端只負責存檔。使用者名單（`directory_export`，含完整 email，另外要 `support.pii`，上限 10000 人）、組織架構（`org_export`）的欄位與開頭的匯出時間列和 App 管理分頁的匯出相同（`scripts/admin-api-accounts.test.mjs` 比對）。
 - **CORS**：只允許 `https://bible-speed-reading-admin.vercel.app`、`https://bible-speed-reading-admin-staging.vercel.app`，加上選填的 `ADMIN_API_ALLOWED_ORIGINS`（逗號分隔）；`ADMIN_API_ALLOW_LOCALHOST=true`（只在 staging 設）才放行本機。其他來源回 403。回應一律 `Cache-Control: no-store`，並回 `x-request-id`；每個請求一行 `admin_api_request` log。
+- **會友 App 版本**（#567 個人頁的「App 是最新版」）：讀會友 App 的 `/version.json`（2 秒逾時、快取 60 秒，讀不到就是「無法判斷」）；正式站專案讀 `https://bible.newlife.org.tw`、其他讀 staging 網址，選填的 `ADMIN_API_MEMBER_APP_URL` 可以覆蓋。
 
 ```bash
 npx supabase secrets set --project-ref <ref> ADMIN_API_ALLOWED_CLIENT_IDS=<後台 Logto client id>

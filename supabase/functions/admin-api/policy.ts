@@ -12,11 +12,12 @@ import {
   runReportThread,
   validateReportImage
 } from "./reports.ts";
-import { directoryFilters, optionalOffset, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
+import { directoryCursor, directoryFilters, orgValues, runDirectoryExport, runOrgExport } from "./accounts.ts";
 import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
 import { validateSearchQuery } from "./search-query.ts";
 import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
 import { runTeamDetail, runTeamHistory, runTeamLineage, runTeamList, runTeamSearch } from "./teams.ts";
+import { runUserSummary } from "./people.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export { validateSearchQuery };
@@ -48,7 +49,8 @@ export function capabilitiesForRole(roleCode: unknown): Capability[] {
   return Object.prototype.hasOwnProperty.call(ROLE_CAPABILITIES, key) ? [...ROLE_CAPABILITIES[key]] : [];
 }
 
-export const USER_SECTIONS = ["reading_logs", "team_events", "tests", "vouchers", "reports"] as const;
+// 個人頁點開才調閱的區塊（#567 多了 plans、teams、notifications）
+export const USER_SECTIONS = ["plans", "reading_logs", "teams", "team_events", "tests", "vouchers", "reports", "notifications"] as const;
 
 export const REPORT_STATUSES = ["pending", "processing", "resolved", "ignored"] as const;
 // 收件匣篩選多一個 open（待處理＋處理中）
@@ -220,11 +222,12 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       return q.ok ? { ok: true, args: { p_query: q.query, p_limit: 20 } } : q;
     }
   },
+  // 打開某人（#567）：SQL 回事實，people.ts 用和 App 同一份規則算出除錯檢查與「會友 App 應該顯示」
   user_summary: {
     capabilities: ["support.read"],
     rateLimit: READ_LIMIT,
     rpc: "admin_api_user_summary",
-    notFoundOnNull: true,
+    run: runUserSummary,
     buildArgs: (params, ctx) => {
       if (!isUuid(params.user_id)) return { ok: false, error: "invalid_user_id" };
       const reason = optionalReason(params.reason);
@@ -239,7 +242,8 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     capabilities: ["support.read"],
     rateLimit: READ_LIMIT,
     rpc: "admin_api_user_section",
-    buildArgs: (params) => {
+    // 第一頁（沒有游標）SQL 記一筆 view_user_section（帶查看理由）
+    buildArgs: (params, ctx) => {
       if (!isUuid(params.user_id)) return { ok: false, error: "invalid_user_id" };
       if (typeof params.section !== "string" || !(USER_SECTIONS as readonly string[]).includes(params.section)) {
         return { ok: false, error: "invalid_section" };
@@ -248,9 +252,12 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       if (!cursor.ok) return cursor;
       const limit = optionalLimit(params.limit, 20);
       if (!limit.ok) return limit;
+      const reason = optionalReason(params.reason);
+      if (!reason.ok) return reason;
       return { ok: true, args: {
-        p_user_id: params.user_id, p_section: params.section,
-        p_cursor_at: cursor.at, p_cursor_id: cursor.id, p_limit: limit.limit
+        ...actorArgs(ctx), p_user_id: params.user_id, p_section: params.section,
+        p_cursor_at: cursor.at, p_cursor_id: cursor.id, p_limit: limit.limit,
+        p_reason: reason.reason, p_request_id: ctx.requestId
       } };
     }
   },
@@ -258,14 +265,17 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     capabilities: ["support.read"],
     rateLimit: READ_LIMIT,
     rpc: "admin_api_user_timeline",
-    buildArgs: (params) => {
+    buildArgs: (params, ctx) => {
       if (!isUuid(params.user_id)) return { ok: false, error: "invalid_user_id" };
       const cursor = optionalCursor(params.cursor);
       if (!cursor.ok) return cursor;
       const limit = optionalLimit(params.limit, 30);
       if (!limit.ok) return limit;
+      const reason = optionalReason(params.reason);
+      if (!reason.ok) return reason;
       return { ok: true, args: {
-        p_user_id: params.user_id, p_cursor_at: cursor.at, p_cursor_id: cursor.id, p_limit: limit.limit
+        ...actorArgs(ctx), p_user_id: params.user_id, p_cursor_at: cursor.at, p_cursor_id: cursor.id, p_limit: limit.limit,
+        p_reason: reason.reason, p_request_id: ctx.requestId
       } };
     }
   },
@@ -391,11 +401,11 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     buildArgs: (params, ctx) => {
       const filters = directoryFilters(params);
       if (!filters.ok) return filters;
-      const offset = optionalOffset(params.offset);
-      if (!offset.ok) return offset;
+      const cursor = directoryCursor(params.cursor);
+      if (!cursor.ok) return cursor;
       const limit = optionalLimit(params.limit, 50);
       if (!limit.ok) return limit;
-      return { ok: true, args: { p_actor_id: ctx.actorId, ...filters.filters, p_offset: offset.offset, p_limit: limit.limit } };
+      return { ok: true, args: { p_actor_id: ctx.actorId, ...filters.filters, p_cursor: cursor.cursor, p_limit: limit.limit } };
     }
   },
   // 名單匯出含完整 email：要 support.pii
@@ -652,6 +662,31 @@ export function adminAllowOrigin(origin: string | null, extraOrigins: readonly s
   if (DEFAULT_ADMIN_ORIGINS.includes(origin) || extraOrigins.includes(origin)) return origin;
   if (allowLocalhost && LOCAL_ORIGIN_RE.test(origin)) return origin;
   return null;
+}
+
+// ── 會友 App 的網址（#567：個人頁比對 App 是不是最新版，讀它的 /version.json）─────────
+// 正式站的 Supabase 專案 → 正式站 App；其他（staging）→ staging App。ADMIN_API_MEMBER_APP_URL 可以覆蓋。
+export const MEMBER_APP_ORIGIN = {
+  production: "https://bible.newlife.org.tw",
+  staging: "https://bible-speed-reading-staging.vercel.app"
+} as const;
+const PRODUCTION_PROJECT_REF = "ztozevcqkfrohgjmngcj";
+const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9.-]+$/i;
+
+export function memberAppOrigin(supabaseUrl: string | undefined, override?: string): string {
+  const custom = String(override || "").trim().replace(/\/+$/, "");
+  if (HTTPS_ORIGIN_RE.test(custom)) return custom;
+  return String(supabaseUrl || "").includes(`${PRODUCTION_PROJECT_REF}.supabase.co`) ? MEMBER_APP_ORIGIN.production : MEMBER_APP_ORIGIN.staging;
+}
+
+const BUILD_VERSION_RE = /^\d{14}$/;
+/** /version.json 的內容 → { version, minVersion }；格式不對回 null（同 js/pwa/VersionWatcher.js）。 */
+export function parseAppVersion(data: unknown): { version: string; minVersion: string | null } | null {
+  const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const version = String(record.version || "");
+  if (!BUILD_VERSION_RE.test(version)) return null;
+  const minVersion = String(record.minVersion || "");
+  return { version, minVersion: BUILD_VERSION_RE.test(minVersion) ? minVersion : null };
 }
 
 // 同 nlc-data 的 resolveRequestId：只收看起來像 id 的值，其他就自己產生。

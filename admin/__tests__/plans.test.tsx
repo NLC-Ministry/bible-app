@@ -300,7 +300,7 @@ describe("roster", () => {
     expect(row.textContent).toContain("落後 9 天、9 天沒打卡");
     expect(row.textContent).toContain("沒有隊");
     const person = row.querySelector<HTMLAnchorElement>(".adm-link")!;
-    expect(person.getAttribute("href")).toContain(`#/support/user/${uuid(4)}?reason=`);
+    expect(person.getAttribute("href")).toContain(`#/people/user/${uuid(4)}?reason=`);
 
     await click(buttons(row, "關心提醒")[0]);
     expect(row.querySelector<HTMLSelectElement>("select")!.value).toBe("behind");

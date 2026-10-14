@@ -159,17 +159,18 @@ describe("inbox request budget", () => {
     expect(el.querySelector(".adm-report-row")?.getAttribute("href")).toBe(`#/support/report/${R1}`);
   });
 
-  it("opening a report costs one report_thread; the list and the user search tab do not refetch", async () => {
+  it("opening a report costs one report_thread; opening the member and coming back does not refetch the list", async () => {
     const { requests, el } = await mount("#/support");
     await go(`#/support/report/${R1}`);
     expect(actions(requests)).toEqual(["bootstrap", "report_list", "report_thread"]);
     expect(requests[2].params).toEqual({ report_id: R1 });
     expect(el.querySelector(".adm-report-row .adm-dot")).toBeNull(); // 打開就算管理員已讀
 
-    await go("#/support/users");
+    await go(`#/people/user/${MEMBER}`);
     await go("#/support");
     await go(`#/support/report/${R1}`);
-    expect(actions(requests)).toEqual(["bootstrap", "report_list", "report_thread", "report_thread"]);
+    expect(actions(requests)).toEqual(["bootstrap", "report_list", "report_thread", "user_summary", "report_thread"]);
+    expect(el.querySelector(".adm-report-row .adm-dot")).toBeNull();
   });
 
   it("a list that comes back after the thread was opened still shows it as read", async () => {
@@ -235,7 +236,7 @@ describe("report thread", () => {
     expect(el.querySelector(".adm-message-item--note")?.textContent).toContain("內部備註，會友看不到");
     expect(el.querySelector(".adm-message-item--admin")?.textContent).toContain("會友已讀");
     const profile = [...el.querySelectorAll("a")].find((a) => a.textContent?.includes("查看這位會友"))!;
-    expect(profile.getAttribute("href")).toBe(`#/support/user/${MEMBER}?${new URLSearchParams({ reason: "因回報 11111111" })}`);
+    expect(profile.getAttribute("href")).toBe(`#/people/user/${MEMBER}?${new URLSearchParams({ reason: "因回報 11111111" })}`);
   });
 
   it("loads diagnostics only when expanded, once", async () => {

@@ -13,19 +13,19 @@ export function adminConsoleBase(hostname) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** 後台「使用者查詢」直接打開某人；reason 會記進後台的查看稽核。不是合法 id 就回 null。 */
+/** 後台「人」區直接打開某人的個人頁（#567）；reason 會記進後台的查看稽核。不是合法 id 就回 null。 */
 export function adminConsoleUserUrl(userId, { reason = "", hostname = globalThis.location?.hostname } = {}) {
   if (typeof userId !== "string" || !UUID_RE.test(userId)) return null;
   const trimmed = String(reason || "").trim().slice(0, 200);
   const query = trimmed ? `?${new URLSearchParams({ reason: trimmed })}` : "";
-  return `${adminConsoleBase(hostname)}/#/support/user/${userId.toLowerCase()}${query}`;
+  return `${adminConsoleBase(hostname)}/#/people/user/${userId.toLowerCase()}${query}`;
 }
 
 // 舊的 App 管理分頁區塊（#/admin/<區塊>）→ 後台的位置（#551：系統管理功能都在後台）。
 // 組長區塊（加入計畫狀況、組員、組隊、統計、小測驗、大測驗）留在 App 的管理分頁，不在這裡。
 export const ADMIN_CONSOLE_SECTION_ROUTES = Object.freeze({
-  users: "#/accounts",
-  permissions: "#/accounts/scopes",
+  users: "#/people",
+  permissions: "#/people/scopes",
   reports: "#/support",
   registrations: "#/operations/registrations",
   "reading-activity": "#/operations/reading-activity",

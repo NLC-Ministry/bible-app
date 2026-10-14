@@ -45,12 +45,16 @@ export function label(map: Record<string, string>, value: unknown): string {
   return map[key] || text(value);
 }
 
+// 個人頁各區（#567）
 export const SECTION_LABEL: Record<string, string> = {
-  reading_logs: "讀經紀錄",
-  team_events: "團隊紀錄",
+  plans: "計畫報名",
+  reading_logs: "打卡紀錄",
+  teams: "團隊",
+  team_events: "團隊異動",
   tests: "測驗",
   vouchers: "兌換券",
-  reports: "回報"
+  reports: "回報",
+  notifications: "通知"
 };
 
 export const TEAM_EVENT_LABEL: Record<string, string> = {
