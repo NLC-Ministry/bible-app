@@ -6717,8 +6717,8 @@ const db = {
   },
 
   // 💌 getTodayCareReminderFor – 打開關心對話框時，先看看今天是否已經傳過
-  // 一則給這位成員，讓對話框可以直接顯示「已發送的內容」並開放編輯，而不是
-  // 讓使用者送出後就再也看不到自己寫了什麼。
+  // 一則給這位成員。提醒一天一則、送出後不能改（#574），對話框據此唯讀顯示
+  // 今天送出的內容，而不是讓人再送一次才撞到「今天已提醒過」。
   async getTodayCareReminderFor(recipientId, planKey = "") {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: null, error: null };
@@ -6747,8 +6747,8 @@ const db = {
   // reason: 'behind' | 'inactive' | 'care' | 'encouragement'
   // message: 關心訊息文字 (最多 300 字)
   // planKey: 計畫識別碼 (presetKey 或 globalPlanId)
-  // 同一天對同一人再送一次，server 端會視為「編輯今天已傳送的內容」，不會
-  // 再撞到「今天已經傳過」的唯一鍵錯誤。
+  // 一天一則、送出後不能改：同一天對同一人再送一次，server 回 409
+  // care_reminder_already_sent（#574）。
   async sendCareReminder({ recipientId, reason, message, planKey = "" }) {
     // 輸入驗證
     const validReasons = ["behind", "inactive", "care", "encouragement"];
@@ -6797,17 +6797,12 @@ const db = {
         );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (payload.error === "care_reminder_already_seen") {
-            return { error: new Error("這則關心已經被對方看過，無法再修改內容") };
+          if (payload.error === "care_reminder_already_sent" || payload.code === "23505") {
+            return { error: new Error("今天已提醒過這位了，明天可以再提醒。") };
           }
-          // A genuine 23505 here would only be a narrow concurrent-request
-          // race (two requests both passing the exists-check before either
-          // insert lands) — the normal same-day-resend case is now handled
-          // as an edit server-side and no longer reaches this branch.
-          if (payload.code === "23505" || response.status === 409) {
-            return { error: new Error("儲存時發生衝突，請重新整理後再試一次") };
-          }
-          if (response.status === 403 || payload.code === "42501" || (payload.error && payload.error.includes("policy"))) {
+          // Only the scope check answers 403. A 42501 can also come from the
+          // reminder trigger (immutable fields), so it is not a scope signal.
+          if (response.status === 403 || payload.error === "pastoral_reminder_scope_required") {
             return { error: new Error("此成員不在您的牧養範圍內") };
           }
           return { error: new Error(payload.error || "傳送失敗") };
