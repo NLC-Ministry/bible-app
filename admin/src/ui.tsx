@@ -51,6 +51,17 @@ export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "bran
   return <span className={`adm-badge adm-badge--${tone}`}>{children}</span>;
 }
 
+/** 長條：CSP 不允許行內 style，所以用 SVG 的屬性畫寬度（#565 從 PlanArea 搬來，隊伍頁也用） */
+export function Bar({ value, max, label }: { value: number; max: number; label?: string }) {
+  const width = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <svg className="adm-bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden={label ? undefined : true} role={label ? "img" : undefined} aria-label={label} focusable="false">
+      <rect className="adm-bar__track" x="0" y="0" width="100" height="8" />
+      <rect className="adm-bar__fill" x="0" y="0" width={width} height="8" />
+    </svg>
+  );
+}
+
 /** 三個以內的選項用分段按鈕，不用下拉（選項一眼看得到）。 */
 export function Segmented<T extends string>({ label, options, value, onChange, disabled = false }: {
   label: string;

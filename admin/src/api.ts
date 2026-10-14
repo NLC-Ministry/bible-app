@@ -19,7 +19,9 @@ export type AdminAction =
   // 稽核紀錄（#550）
   | "audit_list" | "audit_event" | "audit_export"
   // 計畫總覽（只有數字）與名單（#564）；計畫區的計畫選單、測驗作答、名單匯出、關心提醒（#565）
-  | "plan_summary" | "plan_roster" | "plan_options" | "plan_quiz" | "plan_roster_export" | "care_remind";
+  | "plan_summary" | "plan_roster" | "plan_options" | "plan_quiz" | "plan_roster_export" | "care_remind"
+  // 隊伍除錯（#566）
+  | "team_list" | "team_detail" | "team_history" | "team_lineage" | "team_search";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -45,7 +47,9 @@ const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   "audit_list", // 切到功能開放設定再回來不重抓；重新整理鈕用 fresh
   "audit_event", // 稽核紀錄不會改
   // 計畫：重新整理鈕用 fresh。名單 60 秒內重開不再記一筆查看；meta.consistent 是 false 時畫面要 invalidate
-  "plan_summary", "plan_roster", "plan_options", "plan_quiz"
+  "plan_summary", "plan_roster", "plan_options", "plan_quiz",
+  // 隊伍：清單、隊伍頁 60 秒內重開不再記一筆查看；重新整理鈕先 invalidate
+  "team_list", "team_detail", "team_history", "team_lineage", "team_search"
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;

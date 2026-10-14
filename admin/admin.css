@@ -599,6 +599,64 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-weeks li { display: grid; grid-template-columns: 6rem minmax(0, 1fr) 7rem; align-items: center; gap: 10px; font-size: 14px; }
 .adm-weeks__label { color: var(--text-secondary); white-space: nowrap; }
 
+/* ── 隊伍除錯（#566）：計畫 → 團隊的隊伍清單與隊伍頁 ─────────────────────── */
+.adm-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.adm-team-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
+.adm-team-toolbar__search { flex: 1 1 220px; }
+.adm-team-list { list-style: none; margin: 0 0 10px; padding: 0; border: 1px solid var(--border-card); border-radius: var(--radius-lg); overflow: hidden; }
+.adm-team-list > li { border-top: 1px solid var(--border-default); }
+.adm-team-list > li:first-child { border-top: 0; }
+.adm-team-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 10px 14px;
+  color: var(--text-primary); text-decoration: none;
+}
+.adm-team-row:hover { background: var(--color-brand-subtle); }
+.adm-team-row__name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: var(--type-weight-strong); overflow-wrap: anywhere; }
+.adm-team-row__meta { grid-column: 1; color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.adm-team-row__note { grid-column: 2; grid-row: 1 / 3; justify-self: end; font-size: 13px; }
+.adm-team-row__issues { grid-column: 1 / -1; color: var(--color-danger-foreground); font-size: 13px; }
+.adm-team-page__back { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; }
+.adm-team-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.adm-team-check { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); }
+.adm-team-check--bad { background: color-mix(in srgb, var(--color-danger) 8%, var(--bg-card)); }
+.adm-team-check__icon { margin-top: 2px; }
+.adm-team-check__icon--ok { color: var(--color-success-foreground); }
+.adm-team-check__icon--na { color: var(--text-muted); }
+.adm-team-check__icon--bad { color: var(--color-danger-foreground); }
+.adm-team-check__body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.adm-team-check__label { font-weight: var(--type-weight-strong); }
+.adm-team-check__label .adm-muted { font-weight: var(--type-weight-regular); }
+.adm-team-check__problems { margin: 0; padding-left: 18px; font-size: 14px; }
+.adm-team-carries { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.adm-team-carry { display: flex; flex-direction: column; gap: 2px; }
+.adm-team-carry__head { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--type-weight-strong); }
+.adm-team-members { list-style: none; margin: 0; padding: 0; }
+.adm-team-member {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr); align-items: center; gap: 4px 12px;
+  padding: 8px 0; border-top: 1px solid var(--border-default);
+}
+.adm-team-member:first-child { border-top: 0; }
+.adm-team-member__name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }
+.adm-team-member__meta { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.adm-team-member__progress { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.adm-team-toggle {
+  flex: 1; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent;
+  color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+}
+.adm-team-toggle > h3 { flex: 1; }
+.adm-team-history { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.adm-team-history__item { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; border-left: 2px solid var(--border-default); }
+.adm-team-history__time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.adm-team-history__since { flex: 1; margin: 0; }
+.adm-team-lineage { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.adm-team-lineage__stage { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.adm-team-lineage__stage--current { border-color: var(--color-brand-border); background: var(--color-brand-subtle); }
+.adm-team-lineage__plan { font-weight: var(--type-weight-strong); }
+.adm-team-lineage__team { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.adm-team-lineage__team strong { font-weight: var(--type-weight-strong); }
+.adm-team-lineage__members, .adm-team-lineage__removed { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; }
+.adm-team-lineage__members > li, .adm-team-lineage__removed > li { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
 /* ── 照搬的舊管理區塊（#550）：iframe 填滿主畫面剩下的高度、裡面自己捲 ─────────────
    不讓 iframe 跟著內容長高：舊畫面的彈窗是 position: fixed，iframe 一長，彈窗會跑到看不到的地方。 */
 .adm-app--legacy { height: 100vh; height: 100dvh; min-height: 0; }
@@ -655,4 +713,7 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
   .adm-roster__detail { padding-left: 14px; }
   .adm-weeks li { grid-template-columns: 5rem minmax(0, 1fr); }
   .adm-weeks li > .adm-num { grid-column: 1 / -1; text-align: left; }
+  .adm-team-row { grid-template-columns: minmax(0, 1fr); }
+  .adm-team-row__note { grid-column: 1; grid-row: auto; justify-self: start; }
+  .adm-team-member { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }

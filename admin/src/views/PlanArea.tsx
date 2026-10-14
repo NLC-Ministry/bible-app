@@ -1,10 +1,11 @@
 // 後台「計畫」區（#565）：上面選一次計畫，下面分頁 總覽／名單／團隊／測驗作答／計畫設定（照搬，LegacyHost）。
 //
 // 請求預算（需要時才調閱）：打開計畫區＝plan_options＋plan_summary（只有數字）；切到名單才載 plan_roster（記稽核，
-// 之後展開、篩選、排序都不再發請求）；測驗作答打開才載 plan_quiz；團隊用總覽的數字，不另外載。
+// 之後展開、篩選、排序都不再發請求）；測驗作答打開才載 plan_quiz；團隊分頁打開才載 team_list（#566，記稽核）；
+// 隊伍頁（#/plans/teams/<id>）只打 team_detail，異動歷程、跨階段對應點開才載。
 // 全部走 api.ts 的 60 秒快取；選的計畫、名單條件放在 App 那一層（ui），切到計畫設定或別區再回來不會不見。
 // 名單篩選、排序、從總覽點進名單的條件都是伺服器同一份規則（plans.ts → _shared/progress/plan-report.mjs）。
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,7 +20,7 @@ import {
   Send,
   TriangleAlert
 } from "lucide-react";
-import { cacheKey, type AdminAction, type AdminApi } from "../api.ts";
+import type { AdminApi } from "../api.ts";
 import { downloadCsv } from "../download.ts";
 import { formatDate, formatDateTime, text } from "../format.ts";
 import {
@@ -66,8 +67,11 @@ import {
 } from "../plans.ts";
 import { formatRoute, type AdminRoute } from "../route.ts";
 import type { CsvExport } from "../types.ts";
-import { Badge, ErrorNotice, Segmented, Spinner } from "../ui.tsx";
+import { Badge, Bar, ErrorNotice, Segmented, Spinner } from "../ui.tsx";
+import { useAdminData, type Loaded } from "../use-admin-data.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
+import type { TeamList as TeamListData, TeamListFilter } from "../teams.ts";
+import { TeamList, TeamPage } from "./TeamPage.tsx";
 
 export type PlanUiState = {
   planId: string | null;
@@ -80,6 +84,9 @@ export type PlanUiState = {
   expandedUnits: string[];
   /** 今天已送出的關心提醒（計畫 id:人 → 內容），重開那一列看得到送了什麼 */
   sent: Record<string, string>;
+  /** 隊伍清單的篩選（#566）；從隊伍頁回來還在 */
+  teamFilter: TeamListFilter;
+  teamQuery: string;
 };
 
 export const INITIAL_PLAN_UI: PlanUiState = {
@@ -90,7 +97,9 @@ export const INITIAL_PLAN_UI: PlanUiState = {
   filtersOpen: null,
   openRows: [],
   expandedUnits: [],
-  sent: {}
+  sent: {},
+  teamFilter: "all",
+  teamQuery: ""
 };
 
 type Props = {
@@ -102,47 +111,17 @@ type Props = {
   doc: Document;
 };
 
-type Loaded<T> = { data: T | null; error: unknown; loading: boolean };
-
-// 打開才載；同一份參數 60 秒內走快取（api.peek），重新整理先 invalidate 再換 refresh 讓這裡重抓
-function useAdminData<T>(api: AdminApi, action: AdminAction, params: Record<string, unknown> | null, refresh: number): Loaded<T> {
-  const key = params ? cacheKey(action, params) : "";
-  const paramsRef = useRef(params);
-  paramsRef.current = params;
-  const [state, setState] = useState<Loaded<T> & { key: string }>(() => ({
-    key, data: params ? api.peek<T>(action, params) ?? null : null, error: null, loading: false
-  }));
-
-  useEffect(() => {
-    const current = paramsRef.current;
-    if (!current) return undefined;
-    const cached = api.peek<T>(action, current);
-    if (cached !== undefined) {
-      setState({ key, data: cached, error: null, loading: false });
-      return undefined;
-    }
-    let active = true;
-    setState((prev) => ({ key, data: prev.key === key ? prev.data : null, error: null, loading: true }));
-    api.call<T>(action, current)
-      .then((data) => { if (active) setState({ key, data, error: null, loading: false }); })
-      .catch((error) => { if (active) setState({ key, data: null, error, loading: false }); });
-    return () => { active = false; };
-  }, [api, action, key, refresh]);
-
-  if (!params) return { data: null, error: null, loading: false };
-  if (state.key === key) return state;
-  const cached = api.peek<T>(action, params);
-  return cached !== undefined ? { data: cached, error: null, loading: false } : { data: null, error: null, loading: true };
-}
-
 export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
   const [refresh, setRefresh] = useState(0);
-  const options = useAdminData<PlanOptions>(api, "plan_options", {}, refresh);
+  // 隊伍頁（#566）只打 team_detail：計畫選單與總覽都不載
+  const onTeam = !!route.teamId;
+  const options = useAdminData<PlanOptions>(api, "plan_options", onTeam ? null : {}, refresh);
   const planId = options.data ? pickPlanId(options.data, [route.planId, ui.planId]) : (route.planId || ui.planId);
-  const planParams = planId ? { global_plan_id: planId } : null;
+  const planParams = planId && !onTeam ? { global_plan_id: planId } : null;
   const summary = useAdminData<PlanSummary>(api, "plan_summary", planParams, refresh);
   const roster = useAdminData<PlanRoster>(api, "plan_roster", route.tab === "roster" ? planParams : null, refresh);
   const quiz = useAdminData<PlanQuiz>(api, "plan_quiz", route.tab === "quiz" ? planParams : null, refresh);
+  const teams = useAdminData<TeamListData>(api, "team_list", route.tab === "teams" ? planParams : null, refresh);
 
   // 換了計畫：名單的展開、顯示筆數重來（條件保留）
   useEffect(() => {
@@ -159,9 +138,13 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
   }, [api, summaryInconsistent, rosterInconsistent]);
 
   const reload = () => {
-    api.invalidate(["plan_options", "plan_summary", "plan_roster", "plan_quiz"]);
+    api.invalidate(["plan_options", "plan_summary", "plan_roster", "plan_quiz", "team_list"]);
     setRefresh((value) => value + 1);
   };
+
+  if (route.teamId) {
+    return <TeamPage api={api} teamId={route.teamId} backPlanId={route.planId} capabilities={capabilities} />;
+  }
 
   const go = (tab: Extract<AdminRoute, { view: "plans" }>["tab"]) => {
     const view = doc.defaultView;
@@ -214,7 +197,7 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
       {planId && summary.loading && !summary.data && <Spinner label="載入計畫總覽…" />}
       {summary.data && (
         <>
-          <StatusBar summary={summary.data} loading={summary.loading || roster.loading || quiz.loading} onReload={reload} />
+          <StatusBar summary={summary.data} loading={summary.loading || roster.loading || quiz.loading || teams.loading} onReload={reload} />
           <Consistency meta={summary.data.meta} />
           {route.tab === "overview" && <Overview summary={summary.data} ui={ui} setUi={setUi} onDrill={drill} />}
           {route.tab === "roster" && (
@@ -230,7 +213,9 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
               onReload={reload}
             />
           )}
-          {route.tab === "teams" && <Teams summary={summary.data} capabilities={capabilities} onDrill={drill} />}
+          {route.tab === "teams" && (
+            <Teams summary={summary.data} capabilities={capabilities} onDrill={drill} teams={teams} ui={ui} setUi={setUi} onReload={reload} />
+          )}
           {route.tab === "quiz" && <Quiz quiz={quiz} capabilities={capabilities} onReload={reload} />}
         </>
       )}
@@ -272,17 +257,6 @@ function Consistency({ meta }: { meta: PlanMeta }) {
         <p className="adm-muted adm-small">請按右上的重新整理；一直對不上請回報開發者。</p>
       </div>
     </div>
-  );
-}
-
-/** 長條：CSP 不允許行內 style，所以用 SVG 的屬性畫寬度 */
-function Bar({ value, max, label }: { value: number; max: number; label?: string }) {
-  const width = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  return (
-    <svg className="adm-bar" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden={label ? undefined : true} role={label ? "img" : undefined} aria-label={label} focusable="false">
-      <rect className="adm-bar__track" x="0" y="0" width="100" height="8" />
-      <rect className="adm-bar__fill" x="0" y="0" width={width} height="8" />
-    </svg>
   );
 }
 
@@ -645,7 +619,16 @@ function RosterItem({ api, row, planId, planName, open, onToggle, capabilities, 
                     ・近 7 天讀 {row.readDays7} 天
                   </dd></div>
                   {row.care && <div className="adm-field"><dt>需要關心</dt><dd>{row.careReasons.map(careReasonText).filter(Boolean).join("、")}</dd></div>}
-                  <div className="adm-field"><dt>團隊</dt><dd>{row.teams.length > 0 ? row.teams.map(teamText).join("、") : "沒有隊"}</dd></div>
+                  <div className="adm-field"><dt>團隊</dt><dd>
+                    {row.teams.length > 0
+                      ? row.teams.map((team, index) => (
+                        <span key={team.id}>
+                          {index > 0 && "、"}
+                          <a className="adm-link" href={formatRoute({ view: "plans", tab: "teams", planId, teamId: team.id })}>{teamText(team)}</a>
+                        </span>
+                      ))
+                      : "沒有隊"}
+                  </dd></div>
                   <div className="adm-field"><dt>小測驗</dt><dd>交卷 {row.quiz.submitted} 次／已發布 {row.quiz.published} 次</dd></div>
                 </dl>
               </>
@@ -733,40 +716,43 @@ function CareReminder({ api, row, planId, sentMessage, onSent }: {
   );
 }
 
-// ── 團隊（隊伍清單與除錯在 #566）────────────────────────────────────────────
-function Teams({ summary, capabilities, onDrill }: { summary: PlanSummary; capabilities: readonly string[]; onDrill: (filters: RosterFilters) => void }) {
-  const { teams } = summary;
+// ── 團隊：報名者組隊的數字（總覽的）＋隊伍清單與除錯（#566）──────────────────────
+function Teams({ summary, capabilities, onDrill, teams, ui, setUi, onReload }: {
+  summary: PlanSummary;
+  capabilities: readonly string[];
+  onDrill: (filters: RosterFilters) => void;
+  teams: Loaded<TeamListData>;
+  ui: PlanUiState;
+  setUi: Dispatch<SetStateAction<PlanUiState>>;
+  onReload: () => void;
+}) {
+  const numbers = summary.teams;
   return (
-    <div className="adm-grid">
+    <div className="adm-stack">
       <section className="adm-card">
         <header className="adm-card__header"><h3>報名者組隊</h3></header>
         <div className="adm-card__body">
           <div className="adm-tiles">
             <button type="button" className="adm-tile" onClick={() => onDrill({ ...defaultFilters(), team: "yes" })}>
-              <span>有隊</span><strong>{teams.withTeam}</strong><small>報名的 {pct(teams.withTeam, teams.enrolled)}%</small>
+              <span>有隊</span><strong>{numbers.withTeam}</strong><small>報名的 {pct(numbers.withTeam, numbers.enrolled)}%</small>
             </button>
             <button type="button" className="adm-tile" onClick={() => onDrill({ ...defaultFilters(), team: "no" })}>
-              <span>沒有隊</span><strong>{teams.withoutTeam}</strong><small>點進名單可以逐一關心</small>
+              <span>沒有隊</span><strong>{numbers.withoutTeam}</strong><small>點進名單可以逐一關心</small>
             </button>
           </div>
-          <p className="adm-muted adm-small">母體是這期的報名者 {teams.enrolled} 人；點數字打開名單，人數一樣。</p>
+          <p className="adm-muted adm-small">母體是這期的報名者 {numbers.enrolled} 人；點數字打開名單，人數一樣。</p>
         </div>
       </section>
-      <section className="adm-card">
-        <header className="adm-card__header"><h3>隊伍</h3></header>
-        <div className="adm-card__body">
-          <div className="adm-tiles">
-            <div className="adm-tile adm-tile--static"><span>隊伍數</span><strong>{teams.teams}</strong><small>有報名者的隊</small></div>
-            <div className="adm-tile adm-tile--static"><span>還沒滿</span><strong>{teams.unfilled}</strong><small>人數少於組別人數</small></div>
-          </div>
-          <p className="adm-muted adm-small">
-            隊伍清單、每隊的檢查（狀態和人數對不上、邀請碼）之後會搬到這裡。
-            {capabilities.includes("operations.manage") ? "在那之前請到 " : ""}
-            {capabilities.includes("operations.manage") && <a className="adm-link" href="#/operations/teams">營運 → 組隊狀況</a>}
-            {capabilities.includes("operations.manage") ? "。" : ""}
-          </p>
-        </div>
-      </section>
+      <TeamList
+        list={teams}
+        planId={summary.plan.id}
+        filter={ui.teamFilter}
+        query={ui.teamQuery}
+        onFilter={(teamFilter) => setUi((prev) => ({ ...prev, teamFilter }))}
+        onQuery={(teamQuery) => setUi((prev) => ({ ...prev, teamQuery }))}
+        onReload={onReload}
+        legacyLink={capabilities.includes("operations.manage")}
+      />
     </div>
   );
 }

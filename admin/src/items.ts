@@ -13,7 +13,7 @@ import {
   text
 } from "./format.ts";
 
-/** href：點了打開的後台頁（目前只有回報 → 收件匣裡那張對話，#550）。 */
+/** href：點了打開的後台頁（回報 → 收件匣裡那張對話，#550；團隊異動 → 隊伍頁，#566）。 */
 export type ItemView = { title: string; details: string[]; when: string; href?: string };
 
 const MEMBER_ROLE_LABEL: Record<string, string> = { captain: "隊長", member: "隊員" };
@@ -24,7 +24,8 @@ function compact(values: (string | null | false | undefined)[]): string[] {
   return values.filter((value): value is string => typeof value === "string" && value.trim() !== "" && value !== "—");
 }
 
-export function describeItem(item: SectionItem): ItemView {
+/** teamLinks：看的人有 plans.read 才給團隊異動連結（沒權限點進去也是 403） */
+export function describeItem(item: SectionItem, { teamLinks = false }: { teamLinks?: boolean } = {}): ItemView {
   const when = formatDateTime(item.at);
   switch (item.section) {
     case "reading_logs":
@@ -41,7 +42,11 @@ export function describeItem(item: SectionItem): ItemView {
           item.member_role ? label(MEMBER_ROLE_LABEL, item.member_role) : null,
           item.division ? `組別 ${text(item.division)}` : null
         ]),
-        when
+        when,
+        // 隊伍已刪就沒有 team_name（LEFT JOIN），不給連結
+        ...(teamLinks && isUuid(item.team_id) && item.team_name
+          ? { href: formatRoute({ view: "plans", tab: "teams", planId: isUuid(item.global_plan_id) ? String(item.global_plan_id).toLowerCase() : null, teamId: String(item.team_id).toLowerCase() }) }
+          : {})
       };
     case "tests":
       if (item.kind === "exam") {

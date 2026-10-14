@@ -1,5 +1,7 @@
-import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "./team-progress-metrics.mjs";
-import { isCampaignStageKind } from "../data/campaign-stage-kinds.mjs";
+import { getMemberOverallPlanProgress, getTeamOverallPlanProgress, isTeamFull } from "./team-progress-metrics.mjs";
+// 階段結束日已過（Asia/Taipei）→ 團隊名單不能再動（0163 的觸發器才是真正的護欄，這裡只是把會失敗的按鈕先藏起來）。
+// 後台隊伍頁判斷「會友 App 應該顯示」用同一份（#566）。
+import { isCampaignStageEnded, isCampaignStageKind } from "../data/campaign-stage-kinds.mjs";
 import {
   countScheduleDaysCoveredByChapters,
   countExpectedScheduleDays,
@@ -39,19 +41,6 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
       return "00000000-0000-0000-c026-" + String(Number(stageNo) || 0).padStart(12, "0");
     }
     return String(plan.id || "");
-  };
-
-  // 這個階段計畫的結束日已過（Asia/Taipei）→ 團隊名單不能再動。防止「改到已結束
-  // 的舊階段、跟現行階段對不起來」（後端 migration 0163 的 trigger 是真正的護欄，
-  // 這裡只是把會失敗的按鈕先藏起來、給清楚訊息）。
-  const isCampaignStageEnded = plan => {
-    if (!plan || !isCampaignStageKind(plan)) return false;
-    const end = String(plan.endDate || plan.end_date || "");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return false;
-    let today = "";
-    try { today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Taipei" }); } catch (_) { today = ""; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) today = new Date().toISOString().slice(0, 10);
-    return end < today;
   };
 
   const isSupportedPlan = plan => {
@@ -679,10 +668,9 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
       const isCaptain = Boolean(currentUserId && captainId && currentUserId === captainId);
       const isAdminUser = Boolean(state.currentUser && typeof getUserRoleCode === "function" && (getUserRoleCode(state.currentUser) === "admin" || state.currentUser.role === "admin"));
       const canEditTeamName = isCaptain || isAdminUser;
-      // 只看實際人數是否已滿：team.status 可能因為曾滿員又有人退出而卡在 'ready'
-      // （後端 remove_reading_team_member 會改回 'forming'、join 也會 self-heal，
-      //  但舊資料 / CASCADE 刪成員可能沒觸發）。未滿就一定要露出邀請碼讓隊長補人。
-      const isReady = Number(team.memberCount) >= Number(team.capacity);
+      // 只看實際人數是否已滿（不看 team.status，見 isTeamFull）。未滿就一定要露出邀請碼讓隊長補人；
+      // 後台隊伍頁的「邀請碼看不看得到」用同一份（#566）。
+      const isReady = isTeamFull(team.memberCount, team.capacity);
       const joinedDivisions = new Set(allContexts.map(item => Number(item && item.team && item.team.division)));
       const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
       const nextAvailableDivision = availableDivisions[0] || null;

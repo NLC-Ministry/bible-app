@@ -42,7 +42,9 @@ describe("capability table (deny by default)", () => {
       "directory_export", "directory_list", "legacy_export_audit", "org_export",
       "plan_options", "plan_quiz", "plan_roster", "plan_roster_export", "plan_summary",
       "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
-      "reveal_pii", "scope_overview", "scope_set", "user_search", "user_section", "user_summary", "user_timeline"
+      "reveal_pii", "scope_overview", "scope_set",
+      "team_detail", "team_history", "team_lineage", "team_list", "team_search",
+      "user_search", "user_section", "user_summary", "user_timeline"
     ]);
     for (const [name, spec] of Object.entries(ADMIN_ACTIONS)) {
       expect(spec.capabilities.length, name).toBeGreaterThan(0);

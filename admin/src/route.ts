@@ -7,6 +7,7 @@
 //   #/accounts                               使用者名單（#550）
 //   #/accounts/scopes[/<uuid>]               管理範圍（權限總覽＋編輯某個人）
 //   #/plans[/roster|teams|quiz][?plan=<uuid>] 計畫區（#565；沒指定計畫就用上次選的、再來是伺服器挑的預設計畫）
+//   #/plans/teams/<uuid>[?plan=<uuid>]       隊伍頁（#566；隊伍自己知道屬於哪個計畫，plan 只是回清單時用）
 //   #/plans/settings                         計畫設定（照搬的「全域計畫管理」卡片）
 //   #/operations[/<區塊>]、#/content[/<區塊>] 照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
 //   #/system[/audit][?actor=<uuid>&target=<uuid>]  稽核紀錄（#550；actor／target 是篩選條件，可以從別頁連過來）
@@ -34,7 +35,7 @@ export type AdminRoute =
   | { view: "search" }
   | { view: "user"; userId: string; tab: UserTab; reason: string }
   | { view: "accounts"; tab: AccountTab; profileId: string | null }
-  | { view: "plans"; tab: PlanTab; planId: string | null }
+  | { view: "plans"; tab: PlanTab; planId: string | null; teamId?: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
   | { view: "audit"; actorId: string | null; targetId: string | null }
   | { view: "not_found" };
@@ -86,9 +87,11 @@ export function parseRoute(hash: string): AdminRoute {
   if (area === "plans") {
     if (rest.length === 1 && rest[0] === "settings") return { view: "legacy", area: "plans", section: "plans" };
     const tab = (rest[0] || "overview") as PlanTab;
-    if (rest.length > 1 || !(PLAN_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
     const plan = query.get("plan");
-    return { view: "plans", tab, planId: isUuid(plan) ? plan.toLowerCase() : null };
+    const planId = isUuid(plan) ? plan.toLowerCase() : null;
+    if (rest.length === 2 && tab === "teams" && isUuid(rest[1])) return { view: "plans", tab, planId, teamId: rest[1].toLowerCase() };
+    if (rest.length > 1 || !(PLAN_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
+    return { view: "plans", tab, planId };
   }
   if (area === "operations" && rest.length === 1 && Object.prototype.hasOwnProperty.call(MOVED_OPERATIONS_SECTIONS, rest[0])) {
     return MOVED_OPERATIONS_SECTIONS[rest[0]];
@@ -118,7 +121,7 @@ export function formatRoute(route: AdminRoute): string {
       if (route.tab === "users") return "#/accounts";
       return route.profileId ? `#/accounts/scopes/${route.profileId}` : "#/accounts/scopes";
     case "plans": {
-      const tab = route.tab === "overview" ? "" : `/${route.tab}`;
+      const tab = route.teamId ? `/teams/${route.teamId}` : route.tab === "overview" ? "" : `/${route.tab}`;
       return `#/plans${tab}${route.planId ? `?plan=${route.planId}` : ""}`;
     }
     case "legacy":

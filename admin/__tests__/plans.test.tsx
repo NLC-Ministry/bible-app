@@ -158,14 +158,16 @@ describe("plan area request budget", () => {
 
     await go("#/plans/roster");
     expect(actions(requests).slice(3)).toEqual(["plan_roster"]);
+    // 團隊分頁打開才載隊伍清單（#566）
     await go("#/plans/teams");
     await go("#/plans");
-    expect(requests).toHaveLength(4);
+    expect(actions(requests).slice(4)).toEqual(["team_list"]);
     await go("#/plans/quiz");
-    expect(actions(requests).slice(4)).toEqual(["plan_quiz"]);
+    expect(actions(requests).slice(5)).toEqual(["plan_quiz"]);
     await go("#/plans/roster");
+    await go("#/plans/teams");
     await go("#/plans/quiz");
-    expect(requests).toHaveLength(5);
+    expect(requests).toHaveLength(6);
   });
 
   it("switching plans reloads the summary for that plan; the settings tab costs nothing", async () => {
@@ -345,7 +347,7 @@ describe("roster", () => {
 describe("teams and quiz tabs", () => {
   it("teams: numbers from the summary, drilling into the roster with the same count", async () => {
     const { requests, el } = await mount("#/plans/teams");
-    expect(actions(requests)).toEqual(["bootstrap", "plan_options", "plan_summary"]);
+    expect(actions(requests)).toEqual(["bootstrap", "plan_options", "plan_summary", "team_list"]);
     await click([...el.querySelectorAll(".adm-tile")].find((tile) => tile.textContent?.startsWith("沒有隊")));
     expect(sentence(el)).toBe("報名者，且沒有隊 → 5 人");
   });

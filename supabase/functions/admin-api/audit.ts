@@ -113,6 +113,8 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   set_profile_managed_scopes: "設定管理範圍",
   view_plan_roster: "打開計畫名單",
   "care_reminder.send": "送關心提醒",
+  view_plan_teams: "打開隊伍清單",
+  view_team: "查看隊伍",
 
   // admin-api 擋下的請求（action 名稱）
   unknown: "不明的後台操作",
@@ -141,6 +143,11 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   plan_quiz: "看計畫的測驗作答",
   plan_roster_export: "匯出計畫名單",
   care_remind: "送關心提醒",
+  team_list: "看隊伍清單",
+  team_detail: "查看隊伍",
+  team_history: "看隊伍異動歷程",
+  team_lineage: "看隊伍跨階段對應",
+  team_search: "找隊伍",
   audit_list: "看稽核紀錄",
   audit_event: "看稽核紀錄明細",
   audit_export: "匯出稽核紀錄",
