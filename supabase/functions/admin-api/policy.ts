@@ -18,6 +18,7 @@ import { validateSearchQuery } from "./search-query.ts";
 import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
 import { runTeamDetail, runTeamHistory, runTeamLineage, runTeamList, runTeamSearch } from "./teams.ts";
 import { runUserSummary } from "./people.ts";
+import { runReadingUsage, runRegistrationExport, runRegistrationSheetSync, runRegistrationStats, usageRange } from "./stats.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
 
 export { validateSearchQuery };
@@ -29,12 +30,13 @@ export const CAPABILITIES = [
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
-  "operations.manage", // 照搬的營運區塊：組隊狀況、讀經使用率、報名註冊統計，以及計畫區的「計畫設定」（#550、#565）
+  "operations.manage", // 照搬的營運區塊：組隊狀況，以及計畫區的「計畫設定」（#550、#565）
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
   "plans.read",     // 計畫總覽（只有數字）與名單（#564）、測驗作答（#565）、隊伍清單與除錯（#566）
   "plans.remind",   // 從計畫名單送關心提醒給會友（#565）
+  "stats.read",     // 報表區：讀經使用率、報名註冊統計（#568；匯出與同步試算表另外要 export）
   "export"          // 匯出
 ] as const;
 export type Capability = typeof CAPABILITIES[number];
@@ -131,6 +133,7 @@ const auditFilterArgs = (filters: AuditFilters) => ({
 // 區塊 id → 需要的能力。舊區塊的資料仍走 nlc-data（那邊自己檢查角色、寫稽核）；
 // admin-api 只管它們的匯出：檔案由舊程式在瀏覽器產生，下載前先記一筆，記不成就不下載。
 // 同一份清單另外兩處：admin-legacy/sections.mjs、admin/src/legacy.ts（scripts/admin-legacy.test.mjs 比對）。
+// #568：讀經使用率、報名註冊統計改成「報表」區，不再照搬（稽核的舊區塊名稱見 audit.ts 的 RETIRED_LEGACY_SECTIONS）。
 export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Object.freeze({
   announcements: "content.manage",
   commentary: "content.manage",
@@ -139,8 +142,6 @@ export const LEGACY_EXPORT_SECTIONS: Readonly<Record<string, Capability>> = Obje
   "lightning-quiz": "content.manage",
   plans: "operations.manage",
   teams: "operations.manage",
-  "reading-activity": "operations.manage",
-  registrations: "operations.manage",
   settings: "settings.manage"
 });
 export const LEGACY_EXPORT_FORMATS = ["csv", "txt"] as const;
@@ -579,6 +580,49 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       const q = validateSearchQuery(params.q);
       return q.ok ? { ok: true, args: { p_actor_id: ctx.actorId, p_query: q.query } } : q;
     }
+  },
+
+  // ── 報表（#568）：只有數字，不記稽核；匯出、同步試算表記稽核 ─────────────────────────
+  reading_usage: {
+    capabilities: ["stats.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_reading_usage",
+    run: runReadingUsage,
+    buildArgs: (params, ctx) => {
+      const range = usageRange(params);
+      return range.ok ? { ok: true, args: { p_actor_id: ctx.actorId, p_from: range.from, p_to: range.to } } : range;
+    }
+  },
+  // 沒指定計畫＝預設計畫；回應順便帶計畫選單
+  registration_stats: {
+    capabilities: ["stats.read"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_registration_stats",
+    run: runRegistrationStats,
+    buildArgs: (params, ctx) => {
+      const planId = params.global_plan_id ?? null;
+      if (planId !== null && !isUuid(planId)) return { ok: false, error: "invalid_plan_id" };
+      return { ok: true, args: { p_actor_id: ctx.actorId, p_global_plan_id: planId } };
+    }
+  },
+  registration_export: {
+    capabilities: ["stats.read", "export"],
+    rateLimit: EXPORT_LIMIT,
+    rpc: "admin_api_registration_stats",
+    run: runRegistrationExport,
+    buildArgs: (params, ctx) => isUuid(params.global_plan_id)
+      ? { ok: true, args: { ...actorArgs(ctx), p_global_plan_id: params.global_plan_id, p_request_id: ctx.requestId } }
+      : { ok: false, error: "invalid_plan_id" }
+  },
+  // 覆寫教會共用的試算表：一小時最多 10 次（每次都記稽核）
+  registration_sheet_sync: {
+    capabilities: ["stats.read", "export"],
+    rateLimit: { bucket: "sheet", limit: 10, windowSeconds: 3600 },
+    rpc: "admin_api_registration_stats",
+    run: runRegistrationSheetSync,
+    buildArgs: (params, ctx) => isUuid(params.global_plan_id)
+      ? { ok: true, args: { ...actorArgs(ctx), p_global_plan_id: params.global_plan_id, p_request_id: ctx.requestId } }
+      : { ok: false, error: "invalid_plan_id" }
   },
 
   // ── 稽核紀錄（#550 第四組）────────────────────────────────────────────────

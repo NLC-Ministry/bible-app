@@ -134,6 +134,27 @@ async function fetchAppVersion() {
   appVersionCache = { at: Date.now(), value };
   return value;
 }
+// 報名註冊統計同步 Google 試算表（#568）：同 nlc-data 的 sync_registration_stats_sheet，Apps Script 那邊只看共用密鑰、
+// 看不到任何 Supabase／Logto token。10 秒逾時；細節只寫 log，不回給前端。
+async function syncRegistrationSheet(payload: Record<string, unknown>) {
+  const sheetUrl = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
+  const sheetSecret = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
+  if (!sheetUrl || !sheetSecret) return { ok: false as const, error: "server_not_configured" };
+  try {
+    const response = await fetch(sheetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: sheetSecret, ...payload }),
+      signal: AbortSignal.timeout(10_000)
+    });
+    if (response.ok) return { ok: true as const };
+    console.error("registration_sheet_sync: sheet webhook rejected the payload", response.status, await response.text().catch(() => ""));
+    return { ok: false as const, error: "sheet_webhook_failed" };
+  } catch (err) {
+    console.error("registration_sheet_sync: failed to reach sheet webhook", err);
+    return { ok: false as const, error: "sheet_webhook_unreachable" };
+  }
+}
 const logtoIssuer = (Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc").replace(/\/+$/, "");
 
 Deno.serve((req: Request) => handleAdminRequest(req, {
@@ -172,5 +193,6 @@ Deno.serve((req: Request) => handleAdminRequest(req, {
     }
   } : undefined,
   appVersion: fetchAppVersion,
+  sheetSync: syncRegistrationSheet,
   log: (line) => console.log(line)
 }));

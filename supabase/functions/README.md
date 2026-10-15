@@ -90,13 +90,14 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 
 - **驗證**：內嵌同一段 `logto-jwt-verify` 區塊，**一律**要驗過簽章／發行者／到期，不看 `NLC_JWT_VERIFY_MODE`。
 - **後台應用程式**：token 的 `client_id` 宣告（`ADMIN_API_CLIENT_CLAIM` 可改）要在 `ADMIN_API_ALLOWED_CLIENT_IDS` 裡。**沒設定就全部拒絕**（回 `admin_client_not_configured`）。#554 拿到 client id 前，staging 可以暫時設成會友 App 現有的 client id 方便開發；正式站一定要設後台專用的。
-- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`operations.manage`、`content.manage`、`settings.manage`、`audit.read`、`export`、`plans.read`、`plans.remind`）。
+- **權限**：角色讀資料庫（`role_definitions.code`）。`supabase/functions/admin-api/policy.ts` 的角色 → 能力表預設拒絕，目前只有系統管理員有能力（`console.access`、`support.read`、`support.pii`、`support.write`、`accounts.read`、`accounts.write`、`operations.manage`、`content.manage`、`settings.manage`、`audit.read`、`export`、`plans.read`、`plans.remind`、`stats.read`）。
 - **限流**：計數在 `admin_api_rate_limits`（搜尋每分鐘 60 次、查看（含使用者名單、管理範圍總覽）每分鐘 120 次、完整個資每小時 30 次、回覆／改狀態／刪截圖／改管理範圍每分鐘 30 次、刪回報每小時 20 次、匯出每小時 20 次），超過回 429 並記 denied。請求本文超過 1 MB 回 413。
 - **稽核**：`user_summary` 記 `view_user`、`reveal_pii` 記 `reveal_pii`、打開回報對話記 `view_report`（自動更新 `refresh: true` 不記）、`report.set_status`／`report.reply`／`report.note`／`report.attachment_delete`／`report.delete`（刪除前的內容快照）、`set_profile_managed_scopes`（前後差異、修改原因）、`export`（種類、篩選、筆數）——都在同一個交易內；client 不對、沒有能力、超過限流記 denied（來源 `admin-api`）。
 - **稽核紀錄**（#550）：`audit_list`（期間 1／7／30／90／365 天＋動作、結果、來源、操作者、對象；keyset 以紀錄編號由新到舊；第一頁帶總數與選項）、`audit_event`（單筆完整內容）要 `audit.read`，**看不記稽核**；`audit_export`（最多 5000 筆，CSV）另外要 `export`，記 `export`（kind `audit`）。來源篩選前端用 `legacy` 代表 `nlc-data`。動作的中文名稱在 `audit.ts`（由 run 補到每一筆），新增會寫稽核的動作要一起加。
 - **計畫總覽／名單**（#564，`plans.ts`，要 `plans.read`）：`plan_summary`（只有數字：漏斗、進度與最後打卡兩個條件各格人數、需要關心分原因、單位比較、今天的日程；**不記稽核**）、`plan_roster`（範圍內每人一列、一次載完、不帶 email；SQL 在同一個交易記 `view_plan_roster`）。範圍一律全教會：`admin_api_plan_info`／`admin_api_plan_people` 先在 SQL 依操作者重查是不是系統管理員（不是就 42501 → 403）。每個人的狀態由 `_shared/progress` 算（和 App 同一份規則）；SQL 另外回 `meta`（範圍內人數、報名人數），對不上時回應的 `meta.consistent` 是 false，後台要警告、不快取。`nlc-data` 也有同名的組長版（`nlc-data/plan-report.ts`）：要能管理計畫（`canManagePlans`），範圍只看 `getVisibleProfileIds`（前端傳的範圍一律不看），經 `get_pastoral_overview` 取資料；打開名單由 `nlc-data` 記 `view_plan_roster`。
 - **計畫區**（#565，`plans.ts`）：`plan_options`（計畫選單與預設計畫）、`plan_quiz`（每日小測驗／大測驗／雲柱的作答數字，母體是 `plan_progress_people` 判定的報名者；不記稽核）、`plan_roster_export`（要 `plans.read`＋`export`；條件、排序用 `_shared/progress/plan-report.mjs` 檢查與重算，不帶 email，記一筆 `export`（`detail.kind = plan_roster`），記不成就不回檔案）、`care_remind`（要 `plans.remind`；一人一天一則、送出後不能改，稽核 `care_reminder.send` 在 SQL 同一個交易）。三支 SQL（`admin_api_plan_options`／`admin_api_plan_quiz`／`admin_api_care_remind`）都先重查操作者是不是系統管理員。改 `_shared/progress` 要重新部署 `admin-api` 與 `nlc-data`。
 - **照搬區塊的匯出**（#550）：`legacy_export_audit` 只記一筆 `export` 稽核（`resource` 是 `legacy:<區塊>`，detail 有檔名、格式、筆數、大小；用既有的 `admin_api_record_event`，不用新 migration），需要 `export`＋該區塊的能力（`LEGACY_EXPORT_SECTIONS`），和其他匯出共用限流。後台外殼記成功才存檔。
+- **報表區**（#568，`stats.ts`）：`reading_usage`（`admin_api_reading_usage`：舊頁三支使用率函式＋每天章數，伺服器整理成每天一列；只有數字、不記稽核；區間最長 180 天，超過回 `range_too_long`）、`registration_stats`（`admin_api_registration_stats`＋計畫選單；不記稽核）、`registration_export`（要 `stats.read`＋`export`；記一筆 `export`（`detail.kind = registration_stats`），記不成就不回檔案）、`registration_sheet_sync`（要 `stats.read`＋`export`，每人每小時 10 次；伺服器讀數字後送到 Google Apps Script，格式同 nlc-data 的 `sync_registration_stats_sheet`，成功失敗都記 `sync_registration_stats_sheet`；Apps Script 失敗回 502 `sheet_sync_failed`）。試算表要 `REGISTRATION_STATS_SHEET_WEBHOOK_URL`／`_SECRET`（見下面「報名統計同步」，Supabase 的 secrets 整個專案共用，nlc-data 設過就不用再設），沒設回 500。兩支 SQL 都先重查操作者是不是系統管理員。
 - **匯出**：CSV 由伺服器產生（防公式注入，規則同 `js/modules/csv-cell.mjs`；時間用台北時區），前端只負責存檔。使用者名單（`directory_export`，含完整 email，另外要 `support.pii`，上限 10000 人）、組織架構（`org_export`）的欄位與開頭的匯出時間列和 App 管理分頁的匯出相同（`scripts/admin-api-accounts.test.mjs` 比對）。
 - **CORS**：只允許 `https://bible-speed-reading-admin.vercel.app`、`https://bible-speed-reading-admin-staging.vercel.app`，加上選填的 `ADMIN_API_ALLOWED_ORIGINS`（逗號分隔）；`ADMIN_API_ALLOW_LOCALHOST=true`（只在 staging 設）才放行本機。其他來源回 403。回應一律 `Cache-Control: no-store`，並回 `x-request-id`；每個請求一行 `admin_api_request` log。
 - **會友 App 版本**（#567 個人頁的「App 是最新版」）：讀會友 App 的 `/version.json`（2 秒逾時、快取 60 秒，讀不到就是「無法判斷」）；正式站專案讀 `https://bible.newlife.org.tw`、其他讀 staging 網址，選填的 `ADMIN_API_MEMBER_APP_URL` 可以覆蓋。
@@ -410,7 +411,9 @@ It **overwrites** the sheet's whole table every time (not an append), so a
 shorter region/zone list than last time doesn't leave stale rows.
 
 Required Supabase Edge Function secrets on `nlc-data` (in addition to the
-defaults above and its own existing `NLC_*` secrets):
+defaults above and its own existing `NLC_*` secrets). Secrets are
+project-wide, so `admin-api`'s 報表 area (`registration_sheet_sync`, #568)
+reads the same two values — no extra setup, but redeploy `admin-api` too:
 
 ```bash
 REGISTRATION_STATS_SHEET_WEBHOOK_URL=<Apps Script Web App /exec URL>    # from step 2 below

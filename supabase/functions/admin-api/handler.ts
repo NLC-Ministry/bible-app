@@ -15,7 +15,7 @@ import {
   parseList,
   resolveRequestId
 } from "./policy.ts";
-import type { RpcResult, StorageDeps } from "./types.ts";
+import type { RpcResult, RunInput, StorageDeps } from "./types.ts";
 
 export type { RpcResult, StorageDeps };
 export type TokenCheck = { ok: true; payload: Record<string, unknown> } | { ok: false; reason: string };
@@ -27,6 +27,8 @@ export type AdminApiDeps = {
   storage?: StorageDeps;
   // 會友 App 目前的版本（#567）；沒給的話個人頁的版本檢查顯示「查不到」
   appVersion?: () => Promise<{ version: string; minVersion: string | null } | null>;
+  // 報名註冊統計同步 Google 試算表（#568）；沒給的話那個 action 回 500
+  sheetSync?: RunInput["sheetSync"];
   log?: (line: string) => void;
   now?: () => number;
   randomId?: () => string;
@@ -183,7 +185,7 @@ export async function handleAdminRequest(req: Request, deps: AdminApiDeps): Prom
   if (!built.ok) return respond(400, { error: built.error });
 
   if (spec.run) {
-    const outcome = await spec.run({ args: built.args, params, ctx, rpc: deps.rpc, storage: deps.storage || null, log: deps.log, appVersion: deps.appVersion });
+    const outcome = await spec.run({ args: built.args, params, ctx, rpc: deps.rpc, storage: deps.storage || null, log: deps.log, appVersion: deps.appVersion, sheetSync: deps.sheetSync });
     if (outcome.ok) return respond(200, { data: outcome.data });
     if (outcome.status === 500) return failure(outcome.stage || spec.rpc, outcome.detail || { message: outcome.error });
     return respond(outcome.status, { error: outcome.error });

@@ -149,6 +149,10 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   team_history: "看隊伍異動歷程",
   team_lineage: "看隊伍跨階段對應",
   team_search: "找隊伍",
+  reading_usage: "看讀經使用率",
+  registration_stats: "看報名註冊統計",
+  registration_export: "匯出報名註冊統計",
+  registration_sheet_sync: "同步報名統計試算表",
   audit_list: "看稽核紀錄",
   audit_event: "看稽核紀錄明細",
   audit_export: "匯出稽核紀錄",
@@ -188,7 +192,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   set_commentary_reviewers: "設定注釋審核人",
   resubmit_commentary: "注釋重新送審",
   publish_approved_commentary: "發布已審核的注釋",
-  // nlc-data 自己記的
+  // nlc-data（舊頁）與 admin-api 的報表區（#568）都記這個
   sync_registration_stats_sheet: "同步報名統計試算表"
 };
 
@@ -199,12 +203,14 @@ export const AUDIT_EXPORT_KIND_LABEL: Readonly<Record<string, string>> = {
   org_structure: "組織架構",
   audit: "稽核紀錄",
   plan_roster: "計畫名單",
+  registration_stats: "報名註冊統計",
   legacy: "照搬的管理區塊"
 };
 
 // 照搬區塊的 id → 名稱（同 admin/src/legacy.ts；admin-api 單獨部署，不能 import 前端檔）。
-// #565 移除的區塊（加入計畫狀況、組員總覽、計畫統計）名稱留著，之前的匯出紀錄才看得懂（RETIRED_LEGACY_SECTIONS）。
-export const RETIRED_LEGACY_SECTIONS = ["join-status", "members", "statistics"] as const;
+// 移除的區塊名稱留著，之前的匯出紀錄才看得懂（RETIRED_LEGACY_SECTIONS）：#565 的加入計畫狀況、組員總覽、計畫統計，
+// #568 的讀經使用率、報名註冊統計（改成「報表」區）。
+export const RETIRED_LEGACY_SECTIONS = ["join-status", "members", "statistics", "reading-activity", "registrations"] as const;
 export const AUDIT_LEGACY_SECTION_LABEL: Readonly<Record<string, string>> = {
   announcements: "公告",
   commentary: "經文注釋",

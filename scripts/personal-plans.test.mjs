@@ -72,6 +72,11 @@ const PERSONAL_EXCLUDED = [
   "get_plan_stats_roster",
   "get_admin_user_directory"
 ];
+// 之後的 migration 新增、同樣明確排除個人計畫的（不在 #473 那份 migration 裡，所以不跟上面一起檢查授權）。
+//   admin_api_reading_usage（#568）：每天章數和上面三支使用率函式同樣跳過個人計畫的打卡
+const PERSONAL_EXCLUDED_LATER = [
+  "admin_api_reading_usage"
+];
 // 依某個教會計畫（global_plan_id）查：個人計畫的 global_plan_id 一定是空的。
 const SCOPED_TO_CHURCH_PLAN = [
   "daily_quiz_get_stats",
@@ -127,7 +132,7 @@ function functionsTouchingReadingTables() {
 
 describe("#473 個人計畫不進排行榜、團隊、教會統計", () => {
   it("每支碰到 reading_plans／reading_logs 的函式都有分類", () => {
-    const classified = new Set([...PERSONAL_EXCLUDED, ...SCOPED_TO_CHURCH_PLAN, ...OWN_OR_GIVEN_PLANS, ...ONE_PERSON_SUPPORT_VIEW]);
+    const classified = new Set([...PERSONAL_EXCLUDED, ...PERSONAL_EXCLUDED_LATER, ...SCOPED_TO_CHURCH_PLAN, ...OWN_OR_GIVEN_PLANS, ...ONE_PERSON_SUPPORT_VIEW]);
     const unclassified = functionsTouchingReadingTables().filter(name => !classified.has(name));
     expect(unclassified).toEqual([]);
   });
@@ -141,7 +146,7 @@ describe("#473 個人計畫不進排行榜、團隊、教會統計", () => {
     }
   });
 
-  it.each(PERSONAL_EXCLUDED)("%s 明確排除個人計畫", name => {
+  it.each([...PERSONAL_EXCLUDED, ...PERSONAL_EXCLUDED_LATER])("%s 明確排除個人計畫", name => {
     expect(latestFunctionDefinition(name).text).toMatch(/is_personal/);
   });
 

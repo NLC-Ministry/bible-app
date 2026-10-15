@@ -1,7 +1,7 @@
 // 後台外殼（#555）：登入 → bootstrap（開後台只打這 1 個 admin-api 請求）→ 依能力清單顯示左側導覽。
 // 相依（登入、admin-api、window）全部從參數注入，測試用假的跑真的元件。
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, BookOpen, BookOpenCheck, Headset, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
+import { Activity, BarChart3, BookOpen, BookOpenCheck, Headset, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
 import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
@@ -26,6 +26,7 @@ import { LegacyHost } from "./views/LegacyHost.tsx";
 import { INITIAL_PEOPLE_UI, PeopleArea, type PeopleUiState } from "./views/PeopleArea.tsx";
 import { INITIAL_PLAN_UI, PlanArea, type PlanUiState } from "./views/PlanArea.tsx";
 import { INITIAL_INBOX, type InboxState } from "./views/ReportInbox.tsx";
+import { INITIAL_STATS_UI, StatsArea, type StatsUiState } from "./views/StatsArea.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
 
 type Phase =
@@ -49,6 +50,7 @@ const NAV_ICON: Record<NavItem["icon"], LucideIcon> = {
   headset: Headset,
   users: Users,
   plan: BookOpenCheck,
+  chart: BarChart3,
   activity: Activity,
   book: BookOpen,
   settings: Settings
@@ -77,6 +79,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   const [inbox, setInbox] = useState<InboxState>(INITIAL_INBOX);
   // 「人」區的名單、管理範圍（#567）：打開某人、切到別區再回來都還在，不重抓
   const [peopleUi, setPeopleUi] = useState<PeopleUiState>(INITIAL_PEOPLE_UI);
+  // 報表區的日期區間、時段切換、選的計畫（#568）：切到別區再回來還在
+  const [statsUi, setStatsUi] = useState<StatsUiState>(INITIAL_STATS_UI);
 
   // 登入 → bootstrap
   useEffect(() => {
@@ -169,6 +173,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <PeopleArea api={api} route={route} capabilities={capabilities} org={Array.isArray(phase.boot.org) ? phase.boot.org : []} ui={peopleUi} setUi={setPeopleUi} doc={win.document} />;
   } else if (route.view === "plans") {
     content = <PlanArea api={api} route={route} capabilities={capabilities} ui={planUi} setUi={setPlanUi} doc={win.document} />;
+  } else if (route.view === "stats") {
+    content = <StatsArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} doc={win.document} theme={resolvedTheme} />;
   } else if (route.view === "audit") {
     content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else {

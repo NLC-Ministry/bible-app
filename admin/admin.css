@@ -622,6 +622,17 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-tile > strong { font-size: 22px; font-weight: var(--type-weight-strong); font-variant-numeric: tabular-nums; }
 .adm-tile > small { color: var(--text-muted); font-size: 12px; }
 
+/* 報表區（#568）：Chart.js 的圖要一個固定高度的容器（maintainAspectRatio: false），canvas 的尺寸由 Chart.js 用 CSSOM 設定 */
+.adm-stats-area, .adm-stats { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.adm-stats__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.adm-stats__date { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); }
+.adm-stats__date .adm-input { width: auto; }
+.adm-stats__details > summary { cursor: pointer; color: var(--text-secondary); font-size: 14px; padding: 4px 0; }
+.adm-chart { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.adm-chart > figcaption { color: var(--text-secondary); font-size: 13px; }
+.adm-chart__canvas { position: relative; height: 240px; min-width: 0; }
+@media (max-width: 599px) { .adm-chart__canvas { height: 200px; } }
+
 .adm-columns { display: block; width: 100%; height: 120px; }
 .adm-columns__bar { fill: var(--color-brand); }
 .adm-columns__labels { display: flex; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }

@@ -93,7 +93,8 @@ export function resolveAdminConfig(env) {
 // vercel.admin.json 的兩套 CSP：後台外殼（/legacy 以外）與舊管理畫面（/legacy…）
 export const CONSOLE_HEADER_SOURCE = "/((?!legacy).*)";
 export const LEGACY_HEADER_SOURCE = "/legacy(.*)";
-// js/modules/chart-loader.mjs 載入的 Chart.js（鎖版本）；舊管理畫面的 CSP 只放行這一個檔
+// js/modules/chart-loader.mjs 載入的 Chart.js（鎖版本）；舊管理畫面與外殼（#568 報表區，admin/src/chart.ts）的 CSP
+// 都只放行這一個檔
 export const CHART_JS_URL = "https://cdn.jsdelivr.net/npm/chart.js@4.5.1";
 
 export function readHeader(root, source, key) {
@@ -123,6 +124,9 @@ export function assertCspAllowsConfig(csp, config) {
   const missing = [new URL(config.apiUrl).origin, new URL(config.issuer).origin].filter((origin) => !connect.includes(origin));
   if (missing.length) {
     throw new Error(`build-admin: vercel.admin.json CSP connect-src does not allow ${missing.join(", ")}; the console could not reach it`);
+  }
+  if (!(cspDirective(csp, "script-src") || []).includes(CHART_JS_URL)) {
+    throw new Error(`build-admin: vercel.admin.json CSP script-src does not allow ${CHART_JS_URL}; the 報表 charts could not load`);
   }
 }
 

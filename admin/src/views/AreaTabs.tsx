@@ -1,9 +1,8 @@
-// 「營運」「內容」「系統」上方那排分頁（tabs.ts）。照搬的區塊（LegacyHost）和新寫的稽核紀錄共用。
-import type { LegacyArea } from "../legacy.ts";
-import { visibleAreaTabs } from "../tabs.ts";
+// 「計畫」「報表」「營運」「內容」「系統」上方那排分頁（tabs.ts）。照搬的區塊（LegacyHost）和新寫的稽核紀錄共用。
+import { visibleAreaTabs, type TabArea } from "../tabs.ts";
 
 export function AreaTabs({ area, current, capabilities, className = "" }: {
-  area: LegacyArea;
+  area: TabArea;
   current: string;
   capabilities: readonly string[];
   className?: string;
