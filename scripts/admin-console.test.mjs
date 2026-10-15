@@ -16,6 +16,7 @@ const directives = (policy) => Object.fromEntries(
   String(policy || "").split(";").map((part) => part.trim()).filter(Boolean)
     .map((part) => { const [name, ...values] = part.split(/\s+/); return [name, values]; })
 );
+const read = (path) => readFileSync(join(root, path), "utf8");
 const STAGING_API = "https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api";
 const PRODUCTION_API = "https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/admin-api";
 
@@ -60,7 +61,8 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
     expect(global["Content-Security-Policy-Report-Only"]).toBeUndefined();
     expect(consoleOnly["Content-Security-Policy-Report-Only"]).toBeUndefined();
     expect(csp["default-src"]).toEqual(["'none'"]);
-    expect(csp["script-src"]).toEqual(["'self'"]);
+    // 自家腳本＋報表區（#568）的 Chart.js 固定版本完整網址：和會友 App、照搬區塊是同一個檔
+    expect(csp["script-src"]).toEqual(["'self'", "https://cdn.jsdelivr.net/npm/chart.js@4.5.1"]);
     expect(csp["style-src"]).toEqual(["'self'"]);
     expect(csp["connect-src"]).toEqual([
       "https://ztozevcqkfrohgjmngcj.supabase.co",
@@ -80,6 +82,17 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
       expect(values.some((value) => value.includes("*"))).toBe(false);
     }
     expect(consoleOnly["X-Frame-Options"]).toBe("DENY");
+  });
+
+  it("loads one pinned Chart.js file, the same URL in the member app, the console and both CSPs (#568)", () => {
+    const url = "https://cdn.jsdelivr.net/npm/chart.js@4.5.1";
+    expect(read("js/modules/chart-loader.mjs")).toContain(`"${url}"`);
+    expect(read("admin/src/chart.ts")).toContain(`export const CHART_JS_URL = "${url}";`);
+    expect(directives(consoleOnly["Content-Security-Policy"])["script-src"]).toContain(url);
+    expect(directives(legacyOnly["Content-Security-Policy"])["script-src"]).toContain(url);
+    // 只有報表區用：其他頁面不 import chart.ts
+    const importers = walk(join(root, "admin", "src")).filter((file) => /\.tsx?$/.test(file) && /from\s+["'][^"']*chart\.ts["']/.test(readFileSync(file, "utf8")));
+    expect(importers.map((file) => relative(root, file).replace(/\\/g, "/"))).toEqual(["admin/src/views/StatsArea.tsx"]);
   });
 
   it("gives the legacy iframe its own CSP: no inline script, only the console may embed it", () => {

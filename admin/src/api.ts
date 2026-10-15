@@ -21,7 +21,9 @@ export type AdminAction =
   // 計畫總覽（只有數字）與名單（#564）；計畫區的計畫選單、測驗作答、名單匯出、關心提醒（#565）
   | "plan_summary" | "plan_roster" | "plan_options" | "plan_quiz" | "plan_roster_export" | "care_remind"
   // 隊伍除錯（#566）
-  | "team_list" | "team_detail" | "team_history" | "team_lineage" | "team_search";
+  | "team_list" | "team_detail" | "team_history" | "team_lineage" | "team_search"
+  // 報表（#568）
+  | "reading_usage" | "registration_stats" | "registration_export" | "registration_sheet_sync";
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -49,7 +51,9 @@ const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
   // 計畫：重新整理鈕用 fresh。名單 60 秒內重開不再記一筆查看；meta.consistent 是 false 時畫面要 invalidate
   "plan_summary", "plan_roster", "plan_options", "plan_quiz",
   // 隊伍：清單、隊伍頁 60 秒內重開不再記一筆查看；重新整理鈕先 invalidate
-  "team_list", "team_detail", "team_history", "team_lineage", "team_search"
+  "team_list", "team_detail", "team_history", "team_lineage", "team_search",
+  // 報表：只有數字；重新整理鈕先 invalidate
+  "reading_usage", "registration_stats"
 ]);
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -246,6 +250,10 @@ export function describeAdminError(err: unknown): string {
     case "invalid_source":
     case "invalid_action_filter":
     case "invalid_cursor": return "稽核紀錄的篩選條件不正確，請清除篩選再試。";
+    // 報表（#568）
+    case "invalid_range": return "請選擇正確的起訖日期（起日不能晚於迄日）。";
+    case "range_too_long": return "日期區間最長 180 天，請縮短後再試。";
+    case "sheet_sync_failed": return "Google 試算表沒有接受這次更新（或暫時連不上），請稍後再試；一直失敗請回報開發者。";
     case "invalid_user_id": return "不正確的使用者編號，請重新整理後再試。";
     case "invalid_event_id":
     case "audit_event_not_found": return "找不到這筆稽核紀錄（可能已超過保存期限被清除）。";

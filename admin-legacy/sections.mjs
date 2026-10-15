@@ -3,6 +3,7 @@
 // 後台外殼（admin/src/legacy.ts）與 admin-api（policy.ts 的 LEGACY_EXPORT_SECTIONS）各有一份同樣的清單，
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
 // #565：加入計畫狀況、組員總覽、計畫統計由後台「計畫」區的總覽／名單取代，不再照搬；計畫管理（plans）是計畫區的「計畫設定」。
+// #568：讀經使用率、報名註冊統計改成後台「報表」區，不再照搬。
 export const LEGACY_SECTION_IDS = Object.freeze([
   "announcements",
   "commentary",
@@ -11,8 +12,6 @@ export const LEGACY_SECTION_IDS = Object.freeze([
   "lightning-quiz",
   "plans",
   "teams",
-  "reading-activity",
-  "registrations",
   "settings"
 ]);
 

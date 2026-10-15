@@ -185,9 +185,10 @@ describe("legacy iframe boots in a browser-like environment", () => {
       expect(doc.getElementById("admin-section-teams").classList.contains("hidden")).toBe(false);
       expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(false);
 
-      port.postMessage({ type: "open", section: "registrations" });
-      expect(await waitFor((m) => m.type === "section" && m.section === "registrations", "registrations")).toMatchObject({ available: true });
-      expect(doc.getElementById("admin-section-registrations").classList.contains("hidden")).toBe(false);
+      // 系統面板的區塊（#568 起報名註冊統計不再照搬，改用功能開放設定）：計畫篩選列藏起來
+      port.postMessage({ type: "open", section: "settings" });
+      expect(await waitFor((m) => m.type === "section" && m.section === "settings", "settings")).toMatchObject({ available: true });
+      expect(doc.getElementById("admin-section-settings").classList.contains("hidden")).toBe(false);
       expect(doc.getElementById("admin-plan-context").classList.contains("hidden")).toBe(true);
 
       // 沒打開使用者基本資料就不載整份名單

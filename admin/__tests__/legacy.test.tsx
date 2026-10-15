@@ -235,21 +235,20 @@ const CONTENT_CAPS = ["console.access", "support.read", "export", "content.manag
 const OPERATIONS_CAPS = ["console.access", "support.read", "export", "operations.manage"];
 
 describe("operations area", () => {
-  it("keeps only the sections the plan area has not replaced yet, in the same iframe (#565)", async () => {
+  it("keeps only 組隊狀況: the plan area (#565) and the 報表 area (#568) replaced the rest", async () => {
     const { el, fetchImpl } = await mount("#/operations", OPERATIONS_CAPS);
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame.getAttribute("src")).toBe("/legacy");
     expect(frame.title).toBe("組隊狀況管理");
-    const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["組隊狀況", "讀經使用率", "報名註冊統計"]);
-    expect(tabs[0].getAttribute("aria-current")).toBe("page");
-    expect(tabs[2].getAttribute("href")).toBe("#/operations/registrations");
+    // 只剩一個分頁、而且就是這一頁：不顯示分頁列
+    expect([...el.querySelectorAll(".adm-legacy__tabs a")]).toEqual([]);
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("營運");
     // 照搬區只打開後台的 bootstrap，資料由 iframe 走 nlc-data
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
+    // 舊書籤到報表區（沒有 stats.read 就是沒有權限，不會打開 iframe 的舊頁）
     await go("#/operations/registrations");
-    expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
-    expect(frame.title).toBe("報名註冊統計管理");
+    expect(el.textContent).toContain("沒有權限");
+    expect(frame.title).toBe("組隊狀況管理");
   });
 
   it("opens the plan card as the plan area's settings tab, next to the native tabs (#565)", async () => {
@@ -276,10 +275,10 @@ describe("operations area", () => {
   it("shares one iframe with the content area", async () => {
     const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "content.manage"]);
     const frame = el.querySelector("iframe.adm-legacy__frame");
-    await go("#/operations/reading-activity");
+    await go("#/operations/teams");
     expect(el.querySelectorAll("iframe.adm-legacy__frame")).toHaveLength(1);
     expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
-    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("讀經使用率");
+    expect((frame as HTMLIFrameElement).title).toBe("組隊狀況管理");
     expect([...el.querySelectorAll(".adm-legacy__tabs a")].map((a) => a.textContent)).not.toContain("大測驗");
   });
 

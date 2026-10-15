@@ -42,6 +42,7 @@ describe("capability table (deny by default)", () => {
       "audit_event", "audit_export", "audit_list", "bootstrap", "care_remind",
       "directory_export", "directory_list", "legacy_export_audit", "org_export",
       "plan_options", "plan_quiz", "plan_roster", "plan_roster_export", "plan_summary",
+      "reading_usage", "registration_export", "registration_sheet_sync", "registration_stats",
       "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
       "reveal_pii", "scope_overview", "scope_set",
       "team_detail", "team_history", "team_lineage", "team_list", "team_search",

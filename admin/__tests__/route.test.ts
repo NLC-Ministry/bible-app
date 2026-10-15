@@ -51,19 +51,36 @@ describe("parseRoute / formatRoute", () => {
     expect(route.view === "user" && route.reason.length).toBe(200);
   });
 
-  it("parses the operations area: the copied sections left after #565", () => {
+  it("parses the operations area: only 組隊狀況 is left after #565 and #568", () => {
     expect(parseRoute("#/operations")).toEqual({ view: "legacy", area: "operations", section: "teams" });
-    for (const section of ["teams", "reading-activity", "registrations"]) {
-      const route = parseRoute(`#/operations/${section}`);
-      expect(route).toEqual({ view: "legacy", area: "operations", section });
-      expect(formatRoute(route)).toBe(`#/operations/${section}`);
-      expect(areaOf(route)).toBe("operations");
-    }
+    const route = parseRoute("#/operations/teams");
+    expect(route).toEqual({ view: "legacy", area: "operations", section: "teams" });
+    expect(formatRoute(route)).toBe("#/operations/teams");
+    expect(areaOf(route)).toBe("operations");
+    // #568：讀經使用率、報名註冊統計的舊書籤到報表區
+    expect(parseRoute("#/operations/reading-activity")).toEqual({ view: "stats", tab: "usage", planId: null });
+    expect(parseRoute("#/operations/registrations")).toEqual({ view: "stats", tab: "registrations", planId: null });
     expect(parseRoute("#/operations/announcements")).toEqual({ view: "not_found" });
     expect(parseRoute("#/operations/users")).toEqual({ view: "not_found" });
     expect(parseRoute("#/operations/teams/extra")).toEqual({ view: "not_found" });
     // 營運區搬好之後沒有「還在搬」的佔位頁了
     expect(parseRoute("#/nowhere/x")).toEqual({ view: "not_found" });
+  });
+
+  it("parses the 報表 area: usage and registrations, the plan only on registrations (#568)", () => {
+    const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
+    expect(parseRoute("#/stats")).toEqual({ view: "stats", tab: "usage", planId: null });
+    expect(parseRoute("#/stats/usage")).toEqual({ view: "stats", tab: "usage", planId: null });
+    expect(parseRoute(`#/stats?plan=${PLAN}`)).toEqual({ view: "stats", tab: "usage", planId: null });
+    const route = parseRoute(`#/stats/registrations?plan=${PLAN.toUpperCase()}`);
+    expect(route).toEqual({ view: "stats", tab: "registrations", planId: PLAN });
+    expect(formatRoute(route)).toBe(`#/stats/registrations?plan=${PLAN}`);
+    expect(formatRoute({ view: "stats", tab: "registrations", planId: null })).toBe("#/stats/registrations");
+    expect(formatRoute({ view: "stats", tab: "usage", planId: null })).toBe("#/stats");
+    expect(areaOf(route)).toBe("stats");
+    expect(parseRoute("#/stats/registrations?plan=nope")).toEqual({ view: "stats", tab: "registrations", planId: null });
+    expect(parseRoute("#/stats/other")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/stats/usage/extra")).toEqual({ view: "not_found" });
   });
 
   it("parses the plan area: four native tabs, an optional plan, and the copied settings tab (#565)", () => {
