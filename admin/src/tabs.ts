@@ -29,9 +29,13 @@ const NATIVE_TABS: Readonly<Record<TabArea, readonly AreaTab[]>> = {
   system: [{ id: "audit", label: "稽核紀錄", href: formatRoute({ view: "audit", actorId: null, targetId: null }), capability: "audit.read" }]
 };
 
+// 照搬分頁的 id 加前綴，才不會和同一區新寫的分頁撞名（計畫區的「團隊」和照搬的組隊狀況區塊都叫 teams，#583）。
+// 區塊 id 本身不改：iframe 通道、admin-api 權限、稽核標籤都靠它。
+export const legacyTabId = (section: string) => `legacy:${section}`;
+
 export function areaTabs(area: TabArea): AreaTab[] {
   const legacy = (isLegacyArea(area) ? legacySectionsOf(area) : []).map((section) => ({
-    id: section.id,
+    id: legacyTabId(section.id),
     label: section.label,
     href: formatRoute({ view: "legacy", area: section.area, section: section.id }),
     capability: section.capability

@@ -10,6 +10,7 @@ import { downloadBlob } from "../download.ts";
 import { IFRAME_ACTIVITY_EVENT } from "../idle.ts";
 import { LEGACY_PATH, findLegacySection, startLegacyHost, unavailableHint, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
 import type { ResolvedTheme } from "../theme.ts";
+import { legacyTabId } from "../tabs.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
 
 type FrameState =
@@ -93,7 +94,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
 
   return (
     <div className="adm-legacy" hidden={!visible}>
-      <AreaTabs area={area} current={section} capabilities={capabilities} className="adm-legacy__tabs" />
+      <AreaTabs area={area} current={legacyTabId(section)} capabilities={capabilities} className="adm-legacy__tabs" />
       {frame.name === "failed" && (
         <div className="adm-message">
           <h2>管理畫面載入失敗</h2>
