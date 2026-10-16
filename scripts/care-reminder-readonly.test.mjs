@@ -25,6 +25,24 @@ describe("nlc-data send_care_reminder", () => {
     expect(branch).toMatch(/23505/);
     expect(branch).not.toContain("care_reminder_already_seen");
   });
+
+  it("records an audit event after a successful send, like the console's admin_api_care_remind (#570)", () => {
+    const insertAt = branch.indexOf('.from("care_reminders")\n        .insert(');
+    const auditAt = branch.indexOf('p_action: "care_reminder.send"');
+    expect(insertAt).toBeGreaterThan(-1);
+    expect(auditAt).toBeGreaterThan(insertAt);
+    expect(branch.slice(auditAt)).toMatch(/p_target_user_id: p\.recipient_id/);
+    expect(branch.slice(auditAt)).toMatch(/p_changes: \{ reason: p\.reason, message: msg \}/);
+  });
+});
+
+describe("openCareReminderDialog plan key (#570)", () => {
+  it("the management tab's own plan wins over the plan open in the reader; team reminders keep their key", () => {
+    const start = planSrc.indexOf("const planKeyForCare = member.readingTeamId");
+    const block = planSrc.slice(start, planSrc.indexOf(";", start));
+    expect(block.indexOf("reading-team:")).toBeLessThan(block.indexOf("member.carePlanKey"));
+    expect(block.indexOf("member.carePlanKey")).toBeLessThan(block.indexOf("state.activePlan"));
+  });
 });
 
 describe("db.sendCareReminder error mapping", () => {

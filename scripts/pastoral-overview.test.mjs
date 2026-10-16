@@ -1,15 +1,11 @@
 // #551 App 管理分頁的統計 RPC get_pastoral_overview：範圍由 nlc-data 依登入者注入、
-// 只給 service_role、範圍空的時候什麼都不回；前端的呼叫只送計畫。
+// 只給 service_role、範圍空的時候什麼都不回。App 不直接呼叫它：改經 nlc-data 的 plan_summary／plan_roster（#570），
+// 前端只送計畫（總覽再加授權範圍內的縮小條件）。
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { latestFunctionDefinition } from "./migration-sql.mjs";
 import { PASTORAL_OVERVIEW_RPC, buildPastoralOverviewArgs } from "../supabase/functions/nlc-data/plan-stats-scope.ts";
-import {
-  PASTORAL_OVERVIEW_RPC as CLIENT_RPC,
-  fetchPastoralOverview,
-  normalizePastoralOverview,
-  pastoralPlanArgs
-} from "../js/data/pastoral-overview.mjs";
+import { fetchPlanRoster, fetchPlanSummary, pastoralPlanArgs } from "../js/data/pastoral-overview.mjs";
 
 const ACTOR = "11111111-1111-1111-1111-111111111111";
 const OTHER = "22222222-2222-2222-2222-222222222222";
@@ -21,9 +17,10 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 describe("nlc-data injects the scope for get_pastoral_overview", () => {
   const forged = { p_whole_church: true, p_visible_ids: null, p_actor_id: OTHER };
 
-  it("the client and the edge function call the same RPC", () => {
-    expect(CLIENT_RPC).toBe(PASTORAL_OVERVIEW_RPC);
+  it("the edge function's plan report reads get_pastoral_overview; the App never calls it directly (#570)", () => {
     expect(PASTORAL_OVERVIEW_RPC).toBe("get_pastoral_overview");
+    expect(read("js/data/pastoral-overview.mjs")).not.toContain("get_pastoral_overview");
+    expect(read("js/modules/pastoral.js")).not.toContain("get_pastoral_overview");
   });
 
   it("whole church only when getVisibleProfileIds says so; forged scope values are overwritten", () => {
@@ -124,8 +121,11 @@ describe("get_pastoral_overview migration", () => {
   });
 });
 
-describe("App side: fetchPastoralOverview", () => {
-  it("sends the church plan uuid and preset key, nothing about scope", () => {
+describe("App side: plan_summary／plan_roster through nlc-data (#570)", () => {
+  const summary = { plan: { id: PLAN }, funnel: { inScope: 1 }, care: { total: 0 }, units: { level: null, rows: [] }, meta: { consistent: true } };
+  const roster = { plan: { id: PLAN }, people: [{ id: "a" }], meta: { consistent: true } };
+
+  it("picks the church plan uuid", () => {
     expect(pastoralPlanArgs({ id: "enroll-1", globalPlanId: PLAN, presetKey: "2026-Q4" })).toEqual({
       p_global_plan_id: PLAN,
       p_preset_key: "2026-Q4"
@@ -134,24 +134,40 @@ describe("App side: fetchPastoralOverview", () => {
     expect(pastoralPlanArgs({ id: "not-a-uuid" })).toEqual({ p_global_plan_id: null, p_preset_key: null });
   });
 
-  it("returns { today, people } and drops malformed rows", async () => {
-    const client = { rpc: vi.fn(async () => ({ data: { today: "2026-10-13", people: [{ id: "a" }, null, { name: "no id" }] }, error: null })) };
-    await expect(fetchPastoralOverview(client, { globalPlanId: PLAN })).resolves.toEqual({ today: "2026-10-13", people: [{ id: "a" }] });
-    expect(client.rpc).toHaveBeenCalledWith("get_pastoral_overview", { p_global_plan_id: PLAN, p_preset_key: null });
-    expect(Object.keys(client.rpc.mock.calls[0][1])).not.toContain("p_visible_ids");
+  it("the summary sends only the plan and a narrowing scope; never visible ids or a whole-church flag", async () => {
+    const client = { planReport: vi.fn(async () => ({ data: summary, error: null })) };
+    await expect(fetchPlanSummary(client, { globalPlanId: PLAN }, { greatRegion: "東區", pastoralZone: "", smallGroup: "" }))
+      .resolves.toEqual({ data: summary, inconsistent: false });
+    expect(client.planReport).toHaveBeenCalledWith("plan_summary", { p_global_plan_id: PLAN, scope: { greatRegion: "東區" } });
+    const sent = JSON.stringify(client.planReport.mock.calls[0][1]);
+    expect(sent).not.toMatch(/visible|whole_church|actor/);
+  });
+
+  it("the roster sends only the plan; a count mismatch is flagged so it is not cached", async () => {
+    const client = { planReport: vi.fn(async () => ({ data: { ...roster, meta: { consistent: false } }, error: null })) };
+    await expect(fetchPlanRoster(client, { globalPlanId: PLAN })).resolves.toEqual({ data: { ...roster, meta: { consistent: false } }, inconsistent: true });
+    expect(client.planReport).toHaveBeenCalledWith("plan_roster", { p_global_plan_id: PLAN });
   });
 
   it("reports errors instead of throwing, and does not call without a plan", async () => {
-    const client = { rpc: vi.fn() };
-    await expect(fetchPastoralOverview(client, { id: "x" })).resolves.toEqual({ error: "plan_required" });
-    expect(client.rpc).not.toHaveBeenCalled();
-    await expect(fetchPastoralOverview(null, { globalPlanId: PLAN })).resolves.toEqual({ error: "unavailable" });
-    const failing = { rpc: vi.fn(async () => ({ data: null, error: { message: "forbidden_rpc" } })) };
-    await expect(fetchPastoralOverview(failing, { globalPlanId: PLAN })).resolves.toEqual({ error: "forbidden_rpc" });
-    const throwing = { rpc: vi.fn(async () => { throw new Error("offline"); }) };
-    await expect(fetchPastoralOverview(throwing, { globalPlanId: PLAN })).resolves.toEqual({ error: "offline" });
-    const odd = { rpc: vi.fn(async () => ({ data: [], error: null })) };
-    await expect(fetchPastoralOverview(odd, { globalPlanId: PLAN })).resolves.toEqual({ error: "unexpected_shape" });
-    expect(normalizePastoralOverview({ people: [] })).toEqual({ today: "", people: [] });
+    const client = { planReport: vi.fn() };
+    await expect(fetchPlanSummary(client, { id: "x" })).resolves.toEqual({ error: "plan_required" });
+    expect(client.planReport).not.toHaveBeenCalled();
+    await expect(fetchPlanRoster(null, { globalPlanId: PLAN })).resolves.toEqual({ error: "unavailable" });
+    await expect(fetchPlanRoster({ rpc: vi.fn() }, { globalPlanId: PLAN })).resolves.toEqual({ error: "unavailable" });
+    const forbidden = { planReport: vi.fn(async () => ({ data: null, error: { error: "forbidden" } })) };
+    await expect(fetchPlanSummary(forbidden, { globalPlanId: PLAN })).resolves.toEqual({ error: "forbidden" });
+    const throwing = { planReport: vi.fn(async () => { throw new Error("offline"); }) };
+    await expect(fetchPlanRoster(throwing, { globalPlanId: PLAN })).resolves.toEqual({ error: "offline" });
+    const odd = { planReport: vi.fn(async () => ({ data: { plan: {}, people: "x" }, error: null })) };
+    await expect(fetchPlanRoster(odd, { globalPlanId: PLAN })).resolves.toEqual({ error: "unexpected_shape" });
+    await expect(fetchPlanSummary(odd, { globalPlanId: PLAN })).resolves.toEqual({ error: "unexpected_shape" });
+  });
+
+  it("the nlc-data shim only forwards the two plan report actions", () => {
+    const db = read("js/db.js");
+    const shim = db.slice(db.indexOf("planReport(action, args = {})"), db.indexOf("rpc(functionName, args = {})"));
+    expect(shim).toContain('if (action !== "plan_summary" && action !== "plan_roster")');
+    expect(shim).toContain("return callEdge({ action, args });");
   });
 });

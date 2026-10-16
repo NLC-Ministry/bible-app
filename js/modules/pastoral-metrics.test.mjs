@@ -1,25 +1,27 @@
 // #551 App 管理分頁的計算。落後／超前的判斷要和計畫統計的參與者總覽
 // （plan-stats.js renderGroupParticipantsRankingTable）同一套，所以這裡的期望值直接照那邊的規則寫。
 import { describe, expect, it } from "vitest";
+import * as metrics from "./pastoral-metrics.mjs";
+import * as planReport from "../../supabase/functions/_shared/progress/plan-report.mjs";
 import {
   CARE_THRESHOLDS,
   buildPlanContext,
-  buildRosterCsv,
   buildScopeOptions,
-  buildTeamsCsv,
   careReasonText,
   compareQuizUnits,
   compareUnits,
-  countRosterFilters,
+  countRosterConditions,
   daysBetweenKeys,
+  defaultRosterFilters,
   describePeople,
   describePerson,
   filterByScope,
-  filterRoster,
+  filterPlanRoster,
   normalizeScope,
   pickUnitLevel,
   ratio,
   resolvePastoralTab,
+  rosterPerson,
   selectCareList,
   summarizeFunnel,
   summarizeQuiz,
@@ -201,35 +203,52 @@ describe("overview funnel and unit comparison", () => {
   });
 });
 
-describe("roster", () => {
-  const people = describePeople([
-    person("王小明", { chapters: 9 }),
-    person("李大華", null),
-    person("陳美玲", { chapters: 36 }, { teams: [{ id: "t1", name: "火箭隊", division: 3, status: "active", size: 3, captain: true }] }),
-    person("林志強", { chapters: 90, byRound: { 1: 90 } })
-  ], ctx);
+describe("roster (#570): the server's rows, the console's filter rules", () => {
+  const report = {
+    plan: { id: "plan-1", name: "2026 第四季", books: [] },
+    ctx,
+    people: describePeople([
+      person("王小明", { chapters: 9 }),
+      person("李大華", null),
+      person("陳美玲", { chapters: 36 }, { teams: [{ id: "t1", name: "火箭隊", division: 3, status: "active", size: 3, captain: true }] }),
+      person("林志強", { chapters: 90, byRound: { 1: 90 } })
+    ], ctx),
+    meta: { consistent: true }
+  };
+  const rows = planReport.buildPlanRoster(report).people.map(rosterPerson);
 
-  it("filters by chip and by name", () => {
-    expect(filterRoster(people, { filter: "care" }).map((item) => item.id)).toEqual(["王小明"]);
-    expect(filterRoster(people, { filter: "not_enrolled" }).map((item) => item.id)).toEqual(["李大華"]);
-    expect(filterRoster(people, { filter: "behind" }).map((item) => item.id)).toEqual(["王小明"]);
-    expect(filterRoster(people, { filter: "no_team" }).map((item) => item.id)).toEqual(["王小明", "林志強"]);
-    expect(filterRoster(people, { filter: "completed" }).map((item) => item.id)).toEqual(["林志強"]);
-    expect(filterRoster(people, { query: "美" }).map((item) => item.id)).toEqual(["陳美玲"]);
-    expect(countRosterFilters(people)).toEqual({ all: 4, care: 1, not_enrolled: 1, behind: 1, no_team: 2, completed: 1 });
+  it("uses the same filter, sort and drill rules as the admin console", () => {
+    for (const name of ["filterPlanRoster", "sortPlanRoster", "defaultRosterFilters", "drillRosterFilters", "presetRosterFilters", "activeRosterPreset", "countRosterConditions"]) {
+      expect(metrics[name]).toBe(planReport[name]);
+    }
   });
 
-  it("a single day short (今日未完成) is not 落後", () => {
-    expect(filterRoster(describePeople([person("p", { chapters: 33 })], ctx), { filter: "behind" })).toEqual([]);
+  it("defaults to enrolled people sorted by days behind; the 未報名 bucket and the care shortcut", () => {
+    const enrolled = metrics.sortPlanRoster(filterPlanRoster(rows, defaultRosterFilters()), "behind");
+    expect(enrolled.map((row) => row.id)).toEqual(["王小明", "林志強", "陳美玲"]);
+    expect(filterPlanRoster(rows, { ...defaultRosterFilters(), progress: ["not_enrolled"] }).map((row) => row.id)).toEqual(["李大華"]);
+    expect(filterPlanRoster(rows, metrics.drillRosterFilters("care")).map((row) => row.id)).toEqual(["王小明"]);
+    expect(filterPlanRoster(rows, { ...defaultRosterFilters(), team: "no" }).map((row) => row.id)).toEqual(["王小明", "林志強"]);
   });
 
-  it("CSV neutralizes formulas in names and keeps numbers as numbers", () => {
-    const csv = buildRosterCsv(describePeople([person("=HYPERLINK(\"x\")", { chapters: 9 })], ctx));
-    const [head, row] = csv.split("\r\n");
-    expect(head.startsWith('"姓名","大區","牧區","小組","報名","狀態"')).toBe(true);
-    expect(row).toContain('"\'=HYPERLINK(""x"")"');
-    expect(row).toContain('"落後 9天","10","9"');
-    expect(row).toContain('"落後 9 天"');
+  it("counts conditions for the collapsed 篩選（N 個條件）header", () => {
+    expect(countRosterConditions(defaultRosterFilters())).toBe(0);
+    expect(countRosterConditions({ ...defaultRosterFilters(), progress: ["behind"], team: "yes" })).toBe(2);
+    expect(countRosterConditions(metrics.drillRosterFilters("careBehind"))).toBe(1);
+  });
+
+  it("rosterPerson adds what the teams and quiz tabs need", () => {
+    const chen = rows.find((row) => row.id === "陳美玲");
+    expect(chen.team3).toMatchObject({ name: "火箭隊", captain: true });
+    expect(chen.team6).toBeNull();
+    expect(rows.find((row) => row.id === "林志強").completedOnce).toBe(true);
+    expect(rows.find((row) => row.id === "李大華")).toMatchObject({ enrolled: false, lastReadKey: "", completedOnce: false });
+    expect(rosterPerson({ id: "x" })).toMatchObject({ name: "", teams: [], careReasons: [], quiz: { published: 0, submitted: 0 } });
+  });
+
+  it("offers no CSV export in the App (exports live in the console, generated and audited by the server)", () => {
+    expect(metrics.buildRosterCsv).toBeUndefined();
+    expect(metrics.buildTeamsCsv).toBeUndefined();
   });
 });
 
@@ -255,15 +274,6 @@ describe("teams", () => {
     expect(summary.teams[1].members[0]).toEqual({ name: "a", captain: true });
     expect(teamLabel(team6)).toBe("=cmd（6 人隊，4/6）");
     expect(teamLabel(team3)).toBe("火箭隊（3 人隊）");
-  });
-
-  it("CSV", () => {
-    const csv = buildTeamsCsv(summarizeTeams(people));
-    expect(csv.split("\r\n")).toEqual([
-      '"隊型","隊名","狀態","全隊人數","範圍內成員"',
-      '"6 人隊","\'=cmd","還缺 2 人","4","a"',
-      '"3 人隊","火箭隊","已滿","3","a（隊長）、b"'
-    ]);
   });
 });
 
