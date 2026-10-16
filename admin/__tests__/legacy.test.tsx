@@ -8,6 +8,7 @@ import { AdminApp } from "../src/App.tsx";
 import { AdminApiError, createAdminApi } from "../src/api.ts";
 import type { AdminAuth } from "../src/auth.ts";
 import { IFRAME_ACTIVITY_EVENT } from "../src/idle.ts";
+import { areaTabs } from "../src/tabs.ts";
 import {
   LEGACY_HELLO,
   LEGACY_INIT,
@@ -296,6 +297,20 @@ describe("legacy tabs in the plan area", () => {
     const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
     expect(links).toEqual(["首頁", "人", "回報收件匣", "內容"]); // 有 support.read 就看得到人區（個人頁，#567）
     expect(el.textContent).not.toContain("搬移中");
+  });
+
+  it("lights only the tab that is open: 團隊 and 組隊狀況 no longer share an id (#583)", async () => {
+    for (const area of ["plans", "stats", "content", "system"] as const) {
+      const ids = areaTabs(area).map((tab) => tab.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
+    const { el } = await mount("#/plans/team-status", [...OPERATIONS_CAPS, "plans.read"]);
+    const lit = () => [...el.querySelectorAll(".adm-tabs a[aria-current='page']")]
+      .filter((a) => !a.closest("[hidden]"))
+      .map((a) => a.textContent);
+    expect(lit()).toEqual(["組隊狀況"]);
+    await go("#/plans/teams");
+    expect(lit()).toEqual(["團隊"]);
   });
 
   it("explains why a section is not available", () => {
