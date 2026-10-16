@@ -246,6 +246,29 @@ export function presetRosterFilters(preset) {
   return base;
 }
 
+export const ROSTER_PRESETS = Object.freeze(["enrolled", "care", "all"]);
+
+function sameIds(a, b) {
+  return a.length === b.length && a.every((id) => b.includes(id));
+}
+
+/** 目前條件是不是三個快速按鈕之一（不看搜尋字）；都不是回 null */
+export function activeRosterPreset(filters) {
+  for (const preset of ROSTER_PRESETS) {
+    const base = presetRosterFilters(preset);
+    if (filters.shortcut === base.shortcut && filters.team === base.team
+      && sameIds(filters.progress, base.progress) && sameIds(filters.checkin, base.checkin)) return preset;
+  }
+  return null;
+}
+
+/** 篩選區收起來時標題上的「幾個條件」：捷徑算一個；預設的報名者不算（後台與 App 管理分頁共用，#570） */
+export function countRosterConditions(filters) {
+  if (filters.shortcut) return 1 + (filters.team !== "any" ? 1 : 0);
+  const base = defaultRosterFilters();
+  return (sameIds(filters.progress, base.progress) ? 0 : 1) + (sameIds(filters.checkin, base.checkin) ? 0 : 1) + (filters.team !== "any" ? 1 : 0);
+}
+
 // 總覽點漏斗某一層／需要關心某個數字 → 名單條件。人數一定和總覽那個數字相同（scripts/plan-area.test.mjs 對帳）
 const FUNNEL_DRILLS = Object.freeze({
   inScope: () => presetRosterFilters("all"),

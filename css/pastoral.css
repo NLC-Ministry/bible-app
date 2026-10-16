@@ -193,7 +193,19 @@
 }
 
 .pastoral-funnel__label {
-  color: var(--text-secondary);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral-funnel__label:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: var(--shadow-focus-ring);
 }
 
 .pastoral-funnel__value {
@@ -227,36 +239,6 @@
 }
 
 /* 需要關心 */
-.pastoral-care {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pastoral-care__item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem 0.75rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-}
-
-.pastoral-care__name {
-  color: var(--text-primary);
-  font-weight: var(--type-weight-strong);
-}
-
-.pastoral-care__org {
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-}
-
 .pastoral-care__more {
   margin-top: 0.6rem;
 }
@@ -390,45 +372,143 @@
   min-width: 0;
 }
 
-.pastoral-people {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
-  gap: 0.6rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pastoral-person {
+/* 一人一列，點開看詳細（#570） */
+.pastoral-rows {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.75rem;
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--border-card);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
+  list-style: none;
+  overflow: hidden;
+}
+
+.pastoral-row + .pastoral-row {
+  border-top: 1px solid var(--border-card);
+}
+
+.pastoral-row__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral-row__summary:focus-visible {
+  outline: none;
+  box-shadow: inset var(--shadow-focus-ring);
+}
+
+.pastoral-row__who {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
-.pastoral-person__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.pastoral-person__name {
-  margin: 0;
+.pastoral-row__name {
   color: var(--text-primary);
   font-size: 0.9375rem;
   font-weight: var(--type-weight-strong);
   overflow-wrap: anywhere;
 }
 
-.pastoral-person__org {
-  margin: 0.1rem 0 0;
+.pastoral-row__late {
+  margin-left: 0.4rem;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-regular);
+}
+
+.pastoral-row__org {
   color: var(--text-muted);
   font-size: 0.75rem;
+}
+
+.pastoral-row__chapters {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pastoral-row__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.pastoral-row__detail[hidden] {
+  display: none;
+}
+
+/* 篩選：手機預設收合成「篩選（N 個條件）」 */
+.pastoral-filters {
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+}
+
+.pastoral-filters__summary {
+  padding: 0.55rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.pastoral-filters__summary:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-filters__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.pastoral-filters__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pastoral-filters__label {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.pastoral-filters__label small {
+  margin-left: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.pastoral-filters__footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pastoral-segmented {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.pastoral-roster__count {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
 }
 
 .pastoral-person__facts {

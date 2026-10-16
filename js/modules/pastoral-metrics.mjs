@@ -1,10 +1,9 @@
-// App 管理分頁（#551）的計算：get_pastoral_overview 回的「每人一列」精簡資料 → 每個人的狀態、
-// 進度漏斗、需要關心、單位比較、名單篩選、團隊與小測驗摘要、CSV。全部是純函式，畫面在 pastoral.js。
+// App 管理分頁（#551、#570）的計算。全部是純函式，畫面在 pastoral.js。
 //
-// 每個人的進度判斷、漏斗、單位比較在伺服器共用的 plan-progress.mjs（#564），這裡轉出；
-// 名單篩選、團隊、小測驗、CSV 是 App 畫面專用的，留在這裡。
-import { UNSET_UNIT_LABEL, careReasonText, ratio, unitName } from "../../supabase/functions/_shared/progress/plan-progress.mjs";
-import { csvCell } from "./csv-cell.mjs";
+// 總覽數字與名單由伺服器算（nlc-data plan_summary／plan_roster，#564）；名單的篩選、排序、從總覽點進名單的條件
+// 和後台同一份（supabase/functions/_shared/progress/plan-report.mjs），這裡轉出。
+// 團隊、小測驗摘要是 App 畫面專用的，從名單算，留在這裡。App 不提供匯出（匯出只在後台，伺服器產生並記稽核）。
+import { UNSET_UNIT_LABEL, ratio, taipeiDateKey, unitName } from "../../supabase/functions/_shared/progress/plan-progress.mjs";
 
 // 進度判斷、漏斗、單位比較和伺服器共用（#564），本體在 supabase/functions/_shared/progress/plan-progress.mjs
 export {
@@ -32,6 +31,18 @@ export {
   taipeiDateKey
 } from "../../supabase/functions/_shared/progress/plan-progress.mjs";
 
+// 名單條件（進度、最後打卡兩個條件＋團隊；捷徑；快速按鈕）和後台同一份（#570）
+export {
+  ROSTER_PRESETS,
+  activeRosterPreset,
+  countRosterConditions,
+  defaultRosterFilters,
+  drillRosterFilters,
+  filterPlanRoster,
+  presetRosterFilters,
+  sortPlanRoster
+} from "../../supabase/functions/_shared/progress/plan-report.mjs";
+
 export const PASTORAL_TABS = Object.freeze(["overview", "roster", "teams", "quizzes"]);
 
 // 舊管理分頁（#/admin/<區塊>）的組長區塊 → 新分頁
@@ -44,13 +55,16 @@ export const LEGACY_SECTION_TABS = Object.freeze({
   exam: "quizzes"
 });
 
-export const ROSTER_FILTERS = Object.freeze([
-  { id: "all", label: "全部" },
-  { id: "care", label: "需要關心" },
-  { id: "not_enrolled", label: "未報名" },
-  { id: "behind", label: "落後" },
-  { id: "no_team", label: "未組隊" },
-  { id: "completed", label: "讀完一遍" }
+export const ROSTER_SORTS = Object.freeze([
+  { id: "behind", label: "落後天數" },
+  { id: "chapters_desc", label: "章數多" },
+  { id: "chapters_asc", label: "章數少" }
+]);
+export const ROSTER_PRESET_LABELS = Object.freeze({ enrolled: "報名者", care: "需要關心", all: "全部" });
+export const ROSTER_TEAM_OPTIONS = Object.freeze([
+  { id: "any", label: "不限" },
+  { id: "yes", label: "有隊" },
+  { id: "no", label: "沒有隊" }
 ]);
 
 export function resolvePastoralTab(value) {
@@ -59,23 +73,23 @@ export function resolvePastoralTab(value) {
   return LEGACY_SECTION_TABS[text] || null;
 }
 
-export function filterRoster(people, { filter = "all", query = "" } = {}) {
-  const needle = String(query || "").trim().toLowerCase();
-  return (Array.isArray(people) ? people : []).filter((person) => {
-    if (needle && !person.name.toLowerCase().includes(needle)) return false;
-    switch (filter) {
-      case "care": return person.care;
-      case "not_enrolled": return !person.enrolled;
-      case "behind": return person.enrolled && person.behindDays >= 2;
-      case "no_team": return person.enrolled && person.teams.length === 0;
-      case "completed": return person.completedOnce;
-      default: return true;
+// 伺服器名單的一列 → 團隊、小測驗摘要與畫面要的欄位（team3／team6、讀完一遍、最後打卡日期）
+export function rosterPerson(row) {
+  const teams = Array.isArray(row && row.teams) ? row.teams : [];
+  return {
+    ...row,
+    name: String((row && row.name) || ""),
+    teams,
+    team3: teams.find((team) => team.division === 3) || null,
+    team6: teams.find((team) => team.division === 6) || null,
+    careReasons: Array.isArray(row && row.careReasons) ? row.careReasons : [],
+    completedOnce: Boolean(row && row.progressBucket === "completed"),
+    lastReadKey: taipeiDateKey(row && row.lastReadAt),
+    quiz: {
+      published: Math.max(0, Number(row && row.quiz && row.quiz.published) || 0),
+      submitted: Math.max(0, Number(row && row.quiz && row.quiz.submitted) || 0)
     }
-  });
-}
-
-export function countRosterFilters(people) {
-  return Object.fromEntries(ROSTER_FILTERS.map((item) => [item.id, filterRoster(people, { filter: item.id }).length]));
+  };
 }
 
 export function teamLabel(team) {
@@ -140,42 +154,4 @@ export function compareQuizUnits(people, level, { compare = null } = {}) {
       if (a.name === UNSET_UNIT_LABEL || b.name === UNSET_UNIT_LABEL) return a.name === UNSET_UNIT_LABEL ? 1 : -1;
       return comparator ? comparator(a.name, b.name) : a.name.localeCompare(b.name, "zh-Hant");
     });
-}
-
-function csvText(rows) {
-  return rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
-}
-
-export function buildRosterCsv(people) {
-  const head = ["姓名", "大區", "牧區", "小組", "報名", "狀態", "本遍進度(%)", "已讀章數", "最後打卡", "近7天打卡天數", "3人隊", "6人隊", "小測驗作答", "小測驗發布", "需要關心"];
-  const rows = (Array.isArray(people) ? people : []).map((person) => [
-    person.name,
-    person.greatRegion,
-    person.pastoralZone,
-    person.smallGroup,
-    person.enrolled ? "已報名" : "未報名",
-    person.statusLabel,
-    person.enrolled ? person.progress : "",
-    person.enrolled ? person.chapters : "",
-    person.lastReadKey,
-    person.enrolled ? person.readDays7 : "",
-    person.team3 ? person.team3.name : "",
-    person.team6 ? person.team6.name : "",
-    person.enrolled ? person.quiz.submitted : "",
-    person.enrolled ? person.quiz.published : "",
-    person.careReasons.map(careReasonText).join("、")
-  ]);
-  return csvText([head, ...rows]);
-}
-
-export function buildTeamsCsv(summary) {
-  const head = ["隊型", "隊名", "狀態", "全隊人數", "範圍內成員"];
-  const rows = (summary && Array.isArray(summary.teams) ? summary.teams : []).map((team) => [
-    `${team.division} 人隊`,
-    team.name,
-    team.full ? "已滿" : `還缺 ${team.missing} 人`,
-    team.size,
-    team.members.map((member) => `${member.name}${member.captain ? "（隊長）" : ""}`).join("、")
-  ]);
-  return csvText([head, ...rows]);
 }

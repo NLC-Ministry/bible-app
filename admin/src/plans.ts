@@ -6,6 +6,8 @@
 import {
   CHECKIN_BUCKETS,
   PROGRESS_BUCKETS,
+  activeRosterPreset,
+  countRosterConditions,
   defaultRosterFilters,
   drillRosterFilters,
   filterPlanRoster,
@@ -125,26 +127,11 @@ export const drillFilters = (key: DrillKey): RosterFilters => drillRosterFilters
 export const applyRosterFilters = (rows: readonly RosterRow[], filters: RosterFilters): RosterRow[] => filterPlanRoster(rows, filters) as RosterRow[];
 export const sortRoster = (rows: readonly RosterRow[], sort: RosterSort): RosterRow[] => sortPlanRoster(rows, sort) as RosterRow[];
 
-function sameIds(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((id) => b.includes(id));
-}
-
-/** 目前條件是不是三個快速按鈕之一（不看搜尋字） */
-export function activePreset(filters: RosterFilters): RosterPreset | null {
-  for (const option of PRESET_OPTIONS) {
-    const preset = presetFilters(option.value);
-    if (filters.shortcut === preset.shortcut && filters.team === preset.team
-      && sameIds(filters.progress, preset.progress) && sameIds(filters.checkin, preset.checkin)) return option.value;
-  }
-  return null;
-}
+/** 目前條件是不是三個快速按鈕之一（不看搜尋字）；規則和 App 管理分頁共用（plan-report.mjs） */
+export const activePreset = (filters: RosterFilters): RosterPreset | null => activeRosterPreset(filters) as RosterPreset | null;
 
 /** 篩選區收起來時，標題上寫「幾個條件」（快速鍵算一個；預設的報名者不算） */
-export function filterCount(filters: RosterFilters): number {
-  if (filters.shortcut) return 1 + (filters.team !== "any" ? 1 : 0);
-  const base = defaultFilters();
-  return (sameIds(filters.progress, base.progress) ? 0 : 1) + (sameIds(filters.checkin, base.checkin) ? 0 : 1) + (filters.team !== "any" ? 1 : 0);
-}
+export const filterCount = (filters: RosterFilters): number => countRosterConditions(filters);
 
 const SHORTCUT_TEXT: Readonly<Record<Exclude<RosterShortcut, "">, string>> = {
   care: "需要關心（落後 7 天以上，或最後打卡 3 天以上；兩個都符合的只算一次）",

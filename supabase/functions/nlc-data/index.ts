@@ -1299,6 +1299,20 @@ Deno.serve(async (req: Request) => {
       // 23505 here is a concurrent same-day send that won the race.
       if (error && error.code === "23505") return jsonResponse({ error: "care_reminder_already_sent" }, 409);
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
+      // 組長在 App 管理分頁送的提醒也記稽核（#570），欄位同後台的 admin_api_care_remind
+      await recordAdminAudit(supabaseAdmin, {
+        p_action: "care_reminder.send",
+        p_result: "ok",
+        p_actor_id: profile.id,
+        p_actor_role: getProfileRoleCode(profile),
+        p_resource: "care_reminders",
+        p_target_user_id: p.recipient_id,
+        p_target_id: inserted?.id ? String(inserted.id) : null,
+        p_changes: { reason: p.reason, message: msg },
+        p_reason: null,
+        p_request_id: requestId,
+        p_detail: { plan_key: planKey }
+      });
       return jsonResponse({ data: inserted });
     }
 

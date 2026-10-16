@@ -1009,6 +1009,13 @@ const db = {
         // it on every slot — retrying 5 individual calls would hit the same wall.
         return queries.map(() => ({ data: null, error: error || { message: "batch_failed" } }));
       },
+      // 管理分頁的計畫總覽（只有數字）與名單（#564／#570）：範圍由 nlc-data 依登入者決定
+      planReport(action, args = {}) {
+        if (action !== "plan_summary" && action !== "plan_roster") {
+          return Promise.resolve({ data: null, error: { message: "unsupported_action" } });
+        }
+        return callEdge({ action, args });
+      },
       rpc(functionName, args = {}) {
         return {
           execute: () => callEdge({ action: "rpc", function: functionName, args }),

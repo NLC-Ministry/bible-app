@@ -5452,9 +5452,12 @@ window.openCareReminderDialog = async function(member) {
   // RPC），跟一般組織階層提醒用的 presetKey/globalPlanId 不是同一組 key，
   // 這裡要分開組，否則團隊入口永遠查不到「今天已經傳過」，使用者在同一天對
   // 同一位隊友再按一次「傳送」時只會撞上後端的每日上限、看起來像是傳送失敗。
+  // 管理分頁（#570）帶自己選的計畫（carePlanKey），不是目前打開的計畫。
   const planKeyForCare = member.readingTeamId
     ? `reading-team:${member.readingTeamId}`
-    : (state.activePlan ? (state.activePlan.presetKey || state.activePlan.globalPlanId || "") : "");
+    : typeof member.carePlanKey === "string"
+      ? member.carePlanKey
+      : (state.activePlan ? (state.activePlan.presetKey || state.activePlan.globalPlanId || "") : "");
   let existingReminder = null;
   if (typeof db !== "undefined" && typeof db.getTodayCareReminderFor === "function") {
     try {
@@ -5515,8 +5518,8 @@ window.openCareReminderDialog = async function(member) {
       </div>
 
       <p style="margin:0 0 1rem; font-size:0.875rem; color:var(--text-muted);">
-        進度：<strong style="color:${member.statusColor}">${member.statusStr}</strong>
-        &nbsp;・&nbsp;完成：${member.completed} 天
+        進度：<strong style="color:${member.statusColor}">${escapeHTML(member.statusStr)}</strong>
+        &nbsp;・&nbsp;${member.progressText ? escapeHTML(member.progressText) : `完成：${member.completed} 天`}
       </p>
 
       <p id="care-existing-note" style="margin:0 0 1rem; font-size:0.875rem; color:var(--color-brand); background:var(--color-brand-subtle); border-radius:8px; padding:0.5rem 0.75rem;${isLocked ? "" : " display:none;"}">
