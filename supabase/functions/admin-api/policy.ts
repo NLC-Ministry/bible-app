@@ -16,7 +16,16 @@ import { directoryCursor, directoryFilters, orgValues, runDirectoryExport, runOr
 import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList, type AuditFilters } from "./audit.ts";
 import { validateSearchQuery } from "./search-query.ts";
 import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
-import { runTeamDetail, runTeamHistory, runTeamLineage, runTeamList, runTeamSearch } from "./teams.ts";
+import {
+  runTeamAddMember,
+  runTeamDetail,
+  runTeamHistory,
+  runTeamLineage,
+  runTeamList,
+  runTeamRecomputeStatus,
+  runTeamRemoveMember,
+  runTeamSearch
+} from "./teams.ts";
 import { runHomeSummary } from "./home.ts";
 import { runUserSummary } from "./people.ts";
 import { runReadingUsage, runRegistrationExport, runRegistrationSheetSync, runRegistrationStats, usageRange } from "./stats.ts";
@@ -37,6 +46,7 @@ export const CAPABILITIES = [
   "audit.read",     // 看、匯出稽核紀錄（#550）
   "plans.read",     // 計畫總覽（只有數字）與名單（#564）、測驗作答（#565）、隊伍清單與除錯（#566）
   "plans.remind",   // 從計畫名單送關心提醒給會友（#565）
+  "teams.write",    // 隊伍修正動作：移出成員、加人、重算狀態（#571）
   "stats.read",     // 報表區：讀經使用率、報名註冊統計（#568；匯出與同步試算表另外要 export）
   "export"          // 匯出
 ] as const;
@@ -177,6 +187,18 @@ function buildCareRemindArgs(params: Record<string, unknown>, ctx: ActionContext
   return { ok: true, args: {
     ...actorArgs(ctx), p_recipient_id: params.recipient_id, p_global_plan_id: params.global_plan_id,
     p_reason: params.reason, p_message: message, p_request_id: ctx.requestId
+  } };
+}
+
+// 隊伍修正動作（#571）：隊伍、對象（移出／加人才有）、原因選填
+function buildTeamWriteArgs(params: Record<string, unknown>, ctx: ActionContext, withUser: boolean): ArgsResult {
+  if (!isUuid(params.team_id)) return { ok: false, error: "invalid_team_id" };
+  if (withUser && !isUuid(params.user_id)) return { ok: false, error: "invalid_user_id" };
+  const reason = optionalReason(params.reason);
+  if (!reason.ok) return reason;
+  return { ok: true, args: {
+    ...actorArgs(ctx), p_team_id: params.team_id, ...(withUser ? { p_user_id: params.user_id } : {}),
+    p_reason: reason.reason, p_request_id: ctx.requestId
   } };
 }
 
@@ -590,6 +612,30 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
       const q = validateSearchQuery(params.q);
       return q.ok ? { ok: true, args: { p_actor_id: ctx.actorId, p_query: q.query } } : q;
     }
+  },
+
+  // ── 隊伍修正動作（#571）：每個都要畫面再確認一次；檢查與稽核在 SQL、和修改同一個交易 ──────────
+  // 已結束的階段一律擋下（team_stage_ended），後台不提供繞過。
+  team_remove_member: {
+    capabilities: ["teams.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_team_remove_member",
+    run: runTeamRemoveMember,
+    buildArgs: (params, ctx) => buildTeamWriteArgs(params, ctx, true)
+  },
+  team_add_member: {
+    capabilities: ["teams.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_team_add_member",
+    run: runTeamAddMember,
+    buildArgs: (params, ctx) => buildTeamWriteArgs(params, ctx, true)
+  },
+  team_recompute_status: {
+    capabilities: ["teams.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_team_recompute_status",
+    run: runTeamRecomputeStatus,
+    buildArgs: (params, ctx) => buildTeamWriteArgs(params, ctx, false)
   },
 
   // ── 報表（#568）：只有數字，不記稽核；匯出、同步試算表記稽核 ─────────────────────────

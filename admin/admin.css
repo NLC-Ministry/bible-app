@@ -683,13 +683,27 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-team-carry__head { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--type-weight-strong); }
 .adm-team-members { list-style: none; margin: 0; padding: 0; }
 .adm-team-member {
-  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr); align-items: center; gap: 4px 12px;
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto; align-items: center; gap: 4px 12px;
   padding: 8px 0; border-top: 1px solid var(--border-default);
 }
 .adm-team-member:first-child { border-top: 0; }
 .adm-team-member__name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }
 .adm-team-member__meta { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
 .adm-team-member__progress { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+/* 修正動作（#571）：成員列的移出、加人找人、再確認一次 */
+.adm-team-member__actions { justify-self: end; }
+.adm-team-member__confirm { grid-column: 1 / -1; }
+.adm-team-fix { margin: 4px 0 0; }
+.adm-team-add { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border-default); }
+.adm-team-add__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.adm-team-add__head .adm-label { margin: 0; }
+.adm-team-add__input { flex: 1 1 220px; min-width: 0; }
+.adm-team-add__hits { list-style: none; margin: 0; padding: 0; }
+.adm-team-add__hit {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: center; gap: 4px 12px;
+  padding: 6px 0; border-top: 1px solid var(--border-default);
+}
+.adm-team-add__hit:first-child { border-top: 0; }
 .adm-team-toggle {
   flex: 1; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent;
   color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
@@ -767,4 +781,7 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
   .adm-team-row { grid-template-columns: minmax(0, 1fr); }
   .adm-team-row__note { grid-column: 1; grid-row: auto; justify-self: start; }
   .adm-team-member { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .adm-team-member__actions { justify-self: start; }
+  .adm-team-add__hit { grid-template-columns: minmax(0, 1fr); }
+  .adm-team-add__hit > .adm-button { justify-self: start; }
 }

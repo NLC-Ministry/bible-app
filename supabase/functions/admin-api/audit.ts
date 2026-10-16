@@ -116,6 +116,10 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   "care_reminder.send": "送關心提醒",
   view_plan_teams: "打開隊伍清單",
   view_team: "查看隊伍",
+  "team.remove_member": "移出隊員",
+  "team.dissolve": "解散隊伍（移出唯一的隊長）",
+  "team.add_member": "把人加進隊伍",
+  "team.recompute_status": "重算隊伍狀態",
 
   // admin-api 擋下的請求（action 名稱）
   unknown: "不明的後台操作",
@@ -150,6 +154,9 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   team_history: "看隊伍異動歷程",
   team_lineage: "看隊伍跨階段對應",
   team_search: "找隊伍",
+  team_remove_member: "移出隊員",
+  team_add_member: "把人加進隊伍",
+  team_recompute_status: "重算隊伍狀態",
   reading_usage: "看讀經使用率",
   registration_stats: "看報名註冊統計",
   registration_export: "匯出報名註冊統計",

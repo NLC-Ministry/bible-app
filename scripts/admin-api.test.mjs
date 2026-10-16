@@ -45,7 +45,7 @@ describe("capability table (deny by default)", () => {
       "reading_usage", "registration_export", "registration_sheet_sync", "registration_stats",
       "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
       "reveal_pii", "scope_overview", "scope_set",
-      "team_detail", "team_history", "team_lineage", "team_list", "team_search",
+      "team_add_member", "team_detail", "team_history", "team_lineage", "team_list", "team_recompute_status", "team_remove_member", "team_search",
       "user_search", "user_section", "user_summary", "user_timeline"
     ]);
     for (const [name, spec] of Object.entries(ADMIN_ACTIONS)) {

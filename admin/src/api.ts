@@ -22,6 +22,8 @@ export type AdminAction =
   | "plan_summary" | "plan_roster" | "plan_options" | "plan_quiz" | "plan_roster_export" | "care_remind"
   // 隊伍除錯（#566）
   | "team_list" | "team_detail" | "team_history" | "team_lineage" | "team_search"
+  // 隊伍修正動作（#571）
+  | "team_remove_member" | "team_add_member" | "team_recompute_status"
   // 報表（#568）
   | "reading_usage" | "registration_stats" | "registration_export" | "registration_sheet_sync";
 
@@ -258,6 +260,21 @@ export function describeAdminError(err: unknown): string {
     case "invalid_user_id": return "不正確的使用者編號，請重新整理後再試。";
     case "invalid_event_id":
     case "audit_event_not_found": return "找不到這筆稽核紀錄（可能已超過保存期限被清除）。";
+    // 隊伍修正動作（#571）
+    case "invalid_team_id":
+    case "team_not_found": return "找不到這支隊（可能已經解散），請回隊伍清單重新整理。";
+    case "team_stage_ended": return "這個階段已經結束，名單不能修改；請到現行階段的那一隊修改。";
+    case "team_member_not_found": return "這個人已經不在這隊了，請重新整理。";
+    case "team_captain_has_members": return "隊上還有其他人，不能移出隊長。";
+    case "user_inactive": return "這位使用者的帳號已停用，不能加進隊伍。";
+    case "already_in_team": return "這個人已經在這隊了。";
+    case "user_not_enrolled": return "這個人還沒報名這個計畫，請他先到計畫頁按「加入」。";
+    case "reading_team_full": return "這隊已經滿了，不能再加人。";
+    case "already_in_plan_division": return "這個人剛剛已被加進同計畫同組別的某一隊，請重新整理。";
+    // 階段的加入條件（同帶隊的判定，assert_campaign_stage_open）
+    case "plan_requires_pastoral_zone": return "這個人還沒設定牧區，不能加入這個階段的隊伍。";
+    case "plan_audience_restricted": return "這個人的大區不在這個階段的開放範圍。";
+    case "campaign_stage_not_open": return "這個階段還沒開放，不能加入隊伍。";
     case "admin_api_failed": return "後台服務發生錯誤，請稍後再試。";
     default:
       if (err.status === 400) return `請求格式不正確（${err.code}）。`;

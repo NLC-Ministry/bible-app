@@ -1,7 +1,8 @@
-// 後台隊伍除錯（#566）的型別與畫面規則。純函式，測試直接測。
+// 後台隊伍除錯（#566）與修正動作（#571）的型別與畫面規則。純函式，測試直接測。
 //
 // 檢查、「會友 App 應該顯示」、加入方式、異動的白話說明都由伺服器算好（_shared/progress/team-report.mjs，
-// 和會友 App 同一份規則）；這裡只放清單的篩選與排序。
+// 和會友 App 同一份規則）；這裡只放清單的篩選與排序，與修正動作按鈕何時出現。
+// 修正動作真正的檢查（已結束階段、已在別隊、沒報名、已滿、隊長）在 SQL，這裡只決定畫面上給不給按。
 
 export type TeamListFilter = "all" | "unfilled" | "issues";
 
@@ -90,4 +91,52 @@ export function filterTeams(rows: readonly TeamListRow[], filter: TeamListFilter
 export function teamRowNote(row: TeamListRow): string {
   if (row.issues > 0) return `${row.issues} 項異常`;
   return row.missing > 0 ? `還缺 ${row.missing} 人` : "已滿";
+}
+
+// ── 修正動作（#571）────────────────────────────────────────────────────────
+export type TeamRemoveResult = {
+  team_id: string; global_plan_id: string; removed_user_id: string; dissolved: boolean; member_count: number; status: string | null;
+};
+export type TeamAddResult =
+  | { added: true; team_id: string; user_id: string; member_count: number; status: string }
+  | { added: false; blocked: "already_in_other_team"; other_team: { id: string; name: string | null } };
+export type TeamRecomputeResult = { team_id: string; member_count: number; status_before: string; status: string; changed: boolean };
+/** user_search 的一筆（加人時找人用） */
+export type UserSearchHit = {
+  id: string; name: string | null; email_masked: string | null;
+  great_region: string | null; pastoral_zone: string | null; small_group: string | null; is_active: boolean | null;
+};
+
+const STATUS_LABEL: Readonly<Record<string, string>> = { forming: "招募中", ready: "已滿" };
+export const teamStatusLabel = (status: string | null | undefined) => STATUS_LABEL[String(status)] || String(status || "未知");
+
+/** 這隊給不給修正：要有 teams.write；已結束的階段一律不能改（同 0163 的保護，後台不提供繞過） */
+export function teamFixState(detail: TeamDetail, capabilities: readonly string[]): { allowed: boolean; note: string } {
+  if (!capabilities.includes("teams.write")) return { allowed: false, note: "" };
+  if (detail.plan.stage && detail.plan.ended) {
+    return { allowed: false, note: "階段已結束，名單不能修改。要改請到現行階段的那一隊（打開「跨階段對應」找到對應的隊）。" };
+  }
+  return { allowed: true, note: "" };
+}
+
+/** 移出這位成員：隊長只剩自己一人時＝解散這隊；隊上還有別人時不能移出隊長（不做轉移隊長） */
+export function memberRemoval(detail: TeamDetail, memberId: string): { allowed: boolean; dissolve: boolean; note: string } {
+  if (detail.team.captain.id !== memberId) return { allowed: true, dissolve: false, note: "" };
+  if (detail.members.length <= 1) return { allowed: true, dissolve: true, note: "" };
+  return { allowed: false, dissolve: false, note: "隊上還有其他人，不能移出隊長" };
+}
+
+/** 加人按鈕：沒滿才給（滿了 SQL 也會擋） */
+export function canAddMember(detail: TeamDetail): boolean {
+  return detail.members.length < detail.team.division;
+}
+
+/** 狀態檢查沒過才給「重算狀態」 */
+export function needsRecompute(detail: TeamDetail): boolean {
+  return detail.checks.some((check) => check.id === "status" && !check.ok);
+}
+
+/** 找人結果的單位 */
+export function hitUnit(hit: UserSearchHit): string {
+  return [hit.great_region, hit.pastoral_zone, hit.small_group].filter(Boolean).join("・");
 }
