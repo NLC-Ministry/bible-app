@@ -20,8 +20,8 @@ export type NavItem = {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { area: "home", label: "首頁", icon: "home", requires: ["console.access"], description: "今天要處理的事" },
-  { area: "plans", label: "計畫", icon: "plan", requires: ["plans.read"], description: "總覽、名單、團隊、測驗作答、計畫設定、組隊狀況" },
-  { area: "stats", label: "報表", icon: "chart", requires: ["stats.read"], description: "讀經使用率、報名註冊" },
+  { area: "plans", label: "計畫", icon: "plan", requires: ["plans.read"], description: "總覽、名單、團隊、計畫設定、組隊狀況" },
+  { area: "stats", label: "報表", icon: "chart", requires: ["stats.read"], description: "讀經使用率、報名註冊、測驗作答" },
   { area: "people", label: "人", icon: "users", requires: ["console.access"], anyOf: ["accounts.read", "support.read"], description: "名單與查詢、個人頁、管理範圍" },
   { area: "support", label: "回報收件匣", icon: "headset", requires: ["support.read"], description: "會友的回報與對話" },
   { area: "content", label: "內容", icon: "book", requires: ["content.manage"], description: "公告、注釋、小測驗、大測驗、雲柱測驗" },

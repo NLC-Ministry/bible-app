@@ -241,9 +241,9 @@ describe("legacy tabs in the plan area", () => {
     expect(frame.getAttribute("src")).toBe("/legacy");
     expect(frame.title).toBe("組隊狀況管理");
     const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定", "組隊狀況"]);
-    expect(tabs[5].getAttribute("aria-current")).toBe("page");
-    expect(tabs[5].getAttribute("href")).toBe("#/plans/team-status");
+    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "計畫設定", "組隊狀況"]);
+    expect(tabs[4].getAttribute("aria-current")).toBe("page");
+    expect(tabs[4].getAttribute("href")).toBe("#/plans/team-status");
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
     // 選單沒有「營運」了
     expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("營運");
@@ -260,8 +260,8 @@ describe("legacy tabs in the plan area", () => {
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame.title).toBe("計畫設定管理");
     const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定", "組隊狀況"]);
-    expect(tabs[4].getAttribute("aria-current")).toBe("page");
+    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "計畫設定", "組隊狀況"]);
+    expect(tabs[3].getAttribute("aria-current")).toBe("page");
     expect(tabs[1].getAttribute("href")).toBe("#/plans/roster");
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);

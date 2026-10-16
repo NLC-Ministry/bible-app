@@ -162,12 +162,11 @@ describe("plan area request budget", () => {
     await go("#/plans/teams");
     await go("#/plans");
     expect(actions(requests).slice(4)).toEqual(["team_list"]);
-    await go("#/plans/quiz");
-    expect(actions(requests).slice(5)).toEqual(["plan_quiz"]);
     await go("#/plans/roster");
     await go("#/plans/teams");
-    await go("#/plans/quiz");
-    expect(requests).toHaveLength(6);
+    expect(requests).toHaveLength(5);
+    // 測驗作答搬到報表區（#581）：計畫區沒有這個分頁
+    expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).not.toContain("測驗作答");
   });
 
   it("switching plans reloads the summary for that plan; the settings tab costs nothing", async () => {
@@ -344,6 +343,9 @@ describe("roster", () => {
   });
 });
 
+// 測驗作答 #581 起在報表區（#/stats/quiz），和報名註冊共用選的計畫
+const QUIZ_CAPS = [...CAPS, "stats.read"];
+
 describe("teams and quiz tabs", () => {
   it("teams: numbers from the summary, drilling into the roster with the same count", async () => {
     const { requests, el } = await mount("#/plans/teams");
@@ -353,7 +355,10 @@ describe("teams and quiz tabs", () => {
   });
 
   it("quiz: shows what this plan has; a switched-off feature is one small line; nothing configured says so", async () => {
-    const { el } = await mount("#/plans/quiz");
+    const { requests, el } = await mount("#/stats/quiz", { caps: QUIZ_CAPS });
+    expect(actions(requests)).toEqual(["bootstrap", "plan_options", "plan_quiz"]);
+    expect(requests[2].params).toEqual({ global_plan_id: PLAN });
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("報表");
     expect(el.textContent).toContain("每日小測驗作答率");
     expect(el.textContent).toContain("11/11：4／5 人交卷（80%）");
     expect(el.textContent).not.toContain("大測驗・期末考");
@@ -364,7 +369,7 @@ describe("teams and quiz tabs", () => {
   it("quiz: lightning counts this period's enrolled people and links to the content area", async () => {
     const quiz = { ...QUIZ, daily: { enabled: true, configured: false, participants: 0, days: [] }, exam: { enabled: true, papers: [] },
       lightning: { from: "2026-11-01", to: "2026-11-11", questions: 9, participants: 3, weeks: [{ week_start: "2026-11-02", questions: 7, participants: 3 }] } };
-    const { el } = await mount("#/plans/quiz", { quiz });
+    const { el } = await mount("#/stats/quiz", { quiz, caps: QUIZ_CAPS });
     expect(el.textContent).not.toContain("每日小測驗作答率");
     expect(el.textContent).toContain("雲柱測驗（本期期間）");
     expect(el.textContent).toContain("報名者 6 人的 50%");
@@ -372,7 +377,7 @@ describe("teams and quiz tabs", () => {
   });
 
   it("quiz: a failed load shows an error, never an empty page", async () => {
-    const { el } = await mount("#/plans/quiz", { failures: { plan_quiz: 500 } });
+    const { el } = await mount("#/stats/quiz", { failures: { plan_quiz: 500 }, caps: QUIZ_CAPS });
     expect(el.querySelector(".adm-notice--danger")?.textContent).toContain("後台服務發生錯誤");
     expect(buttons(el, "重試")).toHaveLength(1);
   });

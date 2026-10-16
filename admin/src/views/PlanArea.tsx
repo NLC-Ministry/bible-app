@@ -1,7 +1,8 @@
-// 後台「計畫」區（#565）：上面選一次計畫，下面分頁 總覽／名單／團隊／測驗作答／計畫設定（照搬，LegacyHost）。
+// 後台「計畫」區（#565）：上面選一次計畫，下面分頁 總覽／名單／團隊／計畫設定、組隊狀況（照搬，LegacyHost）。
+// 測驗作答 #581 搬到「報表」區（views/QuizTab.tsx）。
 //
 // 請求預算（需要時才調閱）：打開計畫區＝plan_options＋plan_summary（只有數字）；切到名單才載 plan_roster（記稽核，
-// 之後展開、篩選、排序都不再發請求）；測驗作答打開才載 plan_quiz；團隊分頁打開才載 team_list（#566，記稽核）；
+// 之後展開、篩選、排序都不再發請求）；團隊分頁打開才載 team_list（#566，記稽核）；
 // 隊伍頁（#/plans/teams/<id>）只打 team_detail，異動歷程、跨階段對應點開才載。
 // 全部走 api.ts 的 60 秒快取；選的計畫、名單條件放在 App 那一層（ui），切到計畫設定或別區再回來不會不見。
 // 名單篩選、排序、從總覽點進名單的條件都是伺服器同一份規則（plans.ts → _shared/progress/plan-report.mjs）。
@@ -11,7 +12,6 @@ import {
   ChevronRight,
   CircleCheck,
   Download,
-  ExternalLink,
   FilterX,
   HeartHandshake,
   Plus,
@@ -57,7 +57,6 @@ import {
   type DrillKey,
   type PlanMeta,
   type PlanOptions,
-  type PlanQuiz,
   type PlanRoster,
   type PlanSummary,
   type RosterFilters,
@@ -120,7 +119,6 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
   const planParams = planId && !onTeam ? { global_plan_id: planId } : null;
   const summary = useAdminData<PlanSummary>(api, "plan_summary", planParams, refresh);
   const roster = useAdminData<PlanRoster>(api, "plan_roster", route.tab === "roster" ? planParams : null, refresh);
-  const quiz = useAdminData<PlanQuiz>(api, "plan_quiz", route.tab === "quiz" ? planParams : null, refresh);
   const teams = useAdminData<TeamListData>(api, "team_list", route.tab === "teams" ? planParams : null, refresh);
 
   // 換了計畫：名單的展開、顯示筆數重來（條件保留）
@@ -138,7 +136,7 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
   }, [api, summaryInconsistent, rosterInconsistent]);
 
   const reload = () => {
-    api.invalidate(["plan_options", "plan_summary", "plan_roster", "plan_quiz", "team_list"]);
+    api.invalidate(["plan_options", "plan_summary", "plan_roster", "team_list"]);
     setRefresh((value) => value + 1);
   };
 
@@ -197,7 +195,7 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
       {planId && summary.loading && !summary.data && <Spinner label="載入計畫總覽…" />}
       {summary.data && (
         <>
-          <StatusBar summary={summary.data} loading={summary.loading || roster.loading || quiz.loading || teams.loading} onReload={reload} />
+          <StatusBar summary={summary.data} loading={summary.loading || roster.loading || teams.loading} onReload={reload} />
           <Consistency meta={summary.data.meta} />
           {route.tab === "overview" && <Overview summary={summary.data} ui={ui} setUi={setUi} onDrill={drill} />}
           {route.tab === "roster" && (
@@ -216,7 +214,6 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
           {route.tab === "teams" && (
             <Teams summary={summary.data} capabilities={capabilities} onDrill={drill} teams={teams} ui={ui} setUi={setUi} onReload={reload} />
           )}
-          {route.tab === "quiz" && <Quiz quiz={quiz} capabilities={capabilities} onReload={reload} />}
         </>
       )}
     </div>
@@ -753,118 +750,6 @@ function Teams({ summary, capabilities, onDrill, teams, ui, setUi, onReload }: {
         onReload={onReload}
         legacyLink={capabilities.includes("operations.manage")}
       />
-    </div>
-  );
-}
-
-// ── 測驗作答 ─────────────────────────────────────────────────────────────
-const shortDate = (value: string) => {
-  const [, m, d] = String(value || "").split("-");
-  return m && d ? `${Number(m)}/${Number(d)}` : value;
-};
-
-function Quiz({ quiz, capabilities, onReload }: { quiz: Loaded<PlanQuiz>; capabilities: readonly string[]; onReload: () => void }) {
-  if (quiz.error !== null) {
-    return <ErrorNotice error={quiz.error} action={<button type="button" className="adm-button" onClick={onReload}>重試</button>} />;
-  }
-  if (!quiz.data) return <Spinner label="載入測驗作答…" />;
-  const { daily, exam, lightning, enrolled } = quiz.data;
-  const showDaily = daily.configured && daily.enabled;
-  const showExam = exam.papers.length > 0 && exam.enabled;
-  const notes: string[] = [];
-  if (daily.configured && !daily.enabled) notes.push("每日小測驗：功能開放設定目前關閉，會友看不到。");
-  if (exam.papers.length > 0 && !exam.enabled) notes.push("大測驗：功能開放設定目前關閉，會友看不到。");
-  const nothing = !daily.configured && exam.papers.length === 0 && !lightning;
-  const days = daily.days.slice(-14);
-  const weeks = lightning?.weeks.slice(-8) || [];
-
-  return (
-    <div className="adm-plan-quiz">
-      {nothing && <p className="adm-muted adm-empty">這一期沒有設定任何測驗，期間也沒有雲柱題目。</p>}
-      <div className="adm-grid">
-        {showDaily && (
-          <section className="adm-card">
-            <header className="adm-card__header"><h3>每日小測驗作答率</h3></header>
-            <div className="adm-card__body">
-              <p className="adm-muted adm-small">近 {days.length} 次發布・母體＝那天發給的小組裡的報名者。交過至少一次：{daily.participants} 人（報名者 {enrolled} 人的 {pct(daily.participants, enrolled)}%）。</p>
-              {days.length === 0
-                ? <p className="adm-muted">還沒有發布過。</p>
-                : (
-                  <>
-                    <svg className="adm-columns" viewBox={`0 0 ${days.length * 10} 100`} preserveAspectRatio="none" role="img"
-                      aria-label={days.map((day) => `${shortDate(day.date)} ${pct(day.submitted, day.eligible)}%`).join("、")}>
-                      {days.map((day, index) => {
-                        const height = pct(day.submitted, day.eligible);
-                        return <rect key={day.date} className="adm-columns__bar" x={index * 10 + 1.5} y={100 - height} width="7" height={height} />;
-                      })}
-                    </svg>
-                    <div className="adm-columns__labels" aria-hidden="true">
-                      {days.map((day, index) => <span key={day.date}>{index % 2 === 0 || days.length <= 7 ? shortDate(day.date) : ""}</span>)}
-                    </div>
-                    <ul className="adm-plain-list adm-small">
-                      {days.slice(-3).reverse().map((day) => (
-                        <li key={day.date}>{shortDate(day.date)}：{day.submitted}／{day.eligible} 人交卷（{pct(day.submitted, day.eligible)}%）</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-            </div>
-          </section>
-        )}
-
-        {showExam && exam.papers.map((paper) => (
-          <section key={paper.id} className="adm-card">
-            <header className="adm-card__header"><h3>大測驗・{text(paper.title, "未命名試卷")}</h3></header>
-            <div className="adm-card__body">
-              <p className="adm-muted adm-small">
-                {paper.open_at ? `${formatDateTime(paper.open_at)} 開放` : "還沒設定開放時間"}
-                {paper.close_at ? `・${formatDateTime(paper.close_at)} 截止` : ""}・只算正式作答、不含測試帳號
-              </p>
-              <div className="adm-tiles">
-                <div className="adm-tile adm-tile--static"><span>開始作答</span><strong>{paper.started}</strong><small>其中報名者 {paper.enrolled_takers} 人</small></div>
-                <div className="adm-tile adm-tile--static"><span>已交卷</span><strong>{paper.submitted}</strong></div>
-                <div className="adm-tile adm-tile--static"><span>簡答待批改</span><strong>{paper.pending}</strong></div>
-                <div className="adm-tile adm-tile--static"><span>平均（已批改）</span><strong>{paper.average ?? "—"}</strong></div>
-              </div>
-            </div>
-          </section>
-        ))}
-
-        {lightning && (
-          <section className="adm-card">
-            <header className="adm-card__header"><h3>雲柱測驗（本期期間）</h3></header>
-            <div className="adm-card__body">
-              <p className="adm-muted adm-small">
-                雲柱是全教會每週活動，題目按日期出、不屬於任何計畫。這裡只算 {formatDate(lightning.from)}–{formatDate(lightning.to)} 出的 {lightning.questions} 題、這期報名者的參加情況。
-              </p>
-              <div className="adm-tiles">
-                <div className="adm-tile adm-tile--static">
-                  <span>報名者參加過至少 1 題</span><strong>{lightning.participants}</strong><small>報名者 {enrolled} 人的 {pct(lightning.participants, enrolled)}%</small>
-                </div>
-              </div>
-              {weeks.length > 0 && <p className="adm-muted adm-small">每週參加人數；長條滿格是報名者 {enrolled} 人。</p>}
-              {weeks.length > 0 && (
-                <ul className="adm-plain-list adm-weeks">
-                  {weeks.map((week) => (
-                    <li key={week.week_start}>
-                      <span className="adm-weeks__label">{shortDate(week.week_start)} 那週</span>
-                      <Bar value={week.participants} max={enrolled} />
-                      <span className="adm-num">{week.participants} 人／{week.questions} 題</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {capabilities.includes("content.manage") && (
-                <a className="adm-link" href={formatRoute({ view: "legacy", area: "content", section: "lightning-quiz" })}>
-                  前三名公布與兌換券在「內容 → 雲柱測驗」<ExternalLink className="adm-icon adm-icon--small" aria-hidden="true" />
-                </a>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-      {notes.map((note) => <p key={note} className="adm-muted adm-small">{note}</p>)}
-      <p className="adm-muted adm-small">打開這個分頁才調閱；這期沒設定的測驗不顯示。出題、審題在「內容」，這裡只看作答。</p>
     </div>
   );
 }

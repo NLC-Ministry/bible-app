@@ -92,10 +92,22 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute("#/stats/usage/extra")).toEqual({ view: "not_found" });
   });
 
-  it("parses the plan area: four native tabs, an optional plan, and the copied settings tab (#565)", () => {
+  it("moves 測驗作答 to the 報表 area, keeping the plan; old plan-area bookmarks follow (#581)", () => {
+    const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
+    const route = parseRoute(`#/stats/quiz?plan=${PLAN.toUpperCase()}`);
+    expect(route).toEqual({ view: "stats", tab: "quiz", planId: PLAN });
+    expect(formatRoute(route)).toBe(`#/stats/quiz?plan=${PLAN}`);
+    expect(formatRoute({ view: "stats", tab: "quiz", planId: null })).toBe("#/stats/quiz");
+    expect(areaOf(route)).toBe("stats");
+    expect(parseRoute(`#/plans/quiz?plan=${PLAN}`)).toEqual(route);
+    expect(parseRoute("#/plans/quiz")).toEqual({ view: "stats", tab: "quiz", planId: null });
+    expect(parseRoute("#/plans/quiz/x")).toEqual({ view: "not_found" });
+  });
+
+  it("parses the plan area: three native tabs, an optional plan, and the copied settings tab (#565)", () => {
     const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
     expect(parseRoute("#/plans")).toEqual({ view: "plans", tab: "overview", planId: null });
-    for (const tab of ["roster", "teams", "quiz"]) {
+    for (const tab of ["roster", "teams"]) {
       const route = parseRoute(`#/plans/${tab}?plan=${PLAN.toUpperCase()}`);
       expect(route).toEqual({ view: "plans", tab, planId: PLAN });
       expect(formatRoute(route)).toBe(`#/plans/${tab}?plan=${PLAN}`);
