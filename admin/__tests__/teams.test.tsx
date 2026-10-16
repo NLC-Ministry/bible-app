@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // 後台隊伍除錯（#566）：請求預算（團隊分頁 1 個 team_list、隊伍頁只有 team_detail、歷程與跨階段點開才載）、
-// 篩選不發請求、卡住「已滿」的隊被標紅、搜尋找得到隊伍、個人頁的團隊異動連到隊伍頁、路由。
+// 篩選不發請求、卡住「已滿」的隊被標紅、搜尋找得到隊伍、個人頁的團隊異動連到隊伍頁、路由；
+// 修正動作（#571）：要 teams.write、再確認一次才送、已結束的階段不給按、隊長只剩自己＝解散、加人被擋寫出是哪一隊。
 // 回應用伺服器同一份規則（_shared/progress/team-report.mjs）產生。
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AdminApp } from "../src/App.tsx";
-import { createAdminApi } from "../src/api.ts";
+import { AdminApiError, createAdminApi, describeAdminError } from "../src/api.ts";
 import type { AdminAuth } from "../src/auth.ts";
 import { describeItem } from "../src/items.ts";
 import { formatRoute, parseRoute } from "../src/route.ts";
@@ -21,6 +22,8 @@ const PREV_PLAN = "33333333-3333-4333-8333-333333333333";
 const TEAM_OK = "55555555-5555-4555-8555-555555555555";
 const TEAM_STUCK = "66666666-6666-4666-8666-666666666666";
 const TEAM_PREV = "77777777-7777-4777-8777-777777777777";
+const TEAM_SOLO = "88888888-8888-4888-8888-888888888888";
+const TEAM_ENDED = "99999999-9999-4999-8999-999999999999";
 const TODAY = "2026-11-11";
 const PLAN_ROW = {
   id: PLAN, name: "第2階段｜約翰福音", plan_kind: "church_campaign_stage", rules: { presetKey: "church_stage_02" }, is_hidden: false,
@@ -50,7 +53,15 @@ const OK = teamRow(TEAM_OK, "晨光隊", "forming", [member("u1", "甲", "captai
 const STUCK = teamRow(TEAM_STUCK, "南風隊", "ready", [member("u3", "丙", "captain", ["carry_reading_teams_to_stage"]), member("u4", "丁")], { carried_from_team_id: TEAM_PREV });
 
 const TEAM_LIST = buildTeamList({ resolved: resolved(), data: { today: TODAY, teams: [OK, STUCK], people: PEOPLE } });
-const detailOf = (row: typeof OK) => buildTeamDetail({ resolved: resolved(), data: { today: TODAY, team: row, people: PEOPLE, next_stages: [] } });
+const SOLO = teamRow(TEAM_SOLO, "戊的個人隊", "forming", [member("u5", "戊", "captain", ["create_reading_team"])]);
+const detailOf = (row: typeof OK, plan = PLAN_ROW) => buildTeamDetail({ resolved: resolvePlanForReport(plan), data: { today: TODAY, team: row, people: PEOPLE, next_stages: [] } });
+const ENDED_PLAN = { ...PLAN_ROW, end_date: "2026-11-05" };
+const DETAILS: Record<string, () => unknown> = {
+  [TEAM_OK]: () => detailOf(OK),
+  [TEAM_STUCK]: () => detailOf(STUCK),
+  [TEAM_SOLO]: () => detailOf(SOLO),
+  [TEAM_ENDED]: () => detailOf({ ...STUCK, id: TEAM_ENDED }, ENDED_PLAN)
+};
 const HISTORY = buildTeamHistory({
   records_since: "2026-09-28T11:54:07Z",
   member_events: [{ id: 1, at: "2026-11-02T00:00:00Z", event_type: "insert", user_id: "u4", user_name: "丁", member_role: "member", txid: 8, functions: [], call_context: "SQL statement" }],
@@ -96,13 +107,15 @@ async function go(hash: string) {
 
 const CAPS = ["console.access", "support.read", "plans.read", "operations.manage"];
 
-async function mount(initialHash: string, caps = CAPS) {
+type Responder = (params: any) => unknown;
+async function mount(initialHash: string, caps = CAPS, responses: Record<string, Responder> = {}) {
   window.location.hash = initialHash;
   const requests: { action: string; params: any }[] = [];
   const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
     const { action, params } = JSON.parse(String(init.body));
     requests.push({ action, params });
     let data: unknown = null;
+    if (responses[action]) return new Response(JSON.stringify({ data: responses[action](params), request_id: "srv" }), { status: 200 });
     switch (action) {
       case "bootstrap":
         data = { me: { id: "admin-1", name: "王管理", email: null, role_code: "admin", role_label: "系統管理員" }, feature_settings: [], org: [], capabilities: caps };
@@ -112,7 +125,7 @@ async function mount(initialHash: string, caps = CAPS) {
         break;
       case "plan_summary": data = SUMMARY; break;
       case "team_list": data = TEAM_LIST; break;
-      case "team_detail": data = detailOf(params.team_id === TEAM_STUCK ? STUCK : OK); break;
+      case "team_detail": data = (DETAILS[params.team_id] || DETAILS[TEAM_OK])(); break;
       case "team_history": data = HISTORY; break;
       case "team_lineage": data = LINEAGE; break;
       case "directory_list": data = { items: [], total: 0, next_cursor: null, plan_id: null, plans: [], all_count: 0 }; break;
@@ -289,5 +302,111 @@ describe("route and list rules", () => {
     expect(teamRowNote(rows[2])).toBe("2 項異常");
     expect(teamRowNote(rows[1])).toBe("還缺 1 人");
     expect(teamRowNote(rows[0])).toBe("已滿");
+  });
+});
+
+describe("team fixes (#571)", () => {
+  const FIX_CAPS = [...CAPS, "teams.write"];
+  const setInput = async (input: HTMLInputElement, value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const confirmBox = (el: Element) => el.querySelector<HTMLElement>(".adm-team-fix")!;
+
+  it("without teams.write the team page stays read-only", async () => {
+    const { el } = await mount(`#/plans/teams/${TEAM_STUCK}?plan=${PLAN}`);
+    expect(button(el, "重算狀態")).toBeUndefined();
+    expect(button(el, "移出")).toBeUndefined();
+    expect(button(el, "加人")).toBeUndefined();
+  });
+
+  it("重算狀態 shows on the failed status check, asks once more, sends the reason and reloads the team", async () => {
+    const { requests, el } = await mount(`#/plans/teams/${TEAM_STUCK}?plan=${PLAN}`, FIX_CAPS, {
+      team_recompute_status: () => ({ team_id: TEAM_STUCK, member_count: 2, status_before: "ready", status: "forming", changed: true })
+    });
+    await click(el.querySelector(".adm-team-check--bad")!.querySelector("button"));
+    expect(actions(requests)).toEqual(["bootstrap", "team_detail"]);
+    expect(confirmBox(el).textContent).toContain("把狀態改成「招募中」");
+    await setInput(confirmBox(el).querySelector("input")!, " 舊資料 ");
+    await click([...confirmBox(el).querySelectorAll("button")].find((b) => b.textContent === "重算狀態"));
+    expect(actions(requests).slice(2)).toEqual(["team_recompute_status", "team_detail"]);
+    expect(requests[2].params).toEqual({ team_id: TEAM_STUCK, reason: "舊資料" });
+    expect(el.querySelector(".adm-team-fix__done")?.textContent).toBe("狀態已從「已滿」改成「招募中」。");
+  });
+
+  it("移出: members get a button, the captain with others does not; cancel sends nothing", async () => {
+    const { requests, el } = await mount(`#/plans/teams/${TEAM_OK}?plan=${PLAN}`, FIX_CAPS, {
+      team_remove_member: (params) => ({ team_id: TEAM_OK, global_plan_id: PLAN, removed_user_id: params.user_id, dissolved: false, member_count: 1, status: "forming" })
+    });
+    const rows = [...el.querySelectorAll(".adm-team-member")];
+    expect(rows[0].textContent).toContain("隊上還有其他人，不能移出隊長");
+    expect(rows[0].querySelector("button")).toBeNull();
+    await click(rows[1].querySelector("button"));
+    expect(confirmBox(el).textContent).toContain("把「乙」移出「晨光隊」（剩 1／3 人）");
+    await click(button(confirmBox(el), "取消"));
+    expect(el.querySelector(".adm-team-fix")).toBeNull();
+    expect(actions(requests)).toEqual(["bootstrap", "team_detail"]);
+
+    await click(el.querySelectorAll(".adm-team-member")[1].querySelector("button"));
+    await click([...confirmBox(el).querySelectorAll("button")].find((b) => b.textContent === "移出"));
+    expect(actions(requests).slice(2)).toEqual(["team_remove_member", "team_detail"]);
+    expect(requests[2].params).toEqual({ team_id: TEAM_OK, user_id: "u2" });
+    expect(el.querySelector(".adm-team-fix__done")?.textContent).toBe("已把「乙」移出這隊。");
+  });
+
+  it("the captain alone can be removed, which dissolves the team and goes back to the list", async () => {
+    const { requests, el } = await mount(`#/plans/teams/${TEAM_SOLO}?plan=${PLAN}`, FIX_CAPS, {
+      team_remove_member: () => ({ team_id: TEAM_SOLO, global_plan_id: PLAN, removed_user_id: "u5", dissolved: true, member_count: 0, status: null })
+    });
+    await click(button(el, "移出（解散）"));
+    expect(confirmBox(el).textContent).toContain("移出＝解散「戊的個人隊」");
+    await click(button(confirmBox(el), "移出並解散"));
+    expect(requests.find((r) => r.action === "team_remove_member")!.params).toEqual({ team_id: TEAM_SOLO, user_id: "u5" });
+    expect(window.location.hash).toBe(`#/plans/teams?plan=${PLAN}`);
+  });
+
+  it("加人: search, pick, confirm; someone already in another team is blocked with that team's name and link", async () => {
+    const { requests, el } = await mount(`#/plans/teams/${TEAM_OK}?plan=${PLAN}`, FIX_CAPS, {
+      user_search: () => [
+        { id: "u1", name: "甲", email_masked: null, great_region: "北區", pastoral_zone: "北一", small_group: "A組", is_active: true },
+        { id: "u3", name: "丙", email_masked: "c***@x.com", great_region: "北區", pastoral_zone: "北一", small_group: "A組", is_active: true }
+      ],
+      team_add_member: () => ({ added: false, blocked: "already_in_other_team", other_team: { id: TEAM_STUCK, name: "南風隊" } })
+    });
+    await click(button(el, "加人"));
+    await setInput(el.querySelector<HTMLInputElement>(".adm-team-add input")!, "北");
+    await click(button(el.querySelector(".adm-team-add")!, "搜尋"));
+    expect(requests.find((r) => r.action === "user_search")!.params).toEqual({ q: "北" });
+    const hits = [...el.querySelectorAll(".adm-team-add__hit")];
+    expect(hits[0].textContent).toContain("已在這隊");
+    expect(hits[0].querySelector("button")!.disabled).toBe(true);
+    await click(hits[1].querySelector("button"));
+    expect(confirmBox(el).textContent).toContain("把「丙」以隊員身分加進「晨光隊」（3／3 人）");
+    await click(button(confirmBox(el), "加進這隊"));
+    expect(requests.find((r) => r.action === "team_add_member")!.params).toEqual({ team_id: TEAM_OK, user_id: "u3" });
+    const notice = el.querySelector(".adm-team-fix__done")!;
+    expect(notice.textContent).toContain("「丙」已在同計畫同組別的「南風隊」，沒有加入");
+    expect(notice.querySelector("a")!.getAttribute("href")).toBe(`#/plans/teams/${TEAM_STUCK}?plan=${PLAN}`);
+    // 被擋下沒有改到資料：不重載隊伍頁
+    expect(actions(requests).filter((action) => action === "team_detail")).toHaveLength(1);
+  });
+
+  it("server refusals read in plain words", () => {
+    const say = (code: string) => describeAdminError(new AdminApiError(400, code, "req"));
+    expect(say("team_stage_ended")).toContain("階段已經結束");
+    expect(say("team_captain_has_members")).toBe("隊上還有其他人，不能移出隊長。");
+    expect(say("user_not_enrolled")).toContain("還沒報名這個計畫");
+    expect(say("reading_team_full")).toBe("這隊已經滿了，不能再加人。");
+    expect(say("user_inactive")).toContain("帳號已停用");
+  });
+
+  it("an ended stage shows why nothing can be changed and offers no buttons", async () => {
+    const { el } = await mount(`#/plans/teams/${TEAM_ENDED}?plan=${PLAN}`, FIX_CAPS);
+    expect(el.textContent).toContain("階段已結束，名單不能修改");
+    expect(button(el, "重算狀態")).toBeUndefined();
+    expect(button(el, "移出")).toBeUndefined();
+    expect(button(el, "加人")).toBeUndefined();
   });
 });

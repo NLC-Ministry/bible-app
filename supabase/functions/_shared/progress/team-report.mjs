@@ -5,7 +5,7 @@
 //   · 隊伍進度、邀請碼看不看得到：team-progress.mjs（App 團隊視窗用的 getTeamOverallPlanProgress、isTeamFull）。
 //   · 階段結束不能改、帶隊按鈕：campaign-stage-kinds.mjs（App 的 isCampaignStageEnded）＋ SQL 的帶隊條件
 //     （previous_campaign_stage_plan_id、get_reading_team_carryover_offer 的判定）。
-// 第一階段只讀；檢查的「修法」指向 #571 的修正動作。
+// 檢查的「修法」指向隊伍頁的修正動作（#571：移出成員、加人、重算狀態）；沒有按鈕可修的（轉移隊長）請工程協助。
 import { isCampaignStageEnded, isCampaignStageKind } from "./campaign-stage-kinds.mjs";
 import { preparePlanReport } from "./plan-report.mjs";
 import { getTeamOverallPlanProgress, isTeamFull } from "./team-progress.mjs";
@@ -13,7 +13,7 @@ import { getTeamOverallPlanProgress, isTeamFull } from "./team-progress.mjs";
 export const TEAM_STATUS_LABEL = Object.freeze({ forming: "招募中", ready: "已滿" });
 
 const MEMBER_ROLE_LABEL = { captain: "隊長", member: "隊員" };
-const FIX_LATER = "後台的修正動作在下一階段開放（#571）；在那之前請工程協助。";
+const NEEDS_ENGINEER = "後台沒有這個修正動作，請工程協助。";
 
 const statusLabel = (status) => TEAM_STATUS_LABEL[status] || String(status || "未知");
 const nameOf = (value, fallback = "（未填姓名）") => (String(value || "").trim() || fallback);
@@ -34,6 +34,7 @@ export function carryReasonText(reason) {
 export function joinMethod(functions) {
   if (functions === null || functions === undefined) return { key: "unknown", label: "不明（異動紀錄開始之前加入）" };
   const list = arr(functions).map(String);
+  if (list.includes("admin_api_team_add_member")) return { key: "admin", label: "後台加入" };
   if (list.includes("carry_reading_teams_to_stage")) return { key: "carry", label: "帶隊帶入" };
   if (list.includes("create_reading_team")) return { key: "create", label: "建隊" };
   if (list.includes("join_reading_team_by_code")) return { key: "code", label: "邀請碼" };
@@ -82,12 +83,12 @@ export function teamChecks({ team, people, plan }) {
     expected === "forming"
       ? "會友 App 只看人數，仍會露出邀請碼；但舊版 App 與照搬的組隊狀況會把這隊當成已滿。下一位用邀請碼加入時會自動改回招募中。"
       : "人數已滿，邀請碼加入本來就會被擋；只是狀態沒更新，團隊統計可能仍當成未完成。",
-    `重算狀態。${FIX_LATER}`);
+    "在隊伍頁按「重算狀態」。");
 
   add("capacity", "人數沒有超過組別上限",
     count > division ? [`${count} 人，超過 ${division} 人組的上限 ${count - division} 人`] : [],
     "團隊排行、平均進度會失真；App 的團隊統計固定以組別人數計算。",
-    `移出多出的隊員。${FIX_LATER}`);
+    "在成員列表按「移出」，移出多出的隊員。");
 
   const captains = members.filter((member) => member.member_role === "captain");
   const captainMember = members.find((member) => member.user_id === team.captain_id);
@@ -100,7 +101,7 @@ export function teamChecks({ team, people, plan }) {
   }
   add("captain", "隊長在成員名單裡且只有一位", [...new Set(captainProblems)],
     "隊長才看得到的按鈕（改隊名、移出隊員、帶隊進下一階段）會不見或出現在錯的人身上；帶隊要隊長本人在名單裡、角色是隊長。",
-    `轉移或補回隊長。${FIX_LATER}`);
+    `轉移或補回隊長。${NEEDS_ENGINEER}`);
 
   const enrollProblems = [];
   for (const member of members) {
@@ -110,7 +111,7 @@ export function teamChecks({ team, people, plan }) {
   }
   add("enrolled", "每位成員都有報名這個計畫", enrollProblems,
     "沒報名的人不會出現在計畫名單與總覽，團隊平均進度會把他算成 0。",
-    `請那位會友到計畫頁按「加入」，或把他移出隊伍。${FIX_LATER}`);
+    "請那位會友到計畫頁按「加入」，或在成員列表按「移出」。");
 
   const duplicateProblems = [];
   for (const member of members) {
@@ -124,7 +125,7 @@ export function teamChecks({ team, people, plan }) {
   }
   add("duplicate", "沒有人在同計畫同組別的兩支隊", duplicateProblems,
     "同一個人同組別在兩隊，團隊排行會重複計算，App 只會顯示其中一隊。",
-    `把他從其中一隊移出。${FIX_LATER}`);
+    "到其中一隊的成員列表按「移出」。");
 
   const ended = plan.stage && plan.ended;
   const afterEnd = Number(team.events_after_end) || 0;
@@ -295,14 +296,23 @@ function engineering(event) {
   };
 }
 
+// 後台修正動作（#571）：誰按的記在稽核紀錄（事件表只有呼叫堆疊）
+const ADMIN_ACTOR = "管理員在後台修正（誰按的見稽核紀錄）";
+const ADMIN_FIX_FUNCTIONS = new Set(["admin_api_team_remove_member", "admin_api_team_add_member", "admin_api_team_recompute_status"]);
+
 function describeMemberEvent(event, teamDeleteTxids) {
   const who = nameOf(event.user_name);
   const fns = arr(event.functions).map(String);
   const role = event.member_role === "captain" ? "（隊長）" : "";
   if (event.event_type === "insert") {
     const method = joinMethod(fns);
-    const actor = { code: "本人用邀請碼", create: "本人建立隊伍", carry: "隊長帶隊進下一階段", manual: "直接改資料庫", other: `函式 ${fns.join("、")}` }[method.key];
+    const actor = { code: "本人用邀請碼", create: "本人建立隊伍", carry: "隊長帶隊進下一階段", admin: "管理員在後台加入（誰加的見稽核紀錄）", manual: "直接改資料庫", other: `函式 ${fns.join("、")}` }[method.key];
     return { text: `${who}${role} 加入（${method.label}）`, actor };
+  }
+  if (fns.includes("admin_api_team_remove_member")) {
+    return teamDeleteTxids.has(String(event.txid))
+      ? { text: `${who}${role} 跟著隊伍解散移出`, actor: ADMIN_ACTOR }
+      : { text: `${who}${role} 被移出`, actor: ADMIN_ACTOR };
   }
   if (fns.includes("disband_reading_team") || fns.includes("leave_reading_team") || teamDeleteTxids.has(String(event.txid))) {
     return { text: `${who}${role} 跟著隊伍解散移出`, actor: "隊長解散隊伍（或刪除整隊）" };
@@ -321,6 +331,7 @@ function describeTeamEvent(event) {
     };
   }
   if (event.event_type === "delete") {
+    if (fns.includes("admin_api_team_remove_member")) return { text: "隊伍被解散（移出唯一的隊長）", actor: ADMIN_ACTOR };
     return { text: "隊伍被刪除", actor: fns.includes("disband_reading_team") || fns.includes("leave_reading_team") ? "隊長解散隊伍" : fns.length === 0 ? "直接改資料庫" : `函式 ${fns.join("、")}` };
   }
   const changes = [];
@@ -329,7 +340,8 @@ function describeTeamEvent(event) {
   if (event.division_old !== event.division_new) changes.push(`組別從 ${event.division_old} 人改成 ${event.division_new} 人`);
   if (event.plan_changed) changes.push("改到別的計畫");
   if (fns.includes("transfer_reading_team_captain")) changes.push(`隊長轉給 ${nameOf(event.captain_name)}`);
-  const actor = fns.includes("rename_reading_team") ? "隊長或管理員改名"
+  const actor = fns.some((fn) => ADMIN_FIX_FUNCTIONS.has(fn)) ? ADMIN_ACTOR
+    : fns.includes("rename_reading_team") ? "隊長或管理員改名"
     : fns.includes("transfer_reading_team_captain") ? "隊長或管理員轉移隊長"
       : fns.includes("join_reading_team_by_code") ? "有人用邀請碼加入時自動更新"
         : fns.includes("remove_reading_team_member") ? "移出隊員時自動更新"
