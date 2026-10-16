@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 const R = "44444444-4444-4444-8444-444444444444";
 const U = "33333333-3333-4333-8333-333333333333";
 
-const nlcData = readFileSync(new URL("../supabase/functions/nlc-data/index.ts", import.meta.url), "utf8");
+// Windows 取出的檔案是 CRLF：先換成 LF，跨行比對才不看作業系統
+const nlcData = readFileSync(new URL("../supabase/functions/nlc-data/index.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const planSrc = readFileSync(new URL("../js/modules/plan.js", import.meta.url), "utf8");
 
 describe("nlc-data send_care_reminder", () => {
