@@ -10,13 +10,14 @@
 // 區塊 id 就是舊管理分頁（js/modules/admin.js ADMIN_SECTIONS）的 id；計畫管理（plans）是原本讀經計畫分頁
 // 側欄的卡片（#551 起在 admin-legacy/admin-view.html），iframe 把它搬進一個區塊面板（LEGACY_HOSTED_CARDS）。
 // #565 起它是「計畫」區的「計畫設定」分頁；加入計畫狀況、組員總覽、計畫統計由計畫區的總覽／名單取代，已移除。
-// #568：讀經使用率、報名註冊統計改成「報表」區（views/StatsArea.tsx），已移除。同一份清單另外兩處：
+// #568：讀經使用率、報名註冊統計改成「報表」區（views/StatsArea.tsx），已移除。
+// #569：選單拿掉「營運」，組隊狀況（隊伍與成員名單的 CSV 匯出還在這頁）移到「計畫」區最後一個分頁。同一份清單另外兩處：
 // admin-legacy/sections.mjs（iframe）、admin-api policy.ts 的 LEGACY_EXPORT_SECTIONS；
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
 
 import type { ResolvedTheme } from "./theme.ts";
 
-export type LegacyArea = "plans" | "operations" | "content" | "system";
+export type LegacyArea = "plans" | "content" | "system";
 
 export type LegacySection = {
   id: string;
@@ -32,12 +33,12 @@ export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "exam", area: "content", label: "大測驗", capability: "content.manage" },
   { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" },
   { id: "plans", area: "plans", label: "計畫設定", capability: "operations.manage" },
-  // 隊伍清單與除錯搬進計畫區之前（#566）先留在營運區
-  { id: "teams", area: "operations", label: "組隊狀況", capability: "operations.manage" },
+  // 計畫區最後一個分頁（#569）；隊伍清單與除錯是計畫區的「團隊」（#566），這頁留著是為了隊伍與成員名單的 CSV 匯出
+  { id: "teams", area: "plans", label: "組隊狀況", capability: "operations.manage" },
   { id: "settings", area: "system", label: "功能開放設定", capability: "settings.manage" }
 ];
 
-export const LEGACY_AREAS: readonly LegacyArea[] = ["plans", "operations", "content", "system"];
+export const LEGACY_AREAS: readonly LegacyArea[] = ["plans", "content", "system"];
 
 export function isLegacyArea(value: unknown): value is LegacyArea {
   return typeof value === "string" && (LEGACY_AREAS as readonly string[]).includes(value);

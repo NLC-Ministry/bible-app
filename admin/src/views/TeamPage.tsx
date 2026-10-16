@@ -103,8 +103,8 @@ export function TeamList({ list, planId, filter, query, onFilter, onQuery, onRel
             </ul>
           )}
         <p className="adm-muted adm-small">
-          點隊伍看除錯檢查、成員與異動歷程。隊伍名單與成員名單的 CSV 匯出仍在
-          {legacyLink ? <> <a className="adm-link" href="#/operations/teams">營運 → 組隊狀況</a>。</> : "營運 → 組隊狀況（要營運權限）。"}
+          點隊伍看除錯檢查、成員與異動歷程。隊伍名單與成員名單的 CSV 匯出在
+          {legacyLink ? <>上面的「<a className="adm-link" href={formatRoute({ view: "legacy", area: "plans", section: "teams" })}>組隊狀況</a>」分頁。</> : "「組隊狀況」分頁（要計畫設定權限）。"}
         </p>
       </div>
     </section>

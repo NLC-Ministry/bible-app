@@ -622,6 +622,16 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-tile > strong { font-size: 22px; font-weight: var(--type-weight-strong); font-variant-numeric: tabular-nums; }
 .adm-tile > small { color: var(--text-muted); font-size: 12px; }
 
+/* 首頁（#569）：每一格是連結，點了才進那一頁；有待辦的格子左邊加一條提醒色 */
+.adm-home { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.adm-home__plan { flex-wrap: wrap; }
+.adm-home__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 10px; }
+.adm-home__tile { text-decoration: none; padding: 12px 14px; gap: 4px; }
+.adm-home__tile > span { display: inline-flex; align-items: center; gap: 6px; }
+.adm-home__tile--todo { border-left: 3px solid var(--color-warning); }
+.adm-home__changes { display: flex; flex-direction: column; gap: 6px; }
+.adm-home__changes > li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+
 /* 報表區（#568）：Chart.js 的圖要一個固定高度的容器（maintainAspectRatio: false），canvas 的尺寸由 Chart.js 用 CSSOM 設定 */
 .adm-stats-area, .adm-stats { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .adm-stats__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

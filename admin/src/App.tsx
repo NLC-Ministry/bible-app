@@ -1,13 +1,14 @@
 // 後台外殼（#555）：登入 → bootstrap（開後台只打這 1 個 admin-api 請求）→ 依能力清單顯示左側導覽。
 // 相依（登入、admin-api、window）全部從參數注入，測試用假的跑真的元件。
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, BookOpen, BookOpenCheck, Headset, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, BookOpenCheck, Headset, House, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
 import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
 import { startIdleWatch } from "./idle.ts";
 import { findLegacySection } from "./legacy.ts";
 import { canUse, visibleNavItems, type NavItem } from "./nav.ts";
+import { ROSTER_PAGE_SIZE, drillFilters } from "./plans.ts";
 import { areaOf, parseRoute, type AdminRoute } from "./route.ts";
 import {
   THEMES,
@@ -22,6 +23,7 @@ import {
 import type { Bootstrap } from "./types.ts";
 import { Badge, ErrorNotice, Spinner } from "./ui.tsx";
 import { AuditLog } from "./views/AuditLog.tsx";
+import { HomeArea, type HomeDrill } from "./views/HomeArea.tsx";
 import { LegacyHost } from "./views/LegacyHost.tsx";
 import { INITIAL_PEOPLE_UI, PeopleArea, type PeopleUiState } from "./views/PeopleArea.tsx";
 import { INITIAL_PLAN_UI, PlanArea, type PlanUiState } from "./views/PlanArea.tsx";
@@ -47,11 +49,11 @@ export type AdminAppProps = {
 };
 
 const NAV_ICON: Record<NavItem["icon"], LucideIcon> = {
+  home: House,
   headset: Headset,
   users: Users,
   plan: BookOpenCheck,
   chart: BarChart3,
-  activity: Activity,
   book: BookOpen,
   settings: Settings
 };
@@ -162,11 +164,21 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     saveThemePreference(safeLocalStorage(win), value);
   };
 
+  // 首頁點進去之前先把那一頁的篩選設好（#569），點進去的人數才會和首頁一樣
+  const openInboxFromHome = () => setInbox((prev) => (prev.filter === "open" ? prev : { ...prev, filter: "open" }));
+  const openPlanFromHome = (planId: string, drill: HomeDrill) => setPlanUi((prev) => {
+    if (drill === "care") return { ...prev, planId, filters: drillFilters("care"), shown: ROSTER_PAGE_SIZE, openRows: [] };
+    if (drill === "unfilled_teams") return { ...prev, planId, teamFilter: "unfilled", teamQuery: "" };
+    return { ...prev, planId };
+  });
+
   let content: React.ReactNode;
   if (route.view === "not_found") {
     content = <Message title="找不到這個頁面" body="網址可能打錯了，請從左側選單重新進入。" />;
   } else if (!canUse(capabilities, area)) {
     content = <Message title="沒有權限" body="你的帳號沒有這一區的後台權限。" />;
+  } else if (route.view === "home") {
+    content = <HomeArea api={api} capabilities={capabilities} onOpenInbox={openInboxFromHome} onOpenPlan={openPlanFromHome} />;
   } else if (route.view === "inbox") {
     content = <SupportArea api={api} route={route} capabilities={capabilities} inbox={inbox} setInbox={setInbox} doc={win.document} />;
   } else if (route.view === "people" || route.view === "user") {
@@ -262,7 +274,7 @@ function Gate({ phase, auth }: { phase: Exclude<Phase, { name: "ready" }>; auth:
   const [loginError, setLoginError] = useState(false);
   const login = () => {
     setLoginError(false);
-    auth.login("#/support").catch(() => setLoginError(true));
+    auth.login("#/").catch(() => setLoginError(true));
   };
   const loginButton = <button type="button" className="adm-button adm-button--primary" onClick={login}>重新登入</button>;
   let body: React.ReactNode;

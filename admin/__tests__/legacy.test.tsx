@@ -234,15 +234,19 @@ async function go(hash: string) {
 const CONTENT_CAPS = ["console.access", "support.read", "export", "content.manage"];
 const OPERATIONS_CAPS = ["console.access", "support.read", "export", "operations.manage"];
 
-describe("operations area", () => {
-  it("keeps only 組隊狀況: the plan area (#565) and the 報表 area (#568) replaced the rest", async () => {
-    const { el, fetchImpl } = await mount("#/operations", OPERATIONS_CAPS);
+describe("legacy tabs in the plan area", () => {
+  it("moves 組隊狀況 to the plan area's last tab; old operations bookmarks open it (#569)", async () => {
+    const { el, fetchImpl } = await mount("#/operations", [...OPERATIONS_CAPS, "plans.read"]);
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame.getAttribute("src")).toBe("/legacy");
     expect(frame.title).toBe("組隊狀況管理");
-    // 只剩一個分頁、而且就是這一頁：不顯示分頁列
-    expect([...el.querySelectorAll(".adm-legacy__tabs a")]).toEqual([]);
-    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("營運");
+    const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
+    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定", "組隊狀況"]);
+    expect(tabs[5].getAttribute("aria-current")).toBe("page");
+    expect(tabs[5].getAttribute("href")).toBe("#/plans/team-status");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
+    // 選單沒有「營運」了
+    expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("營運");
     // 照搬區只打開後台的 bootstrap，資料由 iframe 走 nlc-data
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
     // 舊書籤到報表區（沒有 stats.read 就是沒有權限，不會打開 iframe 的舊頁）
@@ -256,7 +260,7 @@ describe("operations area", () => {
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame.title).toBe("計畫設定管理");
     const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定"]);
+    expect(tabs.map((a) => a.textContent)).toEqual(["總覽", "名單", "團隊", "測驗作答", "計畫設定", "組隊狀況"]);
     expect(tabs[4].getAttribute("aria-current")).toBe("page");
     expect(tabs[1].getAttribute("href")).toBe("#/plans/roster");
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
@@ -266,28 +270,31 @@ describe("operations area", () => {
     expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("計畫設定");
   });
 
-  it("hides the settings tab without operations.manage", async () => {
+  it("hides the settings and 組隊狀況 tabs without operations.manage", async () => {
     const { el } = await mount("#/plans/settings", ["console.access", "plans.read"]);
+    expect(el.querySelector("iframe")).toBeNull();
+    expect(el.textContent).toContain("沒有權限");
+    await go("#/plans/team-status");
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.textContent).toContain("沒有權限");
   });
 
   it("shares one iframe with the content area", async () => {
-    const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "content.manage"]);
+    const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "plans.read", "content.manage"]);
     const frame = el.querySelector("iframe.adm-legacy__frame");
-    await go("#/operations/teams");
+    await go("#/plans/team-status");
     expect(el.querySelectorAll("iframe.adm-legacy__frame")).toHaveLength(1);
     expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
     expect((frame as HTMLIFrameElement).title).toBe("組隊狀況管理");
     expect([...el.querySelectorAll(".adm-legacy__tabs a")].map((a) => a.textContent)).not.toContain("大測驗");
   });
 
-  it("is hidden from the menu and blocked without operations.manage; no more \"moving\" placeholders", async () => {
+  it("is blocked without plans.read and operations.manage; no more \"moving\" placeholders", async () => {
     const { el } = await mount("#/operations/teams", ["console.access", "support.read", "content.manage"]);
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.textContent).toContain("沒有權限");
     const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
-    expect(links).toEqual(["客服", "人", "內容"]); // 有 support.read 就看得到人區（個人頁，#567）
+    expect(links).toEqual(["首頁", "人", "回報收件匣", "內容"]); // 有 support.read 就看得到人區（個人頁，#567）
     expect(el.textContent).not.toContain("搬移中");
   });
 

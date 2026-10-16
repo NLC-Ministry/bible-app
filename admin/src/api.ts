@@ -8,7 +8,7 @@
 // · 401 → onUnauthorized（重新導向 SSO）；其他錯誤丟 AdminApiError，畫面用 describeAdminError 轉成中文。
 
 export type AdminAction =
-  | "bootstrap" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii"
+  | "bootstrap" | "home_summary" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii"
   // 回報收件匣（#550）
   | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_post"
   | "report_attachment_delete" | "report_delete" | "report_export"
@@ -43,6 +43,7 @@ export class AdminApiError extends Error {
 
 export const CACHE_TTL_MS = 60_000;
 const CACHEABLE: ReadonlySet<AdminAction> = new Set<AdminAction>([
+  "home_summary", // 首頁（#569）只有數字；重新整理鈕先 invalidate
   "user_search", "user_summary", "user_section", "user_timeline",
   "report_diagnostics", // 診斷資訊是回報當下的快照，不會變
   "directory_list", "scope_overview", // 改管理範圍後 invalidate

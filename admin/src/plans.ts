@@ -213,7 +213,7 @@ export function rangesText(ranges: readonly ChapterRange[]): string {
 }
 
 /** 狀態列的「第幾天」與「今天應讀到哪」 */
-export function scheduleLine(summary: PlanSummary): { day: string; reading: string } {
+export function scheduleLine(summary: Pick<PlanSummary, "schedule" | "plan">): { day: string; reading: string } {
   const { schedule, plan } = summary;
   if (!schedule.started) return { day: `還沒開始（共 ${schedule.totalDays} 天）`, reading: plan.startDate ? `${plan.startDate.replace(/-/g, "/")} 開始` : "" };
   if (schedule.ended) return { day: `已結束（共 ${schedule.totalDays} 天）`, reading: "" };
