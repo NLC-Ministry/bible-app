@@ -96,6 +96,17 @@ async function mount(initialHash: string, { caps = CAPS, failures = {} }: MountO
       case "registration_sheet_sync":
         data = { synced: true, planName: "秋季速讀" };
         break;
+      case "plan_options":
+        data = { plans: PLANS, default_plan_id: PLAN };
+        break;
+      case "plan_quiz":
+        data = {
+          enrolled: 10,
+          daily: { enabled: true, configured: true, participants: 4, days: [{ date: "2026-10-14", eligible: 10, submitted: 4 }] },
+          exam: { enabled: true, papers: [] },
+          lightning: null
+        };
+        break;
       default:
         data = null;
     }
@@ -240,6 +251,32 @@ describe("導覽", () => {
   it("shows 報表 only with stats.read", async () => {
     const { el } = await mount("#/", { caps: CAPS.filter((cap) => cap !== "stats.read") });
     expect([...el.querySelectorAll(".adm-nav__link")].map((link) => link.textContent)).not.toContain("報表");
+  });
+
+  it("測驗作答 is the third tab and shares the chosen plan with 報名註冊 (#581)", async () => {
+    const { requests, el } = await mount("#/stats/registrations");
+    const tabs = [...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent);
+    expect(tabs).toEqual(["讀經使用率", "報名註冊", "測驗作答"]);
+    const pick = el.querySelector<HTMLSelectElement>("#adm-stats-plan")!;
+    await act(async () => {
+      pick.value = OTHER_PLAN;
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+    await go("#/stats/quiz");
+    expect(actions(requests).slice(3)).toEqual(["plan_options", "plan_quiz"]);
+    expect(requests.at(-1)!.params).toEqual({ global_plan_id: OTHER_PLAN });
+    expect(el.querySelector<HTMLSelectElement>("#adm-quiz-plan")!.value).toBe(OTHER_PLAN);
+    expect(el.textContent).toContain("每日小測驗作答率");
+    // 回到報名註冊：還是同一個計畫、快取裡有就不再打
+    await go("#/stats/registrations");
+    expect(el.querySelector<HTMLSelectElement>("#adm-stats-plan")!.value).toBe(OTHER_PLAN);
+    expect(actions(requests).slice(5)).toEqual([]);
+  });
+
+  it("hides 測驗作答 without plans.read (its numbers come from plan_quiz)", async () => {
+    const { el } = await mount("#/stats", { caps: CAPS.filter((cap) => cap !== "plans.read") });
+    expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).toEqual(["讀經使用率", "報名註冊"]);
   });
 
   it("the old 營運 pages land on the report tabs", async () => {

@@ -120,6 +120,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   // admin-api 擋下的請求（action 名稱）
   unknown: "不明的後台操作",
   bootstrap: "進入後台",
+  home_summary: "看首頁",
   user_search: "查詢使用者",
   user_summary: "查看使用者",
   user_section: "查看使用者紀錄",

@@ -39,7 +39,8 @@ async function loadPlan(args: Record<string, unknown>, rpc: Rpc) {
   return { resolved, planKey: String(resolved.plan.presetKey || args.p_global_plan_id || "") };
 }
 
-async function loadReport(args: Record<string, unknown>, rpc: Rpc) {
+// 首頁（#569）也用這一支：需要關心、還沒滿的隊、本期進度和計畫總覽同一份規則
+export async function loadReport(args: Record<string, unknown>, rpc: Rpc) {
   const loaded = await loadPlan(args, rpc);
   if (!loaded.resolved) return { outcome: loaded.outcome };
   const { resolved } = loaded;

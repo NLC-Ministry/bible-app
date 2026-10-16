@@ -141,13 +141,14 @@ async function typeInto(input: HTMLInputElement, value: string) {
 }
 
 describe("admin console request budget", () => {
-  it("opening the console makes bootstrap + one inbox page, nothing else", async () => {
+  it("opening the inbox makes bootstrap + one inbox page, nothing else (the home page is home.test.tsx)", async () => {
     const { requests, el } = await mount("#/support");
     expect(actions(requests)).toEqual(["bootstrap", "report_list"]);
     expect(el.textContent).toContain("王管理");
     expect(el.textContent).toContain("測試站");
     const nav = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
-    expect(nav[0]).toContain("客服");
+    expect(nav[0]).toContain("首頁");
+    expect(nav).toContain("回報收件匣");
   });
 
   it("opening a person makes exactly one request (checks + counts); reopening within 60 s makes none", async () => {

@@ -17,6 +17,7 @@ import { auditEventId, auditFilters, runAuditEvent, runAuditExport, runAuditList
 import { validateSearchQuery } from "./search-query.ts";
 import { runCareRemind, runPlanQuiz, runPlanRoster, runPlanRosterExport, runPlanSummary } from "./plans.ts";
 import { runTeamDetail, runTeamHistory, runTeamLineage, runTeamList, runTeamSearch } from "./teams.ts";
+import { runHomeSummary } from "./home.ts";
 import { runUserSummary } from "./people.ts";
 import { runReadingUsage, runRegistrationExport, runRegistrationSheetSync, runRegistrationStats, usageRange } from "./stats.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
@@ -30,7 +31,7 @@ export const CAPABILITIES = [
   "support.write",  // 回覆回報、改回報狀態、刪截圖／回報（#550）
   "accounts.read",  // 使用者名單、管理範圍總覽（#550）
   "accounts.write", // 改管理範圍（#550）；角色由會員中心同步，後台不改
-  "operations.manage", // 照搬的營運區塊：組隊狀況，以及計畫區的「計畫設定」（#550、#565）
+  "operations.manage", // 計畫區照搬的「計畫設定」「組隊狀況」（#550、#565；#569 起營運區拿掉，組隊狀況搬到計畫區）
   "content.manage", // 照搬的內容區塊：公告、經文注釋、小測驗、大測驗、雲柱測驗（#550）
   "settings.manage", // 照搬的功能開放設定（#550）
   "audit.read",     // 看、匯出稽核紀錄（#550）
@@ -213,6 +214,15 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     rateLimit: { bucket: "bootstrap", limit: 30, windowSeconds: 60 },
     rpc: "admin_api_bootstrap",
     buildArgs: (_params, ctx) => ({ ok: true, args: { p_actor_id: ctx.actorId } })
+  },
+  // 首頁（#569）：只有數字、不記稽核；回報、計畫、注釋、小測驗、設定變更一次拿齊（home.ts）。
+  // 進得了後台就能打，SQL 再依操作者重查是不是系統管理員（各格的能力目前也只有系統管理員有）
+  home_summary: {
+    capabilities: ["console.access"],
+    rateLimit: READ_LIMIT,
+    rpc: "admin_api_home_counts",
+    run: runHomeSummary,
+    buildArgs: (_params, ctx) => ({ ok: true, args: { ...actorArgs(ctx), p_request_id: ctx.requestId } })
   },
   user_search: {
     capabilities: ["support.read"],

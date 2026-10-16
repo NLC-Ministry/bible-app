@@ -7,9 +7,13 @@ import { describeItem, usableCursor, voucherState } from "../src/items.ts";
 const ID = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
 
 describe("parseRoute / formatRoute", () => {
-  it("defaults to the report inbox", () => {
-    expect(parseRoute("")).toEqual({ view: "inbox", reportId: null });
-    expect(parseRoute("#/")).toEqual({ view: "inbox", reportId: null });
+  it("defaults to the home page; the inbox keeps its address (#569)", () => {
+    expect(parseRoute("")).toEqual({ view: "home" });
+    expect(parseRoute("#/")).toEqual({ view: "home" });
+    expect(parseRoute("#/home")).toEqual({ view: "home" });
+    expect(parseRoute("#/home/x")).toEqual({ view: "not_found" });
+    expect(formatRoute({ view: "home" })).toBe("#/");
+    expect(areaOf({ view: "home" })).toBe("home");
     expect(parseRoute("#/support")).toEqual({ view: "inbox", reportId: null });
   });
 
@@ -51,12 +55,17 @@ describe("parseRoute / formatRoute", () => {
     expect(route.view === "user" && route.reason.length).toBe(200);
   });
 
-  it("parses the operations area: only 組隊狀況 is left after #565 and #568", () => {
-    expect(parseRoute("#/operations")).toEqual({ view: "legacy", area: "operations", section: "teams" });
-    const route = parseRoute("#/operations/teams");
-    expect(route).toEqual({ view: "legacy", area: "operations", section: "teams" });
-    expect(formatRoute(route)).toBe("#/operations/teams");
-    expect(areaOf(route)).toBe("operations");
+  it("moves 組隊狀況 to the plan area's last tab; old operations bookmarks still work (#569)", () => {
+    const route = parseRoute("#/plans/team-status");
+    expect(route).toEqual({ view: "legacy", area: "plans", section: "teams" });
+    expect(formatRoute(route)).toBe("#/plans/team-status");
+    expect(areaOf(route)).toBe("plans");
+    // 「teams」是新寫的團隊分頁，不是照搬的組隊狀況
+    expect(parseRoute("#/plans/teams")).toEqual({ view: "plans", tab: "teams", planId: null });
+    expect(formatRoute({ view: "legacy", area: "plans", section: "plans" })).toBe("#/plans/settings");
+    // 營運區已拿掉：舊書籤導到計畫區的組隊狀況
+    expect(parseRoute("#/operations")).toEqual(route);
+    expect(parseRoute("#/operations/teams")).toEqual(route);
     // #568：讀經使用率、報名註冊統計的舊書籤到報表區
     expect(parseRoute("#/operations/reading-activity")).toEqual({ view: "stats", tab: "usage", planId: null });
     expect(parseRoute("#/operations/registrations")).toEqual({ view: "stats", tab: "registrations", planId: null });
@@ -83,10 +92,22 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute("#/stats/usage/extra")).toEqual({ view: "not_found" });
   });
 
-  it("parses the plan area: four native tabs, an optional plan, and the copied settings tab (#565)", () => {
+  it("moves 測驗作答 to the 報表 area, keeping the plan; old plan-area bookmarks follow (#581)", () => {
+    const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
+    const route = parseRoute(`#/stats/quiz?plan=${PLAN.toUpperCase()}`);
+    expect(route).toEqual({ view: "stats", tab: "quiz", planId: PLAN });
+    expect(formatRoute(route)).toBe(`#/stats/quiz?plan=${PLAN}`);
+    expect(formatRoute({ view: "stats", tab: "quiz", planId: null })).toBe("#/stats/quiz");
+    expect(areaOf(route)).toBe("stats");
+    expect(parseRoute(`#/plans/quiz?plan=${PLAN}`)).toEqual(route);
+    expect(parseRoute("#/plans/quiz")).toEqual({ view: "stats", tab: "quiz", planId: null });
+    expect(parseRoute("#/plans/quiz/x")).toEqual({ view: "not_found" });
+  });
+
+  it("parses the plan area: three native tabs, an optional plan, and the copied settings tab (#565)", () => {
     const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
     expect(parseRoute("#/plans")).toEqual({ view: "plans", tab: "overview", planId: null });
-    for (const tab of ["roster", "teams", "quiz"]) {
+    for (const tab of ["roster", "teams"]) {
       const route = parseRoute(`#/plans/${tab}?plan=${PLAN.toUpperCase()}`);
       expect(route).toEqual({ view: "plans", tab, planId: PLAN });
       expect(formatRoute(route)).toBe(`#/plans/${tab}?plan=${PLAN}`);
@@ -156,7 +177,8 @@ describe("parseRoute / formatRoute", () => {
 describe("navigation by capability", () => {
   it("shows nothing without console access and support only with support.read", () => {
     expect(visibleNavItems([])).toEqual([]);
-    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual([]);
+    // 首頁進得了後台就有（每一格再看能力）
+    expect(visibleNavItems(["console.access"]).map((item) => item.area)).toEqual(["home"]);
     expect(canUse(["console.access"], "support")).toBe(false);
     expect(canUse(["console.access", "support.read"], "support")).toBe(true);
     // 人區：名單（accounts.read）或個人頁（support.read）有一個就看得到
@@ -166,8 +188,6 @@ describe("navigation by capability", () => {
     expect(canUse(["accounts.read"], "people")).toBe(false);
     expect(canUse(["console.access"], "content")).toBe(false);
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
-    expect(canUse(["console.access"], "operations")).toBe(false);
-    expect(canUse(["console.access", "operations.manage"], "operations")).toBe(true);
     expect(canUse(["console.access", "operations.manage"], "plans")).toBe(false);
     expect(canUse(["console.access", "plans.read"], "plans")).toBe(true);
     // 系統區：稽核紀錄或功能開放設定有一個就看得到
@@ -175,6 +195,11 @@ describe("navigation by capability", () => {
     expect(canUse(["console.access", "audit.read"], "system")).toBe(true);
     expect(canUse(["console.access", "settings.manage"], "system")).toBe(true);
     expect(canUse(["audit.read"], "system")).toBe(false);
+  });
+
+  it("orders the menu by what there is to do (#569)", () => {
+    const all = ["console.access", "support.read", "accounts.read", "plans.read", "stats.read", "content.manage", "audit.read", "operations.manage"];
+    expect(visibleNavItems(all).map((item) => item.label)).toEqual(["首頁", "計畫", "報表", "人", "回報收件匣", "內容", "系統"]);
   });
 });
 
