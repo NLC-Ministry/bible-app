@@ -5,6 +5,7 @@
 //   · token 跟後台外殼要（admin-legacy/legacy-auth.mjs），資料照舊走 nlc-session／nlc-data
 //   · localStorage／sessionStorage 只在記憶體（admin-legacy/memory-storage.mjs）
 //   · 所有下載先經後台外殼記稽核才存檔（admin-legacy/export-guard.mjs）
+//   · 雲柱測驗題目附圖經後台外殼上傳（js/modules/quiz-image-upload.mjs，#585）
 // 開機步驟對照 js/app.js 打開管理分頁的流程（switchTab('admin-view') → 網址指定的功能）。
 import "./globals.js";
 import "../js/data/bible_data.js";
@@ -25,6 +26,7 @@ import "../js/modules/campaign-rule-editor.js";
 import { forwardActivity, waitForBridge } from "./bridge.mjs";
 import { countCsvRecords, installExportGuard } from "./export-guard.mjs";
 import { LEGACY_HOSTED_CARDS, LEGACY_SECTION_IDS } from "./sections.mjs";
+import { setQuizImageUploader } from "../js/modules/quiz-image-upload.mjs";
 
 const THEMES = ["light", "dark", "warm"];
 const statusEl = document.getElementById("adm-legacy-status");
@@ -214,6 +216,8 @@ async function boot() {
   window.auth.connect(bridge);
   forwardActivity(window, bridge);
   installExportGuard(window, (file) => { void handleExport(file); });
+  // 雲柱測驗題目附圖（#585）：經後台外殼呼叫 admin-api 上傳，回 { ok, name } 或 { ok: false, message }
+  setQuizImageUploader((image) => bridge.request("quiz_image_upload", { image }));
   applyTheme(bridge.init.theme);
   bridge.onMessage((message) => {
     if (message.type === "open" && typeof message.section === "string") void openSection(message.section);

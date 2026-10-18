@@ -32,7 +32,8 @@ import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import {
   QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "./quiz-generation-status.mjs";
-import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
+import { getQuestionImage, questionImageHtml, installQuizImageViewer, quizImagePublicUrl } from "./quiz-image.mjs";
+import { canUploadQuizImage, QUIZ_IMAGE_ACCEPT, uploadQuizImageFile } from "./quiz-image-upload.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
@@ -1497,9 +1498,70 @@ export async function renderAdminAnnouncements() {
 // UI，因為題型定義、payload/answerKey 形狀完全共用（quiz-question-types.mjs）。
 // 一次只編輯「一題」，所以不重用它的多題清單管理（新增/刪除/編號）那層。
 
-// 題目附圖（#449）沒有編輯介面（圖檔放在 assets/、用 SQL 加進 payload.image），
-// 這裡只顯示「此題附圖」，並把原本的 image 存在 fieldset 上，重新存檔時帶回去，
-// 不會因為表單只重組 stem/選項就把圖洗掉。
+// 題目附圖（#449、#585）：目前的 image 存在 fieldset 的 data-lq-image 上，存檔時帶回
+// payload.image，不會因為表單只重組 stem/選項就把圖洗掉。在系統管理後台（照搬區塊）裡可以
+// 「加入／更換／移除圖片」，圖片經 admin-api 上傳到 Supabase 的 quiz-images；不能上傳的地方
+// 只顯示目前的圖。
+function renderAdminLightningQuizImageSectionHtml(image) {
+  const canUpload = canUploadQuizImage();
+  if (!image && !canUpload) return '';
+  const actions = canUpload ? `<div class="admin-lq-image__actions">
+      <button type="button" class="secondary-btn" data-lq-image-pick>${image ? '更換圖片' : '加入圖片'}</button>
+      ${image ? '<button type="button" class="secondary-btn" data-lq-image-remove>移除圖片</button>' : ''}
+      <input type="file" accept="${QUIZ_IMAGE_ACCEPT}" data-lq-image-file hidden>
+    </div>` : '';
+  if (!image) {
+    return `<div class="admin-lq-image" data-lq-image-section>
+      <span class="admin-lq-image__label">題目附圖（選填，會顯示在題目下方）</span>
+      ${actions}
+    </div>`;
+  }
+  return `<div class="admin-lq-image" data-lq-image-section>
+    <div class="admin-lq-image-note"><img src="${adminQuizEscape(image.src)}" alt="${adminQuizEscape(image.alt)}"><span>此題附圖，存檔時會一起儲存。</span></div>
+    <label>圖片說明（給看不到圖的人，可留白）<input type="text" class="form-control" data-lq-image-alt maxlength="200" value="${image.alt === '題目附圖' ? '' : adminQuizEscape(image.alt)}" placeholder="例如：祭司獻燔祭的七個場景"></label>
+    ${actions}
+  </div>`;
+}
+
+function setAdminLightningQuizFieldsetImage(fieldset, image) {
+  if (image) fieldset.dataset.lqImage = JSON.stringify(image);
+  else delete fieldset.dataset.lqImage;
+  const section = fieldset.querySelector('[data-lq-image-section]');
+  if (section) section.outerHTML = renderAdminLightningQuizImageSectionHtml(getQuestionImage({ image }));
+}
+
+function bindAdminLightningQuizImageSection(fieldset) {
+  if (!fieldset || !canUploadQuizImage()) return;
+  fieldset.addEventListener('click', event => {
+    if (event.target.closest('[data-lq-image-pick]')) {
+      fieldset.querySelector('[data-lq-image-file]')?.click();
+    } else if (event.target.closest('[data-lq-image-remove]')) {
+      setAdminLightningQuizFieldsetImage(fieldset, null);
+    }
+  });
+  fieldset.addEventListener('change', async event => {
+    const input = event.target.closest('[data-lq-image-file]');
+    if (!input) return;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const pick = fieldset.querySelector('[data-lq-image-pick]');
+    const pickLabel = pick?.textContent;
+    if (pick) { pick.disabled = true; pick.textContent = '上傳中…'; }
+    try {
+      const name = await uploadQuizImageFile(file);
+      const src = quizImagePublicUrl(name);
+      if (!src) throw new Error('上傳成功，但組不出圖片網址，請重新整理後再試。');
+      const alt = fieldset.querySelector('[data-lq-image-alt]')?.value.trim() || '';
+      setAdminLightningQuizFieldsetImage(fieldset, { src, alt: alt || '題目附圖' });
+      showToast('圖片已上傳，記得按「儲存」。');
+    } catch (error) {
+      if (pick?.isConnected) { pick.disabled = false; pick.textContent = pickLabel; }
+      showToast(error?.message || '上傳失敗，請再試一次。');
+    }
+  });
+}
+
 function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
@@ -1509,7 +1571,7 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
       ${Object.entries(ADMIN_QUIZ_CUSTOM_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select></label>
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
-    ${image ? `<div class="admin-lq-image-note"><img src="${adminQuizEscape(image.src)}" alt="${adminQuizEscape(image.alt)}"><span>此題附圖（${adminQuizEscape(image.src)}），存檔時會保留。</span></div>` : ''}
+    ${renderAdminLightningQuizImageSectionHtml(image)}
     <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
     <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
@@ -1522,6 +1584,10 @@ function collectAdminLightningQuizQuestion(fieldset) {
   const imageJson = fieldset.dataset.lqImage;
   if (imageJson) {
     try { question.payload.image = JSON.parse(imageJson); } catch (_) { /* 壞掉的就不帶 */ }
+    const altInput = fieldset.querySelector('[data-lq-image-alt]');
+    if (altInput && question.payload.image && typeof question.payload.image === 'object') {
+      question.payload.image = { ...question.payload.image, alt: altInput.value.trim() || '題目附圖' };
+    }
   }
   question.explanation = fieldset.querySelector('[data-field="explanation"]')?.value.trim() || '';
   return question;
@@ -1775,6 +1841,7 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
     explanation: source.explanation
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
+  bindAdminLightningQuizImageSection(body.querySelector('fieldset'));
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
   if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
   const snapshot = adminLightningQuizEditorSnapshot();

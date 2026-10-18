@@ -22,7 +22,7 @@
 **沒有備份到的**（都已確認）：
 
 - `auth.users`：目前 0 筆（登入用 NLC Logto）。
-- Storage 裡的檔案本身：只存清單。目前 `issue-report-shots` 沒有檔案，而且截圖 180 天後本來就會被清掉。
+- Storage 裡的檔案本身：只存清單。目前 `issue-report-shots` 沒有檔案，而且截圖 180 天後本來就會被清掉。`quiz-images`（雲柱測驗題目附圖，#585）的檔案也不在備份裡；原始圖檔請管理員自己留一份。
 - Vault 密鑰和 Edge Function 環境變數的**值**：只存名稱。值請記在密碼管理器；Vault 的加密內容換到別的專案也解不開。
 - Edge Function 程式碼：已經在 git 裡。
 

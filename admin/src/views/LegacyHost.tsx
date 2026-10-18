@@ -56,6 +56,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
       getToken: () => latest.current.getToken(),
       getIdToken: () => latest.current.getIdToken(),
       auditExport: (file) => api.call("legacy_export_audit", file),
+      uploadQuizImage: (image) => api.call("lightning_quiz_image_upload", { image }),
       saveFile: (blob, filename) => downloadBlob(win.document, filename, blob),
       describeError: describeAdminError,
       onReady: () => setFrame({ name: "ready" }),

@@ -27,7 +27,7 @@
 
 - 結構：和正式環境一致（含 0211–0214）。
 - Vault：只有 `project_url` = `https://dbtjsljrytzonjvclgrd.supabase.co`（見 `supabase/functions/README.md`）。
-- Storage：私有 bucket `issue-report-shots`，和 0153 一致。
+- Storage：私有 bucket `issue-report-shots`，和 0153 一致；公開 bucket `quiz-images`（雲柱測驗題目附圖，#585，`20261018030714_quiz_images_bucket.sql`）。
 - Edge Functions：8 支都已部署（`--no-verify-jwt`）。
 - Secrets：`NLC_LOGTO_ISSUER`、`NLC_MEMBER_HUB_URL`、`NLC_PLATFORM_API_URL`、`NLC_JWT_VERIFY_MODE=enforce`、`EXAM_WRITE_SECRET`（staging 專用）。
 - pg_cron 排程：沒有。
