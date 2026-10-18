@@ -28,6 +28,7 @@ import { cleanupProductionStorage } from './production-cleanup.mjs';
 import { isAppShellVisible, resolvePostLoadTab } from './boot-navigation.mjs';
 import { createAppHashRouting, ROUTE_CHANGED_EVENT } from './app-hash-routing.mjs';
 import { commentaryReviewNotificationTarget } from './data/commentary-review.mjs';
+import { adminConsoleSectionUrl } from './admin-console-link.mjs';
 import { initializePwa } from './pwa/PwaCoordinator.js';
 import { VersionWatcher } from './pwa/VersionWatcher.js';
 import { createUpdateBanner } from './pwa/UpdateBanner.js';
@@ -36,8 +37,11 @@ import { OfflineBibleRepository } from './pwa/OfflineBibleRepository.js';
 import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
+import { installConsoleErrorCapture } from './diagnostics/report-diagnostics.mjs';
 
 window.__bootMark?.("core-imports-done");
+// 回報時附上最近的 console.error（#548）；window error／unhandledrejection 由 index.html 收
+installConsoleErrorCapture();
 
 // ── 暫時性開機耗時量測（找「5 秒才顯示內容」瓶頸用，確認完可整批移除）──
 // 收集 index.html/app.js/db.js 裡所有 boot:* mark，算出每段耗時，印到
@@ -83,16 +87,17 @@ const LAZY_MODULE_LOADERS = {
   home: () => import('./modules/home.js'),
   bible: () => import('./modules/bible.js'),
   plan: () => import('./modules/plan.js'),
-  // 計畫分頁的管理員計畫增刪改卡片，只有系統管理員會載入（#370）。
-  'plan-admin': () => import('./modules/plan-admin.js'),
   // 計畫分頁的統計、排行、組員狀況（含 Chart.js 載入）；plan.js 第一次要畫這些畫面時才載入（#370）。
   'plan-stats': () => import('./modules/plan-stats.js'),
   // 計畫頁今日小測驗的作答畫面；當天確定有指派給自己的測驗才載入（#370）。
   'plan-quiz': () => import('./modules/plan-quiz.js'),
   profile: () => import('./modules/profile.js'),
-  admin: () => import('./modules/admin.js'),
+  // 管理分頁（#551）：組長看自己範圍的組員。系統管理功能（admin.js、plan-admin.js、
+  // campaign-rule-editor.js）在管理後台，會友 App 不載入。
+  pastoral: () => import('./modules/pastoral.js'),
+  // 管理分頁「測驗」裡的大測驗統計（renderExamStatsPanel）。
+  exam: () => import('./modules/exam.js'),
   'team-registration': () => import('./modules/team-registration.js'),
-  'campaign-rule-editor': () => import('./modules/campaign-rule-editor.js'),
   'onboarding-helper': () => import('./modules/onboarding-helper.js'),
   // React + TSX island; its own chunk keeps React out of the initial bundle.
   'issue-report-ui': () => import('./modules/issue-report-ui.js'),
@@ -352,9 +357,9 @@ async function renderNotificationsList() {
         document.getElementById("notification-popover")?.classList.add("hidden");
         // 被指派／待審 → 個人頁「我的審核」；通過待發布／退回 → 後台「經文注釋」。
         if (commentaryReviewNotificationTarget(item.kind) === "admin") {
-          try { sessionStorage.setItem("selected_admin_section", "commentary"); } catch (_error) {}
-          await appRouter.switchTab("admin-view");
-          if (typeof window.openAdminSection === "function") window.openAdminSection("commentary");
+          // 經文注釋管理在管理後台（#551：App 不再有系統管理功能）
+          const consoleUrl = adminConsoleSectionUrl("commentary");
+          if (consoleUrl) window.location.assign(consoleUrl);
         } else {
           window.location.hash = "#/profile/commentary-review";
         }
@@ -519,20 +524,20 @@ async function loadModule(name) {
   throw moduleError;
 }
 
-async function loadIssueReportUi(options = {}) {
+async function loadIssueReportUi() {
   const mod = await loadModule('issue-report-ui');
   if (mod && typeof mod.mountIssueReportUi === "function") {
-    mod.mountIssueReportUi(options);
+    mod.mountIssueReportUi();
   }
   return mod;
 }
 
-function scheduleIssueReportUiLoad(options = {}) {
+function scheduleIssueReportUiLoad() {
   let loadStarted = false;
   const load = () => {
     if (loadStarted) return;
     loadStarted = true;
-    loadIssueReportUi(options).catch(err => {
+    loadIssueReportUi().catch(err => {
       console.warn("[IssueReport] Lazy UI load failed; continuing without report UI.", err);
     });
   };
@@ -548,14 +553,6 @@ function scheduleIssueReportUiLoad(options = {}) {
 
 async function ensurePlanFeatureModulesLoaded() {
   await loadModule('team-registration');
-  if (state.currentUser && getUserRoleCode(state.currentUser) === 'admin') {
-    await loadModule('campaign-rule-editor');
-    await loadModule('plan-admin');
-  }
-}
-
-async function ensureAdminFeatureModulesLoaded() {
-  await loadModule('campaign-rule-editor');
 }
 
 // Focus-triggered refreshes fire on every app re-foreground (switching apps,
@@ -850,30 +847,12 @@ appRouter.switchTab = async function (tabId, options = {}) {
         adminPane.classList.remove("hidden");
         adminPane.style.display = "block";
       }
-      await loadModule('plan');
-      const mod = await loadModule('admin');
-      const isSystemAdmin = getUserRoleCode(state.currentUser) === 'admin';
-
-      const MANAGEMENT_ROLES = ['admin', 'pastor', 'great_zone_leader', 'zone_leader', 'group_leader'];
-      const userRole = getUserRoleCode(state.currentUser) || 'member';
-      if (MANAGEMENT_ROLES.includes(userRole)) {
-        if (mod && typeof mod.renderAdminPlanManagement === 'function') {
-          await mod.renderAdminPlanManagement();
-        } else if (typeof window.renderAdminPlanManagement === 'function') {
-          await window.renderAdminPlanManagement();
-        }
-      }
-      if (isSystemAdmin) {
-        // Campaign editing and the React issue-report manager are secondary
-        // system-management surfaces. Loading them (the report bundle is
-        // comparatively large) must not delay the visible plan-management
-        // panel; hydrate them in the background after its first render.
-        void Promise.all([
-          ensureAdminFeatureModulesLoaded(),
-          loadIssueReportUi({ includeAdmin: true })
-        ]).catch(err => {
-          console.warn('[Admin] Secondary management modules failed to load:', err);
-        });
+      // 管理分頁（#551）：組長看自己範圍的組員、系統管理員看全教會；沒有管理角色的人
+      // pastoral.js 自己顯示「沒有管理權限」。系統管理功能在管理後台。
+      const pastoral = await loadModule('pastoral');
+      if (pastoral && typeof pastoral.renderPastoralView === 'function') {
+        pastoral.registerExamStatsLoader(() => loadModule('exam'));
+        await pastoral.renderPastoralView();
       }
     }
 
@@ -1334,7 +1313,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Mount the report action independently of PWA initialization so a slow service worker cannot hide it.
-  scheduleIssueReportUiLoad({ includeAdmin: false });
+  scheduleIssueReportUiLoad();
 
   // PWA registration and authenticated offline reading queue.
   try {

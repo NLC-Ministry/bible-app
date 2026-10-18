@@ -236,15 +236,24 @@ describe("emitBundle (integration, real repo)", () => {
       expect(existsSync(join(out, "js", "pwa", "CacheManager.js"))).toBe(true);
       expect(existsSync(join(out, "js", "pwa", "SupabaseRepository.js"))).toBe(true);
       expect(readdirSync(join(out, "assets")).length).toBeGreaterThan(0);
+      // 後台（#555）只在自己的網域：會友 App 的輸出沒有後台頁面（/admin 拿不到後台）
+      expect(existsSync(join(out, "admin.html"))).toBe(false);
+      expect(existsSync(join(out, "admin"))).toBe(false);
+      expect(readdirSync(out).some((file) => /^admin\.[A-Z0-9]+\.(js|css)$/i.test(file))).toBe(false);
       // lazy view modules are content-hashed chunks, not raw copies
       expect(existsSync(join(out, "modules"))).toBe(false);
       expect(existsSync(join(out, "data"))).toBe(false);
       const chunks = readdirSync(join(out, "chunks"));
-      for (const name of ["home", "bible", "plan", "profile", "admin", "team-registration", "campaign-rule-editor", "onboarding-helper", "issue-report-ui"]) {
-        expect(chunks.some((file) => new RegExp(`^${name}\\.[A-Z0-9]{8}\\.js$`).test(file))).toBe(true);
+      const hasChunk = (name) => chunks.some((file) => new RegExp(`^${name}\\.[A-Z0-9]{8}\\.js$`).test(file));
+      for (const name of ["home", "bible", "plan", "profile", "pastoral", "exam", "team-registration", "onboarding-helper", "issue-report-ui"]) {
+        expect(hasChunk(name), name).toBe(true);
       }
+      // #551：系統管理的程式在管理後台，會友 App 的 dist/ 一支都沒有
+      for (const name of ["admin", "plan-admin", "campaign-rule-editor"]) expect(hasChunk(name), name).toBe(false);
       const issueReportChunk = chunks.find((file) => file.startsWith("issue-report-ui."));
-      expect(rf(join(out, "chunks", issueReportChunk), "utf8")).toMatch(/mountIssueReportUi/);
+      const issueReportCode = rf(join(out, "chunks", issueReportChunk), "utf8");
+      expect(issueReportCode).toMatch(/mountIssueReportUi/);
+      expect(issueReportCode).not.toContain("admin-reports-root");
       // contains app bundle code
       const bundle = rf(join(out, jsFile), "utf8");
       expect(bundle.includes("MODULE_LOAD_FAILED")).toBe(true);

@@ -1,4 +1,5 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
+import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
 import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
@@ -37,6 +38,7 @@ import {
   validatePersonalPlanName
 } from './data/personal-plans.mjs';
 import { getUserOnboardingBlock } from './member-journey.mjs';
+import { globalPlanScheduleFields, resolveGlobalPlanCampaign } from '../supabase/functions/_shared/progress/plan-schedule.mjs';
 import {
   OFFLINE_IDENTITY_KEY,
   buildOfflineIdentity,
@@ -290,56 +292,23 @@ function getPlanFilterAliases(filterValue) {
 }
 
 function mapGlobalPlanRecord(dbPlan) {
-  const isCampaignMaster = dbPlan.plan_kind === "church_campaign"
-    || dbPlan.id === window.CHURCH_CAMPAIGN_ID;
-  const isCampaignStage = dbPlan.plan_kind === "church_campaign_stage";
+  // 哪種計畫、掛哪份活動定義、起訖／書卷／預設代號：規則和伺服器共用（#564，plan-schedule.mjs）。
   // 延後大區梯次（church_campaign_stage_cohort）：**只沿用獎勵，其他都獨立**。
   // 它是一個普通的固定日期計畫（自己的名稱 / 起訖 / 經卷），排程走一般路徑；
   // 唯一跟正式階段共用的是「完成給哪個獎」——靠 stageNo / awardName 帶著，
   // 不掛 campaignDefinition，不進 campaign 排程機制。
-  const isCohortStage = dbPlan.plan_kind === "church_campaign_stage_cohort";
-  let campaignDefinition = null;
-  let cohortStageNo = null;
-  let cohortSourceStage = null;
-
-  if (isCampaignMaster) {
-    const stored = dbPlan.rules && Array.isArray(dbPlan.rules.stages) && Array.isArray(dbPlan.rules.segments)
-      ? dbPlan.rules
-      : window.CHURCH_CAMPAIGN;
-    campaignDefinition = window.cloneChurchCampaign(stored);
-  } else if (isCampaignStage) {
-    // 正式階段的 id 尾 12 碼就是階段序（…c026-00000000000N）。
-    const storedStageNo = Number(dbPlan.rules && dbPlan.rules.stageNo)
-      || Number(String(dbPlan.id || "").slice(-12));
-    const stored = dbPlan.rules && Array.isArray(dbPlan.rules.stages) && Array.isArray(dbPlan.rules.segments)
-      ? dbPlan.rules
-      : window.getChurchCampaignStageDefinition(storedStageNo);
-    if (stored) campaignDefinition = window.cloneChurchCampaign(stored);
-  } else if (isCohortStage) {
-    // cohort 是隨機 UUID，階段序只能靠 rules 裡的 stageNo / cohortSourceStageNo。
-    const rulesStageNo = Number(
-      dbPlan.rules && (dbPlan.rules.stageNo ?? dbPlan.rules.cohortSourceStageNo ?? dbPlan.rules.cohortStageNo)
+  // 總表沒存規則時退回 window.CHURCH_CAMPAIGN（本機模式可能被管理員存的版本換掉）。
+  const resolved = resolveGlobalPlanCampaign(dbPlan, { masterDefinition: window.CHURCH_CAMPAIGN });
+  const { isCampaignMaster, isCampaignStage, isCohortStage, campaignDefinition, cohortStageNo, cohortSourceStage } = resolved;
+  if (isCohortStage && !cohortStageNo) {
+    console.error(
+      `[cohort] global_plan ${dbPlan.id} 找不到來源階段序（rules 缺 stageNo / cohortSourceStageNo）；` +
+      `發獎會失效。rules keys=${dbPlan.rules ? Object.keys(dbPlan.rules).join(",") : "(none)"}`
     );
-    cohortStageNo = Number.isFinite(rulesStageNo) && rulesStageNo > 0 ? rulesStageNo : null;
-    cohortSourceStage = cohortStageNo && typeof window.getChurchCampaignStageDefinition === "function"
-      ? window.getChurchCampaignStageDefinition(cohortStageNo)
-      : null;
-    if (!cohortStageNo) {
-      console.error(
-        `[cohort] global_plan ${dbPlan.id} 找不到來源階段序（rules 缺 stageNo / cohortSourceStageNo）；` +
-        `發獎會失效。rules keys=${dbPlan.rules ? Object.keys(dbPlan.rules).join(",") : "(none)"}`
-      );
-    }
   }
 
   const useCampaignSchedule = Boolean(campaignDefinition);
-  const campaignBooks = campaignDefinition
-    ? Array.from(new Set(campaignDefinition.segments.flatMap(segment => segment.readings.map(reading => reading.book))))
-    : [];
-  // cohort 沒有 campaignDefinition：經卷用 DB 這一列的 target_books，缺的話退回來源階段的書卷。
-  const cohortBooks = (cohortSourceStage && Array.isArray(cohortSourceStage.books) && cohortSourceStage.books.length)
-    ? cohortSourceStage.books.slice()
-    : [];
+  const scheduleFields = globalPlanScheduleFields(dbPlan, resolved);
   return {
     id: dbPlan.id,
     globalPlanId: dbPlan.id,
@@ -348,14 +317,10 @@ function mapGlobalPlanRecord(dbPlan) {
       : (cohortSourceStage && cohortSourceStage.parentCampaignId) || null,
     name: isCampaignMaster ? "教會階段規則設定" : (useCampaignSchedule ? campaignDefinition.name : dbPlan.name),
     description: useCampaignSchedule ? campaignDefinition.description : dbPlan.description,
-    startDate: useCampaignSchedule ? campaignDefinition.startDate : dbPlan.start_date,
-    endDate: useCampaignSchedule ? campaignDefinition.endDate : dbPlan.end_date,
-    books: Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0
-      ? dbPlan.target_books
-      : (isCohortStage ? cohortBooks : campaignBooks),
-    presetKey: isCohortStage
-      ? ((dbPlan.rules && dbPlan.rules.presetKey) || dbPlan.id)
-      : (campaignDefinition && campaignDefinition.presetKey ? campaignDefinition.presetKey : dbPlan.id),
+    startDate: scheduleFields.startDate,
+    endDate: scheduleFields.endDate,
+    books: scheduleFields.books,
+    presetKey: scheduleFields.presetKey,
     audienceRegions: Array.isArray(dbPlan.audience_regions) && dbPlan.audience_regions.length
       ? dbPlan.audience_regions.slice() : null,
     isHidden: Boolean(dbPlan.is_hidden),
@@ -844,9 +809,9 @@ const db = {
           },
           body: JSON.stringify(request)
         };
-        const response = isReadRequest
-          ? await fetchWithTimeout(url, init, DATA_READ_TIMEOUT_MS)
-          : await fetch(url, init);
+        const response = await fetchNlcTracked(url, init, request, isReadRequest
+          ? (input, options) => fetchWithTimeout(input, options, DATA_READ_TIMEOUT_MS)
+          : (input, options) => fetch(input, options));
         const headersAt = performance.now();
         const payload = await response.json().catch(() => ({}));
         const completedAt = performance.now();
@@ -1043,6 +1008,13 @@ const db = {
         // A real batch-level failure (auth rejected, 503 after retries). Surface
         // it on every slot — retrying 5 individual calls would hit the same wall.
         return queries.map(() => ({ data: null, error: error || { message: "batch_failed" } }));
+      },
+      // 管理分頁的計畫總覽（只有數字）與名單（#564／#570）：範圍由 nlc-data 依登入者決定
+      planReport(action, args = {}) {
+        if (action !== "plan_summary" && action !== "plan_roster") {
+          return Promise.resolve({ data: null, error: { message: "unsupported_action" } });
+        }
+        return callEdge({ action, args });
       },
       rpc(functionName, args = {}) {
         return {
@@ -6752,8 +6724,8 @@ const db = {
   },
 
   // 💌 getTodayCareReminderFor – 打開關心對話框時，先看看今天是否已經傳過
-  // 一則給這位成員，讓對話框可以直接顯示「已發送的內容」並開放編輯，而不是
-  // 讓使用者送出後就再也看不到自己寫了什麼。
+  // 一則給這位成員。提醒一天一則、送出後不能改（#574），對話框據此唯讀顯示
+  // 今天送出的內容，而不是讓人再送一次才撞到「今天已提醒過」。
   async getTodayCareReminderFor(recipientId, planKey = "") {
     if (!state.isSupabaseMode || !state.supabase) {
       return { data: null, error: null };
@@ -6782,8 +6754,8 @@ const db = {
   // reason: 'behind' | 'inactive' | 'care' | 'encouragement'
   // message: 關心訊息文字 (最多 300 字)
   // planKey: 計畫識別碼 (presetKey 或 globalPlanId)
-  // 同一天對同一人再送一次，server 端會視為「編輯今天已傳送的內容」，不會
-  // 再撞到「今天已經傳過」的唯一鍵錯誤。
+  // 一天一則、送出後不能改：同一天對同一人再送一次，server 回 409
+  // care_reminder_already_sent（#574）。
   async sendCareReminder({ recipientId, reason, message, planKey = "" }) {
     // 輸入驗證
     const validReasons = ["behind", "inactive", "care", "encouragement"];
@@ -6809,7 +6781,7 @@ const db = {
         }
         const cfg = state.supabaseConfig || {};
         const accessToken = await auth.getValidAccessToken();
-        const response = await fetch(
+        const response = await fetchNlcTracked(
           cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
           {
             method: "POST",
@@ -6827,21 +6799,17 @@ const db = {
                 plan_key: String(planKey || "")
               }
             })
-          }
+          },
+          { action: "send_care_reminder" }
         );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          if (payload.error === "care_reminder_already_seen") {
-            return { error: new Error("這則關心已經被對方看過，無法再修改內容") };
+          if (payload.error === "care_reminder_already_sent" || payload.code === "23505") {
+            return { error: new Error("今天已提醒過這位了，明天可以再提醒。") };
           }
-          // A genuine 23505 here would only be a narrow concurrent-request
-          // race (two requests both passing the exists-check before either
-          // insert lands) — the normal same-day-resend case is now handled
-          // as an edit server-side and no longer reaches this branch.
-          if (payload.code === "23505" || response.status === 409) {
-            return { error: new Error("儲存時發生衝突，請重新整理後再試一次") };
-          }
-          if (response.status === 403 || payload.code === "42501" || (payload.error && payload.error.includes("policy"))) {
+          // Only the scope check answers 403. A 42501 can also come from the
+          // reminder trigger (immutable fields), so it is not a scope signal.
+          if (response.status === 403 || payload.error === "pastoral_reminder_scope_required") {
             return { error: new Error("此成員不在您的牧養範圍內") };
           }
           return { error: new Error(payload.error || "傳送失敗") };
@@ -6863,7 +6831,7 @@ const db = {
     try {
       const cfg = state.supabaseConfig || {};
       const accessToken = await auth.getValidAccessToken();
-      const response = await fetch(
+      const response = await fetchNlcTracked(
         cfg.url.replace(/\/+$/, "") + "/functions/v1/nlc-data",
         {
           method: "POST",
@@ -6881,7 +6849,8 @@ const db = {
               summary: summary || {}
             }
           })
-        }
+        },
+        { action: "sync_registration_stats_sheet" }
       );
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {

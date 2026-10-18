@@ -2,10 +2,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { convertUserDirectoryToCSV } from "../js/modules/admin.js";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 describe("Admin User Directory CSV Export Tests", () => {
   it("verifies index.html contains export button", () => {
-    const html = readFileSync("index.html", "utf8");
+    const html = readLegacyIndexHtml();
     expect(html).toContain('id="admin-user-directory-export-btn"');
     expect(html).toContain('title="依當前篩選結果匯出 CSV 名單"');
     expect(html).toContain("<span>匯出</span>");
@@ -16,7 +17,7 @@ describe("Admin User Directory CSV Export Tests", () => {
     // one character per line because the button had no white-space:nowrap /
     // flex-shrink:0, and its flex sibling (the title block) had no min-width:0
     // to let it shrink first instead of squeezing the button.
-    const html = readFileSync("index.html", "utf8");
+    const html = readLegacyIndexHtml();
     const btnStart = html.indexOf('id="admin-user-directory-export-btn"');
     const btnTagEnd = html.indexOf(">", btnStart);
     const btnOpenTag = html.slice(btnStart, btnTagEnd);

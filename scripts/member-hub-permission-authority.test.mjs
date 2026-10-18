@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = relativePath => readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
@@ -12,7 +13,8 @@ describe("Member Hub-only permission management", () => {
   const edge = read("supabase/functions/nlc-data/index.ts");
   const sessionEdge = read("supabase/functions/nlc-session/index.ts");
   const migration = read("supabase/migrations/0048_member_hub_role_uuid_authority.sql");
-  const html = read("index.html");
+  // 舊管理分頁只在後台的照搬頁（#551）
+  const html = readLegacyIndexHtml();
 
   it("removes the local user-permission entry and its supporting code", () => {
     // Admin nav is now the unified #admin-section-* model (no data-admin-panel tabs).

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 let dom;
 let renderAdminLightningQuizStats;
@@ -65,7 +66,7 @@ const rankingData = {
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // 用 index.html 裡真正的雲柱測驗區塊（作答明細是它裡面的完整頁面，#317）
-const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const indexHtml = readLegacyIndexHtml();
 const sectionHtml = indexHtml.slice(
   indexHtml.indexOf('<div id="admin-section-lightning-quiz"'),
   indexHtml.indexOf('<div id="admin-section-settings"')

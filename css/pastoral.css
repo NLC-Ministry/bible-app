@@ -1,0 +1,625 @@
+/* 管理分頁（#551）：牧者、大區長、區長、小組長看自己範圍的組員；系統管理員看全教會。
+   畫面：js/modules/pastoral.js。平面配色、只用 400／500 字重、中性陰影（docs/design-system.md）。 */
+
+/* 舊管理分頁在桌機是「左清單＋右內容」雙欄（index.css 的 #admin-view.active）；新畫面是單欄。 */
+#admin-view.pastoral-view.active {
+  display: block !important;
+}
+
+.pastoral {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0.25rem 0 2rem;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.pastoral__console-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.pastoral__link {
+  color: var(--color-brand);
+  font-weight: var(--type-weight-strong);
+  text-decoration: none;
+}
+
+.pastoral__link:hover,
+.pastoral__link:focus-visible {
+  text-decoration: underline;
+}
+
+.pastoral__toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  align-items: end;
+  padding: 0.85rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.pastoral__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+/* 手機：第一列「計畫（兩欄寬）＋更新」，第二列大區／牧區／小組 */
+.pastoral__field--plan {
+  grid-column: 1 / 3;
+}
+
+.pastoral__field .form-control {
+  width: 100%;
+  min-width: 0;
+}
+
+.pastoral__field-label {
+  font-weight: var(--type-weight-strong);
+}
+
+.pastoral__refresh {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .pastoral__toolbar {
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
+  }
+
+  .pastoral__field--plan,
+  .pastoral__refresh {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+.pastoral__tabs .segment-toggle-btn {
+  padding: 0.5rem 0.25rem;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 0.9375rem;
+}
+
+.pastoral__status {
+  margin: 0;
+  min-height: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.pastoral__status:empty {
+  display: none;
+}
+
+.pastoral__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.pastoral__panel.hidden {
+  display: none;
+}
+
+.pastoral-card {
+  padding: 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  min-width: 0;
+}
+
+.pastoral-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.pastoral-card__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong);
+}
+
+.pastoral-card__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.pastoral-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.pastoral-empty {
+  margin: 0;
+  padding: 1.25rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* 進度漏斗 */
+.pastoral-funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pastoral-funnel__row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 9rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.875rem;
+}
+
+.pastoral-funnel__label {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral-funnel__label:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-funnel__value {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--type-weight-strong);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pastoral-funnel__value small {
+  margin-left: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-regular);
+}
+
+.pastoral-bar {
+  position: relative;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--color-progress-track);
+  overflow: hidden;
+}
+
+.pastoral-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-progress-fill);
+}
+
+/* 需要關心 */
+.pastoral-care__more {
+  margin-top: 0.6rem;
+}
+
+/* 單位比較、測驗表格：表格自己橫向捲動，整頁不會跑出橫捲軸 */
+.pastoral-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pastoral-table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.pastoral-table th,
+.pastoral-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border-card);
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pastoral-table th:first-child,
+.pastoral-table td:first-child {
+  text-align: left;
+}
+
+.pastoral-table th {
+  color: var(--text-muted);
+  font-weight: var(--type-weight-strong);
+  font-size: 0.8125rem;
+}
+
+.pastoral-table td {
+  color: var(--text-primary);
+}
+
+.pastoral-table__unit {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
+  font-weight: var(--type-weight-strong);
+  cursor: pointer;
+}
+
+.pastoral-table__unit:hover,
+.pastoral-table__unit:focus-visible {
+  text-decoration: underline;
+}
+
+/* 數字方塊 */
+.pastoral-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.6rem;
+}
+
+.pastoral-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+}
+
+.pastoral-tile__label {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.pastoral-tile__value {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: var(--type-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 名單 */
+.pastoral-roster__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.pastoral-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pastoral-chip {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.pastoral-chip[aria-pressed="true"] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+  font-weight: var(--type-weight-strong);
+}
+
+.pastoral-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-roster__search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pastoral-roster__search .form-control {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+/* 一人一列，點開看詳細（#570） */
+.pastoral-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  list-style: none;
+  overflow: hidden;
+}
+
+.pastoral-row + .pastoral-row {
+  border-top: 1px solid var(--border-card);
+}
+
+.pastoral-row__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral-row__summary:focus-visible {
+  outline: none;
+  box-shadow: inset var(--shadow-focus-ring);
+}
+
+.pastoral-row__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pastoral-row__name {
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: var(--type-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.pastoral-row__late {
+  margin-left: 0.4rem;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-regular);
+}
+
+.pastoral-row__org {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.pastoral-row__chapters {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pastoral-row__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.pastoral-row__detail[hidden] {
+  display: none;
+}
+
+/* 篩選：手機預設收合成「篩選（N 個條件）」 */
+.pastoral-filters {
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+}
+
+.pastoral-filters__summary {
+  padding: 0.55rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.pastoral-filters__summary:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-filters__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.pastoral-filters__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pastoral-filters__label {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.pastoral-filters__label small {
+  margin-left: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.pastoral-filters__footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pastoral-segmented {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.pastoral-roster__count {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.pastoral-person__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.pastoral-person__facts dt {
+  color: var(--text-muted);
+}
+
+.pastoral-person__facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.pastoral-person__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pastoral-badge {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: var(--type-weight-strong);
+  white-space: nowrap;
+}
+
+.pastoral-badge--ok {
+  background: var(--color-success-subtle);
+  color: var(--color-success-foreground);
+}
+
+.pastoral-badge--brand {
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+}
+
+.pastoral-badge--danger {
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+}
+
+.pastoral-badge--warning {
+  background: var(--color-warning-subtle);
+  color: var(--color-warning);
+}
+
+.pastoral-more {
+  align-self: center;
+}
+
+/* 團隊 */
+.pastoral-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pastoral-team {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+}
+
+.pastoral-team__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.pastoral-team__name {
+  color: var(--text-primary);
+  font-weight: var(--type-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.pastoral-team__members {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.pastoral-names {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.pastoral-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

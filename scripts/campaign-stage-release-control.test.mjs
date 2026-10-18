@@ -9,7 +9,8 @@ const planModule = read("js/modules/plan.js");
 // 計畫增刪改卡片（含開放／暫停按鈕）在管理員專用 chunk（#370）。
 const planAdminModule = read("js/modules/plan-admin.js");
 const db = read("js/db.js");
-const campaign = read("js/data/church_campaign.js");
+// 活動定義的本體在伺服器共用的模組（#564），js/data/church_campaign.js 只掛到 window
+const campaign = read("supabase/functions/_shared/progress/church-campaign.mjs");
 const edgeFunction = read("supabase/functions/nlc-data/index.ts");
 
 describe("campaign stage release control", () => {

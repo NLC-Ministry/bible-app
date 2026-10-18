@@ -1335,6 +1335,8 @@ async function renderPlanView() {
       await setPlanState(PLAN_ROUTE.LIST);
     }
 
+    // 「全域計畫管理」卡只在管理後台的照搬頁裡有（admin-legacy/admin-view.html，#551）；
+    // App 的 index.html 沒有這張卡，下面兩段在 App 不會做任何事。
     // System administrator controls use the UUID-backed role definition.
     const isSystemAdmin = getUserRoleCode(state.currentUser) === "admin";
     const adminCard = document.getElementById("admin-plan-card");
@@ -1788,9 +1790,8 @@ function userHasNoPlanAtAll() {
   return (state.activePlans || []).length === 0;
 }
 
-// 歡迎卡只在「我的計畫」、「全域計畫管理」只在「探索計畫」、「已結束」整欄隱藏
-// （見 plan-sidebar-visibility.mjs，#409）。邀請碼卡與管理卡的分頁條件由 CSS 讀
-// #plan-list-subview[data-active-filter]，和它們各自依組隊／角色切換的 hidden 分開。
+// 歡迎卡只在「我的計畫」、其他分頁整欄隱藏（見 plan-sidebar-visibility.mjs，#409）。
+// 邀請碼卡的分頁條件由 CSS 讀 #plan-list-subview[data-active-filter]，和它依組隊切換的 hidden 分開。
 // 兩份清單（joined/preset）各自渲染時都會呼叫這裡，且各自從 DOM 讀目前作用中的
 // 分頁，所以不管先渲染哪一份都能算對。
 function updatePlanSidebarIntroCardVisibility() {
@@ -1802,8 +1803,7 @@ function updatePlanSidebarIntroCardVisibility() {
     sidebar: document.getElementById("plan-sidebar-info-card"),
     introCard: document.getElementById("plan-sidebar-intro-card"),
     filter,
-    hasAnyPlan: !userHasNoPlanAtAll(),
-    isSystemAdmin: getUserRoleCode(state.currentUser) === "admin"
+    hasAnyPlan: !userHasNoPlanAtAll()
   });
 }
 
@@ -5445,16 +5445,19 @@ window.openCareReminderDialog = async function(member) {
   const existingDialog = document.getElementById("care-reminder-dialog-overlay");
   if (existingDialog) existingDialog.remove();
 
-  // 打開對話框時先看看今天是不是已經傳過一則給這個人——有的話直接把內容
-  // 帶進來顯示 + 開放編輯，而不是讓人送出後就再也看不到自己寫了什麼，
-  // 也不會因為「今天已經傳過」而卡死。團隊入口送出的提醒存進 care_reminders
+  // 提醒一天一則、送出後不能改（#574）。打開時先看今天是不是已經傳過一則給
+  // 這個人——有的話唯讀顯示當時的內容，不讓人再送一次才撞到每日上限。
+  // 團隊入口送出的提醒存進 care_reminders
   // 時，plan_key 是 'reading-team:' + team.id（見 send_reading_team_reminder
   // RPC），跟一般組織階層提醒用的 presetKey/globalPlanId 不是同一組 key，
   // 這裡要分開組，否則團隊入口永遠查不到「今天已經傳過」，使用者在同一天對
   // 同一位隊友再按一次「傳送」時只會撞上後端的每日上限、看起來像是傳送失敗。
+  // 管理分頁（#570）帶自己選的計畫（carePlanKey），不是目前打開的計畫。
   const planKeyForCare = member.readingTeamId
     ? `reading-team:${member.readingTeamId}`
-    : (state.activePlan ? (state.activePlan.presetKey || state.activePlan.globalPlanId || "") : "");
+    : typeof member.carePlanKey === "string"
+      ? member.carePlanKey
+      : (state.activePlan ? (state.activePlan.presetKey || state.activePlan.globalPlanId || "") : "");
   let existingReminder = null;
   if (typeof db !== "undefined" && typeof db.getTodayCareReminderFor === "function") {
     try {
@@ -5485,11 +5488,10 @@ window.openCareReminderDialog = async function(member) {
     encouragement: `${member.name}！你最近讀經很穩定，真的很棒！繼續加油哦，感謝主！`
   };
 
-  // 今天已經傳過 → 帶入已發送的內容，讓對話框一打開就看得到自己寫了什麼；
-  // 對方已讀/已關閉 → 鎖定不能再改，但內容還是看得到。
+  // 今天已經傳過 → 唯讀顯示當時送出的內容，不管對方讀了沒。
   const defaultReason = existingReminder ? existingReminder.reason : autoReason;
   const initialMessage = existingReminder ? existingReminder.message : defaultMessages[defaultReason];
-  const isLocked = !!(existingReminder && existingReminder.status !== "unread");
+  const isLocked = !!existingReminder;
 
   const overlay = document.createElement("div");
   overlay.id = "care-reminder-dialog-overlay";
@@ -5516,13 +5518,13 @@ window.openCareReminderDialog = async function(member) {
       </div>
 
       <p style="margin:0 0 1rem; font-size:0.875rem; color:var(--text-muted);">
-        進度：<strong style="color:${member.statusColor}">${member.statusStr}</strong>
-        &nbsp;・&nbsp;完成：${member.completed} 天
+        進度：<strong style="color:${member.statusColor}">${escapeHTML(member.statusStr)}</strong>
+        &nbsp;・&nbsp;${member.progressText ? escapeHTML(member.progressText) : `完成：${member.completed} 天`}
       </p>
 
-      ${existingReminder ? `<p id="care-existing-note" style="margin:0 0 1rem; font-size:0.875rem; color:var(--color-brand); background:var(--color-brand-subtle); border-radius:8px; padding:0.5rem 0.75rem;">
-        今天已經傳過一則給${escapeHTML(member.name)}${isLocked ? '，對方已經看過，內容鎖定無法修改' : '，以下是當時的內容，可以直接修改後更新'}
-      </p>` : ""}
+      <p id="care-existing-note" style="margin:0 0 1rem; font-size:0.875rem; color:var(--color-brand); background:var(--color-brand-subtle); border-radius:8px; padding:0.5rem 0.75rem;${isLocked ? "" : " display:none;"}">
+        今天已提醒過${escapeHTML(member.name)}，以下是送出的內容，明天可以再提醒。
+      </p>
 
       <label style="display:block; font-size:0.875rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">
         關心原因
@@ -5587,7 +5589,7 @@ window.openCareReminderDialog = async function(member) {
           transition: opacity 0.15s;
         ">
           <span class="nlc-icon nlc-icon--sm" data-icon="send" aria-hidden="true"></span>
-          <span id="care-send-btn-label">${existingReminder ? "更新關心內容" : "傳送關心"}</span>
+          <span id="care-send-btn-label">傳送關心</span>
         </button>`}
       </div>
     </div>
@@ -5626,10 +5628,22 @@ window.openCareReminderDialog = async function(member) {
   });
   overlay.querySelector("#care-cancel-btn").addEventListener("click", () => overlay.remove());
 
-  // Send / update — tracked locally so a second click in the same dialog
-  // session (after a first successful send) is labeled/announced as an
-  // edit instead of a brand new send.
-  let alreadySentToday = !!existingReminder;
+  // After a successful send the dialog stays open but turns read-only, the
+  // same as reopening it later today: a reminder can't be changed or resent.
+  const lockAfterSend = (sendBtn) => {
+    sendBtn.remove();
+    reasonBtns.forEach(b => {
+      b.disabled = true;
+      b.style.cursor = "not-allowed";
+      b.style.opacity = "0.6";
+    });
+    msgInput.setAttribute("readonly", "");
+    msgInput.style.opacity = "0.7";
+    msgInput.style.cursor = "not-allowed";
+    overlay.querySelector("#care-existing-note").style.display = "";
+    overlay.querySelector("#care-cancel-btn").textContent = "關閉";
+  };
+
   const sendBtn = overlay.querySelector("#care-send-btn");
   if (sendBtn) sendBtn.addEventListener("click", async () => {
     const message = msgInput.value.trim();
@@ -5648,11 +5662,9 @@ window.openCareReminderDialog = async function(member) {
       return;
     }
 
-    const wasEdit = alreadySentToday;
-    const idleLabel = wasEdit ? "更新關心內容" : "傳送關心";
     sendBtn.disabled = true;
     sendBtn.style.opacity = "0.6";
-    sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="loader" aria-hidden="true"></span> ${wasEdit ? "更新中…" : "傳送中…"}`;
+    sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="loader" aria-hidden="true"></span> 傳送中…`;
     if (typeof hydrateIcons === "function") hydrateIcons(sendBtn);
 
     try {
@@ -5673,22 +5685,15 @@ window.openCareReminderDialog = async function(member) {
 
       if (result.error) throw result.error;
 
-      alreadySentToday = true;
       if (typeof showToast === "function") {
-        showToast(wasEdit ? `已更新給 ${member.name} 的關心內容 💛` : `已傳送關心提醒給 ${member.name} 💛`);
+        showToast(`已傳送關心提醒給 ${member.name} 💛`);
       }
-      // Deliberately do NOT close the dialog — the whole point is that the
-      // text just sent stays visible right here, still editable, instead of
-      // disappearing the moment it's sent.
-      sendBtn.disabled = false;
-      sendBtn.style.opacity = "1";
-      sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="send" aria-hidden="true"></span> <span id="care-send-btn-label">更新關心內容</span>`;
-      if (typeof hydrateIcons === "function") hydrateIcons(sendBtn);
+      lockAfterSend(sendBtn);
     } catch (err) {
       console.error("sendCareReminder failed:", err);
       sendBtn.disabled = false;
       sendBtn.style.opacity = "1";
-      sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="send" aria-hidden="true"></span> <span id="care-send-btn-label">${idleLabel}</span>`;
+      sendBtn.innerHTML = `<span class="nlc-icon nlc-icon--sm" data-icon="send" aria-hidden="true"></span> <span id="care-send-btn-label">傳送關心</span>`;
       if (typeof hydrateIcons === "function") hydrateIcons(sendBtn);
 
       errorEl.textContent = `傳送失敗：${err.message || "請稍後再試"}`;

@@ -1,0 +1,102 @@
+/* 後台的舊管理畫面（#550）：iframe 裡只留 App 管理分頁的內容區。
+   接在 index.css 與 Tailwind 之後，蓋掉 App 外框（頂 bar、底部導覽、登入卡、其他分頁）與
+   管理分頁自己的功能清單——選哪一區由後台外殼左側與上方分頁決定。 */
+
+.hidden,
+[hidden] {
+  display: none !important;
+}
+
+html.adm-legacy,
+html.adm-legacy body {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+
+html.adm-legacy body * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.adm-legacy-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+/* index.css 把 .app-layout 鎖成一個螢幕高（height:100dvh＋overflow:hidden）；
+   iframe 裡由文件自己捲動，要全部蓋回來，不然內容被裁在一個畫面高、捲不到下方（#562）。 */
+html.adm-legacy .app-layout {
+  display: block;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+html.adm-legacy .main-header,
+html.adm-legacy #offline-mode-banner,
+html.adm-legacy .main-footer,
+html.adm-legacy .mobile-nav-bar,
+html.adm-legacy #login-gate,
+html.adm-legacy .issue-report-fab,
+html.adm-legacy .main-content > .view-pane:not(#admin-view) {
+  display: none !important;
+}
+
+/* App 的 .main-content 是 position:fixed、夾在頂 bar 與底部導覽之間自己捲動；
+   iframe 裡兩者都拿掉了，改回一般排版，由 iframe 的文件自己捲動。 */
+html.adm-legacy .main-content {
+  position: static;
+  inset: auto;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 1rem 1rem 2rem;
+  overflow: visible;
+  scroll-behavior: auto;
+}
+
+@media (min-width: 768px) {
+  html.adm-legacy .main-content {
+    padding: 1.25rem 1.5rem 2.5rem;
+  }
+}
+
+/* 管理分頁：不用雙欄、不用手機的全螢幕子頁，功能清單也拿掉 */
+html.adm-legacy #admin-view,
+html.adm-legacy #admin-view.active {
+  display: block !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+html.adm-legacy #admin-view > #admin-section-nav {
+  display: none !important;
+}
+
+html.adm-legacy #admin-view > #admin-section-content,
+html.adm-legacy body.admin-section-open #admin-view > #admin-section-content,
+html.adm-legacy body:not(.admin-section-open) #admin-view > #admin-section-content {
+  display: block !important;
+  position: static;
+  inset: auto;
+  z-index: auto;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+html.adm-legacy body.admin-section-open .main-content {
+  overflow: visible;
+}
+
+html.adm-legacy #admin-view .admin-section-panel {
+  padding-bottom: 1.5rem;
+}

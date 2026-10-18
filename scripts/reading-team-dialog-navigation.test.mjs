@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import { getMemberOverallPlanProgress, getTeamOverallPlanProgress } from "../js/modules/team-progress-metrics.mjs";
-import { isCampaignStageKind } from "../js/data/campaign-stage-kinds.mjs";
+import { getMemberOverallPlanProgress, getTeamOverallPlanProgress, isTeamFull } from "../js/modules/team-progress-metrics.mjs";
+import { isCampaignStageEnded, isCampaignStageKind } from "../js/data/campaign-stage-kinds.mjs";
 import {
   countScheduleDaysCoveredByChapters,
   countExpectedScheduleDays,
@@ -73,6 +73,8 @@ describe("reading team dialog navigation", () => {
       getMemberOverallPlanProgress,
       getTeamOverallPlanProgress,
       isCampaignStageKind,
+      isCampaignStageEnded,
+      isTeamFull,
       countScheduleDaysCoveredByChapters,
       countExpectedScheduleDays,
       countLateCompletedDays,

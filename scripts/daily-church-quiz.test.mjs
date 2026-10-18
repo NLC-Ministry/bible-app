@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const schema = currentMigrationSql("0084_daily_church_quizzes.sql");
@@ -23,7 +24,7 @@ const plan = read("js/modules/plan.js");
 const planQuiz = read("js/modules/plan-quiz.js");
 const planAll = plan + planQuiz;
 const admin = read("js/modules/admin.js");
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 const css = read("index.css");
 const configToml = read("supabase/config.toml");
 

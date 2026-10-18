@@ -4,6 +4,7 @@
 // 牧區分析、大區分析、週排行、週趨勢，並產生 CSV 字串。不碰 DOM，方便用 vitest 直接測。
 
 import { prependTaiwanExportTime, formatTaiwanExportDateTime, taiwanDateTimeParts } from "./export-time.mjs";
+import { csvCell } from "./csv-cell.mjs";
 
 export const UNASSIGNED_ZONE_LABEL = "未分配牧區";
 export const UNASSIGNED_REGION_LABEL = "未分配大區";
@@ -138,9 +139,6 @@ export function filterAttempts(attempts, { search = "", status = "all" } = {}) {
 
 // ── CSV ────────────────────────────────────────────────────────────────
 
-function csvCell(value) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
 
 function toCsv(headers, rows, exportedAt) {
   return prependTaiwanExportTime([

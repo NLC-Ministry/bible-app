@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { copyLightningQuizQuestion, lightningQuizStage } from "../js/modules/lightning-quiz-schedule.mjs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 // #309：雲柱測驗狀態只剩 準備中 → 已排程 → 作答中 → 已結束
 const read = path => readFileSync(path, "utf8");
@@ -70,7 +71,7 @@ describe("migration 20260927121803", () => {
     const admin = read("js/modules/admin.js");
     expect(admin).not.toContain("data-lightning-quiz-clear");
     expect(admin).not.toContain('data-lightning-quiz-status="archived"');
-    expect(read("index.html")).not.toContain("admin-lightning-quiz-fork-note");
+    expect(readLegacyIndexHtml()).not.toContain("admin-lightning-quiz-fork-note");
   });
 });
 
@@ -93,7 +94,7 @@ describe("#316 / #317 wiring", () => {
   });
 
   it("long screens are full pages, short ones stay sheets", () => {
-    const html = read("index.html");
+    const html = readLegacyIndexHtml();
     for (const id of ["admin-lightning-quiz-editor", "admin-lightning-quiz-import", "admin-lightning-quiz-results"]) {
       expect(html).toMatch(new RegExp(`<section class="glass-card admin-lq-subpage hidden" id="${id}"`));
     }

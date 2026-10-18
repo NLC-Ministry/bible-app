@@ -1,28 +1,43 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRetiredPlanRequest } from "./retired-resources.ts";
 import {
+  PASTORAL_OVERVIEW_RPC,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  buildPastoralOverviewArgs,
   buildPlanReadingLogDigestArgs,
   buildPlanStatsRosterArgs,
 } from "./plan-stats-scope.ts";
+import {
+  AUDITED_ADMIN_RPCS,
+  buildRpcAuditEvent,
+  buildTableWriteAuditEvent,
+  classifyFailure,
+  diffFields,
+  isAuditedTableWrite,
+  resolveRequestId,
+  singleRowKey,
+  type AdminAuditEvent,
+} from "./admin-audit.ts";
+import { buildRequestLogLine, requestLogTarget, sanitizeReportInsertPayload } from "./request-diagnostics.ts";
+import { PLAN_REPORT_ACTIONS, PLAN_REPORT_PLAN_COLUMNS, runPlanReport } from "./plan-report.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
-// >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
+// >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
 // base64 解開 payload 就信任裡面的 sub / email——任何人都能自己簽一張假 token 冒用別人。
 // 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
 //
 // NLC_JWT_VERIFY_MODE（Edge Function secret）：
-//   report（預設）：nlc-data 驗證失敗只記錄、照舊放行，用來確認正式流量都驗得過；
+//   enforce（預設）：兩邊驗證失敗都拒絕。沒設或設成不認得的值也是 enforce（#564：漏設 secret 不能變成放行）。
+//   report：         nlc-data 驗證失敗只記錄、照舊放行（當初上線前觀察正式流量用）；
 //                   nlc-session 的 id_token 一律要驗過才採用（見 pickSessionUserinfo）。
-//   enforce：        兩邊驗證失敗都拒絕。確認 report 期間沒有正常使用者被判失敗後再切。
 //   off：            緊急開關，完全回到舊行為（只解 payload）。
-// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 期間的 log 會印出實際的 aud）。
+// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 模式的 log 會印出實際的 aud）。
 // NLC_LOGTO_CLIENT_ID（選填）：id_token 的 aud 要等於它才算過。
 const LOGTO_JWT_MODE: "off" | "report" | "enforce" = (() => {
-  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "report").trim().toLowerCase();
-  return m === "off" || m === "enforce" ? m : "report";
+  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "enforce").trim().toLowerCase();
+  return m === "off" || m === "report" ? m : "enforce";
 })();
 const LOGTO_JWT_CLOCK_TOLERANCE_SEC = 60;
 let logtoJwks: any = null;
@@ -149,10 +164,50 @@ async function verifyExamWriteToken(
 }
 // <<< exam-write-token
 
+// >>> cors-allowlist（nlc-data、nlc-session、exam-write 三支 index.ts 內此區塊逐字相同；scripts/cors-allowlist.test.mjs 會比對）
+// 只對白名單內的網站回 Access-Control-Allow-Origin（#553）。以前直接把請求帶來的 origin 原樣
+// 回傳，任何網站都能在瀏覽器裡讀到回應。白名單外的來源不給這個標頭，瀏覽器就會擋下回應。
+// 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
+//   APP_ALLOWED_ORIGINS（選填，逗號分隔的完整 origin）：臨時再加的網域。
+//   APP_ORIGIN（舊設定，選填）：也算在白名單內。
+const CORS_FIXED_ORIGINS = [
+  "https://bible.newlife.org.tw",
+  "https://bible-speed-reading.vercel.app",
+  "https://bible-speed-reading-staging.vercel.app",
+  // 後台（#550）：照搬的舊管理區塊在後台網域的 iframe 裡，照舊呼叫 nlc-session／nlc-data／exam-write
+  "https://bible-speed-reading-admin.vercel.app",
+  "https://bible-speed-reading-admin-staging.vercel.app"
+];
+// Vercel 的 PR 預覽網址：尾巴是本專案的 Vercel 團隊，別人建的專案不會有
+const CORS_PREVIEW_ORIGIN_RE = /^https:\/\/bible-speed-reading-[a-z0-9]+-a0970927705-1204s-projects\.vercel\.app$/;
+// 本機開發（npx serve dist 等）
+const CORS_LOCAL_ORIGIN_RE = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
+const CORS_ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-request-id";
+function corsAllowedOrigins(): Set<string> {
+  const extra = [Deno.env.get("APP_ORIGIN") || "", ...String(Deno.env.get("APP_ALLOWED_ORIGINS") || "").split(",")]
+    .map((value) => value.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  return new Set([...CORS_FIXED_ORIGINS, ...extra]);
+}
+function corsAllowOrigin(origin: string | null): string | null {
+  if (!origin) return null;
+  if (corsAllowedOrigins().has(origin)) return origin;
+  if (CORS_PREVIEW_ORIGIN_RE.test(origin) || CORS_LOCAL_ORIGIN_RE.test(origin)) return origin;
+  return null;
+}
+function corsHeadersFor(req: Request): Record<string, string> {
+  const allowed = corsAllowOrigin(req.headers.get("origin"));
+  return {
+    ...(allowed ? { "Access-Control-Allow-Origin": allowed } : {}),
+    "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin"
+  };
+}
+// <<< cors-allowlist
+
+// 來源相關的 CORS 標頭由 corsHeadersFor(req) 依白名單決定（見上方 cors-allowlist 區塊）
 const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json"
 };
 
@@ -250,7 +305,9 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "get_joined_plan_members",
   "send_plan_join_invitation",
-  "get_admin_member_team_placements"
+  "get_admin_member_team_placements",
+  // App 管理分頁的統計（#551）；範圍參數在下面依登入者覆寫
+  PASTORAL_OVERVIEW_RPC
 ]);
 const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics",
@@ -431,7 +488,8 @@ const READING_ACTIVITY_RPC_FUNCTIONS = new Set([
 // 計畫統計／組員總覽的精簡打卡紀錄（#394）和一次回傳的名單（#397）：
 // PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
 // 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
-// p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。
+// p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。App 管理分頁的統計 PASTORAL_OVERVIEW_RPC（#551）同一套，
+// 而且只給 canManagePlans 的角色。
 // 經文注釋審核（#471）：審核者只能審被指派的書卷，指派／總覽／重新送審／最終發布只限
 // 系統管理員——都由 SQL 端依注入的 p_actor_id 檢查（沒有指派就拒絕），這裡只注入 p_actor_id。
 const COMMENTARY_REVIEW_RPC_FUNCTIONS = new Set([
@@ -463,6 +521,7 @@ const RPC_FUNCTIONS = new Set([
   ...COMMENTARY_REVIEW_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  PASTORAL_OVERVIEW_RPC,
   ADMIN_USER_DIRECTORY_RPC,
   ...ISSUE_RPC_FUNCTIONS
 ]);
@@ -846,6 +905,50 @@ async function applyForcedScope(query: any, table: string, action: string, profi
   return { query };
 }
 
+// ── 稽核補記（#549）──────────────────────────────────────────────────────────
+// 管理寫入成功後補記一筆到 audit.admin_events（經 public.record_admin_audit_event，
+// 只有 service role 能呼叫）。盡力而為：稽核失敗只記 log，不影響原本的請求。
+async function recordAdminAudit(supabaseAdmin: any, event: AdminAuditEvent) {
+  try {
+    const { error } = await supabaseAdmin.rpc("record_admin_audit_event", event);
+    if (error) console.warn(JSON.stringify({ event: "admin_audit_record_failed", action: event.p_action, code: error.code, message: error.message }));
+  } catch (err) {
+    console.warn(JSON.stringify({ event: "admin_audit_record_failed", action: event.p_action, message: err instanceof Error ? err.message : String(err) }));
+  }
+}
+
+async function fetchManagedScopes(supabaseAdmin: any, profileId: string) {
+  try {
+    const { data } = await supabaseAdmin
+      .from("profiles")
+      .select("managed_regions, managed_zones, managed_groups")
+      .eq("id", profileId)
+      .maybeSingle();
+    return data || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+// 單列 update／delete 先讀出修改前的值（update 只讀 payload 有的欄位）；批次操作不讀，只記條件和筆數
+async function fetchAuditBefore(supabaseAdmin: any, table: string, action: string, filters: unknown, payload: unknown) {
+  if (action !== "update" && action !== "delete") return null;
+  const key = singleRowKey(table, filters);
+  if (!key) return null;
+  let columns = "*";
+  if (action === "update") {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+    columns = Object.keys(payload).filter((name) => /^[a-z_][a-z0-9_]*$/.test(name)).join(",");
+    if (!columns) return null;
+  }
+  try {
+    const { data } = await supabaseAdmin.from(table).select(columns).eq(key.column, key.value).maybeSingle();
+    return data || null;
+  } catch (_err) {
+    return null;
+  }
+}
+
 // Run one read-only query spec through the SAME allowlist + forced-scope + option
 // pipeline as the single-query `action:"select"` path near the bottom of
 // Deno.serve. Kept deliberately in sync with that block; if you change one, change
@@ -895,22 +998,28 @@ async function runSelectPipeline(
 }
 
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get("origin") || "*";
   const localCorsHeaders = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": origin
+    ...corsHeadersFor(req)
   };
 
   const requestStartedAt = performance.now();
+  // 請求 id：前端帶 x-request-id（#548），沒帶就產生一個；寫進稽核紀錄（#549）
+  const requestId = resolveRequestId(req.headers.get("x-request-id"), () => crypto.randomUUID());
+  const requestContext = { action: "", target: "" };
   const jsonResponse = (body: unknown, status = 200) => {
     const serialized = JSON.stringify(body);
+    const elapsedMs = performance.now() - requestStartedAt;
+    // 每個請求一行結構化 log（#548）：回報診斷資訊裡的 request_id 對得到這一行
+    console.log(buildRequestLogLine({ requestId, ...requestContext, status, ms: elapsedMs }));
     return new Response(serialized, {
       status,
       headers: {
         ...localCorsHeaders,
         "Content-Length": String(new TextEncoder().encode(serialized).byteLength),
-        "Server-Timing": `edge;dur=${(performance.now() - requestStartedAt).toFixed(1)}`,
-        "Access-Control-Expose-Headers": "Content-Length, Server-Timing"
+        "Server-Timing": `edge;dur=${elapsedMs.toFixed(1)}`,
+        "x-request-id": requestId,
+        "Access-Control-Expose-Headers": "Content-Length, Server-Timing, x-request-id"
       }
     });
   };
@@ -930,7 +1039,9 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const table = body.table;
     const action = body.action || "select";
-    if (!["save_profile", "rpc", "batch", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet", "issue_thread_get", "issue_thread_post", "issue_thread_attachment_delete"].includes(action) && (!table || typeof table !== "string")) {
+    requestContext.action = String(action).slice(0, 60);
+    requestContext.target = requestLogTarget(body);
+    if (!["save_profile", "rpc", "batch", "send_care_reminder", "mark_issue_report_reply_seen", "sync_registration_stats_sheet", "issue_thread_get", "issue_thread_post", "issue_thread_attachment_delete", ...PLAN_REPORT_ACTIONS].includes(action) && (!table || typeof table !== "string")) {
       return jsonResponse({ error: "missing_table" }, 400);
     }
 
@@ -943,23 +1054,57 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "resource_not_found", resource: "reading_plan" }, 404);
     }
 
+    // 組長版的計畫總覽（只有數字）與名單（#564）：規則同後台，範圍只看 getVisibleProfileIds。
+    // 名單有姓名、單位、進度：打開一次補記一筆 view_plan_roster。
+    if (PLAN_REPORT_ACTIONS.has(action)) {
+      if (!canManagePlans(profile)) return jsonResponse({ error: "forbidden" }, 403);
+      const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+      const result = await runPlanReport(action, body.args, visibleIds, profile.id, {
+        fetchPlanRow: (planId) => supabaseAdmin.from("global_plans").select(PLAN_REPORT_PLAN_COLUMNS).eq("id", planId).maybeSingle(),
+        rpc: (fn, args) => supabaseAdmin.rpc(fn, args)
+      });
+      if (action === "plan_roster" && result.status === 200) {
+        await recordAdminAudit(supabaseAdmin, {
+          p_action: "view_plan_roster",
+          p_result: "ok",
+          p_actor_id: profile.id,
+          p_actor_role: getProfileRoleCode(profile),
+          p_resource: "global_plans",
+          p_target_user_id: null,
+          p_target_id: result.planId || null,
+          p_changes: null,
+          p_reason: null,
+          p_request_id: requestId,
+          p_detail: { people: result.people ?? 0, scope: visibleIds === null ? "church" : "managed" }
+        });
+      }
+      return jsonResponse(result.body, result.status);
+    }
+
     if (action === "rpc") {
       const functionName = typeof body.function === "string" ? body.function : "";
       if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
-      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+      // 權限不足的管理 RPC 記為 denied（#549），供異常偵測
+      const denyAdminRpc = async () => {
+        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+          fn: functionName, args: body.args, actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
+        }));
         return jsonResponse({ error: "forbidden_rpc" }, 403);
+      };
+      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+        return await denyAdminRpc();
       }
       if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (ISSUE_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (functionName === ADMIN_USER_DIRECTORY_RPC && !hasWholeChurchPlanScope(profile)) {
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
+        return await denyAdminRpc();
       }
       if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
         const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
@@ -973,7 +1118,7 @@ Deno.serve(async (req: Request) => {
       }
       if (EXAM_RPC_FUNCTIONS.has(functionName)) {
         if (EXAM_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-          return jsonResponse({ error: "forbidden_rpc" }, 403);
+          return await denyAdminRpc();
         }
         const { data: examFeature, error: examFeatureError } = await supabaseAdmin
           .from("app_feature_settings")
@@ -1009,6 +1154,9 @@ Deno.serve(async (req: Request) => {
       } else if (functionName === PLAN_STATS_ROSTER_RPC) {
         const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
         rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
+      } else if (functionName === PASTORAL_OVERVIEW_RPC) {
+        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+        rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);
       } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
         rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
       } else if (functionName === "publish_global_plan_rules"
@@ -1026,7 +1174,24 @@ Deno.serve(async (req: Request) => {
       } else {
         rpcArgs = (body.args || {});
       }
+      // 管理範圍：補記修改前後的值（只有這支，其他管理 RPC 記參數就夠）
+      const auditRpc = AUDITED_ADMIN_RPCS.has(functionName);
+      const scopeTargetId = auditRpc && functionName === "set_profile_managed_scopes" ? String((rpcArgs as any).p_profile_id || "") : "";
+      const scopeBefore = scopeTargetId ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
       const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
+      if (auditRpc) {
+        const scopeAfter = scopeTargetId && !error ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
+        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+          fn: functionName,
+          args: rpcArgs,
+          actor: profile,
+          roleCode: getProfileRoleCode(profile),
+          requestId,
+          result: error ? classifyFailure(error) : "ok",
+          error,
+          changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : null
+        }));
+      }
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
       // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
       // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
@@ -1102,36 +1267,21 @@ Deno.serve(async (req: Request) => {
       const sentOn = new Date().toISOString().slice(0, 10);
       const planKey = String(p.plan_key || "");
 
-      // A sender can only send one reminder per recipient per plan per day
-      // (care_reminders_daily_unique). Re-sending the same day used to just
-      // hit that unique-constraint error with no way to see or fix what was
-      // already sent. Instead: if today's reminder to this person is still
-      // unread, treat this as an edit (update it in place); if it's already
-      // been read/dismissed, tell the caller plainly rather than surfacing a
-      // raw constraint violation.
+      // A reminder is a one-way notification: one per recipient per plan per
+      // day (care_reminders_daily_unique), and immutable once sent
+      // (enforce_care_reminder_transition). A same-day resend gets a plain
+      // answer instead of a raw constraint violation (#574) — same contract
+      // as admin_api_care_remind.
       const { data: existing, error: existingError } = await supabaseAdmin
         .from("care_reminders")
-        .select("id, status")
+        .select("id")
         .eq("sender_id", profile.id)
         .eq("recipient_id", p.recipient_id)
         .eq("plan_key", planKey)
         .eq("sent_on", sentOn)
         .maybeSingle();
       if (existingError) return jsonResponse({ error: existingError.message, code: existingError.code }, 400);
-
-      if (existing) {
-        if (existing.status !== "unread") {
-          return jsonResponse({ error: "care_reminder_already_seen" }, 409);
-        }
-        const { data: updated, error: updateError } = await supabaseAdmin
-          .from("care_reminders")
-          .update({ reason: p.reason, message: msg })
-          .eq("id", existing.id)
-          .select("id, reason, message, status, sent_on")
-          .single();
-        if (updateError) return jsonResponse({ error: updateError.message, code: updateError.code }, 400);
-        return jsonResponse({ data: { ...updated, edited: true } });
-      }
+      if (existing) return jsonResponse({ error: "care_reminder_already_sent" }, 409);
 
       const { data: inserted, error } = await supabaseAdmin
         .from("care_reminders")
@@ -1146,8 +1296,24 @@ Deno.serve(async (req: Request) => {
         })
         .select("id, reason, message, status, sent_on")
         .single();
+      // 23505 here is a concurrent same-day send that won the race.
+      if (error && error.code === "23505") return jsonResponse({ error: "care_reminder_already_sent" }, 409);
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
-      return jsonResponse({ data: { ...inserted, edited: false } });
+      // 組長在 App 管理分頁送的提醒也記稽核（#570），欄位同後台的 admin_api_care_remind
+      await recordAdminAudit(supabaseAdmin, {
+        p_action: "care_reminder.send",
+        p_result: "ok",
+        p_actor_id: profile.id,
+        p_actor_role: getProfileRoleCode(profile),
+        p_resource: "care_reminders",
+        p_target_user_id: p.recipient_id,
+        p_target_id: inserted?.id ? String(inserted.id) : null,
+        p_changes: { reason: p.reason, message: msg },
+        p_reason: null,
+        p_request_id: requestId,
+        p_detail: { plan_key: planKey }
+      });
+      return jsonResponse({ data: inserted });
     }
 
     // ── mark_issue_report_reply_seen: the reporting member clears their own
@@ -1376,7 +1542,15 @@ Deno.serve(async (req: Request) => {
     // shared secret before forwarding — the Apps Script side never sees a
     // Supabase/Logto token, just this one shared secret.
     if (action === "sync_registration_stats_sheet") {
-      if (!isAdmin(profile)) return jsonResponse({ error: "forbidden" }, 403);
+      const sheetAudit = (result: "ok" | "denied" | "error") => recordAdminAudit(supabaseAdmin, {
+        p_action: "sync_registration_stats_sheet", p_result: result, p_actor_id: profile.id,
+        p_actor_role: getProfileRoleCode(profile), p_resource: "export", p_target_user_id: null, p_target_id: null,
+        p_changes: null, p_reason: null, p_request_id: requestId, p_detail: null
+      });
+      if (!isAdmin(profile)) {
+        await sheetAudit("denied");
+        return jsonResponse({ error: "forbidden" }, 403);
+      }
 
       const sheetUrl = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_URL");
       const sheetSecret = Deno.env.get("REGISTRATION_STATS_SHEET_WEBHOOK_SECRET");
@@ -1427,6 +1601,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "sheet_webhook_unreachable" }, 502);
       }
 
+      await sheetAudit("ok");
       return jsonResponse({ data: { ok: true } });
     }
 
@@ -1436,6 +1611,11 @@ Deno.serve(async (req: Request) => {
     if (["insert", "update", "upsert"].includes(action)
       && table === "profiles"
       && Object.prototype.hasOwnProperty.call(body.payload || {}, "role_id")) {
+      await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+        table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: null,
+        actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied",
+        error: { code: "role_assignment_managed_by_member_hub" }
+      }));
       return jsonResponse({ error: "role_assignment_managed_by_member_hub" }, 403);
     }
     const canReportInsert = action === "insert" && table === "issue_reports";
@@ -1452,7 +1632,22 @@ Deno.serve(async (req: Request) => {
       ((ADMIN_WRITE_TABLES.has(table) || table === "issue_reports") && (isAdmin(profile) || canManagePlans(profile)))
       || (ADMIN_ONLY_WRITE_TABLES.has(table) && isAdmin(profile))
     );
-    if (!canRead && !canOwnWrite && !canAdminWrite) return jsonResponse({ error: "forbidden" }, 403);
+    if (!canRead && !canOwnWrite && !canAdminWrite) {
+      if (isAuditedTableWrite(table, action)) {
+        await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+          table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: null,
+          actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
+        }));
+      }
+      return jsonResponse({ error: "forbidden" }, 403);
+    }
+    // 新增回報：metadata 只留前端附的診斷資訊（#548），其他鍵一律丟掉
+    if (table === "issue_reports" && action === "insert") {
+      body.payload = sanitizeReportInsertPayload(body.payload);
+    }
+    // 管理用資料表的寫入（#549）：單列修改／刪除先讀出修改前的值，寫入後補記一筆
+    const auditWrite = canAdminWrite && !canOwnWrite && isAuditedTableWrite(table, action);
+    const auditBefore = auditWrite ? await fetchAuditBefore(supabaseAdmin, table, action, body.filters, body.payload) : null;
 
 
     const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
@@ -1491,6 +1686,15 @@ Deno.serve(async (req: Request) => {
     else if (body.returning === "maybeSingle") query = query.maybeSingle();
 
     const { data, error } = await query;
+    if (auditWrite) {
+      await recordAdminAudit(supabaseAdmin, buildTableWriteAuditEvent({
+        table, action, filters: body.filters, orFilter: body.or, payload: body.payload, before: auditBefore,
+        actor: profile, roleCode: getProfileRoleCode(profile), requestId,
+        result: error ? classifyFailure(error) : "ok",
+        rowCount: Array.isArray(data) ? data.length : null,
+        error
+      }));
+    }
     if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
 
     let responseData = data;

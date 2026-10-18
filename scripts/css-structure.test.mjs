@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 // #438：#425 大段刪 CSS 時連 `.pill-btn {` 一起刪掉，留下一段沒有選擇器的屬性，
 // 瀏覽器整段忽略，計畫頁篩選鈕變回系統預設的白色按鈕。這裡檢查每個 CSS 檔的
 // 大括號成對、且頂層沒有孤立的「屬性: 值;」。
-const CSS_FILES = ["index.css", "css/admin-registration-statistics.css", "css/team-registration.css"];
+const CSS_FILES = ["index.css", "css/admin-registration-statistics.css", "css/team-registration.css", "css/pastoral.css"];
 
 function stripCommentsAndStrings(css) {
   return css

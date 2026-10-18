@@ -32,7 +32,9 @@ function makeHarness({ href = "https://app.test/", loginGateOpen = false, role =
       get href() { return url.href; },
       get pathname() { return url.pathname; },
       get search() { return url.search; },
-      get hash() { return url.hash; }
+      get hash() { return url.hash; },
+      get hostname() { return url.hostname; },
+      assign: vi.fn()
     },
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); },
     currentPlanViewState: "LIST",
@@ -64,19 +66,19 @@ function makeHarness({ href = "https://app.test/", loginGateOpen = false, role =
       switched.push({ tab, options, planDetailOpen: state.planDetailOpen, activePlan: state.activePlan });
     })
   };
-  const adminModule = { openAdminSectionRoute: vi.fn(() => true), getAdminRouteSection: () => null };
+  const pastoralModule = { openPastoralTab: vi.fn(), getPastoralRouteTab: () => null };
   const toast = vi.fn();
   const routing = createAppHashRouting({
     win,
     doc,
     appRouter,
     state,
-    loadModule: vi.fn(async name => (name === "admin" ? adminModule : {})),
-    getLoadedModule: name => (name === "admin" ? adminModule : null),
+    loadModule: vi.fn(async name => (name === "pastoral" ? pastoralModule : {})),
+    getLoadedModule: name => (name === "pastoral" ? pastoralModule : null),
     getRole: () => role,
     toast
   });
-  return { routing, win, state, appRouter, switched, adminModule, toast, loginGate, listeners, url };
+  return { routing, win, state, appRouter, switched, pastoralModule, toast, loginGate, listeners, url };
 }
 
 const joinedPlan = { id: "enroll-1", globalPlanId: "global-1", name: "Q4" };
@@ -113,19 +115,41 @@ describe("boot deep link", () => {
   });
 
   it("keeps a member out of the admin tab", async () => {
-    const h = makeHarness({ href: "https://app.test/#/admin/users", role: "member" });
-    h.routing.captureBootRoute();
-    await h.routing.finishBoot();
-    expect(h.switched.map(entry => entry.tab)).toEqual(["dashboard-view"]);
-    expect(h.adminModule.openAdminSectionRoute).not.toHaveBeenCalled();
+    for (const section of ["users", "roster"]) {
+      const h = makeHarness({ href: `https://app.test/#/admin/${section}`, role: "member" });
+      h.routing.captureBootRoute();
+      await h.routing.finishBoot();
+      expect(h.switched.map(entry => entry.tab)).toEqual(["dashboard-view"]);
+      expect(h.pastoralModule.openPastoralTab).not.toHaveBeenCalled();
+      expect(h.win.location.assign).not.toHaveBeenCalled();
+    }
   });
 
-  it("opens an admin section for a manager", async () => {
-    const h = makeHarness({ href: "https://app.test/#/admin/lightning-quiz", role: "zone_leader" });
+  it("opens the leader tab a manager's link asks for, old section names included (#551)", async () => {
+    for (const section of ["teams", "join-status"]) {
+      const h = makeHarness({ href: `https://app.test/#/admin/${section}`, role: "zone_leader" });
+      h.routing.captureBootRoute();
+      await h.routing.finishBoot();
+      expect(h.switched.map(entry => entry.tab)).toEqual(["admin-view"]);
+      expect(h.pastoralModule.openPastoralTab).toHaveBeenCalledWith(section);
+    }
+  });
+
+  it("sends the system administrator's old system-section links to the console (#551)", async () => {
+    const h = makeHarness({ href: "https://bible.newlife.org.tw/#/admin/lightning-quiz", role: "admin" });
     h.routing.captureBootRoute();
     await h.routing.finishBoot();
+    expect(h.win.location.assign).toHaveBeenCalledWith("https://bible-speed-reading-admin.vercel.app/#/content/lightning-quiz");
+    expect(h.switched).toEqual([]);
+  });
+
+  it("a leader's old system-section link just opens the 管理 tab (no console for them)", async () => {
+    const h = makeHarness({ href: "https://app.test/#/admin/users", role: "pastor" });
+    h.routing.captureBootRoute();
+    await h.routing.finishBoot();
+    expect(h.win.location.assign).not.toHaveBeenCalled();
     expect(h.switched.map(entry => entry.tab)).toEqual(["admin-view"]);
-    expect(h.adminModule.openAdminSectionRoute).toHaveBeenCalledWith("lightning-quiz");
+    expect(h.pastoralModule.openPastoralTab).not.toHaveBeenCalled();
   });
 
   it("opens the profile exams page from the legacy #my-exams link", async () => {

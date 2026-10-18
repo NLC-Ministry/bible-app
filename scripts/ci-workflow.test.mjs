@@ -98,4 +98,32 @@ describe("CI/CD workflow", () => {
       "github.event.pull_request.head.repo.full_name == github.repository"
     );
   });
+
+  describe("admin console deploy (#555)", () => {
+    const job = yaml.slice(yaml.indexOf("\n  deploy-admin:"));
+    const build = yaml.slice(yaml.indexOf("\n  build:"), yaml.indexOf("\n  deploy:"));
+
+    it("builds the admin console in the build job with placeholder settings", () => {
+      expect(build).toContain("node scripts/build-admin.mjs");
+      expect(build).toContain("test ! -e dist/admin.html");
+    });
+
+    it("deploys only after the member app deploy, on pushes, to its own Vercel project", () => {
+      expect(job).toMatch(/needs:\s*\[deploy\]/);
+      expect(job).toContain("if: github.event_name == 'push'");
+      expect(job).toContain("VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}");
+      expect(job).toContain("cp vercel.admin.json vercel.json");
+      expect(job.indexOf("cp vercel.admin.json vercel.json")).toBeLessThan(job.indexOf("vercel pull"));
+    });
+
+    it("skips quietly until the admin Vercel project exists", () => {
+      expect(job).toContain('if [ -z "$VERCEL_PROJECT_ID" ]; then');
+      expect(job).toContain("steps.configured.outputs.enabled == 'true'");
+    });
+
+    it("aliases staging to the fixed admin staging URL and never touches the member app domains", () => {
+      expect(job).toContain('vercel alias set "$URL" bible-speed-reading-admin-staging.vercel.app');
+      expect(job).not.toMatch(/bible\.newlife\.org\.tw|alias set "\$URL" bible-speed-reading-staging\.vercel\.app/);
+    });
+  });
 });

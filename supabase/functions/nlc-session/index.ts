@@ -1,21 +1,21 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
 
-// >>> logto-jwt-verify（nlc-data 與 nlc-session 兩支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
+// >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
 // base64 解開 payload 就信任裡面的 sub / email——任何人都能自己簽一張假 token 冒用別人。
 // 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
 //
 // NLC_JWT_VERIFY_MODE（Edge Function secret）：
-//   report（預設）：nlc-data 驗證失敗只記錄、照舊放行，用來確認正式流量都驗得過；
+//   enforce（預設）：兩邊驗證失敗都拒絕。沒設或設成不認得的值也是 enforce（#564：漏設 secret 不能變成放行）。
+//   report：         nlc-data 驗證失敗只記錄、照舊放行（當初上線前觀察正式流量用）；
 //                   nlc-session 的 id_token 一律要驗過才採用（見 pickSessionUserinfo）。
-//   enforce：        兩邊驗證失敗都拒絕。確認 report 期間沒有正常使用者被判失敗後再切。
 //   off：            緊急開關，完全回到舊行為（只解 payload）。
-// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 期間的 log 會印出實際的 aud）。
+// NLC_LOGTO_AUDIENCE（選填）：access token 的 aud 要等於它才算過（report 模式的 log 會印出實際的 aud）。
 // NLC_LOGTO_CLIENT_ID（選填）：id_token 的 aud 要等於它才算過。
 const LOGTO_JWT_MODE: "off" | "report" | "enforce" = (() => {
-  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "report").trim().toLowerCase();
-  return m === "off" || m === "enforce" ? m : "report";
+  const m = String(Deno.env.get("NLC_JWT_VERIFY_MODE") || "enforce").trim().toLowerCase();
+  return m === "off" || m === "report" ? m : "enforce";
 })();
 const LOGTO_JWT_CLOCK_TOLERANCE_SEC = 60;
 let logtoJwks: any = null;
@@ -103,10 +103,50 @@ function pickSessionUserinfo(
 // <<< logto-jwt-verify
 
 
+// >>> cors-allowlist（nlc-data、nlc-session、exam-write 三支 index.ts 內此區塊逐字相同；scripts/cors-allowlist.test.mjs 會比對）
+// 只對白名單內的網站回 Access-Control-Allow-Origin（#553）。以前直接把請求帶來的 origin 原樣
+// 回傳，任何網站都能在瀏覽器裡讀到回應。白名單外的來源不給這個標頭，瀏覽器就會擋下回應。
+// 直接內嵌、不 import 共用檔：部署只打包函式自己的資料夾。
+//   APP_ALLOWED_ORIGINS（選填，逗號分隔的完整 origin）：臨時再加的網域。
+//   APP_ORIGIN（舊設定，選填）：也算在白名單內。
+const CORS_FIXED_ORIGINS = [
+  "https://bible.newlife.org.tw",
+  "https://bible-speed-reading.vercel.app",
+  "https://bible-speed-reading-staging.vercel.app",
+  // 後台（#550）：照搬的舊管理區塊在後台網域的 iframe 裡，照舊呼叫 nlc-session／nlc-data／exam-write
+  "https://bible-speed-reading-admin.vercel.app",
+  "https://bible-speed-reading-admin-staging.vercel.app"
+];
+// Vercel 的 PR 預覽網址：尾巴是本專案的 Vercel 團隊，別人建的專案不會有
+const CORS_PREVIEW_ORIGIN_RE = /^https:\/\/bible-speed-reading-[a-z0-9]+-a0970927705-1204s-projects\.vercel\.app$/;
+// 本機開發（npx serve dist 等）
+const CORS_LOCAL_ORIGIN_RE = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/;
+const CORS_ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-request-id";
+function corsAllowedOrigins(): Set<string> {
+  const extra = [Deno.env.get("APP_ORIGIN") || "", ...String(Deno.env.get("APP_ALLOWED_ORIGINS") || "").split(",")]
+    .map((value) => value.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  return new Set([...CORS_FIXED_ORIGINS, ...extra]);
+}
+function corsAllowOrigin(origin: string | null): string | null {
+  if (!origin) return null;
+  if (corsAllowedOrigins().has(origin)) return origin;
+  if (CORS_PREVIEW_ORIGIN_RE.test(origin) || CORS_LOCAL_ORIGIN_RE.test(origin)) return origin;
+  return null;
+}
+function corsHeadersFor(req: Request): Record<string, string> {
+  const allowed = corsAllowOrigin(req.headers.get("origin"));
+  return {
+    ...(allowed ? { "Access-Control-Allow-Origin": allowed } : {}),
+    "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin"
+  };
+}
+// <<< cors-allowlist
+
+// 來源相關的 CORS 標頭由 corsHeadersFor(req) 依白名單決定（見上方 cors-allowlist 區塊）
 const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json"
 };
 
@@ -606,10 +646,9 @@ async function resolveLocalOrgLinks(
 }
 
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get("origin") || "*";
   const localCorsHeaders = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": origin
+    ...corsHeadersFor(req)
   };
 
   const jsonResponse = (body: unknown, status = 200) => {

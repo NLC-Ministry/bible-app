@@ -3,8 +3,11 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, ChevronLeft, ImagePlus, Send, Trash2, Shield } from "lucide-react";
 import { AdminReportTable } from "./AdminReportTable.tsx";
-import { ThreadPipeline, compressScreenshot, type ThreadImage } from "./IssueReportBlocks.ts";
+import { ThreadPipeline, compressScreenshot, fetchReportDiagnostics, type ThreadImage } from "./IssueReportBlocks.ts";
 import { groupMessages, dayKey, dayLabel, clockTime, formatWhen, statusBadgeClass, CATEGORY_BADGE_CLASS } from "./ReportDrawer.tsx";
+import { csvCell } from "../../js/modules/csv-cell.mjs";
+import { fetchNlcTracked } from "../../js/diagnostics/report-diagnostics.mjs";
+import { diagnosticsSummaryRows, taipeiTime } from "../../lib/issue-report/report-diagnostics-summary.ts";
 
 interface IssueReport {
   id: string;
@@ -16,6 +19,7 @@ interface IssueReport {
   status: string;
   metadata?: Record<string, any>;
   profiles?: {
+    id?: string;
     name?: string;
     pastoral_zone?: string;
     small_group?: string;
@@ -49,7 +53,7 @@ export function convertToCSV(data: IssueReport[]): string {
     STATUS_MAP[item.status] || item.status || "待處理",
     (item as any).messageCount ?? "",
     (item as any).lastMessageAt || "",
-    (item.description || "").replace(/"/g, '""'),
+    item.description || "",
     item.url || "",
     item.profiles?.name || "訪客/離線",
     item.profiles?.pastoral_zone || "",
@@ -58,7 +62,7 @@ export function convertToCSV(data: IssueReport[]): string {
   
   return [
     headers.join(","),
-    ...rows.map(row => row.map(val => `"${val}"`).join(","))
+    ...rows.map(row => row.map(csvCell).join(","))
   ].join("\n");
 }
 
@@ -93,7 +97,7 @@ export const AdminReportView: React.FC = () => {
         status: row.status,
         metadata: {},
         profiles: row.reporter
-          ? { name: row.reporter.name, pastoral_zone: row.reporter.pastoralZone, small_group: row.reporter.smallGroup }
+          ? { id: row.reporter.id, name: row.reporter.name, pastoral_zone: row.reporter.pastoralZone, small_group: row.reporter.smallGroup }
           : null,
         // extra fields the table reads via (report as any)
         ...( { unreadFromMember: !!row.unreadFromMember, messageCount: row.messageCount, lastMessageAt: row.lastMessageAt } as any )
@@ -155,19 +159,20 @@ export const AdminReportView: React.FC = () => {
     const cfg = (window as any).state?.supabaseConfig || {};
     const supabaseUrl = String(cfg.url || "").replace(/\/+$/, "");
     if (!token || !supabaseUrl) throw new Error("請先登入管理員帳號");
-    const response = await fetch(`${supabaseUrl}/functions/v1/nlc-data`, {
+    const request = {
+      table: "issue_reports",
+      action: "delete",
+      filters: [{ type: "eq", column: "id", value: id }]
+    };
+    const response = await fetchNlcTracked(`${supabaseUrl}/functions/v1/nlc-data`, {
       method: "POST",
       headers: {
         "apikey": String(cfg.anonKey || ""),
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        table: "issue_reports",
-        action: "delete",
-        filters: [{ type: "eq", column: "id", value: id }]
-      })
-    });
+      body: JSON.stringify(request)
+    }, request);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `HTTP 錯誤 ${response.status}`);
     setReports(prev => prev.filter(r => r.id !== id));
@@ -202,6 +207,80 @@ export const AdminReportView: React.FC = () => {
 
 const CAT_LABEL: Record<string, string> = { bug: "Bug 錯誤", ui: "UI 建議", data: "資料問題", other: "其他" };
 const ST_LABEL: Record<string, string> = { pending: "待處理", processing: "處理中", resolved: "已解決", ignored: "已存檔" };
+
+// taipeiTime／diagnosticsSummaryRows 搬到獨立模組，後台（admin/）也用同一份（#550）
+export { diagnosticsSummaryRows } from "../../lib/issue-report/report-diagnostics-summary.ts";
+
+export const ReportDiagnosticsPanel: React.FC<{ reportId: string }> = ({ reportId }) => {
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [data, setData] = useState<Record<string, any> | null>(null);
+
+  useEffect(() => { setStatus("idle"); setData(null); }, [reportId]);
+
+  // 展開時才讀（列表不帶 metadata，避免每次開對話都多拉一份）
+  const onToggle = async (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    const open = e.currentTarget.open;
+    if (!open || status === "loading" || status === "ready") return;
+    setStatus("loading");
+    const res = await fetchReportDiagnostics(reportId);
+    if (res.success) { setData(res.data ?? null); setStatus("ready"); }
+    else setStatus("error");
+  };
+
+  const requests: any[] = Array.isArray(data?.recent_requests) ? data!.recent_requests : [];
+  const errors: any[] = Array.isArray(data?.recent_errors) ? data!.recent_errors : [];
+
+  return (
+    <details className="mt-2 border-t border-border pt-2" onToggle={onToggle}>
+      <summary className="cursor-pointer select-none text-[11px] font-medium text-muted-foreground">診斷資訊</summary>
+      <div className="mt-2 text-[12px] text-foreground">
+        {status === "loading" && (
+          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />讀取中…</div>
+        )}
+        {status === "error" && <div className="text-muted-foreground">讀取失敗，請收合後再展開一次。</div>}
+        {status === "ready" && !data && <div className="text-muted-foreground">這筆回報沒有診斷資訊（較早送出的回報不會附）。</div>}
+        {status === "ready" && data && (
+          <div className="flex flex-col gap-3">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              {diagnosticsSummaryRows(data).map(([label, value]) => (
+                <React.Fragment key={label}>
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 break-all">{value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+            <div>
+              <div className="mb-1 font-medium text-muted-foreground">最近的請求</div>
+              {requests.length === 0 ? <div className="text-muted-foreground">無</div> : (
+                <ul className="flex flex-col gap-1 font-mono text-[11px]">
+                  {requests.map((r, i) => (
+                    <li key={`${r.request_id}-${i}`} className="break-all">
+                      {taipeiTime(r.at, false)} · {r.action} · {r.status || "失敗"} · {r.ms}ms · <span className="select-all">{r.request_id}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <div className="mb-1 font-medium text-muted-foreground">最近的錯誤</div>
+              {errors.length === 0 ? <div className="text-muted-foreground">無</div> : (
+                <ul className="flex flex-col gap-2">
+                  {errors.map((er, i) => (
+                    <li key={`${er.at}-${i}`} className="rounded-md bg-muted px-2 py-1">
+                      <div className="text-[11px] text-muted-foreground">{taipeiTime(er.at, false)} · {er.kind}</div>
+                      <div className="break-all">{er.message}</div>
+                      {er.stack && <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{er.stack}</pre>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+};
 
 export const AdminThreadPane: React.FC<{
   reportId: string;
@@ -322,6 +401,7 @@ export const AdminThreadPane: React.FC<{
                     原始回報 · {formatWhen(report.createdAt)}{report.url ? ` · ${report.url}` : ""}
                   </div>
                   <p className="whitespace-pre-wrap leading-relaxed text-foreground">{report.description}</p>
+                  <ReportDiagnosticsPanel reportId={reportId} />
                 </div>
               )}
               {messages.length === 0 && (

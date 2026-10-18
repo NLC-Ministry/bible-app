@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-const html = read("index.html");
+const html = readLegacyIndexHtml();
 const admin = read("js/modules/admin.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");

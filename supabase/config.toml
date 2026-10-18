@@ -21,6 +21,10 @@ verify_jwt = false
 [functions.nlc-data]
 verify_jwt = false
 
+# 後台專用 API（#547）：收的是後台 Logto 應用程式的 token，不是 Supabase JWT，閘道不能先驗
+[functions.admin-api]
+verify_jwt = false
+
 [functions.issue-report-sheet-sync]
 verify_jwt = false
 

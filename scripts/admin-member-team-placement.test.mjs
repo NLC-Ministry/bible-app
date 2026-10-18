@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { currentMigrationSql } from "./migration-sql.mjs";
+import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 describe("admin member team placement lookup tests", () => {
   it("verifies migration 0064 creates get_admin_member_team_placements stored procedure", () => {
@@ -26,7 +27,7 @@ describe("admin member team placement lookup tests", () => {
     // 全部成員/已組隊成員/未組隊 tab switcher. It was simplified to show only
     // people who haven't joined a team — no tabs needed since there's only
     // one category left to show.
-    const html = readFileSync("index.html", "utf8");
+    const html = readLegacyIndexHtml();
     expect(html).toContain('id="admin-team-placements-card-wrap"');
     expect(html).toContain("尚未加入團隊");
     expect(html).toContain('id="admin-team-placement-search"');
