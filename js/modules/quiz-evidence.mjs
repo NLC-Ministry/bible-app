@@ -13,6 +13,8 @@ export function renderQuizEvidenceHtml(raw) {
   const evidence = Array.isArray(raw?.evidence) ? raw.evidence : [];
   const options = Array.isArray(raw?.options) ? raw.options : [];
   if (!evidence.length || evidence.length !== options.length) return "";
+  // #590：正解更正過，AI 舉證證明的是舊答案，不再顯示
+  if (raw?.answerCorrected) return "";
   return `<details class="quiz-evidence">
     <summary>經文舉證</summary>
     <ul>${evidence.map((item, index) => {

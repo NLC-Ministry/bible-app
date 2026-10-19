@@ -12,6 +12,10 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".worktrees", ".claude", "dis
 
 // 刻意讀原始檔、而且提到的函式之後被改寫過的少數情況：檔名 → { migration: 理由 }。
 const ALLOWED_RAW_READS = {
+  // #589：檔名常數只拿來比對 latestFunctionDefinition().file，SQL 斷言都走 currentMigrationSql／latestFunctionDefinition
+  "scripts/daily-quiz-generation-progress.test.mjs": {
+    "20261008064652_daily_quiz_generation_progress.sql": "檔名常數只用來比對函式最新定義所在的檔案",
+  },
   // 這裡列的是 0212 之前寫死網址的舊檔「檔名清單」，不是讀檔做斷言
   "scripts/edge-function-url-from-vault.test.mjs": {
     "0077_issue_report_sheet_sync_trigger.sql": "LEGACY_HARDCODED_URL_MIGRATIONS 檔名清單",
