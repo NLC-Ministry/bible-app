@@ -11,6 +11,10 @@ import {
   buildVerseCommentaryHTML,
   commentaryChapterKey,
   commentaryReferenceLabel,
+  commentaryTextHTML,
+  crossChapterSpan,
+  findRefLabelRanges,
+  refRevealTarget,
   findTermRanges,
   formatVerseRuns,
   indexMayHaveCommentary,
@@ -25,7 +29,7 @@ import {
   serializeCommentaryIndex,
   splitCommentaryParagraphs
 } from "../js/data/passage-commentary.mjs";
-import { COMMENTARY_INDEX_RETRY_MS, createCommentaryRepository } from "../js/data/commentary-repository.mjs";
+import { CHAPTER_COMMENTARY_COLUMNS, COMMENTARY_INDEX_RETRY_MS, chapterCommentaryFilter, createCommentaryRepository } from "../js/data/commentary-repository.mjs";
 import { createReaderCommentaryController } from "../js/modules/reader-commentary.mjs";
 import {
   findCommentaryForChapter,
@@ -224,6 +228,7 @@ function createFakeFrom(tables) {
       select(columns) { request.select = columns; return builder; },
       eq(column, value) { request.filters.push(["eq", column, value]); return builder; },
       in(column, value) { request.filters.push(["in", column, value]); return builder; },
+      or(expression) { request.filters.push(["or", expression]); return builder; },
       order(column) { request.orders.push(column); return builder; },
       range(start, end) { request.range = [start, end]; return builder; },
       then(resolve, reject) {
@@ -733,5 +738,138 @@ describe("passage commentary wiring (#447, #470)", () => {
     expect(admin).toContain("{ id: 'commentary',    group: '內容管理'");
     expect(admin).toContain("commentary: () => [renderAdminCommentary({");
     expect(html).toContain('id="admin-section-commentary"');
+  });
+});
+
+// ── #542：跨章範圍、可點的出處、片語 ─────────────────────────────────────
+const OVERVIEW = { id: "o", book: "利未記", chapter: 1, verse_start: 1, verse_end: 1, chapter_end: 3, chapter_end_verse: 2, title: "1:1–3:2 總覽", content: "總覽" };
+
+describe("cross-chapter notes (#542)", () => {
+  const textFor = count => new Map(Array.from({ length: count }, (_, i) => [i + 1, `第${i + 1}節`]));
+
+  it("shows an overview in every chapter it spans, with the icon on the first covered verse", () => {
+    expect(crossChapterSpan(OVERVIEW)).toEqual({ chapter: 1, verseStart: 1, chapterEnd: 3, verseEnd: 2 });
+    expect(crossChapterSpan({ chapter: 1, verse_start: 1, verse_end: 1 })).toBeNull();
+    const first = resolveChapterCommentary({ rows: [OVERVIEW], chapter: 1, textByVerse: textFor(4) });
+    expect(first.iconVerses).toEqual([1]);
+    expect(Array.from(first.entries.keys())).toEqual([1, 2, 3, 4]);
+    const middle = resolveChapterCommentary({ rows: [OVERVIEW, { id: "n", chapter: 2, verse_start: 1, verse_end: 1, content: "x" }], chapter: 2, textByVerse: textFor(3) });
+    expect(middle.iconVerses).toEqual([1]);
+    expect(middle.entries.get(1).notes.map(note => note.id)).toEqual(["o", "n"]);
+    expect(middle.entries.get(3).notes.map(note => note.id)).toEqual(["o"]);
+    const last = resolveChapterCommentary({ rows: [OVERVIEW], chapter: 3, textByVerse: textFor(5) });
+    expect(Array.from(last.entries.keys())).toEqual([1, 2]);
+    expect(resolveChapterCommentary({ rows: [OVERVIEW], chapter: 4, textByVerse: textFor(5) }).entries.size).toBe(0);
+  });
+
+  it("labels the whole span", () => {
+    expect(commentaryReferenceLabel(OVERVIEW)).toBe("利未記 1:1–3:2");
+    expect(commentaryReferenceLabel({ book: "利未記", chapter: 1, verse_start: 3, verse_end: 17 })).toBe("利未記 1:3-17");
+    const html = buildVerseCommentaryHTML({ chapter: 2, verses: [{ verse: 1, text: "x", terms: [] }], notes: [OVERVIEW] }, escapeHTML);
+    expect(html).toContain('<p class="reader-commentary-note__ref">1:1–3:2</p>');
+  });
+
+  it("asks for this chapter's notes plus overviews running into it, with the new columns", async () => {
+    expect(chapterCommentaryFilter(3)).toBe("chapter.eq.3,and(chapter.lt.3,chapter_end.gte.3)");
+    for (const column of ["chapter_end", "chapter_end_verse", "cross_refs", "excerpts"]) expect(CHAPTER_COMMENTARY_COLUMNS).toContain(column);
+    const { from, calls } = createFakeFrom({ passage_commentary: [], commentary_terms: [] });
+    await createCommentaryRepository({ from, storage: memoryStorage() }).fetchChapter("利未記", 3);
+    const call = calls.find(item => item.table === "passage_commentary");
+    expect(call.filters).toContainEqual(["or", "chapter.eq.3,and(chapter.lt.3,chapter_end.gte.3)"]);
+    expect(call.filters).toContainEqual(["eq", "is_published", true]);
+    expect(call.filters.some(filter => filter[0] === "eq" && filter[1] === "chapter")).toBe(false);
+  });
+
+  it("/read sends the or filter to nlc-data", async () => {
+    const storage = memoryStorage();
+    storage.setItem("nlc_access_token", "tok");
+    storage.setItem("nlc_token_expires_at", String(60 * 60 * 1000));
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ data: [] }) }));
+    const client = createReadCommentaryDb({ storage, config: { url: "https://x.supabase.co", anonKey: "anon" }, fetchImpl, now: () => 0 });
+    await client.fetchChapter("利未記", 2);
+    const bodies = fetchImpl.mock.calls.map(([, init]) => JSON.parse(init.body));
+    expect(bodies.find(body => body.table === "passage_commentary").or).toBe("chapter.eq.2,and(chapter.lt.2,chapter_end.gte.2)");
+  });
+});
+
+describe("references and excerpts in the panel (#542)", () => {
+  const REFS = [
+    { book: "出埃及記", chapter: 27, verse: 21, chapter_end: 27, verse_end: 21, label: "出27:21" },
+    { book: "利未記", chapter: 8, verse: 11, chapter_end: 8, verse_end: 11, label: "8:11" },
+    { book: "利未記", chapter: 8, verse: 12, chapter_end: 8, verse_end: 12, label: "12" },
+    { book: "利未記", chapter: 16, verse: null, chapter_end: 16, verse_end: null, label: "第16章" }
+  ];
+
+  it("finds a label only where it is the whole reference", () => {
+    expect(findRefLabelRanges("見8:3。", "8:3")).toEqual([{ start: 1, end: 4 }]);
+    expect(findRefLabelRanges("28:3、8:30、8:3-5、3:1–8:3", "8:3")).toEqual([]);
+    expect(findRefLabelRanges("（8:11、12）", "12")).toEqual([{ start: 6, end: 8 }]);
+    expect(findRefLabelRanges("第12章；12章", "12")).toEqual([]);
+    expect(findRefLabelRanges("見利6:27", "6:27")).toHaveLength(1);
+  });
+
+  it("turns references into buttons and bolds excerpt phrases, escaping the rest", () => {
+    const html = commentaryTextHTML("「燔祭」：見出27:21的注釋（8:11、12；第16章）<b>", { refs: REFS, phrases: ["燔祭"], linkRefs: true }, escapeHTML);
+    expect(html).toContain('「<strong class="reader-commentary-phrase">燔祭</strong>」');
+    expect(html).toContain('<button type="button" class="reader-commentary-ref" data-commentary-ref data-ref-book="出埃及記" data-ref-chapter="27" data-ref-verse="21" data-ref-chapter-end="27" data-ref-verse-end="21">出27:21</button>');
+    expect(html).toContain('data-ref-verse="12" data-ref-chapter-end="8" data-ref-verse-end="12">12</button>');
+    expect(html).toContain('data-ref-book="利未記" data-ref-chapter="16" data-ref-chapter-end="16">第16章</button>');
+    expect(html).toContain("&lt;b&gt;");
+    expect(commentaryTextHTML("見出27:21", { refs: REFS, linkRefs: false }, escapeHTML)).toBe("見出27:21");
+  });
+
+  it("marks a note's excerpt phrases in the quoted verse they belong to", () => {
+    const note = { id: "n", chapter: 13, verse_start: 2, verse_end: 3, content: "「火斑」：說明", cross_refs: [], excerpts: [{ en: "spot", zh: "火斑", chapter: 13, verse: 2 }, { en: "x", zh: "祭司", chapter: 13, verse: 3 }] };
+    const html = buildVerseCommentaryHTML({ chapter: 13, verses: [{ verse: 2, text: "長了火斑的祭司", terms: [] }], notes: [note] }, escapeHTML);
+    expect(html).toContain('長了<mark class="reader-commentary-mark">火斑</mark>的祭司');
+    expect(html).toContain('「<strong class="reader-commentary-phrase">火斑</strong>」');
+  });
+
+  it("scrolls to the first verse and flashes a same-chapter range", () => {
+    expect(refRevealTarget({ chapter: 8, verse: 11, chapterEnd: 8, verseEnd: 13 })).toEqual({ verse: 11, highlightVerses: [11, 12, 13] });
+    expect(refRevealTarget({ chapter: 1, verse: 1, chapterEnd: 7, verseEnd: 38 })).toEqual({ verse: 1, highlightVerses: [1] });
+    expect(refRevealTarget({ chapter: 16, verse: null })).toEqual({ verse: null, highlightVerses: null });
+  });
+
+  it("a reference button in the panel closes it and navigates", async () => {
+    mountReaderDom();
+    const onNavigateRef = vi.fn();
+    const db = chapterDb({
+      fetchChapter: vi.fn(async () => ({
+        rows: [{ id: "n1", chapter: 26, verse_start: 1, verse_end: 1, content: "見出27:21。", cross_refs: [{ book: "出埃及記", chapter: 27, verse: 21, chapter_end: 27, verse_end: 21, label: "出27:21" }], excerpts: [] }],
+        terms: []
+      }))
+    });
+    const { controller, flush } = createController(db, { onNavigateRef });
+    controller.bind();
+    const pending = controller.refreshForChapter("出埃及記", 26, "", TEXT);
+    await flush();
+    await pending;
+    await controller.openVerses([1]);
+    document.querySelector("[data-commentary-ref]").click();
+    expect(onNavigateRef).toHaveBeenCalledWith({ book: "出埃及記", chapter: 27, verse: 21, chapterEnd: 27, verseEnd: 21 });
+    expect(controller.isOpen()).toBe(false);
+  });
+
+  it("without a navigation handler the references stay plain text", async () => {
+    mountReaderDom();
+    const db = chapterDb({
+      fetchChapter: vi.fn(async () => ({ rows: [{ id: "n1", chapter: 26, verse_start: 1, verse_end: 1, content: "見出27:21。", cross_refs: [{ book: "出埃及記", chapter: 27, verse: 21, label: "出27:21" }] }], terms: [] }))
+    });
+    const { controller, flush } = createController(db);
+    controller.bind();
+    const pending = controller.refreshForChapter("出埃及記", 26, "", TEXT);
+    await flush();
+    await pending;
+    await controller.openVerses([1]);
+    expect(document.querySelector("[data-commentary-ref]")).toBeNull();
+    expect(document.getElementById("reader-commentary-body").textContent).toContain("見出27:21");
+  });
+
+  it("both readers wire references to their own navigation", () => {
+    const bible = read("js/modules/bible.js");
+    const readApp = read("js/read/read-app.mjs");
+    expect(bible).toMatch(/onNavigateRef: async target => \{[\s\S]*?goToReaderVerse\(\{ bookId: book\.id, chapter: target\.chapter, verse, highlightVerses \}\)/);
+    expect(readApp).toMatch(/onNavigateRef: async target => \{[\s\S]*?await goTo\(book\.id, target\.chapter\);\s*revealVerses\(content, verse, highlightVerses, \{ schedule \}\);/);
   });
 });

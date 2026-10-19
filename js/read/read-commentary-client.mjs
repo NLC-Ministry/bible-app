@@ -23,7 +23,7 @@ export function readUsableAccessToken(storage, now = Date.now()) {
   }
 }
 
-// 只做讀取：select／eq／in／order／range，送出格式同 db.js 的 NlcQueryBuilder。
+// 只做讀取：select／eq／in／or／order／range，送出格式同 db.js 的 NlcQueryBuilder。
 function createSelectBuilder(table, send) {
   const request = { table, action: "select", select: "*", filters: [] };
   const builder = {
@@ -31,6 +31,7 @@ function createSelectBuilder(table, send) {
     select(columns = "*") { request.select = columns; return builder; },
     eq(column, value) { request.filters.push({ type: "eq", column, value }); return builder; },
     in(column, value) { request.filters.push({ type: "in", column, value }); return builder; },
+    or(expression) { request.or = expression; return builder; },
     order(column, options = {}) {
       const entry = { column, ascending: options.ascending !== false };
       request.orders = [...(request.orders || []), entry];

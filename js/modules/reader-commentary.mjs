@@ -41,7 +41,10 @@ export function createReaderCommentaryController({
   getElement = id => document.getElementById(id),
   getVerseContainer = () => getElement("bible-content"),
   schedule = defaultSchedule,
-  onChange = () => {}
+  onChange = () => {},
+  // 點譯文裡的出處（「見出27:21」，#542）：{ book, chapter, verse, chapterEnd, verseEnd }。
+  // 沒給就不把出處做成按鈕。
+  onNavigateRef = null
 }) {
   let chapterToken = 0;
   let openToken = 0;
@@ -220,7 +223,8 @@ export function createReaderCommentaryController({
       chapter: target.chapter,
       verses: list.map(verse => ({ verse, text: target.textByVerse.get(verse), terms: target.entries.get(verse).terms })),
       notes: Array.from(notes.values()),
-      terms
+      terms,
+      linkRefs: typeof onNavigateRef === "function"
     }, escapeHTML);
     if (typeof hydrateIcons === "function") hydrateIcons(body);
     return true;
@@ -245,6 +249,21 @@ export function createReaderCommentaryController({
     body?.addEventListener("click", event => {
       if (event.target.closest?.("[data-commentary-retry]")) {
         if (typeof reopen === "function") void reopen();
+        return;
+      }
+      const refButton = event.target.closest?.("[data-commentary-ref]");
+      if (refButton && typeof onNavigateRef === "function") {
+        const data = refButton.dataset;
+        const target = {
+          book: data.refBook,
+          chapter: Number(data.refChapter),
+          verse: data.refVerse ? Number(data.refVerse) : null,
+          chapterEnd: data.refChapterEnd ? Number(data.refChapterEnd) : null,
+          verseEnd: data.refVerseEnd ? Number(data.refVerseEnd) : null
+        };
+        if (!target.book || !(target.chapter > 0)) return;
+        close();
+        void onNavigateRef(target);
         return;
       }
       const frame = event.target.closest?.("[data-commentary-zoom]");
