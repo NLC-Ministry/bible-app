@@ -10586,6 +10586,25 @@ body.reader-page {
     padding-left: 64px !important;
     padding-right: 64px !important;
   }
+
+  /* 寬螢幕閱讀欄限寬置中（#544）：一行最多約 36 個字（跟著閱讀字級縮放），
+     標題和經文同一欄、左緣對齊；節旁燈泡跟著欄的右緣走，貼近經文。
+     兩側浮動換章按鈕仍在畫面兩側；選取工具列、注釋面板是 fixed，不受影響。 */
+  #reader-view {
+    --reader-column-max: calc(36 * var(--reader-font-size, 20px) + 128px);
+  }
+
+  #reader-view .reader-header,
+  #reader-view .bible-text-container {
+    max-width: var(--reader-column-max);
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  #reader-view .reader-header {
+    padding-left: 64px !important;
+    padding-right: 64px !important;
+  }
 }
 
 /* 章末換章連結（#347）：「‹ 上一章｜下一章 ›」，跟在經文後面；字級跟著閱讀字體（em），
