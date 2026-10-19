@@ -772,6 +772,10 @@ appRouter.switchTab = async function (tabId, options = {}) {
     if (typeof window.closeAdminSection === "function") {
       window.closeAdminSection();
     }
+    // 管理分頁的全頁畫面（範圍選擇、篩選、個人頁，#584）放在 body 底下，換分頁要明確收起。
+    if (document.body.classList.contains("pastoral-layer-open")) {
+      loadModule('pastoral').then((pastoral) => pastoral.closePastoralLayers()).catch(() => {});
+    }
 
     // ── 3b. Paint reader top bar immediately so it's never stale while the
     // lazy bible.js module loads (avoids the fadeIn-then-label-swap flash) ──
@@ -1099,6 +1103,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const loginGate = document.getElementById("login-gate");
     if (loginGate && !loginGate.classList.contains("hidden") && typeof db.syncNlcSessionWithSupabase === "function") {
       db.syncNlcSessionWithSupabase(true).then(() => db.applyLoginOnboardingGate && db.applyLoginOnboardingGate()).catch(() => {});
+    }
+    // 管理分頁（#584）：沒有「更新」鈕，回前景時自動更新（超過 5 分鐘的資料才重拿）
+    if (currentTab === "admin-view") {
+      loadModule('pastoral').then((pastoral) => pastoral.refreshPastoralOnForeground()).catch(() => {});
     }
     if (currentTab === "profile-view" && typeof db.syncNlcSessionWithSupabase === "function") {
       db.syncNlcSessionWithSupabase(true).then(() => {
@@ -1469,6 +1477,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         // 雲柱測驗後台（#317）：返回鍵先關它的彈窗、再關完整頁面，都沒有才離開後台區塊。
         if (typeof window.closeAdminLightningQuizLayer === "function"
           && window.closeAdminLightningQuizLayer()) {
+          pushRootState();
+          return;
+        }
+
+        // 管理分頁的全頁畫面（#584）：返回鍵一次關一層（範圍選擇先退回上一步），留在管理分頁。
+        if (document.body.classList.contains("pastoral-layer-open")) {
+          loadModule('pastoral').then((pastoral) => pastoral.closePastoralLayer()).catch(() => {});
           pushRootState();
           return;
         }

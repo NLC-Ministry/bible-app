@@ -1,5 +1,5 @@
-/* 管理分頁（#551）：牧者、大區長、區長、小組長看自己範圍的組員；系統管理員看全教會。
-   畫面：js/modules/pastoral.js。平面配色、只用 400／500 字重、中性陰影（docs/design-system.md）。 */
+/* 管理分頁（#551、#584）：牧者、大區長、區長、小組長看自己範圍的組員；系統管理員看全教會。
+   畫面：js/modules/pastoral.js。手機 375px 寬不用左右滑：比較改一個單位一列、篩選與個人頁是全頁畫面（.pastoral-sheet）。平面配色、只用 400／500 字重、中性陰影（docs/design-system.md）。 */
 
 /* 舊管理分頁在桌機是「左清單＋右內容」雙欄（index.css 的 #admin-view.active）；新畫面是單欄。 */
 #admin-view.pastoral-view.active {
@@ -44,60 +44,69 @@
   text-decoration: underline;
 }
 
-.pastoral__toolbar {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.6rem;
-  align-items: end;
-  padding: 0.85rem;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-}
-
-.pastoral__field {
+/* 範圍列（#584）：一行「計畫 · 範圍 ›」，右邊小字「X 分鐘前更新」點了手動更新 */
+.pastoral__scopebar {
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-/* 手機：第一列「計畫（兩欄寬）＋更新」，第二列大區／牧區／小組 */
-.pastoral__field--plan {
-  grid-column: 1 / 3;
-}
-
-.pastoral__field .form-control {
-  width: 100%;
-  min-width: 0;
-}
-
-.pastoral__field-label {
-  font-weight: var(--type-weight-strong);
-}
-
-.pastoral__refresh {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.pastoral__scope {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.35rem 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: var(--type-weight-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral__scope-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-@media (min-width: 720px) {
-  .pastoral__toolbar {
-    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
-  }
+.pastoral__scope .nlc-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
 
-  .pastoral__field--plan,
-  .pastoral__refresh {
-    grid-column: auto;
-    grid-row: auto;
-  }
+.pastoral__scope:disabled {
+  cursor: default;
+}
+
+.pastoral__updated {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pastoral__updated.hidden {
+  display: none;
+}
+
+.pastoral__scope:focus-visible,
+.pastoral__updated:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus-ring);
 }
 
 .pastoral__tabs .segment-toggle-btn {
@@ -243,57 +252,100 @@
   margin-top: 0.6rem;
 }
 
-/* 單位比較、測驗表格：表格自己橫向捲動，整頁不會跑出橫捲軸 */
-.pastoral-table-wrap {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.pastoral-table {
-  width: 100%;
-  min-width: 34rem;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.pastoral-table th,
-.pastoral-table td {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--border-card);
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.pastoral-table th:first-child,
-.pastoral-table td:first-child {
-  text-align: left;
-}
-
-.pastoral-table th {
-  color: var(--text-muted);
-  font-weight: var(--type-weight-strong);
-  font-size: 0.8125rem;
-}
-
-.pastoral-table td {
-  color: var(--text-primary);
-}
-
-.pastoral-table__unit {
-  border: 0;
+/* 各單位比較、測驗作答率：一個單位一列（#584）
+   第一行 名稱＋人數 … 右邊一句提醒；第二行 長條＋百分比 */
+.pastoral-units {
+  display: flex;
+  flex-direction: column;
+  margin: 0.75rem 0 0;
   padding: 0;
+  list-style: none;
+}
+
+.pastoral-unit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head note"
+    "meter meter";
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.65rem 0;
+}
+
+.pastoral-unit + .pastoral-unit {
+  border-top: 1px solid var(--border-card);
+}
+
+.pastoral-unit__head {
+  grid-area: head;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.5rem;
+  min-width: 0;
+}
+
+.pastoral-unit__name {
+  padding: 0;
+  border: 0;
   background: none;
-  color: var(--color-brand);
+  color: var(--text-primary);
   font: inherit;
+  font-size: 0.9375rem;
   font-weight: var(--type-weight-strong);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+button.pastoral-unit__name {
+  color: var(--color-brand);
   cursor: pointer;
 }
 
-.pastoral-table__unit:hover,
-.pastoral-table__unit:focus-visible {
+button.pastoral-unit__name:hover,
+button.pastoral-unit__name:focus-visible {
   text-decoration: underline;
+}
+
+button.pastoral-unit__name:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-unit__size {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pastoral-unit__note {
+  grid-area: note;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pastoral-unit__note--alert {
+  color: var(--color-danger);
+}
+
+.pastoral-unit__meter {
+  grid-area: meter;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pastoral-unit__pct {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--type-weight-strong);
+  text-align: right;
 }
 
 /* 數字方塊 */
@@ -360,19 +412,47 @@
   box-shadow: var(--shadow-focus-ring);
 }
 
-.pastoral-roster__search {
+/* 名單上方：搜尋＋「篩選」鈕，下面一排條件標籤（最前面固定「需要關心」，其餘點了拿掉） */
+.pastoral-roster__bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
   align-items: center;
+  gap: 0.5rem;
 }
 
-.pastoral-roster__search .form-control {
-  flex: 1 1 12rem;
+.pastoral-roster__bar .form-control {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-/* 一人一列，點開看詳細（#570） */
+.pastoral-roster__filter {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.pastoral-roster__filter-count {
+  min-width: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--color-brand);
+  color: var(--color-brand-foreground, #fff);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.pastoral-chip--applied {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+}
+
+/* 一人一列，點了推進個人頁（#570、#584） */
 .pastoral-rows {
   display: flex;
   flex-direction: column;
@@ -391,11 +471,12 @@
 
 .pastoral-row__summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.6rem 0.75rem;
+  min-height: 3.25rem;
+  padding: 0.6rem 0.5rem 0.6rem 0.75rem;
   border: 0;
   background: none;
   color: inherit;
@@ -441,43 +522,6 @@
   white-space: nowrap;
 }
 
-.pastoral-row__detail {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0 0.75rem 0.75rem;
-}
-
-.pastoral-row__detail[hidden] {
-  display: none;
-}
-
-/* 篩選：手機預設收合成「篩選（N 個條件）」 */
-.pastoral-filters {
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-}
-
-.pastoral-filters__summary {
-  padding: 0.55rem 0.75rem;
-  color: var(--text-primary);
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.pastoral-filters__summary:focus-visible {
-  outline: none;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-focus-ring);
-}
-
-.pastoral-filters__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 0 0.75rem 0.75rem;
-}
-
 .pastoral-filters__group {
   display: flex;
   flex-direction: column;
@@ -485,6 +529,7 @@
 }
 
 .pastoral-filters__label {
+  margin: 0;
   color: var(--text-secondary);
   font-size: 0.8125rem;
 }
@@ -493,11 +538,6 @@
   margin-left: 0.4rem;
   color: var(--text-muted);
   font-size: 0.75rem;
-}
-
-.pastoral-filters__footer {
-  align-items: center;
-  justify-content: space-between;
 }
 
 .pastoral-segmented {
@@ -529,9 +569,55 @@
   overflow-wrap: anywhere;
 }
 
+.pastoral-row__chevron {
+  color: var(--text-muted);
+}
+
+/* 個人頁（全頁） */
+.pastoral-person {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pastoral-person__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pastoral-person__org {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pastoral-person__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pastoral-person__badges .pastoral-row__late {
+  margin-left: 0;
+}
+
+.pastoral-person .pastoral-person__facts {
+  gap: 0.5rem 0.9rem;
+  font-size: 0.9375rem;
+}
+
 .pastoral-person__actions {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+}
+
+.pastoral-person__actions .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
 }
 
 .pastoral-badge {
@@ -622,4 +708,165 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+/* ── 全頁畫面（#584）：範圍選擇、篩選、個人頁 ──────────────────────────
+   外殼是 index.css 的 .full-page-overlay／.overlay-header（同聖經目錄）；這裡補安全區、版面寬度與底部按鈕。
+   元素一開始就在 body 底下（index.html 的 pastoral-layers），不放在 .main-content 捲動區裡（#420）。 */
+.pastoral-sheet {
+  z-index: var(--z-modal);
+}
+
+.pastoral-sheet__header {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr) minmax(4.5rem, auto);
+  height: calc(56px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pastoral-sheet__back {
+  justify-self: start;
+}
+
+.pastoral-sheet__title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pastoral-sheet__side {
+  justify-self: end;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.pastoral-sheet__side:focus-visible,
+.pastoral-sheet__back:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-sheet__body {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.pastoral-sheet__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1rem clamp(0.85rem, 3vw, 1.4rem) calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.pastoral-sheet__context {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.pastoral-sheet__footer {
+  flex-shrink: 0;
+  padding: 0.75rem clamp(0.85rem, 3vw, 1.4rem) calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-card);
+  background: var(--bg-card);
+}
+
+.pastoral-sheet__done {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* 篩選頁的團隊／排序：撐滿一列，字不折行 */
+.pastoral-sheet .pastoral-segmented {
+  align-self: stretch;
+}
+
+.pastoral-segmented .segment-toggle-btn {
+  white-space: nowrap;
+}
+
+.pastoral-filters__note {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-brand-subtle);
+}
+
+/* 範圍選擇的清單：一列一個，選中的打勾 */
+.pastoral-picks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  list-style: none;
+  overflow: hidden;
+}
+
+.pastoral-picks > li + li {
+  border-top: 1px solid var(--border-card);
+}
+
+.pastoral-pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.6rem 0.9rem;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pastoral-pick:focus-visible {
+  outline: none;
+  box-shadow: inset var(--shadow-focus-ring);
+}
+
+.pastoral-pick__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pastoral-pick__label small {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.pastoral-pick__mark {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.pastoral-pick[aria-current="true"] {
+  color: var(--color-brand);
+  font-weight: var(--type-weight-strong);
+}
+
+.pastoral-pick[aria-current="true"] .pastoral-pick__mark {
+  color: var(--color-brand);
 }

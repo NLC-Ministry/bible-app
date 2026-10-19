@@ -3,7 +3,16 @@
 // 總覽數字與名單由伺服器算（nlc-data plan_summary／plan_roster，#564）；名單的篩選、排序、從總覽點進名單的條件
 // 和後台同一份（supabase/functions/_shared/progress/plan-report.mjs），這裡轉出。
 // 團隊、小測驗摘要是 App 畫面專用的，從名單算，留在這裡。App 不提供匯出（匯出只在後台，伺服器產生並記稽核）。
-import { UNSET_UNIT_LABEL, ratio, taipeiDateKey, unitName } from "../../supabase/functions/_shared/progress/plan-progress.mjs";
+import {
+  CARE_THRESHOLDS,
+  CHECKIN_BUCKETS,
+  PROGRESS_BUCKETS,
+  UNSET_UNIT_LABEL,
+  ratio,
+  taipeiDateKey,
+  unitName
+} from "../../supabase/functions/_shared/progress/plan-progress.mjs";
+import { defaultRosterFilters } from "../../supabase/functions/_shared/progress/plan-report.mjs";
 
 // 進度判斷、漏斗、單位比較和伺服器共用（#564），本體在 supabase/functions/_shared/progress/plan-progress.mjs
 export {
@@ -66,6 +75,50 @@ export const ROSTER_TEAM_OPTIONS = Object.freeze([
   { id: "yes", label: "有隊" },
   { id: "no", label: "沒有隊" }
 ]);
+
+// 名單上方「已套用的條件」標籤（#584）。規則不變（同 #570），這裡只把目前條件說成字：
+// 捷徑一個標籤；進度、最後打卡和預設不同時各一個標籤（列出勾了哪幾格）；團隊不限以外一個標籤。
+// 「需要關心」捷徑本身是名單上方固定的那顆，不另外列。
+export const ROSTER_SHORTCUT_LABELS = Object.freeze({
+  care: "需要關心",
+  care_behind: `需要關心・落後 ${CARE_THRESHOLDS.behindDays} 天以上`,
+  care_checkin: `需要關心・${CARE_THRESHOLDS.noCheckInDays} 天以上沒打卡`,
+  active7: "近 7 天有讀"
+});
+
+const sameIds = (a, b) => a.length === b.length && a.every((id) => b.includes(id));
+const bucketLabels = (buckets, ids) => buckets.filter((bucket) => ids.includes(bucket.id)).map((bucket) => bucket.label);
+
+export function rosterConditionChips(filters) {
+  const chips = [];
+  if (filters.shortcut) {
+    if (filters.shortcut !== "care") chips.push({ id: "shortcut", label: ROSTER_SHORTCUT_LABELS[filters.shortcut] || "捷徑" });
+  } else {
+    const base = defaultRosterFilters();
+    if (!sameIds(filters.progress, base.progress)) {
+      const all = PROGRESS_BUCKETS.every((bucket) => filters.progress.includes(bucket.id));
+      const labels = bucketLabels(PROGRESS_BUCKETS, filters.progress);
+      chips.push({ id: "progress", label: all ? "含未報名" : labels.length ? labels.join("、") : "進度：一格都沒勾" });
+    }
+    if (!sameIds(filters.checkin, base.checkin)) {
+      const labels = bucketLabels(CHECKIN_BUCKETS, filters.checkin);
+      chips.push({ id: "checkin", label: `最後打卡：${labels.length ? labels.join("、") : "一格都沒勾"}` });
+    }
+  }
+  if (filters.team === "yes") chips.push({ id: "team", label: "有隊" });
+  if (filters.team === "no") chips.push({ id: "team", label: "沒有隊" });
+  return chips;
+}
+
+/** 點掉一個標籤：那個條件回到預設，其他條件不動 */
+export function clearRosterCondition(filters, id) {
+  const base = defaultRosterFilters();
+  if (id === "shortcut") return { ...filters, shortcut: "" };
+  if (id === "progress") return { ...filters, progress: base.progress };
+  if (id === "checkin") return { ...filters, checkin: base.checkin };
+  if (id === "team") return { ...filters, team: "any" };
+  return filters;
+}
 
 export function resolvePastoralTab(value) {
   const text = String(value || "");
