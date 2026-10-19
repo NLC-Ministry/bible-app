@@ -103,7 +103,9 @@ function parseTrueFalse(lines) {
   throw new Error(`無法辨識是非答案「${answerLine}」`);
 }
 
-function parseMatching(lines, questionIndex) {
+// mergeRight（雲柱才開，#588）：右邊文字相同的列共用同一個右邊點，變成多對一。
+// 小測驗的存題驗證（0185）要求一對一，所以預設不合併。
+function parseMatching(lines, questionIndex, { mergeRight = false } = {}) {
   const stem = lines[0];
   const pairLines = lines.slice(1);
   if (!pairLines.length) throw new Error("配對題至少需要一組「左｜右」");
@@ -114,10 +116,13 @@ function parseMatching(lines, questionIndex) {
     const parts = line.split(/[｜|]/).map(part => part.trim()).filter(Boolean);
     if (parts.length !== 2) throw new Error(`配對行格式錯誤（須為「左文字｜右文字」）：${line}`);
     const leftId = `q${questionIndex}-L${pairIndex + 1}`;
-    const rightId = `q${questionIndex}-R${pairIndex + 1}`;
     left.push({ id: leftId, text: parts[0] });
-    right.push({ id: rightId, text: parts[1] });
-    answerKey[leftId] = rightId;
+    let rightItem = mergeRight ? right.find(item => item.text === parts[1]) : null;
+    if (!rightItem) {
+      rightItem = { id: `q${questionIndex}-R${right.length + 1}`, text: parts[1] };
+      right.push(rightItem);
+    }
+    answerKey[leftId] = rightItem.id;
   });
   return { type: "matching", payload: { stem, left, right }, answerKey };
 }
@@ -132,9 +137,10 @@ function parseOrdering(lines, questionIndex) {
 
 /**
  * @param {string} text 貼上的純文字或讀檔出來的字串
+ * @param {{mergeMatchingRight?: boolean}} [options] mergeMatchingRight：配對題右邊文字相同就合併成同一個點（雲柱用）
  * @returns {{questions: Array, errors: Array<{index:number, block:string, message:string}>}}
  */
-export function parseQuizImportText(text) {
+export function parseQuizImportText(text, { mergeMatchingRight = false } = {}) {
   const blocks = splitBlocks(text);
   const questions = [];
   const errors = [];
@@ -160,7 +166,7 @@ export function parseQuizImportText(text) {
       const questionIndex = questions.length + 1;
       if (type === "single" || type === "multiple") parsed = parseSingleOrMultiple(lines, type);
       else if (type === "truefalse") parsed = parseTrueFalse(lines);
-      else if (type === "matching") parsed = parseMatching(lines, questionIndex);
+      else if (type === "matching") parsed = parseMatching(lines, questionIndex, { mergeRight: mergeMatchingRight });
       else parsed = parseOrdering(lines, questionIndex);
       questions.push({ id: `imported-${questionIndex}`, ...parsed, explanation: "", verseRef: "" });
     } catch (error) {

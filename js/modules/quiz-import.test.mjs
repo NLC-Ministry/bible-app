@@ -57,6 +57,35 @@ D. 箴言
     leftIds.forEach((leftId, index) => expect(q.answerKey[leftId]).toBe(rightIds[index]));
   });
 
+  const repeatedRightBlock = `
+[配對] 請配對人物與身分
+彼得｜加利利漁夫
+馬太｜稅吏
+安得烈｜ 加利利漁夫
+雅各｜加利利漁夫
+  `;
+
+  it("keeps a repeated right text as separate points by default (daily quiz needs one-to-one) (#588)", () => {
+    const { questions, errors } = parseQuizImportText(repeatedRightBlock);
+    expect(errors).toEqual([]);
+    expect(questions[0].payload.right.map(item => item.text)).toEqual(["加利利漁夫", "稅吏", "加利利漁夫", "加利利漁夫"]);
+  });
+
+  it("mergeMatchingRight folds identical right texts into one shared point (lightning quiz, #588)", () => {
+    const { questions, errors } = parseQuizImportText(repeatedRightBlock, { mergeMatchingRight: true });
+    expect(errors).toEqual([]);
+    const { payload, answerKey } = questions[0];
+    expect(payload.left.map(item => item.text)).toEqual(["彼得", "馬太", "安得烈", "雅各"]);
+    expect(payload.right.map(item => item.text)).toEqual(["加利利漁夫", "稅吏"]);
+    const rightIdOf = text => payload.right.find(item => item.text === text).id;
+    expect(answerKey).toEqual({
+      [payload.left[0].id]: rightIdOf("加利利漁夫"),
+      [payload.left[1].id]: rightIdOf("稅吏"),
+      [payload.left[2].id]: rightIdOf("加利利漁夫"),
+      [payload.left[3].id]: rightIdOf("加利利漁夫")
+    });
+  });
+
   it("parses an ordering block where lines are already in correct order", () => {
     const { questions, errors } = parseQuizImportText(`
 [排序] 請依照事件發生順序排列

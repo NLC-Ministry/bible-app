@@ -137,14 +137,25 @@ export function arrangeOrderingItems(items, random = Math.random) {
   return order.map(index => list[index]);
 }
 
+// 雲柱的多對一配對題（#588）：右邊文字相同的列在出題時已合併成同一個點，
+// 所以右邊比左邊少；只有這種題目作答時一個右邊點可以接多條線。
+export function isManyToOneMatching(payload) {
+  const leftCount = Array.isArray(payload?.left) ? payload.left.length : 0;
+  const rightCount = Array.isArray(payload?.right) ? payload.right.length : 0;
+  return rightCount > 0 && rightCount < leftCount;
+}
+
 // 配對題：payload 慣例是 left[i] 配 right[i]。左欄照常打亂，右欄再排成
-// 盡量沒有任何一列「左右兩格剛好是一對」。
+// 盡量沒有任何一列「左右兩格剛好是一對」。左右數量不同（多對一）時沒有
+// 這個對應，右欄直接打亂。
 export function arrangeMatchingColumns(left, right, random = Math.random) {
   const leftList = Array.isArray(left) ? left : [];
   const rightList = Array.isArray(right) ? right : [];
   const leftOrder = shuffleItems(leftList.map((_, index) => index), random);
-  const rightOrder = pickLeastGivenAway(rightList.length, random, permutation =>
-    permutation.filter((original, row) => original === leftOrder[row]).length);
+  const rightOrder = rightList.length !== leftList.length
+    ? shuffleItems(rightList.map((_, index) => index), random)
+    : pickLeastGivenAway(rightList.length, random, permutation =>
+      permutation.filter((original, row) => original === leftOrder[row]).length);
   return {
     left: leftOrder.map(index => leftList[index]),
     right: rightOrder.map(index => rightList[index])
@@ -293,7 +304,8 @@ export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}
         // 欄間），跟大測驗連連看（.exam-match-col--left .exam-match-node）同一
         // 招——這樣連線點永遠在兩欄的內側，線不會畫過自己這顆按鈕的文字上面。
         const columns = arrangeMatchingColumns(payload.left, payload.right, random);
-        return `<div class="daily-quiz-matching" data-matching-root>
+        const manyToOne = isManyToOneMatching(payload);
+        return `${manyToOne ? '<p class="daily-quiz-match-hint">右邊的答案可以重複連。</p>' : ""}<div class="daily-quiz-matching" data-matching-root${manyToOne ? " data-matching-many-to-one" : ""}>
           <div class="daily-quiz-matching-col" data-side="left">
             ${columns.left.map(item => `<button type="button" class="daily-quiz-match-item" data-left-id="${escapeHtml(item.id)}"><span class="daily-quiz-match-dot" aria-hidden="true"></span><span class="daily-quiz-match-item__label">${escapeHtml(item.text)}</span></button>`).join("")}
           </div>
@@ -373,6 +385,9 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
   if (type === "matching") {
     let selectedLeft = null;
     const matchingRoot = fieldsetEl.querySelector("[data-matching-root]");
+    const manyToOne = !!matchingRoot?.hasAttribute("data-matching-many-to-one");
+    const rightButtonOf = rightId => Array.from(fieldsetEl.querySelectorAll("[data-right-id]"))
+      .find(button => button.getAttribute("data-right-id") === rightId);
     const SVG_NS = "http://www.w3.org/2000/svg";
     const drawLines = () => {
       if (!matchingRoot) return;
@@ -409,9 +424,10 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
           const rightId = leftButton.getAttribute("data-paired-with");
           leftButton.removeAttribute("data-paired-with");
           leftButton.classList.remove("is-paired");
-          Array.from(fieldsetEl.querySelectorAll("[data-right-id]"))
-            .find(button => button.getAttribute("data-right-id") === rightId)
-            ?.classList.remove("is-paired");
+          // 多對一：這個右邊點還有別條線就維持 is-paired
+          const stillPaired = Array.from(fieldsetEl.querySelectorAll("[data-left-id][data-paired-with]"))
+            .some(button => button.getAttribute("data-paired-with") === rightId);
+          if (!stillPaired) rightButtonOf(rightId)?.classList.remove("is-paired");
           selectedLeft = null;
           emit();
           drawLines();
@@ -424,12 +440,15 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
       }
       if (rightButton && selectedLeft) {
         const rightId = rightButton.getAttribute("data-right-id");
-        Array.from(fieldsetEl.querySelectorAll("[data-paired-with]"))
-          .filter(button => button.getAttribute("data-paired-with") === rightId)
-          .forEach(button => {
-            button.removeAttribute("data-paired-with");
-            button.classList.remove("is-paired");
-          });
+        // 一對一：連新的就拆掉這個右邊點原本的線；多對一（#588）保留
+        if (!manyToOne) {
+          Array.from(fieldsetEl.querySelectorAll("[data-paired-with]"))
+            .filter(button => button.getAttribute("data-paired-with") === rightId)
+            .forEach(button => {
+              button.removeAttribute("data-paired-with");
+              button.classList.remove("is-paired");
+            });
+        }
         selectedLeft.setAttribute("data-paired-with", rightId);
         selectedLeft.classList.remove("is-selected");
         selectedLeft.classList.add("is-paired");

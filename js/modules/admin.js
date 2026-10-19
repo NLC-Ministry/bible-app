@@ -1616,11 +1616,22 @@ function collectAdminLightningQuizQuestionContent(fieldset) {
     return { type, payload: { stem, options }, answerKey };
   }
   if (type === 'matching') {
+    // 雲柱配對題可以多對一（#588）：右邊文字相同的列合併成同一個右邊點
     const rows = Array.from(fieldset.querySelectorAll('[data-pair-row]'));
-    const left = rows.map((row, i) => ({ id: `L${i + 1}`, text: row.querySelector('[data-pair-left]')?.value.trim() || '' }));
-    const right = rows.map((row, i) => ({ id: `R${i + 1}`, text: row.querySelector('[data-pair-right]')?.value.trim() || '' }));
+    const left = [];
+    const right = [];
     const answerKey = {};
-    left.forEach((item, i) => { answerKey[item.id] = right[i].id; });
+    rows.forEach((row, i) => {
+      const leftItem = { id: `L${i + 1}`, text: row.querySelector('[data-pair-left]')?.value.trim() || '' };
+      const rightText = row.querySelector('[data-pair-right]')?.value.trim() || '';
+      let rightItem = rightText ? right.find(item => item.text === rightText) : null;
+      if (!rightItem) {
+        rightItem = { id: `R${right.length + 1}`, text: rightText };
+        right.push(rightItem);
+      }
+      left.push(leftItem);
+      answerKey[leftItem.id] = rightItem.id;
+    });
     return { type, payload: { stem, left, right }, answerKey };
   }
   if (type === 'ordering') {
@@ -1647,10 +1658,13 @@ function adminLightningQuizQuestionIsValid(question) {
         && Array.isArray(question.answerKey) && question.answerKey.length > 0;
     }
     case 'matching': {
+      // 右邊可以比左邊少（多對一，#588），但每個左邊都要連到一個存在的右邊點
       const left = question.payload.left || [];
       const right = question.payload.right || [];
-      return left.length >= 2 && left.length === right.length
-        && left.every(item => item.text) && right.every(item => item.text);
+      const rightIds = new Set(right.map(item => item.id));
+      return left.length >= 2 && right.length >= 2 && right.length <= left.length
+        && left.every(item => item.text) && right.every(item => item.text)
+        && left.every(item => rightIds.has(question.answerKey?.[item.id]));
     }
     case 'ordering': {
       const items = question.payload.items || [];
@@ -3588,12 +3602,19 @@ function renderAdminQuizCustomQuestionBodyHtml(question) {
   if (type === 'matching') {
     const left = payload.left && payload.left.length ? payload.left : [{ text: '' }, { text: '' }];
     const right = payload.right && payload.right.length ? payload.right : [{ text: '' }, { text: '' }];
-    const rowCount = Math.max(left.length, right.length, 2);
+    // 每列的右邊文字照答案還原：多對一（#588）的右邊點已合併、數量比左邊少，
+    // 不能再照順序 left[i]↔right[i]。答案對不上（新題目、舊資料）才退回照順序。
+    const rightById = new Map(right.filter(item => item.id).map(item => [item.id, item]));
+    const byAnswer = answerKey && typeof answerKey === 'object'
+      && left.every(item => item.id && rightById.has(answerKey[item.id]));
+    const rows = byAnswer
+      ? left.map(item => [item.text || '', rightById.get(answerKey[item.id]).text || ''])
+      : Array.from({ length: Math.max(left.length, right.length, 2) }).map((_, i) => [left[i]?.text || '', right[i]?.text || '']);
     return `<div class="admin-quiz-custom-pairs" data-pairs>
-      ${Array.from({ length: rowCount }).map((_, i) => renderAdminQuizCustomPairRowHtml(left[i]?.text || '', right[i]?.text || '')).join('')}
+      ${rows.map(([leftText, rightText]) => renderAdminQuizCustomPairRowHtml(leftText, rightText)).join('')}
     </div>
     <button type="button" class="secondary-btn" data-pair-add>新增配對</button>
-    <p class="admin-daily-quiz-note">同一列的左右兩邊即為正確配對，作答時會友看到的左右順序會被打亂。</p>`;
+    <p class="admin-daily-quiz-note">同一列的左右兩邊即為正確配對，作答時會友看到的左右順序會被打亂。右邊文字相同的列會合併成同一個點，會友可以把多個左邊連到它。</p>`;
   }
   if (type === 'ordering') {
     const items = payload.items && payload.items.length ? payload.items : [{ text: '' }, { text: '' }];

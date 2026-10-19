@@ -7298,6 +7298,14 @@ body.dark-theme .pastoral-race-progress {
   margin-top: 0.75rem;
 }
 
+/* 雲柱多對一配對題（#588）的提示：一個右邊點可以接多條線 */
+.daily-quiz-match-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
+  line-height: 1.6;
+}
+
 .daily-quiz-match-lines {
   position: absolute;
   inset: 0;
