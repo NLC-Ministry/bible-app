@@ -63,6 +63,17 @@ describe("parseLightningImportText", () => {
     const { errors } = parseLightningImportText("時段：13:00-12:00\n[是非] x\n答案：對", { today: "2026-09-28" });
     expect(errors[0].message).toContain("結束時間要晚於開始時間");
   });
+
+  it("merges matching rows with the same right text into one shared point (#588)", () => {
+    const { items, errors } = parseLightningImportText(
+      "[配對] 配對人物與身分\n彼得｜加利利漁夫\n安得烈｜加利利漁夫\n馬太｜稅吏",
+      { today: "2026-09-28" }
+    );
+    expect(errors).toEqual([]);
+    const { payload, answerKey } = items[0].question;
+    expect(payload.right.map(item => item.text)).toEqual(["加利利漁夫", "稅吏"]);
+    expect(answerKey[payload.left[0].id]).toBe(answerKey[payload.left[1].id]);
+  });
 });
 
 describe("planLightningImport", () => {
