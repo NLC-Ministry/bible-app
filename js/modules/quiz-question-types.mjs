@@ -169,7 +169,9 @@ export function normalizeQuestion(raw) {
       payload: raw.payload,
       answerKey: raw.answerKey !== undefined ? raw.answerKey : (raw.answer_key ?? null),
       explanation: raw.explanation || "",
-      verseRef: raw.verseRef || ""
+      verseRef: raw.verseRef || "",
+      // #590：發佈後更正過正解才帶這個欄位（伺服器回 true/false）
+      ...(raw.answerCorrected ? { answerCorrected: true } : {})
     };
   }
 
@@ -183,7 +185,8 @@ export function normalizeQuestion(raw) {
       payload: { stem: raw.question, options: raw.options.map(String) },
       answerKey: Number.isInteger(raw.correctIndex) ? raw.correctIndex : null,
       explanation: raw.explanation || "",
-      verseRef: raw.verseRef || ""
+      verseRef: raw.verseRef || "",
+      ...(raw.answerCorrected ? { answerCorrected: true } : {})
     };
   }
 
