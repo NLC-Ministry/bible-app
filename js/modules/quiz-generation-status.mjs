@@ -45,6 +45,14 @@ function describeCode(step, code, detail) {
   if (code.startsWith("blocked_")) return { reason: "AI 沒有產生內容（可能被安全機制擋下）", hint: "再試一次；一直發生就改成自訂題目。" };
   if (step === "quality" && code === "insufficient") {
     const passed = /^(\d+)\/(\d+)/.exec(detail || "");
+    // #589：kept N/5＝連同之前保留的，目前共有幾題通過（下次只要補不足的）
+    const kept = /kept (\d+)\/(\d+)/.exec(detail || "");
+    if (kept) {
+      return {
+        reason: `這次 ${passed ? `${passed[2]} 題候選有 ${passed[1]} 題通過，` : ""}累計已通過 ${kept[1]}／${kept[2]} 題`,
+        hint: `已通過的題目會留著，再按「請 AI 出題」只要補 ${Math.max(0, Number(kept[2]) - Number(kept[1]))} 題。`
+      };
+    }
     return {
       reason: passed ? `AI 出的 ${passed[2]} 題候選只有 ${passed[1]} 題通過品質檢查（需要 5 題）` : "通過品質檢查的題目不足 5 題",
       hint: "這幾章可出的題目可能比較少，可以再試一次，或改成自訂題目。"

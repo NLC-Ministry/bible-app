@@ -6,7 +6,7 @@ import {
 import {
   describeQuizGenerationError, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "../js/modules/quiz-generation-status.mjs";
-import { latestFunctionDefinition } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 // #465：AI 出題的重試／備用模型、卡住自癒、進度與中文錯誤。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -183,7 +183,8 @@ describe("migration: progress and stuck generations (#465)", () => {
     for (const name of ["_daily_quiz_generation_stale", "reserve_daily_quiz_generation", "reserve_daily_quiz_regeneration",
       "set_daily_quiz_generation_stage", "complete_daily_quiz_generation", "fail_daily_quiz_generation",
       "get_daily_quiz_calendar", "swap_daily_quiz_version"]) {
-      expect(latestFunctionDefinition(name).file, name).toBe(MIGRATION);
+      // #589 之後再改寫過的（保留已通過的題目），斷言照樣驗最新版本
+      expect([MIGRATION, "20261019035001_daily_quiz_keep_passed_questions.sql"], name).toContain(latestFunctionDefinition(name).file);
     }
   });
 
@@ -213,7 +214,7 @@ describe("migration: progress and stuck generations (#465)", () => {
   });
 
   it("stage updates are service-role only; complete/fail clear the stage", () => {
-    const sql = read(`supabase/migrations/${MIGRATION}`);
+    const sql = currentMigrationSql(MIGRATION);
     expect(fn("set_daily_quiz_generation_stage")).toContain("IF auth.role() <> 'service_role' THEN RAISE EXCEPTION 'permission_denied'; END IF;");
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.set_daily_quiz_generation_stage(uuid, text) FROM PUBLIC, anon, authenticated;");
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.set_daily_quiz_generation_stage(uuid, text) TO service_role;");
