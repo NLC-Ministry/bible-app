@@ -4115,6 +4115,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
   color: var(--text-primary);
 }
 
+.commentary-review-card__hint {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
 .commentary-review-card__note {
   margin: 0;
   padding: 0.4rem 0.6rem;
@@ -9266,6 +9273,34 @@ input:checked + .slider:before {
   border-radius: 3px;
   background: color-mix(in srgb, var(--color-brand) 28%, transparent);
   color: inherit;
+}
+
+/* 被解釋的經文片語（#542）：說明裡加粗，引用經文裡用上面的 mark 標出。 */
+.reader-commentary-phrase {
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+/* 譯文裡的出處（「見出27:21」，#542）：點了跳到那一節。看起來像文字連結。 */
+.reader-commentary-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.reader-commentary-ref:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .reader-commentary-section {

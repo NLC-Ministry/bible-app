@@ -10,6 +10,7 @@ import { buildChapterEndNav, createVerseElement, revealVerses } from "../modules
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "../modules/verse-selection-format.mjs";
 import { createBibleNavDirectory, isEnglishBibleVersion, readerBookLabel } from "../modules/bible-nav-directory.mjs";
 import { createReaderCommentaryController } from "../modules/reader-commentary.mjs";
+import { refRevealTarget } from "../data/passage-commentary.mjs";
 import { withSoftTimeout } from "../net-timeout.mjs";
 import {
   READER_FONT_SIZES,
@@ -124,7 +125,15 @@ export function mountReadApp({
     getElement: $,
     getVerseContainer: () => content,
     schedule: callback => schedule(callback, 250),
-    onChange: () => { if (selection.size > 0) renderSelectionBar(); }
+    onChange: () => { if (selection.size > 0) renderSelectionBar(); },
+    // 注釋裡的「見出27:21」（#542）：跳到那一章、捲到那一節並閃底色。
+    onNavigateRef: async target => {
+      const book = books.find(item => item.name === target.book);
+      if (!book) return;
+      const { verse, highlightVerses } = refRevealTarget(target);
+      await goTo(book.id, target.chapter);
+      revealVerses(content, verse, highlightVerses, { schedule });
+    }
   }) : null;
   commentary?.bind();
 
