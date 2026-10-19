@@ -16,6 +16,7 @@ export type AdminAction =
   | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export"
   // 照搬的舊管理區塊：下載前記一筆匯出稽核（#550）
   | "legacy_export_audit"
+  | "lightning_quiz_image_upload"
   // 稽核紀錄（#550）
   | "audit_list" | "audit_event" | "audit_export"
   // 計畫總覽（只有數字）與名單（#564）；計畫區的計畫選單、測驗作答、名單匯出、關心提醒（#565）
@@ -227,6 +228,9 @@ export function describeAdminError(err: unknown): string {
     case "bad_image": return "這張截圖無法處理，請換一張。";
     case "too_large": return "截圖太大（最多 500 KB）。";
     case "payload_too_large": return "送出的資料太大。";
+    case "quiz_image_bad_type": return "圖片只接受 PNG、JPEG、WebP。";
+    case "quiz_image_too_large": return "圖片太大（最多 700 KB），請換一張小一點的。";
+    case "quiz_image_invalid": return "這張圖片無法處理，請換一張。";
     case "invalid_status": return "不正確的處理狀態。";
     case "invalid_org_filter": return "大區／牧區／小組的篩選條件不正確，請清除篩選再試。";
     case "invalid_plan_id":

@@ -12467,6 +12467,22 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-card);
 }
+/* #585 後台題目附圖：加入／更換／移除 */
+.admin-lq-image {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.admin-lq-image__label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.admin-lq-image__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
 .lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }
 .lightning-quiz-result__time {

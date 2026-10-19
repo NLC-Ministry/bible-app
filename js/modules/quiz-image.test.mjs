@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { getQuestionImage, questionImageHtml, installQuizImageViewer, isUploadedQuizImageSrc, quizImagePublicUrl } from "./quiz-image.mjs";
 import { normalizeQuestion, renderQuestionFieldsetHtml, bindQuestionFieldset, readResponseFromFieldset } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml } from "./quiz-review.mjs";
 
@@ -29,6 +29,50 @@ describe("getQuestionImage", () => {
     for (const src of ["https://evil.example/a.webp", "javascript:alert(1)", "/assets/quiz/a.webp", "assets/../index.html", "assets/quiz/a.svg", 'assets/a".webp']) {
       expect(getQuestionImage({ image: { src } }), src).toBeNull();
     }
+  });
+
+  // #585：後台上傳的圖放在本站 Supabase 的公開 bucket quiz-images
+  describe("uploaded images (#585)", () => {
+    const ORIGIN = "https://dbtjsljrytzonjvclgrd.supabase.co";
+    const UUID = "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f";
+    const uploaded = (ext = "webp", origin = ORIGIN) => `${origin}/storage/v1/object/public/quiz-images/${UUID}.${ext}`;
+    let previous;
+    beforeEach(() => {
+      previous = globalThis.SUPABASE_CONFIG;
+      globalThis.SUPABASE_CONFIG = { url: `${ORIGIN}/` };
+    });
+    afterEach(() => { globalThis.SUPABASE_CONFIG = previous; });
+
+    it("accepts this project's quiz-images public URL", () => {
+      for (const ext of ["webp", "png", "jpg", "jpeg"]) {
+        expect(getQuestionImage({ image: { src: uploaded(ext) } }), ext).toEqual({ src: uploaded(ext), alt: "題目附圖" });
+      }
+      expect(isUploadedQuizImageSrc(uploaded())).toBe(true);
+    });
+
+    it("rejects other projects, other buckets, non-uuid names and query strings", () => {
+      for (const src of [
+        uploaded("webp", "https://ztozevcqkfrohgjmngcj.supabase.co"),
+        uploaded("webp", "http://dbtjsljrytzonjvclgrd.supabase.co"),
+        `${ORIGIN}/storage/v1/object/public/issue-report-shots/${UUID}.webp`,
+        `${ORIGIN}/storage/v1/object/public/quiz-images/../${UUID}.webp`,
+        `${ORIGIN}/storage/v1/object/public/quiz-images/photo.webp`,
+        `${uploaded()}?x=1`,
+        uploaded("svg")
+      ]) {
+        expect(getQuestionImage({ image: { src } }), src).toBeNull();
+      }
+    });
+
+    it("rejects uploaded URLs when the app has no Supabase config", () => {
+      globalThis.SUPABASE_CONFIG = undefined;
+      expect(getQuestionImage({ image: { src: uploaded() } })).toBeNull();
+    });
+
+    it("builds the public URL from a stored path", () => {
+      expect(quizImagePublicUrl(`${UUID}.webp`)).toBe(uploaded());
+      expect(quizImagePublicUrl("../x.webp")).toBe("");
+    });
   });
 
   it("escapes the alt text", () => {
