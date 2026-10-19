@@ -16,8 +16,10 @@ git rebase origin/staging
 ```
 Resolve any conflict now (the branch is local-only, so rebase is fine). If `origin/staging` added a migration with a later timestamp than yours, recreate yours with `npx supabase migration new <name>` so it sorts last.
 
-## 2. Test once
-During development run only the related tests (`npx vitest run scripts/<file>.test.mjs`). Now run the full suite once: `npm test`. If one file times out, rerun it alone before calling it a failure (parallel sessions load the machine).
+## 2. Test what you changed
+During development run only the related tests (`npx vitest run scripts/<file>.test.mjs`). Now run once: `npm run test:changed` (`scripts/test-changed.mjs`) — every test that imports a file changed since `origin/staging` (vitest `--changed`) plus every test whose source names a changed file (the many `readFileSync` source-text tests that `--changed` can't see); a change to `package.json`, the lockfile or the vitest config runs everything. The full suite runs once at integration and again in CI (#592). If one file times out, rerun it alone before calling it a failure (parallel sessions load the machine).
+
+If you touched the build (`scripts/bundle.mjs`, `scripts/build-admin.mjs`, `admin/`, `admin-legacy/`, entry points or their import chain), also run `npm run test:build` — those tests run esbuild and are left out of `npm test`.
 
 ## 3. Stop your preview servers
 Stop every `npx serve dist` / preview server you started from this worktree. The integrator removes the worktree after merging, and a server left running keeps the folder locked.
@@ -29,7 +31,7 @@ Stop every `npx serve dist` / preview server you started from this worktree. The
 Task: #<issue>
 Status: ready
 Synced-to: <short sha of origin/staging you rebased onto>
-Tests: npm test <passed>/<total>
+Tests: test:changed <passed>/<total>[, test:build <passed>/<total>]
 Migration: <supabase/migrations/…sql, comma-separated> | none
 Depends-on: <task/… branch that must merge first> | none
 Touches: <files + key functions, one line>

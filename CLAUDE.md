@@ -18,7 +18,7 @@ Several Claude sessions work on this repo at once. To keep them out of each othe
 
 - **Every task gets its own local worktree + branch** `task/<issue>-<slug>` off `origin/staging`. A desktop-app session already runs in its own worktree (`.claude/worktrees/<name>`): use it — `git switch -c task/<issue>-<slug> origin/staging` there (the app's edit hook rejects edits in any other worktree). Otherwise: `git worktree add -b task/<issue>-<slug> .worktrees/task-<issue>-<slug> origin/staging`. Then junction `node_modules` from the main folder if the worktree has none (`cmd //c mklink //J <worktree>\node_modules <main>\node_modules`). Never commit in the shared main folder, and never push `task/*` branches.
 - **Local folders**: never create folders outside the project (the main folder sits on the user's Desktop); one-off scratch files go in your scratchpad. Worktrees you create go under `.worktrees/` in the main folder only: `task-<issue>-<slug>/`, `integrate/`, `release/`, plus `_backup/` for local files to keep before deleting a folder (e.g. an `.env`). Don't create anything in `.claude/worktrees/` — the desktop app manages it. Removing a worktree: stop any preview server you started in it → `cmd //c rmdir <worktree>\node_modules` (the junction) → `git worktree remove <worktree>` → confirm the folder is gone.
-- **Finishing a task = the `handoff` skill** (`.claude/skills/handoff/SKILL.md`): rebase onto `origin/staging` and resolve conflicts yourself, run `npm test` once, and end the last commit with the handoff trailers (`Status: ready`, `Migration`, `Depends-on`, `Release-note`, `Verify`, …). The integrator reads those trailers instead of your diff.
+- **Finishing a task = the `handoff` skill** (`.claude/skills/handoff/SKILL.md`): rebase onto `origin/staging` and resolve conflicts yourself, run `npm run test:changed` once (the full suite runs at integration and in CI), and end the last commit with the handoff trailers (`Status: ready`, `Migration`, `Depends-on`, `Release-note`, `Verify`, …). The integrator reads those trailers instead of your diff.
 - **Whoever merges into `staging` is the integrator for that run** and follows the `integrate` skill (`.claude/skills/integrate/SKILL.md`): take the integration lock, merge only `Status: ready` branches in a temporary detached worktree, one full `npm test`, apply staging migrations, push `HEAD:staging`, clean up, release the lock.
 - **Release PR (`staging` → `main`)**: the integrator opens it only after the user says staging is verified; if one is already open, update it with `gh pr edit` instead of opening another (every push to `staging` lands in the open PR). Never merge it — the maintainer merging it is the approval. When the user says it's merged, the integrator finishes the release (integrate skill step 9): production migrations if any, confirm the deploy, **merge `main` back into `staging`** (fast-forward when possible) so `main` is never ahead, then close the shipped issues.
 - **Branches**: never push to `main` directly and never force-push `staging` — GitHub rulesets enforce both (`main` requires a PR; `staging` blocks only force-push and deletion, so the integrator pushes it directly). Release PRs merge with a merge commit, not squash. Production hotfix: `hotfix/*` off `main` → PR to `main` → merge `main` back into `staging`. Details: `docs/staging.md`.
@@ -34,11 +34,13 @@ Several Claude sessions work on this repo at once. To keep them out of each othe
 
 ```bash
 npm run build             # icon registry → config.js → esbuild bundle into dist/ (what Vercel serves)
-npm test                  # vitest run; quiet: npm test -- --reporter=dot
+npm test                  # full suite, already quiet (dot reporter, logs only from failing tests)
+npm run test:changed      # only tests affected by changes since origin/staging — what a task session runs
+npm run test:build        # the esbuild tests npm test leaves out (CI runs them)
 npm run test:watch
 ```
 
-- No linter. Run `npm test` before calling a change done. `node --check` is not a substitute — it misses e.g. a ReferenceError left by a refactor (that caused a production incident).
+- No linter. Run tests before calling a change done (`test:changed` in a task; full `npm test` at integration). `node --check` is not a substitute — it misses e.g. a ReferenceError left by a refactor (that caused a production incident).
 - `npm run dev` (`npx serve .`) cannot load the app: `js/app.js` imports a `.ts` file that only esbuild strips. To check in a browser use `npm run build && npx serve dist`, or verify via a vitest test.
 - `config.js` is git-ignored and generated from `.env` by `build-config.js` — never edit it by hand.
 

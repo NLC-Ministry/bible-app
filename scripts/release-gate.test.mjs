@@ -36,13 +36,15 @@ describe("release-gate workflow", () => {
 });
 
 describe("production deploy gate in ci.yml", () => {
-  const deploy = ci.slice(ci.indexOf("  deploy:"));
-  const gateStep = deploy.slice(deploy.indexOf("- name: Require a release PR before production deploy"), deploy.indexOf("- uses: actions/setup-node@v4"));
+  // #592：CI 合成一個工作，閘門是第一個步驟
+  const gateStep = ci.slice(ci.indexOf("- name: Require a release PR before production deploy"), ci.indexOf("- name: Skip checks already passed"));
 
   it("runs only for pushes to main, before anything is built or deployed", () => {
-    expect(gateStep).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
-    expect(deploy.indexOf("Require a release PR")).toBeLessThan(deploy.indexOf("- name: Deploy"));
-    expect(deploy.indexOf("Require a release PR")).toBeLessThan(deploy.indexOf("vercel pull"));
+    expect(gateStep).toContain("if: env.IS_PRODUCTION == 'true'");
+    expect(ci).toContain("IS_PRODUCTION: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}");
+    expect(ci.indexOf("Require a release PR")).toBeLessThan(ci.indexOf("- name: Deploy"));
+    expect(ci.indexOf("Require a release PR")).toBeLessThan(ci.indexOf("vercel pull"));
+    expect(ci.indexOf("Require a release PR")).toBeLessThan(ci.indexOf("npm run build"));
   });
 
   it("fails the deploy unless the commit came from a merged PR from staging or hotfix/*", () => {
