@@ -148,11 +148,13 @@ export function renderDailyQuizReviewHtml(attempt, questions) {
     const response = answer.response ?? null;
     const result = !answerHasContent(response) ? "unanswered" : answer.correct === true ? "correct" : "wrong";
     const note = [question.explanation, question.verseRef].filter(Boolean).map(esc).join(" · ");
+    // #590：發佈後管理員更正過正解，對錯與總分已依新正解重算
+    const corrected = question.answerCorrected ? '<p class="exam-result__ln quiz-review__corrected">此題答案已更正，對錯與分數已重新計算。</p>' : "";
     return renderQuestionReviewHtml(question, {
       response,
       result,
       heading: `第 ${index + 1} 題`,
-      extraHtml: note ? `<p class="exam-result__ln"><span class="exam-result__k">解說：</span>${note}</p>` : ""
+      extraHtml: `${corrected}${note ? `<p class="exam-result__ln"><span class="exam-result__k">解說：</span>${note}</p>` : ""}`
     });
   }).join("")}</div>`;
 }

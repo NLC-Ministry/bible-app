@@ -29,6 +29,7 @@ import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-mana
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
+import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
   QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "./quiz-generation-status.mjs";
@@ -3834,13 +3835,24 @@ function adminQuizIsEditableDay(day, today) {
   return day.date >= today && !['open', 'ended', 'outside_plan'].includes(day.status) && Number(day.publishedGroups || 0) === 0;
 }
 
+function adminQuizShiftDate(iso, days) {
+  const [year, month, day] = String(iso || '').split('-').map(Number);
+  if (!year) return '';
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 function renderAdminQuizCalendarHtml(calendar, selectedDate) {
   const today = calendar.today;
   const days = Array.isArray(calendar.days) ? calendar.days : [];
+  const showingPast = days.length > 0 && days[0].date < today;
   return `${calendar.autoPublishEnabled ? '' : `<div class="admin-quiz-calendar-notice" role="status">
       每天自動發佈還沒開啟，下面這些天都不會自動發給小組。
       <button type="button" class="exam-admin__link" data-quiz-goto-rules>到「規則設定」開啟</button>
     </div>`}
+    <div class="admin-quiz-day-actions">
+      <button type="button" class="secondary-btn" data-quiz-week="-1">前 7 天</button>
+      ${showingPast ? '<button type="button" class="secondary-btn" data-quiz-week="1">後 7 天</button><button type="button" class="secondary-btn" data-quiz-week="0">回到今天</button>' : ''}
+    </div>
     <div class="admin-quiz-calendar" role="list">
       ${days.map(day => {
         const status = ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
@@ -3859,18 +3871,29 @@ function renderAdminQuizCalendarHtml(calendar, selectedDate) {
     <div data-quiz-day-detail></div>`;
 }
 
-function renderAdminQuizDayQuestionsHtml(rawQuestions) {
+function adminQuizDayQuestions(rawQuestions) {
   const questions = [];
   (Array.isArray(rawQuestions) ? rawQuestions : []).forEach(raw => {
     try { questions.push({ ...normalizeQuestion(raw), raw }); } catch { /* 格式不認得的題目略過，不讓整頁壞掉 */ }
   });
+  return questions;
+}
+
+// correctable：已發佈的日子，是非／單選／多選題旁邊有「更正答案」（#590）
+function renderAdminQuizDayQuestionsHtml(rawQuestions, { correctable = false } = {}) {
+  const questions = adminQuizDayQuestions(rawQuestions);
   if (!questions.length) return '';
-  return `<ol class="admin-quiz-day-questions">${questions.map(question => `
+  return `<ol class="admin-quiz-day-questions">${questions.map(question => {
+    const note = answerCorrectionNote(question, question.raw);
+    return `
     <li>
       <p class="admin-quiz-day-questions__stem"><span class="role-badge">${adminQuizEscape(QUESTION_TYPE_LABELS[question.type] || question.type)}</span> ${adminQuizEscape(question.payload?.stem || '')}</p>
       <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+      ${note ? `<p class="admin-daily-quiz-note">${adminQuizEscape(note)}</p>` : ''}
+      ${correctable && canCorrectAnswer(question) ? `<button type="button" class="secondary-btn" data-quiz-correct="${adminQuizEscape(question.id)}">更正答案</button>` : ''}
       ${renderQuizEvidenceHtml(question.raw)}
-    </li>`).join('')}</ol>`;
+    </li>`;
+  }).join('')}</ol>`;
 }
 
 function renderAdminQuizDayDetailHtml(day, today) {
@@ -3898,7 +3921,7 @@ function renderAdminQuizDayDetailHtml(day, today) {
         <h2>${adminQuizEscape(status.label)}${day.source === 'custom' ? '・自訂題目' : day.source === 'ai' ? '・AI 題目' : ''}</h2>
       </div>
     </div>
-    ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能再修改。</p>` : ''}
+    ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能換題目；發現正解有錯時，可以按題目下的「更正答案」，所有作答會重新計分。</p>` : ''}
     ${day.status === 'generating' ? `<div data-quiz-generation-slot>${renderQuizGenerationProgressHtml(day, quizGenerationElapsedSeconds(day, adminQuizClockOffsetMs))}</div>` : ''}
     ${day.status === 'failed' ? renderQuizGenerationErrorHtml(day.aiError) : ''}
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
@@ -3906,7 +3929,7 @@ function renderAdminQuizDayDetailHtml(day, today) {
     ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
     ${actions.length ? `<div class="admin-quiz-day-actions">${actions.join('')}</div>` : ''}
     <div data-quiz-day-work></div>
-    ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}
+    ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions, { correctable: published }) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}
   </section>`;
 }
 
@@ -3933,7 +3956,8 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
   const panel = root.querySelector('[data-quiz-tab-panel="calendar"]');
   if (!panel) return;
   if (!panel.querySelector('.admin-quiz-calendar')) panel.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗日曆…</div>';
-  const result = await db.getDailyQuizCalendar(state.adminManagementPlan, null, 7);
+  // #590：可以往前翻，已發佈的日子事後發現答案有錯也找得到
+  const result = await db.getDailyQuizCalendar(state.adminManagementPlan, root.dataset.quizFrom || null, 7);
   if (!result.success) {
     panel.innerHTML = `<div class="admin-user-directory__empty">${adminQuizEscape(result.message || '無法載入小測驗日曆')}</div>`;
     return;
@@ -3963,6 +3987,12 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
   };
   panel.querySelectorAll('[data-quiz-day]').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.quizDay)));
   panel.querySelector('[data-quiz-goto-rules]')?.addEventListener('click', () => switchAdminQuizTab(root, 'rules'));
+  panel.querySelectorAll('[data-quiz-week]').forEach(button => button.addEventListener('click', () => {
+    const shift = Number(button.dataset.quizWeek);
+    const from = shift === 0 ? '' : adminQuizShiftDate(days[0]?.date || calendar.today, shift * 7);
+    root.dataset.quizFrom = from && from >= calendar.today ? '' : from;
+    renderAdminQuizCalendar(root);
+  }));
   if (current) showDetail(current);
 }
 
@@ -4043,6 +4073,39 @@ function bindAdminQuizDayDetail(root, host, day) {
       await run(button, () => db.setDailyQuizDaySkip(plan, day.date, false), '已恢復發佈。');
     }
   }));
+
+  host.querySelectorAll('[data-quiz-correct]').forEach(button => button.addEventListener('click', () => {
+    const question = adminQuizDayQuestions(day.questions).find(item => item.id === button.dataset.quizCorrect);
+    if (!question) return;
+    work.innerHTML = renderAnswerCorrectionHtml(question);
+    bindAdminQuizAnswerCorrection(work, day, question, { confirmDialog, reload });
+    work.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }));
+}
+
+// #590：已發佈的日子更正某一題的正解，伺服器同一個交易裡重算所有作答
+function bindAdminQuizAnswerCorrection(work, day, question, { confirmDialog, reload }) {
+  const form = work.querySelector('[data-quiz-correct-form]');
+  if (!form) return;
+  form.querySelector('[data-quiz-correct-cancel]')?.addEventListener('click', () => { work.innerHTML = ''; });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const answerKey = readCorrectionAnswerKey(form, question.type);
+    if (answerKey === null) { showToast('請選擇正解。'); return; }
+    const explanation = form.querySelector('[data-quiz-correct-explanation]')?.value ?? null;
+    const answerText = formatResponseForDisplay(question.type, question.payload, answerKey);
+    if (!await confirmDialog('更正答案並重新計分？', `正解改成「${answerText}」。${adminQuizDayLabel(day.date)} 所有人這一題的對錯和總分都會重新計算。`, '更正')) return;
+    const saveBtn = form.querySelector('[data-quiz-correct-save]');
+    if (saveBtn) saveBtn.disabled = true;
+    const result = await db.setDailyQuizAnswerKey(state.adminManagementPlan, day.date, question.id, answerKey, explanation);
+    if (saveBtn) saveBtn.disabled = false;
+    if (!result.success) { showToast(result.message || '更正失敗，請稍後再試。'); return; }
+    const data = result.data || {};
+    showToast(data.changed === false
+      ? '正解和解說都沒有變動。'
+      : `已更正，重新計算了 ${Number(data.attemptsUpdated || 0)} 份作答（${Number(data.scoresChanged || 0)} 人分數有變）。`);
+    await reload();
+  });
 }
 
 function bindAdminQuizDayImport(work, day, reload) {
