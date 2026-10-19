@@ -45,7 +45,7 @@
 - **每個修改都在自己的本地 `task/*` 分支上做，由「整合者」合併進 `staging` 再 push**（流程見 CLAUDE.md「Parallel tasks and integration」和 `.claude/skills/handoff`、`.claude/skills/integrate`）。push 之後 CI 會跑測試、部署成 **preview**（用 Vercel Preview 的環境變數，連 staging 資料庫），再綁到固定網址。
 - **不要 force push `staging`**：它上面可能有還沒上線的修改，蓋掉就不見了。
 - **大功能**（要做好幾天、或有上線順序要求，例如大測驗 C3）一樣是 `task/*` 分支，只是做完再交接；還沒準備好上線就不要標 `Status: ready`，不然會跟其他修改綁在一起上線。
-- **不要直接 push 到 `main`**。免費的私人 repo 不能設定分支保護，所以改成在部署時把關：不是從 `staging`（或 `hotfix/*`）的 PR merge 進來的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
+- **不要直接 push 到 `main`**。GitHub 有兩個規則集（#579）：「main」只套用 `main`，禁止刪除、禁止強制推送、一定要走 PR；「staging」只套用 `staging`，只禁止刪除和強制推送、不要求 PR，所以整合者直接 push `staging`。部署時的把關照舊保留，當第二道防線：不是從 `staging`（或 `hotfix/*`）的 PR merge 進來的 commit，CI 不會部署到正式環境（見下方「上線到正式環境」）。
 - **正式環境的緊急修正**：staging 上有還沒準備好上線的東西時，從 `main` 開 `hotfix/<名稱>` 分支 → 開 PR 到 `main` → 照上線流程審核 → merge 後，由整合者把 `main` 併回 `staging`（跟一般上線後一樣，見下方第 5 步）。
 - migration 跟著分支走：整合者合併進 `staging` 時推到 staging 資料庫；上線時推到正式資料庫（見下方「套用 migration」）。
 - **Dependabot 安全更新的 PR**（#461，只開安全更新、不開一般升版）：PR 開在 `staging`，CI 會跑測試與資安掃描但**不部署**（拿不到 Vercel 金鑰）。不要在 GitHub 上按 merge——由整合者跟 `task/*` 一樣處理：在暫時的工作樹 `git merge --no-ff origin/dependabot/...`、跑一次 `npm test`、push `staging`，PR 會自動變成已合併。

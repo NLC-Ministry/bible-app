@@ -51,10 +51,12 @@ git push origin HEAD:staging
 ```
 Rejected (someone pushed first) → `git fetch`, recreate the worktree from the new `origin/staging`, redo 4–6.
 
+Rejected with `push declined due to repository rule violations` → the GitHub rulesets have drifted (#579: `staging` may block only deletion and force-push; only `main` requires a PR). Check `gh api repos/NLC-Ministry/bible-app/rules/branches/staging` and tell the user; don't switch to a PR or any other way of pushing.
+
 If a release PR (`staging` → `main`) is open, this push lands in it: update its description (step 8).
 
 ### 6a. Admin console issues → update the tracking issue #576
-If a merged branch's issue belongs to the admin console redesign (a row in #576, or its title starts with 後台／admin-api, or it references #546／#572), update that issue's row in #576 right after the push (or after opening the PR into staging):
+If a merged branch's issue belongs to the admin console redesign (a row in #576, or its title starts with 後台／admin-api, or it references #546／#572), update that issue's row in #576 right after the push:
 ```bash
 gh issue view 576 --json body -q .body > <scratchpad>/576.md
 # edit the row "| #<issue> | …": 狀態 → 🟡, 進測試站的 PR → #<PR>; leave the 驗收 box alone (only the maintainer ticks it)
