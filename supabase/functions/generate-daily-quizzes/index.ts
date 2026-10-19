@@ -1,7 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  assignCandidateIds, buildVerseIndex, CANDIDATE_COUNT, formatScripture, QUIZ_QUESTION_COUNT, selectQuestions, toBlindReviewItems,
-  type ChapterVerses
+  assignCandidateIds, buildVerseIndex, CANDIDATE_COUNT, combineWithKept, formatScripture, keptQuestionsPrompt, QUIZ_QUESTION_COUNT,
+  sanitizeKeptQuestions, selectQuestions, toBlindReviewItems,
+  type CandidateQuestion, type ChapterVerses
 } from "./quiz-quality.ts";
 import { callWithFallback, GeminiCallError, geminiHttpError, GenerationError, type GenerationStep } from "./gemini-call.ts";
 
@@ -251,8 +252,11 @@ function retryLogger(context: GenerationContext, step: GenerationStep) {
 // 不足 5 題就整版失敗，交給既有的 20:00 重試與後台標紅。
 // #465：每次呼叫都有逾時與重試；審題模型一直失敗（例如持續 503）就改用出題模型代審。
 // #467：單次呼叫有上限（出題 60 秒、審題 40 秒），模型不回應時備用模型還有時間接手。
-async function generateVariant(context: GenerationContext, chapters: ChapterVerses[], refs: ChapterRef[], reportStage: StageReporter) {
+// #589：kept 是上次失敗時保留、已通過審核的題目；這次只需要再通過 QUIZ_QUESTION_COUNT - kept.length 題。
+// 還是不夠就丟 GenerationError 並帶 kept（保留的＋這次通過的），呼叫端寫進 kept_questions。
+async function generateVariant(context: GenerationContext, chapters: ChapterVerses[], refs: ChapterRef[], reportStage: StageReporter, kept: CandidateQuestion[] = []) {
   const { apiKey, models, deadline, invocationId, variant } = context;
+  const needed = QUIZ_QUESTION_COUNT - kept.length;
   const angle = variant === "A" ? "經文事實、事件先後與關鍵細節" : "人物、對話與經文明寫的因果關係";
   const referenceLabel = refs.map(ref => `${ref.book}${ref.chapter}章`).join("、");
   const scripture = formatScripture(chapters);
@@ -261,7 +265,7 @@ async function generateVariant(context: GenerationContext, chapters: ChapterVers
   const draft = await callWithFallback({
     step: "draft", models: [models.generator], attemptsPerModel: 3, maxAttemptMs: 60000, deadline,
     call: (model, timeoutMs) => callGeminiOnce(apiKey, model, GENERATOR_INSTRUCTION,
-      `請為 ${referenceLabel} 產生版本 ${variant} 的 ${CANDIDATE_COUNT} 題四選一候選題（之後會由審題員篩選）。此版本著重：${angle}。各題不要重複考同一件事。\n\n當日經文：\n${scripture}`,
+      `請為 ${referenceLabel} 產生版本 ${variant} 的 ${CANDIDATE_COUNT} 題四選一候選題（之後會由審題員篩選）。此版本著重：${angle}。各題不要重複考同一件事。${keptQuestionsPrompt(kept)}\n\n當日經文：\n${scripture}`,
       CANDIDATES_SCHEMA, timeoutMs),
     onRetry: retryLogger(context, "draft")
   });
@@ -278,13 +282,16 @@ async function generateVariant(context: GenerationContext, chapters: ChapterVers
   if (review.model !== models.reviewer) {
     console.warn("daily_quiz_review_fallback", JSON.stringify({ invocationId, variant, wanted: models.reviewer, used: review.model }));
   }
-  const { questions, acceptedCount, rejected } = selectQuestions(candidates, (review.value as any)?.reviews, buildVerseIndex(chapters));
-  console.info("daily_quiz_quality_check", JSON.stringify({ invocationId, variant, candidates: candidates.length, accepted: acceptedCount, rejected, reviewModel: review.model }));
-  if (questions.length < QUIZ_QUESTION_COUNT) {
-    throw new GenerationError("quality", "insufficient", `${acceptedCount}/${candidates.length} passed; ${summarizeRejections(rejected)}`);
+  const { questions: accepted, acceptedCount, rejected } = selectQuestions(candidates, (review.value as any)?.reviews, buildVerseIndex(chapters), needed);
+  console.info("daily_quiz_quality_check", JSON.stringify({ invocationId, variant, candidates: candidates.length, accepted: acceptedCount, kept: kept.length, rejected, reviewModel: review.model }));
+  const merged = combineWithKept(kept, accepted);
+  if (!merged.questions) {
+    const error = new GenerationError("quality", "insufficient",
+      `${acceptedCount}/${candidates.length} passed; kept ${merged.kept.length}/${QUIZ_QUESTION_COUNT}; ${summarizeRejections(rejected)}`);
+    throw Object.assign(error, { kept: merged.kept });
   }
   await reportStage("saving");
-  return { questions: validateQuestions(questions), model: review.model === draft.model ? draft.model : `${draft.model}+review:${review.model}` };
+  return { questions: validateQuestions(merged.questions), model: review.model === draft.model ? draft.model : `${draft.model}+review:${review.model}` };
 }
 
 // 淘汰原因統計（例如 review_disagrees×4, quote_not_found×2），寫進錯誤方便看出是哪一關卡太嚴
@@ -443,15 +450,21 @@ Deno.serve(async req => {
       if (error) console.warn("daily_quiz_stage_update_failed", JSON.stringify({ invocationId, variant, stage, error: error.message }));
     };
     try {
-      console.info("daily_quiz_gemini_request_started", JSON.stringify({ invocationId, variant, model, reviewModel, chapterCount: chapterRefs.length }));
-      const generated = await generateVariant({ apiKey: geminiApiKey, models: { generator: model, reviewer: reviewModel }, deadline, invocationId, variant }, chapters, chapterRefs, reportStage);
+      // #589：上次失敗時保留的題目（欄位還沒建好時就當沒有）
+      const { data: keptRow, error: keptError } = await supabase.from("daily_quizzes").select("kept_questions").eq("id", quizId).maybeSingle();
+      if (keptError) console.warn("daily_quiz_kept_lookup_failed", JSON.stringify({ invocationId, variant, error: keptError.message }));
+      const kept = sanitizeKeptQuestions(keptRow?.kept_questions);
+      console.info("daily_quiz_gemini_request_started", JSON.stringify({ invocationId, variant, model, reviewModel, chapterCount: chapterRefs.length, kept: kept.length }));
+      const generated = await generateVariant({ apiKey: geminiApiKey, models: { generator: model, reviewer: reviewModel }, deadline, invocationId, variant }, chapters, chapterRefs, reportStage, kept);
       const { error: completionError } = await supabase.rpc("complete_daily_quiz_generation", { p_quiz_id: quizId, p_questions: generated.questions, p_model: generated.model });
       if (completionError) throw new GenerationError("save", "error", completionError.message);
       results.push({ variant, status: "ready", questionCount: generated.questions.length, model: generated.model });
       console.info("daily_quiz_variant_ready", JSON.stringify({ invocationId, variant, questionCount: generated.questions.length, model: generated.model }));
     } catch (error) {
       const message = errorText(error, step);
-      await supabase.rpc("fail_daily_quiz_generation", { p_quiz_id: quizId, p_error: message });
+      // 品質不足時帶上要保留的題目；其他失敗（503、逾時…）傳 null，保留的題目不動
+      const keptQuestions = Array.isArray((error as any)?.kept) ? (error as any).kept : null;
+      await supabase.rpc("fail_daily_quiz_generation", { p_quiz_id: quizId, p_error: message, p_kept_questions: keptQuestions });
       results.push({ variant, status: "failed", error: message });
       console.error("daily_quiz_variant_failed", JSON.stringify({ invocationId, variant, error: message }));
     }

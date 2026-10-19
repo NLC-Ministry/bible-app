@@ -160,3 +160,30 @@ export function selectQuestions(candidates: CandidateQuestion[], reviews: Questi
   }
   return { questions: accepted.slice(0, count).map(toStoredQuestion), acceptedCount: accepted.length, rejected };
 }
+
+// #589：上次失敗時保留下來、已通過審核的題目（daily_quizzes.kept_questions）。
+// 格式不對的略過，最多 count - 1 題（滿 count 題就該是成功，不會留在這裡）。
+export function sanitizeKeptQuestions(value: unknown, count = QUIZ_QUESTION_COUNT): CandidateQuestion[] {
+  const list = Array.isArray(value) ? value : [];
+  return list.filter((question: any) =>
+    question && typeof question === "object"
+    && Array.isArray(question.options) && question.options.length === 4
+    && Number.isInteger(question.correctIndex) && question.correctIndex >= 0 && question.correctIndex <= 3
+    && text(question.question) && text(question.explanation) && text(question.verseRef)
+    && Array.isArray(question.evidence) && question.evidence.length === 4
+  ).slice(0, count - 1) as CandidateQuestion[];
+}
+
+// 保留的題目＋這次通過的題目：湊滿 count 題就是成功（題號重編 q1…），
+// 不夠就全部留到下次（題號 k1…，後台「不要這題」用這個編號）。
+export function combineWithKept(kept: CandidateQuestion[], accepted: CandidateQuestion[], count = QUIZ_QUESTION_COUNT) {
+  const all = [...kept, ...accepted].slice(0, count);
+  if (all.length >= count) return { questions: all.map((question, i) => ({ ...question, id: `q${i + 1}` })), kept: [] as CandidateQuestion[] };
+  return { questions: null, kept: all.map((question, i) => ({ ...question, id: `k${i + 1}` })) };
+}
+
+// 出題提示：已經選用的題目不要再考同一件事
+export function keptQuestionsPrompt(kept: CandidateQuestion[]) {
+  if (!kept.length) return "";
+  return `\n\n以下 ${kept.length} 題已經選用，新的候選題不要再考同一件事：\n${kept.map((question, i) => `${i + 1}. ${text(question.question)}`).join("\n")}`;
+}

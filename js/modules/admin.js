@@ -3896,6 +3896,29 @@ function renderAdminQuizDayQuestionsHtml(rawQuestions, { correctable = false } =
   }).join('')}</ol>`;
 }
 
+// #589：AI 出題失敗時已通過品質檢查、留到下次的題目
+const ADMIN_QUIZ_QUESTION_COUNT = 5;
+
+function adminQuizKeptQuestions(day) {
+  return Array.isArray(day?.keptQuestions) ? adminQuizDayQuestions(day.keptQuestions) : [];
+}
+
+function renderAdminQuizKeptQuestionsHtml(day, editable) {
+  const kept = adminQuizKeptQuestions(day);
+  if (!kept.length || (Array.isArray(day.questions) && day.questions.length)) return '';
+  const canRemove = editable && day.status !== 'generating';
+  return `<div class="admin-daily-quiz-note" data-quiz-kept>
+    <p>已通過品質檢查 ${kept.length}／${ADMIN_QUIZ_QUESTION_COUNT} 題，會留到下次${day.status === 'generating' ? '' : '；再按「請 AI 出題」'}只要補 ${ADMIN_QUIZ_QUESTION_COUNT - kept.length} 題。</p>
+    <ol class="admin-quiz-day-questions">${kept.map(question => `
+      <li>
+        <p class="admin-quiz-day-questions__stem">${adminQuizEscape(question.payload?.stem || '')}</p>
+        <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+        ${canRemove ? `<button type="button" class="secondary-btn" data-quiz-kept-remove="${adminQuizEscape(question.id)}">不要這題</button>` : ''}
+        ${renderQuizEvidenceHtml(question.raw)}
+      </li>`).join('')}</ol>
+  </div>`;
+}
+
 function renderAdminQuizDayDetailHtml(day, today) {
   const status = ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
   const editable = adminQuizIsEditableDay(day, today);
@@ -3924,6 +3947,7 @@ function renderAdminQuizDayDetailHtml(day, today) {
     ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能換題目；發現正解有錯時，可以按題目下的「更正答案」，所有作答會重新計分。</p>` : ''}
     ${day.status === 'generating' ? `<div data-quiz-generation-slot>${renderQuizGenerationProgressHtml(day, quizGenerationElapsedSeconds(day, adminQuizClockOffsetMs))}</div>` : ''}
     ${day.status === 'failed' ? renderQuizGenerationErrorHtml(day.aiError) : ''}
+    ${renderAdminQuizKeptQuestionsHtml(day, editable)}
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
     ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
     ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
@@ -4055,7 +4079,11 @@ function bindAdminQuizDayDetail(root, host, day) {
       return;
     }
     if (act === 'swap') {
-      if (!await confirmDialog('請 AI 重新出題？', `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`, '重新出題')) return;
+      const keptCount = adminQuizKeptQuestions(day).length;
+      const message = !day.questions?.length && keptCount
+        ? `${adminQuizDayLabel(day.date)} 已通過的 ${keptCount} 題會留著，AI 只要再補 ${ADMIN_QUIZ_QUESTION_COUNT - keptCount} 題。出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`
+        : `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`;
+      if (!await confirmDialog('請 AI 重新出題？', message, '重新出題')) return;
       await run(button, () => db.swapDailyQuizVersion(plan, day.date), '已請 AI 出題，下面會顯示進度。');
       return;
     }
@@ -4072,6 +4100,11 @@ function bindAdminQuizDayDetail(root, host, day) {
     if (act === 'unskip') {
       await run(button, () => db.setDailyQuizDaySkip(plan, day.date, false), '已恢復發佈。');
     }
+  }));
+
+  host.querySelectorAll('[data-quiz-kept-remove]').forEach(button => button.addEventListener('click', async () => {
+    if (!await confirmDialog('不要這題？', '這一題會從保留的題目拿掉，下次請 AI 出題時會多補一題。', '不要這題')) return;
+    await run(button, () => db.removeDailyQuizKeptQuestion(plan, day.date, button.dataset.quizKeptRemove), '已拿掉這一題。');
   }));
 
   host.querySelectorAll('[data-quiz-correct]').forEach(button => button.addEventListener('click', () => {

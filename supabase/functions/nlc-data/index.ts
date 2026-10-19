@@ -341,7 +341,9 @@ const QUIZ_RPC_FUNCTIONS = new Set([
   "set_daily_quiz_day_custom",
   "swap_daily_quiz_version",
   // #590：發佈後更正某一題的正解並重算作答（只給系統管理員，SQL 端檢查）
-  "set_daily_quiz_answer_key"
+  "set_daily_quiz_answer_key",
+  // #589：拿掉出題失敗時保留的某一題（只給系統管理員，SQL 端檢查）
+  "remove_daily_quiz_kept_question"
 ]);
 // 速讀「大測驗」(migration 0096). Gated by the speed_reading_exam feature flag;
 // authoring/grading RPCs additionally require an admin/pastor profile.
