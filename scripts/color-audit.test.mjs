@@ -47,13 +47,25 @@ function walk(dir, acc = []) {
   return acc;
 }
 
+// 每支檢查都掃整個 repo：檔案清單與內容只讀一次，避免同一批檔案重讀幾十遍（#592）
+const walkCache = new Map();
+const sourceCache = new Map();
+function walkCached(dir) {
+  if (!walkCache.has(dir)) walkCache.set(dir, walk(dir));
+  return walkCache.get(dir);
+}
+function readSource(abs) {
+  if (!sourceCache.has(abs)) sourceCache.set(abs, readFileSync(abs, "utf8"));
+  return sourceCache.get(abs);
+}
+
 function scanPattern(pattern, allowFiles = null) {
   const hits = [];
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (allowFiles && allowFiles.has(rel)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     if (pattern.test(content)) hits.push(rel);
     pattern.lastIndex = 0;
   }
@@ -84,9 +96,9 @@ describe("color audit", () => {
 
   it("blocks inline style color/background hex in js/modules templates", () => {
     const hits = [];
-    for (const abs of walk(join(root, "js/modules"))) {
+    for (const abs of walkCached(join(root, "js/modules"))) {
       const rel = relative(root, abs).replace(/\\/g, "/");
-      const content = readFileSync(abs, "utf8");
+      const content = readSource(abs);
       if (INLINE_STYLE_COLOR_HEX.test(content)) hits.push(rel);
       INLINE_STYLE_COLOR_HEX.lastIndex = 0;
     }

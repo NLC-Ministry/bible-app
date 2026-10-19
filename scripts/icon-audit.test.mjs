@@ -55,12 +55,24 @@ function walk(dir, acc = []) {
   return acc;
 }
 
+// 每支檢查都掃整個 repo：檔案清單與內容只讀一次，避免同一批檔案重讀幾十遍（#592）
+const walkCache = new Map();
+const sourceCache = new Map();
+function walkCached(dir) {
+  if (!walkCache.has(dir)) walkCache.set(dir, walk(dir));
+  return walkCache.get(dir);
+}
+function readSource(abs) {
+  if (!sourceCache.has(abs)) sourceCache.set(abs, readFileSync(abs, "utf8"));
+  return sourceCache.get(abs);
+}
+
 function findMatches(pattern) {
   const hits = [];
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     if (pattern.test(content)) hits.push(rel);
     pattern.lastIndex = 0;
   }
@@ -76,10 +88,10 @@ function stripAllowedInlineSvgs(html) {
 
 function findInlineSvgHits() {
   const hits = [];
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     if (!INLINE_SVG.test(content)) continue;
     if (rel === "index.html") {
       const withoutAllowed = stripAllowedInlineSvgs(content);
@@ -98,11 +110,11 @@ function findControlIconColorOverrides() {
   const explicitIconColor =
     /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bcolor:\s*(?!inherit\b)/i;
 
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     let match;
     while ((match = buttonBlock.exec(content))) {
       if (explicitIconColor.test(match[0])) {
@@ -120,11 +132,11 @@ function findInvalidIconSizeUsage() {
   const dataSize = /data-icon-size="([^"]+)"/g;
   const renderSize = /renderIcon\([^)]*size:\s*["']([^"']+)["']/g;
 
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     let match;
     while ((match = dataSize.exec(content))) {
       if (!ALLOWED_ICON_SIZE_KEYS.has(match[1])) {
@@ -145,11 +157,11 @@ function findInlineIconFontSize() {
   const pattern =
     /<span\b[^>]*class="[^"]*\bnlc-icon\b[^"]*"[^>]*style="[^"]*\bfont-size\s*:/i;
 
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js)$/.test(abs)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     if (pattern.test(content)) hits.push(rel);
     pattern.lastIndex = 0;
   }
@@ -177,11 +189,11 @@ function findUndeclaredIconKeys() {
   const dataIconRe = /data-icon(?:Key)?\s*[:=]\s*["'`]([a-zA-Z0-9_]+)["'`]/g;
   const renderIconRe = /renderIcon\(\s*["'`]([a-zA-Z0-9_]+)["'`]/g;
 
-  for (const abs of walk(root)) {
+  for (const abs of walkCached(root)) {
     const rel = relative(root, abs).replace(/\\/g, "/");
     if (EXCLUDE.has(rel)) continue;
     if (!/\.(html|js|mjs)$/.test(abs)) continue;
-    const content = readFileSync(abs, "utf8");
+    const content = readSource(abs);
     for (const re of [dataIconRe, renderIconRe]) {
       let match;
       re.lastIndex = 0;
@@ -272,11 +284,11 @@ describe("icon audit", () => {
 
   it("does not use deprecated nlc-icon--xs in app markup", () => {
     const hits = [];
-    for (const abs of walk(root)) {
+    for (const abs of walkCached(root)) {
       const rel = relative(root, abs).replace(/\\/g, "/");
       if (EXCLUDE.has(rel)) continue;
       if (!/\.(html|js)$/.test(abs)) continue;
-      if (/nlc-icon--xs/.test(readFileSync(abs, "utf8"))) hits.push(rel);
+      if (/nlc-icon--xs/.test(readSource(abs))) hits.push(rel);
     }
     expect(hits, hits.join(", ")).toEqual([]);
   });
@@ -284,11 +296,11 @@ describe("icon audit", () => {
   it("does not use deprecated xs size in renderIcon calls", () => {
     const hits = [];
     const renderSize = /renderIcon\([^)]*size:\s*["']xs["']/g;
-    for (const abs of walk(root)) {
+    for (const abs of walkCached(root)) {
       const rel = relative(root, abs).replace(/\\/g, "/");
       if (EXCLUDE.has(rel)) continue;
       if (!/\.js$/.test(abs)) continue;
-      const content = readFileSync(abs, "utf8");
+      const content = readSource(abs);
       if (renderSize.test(content)) hits.push(rel);
       renderSize.lastIndex = 0;
     }

@@ -112,7 +112,7 @@
 
 ### 3. GitHub secret
 
-`VERCEL_ADMIN_PROJECT_ID`：後台專案的 Project ID（Vercel 專案 Settings → General）。沒設之前，CI 的 `deploy-admin` 會跳過、不會失敗。`VERCEL_ORG_ID`、`VERCEL_TOKEN` 和會友 App 共用。
+`VERCEL_ADMIN_PROJECT_ID`：後台專案的 Project ID（Vercel 專案 Settings → General）。沒設之前，CI 的「Deploy admin console」步驟會跳過、不會失敗。`VERCEL_ORG_ID`、`VERCEL_TOKEN` 和會友 App 共用。
 
 ### 4. Supabase（admin-api）
 

@@ -36,7 +36,9 @@ cmd //c mklink //J ".worktrees\integrate\node_modules" "node_modules"
 cd .worktrees/integrate
 git merge --no-ff task/<x> -m "Merge branch 'task/<x>' into staging: <Release-note in English> (#<issue>)"
 ```
-Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone).
+Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone). Task sessions only ran the tests their change touches (`test:changed`), so this is the first full run. The esbuild tests (`npm run test:build`) are left to CI unless a merged branch's `Tests` trailer or `Touches` shows build changes — then run them here too.
+
+After pushing (step 6), check the CI run once (`gh run list --branch staging --limit 1`): it is the deploy, and a docs-only push doesn't trigger one (#592).
 
 ## 5. Migrations (only if a merged branch lists one)
 ```bash
