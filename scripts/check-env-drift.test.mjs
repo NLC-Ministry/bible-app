@@ -14,13 +14,14 @@ import {
 // #593：repo 的 migration／Edge Function 是否已經到了 staging／正式站。
 
 describe("parseMigrationFiles", () => {
-  it("keeps only timestamp files, sorted, ignoring legacy/", () => {
+  it("keeps the early 4-digit and the timestamp files, sorted", () => {
     expect(parseMigrationFiles([
       "supabase/migrations/20261019094508_b.sql",
       "supabase/migrations/20261019035001_a.sql",
-      "supabase/migrations/0001_old.sql",
+      "supabase/migrations/0001_clean_schema.sql",
       "supabase/migrations/README.md"
     ])).toEqual([
+      { version: "0001", file: "0001_clean_schema.sql" },
       { version: "20261019035001", file: "20261019035001_a.sql" },
       { version: "20261019094508", file: "20261019094508_b.sql" }
     ]);
@@ -36,8 +37,8 @@ describe("diffMigrations", () => {
     expect(diff.remoteOnly).toEqual([]);
   });
 
-  it("reports timestamp versions only the environment has, ignoring pre-timestamp ones", () => {
-    const diff = diffMigrations(local, ["0001", "0214", "20261001000000", "20261002000000", "20261003000000", 20260901000000]);
+  it("reports versions only the environment has", () => {
+    const diff = diffMigrations(local, ["20261001000000", "20261002000000", "20261003000000", 20260901000000]);
     expect(diff.pending).toEqual([]);
     expect(diff.remoteOnly).toEqual(["20260901000000"]);
   });
