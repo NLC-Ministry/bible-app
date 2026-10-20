@@ -29,22 +29,19 @@ const FUNCTIONS_DIR = "supabase/functions";
 
 // ── 純函式 ──────────────────────────────────────────────────────────────────
 
-/** migration 檔名 → [{ version, file }]，只取 timestamp 檔（legacy/ 不算）。 */
+/** migration 檔名 → [{ version, file }]：早期的 0001～0214 和之後的 timestamp 檔（legacy/ 子資料夾不算）。 */
 export function parseMigrationFiles(paths) {
   return paths
     .map(path => posix.basename(path))
-    .map(file => ({ file, match: /^(\d{14})_.+\.sql$/.exec(file) }))
+    .map(file => ({ file, match: /^(\d{4}|\d{14})_.+\.sql$/.exec(file) }))
     .filter(({ match }) => match)
     .map(({ file, match }) => ({ version: match[1], file }))
     .sort((a, b) => a.version.localeCompare(b.version));
 }
 
-/**
- * repo 有、環境沒有的 migration；以及環境有、repo 沒有的版本。
- * 改用 timestamp 命名前的舊版本號（0001～0214，檔案在 migrations_legacy/）不算。
- */
+/** repo 有、環境沒有的 migration；以及環境有、repo 沒有的版本。 */
 export function diffMigrations(local, appliedVersions) {
-  const applied = new Set(appliedVersions.map(String).filter(v => /^\d{14}$/.test(v)));
+  const applied = new Set(appliedVersions.map(String));
   const localVersions = new Set(local.map(m => m.version));
   return {
     pending: local.filter(m => !applied.has(m.version)),

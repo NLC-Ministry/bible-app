@@ -108,7 +108,7 @@ node scripts/check-env-drift.mjs --env staging     # 推送 staging 之後
 node scripts/check-env-drift.mjs --pr <上線 PR>    # 上線 PR：兩個環境都查，結果寫成 PR 的同一則留言
 ```
 
-- Migration：repo 的 timestamp 檔有、環境的 `supabase_migrations.schema_migrations` 沒有的就列出來（改用 timestamp 前的 0001～0214 不算）。
+- Migration：`supabase/migrations/` 的檔案（早期的 0001～0214 和之後的 timestamp 檔）有、環境的 `supabase_migrations.schema_migrations` 沒有的就列出來。
 - Edge Function：環境上的部署時間早於 repo 裡這個函式最後一個 commit 的時間，就標「需要重新部署」。函式 import 的資料夾外檔案（例如 `_shared/progress/`）也算；只改註解也會被標，重新部署一次就消掉。
 - 只提示、不擋。CI 不放 Supabase 金鑰：access token 不能限定只讀，等於整個帳號（含正式站）的權限。
 
