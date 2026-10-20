@@ -112,6 +112,24 @@ node scripts/check-env-drift.mjs --pr <上線 PR>    # 上線 PR：兩個環境�
 - Edge Function：環境上的部署時間早於 repo 裡這個函式最後一個 commit 的時間，就標「需要重新部署」。函式 import 的資料夾外檔案（例如 `_shared/progress/`）也算；只改註解也會被標，重新部署一次就消掉。
 - 只提示、不擋。CI 不放 Supabase 金鑰：access token 不能限定只讀，等於整個帳號（含正式站）的權限。
 
+## 資料庫資安檢查（#594）
+
+**CI（會擋）**：`scripts/db-security.test.mjs`、`scripts/db-behavior.test.mjs` 用 PGlite（WASM 版 Postgres）從空資料庫套用 `supabase/migrations/` 的全部 migration（約 2 秒），不需要任何金鑰。`scripts/lib/pglite-supabase.mjs` 模擬 Supabase：anon／authenticated／service_role 角色與預設權限、`auth.uid()`／`auth.role()`（讀 `request.jwt.claims`）、`auth.users`、`storage.buckets`；PGlite 沒有的 pg_cron、pg_net、Vault 換成只記錄不執行的替身。
+
+- `db-security.test.mjs`：anon 能執行的函式、authenticated 能執行的 SECURITY DEFINER 函式、沒開 RLS 的資料表，跟 `supabase/security-allowlist.json` 比對，多出來或清單裡已不存在的都會失敗。authenticated 那份是 2026-10-20 的現況基準（178 支，尚未逐一檢視），新增的要嘛只給 service_role，要嘛加進清單並說明。
+- `db-behavior.test.mjs`：重要 RPC 的實際行為（小測驗更正答案與重算、管理員守門、牧養總覽的 fail closed）。用 `as(role, claims, fn)` 模擬 PostgREST 的角色，結束一律 rollback。
+- PGlite 的結構只來自 migration；正式環境早期在網頁上手動改過的設定不在裡面（那部分由 `compare-env-snapshots.mjs` 管）。
+
+**整合者本機（只提示）**：
+
+```bash
+node scripts/security-advisor.mjs                  # staging；--env production 查正式站
+```
+
+跑 Supabase Security Advisor（[Splinter](https://github.com/supabase/splinter)）的資安類 lint，不在允許清單 `security_advisor` 裡的就列出來、exit code 1。Splinter 沒有授權檔，不能複製進這個公開 repo，所以每次從固定 commit 下載、比對 sha256 才執行（唯讀查詢）。
+
+**CodeQL**：用 GitHub 的 default setup（repo 公開後免費），在 repo 的 Settings → Code security 開啟，不寫 workflow。
+
 ## 樣本資料（#267）
 
 `scripts/staging-sample-data.mjs` 從正式環境**只讀**匯出去識別化樣本，匯入 staging。個資在正式資料庫裡就換掉，原始個資不會離開正式環境。

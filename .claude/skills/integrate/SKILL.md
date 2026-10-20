@@ -56,6 +56,8 @@ node scripts/check-env-drift.mjs --env staging --ref origin/staging
 ```
 🔴 → apply the missing migration / redeploy the function now (`npx supabase functions deploy <name> --project-ref dbtjsljrytzonjvclgrd`), or tell the user why not. It only reports; it never blocks.
 
+If the batch applied a migration, also run `node scripts/security-advisor.mjs` (Supabase Security Advisor on staging, #594): 🔴 → tell the user what it found before the release PR; never add to `supabase/security-allowlist.json` on your own.
+
 ## 6. Push
 ```bash
 git push origin HEAD:staging
