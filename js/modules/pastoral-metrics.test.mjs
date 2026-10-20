@@ -311,3 +311,28 @@ describe("tabs and old links", () => {
     expect(resolvePastoralTab("")).toBeNull();
   });
 });
+
+describe("roster condition chips (#584)", () => {
+  const base = defaultRosterFilters();
+
+  it("the default 報名者 has no chips; 需要關心 is the fixed shortcut chip, not a removable one", () => {
+    expect(metrics.rosterConditionChips(base)).toEqual([]);
+    expect(metrics.rosterConditionChips({ ...base, shortcut: "care" })).toEqual([]);
+  });
+
+  it("names shortcuts, the ticked buckets and the team; clearing one resets only that condition", () => {
+    expect(metrics.rosterConditionChips({ ...base, shortcut: "care_behind", team: "yes" }).map((chip) => chip.label))
+      .toEqual([`需要關心・落後 ${CARE_THRESHOLDS.behindDays} 天以上`, "有隊"]);
+    const filters = { ...base, progress: ["behind_long"], checkin: ["dormant", "none"], team: "no" };
+    expect(metrics.rosterConditionChips(filters)).toEqual([
+      { id: "progress", label: "落後 7 天以上" },
+      { id: "checkin", label: "最後打卡：7 天以上、沒有紀錄" },
+      { id: "team", label: "沒有隊" }
+    ]);
+    expect(metrics.rosterConditionChips({ ...base, progress: [...base.progress, "not_enrolled"] }).map((chip) => chip.label)).toEqual(["含未報名"]);
+    const cleared = metrics.clearRosterCondition(filters, "checkin");
+    expect(cleared).toEqual({ ...filters, checkin: base.checkin });
+    expect(countRosterConditions(cleared)).toBe(2);
+    expect(metrics.clearRosterCondition({ ...base, shortcut: "active7" }, "shortcut")).toEqual(base);
+  });
+});

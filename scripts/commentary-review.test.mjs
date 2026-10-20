@@ -10,7 +10,7 @@ import {
   isInReview,
   toBellNotification
 } from "../js/data/commentary-review.mjs";
-import { createCommentaryReviewPage, reviewCardHtml } from "../js/modules/commentary-review.mjs";
+import { createCommentaryReviewPage, reviewCardHtml, reviewStructureHint } from "../js/modules/commentary-review.mjs";
 import { createAdminCommentaryReview, reviewProgressText, searchMembers } from "../js/modules/admin-commentary-review.mjs";
 import { commentaryItemStatus, renderAdminCommentary } from "../js/modules/admin-commentary.mjs";
 import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
@@ -333,5 +333,25 @@ describe("review wiring (#471)", () => {
     expect(app).toContain('window.location.hash = "#/profile/commentary-review";');
     expect(profile).toContain('if (key === "commentary-review") void commentaryReviewPage.refresh();');
     expect(html).toContain('id="profile-commentary-review-entry" data-profile-open="commentary-review"');
+  });
+});
+
+describe("review card structure hint (#542)", () => {
+  const item = {
+    id: "c1", review_status: "pending", content: "見出27:21和8:3的注釋。「燔祭」：…", source_text: "",
+    cross_refs: [{ label: "出27:21" }, { label: "8:3" }, { label: "9:1" }],
+    excerpts: [{ en: "burnt offering", zh: "燔祭" }, { en: "x", zh: "" }]
+  };
+
+  it("lists the reference labels present in the translation and the bolded phrases", () => {
+    expect(reviewStructureHint(item)).toBe("出處（閱讀器裡可以點）：出27:21、8:3；加粗的經文片語：「燔祭」。修改譯文時請保留這些寫法。");
+    expect(reviewStructureHint({ content: "x" })).toBe("");
+  });
+
+  it("shows the hint under the translation, escaped", () => {
+    const html = reviewCardHtml({ ...item, excerpts: [{ zh: "<b>" }] }, escapeHTML);
+    expect(html).toContain("commentary-review-card__hint");
+    expect(html).toContain("「&lt;b&gt;」");
+    expect(reviewCardHtml({ ...item, cross_refs: [], excerpts: [] }, escapeHTML)).not.toContain("commentary-review-card__hint");
   });
 });

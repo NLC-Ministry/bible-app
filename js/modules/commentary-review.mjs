@@ -8,7 +8,7 @@ import {
   REVIEW_STATUS_LABELS,
   filterReviewItems
 } from "../data/commentary-review.mjs";
-import { commentaryReferenceLabel } from "../data/passage-commentary.mjs";
+import { commentaryReferenceLabel, findRefLabelRanges } from "../data/passage-commentary.mjs";
 
 const ENTRY_RECHECK_MS = 5 * 60 * 1000;
 
@@ -18,6 +18,19 @@ const STATUS_BADGE_CLASS = Object.freeze({
   approved: "stat-badge--success"
 });
 
+// 閱讀器會把譯文裡的出處做成連結、把片語加粗（#542）；審核者改譯文時要保留這些寫法。
+export function reviewStructureHint(item) {
+  const unique = list => Array.from(new Set(list.map(value => String(value || "").trim()).filter(Boolean)));
+  const content = String(item?.content || "");
+  const labels = unique((Array.isArray(item?.cross_refs) ? item.cross_refs : []).map(ref => ref?.label))
+    .filter(label => findRefLabelRanges(content, label).length);
+  const phrases = unique((Array.isArray(item?.excerpts) ? item.excerpts : []).map(excerpt => excerpt?.zh));
+  const parts = [];
+  if (labels.length) parts.push(`出處（閱讀器裡可以點）：${labels.join("、")}`);
+  if (phrases.length) parts.push(`加粗的經文片語：${phrases.map(phrase => `「${phrase}」`).join("、")}`);
+  return parts.length ? `${parts.join("；")}。修改譯文時請保留這些寫法。` : "";
+}
+
 export function reviewCardHtml(item, escapeHTML, { returning = false } = {}) {
   const id = escapeHTML(String(item.id));
   const status = item.review_status;
@@ -25,6 +38,7 @@ export function reviewCardHtml(item, escapeHTML, { returning = false } = {}) {
   const note = status === "returned" && item.review_note
     ? `<p class="commentary-review-card__note"><strong>退回意見${reviewedBy}：</strong>${escapeHTML(item.review_note)}</p>` : "";
   const sourceText = String(item.source_text || "").trim();
+  const structureHint = reviewStructureHint(item);
   const actions = returning
     ? `<label class="commentary-review-card__return">退回意見（必填，會給系統管理員看）
          <textarea class="form-control" rows="3" data-review-note></textarea>
@@ -54,6 +68,7 @@ export function reviewCardHtml(item, escapeHTML, { returning = false } = {}) {
       <label>譯文
         <textarea class="form-control commentary-review-card__content" rows="6" data-review-content>${escapeHTML(item.content || "")}</textarea>
       </label>
+      ${structureHint ? `<p class="commentary-review-card__hint">${escapeHTML(structureHint)}</p>` : ""}
       ${actions}
     </article>`;
 }

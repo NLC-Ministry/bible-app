@@ -29,10 +29,12 @@ import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-mana
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
 import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
+import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
   QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "./quiz-generation-status.mjs";
-import { getQuestionImage, questionImageHtml, installQuizImageViewer } from "./quiz-image.mjs";
+import { getQuestionImage, questionImageHtml, installQuizImageViewer, quizImagePublicUrl } from "./quiz-image.mjs";
+import { canUploadQuizImage, QUIZ_IMAGE_ACCEPT, uploadQuizImageFile } from "./quiz-image-upload.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
@@ -1497,9 +1499,70 @@ export async function renderAdminAnnouncements() {
 // UI，因為題型定義、payload/answerKey 形狀完全共用（quiz-question-types.mjs）。
 // 一次只編輯「一題」，所以不重用它的多題清單管理（新增/刪除/編號）那層。
 
-// 題目附圖（#449）沒有編輯介面（圖檔放在 assets/、用 SQL 加進 payload.image），
-// 這裡只顯示「此題附圖」，並把原本的 image 存在 fieldset 上，重新存檔時帶回去，
-// 不會因為表單只重組 stem/選項就把圖洗掉。
+// 題目附圖（#449、#585）：目前的 image 存在 fieldset 的 data-lq-image 上，存檔時帶回
+// payload.image，不會因為表單只重組 stem/選項就把圖洗掉。在系統管理後台（照搬區塊）裡可以
+// 「加入／更換／移除圖片」，圖片經 admin-api 上傳到 Supabase 的 quiz-images；不能上傳的地方
+// 只顯示目前的圖。
+function renderAdminLightningQuizImageSectionHtml(image) {
+  const canUpload = canUploadQuizImage();
+  if (!image && !canUpload) return '';
+  const actions = canUpload ? `<div class="admin-lq-image__actions">
+      <button type="button" class="secondary-btn" data-lq-image-pick>${image ? '更換圖片' : '加入圖片'}</button>
+      ${image ? '<button type="button" class="secondary-btn" data-lq-image-remove>移除圖片</button>' : ''}
+      <input type="file" accept="${QUIZ_IMAGE_ACCEPT}" data-lq-image-file hidden>
+    </div>` : '';
+  if (!image) {
+    return `<div class="admin-lq-image" data-lq-image-section>
+      <span class="admin-lq-image__label">題目附圖（選填，會顯示在題目下方）</span>
+      ${actions}
+    </div>`;
+  }
+  return `<div class="admin-lq-image" data-lq-image-section>
+    <div class="admin-lq-image-note"><img src="${adminQuizEscape(image.src)}" alt="${adminQuizEscape(image.alt)}"><span>此題附圖，存檔時會一起儲存。</span></div>
+    <label>圖片說明（給看不到圖的人，可留白）<input type="text" class="form-control" data-lq-image-alt maxlength="200" value="${image.alt === '題目附圖' ? '' : adminQuizEscape(image.alt)}" placeholder="例如：祭司獻燔祭的七個場景"></label>
+    ${actions}
+  </div>`;
+}
+
+function setAdminLightningQuizFieldsetImage(fieldset, image) {
+  if (image) fieldset.dataset.lqImage = JSON.stringify(image);
+  else delete fieldset.dataset.lqImage;
+  const section = fieldset.querySelector('[data-lq-image-section]');
+  if (section) section.outerHTML = renderAdminLightningQuizImageSectionHtml(getQuestionImage({ image }));
+}
+
+function bindAdminLightningQuizImageSection(fieldset) {
+  if (!fieldset || !canUploadQuizImage()) return;
+  fieldset.addEventListener('click', event => {
+    if (event.target.closest('[data-lq-image-pick]')) {
+      fieldset.querySelector('[data-lq-image-file]')?.click();
+    } else if (event.target.closest('[data-lq-image-remove]')) {
+      setAdminLightningQuizFieldsetImage(fieldset, null);
+    }
+  });
+  fieldset.addEventListener('change', async event => {
+    const input = event.target.closest('[data-lq-image-file]');
+    if (!input) return;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const pick = fieldset.querySelector('[data-lq-image-pick]');
+    const pickLabel = pick?.textContent;
+    if (pick) { pick.disabled = true; pick.textContent = '上傳中…'; }
+    try {
+      const name = await uploadQuizImageFile(file);
+      const src = quizImagePublicUrl(name);
+      if (!src) throw new Error('上傳成功，但組不出圖片網址，請重新整理後再試。');
+      const alt = fieldset.querySelector('[data-lq-image-alt]')?.value.trim() || '';
+      setAdminLightningQuizFieldsetImage(fieldset, { src, alt: alt || '題目附圖' });
+      showToast('圖片已上傳，記得按「儲存」。');
+    } catch (error) {
+      if (pick?.isConnected) { pick.disabled = false; pick.textContent = pickLabel; }
+      showToast(error?.message || '上傳失敗，請再試一次。');
+    }
+  });
+}
+
 function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
@@ -1509,7 +1572,7 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
       ${Object.entries(ADMIN_QUIZ_CUSTOM_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select></label>
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
-    ${image ? `<div class="admin-lq-image-note"><img src="${adminQuizEscape(image.src)}" alt="${adminQuizEscape(image.alt)}"><span>此題附圖（${adminQuizEscape(image.src)}），存檔時會保留。</span></div>` : ''}
+    ${renderAdminLightningQuizImageSectionHtml(image)}
     <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
     <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
@@ -1522,6 +1585,10 @@ function collectAdminLightningQuizQuestion(fieldset) {
   const imageJson = fieldset.dataset.lqImage;
   if (imageJson) {
     try { question.payload.image = JSON.parse(imageJson); } catch (_) { /* 壞掉的就不帶 */ }
+    const altInput = fieldset.querySelector('[data-lq-image-alt]');
+    if (altInput && question.payload.image && typeof question.payload.image === 'object') {
+      question.payload.image = { ...question.payload.image, alt: altInput.value.trim() || '題目附圖' };
+    }
   }
   question.explanation = fieldset.querySelector('[data-field="explanation"]')?.value.trim() || '';
   return question;
@@ -1549,11 +1616,22 @@ function collectAdminLightningQuizQuestionContent(fieldset) {
     return { type, payload: { stem, options }, answerKey };
   }
   if (type === 'matching') {
+    // 雲柱配對題可以多對一（#588）：右邊文字相同的列合併成同一個右邊點
     const rows = Array.from(fieldset.querySelectorAll('[data-pair-row]'));
-    const left = rows.map((row, i) => ({ id: `L${i + 1}`, text: row.querySelector('[data-pair-left]')?.value.trim() || '' }));
-    const right = rows.map((row, i) => ({ id: `R${i + 1}`, text: row.querySelector('[data-pair-right]')?.value.trim() || '' }));
+    const left = [];
+    const right = [];
     const answerKey = {};
-    left.forEach((item, i) => { answerKey[item.id] = right[i].id; });
+    rows.forEach((row, i) => {
+      const leftItem = { id: `L${i + 1}`, text: row.querySelector('[data-pair-left]')?.value.trim() || '' };
+      const rightText = row.querySelector('[data-pair-right]')?.value.trim() || '';
+      let rightItem = rightText ? right.find(item => item.text === rightText) : null;
+      if (!rightItem) {
+        rightItem = { id: `R${right.length + 1}`, text: rightText };
+        right.push(rightItem);
+      }
+      left.push(leftItem);
+      answerKey[leftItem.id] = rightItem.id;
+    });
     return { type, payload: { stem, left, right }, answerKey };
   }
   if (type === 'ordering') {
@@ -1580,10 +1658,13 @@ function adminLightningQuizQuestionIsValid(question) {
         && Array.isArray(question.answerKey) && question.answerKey.length > 0;
     }
     case 'matching': {
+      // 右邊可以比左邊少（多對一，#588），但每個左邊都要連到一個存在的右邊點
       const left = question.payload.left || [];
       const right = question.payload.right || [];
-      return left.length >= 2 && left.length === right.length
-        && left.every(item => item.text) && right.every(item => item.text);
+      const rightIds = new Set(right.map(item => item.id));
+      return left.length >= 2 && right.length >= 2 && right.length <= left.length
+        && left.every(item => item.text) && right.every(item => item.text)
+        && left.every(item => rightIds.has(question.answerKey?.[item.id]));
     }
     case 'ordering': {
       const items = question.payload.items || [];
@@ -1775,6 +1856,7 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
     explanation: source.explanation
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
+  bindAdminLightningQuizImageSection(body.querySelector('fieldset'));
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
   if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
   const snapshot = adminLightningQuizEditorSnapshot();
@@ -3520,12 +3602,19 @@ function renderAdminQuizCustomQuestionBodyHtml(question) {
   if (type === 'matching') {
     const left = payload.left && payload.left.length ? payload.left : [{ text: '' }, { text: '' }];
     const right = payload.right && payload.right.length ? payload.right : [{ text: '' }, { text: '' }];
-    const rowCount = Math.max(left.length, right.length, 2);
+    // 每列的右邊文字照答案還原：多對一（#588）的右邊點已合併、數量比左邊少，
+    // 不能再照順序 left[i]↔right[i]。答案對不上（新題目、舊資料）才退回照順序。
+    const rightById = new Map(right.filter(item => item.id).map(item => [item.id, item]));
+    const byAnswer = answerKey && typeof answerKey === 'object'
+      && left.every(item => item.id && rightById.has(answerKey[item.id]));
+    const rows = byAnswer
+      ? left.map(item => [item.text || '', rightById.get(answerKey[item.id]).text || ''])
+      : Array.from({ length: Math.max(left.length, right.length, 2) }).map((_, i) => [left[i]?.text || '', right[i]?.text || '']);
     return `<div class="admin-quiz-custom-pairs" data-pairs>
-      ${Array.from({ length: rowCount }).map((_, i) => renderAdminQuizCustomPairRowHtml(left[i]?.text || '', right[i]?.text || '')).join('')}
+      ${rows.map(([leftText, rightText]) => renderAdminQuizCustomPairRowHtml(leftText, rightText)).join('')}
     </div>
     <button type="button" class="secondary-btn" data-pair-add>新增配對</button>
-    <p class="admin-daily-quiz-note">同一列的左右兩邊即為正確配對，作答時會友看到的左右順序會被打亂。</p>`;
+    <p class="admin-daily-quiz-note">同一列的左右兩邊即為正確配對，作答時會友看到的左右順序會被打亂。右邊文字相同的列會合併成同一個點，會友可以把多個左邊連到它。</p>`;
   }
   if (type === 'ordering') {
     const items = payload.items && payload.items.length ? payload.items : [{ text: '' }, { text: '' }];
@@ -3834,13 +3923,24 @@ function adminQuizIsEditableDay(day, today) {
   return day.date >= today && !['open', 'ended', 'outside_plan'].includes(day.status) && Number(day.publishedGroups || 0) === 0;
 }
 
+function adminQuizShiftDate(iso, days) {
+  const [year, month, day] = String(iso || '').split('-').map(Number);
+  if (!year) return '';
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 function renderAdminQuizCalendarHtml(calendar, selectedDate) {
   const today = calendar.today;
   const days = Array.isArray(calendar.days) ? calendar.days : [];
+  const showingPast = days.length > 0 && days[0].date < today;
   return `${calendar.autoPublishEnabled ? '' : `<div class="admin-quiz-calendar-notice" role="status">
       每天自動發佈還沒開啟，下面這些天都不會自動發給小組。
       <button type="button" class="exam-admin__link" data-quiz-goto-rules>到「規則設定」開啟</button>
     </div>`}
+    <div class="admin-quiz-day-actions">
+      <button type="button" class="secondary-btn" data-quiz-week="-1">前 7 天</button>
+      ${showingPast ? '<button type="button" class="secondary-btn" data-quiz-week="1">後 7 天</button><button type="button" class="secondary-btn" data-quiz-week="0">回到今天</button>' : ''}
+    </div>
     <div class="admin-quiz-calendar" role="list">
       ${days.map(day => {
         const status = ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
@@ -3859,18 +3959,52 @@ function renderAdminQuizCalendarHtml(calendar, selectedDate) {
     <div data-quiz-day-detail></div>`;
 }
 
-function renderAdminQuizDayQuestionsHtml(rawQuestions) {
+function adminQuizDayQuestions(rawQuestions) {
   const questions = [];
   (Array.isArray(rawQuestions) ? rawQuestions : []).forEach(raw => {
     try { questions.push({ ...normalizeQuestion(raw), raw }); } catch { /* 格式不認得的題目略過，不讓整頁壞掉 */ }
   });
+  return questions;
+}
+
+// correctable：已發佈的日子，是非／單選／多選題旁邊有「更正答案」（#590）
+function renderAdminQuizDayQuestionsHtml(rawQuestions, { correctable = false } = {}) {
+  const questions = adminQuizDayQuestions(rawQuestions);
   if (!questions.length) return '';
-  return `<ol class="admin-quiz-day-questions">${questions.map(question => `
+  return `<ol class="admin-quiz-day-questions">${questions.map(question => {
+    const note = answerCorrectionNote(question, question.raw);
+    return `
     <li>
       <p class="admin-quiz-day-questions__stem"><span class="role-badge">${adminQuizEscape(QUESTION_TYPE_LABELS[question.type] || question.type)}</span> ${adminQuizEscape(question.payload?.stem || '')}</p>
       <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+      ${note ? `<p class="admin-daily-quiz-note">${adminQuizEscape(note)}</p>` : ''}
+      ${correctable && canCorrectAnswer(question) ? `<button type="button" class="secondary-btn" data-quiz-correct="${adminQuizEscape(question.id)}">更正答案</button>` : ''}
       ${renderQuizEvidenceHtml(question.raw)}
-    </li>`).join('')}</ol>`;
+    </li>`;
+  }).join('')}</ol>`;
+}
+
+// #589：AI 出題失敗時已通過品質檢查、留到下次的題目
+const ADMIN_QUIZ_QUESTION_COUNT = 5;
+
+function adminQuizKeptQuestions(day) {
+  return Array.isArray(day?.keptQuestions) ? adminQuizDayQuestions(day.keptQuestions) : [];
+}
+
+function renderAdminQuizKeptQuestionsHtml(day, editable) {
+  const kept = adminQuizKeptQuestions(day);
+  if (!kept.length || (Array.isArray(day.questions) && day.questions.length)) return '';
+  const canRemove = editable && day.status !== 'generating';
+  return `<div class="admin-daily-quiz-note" data-quiz-kept>
+    <p>已通過品質檢查 ${kept.length}／${ADMIN_QUIZ_QUESTION_COUNT} 題，會留到下次${day.status === 'generating' ? '' : '；再按「請 AI 出題」'}只要補 ${ADMIN_QUIZ_QUESTION_COUNT - kept.length} 題。</p>
+    <ol class="admin-quiz-day-questions">${kept.map(question => `
+      <li>
+        <p class="admin-quiz-day-questions__stem">${adminQuizEscape(question.payload?.stem || '')}</p>
+        <p class="admin-quiz-day-questions__answer">正解：${adminQuizEscape(formatResponseForDisplay(question.type, question.payload, question.answerKey))}</p>
+        ${canRemove ? `<button type="button" class="secondary-btn" data-quiz-kept-remove="${adminQuizEscape(question.id)}">不要這題</button>` : ''}
+        ${renderQuizEvidenceHtml(question.raw)}
+      </li>`).join('')}</ol>
+  </div>`;
 }
 
 function renderAdminQuizDayDetailHtml(day, today) {
@@ -3898,15 +4032,16 @@ function renderAdminQuizDayDetailHtml(day, today) {
         <h2>${adminQuizEscape(status.label)}${day.source === 'custom' ? '・自訂題目' : day.source === 'ai' ? '・AI 題目' : ''}</h2>
       </div>
     </div>
-    ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能再修改。</p>` : ''}
+    ${published ? `<p class="admin-daily-quiz-note">已發給 ${Number(day.publishedGroups || 0)} 個小組，完成 ${Number(day.completed || 0)}／${Number(day.eligible || 0)} 人${day.averageScore != null ? `，平均 ${day.averageScore} 分` : ''}。已經發佈的日子不能換題目；發現正解有錯時，可以按題目下的「更正答案」，所有作答會重新計分。</p>` : ''}
     ${day.status === 'generating' ? `<div data-quiz-generation-slot>${renderQuizGenerationProgressHtml(day, quizGenerationElapsedSeconds(day, adminQuizClockOffsetMs))}</div>` : ''}
     ${day.status === 'failed' ? renderQuizGenerationErrorHtml(day.aiError) : ''}
+    ${renderAdminQuizKeptQuestionsHtml(day, editable)}
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
     ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
     ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
     ${actions.length ? `<div class="admin-quiz-day-actions">${actions.join('')}</div>` : ''}
     <div data-quiz-day-work></div>
-    ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}
+    ${hasQuestions ? renderAdminQuizDayQuestionsHtml(day.questions, { correctable: published }) : '<p class="admin-daily-quiz-empty">這一天還沒有題目。</p>'}
   </section>`;
 }
 
@@ -3933,7 +4068,8 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
   const panel = root.querySelector('[data-quiz-tab-panel="calendar"]');
   if (!panel) return;
   if (!panel.querySelector('.admin-quiz-calendar')) panel.innerHTML = '<div class="admin-user-directory__empty">正在載入小測驗日曆…</div>';
-  const result = await db.getDailyQuizCalendar(state.adminManagementPlan, null, 7);
+  // #590：可以往前翻，已發佈的日子事後發現答案有錯也找得到
+  const result = await db.getDailyQuizCalendar(state.adminManagementPlan, root.dataset.quizFrom || null, 7);
   if (!result.success) {
     panel.innerHTML = `<div class="admin-user-directory__empty">${adminQuizEscape(result.message || '無法載入小測驗日曆')}</div>`;
     return;
@@ -3963,6 +4099,12 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
   };
   panel.querySelectorAll('[data-quiz-day]').forEach(button => button.addEventListener('click', () => showDetail(button.dataset.quizDay)));
   panel.querySelector('[data-quiz-goto-rules]')?.addEventListener('click', () => switchAdminQuizTab(root, 'rules'));
+  panel.querySelectorAll('[data-quiz-week]').forEach(button => button.addEventListener('click', () => {
+    const shift = Number(button.dataset.quizWeek);
+    const from = shift === 0 ? '' : adminQuizShiftDate(days[0]?.date || calendar.today, shift * 7);
+    root.dataset.quizFrom = from && from >= calendar.today ? '' : from;
+    renderAdminQuizCalendar(root);
+  }));
   if (current) showDetail(current);
 }
 
@@ -4025,7 +4167,11 @@ function bindAdminQuizDayDetail(root, host, day) {
       return;
     }
     if (act === 'swap') {
-      if (!await confirmDialog('請 AI 重新出題？', `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`, '重新出題')) return;
+      const keptCount = adminQuizKeptQuestions(day).length;
+      const message = !day.questions?.length && keptCount
+        ? `${adminQuizDayLabel(day.date)} 已通過的 ${keptCount} 題會留著，AI 只要再補 ${ADMIN_QUIZ_QUESTION_COUNT - keptCount} 題。出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`
+        : `${adminQuizDayLabel(day.date)} 原本的 AI 題目會被換掉，出題通常要 30 秒到 1 分鐘，畫面上會顯示進度。`;
+      if (!await confirmDialog('請 AI 重新出題？', message, '重新出題')) return;
       await run(button, () => db.swapDailyQuizVersion(plan, day.date), '已請 AI 出題，下面會顯示進度。');
       return;
     }
@@ -4043,6 +4189,44 @@ function bindAdminQuizDayDetail(root, host, day) {
       await run(button, () => db.setDailyQuizDaySkip(plan, day.date, false), '已恢復發佈。');
     }
   }));
+
+  host.querySelectorAll('[data-quiz-kept-remove]').forEach(button => button.addEventListener('click', async () => {
+    if (!await confirmDialog('不要這題？', '這一題會從保留的題目拿掉，下次請 AI 出題時會多補一題。', '不要這題')) return;
+    await run(button, () => db.removeDailyQuizKeptQuestion(plan, day.date, button.dataset.quizKeptRemove), '已拿掉這一題。');
+  }));
+
+  host.querySelectorAll('[data-quiz-correct]').forEach(button => button.addEventListener('click', () => {
+    const question = adminQuizDayQuestions(day.questions).find(item => item.id === button.dataset.quizCorrect);
+    if (!question) return;
+    work.innerHTML = renderAnswerCorrectionHtml(question);
+    bindAdminQuizAnswerCorrection(work, day, question, { confirmDialog, reload });
+    work.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }));
+}
+
+// #590：已發佈的日子更正某一題的正解，伺服器同一個交易裡重算所有作答
+function bindAdminQuizAnswerCorrection(work, day, question, { confirmDialog, reload }) {
+  const form = work.querySelector('[data-quiz-correct-form]');
+  if (!form) return;
+  form.querySelector('[data-quiz-correct-cancel]')?.addEventListener('click', () => { work.innerHTML = ''; });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const answerKey = readCorrectionAnswerKey(form, question.type);
+    if (answerKey === null) { showToast('請選擇正解。'); return; }
+    const explanation = form.querySelector('[data-quiz-correct-explanation]')?.value ?? null;
+    const answerText = formatResponseForDisplay(question.type, question.payload, answerKey);
+    if (!await confirmDialog('更正答案並重新計分？', `正解改成「${answerText}」。${adminQuizDayLabel(day.date)} 所有人這一題的對錯和總分都會重新計算。`, '更正')) return;
+    const saveBtn = form.querySelector('[data-quiz-correct-save]');
+    if (saveBtn) saveBtn.disabled = true;
+    const result = await db.setDailyQuizAnswerKey(state.adminManagementPlan, day.date, question.id, answerKey, explanation);
+    if (saveBtn) saveBtn.disabled = false;
+    if (!result.success) { showToast(result.message || '更正失敗，請稍後再試。'); return; }
+    const data = result.data || {};
+    showToast(data.changed === false
+      ? '正解和解說都沒有變動。'
+      : `已更正，重新計算了 ${Number(data.attemptsUpdated || 0)} 份作答（${Number(data.scoresChanged || 0)} 人分數有變）。`);
+    await reload();
+  });
 }
 
 function bindAdminQuizDayImport(work, day, reload) {

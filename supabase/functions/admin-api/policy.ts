@@ -27,6 +27,7 @@ import {
   runTeamSearch
 } from "./teams.ts";
 import { runHomeSummary } from "./home.ts";
+import { runQuizImageUpload } from "./quiz-images.ts";
 import { runUserSummary } from "./people.ts";
 import { runReadingUsage, runRegistrationExport, runRegistrationSheetSync, runRegistrationStats, usageRange } from "./stats.ts";
 import type { ActionContext, ActionRunner } from "./types.ts";
@@ -488,6 +489,21 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     buildArgs: (_params, ctx) => ({ ok: true, args: { ...actorArgs(ctx), p_request_id: ctx.requestId } })
   },
   // 照搬區塊的匯出（#550）：只記稽核（admin_api_record_event 回稽核編號），記成功前端才存檔
+  // 雲柱測驗題目附圖上傳（#585）：照搬的雲柱測驗區塊經後台外殼呼叫；檔案本身在 run 裡驗證、上傳
+  lightning_quiz_image_upload: {
+    capabilities: ["content.manage"],
+    rateLimit: { bucket: "upload", limit: 30, windowSeconds: 3600 },
+    rpc: "admin_api_record_event",
+    run: runQuizImageUpload,
+    buildArgs: (_params, ctx) => ({ ok: true, args: {
+      p_action: "lightning_quiz.image_upload",
+      p_result: "ok",
+      ...actorArgs(ctx),
+      p_target_user_id: null,
+      p_reason: null,
+      p_request_id: ctx.requestId
+    } })
+  },
   legacy_export_audit: {
     capabilities: ["export"],
     paramCapabilities: (params) => {

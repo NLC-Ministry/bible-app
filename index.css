@@ -4115,6 +4115,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
   color: var(--text-primary);
 }
 
+.commentary-review-card__hint {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
 .commentary-review-card__note {
   margin: 0;
   padding: 0.4rem 0.6rem;
@@ -7298,6 +7305,14 @@ body.dark-theme .pastoral-race-progress {
   margin-top: 0.75rem;
 }
 
+/* 雲柱多對一配對題（#588）的提示：一個右邊點可以接多條線 */
+.daily-quiz-match-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0;
+  line-height: 1.6;
+}
+
 .daily-quiz-match-lines {
   position: absolute;
   inset: 0;
@@ -9260,6 +9275,34 @@ input:checked + .slider:before {
   color: inherit;
 }
 
+/* 被解釋的經文片語（#542）：說明裡加粗，引用經文裡用上面的 mark 標出。 */
+.reader-commentary-phrase {
+  font-weight: var(--type-weight-strong, 500);
+  color: var(--text-primary);
+}
+
+/* 譯文裡的出處（「見出27:21」，#542）：點了跳到那一節。看起來像文字連結。 */
+.reader-commentary-ref {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  line-height: inherit;
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.reader-commentary-ref:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .reader-commentary-section {
   display: flex;
   flex-direction: column;
@@ -10583,6 +10626,25 @@ body.reader-page {
    節旁注釋燈泡（#470）才不會落在「下一章」按鈕底下被蓋住（#543）。 */
 @media not all and (hover: none) and (pointer: coarse) {
   #reader-view .bible-text-container {
+    padding-left: 64px !important;
+    padding-right: 64px !important;
+  }
+
+  /* 寬螢幕閱讀欄限寬置中（#544）：一行最多約 36 個字（跟著閱讀字級縮放），
+     標題和經文同一欄、左緣對齊；節旁燈泡跟著欄的右緣走，貼近經文。
+     兩側浮動換章按鈕仍在畫面兩側；選取工具列、注釋面板是 fixed，不受影響。 */
+  #reader-view {
+    --reader-column-max: calc(36 * var(--reader-font-size, 20px) + 128px);
+  }
+
+  #reader-view .reader-header,
+  #reader-view .bible-text-container {
+    max-width: var(--reader-column-max);
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  #reader-view .reader-header {
     padding-left: 64px !important;
     padding-right: 64px !important;
   }
@@ -12466,6 +12528,22 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   height: auto;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-card);
+}
+/* #585 後台題目附圖：加入／更換／移除 */
+.admin-lq-image {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.admin-lq-image__label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+.admin-lq-image__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 .lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
 .lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }

@@ -138,11 +138,28 @@ export function formatVerseRuns(verses) {
   return runs.map(run => formatVerseRange(run.start, run.end)).join("、");
 }
 
+// 跨章的節注釋（#542）：verse_start／verse_end 是掛在起始章的位置（舊版前端照舊），
+// chapter_end／chapter_end_verse 是整段真正的結尾。不是跨章就回 null。
+export function crossChapterSpan(row) {
+  const chapter = Number(row?.chapter);
+  const chapterEnd = Number(row?.chapter_end);
+  const start = Number.parseInt(row?.verse_start, 10);
+  if (!(chapterEnd > chapter) || !(start > 0)) return null;
+  return { chapter, verseStart: start, chapterEnd, verseEnd: Number.parseInt(row?.chapter_end_verse, 10) || 0 };
+}
+
+// 節注釋本身的範圍，不含書名：「26:1-5」或跨章的「1:1–7:38」。整章注釋回 null。
+export function noteRangeLabel(row) {
+  const span = crossChapterSpan(row);
+  if (span) return `${span.chapter}:${span.verseStart}–${span.chapterEnd}:${span.verseEnd || ""}`.replace(/:$/, "");
+  const range = normalizeVerseRange(row?.verse_start, row?.verse_end);
+  return range ? `${row?.chapter || ""}:${formatVerseRange(range.start, range.end)}` : null;
+}
+
 // 「出埃及記 26 章」或「出埃及記 26:1-5」
 export function commentaryReferenceLabel(row) {
-  const range = normalizeVerseRange(row?.verse_start, row?.verse_end);
-  const base = `${row?.book || ""} ${row?.chapter || ""}`;
-  return range ? `${base}:${formatVerseRange(range.start, range.end)}` : `${base} 章`;
+  const range = noteRangeLabel(row);
+  return range ? `${row?.book || ""} ${range}` : `${row?.book || ""} ${row?.chapter || ""} 章`;
 }
 
 // ── 詞條比對（#470）────────────────────────────────────────────────
@@ -204,6 +221,94 @@ export function markTermsHTML(text, needles, escapeHTML) {
   return html + escape(source.slice(cursor));
 }
 
+// ── 交叉引用與片語（#542）──────────────────────────────────────────────
+// cross_refs：[{ book, chapter, verse, chapter_end, verse_end, label, note? }]，label 是譯文裡的寫法
+// （「出27:21」「5:17-19」「第16章」，只有節號的「21」）。excerpts：[{ en, zh, chapter, verse, heading }]，
+// zh 是被解釋的和合本字句。兩者都由匯入工具產生（scripts/commentary-import/）。
+const VERSE_ONLY_LABEL = /^\d+(?:[-–]\d+)?$/;
+const LIST_SEPARATORS = "、，,；;和及與 ";
+
+// 譯文裡出處標籤的位置：前後不能接著數字或冒號（「8:3」不算「28:3」「8:30」或「8:3-5」的一部分）；
+// 只有節號的標籤一定要接在頓號、逗號、分號或「和」後面（「8:11、12」的 12）。
+export function findRefLabelRanges(text, label) {
+  const source = String(text || "");
+  const needle = String(label || "");
+  const ranges = [];
+  if (!needle) return ranges;
+  const verseOnly = VERSE_ONLY_LABEL.test(needle);
+  let index = source.indexOf(needle);
+  while (index !== -1) {
+    const before = source[index - 1] || "";
+    const after = source.slice(index + needle.length, index + needle.length + 2);
+    const okBefore = verseOnly ? LIST_SEPARATORS.includes(before) && before !== "" : !/[\d:：\-–—]/.test(before);
+    const okAfter = !/^[\d:：]/.test(after) && !/^[-–]\d/.test(after) && !(verseOnly && /^[章篇]/.test(after));
+    if (okBefore && okAfter) ranges.push({ start: index, end: index + needle.length });
+    index = source.indexOf(needle, index + needle.length);
+  }
+  return ranges;
+}
+
+function refAttributes(ref, escape) {
+  const attrs = { book: ref.book, chapter: ref.chapter, verse: ref.verse, "chapter-end": ref.chapter_end, "verse-end": ref.verse_end };
+  return Object.entries(attrs)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => ` data-ref-${key}="${escape(String(value))}"`)
+    .join("");
+}
+
+// 一段譯文 → HTML：片語加粗；linkRefs 時出處做成按鈕（閱讀器點了跳過去）。
+// 同一個標籤出現好幾次，依序對到同標籤的出處（多出來的都對最後一個）。
+export function commentaryTextHTML(text, { refs = [], phrases = [], linkRefs = false } = {}, escapeHTML) {
+  const escape = typeof escapeHTML === "function" ? escapeHTML : value => String(value ?? "");
+  const source = String(text || "");
+  const marks = [];
+  for (const range of findTermRanges(source, phrases)) marks.push({ ...range, kind: "phrase" });
+  if (linkRefs) {
+    const byLabel = new Map();
+    for (const ref of Array.isArray(refs) ? refs : []) {
+      if (!ref || !ref.label || !ref.book || !(Number(ref.chapter) > 0)) continue;
+      if (!byLabel.has(ref.label)) byLabel.set(ref.label, []);
+      byLabel.get(ref.label).push(ref);
+    }
+    for (const [label, list] of byLabel) {
+      findRefLabelRanges(source, label).forEach((range, i) => marks.push({ ...range, kind: "ref", ref: list[Math.min(i, list.length - 1)] }));
+    }
+  }
+  marks.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  let html = "";
+  let cursor = 0;
+  for (const mark of marks) {
+    if (mark.start < cursor) continue;
+    html += escape(source.slice(cursor, mark.start));
+    const inner = escape(source.slice(mark.start, mark.end));
+    html += mark.kind === "phrase"
+      ? `<strong class="reader-commentary-phrase">${inner}</strong>`
+      : `<button type="button" class="reader-commentary-ref" data-commentary-ref${refAttributes(mark.ref, escape)}>${inner}</button>`;
+    cursor = mark.end;
+  }
+  return html + escape(source.slice(cursor));
+}
+
+// 點出處跳轉時：捲到起始節；同一章的範圍一起閃底色。整章出處（verse 是 null）只換章。
+export function refRevealTarget({ chapter, verse = null, chapterEnd = null, verseEnd = null } = {}) {
+  if (!(Number(verse) > 0)) return { verse: null, highlightVerses: null };
+  const sameChapter = !(Number(chapterEnd) > 0) || Number(chapterEnd) === Number(chapter);
+  const last = sameChapter && Number(verseEnd) > Number(verse) ? Number(verseEnd) : Number(verse);
+  const highlightVerses = [];
+  for (let current = Number(verse); current <= last; current += 1) highlightVerses.push(current);
+  return { verse: Number(verse), highlightVerses };
+}
+
+export function excerptPhrases(excerpts) {
+  return parseTermAliases((Array.isArray(excerpts) ? excerpts : []).map(excerpt => excerpt?.zh));
+}
+
+// 這則注釋裡、屬於第 chapter 章第 verse 節的片語（在引用經文裡標出來）。
+export function excerptPhrasesForVerse(note, chapter, verse) {
+  return excerptPhrases((Array.isArray(note?.excerpts) ? note.excerpts : []).filter(excerpt =>
+    Number(excerpt?.verse) === Number(verse) && Number(excerpt?.chapter ?? note.chapter) === Number(chapter)));
+}
+
 // 把一章的注釋和詞條對到節上（#470）。
 // - 整章注釋（沒有節範圍）→ chapterRow，由工具列的燈泡打開。
 // - 節注釋 → 範圍內每一節都有內容，但 icon 只放在起始節（研讀注釋常一則涵蓋十幾節，#471）。
@@ -223,10 +328,25 @@ export function resolveChapterCommentary({ rows = [], terms = [], chapter, textB
   const versesIn = range => verseNumbers.filter(verse => verse >= range.start && verse <= range.end);
 
   let chapterRow = null;
+  // 從前面的章延續過來的跨章注釋排最前面（這章的第 1 節起）。
+  const sortStart = row => (Number(row?.chapter) < chapterNumber ? 0 : Number(row?.verse_start) || 0);
   const orderedRows = [...(rows || [])].sort((a, b) =>
-    (Number(a.verse_start) || 0) - (Number(b.verse_start) || 0) || (Number(a.verse_end) || 0) - (Number(b.verse_end) || 0));
+    sortStart(a) - sortStart(b) || (Number(a.verse_end) || 0) - (Number(b.verse_end) || 0));
   for (const row of orderedRows) {
-    if (!row || Number(row.chapter) !== chapterNumber) continue;
+    if (!row) continue;
+    // 跨章注釋（#542）：起始章從起始節到章末、中間的章整章、結束章到結束節都有內容；
+    // icon 放在每一章涵蓋的第一節，「1:1–7:38 總覽」在 1–7 章都看得到。
+    const span = crossChapterSpan(row);
+    if (span) {
+      if (chapterNumber < span.chapter || chapterNumber > span.chapterEnd) continue;
+      const from = chapterNumber === span.chapter ? span.verseStart : 1;
+      const to = chapterNumber === span.chapterEnd && span.verseEnd > 0 ? span.verseEnd : Number.POSITIVE_INFINITY;
+      const covered = verseNumbers.filter(verse => verse >= from && verse <= to);
+      for (const verse of covered) entryFor(verse).notes.push(row);
+      if (covered.length) iconVerses.add(covered[0]);
+      continue;
+    }
+    if (Number(row.chapter) !== chapterNumber) continue;
     const range = normalizeVerseRange(row.verse_start, row.verse_end);
     if (!range) {
       if (!chapterRow) chapterRow = row;
@@ -274,9 +394,10 @@ export function splitCommentaryParagraphs(text) {
     .filter(Boolean);
 }
 
-function paragraphsHTML(text, escape) {
+function paragraphsHTML(text, escape, decorate = null) {
+  const line = decorate ? value => commentaryTextHTML(value, decorate, escape) : value => escape(value);
   return splitCommentaryParagraphs(text)
-    .map(paragraph => `<p>${paragraph.split("\n").map(line => escape(line)).join("<br>")}</p>`)
+    .map(paragraph => `<p>${paragraph.split("\n").map(line).join("<br>")}</p>`)
     .join("");
 }
 
@@ -311,21 +432,26 @@ export function buildCommentaryBodyHTML(row, escapeHTML) {
 
 // 節注釋＋詞彙（#470）。verses：[{ verse, text, terms }]（點選或點 icon 的節，已排序）；
 // notes／terms 已去重（一則跨好幾節的注釋只出現一次），terms 要帶 definition。
-// 引用的經文標出詞彙位置——標記只在面板裡，閱讀畫面本身不加底線。
-export function buildVerseCommentaryHTML({ chapter, verses = [], notes = [], terms = [] }, escapeHTML) {
+// 引用的經文標出詞彙與被解釋的片語（#542）——標記只在面板裡，閱讀畫面本身不加底線。
+// linkRefs：譯文裡的出處做成按鈕（呼叫端要處理 [data-commentary-ref] 的點擊）。
+export function buildVerseCommentaryHTML({ chapter, verses = [], notes = [], terms = [], linkRefs = false }, escapeHTML) {
   const escape = typeof escapeHTML === "function" ? escapeHTML : value => String(value ?? "");
   const quotes = verses.map(item => {
-    const needles = (item.terms || []).flatMap(term => termNeedles(term));
+    const needles = [
+      ...(item.terms || []).flatMap(term => termNeedles(term)),
+      ...notes.flatMap(note => excerptPhrasesForVerse(note, chapter, item.verse))
+    ];
     return `<blockquote class="reader-commentary-quote"><span class="reader-commentary-quote__num">${escape(String(item.verse))}</span>${markTermsHTML(plainVerseText(item.text), needles, escape)}</blockquote>`;
   }).join("");
   const noteHTML = notes.map(note => {
-    const range = normalizeVerseRange(note.verse_start, note.verse_end);
+    const range = noteRangeLabel({ ...note, chapter: note.chapter || chapter });
     const title = String(note.title || "").trim();
+    const decorate = { refs: note.cross_refs, phrases: excerptPhrases(note.excerpts), linkRefs };
     return `
       <article class="reader-commentary-note">
-        <p class="reader-commentary-note__ref">${escape(range ? `${chapter}:${formatVerseRange(range.start, range.end)}` : `${chapter} 章`)}</p>
+        <p class="reader-commentary-note__ref">${escape(range || `${chapter} 章`)}</p>
         ${title ? `<h5 class="reader-commentary-note__title">${escape(title)}</h5>` : ""}
-        <div class="reader-commentary-text">${paragraphsHTML(note.content, escape)}</div>
+        <div class="reader-commentary-text">${paragraphsHTML(note.content, escape, decorate)}</div>
         ${sourceHTML(note.source, escape)}
       </article>`;
   }).join("");

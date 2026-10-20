@@ -108,6 +108,19 @@ describe("shuffling", () => {
       }
     }
   });
+
+  it("matching with fewer right points than left items keeps every item and shuffles the right column (#588)", () => {
+    const left = Array.from({ length: 4 }, (_, index) => ({ id: `L${index + 1}` }));
+    const right = [{ id: "R1" }, { id: "R2" }];
+    const rightOrders = new Set();
+    for (let seed = 0; seed < 50; seed += 1) {
+      const columns = arrangeMatchingColumns(left, right, createSeededRandom(`s${seed}`));
+      expect(columns.left.map(item => item.id).sort()).toEqual(["L1", "L2", "L3", "L4"]);
+      expect(columns.right.map(item => item.id).sort()).toEqual(["R1", "R2"]);
+      rightOrders.add(columns.right.map(item => item.id).join(","));
+    }
+    expect(rightOrders.size).toBe(2);
+  });
 });
 
 describe("isResponseComplete", () => {
@@ -267,6 +280,51 @@ describe("render + read + bind round-trip (jsdom)", () => {
     // clicking the already-paired left again should unpair it
     fieldset.querySelector('[data-left-id="L1"]').click();
     expect(lastResponse).toEqual({ L2: "R2" });
+
+    // 一對一題目：右邊點被第二條線連上時，前一條線照舊被拆掉，也沒有多對一提示
+    fieldset.querySelector('[data-left-id="L1"]').click();
+    fieldset.querySelector('[data-right-id="R2"]').click();
+    expect(lastResponse).toEqual({ L1: "R2" });
+    expect(fieldset.querySelector("[data-matching-many-to-one]")).toBeNull();
+    expect(fieldset.querySelector(".daily-quiz-match-hint")).toBeNull();
+  });
+
+  it("matching with fewer right points: several left items can share one right point (#588)", () => {
+    const question = normalizeQuestion({
+      id: "match-many", type: "matching",
+      payload: {
+        stem: "配對人物與身分",
+        left: [{ id: "L1", text: "彼得" }, { id: "L2", text: "安得烈" }, { id: "L3", text: "馬太" }],
+        right: [{ id: "R1", text: "加利利漁夫" }, { id: "R2", text: "稅吏" }]
+      },
+      answerKey: { L1: "R1", L2: "R1", L3: "R2" }
+    });
+    const fieldset = mount(renderQuestionFieldsetHtml(question, 0));
+    expect(fieldset.querySelector("[data-matching-many-to-one]")).not.toBeNull();
+    expect(fieldset.querySelector(".daily-quiz-match-hint")?.textContent).toMatch(/重複連/);
+    let lastResponse;
+    bindQuestionFieldset(fieldset, "matching", response => { lastResponse = response; });
+    const pair = (leftId, rightId) => {
+      fieldset.querySelector(`[data-left-id="${leftId}"]`).click();
+      fieldset.querySelector(`[data-right-id="${rightId}"]`).click();
+    };
+    const r1 = fieldset.querySelector('[data-right-id="R1"]');
+
+    pair("L1", "R1");
+    pair("L2", "R1");
+    pair("L3", "R2");
+    expect(lastResponse).toEqual({ L1: "R1", L2: "R1", L3: "R2" });
+    expect(isAnswerCorrect("matching", question.answerKey, lastResponse)).toBe(true);
+    expect(fieldset.querySelectorAll(".daily-quiz-match-line")).toHaveLength(3);
+
+    // 拆掉其中一條，R1 還有另一條線 → 仍是 is-paired
+    fieldset.querySelector('[data-left-id="L1"]').click();
+    expect(lastResponse).toEqual({ L2: "R1", L3: "R2" });
+    expect(r1.classList.contains("is-paired")).toBe(true);
+    // 最後一條也拆掉 → R1 不再 is-paired
+    fieldset.querySelector('[data-left-id="L2"]').click();
+    expect(r1.classList.contains("is-paired")).toBe(false);
+    expect(lastResponse).toEqual({ L3: "R2" });
   });
 
   it("ordering: answer area starts empty; tap pool items to place them, ✕ sends one back", () => {

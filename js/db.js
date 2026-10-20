@@ -3928,7 +3928,11 @@ const db = {
       quiz_attempt_not_found: "找不到這次的作答紀錄，請先作答至少一題。",
       quiz_stats_permission_required: "沒有權限查看這份小測驗結果統計。",
       quiz_stats_date_range_required: "請選擇正確的日期區間。",
-      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。"
+      quiz_answer_window_closed: "作答時間已截止，無法再送出答案。",
+      quiz_not_published: "這一天還沒有發佈，請直接修改題目。",
+      quiz_multiple_versions: "這一天發佈了兩份不同的題目，無法自動更正，請聯絡系統維護者。",
+      quiz_answer_type_not_supported: "配對題和排序題目前不能更正答案。",
+      quiz_kept_question_not_found: "這一天已經出好題目，沒有保留中的題目可以拿掉。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
     return key ? messages[key] : "目前無法載入小測驗資料，請稍後再試。";
@@ -4004,6 +4008,25 @@ const db = {
     return this._callQuizRpc("set_daily_quiz_day_custom", {
       p_global_plan_id: planId, p_quiz_date: quizDate,
       p_questions: Array.isArray(questions) && questions.length ? questions : null
+    });
+  },
+
+  // #590：已發佈的日子更正某一題的正解（和解說），伺服器同時重算所有作答
+  async setDailyQuizAnswerKey(plan, quizDate, questionId, answerKey, explanation = null) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("set_daily_quiz_answer_key", {
+      p_global_plan_id: planId, p_quiz_date: quizDate, p_question_id: questionId,
+      p_answer_key: answerKey, p_explanation: explanation
+    });
+  },
+
+  // #589：出題失敗時保留的題目，拿掉不要的那一題（下次會再補）
+  async removeDailyQuizKeptQuestion(plan, quizDate, questionId) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("remove_daily_quiz_kept_question", {
+      p_global_plan_id: planId, p_quiz_date: quizDate, p_question_id: questionId
     });
   },
 

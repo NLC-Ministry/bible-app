@@ -69,8 +69,8 @@ describe("daily church quiz", () => {
     // #414：先出 CANDIDATE_COUNT 題候選，通過舉證比對與盲審的取前 5 題，最後仍要剛好 5 題。
     expect(generator).toContain("minItems: CANDIDATE_COUNT, maxItems: CANDIDATE_COUNT");
     expect(generator).toContain("minItems: 4, maxItems: 4");
-    expect(generator).toContain("selectQuestions(candidates, (review.value as any)?.reviews, buildVerseIndex(chapters))");
-    expect(generator).toContain("questions: validateQuestions(questions)");
+    expect(generator).toContain("selectQuestions(candidates, (review.value as any)?.reviews, buildVerseIndex(chapters), needed)");
+    expect(generator).toContain("questions: validateQuestions(merged.questions)");
     expect(generator).toContain("questions.length !== QUIZ_QUESTION_COUNT");
   });
 

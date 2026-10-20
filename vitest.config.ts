@@ -1,11 +1,17 @@
 import { fileURLToPath } from "node:url"
-import { configDefaults, defineConfig } from "vitest/config"
+import { defineConfig } from "vitest/config"
+import { BASE_EXCLUDE, BUILD_TESTS } from "./vitest.shared.mjs"
 
 export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: [...configDefaults.exclude, "dist/**", "dist-admin/**", ".worktrees/**", ".claude/**"],
+    exclude: [...BASE_EXCLUDE, ...BUILD_TESTS],
+    // 通過的測試不印 console 輸出，只有失敗的才印（#592）
+    silent: "passed-only",
+    // 本機用 agent：通過的不印，只印失敗與摘要（給 Claude session 省 token，#592）；
+    // CI 用 dot＋github-actions，失敗會標在 PR 的檔案上
+    reporters: process.env.GITHUB_ACTIONS ? ["dot", "github-actions"] : ["agent"],
   },
   resolve: {
     alias: {

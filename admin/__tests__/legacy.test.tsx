@@ -126,6 +126,27 @@ describe("startLegacyHost (iframe channel)", () => {
     expect(failing.port().sent.at(-1)).toEqual({ ok: false, message: "錯誤：稽核寫不進去", replyTo: 8 });
   });
 
+  it("uploads a lightning-quiz image through admin-api and answers with the file name (#585)", async () => {
+    const uploadQuizImage = vi.fn(async () => ({ name: "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f.webp", w: 1600, h: 900 }));
+    const t = setup({ uploadQuizImage });
+    t.hello();
+    t.port().receive({ type: "quiz_image_upload", id: 3, image: { mime: "image/webp", base64: "AAAA", w: 1600, h: 900 } });
+    await flush();
+    expect(uploadQuizImage).toHaveBeenCalledWith({ mime: "image/webp", base64: "AAAA", w: 1600, h: 900 });
+    expect(t.port().sent.at(-1)).toEqual({ ok: true, name: "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f.webp", replyTo: 3 });
+
+    t.port().receive({ type: "quiz_image_upload", id: 4, image: { mime: "image/svg+xml", base64: "AAAA" } });
+    await flush();
+    expect(uploadQuizImage).toHaveBeenCalledTimes(1);
+    expect(t.port().sent.at(-1)).toMatchObject({ ok: false, replyTo: 4 });
+
+    const failing = setup({ uploadQuizImage: vi.fn(async () => { throw new Error("太大"); }) });
+    failing.hello();
+    failing.port().receive({ type: "quiz_image_upload", id: 5, image: { mime: "image/png", base64: "AAAA" } });
+    await flush();
+    expect(failing.port().sent.at(-1)).toEqual({ ok: false, message: "錯誤：太大", replyTo: 5 });
+  });
+
   it("refuses files it cannot recognise without asking admin-api", async () => {
     const t = setup();
     t.hello();

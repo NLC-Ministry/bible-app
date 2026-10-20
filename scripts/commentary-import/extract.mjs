@@ -1,5 +1,6 @@
 // 從 Tyndale Open Study Notes 的 StudyNotes.xml 取出某一卷，寫成 content/commentary/tosn/<英文書名>.json。
-// 已經翻好的中文（zh、title）會保留，只更新英文原文與範圍。
+// 已經翻好的中文（zh、title、片語的中文）會保留，只更新英文原文、預處理稿、交叉引用、片語與指紋；
+// 原文指紋變了的那幾則會清空譯文等重翻（舊譯文留在 zh_previous）。流程見 docs/commentary-import.md。
 //
 //   node scripts/commentary-import/extract.mjs <StudyNotes.xml 路徑> <書名，例如 利未記>
 //
@@ -9,19 +10,25 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import vm from "node:vm";
-import { TOSN_ATTRIBUTION, TOSN_BOOK_CODES, mergeTranslations, parseTosnStudyNotes } from "./tosn.mjs";
+import { REPO_ROOT, bookSlug, loadBibleBooks, resolveBook } from "./tosn-books.mjs";
+import { TOSN_ATTRIBUTION, mergeTranslations, parseTosnStudyNotes, tosnReleaseOf } from "./tosn.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-export function loadBibleBooks() {
-  const context = { window: {} };
-  vm.runInNewContext(readFileSync(join(root, "js/data/bible_data.js"), "utf8"), context);
-  return context.window.BIBLE_BOOKS || context.BIBLE_BOOKS;
-}
+export { loadBibleBooks };
 
 export function outputPathFor(book) {
-  return join(root, "content/commentary/tosn", `${book.eng.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`);
+  return join(REPO_ROOT, "content/commentary/tosn", `${bookSlug(book)}.json`);
+}
+
+export function readBookFile(bookName) {
+  const { book } = resolveBook(bookName);
+  const path = outputPathFor(book);
+  if (!existsSync(path)) throw new Error(`還沒有 ${path}，先跑 extract.mjs`);
+  return { path, file: JSON.parse(readFileSync(path, "utf8")) };
+}
+
+export function writeBookFile(path, file) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, "utf8");
 }
 
 function main() {
@@ -30,24 +37,22 @@ function main() {
     console.error("用法：node scripts/commentary-import/extract.mjs <StudyNotes.xml> <書名>");
     process.exit(1);
   }
-  const books = loadBibleBooks();
-  const index = books.findIndex(book => book.name === bookName);
-  if (index < 0) throw new Error(`找不到書卷：${bookName}`);
-  const book = books[index];
-  const code = TOSN_BOOK_CODES[index];
-  const notes = parseTosnStudyNotes(readFileSync(xmlPath, "utf8"), code);
+  const { book, code } = resolveBook(bookName);
+  const xml = readFileSync(xmlPath, "utf8");
+  const notes = parseTosnStudyNotes(xml, code);
   const outPath = outputPathFor(book);
   const existing = existsSync(outPath) ? JSON.parse(readFileSync(outPath, "utf8")).notes : [];
   const file = {
     book: book.name,
     tosnCode: code,
+    sourceVersion: tosnReleaseOf(xml),
     attribution: TOSN_ATTRIBUTION,
     notes: mergeTranslations(notes, existing)
   };
-  mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, `${JSON.stringify(file, null, 2)}\n`, "utf8");
+  writeBookFile(outPath, file);
   const translated = file.notes.filter(note => String(note.zh || "").trim()).length;
-  console.log(`${book.name}：${file.notes.length} 則（已翻 ${translated} 則）→ ${outPath}`);
+  const changed = file.notes.filter(note => note.zh_previous && !String(note.zh || "").trim()).length;
+  console.log(`${book.name}：${file.notes.length} 則（已翻 ${translated} 則${changed ? `，原文有變動待重翻 ${changed} 則` : ""}）→ ${outPath}`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

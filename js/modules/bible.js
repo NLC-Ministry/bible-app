@@ -34,6 +34,7 @@ import { buildChapterPreview, buildViewportSnapshot, createReaderPageFlip } from
 import { formatVerseSelectionText, groupVerseSelectionRuns } from "./verse-selection-format.mjs";
 import { buildChapterEndNav as buildSharedChapterEndNav, createVerseElement, revealVerses } from "./reader-verse-dom.mjs";
 import { createReaderCommentaryController } from "./reader-commentary.mjs";
+import { refRevealTarget } from "../data/passage-commentary.mjs";
 import {
   createBibleNavDirectory,
   isReaderReferenceResult,
@@ -56,7 +57,14 @@ const readerCommentary = createReaderCommentaryController({
   hydrateIcons: element => { if (typeof hydrateIcons === "function") hydrateIcons(element); },
   getVerseContainer: () => document.getElementById("bible-content"),
   // 注釋比選取晚到：已經有選取時重建工具列，「注釋」才會出現。
-  onChange: () => { if (verseSelection.size > 0) renderUnifiedSelectionBar(); }
+  onChange: () => { if (verseSelection.size > 0) renderUnifiedSelectionBar(); },
+  // 注釋裡的「見出27:21」（#542）：跳到那一章、捲到那一節並閃底色。
+  onNavigateRef: async target => {
+    const book = BIBLE_BOOKS.find(item => item.name === target.book);
+    if (!book) return;
+    const { verse, highlightVerses } = refRevealTarget(target);
+    await goToReaderVerse({ bookId: book.id, chapter: target.chapter, verse, highlightVerses });
+  }
 });
 
 export function openReaderLayer(element) {

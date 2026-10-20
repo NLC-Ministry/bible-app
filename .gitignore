@@ -31,6 +31,10 @@ dist-admin/
 supabase/.temp/
 supabase/.branches/
 
+# 經文注釋匯入的翻譯參考資料快取與翻譯輸入檔（scripts/commentary-import/，#542）：
+# 信望愛 Strong's、當代譯本、Strong's 詞典只當翻譯參考，不散布。
+.cache/
+
 # Staging sample data exports (scripts/staging-sample-data.mjs). Anonymized but
 # still derived from member activity; never commit.
 staging-sample*.json

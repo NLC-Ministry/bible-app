@@ -36,7 +36,9 @@ cmd //c mklink //J ".worktrees\integrate\node_modules" "node_modules"
 cd .worktrees/integrate
 git merge --no-ff task/<x> -m "Merge branch 'task/<x>' into staging: <Release-note in English> (#<issue>)"
 ```
-Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone).
+Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone). Task sessions only ran the tests their change touches (`test:changed`), so this is the first full run. The esbuild tests (`npm run test:build`) are left to CI unless a merged branch's `Tests` trailer or `Touches` shows build changes — then run them here too.
+
+After pushing (step 6), check the CI run once (`gh run list --branch staging --limit 1`): it is the deploy, and a docs-only push doesn't trigger one (#592).
 
 ## 5. Migrations (only if a merged branch lists one)
 ```bash
@@ -51,10 +53,12 @@ git push origin HEAD:staging
 ```
 Rejected (someone pushed first) → `git fetch`, recreate the worktree from the new `origin/staging`, redo 4–6.
 
+Rejected with `push declined due to repository rule violations` → the GitHub rulesets have drifted (#579: `staging` may block only deletion and force-push; only `main` requires a PR). Check `gh api repos/NLC-Ministry/bible-app/rules/branches/staging` and tell the user; don't switch to a PR or any other way of pushing.
+
 If a release PR (`staging` → `main`) is open, this push lands in it: update its description (step 8).
 
 ### 6a. Admin console issues → update the tracking issue #576
-If a merged branch's issue belongs to the admin console redesign (a row in #576, or its title starts with 後台／admin-api, or it references #546／#572), update that issue's row in #576 right after the push (or after opening the PR into staging):
+If a merged branch's issue belongs to the admin console redesign (a row in #576, or its title starts with 後台／admin-api, or it references #546／#572), update that issue's row in #576 right after the push:
 ```bash
 gh issue view 576 --json body -q .body > <scratchpad>/576.md
 # edit the row "| #<issue> | …": 狀態 → 🟡, 進測試站的 PR → #<PR>; leave the 驗收 box alone (only the maintainer ticks it)

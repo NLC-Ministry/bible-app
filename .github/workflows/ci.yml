@@ -1,11 +1,27 @@
 name: CI
 
+# 一個工作從頭跑到部署（#592）。Actions 每個工作各自進位成整分鐘計費，以前拆成 6 個工作
+#（測試 3 片、建置、部署、部署後台）每次推送約 9 分鐘；合成一個約 5 分鐘，總時間差不多。
 on:
   pull_request:
+    paths-ignore:
+      # 只改文件、Claude／Codex 設定時不跑（規則集沒有 required status check，不會卡住 PR）
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".agents/**"
+      - ".codex/**"
   push:
     # staging：部署成 preview，並綁到固定網址 bible-speed-reading-staging.vercel.app
     #（連 staging 資料庫，見 docs/staging.md）
     branches: [main, staging]
+    # 同上：只改文件、Claude／Codex 設定時不跑
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".agents/**"
+      - ".codex/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -14,6 +30,8 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  # 查 staging 那次 CI 有沒有通過（main 推送時跳過重複測試）
+  actions: read
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -21,51 +39,88 @@ env:
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
-  # 測試分 3 片同時跑（#457）：私有 repo 的 runner 只有 2 核心，283 個測試檔大部分時間花在
-  # 各自載入程式、建立 jsdom 環境，單機要排隊兩分多鐘。分片不改測試寫法，只是多用幾台機器。
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        shard: [1, 2, 3]
+  ci:
+    # 上線 PR（staging → main）不跑：同一份程式在推上 staging 時已經測過、部署過，這裡只要
+    # release-gate.yml 的上線審核。hotfix/* 的 PR 照常跑。
+    if: github.event_name != 'pull_request' || github.head_ref != 'staging'
+    # 明確指定版本（#592）：ubuntu-latest 自 2026-10-19 起陸續換成 Ubuntu 26，固定下來就不會哪天自己變
+    runs-on: ubuntu-26.04
+    env:
+      # Dependabot 的 PR 拿不到 Actions secrets（Vercel token），部署一定失敗，直接跳過（#461）
+      CAN_DEPLOY: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
+      IS_PRODUCTION: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Unit tests (shard ${{ matrix.shard }}/3)
-        run: npx vitest run --shard=${{ matrix.shard }}/3
-
-  # 建置＋基本資安掃描（#461）。掃描放在這裡而不是另開 job：這個 job 本來就裝好套件，
-  # 而且比測試分片早很多跑完，不多開機器、也不拉長 CI 總時間。
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # gitleaks 要拿得到這次推送之前的 commit 才能只掃新的；整個歷史約 14 MB
+          # gitleaks 要拿得到這次推送之前的 commit 才能只掃新的；main 推送要比對上線 PR 那一版的內容。整個歷史約 14 MB
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Require a release PR before production deploy
+        id: release
+        # 上線審核的最後一關（見 release-gate.yml、docs/staging.md）：main 上的這個 commit
+        # 必須來自一個從 staging（或 hotfix/*）開出來、已經 merge 的 PR——按 merge 就代表
+        # 確認上線。直接 push 到 main 的一律不部署到正式環境。
+        if: env.IS_PRODUCTION == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          node-version: "20"
+          script: |
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const release = prs.find((pr) => pr.merged_at && pr.base.ref === 'main'
+              && (pr.head.ref === 'staging' || pr.head.ref.startsWith('hotfix/')));
+            if (!release) {
+              core.setFailed('這個 commit 不是從 staging（或 hotfix/*）的 PR merge 進來的，不部署到正式環境。請從 staging 開 PR，在 staging 確認後再 merge。');
+              return;
+            }
+            core.setOutput('head_sha', release.head.sha);
+            core.summary.addRaw(`上線審核通過：#${release.number}（${release.head.ref} → main）`).write();
+
+      # main 推送：內容和上線 PR 那一版完全相同、而且那一版的 CI 已經通過，就不再測一次（#592）。
+      # 只認真的跑過測試的那次：staging 的推送，或 hotfix/* 的 PR（上線 PR 本身不跑測試）。
+      - name: Skip checks already passed on the release PR's head
+        id: tested
+        if: env.IS_PRODUCTION == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.release.outputs.head_sha }}
+        run: |
+          if [ "$(git rev-parse 'HEAD^{tree}')" != "$(git rev-parse "${HEAD_SHA}^{tree}")" ]; then
+            echo "內容和上線 PR 那一版不同，照常測試"
+            exit 0
+          fi
+          passed=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${HEAD_SHA}&status=success&per_page=20" \
+            --jq '[.workflow_runs[] | select(.event == "push" or (.event == "pull_request" and .head_branch != "staging"))] | length')
+          if [ "$passed" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "- 內容與 ${HEAD_SHA} 相同且該版 CI 已通過，跳過測試與建置檢查" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "找不到 ${HEAD_SHA} 通過的 CI，照常測試"
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          # 版本只寫在 .node-version（#597）：本機、CI、正式站建置（vercel build 用 runner 的 Node）一致
+          node-version-file: .node-version
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Unit tests
+        if: steps.tested.outputs.skip != 'true'
+        run: npm test
 
       # 正式執行會用到的套件有 high/critical 漏洞就擋下
       - name: Audit production dependencies
+        if: steps.tested.outputs.skip != 'true'
         run: npm audit --omit=dev --audit-level=high
 
       # 開發工具（建置時才用、不會跑在使用者瀏覽器）的漏洞只報告不擋（#461 定案）
       - name: Report all dependency advisories
+        if: steps.tested.outputs.skip != 'true'
         run: |
           npm audit > npm-audit.txt 2>&1 || true
           {
@@ -77,6 +132,7 @@ jobs:
 
       # 只掃這次新推上來的 commit。版本與 SHA-256 固定，不跑未驗證的下載。
       - name: Scan new commits for leaked secrets (gitleaks)
+        if: steps.tested.outputs.skip != 'true'
         env:
           GITLEAKS_VERSION: "8.30.1"
           GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
@@ -103,6 +159,7 @@ jobs:
           "$RUNNER_TEMP/gitleaks" git --redact --no-banner --config .gitleaks.toml --log-opts="$RANGE" .
 
       - name: Build and verify bundled output
+        if: steps.tested.outputs.skip != 'true'
         run: |
           npm run build
           test -n "$(ls dist/app.*.js 2>/dev/null)" || { echo "no hashed app bundle in dist/"; exit 1; }
@@ -114,6 +171,7 @@ jobs:
 
       # 後台（#555）另一個入口；這裡只確認建得起來、沒有混進會友 App 的檔案，設定用假值
       - name: Build and verify admin console
+        if: steps.tested.outputs.skip != 'true'
         run: |
           node scripts/build-admin.mjs
           test -f dist-admin/index.html || { echo "no dist-admin/index.html"; exit 1; }
@@ -126,82 +184,48 @@ jobs:
           ADMIN_API_URL: https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api
           SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
-  deploy:
-    # 所有測試分片和建置都通過才部署
-    needs: [test, build]
-    # Dependabot 的 PR 拿不到 Actions secrets（Vercel token），部署一定失敗，直接跳過（#461）
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      # 真的跑 esbuild 的測試（bundle、後台建置、後台照搬區塊開機）——本機 npm test 不跑，這裡跑（#592）
+      - name: Build tests
+        if: steps.tested.outputs.skip != 'true'
+        run: npm run test:build
 
-      - name: Require a release PR before production deploy
-        # 上線審核的最後一關（見 release-gate.yml、docs/staging.md）：main 上的這個 commit
-        # 必須來自一個從 staging（或 hotfix/*）開出來、已經 merge 的 PR——按 merge 就代表
-        # 確認上線。直接 push 到 main 的一律不部署到正式環境。
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha,
-            });
-            const release = prs.find((pr) => pr.merged_at && pr.base.ref === 'main'
-              && (pr.head.ref === 'staging' || pr.head.ref.startsWith('hotfix/')));
-            if (!release) {
-              core.setFailed('這個 commit 不是從 staging（或 hotfix/*）的 PR merge 進來的，不部署到正式環境。請從 staging 開 PR，在 staging 確認後再 merge。');
-              return;
-            }
-            core.summary.addRaw(`上線審核通過：#${release.number}（${release.head.ref} → main）`).write();
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
+      # ── 以上全部通過才部署 ──
 
       # Vercel CLI 裝在固定目錄並快取（#457），不用每次重新下載（約 20 秒）；改版本時連 key 一起改
       - name: Cache Vercel CLI
+        if: env.CAN_DEPLOY == 'true'
         id: vercel-cli-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.vercel-cli
           key: vercel-cli-59.1.3-${{ runner.os }}
 
       - name: Install Vercel CLI
-        if: steps.vercel-cli-cache.outputs.cache-hit != 'true'
+        if: env.CAN_DEPLOY == 'true' && steps.vercel-cli-cache.outputs.cache-hit != 'true'
         run: npm install --global --prefix ~/.vercel-cli vercel@59.1.3
 
       - name: Add Vercel CLI to PATH
+        if: env.CAN_DEPLOY == 'true'
         run: echo "$HOME/.vercel-cli/bin" >> "$GITHUB_PATH"
 
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }}
-
-      - name: Build
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            vercel build --prod
-          else
-            vercel build
-          fi
-
-      - name: Deploy
+      - name: Deploy member app
         id: deploy
+        if: env.CAN_DEPLOY == 'true'
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          if [ "$IS_PRODUCTION" = "true" ]; then
+            vercel pull --yes --environment=production
+            vercel build --prod
             URL=$(vercel deploy --prebuilt --prod)
           else
+            vercel pull --yes --environment=preview
+            vercel build
             URL=$(vercel deploy --prebuilt)
           fi
-          {
-            echo "url=$URL"
-          } >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           {
             echo "## Deploy Result"
             echo "- **URL**: $URL"
-            echo "- **Target**: $([ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && echo production || echo preview)"
+            echo "- **Target**: $([ "$IS_PRODUCTION" = "true" ] && echo production || echo preview)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Alias staging deployment
@@ -214,10 +238,10 @@ jobs:
           echo "- **Staging**: https://bible-speed-reading-staging.vercel.app" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment preview URL
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && env.CAN_DEPLOY == 'true'
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.url }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const url = process.env.PREVIEW_URL;
@@ -245,55 +269,24 @@ jobs:
               });
             }
 
-  # 後台（#555）：同一個 repo、另一個 Vercel 專案（secret VERCEL_ADMIN_PROJECT_ID），網域和會友 App 分開：
-  # 正式站 bible-speed-reading-admin.vercel.app（production）、staging 綁 bible-speed-reading-admin-staging.vercel.app。
-  # 會友 App 部署成功才部署（main 的上線審核已在 deploy 過關）；PR 不部署後台。
-  # 後台的 Vercel 專案還沒建好（secret 沒設）就跳過，不讓整個 CI 失敗。設定步驟見 docs/admin-console.md。
-  deploy-admin:
-    needs: [deploy]
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    env:
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
-    steps:
-      - name: Check admin Vercel project is configured
-        id: configured
+      # 後台（#555）：同一個 repo、另一個 Vercel 專案（secret VERCEL_ADMIN_PROJECT_ID），網域和會友 App 分開：
+      # 正式站 bible-speed-reading-admin.vercel.app（production）、staging 綁 bible-speed-reading-admin-staging.vercel.app。
+      # 會友 App 部署成功才部署（放在同一個工作的後面）；PR 不部署後台。
+      # 後台的 Vercel 專案還沒建好（secret 沒設）就跳過，不讓整個 CI 失敗。設定步驟見 docs/admin-console.md。
+      - name: Deploy admin console
+        if: github.event_name == 'push'
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
         run: |
           if [ -z "$VERCEL_PROJECT_ID" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "## 後台部署：跳過（還沒設定 secret VERCEL_ADMIN_PROJECT_ID）" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-
-      - uses: actions/checkout@v4
-        if: steps.configured.outputs.enabled == 'true'
-
-      - uses: actions/setup-node@v4
-        if: steps.configured.outputs.enabled == 'true'
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Cache Vercel CLI
-        if: steps.configured.outputs.enabled == 'true'
-        id: vercel-cli-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.vercel-cli
-          key: vercel-cli-59.1.3-${{ runner.os }}
-
-      - name: Install Vercel CLI
-        if: steps.configured.outputs.enabled == 'true' && steps.vercel-cli-cache.outputs.cache-hit != 'true'
-        run: npm install --global --prefix ~/.vercel-cli vercel@59.1.3
-
-      - name: Deploy admin console
-        if: steps.configured.outputs.enabled == 'true'
-        run: |
-          export PATH="$HOME/.vercel-cli/bin:$PATH"
-          # 這個 job 的 checkout 只部署後台：換成後台的 Vercel 設定（建置指令、輸出目錄、強制 CSP）
+          # 換成後台的 Vercel 設定（建置指令、輸出目錄、強制 CSP）；會友 App 已經部署完，改這份工作目錄沒關係。
+          # 清掉會友 App 的 .vercel（專案設定與 build 輸出），避免混用。
           cp vercel.admin.json vercel.json
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          rm -rf .vercel
+          if [ "$IS_PRODUCTION" = "true" ]; then
             vercel pull --yes --environment=production
             vercel build --prod
             URL=$(vercel deploy --prebuilt --prod)
@@ -306,7 +299,7 @@ jobs:
           {
             echo "## 後台部署"
             echo "- **URL**: $URL"
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            if [ "$IS_PRODUCTION" = "true" ]; then
               echo "- **正式站**: https://bible-speed-reading-admin.vercel.app"
             else
               echo "- **Staging**: https://bible-speed-reading-admin-staging.vercel.app"

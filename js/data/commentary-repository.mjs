@@ -3,7 +3,7 @@
 // - 索引：檢視表 commentary_chapter_index，localStorage 快取 6 小時；失敗後 5 分鐘內不重試。
 // - 一章的資料：那一章的注釋全文＋這卷書的詞條清單（只有比對用的欄位），記憶體快取。
 // - 詞條解釋：打開面板才依 id 抓，記憶體快取。
-// `from(table)` 回傳 supabase-js 相容的查詢（select/eq/in/order/range）。
+// `from(table)` 回傳 supabase-js 相容的查詢（select/eq/in/or/order/range）。
 
 import {
   COMMENTARY_INDEX_CACHE_KEY,
@@ -17,7 +17,15 @@ import { DEFAULT_PAGE_SIZE, isLastPage } from "./pagination.mjs";
 export const COMMENTARY_INDEX_RETRY_MS = 5 * 60 * 1000;
 const TERM_DETAIL_CHUNK = 100; // .in() 的 id 會放進網址，分批送
 
-export const CHAPTER_COMMENTARY_COLUMNS = "id, book, chapter, verse_start, verse_end, title, content, topic_tags, source";
+// chapter_end 起是 #542 的新欄位：跨章範圍、結構化交叉引用、被解釋的片語。
+export const CHAPTER_COMMENTARY_COLUMNS = "id, book, chapter, verse_start, verse_end, title, content, topic_tags, source, chapter_end, chapter_end_verse, cross_refs, excerpts";
+
+// 這一章的注釋＋從前面的章延續過來的跨章注釋（#542，例如「1:1–7:38 總覽」在第 3 章也看得到）。
+export function chapterCommentaryFilter(chapter) {
+  const n = Number(chapter);
+  return `chapter.eq.${n},and(chapter.lt.${n},chapter_end.gte.${n})`;
+}
+
 export const TERM_MATCH_COLUMNS = "id, term, aliases, chapter, verse_start, verse_end";
 export const TERM_DETAIL_COLUMNS = "id, term, definition, topic_tags, source";
 
@@ -89,7 +97,7 @@ export function createCommentaryRepository({ from, storage = null, now = () => D
       selectAllRows(() => from("passage_commentary")
         .select(CHAPTER_COMMENTARY_COLUMNS)
         .eq("book", book)
-        .eq("chapter", Number(chapter))
+        .or(chapterCommentaryFilter(chapter))
         .eq("is_published", true), ["id"]),
       fetchBookTerms(book)
     ]);

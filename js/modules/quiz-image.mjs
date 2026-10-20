@@ -1,9 +1,40 @@
 // 題目附圖（#449）：payload.image = { src, alt }，顯示在題幹下方，點一下全螢幕放大。
 // 不是新題型——任何題型的 payload 都可以帶；目前只有雲柱測驗會用到。
-// 圖片只接受站內 assets/ 底下的靜態檔（跟著網站部署，不做上傳）：題目內容是
-// 管理員寫的，但仍不讓它變成任意外部網址或 javascript: 連結。
+// 圖片來源只接受兩種：站內 assets/ 底下的靜態檔，或後台上傳到本站 Supabase 公開 bucket
+// quiz-images 的檔案（#585，檔名是隨機 UUID）。題目內容是管理員寫的，但仍不讓它變成
+// 任意外部網址或 javascript: 連結。
 
 const SAFE_IMAGE_SRC = /^assets\/[A-Za-z0-9_\-/]+\.(?:webp|png|jpe?g)$/;
+export const QUIZ_IMAGES_BUCKET = "quiz-images";
+const UPLOADED_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:webp|png|jpe?g)$/;
+
+// 本站 Supabase 的網址（config.js 的 SUPABASE_CONFIG.url）；沒有設定就不接受上傳的圖。
+function supabaseOrigin() {
+  const raw = globalThis.SUPABASE_CONFIG?.url;
+  if (typeof raw !== "string" || !raw) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.origin : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function uploadedPrefix() {
+  const origin = supabaseOrigin();
+  return origin ? `${origin}/storage/v1/object/public/${QUIZ_IMAGES_BUCKET}/` : "";
+}
+
+/** 上傳後拿到的檔名（<uuid>.webp）→ 公開網址；檔名不對或沒有設定回傳空字串。 */
+export function quizImagePublicUrl(name) {
+  const prefix = uploadedPrefix();
+  return prefix && UPLOADED_NAME.test(String(name || "")) ? `${prefix}${name}` : "";
+}
+
+export function isUploadedQuizImageSrc(src) {
+  const prefix = uploadedPrefix();
+  return !!prefix && typeof src === "string" && src.startsWith(prefix) && UPLOADED_NAME.test(src.slice(prefix.length));
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, character => ({
@@ -16,7 +47,8 @@ export function getQuestionImage(payload) {
   const image = payload && typeof payload === "object" ? payload.image : null;
   if (!image || typeof image !== "object") return null;
   const src = typeof image.src === "string" ? image.src.trim() : "";
-  if (!SAFE_IMAGE_SRC.test(src) || src.includes("..")) return null;
+  const safe = (SAFE_IMAGE_SRC.test(src) && !src.includes("..")) || isUploadedQuizImageSrc(src);
+  if (!safe) return null;
   const alt = typeof image.alt === "string" && image.alt.trim() ? image.alt.trim() : "題目附圖";
   return { src, alt };
 }

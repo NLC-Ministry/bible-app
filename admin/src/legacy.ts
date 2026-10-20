@@ -100,6 +100,19 @@ type PortLike = {
 };
 type ChannelLike = { port1: PortLike; port2: unknown };
 
+// 雲柱測驗題目附圖（#585）：iframe 送 base64，外殼原樣轉給 admin-api（伺服器再驗格式、大小、檔頭）
+export const QUIZ_IMAGE_MIMES = ["image/webp", "image/jpeg", "image/png"] as const;
+export type QuizImageUpload = { mime: string; base64: string; w: number | null; h: number | null };
+
+export function quizImageUploadOf(value: unknown): QuizImageUpload | null {
+  if (!value || typeof value !== "object") return null;
+  const { mime, base64, w, h } = value as Record<string, unknown>;
+  if (typeof mime !== "string" || !(QUIZ_IMAGE_MIMES as readonly string[]).includes(mime)) return null;
+  if (typeof base64 !== "string" || !base64) return null;
+  const size = (n: unknown) => (Number.isInteger(n) && (n as number) > 0 ? n as number : null);
+  return { mime, base64, w: size(w), h: size(h) };
+}
+
 export type LegacyHostEvents = {
   onReady?: () => void;
   onSection?: (section: string, available: boolean) => void;
@@ -118,6 +131,8 @@ export type LegacyHostOptions = LegacyHostEvents & {
   getIdToken: () => string | null;
   /** 記稽核；失敗就丟錯（不下載） */
   auditExport: (file: LegacyExport) => Promise<unknown>;
+  /** 雲柱測驗題目附圖上傳（#585）：回傳 admin-api 給的檔名；失敗就丟錯 */
+  uploadQuizImage?: (image: QuizImageUpload) => Promise<unknown>;
   saveFile: (blob: Blob, filename: string) => void;
   describeError: (err: unknown) => string;
   createChannel?: () => ChannelLike;
@@ -176,6 +191,21 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
     reply(target, message.id, { ok: true });
   }
 
+  async function handleQuizImageUpload(target: PortLike, message: Record<string, unknown>) {
+    const image = quizImageUploadOf(message.image);
+    if (!image || !options.uploadQuizImage) {
+      reply(target, message.id, { ok: false, message: "圖片只接受 PNG、JPEG、WebP。" });
+      return;
+    }
+    try {
+      const data = await options.uploadQuizImage(image) as { name?: unknown } | null;
+      const name = data && typeof data.name === "string" ? data.name : "";
+      reply(target, message.id, name ? { ok: true, name } : { ok: false, message: "上傳失敗，請再試一次。" });
+    } catch (err) {
+      reply(target, message.id, { ok: false, message: options.describeError(err) });
+    }
+  }
+
   function handleMessage(target: PortLike, message: Record<string, unknown>) {
     switch (message.type) {
       case "token": {
@@ -187,6 +217,9 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
       }
       case "export":
         void handleExport(target, message);
+        return;
+      case "quiz_image_upload":
+        void handleQuizImageUpload(target, message);
         return;
       case "ready":
         options.onReady?.();

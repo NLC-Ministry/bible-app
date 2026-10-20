@@ -1659,27 +1659,13 @@
             <span>使用者、權限、回報、公告與計畫設定等系統管理功能在管理後台。</span>
             <a class="pastoral__link" id="pastoral-console-link" href="#" target="_blank" rel="noopener">開啟管理後台</a>
           </p>
-          <div class="pastoral__toolbar" role="group" aria-label="計畫與範圍">
-            <label class="pastoral__field pastoral__field--plan">
-              <span class="pastoral__field-label">計畫</span>
-              <select id="pastoral-plan-select" class="form-control"></select>
-            </label>
-            <label class="pastoral__field">
-              <span class="pastoral__field-label">大區</span>
-              <select id="pastoral-region-select" class="form-control" data-pastoral-scope="greatRegion"></select>
-            </label>
-            <label class="pastoral__field">
-              <span class="pastoral__field-label">牧區</span>
-              <select id="pastoral-zone-select" class="form-control" data-pastoral-scope="pastoralZone"></select>
-            </label>
-            <label class="pastoral__field">
-              <span class="pastoral__field-label">小組</span>
-              <select id="pastoral-group-select" class="form-control" data-pastoral-scope="smallGroup"></select>
-            </label>
-            <button type="button" class="secondary-btn pastoral__refresh" id="pastoral-refresh">
-              <span class="nlc-icon nlc-icon--sm" data-icon="refresh" aria-hidden="true"></span>
-              <span>更新</span>
+          <!-- 範圍列（#584）：點了開全頁選擇（計畫 → 大區 → 牧區 → 小組）；右邊小字點了手動更新 -->
+          <div class="pastoral__scopebar">
+            <button type="button" class="pastoral__scope" id="pastoral-scope-button" data-pastoral-action="open-scope" aria-haspopup="dialog">
+              <span class="pastoral__scope-label" id="pastoral-scope-label">載入中…</span>
+              <span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span>
             </button>
+            <button type="button" class="pastoral__updated" id="pastoral-refresh" data-pastoral-action="refresh"></button>
           </div>
           <div class="segment-track pastoral__tabs" role="tablist" aria-label="管理">
             <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-pastoral-tab="overview">總覽</button>
@@ -1883,6 +1869,50 @@
     </div>
   </div>
   <!-- lightning-quiz-sheets:end -->
+
+  <!-- 管理分頁的全頁畫面（#584）：範圍選擇、名單篩選、個人頁。照聖經目錄的 full-page-overlay＋上方返回；
+       一開始就放在 body 底下，不放在 .main-content 捲動區裡、也不在打開時才搬過來（#420）。
+       畫面由 js/modules/pastoral.js 畫；Android 返回鍵先關這一層（js/app.js 的 closePastoralLayer）。 -->
+  <!-- pastoral-layers:start -->
+  <div class="pastoral-layers" id="pastoral-layers">
+    <div class="full-page-overlay pastoral-sheet hidden" id="pastoral-scope-sheet" role="dialog" aria-modal="true" aria-labelledby="pastoral-scope-sheet-title" aria-hidden="true">
+      <header class="overlay-header pastoral-sheet__header">
+        <button type="button" class="overlay-back-btn pastoral-sheet__back" data-pastoral-action="layer-back" aria-label="返回">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span>返回</span>
+        </button>
+        <h2 class="overlay-title pastoral-sheet__title" id="pastoral-scope-sheet-title">選擇範圍</h2>
+        <span class="pastoral-sheet__spacer" aria-hidden="true"></span>
+      </header>
+      <div class="overlay-scroll-content pastoral-sheet__body"><div class="pastoral-sheet__inner" data-pastoral-scope-body></div></div>
+    </div>
+    <div class="full-page-overlay pastoral-sheet hidden" id="pastoral-filter-sheet" role="dialog" aria-modal="true" aria-labelledby="pastoral-filter-sheet-title" aria-hidden="true">
+      <header class="overlay-header pastoral-sheet__header">
+        <button type="button" class="overlay-back-btn pastoral-sheet__back" data-pastoral-action="layer-back" aria-label="返回">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span>返回</span>
+        </button>
+        <h2 class="overlay-title pastoral-sheet__title" id="pastoral-filter-sheet-title">篩選</h2>
+        <button type="button" class="pastoral-sheet__side" data-pastoral-action="reset-filters">重設</button>
+      </header>
+      <div class="overlay-scroll-content pastoral-sheet__body"><div class="pastoral-sheet__inner" data-pastoral-filter-body></div></div>
+      <footer class="pastoral-sheet__footer">
+        <button type="button" class="primary-btn pastoral-sheet__done" data-pastoral-action="layer-back" data-pastoral-filter-done>顯示 0 人</button>
+      </footer>
+    </div>
+    <div class="full-page-overlay pastoral-sheet hidden" id="pastoral-person-sheet" role="dialog" aria-modal="true" aria-labelledby="pastoral-person-sheet-title" aria-hidden="true">
+      <header class="overlay-header pastoral-sheet__header">
+        <button type="button" class="overlay-back-btn pastoral-sheet__back" data-pastoral-action="layer-back" aria-label="返回名單">
+          <span class="nlc-icon nlc-icon--md nav-back-chevron" data-icon="chevronLeft" aria-hidden="true"></span>
+          <span>名單</span>
+        </button>
+        <h2 class="overlay-title pastoral-sheet__title" id="pastoral-person-sheet-title"></h2>
+        <span class="pastoral-sheet__spacer" aria-hidden="true"></span>
+      </header>
+      <div class="overlay-scroll-content pastoral-sheet__body"><div class="pastoral-sheet__inner" data-pastoral-person-body></div></div>
+    </div>
+  </div>
+  <!-- pastoral-layers:end -->
 
   <!-- 經文注釋面板（#447）。跟其他閱讀器疊層一樣放在 .view-pane 外面（見 bible-study-dev-guidelines 第 2 節）。 -->
   <div class="bottom-sheet-backdrop reader-commentary-backdrop hidden" id="reader-commentary-backdrop" aria-hidden="true">

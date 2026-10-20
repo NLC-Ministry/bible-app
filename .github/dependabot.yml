@@ -1,0 +1,20 @@
+# Dependabot 版本更新（#599）：只管 GitHub Actions。
+# workflow 的 actions 都釘選完整 commit SHA（repo 設定強制），版本不會自己更新——
+# 這裡每週檢查一次，有新版就開 PR 把 SHA 和後面的「# vX.Y.Z」註解一起換掉。
+# npm 套件仍然只開安全更新（#461，在 GitHub 的 Dependabot security updates 設定），不在這裡開一般升版。
+# PR 開在預設分支 staging，由整合者跟 task/* 一樣合併（docs/staging.md）。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      timezone: Asia/Taipei
+    # 同一週的 actions 更新合成一個 PR，減少整合次數
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 2
