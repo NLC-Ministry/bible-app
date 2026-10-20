@@ -32,9 +32,12 @@ Conflict → prefer handing it back: tell the user the task session must rebase 
 Run from the main folder; the worktree always lives at `.worktrees/integrate` (never outside the project — see CLAUDE.md「Local folders」).
 ```bash
 git worktree add --detach .worktrees/integrate origin/staging
-cmd //c mklink //J ".worktrees\integrate\node_modules" "node_modules"
 cd .worktrees/integrate
 git merge --no-ff task/<x> -m "Merge branch 'task/<x>' into staging: <Release-note in English> (#<issue>)"
+```
+Junction `node_modules` in from PowerShell, not Bash — `cmd //c mklink` from Bash mangles the backslashes and once left a stray `.worktreesintegratenode_modules` in the main folder (#603):
+```powershell
+New-Item -ItemType Junction -Path "<main>\.worktrees\integrate\node_modules" -Target "<main>\node_modules"
 ```
 Then **one** full `npm test` for the whole batch (a file that only times out: rerun it alone). Task sessions only ran the tests their change touches (`test:changed`), so this is the first full run. The esbuild tests (`npm run test:build`) are left to CI unless a merged branch's `Tests` trailer or `Touches` shows build changes — then run them here too.
 
@@ -75,7 +78,7 @@ git worktree remove "<worktree>"
 git branch -d task/<x>
 node .claude/hooks/integration.mjs release
 ```
-Then confirm the folder is gone (`ls .worktrees`). Only remove a task worktree whose branch you merged. A task worktree under `.claude/worktrees/` belongs to a desktop-app session: don't remove it or its branch — tell the user that session can be archived. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app.
+Then confirm the folder is gone (`ls .worktrees`). `release` (like `acquire`) also fast-forwards the main folder's `staging` to `origin/staging`, so there's no manual pull; if it prints a skip reason (not on staging, tracked changes, local commits), leave the main folder alone and tell the user. Only remove a task worktree whose branch you merged. A task worktree under `.claude/worktrees/` belongs to a desktop-app session: don't remove it or its branch — tell the user that session can be archived. Tell the user what landed on staging and the `Verify` lines to check on https://bible-speed-reading-staging.vercel.app.
 
 ## 8. Release PR (staging → main) — only after the user says staging is verified
 ```bash
