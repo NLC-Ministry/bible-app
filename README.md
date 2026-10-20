@@ -202,18 +202,24 @@ graph TD
    NLC_CLIENT_ID=你的SSO Client ID
    NLC_ISSUER=你的SSO授權端點
    ```
-3. **生成 config.js**（每次修改環境變數後必須執行）：
+3. **建置**（產生 config.js 並打包到 `dist/`；每次修改環境變數後都要重跑）：
    ```bash
    npm run build
    ```
-4. **啟動開發伺服器**：
+4. **在瀏覽器開啟建置結果**（`npm run dev` 直接服務原始碼，無法載入 App）：
    ```bash
-   npm run dev  # 預設會在本地啟動 npx serve，提供 PWA 靜態服務
+   npx serve dist
    ```
+5. **跑測試**：`npm test`。
 
 ### 架構與快取防禦機制（重要）
-- **無打包工具**：本專案前台直接使用原生 JS/CSS，沒有 webpack/vite 等複雜打包，加載順序在 `index.html` 中有嚴格要求，請勿隨意更動 `<script>` 順序。
-- **快取控制 (Cache-Busting)**：由於 PWA 在行動裝置上快取極為強烈，若修改了 JS 或 CSS 檔案，**務必更新 `index.html` 中對應引用的 `?v=版本號` 參數**，否則用戶端可能會加載到舊版代碼。
+- **原生 JS／CSS，由 esbuild 打包**：沒有前端框架；`scripts/bundle.mjs` 把程式打包成帶內容雜湊檔名的檔案。入口檔的 import 順序有嚴格要求，請勿隨意更動。
+- **快取控制**：檔名已經帶內容雜湊，**不要**手動在 import、`<script>`、`<link>` 加 `?v=`（有測試會擋）。細節見 `docs/pwa-architecture.md`。
+
+## 📄 授權
+
+- 本 repo 內的經文、注釋翻譯與圖示等第三方內容，來源與授權見 [`NOTICE`](NOTICE)。其中 Tyndale Open Study Notes 的中文翻譯以 CC BY-SA 4.0 釋出。
+- 程式碼目前沒有附開源授權：可以閱讀，但未授權他人使用或散布。
 
 ---
 

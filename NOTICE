@@ -1,0 +1,57 @@
+新生命聖經速讀計畫（NewLife Bible Speed Reading）
+第三方內容與授權聲明 / Third-party content notices
+
+本 repo 包含下列第三方內容，各自依其授權條款使用與散布。
+This repository includes the third-party content below, each used and
+redistributed under its own license.
+
+--------------------------------------------------------------------------
+1. 當代譯本開放資源（繁體）/ Open Chinese Contemporary Bible (OCCB)
+   檔案 / File: assets/bible-packs/occb-zh-hant.json
+   Biblica® 聖經，當代譯本™開放資源，版權所有 © 1979, 2005, 2007, 2012, 2023
+   Biblica, Inc.
+   授權 / License: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+   https://creativecommons.org/licenses/by-sa/4.0/
+   來源 / Source: https://ebible.org/bible/details.php?id=cmncbt
+   本專案沒有獲得 Biblica 的背書；「Biblica」「當代譯本」是 Biblica, Inc. 的商標。
+   This project is not endorsed by Biblica; "Biblica" is a trademark of
+   Biblica, Inc.
+
+--------------------------------------------------------------------------
+2. World English Bible (WEB)
+   檔案 / File: assets/bible-packs/web.json
+   經文屬公有領域 / The text is in the Public Domain.
+   "World English Bible" is a trademark of eBible.org.
+   來源 / Source: https://ebible.org/bible/details.php?id=engwebp
+
+--------------------------------------------------------------------------
+3. Tyndale Open Study Notes（TOSN）中文翻譯 / Chinese translation of TOSN
+   檔案 / Files: content/commentary/tosn/，以及由此匯入資料庫的逐節注釋
+   原著 / Original: Tyndale Open Study Notes © 2022 Tyndale House Publishers,
+   https://tyndaleopenresources.com
+   授權 / License: CC BY-SA 4.0
+   本專案的中文翻譯是改編作品，同樣以 CC BY-SA 4.0 釋出。
+   The Chinese translation in this project is an adaptation and is likewise
+   released under CC BY-SA 4.0.
+   改編說明 / Changes: 由新生命教會譯為繁體中文，經文與用詞對照和合本並略作調整。
+
+--------------------------------------------------------------------------
+4. Lucide 圖示 / Lucide icons
+   檔案 / Files: js/design/icon-registry.js（由 lucide 套件產生）
+   Copyright (c) Lucide Contributors / Cole Bemis (Feather)
+   授權 / License: ISC License — https://lucide.dev/license
+
+--------------------------------------------------------------------------
+5. supabase-js
+   檔案 / Files: vendor/supabase-js/
+   Copyright (c) Supabase
+   授權 / License: MIT — 全文見 vendor/supabase-js/<版本>/LICENSE
+
+--------------------------------------------------------------------------
+匯入工具使用的外部資料（不在 repo 內）/ Data used by import tooling (not stored here)
+- Open Scriptures Strong's dictionaries — CC BY-SA
+  https://github.com/openscriptures/strongs
+- 信望愛聖經 API（和合本 Strong's 標記）— https://bible.fhl.net
+
+其餘透過 npm 安裝的套件，各自的授權隨套件附在 node_modules 內。
+Other npm dependencies carry their own licenses in node_modules.
