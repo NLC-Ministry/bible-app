@@ -102,7 +102,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 版本只寫在 .node-version（#597）：本機、CI、正式站建置（vercel build 用 runner 的 Node）一致
+          node-version-file: .node-version
           cache: "npm"
 
       - name: Install dependencies

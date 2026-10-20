@@ -34,7 +34,7 @@ Several Claude sessions work on this repo at once. To keep them out of each othe
 
 ```bash
 npm run build             # icon registry → config.js → esbuild bundle into dist/ (what Vercel serves)
-npm test                  # full suite, already quiet (dot reporter, logs only from failing tests)
+npm test                  # full suite, already quiet (agent reporter: only failures + summary)
 npm run test:changed      # only tests affected by changes since origin/staging — what a task session runs
 npm run test:build        # the esbuild tests npm test leaves out (CI runs them)
 npm run test:watch
