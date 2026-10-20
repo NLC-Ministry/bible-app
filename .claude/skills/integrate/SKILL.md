@@ -50,6 +50,14 @@ npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd
 ```
 Read each migration's header for ordering requirements first; then check the result with a query (`supabase db query --linked --project-ref … -f file.sql`). Production is only pushed after the user merges the release PR.
 
+After every push (step 6), with or without migrations, check that staging caught up — CI can't see the database or the deployed Edge Functions (#593):
+```bash
+node scripts/check-env-drift.mjs --env staging --ref origin/staging
+```
+🔴 → apply the missing migration / redeploy the function now (`npx supabase functions deploy <name> --project-ref dbtjsljrytzonjvclgrd`), or tell the user why not. It only reports; it never blocks.
+
+If the batch applied a migration, also run `node scripts/security-advisor.mjs` (Supabase Security Advisor on staging, #594): 🔴 → tell the user what it found before the release PR; never add to `supabase/security-allowlist.json` on your own.
+
 ## 6. Push
 ```bash
 git push origin HEAD:staging
@@ -87,12 +95,16 @@ git log --format='- %(trailers:key=Release-note,valueonly,separator=)' --no-merg
 git log --format='- [ ] %(trailers:key=Verify,valueonly,separator=)' --no-merges origin/main..origin/staging
 git diff --name-only origin/main origin/staging -- supabase/migrations/
 ```
-Build the body from `.github/pull_request_template.md` with those lines (commits without trailers: read their subject). Hold the lock while creating/editing it. Migrations → note that production `db push` runs after the merge; breaking backend change → `release-policy.json` per CLAUDE.md. **Never merge the PR** (the guard blocks `gh pr merge`).
+Build the body from `.github/pull_request_template.md` with those lines (commits without trailers: read their subject). Then post the environment check to the PR — it keeps one comment up to date, so rerun it after every push that lands in the PR:
+```bash
+node scripts/check-env-drift.mjs --pr <PR>
+```
+Its 正式站 section is what goes into the template's 「資料庫要更新的項目」 and 「要重新部署的 Edge Function」; its staging section must be all ✅ before you tell the user staging is ready. Hold the lock while creating/editing it. Migrations → note that production `db push` runs after the merge; breaking backend change → `release-policy.json` per CLAUDE.md. **Never merge the PR** (the guard blocks `gh pr merge`).
 
 ## 9. After the user says the release PR is merged
 Take the lock, then:
-1. **Production migrations** (only if the release included any): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
-2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds.
+1. **Production migrations** (only if the release included any; the release PR's 環境一致檢查 comment lists them): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
+2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds. Redeploy the Edge Functions the comment listed (`--project-ref ztozevcqkfrohgjmngcj`), then `node scripts/check-env-drift.mjs --env production --ref origin/main` must be all ✅.
 3. **Merge `main` back into `staging`** so `main` never drifts ahead (each release adds a merge commit that only `main` has; a hotfix would otherwise stay missing on `staging`):
    ```bash
    git fetch origin
