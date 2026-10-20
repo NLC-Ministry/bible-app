@@ -50,7 +50,7 @@ jobs:
       CAN_DEPLOY: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
       IS_PRODUCTION: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # gitleaks 要拿得到這次推送之前的 commit 才能只掃新的；main 推送要比對上線 PR 那一版的內容。整個歷史約 14 MB
           fetch-depth: 0
@@ -61,7 +61,7 @@ jobs:
         # 必須來自一個從 staging（或 hotfix/*）開出來、已經 merge 的 PR——按 merge 就代表
         # 確認上線。直接 push 到 main 的一律不部署到正式環境。
         if: env.IS_PRODUCTION == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -100,7 +100,7 @@ jobs:
             echo "找不到 ${HEAD_SHA} 通過的 CI，照常測試"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # 版本只寫在 .node-version（#597）：本機、CI、正式站建置（vercel build 用 runner 的 Node）一致
           node-version-file: .node-version
@@ -195,7 +195,7 @@ jobs:
       - name: Cache Vercel CLI
         if: env.CAN_DEPLOY == 'true'
         id: vercel-cli-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.vercel-cli
           key: vercel-cli-59.1.3-${{ runner.os }}
@@ -241,7 +241,7 @@ jobs:
         if: github.event_name == 'pull_request' && env.CAN_DEPLOY == 'true'
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.url }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const url = process.env.PREVIEW_URL;
