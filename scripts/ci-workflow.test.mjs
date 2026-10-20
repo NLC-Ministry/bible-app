@@ -16,6 +16,25 @@ const step = (name) => {
 const at = (text) => yaml.indexOf(text);
 
 describe("CI/CD workflow", () => {
+  // #599：repo 設定強制 actions 釘選完整 SHA（tag 可被改指，SHA 不會）；註解標版本給人和 Dependabot 看
+  it("pins every action to a full commit SHA with a version comment (#599)", () => {
+    for (const file of [".github/workflows/ci.yml", ".github/workflows/release-gate.yml"]) {
+      const uses = read(file).split("\n").filter((line) => /^\s*-?\s*uses:/.test(line));
+      expect(uses.length, file).toBeGreaterThan(0);
+      for (const line of uses) {
+        expect(line, file).toMatch(/^\s*-?\s*uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+(\.\d+)*\s*$/);
+      }
+    }
+  });
+
+  it("lets Dependabot bump the pinned actions weekly (#599)", () => {
+    const dependabot = read(".github/dependabot.yml");
+    expect(dependabot).toMatch(/package-ecosystem: github-actions/);
+    expect(dependabot).toMatch(/interval: weekly/);
+    // npm 只開安全更新（#461），這裡不能出現 npm 的一般升版
+    expect(dependabot).not.toMatch(/package-ecosystem: "?npm/);
+  });
+
   // #592：一個工作從頭跑到部署——每個工作各自進位成整分鐘計費，拆開反而貴
   it("runs everything in one job on a pinned runner (#592)", () => {
     const jobs = yaml.slice(yaml.indexOf("\njobs:"));
