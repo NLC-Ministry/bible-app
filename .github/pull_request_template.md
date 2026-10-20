@@ -21,8 +21,8 @@ staging 網站：https://bible-speed-reading-staging.vercel.app
 <details>
 <summary>開發者用（上線前後的技術步驟）</summary>
 
-- 資料庫要更新的項目（正式環境 `db push --dry-run` 的結果）：<!-- 沒有就寫「無」 -->
-- 要重新部署的 Edge Function：<!-- 沒有就寫「無」 -->
+- 資料庫要更新的項目：<!-- 照抄 PR 留言「環境一致檢查」的正式站段落（`node scripts/check-env-drift.mjs --pr <PR>`）；沒有就寫「無」 -->
+- 要重新部署的 Edge Function：<!-- 同上；沒有就寫「無」 -->
 - 舊版前端會壞掉的改動（要設 `release-policy.json` 的 `forceUpdateBuiltBefore`）：<!-- 沒有就寫「無」 -->
 - merge 後：正式環境 `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj`、部署 Edge Function、確認正式網站已更新、`node scripts/compare-env-snapshots.mjs --run`
 </details>
