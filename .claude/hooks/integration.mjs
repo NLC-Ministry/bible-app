@@ -6,13 +6,16 @@
 //   node .claude/hooks/integration.mjs status             who holds it
 //   (no args, hook JSON on stdin)                         PreToolUse guard
 //
+// acquire and release also fast-forward the main folder's staging to
+// origin/staging when that is safe (#603).
+//
 // The lock is a directory in the git common dir, so every worktree of this repo
 // sees the same one, and mkdir makes taking it atomic. It records the Claude
 // session id, so only the session that took it gets past the guard.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const LOCK_DIR_NAME = "integration.lock";
@@ -77,6 +80,39 @@ export function decide(verdict, lock, sessionIds, now = Date.now()) {
     reason: `\`${verdict.needsLock}\` is reserved for the integrator.${who} Task sessions hand off instead (skill: handoff). `
       + `To integrate, follow the integrate skill: node .claude/hooks/integration.mjs acquire "<what you are merging>".`
   };
+}
+
+// Integration pushes from a temporary worktree, so the main folder's local
+// staging is never updated by the push itself (#603). acquire/release
+// fast-forward it; anything else is skipped with a reason, never an error.
+export function decideMainSync({ branch, dirty, behind, canFastForward }) {
+  if (branch !== "staging") return { sync: false, reason: `not on staging (${branch ? `on ${branch}` : "detached HEAD"})` };
+  if (dirty) return { sync: false, reason: "tracked files have local changes" };
+  if (!behind) return { sync: false, reason: "already up to date" };
+  if (!canFastForward) return { sync: false, reason: "can't fast-forward (local commits not on origin/staging)" };
+  return { sync: true };
+}
+
+function syncMainFolder(cwd) {
+  try {
+    const main = dirname(gitCommonDir(cwd));
+    const git = (...args) => execFileSync("git", ["-C", main, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    const ok = (...args) => { try { git(...args); return true; } catch { return false; } };
+    git("fetch", "-q", "origin");
+    let branch = null;
+    try { branch = git("symbolic-ref", "--short", "-q", "HEAD"); } catch { /* detached */ }
+    const verdict = decideMainSync({
+      branch,
+      dirty: git("status", "--porcelain", "--untracked-files=no") !== "",
+      behind: Number(git("rev-list", "--count", "HEAD..origin/staging")),
+      canFastForward: ok("merge-base", "--is-ancestor", "HEAD", "origin/staging")
+    });
+    if (!verdict.sync) { console.log(`Main folder staging not fast-forwarded: ${verdict.reason}.`); return; }
+    git("merge", "--ff-only", "-q", "origin/staging");
+    console.log(`Main folder staging fast-forwarded to origin/staging (${git("rev-parse", "--short", "HEAD")}).`);
+  } catch (err) {
+    console.log(`Main folder staging not fast-forwarded: ${String(err.message || err).split("\n")[0]}`);
+  }
 }
 
 function sessionId() {
@@ -152,5 +188,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     : cmd === "release" ? release(rest.includes("--force"))
     : cmd === "status" ? status()
     : guard();
+  if (code === 0 && (cmd === "acquire" || cmd === "release")) syncMainFolder(process.cwd());
   process.exit(code);
 }

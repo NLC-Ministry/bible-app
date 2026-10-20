@@ -1,7 +1,7 @@
 // .claude/hooks/integration.mjs — the PreToolUse guard that keeps pushes to
 // staging, release PRs and DB pushes with the session holding the integration lock.
 import { describe, expect, it } from "vitest";
-import { classify, decide, isStale, stripLiterals, STALE_AFTER_MS } from "../.claude/hooks/integration.mjs";
+import { classify, decide, decideMainSync, isStale, stripLiterals, STALE_AFTER_MS } from "../.claude/hooks/integration.mjs";
 
 const NOW = 1_800_000_000_000;
 const lock = (session, ageMs = 0) => ({ session, at: NOW - ageMs, note: "merge #1" });
@@ -56,5 +56,24 @@ describe("decide", () => {
   it("treats a missing or unreadable timestamp as stale", () => {
     expect(isStale({ session: "me", at: "x" }, NOW)).toBe(true);
     expect(isStale(null, NOW)).toBe(true);
+  });
+});
+
+describe("decideMainSync", () => {
+  const behind = { branch: "staging", dirty: false, behind: 61, canFastForward: true };
+
+  it("fast-forwards a clean main folder on staging that is behind", () => {
+    expect(decideMainSync(behind)).toEqual({ sync: true });
+  });
+
+  it("does nothing when already up to date", () => {
+    expect(decideMainSync({ ...behind, behind: 0 })).toEqual({ sync: false, reason: "already up to date" });
+  });
+
+  it("skips with a reason when on another branch, with tracked changes, or when it can't fast-forward", () => {
+    expect(decideMainSync({ ...behind, branch: "main" })).toEqual({ sync: false, reason: "not on staging (on main)" });
+    expect(decideMainSync({ ...behind, branch: null }).reason).toBe("not on staging (detached HEAD)");
+    expect(decideMainSync({ ...behind, dirty: true })).toEqual({ sync: false, reason: "tracked files have local changes" });
+    expect(decideMainSync({ ...behind, canFastForward: false })).toEqual({ sync: false, reason: "can't fast-forward (local commits not on origin/staging)" });
   });
 });
