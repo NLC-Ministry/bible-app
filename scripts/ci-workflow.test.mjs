@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const yaml = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+// Windows 取出的檔案是 CRLF、CI（Linux）是 LF：統一成 LF 再比對，兩邊結果才一樣
+const read = (path) => readFileSync(join(root, path), "utf8").replace(/\r\n/g, "\n");
+const yaml = read(".github/workflows/ci.yml");
 const step = (name) => {
   const start = yaml.indexOf(`- name: ${name}`);
   if (start < 0) return "";
@@ -20,11 +22,25 @@ describe("CI/CD workflow", () => {
     expect(jobs.match(/^  [a-z-]+:\s*$/gm)).toEqual(["  ci:"]);
     // ubuntu-latest 會自己換版本（2026-10-19 起換成 Ubuntu 26）——兩個 workflow 都固定版本
     for (const file of ["ci.yml", "release-gate.yml"]) {
-      const text = readFileSync(join(root, ".github/workflows", file), "utf8");
+      const text = read(`.github/workflows/${file}`);
       const runners = text.match(/runs-on:[^\n]*/g);
       expect(runners.length).toBeGreaterThan(0);
       for (const runner of runners) expect(runner).toMatch(/^runs-on: ubuntu-\d+\.\d+\s*$/);
     }
+  });
+
+  // #597：Node 20 已停止維護。版本只寫在 .node-version，CI（也就是正式站建置）照它裝
+  it("takes the Node version from .node-version, which is a maintained LTS (#597)", () => {
+    // 步驟本身縮排 6 格，with: 底下的設定縮排 8 格以上
+    const setups = yaml.match(/- uses: actions\/setup-node@[^\n]*\n(?: {8,}[^\n]*\n)+/g);
+    expect(setups.length).toBeGreaterThan(0);
+    for (const setup of setups) {
+      expect(setup).toContain("node-version-file: .node-version");
+      expect(setup).not.toMatch(/node-version:\s/);
+    }
+    const version = readFileSync(join(root, ".node-version"), "utf8").trim();
+    expect(version).toMatch(/^\d+$/);
+    expect(Number(version)).toBeGreaterThanOrEqual(24);
   });
 
   it("deploys only after the tests, audits and builds, none of which may be skipped by an error (#592)", () => {
