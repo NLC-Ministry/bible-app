@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
+import { buildInternalErrorBody } from "../_shared/internal-error-body.mjs";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -663,6 +664,7 @@ Deno.serve(async (req: Request) => {
   // ── 暫時性伺服器端耗時量測（找 nlc-session 為何要幾秒鐘的瓶頸用，確認完可整批移除）──
   // 宣告在 try 外面，這樣就算中途丟例外，catch 裡也拿得到已經量到的部分耗時。
   const t0 = Date.now();
+  const requestId = crypto.randomUUID();
   const timings: [string, number][] = [];
   const mark = (label: string) => timings.push([label, Date.now() - t0]);
 
@@ -1101,11 +1103,9 @@ Deno.serve(async (req: Request) => {
     // Log full detail server-side only — never return a stack trace to the
     // client. A stack trace can reveal internal file paths, function names,
     // and dependency versions to anyone who can trigger this failure path.
-    console.error("nlc-session failed:", err);
+    console.error("nlc-session failed:", requestId, err);
     console.info("nlc-session timing (failed)", JSON.stringify({ total_ms: Date.now() - t0, steps: timings }));
-    return jsonResponse({
-      error: "nlc_session_failed",
-      message: err instanceof Error ? err.message : String(err)
-    }, 500);
+    // 對外只回固定訊息 + request id；err.message 可能帶出內部錯誤字串（#606）。
+    return jsonResponse(buildInternalErrorBody("nlc_session_failed", requestId), 500);
   }
 });

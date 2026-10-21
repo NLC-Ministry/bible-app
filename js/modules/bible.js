@@ -2577,32 +2577,6 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
   if (typeof showToast === "function") showToast(`從第 ${startVerse?.verseNum || 1} 節開始朗讀`);
   speakNextVerseInQueue(sessionId);
 };
-window.searchChapterVerses = function(keyword) {
-  const container = document.getElementById("bible-content");
-  if (!container) return;
-  
-  container.querySelectorAll(".bible-verse").forEach(verseDiv => {
-    const verseTextEl = verseDiv.querySelector(".verse-text");
-    if (verseTextEl) {
-      verseTextEl.innerHTML = verseTextEl.textContent;
-    }
-  });
-  
-  const cleanKeyword = keyword.trim();
-  if (!cleanKeyword) return;
-  
-  container.querySelectorAll(".bible-verse").forEach(verseDiv => {
-    const verseTextEl = verseDiv.querySelector(".verse-text");
-    if (verseTextEl) {
-      const text = verseTextEl.textContent;
-      const regex = new RegExp(`(${escapeRegExp(cleanKeyword)})`, "gi");
-      if (text.toLowerCase().includes(cleanKeyword.toLowerCase())) {
-        verseTextEl.innerHTML = text.replace(regex, "<mark>$1</mark>");
-      }
-    }
-  });
-};
-
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

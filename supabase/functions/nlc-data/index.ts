@@ -22,6 +22,7 @@ import {
 import { buildRequestLogLine, requestLogTarget, sanitizeReportInsertPayload } from "./request-diagnostics.ts";
 import { PLAN_REPORT_ACTIONS, PLAN_REPORT_PLAN_COLUMNS, runPlanReport } from "./plan-report.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
+import { buildInternalErrorBody } from "../_shared/internal-error-body.mjs";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -1726,7 +1727,8 @@ Deno.serve(async (req: Request) => {
     if (errorDetails === "profile_identity_not_found") {
       return jsonResponse({ error: "profile_identity_not_found", message: "User profile identity not found" }, 404);
     }
-    console.error("nlc-data failed:", errorDetails, err);
-    return jsonResponse({ error: "nlc_data_failed", message: errorDetails }, 500);
+    console.error("nlc-data failed:", requestId, errorDetails, err);
+    // 對外只回固定訊息 + request id；errorDetails 可能帶出 Postgres／內部錯誤字串（#606）。
+    return jsonResponse(buildInternalErrorBody("nlc_data_failed", requestId), 500);
   }
 });

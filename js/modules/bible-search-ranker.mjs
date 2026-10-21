@@ -1,10 +1,11 @@
+import { toPlainVerseText } from "../data/verse-text.mjs";
+
 const DEFAULT_LIMIT = 120;
 
 export function normalizeBibleSearchText(value) {
-  return String(value ?? "")
+  return toPlainVerseText(value)
     .normalize("NFKC")
     .toLocaleLowerCase()
-    .replace(/<[^>]*>/g, "")
     .replace(/[\s\p{P}\p{S}]+/gu, "");
 }
 

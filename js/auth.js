@@ -419,7 +419,7 @@ const auth = {
 
 
   _failCallback(message, detail) {
-    if (detail) console.error(message, detail);
+    if (detail) console.error("%s", message, detail);
     this._clearFlowState();
     this._clearStoredTokens();
     this._resetAppAuthState();

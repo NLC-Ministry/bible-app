@@ -41,13 +41,18 @@
     return resolved;
   }
 
+  // icons.js 很早載入，不依賴 escapeHTML 全域，這裡自帶屬性值轉義。
+  function escapeAttr(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch]);
+  }
+
   function renderIcon(iconKey, options) {
     const opts = options || {};
     const registry = window.NLC_ICON_SVGS || {};
     const resolvedKey = resolveSolidIconKey(iconKey, opts);
     const svg = registry[resolvedKey];
     if (!svg) {
-      return `<span class="nlc-icon nlc-icon--missing" aria-hidden="true" data-missing-icon="${iconKey}"></span>`;
+      return `<span class="nlc-icon nlc-icon--missing" aria-hidden="true" data-missing-icon="${escapeAttr(iconKey)}"></span>`;
     }
     const size = resolveIconSize(opts.size || DEFAULT_SIZE);
     const className = opts.className || "nlc-icon__svg";

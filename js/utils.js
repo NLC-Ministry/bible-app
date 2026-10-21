@@ -3038,9 +3038,11 @@ function renderInto(el, html, opts) {
   try {
     const a = document.activeElement;
     if (keepFocus && a && a !== document.body && el.contains(a)) {
-      if (a.id) focusSel = "#" + (window.CSS && CSS.escape ? CSS.escape(a.id) : a.id);
-      else if (a.name) focusSel = "[name=\"" + a.name.replace(/"/g, '\\"') + "\"]";
-      else if (a.dataset && a.dataset.focusKey) focusSel = "[data-focus-key=\"" + a.dataset.focusKey + "\"]";
+      // 屬性選擇器的值：有 CSS.escape 就用它，沒有時至少跳脫引號與反斜線。
+      const esc = v => (window.CSS && CSS.escape ? CSS.escape(String(v)) : String(v).replace(/["\\]/g, "\\$&"));
+      if (a.id) focusSel = "#" + esc(a.id);
+      else if (a.name) focusSel = "[name=\"" + esc(a.name) + "\"]";
+      else if (a.dataset && a.dataset.focusKey) focusSel = "[data-focus-key=\"" + esc(a.dataset.focusKey) + "\"]";
       if (focusSel && typeof a.selectionStart === "number") { selStart = a.selectionStart; selEnd = a.selectionEnd; }
     }
   } catch (_) {}
