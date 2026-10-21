@@ -395,3 +395,84 @@ describe("isSupportedQuestionType", () => {
     expect(isSupportedQuestionType("shortanswer")).toBe(false);
   });
 });
+
+// #612：雲柱選單題——像點餐一樣替項目選數量；沒選的＝0，全對才給分
+describe("menu question (#612)", () => {
+  const menuQuestion = () => normalizeQuestion({
+    id: "menu-1", type: "menu",
+    payload: {
+      stem: "挪亞方舟上，每種潔淨的動物帶幾隻？",
+      items: [{ id: "I1", text: "牛" }, { id: "I2", text: "羊" }, { id: "I3", text: "豬" }]
+    },
+    answerKey: { I1: 7, I2: 7 }
+  });
+
+  function mount(html) {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    return container.querySelector("fieldset");
+  }
+
+  it("is a supported type with a label", () => {
+    expect(isSupportedQuestionType("menu")).toBe(true);
+  });
+
+  it("grades by quantities, ignoring zero entries on either side", () => {
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7 }, { I1: 7, I2: 7 })).toBe(true);
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7 }, { I2: 7, I1: 7, I3: 0 })).toBe(true);
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7, I3: 0 }, { I1: 7, I2: 7 })).toBe(true);
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7 }, { I1: 7, I2: 8 })).toBe(false);
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7 }, { I1: 7, I2: 7, I3: 1 })).toBe(false);
+    expect(isAnswerCorrect("menu", { I1: 7, I2: 7 }, { I1: 7 })).toBe(false);
+  });
+
+  it("is complete once at least one item has a quantity", () => {
+    expect(isResponseComplete("menu", {})).toBe(false);
+    expect(isResponseComplete("menu", { I1: 0 })).toBe(false);
+    expect(isResponseComplete("menu", { I1: 2 })).toBe(true);
+    expect(isResponseComplete("menu", null)).toBe(false);
+  });
+
+  it("formats a response for display", () => {
+    const { payload } = menuQuestion();
+    expect(formatResponseForDisplay("menu", payload, { I1: 7, I3: 1 })).toBe("牛 ×7、豬 ×1");
+    expect(formatResponseForDisplay("menu", payload, {})).toBe("未作答");
+  });
+
+  it("starts with only ＋, steps quantities up and down, and keeps the summary in sync", () => {
+    const fieldset = mount(renderQuestionFieldsetHtml(menuQuestion(), 0));
+    const item = id => fieldset.querySelector(`[data-menu-item-id="${id}"]`);
+    expect(fieldset.querySelectorAll("[data-menu-item-id]").length).toBe(3);
+    expect(item("I1").getAttribute("data-qty")).toBe("0");
+    expect(readResponseFromFieldset(fieldset, "menu")).toEqual({});
+
+    let lastResponse;
+    bindQuestionFieldset(fieldset, "menu", response => { lastResponse = response; });
+    const inc = id => item(id).querySelector("[data-menu-inc]").click();
+    const dec = id => item(id).querySelector("[data-menu-dec]").click();
+
+    inc("I1"); inc("I1"); inc("I2");
+    expect(lastResponse).toEqual({ I1: 2, I2: 1 });
+    expect(item("I1").getAttribute("data-qty")).toBe("2");
+    expect(item("I1").querySelector("[data-menu-qty]").textContent).toBe("2");
+    expect(fieldset.querySelector("[data-menu-summary]").textContent).toBe("已選 2 項，共 3 個");
+
+    dec("I2");
+    expect(lastResponse).toEqual({ I1: 2 });
+    expect(item("I2").getAttribute("data-qty")).toBe("0");
+    dec("I2");
+    expect(item("I2").getAttribute("data-qty")).toBe("0");
+    expect(fieldset.querySelector("[data-menu-summary]").textContent).toBe("已選 1 項，共 2 個");
+  });
+
+  it("stops at the fixed maximum of 20", () => {
+    const fieldset = mount(renderQuestionFieldsetHtml(menuQuestion(), 0));
+    let lastResponse;
+    bindQuestionFieldset(fieldset, "menu", response => { lastResponse = response; });
+    const plus = fieldset.querySelector('[data-menu-item-id="I3"] [data-menu-inc]');
+    for (let i = 0; i < 25; i += 1) plus.click();
+    expect(lastResponse).toEqual({ I3: 20 });
+    expect(plus.disabled).toBe(true);
+  });
+});

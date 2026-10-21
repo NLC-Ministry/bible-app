@@ -27,7 +27,7 @@ import { csvCell } from "./csv-cell.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
-import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS } from "./quiz-question-types.mjs";
+import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU_MAX_QUANTITY } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
@@ -1639,6 +1639,20 @@ function collectAdminLightningQuizQuestionContent(fieldset) {
     const items = rows.map((row, i) => ({ id: `I${i + 1}`, text: row.querySelector('[data-item-text]')?.value.trim() || '' }));
     return { type, payload: { stem, items }, answerKey: items.map(item => item.id) };
   }
+  if (type === 'menu') {
+    // 選單題（#612）：正解只記數量不是 0 的項目；數量格式錯的照原樣帶著，讓驗證擋下來
+    const rows = Array.from(fieldset.querySelectorAll('[data-menu-row]'));
+    const items = [];
+    const answerKey = {};
+    rows.forEach((row, i) => {
+      const item = { id: `I${i + 1}`, text: row.querySelector('[data-menu-text]')?.value.trim() || '' };
+      const raw = row.querySelector('[data-menu-quantity]')?.value.trim() || '0';
+      const quantity = Number(raw);
+      if (raw !== '0' && quantity !== 0) answerKey[item.id] = /^\d+$/.test(raw) ? quantity : raw;
+      items.push(item);
+    });
+    return { type, payload: { stem, items }, answerKey };
+  }
   return { type, payload: { stem }, answerKey: null };
 }
 
@@ -1669,6 +1683,14 @@ function adminLightningQuizQuestionIsValid(question) {
     case 'ordering': {
       const items = question.payload.items || [];
       return items.length >= 2 && items.every(item => item.text);
+    }
+    case 'menu': {
+      // 至少 2 個項目、至少一個數量 > 0，每個數量都是 1～20 的整數
+      const items = question.payload.items || [];
+      const itemIds = new Set(items.map(item => item.id));
+      const entries = Object.entries(question.answerKey || {});
+      return items.length >= 2 && items.every(item => item.text) && entries.length > 0
+        && entries.every(([id, quantity]) => itemIds.has(id) && Number.isInteger(quantity) && quantity >= 1 && quantity <= MENU_MAX_QUANTITY);
     }
     default:
       return false;
@@ -2137,7 +2159,7 @@ function openAdminLightningQuizImport() {
   if (!body) return;
   if (!body.querySelector('[data-lq-import-text]')) {
     body.innerHTML = `
-      <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。</p>
+      <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行；另外可以用 [選單]，每行寫「項目｜正確數量」，干擾項寫 0。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。</p>
       <textarea class="form-control" rows="10" data-lq-import-text placeholder="[單選] 亞伯拉罕原本住在哪座城市？&#10;A. 哈蘭&#10;B. 吾珥&#10;答案：B&#10;&#10;日期：10/9&#10;[是非] 摩西在米甸住了四十年。&#10;答案：對"></textarea>
       <div><button type="button" class="secondary-btn" data-lq-import-parse>解析</button></div>
       <div data-lq-import-preview aria-live="polite"></div>`;
@@ -3544,7 +3566,8 @@ function adminQuizEscape(value) {
 // {id, type, payload, answerKey, explanation, verseRef} 是同一種形狀，所以
 // 匯入面板可以直接把解析結果塞進這裡的區塊，不用另外轉換。
 
-const ADMIN_QUIZ_CUSTOM_TYPE_LABELS = { truefalse: '是非', single: '單選', multiple: '多選', matching: '配對', ordering: '排序' };
+// 這個編輯器只有雲柱在用；選單題（#612）只有雲柱才有
+const ADMIN_QUIZ_CUSTOM_TYPE_LABELS = { truefalse: '是非', single: '單選', multiple: '多選', matching: '配對', ordering: '排序', menu: '選單' };
 
 function adminQuizCustomDefaultQuestion(type) {
   switch (type) {
@@ -3552,6 +3575,7 @@ function adminQuizCustomDefaultQuestion(type) {
     case 'multiple': return { type, payload: { stem: '', options: ['', ''] }, answerKey: [], explanation: '', verseRef: '' };
     case 'matching': return { type, payload: { stem: '', left: [{ text: '' }, { text: '' }], right: [{ text: '' }, { text: '' }] }, answerKey: {}, explanation: '', verseRef: '' };
     case 'ordering': return { type, payload: { stem: '', items: [{ text: '' }, { text: '' }] }, answerKey: [], explanation: '', verseRef: '' };
+    case 'menu': return { type, payload: { stem: '', items: [{ text: '' }, { text: '' }] }, answerKey: {}, explanation: '', verseRef: '' };
     default: return { type: 'single', payload: { stem: '', options: ['', '', '', ''] }, answerKey: 0, explanation: '', verseRef: '' };
   }
 }
@@ -3577,6 +3601,14 @@ function renderAdminQuizCustomItemRowHtml(text = '') {
   return `<div class="admin-quiz-custom-item-row" data-item-row>
     <input class="form-control" data-item-text value="${adminQuizEscape(text)}" placeholder="項目文字">
     <button type="button" class="icon-button icon-button--subtle" data-item-remove aria-label="移除這個項目"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button>
+  </div>`;
+}
+
+function renderAdminQuizCustomMenuRowHtml(text = '', quantity = 0) {
+  return `<div class="admin-quiz-custom-menu-row" data-menu-row>
+    <input class="form-control" data-menu-text value="${adminQuizEscape(text)}" placeholder="項目">
+    <input class="form-control" type="number" inputmode="numeric" min="0" max="${MENU_MAX_QUANTITY}" step="1" data-menu-quantity value="${adminQuizEscape(String(quantity))}" aria-label="正確數量">
+    <button type="button" class="icon-button icon-button--subtle" data-menu-remove aria-label="移除這個項目"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button>
   </div>`;
 }
 
@@ -3623,6 +3655,15 @@ function renderAdminQuizCustomQuestionBodyHtml(question) {
     </div>
     <button type="button" class="secondary-btn" data-item-add>新增項目</button>
     <p class="admin-daily-quiz-note">由上到下即為正確順序，作答時會友看到的順序會被打亂。</p>`;
+  }
+  if (type === 'menu') {
+    const items = payload.items && payload.items.length ? payload.items : [{ text: '' }, { text: '' }];
+    const quantities = answerKey && typeof answerKey === 'object' && !Array.isArray(answerKey) ? answerKey : {};
+    return `<div class="admin-quiz-custom-menu" data-menu-rows>
+      ${items.map(item => renderAdminQuizCustomMenuRowHtml(item.text || '', (item.id && quantities[item.id]) || 0)).join('')}
+    </div>
+    <button type="button" class="secondary-btn" data-menu-add>新增項目</button>
+    <p class="admin-daily-quiz-note">每列填項目和正確數量（0～${MENU_MAX_QUANTITY}）；干擾項填 0。會友要替每個項目選數量，全部對才算答對，項目順序會被打亂。</p>`;
   }
   return '';
 }
@@ -3672,6 +3713,14 @@ function bindAdminQuizCustomQuestionBlock(fieldset, onChange) {
     } else if (event.target.closest('[data-item-remove]')) {
       const rows = body.querySelectorAll('[data-item-row]');
       if (rows.length > 2) event.target.closest('[data-item-row]').remove();
+      if (typeof onChange === 'function') onChange();
+    } else if (event.target.closest('[data-menu-add]')) {
+      body.querySelector('[data-menu-rows]')?.insertAdjacentHTML('beforeend', renderAdminQuizCustomMenuRowHtml());
+      if (typeof hydrateIcons === 'function') hydrateIcons(body);
+      if (typeof onChange === 'function') onChange();
+    } else if (event.target.closest('[data-menu-remove]')) {
+      const rows = body.querySelectorAll('[data-menu-row]');
+      if (rows.length > 2) event.target.closest('[data-menu-row]').remove();
       if (typeof onChange === 'function') onChange();
     }
   });

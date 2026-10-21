@@ -137,8 +137,8 @@ export function parseLightningImportText(text, { today }) {
         return;
       }
     }
-    // 雲柱配對題可以多對一（#588）：右邊文字相同的列共用同一個點
-    const parsed = parseQuizImportText(lines.join("\n"), { mergeMatchingRight: true });
+    // 雲柱配對題可以多對一（#588）：右邊文字相同的列共用同一個點；選單題（#612）只有雲柱才有
+    const parsed = parseQuizImportText(lines.join("\n"), { mergeMatchingRight: true, allowMenu: true });
     if (parsed.errors.length) {
       errors.push({ number, message: parsed.errors[0].message });
       return;
