@@ -74,6 +74,17 @@ describe("parseLightningImportText", () => {
     expect(payload.right.map(item => item.text)).toEqual(["加利利漁夫", "稅吏"]);
     expect(answerKey[payload.left[0].id]).toBe(answerKey[payload.left[1].id]);
   });
+
+  it("accepts the lightning-only menu question (#612)", () => {
+    const { items, errors } = parseLightningImportText(
+      "[選單] 每種潔淨的動物帶幾隻？\n牛｜7\n豬｜0",
+      { today: "2026-09-28" }
+    );
+    expect(errors).toEqual([]);
+    const { type, payload, answerKey } = items[0].question;
+    expect(type).toBe("menu");
+    expect(answerKey).toEqual({ [payload.items[0].id]: 7 });
+  });
 });
 
 describe("planLightningImport", () => {

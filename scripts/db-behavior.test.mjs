@@ -207,3 +207,49 @@ describe("牧養總覽的管理範圍（get_pastoral_overview）", () => {
     ))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("雲柱選單題（menu，#612）", () => {
+  const grade = (answerKey, response) => asService(async tx =>
+    (await tx.query(`SELECT public._lightning_quiz_answer_is_correct('menu', $1::jsonb, $2::jsonb) AS ok`,
+      [JSON.stringify(answerKey), JSON.stringify(response)])).rows[0].ok);
+
+  it("數量全對才算對，兩邊數量為 0 的項目都不算", async () => {
+    expect(await grade({ I1: 7, I2: 7 }, { I2: 7, I1: 7 })).toBe(true);
+    expect(await grade({ I1: 7, I2: 7 }, { I1: 7, I2: 7, I3: 0 })).toBe(true);
+    expect(await grade({ I1: 7, I2: 7, I3: 0 }, { I1: 7, I2: 7 })).toBe(true);
+    expect(await grade({ I1: 7, I2: 7 }, { I1: 7, I2: 8 })).toBe(false);
+    expect(await grade({ I1: 7, I2: 7 }, { I1: 7, I2: 7, I3: 1 })).toBe(false);
+    expect(await grade({ I1: 7, I2: 7 }, { I1: 7 })).toBe(false);
+  });
+
+  it("壞掉的作答（不是物件、數量是字串）判錯而不是報錯；正解全是 0 也不會被空作答判對", async () => {
+    expect(await grade({ I1: 7 }, [7])).toBe(false);
+    expect(await grade({ I1: 7 }, { I1: "7" })).toBe(false);
+    expect(await grade({}, {})).toBe(false);
+  });
+
+  it("其他題型的判分照舊", async () => {
+    const other = (type, key, response) => asService(async tx =>
+      (await tx.query(`SELECT public._lightning_quiz_answer_is_correct($1, $2::jsonb, $3::jsonb) AS ok`,
+        [type, JSON.stringify(key), JSON.stringify(response)])).rows[0].ok);
+    expect(await other("multiple", [0, 2], [2, 0])).toBe(true);
+    expect(await other("matching", { L1: "R1" }, { L1: "R1" })).toBe(true);
+    expect(await other("single", 1, 0)).toBe(false);
+  });
+
+  it("題目表接受 menu 題型", async () => {
+    await asService(async tx => {
+      await tx.query(
+        `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key)
+         VALUES ('2099-01-05', '07:00', '10:00', 'menu', $1::jsonb, $2::jsonb)`,
+        [JSON.stringify({ stem: "每種潔淨的動物帶幾隻？", items: [{ id: "I1", text: "牛" }, { id: "I2", text: "豬" }] }), JSON.stringify({ I1: 7 })]
+      );
+    });
+  });
+
+  it("client 不能直接呼叫判分函式", async () => {
+    await expect(as("authenticated", { sub: ids.memberAuth }, tx =>
+      tx.query(`SELECT public._lightning_quiz_answer_is_correct('menu', '{}'::jsonb, '{}'::jsonb)`)
+    )).rejects.toThrow(/permission denied/);
+  });
+});

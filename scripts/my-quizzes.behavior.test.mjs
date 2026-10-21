@@ -231,3 +231,33 @@ describe("個人「我的測驗」分頁", () => {
     expect(detail.textContent).toContain("正解");
   });
 });
+
+// #612：選單題的檢討畫面——每個項目列出你選的數量與正確數量，不一樣的標出來
+describe("quiz-review 選單題（#612）", () => {
+  beforeEach(() => { vi.resetModules(); setupDom(""); });
+  const question = {
+    type: "menu",
+    payload: { stem: "每種潔淨的動物帶幾隻？", items: [{ id: "I1", text: "牛" }, { id: "I2", text: "羊" }, { id: "I3", text: "豬" }] },
+    answerKey: { I1: 7, I2: 7 }
+  };
+
+  it("每個項目列出你選的與正確數量，對的標綠、錯的補正解", async () => {
+    const { renderQuestionReviewHtml } = await import("../js/modules/quiz-review.mjs?menu");
+    document.body.innerHTML = renderQuestionReviewHtml(question, { response: { I1: 7, I3: 2 }, result: "wrong" });
+    const items = [...document.querySelectorAll("li")];
+    expect(items.map(li => li.textContent.replace(/\s+/g, " ").trim())).toEqual([
+      "牛 你選 7 個",
+      "羊 你選 0 個 正解 7 個",
+      "豬 你選 2 個 正解 0 個"
+    ]);
+    expect(items[0].className).toBe("is-mine");
+    expect(items[1].className).toBe("");
+  });
+
+  it("沒有作答只列出正解數量大於 0 的項目", async () => {
+    const { renderQuestionReviewHtml } = await import("../js/modules/quiz-review.mjs?menu-unanswered");
+    document.body.innerHTML = renderQuestionReviewHtml(question, { response: null, result: "not_participated" });
+    const items = [...document.querySelectorAll("li")].map(li => li.textContent.replace(/\s+/g, " ").trim());
+    expect(items).toEqual(["牛 ×7", "羊 ×7"]);
+  });
+});

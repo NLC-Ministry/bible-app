@@ -151,3 +151,38 @@ A. 選項一
     expect(parseQuizImportText("")).toEqual({ questions: [], errors: [] });
   });
 });
+
+// #612：雲柱選單題的匯入格式「項目｜數量」，干擾項寫 0；小測驗匯入不接受
+describe("menu import (#612)", () => {
+  const menuBlock = `
+[選單] 挪亞方舟上，每種潔淨的動物帶幾隻？
+牛｜7
+羊|7
+豬｜0
+`;
+
+  it("parses items and keeps only positive quantities in the answer when allowMenu is on", () => {
+    const { questions, errors } = parseQuizImportText(menuBlock, { allowMenu: true });
+    expect(errors).toEqual([]);
+    const { type, payload, answerKey } = questions[0];
+    expect(type).toBe("menu");
+    expect(payload.items.map(item => item.text)).toEqual(["牛", "羊", "豬"]);
+    const idOf = text => payload.items.find(item => item.text === text).id;
+    expect(answerKey).toEqual({ [idOf("牛")]: 7, [idOf("羊")]: 7 });
+  });
+
+  it("is rejected for the daily quiz (allowMenu off)", () => {
+    const { questions, errors } = parseQuizImportText(menuBlock);
+    expect(questions).toEqual([]);
+    expect(errors[0].message).toMatch(/雲柱/);
+  });
+
+  it("rejects bad quantities, too few items, and an all-zero answer", () => {
+    const parse = body => parseQuizImportText(`[選單] 題目\n${body}`, { allowMenu: true }).errors[0]?.message;
+    expect(parse("牛｜21\n羊｜1")).toMatch(/0～20/);
+    expect(parse("牛｜1.5\n羊｜1")).toMatch(/0～20/);
+    expect(parse("牛\n羊｜1")).toMatch(/項目｜數量/);
+    expect(parse("牛｜1")).toMatch(/至少需要 2 個項目/);
+    expect(parse("牛｜0\n羊｜0")).toMatch(/至少要有一個項目的數量大於 0/);
+  });
+});
