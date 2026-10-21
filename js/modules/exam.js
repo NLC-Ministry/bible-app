@@ -14,6 +14,7 @@
 import { paintMatchReviewLines, drawMatchReviewLines } from "./quiz-review.mjs";
 import { EXAM_STAGES, examStage, examNextStepText, formatExamTime } from "./exam-stage.mjs";
 import { csvCell } from "./csv-cell.mjs";
+import { resolveSafeReturnPath } from "./safe-return-path.mjs";
 import { checkExamScheduleWindow, isExamWindowExpired } from "./exam-schedule-window.mjs";
 
 const SECTION_ORDER = ["truefalse", "single", "multiple", "matching", "ordering", "shortanswer"];
@@ -2268,8 +2269,7 @@ class ExamRunner {
     let isPopup = false;
     try {
       const qs = new URLSearchParams(location.search);
-      ret = qs.get("return");
-      if (ret && !/^\/(?!\/)/.test(ret)) ret = null;
+      ret = resolveSafeReturnPath(qs.get("return"), location.origin);
       isPopup = qs.get("popup") === "1";
     } catch (_) { ret = null; }
 

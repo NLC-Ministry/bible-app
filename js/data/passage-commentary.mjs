@@ -1,6 +1,7 @@
 // 經文注釋（#447、#470）：主題圖庫、章節索引快取、節範圍與詞條比對、面板內容 HTML。
 // 純函式，閱讀器（js/modules/reader-commentary.mjs，主 App 與 /read 共用）、後台
 // （js/modules/admin-commentary*.mjs）與 js/data/commentary-repository.mjs 共用。
+import { toPlainVerseText } from "./verse-text.mjs";
 
 export const COMMENTARY_IMAGE_DIR = "assets/commentary/";
 
@@ -185,8 +186,7 @@ const HTML_ENTITIES = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", 
 
 // 主 App 的經文以 HTML 放入（來源已清掉標籤）；比對與引用一律用純文字。
 export function plainVerseText(text) {
-  return String(text ?? "")
-    .replace(/<[^>]*>/g, "")
+  return toPlainVerseText(text)
     .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, entity => HTML_ENTITIES[entity] || entity);
 }
 

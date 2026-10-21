@@ -308,7 +308,7 @@ export function mountReadApp({
     titleEl.textContent = headingText(book, chapter);
     content.textContent = "";
     const fragment = doc.createDocumentFragment();
-    verses.forEach(v => fragment.appendChild(createVerseElement(doc, v, { allowHtml: false })));
+    verses.forEach(v => fragment.appendChild(createVerseElement(doc, v)));
     content.appendChild(fragment);
     content.appendChild(buildChapterEndNav({ doc, books, bookId: book.id, chapter, copy, hydrateIcons }));
     content.dataset.ready = "1";
@@ -453,7 +453,7 @@ export function mountReadApp({
         doc,
         fillContent: shell => {
           if (!verses) return; // 還沒預載到：空白頁照樣翻過去，之後顯示「正在打開經文」
-          verses.slice(0, FLIP_PREVIEW_VERSES).forEach(v => shell.appendChild(createVerseElement(doc, v, { allowHtml: false })));
+          verses.slice(0, FLIP_PREVIEW_VERSES).forEach(v => shell.appendChild(createVerseElement(doc, v)));
         }
       });
     },

@@ -132,7 +132,11 @@ describe("reader speech controls", () => {
   });
 
   it("does not cancel speech between verses", () => {
-    const audioBlock = bible.slice(bible.indexOf("let isSpeaking = false;"), bible.indexOf("window.searchChapterVerses"));
+    const audioStart = bible.indexOf("let isSpeaking = false;");
+    const audioEnd = bible.indexOf("function escapeRegExp(string)");
+    expect(audioStart).toBeGreaterThan(-1);
+    expect(audioEnd).toBeGreaterThan(audioStart);
+    const audioBlock = bible.slice(audioStart, audioEnd);
     // stopReaderAudio() and pauseReaderAudio() (a full cancel + verse-marker
     // remember, not a true suspend — see the other pause/resume test) each
     // call cancel() once for their own user-initiated reason. Neither is on

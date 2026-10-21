@@ -94,12 +94,24 @@ async function fetchJson(url) {
   return response.json();
 }
 
+// 經文純文字化。這是傳統腳本（測試以 vm 載入、不能 import），所以這裡放一份
+// js/data/verse-text.mjs 的 toPlainVerseText 副本；scripts/verse-text.test.mjs 對照兩邊輸出，改規則要兩邊一起改。
+function toPlainVerseText(raw) {
+  let text = String(raw ?? "");
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, "");
+  } while (text !== previous);
+  return text.replace(/[<>]/g, "");
+}
+
 function normalizeVerses(rawVerses) {
   if (!Array.isArray(rawVerses)) return [];
   return rawVerses
     .map((v, index) => ({
       verse: Number(v.verse || v.verseNumber || v.number || index + 1),
-      text: String(v.text || v.content || "").replace(/<[^>]*>/g, "").trim()
+      text: toPlainVerseText(v.text || v.content || "").trim()
     }))
     .filter(v => v.verse && v.text);
 }
@@ -178,10 +190,10 @@ const FHL_CHAPTER_VERSIONS = Object.freeze({ RCUVTS: "rcuv" });
 function cleanFhlChapterText(text) {
   const raw = String(text ?? "");
   if (raw.trim() === "a") return "併於上節";
-  return raw
+  const withoutNotes = raw
     .replace(/<h\d[^>]*>[\s\S]*?<\/h\d>/gi, "")
-    .replace(/\(\s*\[\s*[\d.\-–\s]+\][^()]*\)/g, "")
-    .replace(/<[^>]*>/g, "")
+    .replace(/\(\s*\[\s*[\d.\-–\s]+\][^()]*\)/g, "");
+  return toPlainVerseText(withoutNotes)
     .replace(/[ \t\r\n]+/g, "")
     .trim();
 }
@@ -383,6 +395,7 @@ async function fetchBibleChapter(bookEngName, chapter, requestedVersion = null) 
 }
 
 window.BIBLE_BOOKS = BIBLE_BOOKS;
+window.toPlainVerseText = toPlainVerseText;
 window.cleanFhlChapterText = cleanFhlChapterText;
 window.mapFhlChapterRecords = mapFhlChapterRecords;
 window.fetchBibleChapter = fetchBibleChapter;

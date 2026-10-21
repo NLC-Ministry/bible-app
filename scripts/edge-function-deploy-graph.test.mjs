@@ -51,7 +51,7 @@ describe("edge function deploy graph", () => {
   it("admin-api and nlc-data ship the same progress rules from _shared/progress", () => {
     const shared = (name) => walkDeployGraph(path.join(FUNCTIONS_DIR, name, "index.ts")).files
       .map(relative)
-      .filter((file) => file.startsWith("_shared/"))
+      .filter((file) => file.startsWith("_shared/progress/"))
       .sort();
     const adminApi = shared("admin-api");
     expect(adminApi).toContain("_shared/progress/plan-report.mjs");

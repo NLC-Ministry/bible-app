@@ -4364,7 +4364,15 @@ async function renderInlineScriptureText() {
           const verseDiv = document.createElement("div");
           verseDiv.className = "bible-verse";
           verseDiv.style.marginBottom = "0.8rem";
-          verseDiv.innerHTML = `<span class="verse-num" style="font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.875rem;">${v.verse}</span><span class="verse-text" style="font-size: 1.05rem; line-height: 1.8;">${v.text}</span>`;
+          const numEl = document.createElement("span");
+          numEl.className = "verse-num";
+          numEl.style.cssText = "font-weight: 500; color: var(--primary-color); margin-right: 0.5rem; font-size: 0.875rem;";
+          numEl.textContent = String(v.verse);
+          const textEl = document.createElement("span");
+          textEl.className = "verse-text";
+          textEl.style.cssText = "font-size: 1.05rem; line-height: 1.8;";
+          textEl.textContent = String(v.text ?? "");
+          verseDiv.append(numEl, textEl);
           container.appendChild(verseDiv);
         });
         const sentinel = document.createElement("div");

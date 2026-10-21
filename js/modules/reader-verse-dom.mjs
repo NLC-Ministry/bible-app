@@ -5,8 +5,8 @@ import { resolveAdjacentChapter } from "./reader-chapter-nav.mjs";
 
 // 一節經文：<div class="bible-verse" data-verse> <span class="verse-num"> <span class="verse-text">。
 // 點一下＝切換這一節的選取（事件由呼叫端在容器上委派）。
-// verse.text 會以 HTML 放入（主 App 一直如此；經文來源已清掉標籤）；allowHtml=false 時改用純文字。
-export function createVerseElement(doc, verse, { highlightColor = "", allowHtml = true } = {}) {
+// 經文一律以純文字（textContent）放入，不經 innerHTML：來源就算被汙染也不會變成標籤。
+export function createVerseElement(doc, verse, { highlightColor = "" } = {}) {
   const verseDiv = doc.createElement("div");
   verseDiv.className = "bible-verse";
   verseDiv.dataset.verse = String(verse.verse);
@@ -21,17 +21,13 @@ export function createVerseElement(doc, verse, { highlightColor = "", allowHtml 
     verseDiv.setAttribute("data-highlight", highlightColor);
   }
 
-  if (allowHtml) {
-    verseDiv.innerHTML = `<span class="verse-num">${verse.verse}</span><span class="verse-text">${verse.text}</span>`;
-  } else {
-    const num = doc.createElement("span");
-    num.className = "verse-num";
-    num.textContent = String(verse.verse);
-    const text = doc.createElement("span");
-    text.className = "verse-text";
-    text.textContent = String(verse.text ?? "");
-    verseDiv.append(num, text);
-  }
+  const num = doc.createElement("span");
+  num.className = "verse-num";
+  num.textContent = String(verse.verse);
+  const text = doc.createElement("span");
+  text.className = "verse-text";
+  text.textContent = String(verse.text ?? "");
+  verseDiv.append(num, text);
   return verseDiv;
 }
 
