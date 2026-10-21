@@ -16,6 +16,8 @@ import { EXAM_STAGES, examStage, examNextStepText, formatExamTime } from "./exam
 import { csvCell } from "./csv-cell.mjs";
 import { resolveSafeReturnPath } from "./safe-return-path.mjs";
 import { checkExamScheduleWindow, isExamWindowExpired } from "./exam-schedule-window.mjs";
+import { isManyToOneMatching } from "./quiz-question-types.mjs";
+import { applyExamMatchClick, examMatchingCardError } from "./exam-matching.mjs";
 
 const SECTION_ORDER = ["truefalse", "single", "multiple", "matching", "ordering", "shortanswer"];
 const SECTION_TITLE = {
@@ -1316,7 +1318,7 @@ function qEditCard(sec, q, secCfg, { allowDelete = true } = {}) {
       <button type="button" class="exam-admin__link" data-opt-add>＋ 選項</button>`;
   } else if (sec === "matching") {
     body += `<label>左欄（每行 id|文字）<textarea class="form-control" rows="4" data-p="left">${esc((pl.left || []).map((x) => x.id + "|" + x.text).join("\n"))}</textarea></label>
-      <label>右欄（每行 id|文字，數量須與左欄相等）<textarea class="form-control" rows="4" data-p="right">${esc((pl.right || []).map((x) => x.id + "|" + x.text).join("\n"))}</textarea></label>
+      <label>右欄（每行 id|文字；可以比左欄少，多個左欄的正解寫同一個右欄 id 就是多對一）<textarea class="form-control" rows="4" data-p="right">${esc((pl.right || []).map((x) => x.id + "|" + x.text).join("\n"))}</textarea></label>
       <label>正解（每行 左id=右id）<textarea class="form-control" rows="4" data-a="match">${esc(Object.entries(ak || {}).map(([l, r]) => l + "=" + r).join("\n"))}</textarea></label>`;
   } else if (sec === "ordering") {
     body += `<label>事件（每行 id|文字，＝待排序區呈現順序）<textarea class="form-control" rows="5" data-p="items">${esc((pl.items || []).map((x) => x.id + "|" + x.text).join("\n"))}</textarea></label>
@@ -1367,7 +1369,8 @@ function collectQCard(card, sec, secCfg) {
       const [l, rr] = r.split("=");
       if (l && rr) answer_key[l.trim()] = rr.trim();
     });
-    if (Object.keys(answer_key).length !== left.length) return { error: "連連看：正解組數要等於左欄項數" };
+    const matchError = examMatchingCardError(left, right, answer_key);
+    if (matchError) return { error: matchError };
   } else if (sec === "ordering") {
     const items = parseIdText(lines(card.querySelector('[data-p="items"]').value));
     payload.items = items;
@@ -2609,8 +2612,10 @@ class ExamRunner {
       const node = (side, id, text) => `<button type="button" class="exam-match-node" data-side="${side}" data-id="${esc(id)}">
         <span class="exam-match-dot"></span><span class="exam-match-node__label">${esc(text)}</span></button>`;
       const rightById = Object.fromEntries(right.map((r) => [r.id, r.text]));
-      return wrap(`
-        <div class="exam-match-board" data-qid="${esc(q.id)}">
+      // 右欄比左欄少＝多對一（#611）：一個右邊點可以接多條線
+      const manyToOne = isManyToOneMatching(q.payload);
+      return wrap(`${manyToOne ? '<p class="daily-quiz-match-hint">右邊的答案可以重複連。</p>' : ""}
+        <div class="exam-match-board" data-qid="${esc(q.id)}"${manyToOne ? " data-many-to-one" : ""}>
           <div class="exam-match-col exam-match-col--left">${left.map((l) => node("L", l.id, l.text)).join("")}</div>
           <div class="exam-match-col exam-match-col--right">${rOrder.map((rid) => node("R", rid, rightById[rid])).join("")}</div>
         </div>
@@ -2689,17 +2694,7 @@ class ExamRunner {
     };
     board.addEventListener("click", (ev) => {
       const n = ev.target.closest(".exam-match-node"); if (!n) return;
-      const id = n.dataset.id;
-      if (n.dataset.side === "L") {
-        pending = (pending === id) ? null : id;
-      } else {
-        const usedBy = Object.keys(cur).find((l) => cur[l] === id);
-        if (pending) {
-          if (cur[pending] === id) delete cur[pending];
-          else { if (usedBy) delete cur[usedBy]; cur[pending] = id; }
-          pending = null;
-        } else if (usedBy) delete cur[usedBy];
-      }
+      pending = applyExamMatchClick(cur, pending, n.dataset.side, n.dataset.id, board.hasAttribute("data-many-to-one"));
       this.markDirty(qid); paint();
     });
     node.querySelector(".exam-match-clear").addEventListener("click", () => {

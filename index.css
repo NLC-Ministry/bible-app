@@ -7305,7 +7305,7 @@ body.dark-theme .pastoral-race-progress {
   margin-top: 0.75rem;
 }
 
-/* 雲柱多對一配對題（#588）的提示：一個右邊點可以接多條線 */
+/* 多對一配對題的提示：一個右邊點可以接多條線（雲柱 #588、大測驗連連看 #611） */
 .daily-quiz-match-hint {
   font-size: 0.875rem;
   color: var(--text-muted);
