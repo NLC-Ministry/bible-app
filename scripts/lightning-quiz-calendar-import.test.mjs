@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import {
   buildLightningQuizCalendar,
   isoWeekday,
@@ -144,7 +145,8 @@ describe("buildLightningQuizCalendar", () => {
 });
 
 describe("wiring", () => {
-  const migration = readFileSync("supabase/migrations/20260927123111_lightning_quiz_calendar_import.sql", "utf8");
+  // 匯入函式在 #612 改寫過，讀「現在的樣子」
+  const migration = currentMigrationSql("20260927123111_lightning_quiz_calendar_import.sql");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 
   it("import is all-or-nothing and checks dates again on the server", () => {
