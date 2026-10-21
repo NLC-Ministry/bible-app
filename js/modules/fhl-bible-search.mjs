@@ -1,5 +1,6 @@
 // 信望愛聖經搜尋（#366）：bolls.life 規定關鍵字至少 3 個字，
 // 1～2 個字的關鍵字（「愛」「恩典」）改由信望愛 se.php 搜尋。純函式、不碰 DOM。
+import { toPlainVerseText } from "../data/verse-text.mjs";
 
 export const FHL_SEARCH_ENDPOINT = "https://bible.fhl.net/json/se.php";
 // 信望愛超過 500 筆且沒帶 limit 時會回 "Fail: record count > 500"。
@@ -94,8 +95,7 @@ export function buildFhlSearchUrl(query, fhlVersion) {
 
 // 修訂版經文夾有原文編號 <WH03588> 與 <br/>，顯示與比對前全部去掉。
 export function stripFhlMarkup(text) {
-  return String(text ?? "")
-    .replace(/<[^>]*>/g, "")
+  return toPlainVerseText(text)
     .replace(/\s+/g, " ")
     .trim();
 }
