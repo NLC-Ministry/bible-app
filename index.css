@@ -7289,22 +7289,6 @@ body.dark-theme .pastoral-race-progress {
   margin-top: 0.2rem;
 }
 
-.daily-quiz-submit,
-.daily-quiz-publish {
-  width: 100%;
-  justify-content: center;
-}
-
-
-/* 題型四：配對——左右兩欄點選配對，flat 色塊、無漸層、無品牌色光暈 */
-.daily-quiz-matching {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
 /* 雲柱選單題（#612）：像點餐 App，一開始只有「＋」，選了之後變成「− 數量 ＋」 */
 .daily-quiz-menu {
   display: grid;
@@ -7375,6 +7359,22 @@ body.dark-theme .pastoral-race-progress {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;
   color: var(--text-muted);
+}
+
+.daily-quiz-submit,
+.daily-quiz-publish {
+  width: 100%;
+  justify-content: center;
+}
+
+
+/* 題型四：配對——左右兩欄點選配對，flat 色塊、無漸層、無品牌色光暈 */
+.daily-quiz-matching {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 /* 雲柱多對一配對題（#588）的提示：一個右邊點可以接多條線 */
