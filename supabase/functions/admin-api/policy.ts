@@ -781,18 +781,18 @@ export function adminAllowOrigin(origin: string | null, extraOrigins: readonly s
 }
 
 // ── 會友 App 的網址（#567：個人頁比對 App 是不是最新版，讀它的 /version.json）─────────
-// 正式站的 Supabase 專案 → 正式站 App；其他（staging）→ staging App。ADMIN_API_MEMBER_APP_URL 可以覆蓋。
+// 預設 staging App；正式站的 admin-api 要設 secret ADMIN_API_MEMBER_APP_URL 指到正式站 App（project ref 不寫進 repo，#609，
+// 所以不再從 Supabase 專案網址判斷）。
 export const MEMBER_APP_ORIGIN = {
   production: "https://bible.newlife.org.tw",
   staging: "https://bible-speed-reading-staging.vercel.app"
 } as const;
-const PRODUCTION_PROJECT_REF = "ztozevcqkfrohgjmngcj";
 const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9.-]+$/i;
 
-export function memberAppOrigin(supabaseUrl: string | undefined, override?: string): string {
+export function memberAppOrigin(override?: string): string {
   const custom = String(override || "").trim().replace(/\/+$/, "");
   if (HTTPS_ORIGIN_RE.test(custom)) return custom;
-  return String(supabaseUrl || "").includes(`${PRODUCTION_PROJECT_REF}.supabase.co`) ? MEMBER_APP_ORIGIN.production : MEMBER_APP_ORIGIN.staging;
+  return MEMBER_APP_ORIGIN.staging;
 }
 
 const BUILD_VERSION_RE = /^\d{14}$/;

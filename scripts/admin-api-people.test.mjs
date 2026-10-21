@@ -116,11 +116,12 @@ describe("個人頁的除錯檢查", () => {
     expect(formatBuildId("nope")).toBe("nope");
   });
 
-  it("/version.json 的網址依 Supabase 專案決定，可以覆蓋；格式不對就當查不到", () => {
-    expect(memberAppOrigin("https://ztozevcqkfrohgjmngcj.supabase.co")).toBe(MEMBER_APP_ORIGIN.production);
-    expect(memberAppOrigin("https://dbtjsljrytzonjvclgrd.supabase.co")).toBe(MEMBER_APP_ORIGIN.staging);
-    expect(memberAppOrigin("https://dbtjsljrytzonjvclgrd.supabase.co", "https://preview.example.com/")).toBe("https://preview.example.com");
-    expect(memberAppOrigin("https://ztozevcqkfrohgjmngcj.supabase.co", "javascript:alert(1)")).toBe(MEMBER_APP_ORIGIN.production);
+  it("/version.json 的網址預設 staging，正式站靠 ADMIN_API_MEMBER_APP_URL 覆蓋；格式不對就退回預設（#609：不從 project ref 判斷）", () => {
+    expect(memberAppOrigin()).toBe(MEMBER_APP_ORIGIN.staging);
+    expect(memberAppOrigin("")).toBe(MEMBER_APP_ORIGIN.staging);
+    expect(memberAppOrigin(MEMBER_APP_ORIGIN.production + "/")).toBe(MEMBER_APP_ORIGIN.production);
+    expect(memberAppOrigin("https://preview.example.com/")).toBe("https://preview.example.com");
+    expect(memberAppOrigin("javascript:alert(1)")).toBe(MEMBER_APP_ORIGIN.staging);
     expect(parseAppVersion({ version: "20261101090000", minVersion: "x" })).toEqual({ version: "20261101090000", minVersion: null });
     expect(parseAppVersion({ version: "latest" })).toBeNull();
   });

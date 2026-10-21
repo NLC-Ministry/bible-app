@@ -36,7 +36,7 @@ export function classifyFindings(rows, { lints = {}, cache_keys: cacheKeys = {} 
 }
 
 export function renderFindings({ envLabel, ref, accepted, unexpected }) {
-  const lines = [`## Security Advisor：${envLabel}（\`${ref}\`）`, ""];
+  const lines = [`## Security Advisor：${envLabel}`, ""];
   if (!unexpected.length) lines.push("✅ 沒有要處理的資安項目");
   else {
     lines.push(`🔴 要處理 ${unexpected.length} 項：`);

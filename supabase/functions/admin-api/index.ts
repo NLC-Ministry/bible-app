@@ -6,7 +6,7 @@
 // 必要的 secret（見 supabase/functions/README.md）：
 //   ADMIN_API_ALLOWED_CLIENT_IDS  後台 Logto 應用程式的 client id（逗號分隔）。沒設定 → 全部拒絕。
 // 選填：ADMIN_API_CLIENT_CLAIM（預設 client_id）、ADMIN_API_ALLOWED_ORIGINS、ADMIN_API_ALLOW_LOCALHOST、
-//       ADMIN_API_MEMBER_APP_URL（會友 App 網址，預設依 Supabase 專案判斷正式站／staging）、
+//       ADMIN_API_MEMBER_APP_URL（會友 App 網址；沒設就是 staging App，所以正式站一定要設）、
 //       ADMIN_API_AUDIENCE（沒設就用 NLC_LOGTO_AUDIENCE）、NLC_LOGTO_ISSUER。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
@@ -120,7 +120,7 @@ const supabaseAdmin = supabaseUrl && serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 // 會友 App 目前的版本（#567）：讀它的 /version.json，2 秒逾時、記憶 60 秒（同一個執行個體連續打開幾個人不重抓）
-const memberAppVersionUrl = `${memberAppOrigin(supabaseUrl, Deno.env.get("ADMIN_API_MEMBER_APP_URL"))}/version.json`;
+const memberAppVersionUrl = `${memberAppOrigin(Deno.env.get("ADMIN_API_MEMBER_APP_URL"))}/version.json`;
 let appVersionCache: { at: number; value: { version: string; minVersion: string | null } | null } | null = null;
 async function fetchAppVersion() {
   if (appVersionCache && Date.now() - appVersionCache.at < 60_000) return appVersionCache.value;

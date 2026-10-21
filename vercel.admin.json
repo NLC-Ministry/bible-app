@@ -51,7 +51,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/chart.js@4.5.1; style-src 'self'; img-src 'self' data: https://ztozevcqkfrohgjmngcj.supabase.co https://dbtjsljrytzonjvclgrd.supabase.co; connect-src https://ztozevcqkfrohgjmngcj.supabase.co https://dbtjsljrytzonjvclgrd.supabase.co https://sso.newlife.org.tw; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/chart.js@4.5.1; style-src 'self'; img-src 'self' data: __SUPABASE_PRODUCTION_ORIGIN__ __SUPABASE_STAGING_ORIGIN__; connect-src __SUPABASE_PRODUCTION_ORIGIN__ __SUPABASE_STAGING_ORIGIN__ https://sso.newlife.org.tw; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
         },
         {
           "key": "X-Frame-Options",
@@ -64,7 +64,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/chart.js@4.5.1; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ztozevcqkfrohgjmngcj.supabase.co https://dbtjsljrytzonjvclgrd.supabase.co; font-src 'self' data:; connect-src 'self' https://ztozevcqkfrohgjmngcj.supabase.co https://dbtjsljrytzonjvclgrd.supabase.co; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+          "value": "default-src 'none'; script-src 'self' https://cdn.jsdelivr.net/npm/chart.js@4.5.1; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: __SUPABASE_PRODUCTION_ORIGIN__ __SUPABASE_STAGING_ORIGIN__; font-src 'self' data:; connect-src 'self' __SUPABASE_PRODUCTION_ORIGIN__ __SUPABASE_STAGING_ORIGIN__; frame-ancestors 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
         },
         {
           "key": "X-Frame-Options",

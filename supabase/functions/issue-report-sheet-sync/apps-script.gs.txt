@@ -5,7 +5,7 @@
 // copy of what to paste.
 //
 // Target sheet tab: the one at gid=2084089275 in
-// https://docs.google.com/spreadsheets/d/1iqHhlrzQ4nuS0BBtciEll5mBUsUFMhwiB4mhSO8sWx4/edit
+// https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
 // Looked up by gid (not by name) so this keeps working even if someone renames the tab.
 
 var SHEET_GID = 2084089275;

@@ -11,7 +11,9 @@ describe("classify", () => {
     expect(classify("git push origin HEAD:staging")).toEqual({ needsLock: "git push" });
     expect(classify('cd "C:/x" && git -C ../y push')).toEqual({ needsLock: "git push" });
     expect(classify("gh pr create --base main --head staging --title x")).toEqual({ needsLock: "gh pr create" });
-    expect(classify("npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd")).toEqual({ needsLock: "supabase db push" });
+    expect(classify("npx supabase db push --linked --project-ref aaaaaaaaaaaaaaaaaaaa")).toEqual({ needsLock: "supabase db push" });
+    expect(classify("node scripts/supabase-env.mjs staging db push --linked")).toEqual({ needsLock: "supabase db push" });
+    expect(classify("node scripts/supabase-env.mjs production db push --linked")).toEqual({ needsLock: "supabase db push" });
   });
 
   it("always denies merging a PR", () => {
@@ -20,6 +22,8 @@ describe("classify", () => {
 
   it("allows dry runs, hotfix branches and ordinary commands", () => {
     expect(classify("npx supabase db push --linked --project-ref x --dry-run")).toBeNull();
+    expect(classify("node scripts/supabase-env.mjs staging db push --linked --dry-run")).toBeNull();
+    expect(classify("node scripts/supabase-env.mjs staging functions deploy nlc-data")).toBeNull();
     expect(classify("git push --dry-run origin HEAD:staging")).toBeNull();
     expect(classify("git push -u origin hotfix/login-loop")).toBeNull();
     expect(classify("gh pr create --base main --head hotfix/login-loop")).toBeNull();

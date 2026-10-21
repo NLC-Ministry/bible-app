@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
-const ORIGIN = "https://dbtjsljrytzonjvclgrd.supabase.co";
+const ORIGIN = "https://aaaaaaaaaaaaaaaaaaaa.supabase.co";
 const NAME = "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f.webp";
 const PUBLIC_URL = `${ORIGIN}/storage/v1/object/public/quiz-images/${NAME}`;
 

@@ -60,7 +60,7 @@ BEGIN
   END IF;
 
   PERFORM net.http_post(
-    url := 'https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/issue-report-maintenance',
+    url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/issue-report-maintenance',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-maintenance-secret', cron_secret

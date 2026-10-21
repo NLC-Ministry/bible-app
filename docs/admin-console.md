@@ -6,7 +6,7 @@
 |---|---|---|
 | 網址 | https://bible-speed-reading-admin.vercel.app | https://bible-speed-reading-admin-staging.vercel.app |
 | Vercel | 後台專案的 production | 後台專案的 preview，CI 綁固定別名 |
-| admin-api | `ztozevcqkfrohgjmngcj` | `dbtjsljrytzonjvclgrd` |
+| admin-api | 正式站 Supabase 專案 | staging Supabase 專案 |
 | Logto 應用程式 | 正式站的後台 client（#554） | staging 的後台 client（#554） |
 
 為什麼要分開：會友 App 的 localStorage、innerHTML 渲染和管理員共用的話，會友 App 任何一處 XSS 都等於拿到管理員的 token。分開後，會友 App 被攻破也讀不到後台的任何東西，偷到的會友 token 也打不進 `admin-api`（它只收後台應用程式發的 token）。
@@ -56,7 +56,7 @@
 - **截圖**：回覆可附 1 張（瀏覽器先壓到約 300 KB，伺服器上限 500 KB，PNG／JPEG／WebP）。顯示用 5 分鐘有效的簽名網址，存檔路徑不送到前端。
 - **個人頁**（#567，`admin/src/views/UserDetail.tsx`、`supabase/functions/admin-api/people.ts`；第一階段只讀，刪除沒有歸屬的打卡等修正之後個別評估）：照「需要時才調閱」——打開只拿除錯檢查＋各區筆數（記 `view_user`）；各區摺疊、右邊先顯示筆數，點開才調閱（第一頁記 `view_user_section`，`detail.section` 是哪一區，時間軸是 `timeline`）。
   - **除錯檢查**只列真的發生過的事故：重複報名、沒有歸屬計畫的打卡（章數會多算）、App 累積章數和計畫書卷內章數不一致、登入身分（同一個會員中心 id 或同 email 對到別的帳號）、同計畫同組別在兩隊、寬限期截止後還有寫入、App 版本。事實由 SQL 查（`admin_api_user_summary` 的 `facts`），判斷與文字在 `people.ts`（`buildPersonReport`），前端只顯示。
-  - **App 版本**只能從這個人最近一次回報的診斷資訊（`build_id`）知道，和 admin-api 讀會友 App 的 `/version.json` 比（正式站 `bible.newlife.org.tw`、其他專案用 staging；可用 `ADMIN_API_MEMBER_APP_URL` 覆蓋）；讀不到就是「無法判斷」，不影響其他檢查。
+  - **App 版本**只能從這個人最近一次回報的診斷資訊（`build_id`）知道，和 admin-api 讀會友 App 的 `/version.json` 比（預設讀 staging 網址；正式站的 admin-api 要設 `ADMIN_API_MEMBER_APP_URL` 指到 `bible.newlife.org.tw`）；讀不到就是「無法判斷」，不影響其他檢查。
   - **會友 App 現在應該顯示**：伺服器對這一個人跑 `plan_progress_people`（`ARRAY[這個人]`），再用和計畫名單同一份規則（`_shared/progress/plan-report.mjs`）算出「第 N 遍・%・落後 N 天」，拿來和會友的截圖對照；前端不要再算。
   - **不列徽章、不分手動／自動打卡**（維護者 2026-10-14）：徽章只存在會友手機的 App 裡，看讀經紀錄就知道；打卡來源不影響任何計算，除錯也用不到（讀了沒記錄＝沒有那筆可看、打卡不見＝取消勾選刪掉了），所以 `reading_logs` 不加來源欄位。
   - **經文筆記只給筆數與最後更新時間，不給內容**（屬於個人靈修）。
@@ -103,26 +103,34 @@
 | 變數 | Production | Preview |
 |---|---|---|
 | `ADMIN_LOGTO_CLIENT_ID` | 正式站後台 client id | staging 後台 client id |
-| `ADMIN_API_URL` | `https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/admin-api` | `https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api` |
+| `ADMIN_API_URL` | `https://<正式站 ref>.supabase.co/functions/v1/admin-api` | `https://<staging ref>.supabase.co/functions/v1/admin-api` |
 | `SUPABASE_ANON_KEY` | 正式站的 anon key（和會友 App 的 Production 同一個值） | staging 的 anon key（和會友 App 的 Preview 同一個值） |
 
 `SUPABASE_ANON_KEY` 是照搬區塊呼叫 nlc-session／nlc-data 用的（本來就是公開值）；沒設建置會失敗。
 
 選填：`ADMIN_LOGTO_ISSUER`（預設 `https://sso.newlife.org.tw/oidc`）、`ADMIN_LOGTO_RESOURCE`（預設 `https://platform.newlife.org.tw`）、`ADMIN_LOGTO_SCOPES`（預設 `openid profile email member:read.basic`）、`ADMIN_ENVIRONMENT`（預設看 `ADMIN_API_URL` 是哪個 Supabase 專案）、`SUPABASE_URL`（預設從 `ADMIN_API_URL` 推；兩個不同專案建置會失敗）、`NLC_MEMBER_HUB_URL`（預設 `https://member.newlife.org.tw`）。
 
-### 3. GitHub secret
+### 3. GitHub secret 與 variables
+
+**Variables（#609）**：`SUPABASE_PRODUCTION_REF`、`SUPABASE_STAGING_REF`（兩個 Supabase 專案的 project ref，20 碼；repo 是公開的所以不寫進程式）。CI 部署後台時用它們把 `vercel.admin.json` 的 CSP 占位符換成真的網址（`scripts/render-admin-vercel-config.mjs`）。沒設就跳過後台部署並在 CI 摘要與註解提醒，不會讓整個 CI 失敗。
+
+**Secrets**：
 
 `VERCEL_ADMIN_PROJECT_ID`：後台專案的 Project ID（Vercel 專案 Settings → General）。沒設之前，CI 的「Deploy admin console」步驟會跳過、不會失敗。`VERCEL_ORG_ID`、`VERCEL_TOKEN` 和會友 App 共用。
 
 ### 4. Supabase（admin-api）
 
 ```bash
-npx supabase secrets set --project-ref dbtjsljrytzonjvclgrd ADMIN_API_ALLOWED_CLIENT_IDS=<staging 後台 client id>
-npx supabase secrets set --project-ref dbtjsljrytzonjvclgrd ADMIN_API_ALLOW_LOCALHOST=true
-npx supabase secrets set --project-ref ztozevcqkfrohgjmngcj ADMIN_API_ALLOWED_CLIENT_IDS=<正式站後台 client id>
+node scripts/supabase-env.mjs staging secrets set ADMIN_API_ALLOWED_CLIENT_IDS=<staging 後台 client id>
+node scripts/supabase-env.mjs staging secrets set ADMIN_API_ALLOW_LOCALHOST=true
+node scripts/supabase-env.mjs production secrets set ADMIN_API_ALLOWED_CLIENT_IDS=<正式站後台 client id>
 ```
 
-選用：`ADMIN_API_MEMBER_APP_URL` 指定個人頁「App 是最新版」要讀哪個會友 App 的 `/version.json`（沒設時正式站專案用 `https://bible.newlife.org.tw`、其他用 staging 網址）。
+`ADMIN_API_MEMBER_APP_URL` 指定個人頁「App 是最新版」要讀哪個會友 App 的 `/version.json`。**沒設就是 staging 網址，所以正式站一定要設**成 `https://bible.newlife.org.tw`（#609 起不再從 Supabase 專案判斷）：
+
+```bash
+node scripts/supabase-env.mjs production secrets set ADMIN_API_MEMBER_APP_URL=https://bible.newlife.org.tw
+```
 
 細節見 `supabase/functions/README.md` 的 admin-api 一節。
 

@@ -43,7 +43,7 @@ BEGIN
   END IF;
 
   PERFORM net.http_post(
-    url := 'https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/issue-report-sheet-sync',
+    url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/issue-report-sheet-sync',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-webhook-secret', webhook_secret

@@ -33,7 +33,7 @@ describe("getQuestionImage", () => {
 
   // #585：後台上傳的圖放在本站 Supabase 的公開 bucket quiz-images
   describe("uploaded images (#585)", () => {
-    const ORIGIN = "https://dbtjsljrytzonjvclgrd.supabase.co";
+    const ORIGIN = "https://aaaaaaaaaaaaaaaaaaaa.supabase.co";
     const UUID = "3f2b8c1e-4d5a-4b6c-9e7f-0a1b2c3d4e5f";
     const uploaded = (ext = "webp", origin = ORIGIN) => `${origin}/storage/v1/object/public/quiz-images/${UUID}.${ext}`;
     let previous;
@@ -52,8 +52,8 @@ describe("getQuestionImage", () => {
 
     it("rejects other projects, other buckets, non-uuid names and query strings", () => {
       for (const src of [
-        uploaded("webp", "https://ztozevcqkfrohgjmngcj.supabase.co"),
-        uploaded("webp", "http://dbtjsljrytzonjvclgrd.supabase.co"),
+        uploaded("webp", "https://bbbbbbbbbbbbbbbbbbbb.supabase.co"),
+        uploaded("webp", "http://aaaaaaaaaaaaaaaaaaaa.supabase.co"),
         `${ORIGIN}/storage/v1/object/public/issue-report-shots/${UUID}.webp`,
         `${ORIGIN}/storage/v1/object/public/quiz-images/../${UUID}.webp`,
         `${ORIGIN}/storage/v1/object/public/quiz-images/photo.webp`,

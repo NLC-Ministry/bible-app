@@ -5,7 +5,7 @@
 // Supabase CLI, this file is just a version-controlled copy of what to paste.
 //
 // Target sheet tab: gid=9828844 ("最新速讀狀況") in
-// https://docs.google.com/spreadsheets/d/1YNjAp6hhgTmjuL17SBhxyvUsbcddfynuMGPoI6irOpY/edit
+// https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
 // Looked up by gid (not by name) so this keeps working even if someone renames the tab.
 //
 // Unlike issue-report-sheet-sync (which appends one row per new report), this

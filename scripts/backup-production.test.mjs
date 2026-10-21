@@ -39,7 +39,7 @@ describe("parseCliCredentials", () => {
     "Initialising login role...",
     'export PGHOST="aws-1-ap-northeast-1.pooler.supabase.com"',
     'export PGPORT="5432"',
-    'export PGUSER="cli_login_postgres.ztozevcqkfrohgjmngcj"',
+    'export PGUSER="cli_login_postgres.bbbbbbbbbbbbbbbbbbbb"',
     'export PGPASSWORD="abcdefABCDEF0123456789abcdefABCD"',
     'export PGDATABASE="postgres"',
     'pg_dump --schema-only ...'
@@ -49,14 +49,14 @@ describe("parseCliCredentials", () => {
     expect(parseCliCredentials(good)).toEqual({
       PGHOST: "aws-1-ap-northeast-1.pooler.supabase.com",
       PGPORT: "5432",
-      PGUSER: "cli_login_postgres.ztozevcqkfrohgjmngcj",
+      PGUSER: "cli_login_postgres.bbbbbbbbbbbbbbbbbbbb",
       PGPASSWORD: "abcdefABCDEF0123456789abcdefABCD",
       PGDATABASE: "postgres"
     });
   });
 
   it("refuses a login for any project other than production", () => {
-    expect(() => parseCliCredentials(good.replace(/ztozevcqkfrohgjmngcj/, "dbtjsljrytzonjvclgrd"))).toThrow(/正式站/);
+    expect(() => parseCliCredentials(good.replace(/bbbbbbbbbbbbbbbbbbbb/, "aaaaaaaaaaaaaaaaaaaa"))).toThrow(/正式站/);
   });
 
   it("refuses a host that is not the Supabase pooler", () => {
@@ -69,7 +69,7 @@ describe("parseCliCredentials", () => {
   });
 
   it("never puts the password in the error message", () => {
-    const bad = good.replace('export PGUSER="cli_login_postgres.ztozevcqkfrohgjmngcj"', 'export PGUSER="someone.else"');
+    const bad = good.replace('export PGUSER="cli_login_postgres.bbbbbbbbbbbbbbbbbbbb"', 'export PGUSER="someone.else"');
     expect(() => parseCliCredentials(bad)).toThrow();
     try { parseCliCredentials(bad); } catch (e) { expect(e.message).not.toContain("abcdefABCDEF"); }
   });

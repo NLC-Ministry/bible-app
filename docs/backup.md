@@ -1,6 +1,6 @@
 # 正式站每週備份（#345）
 
-每週二 00:00 自動把正式環境（`ztozevcqkfrohgjmngcj`）的結構和資料備份到本機，並在 OneDrive 留一份加密副本。只讀正式站，不寫入任何東西。
+每週二 00:00 自動把正式環境的結構和資料備份到本機，並在 OneDrive 留一份加密副本。只讀正式站，不寫入任何東西。
 
 - 程式：`scripts/backup-production.mjs`（備份本體）、`scripts/backup-production.ps1`（密碼、排程、執行）
 - 備份內容含約 1,200 位會友的個資。**本機明文只放在專案 repo 和 OneDrive 外面**，腳本會檢查；建議開啟 BitLocker。
@@ -28,7 +28,7 @@
 
 ## 一次性設定
 
-0. **Supabase CLI 保持登入**（`npx supabase login`；平常跑 `db push` 就已經登入了）。備份**不存 DB 密碼**：每一步連線前，程式在專案主資料夾跑 `npx supabase db dump --dry-run --linked --project-ref ztozevcqkfrohgjmngcj`，拿 CLI 發的臨時帳號（`cli_login_postgres`，跟 `db push` 同一套機制），連上後 `SET ROLE postgres` 並設成唯讀。CLI 登入過期或改版導致格式看不懂時，備份會失敗並跳通知。
+0. **Supabase CLI 保持登入**（`npx supabase login`；平常跑 `db push` 就已經登入了）。備份**不存 DB 密碼**：每一步連線前，程式在專案主資料夾跑 `node scripts/supabase-env.mjs production db dump --dry-run --linked`，拿 CLI 發的臨時帳號（`cli_login_postgres`，跟 `db push` 同一套機制），連上後 `SET ROLE postgres` 並設成唯讀。CLI 登入過期或改版導致格式看不懂時，備份會失敗並跳通知。
 1. **PostgreSQL 17 指令列工具**（`pg_dump`、`psql`；正式站是 17.x，工具版本不能比它舊，而且要 17.6 以上才有 `--restrict-key`）。只裝 Command Line Tools：
    ```powershell
    winget install --id PostgreSQL.PostgreSQL.17 --override "--mode unattended --unattendedmodeui minimal --enable-components commandlinetools --disable-components server,pgAdmin,stackbuilder"

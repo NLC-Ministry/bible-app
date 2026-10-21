@@ -108,7 +108,7 @@ const formatTime = ms =>
 /** 一個環境的結果 → markdown 行。 */
 export function renderEnvironment({ env, migrations, functions }) {
   const bad = env.expectComplete ? "🔴 " : "";
-  const lines = [`### ${env.label}（\`${env.ref}\`）`];
+  const lines = [`### ${env.label}`];
 
   if (!migrations.pending.length) lines.push("- Migration：✅ 全部已套用");
   else {

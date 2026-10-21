@@ -163,7 +163,7 @@ BEGIN
   IF cron_secret IS NULL THEN RAISE EXCEPTION 'quiz_generation_secret_missing'; END IF;
 
   SELECT net.http_post(
-    url := 'https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/generate-daily-quizzes',
+    url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/generate-daily-quizzes',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', cron_secret),
     body := jsonb_build_object(
       'source', 'manual',

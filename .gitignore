@@ -38,3 +38,7 @@ supabase/.branches/
 # Staging sample data exports (scripts/staging-sample-data.mjs). Anonymized but
 # still derived from member activity; never commit.
 staging-sample*.json
+
+# 各 AI 工具的本機設定複本（含 skill 複本，不提交，#609）
+.agents/
+.codex/

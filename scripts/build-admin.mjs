@@ -11,6 +11,8 @@
 //       ADMIN_LOGTO_SCOPES      預設 "openid profile email member:read.basic"；不可含 offline_access（不要 refresh token）
 //                               member:read.basic：照搬的舊管理區塊（#550）照舊經 nlc-session 同步會員中心資料
 //       ADMIN_ENVIRONMENT       production / staging / local；沒設就看 admin-api 網址是哪個 Supabase 專案
+//                               （比對 SUPABASE_PRODUCTION_REF／SUPABASE_STAGING_REF，ref 不放進 repo，#609）；
+//                               在 Vercel／CI 上建置時一定要能判斷出來，不然直接失敗（不會悄悄當成 local）
 //     本機建置時也會讀專案根目錄的 .env（環境變數優先）。
 //   · 建置時檢查 vercel.admin.json 的 CSP 有放行 admin-api 和 Logto，不然上線後整頁連不出去。
 //
@@ -31,10 +33,10 @@ import { fileURLToPath } from "node:url";
 import { buildTailwindCss, contentHash, cpDirRecursive, resolveLocalAssets } from "./bundle.mjs";
 import { LEGACY_SECTION_IDS, legacyMarkupId } from "../admin-legacy/sections.mjs";
 import { composeLegacyIndexHtml, readLegacyAdminView } from "./lib/legacy-markup.mjs";
+import { isOriginPlaceholder, renderAdminVercelConfig } from "./lib/admin-vercel-config.mjs";
+import { loadProjectRefs } from "./lib/project-refs.mjs";
 
 export const ADMIN_OUT_DIR = "dist-admin";
-const PRODUCTION_REF = "ztozevcqkfrohgjmngcj";
-const STAGING_REF = "dbtjsljrytzonjvclgrd";
 const CSS_PLACEHOLDER = "<!-- build:admin-css -->";
 const JS_PLACEHOLDER = "<!-- build:admin-js -->";
 const LEGACY_CSS_PLACEHOLDER = "<!-- build:legacy-css -->";
@@ -85,8 +87,14 @@ export function resolveAdminConfig(env) {
   if (explicitEnv && !["production", "staging", "local"].includes(explicitEnv)) {
     throw new Error(`build-admin: ADMIN_ENVIRONMENT must be production, staging or local (got ${JSON.stringify(explicitEnv)})`);
   }
+  const refs = loadProjectRefs({ env: { ...process.env, ...env } });
   const environment = explicitEnv
-    || (apiUrl.includes(PRODUCTION_REF) ? "production" : apiUrl.includes(STAGING_REF) ? "staging" : "local");
+    || (refs.production && apiUrl.includes(`${refs.production}.supabase.co`) ? "production"
+      : refs.staging && apiUrl.includes(`${refs.staging}.supabase.co`) ? "staging" : "local");
+  // 在 Vercel／CI 上建置卻判斷不出環境（沒設 ADMIN_ENVIRONMENT 也沒設 ref）：不要悄悄當成 local（會略過 CSP 與金鑰檢查）
+  if (!explicitEnv && environment === "local" && get("VERCEL")) {
+    throw new Error("build-admin: cannot tell which environment this build is for; set ADMIN_ENVIRONMENT (production or staging) or SUPABASE_PRODUCTION_REF / SUPABASE_STAGING_REF");
+  }
   return { issuer, clientId, resource, scopes, apiUrl, environment };
 }
 
@@ -98,7 +106,8 @@ export const LEGACY_HEADER_SOURCE = "/legacy(.*)";
 export const CHART_JS_URL = "https://cdn.jsdelivr.net/npm/chart.js@4.5.1";
 
 export function readHeader(root, source, key) {
-  const config = JSON.parse(readFileSync(join(root, "vercel.admin.json"), "utf8"));
+  // 檔案裡的 Supabase 網址是占位符（#609）；有 ref 的換成真值，沒有的保持原樣（檢查時當成「某個 Supabase 專案」）
+  const config = JSON.parse(renderAdminVercelConfig(readFileSync(join(root, "vercel.admin.json"), "utf8")));
   const rule = (config.headers || []).find((item) => item.source === source);
   const header = (rule?.headers || []).find((item) => item.key === key);
   return header ? header.value : "";
@@ -119,9 +128,15 @@ export function cspDirective(csp, name) {
   return part ? part.split(/\s+/).slice(1) : null;
 }
 
+/** origin 在清單裡；清單裡還沒換成真值的 Supabase 占位符，視為放行任何 *.supabase.co。 */
+function originAllowed(list, origin) {
+  if (list.includes(origin)) return true;
+  return list.some(isOriginPlaceholder) && /^https:\/\/[a-z0-9]+\.supabase\.co$/.test(origin);
+}
+
 export function assertCspAllowsConfig(csp, config) {
   const connect = cspDirective(csp, "connect-src") || [];
-  const missing = [new URL(config.apiUrl).origin, new URL(config.issuer).origin].filter((origin) => !connect.includes(origin));
+  const missing = [new URL(config.apiUrl).origin, new URL(config.issuer).origin].filter((origin) => !originAllowed(connect, origin));
   if (missing.length) {
     throw new Error(`build-admin: vercel.admin.json CSP connect-src does not allow ${missing.join(", ")}; the console could not reach it`);
   }
@@ -160,7 +175,7 @@ export function assertLegacyCspAllows(csp, legacyConfig) {
   const script = cspDirective(csp, "script-src") || [];
   const origin = new URL(legacyConfig.supabaseUrl).origin;
   const missing = [];
-  if (!connect.includes(origin)) missing.push(`connect-src ${origin}`);
+  if (!originAllowed(connect, origin)) missing.push(`connect-src ${origin}`);
   if (!script.includes(CHART_JS_URL)) missing.push(`script-src ${CHART_JS_URL}`);
   if (missing.length) {
     throw new Error(`build-admin: vercel.admin.json legacy CSP (${LEGACY_HEADER_SOURCE}) does not allow ${missing.join(", ")}`);

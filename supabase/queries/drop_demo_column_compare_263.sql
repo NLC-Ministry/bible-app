@@ -5,7 +5,7 @@
 -- （跟 nlc-data 用 service_role 呼叫時一樣）。
 --
 -- 用法（套用 migration 前跑一次、套用後再跑一次，兩次輸出逐列比對）：
---   npx supabase db query --linked --project-ref dbtjsljrytzonjvclgrd -f supabase/queries/drop_demo_column_compare_263.sql
+--   node scripts/supabase-env.mjs staging db query --linked -f supabase/queries/drop_demo_column_compare_263.sql
 -- 或整段貼到 SQL Editor 一次執行（要整段一起跑，set_config 才會生效）。
 --
 -- 選樣都是固定規則（報名人數最多的 3 個計畫、每種管理角色 id 最小的一位、每個計畫
