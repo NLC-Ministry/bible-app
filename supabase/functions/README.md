@@ -102,11 +102,11 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 - **報表區**（#568，`stats.ts`）：`reading_usage`（`admin_api_reading_usage`：舊頁三支使用率函式＋每天章數，伺服器整理成每天一列；只有數字、不記稽核；區間最長 180 天，超過回 `range_too_long`）、`registration_stats`（`admin_api_registration_stats`＋計畫選單；不記稽核）、`registration_export`（要 `stats.read`＋`export`；記一筆 `export`（`detail.kind = registration_stats`），記不成就不回檔案）、`registration_sheet_sync`（要 `stats.read`＋`export`，每人每小時 10 次；伺服器讀數字後送到 Google Apps Script，格式同 nlc-data 的 `sync_registration_stats_sheet`，成功失敗都記 `sync_registration_stats_sheet`；Apps Script 失敗回 502 `sheet_sync_failed`）。試算表要 `REGISTRATION_STATS_SHEET_WEBHOOK_URL`／`_SECRET`（見下面「報名統計同步」，Supabase 的 secrets 整個專案共用，nlc-data 設過就不用再設），沒設回 500。兩支 SQL 都先重查操作者是不是系統管理員。
 - **匯出**：CSV 由伺服器產生（防公式注入，規則同 `js/modules/csv-cell.mjs`；時間用台北時區），前端只負責存檔。使用者名單（`directory_export`，含完整 email，另外要 `support.pii`，上限 10000 人）、組織架構（`org_export`）的欄位與開頭的匯出時間列和 App 管理分頁的匯出相同（`scripts/admin-api-accounts.test.mjs` 比對）。
 - **CORS**：只允許 `https://bible-speed-reading-admin.vercel.app`、`https://bible-speed-reading-admin-staging.vercel.app`，加上選填的 `ADMIN_API_ALLOWED_ORIGINS`（逗號分隔）；`ADMIN_API_ALLOW_LOCALHOST=true`（只在 staging 設）才放行本機。其他來源回 403。回應一律 `Cache-Control: no-store`，並回 `x-request-id`；每個請求一行 `admin_api_request` log。
-- **會友 App 版本**（#567 個人頁的「App 是最新版」）：讀會友 App 的 `/version.json`（2 秒逾時、快取 60 秒，讀不到就是「無法判斷」）；正式站專案讀 `https://bible.newlife.org.tw`、其他讀 staging 網址，選填的 `ADMIN_API_MEMBER_APP_URL` 可以覆蓋。
+- **會友 App 版本**（#567 個人頁的「App 是最新版」）：讀會友 App 的 `/version.json`（2 秒逾時、快取 60 秒，讀不到就是「無法判斷」）；預設讀 staging 網址；正式站要設 secret `ADMIN_API_MEMBER_APP_URL=https://bible.newlife.org.tw`（#609 起不從 Supabase 專案判斷）。
 
 ```bash
 npx supabase secrets set --project-ref <ref> ADMIN_API_ALLOWED_CLIENT_IDS=<後台 Logto client id>
-npx supabase secrets set --project-ref dbtjsljrytzonjvclgrd ADMIN_API_ALLOW_LOCALHOST=true   # 只有 staging
+node scripts/supabase-env.mjs staging secrets set ADMIN_API_ALLOW_LOCALHOST=true   # 只有 staging
 npx supabase functions deploy admin-api --project-ref <ref>
 ```
 
@@ -121,10 +121,10 @@ pg_cron 排程和 trigger 呼叫 Edge Function 時，網址由 `public.edge_func
 
 ```sql
 -- 正式環境
-select vault.create_secret('https://ztozevcqkfrohgjmngcj.supabase.co', 'project_url',
+select vault.create_secret('https://<正式站 ref>.supabase.co', 'project_url',
   'Base URL used by edge_function_url() to call this project''s Edge Functions');
 -- staging
-select vault.create_secret('https://dbtjsljrytzonjvclgrd.supabase.co', 'project_url',
+select vault.create_secret('https://<staging ref>.supabase.co', 'project_url',
   'Base URL used by edge_function_url() to call this project''s Edge Functions');
 ```
 

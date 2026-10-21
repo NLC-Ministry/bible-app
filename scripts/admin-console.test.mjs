@@ -5,9 +5,12 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 import { assertCspAllowsConfig, buildAdmin, cspDirective, listInlineHandlers, readAdminCsp, resolveAdminConfig } from "./build-admin.mjs";
+import { renderAdminVercelConfig } from "./lib/admin-vercel-config.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const adminCfg = JSON.parse(readFileSync(join(root, "vercel.admin.json"), "utf8"));
+// vercel.admin.json 裡的 Supabase 網址是占位符（#609）；這裡換成測試用的假 ref 再檢查
+const FAKE_REFS = { production: "bbbbbbbbbbbbbbbbbbbb", staging: "aaaaaaaaaaaaaaaaaaaa" };
+const adminCfg = JSON.parse(renderAdminVercelConfig(readFileSync(join(root, "vercel.admin.json"), "utf8"), { refs: FAKE_REFS, strict: true }));
 const memberCfg = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
 const headersFor = (cfg, source) => Object.fromEntries(
   (cfg.headers.find((rule) => rule.source === source)?.headers || []).map((entry) => [entry.key, entry.value])
@@ -17,8 +20,8 @@ const directives = (policy) => Object.fromEntries(
     .map((part) => { const [name, ...values] = part.split(/\s+/); return [name, values]; })
 );
 const read = (path) => readFileSync(join(root, path), "utf8");
-const STAGING_API = "https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api";
-const PRODUCTION_API = "https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/admin-api";
+const STAGING_API = "https://aaaaaaaaaaaaaaaaaaaa.supabase.co/functions/v1/admin-api";
+const PRODUCTION_API = "https://bbbbbbbbbbbbbbbbbbbb.supabase.co/functions/v1/admin-api";
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -65,11 +68,11 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
     expect(csp["script-src"]).toEqual(["'self'", "https://cdn.jsdelivr.net/npm/chart.js@4.5.1"]);
     expect(csp["style-src"]).toEqual(["'self'"]);
     expect(csp["connect-src"]).toEqual([
-      "https://ztozevcqkfrohgjmngcj.supabase.co",
-      "https://dbtjsljrytzonjvclgrd.supabase.co",
+      "https://bbbbbbbbbbbbbbbbbbbb.supabase.co",
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
       "https://sso.newlife.org.tw"
     ]);
-    expect(csp["img-src"]).toEqual(["'self'", "data:", "https://ztozevcqkfrohgjmngcj.supabase.co", "https://dbtjsljrytzonjvclgrd.supabase.co"]);
+    expect(csp["img-src"]).toEqual(["'self'", "data:", "https://bbbbbbbbbbbbbbbbbbbb.supabase.co", "https://aaaaaaaaaaaaaaaaaaaa.supabase.co"]);
     // 只嵌自己網域的舊管理區塊（/legacy）；外殼本身不能被任何人嵌
     expect(csp["frame-src"]).toEqual(["'self'"]);
     expect(csp["frame-ancestors"]).toEqual(["'none'"]);
@@ -102,7 +105,7 @@ describe("admin console Vercel project (vercel.admin.json)", () => {
     expect(csp["script-src"]).toEqual(["'self'", "https://cdn.jsdelivr.net/npm/chart.js@4.5.1"]);
     // 舊畫面大量使用 style 屬性（照搬、程式不動）：只放寬樣式，腳本仍不允許行內
     expect(csp["style-src"]).toEqual(["'self'", "'unsafe-inline'"]);
-    expect(csp["connect-src"]).toEqual(["'self'", "https://ztozevcqkfrohgjmngcj.supabase.co", "https://dbtjsljrytzonjvclgrd.supabase.co"]);
+    expect(csp["connect-src"]).toEqual(["'self'", "https://bbbbbbbbbbbbbbbbbbbb.supabase.co", "https://aaaaaaaaaaaaaaaaaaaa.supabase.co"]);
     expect(csp["frame-ancestors"]).toEqual(["'self'"]);
     expect(csp["form-action"]).toEqual(["'none'"]);
     expect(csp["base-uri"]).toEqual(["'none'"]);
@@ -159,7 +162,7 @@ describe("resolveAdminConfig", () => {
   });
 
   it("derives the API URL from SUPABASE_URL and the environment from the Supabase project", () => {
-    expect(resolveAdminConfig({ ADMIN_LOGTO_CLIENT_ID: "c", SUPABASE_URL: "https://dbtjsljrytzonjvclgrd.supabase.co/" }))
+    expect(resolveAdminConfig({ ADMIN_LOGTO_CLIENT_ID: "c", SUPABASE_URL: "https://aaaaaaaaaaaaaaaaaaaa.supabase.co/" }))
       .toEqual({
         issuer: "https://sso.newlife.org.tw/oidc",
         clientId: "c",
@@ -231,7 +234,7 @@ describe("buildAdmin (real repo)", () => {
         expect(legacyHtml, id).toContain(`id="${id}"`);
       }
       const legacyJs = readFileSync(join(out, legacy.jsFile), "utf8");
-      expect(legacyJs).toContain("https://dbtjsljrytzonjvclgrd.supabase.co");
+      expect(legacyJs).toContain("https://aaaaaaaaaaaaaaaaaaaa.supabase.co");
       expect(legacyJs).toContain("test-anon-key");
       expect(legacyJs).not.toContain("__ADMIN_LEGACY_CONFIG__");
       // 後台網域不註冊 Service Worker；離線聖經包不複製

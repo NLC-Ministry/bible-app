@@ -5,7 +5,7 @@ description: Merge handed-off task/* branches into staging and push, open/update
 
 # Integrate: task branches → staging (→ release PR)
 
-Read trailers, not diffs. Open code only for a conflict, a failing test, or an `Integrator-note` that asks for it. Never commit in the shared main folder.
+Read trailers, not diffs. **The repo is public: never put a Supabase project ref, spreadsheet ID, key or similar identifier in a PR body, comment, issue or commit message** (#609; refs live in `.env`, use `node scripts/supabase-env.mjs <staging|production> …` for CLI calls). Open code only for a conflict, a failing test, or an `Integrator-note` that asks for it. Never commit in the shared main folder.
 
 ## 1. Take the lock
 ```bash
@@ -45,8 +45,8 @@ After pushing (step 6), check the CI run once (`gh run list --branch staging --l
 
 ## 5. Migrations (only if a merged branch lists one)
 ```bash
-npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd --dry-run   # must list exactly the expected files
-npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd
+node scripts/supabase-env.mjs staging db push --linked --dry-run   # must list exactly the expected files
+node scripts/supabase-env.mjs staging db push --linked
 ```
 Read each migration's header for ordering requirements first; then check the result with a query (`supabase db query --linked --project-ref … -f file.sql`). Production is only pushed after the user merges the release PR.
 
@@ -54,7 +54,7 @@ After every push (step 6), with or without migrations, check that staging caught
 ```bash
 node scripts/check-env-drift.mjs --env staging --ref origin/staging
 ```
-🔴 → apply the missing migration / redeploy the function now (`npx supabase functions deploy <name> --project-ref dbtjsljrytzonjvclgrd`), or tell the user why not. It only reports; it never blocks.
+🔴 → apply the missing migration / redeploy the function now (`node scripts/supabase-env.mjs staging functions deploy <name>`), or tell the user why not. It only reports; it never blocks.
 
 If the batch applied a migration, also run `node scripts/security-advisor.mjs` (Supabase Security Advisor on staging, #594): 🔴 → tell the user what it found before the release PR; never add to `supabase/security-allowlist.json` on your own.
 
@@ -103,8 +103,8 @@ Its 正式站 section is what goes into the template's 「資料庫要更新的�
 
 ## 9. After the user says the release PR is merged
 Take the lock, then:
-1. **Production migrations** (only if the release included any; the release PR's 環境一致檢查 comment lists them): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
-2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds. Redeploy the Edge Functions the comment listed (`--project-ref ztozevcqkfrohgjmngcj`), then `node scripts/check-env-drift.mjs --env production --ref origin/main` must be all ✅.
+1. **Production migrations** (only if the release included any; the release PR's 環境一致檢查 comment lists them): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `node scripts/supabase-env.mjs production db push --linked --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
+2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds. Redeploy the Edge Functions the comment listed (`node scripts/supabase-env.mjs production functions deploy <name>`), then `node scripts/check-env-drift.mjs --env production --ref origin/main` must be all ✅.
 3. **Merge `main` back into `staging`** so `main` never drifts ahead (each release adds a merge commit that only `main` has; a hotfix would otherwise stay missing on `staging`):
    ```bash
    git fetch origin

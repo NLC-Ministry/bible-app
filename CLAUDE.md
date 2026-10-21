@@ -67,12 +67,12 @@ How stale-build detection, chunks, `/repair`, and the offline queue work: `docs/
 
 Tables, Edge Function inventory, and the incident history behind these rules: `docs/architecture.md`. Required secrets: `supabase/functions/README.md`.
 
-- **Migrations**: timestamp names only — create with `npx supabase migration new <name>` (`scripts/migration-naming.test.mjs`). Apply to staging, verify, then production, always with an explicit `--project-ref` (never rely on `supabase link`). Never pass `--include-all` to production. Read a migration's header for ordering requirements before pushing.
+- **Migrations**: timestamp names only — create with `npx supabase migration new <name>` (`scripts/migration-naming.test.mjs`). Apply to staging, verify, then production, always against an explicit environment via `scripts/supabase-env.mjs` (never rely on `supabase link`). Never pass `--include-all` to production. Read a migration's header for ordering requirements before pushing.
   ```bash
-  npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd --dry-run   # staging: check what will run
-  npx supabase db push --linked --project-ref dbtjsljrytzonjvclgrd
-  npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj --dry-run   # then production
-  npx supabase db push --linked --project-ref ztozevcqkfrohgjmngcj
+  node scripts/supabase-env.mjs staging db push --linked --dry-run   # staging: check what will run
+  node scripts/supabase-env.mjs staging db push --linked
+  node scripts/supabase-env.mjs production db push --linked --dry-run   # then production
+  node scripts/supabase-env.mjs production db push --linked
   node scripts/compare-env-snapshots.mjs --run                                 # both environments still match
   ```
 - `supabase/migrations_legacy/` and `supabase/migrations/legacy/` are reference only — never replay them.
@@ -86,7 +86,7 @@ Tables, Edge Function inventory, and the incident history behind these rules: `d
 - **Forced scope**: `nlc-data` uses the service role, so RLS does not apply in production. Writes/deletes through it must enforce `user_id`/`plan_id` via `applyForcedScope`, and RPCs must filter explicitly — never a cross-tenant unfiltered mutation.
 - **Edge Functions**: never trust a decoded-but-unverified token claim for identity (`scripts/logto-jwt-verify.test.mjs`). A new function whose cron/webhook caller sends no `Authorization` header needs its `verify_jwt = false` entry in `supabase/config.toml` in the same change — a Dashboard-only toggle drifts back on the next CLI deploy.
 - Keep the `profiles`/`user_identities` split (it prevents data loss when a user switches login method). The first admin is promoted manually via SQL (`supabase/README_clean_setup.md`).
-- Environments: production `ztozevcqkfrohgjmngcj`, staging `dbtjsljrytzonjvclgrd` (https://bible-speed-reading-staging.vercel.app) — see `docs/staging.md`.
+- Environments: production and staging are separate Supabase projects (staging site: https://bible-speed-reading-staging.vercel.app) — see `docs/staging.md`. **The repo is public: never write a Supabase project ref, spreadsheet ID, key or other identifier into a file, PR, issue, comment or commit message.** Refs live in the git-ignored `.env` (`SUPABASE_PRODUCTION_REF`, `SUPABASE_STAGING_REF`); run the CLI as `node scripts/supabase-env.mjs <staging|production> <supabase args>` instead of passing `--project-ref`. `scripts/no-project-ref.test.mjs` fails on a ref-shaped value.
 
 ## Design system
 

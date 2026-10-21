@@ -26,7 +26,9 @@ import { fileURLToPath } from "node:url";
 
 const { isAbsolute, join, relative, resolve } = win32;
 
-export const PROD_REF = "ztozevcqkfrohgjmngcj";
+// 正式站 ref 來自環境變數／.env（#609），和 scripts/lib/supabase-cli-query.mjs 同一個來源
+import { PROD_REF } from "./lib/supabase-cli-query.mjs";
+export { PROD_REF };
 export const MONTHLY_FULL_KEEP = 3;
 export const CLOUD_KEEP = 4;
 export const LOG_KEEP = 30;
@@ -274,7 +276,8 @@ export function parseCliCredentials(output) {
   }
   const missing = CREDENTIAL_KEYS.filter((k) => !creds[k]);
   if (missing.length) throw new Error(`Supabase CLI 沒給出 ${missing.join("、")}（CLI 沒登入或改版了？）`);
-  if (!creds.PGUSER.endsWith(`.${PROD_REF}`)) throw new Error(`臨時帳號不是正式站：${creds.PGUSER}`);
+  if (!PROD_REF) throw new Error("沒有設定 SUPABASE_PRODUCTION_REF（放在專案主資料夾的 .env），無法確認臨時帳號是正式站");
+  if (!creds.PGUSER.endsWith(`.${PROD_REF}`)) throw new Error("臨時帳號不是正式站");
   if (!/\.pooler\.supabase\.com$/.test(creds.PGHOST)) throw new Error(`連線主機不是 Supabase pooler：${creds.PGHOST}`);
   return creds;
 }

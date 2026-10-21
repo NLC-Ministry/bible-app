@@ -1,6 +1,6 @@
 -- #400 reading_logs 索引整理：移除 3 個幾乎沒用到或開頭欄位重複的單欄索引。
 --
--- 依據（正式站 ztozevcqkfrohgjmngcj，2026-10-02 只讀查詢；pg_stat_database.stats_reset =
+-- 依據（正式站，2026-10-02 只讀查詢；pg_stat_database.stats_reset =
 -- 2026-05-22，涵蓋 6/1、7/1、8/1、9/1、10/1 五次月初換計畫）：
 --   reading_logs 123,781 筆，每次打卡都要更新全部 9 個索引。
 --   idx_reading_logs_read_at   (read_at DESC)  5.0 MB  idx_scan = 8

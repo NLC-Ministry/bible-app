@@ -2,7 +2,7 @@
 -- 0212_edge_function_url_from_vault.sql
 --
 -- 問題：下面 6 個函式把正式環境的網址
---   https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/...
+--   https://YOUR-PROJECT-REF.supabase.co/functions/v1/...
 -- 寫死在 SQL 裡。Supabase 的 staging 分支會原樣繼承這些函式，只要 staging 的
 -- Vault 設定了對應的 secret，staging 的 pg_cron／trigger 就會去呼叫**正式環境**
 -- 的 Edge Function（最嚴重的是 issue-report-maintenance 的每週 purge，會刪掉
@@ -27,11 +27,11 @@
 -- ⚠️ 部署順序（正式環境，不能反）：
 --   1. 先在 Vault 設定 project_url：
 --        select vault.create_secret(
---          'https://ztozevcqkfrohgjmngcj.supabase.co',
+--          'https://YOUR-PROJECT-REF.supabase.co',
 --          'project_url',
 --          'Base URL used by edge_function_url() to call this project''s Edge Functions'
 --        );
---      （staging 用 https://vzokpsscyivhgmhleplq.supabase.co）
+--      （staging 用它自己的專案網址）
 --   2. 再貼這支 migration。
 --      反過來的話，正式環境的排程會悄悄停掉（只留 WARNING）。
 --   3. 驗證：

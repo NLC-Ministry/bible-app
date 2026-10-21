@@ -14,7 +14,7 @@ import { LEGACY_SECTION_IDS } from "../admin-legacy/sections.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const ORIGIN = "https://bible-speed-reading-admin.vercel.app";
-const SUPABASE = "https://dbtjsljrytzonjvclgrd.supabase.co";
+const SUPABASE = "https://aaaaaaaaaaaaaaaaaaaa.supabase.co";
 
 const ADMIN_ROLE = { id: "10000000-0000-4000-8000-000000000006", code: "admin", label: "系統管理員", sort_order: 10, is_assignable: false, can_manage_plans: true, can_manage_permissions: true, scope_type: "church" };
 const PROFILE = {

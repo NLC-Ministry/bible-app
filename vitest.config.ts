@@ -1,10 +1,11 @@
 import { fileURLToPath } from "node:url"
 import { defineConfig } from "vitest/config"
-import { BASE_EXCLUDE, BUILD_TESTS } from "./vitest.shared.mjs"
+import { BASE_EXCLUDE, BUILD_TESTS, TEST_ENV } from "./vitest.shared.mjs"
 
 export default defineConfig({
   test: {
     globals: true,
+    env: TEST_ENV,
     environment: "node",
     exclude: [...BASE_EXCLUDE, ...BUILD_TESTS],
     // 通過的測試不印 console 輸出，只有失敗的才印（#592）

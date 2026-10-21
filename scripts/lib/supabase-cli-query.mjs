@@ -6,9 +6,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { loadProjectRefs } from "./project-refs.mjs";
 
-export const PROD_REF = "ztozevcqkfrohgjmngcj";
-export const STAGING_REF = "dbtjsljrytzonjvclgrd";
+// ref 來自環境變數／.env，不寫進 repo（#609）；沒設定時是空字串，真的要連線前由 assertRef 擋下。
+const REFS = loadProjectRefs();
+export const PROD_REF = REFS.production;
+export const STAGING_REF = REFS.staging;
 
 /** 解析 `supabase db query` 的輸出：前面可能有 "Initialising login role..." 之類的訊息。 */
 export function parseCliRows(output) {
@@ -22,7 +25,7 @@ export function parseCliRows(output) {
 }
 
 function assertRef(ref) {
-  if (!/^[a-z]{20}$/.test(ref)) throw new Error(`不合法的 project ref：${ref}`);
+  if (!/^[a-z0-9]{20}$/.test(String(ref || ""))) throw new Error("沒有可用的 project ref（SUPABASE_PRODUCTION_REF／SUPABASE_STAGING_REF 沒設定或格式不對，見 docs/staging.md）");
 }
 
 /** 執行一個 SQL 檔案。 */
@@ -33,7 +36,7 @@ export function runSqlFile(ref, sqlPath) {
   const command = `npx supabase db query --linked --project-ref ${ref} -f "${sqlPath}"`;
   const result = spawnSync(command, { encoding: "utf8", shell: true, maxBuffer: 256 * 1024 * 1024 });
   if (result.status !== 0) {
-    throw new Error(`查詢 ${ref} 失敗：\n${`${result.stderr || ""}${result.stdout || ""}`.slice(0, 1500)}`);
+    throw new Error(`查詢失敗：\n${`${result.stderr || ""}${result.stdout || ""}`.slice(0, 1500)}`);
   }
   return parseCliRows(result.stdout || "");
 }
