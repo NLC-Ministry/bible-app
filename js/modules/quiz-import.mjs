@@ -22,13 +22,20 @@
 //   [排序] 題目文字            -- 每行依「正確順序」列出，不用另外寫答案
 //   創造天地
 //   挪亞洪水
+//
+//   [選單] 題目文字            -- 雲柱才有（#612）：每行「項目｜正確數量」，干擾項寫 0
+//   牛｜7
+//   豬｜0
+
+import { MENU_MAX_QUANTITY } from "./quiz-question-types.mjs";
 
 const TYPE_TAG_TO_TYPE = {
   "單選": "single",
   "多選": "multiple",
   "是非": "truefalse",
   "配對": "matching",
-  "排序": "ordering"
+  "排序": "ordering",
+  "選單": "menu"
 };
 
 const TRUE_WORDS = new Set(["對", "是", "true", "t", "yes", "y", "正確"]);
@@ -127,6 +134,28 @@ function parseMatching(lines, questionIndex, { mergeRight = false } = {}) {
   return { type: "matching", payload: { stem, left, right }, answerKey };
 }
 
+// 選單題（#612）：數量 0～MENU_MAX_QUANTITY 的整數，正解只記數量 > 0 的項目
+function parseMenu(lines, questionIndex) {
+  const stem = lines[0];
+  const itemLines = lines.slice(1);
+  const items = [];
+  const answerKey = {};
+  itemLines.forEach((line, itemIndex) => {
+    const parts = line.split(/[｜|]/).map(part => part.trim());
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new Error(`選單行格式錯誤（須為「項目｜數量」）：${line}`);
+    const quantity = Number(parts[1]);
+    if (!/^\d+$/.test(parts[1]) || quantity > MENU_MAX_QUANTITY) {
+      throw new Error(`數量要是 0～${MENU_MAX_QUANTITY} 的整數：${line}`);
+    }
+    const id = `q${questionIndex}-I${itemIndex + 1}`;
+    items.push({ id, text: parts[0] });
+    if (quantity > 0) answerKey[id] = quantity;
+  });
+  if (items.length < 2) throw new Error("選單題至少需要 2 個項目");
+  if (!Object.keys(answerKey).length) throw new Error("選單題至少要有一個項目的數量大於 0");
+  return { type: "menu", payload: { stem, items }, answerKey };
+}
+
 function parseOrdering(lines, questionIndex) {
   const stem = lines[0];
   const itemLines = lines.slice(1);
@@ -137,10 +166,11 @@ function parseOrdering(lines, questionIndex) {
 
 /**
  * @param {string} text 貼上的純文字或讀檔出來的字串
- * @param {{mergeMatchingRight?: boolean}} [options] mergeMatchingRight：配對題右邊文字相同就合併成同一個點（雲柱用）
+ * @param {{mergeMatchingRight?: boolean, allowMenu?: boolean}} [options] mergeMatchingRight：配對題右邊文字相同就合併成同一個點（雲柱用）；
+ *   allowMenu：接受 [選單] 題（雲柱才有，小測驗的存題驗證不認得這個題型，#612）
  * @returns {{questions: Array, errors: Array<{index:number, block:string, message:string}>}}
  */
-export function parseQuizImportText(text, { mergeMatchingRight = false } = {}) {
+export function parseQuizImportText(text, { mergeMatchingRight = false, allowMenu = false } = {}) {
   const blocks = splitBlocks(text);
   const questions = [];
   const errors = [];
@@ -156,6 +186,10 @@ export function parseQuizImportText(text, { mergeMatchingRight = false } = {}) {
       errors.push({ index: blockIndex, block, message: `不認得的題型標籤「${tagMatch[1]}」` });
       return;
     }
+    if (type === "menu" && !allowMenu) {
+      errors.push({ index: blockIndex, block, message: "「選單」題型只有雲柱測驗能用" });
+      return;
+    }
     const lines = splitLines(block.slice(tagMatch[0].length));
     if (!lines.length) {
       errors.push({ index: blockIndex, block, message: "缺少題目內容" });
@@ -167,6 +201,7 @@ export function parseQuizImportText(text, { mergeMatchingRight = false } = {}) {
       if (type === "single" || type === "multiple") parsed = parseSingleOrMultiple(lines, type);
       else if (type === "truefalse") parsed = parseTrueFalse(lines);
       else if (type === "matching") parsed = parseMatching(lines, questionIndex, { mergeRight: mergeMatchingRight });
+      else if (type === "menu") parsed = parseMenu(lines, questionIndex);
       else parsed = parseOrdering(lines, questionIndex);
       questions.push({ id: `imported-${questionIndex}`, ...parsed, explanation: "", verseRef: "" });
     } catch (error) {

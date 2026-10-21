@@ -11,16 +11,32 @@ import { questionImageHtml } from "./quiz-image.mjs";
 //   multiple   number[]（選項索引，順序無關）
 //   matching   { [leftId]: rightId }
 //   ordering   string[]（item id 依作答排列順序）
+//   menu       { [itemId]: 數量 }（只記數量 > 0 的項目；雲柱才有，#612）
 
-export const QUESTION_TYPES = ["truefalse", "single", "multiple", "matching", "ordering"];
+export const QUESTION_TYPES = ["truefalse", "single", "multiple", "matching", "ordering", "menu"];
 
 export const QUESTION_TYPE_LABELS = {
   truefalse: "是非",
   single: "單選",
   multiple: "多選",
   matching: "配對",
-  ordering: "排序"
+  ordering: "排序",
+  menu: "選單"
 };
+
+// 選單題（#612）每個項目的數量上限：所有題目一樣，不讓出題者每題自訂（上限會洩漏答案）
+export const MENU_MAX_QUANTITY = 20;
+
+// 選單題的作答／正解只留數量 > 0 的項目，{I1: 0} 跟沒選一樣
+export function menuQuantities(value) {
+  const out = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  Object.entries(value).forEach(([id, quantity]) => {
+    const number = Number(quantity);
+    if (Number.isFinite(number) && number > 0) out[id] = number;
+  });
+  return out;
+}
 
 export function isSupportedQuestionType(type) {
   return QUESTION_TYPES.includes(type);
@@ -48,6 +64,11 @@ export function formatResponseForDisplay(type, payload, response) {
       const text = id => (payload.items || []).find(item => item.id === id)?.text ?? id;
       const order = Array.isArray(response) ? response.map(text) : [];
       return order.length ? order.join(" → ") : "未作答";
+    }
+    case "menu": {
+      const chosen = Object.entries(menuQuantities(response));
+      const text = id => (payload.items || []).find(item => item.id === id)?.text ?? id;
+      return chosen.length ? chosen.map(([id, quantity]) => `${text(id)} ×${quantity}`).join("、") : "未作答";
     }
     default:
       return "未作答";
@@ -223,6 +244,8 @@ export function isResponseComplete(type, response, payload = {}) {
       const expected = Array.isArray(payload.items) ? payload.items.length : 0;
       return Array.isArray(response) && response.length === expected;
     }
+    case "menu":
+      return Object.keys(menuQuantities(response)).length > 0;
     default:
       return false;
   }
@@ -242,6 +265,7 @@ export function isAnswerCorrect(type, answerKey, response) {
     const b = Array.isArray(response) ? [...response].sort() : [];
     return a.length === b.length && a.every((value, index) => String(value) === String(b[index]));
   }
+  if (type === "menu") return deepEqual(menuQuantities(answerKey), menuQuantities(response));
   return false;
 }
 
@@ -274,6 +298,26 @@ function orderChipHtml(item, answerIndex) {
 
 function orderZoneHtml(chipsHtml, emptyText) {
   return chipsHtml.length ? chipsHtml.join("") : `<span class="exam-order-empty">${emptyText}</span>`;
+}
+
+// 選單題（#612）照點餐 App：一開始只有「＋」，選了之後變成「− 數量 ＋」；
+// 數量為 0 時用 CSS（data-qty="0"）把「−」和數量藏起來。
+function menuItemHtml(item) {
+  const name = escapeHtml(item.text);
+  return `<div class="daily-quiz-menu__item" data-menu-item-id="${escapeHtml(item.id)}" data-qty="0">
+    <span class="daily-quiz-menu__name">${name}</span>
+    <div class="daily-quiz-menu__stepper">
+      <button type="button" class="daily-quiz-menu__btn" data-menu-dec aria-label="減少「${name}」">−</button>
+      <span class="daily-quiz-menu__qty" data-menu-qty aria-live="polite">0</span>
+      <button type="button" class="daily-quiz-menu__btn" data-menu-inc aria-label="增加「${name}」">＋</button>
+    </div>
+  </div>`;
+}
+
+function menuSummaryText(quantities) {
+  const values = Object.values(quantities);
+  if (!values.length) return "還沒有選任何項目";
+  return `已選 ${values.length} 項，共 ${values.reduce((sum, value) => sum + value, 0)} 個`;
 }
 
 /**
@@ -324,6 +368,12 @@ export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}
           <div class="exam-order-pool" data-order-pool>${orderZoneHtml(pool.map(item => orderChipHtml(item)), ORDER_EMPTY_POOL)}</div>
         </div>`;
       }
+      case "menu":
+        // 項目順序打亂，免得出題者把正解寫在前面就被看出來
+        return `<div class="daily-quiz-menu" data-menu-root>
+          ${shuffleItems(payload.items, random).map(menuItemHtml).join("")}
+          <p class="daily-quiz-menu__summary" data-menu-summary>${menuSummaryText({})}</p>
+        </div>`;
       default:
         return "";
     }
@@ -362,6 +412,13 @@ export function readResponseFromFieldset(fieldsetEl, type) {
     }
     case "ordering": {
       return Array.from(fieldsetEl.querySelectorAll("[data-order-answer] [data-item-id]")).map(chip => chip.getAttribute("data-item-id"));
+    }
+    case "menu": {
+      const quantities = {};
+      fieldsetEl.querySelectorAll("[data-menu-item-id]").forEach(row => {
+        quantities[row.getAttribute("data-menu-item-id")] = Number(row.getAttribute("data-qty"));
+      });
+      return menuQuantities(quantities);
     }
     default:
       return null;
@@ -465,6 +522,25 @@ export function bindQuestionFieldset(fieldsetEl, type, onChange) {
       fieldsetEl.removeEventListener("click", onClick);
       window.removeEventListener("resize", drawLines);
     };
+  }
+
+  if (type === "menu") {
+    const onClick = event => {
+      const button = event.target.closest("[data-menu-inc], [data-menu-dec]");
+      const row = button?.closest("[data-menu-item-id]");
+      if (!row) return;
+      const current = Number(row.getAttribute("data-qty")) || 0;
+      const next = Math.min(MENU_MAX_QUANTITY, Math.max(0, current + (button.hasAttribute("data-menu-inc") ? 1 : -1)));
+      row.setAttribute("data-qty", String(next));
+      row.querySelector("[data-menu-qty]").textContent = String(next);
+      row.querySelector("[data-menu-inc]").disabled = next >= MENU_MAX_QUANTITY;
+      const response = readResponseFromFieldset(fieldsetEl, type);
+      const summary = fieldsetEl.querySelector("[data-menu-summary]");
+      if (summary) summary.textContent = menuSummaryText(response);
+      onChange(response);
+    };
+    fieldsetEl.addEventListener("click", onClick);
+    return () => fieldsetEl.removeEventListener("click", onClick);
   }
 
   if (type === "ordering") {

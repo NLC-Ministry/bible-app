@@ -3,9 +3,10 @@
 //   選擇題：標出「你選的」與「正解」
 //   連連看：畫線——你的連線是綠色實線，連錯的地方補一條紅色虛線的正解
 //   排序題：列出你的順序（位置對的標綠、錯的標出應在第幾）與正確順序
+//   選單題：每個項目列出你選的數量（對的標綠、錯的補正確數量，#612）
 // 小測驗、雲柱測驗共用；連連看畫線 paintMatchReviewLines 大測驗 exam.js 也共用。
 
-import { isAnswerCorrect } from "./quiz-question-types.mjs";
+import { isAnswerCorrect, menuQuantities } from "./quiz-question-types.mjs";
 import { questionImageHtml } from "./quiz-image.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -97,6 +98,23 @@ function orderingHtml(payload, response, answerKey) {
     ${correctList}`;
 }
 
+function menuReviewHtml(payload, response, answerKey) {
+  const items = payload.items || [];
+  const right = menuQuantities(answerKey);
+  const mine = menuQuantities(response);
+  if (!Object.keys(mine).length) {
+    return `<p class="exam-result__k">正確數量：</p>
+    <ol class="exam-result__choices">${items.filter(item => right[item.id]).map(item => `<li>${esc(item.text)} ×${right[item.id]}</li>`).join("")}</ol>`;
+  }
+  return `<ol class="exam-result__choices exam-result__choices--marked">${items.map(item => {
+    const mineCount = mine[item.id] || 0;
+    const rightCount = right[item.id] || 0;
+    return mineCount === rightCount
+      ? `<li class="is-mine">${esc(item.text)}　你選 ${mineCount} 個</li>`
+      : `<li>${esc(item.text)}　你選 ${mineCount} 個　<span class="exam-choice-tag exam-choice-tag--right">正解 ${rightCount} 個</span></li>`;
+  }).join("")}</ol>`;
+}
+
 function reviewBodyHtml(type, payload, answerKey, response) {
   switch (type) {
     case "truefalse":
@@ -112,6 +130,8 @@ function reviewBodyHtml(type, payload, answerKey, response) {
       return matchingBoardHtml(payload, response, answerKey);
     case "ordering":
       return orderingHtml(payload, response, answerKey);
+    case "menu":
+      return menuReviewHtml(payload, response, answerKey);
     default:
       return "";
   }
